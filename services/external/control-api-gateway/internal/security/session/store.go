@@ -28,6 +28,9 @@ const (
 	csrfTokenBytes = 32
 
 	ElevationKindRuntimeSecretReveal = "RUNTIME_SECRET_REVEAL"
+	ElevationKindEmailReconciliation = "EMAIL_EFFECT_RECONCILIATION"
+	MaximumElevationLifetime         = 2 * time.Minute
+	maximumReceiptVersion            = 1<<53 - 1
 )
 
 type Config struct {
@@ -49,7 +52,8 @@ type Claims struct {
 	OIDCSessionID   string     `json:"oidc_session_id"`
 	SessionRevision uint64     `json:"session_revision"`
 	SessionID       string     `json:"session_id"`
-	Bearer          string     `json:"bearer"`
+	Bearer          string     `json:"bearer,omitempty"`
+	FamilyID        string     `json:"family_id,omitempty"`
 	CSRFHash        string     `json:"csrf_sha256"`
 	IssuedAt        int64      `json:"issued_at"`
 	ExpiresAt       int64      `json:"expires_at"`
@@ -59,10 +63,13 @@ type Claims struct {
 // Elevation связывает короткоживущее полномочие с точной чувствительной операцией.
 // Одноразовость обеспечивается авторитетным server-owned store по SessionID.
 type Elevation struct {
-	Kind       string `json:"kind"`
-	ProjectRef string `json:"project_ref"`
-	SecretRef  string `json:"secret_ref"`
-	ExpiresAt  int64  `json:"expires_at"`
+	Kind           string `json:"kind"`
+	ProjectRef     string `json:"project_ref,omitempty"`
+	SecretRef      string `json:"secret_ref,omitempty"`
+	ReceiptRef     string `json:"receipt_ref,omitempty"`
+	ReceiptVersion int64  `json:"receipt_version,omitempty"`
+	ReceiptDigest  string `json:"receipt_digest,omitempty"`
+	ExpiresAt      int64  `json:"expires_at"`
 }
 
 func New(config Config) (*Store, error) {
@@ -127,7 +134,7 @@ func (store *Store) IssueWithElevation(subject, organizationID, oidcSessionID st
 // Renew продлевает idle-срок существующей сессии, не меняя её authority,
 // идентификаторы и CSRF binding. Абсолютной границей остаётся срок OIDC bearer.
 func (store *Store) Renew(claims Claims, tokenExpiry time.Time) (Claims, string, bool, error) {
-	if store == nil || tokenExpiry.IsZero() || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt {
+	if store == nil || claims.FamilyID != "" || tokenExpiry.IsZero() || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt {
 		return Claims{}, "", false, errors.New("session renewal input is invalid")
 	}
 	now := store.now().UTC()
@@ -168,7 +175,7 @@ func (store *Store) Open(encoded string) (Claims, error) {
 	if decoder.Decode(&claims) != nil || decoder.Decode(&struct{}{}) != io.EOF ||
 		uuid.Validate(claims.Subject) != nil || uuid.Validate(claims.OrganizationID) != nil || uuid.Validate(claims.OIDCSessionID) != nil ||
 		uuid.Validate(claims.SessionID) != nil || claims.SessionRevision == 0 ||
-		claims.Bearer == "" || len(claims.Bearer) > maximumBearer ||
+		!validCredentialCarrier(claims) ||
 		len(claims.CSRFHash) != sha256.Size*2 || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt ||
 		!store.now().UTC().Before(time.Unix(claims.ExpiresAt, 0)) ||
 		!validElevation(claims.Elevation, time.Unix(claims.IssuedAt, 0).UTC(), time.Unix(claims.ExpiresAt, 0).UTC()) {
@@ -177,14 +184,38 @@ func (store *Store) Open(encoded string) (Claims, error) {
 	return claims, nil
 }
 
+func validCredentialCarrier(claims Claims) bool {
+	if claims.FamilyID != "" {
+		return uuid.Validate(claims.FamilyID) == nil && claims.Bearer == ""
+	}
+	return claims.Bearer != "" && len(claims.Bearer) <= maximumBearer
+}
+
 func validElevation(value *Elevation, now, sessionExpiry time.Time) bool {
 	if value == nil {
 		return true
 	}
 	expires := time.Unix(value.ExpiresAt, 0).UTC()
-	return value.Kind == ElevationKindRuntimeSecretReveal &&
-		validOpaqueReference(value.ProjectRef) && validOpaqueReference(value.SecretRef) &&
-		expires.After(now) && !expires.After(sessionExpiry) && expires.Sub(now) <= 2*time.Minute
+	if !expires.After(now) || expires.After(sessionExpiry) || expires.Sub(now) > MaximumElevationLifetime {
+		return false
+	}
+	switch value.Kind {
+	case ElevationKindRuntimeSecretReveal:
+		return validOpaqueReference(value.ProjectRef) && validOpaqueReference(value.SecretRef) &&
+			value.ReceiptRef == "" && value.ReceiptVersion == 0 && value.ReceiptDigest == ""
+	case ElevationKindEmailReconciliation:
+		return value.ProjectRef == "" && value.SecretRef == "" && ValidEmailReceiptBinding(value.ReceiptRef, value.ReceiptVersion, value.ReceiptDigest)
+	default:
+		return false
+	}
+}
+
+func ValidEmailReceiptBinding(ref string, version int64, digest string) bool {
+	if !validOpaqueReference(ref) || version < 1 || version > maximumReceiptVersion || len(digest) != sha256.Size*2 || strings.ToLower(digest) != digest {
+		return false
+	}
+	_, err := hex.DecodeString(digest)
+	return err == nil
 }
 
 func validOpaqueReference(value string) bool {

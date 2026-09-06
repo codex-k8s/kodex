@@ -45,6 +45,8 @@ spec:
             - name: CONTROL_API_GATEWAY_OIDC_ISSUER
               valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcIssuer}}
             - {name: CONTROL_API_GATEWAY_OIDC_AUDIENCE, value: kodex-control-api}
+            - name: CONTROL_API_GATEWAY_OIDC_BROWSER_ORIGIN
+              valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: publicOrigin}}
             - name: CONTROL_API_GATEWAY_OIDC_JWKS_URL
               valueFrom: {configMapKeyRef: {name: kodex-platform-endpoints, key: oidcJwksUrl}}
             - name: CONTROL_API_GATEWAY_OIDC_CONNECT_ADDRESS

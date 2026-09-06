@@ -235,6 +235,10 @@ lint-proto: check-proto-toolchain
 test-secret-broker-drafts:
 	bash scripts/tests/secret-broker-drafts-test.sh
 
+.PHONY: test-browser-state-component
+test-browser-state-component:
+	bash scripts/tests/browser-state-component-test.sh
+
 .PHONY: test-provider-model-catalog-codex
 test-provider-model-catalog-codex:
 	python3 scripts/tests/provider-model-catalog-codex-test.py "$(KODEX_CATALOG_CODEX_TEST_IMAGE)"

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/errorprofile"
 	"github.com/google/uuid"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
@@ -71,7 +72,7 @@ func rpcErrorHasReason(err error, reason string) bool {
 func writeLocalProblem(writer http.ResponseWriter, statusCode int, code string, retryable bool) {
 	writer.Header().Set("Content-Type", "application/problem+json")
 	writer.Header().Set("Cache-Control", "no-store")
-	if statusCode == http.StatusTooManyRequests {
+	if statusCode == http.StatusTooManyRequests && code != errorprofile.TranscriptionRateLimited {
 		writer.Header().Set("Retry-After", "1")
 	}
 	writer.WriteHeader(statusCode)

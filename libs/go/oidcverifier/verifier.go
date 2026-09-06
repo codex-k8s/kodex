@@ -70,6 +70,8 @@ type Verifier struct {
 	verifier  *coreoidc.IDTokenVerifier
 	keys      *boundedKeySet
 	transport *http.Transport
+	client    *http.Client
+	issuer    string
 }
 
 type exactTransport struct {
@@ -166,6 +168,8 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 		verifier:  coreoidc.NewVerifier(config.Issuer, keys, &coreoidc.Config{ClientID: config.Audience, SupportedSigningAlgs: []string{"RS256"}}),
 		keys:      keys,
 		transport: base,
+		client:    client,
+		issuer:    config.Issuer,
 	}, nil
 }
 

@@ -13,7 +13,6 @@ import (
 
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -27,9 +26,7 @@ var (
 	errAudioBodyRead     = errors.New("audio request body read failed")
 )
 
-type speechToTextClient interface {
-	Transcribe(ctx context.Context, opts ...grpc.CallOption) (sttv1.SpeechToTextService_TranscribeClient, error)
-}
+type speechToTextClient = sttv1.SpeechToTextServiceClient
 
 func (server *Server) AttachSpeechToText(client speechToTextClient) error {
 	if client == nil || server.speech != nil {
@@ -44,13 +41,28 @@ func (server *Server) TranscribeSpeech(writer http.ResponseWriter, request *http
 	if !ok {
 		return
 	}
+	server.transcribeSpeech(writer, request, parameters.XAudioSize)
+}
+
+func (server *Server) TranscribeOrganizationSpeech(writer http.ResponseWriter, request *http.Request, parameters generated.TranscribeOrganizationSpeechParams) {
+	server.transcribeSpeech(writer, request, parameters.XAudioSize)
+}
+
+func (server *Server) transcribeSpeech(writer http.ResponseWriter, request *http.Request, declaredSize int64) {
 	if server.speech == nil {
 		writeLocalProblem(writer, http.StatusServiceUnavailable, "UNAVAILABLE", true)
 		return
 	}
-	declaredSize := int64(parameters.XAudioSize)
 	if declaredSize < 1 || declaredSize > maximumAudioBytes {
 		writeLocalProblem(writer, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", false)
+		return
+	}
+	if request.ContentLength > maximumAudioBytes+maximumMultipartOverhead {
+		writeLocalProblem(writer, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", false)
+		return
+	}
+	if request.ContentLength >= 0 && request.ContentLength < declaredSize {
+		writeLocalProblem(writer, http.StatusBadRequest, "CONTENT_LENGTH_MISMATCH", false)
 		return
 	}
 	mediaType, values, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
@@ -65,20 +77,22 @@ func (server *Server) TranscribeSpeech(writer http.ResponseWriter, request *http
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	audioMediaType, _, err := mime.ParseMediaType(part.Header.Get("Content-Type"))
-	if err != nil || !supportedAudioMediaType(audioMediaType) {
+	audioMediaType, audioParameters, err := mime.ParseMediaType(part.Header.Get("Content-Type"))
+	if err != nil || !supportedAudioMediaType(audioMediaType) || !supportedAudioParameters(audioParameters) {
 		writeLocalProblem(writer, http.StatusUnsupportedMediaType, "UNSUPPORTED_MEDIA_TYPE", false)
 		return
 	}
-	stream, err := server.speech.Transcribe(request.Context())
+	streamContext, cancelStream := context.WithCancel(request.Context())
+	defer cancelStream()
+	stream, err := server.speech.Transcribe(streamContext)
 	if err != nil {
-		writeRPCProblem(writer, err)
+		writeSpeechProblem(writer, err)
 		return
 	}
 	if err = stream.Send(&sttv1.TranscribeRequest{Body: &sttv1.TranscribeRequest_Metadata{Metadata: &sttv1.TranscribeMetadata{
-		MediaType: audioMediaType, SizeBytes: uint64(declaredSize),
+		MediaType: mime.FormatMediaType(audioMediaType, audioParameters), SizeBytes: uint64(declaredSize),
 	}}}); err != nil {
-		writeRPCProblem(writer, err)
+		writeSpeechSendProblem(writer, stream, err)
 		return
 	}
 	received, digest, err := forwardAudioPart(part, declaredSize, func(chunk []byte) error {
@@ -93,7 +107,7 @@ func (server *Server) TranscribeSpeech(writer http.ResponseWriter, request *http
 		return
 	}
 	if err != nil {
-		writeRPCProblem(writer, err)
+		writeSpeechSendProblem(writer, stream, err)
 		return
 	}
 	if trailing, trailingErr := multipartReader.NextPart(); trailingErr != io.EOF || trailing != nil {
@@ -103,18 +117,18 @@ func (server *Server) TranscribeSpeech(writer http.ResponseWriter, request *http
 	if err = stream.Send(&sttv1.TranscribeRequest{Body: &sttv1.TranscribeRequest_Commit{Commit: &sttv1.TranscribeCommit{
 		SizeBytes: uint64(received), Sha256: digest,
 	}}}); err != nil {
-		writeRPCProblem(writer, err)
+		writeSpeechSendProblem(writer, stream, err)
 		return
 	}
 	response, err := stream.CloseAndRecv()
 	if err != nil {
-		writeRPCProblem(writer, err)
+		writeSpeechProblem(writer, err)
 		return
 	}
 	receipt := response.GetReceipt()
 	if receipt == nil || response.GetText() == "" || receipt.GetRequestId() == "" || receipt.GetCorrelationId() == "" ||
 		receipt.GetAuthoritySourceRevision() == 0 || receipt.GetConfigRevision() == 0 || receipt.GetModel() == "" ||
-		receipt.GetLanguage() == "" || receipt.GetCompletedStage() != sttv1.TranscriptionStage_TRANSCRIPTION_STAGE_PROVIDER_COMPLETED {
+		!validSTTReceiptLanguage(receipt.GetLanguage()) || receipt.GetCompletedStage() != sttv1.TranscriptionStage_TRANSCRIPTION_STAGE_PROVIDER_COMPLETED {
 		writeLocalProblem(writer, http.StatusBadGateway, "UPSTREAM_RESPONSE_INVALID", false)
 		return
 	}
@@ -131,13 +145,40 @@ func (server *Server) TranscribeSpeech(writer http.ResponseWriter, request *http
 	})
 }
 
+// Singular hint отсутствует при auto-detect либо model-specific languages.
+func validSTTReceiptLanguage(value string) bool {
+	return value == "" || len(value) == 2 && value[0] >= 'a' && value[0] <= 'z' && value[1] >= 'a' && value[1] <= 'z'
+}
+
+func writeSpeechSendProblem(writer http.ResponseWriter, stream sttv1.SpeechToTextService_TranscribeClient, err error) {
+	// Send возвращает EOF при раннем отказе сервера; точный статус приходит в Recv.
+	if errors.Is(err, io.EOF) {
+		_, err = stream.CloseAndRecv()
+		if err == nil {
+			writeLocalProblem(writer, http.StatusBadGateway, "UPSTREAM_RESPONSE_INVALID", false)
+			return
+		}
+	}
+	writeSpeechProblem(writer, err)
+}
+
 func supportedAudioMediaType(value string) bool {
 	switch value {
-	case "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/flac", "audio/x-flac":
+	case "audio/mpeg", "audio/mp3", "audio/mpga", "audio/wav", "audio/x-wav", "audio/wave", "audio/flac", "audio/x-flac",
+		"audio/webm", "video/webm", "audio/ogg", "application/ogg", "audio/mp4", "audio/m4a", "audio/x-m4a", "video/mp4":
 		return true
 	default:
 		return false
 	}
+}
+
+func supportedAudioParameters(parameters map[string]string) bool {
+	for key, value := range parameters {
+		if key != "codecs" || value != "opus" && value != "vorbis" && value != "mp4a.40.2" {
+			return false
+		}
+	}
+	return true
 }
 
 func forwardAudioPart(reader io.Reader, declaredSize int64, send func([]byte) error) (int64, string, error) {

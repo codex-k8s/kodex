@@ -104,6 +104,50 @@ func TestListArtifactsRejectsUnknownClosedEnum(t *testing.T) {
 	}
 }
 
+func TestArtifactSourceGroupRejectsAmbiguousFilters(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name   string
+		values []string
+		single controlplanev1.ArtifactSource
+	}{
+		{name: "duplicate", values: []string{"AGENT_RESULT", "AGENT_RESULT"}},
+		{name: "unknown", values: []string{"FUTURE_SOURCE"}},
+		{name: "unspecified", values: []string{"UNSPECIFIED"}},
+		{name: "empty member", values: []string{""}},
+		{name: "exclusive", values: []string{"AGENT_RESULT"}, single: controlplanev1.ArtifactSource_ARTIFACT_SOURCE_CONTROL_CENTER},
+		{name: "oversized", values: []string{"CONTROL_CENTER", "AGENT_RESULT", "INTEGRATION_RESULT", "KNOWLEDGE_SOURCE", "INTERACTION_ATTACHMENT", "AGENT_RESULT"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, ok := artifactSourceGroupFilter(&test.values, test.single); ok {
+				t.Fatal("ambiguous source filter was accepted")
+			}
+		})
+	}
+}
+
+func TestArtifactSourceGroupUsesOneOwnerQuery(t *testing.T) {
+	t.Parallel()
+	for _, project := range []bool{false, true} {
+		client := &artifactQueryStub{}
+		server := &Server{control: &controlplaneclient.Client{Query: client}}
+		group := generated.ArtifactSourceKindsQuery{"AGENT_RESULT", "INTEGRATION_RESULT"}
+		query := generated.Query("literal_%")
+		token := generated.PageToken("owner-cursor")
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest("GET", "/", nil)
+		if project {
+			server.ListArtifacts(response, request, "prj_12345678", generated.ListArtifactsParams{SourceKinds: &group, Query: &query, PageToken: &token})
+		} else {
+			server.ListOrganizationArtifacts(response, request, generated.ListOrganizationArtifactsParams{SourceKinds: &group, Query: &query, PageToken: &token})
+		}
+		got := client.request
+		if response.Code != 200 || got == nil || got.Query != string(query) || got.GetPage().GetPageToken() != string(token) || len(got.SourceKinds) != 2 || got.SourceKinds[0] != controlplanev1.ArtifactSource_ARTIFACT_SOURCE_AGENT_RESULT || got.SourceKinds[1] != controlplanev1.ArtifactSource_ARTIFACT_SOURCE_INTEGRATION_RESULT || got.SourceKind != 0 || (got.ProjectRef != "") != project {
+			t.Fatalf("group scope or filters changed: status=%d request=%#v", response.Code, got)
+		}
+	}
+}
+
 func TestCreateRunAcceptsMissingTitle(t *testing.T) {
 	t.Parallel()
 	commandClient := &launchRunCommandStub{}

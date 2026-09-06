@@ -378,7 +378,8 @@ if [[ "$mode" == apply ]]; then
     -s enabled=true -s sslRequired=external -s registrationAllowed=false \
     -s resetPasswordAllowed=true -s rememberMe=true -s loginWithEmailAllowed=true \
     -s duplicateEmailsAllowed=false -s verifyEmail=false -s accessTokenLifespan=300 \
-    -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200 >/dev/null
+    -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200 \
+    -s revokeRefreshToken=true -s refreshTokenMaxReuse=0 >/dev/null
 
   if ! keycloak_request get "roles/kodex-owner" -r "$realm" >/dev/null 2>&1; then
     keycloak_request create roles -r "$realm" -s name=kodex-owner \
@@ -485,7 +486,9 @@ if [[ "$mode" == apply ]]; then
 fi
 
 realm_json=$(keycloak_request get "realms/$realm")
-jq -e '.enabled == true and .registrationAllowed == false and .accessTokenLifespan == 300' \
+jq -e '.enabled == true and .registrationAllowed == false and .accessTokenLifespan == 300 and
+  .ssoSessionIdleTimeout == 28800 and .ssoSessionMaxLifespan == 43200 and
+  .revokeRefreshToken == true and .refreshTokenMaxReuse == 0' \
   <<<"$realm_json" >/dev/null || fail 'realm readback failed'
 control_center_id=$(find_client_id kodex-control-center)
 client_json=$(keycloak_request get "clients/$control_center_id" -r "$realm")

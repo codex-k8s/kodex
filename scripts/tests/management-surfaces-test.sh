@@ -85,6 +85,10 @@ oauth2_upgrade_line=$(grep -n 'helm upgrade --install "oauth2-$surface"' "$boots
   fail 'OAuth2 routes and NetworkPolicy are not applied before proxy rollout'
 rg -q -- '-s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200' "$keycloak_bootstrap" ||
   fail 'realm SSO lifetime contract is absent'
+rg -q -- '-s revokeRefreshToken=true -s refreshTokenMaxReuse=0' "$keycloak_bootstrap" ||
+  fail 'realm refresh-token rotation contract is absent'
+rg -q -- '\.revokeRefreshToken == true and \.refreshTokenMaxReuse == 0' "$keycloak_bootstrap" ||
+  fail 'realm refresh-token rotation readback is absent'
 rg -q -- '-s duplicateEmailsAllowed=false -s verifyEmail=false -s accessTokenLifespan=300' "$keycloak_bootstrap" ||
   fail 'realm access token lifetime is not fixed at 300 seconds'
 rg -q '"access\.token\.lifespan":"3600"' "$keycloak_bootstrap" ||

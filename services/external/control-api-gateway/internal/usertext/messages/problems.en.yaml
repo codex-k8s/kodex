@@ -1,5 +1,37 @@
 INTERNAL:
   other: Internal error
+AUTOMATION_VARIABLE_NAME:
+  other: Automation name
+AUTOMATION_VARIABLE_TASK:
+  other: Original automation task
+AUTOMATION_VARIABLE_SCHEDULED_AT:
+  other: Exact occurrence time
+AUTOMATION_VARIABLE_TIMEZONE:
+  other: Automation timezone
+AUTOMATION_VARIABLE_REVISION:
+  other: Saved immutable automation revision
+GATE_CONSEQUENCE_CONTINUE:
+  other: Continue execution
+GATE_CONSEQUENCE_EXTERNAL_EFFECT:
+  other: Allow the external integration effect
+GATE_CONSEQUENCE_REJECT_RUN:
+  other: Reject the request and terminate the run
+GATE_CONSEQUENCE_REJECT_EFFECT:
+  other: Reject the external effect without terminating the run
+GATE_CONSEQUENCE_CANCEL_RUN:
+  other: Cancel the run
+GATE_CONSEQUENCE_CANCEL_EFFECT:
+  other: Cancel the external effect without terminating the run
+GATE_CONSEQUENCE_REQUEST_CHANGES:
+  other: Request changes
+AGENT_INSTRUCTIONS_IMPACT_PREPARED:
+  other: Instruction publication impact plan prepared
+PROMPT_TEMPLATE_IMPACT_PREPARED:
+  other: Prompt template publication impact plan prepared
+RUNTIME_ENVIRONMENT_IMPACT_PREPARED:
+  other: Runtime environment publication impact plan prepared
+RUNTIME_ARTIFACT_READ:
+  other: Runtime artifact read
 INVALID_REQUEST:
   other: Check the request data
 UNAUTHENTICATED:
@@ -18,6 +50,8 @@ STATE_CONFLICT:
   other: This action is not available in the current state
 RATE_LIMITED:
   other: Too many requests; try again shortly
+TRANSCRIPTION_RATE_LIMITED:
+  other: The provider limited speech transcription; the recording was not automatically submitted again
 UNAVAILABLE:
   other: The service is temporarily unavailable
 DEADLINE_EXCEEDED:
@@ -298,6 +332,8 @@ RUNTIME_WORK_CLAIMS_MATERIALIZED:
   other: Available work assigned to runtime
 RUNTIME_LEASE_RENEWED:
   other: Runtime lease renewed
+RUNTIME_LEASE_EXPIRED:
+  other: Runtime lease expired
 RUNTIME_PROGRESS_RECORDED:
   other: Runtime progress recorded
 RUNTIME_EXECUTION_COMPLETED:
@@ -702,6 +738,24 @@ PERMISSION_ARTIFACT_PURGE_DESCRIPTION:
   other: Permanently remove assigned artifacts
 PERMISSION_IMAGE_BUILD_NAME:
   other: Build role images
+PERMISSION_IMAGE_SOURCE_VIEW_NAME:
+  other: View role image sources
+PERMISSION_IMAGE_SOURCE_VIEW_DESCRIPTION:
+  other: Read source text of assigned role images
+PERMISSION_IMAGE_SOURCE_MANAGE_NAME:
+  other: Manage role image sources
+PERMISSION_IMAGE_SOURCE_MANAGE_DESCRIPTION:
+  other: Modify source text of assigned role images
+SYSTEM_ROLE_IMAGE_SOURCE_ACCESS:
+  other: Separate role image source access was added to the system role
+RUNTIME_CLAIM_ELIGIBILITY_CHANGED:
+  other: 'Run stopped: required permissions or dependencies changed'
+PROVIDER_ACCOUNT_DELETION_REQUESTED:
+  other: Provider account deletion requested
+PROVIDER_ACCOUNT_VERIFICATION_REQUESTED:
+  other: Current credential verification requested
+PROVIDER_ACCOUNT_QUEUED_WORK_PROCESSED:
+  other: Selected queued work processed
 PERMISSION_IMAGE_BUILD_DESCRIPTION:
   other: Start builds for assigned role images
 PERMISSION_IMAGE_PROMOTE_NAME:
@@ -724,3 +778,57 @@ SYSTEM_ROLE_EXACT_SENSITIVE_ACCESS:
   other: System exact permissions for sensitive operations
 SYSTEM_ROLE_MVP_BACKEND_LIFECYCLES:
   other: System permissions for product backend lifecycles
+PERMISSION_PLATFORM_STT_USE_NAME:
+  other: Voice input
+PERMISSION_PLATFORM_STT_USE_DESCRIPTION:
+  other: Convert speech to text through the configured transcription service
+RUNTIME_ENVIRONMENT_DRAFT_CHANGED:
+  other: Environment draft changed
+INTERACTION_DELIVERY_OUTCOME_UNKNOWN:
+  other: Interaction delivery outcome is unknown
+INTERACTION_DELIVERY_RECONCILIATION_REQUIRED:
+  other: Interaction delivery outcome requires reconciliation
+INTERACTION_IDENTITY_CHANGED:
+  other: External interaction identity binding changed
+RUNTIME_ENVIRONMENT_SELECTED_REBOUND:
+  other: Selected consumers rebound to a new environment version
+RUNTIME_SECRET_SELECTED_REBOUND:
+  other: Selected environments rebound to a new secret revision
+SCHEDULE_OCCURRENCE_FAILED:
+  other: Scheduled occurrence failed
+AGENT_CONTEXT_BINDING_CHANGED:
+  other: Agent context binding changed
+MEMORY_RECORD_CHANGED:
+  other: Memory record changed
+SKILL_BUNDLE_CHANGED:
+  other: Skill bundle changed
+SYSTEM_ROLE_STT_PERMISSION:
+  other: System permission for voice input
+ASSISTANT_CONVERSATION_ARCHIVED:
+  other: Assistant conversation archived
+EMAIL_EFFECT_RECONCILED:
+  other: Email operation reconciled
+EMAIL_EFFECT_REPORTED:
+  other: Email operation result recorded
+EMAIL_MAILBOX_CREDENTIAL_CREATED:
+  other: Mailbox credential created
+EMAIL_MAILBOX_GIT_PUBLICATION_PENDING:
+  other: Mailbox configuration from Git is awaiting delivery
+EMAIL_MAILBOX_GIT_SOURCE_RECORDED:
+  other: Mailbox Git source recorded
+EMAIL_MAILBOX_PUBLICATION_FAILED:
+  other: Mailbox configuration delivery failed
+EMAIL_MAILBOX_PUBLICATION_PENDING:
+  other: Mailbox configuration is awaiting delivery
+EMAIL_MAILBOX_PUBLICATION_READY:
+  other: Mailbox configuration delivery confirmed
+RUNTIME_SECRET_DRAFT_CHANGED:
+  other: Secret draft changed
+INTERACTION_AUTHORITY_CHANGED:
+  other: Interaction authority changed
+INTERACTION_DELIVERY_APPROVAL_REQUIRED:
+  other: Result delivery requires approval
+INTERACTION_DELIVERY_GATE_PROMPT:
+  other: Approve sending the result to the external channel
+INTERACTION_DELIVERY_GATE_TITLE:
+  other: Send result to external channel

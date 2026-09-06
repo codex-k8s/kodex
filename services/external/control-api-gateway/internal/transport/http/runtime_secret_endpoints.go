@@ -29,8 +29,21 @@ func (server *Server) ListRuntimeSecrets(writer http.ResponseWriter, request *ht
 		writeRPCProblem(writer, err)
 		return
 	}
-	page := generated.RuntimeSecretPage{NextPageToken: response.GetPage().GetNextPageToken()}
+	writeRuntimeSecretPage(writer, response)
+}
+
+func writeRuntimeSecretPage(writer http.ResponseWriter, response *controlplanev1.ListRuntimeSecretsResponse) {
+	setRuntimeSecretHeaders(writer)
+	if response == nil || len(response.GetSecrets()) > 100 {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	page := generated.RuntimeSecretPage{Items: make([]generated.RuntimeSecret, 0, len(response.GetSecrets())), NextPageToken: response.GetPage().GetNextPageToken()}
 	for _, item := range response.GetSecrets() {
+		if item == nil {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		page.Items = append(page.Items, castControlPlaneRuntimeSecret(item))
 	}
 	writeJSON(writer, http.StatusOK, page)

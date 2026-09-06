@@ -69,6 +69,74 @@ func TestWorkflowDraftPreservesBoundedInputFields(t *testing.T) {
 	}
 }
 
+func TestWorkflowRevisionPinsFollowSelectedBody(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		draft, published bool
+	}{
+		{"draft", true, false}, {"published", false, true}, {"both", true, true}, {"neither", false, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			workflow := &controlplanev1.Workflow{Ref: "wfl_fixture", Version: 4}
+			if test.draft {
+				workflow.DraftVersion = &controlplanev1.WorkflowVersion{Ref: "wfv_draft", Version: 3, Revision: 3, State: controlplanev1.WorkflowState_WORKFLOW_STATE_DRAFT, Steps: []*controlplanev1.WorkflowStep{{Ref: "draft_step"}}}
+			}
+			if test.published {
+				workflow.PublishedVersion = &controlplanev1.WorkflowVersion{Ref: "wfv_published", Version: 2, Revision: 2, State: controlplanev1.WorkflowState_WORKFLOW_STATE_PUBLISHED, Steps: []*controlplanev1.WorkflowStep{{Ref: "published_step"}}}
+			}
+			workflowReadinessFixture(workflow)
+			view, err := messageMap(&controlplanev1.GetWorkflowResponse{Workflow: workflow})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := view["workflow"].(map[string]any)
+			if _, exists := body["draftRevisionRef"]; exists != test.draft {
+				t.Fatal("draft presence changed")
+			}
+			if _, exists := body["publishedRevisionRef"]; exists != test.published {
+				t.Fatal("published presence changed")
+			}
+			if test.draft && body["draftRevisionRef"] != "wfv_draft" {
+				t.Fatal("draft pin changed")
+			}
+			if test.published && body["publishedRevisionRef"] != "wfv_published" {
+				t.Fatal("published pin changed")
+			}
+			selected, step := "wfv_draft", "draft_step"
+			if test.published {
+				selected, step = "wfv_published", "published_step"
+			}
+			if test.draft || test.published {
+				if body["revisionRef"] != selected || body["steps"].([]any)[0].(map[string]any)["ref"] != step {
+					t.Fatal("body and revision pin disagree")
+				}
+			} else if _, exists := body["revisionRef"]; exists {
+				t.Fatal("invented revision pin")
+			}
+			if _, exists := body["draftVersion"]; exists {
+				t.Fatal("private source shape leaked")
+			}
+		})
+	}
+}
+
+func TestWorkflowRevisionRejectsInvalidOwnerPin(t *testing.T) {
+	for _, ref := range []string{"", "short", "wfv/invalid"} {
+		for _, published := range []bool{false, true} {
+			workflow := &controlplanev1.Workflow{Ref: "wfl_fixture"}
+			version := &controlplanev1.WorkflowVersion{Ref: ref, Revision: 7}
+			if published {
+				workflow.PublishedVersion = version
+			} else {
+				workflow.DraftVersion = version
+			}
+			if _, err := messageMap(&controlplanev1.GetWorkflowResponse{Workflow: workflow}); err == nil {
+				t.Fatal("invalid owner pin accepted")
+			}
+		}
+	}
+}
+
 func TestNormalizeWorkflowInputFieldAddsEmptyOptions(t *testing.T) {
 	t.Parallel()
 
@@ -302,6 +370,7 @@ func TestMessageMapMaterializesRequiredEmptyRuntimeConfigurationStrings(t *testi
 	t.Parallel()
 
 	value, err := messageMap(&controlplanev1.AgentRuntimeConfigurationView{
+		OverlaySchema: runtimeOverlayFixture(),
 		PublishedOverlay: &controlplanev1.ConfigOverlayVersion{
 			Ref: "cov-example", Version: 1, Revision: 1, State: "PUBLISHED",
 		},
@@ -400,6 +469,32 @@ func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 	}
 	if problems, ok := operation["validationProblems"].([]any); !ok || len(problems) != 0 {
 		t.Fatalf("assistant operation validation problems are invalid: %#v", operation)
+	}
+}
+
+func TestAssistantResourceContextPreservesOwnerReadback(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []string{"PROJECT", "AGENT", "WORKFLOW", "RUN", "FILE", "ENVIRONMENT", "INTEGRATION_CONNECTION"} {
+		t.Run(kind, func(t *testing.T) {
+			version := int64(7)
+			value, err := messageMap(&controlplanev1.AssistantConversation{
+				Ref: "cnv_fixture01", Version: 4,
+				Context: &controlplanev1.AssistantContextDescriptor{Route: "/projects/prj_fixture01", EntityKind: kind,
+					EntityRef: "resource_fixture01", EntityName: "TYPE_literal i18n:literal", EntityVersion: &version,
+					AllowedOperations: []controlplanev1.AssistantPlanOperation_Type{controlplanev1.AssistantPlanOperation_TYPE_CHANGE_INTEGRATION_GRANT}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			context := value["context"].(map[string]any)
+			if context["entityKind"] != kind || context["entityRef"] != "resource_fixture01" || context["entityName"] != "TYPE_literal i18n:literal" || context["entityVersion"] != float64(7) {
+				t.Fatal("owner resource context changed during normalization")
+			}
+			operations := context["allowedOperations"].([]any)
+			if len(operations) != 1 || operations[0] != "CHANGE_INTEGRATION_GRANT" {
+				t.Fatal("resource kind changed owner operation eligibility")
+			}
+		})
 	}
 }
 

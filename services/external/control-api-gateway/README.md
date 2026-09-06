@@ -63,11 +63,16 @@ Duplicate игнорируется, slow client закрывается по boun
 возобновляется с сохранённых cursors. Raw stdout, stderr, Codex JSONL, provider
 payload, secret и file body запрещены.
 
-PWA продлевает session через межвкладочный lease и передаёт только монотонную
-session revision через `BroadcastChannel`. Server renew выполняется только по
-explicit `PUT /api/v1/session` после exact Origin и double-submit CSRF и не
-превышает expiry исходного bearer. Durable logout revocation выигрывает у
-запоздавшего renew, поскольку browser session ID при renew не меняется.
+Backend OIDC login использует same-origin `POST /api/v1/session/authorization`
+и `/api/v1/session/callback`. Обязательный `CONTROL_API_GATEWAY_OIDC_BROWSER_ORIGIN`
+задаёт точный public origin и входит в allowlist; redirect остаётся `/auth/callback`.
+Access/refresh tokens хранятся только в зашифрованной durable family.
+`GET /api/v1/session` и `PUT /api/v1/session` возвращают безопасные expiry и
+renewAfter. Только PUT с exact Origin и double-submit CSRF продлевает idle и
+при необходимости выполняет однократный refresh в пределах исходной SSO policy.
+Прежний bearer login остаётся с режимом REAUTHENTICATION и старым bearer ceiling.
+Durable logout/CAS отклоняет поздний refresh. Матрица и ограничения:
+`docs/operations/browser-session-renewal-1086.md`; новый PWA lifecycle проверяется отдельно.
 
 ## Локализация ошибок
 
@@ -86,14 +91,181 @@ typed `Unavailable`/HTTP `502/503/504`.
 JWKS LKG ограничен двумя минутами без продления на повторной ошибке. Signature,
 rollback, conflicting revision и expiry немедленно fail closed.
 
+## HTTP lifecycle управляемых конфигураций (#1045)
+
+Источник требований: #1018, #1019, #1022 и корректирующие #1045/#1046.
+Проверенная browser session задаёт actor и organization; query/body refs
+служат только локаторами. Generated controlplaneclient выбирает exact RPC
+и зарегистрированный authority operation. Owner проверяет resource eligibility
+до OCC/idempotency; gateway не принимает managedBy/source/actor от клиента.
+
+| HTTP базовый путь /api/v1/ | POST /drafts | POST /{configurationRef}/revisions/{revisionRef}/validation | POST .../publication | POST .../consumer-bindings |
+| --- | --- | --- | --- | --- |
+| `prompt-template-configurations` | `CreatePromptTemplateDraft` | `ValidatePromptTemplateDraft` | `PublishPromptTemplateDraft` | `RebindPromptTemplateConsumers` |
+| `role-image-configurations` | `CreateRoleImageRevisionDraft` | `ValidateRoleImageRevisionDraft` | `PublishRoleImageRevisionDraft` | `RebindRoleImageConsumers` |
+| `integration-definition-configurations` | `CreateIntegrationDefinitionDraft` | `ValidateIntegrationDefinitionDraft` | `PublishIntegrationDefinitionDraft` | `RebindIntegrationDefinitionConsumers` |
+| `system-stt-configurations` | `CreateSystemSTTConfigurationDraft` | `ValidateSystemSTTConfigurationDraft` | `PublishSystemSTTConfigurationDraft` | `RebindSystemSTTConsumers` |
+
+В каждой строке draft создаёт серверную ревизию DRAFT; validation возвращает
+VALID/INVALID с диагностикой; publish фиксирует PUBLISHED; rebind меняет
+только явно выбранные bindings после проверки impact digest и версий
+потребителей. Existing configuration требует If-Match, все mutations требуют
+Idempotency-Key и CSRF. Configuration/ref/version назначает control-plane.
+Состояние и idempotency receipt сохраняет owner transaction, gateway не
+публикует события; потребитель результата здесь PWA, runtime читает точную
+закреплённую ревизию своим защищённым read path.
+
+| Дополнительный HTTP путь | RPC | Результат |
+| --- | --- | --- |
+| GET /managed-configurations/{ref}/revisions | ListManagedConfigurationHistory | bounded items, configuration, total и nextPageToken |
+| GET /managed-configurations/{ref}/revisions/{revisionRef}/impact | GetManagedConfigurationImpact | exact consumer bindings, target revision и digest |
+| POST /managed-configurations/{ref}/detachment | DetachGitManagedConfiguration | UI source ownership без выдуманной новой ревизии |
+| POST /managed-configurations/{ref}/copies | CopyGitManagedConfiguration | отдельный server-owned ref и DRAFT |
+| GET /system-stt-configuration | GetSystemSTTConfiguration | безопасная конфигурация и provider blockers; НЕ разрешение пользователя на STT |
+
+Отказы owner сохраняют Problem mapping: InvalidArgument → 400,
+PermissionDenied → 403, NotFound → 404, Aborted/OCC → 412,
+FailedPrecondition → 409, Unavailable → 503. Неизвестный/повреждённый
+producer response закрыто отклоняется. Source content и name не проходят
+общую строковую enum/i18n нормализацию, иначе редактор потеряет исходный текст.
+
+Доказательство mapping: TestManagedConfigurationRoutesCallExactTypedRPC
+проверяет все перечисленные маршруты, точные RPC, idempotency/OCC и pagination.
+Дополнительные тесты проверяют сохранение source, отсутствие caller authority,
+невалидные revisions, owner denial и duplicate consumers.
+
+Выборочное переключение потребителей environment/secret revisions и полный
+SkillBundle/MemoryRecord lifecycle зависят от завершения #1046. Этот раздел
+не заявляет готовность всего #1045 до подключения этих producer contracts.
+
+## Черновики окружений (#1045, #1046)
+
+| HTTP /api/v1/ | Внутренний RPC | Авторитетный результат |
+| --- | --- | --- |
+| POST projects/{projectRef}/runtime-environment-drafts | CreateRuntimeEnvironmentDraft | Создание отдельного DRAFT, без публикации |
+| GET runtime-environment-drafts/{draftRef} | GetRuntimeEnvironmentDraft | Сохранённая спецификация и version |
+| PUT runtime-environment-drafts/{draftRef} | SaveRuntimeEnvironmentDraft | Сохранение, сброс предыдущей валидации |
+| POST runtime-environment-drafts/{draftRef}/validation | ValidateRuntimeEnvironmentDraft | VALID/digest либо INVALID/diagnostics |
+| POST runtime-environment-drafts/{draftRef}/publication | PublishRuntimeEnvironmentDraft | PUBLISHED и publishedEnvironmentRef |
+| DELETE runtime-environment-drafts/{draftRef} | DiscardRuntimeEnvironmentDraft | DISCARDED, опубликованное окружение не меняется |
+
+Actor/organization берутся из проверенной browser authority. При создании
+route project лишь сужает полномочия; при чтении/изменении владелец разрешает
+проект через draftRef и проверяет `project.manage`. Payload не назначает owner.
+Создание черновика существующего окружения требует пары environmentRef и
+expectedEnvironmentVersion. Последующие команды требуют If-Match версии
+черновика и Idempotency-Key; ETag ответа относится к этому же draft.
+
+Сохранение допускает незавершённые имя/образ и не запускает публикацию.
+Валидация и публикация выполняются отдельными owner-командами. Control-plane
+атомарно проверяет свежесть зависимостей, VALID/digest, OCC окружения и
+сохраняет публикацию; её событие и потребители принадлежат тому же владельцу.
+Черновые команды не создают исполняемую runtime revision; их авторитетный
+read path — GET draft. Ответ публикации возвращает ссылку, по которой PWA
+читает опубликованное окружение, а не выдаёт локальный draft за публикацию.
+
+Свободный текст, значения переменных и команды инструментов переносятся
+типизированным caster без общей строковой i18n/enum нормализации. Secret
+bindings содержат только ссылки. Все ответы no-store, массивы всегда `[]`.
+Тесты проверяют шесть точных RPC, source round-trip, policy enums, OCC,
+подстановку projectRef, отказ без версии и owner 403/404/412.
+
+## Общие каталоги и виртуальные файлы (#1045)
+
+| HTTP GET /api/v1/ | RPC | Результат для PWA |
+| --- | --- | --- |
+| agents | ListAgents | ИИ-сотрудники доступных проектов |
+| workflows | ListWorkflows | Процессы доступных проектов |
+| schedules | ListSchedules | Автоматизации доступных проектов |
+| runtime-environments | ListRuntimeEnvironmentSets | Безопасные описания окружений |
+| runtime-secrets | ListRuntimeSecrets | Метаданные без значений секретов |
+| project-memberships | ListProjectMemberships | Участники доступных проектов, поиск и cursor |
+| managed-configurations | ListManagedConfigurations | Компактные метаданные конфигураций и текущих ревизий |
+| vfs/nodes | ListVFSNodes | Типизированные элементы виртуальной папки |
+| vfs/search | SearchVFS | Серверный поиск разрешённых виртуальных ресурсов |
+
+Источник actor/organization тот же проверенный browser context. Optional
+projectRef лишь сужает owner query; отсутствие фильтра не даёт доступа к чужим
+проектам. Одна HTTP-операция вызывает один RPC, без обхода проектов через fanout.
+Control-plane разрешает eligibility, lifecycle и scan state; путь VFS не
+используется как authority или ключ физического хранилища. Чтения не создают
+события или mutable state, ответ и cursor являются авторитетным read path.
+
+Каталог конфигураций дополнительно фильтруется по закрытому kind. Он не
+передаёт source content каждой ревизии: полный текст остаётся в существующем
+защищённом history read path. Компактная текущая ревизия сохраняет точные
+ref/version/state/digest, а не подменяет отсутствующий текст пустой строкой.
+Проектный `/projects/{projectRef}/members` также принимает query и pagination.
+Глобальный membership сохраняет producer projectRef для группировки; у
+участника платформы этого поля нет. VFS также передаёт типы AUTOMATION,
+ENVIRONMENT и AVATAR без подмены их обычным файлом.
+
+Query, pageSize и pageToken ограничены до RPC, включая защиту от переполнения
+при преобразовании int в int32. Names/paths VFS сохраняются дословно, enum
+переводится только из закрытого реестра kind. Пустые списки представлены [];
+secret metadata всегда no-store. Unknown kind и повреждённый producer response
+отклоняются с 502. Глобальная выборка и bounded SQL pagination владельца
+дорабатываются в #1046; HTTP mapping не является доказательством этой части.
+
+Проверки: TestOrganizationCatalogsForwardFiltersAndCursorWithoutProjectFanout,
+TestOrganizationCatalogRejectsInvalidBoundsBeforeRPC,
+TestOrganizationCatalogPropagatesAuthoritativeDenial,
+TestProjectMembershipsForwardSearchAndPagination,
+TestManagedCatalogPreservesSummaryAndFilters,
+TestManagedCatalogRejectsMalformedInputsAndProducer,
+TestVFSRoutesPreserveTypedSourceAndPagination,
+TestVFSRejectsMalformedPathAndUnknownProducerKind.
+
 ## Контракты и проверка
+
+### Доступность голосового ввода (#1045, #1020)
+
+Источник требования: `MVP-UI-55`..`MVP-UI-60`. Авторитетный actor и организация
+берутся из browser session/OIDC, а не из multipart или выбранного проекта.
+`POST /api/v1/speech/transcriptions` и совместимый проектный маршрут используют
+одну `platform.stt.transcribe` operation. Policy revision 45 выдаёт ей
+organization-scoped proof; проект не подставляется для обхода отсутствующей
+области. CSRF/Origin, organization+subject rate limit и concurrency admission
+выполняет общая browser boundary до handler.
+
+`GET /bootstrap` и результат onboarding содержат `speechTranscription`.
+Control-plane сначала вычисляет eligibility по правам и конфигурации. Только
+после положительного решения gateway вызывает `Transcribe.availability_check`
+под свежим user-bound authority: STT проверяет policy, credential и provider
+путь без audio и billable transcription. Локальная readiness не заменяет эту
+проверку. Ответ ограничен пятью секундами, не кэшируется между пользователями
+и даёт `available=true` только при `READY` и действующем `validUntil` не дальше
+30 секунд с допуском одной секунды на часы. PWA обновляет этот снимок до expiry;
+сама транскрипция всегда заново проверяет право и конфигурацию. Отказ STT не
+превращает bootstrap всего приложения в ошибку.
+
+Multipart принимает MP3/MPGA, WAV, FLAC, WebM, Ogg и MP4/M4A с закрытыми codec
+parameters. Content-Length и заявленный размер проверяются до RPC; chunks,
+digest и единственная part сверяются перед commit. Реальный контейнер и
+длительность проверяет STT decoder. Каждый выход из handler отменяет stream;
+автоматических повторов billable вызова нет. Audio/transcript не пишутся в
+логи или audit; gateway возвращает только текст и безопасный receipt, без
+actor/tenant/provider-account identifiers. Событий и устойчивой записи
+транскрипции нет, единственный результат возвращается в текущий запрос.
+
+Локальные тесты: `TestSpeechAvailabilityUsesProtectedStreamWithoutAudio`,
+`TestSpeechAvailabilityFailsClosedWithoutBreakingBootstrap`,
+`TestOrganizationSpeechSupportsBrowserFormatsAndCancelsStream`,
+`TestSpeechRejectsUnsupportedFormatsAndMalformedLengthBeforeRPC`.
+Полный STT provider/deploy path завершается в #1020, #1029 и #1046, PWA в
+#1022; реальные русскоязычные provider и browser smoke до staging не выполнены.
 
 - OpenAPI: `contracts/openapi/control-api-gateway/v1/openapi.yaml`;
 - WebSocket: `contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml`;
 - deploy: `deploy/k8s/base/control-api-gateway`.
 
 Проверенная документация внешних библиотек: gRPC-Go client streaming/flow
-control/context cancellation и oidc-client-ts session/events.
+control/context cancellation и oidc-client-ts session/events. Через Context7
+`/oapi-codegen/oapi-codegen` проверена stdhttp generation: generated handler
+не заменяет валидацию ограничений query/request на границе.
+Дополнительно Context7 `/grpc/grpc-go`: `SendMsg` может возвращать EOF вместо
+server status, поэтому STT handler читает окончательный статус через
+`CloseAndRecv`; отмена контекста завершает незакрытый streaming RPC.
 
 ```bash
 cd services/external/control-api-gateway

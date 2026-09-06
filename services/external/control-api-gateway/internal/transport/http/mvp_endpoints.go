@@ -150,6 +150,10 @@ func writeFallbackAvatar(w http.ResponseWriter, ref string) error {
 }
 
 func (server *Server) ListProviderDefinitions(w http.ResponseWriter, r *http.Request, p generated.ListProviderDefinitionsParams) {
+	r, ok := catalogRequest(w, r, nil, p.Query, p.PageSize, p.PageToken)
+	if !ok {
+		return
+	}
 	response, err := server.control.Query.ListProviderDefinitions(r.Context(), &controlplanev1.ListProviderDefinitionsRequest{
 		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query),
 	})
@@ -157,24 +161,59 @@ func (server *Server) ListProviderDefinitions(w http.ResponseWriter, r *http.Req
 		writeRPCProblem(w, err)
 		return
 	}
+	for _, definition := range response.GetDefinitions() {
+		if definition == nil {
+			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
+		for _, model := range definition.Models {
+			if _, valid := modelCapabilityView(model); !valid || model.ProviderDefinitionKey != definition.Key {
+				writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+				return
+			}
+		}
+	}
 	writeMessage(w, http.StatusOK, response, "", "definitions")
 }
 
 func (server *Server) ListProviderAccounts(w http.ResponseWriter, r *http.Request, p generated.ListProviderAccountsParams) {
+	usage, usageOK := providerUsageContext(p.UsagePurpose != nil || p.UsageAgentRef != nil || p.UsageRuntimeProfileRef != nil || p.UsageProviderDefinitionKey != nil || p.UsageModel != nil || p.UsageReasoningEffort != nil,
+		stringValue(p.UsagePurpose), stringValue(p.UsageAgentRef), stringValue(p.UsageRuntimeProfileRef), stringValue(p.UsageProviderDefinitionKey), stringValue(p.UsageModel), stringValue(p.UsageReasoningEffort))
+	state, stateOK := catalogStateFilter(p.State, controlplanev1.ProviderAccountState_value, "PROVIDER_ACCOUNT_STATE_")
+	if !stateOK || !usageOK {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+		return
+	}
 	response, err := server.control.Query.ListProviderAccounts(r.Context(), &controlplanev1.ListProviderAccountsRequest{
-		Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), DefinitionKey: stringValue(p.DefinitionKey),
+		Page: page(p.PageSize, p.PageToken), State: controlplanev1.ProviderAccountState(state), Query: stringValue(p.Query), DefinitionKey: stringValue(p.DefinitionKey), UsageContext: usage,
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
+	for _, account := range response.GetAccounts() {
+		if !validProviderAccountRead(account, usage) {
+			writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
+	}
 	writeMessage(w, http.StatusOK, response, "", "accounts")
 }
 
-func (server *Server) GetProviderAccount(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef) {
-	response, err := server.control.Query.GetProviderAccount(r.Context(), &controlplanev1.GetProviderAccountRequest{AccountRef: ref})
+func (server *Server) GetProviderAccount(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.GetProviderAccountParams) {
+	usage, ok := providerUsageContext(p.UsagePurpose != nil || p.UsageAgentRef != nil || p.UsageRuntimeProfileRef != nil || p.UsageProviderDefinitionKey != nil || p.UsageModel != nil || p.UsageReasoningEffort != nil,
+		stringValue(p.UsagePurpose), stringValue(p.UsageAgentRef), stringValue(p.UsageRuntimeProfileRef), stringValue(p.UsageProviderDefinitionKey), stringValue(p.UsageModel), stringValue(p.UsageReasoningEffort))
+	if !ok {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+		return
+	}
+	response, err := server.control.Query.GetProviderAccount(r.Context(), &controlplanev1.GetProviderAccountRequest{AccountRef: ref, UsageContext: usage})
 	if err != nil {
 		writeRPCProblem(w, err)
+		return
+	}
+	if !validProviderAccountRead(response.GetAccount(), usage) || response.GetAccount().Ref != ref {
+		writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "account", "")
@@ -262,6 +301,10 @@ func (server *Server) VerifyProviderAccountDeviceAuthorization(w http.ResponseWr
 		writeRPCProblem(w, err)
 		return
 	}
+	if response.GetAccount() == nil || response.GetAccount().GetRef() != ref {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	writeMessage(w, http.StatusOK, response, "account", "")
 }
 
@@ -275,6 +318,10 @@ func (server *Server) ReauthorizeProviderAccountDeviceCode(w http.ResponseWriter
 		writeRPCProblem(w, err)
 		return
 	}
+	if response.GetAccount() == nil || response.GetAccount().GetRef() != ref {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	writeMessage(w, http.StatusAccepted, response, "account", "")
 }
 
@@ -286,6 +333,10 @@ func (server *Server) DeleteProviderAccount(w http.ResponseWriter, r *http.Reque
 	response, err := server.control.Command.DeleteProviderAccount(r.Context(), &controlplanev1.DeleteProviderAccountRequest{Mutation: mutation, AccountRef: ref})
 	if err != nil {
 		writeRPCProblem(w, err)
+		return
+	}
+	if response.GetAccount() == nil || response.GetAccount().GetRef() != ref {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	writeMessage(w, http.StatusOK, response, "account", "")
@@ -322,14 +373,7 @@ func (server *Server) SetProviderAccountEnabled(w http.ResponseWriter, r *http.R
 }
 
 func (server *Server) ListPromptTemplateVariables(w http.ResponseWriter, r *http.Request, p generated.ListPromptTemplateVariablesParams) {
-	response, err := server.control.Query.ListTemplateVariables(r.Context(), &controlplanev1.ListTemplateVariablesRequest{
-		ProjectRef: stringValue(p.ProjectRef), Query: stringValue(p.Query), Page: page(p.PageSize, p.PageToken),
-	})
-	if err != nil {
-		writeRPCProblem(w, err)
-		return
-	}
-	writeMessage(w, http.StatusOK, response, "", "variables")
+	server.listTemplateVariables(w, r, stringValue(p.ProjectRef), stringValue(p.AgentRef), stringValue(p.RuntimeRevisionRef), stringValue(p.Query), p.PageSize, p.PageToken)
 }
 
 func (server *Server) ValidatePromptTemplate(w http.ResponseWriter, r *http.Request, _ generated.ValidatePromptTemplateParams) {
@@ -337,12 +381,22 @@ func (server *Server) ValidatePromptTemplate(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	response, err := server.control.Query.ValidatePromptTemplate(r.Context(), &controlplanev1.ValidatePromptTemplateRequest{Template: body.Template})
+	context, valid := promptContextInput(body.Context)
+	if !valid || !promptText(body.Template, 256<<10) || !validPromptSelection(promptOptional(body.TargetKind), stringValue(body.TargetRef), stringValue(body.ExpectedContextDigest), context) {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+		return
+	}
+	response, err := server.control.Query.ValidatePromptTemplate(r.Context(), &controlplanev1.ValidatePromptTemplateRequest{Template: body.Template, TargetKind: promptOptional(body.TargetKind), TargetRef: stringValue(body.TargetRef), Context: context, ExpectedContextDigest: stringValue(body.ExpectedContextDigest)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "")
+	result, valid := promptValidationView(response)
+	if !valid || !validPromptContextReadback(promptOptional(body.TargetKind), stringValue(body.TargetRef), stringValue(body.ExpectedContextDigest), response.GetContextPin()) || !validPromptSelectedPin(context, response.GetContextPin()) {
+		writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (server *Server) PreviewPromptTemplate(w http.ResponseWriter, r *http.Request, _ generated.PreviewPromptTemplateParams) {
@@ -350,15 +404,25 @@ func (server *Server) PreviewPromptTemplate(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
+	context, valid := promptContextInput(body.Context)
+	if !valid || !promptText(body.Template, 256<<10) || !validPromptSelection(promptOptional(body.TargetKind), stringValue(body.TargetRef), stringValue(body.ExpectedContextDigest), context) {
+		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
+		return
+	}
 	response, err := server.control.Query.PreviewPromptTemplate(r.Context(), &controlplanev1.PreviewPromptTemplateRequest{
-		Template: body.Template, TargetKind: stringValue(body.TargetKind), TargetRef: stringValue(body.TargetRef),
+		Template: body.Template, TargetKind: promptOptional(body.TargetKind), TargetRef: stringValue(body.TargetRef), Context: context, ExpectedContextDigest: stringValue(body.ExpectedContextDigest),
 		IncludeFullMaterialization: body.IncludeFullMaterialization != nil && *body.IncludeFullMaterialization,
 	})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "")
+	result, valid := promptPreviewView(response, body.IncludeFullMaterialization != nil && *body.IncludeFullMaterialization)
+	if !valid || !validPromptContextReadback(promptOptional(body.TargetKind), stringValue(body.TargetRef), stringValue(body.ExpectedContextDigest), response.GetContextPin()) || !validPromptSelectedPin(context, response.GetContextPin()) || response.GetRuntimeDiff() != nil && promptOptional(body.TargetKind) == "SESSION_CONTINUATION" && response.GetRuntimeDiff().GetSessionRef() != stringValue(body.TargetRef) {
+		writeLocalProblem(w, 502, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (server *Server) DeleteRuntimeEnvironment(w http.ResponseWriter, r *http.Request, ref generated.RuntimeEnvironmentRef, p generated.DeleteRuntimeEnvironmentParams) {

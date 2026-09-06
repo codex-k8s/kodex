@@ -25,13 +25,14 @@ import (
 const maximumJSONBody = 1 << 20
 
 type Server struct {
-	control  *controlplaneclient.Client
-	secrets  secretbrokerv1.SecretBrokerServiceClient
-	speech   speechToTextClient
-	boundary *boundary.Boundary
-	logger   *slog.Logger
-	realtime http.Handler
-	texts    *texti18n.Localizer
+	control      *controlplaneclient.Client
+	secrets      secretbrokerv1.SecretBrokerServiceClient
+	secretDrafts secretbrokerv1.SecretBrokerServiceClient
+	speech       speechToTextClient
+	boundary     *boundary.Boundary
+	logger       *slog.Logger
+	realtime     http.Handler
+	texts        *texti18n.Localizer
 }
 
 func New(control *controlplaneclient.Client, security *boundary.Boundary, logger *slog.Logger, texts *texti18n.Localizer) (*Server, error) {
@@ -46,6 +47,14 @@ func (server *Server) AttachSecretBroker(client secretbrokerv1.SecretBrokerServi
 		return errors.New("secret broker attachment is invalid")
 	}
 	server.secrets = client
+	return nil
+}
+
+func (server *Server) AttachSecretDraftBroker(client secretbrokerv1.SecretBrokerServiceClient) error {
+	if client == nil || server.secretDrafts != nil {
+		return errors.New("secret draft broker attachment is invalid")
+	}
+	server.secretDrafts = client
 	return nil
 }
 
@@ -104,7 +113,11 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 			secretRef = *body.Purpose.SecretRef
 		}
 		purpose = &boundary.SessionPurpose{
-			Kind: string(body.Purpose.Kind), ProjectRef: body.Purpose.ProjectRef, SecretRef: secretRef,
+			Kind: string(body.Purpose.Kind), ProjectRef: stringValue(body.Purpose.ProjectRef), SecretRef: secretRef,
+			ReceiptRef: stringValue(body.Purpose.ReceiptRef), ReceiptDigest: stringValue(body.Purpose.ReceiptDigest),
+		}
+		if body.Purpose.ReceiptVersion != nil {
+			purpose.ReceiptVersion = *body.Purpose.ReceiptVersion
 		}
 	}
 	claims, encoded, csrf, err := server.boundary.IssueSession(principal, bearer, purpose)
@@ -127,9 +140,8 @@ func (server *Server) CreateOwnerSession(writer http.ResponseWriter, request *ht
 	writer.WriteHeader(http.StatusNoContent)
 }
 
-func (server *Server) RenewOwnerSession(writer http.ResponseWriter, _ *http.Request, _ generated.RenewOwnerSessionParams) {
-	writer.Header().Set("Cache-Control", "no-store")
-	writer.WriteHeader(http.StatusNoContent)
+func (server *Server) RenewOwnerSession(writer http.ResponseWriter, request *http.Request, _ generated.RenewOwnerSessionParams) {
+	server.GetOwnerSession(writer, request)
 }
 
 func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *http.Request, parameters generated.DeleteOwnerSessionParams) {
@@ -240,6 +252,10 @@ func withProjectReference(writer http.ResponseWriter, request *http.Request, ref
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
+		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) || errors.Is(err, errPublicIntegrationShape) || errors.Is(err, errRuntimeCatalogView) || errors.Is(err, errOwnerGateShape) {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		writeLocalProblem(writer, http.StatusInternalServerError, "INTERNAL", false)
 		return
 	}
@@ -288,6 +304,9 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 }
 
 func messageMap(message proto.Message) (map[string]any, error) {
+	if err := validateRuntimeCatalogMessage(message.ProtoReflect(), 0); err != nil {
+		return nil, err
+	}
 	raw, err := (protojson.MarshalOptions{UseProtoNames: false}).Marshal(message)
 	if err != nil {
 		return nil, err
@@ -305,7 +324,36 @@ func messageMap(message proto.Message) (map[string]any, error) {
 
 const maximumSafeJSONInteger = int64(1<<53 - 1)
 
+var errPublicSecretDescriptor = errors.New("public Secret descriptor revision is invalid")
+var errPublicProviderStatusReason = errors.New("public provider status reason is invalid")
+
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+	if descriptor.FullName() == "controlplane.v1.WorkflowVersion" {
+		ref, ok := value["ref"].(string)
+		if !ok || !fileTargetRef(ref) {
+			return errors.New("workflow revision reference is invalid")
+		}
+		if _, ok := controlplanev1.WorkflowState_value[fmt.Sprint(value["state"])]; !ok || value["state"] == "WORKFLOW_STATE_UNSPECIFIED" {
+			return errors.New("workflow revision state is invalid")
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.ProviderAccount" {
+		if reason, exists := value["safeStatusReason"]; exists {
+			switch reason {
+			case "AUTHORIZED", "ACCOUNT_DISABLED", "ACCOUNT_REVOKED", "REAUTHORIZATION_REQUIRED", "DEVICE_AUTHORIZATION_PENDING", "CREDENTIAL_CONFIGURATION_REQUIRED", "ACCOUNT_STATE_UNKNOWN", "DEVICE_AUTHORIZATION_EXPIRED", "DEVICE_AUTHORIZATION_FAILED", "CREDENTIAL_MATERIALIZATION_FAILED", "ACCOUNT_DELETING", "ACCOUNT_DELETED":
+			default:
+				return errPublicProviderStatusReason
+			}
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.RuntimeSecretDescriptor" {
+		revision, ok := value["revision"].(string)
+		pin, err := strconv.ParseInt(revision, 10, 64)
+		if !ok || err != nil || !validManagedVersion(pin) {
+			return errPublicSecretDescriptor
+		}
+		delete(value, "namespace")
+	}
 	fields := descriptor.Fields()
 	for index := 0; index < fields.Len(); index++ {
 		field := fields.Get(index)
@@ -340,27 +388,134 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		}
 		value[field.JSONName()] = normalized
 	}
-	return nil
+	if descriptor.FullName() == "controlplane.v1.WorkflowVersion" {
+		for _, key := range []string{"version", "revision"} {
+			number, ok := value[key].(float64)
+			if !ok || number < 1 || number > float64(maximumSafeJSONInteger) || number != float64(int64(number)) {
+				return errors.New("workflow revision number is invalid")
+			}
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.AgentInstructionsBinding" {
+		ref, refOK := value["ref"].(string)
+		revision, revisionOK := value["revisionRef"].(string)
+		version, versionOK := value["version"].(float64)
+		if !refOK || !revisionOK || !versionOK || !fileTargetRef(ref) || !fileTargetRef(revision) || version < 1 || version > float64(maximumSafeJSONInteger) || version != float64(int64(version)) {
+			return errors.New("agent instructions binding shape is invalid")
+		}
+	}
+	return normalizeIntegrationShape(value, descriptor)
 }
 
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	if descriptor.FullName() == "controlplane.v1.WorkflowCardSummary" {
+		if field.Kind() == protoreflect.BoolKind {
+			return false, field.JSONName() == "hasHumanGate"
+		}
+		if field.Kind() == protoreflect.Int32Kind {
+			switch field.JSONName() {
+			case "stageCount", "uniqueAgentCount", "parallelGroupCount", "activeRunCount", "pendingGateCount":
+				return float64(0), true
+			}
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.Project" && field.Kind() == protoreflect.Int32Kind {
+		switch field.JSONName() {
+		case "agentCount", "workflowCount", "activeRunCount", "pendingGateCount":
+			return float64(0), true
+		}
+	}
+	if field.Kind() == protoreflect.Int64Kind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.ProviderAccountBlockerCount":
+			return float64(0), field.JSONName() == "total"
+		case "controlplane.v1.ProviderAccountDeletion":
+			return float64(0), field.JSONName() == "pendingCleanup"
+		case "controlplane.v1.ListProviderAccountBlockersResponse":
+			return float64(0), field.JSONName() == "total" || field.JSONName() == "hiddenCount" || field.JSONName() == "deletionIntentVersion"
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.ProviderAccountBlocker" {
+		if field.Kind() == protoreflect.BoolKind && field.JSONName() == "canCancel" {
+			return false, true
+		}
+		if field.Kind() == protoreflect.StringKind && field.JSONName() == "name" {
+			return "", true
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.AgentInstructionsBinding" && field.Kind() == protoreflect.BoolKind && field.JSONName() == "effective" {
+		return false, true
+	}
 	// Некоторым proto3 zero values соответствует обязательное поле OpenAPI.
 	// Список явный: другие пустые scalar могут означать отсутствующую ссылку.
+	if field.JSONName() == "total" && field.Kind() == protoreflect.Int64Kind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.ListRunsResponse", "controlplane.v1.ListArtifactsResponse", "controlplane.v1.ListConfigOverlayRevisionsResponse":
+			return float64(0), true
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.TokenUsage" && isProto64BitInteger(field.Kind()) {
 		return float64(0), true
 	}
 	if field.Kind() == protoreflect.StringKind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.OwnerGateDecisionConsequence":
+			return "", field.JSONName() == "safeSummary"
+		case "controlplane.v1.IntegrationIntent":
+			return "", field.JSONName() == "connectionName"
+		case "controlplane.v1.ProviderAccountCandidate":
+			return "", field.JSONName() == "defaultReasoningEffort"
+		case "controlplane.v1.ConfigOverlayField":
+			return "", field.JSONName() == "defaultValue"
+		case "controlplane.v1.ConfigOverlayDiagnostic":
+			return "", field.JSONName() == "key"
 		case "controlplane.v1.ConfigOverlayVersion":
 			return "", field.JSONName() == "content"
 		case "controlplane.v1.AgentRuntimeConfigurationView":
 			return "", field.JSONName() == "safeEffectiveConfig"
 		case "controlplane.v1.ProviderAccount":
 			return "", field.JSONName() == "externalAccountMasked"
+		case "controlplane.v1.ModelCapability":
+			return "", field.JSONName() == "defaultReasoningEffort"
+		case "controlplane.v1.ProviderDefinition":
+			return "", field.JSONName() == "description" || field.JSONName() == "defaultModelId"
 		}
+	}
+	if descriptor.FullName() == "controlplane.v1.ConfigOverlayDiagnostic" && field.Kind() == protoreflect.Int32Kind {
+		return float64(0), field.JSONName() == "line" || field.JSONName() == "column"
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"
+	}
+	if descriptor.FullName() == "controlplane.v1.ProviderAccountUsage" {
+		if field.Kind() == protoreflect.BoolKind {
+			return false, field.JSONName() == "allowedToSubmit" || field.JSONName() == "eligibleForSelection"
+		}
+		if isProto64BitInteger(field.Kind()) {
+			return float64(0), field.JSONName() == "agentVersion" || field.JSONName() == "activeExecutions"
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.WorkflowLaunchReadiness" && field.Kind() == protoreflect.BoolKind {
+		return false, field.JSONName() == "allowedToSubmit"
+	}
+	if field.Kind() == protoreflect.BoolKind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.OwnerGateDecisionConsequence":
+			return false, field.JSONName() == "executesExternalEffect" || field.JSONName() == "terminalForRun"
+		case "controlplane.v1.IntegrationCapability":
+			return false, field.JSONName() == "approvalRequired"
+		case "controlplane.v1.IntegrationConfigurationField":
+			return false, field.JSONName() == "required"
+		case "controlplane.v1.IntegrationGrant":
+			return false, field.JSONName() == "enabled"
+		case "controlplane.v1.IntegrationDefinition":
+			return false, field.JSONName() == "builtIn" || field.JSONName() == "available"
+		case "controlplane.v1.IntegrationConnection":
+			return false, field.JSONName() == "credentialsConfigured"
+		}
+	}
+	if (descriptor.FullName() == "controlplane.v1.ModelCapability" || descriptor.FullName() == "controlplane.v1.ProviderDefinition") && field.Kind() == protoreflect.BoolKind {
+		return false, field.JSONName() == "available" || field.JSONName() == "ready"
 	}
 	return nil, false
 }
@@ -393,6 +548,8 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 		return item, normalizeProtoJSONShape(item, field.Message())
 	}
 	switch field.Kind() {
+	case protoreflect.EnumKind:
+		return normalizeIntegrationEnum(value, field.Enum())
 	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
 		text, ok := value.(string)
 		if !ok {
@@ -446,6 +603,9 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 		}
 	case map[string]any:
 		for key, item := range current {
+			if key == "integrationIntent" {
+				continue
+			}
 			LocalizeSafeErrors(item, localize)
 			if text, ok := item.(string); ok && strings.HasPrefix(text, "i18n:") {
 				current[key] = localize(strings.TrimPrefix(text, "i18n:"))
@@ -465,8 +625,10 @@ var enumPrefixes = []string{
 	"RUN_EVENT_ACTOR_KIND_", "RUN_EVENT_MESSAGE_KIND_", "RUN_TOOL_CALL_STATE_",
 	"OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "ARTIFACT_LIFECYCLE_STATE_",
 	"ATTACHMENT_SET_STATE_", "ATTACHMENT_SET_PURPOSE_",
-	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_",
+	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_", "ASSISTANT_CONVERSATION_STATE_",
 	"PROVIDER_ACCOUNT_STATE_", "PROVIDER_AUTHORIZATION_METHOD_", "PROVIDER_AUTHORIZATION_STATE_",
+	"PROVIDER_ACCOUNT_DELETION_STATE_", "PROVIDER_ACCOUNT_VERIFICATION_STATE_", "PROVIDER_ACCOUNT_VERIFICATION_SCOPE_", "PROVIDER_ACCOUNT_BLOCKER_KIND_", "PROVIDER_ACCOUNT_QUEUED_WORK_OUTCOME_",
+	"PROVIDER_ACCOUNT_USAGE_PURPOSE_", "PROVIDER_USAGE_STATE_", "PROVIDER_USAGE_REASON_", "PROVIDER_USAGE_REMEDIATION_", "PROVIDER_HEALTH_SCOPE_",
 	"RUNTIME_SECRET_VALUE_TYPE_",
 	"SEARCH_RESULT_KIND_",
 	"PERMISSION_RISK_", "ACCESS_SUBJECT_KIND_", "ACCESS_SCOPE_KIND_", "ACCESS_RESOURCE_KIND_",
@@ -485,6 +647,24 @@ func normalize(value any) {
 		}
 	case map[string]any:
 		for key, item := range current {
+			// Ссылка — literal owner data, даже если совпала с префиксом enum.
+			if key == "currentRunRef" {
+				continue
+			}
+			// Typed intent уже проверен по Proto; его owner data не являются enum.
+			if key == "integrationIntent" || key == "decisionConsequences" {
+				continue
+			}
+			// Имена и ссылки контекста — literal owner data, не enum.
+			_, contextRoute := current["route"]
+			_, contextOperations := current["allowedOperations"]
+			if contextRoute && contextOperations && (key == "route" || key == "entityKind" || key == "entityRef" || key == "entityName") {
+				continue
+			}
+			_, blockerCancellation := current["canCancel"]
+			if blockerCancellation && (key == "name" || key == "ref" || key == "projectRef") {
+				continue
+			}
 			normalize(item)
 			if text, ok := item.(string); ok {
 				current[key] = normalizeEnum(text)
@@ -676,9 +856,26 @@ func target(value map[string]any) (string, any, bool) {
 }
 
 func flattenWorkflow(value map[string]any) {
+	for source, field := range map[string]string{"publishedVersion": "publishedRevisionRef", "draftVersion": "draftRevisionRef"} {
+		if snapshot, ok := value[source].(map[string]any); ok {
+			value[field] = snapshot["ref"]
+		}
+	}
+	if draft, ok := value["draftVersion"].(map[string]any); ok {
+		snapshot := map[string]any{}
+		for _, key := range []string{"ref", "version", "revision", "state", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
+			if item, exists := draft[key]; exists {
+				snapshot[key] = item
+			}
+		}
+		value["draft"] = snapshot
+	}
 	version, _ := value["publishedVersion"].(map[string]any)
 	if version == nil {
 		version, _ = value["draftVersion"].(map[string]any)
+	}
+	if version != nil {
+		value["revisionRef"] = version["ref"]
 	}
 	for _, key := range []string{"revision", "coordinatorAgentRef", "inputFields", "steps", "maxConcurrency", "timeoutSeconds", "completionCriteria", "validationMessages"} {
 		if item, exists := version[key]; exists {

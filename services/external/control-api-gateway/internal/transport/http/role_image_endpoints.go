@@ -28,19 +28,46 @@ func (server *Server) ListRoleImageRecipes(writer http.ResponseWriter, request *
 	if !ok {
 		return
 	}
+	query, state := stringValue(parameters.Query), ""
+	if parameters.State != nil {
+		state = string(*parameters.State)
+	}
+	if !validSearchText(query, 0, 128) || len(query) > 128 || state != "" && state != "ACTIVE" && state != "ARCHIVED" ||
+		parameters.RoleDefinitionRef != nil && !effectiveCapabilityRef(*parameters.RoleDefinitionRef) ||
+		parameters.PageSize != nil && (*parameters.PageSize < 1 || *parameters.PageSize > 100) ||
+		parameters.PageToken != nil && !boundedModelText(*parameters.PageToken, 512) {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	response, err := server.control.RoleImages.ListRoleImageRecipes(request.Context(), &controlplanev1.ListRoleImageRecipesRequest{
 		ProjectRef: projectRef, RoleDefinitionRef: stringValue(parameters.RoleDefinitionRef),
-		Page: page(parameters.PageSize, parameters.PageToken),
+		Page: page(parameters.PageSize, parameters.PageToken), Query: query, State: state,
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
 		return
 	}
-	result := generated.RoleImageRecipePage{Items: make([]generated.RoleImageRecipe, 0, len(response.GetRecipes()))}
+	if response == nil || response.GetTotal() < int64(len(response.GetRecipes())) || response.GetTotal() > maximumSafeJSONInteger || len(response.GetRecipes()) > 100 ||
+		parameters.PageSize != nil && len(response.GetRecipes()) > *parameters.PageSize {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	result := generated.RoleImageRecipePage{Items: make([]generated.RoleImageRecipe, 0, len(response.GetRecipes())), Total: response.GetTotal()}
+	seen := make(map[string]bool, len(response.GetRecipes()))
 	for _, recipe := range response.GetRecipes() {
+		if recipe == nil || recipe.GetProjectRef() != projectRef || !effectiveCapabilityRef(recipe.GetRef()) || seen[recipe.GetRef()] ||
+			!validRoleImageLineage(recipe.GetManagedLineage()) || !validRoleImageSource(recipe) {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
+		seen[recipe.GetRef()] = true
 		result.Items = append(result.Items, publicRoleImageRecipe(recipe))
 	}
 	if token := response.GetPage().GetNextPageToken(); token != "" {
+		if !boundedModelText(token, 512) || token == stringValue(parameters.PageToken) || len(result.Items) == 0 {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		result.NextPageToken = &token
 	}
 	writeJSON(writer, http.StatusOK, result)
@@ -56,11 +83,19 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 		writeLocalProblem(writer, http.StatusNotFound, "NOT_FOUND", false)
 		return
 	}
+	if !validRoleImageLineage(response.GetRecipe().GetManagedLineage()) || !validRoleImageSource(response.GetRecipe()) {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
 	result := generated.RoleImageRecipeDetail{
 		Recipe: publicRoleImageRecipe(response.GetRecipe()),
 		Builds: make([]generated.RoleImageBuild, 0, len(response.GetBuilds())),
 	}
 	for _, build := range response.GetBuilds() {
+		if build == nil || !validRoleImageBuildSource(build) || build.GetConfigurationRevisionRef() != "" && !effectiveCapabilityRef(build.GetConfigurationRevisionRef()) {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		result.Builds = append(result.Builds, publicRoleImageBuild(build))
 	}
 	if response.GetActiveArtifact() != nil {
@@ -73,6 +108,51 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 	}
 	setVersionETag(writer, response.GetRecipe().GetVersion())
 	writeJSON(writer, http.StatusOK, result)
+}
+
+func validRoleImageLineage(lineage *controlplanev1.RoleImageManagedLineage) bool {
+	if lineage == nil {
+		return true
+	}
+	if !generated.RoleImageManagedLineageManagedBy(lineage.GetManagedBy()).Valid() || !generated.RoleImageManagedLineageOrigin(lineage.GetOrigin()).Valid() ||
+		!validSearchText(lineage.GetSourceRef(), 0, 1024) || !validSearchText(lineage.GetSourceRevision(), 0, 256) {
+		return false
+	}
+	if lineage.GetConfigurationRef() == "" && lineage.GetRevisionRef() == "" && lineage.GetRevision() == 0 {
+		return lineage.GetManagedBy() == "SHIPPED" && lineage.GetOrigin() == "BASELINE"
+	}
+	return effectiveCapabilityRef(lineage.GetConfigurationRef()) && effectiveCapabilityRef(lineage.GetRevisionRef()) && validManagedVersion(lineage.GetRevision())
+}
+
+func validRoleImageReceipt(writer http.ResponseWriter, response *controlplanev1.ManageRoleImageRecipeResponse, projectRef, recipeRef string) bool {
+	recipe := response.GetRecipe()
+	if recipe == nil || recipe.GetProjectRef() != projectRef || recipeRef != "" && recipe.GetRef() != recipeRef ||
+		!validRoleImageLineage(recipe.GetManagedLineage()) || !validRoleImageSource(recipe) || !validRoleImageBuildSource(response.GetImageBuild()) || response.GetImageBuild().GetConfigurationRevisionRef() != "" && !effectiveCapabilityRef(response.GetImageBuild().GetConfigurationRevisionRef()) {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return false
+	}
+	return true
+}
+
+func validRoleImageSource(recipe *controlplanev1.RoleImageRecipe) bool {
+	environment := recipe.GetEnvironment()
+	if recipe == nil || environment == nil {
+		return false
+	}
+	if recipe.GetSourceAvailable() {
+		return strings.TrimSpace(environment.GetDockerfile()) != ""
+	}
+	return environment.GetDockerfile() == "" && environment.GetInstallationBlock() == ""
+}
+
+func validRoleImageBuildSource(build *controlplanev1.ImageBuild) bool {
+	if build == nil {
+		return true
+	}
+	if build.GetSourceAvailable() {
+		return strings.TrimSpace(build.GetDockerfile()) != ""
+	}
+	return build.GetDockerfile() == ""
 }
 
 func (server *Server) CreateRoleImageRecipe(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.CreateRoleImageRecipeParams) {
@@ -95,6 +175,9 @@ func (server *Server) CreateRoleImageRecipe(writer http.ResponseWriter, request 
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
+		return
+	}
+	if !validRoleImageReceipt(writer, response, projectRef, "") {
 		return
 	}
 	setVersionETag(writer, response.GetRecipe().GetVersion())
@@ -121,6 +204,9 @@ func (server *Server) UpdateRoleImageRecipe(writer http.ResponseWriter, request 
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
+		return
+	}
+	if !validRoleImageReceipt(writer, response, projectRef, recipeRef) {
 		return
 	}
 	setVersionETag(writer, response.GetRecipe().GetVersion())
@@ -150,6 +236,9 @@ func (server *Server) CommandRoleImageRecipe(writer http.ResponseWriter, request
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
+		return
+	}
+	if !validRoleImageReceipt(writer, response, projectRef, recipeRef) {
 		return
 	}
 	result := generated.RoleImageRecipeCommandReceipt{
@@ -209,8 +298,20 @@ func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.Role
 		RoleDefinitionRef: input.GetRoleDefinitionRef(), Name: input.GetName(),
 		State: generated.RoleImageRecipeState(input.GetState()), Generation: int64(input.GetGeneration()),
 		PromotedImageReady: input.GetPromotedImageReference() != "",
+		SourceAvailable:    input.GetSourceAvailable(),
 		CreatedAt:          protoTime(input.GetCreatedAt()), UpdatedAt: protoTime(input.GetUpdatedAt()),
 		NextActions: make([]generated.NextAction, 0, len(input.GetNextActions())),
+	}
+	if lineage := input.GetManagedLineage(); lineage != nil {
+		result.ManagedLineage = &generated.RoleImageManagedLineage{
+			ManagedBy: generated.RoleImageManagedLineageManagedBy(lineage.GetManagedBy()), Origin: generated.RoleImageManagedLineageOrigin(lineage.GetOrigin()),
+			SourceRef: lineage.GetSourceRef(), SourceRevision: lineage.GetSourceRevision(),
+			ConfigurationRef: optionalManagedString(lineage.GetConfigurationRef()), RevisionRef: optionalManagedString(lineage.GetRevisionRef()),
+		}
+		if lineage.GetRevision() != 0 {
+			revision := lineage.GetRevision()
+			result.ManagedLineage.Revision = &revision
+		}
 	}
 	if value := input.GetActiveImageArtifactRef(); value != "" {
 		result.ActiveImageArtifactRef = &value
@@ -219,7 +320,7 @@ func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.Role
 		result.PromotedImageReference = &value
 	}
 	if environment := input.GetEnvironment(); environment != nil {
-		result.Environment = generated.RoleEnvironmentSelection{EnvironmentKey: environment.GetEnvironmentKey(), Dockerfile: environment.GetDockerfile()}
+		result.Environment = generated.RoleEnvironmentView{EnvironmentKey: environment.GetEnvironmentKey(), Dockerfile: optionalManagedString(environment.GetDockerfile())}
 		if values := environment.GetPackageKeys(); len(values) > 0 {
 			copy := append([]string(nil), values...)
 			result.Environment.PackageKeys = &copy
@@ -241,9 +342,10 @@ func publicRoleImageRecipe(input *controlplanev1.RoleImageRecipe) generated.Role
 func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageBuild {
 	result := generated.RoleImageBuild{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
-		RecipeGeneration: int64(input.GetRecipeGeneration()), Dockerfile: input.GetDockerfile(),
+		RecipeGeneration: int64(input.GetRecipeGeneration()), Dockerfile: optionalManagedString(input.GetDockerfile()), SourceAvailable: input.GetSourceAvailable(),
 		Attempt: int(input.GetAttempt()), Stage: generated.RoleImageBuildStage(strings.TrimPrefix(input.GetStage().String(), "IMAGE_BUILD_STAGE_")),
 		ProgressPercent: int(input.GetProgressPercent()), CreatedAt: protoTime(input.GetCreatedAt()), UpdatedAt: protoTime(input.GetUpdatedAt()),
+		ConfigurationRevisionRef: optionalManagedString(input.GetConfigurationRevisionRef()),
 	}
 	if value := input.GetSafeErrorCode(); value != "" {
 		result.SafeErrorCode = &value
