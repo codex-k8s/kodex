@@ -440,7 +440,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .resources.limits["ephemeral-storage"] == "2Gi" and
     any(.volumeMounts[];
       .name == "artifact-spool" and
-      .mountPath == "/var/run/kodex/runtime-controller/artifact-spool" and
+      .mountPath == "/var/lib/kodex/runtime-controller/artifact-spool" and
       (.readOnly // false) == false and has("subPath") == false)) and
   all(($pod.containers + ($pod.initContainers // []))[];
     .name == "runtime-controller" or

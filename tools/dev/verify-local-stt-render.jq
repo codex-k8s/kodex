@@ -20,7 +20,7 @@ any(workload("Deployment"; "stt-tts-service") | .spec.template.spec;
     .args == ["services/internal/stt-tts-service", "./cmd/stt-tts-service", "stt-tts-service"] and
     .securityContext.readOnlyRootFilesystem == true and
     .readinessProbe.httpGet == {path:"/readyz", port:"metrics"} and
-    any(.volumeMounts[]; .name == "stt-spool" and .mountPath == "/var/run/kodex/stt-spool") and
+    any(.volumeMounts[]; .name == "stt-spool" and .mountPath == "/var/lib/kodex/stt-spool") and
     any(.volumeMounts[]; .name == "workload-tls" and .readOnly == true)) and
   any(.containers | named("internal-rpc-authority-issuer");
     .args[1] == "./cmd/internal-rpc-authority-issuer") and
