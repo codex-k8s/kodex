@@ -35,6 +35,7 @@ type Service interface {
 	CheckProtectedPath(context.Context) error
 	CheckAvailability(context.Context, value.Principal, string) (transcriptionservice.Availability, error)
 	Catalog() modelprofile.Catalog
+	GetModelCatalog(context.Context, value.Principal) (modelprofile.Catalog, error)
 }
 
 type Readiness interface {
@@ -213,6 +214,28 @@ func (server *Server) CheckReadiness(ctx context.Context, _ *sttv1.CheckReadines
 		return &sttv1.CheckReadinessResponse{Ready: false}, statusError(codes.Unavailable, "STT local runtime is unavailable", "UNAVAILABLE")
 	}
 	return &sttv1.CheckReadinessResponse{Ready: true}, nil
+}
+
+func (server *Server) GetModelCatalog(ctx context.Context, request *sttv1.GetModelCatalogRequest) (*sttv1.GetModelCatalogResponse, error) {
+	principal, err := authorization.Principal(ctx, sttv1.SpeechToTextService_GetModelCatalog_FullMethodName)
+	if err != nil {
+		return nil, statusError(codes.Unauthenticated, "verified STT authorization context is required", "UNAUTHENTICATED")
+	}
+	if request == nil || len(request.ProtoReflect().GetUnknown()) != 0 {
+		return nil, transportError(errs.ErrInvalidRequest)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ctx, cancelAuthority := context.WithDeadline(ctx, principal.ExpiresAt)
+	defer cancelAuthority()
+	catalog, err := server.service.GetModelCatalog(ctx, principal)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, transportError(err)
+	}
+	return &sttv1.GetModelCatalogResponse{Catalog: sttapi.ModelCatalog(catalog)}, nil
 }
 
 func (server *Server) CheckProtectedPath(ctx context.Context, _ *sttv1.CheckProtectedPathRequest) (*sttv1.CheckProtectedPathResponse, error) {

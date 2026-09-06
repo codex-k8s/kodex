@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
@@ -127,6 +128,8 @@ func (client *Client) Transcribe(ctx context.Context, request value.ProviderRequ
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		switch response.StatusCode {
+		case http.StatusTooManyRequests:
+			return "", &errs.ProviderRateLimit{RetryAfter: boundedRetryAfter(response.Header, time.Now())}
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusBadRequest, http.StatusNotFound:
 			return "", errs.ErrProviderRejected
 		default:

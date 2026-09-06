@@ -30,6 +30,10 @@ type fakeService struct{}
 
 func (fakeService) Catalog() modelprofile.Catalog { return modelprofile.OpenAICatalog() }
 
+func (fakeService) GetModelCatalog(context.Context, value.Principal) (modelprofile.Catalog, error) {
+	return modelprofile.OpenAICatalog(), nil
+}
+
 func (fakeService) CheckAvailability(context.Context, value.Principal, string) (transcriptionservice.Availability, error) {
 	return transcriptionservice.Availability{}, errors.New("unavailable")
 }

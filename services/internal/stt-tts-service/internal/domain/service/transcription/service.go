@@ -212,9 +212,9 @@ func projectionClass(err error) value.ErrorClass {
 
 func validatePolicy(policy value.Policy, now time.Time) error {
 	if policy.Revision == 0 || !validSHA256(policy.DigestSHA256) || modelprofile.Validate(policy.Model, policy.Language, policy.Parameters) != nil ||
-		policy.MaximumAudioBytes < 1024 || policy.MaximumAudioBytes > value.MaximumAbsoluteBytes ||
-		policy.MaximumAudioDuration < time.Second || policy.MaximumAudioDuration > 30*time.Minute ||
-		policy.ProviderTimeout < time.Second || policy.ProviderTimeout > 15*time.Second ||
+		policy.MaximumAudioBytes < modelprofile.MinimumAudioBytes || policy.MaximumAudioBytes > modelprofile.MaximumAudioBytes ||
+		policy.MaximumAudioDuration < modelprofile.MinimumAudioDuration || policy.MaximumAudioDuration > modelprofile.MaximumAudioDuration ||
+		policy.ProviderTimeout < modelprofile.MinimumProviderTimeout || policy.ProviderTimeout > modelprofile.MaximumProviderTimeout ||
 		policy.ProviderAccountRef == "" || len(policy.ProviderAccountRef) > 96 || policy.ProviderCredentialGeneration == 0 || !now.Before(policy.ExpiresAt) {
 		return errs.ErrGrantRevoked
 	}

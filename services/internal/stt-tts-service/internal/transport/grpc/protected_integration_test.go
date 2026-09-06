@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"github.com/codex-k8s/kodex/libs/go/sttapi"
+	"github.com/codex-k8s/kodex/libs/go/sttapi/errorprofile"
 	"io"
 	"math/big"
 	"net"
@@ -26,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/grpcserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	av1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
@@ -40,6 +42,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/provider/openai"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/testdata"
 	"github.com/google/uuid"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	googlegrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -55,15 +58,16 @@ type integrationBoundary struct {
 	av1.AuthorizationVerifierServiceClient
 	sttv1.UnimplementedTranscriptionPolicyProjectionServiceServer
 	sttv1.UnimplementedTranscriptionCredentialProjectionServiceServer
-	mu                sync.Mutex
-	children          map[string]string
-	deny              atomic.Bool
-	missingPolicy     atomic.Bool
-	missingCredential atomic.Bool
-	posts             atomic.Int32
-	probes            atomic.Int32
-	providerStatus    atomic.Int32
-	providerTimeout   atomic.Bool
+	mu                 sync.Mutex
+	children           map[string]string
+	deny               atomic.Bool
+	missingPolicy      atomic.Bool
+	missingCredential  atomic.Bool
+	posts              atomic.Int32
+	probes             atomic.Int32
+	providerStatus     atomic.Int32
+	providerRetryAfter atomic.Value
+	providerTimeout    atomic.Bool
 }
 
 type integrationIssuer struct {
@@ -71,28 +75,40 @@ type integrationIssuer struct {
 	boundary *integrationBoundary
 }
 
-func (issuer integrationIssuer) IssueContinuationAuthorizationContext(ctx context.Context, request *av1.IssueContinuationAuthorizationContextRequest, options ...googlegrpc.CallOption) (*av1.IssueAuthorizationContextResponse, error) {
+func (issuer integrationIssuer) IssueContinuationAuthorizationContext(ctx context.Context, request *av1.IssueContinuationAuthorizationContextRequest, options ...googlegrpc.CallOption) (*av1.IssueContinuationAuthorizationContextResponse, error) {
 	return issuer.boundary.IssueContinuationAuthorizationContext(ctx, request, options...)
 }
 
 func (fake *integrationBoundary) VerifyAuthorizationContext(_ context.Context, request *av1.VerifyAuthorizationContextRequest, _ ...googlegrpc.CallOption) (*av1.VerifyAuthorizationContextResponse, error) {
-	if fake.deny.Load() || request.GetCompactJws() != "test-parent" {
+	if fake.deny.Load() || (request.GetCompactJws() != "test-parent" && request.GetCompactJws() != "test-catalog") {
 		return nil, status.Error(codes.PermissionDenied, "rejected")
 	}
 	digest := strings.Repeat("a", 64)
 	identity := func(id string) *av1.AuthorityIdentity {
 		return &av1.AuthorityIdentity{Id: id, Provenance: &av1.AuthorityProvenance{Source: av1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE, Reference: "fixture:" + id, Revision: 1, DigestSha256: digest}}
 	}
-	return &av1.VerifyAuthorizationContextResponse{Context: &av1.VerifiedAuthorizationContext{
+	verified := &av1.VerifiedAuthorizationContext{
 		ContractVersion: 1, AuthorityAbiVersion: internalrpcauth.AuthorityABIVersion, RequestBindingMode: internalrpcauth.RequestBindingStream,
 		Audience: "urn:kodex:internal-rpc:stt-tts-service", TargetWorkloadId: "stt-tts-service", CallerWorkloadId: "control-api-gateway",
 		FullMethod: sttv1.SpeechToTextService_Transcribe_FullMethodName, OperationId: "platform.stt.transcribe", Permission: value.TransportPermissionTranscribe,
 		Jti: uuid.NewString(), SourceRevision: 1, SourceDigestSha256: digest, ExpiresAt: timestamppb.New(time.Now().Add(time.Minute)),
 		Authority: &av1.CallerAuthority{ActorKind: av1.ActorKind_ACTOR_KIND_HUMAN, Actor: identity("user"), Tenant: identity("organization")},
-	}}, nil
+	}
+	if request.GetCompactJws() == "test-catalog" {
+		if request.GetObservedFullMethod() != sttv1.SpeechToTextService_GetModelCatalog_FullMethodName ||
+			request.GetObservedRequestDigestSha256() != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+			return nil, status.Error(codes.PermissionDenied, "catalog binding mismatch")
+		}
+		verified.FullMethod = request.GetObservedFullMethod()
+		verified.OperationId = "platform.stt.model-catalog.get"
+		verified.Permission = value.PermissionManageConfiguration
+		verified.RequestBindingMode = internalrpcauth.RequestBindingUnary
+		verified.RequestDigestSha256 = request.GetObservedRequestDigestSha256()
+	}
+	return &av1.VerifyAuthorizationContextResponse{Context: verified}, nil
 }
 
-func (fake *integrationBoundary) IssueContinuationAuthorizationContext(_ context.Context, request *av1.IssueContinuationAuthorizationContextRequest, _ ...googlegrpc.CallOption) (*av1.IssueAuthorizationContextResponse, error) {
+func (fake *integrationBoundary) IssueContinuationAuthorizationContext(_ context.Context, request *av1.IssueContinuationAuthorizationContextRequest, _ ...googlegrpc.CallOption) (*av1.IssueContinuationAuthorizationContextResponse, error) {
 	if fake.deny.Load() || request.GetParentAuthorizationContextCompactJws() != "test-parent" || len(request.GetRequestDigestSha256()) != 64 || request.GetRequestId() == "" || request.GetCorrelationId() == "" {
 		return nil, status.Error(codes.PermissionDenied, "rejected")
 	}
@@ -103,7 +119,7 @@ func (fake *integrationBoundary) IssueContinuationAuthorizationContext(_ context
 	fake.mu.Lock()
 	fake.children[token] = request.GetRequestDigestSha256()
 	fake.mu.Unlock()
-	return &av1.IssueAuthorizationContextResponse{CompactJws: token}, nil
+	return &av1.IssueContinuationAuthorizationContextResponse{CompactJws: token}, nil
 }
 
 func (fake *integrationBoundary) verifyChild(ctx context.Context, request any, _ *googlegrpc.UnaryServerInfo, handler googlegrpc.UnaryHandler) (any, error) {
@@ -172,7 +188,11 @@ func (fake *integrationBoundary) Do(request *http.Request) (*http.Response, erro
 	if code == 0 {
 		code = 200
 	}
-	return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(`{"text":"раз два три четыре пять","languages":[{"code":"ru"}]}`))}, nil
+	header := http.Header{}
+	if hint, ok := fake.providerRetryAfter.Load().(string); ok && hint != "" {
+		header.Set("Retry-After", hint)
+	}
+	return &http.Response{StatusCode: code, Header: header, Body: io.NopCloser(strings.NewReader(`{"text":"раз два три четыре пять","languages":[{"code":"ru"}]}`))}, nil
 }
 
 func TestProtectedFakeIntegration(t *testing.T) {
@@ -202,7 +222,9 @@ func TestProtectedFakeIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := googlegrpc.NewServer(googlegrpc.Creds(credentials.NewTLS(serverTLS)), googlegrpc.ChainStreamInterceptor(observability.StreamCorrelationServerInterceptor(), authorityclient.VerifierStreamServerInterceptor(fake), handler.StreamServerInterceptor()))
+	server := googlegrpc.NewServer(googlegrpc.Creds(credentials.NewTLS(serverTLS)), googlegrpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
+		googlegrpc.ChainUnaryInterceptor(authorityclient.VerifierUnaryServerInterceptor(fake), grpcserver.RejectMalformedUnary),
+		googlegrpc.ChainStreamInterceptor(observability.StreamCorrelationServerInterceptor(), authorityclient.VerifierStreamServerInterceptor(fake), handler.StreamServerInterceptor()))
 	sttv1.RegisterSpeechToTextServiceServer(server, handler)
 	address := serveIntegration(t, server)
 	connection, err := googlegrpc.NewClient(address, googlegrpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, ServerName: "stt-test", RootCAs: pool, Certificates: []tls.Certificate{certificate}})))
@@ -211,6 +233,45 @@ func TestProtectedFakeIntegration(t *testing.T) {
 	}
 	defer connection.Close()
 	client := sttv1.NewSpeechToTextServiceClient(connection)
+	t.Run("catalog before configuration", func(t *testing.T) {
+		fake.missingPolicy.Store(true)
+		fake.missingCredential.Store(true)
+		readiness.Set(false, "local_not_ready")
+		defer fake.missingPolicy.Store(false)
+		defer fake.missingCredential.Store(false)
+		defer readiness.Set(true, "ready")
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+		ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(authorityclient.AuthorizationMetadata, "test-catalog"))
+		catalog, err := client.GetModelCatalog(ctx, &sttv1.GetModelCatalogRequest{})
+		if err != nil || !proto.Equal(catalog.GetCatalog(), sttapi.ModelCatalog(provider.Catalog())) || fake.posts.Load() != 0 || fake.probes.Load() != 0 {
+			t.Fatal("каталог до настройки вызвал provider или потерял adapter profile")
+		}
+		for _, token := range []string{"", "test-parent"} {
+			ctx := t.Context()
+			if token != "" {
+				ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(authorityclient.AuthorizationMetadata, token))
+			}
+			if _, err := client.GetModelCatalog(ctx, &sttv1.GetModelCatalogRequest{}); err == nil {
+				t.Fatal("каталог доступен без административного authority")
+			}
+		}
+		fake.deny.Store(true)
+		if _, err := client.GetModelCatalog(ctx, &sttv1.GetModelCatalogRequest{}); err == nil {
+			t.Fatal("отозванное право каталога принято")
+		}
+		fake.deny.Store(false)
+		unknown := &sttv1.GetModelCatalogRequest{}
+		unknown.ProtoReflect().SetUnknown([]byte{0x0a, 0x01, 'x'})
+		if _, err := client.GetModelCatalog(ctx, unknown); err == nil {
+			t.Fatal("payload расширил пустой запрос каталога")
+		}
+		cancelled, stop := context.WithCancel(ctx)
+		stop()
+		if _, err := client.GetModelCatalog(cancelled, &sttv1.GetModelCatalogRequest{}); status.Code(err) != codes.Canceled {
+			t.Fatal("отменённое чтение каталога принято")
+		}
+	})
 	call := func(probe bool, raw []byte) (*sttv1.TranscribeResponse, error) {
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		defer cancel()
@@ -244,7 +305,7 @@ func TestProtectedFakeIntegration(t *testing.T) {
 		t.Fatalf("protected success failed: %v", err)
 	}
 	response, err = call(true, nil)
-	if err != nil || !response.GetAvailability().GetReady() || response.GetAvailability().GetValidUntil() == nil || len(response.GetAvailability().GetCatalog().GetModels()) != 5 || response.GetText() != "" || fake.posts.Load() != 1 || fake.probes.Load() != 1 {
+	if err != nil || !response.GetAvailability().GetReady() || response.GetAvailability().GetValidUntil() == nil || !proto.Equal(response.GetAvailability().GetCatalog(), sttapi.ModelCatalog(provider.Catalog())) || response.GetText() != "" || fake.posts.Load() != 1 || fake.probes.Load() != 1 {
 		t.Fatalf("availability failed: %v", err)
 	}
 	for _, tc := range []struct {
@@ -270,13 +331,31 @@ func TestProtectedFakeIntegration(t *testing.T) {
 		t.Fatal("malformed audio reached provider")
 	}
 	fake.providerStatus.Store(429)
-	if _, err := call(false, testdata.RussianNumbers); err == nil || fake.posts.Load() != 2 {
-		t.Fatal("provider failure retried or accepted")
+	for _, hint := range []string{"17", "", "malformed", "999999999999999999999999"} {
+		fake.providerRetryAfter.Store(hint)
+		before := fake.posts.Load()
+		_, err := call(false, testdata.RussianNumbers)
+		if status.Code(err) != codes.ResourceExhausted || fake.posts.Load() != before+1 {
+			t.Fatal("provider rate limit retried or lost its status")
+		}
+		foundReason, foundHint := false, false
+		for _, detail := range status.Convert(err).Details() {
+			switch detail := detail.(type) {
+			case *errdetails.ErrorInfo:
+				foundReason = detail.Domain == errorprofile.Domain && detail.Reason == errorprofile.TranscriptionRateLimited
+			case *errdetails.RetryInfo:
+				foundHint = detail.RetryDelay.AsDuration() == 17*time.Second
+			}
+		}
+		if !foundReason || foundHint != (hint == "17") {
+			t.Fatal("protected rate limit details are inconsistent")
+		}
 	}
 	fake.providerStatus.Store(0)
 	fake.providerTimeout.Store(true)
 	start := time.Now()
-	if _, err := call(false, testdata.RussianNumbers); err == nil || time.Since(start) > 2500*time.Millisecond || fake.posts.Load() != 3 {
+	beforeTimeout := fake.posts.Load()
+	if _, err := call(false, testdata.RussianNumbers); err == nil || time.Since(start) > 2500*time.Millisecond || fake.posts.Load() != beforeTimeout+1 {
 		t.Fatal("provider timeout is not bounded/single effect")
 	}
 	files, _ := filepath.Glob(filepath.Join(dir, "request-*.audio"))
