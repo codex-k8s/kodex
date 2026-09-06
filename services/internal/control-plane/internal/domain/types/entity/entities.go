@@ -323,6 +323,7 @@ type ManagedConfigurationSet struct {
 type ManagedConfigurationConsumer struct {
 	Kind, Ref, RevisionRef string
 	Version                int64
+	ExpectedAbsent         bool
 }
 
 type ManagedConfigurationImpact struct {
