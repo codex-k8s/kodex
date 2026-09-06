@@ -309,6 +309,16 @@ export function createOwnerSessionClient({
   }
 
   return {
+    // Только проверенная cookie-пара для продолжения browser acceptance после
+    // Node-only запроса. Snapshot не содержит origins/localStorage и не даёт
+    // вызывающей стороне менять внутреннее состояние клиента.
+    authenticatedCookies() {
+      requireSession(ready && !failed, "session snapshot is unavailable");
+      sessionHeaders(state, origin, now());
+      return structuredClone(
+        state.cookies.filter((cookie) => sessionCookieNames.includes(cookie.name)),
+      );
+    },
     // Сериализация включает refresh и adoption; бизнес-запрос никогда не
     // повторяется здесь, даже после 401 либо неизвестного результата mutation.
     request(path, options = {}) {

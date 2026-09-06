@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { type Page } from "@playwright/test";
+import { authorizeProviderAPIKeyFixture } from "../../../../tools/dev/provider-api-key-acceptance.mjs";
 
 import type {
   AgentRuntimeConfigurationView,
@@ -523,35 +524,57 @@ test.describe("deployed local integration path", () => {
       const authorizationDialog = page.getByRole("dialog", {
         name: new RegExp(`Авторизация: ${escapeRegExp(account.name)}`),
       });
-      await authorizationDialog.getByRole("tab", { name: "API key" }).click();
-      await authorizationDialog.getByLabel("API key").fill(apiKey);
-      const authorizationResponse = page.waitForResponse(
-        (response) =>
-          response.request().method() === "POST" &&
-          new URL(response.url()).pathname ===
-            `/api/v1/provider-accounts/${account?.ref ?? ""}/api-key-authorization`,
-      );
       await authorizationDialog
-        .getByRole("button", { name: "Авторизовать", exact: true })
+        .locator(".modal__footer")
+        .getByRole("button", { name: "Закрыть", exact: true })
         .click();
+      const authorizationStorage = await page.context().storageState();
+      await authorizeProviderAPIKeyFixture({
+        origin: environment.baseURL,
+        storage: authorizationStorage,
+        accountRef: account.ref,
+        apiKey,
+        onSessionCookies: async (cookies) => {
+          const current = await page.context().cookies(environment.baseURL);
+          const unchanged = cookies.every((cookie) => {
+            const before = authorizationStorage.cookies.find(
+              (item) => item.name === cookie.name,
+            );
+            const observed = current.filter(
+              (item) => item.name === cookie.name,
+            );
+            return (
+              observed.length === 1 && observed[0]?.value === before?.value
+            );
+          });
+          if (!unchanged)
+            throw new Error(
+              "Browser session changed during Node-only authorization",
+            );
+          await page.context().addCookies(cookies);
+        },
+      });
       apiKey = undefined;
-      const authorized = await authorizationResponse;
-      const authorizedPayload = (await authorized.json()) as ProviderAccount;
-      expect(authorized.status(), JSON.stringify(authorizedPayload)).toBe(200);
-      account = authorizedPayload;
+      await gotoWithRetry(page, "/administration/providers");
+      account = await readAPI<ProviderAccount>(
+        page,
+        `/api/v1/provider-accounts/${encodeURIComponent(account.ref)}`,
+      );
       expect(account).toMatchObject({
         authorization: { method: "API_KEY", state: "AUTHORIZED" },
         enabled: true,
         state: "AUTHORIZED",
       });
       expect(account.externalAccountMasked).not.toBe("");
+      const accountCard = page.locator(".provider-account-card").filter({
+        has: page.getByRole("heading", { name: account.name, exact: true }),
+      });
       await expect(
-        authorizationDialog.getByText("Учётная запись авторизована."),
+        accountCard.locator('[data-state="AUTHORIZED"]'),
       ).toBeVisible();
-      await authorizationDialog
-        .locator(".modal__footer")
-        .getByRole("button", { name: "Закрыть", exact: true })
-        .click();
+      await expect(
+        accountCard.getByText(account.externalAccountMasked, { exact: true }),
+      ).toBeVisible();
 
       const project = await mutateAPI<Project>(page, {
         method: "POST",
@@ -589,10 +612,6 @@ test.describe("deployed local integration path", () => {
       await verifySingleProviderAffinity(run.ref, account.ref);
     } finally {
       apiKey = undefined;
-      const credentialInput = page.locator('input[type="password"]');
-      if ((await credentialInput.count()) > 0) {
-        await credentialInput.fill("").catch(() => undefined);
-      }
       if (account) {
         await deleteFixtureProviderAccount(page, account.ref, {
           agent: fixtureAgent,

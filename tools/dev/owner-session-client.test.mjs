@@ -101,6 +101,20 @@ const close = async (response) => {
   await response.body?.cancel();
 };
 
+test("cookie snapshot после renewal изолирован от внутреннего state и origins", async () => {
+  const f = fixture();
+  const client = createOwnerSessionClient({ origin, storage: storage(), ...f });
+  assert.throws(() => client.authenticatedCookies(), /snapshot is unavailable/);
+  await close(await client.request("/api/v1/runs/run_first"));
+  f.advance(181000);
+  await close(await client.request("/api/v1/runs/run_next"));
+  const snapshot = client.authenticatedCookies();
+  assert.equal(snapshot.length, 2);
+  assert.equal(snapshot[1].value, "2".repeat(43));
+  snapshot[1].value = "changed-synthetic-copy";
+  assert.equal(client.authenticatedCookies()[1].value, "2".repeat(43));
+});
+
 test("long polling renews once before concurrent effects and adopts fresh CSRF", async () => {
   const f = fixture();
   const client = createOwnerSessionClient({ origin, storage: storage(), ...f });
