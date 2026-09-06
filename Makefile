@@ -41,6 +41,10 @@ test-web-only-release:
 test-pwa-public-assets-http:
 	@timeout 180s python3 scripts/tests/pwa-public-assets-test.py --http
 
+.PHONY: test-frontend-offline-bootstrap
+test-frontend-offline-bootstrap:
+	@timeout 900s python3 scripts/tests/frontend-offline-bootstrap-test.py
+
 test-service-infrastructure-bootstrap:
 	@./scripts/tests/service-infrastructure-bootstrap-test.sh
 	@./scripts/tests/nats-operator-material-test.sh

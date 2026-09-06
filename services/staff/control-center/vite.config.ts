@@ -160,6 +160,7 @@ export const controlCenterFileSystemBoundary = {
 } satisfies FileSystemServeOptions;
 
 export default defineConfig({
+  cacheDir: process.env.KODEX_DEV_CACHE_DIR ?? "node_modules/.vite",
   plugins: [
     vue(),
     ...(remoteDevelopmentEnabled ? [controlCenterRemoteReloadPlugin()] : []),

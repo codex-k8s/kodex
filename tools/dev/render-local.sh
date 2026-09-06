@@ -191,17 +191,19 @@ go_prime_cache="$go_build_cache/host-prime"
 install -d -m 0755 \
   "$go_module_cache/cache/download/sumdb/sum.golang.org" \
   "$go_sumdb_cache/sum.golang.org" \
-  "$cache_root/go-tools" \
-  "$cache_root/node-modules"
+  "$cache_root/go-tools"
 install -d -m 0777 "$go_prime_cache"
 install -d -m 0755 "$go_build_cache"
 chmod -R u+rwX \
   "$go_module_cache" \
   "$go_sumdb_cache" \
   "$cache_root/go-tools"
-chmod 0777 "$go_prime_cache" "$cache_root/node-modules"
+chmod 0777 "$go_prime_cache"
 install -d -m 0777 "$source_root/services/staff/control-center/node_modules"
 chmod 0777 "$source_root/services/staff/control-center/node_modules"
+frontend_cache=$(bash "$source_root/tools/dev/prime-frontend-cache.sh" "$source_root" "$cache_root")
+node_image=$(sed -n 's/^FROM \(docker.io\/library\/node:[^ ]*\) AS build$/\1/p' \
+  "$source_root/services/staff/control-center/Dockerfile")
 
 # Local NetworkPolicy intentionally blocks arbitrary Internet access from pods.
 # Prime every module used by hot-reload workloads on the host so migrations and
@@ -978,7 +980,7 @@ if [[ "$tls_mode" == public-acme ]]; then
   frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
   api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
 fi
-NODE_IMAGE='docker.io/library/node:24.17.0-alpine3.23@sha256:7c70d1235c0b4c2bc9eeed5393d19f1bbdde6885ba0d58ba62bb385d7b0f3ff1' \
+NODE_IMAGE="$node_image" FRONTEND_CACHE="$frontend_cache" \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
 SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" \
 FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" yq -i '
@@ -1002,7 +1004,9 @@ FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" 
       [
         {"name":"dev-frontend-source","hostPath":{"path":(strenv(SOURCE_ROOT) + "/services/staff/control-center"),"type":"Directory"}},
         {"name":"dev-frontend-runner","hostPath":{"path":(strenv(SOURCE_ROOT) + "/tools/dev/run-frontend.sh"),"type":"File"}},
-        {"name":"dev-node-modules","hostPath":{"path":(strenv(CACHE_ROOT) + "/node-modules"),"type":"Directory"}}
+        {"name":"dev-frontend-identity","hostPath":{"path":(strenv(SOURCE_ROOT) + "/tools/dev/frontend-cache-identity.sh"),"type":"File"}},
+        {"name":"dev-frontend-tmp","emptyDir":{}},
+        {"name":"dev-node-modules","hostPath":{"path":strenv(FRONTEND_CACHE),"type":"Directory"}}
       ]
     ) |
     (.spec.template.spec.containers[] | select(.name == "staff-control-center")) |= (
@@ -1020,12 +1024,16 @@ FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" 
       .volumeMounts = [
         {"name":"dev-frontend-source","mountPath":"/workspace/services/staff/control-center","readOnly":true},
         {"name":"dev-frontend-runner","mountPath":"/workspace/tools/dev/run-frontend.sh","readOnly":true},
-        {"name":"dev-node-modules","mountPath":"/workspace/services/staff/control-center/node_modules"},
+        {"name":"dev-frontend-identity","mountPath":"/workspace/tools/dev/frontend-cache-identity.sh","readOnly":true},
+        {"name":"dev-frontend-tmp","mountPath":"/tmp"},
+        {"name":"dev-node-modules","mountPath":"/workspace/services/staff/control-center/node_modules","readOnly":true},
         (((.volumeMounts // [])[] | select(.name == "runtime-config")) |
           .mountPath = "/workspace/services/staff/control-center/public/config" |
           .readOnly = true)
       ] |
       .env = [
+        {"name":"KODEX_DEV_NODE_IMAGE","value":strenv(NODE_IMAGE)},
+        {"name":"KODEX_DEV_CACHE_DIR","value":"/tmp/vite-cache"},
         {"name":"KODEX_DEV_PUBLIC_HOST","value":strenv(PUBLIC_HOST)},
         {"name":"KODEX_DEV_API_TARGET","value":"https://control-api-gateway.kodex-system.svc:8443"}
       ]
