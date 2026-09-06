@@ -7,6 +7,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        sttActivation: fileURLToPath(
+          new URL("./e2e/fixtures/stt-activation.html", import.meta.url),
+        ),
         cards: fileURLToPath(
           new URL("./e2e/fixtures/cards.html", import.meta.url),
         ),
