@@ -177,7 +177,7 @@ ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
@@ -327,6 +327,11 @@ if [[ "$mode" == apply ]]; then
     "$unit_prefix-80.socket" "$unit_prefix-443.socket" >/dev/null
   systemctl stop \
     "$unit_prefix-80.service" "$unit_prefix-443.service" >/dev/null 2>&1 || true
+  # Сбрасывается только прежний отказ управляемых units до нового запуска.
+  # Последующий отказ не очищается и должен остановить readback.
+  systemctl reset-failed \
+    "$unit_prefix-80.service" "$unit_prefix-443.service" \
+    "$unit_prefix-80.socket" "$unit_prefix-443.socket" >/dev/null
   systemctl restart \
     "$unit_prefix-80.socket" "$unit_prefix-443.socket" >/dev/null
 fi
@@ -336,4 +341,7 @@ for port in "${ports[@]}"; do
   assert_socket_listening "$port"
 done
 probe_ipv6_http "$normalized_ipv6_address"
+for port in "${ports[@]}"; do
+  assert_socket_listening "$port"
+done
 printf 'Kodex IPv6 ingress bridge completed: %s\n' "$mode"

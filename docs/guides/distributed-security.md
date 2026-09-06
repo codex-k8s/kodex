@@ -961,3 +961,10 @@ port, TLS, source либо configuration field не является сужен�
 GitHub API-only package сохраняет API возможности, но не разрешает Git transport
 без точного `github_git` / `github.com:443` / `TLS=REQUIRED`. SHIPPED revision
 по-прежнему требует exact digest, без исторического fallback.
+
+Systemd service с `Type=notify` сохраняет в `RestrictAddressFamilies` семейство
+`AF_UNIX`, необходимое для локального `sd_notify`. Сетевые семейства разрешаются
+отдельно по фактическим listeners/destinations; локальное уведомление не является
+разрешением дополнительного сетевого ingress. Recovery сбрасывает только прежний
+failed state принадлежащих установщику units до нового запуска. Новый отказ
+проверяется после активации и probe, а readback никогда не очищает failed state.
