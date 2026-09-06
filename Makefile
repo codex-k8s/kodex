@@ -207,6 +207,14 @@ gen-openapi-ts:
 lint-proto: check-proto-toolchain
 	buf lint
 
+.PHONY: test-secret-broker-drafts
+test-secret-broker-drafts:
+	bash scripts/tests/secret-broker-drafts-test.sh
+
+.PHONY: test-provider-model-catalog-codex
+test-provider-model-catalog-codex:
+	python3 scripts/tests/provider-model-catalog-codex-test.py "$(KODEX_CATALOG_CODEX_TEST_IMAGE)"
+
 .PHONY: test-automation-scheduler
 test-automation-scheduler:
 	bash scripts/tests/automation-scheduler-test.sh

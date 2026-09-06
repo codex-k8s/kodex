@@ -30,6 +30,7 @@ done
 [[ -n "$expected_context" ]] || fail 'exact Kubernetes context is required'
 [[ -d "$material_directory" && ! -L "$material_directory" ]] ||
   fail 'material directory is invalid'
+material_directory=$(cd -- "$material_directory" && pwd -P)
 for file_path in "$oidc_ca_file" "$provider_auth_file"; do
   [[ -r "$file_path" && -s "$file_path" && ! -L "$file_path" ]] ||
     fail 'required input material is invalid'
@@ -65,7 +66,7 @@ temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 umask 077
 
-for namespace_name in kodex-system kodex-runtime kodex-trust; do
+for namespace_name in kodex-system kodex-runtime kodex-trust kodex-secret-drafts; do
   kubectl create namespace "$namespace_name" --dry-run=client -o yaml |
     kubectl apply --server-side --field-manager=kodex-install -f - >/dev/null
 done
@@ -88,6 +89,13 @@ apply_secret_from_directory() {
 }
 
 while IFS=$'\t' read -r secret_name dynamic; do
+  if [[ "$secret_name" == secret-broker-draft-keyring ]]; then
+    # Отдельный владелец rotation/guard: общий apply не перезаписывает ключи.
+    bash "$repository_root/tools/install/bootstrap-secret-drafts.sh" ensure \
+      --context "$expected_context" \
+      --keyring-file "$material_directory/projections/$secret_name/keyring.json"
+    continue
+  fi
   if [[ "$dynamic" == true ]]; then
     if ! kubectl -n "$namespace" get secret "$secret_name" >/dev/null 2>&1; then
       jq -n --arg namespace "$namespace" --arg name "$secret_name" '{

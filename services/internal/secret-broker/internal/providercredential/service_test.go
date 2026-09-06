@@ -10,6 +10,7 @@ import (
 )
 
 type providerCredentialStoreStub struct {
+	Store
 	attempt           kubernetesstore.ProviderAuthorizationAttempt
 	completed         []kubernetesstore.ProviderAuthorizationAttempt
 	cleanupTaskRef    string
@@ -80,16 +81,24 @@ func (store *providerCredentialStoreStub) CleanupProviderCredential(
 	taskRef, accountRef string,
 	leaseGeneration int64,
 	descriptor kubernetesstore.ProviderCredentialDescriptor,
-) (string, error) {
+) (kubernetesstore.ProviderCredentialCleanupResult, error) {
 	store.cleanupCalls++
 	store.cleanupTaskRef = taskRef
 	store.cleanupAccountRef = accountRef
 	store.cleanupGeneration = leaseGeneration
 	store.cleanupDescriptor = descriptor
-	return store.cleanupReceipt, store.cleanupErr
+	return kubernetesstore.ProviderCredentialCleanupResult{TerminalReceipt: store.cleanupReceipt}, store.cleanupErr
 }
 
 type providerAppServerStub struct{ starts int }
+
+func (store *providerCredentialStoreStub) ReadProviderCredentialExact(context.Context, string, kubernetesstore.ProviderCredentialDescriptor) ([]byte, error) {
+	return nil, errors.New("unexpected credential read")
+}
+
+func (server *providerAppServerStub) ObserveModelCatalog(context.Context, []byte, string) (ModelCatalog, error) {
+	return ModelCatalog{}, errors.New("unexpected model catalog observation")
+}
 
 func (server *providerAppServerStub) Check(context.Context) error { return nil }
 
@@ -140,10 +149,10 @@ func TestCleanupProviderCredentialForwardsExactFencedTarget(t *testing.T) {
 	receipt, err := service.CleanupProviderCredential(
 		context.Background(), "pcct_cleanup1234", "pacc_cleanup1234", 7, descriptor,
 	)
-	if err != nil || receipt != store.cleanupReceipt || store.cleanupCalls != 1 ||
+	if err != nil || receipt.TerminalReceipt != store.cleanupReceipt || store.cleanupCalls != 1 ||
 		store.cleanupTaskRef != "pcct_cleanup1234" || store.cleanupAccountRef != "pacc_cleanup1234" ||
 		store.cleanupGeneration != 7 || store.cleanupDescriptor != descriptor {
-		t.Fatalf("cleanup target was not forwarded exactly: receipt=%q store=%#v err=%v", receipt, store, err)
+		t.Fatalf("cleanup target was not forwarded exactly: receipt=%#v store=%#v err=%v", receipt, store, err)
 	}
 }
 

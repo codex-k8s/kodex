@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +48,10 @@ var (
 	ErrProviderCredentialInputInvalid    = errors.New("provider credential materialization input is invalid")
 	ErrProviderCredentialCleanupConflict = errors.New("provider credential cleanup conflicts with stored materialization")
 	ErrProviderCredentialCleanupInvalid  = errors.New("provider credential cleanup input is invalid")
+	// SnapshotChanged доказывает отсутствие записи fence в текущем вызове.
+	// Общий Conflict такого доказательства не несёт.
+	ErrProviderAuthorizationCleanupSnapshotChanged = errors.Join(ErrProviderCredentialCleanupConflict,
+		errors.New("provider authorization cleanup snapshot changed before fencing"))
 )
 
 // ProviderCredentialDescriptor содержит только exact metadata Kubernetes
@@ -150,6 +153,7 @@ func (store *Store) CompleteProviderAuthorizationAttempt(
 		return ProviderAuthorizationAttempt{}, ErrProviderAttemptConflict
 	}
 	terminal := providerAttemptSecret(store.namespace, name, wanted)
+	terminal.UID = secret.UID
 	terminal.ResourceVersion = secret.ResourceVersion
 	defer clearSecretData(terminal)
 	updated, err := store.client.CoreV1().Secrets(store.namespace).Update(ctx, terminal, metav1.UpdateOptions{})
@@ -234,50 +238,25 @@ func (store *Store) ReadProviderCredentialExact(ctx context.Context, accountRef 
 	return append([]byte(nil), secret.Data[providerAuthJSONKey]...), nil
 }
 
-// DiscardProviderAuthorizationAttempt удаляет только тот attempt Secret,
-// который принадлежит exact materialization lineage. Terminal descriptor,
-// появившийся в гонке с отменой, удаляется по собственным UID/RV/digest.
+// DiscardProviderAuthorizationAttempt сохраняет тот же durable fence,
+// что и фоновая cleanup task. Ошибка компенсации не завершает owner cleanup.
 func (store *Store) DiscardProviderAuthorizationAttempt(
 	ctx context.Context,
 	attemptRef, accountRef, materializerAttemptRef, secretUID, initialResourceVersion string,
 ) error {
-	name, err := providerAttemptName(materializerAttemptRef)
-	if err != nil || !providerReferencePattern.MatchString(attemptRef) ||
-		!providerReferencePattern.MatchString(accountRef) || secretUID == "" || initialResourceVersion == "" {
-		return ErrProviderAttemptConflict
+	target := ProviderAuthorizationCleanupTarget{AccountRef: accountRef, AuthorizationAttemptRef: attemptRef,
+		MaterializerAttemptRef: materializerAttemptRef, UID: secretUID, ResourceVersion: initialResourceVersion,
+		Kind: ProviderCleanupAuthorization, Generation: 1}
+	target.TaskRef = "pcct_" + providerCleanupValueDigest(target)[:40]
+	if err := store.FenceProviderAuthorization(ctx, target); err != nil {
+		return providerDiscardError(err, ErrProviderAttemptConflict)
 	}
-	secret, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
+	produced, err := store.FenceAuthorizationCredentialName(ctx, target)
 	if err != nil {
-		return errors.New("read provider authorization attempt for discard")
+		return providerDiscardError(err, ErrProviderAttemptConflict)
 	}
-	defer clearSecretData(secret)
-	current, err := providerAttemptFromSecret(secret)
-	if err != nil || current.AttemptRef != attemptRef || current.AccountRef != accountRef ||
-		current.MaterializerAttemptRef != materializerAttemptRef || current.SecretUID != secretUID ||
-		current.ResourceVersion != initialResourceVersion {
-		return ErrProviderAttemptConflict
-	}
-	if current.Credential != nil {
-		if err := store.DiscardProviderCredential(ctx, attemptRef, accountRef, *current.Credential); err != nil {
-			return err
-		}
-	}
-	uid := types.UID(current.SecretUID)
-	resourceVersion := current.ResourceVersion
-	err = store.client.CoreV1().Secrets(store.namespace).Delete(ctx, name, metav1.DeleteOptions{
-		Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
-	})
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-	if apierrors.IsConflict(err) || apierrors.IsInvalid(err) {
-		return ErrProviderAttemptConflict
-	}
-	if err != nil {
-		return errors.New("discard provider authorization attempt")
+	if produced != nil {
+		return store.DiscardProviderCredential(ctx, attemptRef, accountRef, *produced)
 	}
 	return nil
 }
@@ -293,80 +272,113 @@ func (store *Store) DiscardProviderCredential(
 		!validProviderCredentialDescriptor(descriptor) || descriptor.SecretName != providerCredentialName(accountRef, attemptRef) {
 		return ErrProviderCredentialConflict
 	}
-	secret, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, descriptor.SecretName, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
+	taskRef := "pcct_" + providerCleanupValueDigest(struct {
+		Attempt, Account string
+		Descriptor       ProviderCredentialDescriptor
+	}{attemptRef, accountRef, descriptor})[:40]
+	result, err := store.CleanupProviderCredential(ctx, taskRef, accountRef, 1, descriptor)
 	if err != nil {
-		return errors.New("read provider credential for discard")
+		return providerDiscardError(err, ErrProviderCredentialConflict)
 	}
-	defer clearSecretData(secret)
-	current, err := providerCredentialDescriptor(secret, attemptRef, accountRef, descriptor.ContentSHA256)
-	if err != nil || current != descriptor {
+	if result.ProducedCredential != nil {
 		return ErrProviderCredentialConflict
-	}
-	uid := types.UID(descriptor.SecretUID)
-	resourceVersion := descriptor.SecretResourceVersion
-	err = store.client.CoreV1().Secrets(store.namespace).Delete(ctx, descriptor.SecretName, metav1.DeleteOptions{
-		Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
-	})
-	if apierrors.IsNotFound(err) {
-		return nil
-	}
-	if apierrors.IsConflict(err) || apierrors.IsInvalid(err) {
-		return ErrProviderCredentialConflict
-	}
-	if err != nil {
-		return errors.New("discard provider credential")
 	}
 	return nil
 }
 
-// CleanupProviderCredential удаляет provider credential только после проверки
-// server-owned binding, exact metadata и фактического content digest.
+func providerDiscardError(err, conflict error) error {
+	if errors.Is(err, ErrProviderCredentialCleanupInvalid) || errors.Is(err, ErrProviderCredentialCleanupConflict) {
+		return errors.Join(conflict, err)
+	}
+	return err
+}
+
+// CleanupProviderCredential удаляет только exact объект и занимает его имя
+// immutable fence. Появившаяся замена возвращается владельцу отдельным target.
 func (store *Store) CleanupProviderCredential(
 	ctx context.Context,
 	taskRef, accountRef string,
 	leaseGeneration int64,
 	descriptor ProviderCredentialDescriptor,
-) (string, error) {
-	if !validProviderCleanupReference(taskRef, "pcct_") ||
-		!validProviderCleanupReference(accountRef, "pacc_") || leaseGeneration < 1 ||
-		!validProviderCredentialCleanupDescriptor(descriptor) {
-		return "", ErrProviderCredentialCleanupInvalid
-	}
-	receipt := providerCredentialCleanupReceipt(taskRef, accountRef, leaseGeneration, descriptor)
-	secret, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, descriptor.SecretName, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return receipt, nil
-	}
+) (ProviderCredentialCleanupResult, error) {
+	identity, err := credentialCleanupReceiptIdentity(taskRef, accountRef, leaseGeneration, descriptor)
 	if err != nil {
-		return "", errors.New("read provider credential for cleanup")
+		return ProviderCredentialCleanupResult{}, err
+	}
+	if result, found, err := store.ReadProviderCleanupReceipt(ctx, identity); err != nil || found {
+		return result, err
+	}
+	secret, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, descriptor.SecretName, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return ProviderCredentialCleanupResult{}, errors.New("read provider credential for cleanup")
+	}
+	if apierrors.IsNotFound(err) {
+		secret = nil
 	}
 	defer clearSecretData(secret)
-	if !providerCredentialCleanupSecretMatches(secret, accountRef, descriptor) {
-		return "", ErrProviderCredentialCleanupConflict
+	if secret != nil && secret.Labels[providerCleanupFenceLabel] == "" {
+		if string(secret.UID) != descriptor.SecretUID {
+			produced, err := store.cleanupReplacementDescriptor(secret, accountRef, descriptor.SecretName)
+			if err != nil {
+				return ProviderCredentialCleanupResult{}, err
+			}
+			return store.CompleteProviderCleanupReceipt(ctx, identity, produced)
+		}
+		if secret.Namespace != store.namespace || !providerCredentialCleanupSecretMatches(secret, accountRef, descriptor) {
+			return ProviderCredentialCleanupResult{}, ErrProviderCredentialCleanupConflict
+		}
+		uid, version := types.UID(descriptor.SecretUID), descriptor.SecretResourceVersion
+		err = store.client.CoreV1().Secrets(store.namespace).Delete(ctx, descriptor.SecretName, metav1.DeleteOptions{
+			Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &version},
+		})
+		if apierrors.IsConflict(err) || apierrors.IsInvalid(err) {
+			return ProviderCredentialCleanupResult{}, ErrProviderCredentialCleanupConflict
+		}
+		if err != nil && !apierrors.IsNotFound(err) {
+			return ProviderCredentialCleanupResult{}, errors.New("delete provider credential for cleanup")
+		}
 	}
-	uid := types.UID(descriptor.SecretUID)
-	resourceVersion := descriptor.SecretResourceVersion
-	err = store.client.CoreV1().Secrets(store.namespace).Delete(ctx, descriptor.SecretName, metav1.DeleteOptions{
-		Preconditions: &metav1.Preconditions{UID: &uid, ResourceVersion: &resourceVersion},
+	wanted := store.providerCleanupFenceSecret(descriptor.SecretName, providerCleanupFence{
+		Schema: providerCleanupFenceSchema, Kind: "CREDENTIAL", AccountRef: accountRef,
+		OriginalUID: descriptor.SecretUID, OriginalResourceVersion: descriptor.SecretResourceVersion,
 	})
-	if apierrors.IsConflict(err) || apierrors.IsInvalid(err) {
-		return "", ErrProviderCredentialCleanupConflict
-	}
-	if err != nil && !apierrors.IsNotFound(err) {
-		return "", errors.New("delete provider credential for cleanup")
+	defer clearSecretData(wanted)
+	written, err := store.client.CoreV1().Secrets(store.namespace).Create(ctx, wanted, metav1.CreateOptions{})
+	clearSecretData(written)
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return ProviderCredentialCleanupResult{}, errors.New("persist provider credential cleanup fence")
 	}
 	readback, err := store.client.CoreV1().Secrets(store.namespace).Get(ctx, descriptor.SecretName, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return receipt, nil
-	}
 	if err != nil {
-		return "", errors.New("read back provider credential cleanup")
+		return ProviderCredentialCleanupResult{}, errors.New("read back provider credential cleanup fence")
 	}
-	clearSecretData(readback)
-	return "", ErrProviderCredentialCleanupConflict
+	defer clearSecretData(readback)
+	if readback.Labels[providerCleanupFenceLabel] != "" {
+		if _, err := store.parseProviderCleanupFence(readback, "CREDENTIAL", accountRef); err != nil || readback.Name != descriptor.SecretName {
+			return ProviderCredentialCleanupResult{}, ErrProviderCredentialCleanupConflict
+		}
+		return store.CompleteProviderCleanupReceipt(ctx, identity, nil)
+	}
+	if string(readback.UID) == descriptor.SecretUID {
+		return ProviderCredentialCleanupResult{}, ErrProviderCredentialCleanupConflict
+	}
+	produced, err := store.cleanupReplacementDescriptor(readback, accountRef, descriptor.SecretName)
+	if err != nil {
+		return ProviderCredentialCleanupResult{}, err
+	}
+	return store.CompleteProviderCleanupReceipt(ctx, identity, produced)
+}
+
+func (store *Store) cleanupReplacementDescriptor(secret *corev1.Secret, accountRef, name string) (*ProviderCredentialDescriptor, error) {
+	if secret == nil || secret.Namespace != store.namespace || secret.Name != name {
+		return nil, ErrProviderCredentialCleanupConflict
+	}
+	descriptor := ProviderCredentialDescriptor{SecretName: secret.Name, SecretUID: string(secret.UID),
+		SecretResourceVersion: secret.ResourceVersion, ContentSHA256: string(secret.Data[providerAuthSHA256Key])}
+	if !validProviderCredentialCleanupDescriptor(descriptor) || !providerCredentialCleanupSecretMatches(secret, accountRef, descriptor) {
+		return nil, ErrProviderCredentialCleanupConflict
+	}
+	return &descriptor, nil
 }
 
 func providerAttemptSecret(namespace, name string, attempt ProviderAuthorizationAttempt) *corev1.Secret {
@@ -568,23 +580,6 @@ func providerCredentialRuntimeOwned(secret *corev1.Secret, accountRef, digest st
 		secret.Labels[providerPartOfLabel] == "kodex" &&
 		secret.Annotations[providerRuntimeAccountRef] == accountRef &&
 		secret.Annotations[providerRuntimeContentSHA] == digest
-}
-
-func providerCredentialCleanupReceipt(
-	taskRef, accountRef string,
-	leaseGeneration int64,
-	descriptor ProviderCredentialDescriptor,
-) string {
-	digest := sha256.Sum256([]byte(strings.Join([]string{
-		taskRef,
-		accountRef,
-		strconv.FormatInt(leaseGeneration, 10),
-		descriptor.SecretName,
-		descriptor.SecretUID,
-		descriptor.SecretResourceVersion,
-		descriptor.ContentSHA256,
-	}, "\x00")))
-	return "provider-credential-cleanup:sha256:" + hex.EncodeToString(digest[:])
 }
 
 func samePendingProviderAttempt(left, right ProviderAuthorizationAttempt) bool {

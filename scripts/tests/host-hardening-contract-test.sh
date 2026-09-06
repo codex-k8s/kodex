@@ -30,11 +30,11 @@ jq -e '
     ((has("sha256") and (has("integrity") | not)) or
      (has("integrity") and (has("sha256") | not)))) and
   any(.artifacts[];
-    .name == "codex-cli" and .version == "0.152.0" and
-    (.url | endswith("/codex-0.152.0.tgz")) and has("integrity")) and
+    .name == "codex-cli" and .version == "0.153.4" and
+    (.url | endswith("/codex-0.153.4.tgz")) and has("integrity")) and
   any(.artifacts[];
-    .name == "codex-linux-x64" and .version == "0.152.0-linux-x64" and
-    (.url | endswith("/codex-0.152.0-linux-x64.tgz")) and has("integrity"))
+    .name == "codex-linux-x64" and .version == "0.153.4-linux-x64" and
+    (.url | endswith("/codex-0.153.4-linux-x64.tgz")) and has("integrity"))
 ' "$lock_file" >/dev/null || fail 'component integrity lock is invalid'
 
 if rg -n 'apt-get[[:space:]]+upgrade' "$prepare_host" >/dev/null; then

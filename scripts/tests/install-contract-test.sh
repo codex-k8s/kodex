@@ -557,7 +557,7 @@ for host_tool_contract in \
   '"name": "node"' \
   '"name": "teleport-client"' \
   'tsh version --format=json' \
-  "'@openai/codex@0.152.0'" \
+  "'@openai/codex@0.153.4'" \
   'systemctl enable --now docker'; do
   rg -Fq -- "$host_tool_contract" \
     "$repository_root/tools/install/prepare-host.sh" \
