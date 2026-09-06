@@ -915,6 +915,16 @@ control-plane. Политика строится из фактического S
 
 ## Полнота deployable
 
+Приватный spool не полагается на исходный mode корня `emptyDir`: kubelet и
+`fsGroup` могут оставить его world-writable. Отдельный non-root init того же
+deployable создаёт фиксированный child с mode0700 и проверяет UID, тип и identity
+открытого каталога; существующее небезопасное состояние закрыто отклоняется
+без chmod, удаления или следования symlink. Рабочий контейнер получает только
+этот child через `subPath`; другие identities не монтируют родительский том.
+Init не получает authority/secret mounts. Regression воспроизводит реальные
+permissions kubelet и запускает подготовку и рабочий spool-код, а не только
+shell write в заранее приватный tmpfs.
+
 Sidecar, verifier, issuer, publisher, reconciler, задача миграции и прокси
 исходящего трафика считаются частью production-пути только при наличии:
 

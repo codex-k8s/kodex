@@ -18,6 +18,45 @@ var (
 	errArtifactCapacity = errors.New("runtime artifact transfer capacity exhausted")
 )
 
+// PrepareArtifactSpool выполняется только non-root init на выделенном emptyDir.
+// Основной контейнер получает child через subPath; корень тома ему недоступен.
+// Уже существующий небезопасный child не исправляется и не удаляется.
+func PrepareArtifactSpool(directory string) error {
+	if !filepath.IsAbs(directory) || filepath.Clean(directory) != directory {
+		return errArtifactSpool
+	}
+	info, err := os.Lstat(directory)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return errArtifactSpool
+	}
+	base, err := os.OpenRoot(directory)
+	if err != nil {
+		return errArtifactSpool
+	}
+	defer base.Close()
+	actual, err := base.Stat(".")
+	if err != nil || !os.SameFile(info, actual) {
+		return errArtifactSpool
+	}
+	if err := base.Mkdir("controller", 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		return errArtifactSpool
+	}
+	info, err = base.Lstat("controller")
+	if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || !ownedSpoolFile(info) {
+		return errArtifactSpool
+	}
+	child, err := base.OpenRoot("controller")
+	if err != nil {
+		return errArtifactSpool
+	}
+	defer child.Close()
+	actual, err = child.Stat(".")
+	if err != nil || !os.SameFile(info, actual) {
+		return errArtifactSpool
+	}
+	return nil
+}
+
 // Отдельный mount принадлежит controller. Внутри него только приватный каталог
 // текущего UID; открытый временный файл сразу unlink и исчезает при close/crash.
 type artifactSpool struct {

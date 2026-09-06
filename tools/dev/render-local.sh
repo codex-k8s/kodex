@@ -881,6 +881,16 @@ patch_go_container Deployment control-api-gateway control-api-gateway services/e
 patch_go_container Deployment control-api-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment egress-gateway egress-gateway services/external/egress-gateway ./cmd/egress-gateway
 patch_go_container Deployment runtime-controller runtime-controller services/internal/runtime-controller ./cmd/runtime-controller
+patch_go_container Deployment runtime-controller artifact-spool-init services/internal/runtime-controller ./cmd/runtime-controller
+# Init должен завершиться до subPath mount основного контейнера, без Air/retry.
+yq -i '
+  with(select(.kind == "Deployment" and .metadata.name == "runtime-controller");
+    (.spec.template.spec.initContainers[] | select(.name == "artifact-spool-init")) |= (
+      .command = ["/bin/sh", "-ec"] |
+      .args = ["mkdir -p \"$GOTMPDIR\" \"$HOME\"; CGO_ENABLED=0 go build -trimpath -buildvcs=false -o /go/build-cache/artifact-spool-init ./cmd/runtime-controller; exec /go/build-cache/artifact-spool-init --prepare-artifact-spool /var/lib/kodex/runtime-controller/artifact-spool"]
+    )
+  )
+' "$render"
 patch_go_container Deployment runtime-controller internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment runtime-controller platform-worker-grant-agent services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-platform-worker-grant-agent
 patch_go_container Deployment integration-gateway integration-gateway services/external/integration-gateway ./cmd/integration-gateway

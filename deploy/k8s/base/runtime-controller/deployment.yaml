@@ -31,6 +31,23 @@ spec:
       securityContext:
         runAsNonRoot: true
         seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: artifact-spool-init
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          args: [--prepare-artifact-spool, /var/lib/kodex/runtime-controller/artifact-spool]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 32Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: artifact-spool, mountPath: /var/lib/kodex/runtime-controller/artifact-spool}
       containers:
         - name: runtime-controller
           image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/runtime-controller@sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -91,7 +108,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
-            - {name: artifact-spool, mountPath: /var/lib/kodex/runtime-controller/artifact-spool}
+            - {name: artifact-spool, mountPath: /var/lib/kodex/runtime-controller/artifact-spool, subPath: controller}
             - {name: kube-api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
             - {name: workload-tls, mountPath: /var/run/secrets/kodex/runtime-controller/workload-tls, readOnly: true}
             - {name: control-plane-ca, mountPath: /var/run/config/kodex/runtime-controller/control-plane, readOnly: true}

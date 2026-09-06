@@ -62,10 +62,26 @@ repo_root="$(cd -- "$script_dir/.." && pwd -P)"
 rendered="$(kubectl kustomize "$repo_root/deploy/k8s/overlays/$environment_name/runtime-controller")" || fail "kustomize render failed"
 controller_placeholder="kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/runtime-controller@sha256:$(printf '0%.0s' {1..64})"
 authority_placeholder="ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:$(printf '0%.0s' {1..64})"
-[[ "$(grep -Fc "$controller_placeholder" <<<"$rendered" || true)" == 12 ]] || fail "render has an unexpected controller placeholder count"
-[[ "$(grep -Fc "$authority_placeholder" <<<"$rendered" || true)" == 3 ]] || fail "render has an unexpected authority placeholder count"
-[[ "$(grep -Fc 'registry-pull-placeholder/kodex/roles@sha256:' <<<"$rendered" || true)" == 1 ]] ||
-  fail "render has no exact promoted role repository placeholder"
+[[ "$(grep -Fc "$controller_placeholder" <<<"$rendered" || true)" == 3 ]] || fail "render has an unexpected controller placeholder count"
+[[ "$(grep -Fc "$authority_placeholder" <<<"$rendered" || true)" == 4 ]] || fail "render has an unexpected authority placeholder count"
+# Promoted repository теперь принадлежит общему admission ConfigMap. Старый
+# registry-pull-host argv сохраняется для совместимости, но не подменяет owner.
+command -v yq >/dev/null 2>&1 || fail "yq is required"
+command -v jq >/dev/null 2>&1 || fail "jq is required"
+yq -o=json -I=0 '.' <<<"$rendered" | jq -s -e '
+  [.[] | select(.kind == "Deployment" and .metadata.name == "runtime-controller") |
+   .spec.template.spec.containers[] | select(.name == "runtime-controller")] as $apps |
+  ($apps | length) == 1 and
+  all([
+    ["RUNTIME_CONTROLLER_PROMOTED_ROLE_IMAGE_REPOSITORY", "promotedPullRepository"],
+    ["RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE", "nodeReadbackImage"]
+  ][]; . as $expected |
+    [$apps[0].env[] | select(.name == $expected[0])] as $entries |
+    ($entries | length) == 1 and
+    $entries[0].value == null and
+    $entries[0].valueFrom == {"configMapKeyRef":{"name":"kodex-image-admission-policy","key":$expected[1]}}
+  )
+' >/dev/null || fail "render has no exact role image admission references"
 registry_pull_pattern=${registry_pull_host//./\\\\\\\\.}
 materialized=$(sed -e "s|$controller_placeholder|$controller_image|g" \
   -e "s|$authority_placeholder|$authority_image|g" \
