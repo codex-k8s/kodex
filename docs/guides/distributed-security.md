@@ -4,11 +4,19 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.15
-updated: 2026-09-06
+version: 1.4.16
+updated: 2026-09-07
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Поколения manifest signer и workload signing key принадлежат разным trust
+domains; их числовое равенство не подтверждает authority. Workload watermark
+сверяется с единственным CURRENT ключом нужного purpose и exact workload в
+owner-published snapshot, связанном с проверенными history и attestation.
+Отсутствующие/неоднозначные ключи и ошибка разбора закрывают действие; нельзя
+восстанавливать частичную модель, понижать watermark или отключать receipt/RLS
+для устранения такого mismatch. Regression использует различающиеся поколения.
 
 Если acceptance credential разрешён только для Node/host, его нельзя передавать
 в DOM, page.evaluate, browser request context или browser storage даже при

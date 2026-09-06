@@ -4,8 +4,8 @@ title: Диагностика internal RPC authority
 type: runbook
 status: approved
 owner: sre
-version: 2.3.0
-updated: 2026-08-27
+version: 2.4.0
+updated: 2026-09-07
 ---
 
 # Диагностика internal RPC authority
@@ -14,6 +14,60 @@ Runbook разрешает read-only диагностику publisher, issuer, v
 attestor и restore controller. Secret values, DSN и private keys не выводятся.
 
 ## Контракт
+
+### Безопасная startup диагностика issuer/verifier (#1121)
+
+CLI выводит только закрытые `mode`, `stage`, `domain_kind`, `error_class`,
+`sqlstate` и `context_state`. Поля исходных ошибок, DSN, SQL, receipt contents,
+credential, private paths и адреса соединений не печатаются. Неизвестные
+значения нормализуются в `UNKNOWN`; отсутствие domain/SQL/context — `NONE`.
+SQLSTATE выводится только из явного списка `runtime_diagnostics.go`, а не по
+проверке длины произвольной строки. Не включать raw causes ради диагностики.
+
+| Stage/исход | Значение и следующий разрешённый разбор |
+| --- | --- |
+| CONFIGURATION, OBSERVABILITY, POSTGRES | До snapshot lifecycle: проверить code-first config/mounts и разрешённый доступ зависимостей. |
+| SNAPSHOT_LOAD, AUTHORITY_CONSTRUCTION, READBACK_CLIENT, RESTORE_CLIENT | Конструирование exact snapshot/domain и mTLS clients; не подменять файлы/доверие вручную. |
+| RESTORE_VERIFY | Startup restore barrier не пройден; socket/workers ещё не открываются. |
+| SNAPSHOT_ACTIVATION + SNAPSHOT_REJECTED | Owner SQL не принял restore fence, attestation receipt или watermark/history. Это не доказательство конкретного из трёх отказов; нужен авторитетный readback. |
+| SNAPSHOT_ACTIVATION + PERSISTENCE_UNAVAILABLE + POSTGRES | Ошибка PostgreSQL statement/driver; allowlisted SQLSTATE различает permission/schema/constraint/serialization отказ без содержимого SQL. |
+| RESTORE_OPEN | После snapshot activation повторный restore poll не разрешил работу; startup остаётся закрытым. |
+| LOCAL_SERVERS, RUNTIME | Listener либо последующий runtime/shutdown fan-in; существующие bounded cancel/join и cleanup не меняются. |
+| context_state=DEADLINE/CANCELED | Исчерпан startup/retry budget либо отменён caller. Первичный POSTGRES/SNAPSHOT_REJECTED/network/gRPC class сохраняется отдельно; deadline не доказывает сетевую первопричину. |
+
+Причина #1121: `history.signer_generation` назначает publisher из manifest
+signer, а `SnapshotState.signer_generation` loader берёт из CURRENT ключа
+workload AUTHORIZATION_CONTEXT. Эти независимые поколения могут различаться.
+Прежний trigger сравнивал их числовое равенство и возвращал 42501 даже при
+действительных identity/receipt. Forward migration
+`20260907000100_snapshot_workload_signer_boundary.sql` сохраняет exact
+history revision/digest/key-set/policy и identity/attestation проверки, но
+получает workload generation из public payload того же owner-published
+`snapshot_compact_jws`. Нужны ровно один exact workload issuer и один CURRENT
+ключ с purpose AUTHORIZATION_CONTEXT и ожидаемым generation. Отсутствие,
+duplicate, иной purpose/generation и ошибка parser закрыто отклоняются.
+Это не самостоятельное принятие произвольного JWS: строка history принадлежит
+publisher owner, а независимый attestation receipt остаётся обязательным.
+
+Семантика workload watermark, claims и replay не меняется; сохранённые строки
+не переписываются. Миграция заменяет только функцию guard через штатный goose
+up, не отключает trigger/RLS и не меняет старые migration bytes. Локальный
+PostgreSQL regression воспроизводит старый 42501 для manifest7/workload1,
+применяет forward migration и принимает тот же fixture; повторный up и
+negative controls проверяются той же публичной оснасткой
+`scripts/tests/internal-rpc-authority-postgres-test.sh`.
+
+Live активация после исправления остаётся NOT RUN до owner-approved exact
+deploy/readback issuer/verifier и зависимых сервисов. Нельзя сбрасывать durable
+watermark, переигрывать receipt, обходить external restore barrier или открывать
+readiness независимо от результата.
+
+Локальная проверка без PostgreSQL/Docker/live из модуля authority:
+`timeout 90s go test -race ./internal/app ./cmd/internal-rpc-authority-issuer ./cmd/internal-rpc-authority-verifier`.
+Sentinel cases покрывают вложенные pgx/network/domain/gRPC ошибки, joined
+deadline, неизвестные Kind/SQLSTATE/stage/mode и private paths. Отдельно
+проверяется реальный config-failure выход `Run`; CLI обоих режимов использует
+тот же safe formatter. `go vet` и `go build` выполняются в той же области.
 
 ### Controller shutdown companion (#1073)
 

@@ -101,11 +101,18 @@ func Run(
 	shutdownBase context.Context,
 	mode Mode,
 	buildVersion string,
-) error {
+) (runErr error) {
+	stage := stageConfiguration
+	defer func() {
+		if runErr != nil {
+			runErr = &runtimeStageError{stage: stage, cause: runErr}
+		}
+	}()
 	config, err := LoadConfig(mode)
 	if err != nil {
 		return fmt.Errorf("load runtime configuration: %w", err)
 	}
+	stage = stageObservability
 	telemetry, logger, err := startTelemetry(
 		lifecycle,
 		config.ServiceName,
@@ -122,6 +129,7 @@ func Run(
 	}()
 	startupCtx, startupCancel := context.WithTimeout(lifecycle, config.StartupTimeout)
 	defer startupCancel()
+	stage = stagePostgres
 	pool, err := openPostgres(startupCtx, config)
 	if err != nil {
 		return err
@@ -139,6 +147,7 @@ func Run(
 		pool.Close()
 		return fmt.Errorf("construct authority repository: %w", err)
 	}
+	stage = stageSnapshotLoad
 	loaded, err := snapshot.Load(snapshot.LoadOptions{
 		Role:                       snapshot.Role(config.Mode),
 		WorkloadID:                 config.WorkloadID,
@@ -154,6 +163,7 @@ func Run(
 		store.Close()
 		return fmt.Errorf("load served authority snapshot: %w", err)
 	}
+	stage = stageAuthorityConstruction
 	domainService, err := service.NewAuthority(loaded.Policy, loaded.Keys, store)
 	if err != nil {
 		store.Close()
@@ -164,6 +174,7 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct authority material delivery: %w", err)
 	}
+	stage = stageReadbackClient
 	readbackTLS, err := loadRestoreClientTLS(
 		config.ReadbackAttestorCAFile,
 		config.WorkloadCertificateFile,
@@ -258,6 +269,7 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct authority application: %w", err)
 	}
+	stage = stageRestoreClient
 	restoreTLS, err := loadRestoreClientTLS(
 		config.RestoreControllerCAFile,
 		config.WorkloadCertificateFile,
@@ -293,6 +305,7 @@ func Run(
 		store.Close()
 		return fmt.Errorf("construct restore workload agent: %w", err)
 	}
+	stage = stageRestoreVerify
 	if err := restoreWorkloadAgent.VerifyStartup(
 		startupCtx,
 		authorityApplication,
@@ -301,11 +314,13 @@ func Run(
 		store.Close()
 		return fmt.Errorf("verify external restore startup barrier: %w", err)
 	}
+	stage = stageSnapshotActivation
 	if err := activateSnapshotUntilReady(startupCtx, authorityApplication); err != nil {
 		delivery.Close()
 		store.Close()
 		return fmt.Errorf("activate served authority snapshot: %w", err)
 	}
+	stage = stageRestoreOpen
 	if err := restoreWorkloadAgent.Poll(
 		startupCtx,
 		authorityApplication,
@@ -314,6 +329,7 @@ func Run(
 		store.Close()
 		return fmt.Errorf("open external restore startup barrier: %w", err)
 	}
+	stage = stageLocalServers
 	metrics := observability.NewMetrics(
 		config.ServiceName,
 		buildVersion,
@@ -376,6 +392,7 @@ func Run(
 		metrics,
 		authorityApplication,
 	)
+	stage = stageRuntime
 	workers := serviceruntime.StartWorkers(
 		lifecycle,
 		func(ctx context.Context) error {

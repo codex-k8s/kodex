@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -63,7 +65,6 @@ func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 	issuer := workloadBoundaryConnection(t, ctx, port, "ira_control_plane_issuer_g1", "internal_rpc_authority_issuer")
 	verifier := workloadBoundaryConnection(t, ctx, port, "ira_control_plane_verifier_g1", "internal_rpc_authority_verifier")
 	retired := workloadBoundaryConnection(t, ctx, port, "ira_session_archive_issuer_g1", "internal_rpc_authority_issuer")
-	seedBoundaryAttestations(t, ctx, admin)
 
 	for _, item := range []struct {
 		name       string
@@ -160,6 +161,7 @@ func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 		source_revision = 1093001, source_digest_sha256 = repeat('a', 64),
 		readback_attestation_receipt_id = '10930000-0000-4000-8000-000000000021'`)
 	testCanonicalBoundaryQueries(t, ctx, issuer, verifier)
+	testSnapshotPublishedSignerNegatives(t, ctx, admin, verifier)
 
 	// Владелец обновляет реестр при живой сессии. Уже принятый SET ROLE не
 	// сохраняет доступ после retirement даже до termination backend.
@@ -262,8 +264,12 @@ func seedBoundaryAttestations(t *testing.T, ctx context.Context, admin *pgx.Conn
 	boundaryExec(t, ctx, admin, `INSERT INTO internal_rpc_authority.authority_snapshot_history
 		(source_revision, source_digest_sha256, key_set_revision, policy_revision, signer_generation,
 		 predecessor_revision, predecessor_digest_sha256, canonical_payload, published_at, publication_intent_id)
-		VALUES (1093001, repeat('a', 64), 1, 1, 1, 1093000, repeat('0', 64), '{}', clock_timestamp(), '10930000-0000-4000-8000-000000000010'),
-		(1093002, repeat('b', 64), 1, 1, 1, 1093001, repeat('a', 64), '{}', clock_timestamp(), '10930000-0000-4000-8000-000000000011')`)
+		VALUES (1093001, repeat('a', 64), 1, 1, 7, 1093000, repeat('0', 64), '{}', clock_timestamp(), '10930000-0000-4000-8000-000000000010'),
+		(1093002, repeat('b', 64), 1, 1, 9, 1093001, repeat('a', 64), '{}', clock_timestamp(), '10930000-0000-4000-8000-000000000011')`)
+	for _, revision := range []int64{1093001, 1093002} {
+		boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_snapshot_history
+			SET snapshot_compact_jws = $1 WHERE source_revision = $2`, boundarySnapshotJWS(t, ""), revision)
+	}
 	boundaryExec(t, ctx, admin, `INSERT INTO internal_rpc_authority.authority_rotation_intents
 		(intent_id, source_revision, source_digest_sha256, status, created_at, updated_at)
 		VALUES ('10930000-0000-4000-8000-000000000010', 1093001, repeat('a', 64), 'PROMOTED', clock_timestamp(), clock_timestamp()),
@@ -296,4 +302,67 @@ func seedBoundaryAttestations(t *testing.T, ctx context.Context, admin *pgx.Conn
 			 accepted_at, expires_at, evidence_jti, idempotency_key, peer_spiffe_id)
 			VALUES ($1, $1, repeat('a',64), repeat('a',64), 1, clock_timestamp(), clock_timestamp()+interval '5 minutes', $1, $1, $2)`, id, spiffe)
 	}
+}
+
+// Публичный payload синтетической owner publication; криптографический loader
+// проверяется отдельно. Этот fixture не заменяет receipt/history JOIN заглушкой.
+func boundarySnapshotJWS(t *testing.T, variant string) string {
+	t.Helper()
+	key := map[string]any{"status": "CURRENT", "purpose": "AUTHORIZATION_CONTEXT", "generation": 1}
+	issuer := map[string]any{"workload_id": "control-plane", "keys": []any{key}}
+	issuers := []any{issuer, map[string]any{"workload_id": "email-bridge", "keys": []any{key}}}
+	switch variant {
+	case "foreign":
+		issuer["workload_id"] = "foreign-workload"
+	case "wrong purpose":
+		key["purpose"] = "MANIFEST"
+	case "wrong generation":
+		key["generation"] = 2
+	case "not current":
+		key["status"] = "PREVIOUS"
+	case "duplicate key":
+		issuer["keys"] = []any{key, key}
+	case "duplicate issuer":
+		issuers = append(issuers, issuer)
+	case "missing keys":
+		delete(issuer, "keys")
+	}
+	payload, err := json.Marshal(map[string]any{"signer_generation": 9, "issuers": issuers})
+	if err != nil {
+		t.Fatal("encode synthetic public snapshot")
+	}
+	if variant == "malformed JSON" {
+		payload = []byte(`{"issuers":`)
+	}
+	return "synthetic." + base64.RawURLEncoding.EncodeToString(payload) + ".synthetic"
+}
+
+func testSnapshotGenerationUpgradeRejection(t *testing.T, port uint64) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	admin := workloadBoundaryConnection(t, ctx, port, "postgres", "")
+	verifier := workloadBoundaryConnection(t, ctx, port, "ira_control_plane_verifier_g1", "internal_rpc_authority_verifier")
+	seedBoundaryAttestations(t, ctx, admin)
+	// До forward migration правильный workload generation=1 отвергается из-за
+	// независимого manifest generation=7. После up тот же fixture принят ниже.
+	boundaryDenied(t, ctx, verifier, `INSERT INTO internal_rpc_authority.authority_snapshot_watermarks
+		(target_workload_id, source_revision, source_digest_sha256, key_set_revision, policy_revision, signer_generation, served_at, readback_attestation_receipt_id)
+		VALUES ('control-plane', 1093001, repeat('a',64), 1, 1, 1, clock_timestamp(), '10930000-0000-4000-8000-000000000021')`)
+}
+
+func testSnapshotPublishedSignerNegatives(t *testing.T, ctx context.Context, admin, verifier *pgx.Conn) {
+	t.Helper()
+	for _, variant := range []string{"foreign", "wrong purpose", "wrong generation", "not current", "duplicate key", "duplicate issuer", "missing keys", "malformed JSON"} {
+		t.Run("published signer "+variant, func(t *testing.T) {
+			boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_snapshot_history
+				SET snapshot_compact_jws = $1 WHERE source_revision = 1093002`, boundarySnapshotJWS(t, variant))
+			boundaryDenied(t, ctx, verifier, `UPDATE internal_rpc_authority.authority_snapshot_watermarks
+				SET served_at = clock_timestamp() WHERE target_workload_id = 'control-plane'`)
+		})
+	}
+	boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_snapshot_history
+		SET snapshot_compact_jws = $1 WHERE source_revision = 1093002`, boundarySnapshotJWS(t, ""))
+	boundaryExec(t, ctx, verifier, `UPDATE internal_rpc_authority.authority_snapshot_watermarks
+		SET served_at = clock_timestamp() WHERE target_workload_id = 'control-plane'`)
 }
