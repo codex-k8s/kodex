@@ -65,13 +65,13 @@ func (stream *requestBoundClientStream) SendMsg(request any) error {
 	}
 	proof, correlation, err := authorityProofWithRetry(bound, stream.proofs, operation, stream.method)
 	if err != nil {
-		return newLocalAuthorityError(err, correlation)
+		return newLocalAuthorityError(err, correlation, StageProofResolve)
 	}
 	issued, err := stream.issuer.IssueAuthorizationContext(bound, &api.IssueAuthorizationContextRequest{
 		OperationId: operation, CorrelationId: correlation, AuthorityProofCompactJws: proof, RequestDigestSha256: digest,
 	})
 	if err != nil {
-		return newLocalAuthorityError(err, correlation)
+		return newLocalAuthorityError(err, correlation, StageContextIssue)
 	}
 	if issued.GetCompactJws() == "" {
 		return status.Error(codes.Unauthenticated, "authorization context required")
