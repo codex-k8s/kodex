@@ -268,7 +268,7 @@ func seedBoundaryAttestations(t *testing.T, ctx context.Context, admin *pgx.Conn
 		(1093002, repeat('b', 64), 1, 1, 9, 1093001, repeat('a', 64), '{}', clock_timestamp(), '10930000-0000-4000-8000-000000000011')`)
 	for _, revision := range []int64{1093001, 1093002} {
 		boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_snapshot_history
-			SET snapshot_compact_jws = $1 WHERE source_revision = $2`, boundarySnapshotJWS(t, ""), revision)
+			SET snapshot_compact_jws = $1 WHERE source_revision = $2`, boundarySnapshotJWS(t, "", revision), revision)
 	}
 	boundaryExec(t, ctx, admin, `INSERT INTO internal_rpc_authority.authority_rotation_intents
 		(intent_id, source_revision, source_digest_sha256, status, created_at, updated_at)
@@ -306,7 +306,7 @@ func seedBoundaryAttestations(t *testing.T, ctx context.Context, admin *pgx.Conn
 
 // Публичный payload синтетической owner publication; криптографический loader
 // проверяется отдельно. Этот fixture не заменяет receipt/history JOIN заглушкой.
-func boundarySnapshotJWS(t *testing.T, variant string) string {
+func boundarySnapshotJWS(t *testing.T, variant string, revision int64) string {
 	t.Helper()
 	key := map[string]any{"status": "CURRENT", "purpose": "AUTHORIZATION_CONTEXT", "generation": 1}
 	issuer := map[string]any{"workload_id": "control-plane", "keys": []any{key}}
@@ -327,7 +327,11 @@ func boundarySnapshotJWS(t *testing.T, variant string) string {
 	case "missing keys":
 		delete(issuer, "keys")
 	}
-	payload, err := json.Marshal(map[string]any{"signer_generation": 9, "issuers": issuers})
+	manifestGeneration := 9
+	if revision == 1093001 {
+		manifestGeneration = 7
+	}
+	payload, err := json.Marshal(map[string]any{"source_revision": revision, "key_set_revision": 1, "policy_revision": 1, "signer_generation": manifestGeneration, "issuers": issuers})
 	if err != nil {
 		t.Fatal("encode synthetic public snapshot")
 	}
@@ -356,13 +360,13 @@ func testSnapshotPublishedSignerNegatives(t *testing.T, ctx context.Context, adm
 	for _, variant := range []string{"foreign", "wrong purpose", "wrong generation", "not current", "duplicate key", "duplicate issuer", "missing keys", "malformed JSON"} {
 		t.Run("published signer "+variant, func(t *testing.T) {
 			boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_snapshot_history
-				SET snapshot_compact_jws = $1 WHERE source_revision = 1093002`, boundarySnapshotJWS(t, variant))
+				SET snapshot_compact_jws = $1 WHERE source_revision = 1093002`, boundarySnapshotJWS(t, variant, 1093002))
 			boundaryDenied(t, ctx, verifier, `UPDATE internal_rpc_authority.authority_snapshot_watermarks
 				SET served_at = clock_timestamp() WHERE target_workload_id = 'control-plane'`)
 		})
 	}
 	boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_snapshot_history
-		SET snapshot_compact_jws = $1 WHERE source_revision = 1093002`, boundarySnapshotJWS(t, ""))
+		SET snapshot_compact_jws = $1 WHERE source_revision = 1093002`, boundarySnapshotJWS(t, "", 1093002))
 	boundaryExec(t, ctx, verifier, `UPDATE internal_rpc_authority.authority_snapshot_watermarks
 		SET served_at = clock_timestamp() WHERE target_workload_id = 'control-plane'`)
 }
