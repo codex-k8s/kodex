@@ -3,6 +3,8 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/managed_configuration_cas_consumer.sql
+	queryManagedConfigurationCASConsumer string
 	//go:embed sql/managed_configuration_discard_revision.sql
 	queryManagedConfigurationDiscardRevision string
 	//go:embed sql/stt_runtime_actor.sql

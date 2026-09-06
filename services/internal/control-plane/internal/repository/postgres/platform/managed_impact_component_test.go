@@ -37,7 +37,7 @@ func testManagedImpactPagination(t *testing.T, ctx context.Context, service *pla
 	_, err = service.Execute(ctx, command.Command{Kind: command.RebindPromptTemplate, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "managed-impact-second-bind", ExpectedVersion: &current.Version},
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: ref, RevisionRef: revision, ImpactDigest: before.Digest,
-			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "AGENT", Ref: agent.Ref}}}})
+			Consumers: []entity.ManagedConfigurationConsumer{{Kind: "AGENT", Ref: agent.Ref, ExpectedAbsent: true}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

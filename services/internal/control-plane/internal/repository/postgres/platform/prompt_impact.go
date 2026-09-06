@@ -184,7 +184,7 @@ func (r *Repository) applyPromptImpact(ctx context.Context, tx pgx.Tx, s scope, 
 				nested := input
 				nested.Kind = command.RebindPromptTemplate
 				nested.Mutation.ExpectedVersion = &set.Version
-				nested.Payload = command.ManagedConfigurationInput{ConfigurationRef: set.Ref, RevisionRef: published, ImpactDigest: impact.Digest, Consumers: []entity.ManagedConfigurationConsumer{{Kind: item.ConsumerKind, Ref: item.ConsumerRef}}}
+				nested.Payload = command.ManagedConfigurationInput{ConfigurationRef: set.Ref, RevisionRef: published, ImpactDigest: impact.Digest, Consumers: []entity.ManagedConfigurationConsumer{{Kind: item.ConsumerKind, Ref: item.ConsumerRef, RevisionRef: item.SourceRevisionRef, Version: item.BindingVersion}}}
 				outcome, applyErr = r.changeManagedConfiguration(ctx, attempt, s, nested)
 			}
 		}

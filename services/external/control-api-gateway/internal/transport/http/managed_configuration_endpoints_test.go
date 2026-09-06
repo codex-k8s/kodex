@@ -230,9 +230,12 @@ func TestManagedConfigurationPropagatesOwnerDenial(t *testing.T) {
 
 func TestManagedConfigurationRejectsDuplicateConsumerBindings(t *testing.T) {
 	t.Parallel()
-	consumer := generated.ManagedConfigurationConsumer{Kind: "AGENT", Ref: "agt_fixture01", RevisionRef: "mrev_fixture00", Version: 2}
+	var consumer generated.ManagedConfigurationConsumerInput
+	if err := consumer.FromManagedConfigurationConsumerMatch(generated.ManagedConfigurationConsumerMatch{Kind: "AGENT", Ref: "agt_fixture01", RevisionRef: "mrev_fixture00", Version: 2}); err != nil {
+		t.Fatal(err)
+	}
 	recorder := httptest.NewRecorder()
-	if _, ok := managedConsumerInput(recorder, generated.ManagedConfigurationRebindInput{ImpactDigest: strings.Repeat("a", 64), Consumers: []generated.ManagedConfigurationConsumer{consumer, consumer}}); ok {
+	if _, ok := managedConsumerInput(recorder, generated.ManagedConfigurationRebindInput{ImpactDigest: strings.Repeat("a", 64), Consumers: []generated.ManagedConfigurationConsumerInput{consumer, consumer}}); ok {
 		t.Fatal("duplicate consumer accepted")
 	}
 }

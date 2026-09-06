@@ -4,11 +4,70 @@ title: Сквозная приёмка доработок MVP
 type: verification-plan
 status: approved
 owner: qa
-version: 1.21.0
-updated: 2026-09-06
+version: 1.22.0
+updated: 2026-09-07
 ---
 
 # Приёмка #1031
+
+## Постоянная STT fixture для HTTP smoke и микрофона (#1117)
+
+`node tools/dev/stt-fixture-setup.mjs --expected-sha "$EXPECTED_SHA"`
+выполняется **один раз** из точного чистого checkout после разрешённого deploy.
+Это Node-only setup: он не запускает браузер, не отправляет audio и не является
+проверкой транскрипции. Нужны действующие owner cookies в private storage,
+HTTPS `KODEX_E2E_BASE_URL`, `KODEX_E2E_STATE_DIRECTORY`,
+`KODEX_E2E_STORAGE_STATE` внутри этого каталога и уникальный
+`KODEX_E2E_RESOURCE_PREFIX`. Каталог принадлежит текущему пользователю и имеет
+режим 0700; storage — обычный файл 0600 без symlink/hardlink.
+Обязательны `KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION`
+и `KODEX_PROVIDER_E2E_API_KEY=1`. Credential поступает ровно из одного источника:
+`OPENAI_API_KEY` **либо** `KODEX_PROVIDER_E2E_API_KEY_FILE` (абсолютный путь,
+обычный owner-private файл 0600 без ссылок). Значение не передавать аргументом,
+в браузер, trace, screenshot, Issue или receipt. Setup не печатает значения env
+и содержимое ответов/исключений. Provider credential отправляется только одним
+write-only POST через Node helper `provider-api-key-acceptance.mjs` (#1116).
+
+| Фаза | Authority, версия и результат |
+| --- | --- |
+| Preflight | Exact source/origin/private storage; GET session и bootstrap OWNER; отсутствие effective STT и любых SYSTEM_STT sets. Чужой/GIT set требует отдельного решения, даже если пока не связан. |
+| Account | Отдельный `openai-codex` account без agent bindings; свежий descriptor/ETag, Origin, CSRF, session и уникальный idempotency key для единственного authorization POST. |
+| Draft → VALID → PUBLISHED | Текущий server catalog; typed specification; проверка content SHA256 и всех полей; перед каждым переходом свежая configuration.version из history. |
+| Initial bind | Свежие impact digest и configuration.version; consumer STT_SERVICE/stt-tts-service с **expectedAbsent=true**, без revisionRef/version. Это контракт #1118/#1119; старый сервер использовать нельзя. Отдельный GET отсутствия не заменяет owner-transaction CAS. |
+| Readback | Exact configuration/revision/digest/specification/account, authorized API_KEY descriptor, ready и пустые blockers, generation; свежий bootstrap speechTranscription READY с будущим validUntil. |
+| UNKNOWN/412/частичный успех | Ни повторов mutation, ни автоматического удаления. Каждый эффект предваряется durable UNKNOWN; подтверждённый ответ меняет только свою фазу. После 412 сохранён UNKNOWN до отдельного авторитетного разбора. |
+
+`<prefix>-stt-setup.json.reserved` создаётся через O_EXCL и fsync до эффектов;
+`<prefix>-stt-setup.json` атомарно сохраняет безопасные refs, версии, digest,
+catalog pin, phase и idempotency keys. Существующий journal/reservation закрыто
+останавливает повтор. **Не удалять reservation и не выбирать новый prefix для
+обхода UNKNOWN.** Потерянный ACK сначала разбирается через owner read paths
+для уже записанных refs и списка accounts/configurations; setup не имеет
+автоматического resume/replay. Credential, cookies, content и audio в journal
+не сохраняются. Обновлённая при GET/PUT session авторизация записывается в тот
+же private storage и используется последующими фазами и STT smoke.
+
+После setup PASS ресурсы намеренно остаются. Затем отдельно запускаются
+`stt-http-acceptance.mjs` и browser microphone acceptance из этого плана.
+Setup PASS не означает provider inference, аудио или UI PASS. Если readback
+не прошёл, journal содержит FAIL/UNKNOWN, а оставшиеся refs нужны для разбора.
+
+Teardown — отдельное явно разрешённое действие владельца через штатный UI/API,
+а не `finally` setup. Для связанного fixture сначала создать typed revision
+того же SYSTEM_STT с `enabled=false`, validate/publish, получить свежий impact
+и rebind с **прежними** exact consumer revisionRef/version; подтвердить disabled
+readback. Если требуется восстановить прежнюю конфигурацию, владелец явно
+выбирает её published revision и проверяет те же OCC/ownership fences;
+setup автоматически чужую привязку не заменяет. Только после закрытия активных
+STT consumers удалять fixture account через штатный lifecycle с fresh ETag,
+idempotency и readback; blockers не обходить. Непривязанный account после
+частичного setup также удаляется только отдельным действием после readback.
+Private journal сохраняется как evidence; reservation не снимается автоматически.
+
+Локальная bounded точка входа `make test-stt-fixture-setup` использует только
+синтетические sentinel/cookies и проверяет first bind, fresh OCC, UNKNOWN каждой
+фазы, запрет чужого/GIT binding, session refresh persistence и отсутствие
+автоматического cleanup/audio. Реальный ключ и staging ей не нужны.
 
 Источник: [эпик #1018](https://github.com/codex-k8s/kodex/issues/1018),
 [приёмка #1031](https://github.com/codex-k8s/kodex/issues/1031), принятые
