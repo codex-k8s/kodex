@@ -17,8 +17,8 @@ import (
 var migrations embed.FS
 
 func main() {
-	if run() != nil {
-		fmt.Fprintln(os.Stderr, "Email bridge migration failed")
+	if err := run(); err != nil {
+		reportFailure(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -27,28 +27,32 @@ func run() error {
 		DSNFile string `env:"EMAIL_BRIDGE_MIGRATION_DSN_FILE,required,notEmpty"`
 	}
 	if e := env.ParseWithOptions(&cfg, env.Options{}); e != nil {
-		return e
+		return failure(stageConfiguration, e)
 	}
 	if len(os.Args) != 2 || (os.Args[1] != "up" && os.Args[1] != "status") {
-		return fmt.Errorf("unsupported migration command")
+		return failure(stageArguments, fmt.Errorf("unsupported migration command"))
 	}
 	raw, e := securefile.Read(cfg.DSNFile, 16384)
 	if e != nil {
-		return e
+		return failure(stageDSNRead, e)
 	}
 	db, e := sql.Open("pgx", string(raw))
 	if e != nil {
-		return e
+		return failure(stageDatabaseOpen, e)
 	}
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	// Ping отделяет настройку/соединение от выполнения forward-only migrations.
+	if e = db.PingContext(ctx); e != nil {
+		return failure(stageDatabaseConnect, e)
+	}
 	goose.SetBaseFS(migrations)
 	if e = goose.SetDialect("postgres"); e != nil {
-		return e
+		return failure(stageDialect, e)
 	}
 	if os.Args[1] == "up" {
-		return goose.UpContext(ctx, db, "migrations")
+		return failure(stageMigration, goose.UpContext(ctx, db, "migrations"))
 	}
-	return goose.StatusContext(ctx, db, "migrations")
+	return failure(stageStatus, goose.StatusContext(ctx, db, "migrations"))
 }

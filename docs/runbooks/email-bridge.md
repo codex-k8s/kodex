@@ -10,6 +10,23 @@ updated: 2026-09-05
 
 # Email bridge
 
+## Отказ migration CLI
+
+`Email bridge migration failed` содержит только `stage` и закрытый
+`error_class`. `configuration`/`arguments` — вход CLI; `dsn_read`/`secure_file` —
+чтение bounded Secret; `database_open` — создание handle; `database_connect` —
+настройка pgx, TLS и Ping до goose; `dialect`, `migration`, `status` — этап goose.
+Классы различают timeout/canceled, network, filesystem, connection_configuration,
+tls_verification и database (отдельно authentication/permission/missing/unavailable).
+`unknown` не доказывает конкретную причину; raw error, DSN и SQL не публикуются.
+
+При повторном up сначала сверить UID/GID/mode/size и symlink boundary DSN/CA,
+Secret metadata и reuse material. Затем по классу проверять TLS CA/SNI/expiry,
+service endpoints или PostgreSQL. Не снимать read-only/TLS и не ротировать
+пароль по одному общему failure. CLI сохраняет минутный бюджет и forward-only
+goose; предварительный Ping не применяет миграций. Причина staging #1114 пока
+не подтверждена: live acceptance требует нового разрешённого code-first up.
+
 ## Подготовка владельцем
 
 После review и отдельного допуска применяются кодовые ресурсы
