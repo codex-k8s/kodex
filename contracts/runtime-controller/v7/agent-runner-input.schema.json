@@ -107,7 +107,7 @@
     "role_runtime_contract_revision": {"type": "integer", "minimum": 1},
     "role_runtime_contract_sha256": {"$ref": "#/$defs/sha256"},
     "role_definition_ref": {"$ref": "#/$defs/opaque_ref"},
-    "runtime_profile_ref": {"$ref": "#/$defs/opaque_ref"},
+    "runtime_profile_ref": {"$ref": "#/$defs/runtime_profile_key"},
     "runtime_profile_revision": {"type": "string", "minLength": 1, "maxLength": 128},
     "instruction_ref": {"$ref": "#/$defs/opaque_ref"},
     "instruction_digest": {"$ref": "#/$defs/sha256"},
@@ -304,6 +304,7 @@
     }
   ],
   "$defs": {
+    "runtime_profile_key": {"type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]{8,128}$"},
     "file_catalog": {
       "type": "object", "additionalProperties": false,
       "required": ["ref", "digest", "total", "purposes"],

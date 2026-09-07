@@ -322,6 +322,11 @@ Service config:
 
 - Удаление или изменение public API требует миграционного плана потребителей.
 - Storage/wire schema общей библиотеки versioned и проверяется readiness.
+- Общий validator различает stable key каталога и opaque ID агрегата по
+  каноническому producer contract. Суффикс `ref` в имени поля не доказывает
+  одинаковую грамматику. Regression включает фактический bootstrap key и
+  полный encode/decode потребителя; расширение одного вида ключа не меняет
+  проверки остальных resource refs и не заменяет owner authority.
 - Общая библиотека не применяет миграции скрыто.
 - Каждый сервис включает нужные forward-only migrations в собственный
   migration binary.

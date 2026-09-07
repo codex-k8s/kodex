@@ -36,6 +36,32 @@ func TestRunnerInputSchemaV7MatchesRuntimePayload(t *testing.T) {
 		t.Fatalf("BuildWarmInput() error = %v", err)
 	}
 	validateRunnerInputSchema(t, compiled, warm)
+	for _, input := range []runtimecontract.RunnerInput{turn, warm} {
+		if input.RuntimeProfileRef != "builtin-safe-runtime" {
+			t.Fatal("production bootstrap runtime key missing from warm/turn fixture")
+		}
+		raw, err := runtimecontract.EncodeRunnerInput(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if decoded, err := runtimecontract.DecodeRunnerInput(raw); err != nil || decoded.RuntimeProfileRef != input.RuntimeProfileRef {
+			t.Fatal("runner rejected controller-produced bootstrap profile")
+		}
+		for _, key := range []string{"", "short", strings.Repeat("a", 129), "runtime/key", "runtime.key", "runtime key", "runtime\nkey", "runtime-ключ"} {
+			object := decodeJSONInstance(t, raw).(map[string]any)
+			object["runtime_profile_ref"] = key
+			if compiled.Validate(object) == nil {
+				t.Fatal("schema admitted invalid profile key")
+			}
+		}
+		for _, field := range []string{"agent_ref", "role_definition_ref", "provider_account_ref", "runtime_config_ref"} {
+			object := decodeJSONInstance(t, raw).(map[string]any)
+			object[field] = "builtin-safe-runtime"
+			if compiled.Validate(object) == nil {
+				t.Fatal("schema widened aggregate reference")
+			}
+		}
+	}
 }
 
 func TestRunnerInputSchemaV7CarriesOnlySecretDescriptors(t *testing.T) {
