@@ -353,6 +353,15 @@ type claimableExecution struct {
 	resourcesDigest, volumesDigest, networkDigest, rbacDigest                                    string
 }
 
+func runtimeExecutionProvider(definitionKey string) (string, error) {
+	switch definitionKey {
+	case "openai-codex":
+		return "openai", nil
+	default:
+		return "", errs.ErrConflict
+	}
+}
+
 func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LeaseInput)
 	if !ok || payload.WorkloadInstance == "" || payload.Limit < 1 || payload.Limit > 32 {
@@ -454,6 +463,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		_, candidateErr := func(tx pgx.Tx) (commandOutcome, error) {
+			runtimeProvider, err := runtimeExecutionProvider(candidate.provider)
+			if err != nil {
+				return commandOutcome{}, err
+			}
 			configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, candidate.agentRef, candidate.runtimeConfigID)
 			if err != nil {
 				return commandOutcome{}, err
@@ -483,7 +496,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
 			rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
 			sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
-			runtimeKey, runtimeRevision, provider, model := candidate.runtimeKey, candidate.runtimeRevision, candidate.provider, candidate.model
+			runtimeKey, runtimeRevision, provider, model := candidate.runtimeKey, candidate.runtimeRevision, runtimeProvider, candidate.model
 			providerAccountID, providerAccountRef := candidate.providerAccountID, candidate.providerAccountRef
 			providerCredentialID, providerCredentialRef := candidate.providerCredentialID, candidate.providerCredentialRef
 			providerCredentialRevisionNumber := candidate.providerCredentialRevisionNumber
