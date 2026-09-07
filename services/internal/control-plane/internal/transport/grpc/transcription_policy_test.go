@@ -36,18 +36,18 @@ func transcriptionAuthorityFixture(locatorExpiry, verifiedExpiry time.Time) (*st
 	actor := &authorityv1.AuthorityProvenance{Source: authorityv1.AuthoritySource_AUTHORITY_SOURCE_OIDC_SESSION, Reference: "actor", Revision: 3, DigestSha256: digest}
 	tenant := &authorityv1.AuthorityProvenance{Source: authorityv1.AuthoritySource_AUTHORITY_SOURCE_DOMAIN_STATE, Reference: "tenant", Revision: 4, DigestSha256: digest}
 	return &sttv1.DelegatedAuthorityLocator{
-		RequestId: "b05d9c6e-9d1b-4ae5-842a-b741662a18b0", CorrelationId: "stt-policy-test",
-		RootActorId: actorID, TenantId: tenantID, SourceRevision: 7, SourceDigestSha256: digest,
-		Actor: &sttv1.AuthorityIdentityProvenance{Source: int32(actor.Source), Reference: actor.Reference, Revision: actor.Revision, DigestSha256: actor.DigestSha256},
-		Tenant: &sttv1.AuthorityIdentityProvenance{Source: int32(tenant.Source), Reference: tenant.Reference, Revision: tenant.Revision, DigestSha256: tenant.DigestSha256},
-		ExpiresAt: timestamppb.New(locatorExpiry),
-	}, &authorityv1.VerifiedAuthorizationContext{
-		ExpiresAt: verifiedExpiryTimestamp(verifiedExpiry), SourceRevision: 7, SourceDigestSha256: digest,
-		Authority: &authorityv1.CallerAuthority{
-			Actor: &authorityv1.AuthorityIdentity{Id: actorID, Provenance: actor},
-			Tenant: &authorityv1.AuthorityIdentity{Id: tenantID, Provenance: tenant},
-		},
-	}
+			RequestId: "b05d9c6e-9d1b-4ae5-842a-b741662a18b0", CorrelationId: "stt-policy-test",
+			RootActorId: actorID, TenantId: tenantID, SourceRevision: 7, SourceDigestSha256: digest,
+			Actor:     &sttv1.AuthorityIdentityProvenance{Source: int32(actor.Source), Reference: actor.Reference, Revision: actor.Revision, DigestSha256: actor.DigestSha256},
+			Tenant:    &sttv1.AuthorityIdentityProvenance{Source: int32(tenant.Source), Reference: tenant.Reference, Revision: tenant.Revision, DigestSha256: tenant.DigestSha256},
+			ExpiresAt: timestamppb.New(locatorExpiry),
+		}, &authorityv1.VerifiedAuthorizationContext{
+			ExpiresAt: verifiedExpiryTimestamp(verifiedExpiry), SourceRevision: 7, SourceDigestSha256: digest,
+			Authority: &authorityv1.CallerAuthority{
+				Actor:  &authorityv1.AuthorityIdentity{Id: actorID, Provenance: actor},
+				Tenant: &authorityv1.AuthorityIdentity{Id: tenantID, Provenance: tenant},
+			},
+		}
 }
 
 func verifiedExpiryTimestamp(value time.Time) *timestamppb.Timestamp {
