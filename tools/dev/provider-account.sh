@@ -27,12 +27,14 @@ account_key=""
 account_name=""
 auth_mode=""
 auth_file=""
+preserve_current=()
 while (($# > 0)); do
   case "$1" in
     --account-key) account_key=${2:-}; shift 2 ;;
     --name) account_name=${2:-}; shift 2 ;;
     --mode) auth_mode=${2:-}; shift 2 ;;
     --auth-file) auth_file=${2:-}; shift 2 ;;
+    --preserve-current) preserve_current=(--preserve-current); shift ;;
     --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
     --context) context=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
@@ -42,7 +44,7 @@ while (($# > 0)); do
 done
 
 case "$command_name" in authorize|import|list) ;; *) usage; fail 'command is invalid' ;; esac
-for command in codex install jq kubectl mktemp realpath sha256sum stat; do
+for command in codex install jq kubectl mktemp realpath sha256sum stat python3; do
   command -v "$command" >/dev/null 2>&1 || fail "$command is required"
 done
 [[ -f "$kubeconfig" && -r "$kubeconfig" ]] || fail 'Kubernetes configuration is absent'
@@ -113,110 +115,18 @@ if [[ "$(realpath -e -- "$auth_file")" != "$canonical_auth_file" ]]; then
 fi
 auth_file="$canonical_auth_file"
 
-digest=$(sha256sum "$auth_file" | awk '{print $1}')
 key_digest=$(printf '%s' "$account_key" | sha256sum | awk '{print $1}')
-account_slug=${account_key:0:16}
-secret_name="runtime-provider-openai-${account_slug}-${key_digest:0:6}-${digest:0:12}"
-temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"' EXIT
-chmod 0700 "$temporary_directory"
-printf '%s\n' "$digest" >"$temporary_directory/auth.sha256"
-chmod 0600 "$temporary_directory/auth.sha256"
-
-if secret_json=$(kubectl -n "$runtime_namespace" get "secret/$secret_name" -o json 2>/dev/null); then
-  existing_digest=$(jq -jr '.data["auth.json"] | @base64d' <<<"$secret_json" | sha256sum | awk '{print $1}')
-  jq -e --arg account_key "$account_key" --arg authorization_mode "$authorization_mode" '
-    .immutable == true and .type == "Opaque" and
-    .metadata.annotations["kodex.dev/provider-account-key"] == $account_key and
-    (.metadata.annotations["kodex.dev/provider-authorization-mode"] // $authorization_mode) == $authorization_mode
-  ' <<<"$secret_json" >/dev/null || fail 'existing provider Secret contract is invalid'
-  [[ "$existing_digest" == "$digest" ]] || fail 'existing immutable provider Secret digest differs'
-  if [[ $(jq -r '.metadata.annotations["kodex.dev/provider-authorization-mode"] // ""' <<<"$secret_json") == "" ]]; then
-    kubectl -n "$runtime_namespace" annotate "secret/$secret_name" \
-      "kodex.dev/provider-authorization-mode=$authorization_mode" >/dev/null
-  fi
-else
-  manifest="$temporary_directory/provider-secret.json"
-  kubectl -n "$runtime_namespace" create secret generic "$secret_name" \
-    --from-file=auth.json="$auth_file" \
-    --from-file=auth.sha256="$temporary_directory/auth.sha256" \
-    --dry-run=client -o json | jq --arg account_key "$account_key" --arg authorization_mode "$authorization_mode" '
-      .immutable = true |
-      .metadata.labels = {
-        "app.kubernetes.io/part-of":"kodex",
-        "app.kubernetes.io/managed-by":"kodex-local-dev"
-      } |
-      .metadata.annotations = {
-        "kodex.dev/provider-account-key":$account_key,
-        "kodex.dev/provider-authorization-mode":$authorization_mode
-      }
-    ' >"$manifest"
-  kubectl create --field-manager=kodex-local-dev -f "$manifest" >/dev/null
-fi
-
-secret_uid=$(kubectl -n "$runtime_namespace" get "secret/$secret_name" -o jsonpath='{.metadata.uid}')
-secret_resource_version=$(kubectl -n "$runtime_namespace" get "secret/$secret_name" -o jsonpath='{.metadata.resourceVersion}')
 account_ref="pacc_${key_digest:0:24}"
-if [[ "$account_key" == default-openai-codex ]]; then
-  existing_account_ref=$(kubectl -n "$control_namespace" exec kodex-postgresql-0 -- \
-    psql -qAt -U postgres -d control_plane -P pager=off -v ON_ERROR_STOP=1 -c "
-      SELECT account.ref
-      FROM control_plane.owner_claim_contracts installation_owner
-      JOIN control_plane.provider_accounts account
-        ON account.organization_id = installation_owner.organization_id
-      WHERE installation_owner.stable_key = 'installation-owner'
-        AND account.definition_key = 'openai-codex'
-        AND account.stable_key = 'default-openai-codex'")
-  [[ "$existing_account_ref" =~ ^pacc_[A-Za-z0-9_-]{8,88}$ ]] ||
-    fail 'authoritative default provider account is absent'
-  account_ref=$existing_account_ref
+if [[ "$account_key" != default-openai-codex ]]; then
+  kubectl -n "$control_namespace" exec -i kodex-postgresql-0 -- \
+    psql -XqAt -U postgres -d control_plane -v ON_ERROR_STOP=1 \
+    -v account_ref="$account_ref" -v stable_key="$account_key" -v account_name="$account_name" \
+    -v max_concurrent_executions="$max_concurrent_executions" \
+    <"$repository_root/tools/dev/provider-account-ensure.sql" >/dev/null 2>&1 ||
+    fail 'provider account owner reservation failed'
 fi
-credential_digest=$(printf '%s\n%s\n%s\n' "$account_key" "$secret_uid" "$secret_resource_version" | sha256sum | awk '{print $1}')
-credential_ref="pcr_${credential_digest:0:24}"
-
-readback=$(kubectl -n "$control_namespace" exec -i kodex-postgresql-0 -- \
-  psql -qAt -U postgres -d control_plane -P pager=off \
-  -v account_ref="$account_ref" \
-  -v stable_key="$account_key" \
-  -v account_name="$account_name" \
-  -v max_concurrent_executions="$max_concurrent_executions" \
-  -v credential_ref="$credential_ref" \
-  -v secret_name="$secret_name" \
-  -v secret_uid="$secret_uid" \
-  -v secret_resource_version="$secret_resource_version" \
-  -v content_sha256="$digest" \
-  <"$repository_root/tools/dev/reconcile-provider-account.sql")
-IFS='|' read -r readback_key readback_revision readback_secret <<<"$readback"
-[[ "$readback_key" == "$account_key" && "$readback_revision" =~ ^[1-9][0-9]*$ &&
-  "$readback_secret" == "$secret_name" ]] || fail 'provider account database readback failed'
-
-if [[ "$account_key" == default-openai-codex ]]; then
-  kubectl -n "$control_namespace" create configmap runtime-provider-openai-default-metadata \
-    --from-literal=secretName="$secret_name" \
-    --from-literal=secretUID="$secret_uid" \
-    --from-literal=secretResourceVersion="$secret_resource_version" \
-    --from-literal=contentSHA256="$digest" \
-    --dry-run=client -o json | jq --arg account_key "$account_key" '
-      .metadata.labels = {
-        "app.kubernetes.io/part-of":"kodex",
-        "app.kubernetes.io/managed-by":"kodex-local-dev"
-      } |
-      .metadata.annotations = {"kodex.dev/provider-account-key":$account_key}
-    ' | kubectl apply --server-side --force-conflicts \
-      --field-manager=kodex-local-dev -f - >/dev/null
-fi
-
-if legacy_secret=$(kubectl -n "$control_namespace" get "secret/$secret_name" -o json 2>/dev/null); then
-  jq -e --arg account_key "$account_key" '
-    .immutable == true and .type == "Opaque" and
-    .metadata.labels["app.kubernetes.io/managed-by"] == "kodex-local-dev" and
-    .metadata.annotations["kodex.dev/provider-account-key"] == $account_key and
-    ((.metadata.ownerReferences // []) | length == 0)
-  ' <<<"$legacy_secret" >/dev/null ||
-    fail 'legacy provider Secret in control namespace is not owned by local development'
-  kubectl -n "$control_namespace" delete "secret/$secret_name" \
-    --wait=true --timeout=3m >/dev/null
-fi
+python3 "$repository_root/tools/install/provider-bootstrap.py" import \
+  --context "$context" --account-key "$account_key" --auth-file "$auth_file" "${preserve_current[@]}"
 
 metadata_file="$account_home/account.json"
 temporary_metadata=$(mktemp "$account_home/.account.json.XXXXXX")
@@ -226,4 +136,4 @@ jq -n --arg account_key "$account_key" --arg account_name "$account_name" --arg 
 chmod 0600 "$temporary_metadata"
 mv -f -- "$temporary_metadata" "$metadata_file"
 
-printf 'Kodex provider account reconciled: %s revision %s\n' "$account_key" "$readback_revision"
+printf 'Kodex provider account reconciled: %s\n' "$account_key"

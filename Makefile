@@ -127,6 +127,10 @@ test-local-object-storage-capacity-contract:
 test-local-provider-account-persistence-contract:
 	@./scripts/tests/local-provider-account-persistence-contract-test.sh
 
+.PHONY: test-provider-bootstrap-postgres
+test-provider-bootstrap-postgres:
+	@timeout 300s python3 -B scripts/tests/provider-bootstrap-postgres-test.py
+
 test-local-backup-controller-credentials-contract:
 	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
 

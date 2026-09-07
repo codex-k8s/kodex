@@ -833,7 +833,7 @@ for metadata_file in "${provider_metadata[@]}"; do
   "$repository_root/tools/dev/provider-account.sh" import \
     --kubeconfig "$kubeconfig" --context "$context" --state-directory "$state_directory" \
     --account-key "$account_key" --name "$account_name" \
-    --auth-file "$account_auth_file"
+    --auth-file "$account_auth_file" --preserve-current
   restored_provider_accounts=$((restored_provider_accounts + 1))
 done
 if ((restored_provider_accounts > 0)); then
