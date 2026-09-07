@@ -48,6 +48,8 @@ def permits(objects, destination, source, direction, port, protocol="TCP"):
             if not peers:
                 return True
             for peer in peers:
+                if not peer:
+                    return True
                 assert "ipBlock" not in peer, "IP peer requires independently pinned Pod IP"
                 assert set(peer) <= {"namespaceSelector", "podSelector"}, "unsupported peer"
                 if "namespaceSelector" in peer:
@@ -87,7 +89,7 @@ def main():
                                 capture_output=True, check=True, timeout=60)
         objects = [item for item in yaml.safe_load_all(result.stdout) if item]
         verify(objects)
-        for mutation in ("missing-peer", "namespace", "component", "extra-port", "additive-policy"):
+        for mutation in ("missing-peer", "namespace", "component", "extra-port", "empty-peer", "additive-policy"):
             changed = copy.deepcopy(objects)
             policy = next(item for item in changed if item["kind"] == "NetworkPolicy"
                           and item["metadata"]["name"] == "egress-gateway-exact-runtime-paths")
@@ -103,6 +105,8 @@ def main():
                 del peer["podSelector"]["matchLabels"]["app.kubernetes.io/component"]
             elif mutation == "extra-port":
                 rule["ports"].append({"protocol": "TCP", "port": 8081})
+            elif mutation == "empty-peer":
+                rule["from"].append({})
             else:
                 extra = copy.deepcopy(policy)
                 extra["metadata"]["name"] = "synthetic-unrestricted-ingress"
