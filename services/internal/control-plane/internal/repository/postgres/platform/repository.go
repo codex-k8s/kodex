@@ -892,9 +892,12 @@ func (repository *Repository) NextAuthorityProofRevision(ctx context.Context) (u
 }
 
 func (repository *Repository) AcceptWorkerGrant(ctx context.Context, input platformrepo.WorkerGrantInput) error {
-	if input.WorkloadID == "" || input.CredentialGeneration == 0 || input.Revision == 0 || input.Revision > 9007199254740991 ||
+	if input.WorkloadID == "" || input.CredentialGeneration == 0 || input.CredentialGeneration > 9007199254740991 || input.Revision == 0 || input.Revision > 9007199254740991 ||
 		input.IssuedAt.IsZero() || !input.ExpiresAt.After(input.IssuedAt) {
 		return errs.ErrForbidden
+	}
+	if input.InstanceID != "" {
+		return repository.acceptWorkerGrantInstance(ctx, input)
 	}
 	var accepted uint64
 	if err := repository.pool.QueryRow(ctx, queryAcceptWorkerGrantHighWatermark,

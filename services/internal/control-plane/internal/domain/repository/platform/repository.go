@@ -100,6 +100,8 @@ type ProofAuthority struct {
 
 type WorkerGrantInput struct {
 	WorkloadID           string
+	InstanceID           string
+	EnvelopeSHA256       string
 	CredentialGeneration uint64
 	Revision             uint64
 	IssuedAt             time.Time
