@@ -55,7 +55,8 @@ with tempfile.TemporaryDirectory() as tmp:
                     "--mount", f"type=bind,src={dsn},dst=/fixture-dsn,readonly", image]).returncode == 0
         volumes = [v["Name"] for v in json.loads(run(["docker", "inspect", name]).stdout)[0]["Mounts"] if v["Type"] == "volume"]
         deadline = time.monotonic() + 30
-        while run(["docker", "exec", name, "pg_isready", "-U", "postgres"]).returncode:
+        # Временный initdb server слушает только Unix socket; ждём финальный TCP listener.
+        while run(["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"]).returncode:
             assert time.monotonic() < deadline
             time.sleep(1)
         bootstrap = (root / "deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql").read_text()
