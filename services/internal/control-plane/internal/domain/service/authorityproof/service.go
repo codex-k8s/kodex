@@ -206,6 +206,7 @@ type proofClaims struct {
 
 type workerGrantClaims struct {
 	Version              int    `json:"v"`
+	InstanceID           string `json:"instance_id,omitempty"`
 	Issuer               string `json:"iss"`
 	Audience             string `json:"aud"`
 	Subject              string `json:"sub"`
@@ -374,6 +375,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		}
 		if err := service.owner.AcceptWorkerGrant(ctx, platformrepo.WorkerGrantInput{
 			WorkloadID: producer.CallerWorkloadID, Revision: grant.Revision,
+			InstanceID: grant.InstanceID, EnvelopeSHA256: hex.EncodeToString(credentialDigest[:]),
 			CredentialGeneration: grant.CredentialGeneration,
 			IssuedAt:             time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0),
 		}); err != nil {
@@ -456,7 +458,7 @@ func (service *Service) verifyWorkerGrant(compact string, producer proofProducer
 	now := service.now().UTC().Truncate(time.Second)
 	credentialGeneration, generationErr := internalrpcauth.KeyGeneration(key.KeyID)
 	if err := internalrpcauth.ValidateTimes(now, time.Unix(claims.IssuedAt, 0), time.Unix(claims.NotBefore, 0), time.Unix(claims.ExpiresAt, 0), workerGrantTTL, 5*time.Second); err != nil ||
-		generationErr != nil || claims.Version != 1 || claims.AuthorityABIVersion != internalrpcauth.AuthorityABIVersion || claims.Issuer != producer.ApplicationCredentialIssuer || claims.Audience != producer.ApplicationCredentialAudience || claims.WorkloadID != producer.CallerWorkloadID || claims.CallerSPIFFEID != producer.CallerSPIFFEID || claims.Revision == 0 || claims.CredentialGeneration != credentialGeneration || uuid.Validate(claims.JTI) != nil || claims.ProjectID != "" || claims.TenantOwner {
+		generationErr != nil || !validWorkerGrantInstance(claims) || claims.AuthorityABIVersion != internalrpcauth.AuthorityABIVersion || claims.Issuer != producer.ApplicationCredentialIssuer || claims.Audience != producer.ApplicationCredentialAudience || claims.WorkloadID != producer.CallerWorkloadID || claims.CallerSPIFFEID != producer.CallerSPIFFEID || claims.Revision == 0 || claims.CredentialGeneration != credentialGeneration || uuid.Validate(claims.JTI) != nil || claims.ProjectID != "" || claims.TenantOwner {
 		return workerGrantClaims{}, errors.New("worker application grant binding is rejected")
 	}
 	return claims, nil
@@ -481,7 +483,8 @@ func (service *Service) Ready(ctx context.Context) (Readiness, error) {
 		if err != nil {
 			return Readiness{}, errors.New("readiness worker grant is incompatible")
 		}
-		if err := service.owner.AcceptWorkerGrant(ctx, platformrepo.WorkerGrantInput{WorkloadID: producer.CallerWorkloadID, Revision: grant.Revision, CredentialGeneration: grant.CredentialGeneration, IssuedAt: time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0)}); err != nil {
+		digest := sha256.Sum256(raw)
+		if err := service.owner.AcceptWorkerGrant(ctx, platformrepo.WorkerGrantInput{WorkloadID: producer.CallerWorkloadID, InstanceID: grant.InstanceID, EnvelopeSHA256: hex.EncodeToString(digest[:]), Revision: grant.Revision, CredentialGeneration: grant.CredentialGeneration, IssuedAt: time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0)}); err != nil {
 			return Readiness{}, errors.New("readiness worker grant is rejected")
 		}
 	}
