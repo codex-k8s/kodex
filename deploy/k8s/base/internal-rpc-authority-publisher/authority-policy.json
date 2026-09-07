@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 75,
+  "policy_revision": 76,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -13648,7 +13648,7 @@
           "OIDC_SESSION",
           "RUNTIME_EXECUTION"
         ],
-        "project_required": true,
+        "project_required": false,
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,

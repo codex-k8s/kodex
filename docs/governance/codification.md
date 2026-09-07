@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.2
-updated: 2026-09-06
+version: 2.2.3
+updated: 2026-09-07
 ---
 
 # Кодификация документов и задач
@@ -108,6 +108,7 @@ updated: 2026-07-28
 | `DOM-MC-001`       | `docs/domains/README.md`                                    |
 | `OPS-MC-001`       | `docs/operations/README.md`                                 |
 | `OPS-AUTHORITY-DATABASE-1093` | `docs/operations/authority-database-boundary-1093.md` |
+| `OPS-DOC-1198` | `docs/operations/mvp-1198-runtime-proof.md` |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |
 | `ADR-DOC-004`      | `docs/decisions/0014-domain-events-transactional-outbox.md` |
 | `GUIDE-MC-001`     | `docs/guides/README.md`                                     |

@@ -92,6 +92,7 @@ type ProofPrincipalInput struct {
 // ProofAuthority — внутренние UUID, которые допускаются wire-контрактом
 // internal-rpc-authority. Opaque refs остаются locator и не попадают в claims.
 type ProofAuthority struct {
+	RuntimeExecution                   *RuntimeExecutionProof
 	ActorID, OrganizationID, ProjectID string
 	ActorVersion, OrganizationVersion  uint64
 	ProjectVersion                     uint64

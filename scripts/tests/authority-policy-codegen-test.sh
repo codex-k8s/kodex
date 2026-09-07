@@ -32,7 +32,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 75 and .policy.authority_abi_version == 2 and
+	.policy_revision == 76 and .policy.authority_abi_version == 2 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.command.role-images.copy" or .operation_id == "platform.command.integration-definitions.copy" or .operation_id == "platform.command.role-images.archive-configuration" or .operation_id == "platform.command.integration-definitions.archive") |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
       .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 4 and
@@ -111,7 +111,7 @@ jq -e '
   ([.policy.operation_bindings[] | select(.caller_workload_id == "runtime-controller" and .target_workload_id == "secret-broker") | .operation_id] | sort) ==
     ["platform.runtime.credentials.materialize", "platform.runtime.credentials.readiness.check", "platform.runtime.credentials.system-assistant.materialize"] and
   all(.policy.operation_bindings[] | select(.caller_workload_id == "runtime-controller" and .target_workload_id == "secret-broker");
-    .project_required == (.operation_id != "platform.runtime.credentials.system-assistant.materialize") and .authority_sources == ["DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"]) and
+    .project_required == (.operation_id == "platform.runtime.credentials.materialize") and .authority_sources == ["DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"]) and
   ([.policy.operation_bindings[] | select(.caller_workload_id == "stt-tts-service" and .target_workload_id == "secret-broker") | .operation_id]) ==
     ["platform.stt.credential.project"] and
   all(.policy.operation_bindings[] | select(.caller_workload_id == "stt-tts-service" and .target_workload_id == "secret-broker");
