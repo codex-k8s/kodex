@@ -25,6 +25,22 @@ func TestAppServerPipeProcessFixture(t *testing.T) {
 		return
 	}
 	switch mode {
+	case "start-failure":
+		// Изолированный процесс исключает позднее закрытие FD предыдущих fixtures.
+		_, _ = startAppServerCommand(exec.Command("/definitely/missing/kodex"), nil)
+		before, err := os.ReadDir("/proc/self/fd")
+		if err != nil {
+			os.Exit(7)
+		}
+		for attempt := 0; attempt < 50; attempt++ {
+			if _, err := startAppServerCommand(exec.Command("/definitely/missing/kodex"), nil); err == nil {
+				os.Exit(8)
+			}
+		}
+		after, err := os.ReadDir("/proc/self/fd")
+		if err != nil || len(before) != len(after) {
+			os.Exit(9)
+		}
 	case "buffered":
 		_, _ = os.Stdout.WriteString("{\"id\":1,\"result\":{}}\n")
 		_, _ = os.Stderr.WriteString("bounded diagnostic")
@@ -170,21 +186,8 @@ func TestAppServerTerminateKillsDescriptorHoldingDescendant(t *testing.T) {
 }
 
 func TestAppServerStartFailureClosesOwnedPipes(t *testing.T) {
-	openFiles := func() int {
-		entries, err := os.ReadDir("/proc/self/fd")
-		if err != nil {
-			t.Fatal(err)
-		}
-		return len(entries)
-	}
-	before := openFiles()
-	for attempt := 0; attempt < 50; attempt++ {
-		if _, err := startAppServerCommand(exec.Command("/definitely/missing/kodex"), nil); err == nil {
-			t.Fatal("missing process unexpectedly started")
-		}
-	}
-	if after := openFiles(); after != before {
-		t.Fatalf("start failure leaked descriptors: before=%d after=%d", before, after)
+	if err := appServerPipeFixtureCommand(t, "start-failure").Run(); err != nil {
+		t.Fatal("isolated start failure descriptor fixture failed")
 	}
 }
 
