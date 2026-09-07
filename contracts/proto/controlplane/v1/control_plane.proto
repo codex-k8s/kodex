@@ -1362,6 +1362,7 @@ message IntegrationDefinition {
   string execution_route = 16;
   string adapter_readiness = 17;
   int64 version = 18;
+  repeated string next_actions = 19;
 }
 
 // IntegrationResourceScope содержит только server-derived exact resource values.
@@ -5966,6 +5967,7 @@ message ManagedConfigurationSet {
   optional bool source_editable = 12;
   bool archived = 13;
   ManagedConfigurationCopyProvenance copy_provenance = 14;
+  repeated string next_actions = 15;
 }
 message ManagedConfigurationCopyProvenance {
   ManagedConfigurationCopyOrigin origin = 1;

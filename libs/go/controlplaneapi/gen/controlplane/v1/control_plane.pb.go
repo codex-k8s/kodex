@@ -12223,6 +12223,7 @@ type IntegrationDefinition struct {
 	ExecutionRoute      string                           `protobuf:"bytes,16,opt,name=execution_route,json=executionRoute,proto3" json:"execution_route,omitempty"`
 	AdapterReadiness    string                           `protobuf:"bytes,17,opt,name=adapter_readiness,json=adapterReadiness,proto3" json:"adapter_readiness,omitempty"`
 	Version             int64                            `protobuf:"varint,18,opt,name=version,proto3" json:"version,omitempty"`
+	NextActions         []string                         `protobuf:"bytes,19,rep,name=next_actions,json=nextActions,proto3" json:"next_actions,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -12381,6 +12382,13 @@ func (x *IntegrationDefinition) GetVersion() int64 {
 		return x.Version
 	}
 	return 0
+}
+
+func (x *IntegrationDefinition) GetNextActions() []string {
+	if x != nil {
+		return x.NextActions
+	}
+	return nil
 }
 
 // IntegrationResourceScope содержит только server-derived exact resource values.
@@ -55366,6 +55374,7 @@ type ManagedConfigurationSet struct {
 	SourceEditable *bool                               `protobuf:"varint,12,opt,name=source_editable,json=sourceEditable,proto3,oneof" json:"source_editable,omitempty"`
 	Archived       bool                                `protobuf:"varint,13,opt,name=archived,proto3" json:"archived,omitempty"`
 	CopyProvenance *ManagedConfigurationCopyProvenance `protobuf:"bytes,14,opt,name=copy_provenance,json=copyProvenance,proto3" json:"copy_provenance,omitempty"`
+	NextActions    []string                            `protobuf:"bytes,15,rep,name=next_actions,json=nextActions,proto3" json:"next_actions,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -55494,6 +55503,13 @@ func (x *ManagedConfigurationSet) GetArchived() bool {
 func (x *ManagedConfigurationSet) GetCopyProvenance() *ManagedConfigurationCopyProvenance {
 	if x != nil {
 		return x.CopyProvenance
+	}
+	return nil
+}
+
+func (x *ManagedConfigurationSet) GetNextActions() []string {
+	if x != nil {
+		return x.NextActions
 	}
 	return nil
 }
@@ -73946,7 +73962,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"hasMinimum\x12\x1f\n" +
 	"\vhas_maximum\x18\f \x01(\bR\n" +
 	"hasMaximum\x12%\n" +
-	"\x0emaximum_length\x18\r \x01(\x05R\rmaximumLength\"\xfa\x05\n" +
+	"\x0emaximum_length\x18\r \x01(\x05R\rmaximumLength\"\x9d\x06\n" +
 	"\x15IntegrationDefinition\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -73966,7 +73982,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\radapter_owner\x18\x0f \x01(\tR\fadapterOwner\x12'\n" +
 	"\x0fexecution_route\x18\x10 \x01(\tR\x0eexecutionRoute\x12+\n" +
 	"\x11adapter_readiness\x18\x11 \x01(\tR\x10adapterReadiness\x12\x18\n" +
-	"\aversion\x18\x12 \x01(\x03R\aversion\"\xfa\x01\n" +
+	"\aversion\x18\x12 \x01(\x03R\aversion\x12!\n" +
+	"\fnext_actions\x18\x13 \x03(\tR\vnextActions\"\xfa\x01\n" +
 	"\x18IntegrationResourceScope\x12<\n" +
 	"\x04kind\x18\x01 \x01(\x0e2(.controlplane.v1.IntegrationResourceKindR\x04kind\x12M\n" +
 	"\x06values\x18\x02 \x03(\v25.controlplane.v1.IntegrationResourceScope.ValuesEntryR\x06values\x12\x16\n" +
@@ -77633,7 +77650,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"target_ref\x18\x02 \x01(\tR\ttargetRef\x12B\n" +
 	"\vcontext_pin\x18\x03 \x01(\v2!.controlplane.v1.PromptContextPinR\n" +
 	"contextPin\x12H\n" +
-	"\rtemplate_kind\x18\x04 \x01(\x0e2#.controlplane.v1.PromptTemplateKindR\ftemplateKind\"\xe5\x05\n" +
+	"\rtemplate_kind\x18\x04 \x01(\x0e2#.controlplane.v1.PromptTemplateKindR\ftemplateKind\"\x88\x06\n" +
 	"\x17ManagedConfigurationSet\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1f\n" +
@@ -77653,7 +77670,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"git_source\x18\v \x01(\v2..controlplane.v1.ManagedConfigurationGitSourceR\tgitSource\x12,\n" +
 	"\x0fsource_editable\x18\f \x01(\bH\x00R\x0esourceEditable\x88\x01\x01\x12\x1a\n" +
 	"\barchived\x18\r \x01(\bR\barchived\x12\\\n" +
-	"\x0fcopy_provenance\x18\x0e \x01(\v23.controlplane.v1.ManagedConfigurationCopyProvenanceR\x0ecopyProvenanceB\x12\n" +
+	"\x0fcopy_provenance\x18\x0e \x01(\v23.controlplane.v1.ManagedConfigurationCopyProvenanceR\x0ecopyProvenance\x12!\n" +
+	"\fnext_actions\x18\x0f \x03(\tR\vnextActionsB\x12\n" +
 	"\x10_source_editable\"\x81\x02\n" +
 	"\"ManagedConfigurationCopyProvenance\x12G\n" +
 	"\x06origin\x18\x01 \x01(\x0e2/.controlplane.v1.ManagedConfigurationCopyOriginR\x06origin\x12\x1d\n" +
