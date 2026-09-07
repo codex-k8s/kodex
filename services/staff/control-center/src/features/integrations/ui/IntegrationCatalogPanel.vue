@@ -8,6 +8,7 @@ import {
   ShieldCheck,
 } from "@lucide/vue";
 import { ref } from "vue";
+import IntegrationIntegerBounds from "./IntegrationIntegerBounds.vue";
 import { useI18n } from "vue-i18n";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
 import {
@@ -242,6 +243,7 @@ function fieldType(field: IntegrationConfigurationField): string {
                       field.required ? "обязательное" : "необязательное"
                     }}</span>
                     <span>{{ field.help }}</span>
+                    <IntegrationIntegerBounds :field="field" />
                   </dd>
                 </div>
               </dl>
@@ -297,6 +299,7 @@ function fieldType(field: IntegrationConfigurationField): string {
                           field.required ? "обязательное" : "необязательное"
                         }}</span>
                         <span>{{ field.help }}</span>
+                        <IntegrationIntegerBounds :field="field" />
                       </dd>
                     </div>
                   </dl>

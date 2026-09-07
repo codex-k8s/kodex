@@ -1852,6 +1852,9 @@ const ru = {
   },
   integrations: {
     title: "Интеграции",
+    minimum: "Минимум",
+    maximum: "Максимум",
+    invalidBounds: "Диапазон целого числа недоступен: некорректные границы",
     subtitle: "Необязательные подключения к внешним системам",
     catalog: "Доступные интеграции",
     connections: "Подключения",
@@ -4910,6 +4913,9 @@ const en = {
   integrations: {
     ...ru.integrations,
     title: "Integrations",
+    minimum: "Minimum",
+    maximum: "Maximum",
+    invalidBounds: "Integer range unavailable: invalid bounds",
     subtitle: "Optional connections to external systems",
     catalog: "Available integrations",
     connections: "Connections",
