@@ -1,88 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-fail() {
-  printf 'Kodex local provider account persistence contract test failed: %s\n' "$*" >&2
-  exit 1
-}
-
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
-provider_script="$repository_root/tools/dev/provider-account.sh"
-reconcile_sql="$repository_root/tools/dev/reconcile-provider-account.sql"
-dev_script="$repository_root/dev.sh"
-materialize_script="$repository_root/tools/install/materialize-secrets.sh"
-deploy_script="$repository_root/tools/install/deploy-platform.sh"
-
-grep -Fq 'canonical_auth_file="$account_home/auth.json"' "$provider_script" ||
-  fail 'provider import does not retain a canonical private auth snapshot'
-grep -Fq '{version:1, accountKey:$account_key, name:$account_name, authorizationMode:$authorization_mode}' "$provider_script" ||
-  fail 'provider account metadata is not persisted'
-grep -Fq 'control_namespace=kodex-system' "$provider_script" ||
-  fail 'provider metadata does not declare the control namespace'
-grep -Fq 'runtime_namespace=kodex-runtime' "$provider_script" ||
-  fail 'provider credential does not declare the runtime namespace'
-grep -Fq 'kubectl -n "$runtime_namespace" create secret generic "$secret_name"' "$provider_script" ||
-  fail 'provider credential is not materialized in the runtime namespace'
-[[ $(grep -Fc 'kubectl -n "$runtime_namespace" get "secret/$secret_name"' "$provider_script") -eq 3 ]] ||
-  fail 'provider credential identity is not read back from the runtime namespace'
-if grep -Fq 'kubectl -n "$control_namespace" create secret generic "$secret_name"' "$provider_script"; then
-  fail 'provider credential is still materialized in the control namespace'
-fi
-grep -Fq 'legacy provider Secret in control namespace is not owned by local development' "$provider_script" ||
-  fail 'legacy provider credential cleanup is not ownership guarded'
-grep -Fq 'default_provider_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"' "$dev_script" ||
-  fail 'default provider authorization is not isolated in its account directory'
-grep -Fq 'provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-$default_provider_auth}' "$dev_script" ||
-  fail 'immutable installation material is not separated from provider account revisions'
-grep -Fq 'provider_metadata=("$state_directory"/provider-accounts/*/account.json)' "$dev_script" ||
-  fail 'local deployment does not discover persisted provider accounts'
-grep -Fq 'provider account metadata directory binding is invalid' "$dev_script" ||
-  fail 'provider metadata is not bound to its account directory'
-grep -Fq 'restored_provider_accounts > 0' "$dev_script" ||
-  fail 'runtime readiness is not rechecked after provider reconciliation'
-grep -Fq 'if preserve_selected_provider_metadata; then' "$materialize_script" ||
-  fail 'installer does not preserve the selected immutable provider revision'
-grep -Fq 'selected_provider_metadata_preserved=true' "$materialize_script" ||
-  fail 'installer does not distinguish an active revision from bootstrap material'
-grep -Fq 'restore_selected_provider_metadata_from_auth && preserve_selected_provider_metadata' "$materialize_script" ||
-  fail 'installer cannot restore active provider metadata after material recreation'
-grep -Fq 'select((.data["auth.sha256"] // "" | @base64d' "$materialize_script" ||
-  fail 'provider metadata recovery is not bound to the exact authorization digest'
-grep -Fq 'preserve_selected_provider_metadata || fail' "$materialize_script" ||
-  fail 'active provider revision has no final exact readback'
-if grep -Fq 'local name=runtime-provider-openai-default-r1 secret_json metadata_json' "$deploy_script"; then
-  fail 'platform preflight is still pinned to the bootstrap provider revision'
-fi
-grep -Fq 'name=$(jq -er' "$deploy_script" ||
-  fail 'platform preflight does not resolve the active provider revision from metadata'
-grep -Fq 'FROM control_plane.owner_claim_contracts installation_owner' "$provider_script" ||
-  fail 'default provider account is not resolved through the installation owner contract'
-grep -Fq 'ON account.organization_id = installation_owner.organization_id' "$provider_script" ||
-  fail 'default provider account is not bound to the installation organization'
-grep -Fq "WHERE installation_owner.stable_key = 'installation-owner'" "$provider_script" ||
-  fail 'default provider account lookup does not require the authoritative installation owner'
-if grep -Eq 'control_plane\.(assistant_runtime|sessions)' "$provider_script"; then
-  fail 'default provider account lookup still depends on the current warm session'
-fi
-grep -Fq 'ON CONFLICT (ref) DO UPDATE' "$reconcile_sql" ||
-  fail 'provider reconciliation does not use the current immutable account identity'
-if grep -Fq 'ON CONFLICT (organization_id, stable_key)' "$reconcile_sql"; then
-  fail 'provider reconciliation relies on the removed stable-key uniqueness constraint'
-fi
-[[ $(grep -Fc "WHERE account.ref = :'account_ref'" "$reconcile_sql") -ge 4 ]] ||
-  fail 'provider credential reconciliation is not bound to the exact account ref'
-[[ $(grep -Fc "installation_owner.stable_key = 'installation-owner'" "$reconcile_sql") -eq 4 ]] ||
-  fail 'provider reconciliation is not consistently bound to the installation owner contract'
-grep -Fq 'ON organization.id = installation_owner.organization_id' "$reconcile_sql" ||
-  fail 'provider account creation is not bound to the installation organization'
-grep -Fq 'ON subject.organization_id = organization.id' "$reconcile_sql" ||
-  fail 'provider account creator is not bound to the installation organization'
-grep -Fq "AND subject.issuer = 'kodex-system'" "$reconcile_sql" ||
-  fail 'provider account creator does not require the system issuer'
-grep -Fq 'AND subject.active' "$reconcile_sql" ||
-  fail 'provider account creator does not require an active system subject'
-if grep -Fq 'ORDER BY organization.created_at' "$reconcile_sql"; then
-  fail 'provider reconciliation still selects an organization by creation order'
-fi
-
-printf 'Kodex local provider account persistence contract test passed\n'
+python3 -B "$repository_root/scripts/tests/provider-bootstrap-test.py"
+python3 - "$repository_root" <<'PY'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+provider = (root / "tools/dev/provider-account.sh").read_text()
+dev = (root / "dev.sh").read_text()
+installer = (root / "tools/install/materialize-secrets.sh").read_text()
+sql = (root / "tools/dev/reconcile-provider-account.sql").read_text()
+assert 'canonical_auth_file="$account_home/auth.json"' in provider
+assert '{version:1, accountKey:$account_key, name:$account_name, authorizationMode:$authorization_mode}' in provider
+assert 'provider-bootstrap.py" import' in provider
+assert 'create secret generic' not in provider
+assert 'delete "secret/' not in provider
+assert 'ON CONFLICT (organization_id, stable_key)' not in sql
+assert "account.ref = :'account_ref'" in sql
+assert "installation_owner.stable_key = 'installation-owner'" in sql
+assert "expected_version" in sql and "expected_credential_ref" in sql
+assert "FOR UPDATE OF account" in sql
+assert "provider-bootstrap.py\" verify-metadata" in installer
+assert "restore_selected_provider_metadata_from_auth" not in installer
+assert '--auth-file "$account_auth_file" --preserve-current' in dev
+for path in ("tools/dev/deploy-local.sh", "tools/install/deploy-platform.sh"):
+    source = (root / path).read_text()
+    import_at = source.index('provider-bootstrap.py" recover')
+    cp_at = source.rindex("rollout status deployment/control-plane", 0, import_at)
+    wait_at = source.index("wait_warm_runtime\n" if "deploy-local" in path else "wait_system_assistant\n", import_at)
+    assert cp_at < import_at < wait_at
+print("Kodex local provider account persistence contract test passed")
+PY

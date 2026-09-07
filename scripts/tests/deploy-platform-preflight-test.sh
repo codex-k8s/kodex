@@ -131,7 +131,7 @@ printf 'mode=%s args=' "${KODEX_DEPLOY_PUBLIC_TLS_MODE:-unset}" >>"$KUBECTL_LOG"
 printf '%q ' "$@" >>"$KUBECTL_LOG"
 printf '\n' >>"$KUBECTL_LOG"
 
-if [[ "$*" == "config current-context" ]]; then
+if [[ " $* " == *" config current-context " ]]; then
   printf 'kodex-test\n'
   exit 0
 fi
@@ -204,11 +204,12 @@ if [[ " $* " == *' get certificaterequests.cert-manager.io,orders.acme.cert-mana
   exit 0
 fi
 if [[ " $* " == *' get secret/runtime-provider-openai-default-r1 -o json '* ]]; then
-  auth='{"tokens":"provider-fixture"}'
+  auth='{"auth_mode":"chatgpt","tokens":{"access_token":"synthetic-provider-fixture"}}'
   digest=$(printf '%s' "$auth" | sha256sum | awk '{print $1}')
   jq -n --arg auth "$(printf '%s' "$auth" | base64 -w0)" \
     --arg digest "$(printf '%s\n' "$digest" | base64 -w0)" '{
       metadata:{name:"runtime-provider-openai-default-r1",namespace:"kodex-runtime",
+        labels:{"app.kubernetes.io/managed-by":"kodex-install"},
         annotations:{"kodex.dev/provider-account-key":"default-openai-codex"},
         uid:"10000000-0000-4000-8000-000000000001",resourceVersion:"7"},
       immutable:true,type:"Opaque",data:{"auth.json":$auth,"auth.sha256":$digest}
@@ -216,7 +217,7 @@ if [[ " $* " == *' get secret/runtime-provider-openai-default-r1 -o json '* ]]; 
   exit 0
 fi
 if [[ " $* " == *' get configmap/runtime-provider-openai-default-metadata -o json '* ]]; then
-  auth='{"tokens":"provider-fixture"}'
+  auth='{"auth_mode":"chatgpt","tokens":{"access_token":"synthetic-provider-fixture"}}'
   digest=$(printf '%s' "$auth" | sha256sum | awk '{print $1}')
   jq -n --arg digest "$digest" '{
       metadata:{name:"runtime-provider-openai-default-metadata",namespace:"kodex-system",

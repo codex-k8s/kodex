@@ -35,7 +35,7 @@ case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is in
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && -d "$state_directory" &&
   ! -L "$state_directory" ]] || fail 'state directory is invalid'
-for command_name in docker jq kubectl openssl sha256sum yq; do
+for command_name in docker jq kubectl openssl sha256sum yq python3; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'Kubernetes context mismatch'
@@ -1167,6 +1167,10 @@ if [[ "$mode" == apply ]]; then
       .metadata.name != "role-image-builder" and
       (.metadata.name | test("^kodex-image-registry-") | not))
   '
+  # CP seed назначает accountRef; каталог и warm не могут предшествовать импорту.
+  kubectl -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
+    fail 'control plane is unavailable before provider bootstrap'
+  python3 "$script_directory/../install/provider-bootstrap.py" recover --context "$context"
 else
   discover_local_object_storage_secret
   readback_session_archive_worker_secret

@@ -35,7 +35,7 @@ esac
 case "$public_tls_mode" in deferred|enabled) ;; *) fail 'public TLS mode is invalid' ;; esac
 [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
   fail 'release render is invalid'
-for command_name in jq kubectl rg sha256sum sort yq; do
+for command_name in jq kubectl rg sha256sum sort yq python3; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
@@ -87,38 +87,8 @@ kubectl --context "$context" -n "$runtime_namespace" get secret "$secret_name" >
   fail "installation runtime Secret is absent: $secret_name"
 
 verify_provider_credential() {
-  local name secret_json metadata_json
-  local auth_digest digest_file metadata_digest
-  metadata_json=$(kubectl --context "$context" -n "$namespace" get \
-    configmap/runtime-provider-openai-default-metadata -o json)
-  name=$(jq -er '
-    .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
-    (.data.secretName | test("^runtime-provider-openai-[a-z0-9-]{1,160}$")) as $valid |
-    if $valid then .data.secretName else error("invalid provider Secret name") end
-  ' <<<"$metadata_json") || fail 'provider credential metadata contract is invalid'
-  secret_json=$(kubectl --context "$context" -n "$runtime_namespace" get "secret/$name" -o json)
-  jq -e --arg namespace "$runtime_namespace" --arg name "$name" '
-    .metadata.namespace == $namespace and .metadata.name == $name and
-    .immutable == true and .type == "Opaque" and
-    .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
-    (.data["auth.json"] | type == "string" and length > 0) and
-    (.data["auth.sha256"] | type == "string" and length > 0)
-  ' <<<"$secret_json" >/dev/null || fail 'provider credential Secret contract is invalid'
-  auth_digest=$(jq -jr '.data["auth.json"] | @base64d' <<<"$secret_json" |
-    sha256sum | awk '{print $1}')
-  digest_file=$(jq -jr '.data["auth.sha256"] | @base64d' <<<"$secret_json" |
-    tr -d '[:space:]')
-  metadata_digest=$(jq -r '.data.contentSHA256 // ""' <<<"$metadata_json")
-  [[ "$digest_file" == "$auth_digest" && "$metadata_digest" == "$auth_digest" ]] ||
-    fail 'provider credential digest readback failed'
-  [[ "$(jq -r '.data.secretName // ""' <<<"$metadata_json")" == "$name" ]] ||
-    fail 'provider credential Secret name readback failed'
-  [[ "$(jq -r '.data.secretUID // ""' <<<"$metadata_json")" == \
-    "$(jq -r '.metadata.uid' <<<"$secret_json")" ]] ||
-    fail 'provider credential Secret UID readback failed'
-  [[ "$(jq -r '.data.secretResourceVersion // ""' <<<"$metadata_json")" == \
-    "$(jq -r '.metadata.resourceVersion' <<<"$secret_json")" ]] ||
-    fail 'provider credential Secret resourceVersion readback failed'
+  python3 "$repository_root/tools/install/provider-bootstrap.py" verify-metadata \
+    --context "$context" >/dev/null || fail 'provider credential metadata contract is invalid'
 }
 
 verify_provider_credential
@@ -812,6 +782,9 @@ if [[ "$mode" == apply ]]; then
     select((.kind == "Deployment" and .metadata.name != "role-image-builder") or
       .kind == "DaemonSet" or .kind == "CronJob")
   '
+  kubectl --context "$context" -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
+    fail 'control plane is unavailable before provider bootstrap'
+  python3 "$repository_root/tools/install/provider-bootstrap.py" recover --context "$context"
   for dependency in egress-gateway kodex-image-registry-promotion; do
     kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
       --timeout=15m >/dev/null || fail "release materializer dependency failed: $dependency"

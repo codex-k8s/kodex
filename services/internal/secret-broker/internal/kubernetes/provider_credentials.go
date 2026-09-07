@@ -30,6 +30,8 @@ const (
 	providerRuntimeContentSHA     = "runtime.kodex.dev/provider-credential-digest"
 	providerSecretBrokerManager   = "secret-broker"
 	providerRuntimeManager        = "runtime-controller"
+	providerBootstrapManager      = "kodex-provider-bootstrap"
+	providerBootstrapLabel        = "provider-credentials.kodex.dev/bootstrap"
 	providerAuthJSONKey           = "auth.json"
 	providerAuthSHA256Key         = "auth.sha256"
 	providerCredentialMaximumSize = 1 << 20
@@ -551,7 +553,8 @@ func providerCredentialCleanupSecretMatches(
 		return false
 	}
 	serverOwned := providerCredentialSecretBrokerOwned(secret, accountRef, descriptor.ContentSHA256) ||
-		providerCredentialRuntimeOwned(secret, accountRef, descriptor.ContentSHA256)
+		providerCredentialRuntimeOwned(secret, accountRef, descriptor.ContentSHA256) ||
+		providerCredentialBootstrapOwned(secret, accountRef, descriptor.ContentSHA256)
 	if secret.Name != descriptor.SecretName || string(secret.UID) != descriptor.SecretUID ||
 		secret.ResourceVersion != descriptor.SecretResourceVersion || secret.Immutable == nil || !*secret.Immutable ||
 		secret.Type != corev1.SecretTypeOpaque || len(secret.Data) != 2 ||
@@ -580,6 +583,16 @@ func providerCredentialRuntimeOwned(secret *corev1.Secret, accountRef, digest st
 		secret.Labels[providerPartOfLabel] == "kodex" &&
 		secret.Annotations[providerRuntimeAccountRef] == accountRef &&
 		secret.Annotations[providerRuntimeContentSHA] == digest
+}
+
+// Bootstrap публикует новый объект от своего имени после разрешения account
+// владельцем. Старые installer/local-dev объекты этим предикатом не допускаются.
+func providerCredentialBootstrapOwned(secret *corev1.Secret, accountRef, digest string) bool {
+	return secret.Labels[providerBootstrapLabel] == "v1" &&
+		secret.Labels[providerManagedByLabel] == providerBootstrapManager &&
+		secret.Labels[providerPartOfLabel] == "kodex" &&
+		secret.Annotations[providerAccountRefAnnotation] == accountRef &&
+		secret.Annotations[providerContentSHAAnnotation] == digest
 }
 
 func samePendingProviderAttempt(left, right ProviderAuthorizationAttempt) bool {

@@ -35,7 +35,7 @@ for file_path in "$oidc_ca_file" "$provider_auth_file"; do
   [[ -r "$file_path" && -s "$file_path" && ! -L "$file_path" ]] ||
     fail 'required input material is invalid'
 done
-for command_name in jq kubectl openssl sha256sum stat; do
+for command_name in jq kubectl openssl sha256sum stat python3; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 [[ "$(kubectl config current-context)" == "$expected_context" ]] ||
@@ -133,63 +133,12 @@ apply_configmap() {
 }
 
 preserve_selected_provider_metadata() {
-  local metadata selected_name selected_secret selected_digest
-  metadata=$(kubectl -n kodex-system get configmap \
-    runtime-provider-openai-default-metadata -o json 2>/dev/null) || return 1
-  jq -e '
-    .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
-    (.data.secretName | test("^runtime-provider-openai-[a-z0-9-]{1,160}$")) and
-    (.data.secretUID | type == "string" and length > 0) and
-    (.data.secretResourceVersion | type == "string" and length > 0) and
-    (.data.contentSHA256 | test("^[a-f0-9]{64}$"))
-  ' <<<"$metadata" >/dev/null || return 1
-  selected_name=$(jq -er '.data.secretName' <<<"$metadata")
-  selected_secret=$(kubectl -n "$runtime_namespace" get "secret/$selected_name" -o json 2>/dev/null) || return 1
-  selected_digest=$(jq -jr '.data["auth.json"] // "" | @base64d' <<<"$selected_secret" |
-    sha256sum | awk '{print $1}')
-  jq -e --arg name "$selected_name" --arg digest "$selected_digest" \
-    --arg uid "$(jq -r '.metadata.uid' <<<"$selected_secret")" \
-    --arg resource_version "$(jq -r '.metadata.resourceVersion' <<<"$selected_secret")" '
-      .immutable == true and .type == "Opaque" and
-      .metadata.name == $name and
-      .metadata.namespace == "kodex-runtime" and
-      .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex" and
-      ((.data["auth.sha256"] // "" | @base64d | gsub("[[:space:]]"; "")) == $digest) and
-      $uid != "" and $resource_version != ""
-    ' <<<"$selected_secret" >/dev/null || return 1
-  jq -e --arg uid "$(jq -r '.metadata.uid' <<<"$selected_secret")" \
-    --arg resource_version "$(jq -r '.metadata.resourceVersion' <<<"$selected_secret")" \
-    --arg digest "$selected_digest" '
-      .data.secretUID == $uid and
-      .data.secretResourceVersion == $resource_version and
-      .data.contentSHA256 == $digest
-  ' <<<"$metadata" >/dev/null
-}
-
-restore_selected_provider_metadata_from_auth() {
-  local digest candidates selected_name selected_uid selected_resource_version
-  digest=$(sha256sum "$provider_auth_file" | awk '{print $1}')
-  candidates=$(kubectl -n "$runtime_namespace" get secrets -o json | jq -c \
-    --arg digest "$digest" '
-      [.items[] |
-        select(.immutable == true and .type == "Opaque") |
-        select(.metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex") |
-        select(.metadata.name | test("^runtime-provider-openai-[a-z0-9-]{1,160}$")) |
-        select((.data["auth.sha256"] // "" | @base64d | gsub("[[:space:]]"; "")) == $digest) |
-        {name:.metadata.name,uid:.metadata.uid,resourceVersion:.metadata.resourceVersion}]
-    ')
-  [[ "$(jq -r 'length' <<<"$candidates")" == 1 ]] || return 1
-  selected_name=$(jq -er '.[0].name' <<<"$candidates")
-  selected_uid=$(jq -er '.[0].uid | select(type == "string" and length > 0)' <<<"$candidates")
-  selected_resource_version=$(jq -er \
-    '.[0].resourceVersion | select(type == "string" and length > 0)' <<<"$candidates")
-  apply_configmap kodex-system runtime-provider-openai-default-metadata \
-    --from-literal=secretName="$selected_name" \
-    --from-literal=secretUID="$selected_uid" \
-    --from-literal=secretResourceVersion="$selected_resource_version" \
-    --from-literal=contentSHA256="$digest"
-  kubectl -n kodex-system annotate configmap runtime-provider-openai-default-metadata \
-    kodex.dev/provider-account-key=default-openai-codex --overwrite >/dev/null
+  local status=0
+  python3 "$repository_root/tools/install/provider-bootstrap.py" verify-metadata \
+    --context "$expected_context" >/dev/null || status=$?
+  # Только доказанное отсутствие metadata допускает первый seed.
+  [[ "$status" == 3 ]] && return 1
+  [[ "$status" == 0 ]] || fail 'selected provider metadata failed exact validation'
 }
 
 materialize_provider_secret() {
@@ -198,7 +147,7 @@ materialize_provider_secret() {
   digest=$(sha256sum "$provider_auth_file" | awk '{print $1}')
   digest_file="$temporary_directory/provider-auth.sha256"
   manifest="$temporary_directory/provider-secret.json"
-  printf '%s\n' "$digest" >"$digest_file"
+  printf '%s' "$digest" >"$digest_file"
 
   if current=$(kubectl -n "$runtime_namespace" get "secret/$name" \
     --show-managed-fields -o json 2>/dev/null); then
@@ -207,8 +156,11 @@ materialize_provider_secret() {
     current_digest_file=$(jq -jr '.data["auth.sha256"] // "" | @base64d' \
       <<<"$current" | tr -d '[:space:]')
     if jq -e '.immutable == true' <<<"$current" >/dev/null; then
-      [[ "$current_digest" == "$digest" && "$current_digest_file" == "$digest" ]] ||
-        fail 'immutable provider credential differs from installation material; create a new credential revision'
+      [[ "$current_digest_file" == "$current_digest" ]] ||
+        fail 'immutable provider credential digest is invalid'
+      jq -e '.metadata.labels["app.kubernetes.io/managed-by"] == "kodex-install" and
+        .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex"' \
+        <<<"$current" >/dev/null || fail 'bootstrap provider credential provenance is invalid'
       return
     fi
     jq -e --arg namespace "$runtime_namespace" --arg name "$name" '
@@ -217,7 +169,7 @@ materialize_provider_secret() {
       any(.metadata.managedFields[]?; .manager == "kodex-install")
     ' <<<"$current" >/dev/null ||
       fail 'mutable provider credential is not owned by the Kodex installer'
-    kubectl -n "$runtime_namespace" delete "secret/$name" --wait=true --timeout=3m >/dev/null
+    fail 'mutable provider credential requires explicit recovery'
   fi
 
   kubectl -n "$runtime_namespace" create secret generic "$name" \
@@ -273,20 +225,10 @@ create_secret kodex-system kodex-integration-credentials --from-literal=empty=
 selected_provider_metadata_preserved=false
 if preserve_selected_provider_metadata; then
   selected_provider_metadata_preserved=true
-elif restore_selected_provider_metadata_from_auth && preserve_selected_provider_metadata; then
-  selected_provider_metadata_preserved=true
 else
   materialize_provider_secret
 fi
-if legacy_provider=$(kubectl -n kodex-system get secret runtime-provider-openai-default-r1 -o json 2>/dev/null); then
-  jq -e '
-    .metadata.labels["app.kubernetes.io/managed-by"] == "kodex-install" and
-    ((.metadata.ownerReferences // []) | length == 0)
-  ' <<<"$legacy_provider" >/dev/null ||
-    fail 'legacy provider credential in control namespace is not owned by the Kodex installer'
-  kubectl -n kodex-system delete secret runtime-provider-openai-default-r1 \
-    --wait=true --timeout=3m >/dev/null
-fi
+# Legacy provider objects сохраняются: bootstrap не выполняет неявную очистку.
 
 apply_configmap kodex-system kodex-oidc-ca --from-file=ca.pem="$oidc_ca_file"
 for configmap_name in kodex-internal-ca kodex-otel-ca internal-rpc-authority-otel-ca; do
@@ -298,7 +240,8 @@ if [[ "$selected_provider_metadata_preserved" != true ]]; then
     -o jsonpath='{.metadata.uid}')
   provider_resource_version=$(kubectl -n "$runtime_namespace" get secret runtime-provider-openai-default-r1 \
     -o jsonpath='{.metadata.resourceVersion}')
-  provider_sha256=$(sha256sum "$provider_auth_file" | awk '{print $1}')
+  provider_sha256=$(kubectl -n "$runtime_namespace" get secret runtime-provider-openai-default-r1 -o json |
+    jq -jr '.data["auth.json"] | @base64d' | sha256sum | awk '{print $1}')
   apply_configmap kodex-system runtime-provider-openai-default-metadata \
     --from-literal=secretName=runtime-provider-openai-default-r1 \
     --from-literal=secretUID="$provider_uid" \

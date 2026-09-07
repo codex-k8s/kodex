@@ -10,6 +10,13 @@ updated: 2026-09-07
 
 # Безопасность распределенных сервисов и служебного состояния
 
+Bootstrap/import credential публикует новый immutable объект от собственного
+закрытого publisher после разрешения actual account владельцем. Он не копирует
+provenance runtime writer на старый объект. Reader проверяет exact account,
+UID/resourceVersion/raw digest одинаково для bootstrap и runtime; совместимость
+старого формата допускается только как проверенный вход переноса. Восстановление
+metadata сохраняет authoritative current revision, а не старый локальный auth-файл.
+
 Metadata, сохранённая в durable JSON plan и повторно прочитанная из Kubernetes,
 сравнивает timestamp по точному моменту, независимо от timezone/Location и
 локального monotonic reading. Структурное `time.Time ==` не является проверкой
