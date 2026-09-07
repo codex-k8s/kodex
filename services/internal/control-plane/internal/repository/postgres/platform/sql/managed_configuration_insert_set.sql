@@ -8,4 +8,4 @@ LEFT JOIN control_plane.projects project
 WHERE (@kind IN ('SYSTEM_STT', 'INTEGRATION_DEFINITION', 'EMAIL_MAILBOX') AND @project_ref = '')
    OR (@kind NOT IN ('SYSTEM_STT', 'INTEGRATION_DEFINITION', 'EMAIL_MAILBOX') AND project.id IS NOT NULL)
 RETURNING id::text, ref, COALESCE(project_id::text, ''), COALESCE((SELECT ref FROM control_plane.projects WHERE id = project_id), ''),
-          kind, name, managed_by, source, source_revision, version, updated_at, '';
+          kind, name, managed_by, source, source_revision, version, updated_at, '', archived, copy_provenance;

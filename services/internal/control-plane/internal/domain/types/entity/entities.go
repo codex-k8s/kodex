@@ -312,12 +312,20 @@ type PromptRenderedUserTask struct {
 }
 
 type ManagedConfigurationSet struct {
+	NextActions                                                    []string
+	Archived                                                       bool
+	CopyProvenance                                                 *ManagedConfigurationCopyProvenance
 	SourceEditable                                                 *bool
 	Ref, ProjectRef, Kind, Name, ManagedBy, Source, SourceRevision string
 	Version                                                        int64
 	CurrentRevision                                                *ManagedConfigurationRevision
 	UpdatedAt                                                      time.Time
 	GitSource                                                      *ManagedConfigurationGitSource
+}
+
+type ManagedConfigurationCopyProvenance struct {
+	Origin, SourceRef, SourceRevision, SourceDigest string
+	SourceVersion                                   int64
 }
 
 type ManagedConfigurationConsumer struct {
@@ -691,6 +699,8 @@ type IntegrationConfigurationField struct {
 }
 
 type IntegrationDefinition struct {
+	NextActions                                                        []string
+	Version                                                            int64
 	Key, Name, Description, Category, SchemaVersion, DefinitionVersion string
 	Origin, Digest, Adapter, CredentialSecretKey                       string
 	AdapterOwner, ExecutionRoute, AdapterReadiness                     string

@@ -20,6 +20,30 @@ type managedDraftRequest interface {
 	GetContent() string
 }
 
+func (server *Server) CopyRoleImageConfiguration(ctx context.Context, request *controlplanev1.CopyRoleImageConfigurationRequest) (*controlplanev1.CopyRoleImageConfigurationResponse, error) {
+	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_CopyRoleImageConfiguration_FullMethodName, command.CopyRoleImageConfiguration, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), RecipeRef: request.GetRecipeRef(), ProjectRef: request.GetProjectRef(), Name: request.GetName()})
+	return &controlplanev1.CopyRoleImageConfigurationResponse{Configuration: configuration, Revision: revision}, err
+}
+
+func (server *Server) CopyIntegrationDefinitionConfiguration(ctx context.Context, request *controlplanev1.CopyIntegrationDefinitionConfigurationRequest) (*controlplanev1.CopyIntegrationDefinitionConfigurationResponse, error) {
+	input := command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef(), Name: request.GetName()}
+	if shipped := request.GetShipped(); shipped != nil {
+		input.DefinitionKey, input.DefinitionVersion, input.DefinitionDigest = shipped.GetKey(), shipped.GetDefinitionVersion(), shipped.GetDigest()
+	}
+	configuration, revision, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_CopyIntegrationDefinitionConfiguration_FullMethodName, command.CopyIntegrationDefinitionConfiguration, request.GetMutation(), input)
+	return &controlplanev1.CopyIntegrationDefinitionConfigurationResponse{Configuration: configuration, Revision: revision}, err
+}
+
+func (server *Server) ArchiveRoleImageConfiguration(ctx context.Context, request *controlplanev1.ArchiveRoleImageConfigurationRequest) (*controlplanev1.ArchiveRoleImageConfigurationResponse, error) {
+	configuration, _, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_ArchiveRoleImageConfiguration_FullMethodName, command.ArchiveRoleImageConfiguration, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef()})
+	return &controlplanev1.ArchiveRoleImageConfigurationResponse{Configuration: configuration}, err
+}
+
+func (server *Server) ArchiveIntegrationDefinitionConfiguration(ctx context.Context, request *controlplanev1.ArchiveIntegrationDefinitionConfigurationRequest) (*controlplanev1.ArchiveIntegrationDefinitionConfigurationResponse, error) {
+	configuration, _, err := server.managedMutation(ctx, controlplanev1.PlatformCommandService_ArchiveIntegrationDefinitionConfiguration_FullMethodName, command.ArchiveIntegrationDefinitionConfiguration, request.GetMutation(), command.ManagedConfigurationInput{ConfigurationRef: request.GetConfigurationRef()})
+	return &controlplanev1.ArchiveIntegrationDefinitionConfigurationResponse{Configuration: configuration}, err
+}
+
 type managedRevisionRequest interface {
 	GetConfigurationRef() string
 	GetRevisionRef() string
@@ -300,10 +324,18 @@ func castManagedConfiguration(value *entity.ManagedConfigurationSet) *controlpla
 		return nil
 	}
 	return &controlplanev1.ManagedConfigurationSet{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef,
+		Archived: value.Archived, CopyProvenance: castConfigurationCopyProvenance(value.CopyProvenance), NextActions: append([]string{}, value.NextActions...),
 		SourceEditable: value.SourceEditable,
 		Kind:           controlplanev1.ManagedConfigurationKind(controlplanev1.ManagedConfigurationKind_value["MANAGED_CONFIGURATION_KIND_"+value.Kind]),
 		Name:           value.Name, ManagedBy: controlplanev1.ManagedConfigurationOwner(controlplanev1.ManagedConfigurationOwner_value["MANAGED_CONFIGURATION_OWNER_"+value.ManagedBy]),
 		Source: value.Source, SourceRevision: value.SourceRevision, CurrentRevision: castManagedRevision(value.CurrentRevision), UpdatedAt: timestamp(value.UpdatedAt), GitSource: castConfigurationSource(value.GitSource)}
+}
+
+func castConfigurationCopyProvenance(value *entity.ManagedConfigurationCopyProvenance) *controlplanev1.ManagedConfigurationCopyProvenance {
+	if value == nil {
+		return nil
+	}
+	return &controlplanev1.ManagedConfigurationCopyProvenance{Origin: controlplanev1.ManagedConfigurationCopyOrigin(controlplanev1.ManagedConfigurationCopyOrigin_value["MANAGED_CONFIGURATION_COPY_ORIGIN_"+value.Origin]), SourceRef: value.SourceRef, SourceRevision: value.SourceRevision, SourceVersion: value.SourceVersion, SourceDigest: value.SourceDigest}
 }
 
 func castManagedConsumer(value entity.ManagedConfigurationConsumer) *controlplanev1.ManagedConfigurationConsumer {

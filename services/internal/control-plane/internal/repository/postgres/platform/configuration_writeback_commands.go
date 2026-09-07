@@ -52,6 +52,9 @@ func (repository *Repository) writeBackSetAuthority(ctx context.Context, tx pgx.
 		if err := rejectShippedRoleImageMutation(ctx, tx, current.organizationID, set); err != nil {
 			return set, err
 		}
+		if set.Archived {
+			return set, errs.ErrConflict
+		}
 	}
 	return set, nil
 }

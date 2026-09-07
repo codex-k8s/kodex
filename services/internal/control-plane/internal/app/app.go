@@ -165,7 +165,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct role image service: %w", err)
 	}
-	repository.ConfigureRoleImageCatalog(roleEnvironmentCatalog.Resolve)
+	repository.ConfigureRoleImageCatalog(roleEnvironmentCatalog)
 	workerGrantTrustFiles := workerGrantTrustFilesFor(config)
 	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
 		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,

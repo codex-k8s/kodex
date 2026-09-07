@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 73,
+  "policy_revision": 74,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -379,6 +379,8 @@
           "platform.command.integration-definition-sources.configure",
           "platform.command.integration-definition-sources.refresh",
           "platform.command.integration-definition-writebacks.prepare",
+          "platform.command.integration-definitions.archive",
+          "platform.command.integration-definitions.copy",
           "platform.command.integration-definitions.create-draft",
           "platform.command.integration-definitions.discard-draft",
           "platform.command.integration-definitions.publish",
@@ -440,6 +442,8 @@
           "platform.command.role-image-sources.configure",
           "platform.command.role-image-sources.refresh",
           "platform.command.role-image-writebacks.prepare",
+          "platform.command.role-images.archive-configuration",
+          "platform.command.role-images.copy",
           "platform.command.role-images.promote",
           "platform.command.runs.cancel",
           "platform.command.runs.launch",
@@ -3747,6 +3751,78 @@
         }
       },
       {
+        "operation_id": "platform.command.integration-definitions.archive",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/ArchiveIntegrationDefinitionConfiguration",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.integration-definitions.archive",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.command.integration-definitions.copy",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/CopyIntegrationDefinitionConfiguration",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.integration-definitions.copy",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
         "operation_id": "platform.command.integration-definitions.create-draft",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -5918,6 +5994,78 @@
         "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
         "target_trust_bundle_id": "kodex-internal-ca-g1",
         "permission": "platform.command.role-image-writebacks.prepare",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.command.role-images.archive-configuration",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/ArchiveRoleImageConfiguration",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.role-images.archive-configuration",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "REQUIRED",
+          "version": "REQUIRED",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.command.role-images.copy",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/CopyRoleImageConfiguration",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.role-images.copy",
         "authority_proof_producer_id": "control-plane.oidc",
         "authority_sources": [
           "OIDC_SESSION",
