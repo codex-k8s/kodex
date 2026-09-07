@@ -43,6 +43,10 @@ if (result.warnings.length > 0) {
 }
 await mkdir(output, { recursive: true });
 await writeFile(
+  new URL("schema.json", output),
+  `${JSON.stringify(schema, null, 2)}\n`,
+);
+await writeFile(
   new URL("validate.js", output),
   "// Сгенерировано tools/generate-integration-schema.mjs. Не редактировать.\n" +
     result.outputFiles[0].text,
