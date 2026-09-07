@@ -54,6 +54,62 @@ class MemoryChannel implements SessionRevisionChannel {
 }
 
 describe("session renewal coordinator", () => {
+  it("передаёт результат с дробной сетевой задержкой и не допускает второй refresh", () => {
+    const storage = new MemoryStorage();
+    let now = 100;
+    const first = new SessionRenewalCoordinator(
+      storage,
+      "first",
+      () => now,
+      () => "token-1",
+    );
+    const second = new SessionRenewalCoordinator(
+      storage,
+      "second",
+      () => now,
+      () => "token-2",
+    );
+    const firstChannel = new MemoryChannel();
+    const secondChannel = new MemoryChannel();
+    firstChannel.peer = secondChannel;
+    const publisher = new SessionRenewalBus(firstChannel, 3);
+    const subscriber = new SessionRenewalBus(secondChannel, 3);
+    const receipts: number[] = [];
+    subscriber.subscribe((receipt) => receipts.push(receipt.nextRenewalAt));
+
+    expect(first.acquire().acquired).toBe(true);
+    expect(second.acquire().retryAfterMs).toBe(sessionRenewalLeaseMs);
+    const nextRenewalAt = first.complete(300_000.75);
+    publisher.publish({ revision: 3, completedAt: now, nextRenewalAt });
+    first.release();
+
+    expect(nextRenewalAt).toBe(300_100);
+    expect(receipts).toEqual([300_100]);
+    now += sessionRenewalLeaseMs + 25;
+    expect(second.acquire()).toEqual({
+      acquired: false,
+      retryAfterMs: nextRenewalAt - now,
+    });
+    now = nextRenewalAt;
+    expect(second.acquire().acquired).toBe(true);
+    publisher.close();
+    subscriber.close();
+  });
+
+  it.each([NaN, Infinity, -Infinity, 0, -1, Number.MAX_SAFE_INTEGER])(
+    "не публикует недопустимый срок следующего обновления: %s",
+    (delay) => {
+      const coordinator = new SessionRenewalCoordinator(
+        new MemoryStorage(),
+        "first",
+        () => 100,
+      );
+      expect(() => coordinator.complete(delay)).toThrow(
+        "Session renewal deadline is invalid",
+      );
+    },
+  );
+
   it("выдаёт lease ровно одной вкладке и предотвращает storm", () => {
     const storage = new MemoryStorage();
     const first = new SessionRenewalCoordinator(
