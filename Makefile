@@ -144,6 +144,10 @@ test-platform-worker-grant-workloads-contract:
 test-local-material-contract-revision:
 	@./scripts/tests/local-material-contract-revision-test.sh
 
+.PHONY: test-secret-draft-key-recovery-api
+test-secret-draft-key-recovery-api:
+	@timeout 360s python3 -B scripts/tests/secret-draft-key-recovery-api-test.py
+
 test-integration-deployed-e2e-check:
 	@cd services/staff/control-center && \
 		KODEX_E2E_CHECK_ONLY=1 KODEX_E2E_PROFILE=web-only KODEX_E2E_RESOURCE_PREFIX=check-only \

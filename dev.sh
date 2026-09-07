@@ -631,6 +631,14 @@ kubectl label namespace kodex-system app.kubernetes.io/part-of=kodex \
   kodex.dev/environment=staging kodex.dev/local-profile=hot-reload --overwrite >/dev/null
 
 if [[ ! -d "$material_directory" ]]; then
+  draft_recovery_directory="$state_directory/draft-key-recovery"
+  [[ ! -L "$draft_recovery_directory" ]] || fail 'draft recovery directory is invalid'
+  mkdir -p "$draft_recovery_directory"
+  chmod 0700 "$draft_recovery_directory"
+  draft_keyring=$(python3 "$repository_root/tools/install/draft-key-recovery.py" export \
+    --context "$context" --output-directory "$draft_recovery_directory")
+  draft_material_arguments=()
+  [[ -z "$draft_keyring" ]] || draft_material_arguments+=(--secret-draft-keyring-file "$draft_keyring")
   registry_username="$state_directory/inputs/registry-username"
   registry_password="$state_directory/inputs/registry-password"
   printf '%s' local-dev >"$registry_username"
@@ -641,7 +649,8 @@ if [[ ! -d "$material_directory" ]]; then
     --release-registry-host "$registry_host" \
     --promoted-pull-host "$promoted_pull_host" \
     --release-registry-username-file "$registry_username" \
-    --release-registry-password-file "$registry_password"
+    --release-registry-password-file "$registry_password" \
+    "${draft_material_arguments[@]}"
 fi
 
 if [[ ! -d "$material_directory/identity" ]]; then

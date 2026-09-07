@@ -82,6 +82,38 @@ func TestEncryptedStoreReadbackAndExactDelete(t *testing.T) {
 	}
 }
 
+func TestRetainedKeyBackupIsNotDraftReadOrCleanupTarget(t *testing.T) {
+	store, client, work, encrypted := storageFixture(t)
+	descriptor, err := store.Create(t.Context(), work, encrypted)
+	if err != nil {
+		t.Fatal("fixture create failed")
+	}
+	object, err := client.CoreV1().Secrets(work.StagedNamespace).Get(t.Context(), work.StagedName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal("fixture get failed")
+	}
+	// Даже при известных caller exact pins отдельный purpose не является draft.
+	object.Labels = map[string]string{"app.kubernetes.io/managed-by": "kodex-secret-broker-bootstrap", "kodex.dev/purpose": "secret-draft-key-backup"}
+	if _, err := client.CoreV1().Secrets(work.StagedNamespace).Update(t.Context(), object, metav1.UpdateOptions{}); err != nil {
+		t.Fatal("fixture update failed")
+	}
+	client.ClearActions()
+	if read, err := store.Read(t.Context(), work, descriptor); !errors.Is(err, secretdrafts.ErrConflict) || len(read.Ciphertext) != 0 {
+		t.Fatal("backup returned draft payload")
+	}
+	if _, err := store.Lookup(t.Context(), work); !errors.Is(err, secretdrafts.ErrConflict) {
+		t.Fatal("backup returned draft descriptor")
+	}
+	if err := store.Delete(t.Context(), work, descriptor); !errors.Is(err, secretdrafts.ErrConflict) {
+		t.Fatal("backup accepted as cleanup target")
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() != "get" {
+			t.Fatal("backup cleanup performed a mutation")
+		}
+	}
+}
+
 func TestEncryptedStoreRejectsEveryForeignDescriptorAndBinding(t *testing.T) {
 	store, _, work, encrypted := storageFixture(t)
 	descriptor, err := store.Create(t.Context(), work, encrypted)

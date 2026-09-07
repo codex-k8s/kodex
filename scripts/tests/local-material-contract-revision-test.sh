@@ -18,6 +18,14 @@ kubeconfig="$temporary_directory/kubeconfig"
 mkdir -p "$fixture_root/tools/dev" "$fixture_root/tools/install" "$fixture_root/tools/deploy" \
   "$state_directory/provider-accounts/default" "$state_directory/cache" "$cluster_state" "$fake_bin"
 cp "$source_script" "$fixture_root/tools/dev/reconcile-local-material.sh"
+cat >"$fixture_root/tools/install/draft-key-recovery.py" <<'PY'
+import os,pathlib,sys
+assert sys.argv[1:] == ['preserve','--context','fixture-local']
+state = pathlib.Path(os.environ['KODEX_TEST_CLUSTER_STATE'])
+if (state/'key-recovery-blocked').exists():
+    raise SystemExit(1)
+(state/'key-recovery-checked').touch()
+PY
 for path in \
   tools/install/secret-projections.json \
   tools/install/generate-material.sh \
@@ -108,6 +116,14 @@ printf '%s\n' '{"metadata":{"labels":{"app.kubernetes.io/part-of":"kodex","kodex
   >"$cluster_state/identity"
 printf 'radar\n' >"$cluster_state/radar-dev"
 printf 'changed\n' >>"$fixture_root/tools/install/secret-projections.json"
+touch "$cluster_state/key-recovery-blocked"
+if "$fixture_root/tools/dev/reconcile-local-material.sh" --context fixture-local \
+  --state-directory "$state_directory" --mode reconcile >/dev/null 2>&1; then
+  fail 'missing retained keys did not block material refresh'
+fi
+[[ -f "$cluster_state/kodex-system" && -f "$cluster_state/identity" && -d "$state_directory/material" ]] ||
+  fail 'failed key preservation destroyed namespace or material'
+rm "$cluster_state/key-recovery-blocked"
 action=$("$fixture_root/tools/dev/reconcile-local-material.sh" \
   --context fixture-local --state-directory "$state_directory" --mode reconcile)
 [[ "$action" == recreate ]] || fail 'contract drift did not request recreation'

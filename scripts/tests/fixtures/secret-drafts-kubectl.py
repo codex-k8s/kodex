@@ -38,14 +38,30 @@ def acknowledge():
 
 
 if args[:2] == ["get", "namespace"]:
-    print(json.dumps({"metadata": {"name": "kodex-secret-drafts"}}))
+    print(json.dumps({"metadata": {"name": "kodex-secret-drafts", "uid": "fixture-drafts-epoch"}}))
+elif args[:2] == ["get", "secrets"]:
+    print(" ".join(state.get("backups", {})))
 elif args[:2] in (["get", "configmap"], ["get", "secret"]):
+    if args[1] == "secret" and args[2].startswith("draft-key-backup-"):
+        value = state.get("backups", {}).get(args[2])
+        if value:
+            print(json.dumps(value))
+        sys.exit(0 if value or "--ignore-not-found" in args else 1)
     key = "guard" if args[1] == "configmap" else "keyring"
     if key not in state:
         sys.exit(0 if "--ignore-not-found" in args else 1)
     print(json.dumps(state[key]))
 elif args and args[0] in ("create", "replace"):
-    incoming = json.loads(Path(args[args.index("-f") + 1]).read_text())
+    file = args[args.index("-f") + 1]
+    incoming = json.loads(sys.stdin.read() if file == "-" else Path(file).read_text())
+    if incoming["metadata"]["name"].startswith("draft-key-backup-"):
+        name = incoming["metadata"]["name"]
+        if args[0] != "create" or name in state.get("backups", {}):
+            sys.exit(1)
+        incoming["metadata"].update(uid="fixture-backup-" + name, resourceVersion="1")
+        state.setdefault("backups", {})[name] = incoming
+        save()
+        sys.exit(1 if os.environ.get("KODEX_DRAFT_FIXTURE_LOST_WRITE") == "1" else 0)
     key = "guard" if incoming["kind"] == "ConfigMap" else "keyring"
     if args[0] == "create":
         if key in state:

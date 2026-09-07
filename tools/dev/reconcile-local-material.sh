@@ -133,6 +133,10 @@ if [[ -n "$identity_namespace" ]]; then
     fail 'legacy identity namespace cannot be attributed to the local Kodex profile'
 fi
 
+# До удаления serving namespace и обеих файловых копий проверяем retained backup.
+# Ошибка/UNKNOWN не разрешает ни namespace DELETE, ни rm material.
+python3 "$repository_root/tools/install/draft-key-recovery.py" preserve --context "$context"
+
 if [[ -n "$kodex_namespace" || -n "$identity_namespace" ]]; then
   namespaces=()
   [[ -z "$kodex_namespace" ]] || namespaces+=(kodex-system)

@@ -228,6 +228,17 @@ func (guard *Guard) decode(object *corev1.ConfigMap) (guardState, error) {
 	return state, nil
 }
 
+// InspectRecovery проверяет retained snapshot тем же закрытым parser, что broker.
+// Оператор не получает способ изменить manifest или счётчики использований.
+func InspectRecovery(object *corev1.ConfigMap) (*value.DraftKeyManifest, error) {
+	guard := &Guard{namespace: "kodex-secret-drafts", name: "secret-broker-draft-key-guard"}
+	state, err := guard.decode(object)
+	if err != nil {
+		return nil, err
+	}
+	return state.Manifest, nil
+}
+
 func validManifest(manifest value.DraftKeyManifest) bool {
 	if manifest.Revision < 1 || len(manifest.Keys) == 0 || len(manifest.Keys) > maximumManifestKeys || !validKey(manifest.Current) || !validDigest(manifest.Digest) {
 		return false
