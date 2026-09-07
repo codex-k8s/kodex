@@ -91,11 +91,24 @@ files не переиспользует warm Pod и получает собст�
 
 ## Workspace
 
-`workspace-init` с UID 10001 заполняет `input` и `knowledge`; в role/provider
+Перед nested mounts одноразовый `workspace-prepare` запускает защищённую
+`runtime-prepare-workspace` от UID 10001 с единственным mount `/workspace`.
+Он создаёт `.kodex` через прежний owner/symlink guard, без runtime input,
+credentials или сетевых клиентов. Это не исправление чужих прав: уже существующий
+чужой parent закрыто отклоняется. Последующий `workspace-init` с UID 10001
+заполняет `input` и `knowledge`; в role/provider
 containers эти mounts read-only. Session PVC смонтирован только в
 `/workspace/.kodex/state`. Writable workspace/result outbox ограничен 1 GiB,
 10 000 files и Kubernetes `emptyDir.sizeLimit`; root filesystem read-only,
 `fsGroup=29000`, seccomp и optional provider AppArmor согласованы с admission.
+
+Тот же порядок применяется к warm и turn. `.kodex` — единственный промежуточный
+parent nested workspace mount; `input`, `knowledge` и `context` находятся прямо
+под `/workspace`. V7 input schema не меняется: preparer не читает payload.
+`make test-workspace-parent-container` (360 секунд, `KODEX_WORKSPACE_TEST_IMAGE`
+с exact локальным image SHA) проверяет настоящий container startup и production
+directory materializer, replay и отрицательные owner/symlink/traversal границы.
+Этот тест не вызывает provider и не подменяет живую readiness runtime.
 
 До готовности runtime выполняется bounded canary create/write/`fsync`/atomic
 replace/read/delete с cleanup. Диагностика ограничена точными reason codes

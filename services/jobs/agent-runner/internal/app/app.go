@@ -47,11 +47,17 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return errors.New("agent-runner mode is required")
 	}
 	mode := args[1]
-	if mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
+	if mode != "runtime-prepare-workspace" && mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
 		return errors.New("agent-runner mode is invalid")
 	}
 	if err := security.VerifyInvocation(args, mode); err != nil {
 		return err
+	}
+	if mode == "runtime-prepare-workspace" {
+		if os.Geteuid() != 10001 {
+			return errors.New("agent-runner runtime UID is invalid")
+		}
+		return security.EnsureSharedWorkspaceDirectory(".kodex")
 	}
 	if mode == "runtime-provider" {
 		return codex.ServeProviderBroker(lifecycleContext)
@@ -395,10 +401,8 @@ func runtimeExecutionFailureCode(err error) string {
 }
 
 func materializeWorkspace(ctx context.Context, input model.Input) error {
-	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge"} {
-		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
-			return err
-		}
+	if err := materializeWorkspaceDirectories(); err != nil {
+		return err
 	}
 	if err := checkWorkspaceProcess(ctx); err != nil {
 		return err
@@ -423,6 +427,15 @@ func materializeWorkspace(ctx context.Context, input model.Input) error {
 		return err
 	}
 	return writeWorkspaceFile(input.WorkspaceRoot, ".kodex/inbox/prompt.md", prompt)
+}
+
+func materializeWorkspaceDirectories() error {
+	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge"} {
+		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func buildPrompt(input model.Input) ([]byte, error) {

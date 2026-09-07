@@ -488,9 +488,30 @@ spec:
         size(variables.providerContainers) == 1 &&
         size(variables.relayContainers) == 1 &&
         has(object.spec.initContainers) &&
-        size(object.spec.initContainers) == 1 &&
-        object.spec.initContainers[0].name == 'workspace-init'
+        size(object.spec.initContainers) == 2 &&
+        object.spec.initContainers[1].name == 'workspace-init'
       message: managed role Pod container set is invalid
+    - expression: >-
+        object.spec.initContainers[0].name == 'workspace-prepare' &&
+        object.spec.initContainers[0].image == variables.roleContainers[0].image &&
+        object.spec.initContainers[0].imagePullPolicy == 'IfNotPresent' &&
+        (!has(object.spec.initContainers[0].command) || size(object.spec.initContainers[0].command) == 0) &&
+        object.spec.initContainers[0].args == ['runtime-prepare-workspace'] &&
+        object.spec.initContainers[0].securityContext == object.spec.initContainers[1].securityContext &&
+        object.spec.initContainers[0].resources == object.spec.initContainers[1].resources &&
+        (!has(object.spec.initContainers[0].env) || size(object.spec.initContainers[0].env) == 0) &&
+        (!has(object.spec.initContainers[0].envFrom) || size(object.spec.initContainers[0].envFrom) == 0) &&
+        object.spec.initContainers.all(container,
+          !has(container.restartPolicy) && !has(container.startupProbe) &&
+          !has(container.readinessProbe) && !has(container.livenessProbe) && !has(container.lifecycle)) &&
+        size(object.spec.initContainers[0].volumeMounts) == 1 &&
+        object.spec.initContainers[0].volumeMounts[0].name == 'workspace' &&
+        object.spec.initContainers[0].volumeMounts[0].mountPath == '/workspace' &&
+        (!has(object.spec.initContainers[0].volumeMounts[0].readOnly) || object.spec.initContainers[0].volumeMounts[0].readOnly == false) &&
+        !has(object.spec.initContainers[0].volumeMounts[0].subPath) &&
+        !has(object.spec.initContainers[0].volumeMounts[0].subPathExpr) &&
+        !has(object.spec.initContainers[0].volumeMounts[0].mountPropagation)
+      message: workspace preparation boundary is invalid
     - expression: >-
         object.spec.restartPolicy == 'Never' &&
         has(object.spec.enableServiceLinks) &&
@@ -510,7 +531,7 @@ spec:
       message: managed role Pod security boundary is invalid
     - expression: >-
         [variables.roleContainers[0], variables.providerContainers[0],
-          object.spec.initContainers[0]].all(container,
+          object.spec.initContainers[1]].all(container,
           container.image.matches('^.+@sha256:[a-f0-9]{64}$') &&
           container.image == variables.roleContainers[0].image &&
           container.imagePullPolicy == 'IfNotPresent' &&
@@ -529,8 +550,8 @@ spec:
         size(variables.relayContainers[0].args) == 1 &&
         variables.relayContainers[0].args[0] ==
           'runtime-provider-credential-relay' &&
-        size(object.spec.initContainers[0].args) == 1 &&
-        object.spec.initContainers[0].args[0] == 'runtime-init-workspace'
+        size(object.spec.initContainers[1].args) == 1 &&
+        object.spec.initContainers[1].args[0] == 'runtime-init-workspace'
       message: managed role Pod image or process contract is invalid
     - expression: >-
         variables.allContainers.all(container,
@@ -549,9 +570,9 @@ spec:
         variables.roleContainers[0].securityContext.runAsGroup == 10001 &&
         variables.roleContainers[0].securityContext.seccompProfile.type ==
           'RuntimeDefault' &&
-        object.spec.initContainers[0].securityContext.runAsUser == 10001 &&
-        object.spec.initContainers[0].securityContext.runAsGroup == 10001 &&
-        object.spec.initContainers[0].securityContext.seccompProfile.type ==
+        object.spec.initContainers[1].securityContext.runAsUser == 10001 &&
+        object.spec.initContainers[1].securityContext.runAsGroup == 10001 &&
+        object.spec.initContainers[1].securityContext.seccompProfile.type ==
           'RuntimeDefault' &&
         variables.providerContainers[0].securityContext.runAsUser == 10002 &&
         variables.providerContainers[0].securityContext.runAsGroup == 10002 &&
@@ -593,7 +614,7 @@ spec:
       message: managed role Pod resources are outside the approved policy
     - expression: >-
         [variables.providerContainers[0], variables.relayContainers[0],
-          object.spec.initContainers[0]].all(container,
+          object.spec.initContainers[1]].all(container,
           size(container.resources.requests) == 2 &&
           size(container.resources.limits) == 2 &&
           quantity(string(container.resources.requests.cpu)).compareTo(quantity('25m')) == 0 &&
@@ -689,8 +710,8 @@ spec:
         size(variables.roleContainers[0].env.filter(item,
           item.name == 'DEPLOYMENT_ENVIRONMENT' &&
           item.value == object.metadata.labels['kodex.dev/environment'])) == 1 &&
-        (!has(object.spec.initContainers[0].env) ||
-          size(object.spec.initContainers[0].env) == 0)
+        (!has(object.spec.initContainers[1].env) ||
+          size(object.spec.initContainers[1].env) == 0)
       message: role runtime server-owned environment is invalid
     - expression: >-
         size(variables.relayContainers[0].env) == 3 &&
@@ -950,40 +971,40 @@ spec:
         size(variables.relayContainers[0].volumeMounts.filter(mount,
           mount.name == 'provider-credential-relay' &&
           mount.mountPath == '/run/kodex/provider-credential-relay')) == 1 &&
-        object.spec.initContainers[0].volumeMounts.all(mount,
+        object.spec.initContainers[1].volumeMounts.all(mount,
           mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
             'tmp']) &&
         ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context'].all(name,
-          size(object.spec.initContainers[0].volumeMounts.filter(mount,
+          size(object.spec.initContainers[1].volumeMounts.filter(mount,
             mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'workspace' && mount.mountPath == '/workspace')) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'session' && mount.mountPath == '/workspace/.kodex/state')) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'vfs-input' && mount.mountPath == '/workspace/input')) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'vfs-knowledge' && mount.mountPath == '/workspace/knowledge')) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'runtime-context' && mount.mountPath == '/workspace/context' &&
           !has(mount.subPath) && !has(mount.subPathExpr) && !has(mount.mountPropagation))) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'runtime-input' && mount.mountPath == '/var/run/config/kodex/runtime' &&
           !has(mount.subPath) && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'runtime-ticket' &&
           mount.mountPath == '/var/run/secrets/kodex/runtime/ticket/token' &&
           mount.subPath == 'token' && has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'callback-ca' &&
           mount.mountPath == '/var/run/config/kodex/runtime/callback' &&
           has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'callback-client' &&
           mount.mountPath == '/var/run/secrets/kodex/runtime/callback-client' &&
           has(mount.readOnly) && mount.readOnly == true)) == 1 &&
-        size(object.spec.initContainers[0].volumeMounts.filter(mount,
+        size(object.spec.initContainers[1].volumeMounts.filter(mount,
           mount.name == 'tmp' && mount.mountPath == '/tmp')) == 1
       message: managed role Pod authority mount boundary is invalid
     - expression: >-
@@ -1014,7 +1035,7 @@ spec:
           mount.name != 'kube-api-access') &&
         variables.relayContainers[0].volumeMounts.all(mount,
           mount.name != 'kube-api-access') &&
-        object.spec.initContainers[0].volumeMounts.all(mount,
+        object.spec.initContainers[1].volumeMounts.all(mount,
           mount.name != 'kube-api-access')
       message: Kubernetes API credential projection is not execution scoped
 ---

@@ -237,7 +237,7 @@ func TestContextVolumeSeparatesInitWriterFromRuntimeReaders(t *testing.T) {
 			}
 		}
 		want := 1
-		if container.Name == "provider-credential-relay" {
+		if container.Name == "provider-credential-relay" || container.Name == "workspace-prepare" {
 			want = 0
 		}
 		if count != want {
