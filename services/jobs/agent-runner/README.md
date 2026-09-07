@@ -260,3 +260,13 @@ prefix/suffix. Ключ по-прежнему входит в immutable revision
 затрагиваются. Controller schema regression проверяет actual bootstrap key
 для warm и turn вплоть до runner decode, включая отрицательные границы.
 Supply chain: `docs/domains/images-supply-chain.md`.
+
+Защита `input`/`knowledge` сохраняет mode точных root-owned корней emptyDir
+`/workspace/input` и `/workspace/knowledge` с fsGroup 29000. Init не владеет
+этими корнями и не вызывает для них chmod. Вложенные каталоги и обычные файлы
+должны принадлежать init: descriptor-relative обход без symlink назначает
+02750/0440, отклоняет чужого владельца, hardlink и специальные файлы.
+Оба рабочих контейнера получают целые тома readOnly; это обязательная часть
+Pod ABI, включая запрет создания файла в исходно writable корне emptyDir.
+`make test-workspace-parent-container` проверяет настоящий non-root init,
+повтор защиты и чтение/запрет записи для UID 10001 и 10002.
