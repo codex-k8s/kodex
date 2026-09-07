@@ -4,13 +4,268 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
+
+func TestAppServerPipeProcessFixture(t *testing.T) {
+	mode := os.Getenv("KODEX_APP_SERVER_PIPE_FIXTURE")
+	if mode == "" {
+		return
+	}
+	switch mode {
+	case "start-failure":
+		// Изолированный процесс исключает позднее закрытие FD предыдущих fixtures.
+		_, _ = startAppServerCommand(exec.Command("/definitely/missing/kodex"), nil)
+		before, err := os.ReadDir("/proc/self/fd")
+		if err != nil {
+			os.Exit(7)
+		}
+		for attempt := 0; attempt < 50; attempt++ {
+			if _, err := startAppServerCommand(exec.Command("/definitely/missing/kodex"), nil); err == nil {
+				os.Exit(8)
+			}
+		}
+		after, err := os.ReadDir("/proc/self/fd")
+		if err != nil || len(before) != len(after) {
+			os.Exit(9)
+		}
+	case "buffered":
+		_, _ = os.Stdout.WriteString("{\"id\":1,\"result\":{}}\n")
+		_, _ = os.Stderr.WriteString("bounded diagnostic")
+	case "clean":
+		_, _ = os.Stderr.WriteString("bounded diagnostic")
+	case "overflow":
+		_, _ = os.Stderr.Write(make([]byte, maximumDiagnosticSize+1))
+	case "nonzero":
+		os.Exit(3)
+	case "term-resistant":
+		signal.Ignore(syscall.SIGTERM)
+		pidPath := os.Getenv("KODEX_APP_SERVER_PIPE_PID_PATH")
+		if pidPath == "" || os.WriteFile(pidPath, []byte("ready"), 0o600) != nil {
+			os.Exit(6)
+		}
+		time.Sleep(30 * time.Second)
+	case "holding-descendant":
+		child := exec.Command("/usr/bin/sleep", "30")
+		child.Stdout, child.Stderr = os.Stdout, os.Stderr
+		if child.Start() != nil {
+			os.Exit(5)
+		}
+		pidPath := os.Getenv("KODEX_APP_SERVER_PIPE_PID_PATH")
+		if pidPath == "" || os.WriteFile(pidPath, []byte(strconv.Itoa(child.Process.Pid)), 0o600) != nil {
+			_ = child.Process.Kill()
+			os.Exit(6)
+		}
+	default:
+		os.Exit(4)
+	}
+	os.Exit(0)
+}
+
+func TestAppServerOwnsPipesUntilReadersDrain(t *testing.T) {
+	command := appServerPipeFixtureCommand(t, "buffered")
+	readerGate := make(chan struct{})
+	server, err := startAppServerCommand(command, readerGate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case server.waitErr = <-server.wait:
+		server.waited = true
+	case <-time.After(5 * time.Second):
+		t.Fatal("fixture process did not exit")
+	}
+	if server.waitErr != nil {
+		t.Fatal("fixture process failed")
+	}
+	close(readerGate)
+	select {
+	case event, open := <-server.messages:
+		if !open || event.err != nil || event.message.kind != messageResponse {
+			t.Fatal("buffered response was not preserved after process exit")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("buffered response reader did not finish")
+	}
+	select {
+	case _, open := <-server.messages:
+		if open {
+			t.Fatal("unexpected second response")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("response stream did not close")
+	}
+	server.readDiagnostic(time.Second)
+	if !server.diagnosticRead || server.diagnosticErr != nil {
+		t.Fatal("bounded diagnostic stream did not drain cleanly")
+	}
+	server.closeStreams()
+}
+
+func TestAppServerStopPreservesProcessAndDiagnosticFailures(t *testing.T) {
+	for _, test := range []struct {
+		mode      string
+		wantError string
+	}{
+		{mode: "clean"},
+		{mode: "overflow", wantError: "Codex app-server diagnostic stream exceeded its bound"},
+		{mode: "nonzero", wantError: "Codex app-server exited unsuccessfully"},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			server, err := startAppServerCommand(appServerPipeFixtureCommand(t, test.mode), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = server.stop(newProtocolState(""))
+			if test.wantError == "" && err != nil {
+				t.Fatal("clean process shutdown failed")
+			}
+			if test.wantError != "" && (err == nil || err.Error() != test.wantError) {
+				t.Fatalf("shutdown error category changed: %v", err)
+			}
+		})
+	}
+}
+
+func TestAppServerTerminateKillsDescriptorHoldingDescendant(t *testing.T) {
+	pidPath := filepath.Join(t.TempDir(), "pid")
+	command := appServerPipeFixtureCommand(t, "holding-descendant")
+	command.Env = append(command.Env, "KODEX_APP_SERVER_PIPE_PID_PATH="+pidPath)
+	server, err := startAppServerCommand(command, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	var pid int
+	for time.Now().Before(deadline) {
+		raw, readErr := os.ReadFile(pidPath)
+		if readErr == nil {
+			pid, err = strconv.Atoi(string(raw))
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err != nil || pid <= 0 {
+		t.Fatal("descriptor holding descendant was not observed")
+	}
+	select {
+	case server.waitErr = <-server.wait:
+		server.waited = true
+	case <-time.After(time.Second):
+		t.Fatal("fixture leader did not exit")
+	}
+	if server.waitErr != nil {
+		t.Fatal("fixture leader failed")
+	}
+	cause := errors.New("synthetic abort")
+	started := time.Now()
+	if err := server.terminate(cause); !errors.Is(err, cause) {
+		t.Fatal("abort cause was replaced")
+	}
+	if time.Since(started) > 3*terminationGrace {
+		t.Fatal("descriptor drain exceeded its bounded shutdown budget")
+	}
+	for attempt := 0; attempt < 100 && syscall.Kill(pid, 0) == nil; attempt++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if syscall.Kill(pid, 0) == nil {
+		t.Fatal("descriptor holding descendant survived process-group shutdown")
+	}
+}
+
+func TestAppServerStartFailureClosesOwnedPipes(t *testing.T) {
+	if err := appServerPipeFixtureCommand(t, "start-failure").Run(); err != nil {
+		t.Fatal("isolated start failure descriptor fixture failed")
+	}
+}
+
+func appServerPipeFixtureCommand(t *testing.T, mode string) *exec.Cmd {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(executable, "-test.run=^TestAppServerPipeProcessFixture$")
+	command.Env = []string{"KODEX_APP_SERVER_PIPE_FIXTURE=" + mode}
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
+	return command
+}
+
+func TestAppServerAbortPreservesRealReadError(t *testing.T) {
+	gate := make(chan struct{})
+	server, err := startAppServerCommand(appServerPipeFixtureCommand(t, "clean"), gate)
+	if err != nil {
+		t.Fatal("fixture start failed")
+	}
+	server.waitErr = <-server.wait
+	server.waited = true
+	// Настоящий read error до первого Read, не имитация текста diagnostic.
+	_ = server.stderr.Close()
+	close(gate)
+	cause := errors.New("synthetic abort")
+	err = server.abort(t.Context(), newProtocolState(""), cause)
+	if !errors.Is(err, cause) || !server.diagnosticRead || server.diagnosticErr == nil || !errors.Is(err, server.diagnosticErr) || !server.readerRead {
+		t.Fatal("abort lost read error or reader join")
+	}
+}
+
+func TestAppServerTermResistantProcessIsKilledAndJoined(t *testing.T) {
+	readyPath := filepath.Join(t.TempDir(), "ready")
+	command := appServerPipeFixtureCommand(t, "term-resistant")
+	command.Env = append(command.Env, "KODEX_APP_SERVER_PIPE_PID_PATH="+readyPath)
+	server, err := startAppServerCommand(command, nil)
+	if err != nil {
+		t.Fatal("fixture start failed")
+	}
+	t.Cleanup(func() { _ = server.terminate(errors.New("fixture cleanup")) })
+	deadline := time.Now().Add(5 * time.Second)
+	ready := false
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(readyPath); err == nil {
+			ready = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !ready {
+		t.Fatal("fixture readiness deadline")
+	}
+	cause := errors.New("synthetic abort")
+	start := time.Now()
+	err = server.terminate(cause)
+	if !errors.Is(err, cause) || !server.waited || server.waitErr == nil || !server.readerRead || !server.diagnosticRead {
+		t.Fatal("TERM resistant process was not joined")
+	}
+	if time.Since(start) > 4*terminationGrace {
+		t.Fatal("termination budget exceeded")
+	}
+	if syscall.Kill(command.Process.Pid, 0) == nil {
+		t.Fatal("process survived KILL")
+	}
+}
+
+func TestAppServerStopCloseFailureStillJoins(t *testing.T) {
+	server, err := startAppServerCommand(appServerPipeFixtureCommand(t, "clean"), nil)
+	if err != nil {
+		t.Fatal("fixture start failed")
+	}
+	_ = server.stdin.Close()
+	if server.stop(newProtocolState("")) == nil || !server.waited || !server.readerRead || !server.diagnosticRead {
+		t.Fatal("close failure bypassed cleanup")
+	}
+}
 
 func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 	for _, session := range []string{"", "existing-thread"} {

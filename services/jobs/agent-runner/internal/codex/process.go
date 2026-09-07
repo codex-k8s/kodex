@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -39,6 +40,8 @@ var (
 	ErrAuthorityRequestUnsupported = errors.New("Codex app-server authority request is unsupported")
 	ErrRequiredMCPUnavailable      = errors.New("Codex required MCP runtime is unavailable")
 	errAccountReadResponseInvalid  = errors.New("Codex app-server account/read response is invalid")
+	errAppServerExited             = errors.New("Codex app-server exited unsuccessfully")
+	errAppServerStreamDeadline     = errors.New("Codex app-server stream shutdown deadline exceeded")
 )
 
 type streamEvent struct {
@@ -47,12 +50,23 @@ type streamEvent struct {
 }
 
 type appServer struct {
-	command     *exec.Cmd
-	stdin       io.WriteCloser
-	messages    <-chan streamEvent
-	wait        <-chan error
-	diagnostics <-chan error
-	nextID      int64
+	command        *exec.Cmd
+	stdin          io.WriteCloser
+	stdout         io.Closer
+	stderr         io.Closer
+	messages       <-chan streamEvent
+	wait           <-chan error
+	diagnostics    <-chan error
+	readerStop     chan struct{}
+	readerDone     <-chan struct{}
+	stopOnce       sync.Once
+	streamsOnce    sync.Once
+	waited         bool
+	waitErr        error
+	readerRead     bool
+	diagnosticRead bool
+	diagnosticErr  error
+	nextID         int64
 }
 
 func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string) (result Result, resultErr error) {
@@ -328,25 +342,54 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 		return nil, errors.New("runtime Secret projection is unavailable")
 	}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
-	stdin, err := command.StdinPipe()
+	return startAppServerCommand(command, nil)
+}
+
+func startAppServerCommand(command *exec.Cmd, readerGate <-chan struct{}) (*appServer, error) {
+	stdinChild, stdin, err := os.Pipe()
 	if err != nil {
 		return nil, errors.New("create Codex app-server request stream")
 	}
-	stdout, err := command.StdoutPipe()
+	defer stdinChild.Close()
+	command.Stdin = stdinChild
+	stdout, stdoutChild, err := os.Pipe()
 	if err != nil {
+		_ = stdin.Close()
 		return nil, errors.New("create Codex app-server response stream")
 	}
-	stderr, err := command.StderrPipe()
+	stderr, stderrChild, err := os.Pipe()
 	if err != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stdoutChild.Close()
 		return nil, errors.New("create Codex app-server diagnostic stream")
 	}
+	command.Stdout, command.Stderr = stdoutChild, stderrChild
 	if err := command.Start(); err != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stdoutChild.Close()
+		_ = stderr.Close()
+		_ = stderrChild.Close()
 		return nil, errors.New("start Codex app-server process")
 	}
+	// Родитель не держит child ends: EOF приходит после закрытия descriptors
+	// process group, а Cmd.Wait не владеет reader ends и не закрывает их под readers.
+	_ = stdoutChild.Close()
+	_ = stderrChild.Close()
 	messages := make(chan streamEvent, 64)
-	go readAppServerMessages(stdout, messages)
+	readerStop, readerDone := make(chan struct{}), make(chan struct{})
+	go func() {
+		if readerGate != nil {
+			<-readerGate
+		}
+		readAppServerMessagesUntil(stdout, messages, readerStop, readerDone)
+	}()
 	diagnostics := make(chan error, 1)
 	go func() {
+		if readerGate != nil {
+			<-readerGate
+		}
 		written, copyErr := io.Copy(io.Discard, io.LimitReader(stderr, maximumDiagnosticSize+1))
 		if copyErr != nil || written > maximumDiagnosticSize {
 			diagnostics <- errors.New("Codex app-server diagnostic stream exceeded its bound")
@@ -356,7 +399,11 @@ func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error)
 	}()
 	wait := make(chan error, 1)
 	go func() { wait <- command.Wait() }()
-	return &appServer{command: command, stdin: stdin, messages: messages, wait: wait, diagnostics: diagnostics}, nil
+	return &appServer{
+		command: command, stdin: stdin, stdout: stdout, stderr: stderr,
+		messages: messages, wait: wait, diagnostics: diagnostics,
+		readerStop: readerStop, readerDone: readerDone,
+	}, nil
 }
 
 func appServerEnvironment(input model.Input, mcpProxyToken string) []string {
@@ -381,25 +428,46 @@ func appServerEnvironment(input model.Input, mcpProxyToken string) []string {
 }
 
 func readAppServerMessages(reader io.Reader, events chan<- streamEvent) {
+	readAppServerMessagesUntil(reader, events, nil, nil)
+}
+
+func readAppServerMessagesUntil(reader io.Reader, events chan<- streamEvent, stop <-chan struct{}, done chan<- struct{}) {
+	if done != nil {
+		defer close(done)
+	}
 	defer close(events)
+	send := func(event streamEvent) bool {
+		if stop == nil {
+			events <- event
+			return true
+		}
+		select {
+		case events <- event:
+			return true
+		case <-stop:
+			return false
+		}
+	}
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 64<<10), maximumJSONLLineBytes)
 	count := 0
 	for scanner.Scan() {
 		count++
 		if count > maximumJSONLMessages || len(scanner.Bytes()) == 0 {
-			events <- streamEvent{err: errors.New("Codex app-server message budget exceeded")}
+			send(streamEvent{err: errors.New("Codex app-server message budget exceeded")})
 			return
 		}
 		message, err := parseWireMessage(scanner.Bytes())
 		if err != nil {
-			events <- streamEvent{err: err}
+			send(streamEvent{err: err})
 			return
 		}
-		events <- streamEvent{message: message}
+		if !send(streamEvent{message: message}) {
+			return
+		}
 	}
 	if err := scanner.Err(); err != nil {
-		events <- streamEvent{err: errors.New("read Codex app-server response stream")}
+		send(streamEvent{err: errors.New("read Codex app-server response stream")})
 	}
 }
 
@@ -551,15 +619,27 @@ func (server *appServer) write(message any) error {
 
 func (server *appServer) stop(state *protocolState) error {
 	if err := server.stdin.Close(); err != nil {
-		return errors.New("close Codex app-server request stream")
+		return server.terminate(errors.New("close Codex app-server request stream"))
 	}
 	timer := time.NewTimer(processGrace)
 	defer timer.Stop()
+	messages := server.messages
+	diagnostics := server.diagnostics
 	for {
+		if server.waited && messages == nil && server.diagnosticRead {
+			if !server.drainReaders(terminationGrace) {
+				return server.terminate(errAppServerStreamDeadline)
+			}
+			server.closeStreams()
+			if server.waitErr != nil {
+				return errors.Join(errAppServerExited, server.diagnosticErr)
+			}
+			return server.diagnosticErr
+		}
 		select {
-		case event, open := <-server.messages:
+		case event, open := <-messages:
 			if !open {
-				server.messages = nil
+				messages = nil
 				continue
 			}
 			if event.err != nil {
@@ -577,11 +657,10 @@ func (server *appServer) stop(state *protocolState) error {
 				return server.terminate(errors.New("Codex app-server emitted a late response"))
 			}
 		case waitErr := <-server.wait:
-			diagnosticErr := <-server.diagnostics
-			if waitErr != nil {
-				return errors.New("Codex app-server exited unsuccessfully")
-			}
-			return diagnosticErr
+			server.waited, server.waitErr = true, waitErr
+		case diagnosticErr := <-diagnostics:
+			server.diagnosticRead, server.diagnosticErr = true, diagnosticErr
+			diagnostics = nil
 		case <-timer.C:
 			return server.terminate(errors.New("Codex app-server shutdown deadline exceeded"))
 		}
@@ -606,25 +685,101 @@ func (server *appServer) abort(ctx context.Context, state *protocolState, cause 
 }
 
 func (server *appServer) terminate(cause error) error {
+	server.stopOnce.Do(func() { close(server.readerStop) })
 	_ = server.stdin.Close()
-	if server.command.Process != nil {
+	if !server.waited && server.command.Process != nil {
 		_ = syscall.Kill(-server.command.Process.Pid, syscall.SIGTERM)
 	}
-	timer := time.NewTimer(terminationGrace)
-	defer timer.Stop()
-	select {
-	case <-server.wait:
-	case <-timer.C:
+	if !server.waitProcess(terminationGrace) {
+		cause = errors.Join(cause, errors.New("Codex app-server termination deadline exceeded"))
 		if server.command.Process != nil {
 			_ = syscall.Kill(-server.command.Process.Pid, syscall.SIGKILL)
 		}
-		<-server.wait
+		if !server.waitProcess(terminationGrace) {
+			cause = errors.Join(cause, errors.New("Codex app-server process join deadline exceeded"))
+		}
 	}
+	// Потомок может удерживать descriptors после выхода лидера. Сначала даём
+	// readers отдельный drain budget, затем закрываем всю process group и pipes.
+	if !server.drainReaders(terminationGrace) {
+		cause = errors.Join(cause, errAppServerStreamDeadline)
+		if server.command.Process != nil {
+			_ = syscall.Kill(-server.command.Process.Pid, syscall.SIGKILL)
+		}
+		server.closeStreams()
+		if !server.drainReaders(terminationGrace) {
+			cause = errors.Join(cause, errors.New("Codex app-server reader join deadline exceeded"))
+		}
+	}
+	server.closeStreams()
+	if server.waitErr != nil {
+		cause = errors.Join(cause, errAppServerExited)
+	}
+	return errors.Join(cause, server.diagnosticErr)
+}
+
+func (server *appServer) waitProcess(timeout time.Duration) bool {
+	if server.waited {
+		return true
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	select {
-	case <-server.diagnostics:
-	default:
+	case server.waitErr = <-server.wait:
+		server.waited = true
+		return true
+	case <-timer.C:
+		return false
 	}
-	return cause
+}
+
+func (server *appServer) readDiagnostic(timeout time.Duration) {
+	if server.diagnosticRead {
+		return
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case server.diagnosticErr = <-server.diagnostics:
+		server.diagnosticRead = true
+	case <-timer.C:
+	}
+}
+
+func (server *appServer) drainReaders(timeout time.Duration) bool {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	readerDone, diagnostics := server.readerDone, server.diagnostics
+	if server.readerRead {
+		readerDone = nil
+	}
+	if server.diagnosticRead {
+		diagnostics = nil
+	}
+	for !server.readerRead || !server.diagnosticRead {
+		select {
+		case <-readerDone:
+			server.readerRead = true
+			readerDone = nil
+		case server.diagnosticErr = <-diagnostics:
+			server.diagnosticRead = true
+			diagnostics = nil
+		case <-timer.C:
+			return false
+		}
+	}
+	return true
+}
+
+func (server *appServer) closeStreams() {
+	server.streamsOnce.Do(func() {
+		if server.stdout != nil {
+			_ = server.stdout.Close()
+		}
+		if server.stderr != nil {
+			_ = server.stderr.Close()
+		}
+	})
 }
 
 func verifyAccountPin(input model.Input) error {

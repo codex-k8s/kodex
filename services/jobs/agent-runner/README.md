@@ -4,7 +4,7 @@ title: agent-runner
 type: service
 status: approved
 owner: developer
-version: 3.1.0
+version: 3.1.1
 updated: 2026-09-04
 ---
 
@@ -139,6 +139,12 @@ Raw provider JSONL, stdout/stderr, arbitrary tool payload, prompts и secret
 values не публикуются в logs, NATS или WebSocket. Runtime возвращает stable
 safe code/message key и bounded status. Пользовательский текст локализуется по
 проверенной locale из YAML i18n, а runtime diagnostics остаются на английском.
+
+Runner владеет read ends stdout/stderr app-server и завершает их отдельным
+bounded drain после process exit. `Cmd.Wait` не закрывает pipes под активными
+readers. Если потомок удерживает descriptor, shutdown закрывает всю process
+group и owned pipes; normal stop при этом сохраняет buffered protocol messages,
+реальный diagnostic overflow и non-zero exit.
 
 ## Immutable RuntimeRevision
 
