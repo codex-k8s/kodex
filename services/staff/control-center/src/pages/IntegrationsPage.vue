@@ -19,6 +19,7 @@ import {
 } from "@/features/integrations/connection-setup";
 import IntegrationApprovalPanel from "@/features/integrations/ui/IntegrationApprovalPanel.vue";
 import IntegrationCatalogPanel from "@/features/integrations/ui/IntegrationCatalogPanel.vue";
+import IntegrationIntegerBounds from "@/features/integrations/ui/IntegrationIntegerBounds.vue";
 import IntegrationConnectionsPanel from "@/features/integrations/ui/IntegrationConnectionsPanel.vue";
 import IntegrationGrantsPanel from "@/features/integrations/ui/IntegrationGrantsPanel.vue";
 import type { IntegrationGrantSelection } from "@/features/integrations/grant-candidates";
@@ -1208,16 +1209,8 @@ onBeforeUnmount(() => {
           <input
             v-else
             v-model="form.configuration[field.key]"
-            :type="
-              field.valueType === 'URL'
-                ? 'url'
-                : field.valueType === 'INTEGER'
-                  ? 'number'
-                  : 'text'
-            "
-            :min="field.minimum"
-            :max="field.maximum"
-            :step="field.valueType === 'INTEGER' ? 1 : undefined"
+            :type="field.valueType === 'URL' ? 'url' : 'text'"
+            :inputmode="field.valueType === 'INTEGER' ? 'numeric' : undefined"
             :required="field.required"
             :placeholder="field.placeholder"
             :maxlength="
@@ -1231,6 +1224,7 @@ onBeforeUnmount(() => {
           />
           <small>
             {{ field.help }}
+            <IntegrationIntegerBounds :field="field" />
             <template v-if="field.valueType === 'STRING_LIST'">
               Значения разделяются запятыми.
             </template>

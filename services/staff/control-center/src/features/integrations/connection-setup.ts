@@ -4,6 +4,7 @@ import type {
   IntegrationConfigurationField,
   IntegrationDefinition,
 } from "@/shared/api/generated/openapi/types.gen";
+import { integrationInteger, readIntegerBounds } from "./integer-bounds";
 
 export interface PendingCredentialSetup {
   connectionRef: string;
@@ -79,6 +80,11 @@ export function prepareConnectionConfiguration(
   const problems: PreparedConnectionConfiguration["problems"] = {};
 
   for (const field of fields) {
+    const bounds = readIntegerBounds(field);
+    if (field.valueType === "INTEGER" && !bounds.valid) {
+      problems[field.key] = "INVALID_VALUE";
+      continue;
+    }
     const prepared = fieldValue(field, values[field.key] ?? "");
     const empty = Array.isArray(prepared)
       ? prepared.length === 0
@@ -89,15 +95,10 @@ export function prepareConnectionConfiguration(
     }
     if (field.valueType === "INTEGER") {
       const number =
-        typeof prepared === "string" && /^-?\d+$/.test(prepared)
-          ? Number(prepared)
-          : NaN;
-      if (
-        !Number.isSafeInteger(number) ||
-        (field.minimum !== undefined && number < field.minimum) ||
-        (field.maximum !== undefined && number > field.maximum)
-      )
-        problems[field.key] = "INVALID_VALUE";
+        typeof prepared === "string"
+          ? integrationInteger(prepared, bounds)
+          : undefined;
+      if (number === undefined) problems[field.key] = "INVALID_VALUE";
       else value[field.key] = number;
       continue;
     }
