@@ -569,7 +569,14 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 			return nil, errors.New("public protobuf int64 shape is invalid")
 		}
 		parsed, err := strconv.ParseInt(text, 10, 64)
-		if err != nil || parsed < -maximumSafeJSONInteger || parsed > maximumSafeJSONInteger {
+		if err != nil {
+			return nil, errors.New("public protobuf int64 exceeds JSON safe range")
+		}
+		if parsed < -maximumSafeJSONInteger || parsed > maximumSafeJSONInteger {
+			// Метаданные диапазона сохраняют полный int64 без округления в браузере.
+			if field.ContainingMessage().FullName() == "controlplane.v1.IntegrationConfigurationField" && (field.Name() == "minimum" || field.Name() == "maximum") {
+				return strconv.FormatInt(parsed, 10), nil
+			}
 			return nil, errors.New("public protobuf int64 exceeds JSON safe range")
 		}
 		return float64(parsed), nil
