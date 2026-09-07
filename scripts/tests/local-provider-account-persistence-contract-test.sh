@@ -23,6 +23,9 @@ assert "expected_version" in sql and "expected_credential_ref" in sql
 assert "FOR UPDATE OF account" in sql
 assert "provider-bootstrap.py\" verify-metadata" in installer
 assert "restore_selected_provider_metadata_from_auth" not in installer
+assert 'provider-bootstrap.py" seed' in installer
+assert "runtime-provider-openai-default-r1" not in installer
+assert "preserve_selected_provider_metadata" not in installer
 assert '--auth-file "$account_auth_file" --preserve-current' in dev
 for path in ("tools/dev/deploy-local.sh", "tools/install/deploy-platform.sh"):
     source = (root / path).read_text()

@@ -142,5 +142,149 @@ class Tests(unittest.TestCase):
             self.assertEqual(operator.state["version"], 2)
 
 
+class SeedMemory(p.Operator):
+    def __init__(self, old):
+        super().__init__("synthetic")
+        self.epoch = "30000000-0000-4000-8000-000000000001"
+        self.secrets = {old["metadata"]["name"]: copy.deepcopy(old)}
+        self.configmap = None
+        self.resources = {}
+        self.status = {"owners": 0, "organizations": 0, "accounts": 0}
+        self.effects = []
+        self.unknown = False
+        self.before_metadata = None
+
+    def get(self, kind, name, namespace="kodex-runtime", absent=False):
+        if kind == "namespace":
+            return {"metadata": {"uid": self.epoch}}
+        if kind == "secret":
+            return copy.deepcopy(self.secrets.get(name))
+        if kind == "configmap":
+            return copy.deepcopy(self.configmap)
+        return self.resources.get((kind, name))
+
+    def sql(self, name, values):
+        assert name == "provider-bootstrap-owner-state.sql"
+        if self.status is None:
+            raise p.Rejected("unavailable")
+        return self.status
+
+    def call(self, argv, payload=None):
+        obj = json.loads(payload)
+        name = obj["metadata"]["name"]
+        self.effects.append((argv[0], obj["kind"]))
+        if obj["kind"] == "Secret":
+            assert argv[0] == "create" and name not in self.secrets
+            obj["metadata"].update(uid="40000000-0000-4000-8000-000000000001", resourceVersion="12")
+            self.secrets[name] = obj
+            if self.before_metadata:
+                self.before_metadata()
+            if self.unknown:
+                raise p.Rejected("unknown")
+        else:
+            if argv[0] == "replace":
+                assert obj["metadata"]["resourceVersion"] == self.configmap["metadata"]["resourceVersion"]
+            obj["metadata"]["resourceVersion"] = "13"
+            self.configmap = obj
+        return b""
+
+    def reconcile(self, key, *args):
+        assert key == KEY and not args
+        self.effects.append(("recover", "CURRENT"))
+
+
+class SeedTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.input = Path(self.directory.name) / "auth.json"
+        self.raw = RAW.replace(b"material", b"fresh-material")
+        self.input.write_bytes(self.raw)
+        self.input.chmod(0o600)
+        self.old = Tests().legacy()
+
+    def test_fresh_seed_ignores_old_r1_and_partial_metadata(self):
+        for partial in (False, True):
+            with self.subTest(partial=partial):
+                operator = SeedMemory(self.old)
+                if partial:
+                    operator.configmap = {"metadata": {"resourceVersion": "10"}, "data": p.descriptor(self.old)}
+                operator.seed(str(self.input))
+                self.assertEqual(operator.secrets[self.old["metadata"]["name"]], self.old)
+                pins = operator.configmap["data"]
+                selected = operator.secrets[pins["secretName"]]
+                self.assertEqual(base64.b64decode(selected["data"]["auth.json"]), self.raw)
+                self.assertEqual(pins["contentSHA256"], p.digest(self.raw))
+                self.assertNotEqual(pins["secretName"], self.old["metadata"]["name"])
+                operator.effects.clear()
+                operator.seed(str(self.input))
+                self.assertEqual(operator.effects, [])
+
+    def test_changed_input_creates_new_name_without_rewrite(self):
+        operator = SeedMemory(self.old)
+        operator.seed(str(self.input))
+        first = copy.deepcopy(operator.secrets)
+        self.input.write_bytes(RAW.replace(b"material", b"second-material"))
+        operator.seed(str(self.input))
+        for name, secret in first.items():
+            self.assertEqual(operator.secrets[name], secret)
+        self.assertEqual(len(operator.secrets), 3)
+
+    def test_current_owner_wins_without_reading_stale_file(self):
+        operator = SeedMemory(self.old)
+        operator.resources[("deployment", "control-plane")] = {"metadata": {}}
+        operator.status = {"owners": 1, "organizations": 1, "accounts": 2}
+        operator.seed("/nonexistent-old-input")
+        self.assertEqual(operator.effects, [("recover", "CURRENT")])
+
+    def test_unreadable_pvc_or_started_cp_never_becomes_fresh(self):
+        for pod, status in ((False, None), (True, {"owners": 0, "organizations": 0, "accounts": 0}),
+                            (False, {"owners": 0, "organizations": 1, "accounts": 0})):
+            operator = SeedMemory(self.old)
+            operator.resources[("pvc", "data-kodex-postgresql-0")] = {"metadata": {}}
+            if pod:
+                operator.resources[("deployment", "control-plane")] = {"metadata": {}}
+            operator.status = status
+            with self.assertRaises(p.Rejected):
+                operator.seed(str(self.input))
+            self.assertEqual(operator.effects, [])
+
+    def test_namespace_or_owner_change_stops_before_metadata(self):
+        for change in ("epoch", "owner"):
+            operator = SeedMemory(self.old)
+            def drift():
+                if change == "epoch":
+                    operator.epoch = "50000000-0000-4000-8000-000000000001"
+                else:
+                    operator.resources[("deployment", "control-plane")] = {"metadata": {}}
+                    operator.status = {"owners": 1, "organizations": 1, "accounts": 1}
+            operator.before_metadata = drift
+            with self.assertRaises(p.Rejected):
+                operator.seed(str(self.input))
+            self.assertIsNone(operator.configmap)
+            self.assertEqual(operator.secrets[self.old["metadata"]["name"]], self.old)
+
+    def test_unknown_create_is_not_retried(self):
+        operator = SeedMemory(self.old)
+        operator.unknown = True
+        with self.assertRaises(p.Rejected):
+            operator.seed(str(self.input))
+        self.assertEqual(operator.effects, [("create", "Secret")])
+        self.assertIsNone(operator.configmap)
+        operator.unknown = False
+        operator.seed(str(self.input))
+        self.assertEqual(operator.effects.count(("create", "Secret")), 1)
+
+    def test_occupied_new_name_with_wrong_epoch_rejected(self):
+        operator = SeedMemory(self.old)
+        forged = p.seed_manifest(operator.epoch, self.raw)
+        forged["metadata"].update(uid="40000000-0000-4000-8000-000000000001", resourceVersion="12")
+        forged["metadata"]["annotations"][p.SEED_EPOCH] = "50000000-0000-4000-8000-000000000001"
+        operator.secrets[forged["metadata"]["name"]] = forged
+        with self.assertRaises(p.Rejected):
+            operator.seed(str(self.input))
+        self.assertEqual(operator.effects, [])
+
+
 if __name__ == "__main__":
     unittest.main()
