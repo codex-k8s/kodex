@@ -841,23 +841,7 @@ func resetWorkspaceDirectory(ctx context.Context, root, relative string) error {
 
 func protectReadOnlyWorkspaceTrees(root string, relatives ...string) error {
 	for _, relative := range relatives {
-		tree := filepath.Join(root, relative)
-		if filepath.Clean(tree) != tree || !strings.HasPrefix(tree, root+string(os.PathSeparator)) {
-			return errors.New("workspace input tree is invalid")
-		}
-		if err := filepath.WalkDir(tree, func(path string, entry os.DirEntry, walkErr error) error {
-			if walkErr != nil || entry.Type()&os.ModeSymlink != 0 || !strings.HasPrefix(filepath.Clean(path), tree) {
-				return errors.New("workspace input tree is unsafe")
-			}
-			mode := os.FileMode(0o440)
-			if entry.IsDir() {
-				mode = 0o750 | os.ModeSetgid
-			}
-			if err := os.Chmod(path, mode); err != nil {
-				return errors.New("protect workspace input tree")
-			}
-			return nil
-		}); err != nil {
+		if err := security.ProtectWorkspaceInputTree(root, relative); err != nil {
 			return err
 		}
 	}
