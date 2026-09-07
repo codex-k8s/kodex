@@ -62,6 +62,7 @@ kube -n kodex-secret-drafts get configmap secret-broker-draft-key-guard --ignore
 kube -n kodex-system get secret secret-broker-draft-keyring --ignore-not-found -o json >"$temporary_directory/current.json" 2>/dev/null || fail 'keyring projection read failed'
 if [[ ! -s "$temporary_directory/guard.json" ]]; then
   [[ "$mode" == ensure && ! -s "$temporary_directory/current.json" && "$candidate_revision" == 1 ]] || fail 'missing durable key guard cannot be reinitialized'
+  recovery validate-genesis || fail 'retained objects forbid key guard genesis'
   jq -n '{apiVersion:"v1",kind:"ConfigMap",metadata:{name:"secret-broker-draft-key-guard",namespace:"kodex-secret-drafts",labels:{
     "app.kubernetes.io/managed-by":"kodex-secret-broker-bootstrap","kodex.dev/purpose":"secret-draft-key-guard"}},
     data:{"state.json":"{\"v\":1,\"manifest\":null,\"uses\":[]}"}}' >"$temporary_directory/genesis.json"

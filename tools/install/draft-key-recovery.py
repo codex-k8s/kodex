@@ -182,7 +182,7 @@ class Operator:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("preserve", "export", "backup", "validate-restore"))
+    parser.add_argument("mode", choices=("preserve", "export", "backup", "validate-restore", "validate-genesis"))
     parser.add_argument("--context", required=True)
     parser.add_argument("--kubeconfig-file")
     parser.add_argument("--keyring-file")
@@ -191,6 +191,10 @@ def main():
     operator = Operator(args.context, args.kubeconfig_file)
     if args.mode == "preserve":
         operator.preserve()
+    elif args.mode == "validate-genesis":
+        snapshot = operator.snapshot()
+        require(snapshot[0] and snapshot[1] is None and operator.serving() is None)
+        operator.same(snapshot)
     elif args.mode == "export":
         print(operator.export(args.output_directory))
     else:

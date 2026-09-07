@@ -78,6 +78,8 @@ projection files остаются в owner-private installation directory.
 Genesis guard создаётся только при отсутствии и keyring, и guard. Существующий
 guard никогда не сбрасывается. Удалённый guard при сохранённом keyring требует
 восстановления точного защищённого backup, а не повторной инициализации.
+Если guard и serving projection отсутствуют одновременно, genesis также
+запрещён при любом Secret в retained namespace, включая backup и ciphertext.
 
 ## Сохранение и exact recovery после refresh (#1156)
 
