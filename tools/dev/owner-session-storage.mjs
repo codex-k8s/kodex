@@ -21,12 +21,15 @@ export const maximumProxyAge = 8 * 60 * 60;
 
 // Имена OAuth2 CSRF относятся только к login, а не к authenticated API transport.
 export function isProxySessionCookie(name) {
-  return (
-    typeof name === "string" &&
-    (name === proxyCookieName ||
-      (name.startsWith(`${proxyCookieName}_`) &&
-        name !== `${proxyCookieName}_csrf` &&
-        !name.startsWith(`${proxyCookieName}_csrf_`)))
+  if (typeof name !== "string") return false;
+  if (name === proxyCookieName) return true;
+  if (!name.startsWith(`${proxyCookieName}_`)) return false;
+  const suffix = name.slice(proxyCookieName.length + 1);
+  return !(
+    suffix === "csrf" ||
+    suffix.startsWith("csrf_") ||
+    suffix.endsWith("_csrf") ||
+    suffix.includes("_csrf_")
   );
 }
 
