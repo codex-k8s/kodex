@@ -1081,6 +1081,7 @@ watch(
           configuration.copyProvenance.sourceVersion
         }}
       </dd>
+      <dt>SHA-256</dt>
       <dd>{{ configuration.copyProvenance.sourceDigest }}</dd>
     </dl>
     <ConfigurationCopyDialog
@@ -1609,6 +1610,13 @@ watch(
   max-width: 100%;
 }
 @media (max-width: 600px) {
+  .configuration-editor__source {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .configuration-editor__source dd {
+    margin-bottom: 8px;
+  }
   .configuration-editor__fields {
     grid-template-columns: minmax(0, 1fr);
   }
