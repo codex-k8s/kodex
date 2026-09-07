@@ -176,6 +176,15 @@ delivery ID, canonical payload digest и фактический post/interaction
 
 ## Свежая `RuntimeRevision`
 
+Версия immutable исполняемой спецификации не совпадает с OCC-версией её
+наблюдаемого lifecycle. Heartbeat, provisioning и health report могут менять
+последнюю, сохраняя identity/digest desired specification. Владелец связывает
+полный набор исполняемых зависимостей отдельным fingerprint и монотонной spec
+version; изменение и последующий возврат зависимости создают новые refs,
+чтобы прежний report не авторизовал новую attempt. Проверка полного runtime
+digest у consumer сохраняется; исключать из неё version ради обхода churn
+запрещено. Adoption текущего состояния не переписывает исторические snapshots.
+
 Перед каждым новым turn, occurrence attempt и продолжением сервер заново
 разрешает итоговую конфигурацию из точного набора активных grants и
 авторитетных версий. Запрос не выбирает существующую revision как источник

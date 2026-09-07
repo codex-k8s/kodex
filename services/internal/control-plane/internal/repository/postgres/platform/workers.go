@@ -242,6 +242,11 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		return entity.SystemAssistant{}, nil, false, err
 	}
 	snapshot["contextSnapshot"] = contextSnapshot
+	specificationChanged, err := repository.bindWarmSpecification(ctx, tx, scope, &assistant, snapshot)
+	if err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
+	required = required || specificationChanged
 	revisionDigest, err := runtimeRevisionDigestFromSnapshot(snapshot)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
