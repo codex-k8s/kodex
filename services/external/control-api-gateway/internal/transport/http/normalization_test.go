@@ -612,7 +612,8 @@ func TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog(t *testing.
 	writer := &localizingRecorder{ResponseRecorder: httptest.NewRecorder()}
 	writeMessage(writer, http.StatusOK, &controlplanev1.ListIntegrationDefinitionsResponse{
 		Definitions: []*controlplanev1.IntegrationDefinition{{
-			Key: "example", Name: "i18n:INTEGRATION_EXAMPLE_NAME", Available: true,
+			Version: 3,
+			Key:     "example", Name: "i18n:INTEGRATION_EXAMPLE_NAME", Available: true,
 		}},
 		NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_CREATE_CONNECTION},
 		CoreReady:   true,

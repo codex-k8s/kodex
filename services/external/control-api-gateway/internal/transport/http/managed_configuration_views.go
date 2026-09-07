@@ -176,13 +176,36 @@ func managedConfigurationMetadataView(value *controlplanev1.ManagedConfiguration
 		return generated.ManagedConfiguration{}, errManagedConfigurationShape
 	}
 	result := generated.ManagedConfiguration{
+		NextActions:    make([]generated.ManagedConfigurationNextActions, 0, len(value.GetNextActions())),
+		Archived:       value.GetArchived(),
 		SourceEditable: value.SourceEditable,
 		Ref:            value.GetRef(), Version: value.GetVersion(), Name: value.GetName(), ProjectRef: optionalManagedString(value.GetProjectRef()),
 		Kind:      generated.ManagedConfigurationKind(strings.TrimPrefix(value.GetKind().String(), "MANAGED_CONFIGURATION_KIND_")),
 		ManagedBy: generated.ManagedConfigurationManagedBy(strings.TrimPrefix(value.GetManagedBy().String(), "MANAGED_CONFIGURATION_OWNER_")),
 		Source:    value.GetSource(), SourceRevision: value.GetSourceRevision(), UpdatedAt: value.GetUpdatedAt().AsTime(),
 	}
+	seenActions := make(map[string]bool)
+	for _, action := range value.GetNextActions() {
+		if (action != "COPY" && action != "ARCHIVE") || seenActions[action] {
+			return generated.ManagedConfiguration{}, errManagedConfigurationShape
+		}
+		seenActions[action] = true
+		result.NextActions = append(result.NextActions, generated.ManagedConfigurationNextActions(action))
+	}
 	var err error
+	if provenance := value.GetCopyProvenance(); provenance != nil {
+		origin := strings.TrimPrefix(provenance.GetOrigin().String(), "MANAGED_CONFIGURATION_COPY_ORIGIN_")
+		if (origin != "SHIPPED" && origin != "UI" && origin != "GIT") ||
+			strings.TrimSpace(provenance.GetSourceRef()) == "" || len(provenance.GetSourceRef()) > 2000 ||
+			strings.TrimSpace(provenance.GetSourceRevision()) == "" || len(provenance.GetSourceRevision()) > 2000 ||
+			!validManagedVersion(provenance.GetSourceVersion()) || !validManagedDigest(provenance.GetSourceDigest()) {
+			return generated.ManagedConfiguration{}, errManagedConfigurationShape
+		}
+		result.CopyProvenance = &generated.ManagedConfigurationCopyProvenance{
+			Origin: generated.ManagedConfigurationCopyProvenanceOrigin(origin), SourceRef: provenance.GetSourceRef(),
+			SourceRevision: provenance.GetSourceRevision(), SourceVersion: provenance.GetSourceVersion(), SourceDigest: provenance.GetSourceDigest(),
+		}
+	}
 	result.GitSource, err = managedGitSourceView(value)
 	if err != nil {
 		return generated.ManagedConfiguration{}, err

@@ -26,10 +26,32 @@ assert.equal(definitions.ManagedConfigurationRebindInput.properties.consumers.it
 assert.deepEqual(definitions.ManagedConfigurationConsumer.required, ["kind", "ref", "revisionRef", "version"]);
 assert.equal("expectedAbsent" in definitions.ManagedConfigurationConsumer.properties, false);
 
+// CFG copy сохраняет закрытый выбор источника, OCC и server-owned provenance.
+const copyNames = ["OpaqueRef", "RoleImageConfigurationCopyInput", "RoleImageRecipeCopyInput", "RoleImageManagedCopyInput", "IntegrationDefinitionConfigurationCopyInput", "IntegrationDefinitionShippedCopyInput", "ManagedConfigurationSourceCopyInput", "ShippedIntegrationDefinitionCopySource"];
+for (const [name, variants] of [
+  ["RoleImageConfigurationCopyInput", [{name:"Копия", projectRef:"prj_fixture01", recipeRef:"recipe_fixture01"}, {name:"Копия", projectRef:"prj_fixture01", configurationRef:"mcfg_fixture01"}]],
+  ["IntegrationDefinitionConfigurationCopyInput", [{name:"Копия", shipped:{key:"github", definitionVersion:"1.0.0", digest:"a".repeat(64)}}, {name:"Копия", configurationRef:"mcfg_fixture01"}]],
+]) {
+  const source = JSON.parse(JSON.stringify({$ref:`#/components/schemas/${name}`, $defs:Object.fromEntries(copyNames.map(key => [key, definitions[key]]))}).replaceAll("#/components/schemas/", "#/$defs/"));
+  const check = new Ajv({strict:true, validateFormats:false}).compile(source);
+  for (const variant of variants) assert.equal(check(variant), true);
+  for (const invalid of [{}, {...variants[0], ...variants[1]}, {...variants[0], actorRef:"usr_fixture01"}, {...variants[1], configurationRef:null}, {...variants[0], copyProvenance:{origin:"UI"}}]) assert.equal(check(invalid), false);
+}
+for (const [path, operation] of [
+  ["/api/v1/role-image-configurations/copies", "copyRoleImageConfiguration"],
+  ["/api/v1/integration-definition-configurations/copies", "copyIntegrationDefinitionConfiguration"],
+  ["/api/v1/role-image-configurations/{configurationRef}/archive", "archiveRoleImageConfiguration"],
+  ["/api/v1/integration-definition-configurations/{configurationRef}/archive", "archiveIntegrationDefinitionConfiguration"],
+]) {
+  const value = document.paths[path].post;
+  assert.equal(value.operationId, operation);
+  for (const header of ["IfMatch", "IdempotencyKey", "CsrfToken"]) assert.ok(value.parameters.some(p => p.$ref?.endsWith(`/${header}`)), header);
+}
+
 const directory = mkdtempSync(join(tmpdir(), "kodex-consumer-types-"));
 try {
   const source = join(directory, "contract.ts");
-  const types = join(root, "services/staff/control-center/src/shared/api/generated/openapi/types.gen");
+const types = join(root, "services/staff/control-center/src/shared/api/generated/openapi/types.gen");
   writeFileSync(source, `import type { ManagedConfigurationConsumerInput as Input, ManagedConfigurationConsumer as Read } from ${JSON.stringify(types)};
 const absent: Input = {kind:"STT_SERVICE", ref:"stt-tts-service", expectedAbsent:true};
 const match: Input = {kind:"STT_SERVICE", ref:"stt-tts-service", revisionRef:"mrev_previous", version:7};
@@ -43,6 +65,17 @@ const incomplete: Input = {kind:"STT_SERVICE", ref:"stt-tts-service", expectedAb
 // @ts-expect-error read DTO не содержит write expectation
 const read: Read = {kind:"STT_SERVICE", ref:"stt-tts-service", revisionRef:"mrev_previous", version:7, expectedAbsent:false};
 void [absent, match, explicit, missing, contradictory, incomplete, read];
+import type { RoleImageConfigurationCopyInput as RoleCopy, IntegrationDefinitionConfigurationCopyInput as IntegrationCopy, ManagedConfigurationCopyProvenance as Provenance } from ${JSON.stringify(types)};
+const recipe: RoleCopy = {name:"Копия", projectRef:"prj_fixture01", recipeRef:"recipe_fixture01"};
+const managed: RoleCopy = {name:"Копия", projectRef:"prj_fixture01", configurationRef:"mcfg_fixture01"};
+const shipped: IntegrationCopy = {name:"Копия", shipped:{key:"github", definitionVersion:"1.0.0", digest:"a".repeat(64)}};
+// @ts-expect-error источник обязателен
+const noSource: RoleCopy = {name:"Копия", projectRef:"prj_fixture01"};
+// @ts-expect-error immutable pins обязательны
+const noDigest: IntegrationCopy = {name:"Копия", shipped:{key:"github", definitionVersion:"1.0.0"}};
+// @ts-expect-error origin закрыт
+const badOrigin: Provenance = {origin:"OWNER",sourceRef:"x",sourceRevision:"1",sourceVersion:1,sourceDigest:"a".repeat(64)};
+void [recipe, managed, shipped, noSource, noDigest, badOrigin];
 `);
   execFileSync(process.execPath, [require.resolve("typescript/bin/tsc"), "--noEmit", "--strict", "--skipLibCheck", "--moduleResolution", "bundler", "--module", "esnext", "--target", "es2022", source], { timeout: 30000, stdio: "pipe" });
 } finally {

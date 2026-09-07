@@ -4296,6 +4296,56 @@ paths:
           description: Создана отдельная UI-конфигурация
           content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/copies:
+    post:
+      tags: [Administration]
+      operationId: copyRoleImageConfiguration
+      description: Owner проверяет source-read и project authority до OCC. If-Match связывает версию recipe либо исходной конфигурации; provenance назначает сервер.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RoleImageConfigurationCopyInput' } } }
+      responses:
+        '201':
+          description: Отдельная UI-конфигурация и immutable исходная revision
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/copies:
+    post:
+      tags: [Administration]
+      operationId: copyIntegrationDefinitionConfiguration
+      description: If-Match связывает authoritative version каталожного SHIPPED определения либо managed конфигурации; source pins и provenance проверяет владелец.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationDefinitionConfigurationCopyInput' } } }
+      responses:
+        '201':
+          description: Отдельная UI-конфигурация и immutable исходная revision
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/role-image-configurations/{configurationRef}/archive:
+    post:
+      tags: [Administration]
+      operationId: archiveRoleImageConfiguration
+      description: Архивирование UI-конфигурации без отзыва законных pinned consumers. Активный build либо GIT-managed source закрыто отклоняется владельцем.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная архивная конфигурация
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDetachment' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/{configurationRef}/archive:
+    post:
+      tags: [Administration]
+      operationId: archiveIntegrationDefinitionConfiguration
+      description: Архивирование UI-конфигурации с сохранением существующих pins. GIT-managed source отклоняется владельцем.
+      parameters: [{ $ref: '#/components/parameters/ConfigurationRef' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }, { $ref: '#/components/parameters/IfMatch' }]
+      responses:
+        '200':
+          description: Авторитетная архивная конфигурация
+          content: { application/json: { schema: { $ref: '#/components/schemas/ManagedConfigurationDetachment' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/skill-bundles:
     get:
       tags: [Agents]
@@ -5355,7 +5405,7 @@ components:
         evaluatedAt: { $ref: '#/components/schemas/Timestamp' }
     NextAction:
       type: string
-      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, REFRESH_AUTHORIZATION, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS, CREATE_PROJECT, CREATE_CONNECTION, CREATE_CONVERSATION, COMPLETE_ONBOARDING, CONFIGURE_CREDENTIAL, ROTATE, REVEAL, PROMOTE, DELETE, PURGE]
+      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, REFRESH_AUTHORIZATION, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS, CREATE_PROJECT, CREATE_CONNECTION, CREATE_CONVERSATION, COMPLETE_ONBOARDING, CONFIGURE_CREDENTIAL, ROTATE, REVEAL, PROMOTE, DELETE, PURGE, COPY]
     Problem:
       type: object
       additionalProperties: false
@@ -5801,11 +5851,70 @@ components:
         acceptedRevisionRef: { $ref: '#/components/schemas/OpaqueRef' }
         syncedAt: { $ref: '#/components/schemas/Timestamp' }
         failureCode: { type: string, enum: [UNAVAILABLE, CREDENTIAL_REJECTED, ACCESS_DENIED, NOT_FOUND, DIVERGED, CONTENT_INVALID, RESPONSE_INVALID] }
+    ManagedConfigurationCopyProvenance:
+      type: object
+      additionalProperties: false
+      required: [origin, sourceRef, sourceRevision, sourceVersion, sourceDigest]
+      properties:
+        origin: { type: string, enum: [SHIPPED, UI, GIT] }
+        sourceRef: { type: string, minLength: 1, maxLength: 2000 }
+        sourceRevision: { type: string, minLength: 1, maxLength: 2000 }
+        sourceVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        sourceDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+    RoleImageConfigurationCopyInput:
+      oneOf:
+        - $ref: '#/components/schemas/RoleImageRecipeCopyInput'
+        - $ref: '#/components/schemas/RoleImageManagedCopyInput'
+    RoleImageRecipeCopyInput:
+      type: object
+      additionalProperties: false
+      required: [projectRef, name, recipeRef]
+      properties:
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        recipeRef: { $ref: '#/components/schemas/OpaqueRef' }
+    RoleImageManagedCopyInput:
+      type: object
+      additionalProperties: false
+      required: [projectRef, name, configurationRef]
+      properties:
+        projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+    IntegrationDefinitionConfigurationCopyInput:
+      oneOf:
+        - $ref: '#/components/schemas/IntegrationDefinitionShippedCopyInput'
+        - $ref: '#/components/schemas/ManagedConfigurationSourceCopyInput'
+    IntegrationDefinitionShippedCopyInput:
+      type: object
+      additionalProperties: false
+      required: [name, shipped]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        shipped: { $ref: '#/components/schemas/ShippedIntegrationDefinitionCopySource' }
+    ManagedConfigurationSourceCopyInput:
+      type: object
+      additionalProperties: false
+      required: [name, configurationRef]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
+    ShippedIntegrationDefinitionCopySource:
+      type: object
+      additionalProperties: false
+      required: [key, definitionVersion, digest]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 100 }
+        definitionVersion: { type: string, pattern: '^[1-9][0-9]*\.[0-9]+\.[0-9]+$', maxLength: 32 }
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
     ManagedConfiguration:
       type: object
       additionalProperties: false
-      required: [ref, version, kind, name, managedBy, source, sourceRevision, updatedAt]
+      required: [ref, version, kind, name, managedBy, source, sourceRevision, updatedAt, archived, nextActions]
       properties:
+        nextActions: { type: array, uniqueItems: true, items: { type: string, enum: [COPY, ARCHIVE] } }
+        archived: { type: boolean }
+        copyProvenance: { $ref: '#/components/schemas/ManagedConfigurationCopyProvenance' }
         sourceEditable:
           type: boolean
           description: Обязателен для ROLE_IMAGE; дополнительный допуск владельца к изменению исходников, без замены полномочий команды и OCC. Для остальных видов отсутствует.
@@ -5823,8 +5932,11 @@ components:
     ManagedConfigurationSummary:
       type: object
       additionalProperties: false
-      required: [ref, version, kind, name, managedBy, source, sourceRevision, updatedAt]
+      required: [ref, version, kind, name, managedBy, source, sourceRevision, updatedAt, archived, nextActions]
       properties:
+        nextActions: { type: array, uniqueItems: true, items: { type: string, enum: [COPY, ARCHIVE] } }
+        archived: { type: boolean }
+        copyProvenance: { $ref: '#/components/schemas/ManagedConfigurationCopyProvenance' }
         sourceEditable:
           type: boolean
           description: Обязателен для ROLE_IMAGE; дополнительный допуск к изменению исходников. Для остальных видов отсутствует.
@@ -8979,8 +9091,10 @@ components:
     IntegrationDefinition:
       type: object
       additionalProperties: false
-      required: [key, name, description, category, builtIn, available, capabilities, configurationFields, schemaVersion, definitionVersion, origin, digest, adapter, adapterOwner, executionRoute, adapterReadiness]
+      required: [key, name, description, category, builtIn, available, capabilities, configurationFields, schemaVersion, definitionVersion, origin, digest, adapter, adapterOwner, executionRoute, adapterReadiness, version, nextActions]
       properties:
+        nextActions: { type: array, uniqueItems: true, items: { type: string, enum: [COPY] } }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Авторитетная версия каталога для If-Match при SHIPPED copy. }
         key: { type: string, maxLength: 100 }
         name: { type: string, maxLength: 160 }
         description: { type: string, maxLength: 500 }
