@@ -38,6 +38,15 @@ reconciler; STT response не содержит provider JSON и ограниче
 
 ## Локальная проверка
 
+Catalog observation и device authorization используют общий процессный adapter.
+Родитель владеет всеми stdio pipes: завершение `Cmd.Wait` не закрывает read ends
+до завершения readers. Cleanup явно ожидает stdout и stderr; отдельный ограниченный
+drain budget закрывает случай потомка, удерживающего дескриптор после выхода лидера.
+Ошибки чтения, превышение diagnostic budget, ненулевой exit и принудительное
+завершение остаются ошибками cleanup. Диагностическое содержимое не сохраняется.
+Регрессии `TestAppServer*` и `TestCatalogDiagnosticProcessStagesAndCleanup`
+входят в обычный package test; внешние Codex/provider и live credentials не нужны.
+
 ```bash
 make test-secret-broker-drafts
 ```

@@ -142,16 +142,19 @@ type streamEvent struct {
 }
 
 type appServer struct {
-	command     *exec.Cmd
-	stdin       io.WriteCloser
-	messages    <-chan streamEvent
-	wait        <-chan error
-	diagnostics <-chan error
-	nextID      int64
-	closeOnce   sync.Once
-	closeErr    error
-	readerStop  chan struct{}
-	readerDone  chan struct{}
+	command         *exec.Cmd
+	stdin           io.WriteCloser
+	messages        <-chan streamEvent
+	wait            <-chan error
+	diagnostics     <-chan error
+	nextID          int64
+	closeOnce       sync.Once
+	closeErr        error
+	readerStop      chan struct{}
+	readerDone      chan struct{}
+	stdout          io.ReadCloser
+	stderr          io.ReadCloser
+	shutdownTimeout time.Duration
 }
 
 func startAppServer(binary, home string) (*appServer, error) {
@@ -161,19 +164,40 @@ func startAppServer(binary, home string) (*appServer, error) {
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + home, "CODEX_HOME=" + home}
 	command.Env = append(command.Env, "HTTP_PROXY="+providerEgressProxyURL, "HTTPS_PROXY="+providerEgressProxyURL)
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
-	stdin, err := command.StdinPipe()
+	return startAppServerCommand(command)
+}
+
+func startAppServerCommand(command *exec.Cmd) (*appServer, error) {
+	return startAppServerWithDiagnosticReader(command, readAppServerDiagnostics)
+}
+
+func startAppServerWithDiagnosticReader(command *exec.Cmd, readDiagnostics func(io.Reader) error) (*appServer, error) {
+	stdinChild, stdin, err := os.Pipe()
 	if err != nil {
 		return nil, errors.New("create Codex app-server request stream")
 	}
-	stdout, err := command.StdoutPipe()
+	defer stdinChild.Close()
+	command.Stdin = stdinChild
+	stdout, stdoutChild, err := os.Pipe()
 	if err != nil {
+		_ = stdin.Close()
 		return nil, errors.New("create Codex app-server response stream")
 	}
-	stderr, err := command.StderrPipe()
+	stderr, stderrChild, err := os.Pipe()
 	if err != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stdoutChild.Close()
 		return nil, errors.New("create Codex app-server diagnostic stream")
 	}
+	// Родитель владеет read ends: Cmd.Wait не должен закрывать их под readers.
+	command.Stdout, command.Stderr = stdoutChild, stderrChild
+	defer stdoutChild.Close()
+	defer stderrChild.Close()
 	if err := command.Start(); err != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
 		return nil, errors.New("start Codex app-server process")
 	}
 	messages := make(chan streamEvent, 64)
@@ -181,16 +205,19 @@ func startAppServer(binary, home string) (*appServer, error) {
 	go readAppServerMessages(stdout, messages, readerStop, readerDone)
 	diagnostics := make(chan error, 1)
 	go func() {
-		written, copyErr := io.Copy(io.Discard, io.LimitReader(stderr, maximumAppServerLineBytes+1))
-		if copyErr != nil || written > maximumAppServerLineBytes {
-			diagnostics <- errors.New("Codex app-server diagnostic stream exceeded its bound")
-			return
-		}
-		diagnostics <- nil
+		diagnostics <- readDiagnostics(stderr)
 	}()
 	wait := make(chan error, 1)
 	go func() { wait <- command.Wait() }()
-	return &appServer{command: command, stdin: stdin, messages: messages, wait: wait, diagnostics: diagnostics, readerStop: readerStop, readerDone: readerDone}, nil
+	return &appServer{command: command, stdin: stdin, messages: messages, wait: wait, diagnostics: diagnostics, readerStop: readerStop, readerDone: readerDone, stdout: stdout, stderr: stderr, shutdownTimeout: processShutdownTimeout}, nil
+}
+
+func readAppServerDiagnostics(reader io.Reader) error {
+	written, err := io.Copy(io.Discard, io.LimitReader(reader, maximumAppServerLineBytes+1))
+	if err != nil || written > maximumAppServerLineBytes {
+		return errors.New("Codex app-server diagnostic stream exceeded its bound")
+	}
+	return nil
 }
 
 func readAppServerMessages(reader io.Reader, events chan<- streamEvent, stop <-chan struct{}, done chan<- struct{}) {
@@ -286,7 +313,7 @@ func (server *appServer) terminate() error {
 	server.closeOnce.Do(func() {
 		close(server.readerStop)
 		_ = server.stdin.Close()
-		timer := time.NewTimer(processShutdownTimeout)
+		timer := time.NewTimer(server.shutdownTimeout)
 		defer timer.Stop()
 		select {
 		case err := <-server.wait:
@@ -297,7 +324,7 @@ func (server *appServer) terminate() error {
 			if server.command.Process != nil {
 				_ = syscall.Kill(-server.command.Process.Pid, syscall.SIGTERM)
 			}
-			force := time.NewTimer(processShutdownTimeout)
+			force := time.NewTimer(server.shutdownTimeout)
 			select {
 			case <-server.wait:
 				server.closeErr = errors.New("Codex app-server required forced shutdown")
@@ -310,12 +337,26 @@ func (server *appServer) terminate() error {
 			}
 			force.Stop()
 		}
-		<-server.readerDone
-		select {
-		case diagnosticErr := <-server.diagnostics:
-			server.closeErr = errors.Join(server.closeErr, diagnosticErr)
-		default:
+		// Потомок может удерживать pipe после выхода лидера. Drain имеет отдельный budget.
+		drain := time.NewTimer(server.shutdownTimeout)
+		defer drain.Stop()
+		readerDone, diagnostics := server.readerDone, server.diagnostics
+		for readerDone != nil || diagnostics != nil {
+			select {
+			case <-readerDone:
+				readerDone = nil
+			case diagnosticErr := <-diagnostics:
+				server.closeErr = errors.Join(server.closeErr, diagnosticErr)
+				diagnostics = nil
+			case <-drain.C:
+				_ = syscall.Kill(-server.command.Process.Pid, syscall.SIGKILL)
+				_ = server.stdout.Close()
+				_ = server.stderr.Close()
+				server.closeErr = errors.Join(server.closeErr, errors.New("Codex app-server stream shutdown deadline exceeded"))
+			}
 		}
+		_ = server.stdout.Close()
+		_ = server.stderr.Close()
 	})
 	return server.closeErr
 }
