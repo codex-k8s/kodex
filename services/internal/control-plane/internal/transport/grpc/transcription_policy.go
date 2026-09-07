@@ -47,7 +47,8 @@ func (server *Server) ResolveTranscriptionPolicy(ctx context.Context, request *s
 func transcriptionLocatorMatches(locator *sttv1.DelegatedAuthorityLocator, verified *authorityv1.VerifiedAuthorizationContext) bool {
 	if locator == nil || verified == nil || uuid.Validate(locator.GetRequestId()) != nil || locator.GetCorrelationId() == "" || len(locator.GetCorrelationId()) > 128 ||
 		locator.GetExpiresAt() == nil || locator.GetExpiresAt().CheckValid() != nil || verified.GetExpiresAt() == nil ||
-		!locator.GetExpiresAt().AsTime().After(time.Now()) || !proto.Equal(locator.GetExpiresAt(), verified.GetExpiresAt()) {
+		verified.GetExpiresAt().CheckValid() != nil || !verified.GetExpiresAt().AsTime().After(time.Now()) ||
+		verified.GetExpiresAt().AsTime().After(locator.GetExpiresAt().AsTime()) {
 		return false
 	}
 	authority := verified.GetAuthority()
