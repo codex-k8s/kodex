@@ -36,6 +36,7 @@ var (
 
 // ModelCatalog содержит только безопасные возможности, без provider payload.
 type ModelCatalog struct {
+	stage      catalogStage
 	ObservedAt time.Time
 	Source     ModelCatalogSource
 	Models     []CatalogModel
@@ -94,5 +95,7 @@ func catalogFailure(ctx context.Context, err error) (ModelCatalog, error) {
 	} else if errors.Is(err, errModelCatalogAuthorization) {
 		failure = CatalogFailureAuthorization
 	}
-	return ModelCatalog{ObservedAt: time.Now().UTC(), Failure: failure}, nil
+	var diagnostic catalogDiagnosticError
+	_ = errors.As(err, &diagnostic)
+	return ModelCatalog{ObservedAt: time.Now().UTC(), Failure: failure, stage: diagnostic.stage}, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"time"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -17,6 +18,24 @@ import (
 )
 
 const providerCatalogOperation = "platform.provider-accounts.model-catalog.observe"
+
+const providerCatalogDiagnosticMessage = "provider model catalog observation rejected"
+
+func WithCatalogLogger(logger *slog.Logger) Option {
+	return func(server *Server) { server.catalogLogger = logger }
+}
+
+func (server *Server) logCatalogFailure(ctx context.Context, result providercredential.ModelCatalog) {
+	if server.catalogLogger == nil {
+		return
+	}
+	switch result.Failure {
+	case providercredential.CatalogFailureUnverified, providercredential.CatalogFailureUnavailable,
+		providercredential.CatalogFailureAuthorization:
+		server.catalogLogger.WarnContext(ctx, providerCatalogDiagnosticMessage,
+			"stage", result.DiagnosticStage(), "failure", string(result.Failure))
+	}
+}
 
 func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *cp.ObserveProviderModelCatalogRequest) (*cp.ObserveProviderModelCatalogResponse, error) {
 	_, verified, err := verifiedProjectionAuthority(ctx, "control-plane", "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
@@ -87,6 +106,7 @@ func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *
 	if proto.Size(response) > 128<<10 {
 		return nil, status.Error(codes.Unavailable, "provider catalog response exceeded its bound")
 	}
+	server.logCatalogFailure(ctx, result)
 	return response, nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 	"unicode/utf8"
 
@@ -50,6 +51,7 @@ type Store interface {
 }
 
 type Server struct {
+	catalogLogger *slog.Logger
 	secretbrokerv1.UnimplementedSecretBrokerServiceServer
 	secretbrokerv1.UnimplementedRuntimeCredentialProjectionServiceServer
 	sttv1.UnimplementedTranscriptionCredentialProjectionServiceServer

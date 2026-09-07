@@ -22,7 +22,7 @@ func (service *Service) ObserveModelCatalog(ctx context.Context, accountRef stri
 	started := time.Now().UTC()
 	raw, err := service.store.ReadProviderCredentialExact(ctx, accountRef, descriptor)
 	if err != nil {
-		return catalogFailure(ctx, err)
+		return catalogFailure(ctx, atCatalogStage(catalogStageCredential, err))
 	}
 	defer clear(raw)
 	result, err := service.appServer.ObserveModelCatalog(ctx, raw, method)
@@ -33,23 +33,23 @@ func (service *Service) ObserveModelCatalog(ctx context.Context, accountRef stri
 		return ModelCatalog{}, ctx.Err()
 	}
 	if result.ObservedAt.IsZero() || result.ObservedAt.Before(started) || result.ObservedAt.After(time.Now().UTC()) {
-		return catalogFailure(ctx, errModelCatalogUnverified)
+		return catalogFailure(ctx, atCatalogStage(catalogStageResult, errModelCatalogUnverified))
 	}
 	if result.Failure == CatalogFailureNone {
 		if result.Source != CatalogRemoteAPI && result.Source != CatalogRemoteCodex || validateCatalogModels(result.Models) != nil {
-			return catalogFailure(ctx, errModelCatalogUnverified)
+			return catalogFailure(ctx, atCatalogStage(catalogStageResult, errModelCatalogUnverified))
 		}
 		if method == CatalogMethodAPIKey && result.Source != CatalogRemoteAPI || method == CatalogMethodDeviceCode && result.Source != CatalogRemoteCodex {
-			return catalogFailure(ctx, errModelCatalogUnverified)
+			return catalogFailure(ctx, atCatalogStage(catalogStageResult, errModelCatalogUnverified))
 		}
 	} else {
 		if result.Source != "" || len(result.Models) != 0 {
-			return catalogFailure(ctx, errModelCatalogUnverified)
+			return catalogFailure(ctx, atCatalogStage(catalogStageResult, errModelCatalogUnverified))
 		}
 		switch result.Failure {
 		case CatalogFailureUnavailable, CatalogFailureUnverified, CatalogFailureAuthorization:
 		default:
-			return catalogFailure(ctx, errModelCatalogUnverified)
+			return catalogFailure(ctx, atCatalogStage(catalogStageResult, errModelCatalogUnverified))
 		}
 	}
 	return result, nil

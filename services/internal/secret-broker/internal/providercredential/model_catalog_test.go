@@ -210,6 +210,7 @@ func runCatalogProcessFixture() int {
 		return 12
 	}
 	external, refresh, hang := false, false, false
+	diagnosticMode := ""
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		var request struct {
@@ -234,7 +235,11 @@ func runCatalogProcessFixture() int {
 				return 9
 			}
 			external, refresh, hang = true, params.AccountID == "fixture-expired", params.AccountID == "fixture-hang"
+			diagnosticMode = params.AccountID
 			result = map[string]string{"type": "chatgptAuthTokens"}
+			if diagnosticMode == "fixture-login" {
+				result = map[string]string{"type": "synthetic-private-payload"}
+			}
 		} else if request.Method == "model/list" {
 			if hang {
 				time.Sleep(30 * time.Second)
@@ -255,6 +260,16 @@ func runCatalogProcessFixture() int {
 			if external {
 				cache, _ := json.Marshal(map[string]any{"fetched_at": time.Now().UTC(), "client_version": catalogCodexVersion, "models": []any{map[string]any{"slug": "fixture-reasoning", "default_reasoning_level": "medium", "supported_reasoning_levels": []any{map[string]string{"effort": "medium"}}}}})
 				if os.WriteFile(filepath.Join(home, "models_cache.json"), cache, 0o600) != nil {
+					return 5
+				}
+			}
+			switch diagnosticMode {
+			case "fixture-list-schema":
+				result = map[string]string{"unexpected": "synthetic-private-payload"}
+			case "fixture-list-identity":
+				result = map[string]any{"data": []any{map[string]string{"id": "synthetic-private-payload", "model": "different"}}}
+			case "fixture-cache-missing":
+				if os.Remove(filepath.Join(home, "models_cache.json")) != nil {
 					return 5
 				}
 			}
