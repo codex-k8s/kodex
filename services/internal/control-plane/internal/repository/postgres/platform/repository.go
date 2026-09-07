@@ -457,6 +457,21 @@ func (repository *Repository) reconcileProviderCredential(ctx context.Context, t
 		secretResourceVersion == configured.SecretResourceVersion && contentSHA256 == configured.ContentSHA256 {
 		return nil
 	}
+	var historical bool
+	if err := tx.QueryRow(ctx, queryProviderCredentialHistoricalBootstrapPin, pgx.StrictNamedArgs{
+		"organization_id":         organizationID,
+		"provider_account_id":     accountID,
+		"secret_name":             configured.SecretName,
+		"secret_uid":              configured.SecretUID,
+		"secret_resource_version": configured.SecretResourceVersion,
+		"content_sha256":          configured.ContentSHA256,
+	}).Scan(&historical); err != nil {
+		return errors.New("read historical provider credential bootstrap pin")
+	}
+	// Прежний exact pin подтверждает bootstrap, но не переключает current назад.
+	if historical {
+		return nil
+	}
 	if secretName != configured.SecretName || contentSHA256 != configured.ContentSHA256 {
 		return errors.New("provider credential rotation requires an explicit revision")
 	}
