@@ -33,6 +33,13 @@ const (
 )
 
 var opaqueReferencePattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,11}_[A-Za-z0-9_-]{8,84}$`)
+
+// RuntimeSelection.ref — stable_key профиля, а не prefixed ID агрегата.
+// Границы совпадают с действующим внешним контрактом RuntimeSelection/OpaqueRef.
+var runtimeProfileKeyPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
+
+func validRuntimeProfileKey(value string) bool { return runtimeProfileKeyPattern.MatchString(value) }
+
 var imageDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 var systemRuntimeRevisionPattern = regexp.MustCompile(`^system-assistant-(?:core-v[1-9][0-9]*|runtime-[a-f0-9]{64})$`)
 var workflowStepKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$`)
@@ -253,7 +260,7 @@ func (input RunnerInput) Validate() error {
 		!(opaqueReferencePattern.MatchString(input.RuntimeRevisionRef) || systemRuntimeRevisionPattern.MatchString(input.RuntimeRevisionRef)) || input.RuntimeRevisionVersion < 1 ||
 		!sha256Pattern.MatchString(input.RuntimeRevisionDigest) || !validPinnedImage(input.ImageReference, input.ImageManifestDigest) ||
 		input.RoleRuntimeContractRevision == 0 || !sha256Pattern.MatchString(input.RoleRuntimeContractSHA256) ||
-		!opaqueReferencePattern.MatchString(input.RoleDefinitionRef) || !opaqueReferencePattern.MatchString(input.RuntimeProfileRef) ||
+		!opaqueReferencePattern.MatchString(input.RoleDefinitionRef) || !validRuntimeProfileKey(input.RuntimeProfileRef) ||
 		input.RuntimeProfileRevision == "" || len(input.RuntimeProfileRevision) > 128 ||
 		!opaqueReferencePattern.MatchString(input.InstructionRef) || !sha256Pattern.MatchString(input.InstructionDigest) ||
 		!opaqueReferencePattern.MatchString(input.PromptTemplateRef) || !sha256Pattern.MatchString(input.PromptTemplateDigest) ||

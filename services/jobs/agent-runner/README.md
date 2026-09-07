@@ -219,4 +219,13 @@ Runner не владеет PostgreSQL/OCC, pagination, schedule или terminal 
 https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md.
 
 Schema: `contracts/runtime-controller/v7/agent-runner-input.schema.json`.
+Поле `runtime_profile_ref` содержит существующий `RuntimeSelection.ref`, то есть
+stable key профиля CP (в том числе `builtin-safe-runtime`), а не prefixed ID
+агрегата. Его отдельный validator совпадает с внешним контрактом: 8–128 ASCII
+символов `A-Za-z0-9_-`. Остальные opaque refs сохраняют строгую проверку
+prefix/suffix. Ключ по-прежнему входит в immutable revision и execution binding;
+валидная форма не заменяет owner selection или authority. Canonical v7 schema
+редактируется как исходный контракт; generated Proto/SDK этим изменением не
+затрагиваются. Controller schema regression проверяет actual bootstrap key
+для warm и turn вплоть до runner decode, включая отрицательные границы.
 Supply chain: `docs/domains/images-supply-chain.md`.
