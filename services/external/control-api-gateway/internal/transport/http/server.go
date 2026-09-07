@@ -328,6 +328,19 @@ var errPublicSecretDescriptor = errors.New("public Secret descriptor revision is
 var errPublicProviderStatusReason = errors.New("public provider status reason is invalid")
 
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+	if descriptor.FullName() == "controlplane.v1.IntegrationDefinition" {
+		version, ok := value["version"].(string)
+		parsed, err := strconv.ParseInt(version, 10, 64)
+		if !ok || err != nil || !validManagedVersion(parsed) {
+			return errors.New("integration definition catalog version is invalid")
+		}
+		if actions, present := value["nextActions"]; present {
+			items, ok := actions.([]any)
+			if !ok || len(items) > 1 || len(items) == 1 && items[0] != "COPY" {
+				return errors.New("integration definition actions are invalid")
+			}
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.WorkflowVersion" {
 		ref, ok := value["ref"].(string)
 		if !ok || !fileTargetRef(ref) {

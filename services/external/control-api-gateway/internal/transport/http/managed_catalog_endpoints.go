@@ -52,11 +52,16 @@ func managedConfigurationSummaryView(value *controlplanev1.ManagedConfigurationS
 		return generated.ManagedConfigurationSummary{}, err
 	}
 	result := generated.ManagedConfigurationSummary{
+		NextActions: make([]generated.ManagedConfigurationSummaryNextActions, 0, len(metadata.NextActions)),
+		Archived:    metadata.Archived, CopyProvenance: metadata.CopyProvenance,
 		SourceEditable: metadata.SourceEditable,
 		Ref:            metadata.Ref, Version: metadata.Version, ProjectRef: metadata.ProjectRef, Name: metadata.Name,
 		Kind: generated.ManagedConfigurationSummaryKind(metadata.Kind), ManagedBy: generated.ManagedConfigurationSummaryManagedBy(metadata.ManagedBy),
 		Source: metadata.Source, SourceRevision: metadata.SourceRevision, UpdatedAt: metadata.UpdatedAt,
 		GitSource: metadata.GitSource,
+	}
+	for _, action := range metadata.NextActions {
+		result.NextActions = append(result.NextActions, generated.ManagedConfigurationSummaryNextActions(action))
 	}
 	if revision := value.GetCurrentRevision(); revision != nil {
 		if revision.GetRef() == "" || !validManagedVersion(revision.GetRevision()) || !validManagedDigest(revision.GetDigest()) {

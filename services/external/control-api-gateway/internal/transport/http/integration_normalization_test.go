@@ -30,7 +30,7 @@ func TestIntegrationPublicEnumsAndRiskPreserveAuthorityMeaning(t *testing.T) {
 			}
 		}
 	}
-	value, err := messageMap(&cp.IntegrationDefinition{Origin: cp.IntegrationDefinitionOrigin_INTEGRATION_DEFINITION_ORIGIN_SHIPPED})
+	value, err := messageMap(&cp.IntegrationDefinition{Version: 3, Origin: cp.IntegrationDefinitionOrigin_INTEGRATION_DEFINITION_ORIGIN_SHIPPED})
 	if err != nil || value["origin"] != "SHIPPED" || value["available"] != false || value["builtIn"] != false {
 		t.Fatal("definition source/readiness changed")
 	}
@@ -45,13 +45,13 @@ func TestIntegrationRejectsUnknownEnumsAndContradictoryRisk(t *testing.T) {
 		{ResourceKind: cp.IntegrationResourceKind(999)},
 	} {
 		w := httptest.NewRecorder()
-		writeMessage(w, 200, &cp.ListIntegrationDefinitionsResponse{Definitions: []*cp.IntegrationDefinition{{Capabilities: []*cp.IntegrationCapability{capability}}}}, "", "definitions")
+		writeMessage(w, 200, &cp.ListIntegrationDefinitionsResponse{Definitions: []*cp.IntegrationDefinition{{Version: 3, Capabilities: []*cp.IntegrationCapability{capability}}}}, "", "definitions")
 		if w.Code != 502 {
 			t.Fatalf("invalid integration contract accepted: %d", w.Code)
 		}
 	}
 	w := httptest.NewRecorder()
-	writeMessage(w, 200, &cp.IntegrationDefinition{Origin: cp.IntegrationDefinitionOrigin(999)}, "", "")
+	writeMessage(w, 200, &cp.IntegrationDefinition{Version: 3, Origin: cp.IntegrationDefinitionOrigin(999)}, "", "")
 	if w.Code != 502 {
 		t.Fatal("unknown definition origin accepted")
 	}
@@ -103,7 +103,7 @@ func TestIntegrationInputSchemaRequiresExactDigest(t *testing.T) {
 			capability.InputSchema = `{"description":"` + strings.Repeat("x", 256<<10) + `"}`
 		}
 		w := httptest.NewRecorder()
-		writeMessage(w, 200, &cp.ListIntegrationDefinitionsResponse{Definitions: []*cp.IntegrationDefinition{{Capabilities: []*cp.IntegrationCapability{capability}}}}, "", "definitions")
+		writeMessage(w, 200, &cp.ListIntegrationDefinitionsResponse{Definitions: []*cp.IntegrationDefinition{{Version: 3, Capabilities: []*cp.IntegrationCapability{capability}}}}, "", "definitions")
 		if invalid != "" {
 			if w.Code != 502 {
 				t.Fatal("invalid schema digest returned")

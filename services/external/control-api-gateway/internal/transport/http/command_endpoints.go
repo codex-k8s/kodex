@@ -857,9 +857,9 @@ func forwardArtifactBody(reader io.Reader, declaredSize int64, send func([]byte)
 func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DownloadArtifactParams) {
 	purpose := controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED
 	switch p.Purpose {
-	case generated.DOWNLOAD:
+	case generated.DownloadArtifactParamsPurposeDOWNLOAD:
 		purpose = controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_DOWNLOAD
-	case generated.PREVIEW:
+	case generated.DownloadArtifactParamsPurposePREVIEW:
 		purpose = controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_PREVIEW
 	}
 	stream, err := server.control.Command.DownloadArtifact(r.Context(), &controlplanev1.DownloadArtifactRequest{ArtifactRef: ref, Purpose: purpose})

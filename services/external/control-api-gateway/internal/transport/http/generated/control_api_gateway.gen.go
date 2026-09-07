@@ -2008,6 +2008,21 @@ func (e IntegrationDefinitionExecutionRoute) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationDefinitionNextActions.
+const (
+	IntegrationDefinitionNextActionsCOPY IntegrationDefinitionNextActions = "COPY"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionNextActions enum.
+func (e IntegrationDefinitionNextActions) Valid() bool {
+	switch e {
+	case IntegrationDefinitionNextActionsCOPY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationDefinitionOrigin.
 const (
 	IntegrationDefinitionOriginSHIPPED IntegrationDefinitionOrigin = "SHIPPED"
@@ -2233,6 +2248,24 @@ func (e ManagedConfigurationManagedBy) Valid() bool {
 	}
 }
 
+// Defines values for ManagedConfigurationNextActions.
+const (
+	ManagedConfigurationNextActionsARCHIVE ManagedConfigurationNextActions = "ARCHIVE"
+	ManagedConfigurationNextActionsCOPY    ManagedConfigurationNextActions = "COPY"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationNextActions enum.
+func (e ManagedConfigurationNextActions) Valid() bool {
+	switch e {
+	case ManagedConfigurationNextActionsARCHIVE:
+		return true
+	case ManagedConfigurationNextActionsCOPY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ManagedConfigurationConsumerKind.
 const (
 	ManagedConfigurationConsumerKindAGENT                 ManagedConfigurationConsumerKind = "AGENT"
@@ -2356,6 +2389,27 @@ func (e ManagedConfigurationConsumerMatchKind) Valid() bool {
 	case ManagedConfigurationConsumerMatchKindSTTSERVICE:
 		return true
 	case ManagedConfigurationConsumerMatchKindWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ManagedConfigurationCopyProvenanceOrigin.
+const (
+	ManagedConfigurationCopyProvenanceOriginGIT     ManagedConfigurationCopyProvenanceOrigin = "GIT"
+	ManagedConfigurationCopyProvenanceOriginSHIPPED ManagedConfigurationCopyProvenanceOrigin = "SHIPPED"
+	ManagedConfigurationCopyProvenanceOriginUI      ManagedConfigurationCopyProvenanceOrigin = "UI"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationCopyProvenanceOrigin enum.
+func (e ManagedConfigurationCopyProvenanceOrigin) Valid() bool {
+	switch e {
+	case ManagedConfigurationCopyProvenanceOriginGIT:
+		return true
+	case ManagedConfigurationCopyProvenanceOriginSHIPPED:
+		return true
+	case ManagedConfigurationCopyProvenanceOriginUI:
 		return true
 	default:
 		return false
@@ -2617,6 +2671,24 @@ func (e ManagedConfigurationSummaryManagedBy) Valid() bool {
 	}
 }
 
+// Defines values for ManagedConfigurationSummaryNextActions.
+const (
+	ManagedConfigurationSummaryNextActionsARCHIVE ManagedConfigurationSummaryNextActions = "ARCHIVE"
+	ManagedConfigurationSummaryNextActionsCOPY    ManagedConfigurationSummaryNextActions = "COPY"
+)
+
+// Valid indicates whether the value is a known member of the ManagedConfigurationSummaryNextActions enum.
+func (e ManagedConfigurationSummaryNextActions) Valid() bool {
+	switch e {
+	case ManagedConfigurationSummaryNextActionsARCHIVE:
+		return true
+	case ManagedConfigurationSummaryNextActionsCOPY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MembershipPermissions.
 const (
 	MembershipPermissionsCANCELRUNS         MembershipPermissions = "CANCEL_RUNS"
@@ -2701,6 +2773,7 @@ const (
 	NextActionCANCEL               NextAction = "CANCEL"
 	NextActionCOMPLETEONBOARDING   NextAction = "COMPLETE_ONBOARDING"
 	NextActionCONFIGURECREDENTIAL  NextAction = "CONFIGURE_CREDENTIAL"
+	NextActionCOPY                 NextAction = "COPY"
 	NextActionCREATEAGENT          NextAction = "CREATE_AGENT"
 	NextActionCREATECONNECTION     NextAction = "CREATE_CONNECTION"
 	NextActionCREATECONVERSATION   NextAction = "CREATE_CONVERSATION"
@@ -2754,6 +2827,8 @@ func (e NextAction) Valid() bool {
 	case NextActionCOMPLETEONBOARDING:
 		return true
 	case NextActionCONFIGURECREDENTIAL:
+		return true
+	case NextActionCOPY:
 		return true
 	case NextActionCREATEAGENT:
 		return true
@@ -4437,19 +4512,19 @@ func (e RoleImageImpactPlanState) Valid() bool {
 
 // Defines values for RoleImageManagedLineageManagedBy.
 const (
-	RoleImageManagedLineageManagedByGIT     RoleImageManagedLineageManagedBy = "GIT"
-	RoleImageManagedLineageManagedBySHIPPED RoleImageManagedLineageManagedBy = "SHIPPED"
-	RoleImageManagedLineageManagedByUI      RoleImageManagedLineageManagedBy = "UI"
+	GIT     RoleImageManagedLineageManagedBy = "GIT"
+	SHIPPED RoleImageManagedLineageManagedBy = "SHIPPED"
+	UI      RoleImageManagedLineageManagedBy = "UI"
 )
 
 // Valid indicates whether the value is a known member of the RoleImageManagedLineageManagedBy enum.
 func (e RoleImageManagedLineageManagedBy) Valid() bool {
 	switch e {
-	case RoleImageManagedLineageManagedByGIT:
+	case GIT:
 		return true
-	case RoleImageManagedLineageManagedBySHIPPED:
+	case SHIPPED:
 		return true
-	case RoleImageManagedLineageManagedByUI:
+	case UI:
 		return true
 	default:
 		return false
@@ -7470,16 +7545,16 @@ func (e ListOrganizationArtifactsParamsSourceKinds) Valid() bool {
 
 // Defines values for DownloadArtifactParamsPurpose.
 const (
-	DOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
-	PREVIEW  DownloadArtifactParamsPurpose = "PREVIEW"
+	DownloadArtifactParamsPurposeDOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
+	DownloadArtifactParamsPurposePREVIEW  DownloadArtifactParamsPurpose = "PREVIEW"
 )
 
 // Valid indicates whether the value is a known member of the DownloadArtifactParamsPurpose enum.
 func (e DownloadArtifactParamsPurpose) Valid() bool {
 	switch e {
-	case DOWNLOAD:
+	case DownloadArtifactParamsPurposeDOWNLOAD:
 		return true
-	case PREVIEW:
+	case DownloadArtifactParamsPurposePREVIEW:
 		return true
 	default:
 		return false
@@ -9494,8 +9569,12 @@ type IntegrationDefinition struct {
 	ExecutionRoute      IntegrationDefinitionExecutionRoute   `json:"executionRoute"`
 	Key                 string                                `json:"key"`
 	Name                string                                `json:"name"`
+	NextActions         []IntegrationDefinitionNextActions    `json:"nextActions"`
 	Origin              IntegrationDefinitionOrigin           `json:"origin"`
 	SchemaVersion       string                                `json:"schemaVersion"`
+
+	// Version Авторитетная версия каталога для If-Match при SHIPPED copy.
+	Version int64 `json:"version"`
 }
 
 // IntegrationDefinitionAdapter defines model for IntegrationDefinition.Adapter.
@@ -9510,8 +9589,16 @@ type IntegrationDefinitionAdapterReadiness string
 // IntegrationDefinitionExecutionRoute defines model for IntegrationDefinition.ExecutionRoute.
 type IntegrationDefinitionExecutionRoute string
 
+// IntegrationDefinitionNextActions defines model for IntegrationDefinition.NextActions.
+type IntegrationDefinitionNextActions string
+
 // IntegrationDefinitionOrigin defines model for IntegrationDefinition.Origin.
 type IntegrationDefinitionOrigin string
+
+// IntegrationDefinitionConfigurationCopyInput defines model for IntegrationDefinitionConfigurationCopyInput.
+type IntegrationDefinitionConfigurationCopyInput struct {
+	union json.RawMessage
+}
 
 // IntegrationDefinitionGitSourceInput defines model for IntegrationDefinitionGitSourceInput.
 type IntegrationDefinitionGitSourceInput struct {
@@ -9531,6 +9618,12 @@ type IntegrationDefinitionGitSourceInput struct {
 
 // IntegrationDefinitionGitSourceInputContentFormat defines model for IntegrationDefinitionGitSourceInput.ContentFormat.
 type IntegrationDefinitionGitSourceInputContentFormat string
+
+// IntegrationDefinitionShippedCopyInput defines model for IntegrationDefinitionShippedCopyInput.
+type IntegrationDefinitionShippedCopyInput struct {
+	Name    string                                 `json:"name"`
+	Shipped ShippedIntegrationDefinitionCopySource `json:"shipped"`
+}
 
 // IntegrationGrant defines model for IntegrationGrant.
 type IntegrationGrant struct {
@@ -9744,16 +9837,19 @@ type KodexMemoryRecord struct {
 
 // ManagedConfiguration defines model for ManagedConfiguration.
 type ManagedConfiguration struct {
-	CurrentRevision *ManagedConfigurationRevision `json:"currentRevision,omitempty"`
+	Archived        bool                                `json:"archived"`
+	CopyProvenance  *ManagedConfigurationCopyProvenance `json:"copyProvenance,omitempty"`
+	CurrentRevision *ManagedConfigurationRevision       `json:"currentRevision,omitempty"`
 
 	// GitSource Безопасная owner-проекция без credential, SourceWork, package и lease. READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin. SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта. failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
-	GitSource  *ManagedConfigurationGitSource `json:"gitSource,omitempty"`
-	Kind       ManagedConfigurationKind       `json:"kind"`
-	ManagedBy  ManagedConfigurationManagedBy  `json:"managedBy"`
-	Name       string                         `json:"name"`
-	ProjectRef *OpaqueRef                     `json:"projectRef,omitempty"`
-	Ref        OpaqueRef                      `json:"ref"`
-	Source     string                         `json:"source"`
+	GitSource   *ManagedConfigurationGitSource    `json:"gitSource,omitempty"`
+	Kind        ManagedConfigurationKind          `json:"kind"`
+	ManagedBy   ManagedConfigurationManagedBy     `json:"managedBy"`
+	Name        string                            `json:"name"`
+	NextActions []ManagedConfigurationNextActions `json:"nextActions"`
+	ProjectRef  *OpaqueRef                        `json:"projectRef,omitempty"`
+	Ref         OpaqueRef                         `json:"ref"`
+	Source      string                            `json:"source"`
 
 	// SourceEditable Обязателен для ROLE_IMAGE; дополнительный допуск владельца к изменению исходников, без замены полномочий команды и OCC. Для остальных видов отсутствует.
 	SourceEditable *bool     `json:"sourceEditable,omitempty"`
@@ -9767,6 +9863,9 @@ type ManagedConfigurationKind string
 
 // ManagedConfigurationManagedBy defines model for ManagedConfiguration.ManagedBy.
 type ManagedConfigurationManagedBy string
+
+// ManagedConfigurationNextActions defines model for ManagedConfiguration.NextActions.
+type ManagedConfigurationNextActions string
 
 // ManagedConfigurationConsumer defines model for ManagedConfigurationConsumer.
 type ManagedConfigurationConsumer struct {
@@ -9816,6 +9915,18 @@ type ManagedConfigurationConsumerMatchKind string
 type ManagedConfigurationCopyInput struct {
 	Name string `json:"name"`
 }
+
+// ManagedConfigurationCopyProvenance defines model for ManagedConfigurationCopyProvenance.
+type ManagedConfigurationCopyProvenance struct {
+	Origin         ManagedConfigurationCopyProvenanceOrigin `json:"origin"`
+	SourceDigest   string                                   `json:"sourceDigest"`
+	SourceRef      string                                   `json:"sourceRef"`
+	SourceRevision string                                   `json:"sourceRevision"`
+	SourceVersion  int64                                    `json:"sourceVersion"`
+}
+
+// ManagedConfigurationCopyProvenanceOrigin defines model for ManagedConfigurationCopyProvenance.Origin.
+type ManagedConfigurationCopyProvenanceOrigin string
 
 // ManagedConfigurationDetachment defines model for ManagedConfigurationDetachment.
 type ManagedConfigurationDetachment struct {
@@ -9935,8 +10046,16 @@ type ManagedConfigurationRevisionContentFormat string
 // ManagedConfigurationRevisionState defines model for ManagedConfigurationRevision.State.
 type ManagedConfigurationRevisionState string
 
+// ManagedConfigurationSourceCopyInput defines model for ManagedConfigurationSourceCopyInput.
+type ManagedConfigurationSourceCopyInput struct {
+	ConfigurationRef OpaqueRef `json:"configurationRef"`
+	Name             string    `json:"name"`
+}
+
 // ManagedConfigurationSummary defines model for ManagedConfigurationSummary.
 type ManagedConfigurationSummary struct {
+	Archived        bool                                `json:"archived"`
+	CopyProvenance  *ManagedConfigurationCopyProvenance `json:"copyProvenance,omitempty"`
 	CurrentRevision *struct {
 		Digest   string                                          `json:"digest"`
 		Ref      OpaqueRef                                       `json:"ref"`
@@ -9945,13 +10064,14 @@ type ManagedConfigurationSummary struct {
 	} `json:"currentRevision,omitempty"`
 
 	// GitSource Безопасная owner-проекция без credential, SourceWork, package и lease. READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin. SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта. failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
-	GitSource  *ManagedConfigurationGitSource       `json:"gitSource,omitempty"`
-	Kind       ManagedConfigurationSummaryKind      `json:"kind"`
-	ManagedBy  ManagedConfigurationSummaryManagedBy `json:"managedBy"`
-	Name       string                               `json:"name"`
-	ProjectRef *OpaqueRef                           `json:"projectRef,omitempty"`
-	Ref        OpaqueRef                            `json:"ref"`
-	Source     string                               `json:"source"`
+	GitSource   *ManagedConfigurationGitSource           `json:"gitSource,omitempty"`
+	Kind        ManagedConfigurationSummaryKind          `json:"kind"`
+	ManagedBy   ManagedConfigurationSummaryManagedBy     `json:"managedBy"`
+	Name        string                                   `json:"name"`
+	NextActions []ManagedConfigurationSummaryNextActions `json:"nextActions"`
+	ProjectRef  *OpaqueRef                               `json:"projectRef,omitempty"`
+	Ref         OpaqueRef                                `json:"ref"`
+	Source      string                                   `json:"source"`
 
 	// SourceEditable Обязателен для ROLE_IMAGE; дополнительный допуск к изменению исходников. Для остальных видов отсутствует.
 	SourceEditable *bool     `json:"sourceEditable,omitempty"`
@@ -9968,6 +10088,9 @@ type ManagedConfigurationSummaryKind string
 
 // ManagedConfigurationSummaryManagedBy defines model for ManagedConfigurationSummary.ManagedBy.
 type ManagedConfigurationSummaryManagedBy string
+
+// ManagedConfigurationSummaryNextActions defines model for ManagedConfigurationSummary.NextActions.
+type ManagedConfigurationSummaryNextActions string
 
 // Membership defines model for Membership.
 type Membership struct {
@@ -10992,6 +11115,11 @@ type RoleImageBuild struct {
 // RoleImageBuildStage defines model for RoleImageBuild.Stage.
 type RoleImageBuildStage string
 
+// RoleImageConfigurationCopyInput defines model for RoleImageConfigurationCopyInput.
+type RoleImageConfigurationCopyInput struct {
+	union json.RawMessage
+}
+
 // RoleImageGitSourceInput defines model for RoleImageGitSourceInput.
 type RoleImageGitSourceInput struct {
 	ConnectionRef             OpaqueRef                            `json:"connectionRef"`
@@ -11060,6 +11188,13 @@ type RoleImageImpactPlan struct {
 
 // RoleImageImpactPlanState defines model for RoleImageImpactPlan.State.
 type RoleImageImpactPlanState string
+
+// RoleImageManagedCopyInput defines model for RoleImageManagedCopyInput.
+type RoleImageManagedCopyInput struct {
+	ConfigurationRef OpaqueRef `json:"configurationRef"`
+	Name             string    `json:"name"`
+	ProjectRef       OpaqueRef `json:"projectRef"`
+}
 
 // RoleImageManagedLineage Авторитетное происхождение рецепта; у SHIPPED baseline может отсутствовать managed revision. Отсутствие lineage не назначает UI право изменения.
 type RoleImageManagedLineage struct {
@@ -11153,6 +11288,13 @@ type RoleImageRecipeCommandReceipt struct {
 	ImageBuild *RoleImageBuild `json:"imageBuild,omitempty"`
 	Recipe     RoleImageRecipe `json:"recipe"`
 	Reused     bool            `json:"reused"`
+}
+
+// RoleImageRecipeCopyInput defines model for RoleImageRecipeCopyInput.
+type RoleImageRecipeCopyInput struct {
+	Name       string    `json:"name"`
+	ProjectRef OpaqueRef `json:"projectRef"`
+	RecipeRef  OpaqueRef `json:"recipeRef"`
 }
 
 // RoleImageRecipeCreateInput defines model for RoleImageRecipeCreateInput.
@@ -12308,6 +12450,13 @@ type SearchResultPage struct {
 	Items         []SearchResult `json:"items"`
 	NextPageToken *string        `json:"nextPageToken,omitempty"`
 	Total         int64          `json:"total"`
+}
+
+// ShippedIntegrationDefinitionCopySource defines model for ShippedIntegrationDefinitionCopySource.
+type ShippedIntegrationDefinitionCopySource struct {
+	DefinitionVersion string `json:"definitionVersion"`
+	Digest            string `json:"digest"`
+	Key               string `json:"key"`
 }
 
 // SimulateAccessInput defines model for SimulateAccessInput.
@@ -13745,11 +13894,25 @@ type BindInteractionIdentityParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 }
 
+// CopyIntegrationDefinitionConfigurationParams defines parameters for CopyIntegrationDefinitionConfiguration.
+type CopyIntegrationDefinitionConfigurationParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // CreateIntegrationDefinitionDraftParams defines parameters for CreateIntegrationDefinitionDraft.
 type CreateIntegrationDefinitionDraftParams struct {
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
 	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
+}
+
+// ArchiveIntegrationDefinitionConfigurationParams defines parameters for ArchiveIntegrationDefinitionConfiguration.
+type ArchiveIntegrationDefinitionConfigurationParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
 }
 
 // ConfigureIntegrationDefinitionGitSourceParams defines parameters for ConfigureIntegrationDefinitionGitSource.
@@ -14535,11 +14698,25 @@ type GetRevisionImpactPlanParams struct {
 	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// CopyRoleImageConfigurationParams defines parameters for CopyRoleImageConfiguration.
+type CopyRoleImageConfigurationParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
+}
+
 // CreateRoleImageRevisionDraftParams defines parameters for CreateRoleImageRevisionDraft.
 type CreateRoleImageRevisionDraftParams struct {
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
 	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
+}
+
+// ArchiveRoleImageConfigurationParams defines parameters for ArchiveRoleImageConfiguration.
+type ArchiveRoleImageConfigurationParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+	IfMatch        IfMatch        `json:"If-Match"`
 }
 
 // ConfigureRoleImageGitSourceParams defines parameters for ConfigureRoleImageGitSource.
@@ -15274,6 +15451,9 @@ type ChangeIntegrationGrantJSONRequestBody = IntegrationGrantInput
 // BindInteractionIdentityJSONRequestBody defines body for BindInteractionIdentity for application/json ContentType.
 type BindInteractionIdentityJSONRequestBody = InteractionIdentityBindInput
 
+// CopyIntegrationDefinitionConfigurationJSONRequestBody defines body for CopyIntegrationDefinitionConfiguration for application/json ContentType.
+type CopyIntegrationDefinitionConfigurationJSONRequestBody = IntegrationDefinitionConfigurationCopyInput
+
 // CreateIntegrationDefinitionDraftJSONRequestBody defines body for CreateIntegrationDefinitionDraft for application/json ContentType.
 type CreateIntegrationDefinitionDraftJSONRequestBody = ManagedConfigurationDraftInput
 
@@ -15394,6 +15574,9 @@ type SetProviderAccountEnabledJSONRequestBody = EnabledInput
 // CancelProviderAccountQueuedWorkJSONRequestBody defines body for CancelProviderAccountQueuedWork for application/json ContentType.
 type CancelProviderAccountQueuedWorkJSONRequestBody = ProviderAccountQueuedWorkCancellationInput
 
+// CopyRoleImageConfigurationJSONRequestBody defines body for CopyRoleImageConfiguration for application/json ContentType.
+type CopyRoleImageConfigurationJSONRequestBody = RoleImageConfigurationCopyInput
+
 // CreateRoleImageRevisionDraftJSONRequestBody defines body for CreateRoleImageRevisionDraft for application/json ContentType.
 type CreateRoleImageRevisionDraftJSONRequestBody = ManagedConfigurationDraftInput
 
@@ -15508,6 +15691,68 @@ type UpdateWorkflowDraftJSONRequestBody = WorkflowInput
 // CommandWorkflowJSONRequestBody defines body for CommandWorkflow for application/json ContentType.
 type CommandWorkflowJSONRequestBody = WorkflowCommand
 
+// AsIntegrationDefinitionShippedCopyInput returns the union data inside the IntegrationDefinitionConfigurationCopyInput as a IntegrationDefinitionShippedCopyInput
+func (t IntegrationDefinitionConfigurationCopyInput) AsIntegrationDefinitionShippedCopyInput() (IntegrationDefinitionShippedCopyInput, error) {
+	var body IntegrationDefinitionShippedCopyInput
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIntegrationDefinitionShippedCopyInput overwrites any union data inside the IntegrationDefinitionConfigurationCopyInput as the provided IntegrationDefinitionShippedCopyInput
+func (t *IntegrationDefinitionConfigurationCopyInput) FromIntegrationDefinitionShippedCopyInput(v IntegrationDefinitionShippedCopyInput) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIntegrationDefinitionShippedCopyInput performs a merge with any union data inside the IntegrationDefinitionConfigurationCopyInput, using the provided IntegrationDefinitionShippedCopyInput
+func (t *IntegrationDefinitionConfigurationCopyInput) MergeIntegrationDefinitionShippedCopyInput(v IntegrationDefinitionShippedCopyInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsManagedConfigurationSourceCopyInput returns the union data inside the IntegrationDefinitionConfigurationCopyInput as a ManagedConfigurationSourceCopyInput
+func (t IntegrationDefinitionConfigurationCopyInput) AsManagedConfigurationSourceCopyInput() (ManagedConfigurationSourceCopyInput, error) {
+	var body ManagedConfigurationSourceCopyInput
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromManagedConfigurationSourceCopyInput overwrites any union data inside the IntegrationDefinitionConfigurationCopyInput as the provided ManagedConfigurationSourceCopyInput
+func (t *IntegrationDefinitionConfigurationCopyInput) FromManagedConfigurationSourceCopyInput(v ManagedConfigurationSourceCopyInput) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeManagedConfigurationSourceCopyInput performs a merge with any union data inside the IntegrationDefinitionConfigurationCopyInput, using the provided ManagedConfigurationSourceCopyInput
+func (t *IntegrationDefinitionConfigurationCopyInput) MergeManagedConfigurationSourceCopyInput(v ManagedConfigurationSourceCopyInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t IntegrationDefinitionConfigurationCopyInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *IntegrationDefinitionConfigurationCopyInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsManagedConfigurationConsumerAbsent returns the union data inside the ManagedConfigurationConsumerInput as a ManagedConfigurationConsumerAbsent
 func (t ManagedConfigurationConsumerInput) AsManagedConfigurationConsumerAbsent() (ManagedConfigurationConsumerAbsent, error) {
 	var body ManagedConfigurationConsumerAbsent
@@ -15566,6 +15811,68 @@ func (t ManagedConfigurationConsumerInput) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ManagedConfigurationConsumerInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsRoleImageRecipeCopyInput returns the union data inside the RoleImageConfigurationCopyInput as a RoleImageRecipeCopyInput
+func (t RoleImageConfigurationCopyInput) AsRoleImageRecipeCopyInput() (RoleImageRecipeCopyInput, error) {
+	var body RoleImageRecipeCopyInput
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRoleImageRecipeCopyInput overwrites any union data inside the RoleImageConfigurationCopyInput as the provided RoleImageRecipeCopyInput
+func (t *RoleImageConfigurationCopyInput) FromRoleImageRecipeCopyInput(v RoleImageRecipeCopyInput) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRoleImageRecipeCopyInput performs a merge with any union data inside the RoleImageConfigurationCopyInput, using the provided RoleImageRecipeCopyInput
+func (t *RoleImageConfigurationCopyInput) MergeRoleImageRecipeCopyInput(v RoleImageRecipeCopyInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsRoleImageManagedCopyInput returns the union data inside the RoleImageConfigurationCopyInput as a RoleImageManagedCopyInput
+func (t RoleImageConfigurationCopyInput) AsRoleImageManagedCopyInput() (RoleImageManagedCopyInput, error) {
+	var body RoleImageManagedCopyInput
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRoleImageManagedCopyInput overwrites any union data inside the RoleImageConfigurationCopyInput as the provided RoleImageManagedCopyInput
+func (t *RoleImageConfigurationCopyInput) FromRoleImageManagedCopyInput(v RoleImageManagedCopyInput) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRoleImageManagedCopyInput performs a merge with any union data inside the RoleImageConfigurationCopyInput, using the provided RoleImageManagedCopyInput
+func (t *RoleImageConfigurationCopyInput) MergeRoleImageManagedCopyInput(v RoleImageManagedCopyInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t RoleImageConfigurationCopyInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *RoleImageConfigurationCopyInput) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -15926,8 +16233,14 @@ type ServerInterface interface {
 	// (POST /api/v1/integration-connections/{connectionRef}/interaction-identities)
 	BindInteractionIdentity(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params BindInteractionIdentityParams)
 
+	// (POST /api/v1/integration-definition-configurations/copies)
+	CopyIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request, params CopyIntegrationDefinitionConfigurationParams)
+
 	// (POST /api/v1/integration-definition-configurations/drafts)
 	CreateIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request, params CreateIntegrationDefinitionDraftParams)
+
+	// (POST /api/v1/integration-definition-configurations/{configurationRef}/archive)
+	ArchiveIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ArchiveIntegrationDefinitionConfigurationParams)
 
 	// (POST /api/v1/integration-definition-configurations/{configurationRef}/git-source)
 	ConfigureIntegrationDefinitionGitSource(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ConfigureIntegrationDefinitionGitSourceParams)
@@ -16241,8 +16554,14 @@ type ServerInterface interface {
 	// (GET /api/v1/role-environments)
 	ListRoleEnvironments(w http.ResponseWriter, r *http.Request)
 
+	// (POST /api/v1/role-image-configurations/copies)
+	CopyRoleImageConfiguration(w http.ResponseWriter, r *http.Request, params CopyRoleImageConfigurationParams)
+
 	// (POST /api/v1/role-image-configurations/drafts)
 	CreateRoleImageRevisionDraft(w http.ResponseWriter, r *http.Request, params CreateRoleImageRevisionDraftParams)
+
+	// (POST /api/v1/role-image-configurations/{configurationRef}/archive)
+	ArchiveRoleImageConfiguration(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ArchiveRoleImageConfigurationParams)
 
 	// (POST /api/v1/role-image-configurations/{configurationRef}/git-source)
 	ConfigureRoleImageGitSource(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ConfigureRoleImageGitSourceParams)
@@ -24915,6 +25234,103 @@ func (siw *ServerInterfaceWrapper) BindInteractionIdentity(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// CopyIntegrationDefinitionConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) CopyIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CopyIntegrationDefinitionConfigurationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CopyIntegrationDefinitionConfiguration(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateIntegrationDefinitionDraft operation middleware
 func (siw *ServerInterfaceWrapper) CreateIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request) {
 
@@ -24999,6 +25415,112 @@ func (siw *ServerInterfaceWrapper) CreateIntegrationDefinitionDraft(w http.Respo
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateIntegrationDefinitionDraft(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveIntegrationDefinitionConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ArchiveIntegrationDefinitionConfigurationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveIntegrationDefinitionConfiguration(w, r, configurationRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -34505,6 +35027,103 @@ func (siw *ServerInterfaceWrapper) ListRoleEnvironments(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// CopyRoleImageConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) CopyRoleImageConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CopyRoleImageConfigurationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CopyRoleImageConfiguration(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateRoleImageRevisionDraft operation middleware
 func (siw *ServerInterfaceWrapper) CreateRoleImageRevisionDraft(w http.ResponseWriter, r *http.Request) {
 
@@ -34589,6 +35208,112 @@ func (siw *ServerInterfaceWrapper) CreateRoleImageRevisionDraft(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRoleImageRevisionDraft(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ArchiveRoleImageConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) ArchiveRoleImageConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "configurationRef" -------------
+	var configurationRef ConfigurationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "configurationRef", r.PathValue("configurationRef"), &configurationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "configurationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ArchiveRoleImageConfigurationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ArchiveRoleImageConfiguration(w, r, configurationRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -42857,7 +43582,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/grants", wrapper.ChangeIntegrationGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.ListInteractionIdentities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/copies", wrapper.CopyIntegrationDefinitionConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/drafts", wrapper.CreateIntegrationDefinitionDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/archive", wrapper.ArchiveIntegrationDefinitionConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-source", wrapper.ConfigureIntegrationDefinitionGitSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-source/refresh", wrapper.RefreshIntegrationDefinitionGitSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-write-backs", wrapper.PrepareIntegrationDefinitionGitWriteBack)
@@ -42962,7 +43689,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/provider-definitions", wrapper.ListProviderDefinitions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/revision-impact-plans/{planRef}", wrapper.GetRevisionImpactPlan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/role-environments", wrapper.ListRoleEnvironments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/copies", wrapper.CopyRoleImageConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/drafts", wrapper.CreateRoleImageRevisionDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/archive", wrapper.ArchiveRoleImageConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/git-source", wrapper.ConfigureRoleImageGitSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/git-source/refresh", wrapper.RefreshRoleImageGitSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/role-image-configurations/{configurationRef}/git-write-backs", wrapper.PrepareRoleImageGitWriteBack)

@@ -262,7 +262,7 @@ export type SimulateAccessResult = {
     evaluatedAt: Timestamp;
 };
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE' | 'COPY';
 
 export type Problem = {
     type: string;
@@ -653,7 +653,50 @@ export type ManagedConfigurationGitSource = {
     failureCode?: 'UNAVAILABLE' | 'CREDENTIAL_REJECTED' | 'ACCESS_DENIED' | 'NOT_FOUND' | 'DIVERGED' | 'CONTENT_INVALID' | 'RESPONSE_INVALID';
 };
 
+export type ManagedConfigurationCopyProvenance = {
+    origin: 'SHIPPED' | 'UI' | 'GIT';
+    sourceRef: string;
+    sourceRevision: string;
+    sourceVersion: number;
+    sourceDigest: string;
+};
+
+export type RoleImageConfigurationCopyInput = RoleImageRecipeCopyInput | RoleImageManagedCopyInput;
+
+export type RoleImageRecipeCopyInput = {
+    projectRef: OpaqueRef;
+    name: string;
+    recipeRef: OpaqueRef;
+};
+
+export type RoleImageManagedCopyInput = {
+    projectRef: OpaqueRef;
+    name: string;
+    configurationRef: OpaqueRef;
+};
+
+export type IntegrationDefinitionConfigurationCopyInput = IntegrationDefinitionShippedCopyInput | ManagedConfigurationSourceCopyInput;
+
+export type IntegrationDefinitionShippedCopyInput = {
+    name: string;
+    shipped: ShippedIntegrationDefinitionCopySource;
+};
+
+export type ManagedConfigurationSourceCopyInput = {
+    name: string;
+    configurationRef: OpaqueRef;
+};
+
+export type ShippedIntegrationDefinitionCopySource = {
+    key: string;
+    definitionVersion: string;
+    digest: string;
+};
+
 export type ManagedConfiguration = {
+    nextActions: Array<'COPY' | 'ARCHIVE'>;
+    archived: boolean;
+    copyProvenance?: ManagedConfigurationCopyProvenance;
     /**
      * Обязателен для ROLE_IMAGE; дополнительный допуск владельца к изменению исходников, без замены полномочий команды и OCC. Для остальных видов отсутствует.
      */
@@ -672,6 +715,9 @@ export type ManagedConfiguration = {
 };
 
 export type ManagedConfigurationSummary = {
+    nextActions: Array<'COPY' | 'ARCHIVE'>;
+    archived: boolean;
+    copyProvenance?: ManagedConfigurationCopyProvenance;
     /**
      * Обязателен для ROLE_IMAGE; дополнительный допуск к изменению исходников. Для остальных видов отсутствует.
      */
@@ -3343,6 +3389,11 @@ export type IntegrationConfigurationField = {
 };
 
 export type IntegrationDefinition = {
+    nextActions: Array<'COPY'>;
+    /**
+     * Авторитетная версия каталога для If-Match при SHIPPED copy.
+     */
+    version: number;
     key: string;
     name: string;
     description: string;
@@ -12450,6 +12501,130 @@ export type CopyGitManagedConfigurationResponses = {
 };
 
 export type CopyGitManagedConfigurationResponse = CopyGitManagedConfigurationResponses[keyof CopyGitManagedConfigurationResponses];
+
+export type CopyRoleImageConfigurationData = {
+    body: RoleImageConfigurationCopyInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/role-image-configurations/copies';
+};
+
+export type CopyRoleImageConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CopyRoleImageConfigurationError = CopyRoleImageConfigurationErrors[keyof CopyRoleImageConfigurationErrors];
+
+export type CopyRoleImageConfigurationResponses = {
+    /**
+     * Отдельная UI-конфигурация и immutable исходная revision
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CopyRoleImageConfigurationResponse = CopyRoleImageConfigurationResponses[keyof CopyRoleImageConfigurationResponses];
+
+export type CopyIntegrationDefinitionConfigurationData = {
+    body: IntegrationDefinitionConfigurationCopyInput;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/copies';
+};
+
+export type CopyIntegrationDefinitionConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CopyIntegrationDefinitionConfigurationError = CopyIntegrationDefinitionConfigurationErrors[keyof CopyIntegrationDefinitionConfigurationErrors];
+
+export type CopyIntegrationDefinitionConfigurationResponses = {
+    /**
+     * Отдельная UI-конфигурация и immutable исходная revision
+     */
+    201: ManagedConfigurationResult;
+};
+
+export type CopyIntegrationDefinitionConfigurationResponse = CopyIntegrationDefinitionConfigurationResponses[keyof CopyIntegrationDefinitionConfigurationResponses];
+
+export type ArchiveRoleImageConfigurationData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/role-image-configurations/{configurationRef}/archive';
+};
+
+export type ArchiveRoleImageConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ArchiveRoleImageConfigurationError = ArchiveRoleImageConfigurationErrors[keyof ArchiveRoleImageConfigurationErrors];
+
+export type ArchiveRoleImageConfigurationResponses = {
+    /**
+     * Авторитетная архивная конфигурация
+     */
+    200: ManagedConfigurationDetachment;
+};
+
+export type ArchiveRoleImageConfigurationResponse = ArchiveRoleImageConfigurationResponses[keyof ArchiveRoleImageConfigurationResponses];
+
+export type ArchiveIntegrationDefinitionConfigurationData = {
+    body?: never;
+    headers: {
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+        'If-Match': string;
+    };
+    path: {
+        configurationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/{configurationRef}/archive';
+};
+
+export type ArchiveIntegrationDefinitionConfigurationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ArchiveIntegrationDefinitionConfigurationError = ArchiveIntegrationDefinitionConfigurationErrors[keyof ArchiveIntegrationDefinitionConfigurationErrors];
+
+export type ArchiveIntegrationDefinitionConfigurationResponses = {
+    /**
+     * Авторитетная архивная конфигурация
+     */
+    200: ManagedConfigurationDetachment;
+};
+
+export type ArchiveIntegrationDefinitionConfigurationResponse = ArchiveIntegrationDefinitionConfigurationResponses[keyof ArchiveIntegrationDefinitionConfigurationResponses];
 
 export type ListSkillBundlesData = {
     body?: never;
