@@ -132,62 +132,6 @@ apply_configmap() {
     kubectl apply --server-side --force-conflicts --field-manager=kodex-install -f - >/dev/null
 }
 
-preserve_selected_provider_metadata() {
-  local status=0
-  python3 "$repository_root/tools/install/provider-bootstrap.py" verify-metadata \
-    --context "$expected_context" >/dev/null || status=$?
-  # Только доказанное отсутствие metadata допускает первый seed.
-  [[ "$status" == 3 ]] && return 1
-  [[ "$status" == 0 ]] || fail 'selected provider metadata failed exact validation'
-}
-
-materialize_provider_secret() {
-  local name=runtime-provider-openai-default-r1
-  local digest digest_file manifest current current_digest current_digest_file
-  digest=$(sha256sum "$provider_auth_file" | awk '{print $1}')
-  digest_file="$temporary_directory/provider-auth.sha256"
-  manifest="$temporary_directory/provider-secret.json"
-  printf '%s' "$digest" >"$digest_file"
-
-  if current=$(kubectl -n "$runtime_namespace" get "secret/$name" \
-    --show-managed-fields -o json 2>/dev/null); then
-    current_digest=$(jq -jr '.data["auth.json"] // "" | @base64d' <<<"$current" |
-      sha256sum | awk '{print $1}')
-    current_digest_file=$(jq -jr '.data["auth.sha256"] // "" | @base64d' \
-      <<<"$current" | tr -d '[:space:]')
-    if jq -e '.immutable == true' <<<"$current" >/dev/null; then
-      [[ "$current_digest_file" == "$current_digest" ]] ||
-        fail 'immutable provider credential digest is invalid'
-      jq -e '.metadata.labels["app.kubernetes.io/managed-by"] == "kodex-install" and
-        .metadata.annotations["kodex.dev/provider-account-key"] == "default-openai-codex"' \
-        <<<"$current" >/dev/null || fail 'bootstrap provider credential provenance is invalid'
-      return
-    fi
-    jq -e --arg namespace "$runtime_namespace" --arg name "$name" '
-      .metadata.namespace == $namespace and .metadata.name == $name and
-      .type == "Opaque" and ((.metadata.ownerReferences // []) | length == 0) and
-      any(.metadata.managedFields[]?; .manager == "kodex-install")
-    ' <<<"$current" >/dev/null ||
-      fail 'mutable provider credential is not owned by the Kodex installer'
-    fail 'mutable provider credential requires explicit recovery'
-  fi
-
-  kubectl -n "$runtime_namespace" create secret generic "$name" \
-    --from-file=auth.json="$provider_auth_file" \
-    --from-file=auth.sha256="$digest_file" \
-    --dry-run=client -o json | jq '
-      .immutable = true |
-      .metadata.labels = {
-        "app.kubernetes.io/part-of":"kodex",
-        "app.kubernetes.io/managed-by":"kodex-install"
-      } |
-      .metadata.annotations = {
-        "kodex.dev/provider-account-key":"default-openai-codex"
-      }
-    ' >"$manifest"
-  kubectl create --field-manager=kodex-install -f "$manifest" >/dev/null
-}
-
 installation_ca="$material_directory/authorities/pki"
 runtime_execution_certificate="$material_directory/material/kodex/runtime-execution-client/tls/tls.crt"
 openssl verify -CAfile "$installation_ca/ca.crt" "$runtime_execution_certificate" >/dev/null ||
@@ -222,34 +166,14 @@ create_secret kodex-system kodex-nats-credentials \
 create_secret kodex-system kodex-sentry --from-literal=dsn=
 create_secret kodex-system internal-rpc-authority-sentry --from-literal=dsn=
 create_secret kodex-system kodex-integration-credentials --from-literal=empty=
-selected_provider_metadata_preserved=false
-if preserve_selected_provider_metadata; then
-  selected_provider_metadata_preserved=true
-else
-  materialize_provider_secret
-fi
+python3 "$repository_root/tools/install/provider-bootstrap.py" seed \
+  --context "$expected_context" --auth-file "$provider_auth_file"
 # Legacy provider objects сохраняются: bootstrap не выполняет неявную очистку.
 
 apply_configmap kodex-system kodex-oidc-ca --from-file=ca.pem="$oidc_ca_file"
 for configmap_name in kodex-internal-ca kodex-otel-ca internal-rpc-authority-otel-ca; do
   apply_configmap kodex-system "$configmap_name" --from-file=ca.pem="$installation_ca/ca.crt"
 done
-
-if [[ "$selected_provider_metadata_preserved" != true ]]; then
-  provider_uid=$(kubectl -n "$runtime_namespace" get secret runtime-provider-openai-default-r1 \
-    -o jsonpath='{.metadata.uid}')
-  provider_resource_version=$(kubectl -n "$runtime_namespace" get secret runtime-provider-openai-default-r1 \
-    -o jsonpath='{.metadata.resourceVersion}')
-  provider_sha256=$(kubectl -n "$runtime_namespace" get secret runtime-provider-openai-default-r1 -o json |
-    jq -jr '.data["auth.json"] | @base64d' | sha256sum | awk '{print $1}')
-  apply_configmap kodex-system runtime-provider-openai-default-metadata \
-    --from-literal=secretName=runtime-provider-openai-default-r1 \
-    --from-literal=secretUID="$provider_uid" \
-    --from-literal=secretResourceVersion="$provider_resource_version" \
-    --from-literal=contentSHA256="$provider_sha256"
-  kubectl -n kodex-system annotate configmap runtime-provider-openai-default-metadata \
-    kodex.dev/provider-account-key=default-openai-codex --overwrite >/dev/null
-fi
 
 manifest_root="$material_directory/crypto/authority-bootstrap/public/manifest-root"
 readback_root="$material_directory/crypto/authority-bootstrap/public/readback-root"
@@ -293,5 +217,6 @@ done
 secret_name=runtime-execution-client-tls
 kubectl -n "$runtime_namespace" get secret "$secret_name" -o json | jq -e \
   '.data | type == "object"' >/dev/null || fail "runtime Secret readback failed: $secret_name"
-preserve_selected_provider_metadata || fail 'active provider credential readback failed'
+python3 "$repository_root/tools/install/provider-bootstrap.py" verify-metadata \
+  --context "$expected_context" >/dev/null || fail 'active provider credential readback failed'
 printf 'Kodex Kubernetes Secrets materialized\n'

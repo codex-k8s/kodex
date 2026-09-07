@@ -16,6 +16,12 @@ provenance runtime writer на старый объект. Reader проверя�
 UID/resourceVersion/raw digest одинаково для bootstrap и runtime; совместимость
 старого формата допускается только как проверенный вход переноса. Восстановление
 metadata сохраняет authoritative current revision, а не старый локальный auth-файл.
+После пересоздания owner namespace существование metadata или старого Secret
+не доказывает current. Свежий seed требует проверенного отсутствия owner и его
+сохранённого состояния либо прочитанного пустого owner state; недоступная DB
+не равна пустой. Имя seed связывает namespace UID и digest явного input, а старые
+immutable объекты сохраняются. До привязки account seed остаётся только входом
+канонического publisher и не доказывает runtime eligibility.
 
 Metadata, сохранённая в durable JSON plan и повторно прочитанная из Kubernetes,
 сравнивает timestamp по точному моменту, независимо от timezone/Location и

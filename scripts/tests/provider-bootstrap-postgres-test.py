@@ -41,7 +41,15 @@ def test():
                "GOMAXPROCS": "2", "GOFLAGS": "-p=2"}
         run(["go", "run", "./cmd/cli", "up"], env=env, cwd=ROOT / "services/internal/control-plane", timeout=180)
     cli += ["-d", "control_plane"]
+    owner_probe = (ROOT / "tools/dev/provider-bootstrap-owner-state.sql").read_bytes()
+    assert json.loads(run(cli, data=owner_probe).stdout) == {"owners": 0, "organizations": 0, "accounts": 0}
+    # Отсутствующая и частично созданная схема различаются даже до migrations.
+    empty_cli = cli[:-1] + ["postgres"]
+    assert json.loads(run(empty_cli, data=owner_probe).stdout) == {"owners": 0, "organizations": 0, "accounts": 0}
+    run(empty_cli, data=b"CREATE SCHEMA control_plane; CREATE TABLE control_plane.owner_claim_contracts(id int);")
+    assert json.loads(run(empty_cli, data=owner_probe).stdout) == {"unknown": True}
     run(cli, data=(ROOT / "scripts/tests/provider-bootstrap-fixture.sql").read_bytes())
+    assert json.loads(run(cli, data=owner_probe).stdout) == {"owners": 1, "organizations": 2, "accounts": 3}
     ensure = cli + ["-v", "account_ref=pacc_reserved_fixture", "-v", "stable_key=reserved-fixture",
                     "-v", "account_name=Synthetic reserved", "-v", "max_concurrent_executions=1"]
     for _ in range(2):
@@ -105,7 +113,7 @@ def test():
     current = values("c" if results[0] else "d", 3, second["credentialRef"])
     current.update(account_ref="pacc_disabled_fixture", stable_key="disabled-fixture")
     assert not apply(current, False)
-    print("Provider bootstrap PostgreSQL passed: initial/replay/stale/concurrent/foreign/rollback/retained/disabled")
+    print("Provider bootstrap PostgreSQL passed: fresh/partial/current/initial/replay/stale/concurrent/foreign/rollback/retained/disabled")
 
 
 if __name__ == "__main__":

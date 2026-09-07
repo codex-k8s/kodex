@@ -186,9 +186,8 @@ jq -e '
 rg -Fq 'for name in staging-read scanner signer admission promotion-staging' \
   "$repository_root/tools/install/generate-material.sh" ||
   fail 'staging-read registry ACL omits an application identity'
-[[ $(rg -F -- 'kodex.dev/provider-account-key=default-openai-codex' \
-  "$repository_root/tools/install/materialize-secrets.sh" | wc -l) -eq 1 ]] ||
-  fail 'fresh default provider metadata lacks its account-key annotation'
+rg -Fq 'provider-bootstrap.py" seed' "$repository_root/tools/install/materialize-secrets.sh" ||
+  fail 'fresh provider seed bypasses owner state and immutable input selection'
 rg -Fq 'provider-bootstrap.py" verify-metadata' "$repository_root/tools/install/materialize-secrets.sh" ||
   fail 'selected provider metadata bypasses the canonical validator'
 jq -e '

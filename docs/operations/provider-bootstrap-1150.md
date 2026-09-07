@@ -4,17 +4,33 @@ title: Канонический bootstrap provider credential
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-07
 ---
 
 # Канонический bootstrap provider credential
 
-Refs #1150, #1148, #1031. Общий publisher —
+Refs #1150, #1154, #1148, #1031. Общий publisher —
 `tools/install/provider-bootstrap.py`; команды `dev.sh provider-import` и
 `provider-authorize` сохраняются. Новый API или deployable не вводится.
 
-Первый installer seed позволяет CP создать installation owner и provider
+Первый installer `seed` связывает имя нового immutable Secret с UID namespace
+`kodex-system` и digest выбранного приватного input. Уцелевший Secret прежнего
+контура, включая фиксированное имя `runtime-provider-openai-default-r1`, не
+подменяет этот input. Старые объекты не изменяются и не удаляются.
+
+Свежий контур доказывается отсутствием CP Deployment и PostgreSQL
+StatefulSet/Pod/PVC либо отсутствием CP Deployment и прочитанным пустым owner
+state. Оставшийся PVC с недоступной DB, частичная схема или неизвестный state
+закрыто останавливают materialization. Наличие metadata само по себе не доказывает
+current: после прерванного fresh seed она сверяется с новым input и epoch.
+Если DB содержит installation owner, installer восстанавливает его current через
+`recover`, не читая старый input. Namespace epoch и owner state повторно
+проверяются перед публикацией metadata и после её readback. Запуски установщика
+должны оставаться последовательными; эти проверки не заменяют блокировку
+параллельного оператора.
+
+Seed позволяет CP создать installation owner и provider
 account, но не доказывает готовность provider. После Ready control-plane и до
 warm wait оба deploy entrypoint вызывают `recover`:
 
@@ -55,9 +71,10 @@ Restart CP со старым exact историческим bootstrap pin тре
 ## Проверки и ручная приёмка
 
 - `make test-local-provider-account-persistence-contract`: publisher, replay,
-  stale CAS, lost create ACK, сохранение current вместо старого файла.
+  stale CAS, lost create ACK, разные inputs после reset, partial metadata,
+  epoch/owner drift, сохранение current вместо старого файла.
 - `make test-provider-bootstrap-postgres`: disposable PostgreSQL с полной схемой,
-  actual SQL first bind/replay/concurrency/foreign/rollback/retained/disabled.
+  actual SQL fresh/partial/current и first bind/replay/concurrency/foreign/rollback/retained/disabled.
 - Broker tests получают manifest непосредственно из Python publisher и читают
   настоящим `ReadProviderCredentialExact`, включая отрицательные pins.
 - `make test-secret-broker-drafts`, install/web-only-release и local render обоих
