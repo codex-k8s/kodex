@@ -163,7 +163,7 @@ func TestAppServerTerminateKillsDescriptorHoldingDescendant(t *testing.T) {
 	select {
 	case server.waitErr = <-server.wait:
 		server.waited = true
-	case <-time.After(time.Second):
+	case <-time.After(processGrace):
 		t.Fatal("fixture leader did not exit")
 	}
 	if server.waitErr != nil {
