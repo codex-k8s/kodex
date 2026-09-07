@@ -144,6 +144,8 @@ for (const width of [390, 2900]) {
               kind: "EMAIL_MAILBOX",
               name: input.name,
               managedBy: "UI",
+              archived: false,
+              nextActions: [],
               source: "",
               sourceRevision: "",
               updatedAt: "2026-09-05T00:00:00Z",

@@ -49,6 +49,8 @@ async function install(page: Page, lostPrepare: boolean) {
     kind: "ROLE_IMAGE",
     name: "Образ из Git",
     managedBy: "GIT",
+    archived: false,
+    nextActions: [],
     source: proposal.sourceRef,
     sourceRevision: proposal.baseCommitSha,
     updatedAt: proposal.createdAt,

@@ -51,6 +51,8 @@ for (const width of [1440, 390]) {
         kind: "PROMPT_TEMPLATE",
         name: "Конфигурация",
         managedBy: "UI",
+        archived: false,
+        nextActions: [],
         source: "UI",
         sourceRevision: "",
         currentRevision: revision,

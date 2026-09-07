@@ -23,6 +23,8 @@ function definition(
     description: `Описание ${key}`,
     category: "development",
     builtIn: true,
+    version: 1,
+    nextActions: [],
     available: true,
     capabilities: [
       {

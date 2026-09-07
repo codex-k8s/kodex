@@ -17,6 +17,8 @@ function definition(credentialSecretKey?: string): IntegrationDefinition {
     description: "Репозитории и задачи",
     category: "DEVELOPMENT",
     builtIn: true,
+    version: 1,
+    nextActions: [],
     available: true,
     capabilities: [],
     configurationFields: [],

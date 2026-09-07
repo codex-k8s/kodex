@@ -92,6 +92,8 @@ const overview: Overview = {
   recentArtifacts: [],
 };
 const integration: IntegrationDefinition = {
+  version: 1,
+  nextActions: [],
   key: "github",
   name: "GitHub",
   description: "Репозитории и задачи",
@@ -473,6 +475,8 @@ for (const { width, height } of [
       kind: "PROMPT_TEMPLATE",
       name: "Шаблон",
       managedBy: "UI",
+      archived: false,
+      nextActions: [],
       source: "ui",
       sourceRevision: "1",
       updatedAt: "2026-09-04T11:00:00Z",
@@ -751,6 +755,8 @@ for (const { width, height } of [
         kind: "PROMPT_TEMPLATE",
         name: `Шаблон ${String(index + 1)}`,
         managedBy: index === 0 ? "GIT" : "UI",
+        archived: false,
+        nextActions: [],
         source: index === 0 ? "repository/templates/summary.txt" : "ui",
         sourceRevision: "revision-1",
         updatedAt: "2026-09-04T11:00:00Z",
@@ -1490,7 +1496,7 @@ for (const { width, height } of [
         path: testInfo.outputPath(`context-${String(width)}.png`),
         fullPage: true,
       });
-      await checkIntegrationPackage(page);
+      await checkIntegrationPackage(page, integration);
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({
         path: testInfo.outputPath(`integration-package-${String(width)}.png`),

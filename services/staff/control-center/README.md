@@ -1613,3 +1613,38 @@ cursor, переход к редактированию и обновление �
 оснастка не заменяет этот маршрут или live acceptance. Документация Vue,
 CodeMirror и Playwright проверена через Context7. Новый полный baseline и
 общий review привязываются к exact SHA отдельно; staged/live здесь не заявляются.
+
+# Копирование и архивирование конфигураций (#1176)
+
+Пакет SHIPPED копируется из каталога интеграций кнопкой «Создать копию».
+Для SHIPPED RoleImage эта кнопка доступна в карточке рецепта. Карточка
+управляемой конфигурации предоставляет копирование UI/GIT и архивирование UI
+только по авторитетным `nextActions`; прежние ARCHIVE/RESTORE рецепта сохранены.
+Копирование всегда вызывает специализированный generated SDK endpoint с
+точным selector источника и `If-Match`, затем открывает собственный UI draft.
+Полученный `copyProvenance` сверяется с доступными точными source pins.
+
+| Переход                                  | Полномочия и версия                                                                         | Результат и чтение                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| SHIPPED RoleImage → UI draft             | recipe COPY, sourceAvailable, recipe version/generation; owner проверяет project назначения | новый configuration/revision, server provenance; история нового ref                             |
+| SHIPPED IntegrationDefinition → UI draft | definition COPY, key/definitionVersion/digest и отдельная catalog version                   | новый configuration/revision; исходная shipped definition сохраняется                           |
+| UI/GIT configuration → UI draft          | configuration COPY и version; payload не назначает owner/provenance                         | независимый ref; источник и прежние immutable pins сохраняются, включая архивный источник       |
+| UI configuration → archived              | configuration ARCHIVE, UI и version                                                         | receipt и обязательный history readback; редактор и новые назначения закрыты, история сохранена |
+| legacy RoleImage ARCHIVE/RESTORE         | прежние recipe nextActions и OCC                                                            | прежний owner lifecycle с атомарным отражением managed archived                                 |
+| conflict/permission/UNKNOWN              | отдельная серверная ошибка; одна отправка                                                   | нет optimistic успеха и автоматического retry; явное обновление каталога/карточки               |
+
+Actor и организация принадлежат проверенной browser session; authority,
+idempotency receipt, audit, event и состояние принадлежат Control Plane через
+HTTP mapping #1175. PWA не выдаёт permissions по origin и не публикует события.
+У archive нет нового restore/purge для IntegrationDefinition.
+
+Ручная проверка на disposable fixture: скопировать SHIPPED без Git, сверить
+provenance, изменить Form/YAML, проверить validate/publish и новую immutable
+revision. Открыть историю и исходный SHIPPED объект. Архивировать созданную
+конфигурацию, обновить карточку и проверить сохранность истории и прежних
+законных pins, отсутствие новых назначений; проверить stale OCC и пользователя
+без COPY/ARCHIVE. Не изменять исходные SHIPPED definitions и чужие connections.
+Synthetic fixtures подтверждают поведение UI, но не заменяют такую live-проверку.
+
+Для работы проверены документы Vue 3 через Context7: Composition API watchers,
+cleanup и защита от устаревшего async response.

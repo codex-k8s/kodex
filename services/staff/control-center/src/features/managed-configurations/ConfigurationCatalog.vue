@@ -158,9 +158,13 @@ function scroll(event: Event): void {
             ></small
           >
         </div>
-        <StatusBadge :state="item.currentRevision?.state ?? 'DRAFT'" /><span
-          >v{{ item.currentRevision?.revision ?? item.version }}</span
-        >
+        <StatusBadge
+          :state="
+            item.archived
+              ? 'ARCHIVED'
+              : (item.currentRevision?.state ?? 'DRAFT')
+          "
+        /><span>v{{ item.currentRevision?.revision ?? item.version }}</span>
       </RouterLink>
       <button
         v-if="nextPageToken"

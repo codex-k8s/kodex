@@ -44,6 +44,8 @@ for (const width of [390, 2900]) {
       kind: "ROLE_IMAGE",
       name: "Образ из Git",
       managedBy: "UI",
+      archived: false,
+      nextActions: [],
       source: "UI",
       sourceRevision: "",
       currentRevision: revision,

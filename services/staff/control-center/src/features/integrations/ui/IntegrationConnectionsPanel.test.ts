@@ -15,6 +15,8 @@ const definition: IntegrationDefinition = {
   description: "Локальная проверка lifecycle",
   category: "testing",
   builtIn: true,
+  version: 1,
+  nextActions: [],
   available: true,
   capabilities: [
     {

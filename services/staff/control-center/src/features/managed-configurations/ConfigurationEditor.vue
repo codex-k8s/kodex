@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   CheckCheck,
+  Archive,
   Copy,
   GitFork,
   GitCompareArrows,
@@ -29,6 +30,9 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import * as api from "./api";
+import { archiveConfiguration } from "./lifecycle";
+import { managedCopySource, canArchiveConfiguration } from "./copy-source";
+import ConfigurationCopyDialog from "./ConfigurationCopyDialog.vue";
 import { loadRoleImageCreateAccess } from "@/features/role-images/api";
 import ConfigurationFields from "./ConfigurationFields.vue";
 import SttActivationPanel from "./SttActivationPanel.vue";
@@ -161,6 +165,13 @@ const selected = ref<string[]>([]);
 const sourceAction = ref<"copy" | "detach">();
 const discardOpen = ref(false);
 const copyName = ref("");
+const copyOpen = ref(false);
+const archiveOpen = ref(false);
+const archiveAttempted = ref(false);
+const archiveUnknown = ref(false);
+const copySource = computed(() =>
+  configuration.value ? managedCopySource(configuration.value) : undefined,
+);
 const editorMode = ref<"FORM" | "SOURCE">(
   props.kind === "PROMPT_TEMPLATE" ? "SOURCE" : "FORM",
 );
@@ -183,10 +194,11 @@ const sourceVisible = computed(
 );
 const sourceEditable = computed(
   () =>
-    props.kind !== "ROLE_IMAGE" ||
-    (configuration.value
-      ? configuration.value.sourceEditable === true
-      : !props.configurationRef && createSourceAllowed.value),
+    configuration.value?.archived !== true &&
+    (props.kind !== "ROLE_IMAGE" ||
+      (configuration.value
+        ? configuration.value.sourceEditable === true
+        : !props.configurationRef && createSourceAllowed.value)),
 );
 const dirty = computed(
   () =>
@@ -370,6 +382,8 @@ async function load(more = false): Promise<void> {
       throw new Error("Duplicate configuration revision");
     if (!more) {
       historyCursors.clear();
+      archiveAttempted.value = false;
+      archiveUnknown.value = false;
       configuration.value = result.configuration;
       name.value = result.configuration.name;
     }
@@ -651,6 +665,7 @@ async function showImpact(more = false): Promise<void> {
     target = revision.value;
   if (
     !current ||
+    current.archived ||
     !target ||
     dirty.value ||
     busy.value ||
@@ -765,6 +780,7 @@ async function rebind(): Promise<void> {
     impact = impactValue.value;
   if (
     !current ||
+    current.archived ||
     !target ||
     target.state !== "PUBLISHED" ||
     !impact ||
@@ -900,6 +916,32 @@ async function changeSource(): Promise<void> {
   });
   if (!problem.value) await load();
 }
+async function archive(): Promise<void> {
+  const current = configuration.value;
+  if (
+    !current ||
+    !canArchiveConfiguration(current) ||
+    dirty.value ||
+    busy.value ||
+    archiveAttempted.value
+  )
+    return;
+  archiveAttempted.value = true;
+  await perform(async () => {
+    const result = await archiveConfiguration(current, controller.signal);
+    if (disposed) return;
+    configuration.value = result.configuration;
+    closeImpact();
+    archiveOpen.value = false;
+  });
+  archiveUnknown.value =
+    !!problem.value &&
+    (problem.value.status === 0 || problem.value.status >= 500);
+}
+function copied(value: ManagedConfiguration): void {
+  copyOpen.value = false;
+  emit("created", value);
+}
 watch(
   () => [props.configurationRef, props.projectRef, props.kind],
   async () => {
@@ -980,6 +1022,22 @@ watch(
       >
         <History :size="18" />{{ $t("managed.history") }}
       </button>
+      <button
+        v-if="copySource"
+        class="button"
+        :disabled="busy || sourceBusy || dirty"
+        @click="copyOpen = true"
+      >
+        <Copy :size="18" />{{ $t("managed.copy") }}
+      </button>
+      <button
+        v-if="configuration && canArchiveConfiguration(configuration)"
+        class="button"
+        :disabled="busy || sourceBusy || dirty || archiveAttempted"
+        @click="archiveOpen = true"
+      >
+        <Archive :size="18" />{{ $t("managed.archive") }}
+      </button>
       <template v-if="gitOwned && sourceEditable">
         <button
           class="button"
@@ -989,6 +1047,7 @@ watch(
           <GitFork :size="18" />{{ $t("managed.detach") }}
         </button>
         <button
+          v-if="kind !== 'ROLE_IMAGE' && kind !== 'INTEGRATION_DEFINITION'"
           class="button"
           :disabled="busy || sourceBusy"
           @click="
@@ -1001,6 +1060,54 @@ watch(
       </template>
     </header>
     <p v-if="gitOwned" class="muted">{{ $t("managed.gitOwned") }}</p>
+    <p v-if="configuration?.archived" role="status">
+      {{ $t("managed.archived") }}
+    </p>
+    <p v-if="archiveUnknown" role="status">
+      {{ $t("managed.outcomeUnknown") }}
+    </p>
+    <dl
+      v-if="configuration?.copyProvenance"
+      class="configuration-editor__source"
+    >
+      <dt>{{ $t("managed.copyProvenance") }}</dt>
+      <dd>
+        {{ configuration.copyProvenance.origin }} ·
+        {{ configuration.copyProvenance.sourceRef }}
+      </dd>
+      <dt>{{ $t("managed.sourceRevision") }}</dt>
+      <dd>
+        {{ configuration.copyProvenance.sourceRevision }} · v{{
+          configuration.copyProvenance.sourceVersion
+        }}
+      </dd>
+      <dt>SHA-256</dt>
+      <dd>{{ configuration.copyProvenance.sourceDigest }}</dd>
+    </dl>
+    <ConfigurationCopyDialog
+      v-if="copyOpen && copySource"
+      :source="copySource"
+      @close="copyOpen = false"
+      @created="copied"
+    />
+    <ModalDialog
+      v-if="archiveOpen"
+      :title="$t('managed.archive')"
+      :busy="busy"
+      @close="archiveOpen = false"
+    >
+      <p>{{ $t("managed.archiveConfirm") }}</p>
+      <ProblemNotice v-if="problem" :problem="problem" />
+      <template #actions
+        ><button
+          class="button button--danger"
+          :disabled="busy || archiveAttempted"
+          @click="archive"
+        >
+          {{ $t("managed.archive") }}
+        </button></template
+      >
+    </ModalDialog>
     <SttActivationPanel
       v-if="kind === 'SYSTEM_STT' && configuration && revision"
       :configuration="configuration"
@@ -1185,7 +1292,7 @@ watch(
       <button
         v-if="configuration && revision"
         class="button"
-        :disabled="busy || sourceBusy || dirty"
+        :disabled="busy || sourceBusy || dirty || configuration.archived"
         @click="showImpact()"
       >
         {{ $t("managed.impact") }}
@@ -1503,6 +1610,13 @@ watch(
   max-width: 100%;
 }
 @media (max-width: 600px) {
+  .configuration-editor__source {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .configuration-editor__source dd {
+    margin-bottom: 8px;
+  }
   .configuration-editor__fields {
     grid-template-columns: minmax(0, 1fr);
   }

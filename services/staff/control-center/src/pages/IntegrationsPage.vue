@@ -976,6 +976,16 @@ onBeforeUnmount(() => {
           @update:search="catalogSearch = $event"
           @update:category="catalogCategory = $event"
           @connect="openConnection"
+          @copied="
+            (configuration) =>
+              router.push({
+                name: 'configuration',
+                params: {
+                  kind: configuration.kind,
+                  configurationRef: configuration.ref,
+                },
+              })
+          "
         />
 
         <IntegrationGrantsPanel
