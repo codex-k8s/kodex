@@ -247,6 +247,14 @@ chmod +x "$fixture_root/dev.sh" "$fixture_root/tools/dev/remote-dev.sh" \
   "$fixture_root/tools/install/prepare-host.sh" \
   "$fixture_root/infra/teleport/bootstrap-host.sh" \
   "$fixture_root/infra/teleport/bootstrap.sh"
+cp "$repository_root/tools/dev/reset-local.sh" "$fixture_root/tools/dev/reset-local.sh"
+cat >"$fixture_root/tools/dev/runtime-secret-maintenance.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >"${KODEX_TEST_REMOTE_COMMAND_LOG:?}"
+[[ -f ${KUBECONFIG:?} && "$(stat -c '%a' "$KUBECONFIG")" == 600 ]]
+printf '%s\n' "$KUBECONFIG" >"${KODEX_TEST_TEMP_KUBECONFIG_LOG:?}"
+EOF
 git -C "$fixture_root" init -q
 git -C "$fixture_root" config user.name 'Kodex contract'
 git -C "$fixture_root" config user.email 'contract@kodex.local'
@@ -321,6 +329,25 @@ rg -F -- '--mode readback' "$teleport_host_command_log" >/dev/null ||
   fail 'remote up omitted host-owned Teleport readback'
 rg -F -- '--mode apply' "$teleport_route_command_log" >/dev/null ||
   fail 'remote up omitted the in-cluster Teleport route apply'
+
+for maintenance_mode in plan apply; do
+  maintenance_args=(--plan-file "$temporary_directory/orphan.json")
+  if [[ "$maintenance_mode" == plan ]]; then
+    maintenance_args+=(--secret-name exact-metadata-target)
+  fi
+  "$fixture_root/tools/dev/remote-dev.sh" "orphan-$maintenance_mode" --env-file "$env_file" \
+    --expected-sha "$expected_sha" "${maintenance_args[@]}" >/dev/null
+  rg -F -- "--mode $maintenance_mode" "$remote_command_log" >/dev/null || fail 'maintenance mode was lost'
+  rg -F -- "--expected-sha $expected_sha" "$remote_command_log" >/dev/null || fail 'maintenance source pin was lost'
+  rg -F -- '--cluster-marker /var/lib/kodex-dev/cluster-identity.json' "$remote_command_log" >/dev/null || fail 'maintenance marker was lost'
+  temporary_kubeconfig=$(<"$temporary_kubeconfig_log")
+  [[ ! -e "$temporary_kubeconfig" ]] || fail 'maintenance kubeconfig survived'
+done
+"$fixture_root/tools/dev/remote-dev.sh" reset-local --env-file "$env_file" \
+  --expected-sha "$expected_sha" --confirm DELETE-KODEX-LOCAL-DATA >/dev/null
+rg -F -- '--mode reset' "$remote_command_log" >/dev/null || fail 'reset wrapper was bypassed'
+temporary_kubeconfig=$(<"$temporary_kubeconfig_log")
+[[ ! -e "$temporary_kubeconfig" ]] || fail 'reset kubeconfig survived'
 
 printf '\n# dirty\n' >>"$fixture_root/dev.sh"
 if "$fixture_root/tools/dev/remote-dev.sh" up --env-file "$env_file" \
