@@ -546,6 +546,7 @@ func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
 }
 func castDefinition(value entity.IntegrationDefinition) *controlplanev1.IntegrationDefinition {
 	result := &controlplanev1.IntegrationDefinition{
+		Version: value.Version, NextActions: append([]string{}, value.NextActions...),
 		Key: value.Key, Name: value.Name, Description: value.Description, Category: value.Category, BuiltIn: true, Available: value.Enabled,
 		SchemaVersion: value.SchemaVersion, DefinitionVersion: value.DefinitionVersion,
 		Origin: controlplanev1.IntegrationDefinitionOrigin_INTEGRATION_DEFINITION_ORIGIN_SHIPPED,

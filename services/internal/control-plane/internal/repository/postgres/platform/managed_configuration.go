@@ -46,6 +46,9 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 	if action == "COPY" {
 		return repository.copyManagedConfiguration(ctx, tx, current, input, payload)
 	}
+	if action == "COPY_CFG" {
+		return repository.copyCFG(ctx, tx, current, input, payload, kind)
+	}
 	configuration, err := repository.resolveManagedSet(ctx, tx, current, payload, kind, action == "CREATE")
 	if err != nil {
 		return commandOutcome{}, err
@@ -53,11 +56,17 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 	if err := rejectShippedRoleImageMutation(ctx, tx, current.organizationID, configuration); err != nil {
 		return commandOutcome{}, err
 	}
+	if configuration.Archived {
+		return commandOutcome{}, errs.ErrConflict
+	}
 	if (action != "CREATE" || payload.ConfigurationRef != "") &&
 		(input.Mutation.ExpectedVersion == nil || configuration.Version != *input.Mutation.ExpectedVersion) {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	var revision *entity.ManagedConfigurationRevision
+	if action == "ARCHIVE" {
+		return repository.archiveCFG(ctx, tx, current, configuration)
+	}
 	var publicationPlan *entity.RevisionImpactPlan
 	if action == "DETACH" {
 		if err := repository.cancelConfigurationWriteBacks(ctx, tx, current, configuration.Ref, ""); err != nil {
@@ -534,22 +543,26 @@ func (repository *Repository) copyManagedConfiguration(ctx context.Context, tx p
 
 func managedCommand(kind command.Kind) (string, string) {
 	mapping := map[command.Kind][2]string{
-		command.PreparePromptTemplateImpact:        {revisionservice.KindPromptTemplate, "PREPARE_PROMPT_IMPACT"},
-		command.PrepareRoleImageImpactPlan:         {revisionservice.KindRoleImage, "PREPARE_IMPACT"},
-		command.CreateEmailMailboxDraft:            {revisionservice.KindEmailMailbox, "CREATE"},
-		command.SaveEmailMailboxDraft:              {revisionservice.KindEmailMailbox, "SAVE"},
-		command.ValidateEmailMailboxDraft:          {revisionservice.KindEmailMailbox, "VALIDATE"},
-		command.PublishEmailMailboxDraft:           {revisionservice.KindEmailMailbox, "PUBLISH"},
-		command.DiscardEmailMailboxDraft:           {revisionservice.KindEmailMailbox, "DISCARD"},
-		command.SavePromptTemplateDraft:            {revisionservice.KindPromptTemplate, "SAVE"},
-		command.DiscardPromptTemplateDraft:         {revisionservice.KindPromptTemplate, "DISCARD"},
-		command.SaveRoleImageRevisionDraft:         {revisionservice.KindRoleImage, "SAVE"},
-		command.DiscardRoleImageRevisionDraft:      {revisionservice.KindRoleImage, "DISCARD"},
-		command.SaveIntegrationDefinitionDraft:     {revisionservice.KindIntegrationDefinition, "SAVE"},
-		command.DiscardIntegrationDefinitionDraft:  {revisionservice.KindIntegrationDefinition, "DISCARD"},
-		command.SaveSystemSTTConfigurationDraft:    {revisionservice.KindSystemSTT, "SAVE"},
-		command.DiscardSystemSTTConfigurationDraft: {revisionservice.KindSystemSTT, "DISCARD"},
-		command.CreatePromptTemplateDraft:          {revisionservice.KindPromptTemplate, "CREATE"}, command.ValidatePromptTemplateDraft: {revisionservice.KindPromptTemplate, "VALIDATE"}, command.PublishPromptTemplateDraft: {revisionservice.KindPromptTemplate, "PUBLISH"}, command.RebindPromptTemplate: {revisionservice.KindPromptTemplate, "REBIND"},
+		command.CopyRoleImageConfiguration:                {revisionservice.KindRoleImage, "COPY_CFG"},
+		command.CopyIntegrationDefinitionConfiguration:    {revisionservice.KindIntegrationDefinition, "COPY_CFG"},
+		command.ArchiveRoleImageConfiguration:             {revisionservice.KindRoleImage, "ARCHIVE"},
+		command.ArchiveIntegrationDefinitionConfiguration: {revisionservice.KindIntegrationDefinition, "ARCHIVE"},
+		command.PreparePromptTemplateImpact:               {revisionservice.KindPromptTemplate, "PREPARE_PROMPT_IMPACT"},
+		command.PrepareRoleImageImpactPlan:                {revisionservice.KindRoleImage, "PREPARE_IMPACT"},
+		command.CreateEmailMailboxDraft:                   {revisionservice.KindEmailMailbox, "CREATE"},
+		command.SaveEmailMailboxDraft:                     {revisionservice.KindEmailMailbox, "SAVE"},
+		command.ValidateEmailMailboxDraft:                 {revisionservice.KindEmailMailbox, "VALIDATE"},
+		command.PublishEmailMailboxDraft:                  {revisionservice.KindEmailMailbox, "PUBLISH"},
+		command.DiscardEmailMailboxDraft:                  {revisionservice.KindEmailMailbox, "DISCARD"},
+		command.SavePromptTemplateDraft:                   {revisionservice.KindPromptTemplate, "SAVE"},
+		command.DiscardPromptTemplateDraft:                {revisionservice.KindPromptTemplate, "DISCARD"},
+		command.SaveRoleImageRevisionDraft:                {revisionservice.KindRoleImage, "SAVE"},
+		command.DiscardRoleImageRevisionDraft:             {revisionservice.KindRoleImage, "DISCARD"},
+		command.SaveIntegrationDefinitionDraft:            {revisionservice.KindIntegrationDefinition, "SAVE"},
+		command.DiscardIntegrationDefinitionDraft:         {revisionservice.KindIntegrationDefinition, "DISCARD"},
+		command.SaveSystemSTTConfigurationDraft:           {revisionservice.KindSystemSTT, "SAVE"},
+		command.DiscardSystemSTTConfigurationDraft:        {revisionservice.KindSystemSTT, "DISCARD"},
+		command.CreatePromptTemplateDraft:                 {revisionservice.KindPromptTemplate, "CREATE"}, command.ValidatePromptTemplateDraft: {revisionservice.KindPromptTemplate, "VALIDATE"}, command.PublishPromptTemplateDraft: {revisionservice.KindPromptTemplate, "PUBLISH"}, command.RebindPromptTemplate: {revisionservice.KindPromptTemplate, "REBIND"},
 		command.CreateRoleImageRevisionDraft: {revisionservice.KindRoleImage, "CREATE"}, command.ValidateRoleImageRevision: {revisionservice.KindRoleImage, "VALIDATE"}, command.PublishRoleImageRevision: {revisionservice.KindRoleImage, "PUBLISH"}, command.RebindRoleImage: {revisionservice.KindRoleImage, "REBIND"},
 		command.CreateIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "CREATE"}, command.ValidateIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "VALIDATE"}, command.PublishIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "PUBLISH"}, command.RebindIntegrationDefinition: {revisionservice.KindIntegrationDefinition, "REBIND"},
 		command.CreateSystemSTTDraft: {revisionservice.KindSystemSTT, "CREATE"}, command.ValidateSystemSTTDraft: {revisionservice.KindSystemSTT, "VALIDATE"}, command.PublishSystemSTTDraft: {revisionservice.KindSystemSTT, "PUBLISH"}, command.RebindSystemSTT: {revisionservice.KindSystemSTT, "REBIND"},
@@ -624,7 +637,7 @@ func scanPublishedManagedRevision(row rowScanner) (managedRevisionScan, int64, t
 func scanManagedSet(row rowScanner) (managedSet, error) {
 	var item managedSet
 	err := row.Scan(&item.id, &item.Ref, &item.projectID, &item.ProjectRef, &item.Kind, &item.Name,
-		&item.ManagedBy, &item.Source, &item.SourceRevision, &item.Version, &item.UpdatedAt, &item.currentRevisionID)
+		&item.ManagedBy, &item.Source, &item.SourceRevision, &item.Version, &item.UpdatedAt, &item.currentRevisionID, &item.Archived, &item.CopyProvenance)
 	return item, err
 }
 func scanManagedCopy(row rowScanner) (managedSet, entity.ManagedConfigurationRevision, error) {
@@ -651,7 +664,7 @@ func scanManagedBinding(row rowScanner) (entity.ManagedConfigurationBindingSnaps
 		&set.Source, &set.SourceRevision, &set.Version, &set.UpdatedAt, &set.currentRevisionID,
 		&revision.internalID, &revision.Ref, &revision.Revision, &revision.State, &revision.ContentFormat,
 		&revision.Content, &revision.Digest, &revision.ParentRevisionRef, &diagnostics,
-		&revision.CreatedAt, &revision.ValidatedAt, &revision.PublishedAt)
+		&revision.CreatedAt, &revision.ValidatedAt, &revision.PublishedAt, &set.Archived, &set.CopyProvenance)
 	if err == nil && json.Unmarshal(diagnostics, &revision.ValidationDiagnostics) != nil {
 		err = errs.ErrUnavailable
 	}
@@ -746,6 +759,9 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 				return entity.ManagedConfigurationSet{}, nil, 0, "", err
 			}
 		}
+	}
+	if err := repository.projectCFGActions(ctx, tx, current, &set.ManagedConfigurationSet); err != nil {
+		return entity.ManagedConfigurationSet{}, nil, 0, "", err
 	}
 	next := ""
 	if len(items) > int(limit) {

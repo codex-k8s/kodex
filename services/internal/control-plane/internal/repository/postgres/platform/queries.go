@@ -1135,6 +1135,9 @@ func (repository *Repository) applyResultActionPermissions(
 	if err := repository.projectManagedRoleImageSource(ctx, runner, scope, result); err != nil {
 		return err
 	}
+	if err := repository.projectCFGActions(ctx, runner, scope, result.ManagedConfiguration); err != nil {
+		return err
+	}
 	if projectRef == "" {
 		switch {
 		case result.Agent != nil:
@@ -1811,7 +1814,17 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 		return nil, "", nil, errs.ErrInvalid
 	}
 	limit := boundedPage(filter.Page)
-	rows, err := repository.pool.Query(ctx, queryQueriesListintegrationdefinitionsSelectIntegrationDefinitionsCategory,
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, "", nil, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	authorization, err := repository.loadRoleImageAccessContext(ctx, tx, scope)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	canCopy := authorization.allowed("organization.manage", resolvedAccessTarget{scope: organizationTarget(scope.organizationRef)})
+	rows, err := tx.Query(ctx, queryQueriesListintegrationdefinitionsSelectIntegrationDefinitionsCategory,
 		strings.TrimSpace(filter.Category), strings.TrimSpace(filter.Query), cursor, limit+1)
 	if err != nil {
 		return nil, "", nil, errs.ErrUnavailable
@@ -1825,16 +1838,23 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 			&item.Key, &item.Name, &item.Description, &item.Category, &item.Optional, &item.Enabled,
 			&capabilities, &schema, &item.SchemaVersion, &item.DefinitionVersion, &item.Origin,
 			&item.Digest, &item.Adapter, &item.CredentialSecretKey,
-			&item.AdapterOwner, &item.ExecutionRoute, &item.AdapterReadiness,
+			&item.AdapterOwner, &item.ExecutionRoute, &item.AdapterReadiness, &item.Version,
 		); err != nil {
 			return nil, "", nil, errs.ErrUnavailable
 		}
 		if json.Unmarshal(capabilities, &item.Capabilities) != nil || json.Unmarshal(schema, &item.ConfigurationFields) != nil {
 			return nil, "", nil, errs.ErrUnavailable
 		}
+		if canCopy && item.Enabled && item.Origin == "SHIPPED" {
+			item.NextActions = []string{"COPY"}
+		}
 		result = append(result, item)
 	}
 	if rows.Err() != nil {
+		return nil, "", nil, errs.ErrUnavailable
+	}
+	rows.Close()
+	if err := tx.Commit(ctx); err != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
 	next := ""

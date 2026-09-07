@@ -6,7 +6,9 @@ WITH visible AS MATERIALIZED (
            COALESCE(revision.ref, '') AS revision_ref, COALESCE(revision.revision, 0) AS revision,
            COALESCE(revision.state, '') AS revision_state, COALESCE(revision.digest, '') AS revision_digest,
            COALESCE(recipe.ref, '') AS source_recipe_ref, COALESCE(project.id::text, '') AS source_project_id,
-           COALESCE(recipe_owner.ref, project_owner.ref, '') AS source_owner_ref
+           COALESCE(recipe_owner.ref, project_owner.ref, '') AS source_owner_ref, configuration.copy_provenance,
+           COALESCE(recipe.specification->>'SourceRef'=@shipped_source AND recipe.specification->>'EnvironmentKey'='system-base',false) AS shipped,
+           COALESCE(project_owner.ref,'') AS project_owner_ref
     FROM control_plane.managed_configuration_sets configuration
     LEFT JOIN control_plane.projects project ON project.id = configuration.project_id
     LEFT JOIN control_plane.subjects project_owner ON project_owner.id = project.created_by
@@ -18,6 +20,7 @@ WITH visible AS MATERIALIZED (
     LEFT JOIN control_plane.managed_configuration_revisions revision
       ON revision.id = configuration.current_revision_id AND revision.configuration_set_id = configuration.id
     WHERE configuration.organization_id = @organization_id::uuid
+      AND NOT configuration.archived
       AND (@project_ref = '' OR project.ref = @project_ref)
       AND (@authority_project = '' OR project.id = NULLIF(@authority_project, '')::uuid)
       AND (@kind = '' OR configuration.kind = @kind)
@@ -41,6 +44,6 @@ SELECT COALESCE(page.ref, ''), COALESCE(page.project_ref, ''), COALESCE(page.kin
        COALESCE(page.name, ''), COALESCE(page.managed_by, ''), COALESCE(page.source, ''),
        COALESCE(page.source_revision, ''), COALESCE(page.version, 0), COALESCE(page.updated_at, 'epoch'::timestamptz),
        COALESCE(page.revision_ref, ''), COALESCE(page.revision, 0), COALESCE(page.revision_state, ''), COALESCE(page.revision_digest, ''), totals.total,
-       COALESCE(page.source_recipe_ref, ''), COALESCE(page.source_project_id, ''), COALESCE(page.source_owner_ref, '')
+       COALESCE(page.source_recipe_ref, ''), COALESCE(page.source_project_id, ''), COALESCE(page.source_owner_ref, ''), page.copy_provenance, COALESCE(page.shipped,false), COALESCE(page.project_owner_ref,'')
 FROM (SELECT count(*) AS total FROM visible) totals LEFT JOIN page ON true
 ORDER BY page.ref;

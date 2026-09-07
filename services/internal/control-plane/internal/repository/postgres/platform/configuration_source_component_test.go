@@ -166,7 +166,7 @@ func testConfigurationSourceLifecycle(t *testing.T, ctx context.Context, reposit
 func testRoleImageSourcePublication(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner, worker value.Principal, connectionRef string, connectionVersion int64) {
 	t.Helper()
 	catalog, _ := promotionComponentCatalog(t)
-	repository.ConfigureRoleImageCatalog(catalog.Resolve)
+	repository.ConfigureRoleImageCatalog(catalog)
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "source-role-project"}, Payload: command.ProjectInput{Name: "Role source project", Language: "ru"}})
 	if err != nil || project.Project == nil {
 		t.Fatalf("source role project: %v", err)

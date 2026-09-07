@@ -36,6 +36,7 @@ func (repository *Repository) ListManagedConfigurations(ctx context.Context, pri
 		"organization_id": current.organizationID, "project_ref": filter.ProjectRef, "actor_id": current.actorID,
 		"authority_project": current.authorityProjectID, "evaluated_at": time.Now().UTC(),
 		"kind": filter.Category, "query": filter.Query, "cursor_ref": cursor, "page_size": limit + 1,
+		"shipped_source": platformOwnedRoleImageSource,
 	})
 	if err != nil {
 		return nil, 0, "", errs.ErrUnavailable
@@ -46,10 +47,11 @@ func (repository *Repository) ListManagedConfigurations(ctx context.Context, pri
 	for rows.Next() {
 		var item entity.ManagedConfigurationSet
 		var revision entity.ManagedConfigurationRevision
-		var sourceRecipeRef, sourceProjectID, sourceOwnerRef string
+		var sourceRecipeRef, sourceProjectID, sourceOwnerRef, projectOwnerRef string
+		var shipped bool
 		if err := rows.Scan(&item.Ref, &item.ProjectRef, &item.Kind, &item.Name, &item.ManagedBy, &item.Source,
 			&item.SourceRevision, &item.Version, &item.UpdatedAt, &revision.Ref, &revision.Revision, &revision.State, &revision.Digest, &total,
-			&sourceRecipeRef, &sourceProjectID, &sourceOwnerRef); err != nil {
+			&sourceRecipeRef, &sourceProjectID, &sourceOwnerRef, &item.CopyProvenance, &shipped, &projectOwnerRef); err != nil {
 			return nil, 0, "", errs.ErrUnavailable
 		}
 		if item.Ref == "" {
@@ -58,6 +60,13 @@ func (repository *Repository) ListManagedConfigurations(ctx context.Context, pri
 		if revision.Ref != "" {
 			item.CurrentRevision = &revision
 		}
+		projectTarget := resolvedAccessTarget{projectID: sourceProjectID, ownerSubjectRef: projectOwnerRef, scope: organizationTarget(current.organizationRef)}
+		permission := "organization.manage"
+		if item.ProjectRef != "" {
+			projectTarget.scope = entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: item.ProjectRef, ProjectRef: item.ProjectRef}
+			permission = "project.manage"
+		}
+		manage, sourceRead, build := authorization.allowed(permission, projectTarget), true, true
 		if item.Kind == "ROLE_IMAGE" {
 			target := resolvedAccessTarget{projectID: sourceProjectID, ownerSubjectRef: sourceOwnerRef, scope: organizationTarget(current.organizationRef)}
 			if sourceRecipeRef != "" {
@@ -67,7 +76,9 @@ func (repository *Repository) ListManagedConfigurations(ctx context.Context, pri
 			}
 			editable := authorization.allowed("image.source.view", target) && authorization.allowed("image.source.manage", target)
 			item.SourceEditable = &editable
+			sourceRead, build = authorization.allowed("image.source.view", target), authorization.allowed("image.build", target)
 		}
+		item.NextActions = cfgNextActions(item, manage, sourceRead, build, shipped)
 		items = append(items, item)
 	}
 	if rows.Err() != nil {

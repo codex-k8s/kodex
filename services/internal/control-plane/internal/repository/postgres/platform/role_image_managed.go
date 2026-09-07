@@ -118,10 +118,19 @@ func (repository *Repository) managedRoleImageTarget(ctx context.Context, tx pgx
 	if set.ManagedBy != "UI" && input.Action != "REQUEST_BUILD" {
 		return nil, errs.ErrConflict
 	}
+	if set.Archived && input.Action != "RESTORE" {
+		return nil, errs.ErrConflict
+	}
 	return &set, nil
 }
 
 func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context, tx pgx.Tx, current scope, input roleimagerepo.ManageInput, set *managedSet, result roleimagerepo.ManageResult) error {
+	if set != nil && (input.Action == "ARCHIVE" || input.Action == "RESTORE") {
+		if err := tx.QueryRow(ctx, queryCFGArchive, set.id, set.Version, input.Action == "ARCHIVE").Scan(&set.Version, &set.UpdatedAt); err != nil {
+			return errs.ErrVersionMismatch
+		}
+		set.Archived = input.Action == "ARCHIVE"
+	}
 	if input.Action != "CREATE" && input.Action != "UPDATE" {
 		if result.Build != nil && set != nil {
 			_, err := tx.Exec(ctx, queryRoleImageManagedBuild, current.organizationID, result.Build.Ref)
@@ -184,8 +193,9 @@ func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context,
 	return nil
 }
 
-func (repository *Repository) ConfigureRoleImageCatalog(resolve func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)) {
-	repository.roleImageCatalogResolver = resolve
+func (repository *Repository) ConfigureRoleImageCatalog(catalog *roleimageservice.Catalog) {
+	repository.roleImageCatalogResolver = catalog.Resolve
+	repository.roleImageBootstrapCopySelection = catalog.CopyBootstrapSelection
 }
 
 func (repository *Repository) validateSourceRoleImage(set managedSet, format, content string) error {

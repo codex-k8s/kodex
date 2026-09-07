@@ -20,6 +20,12 @@ var queryRoleImageSourceConfigurationTarget string
 // source для build worker остаётся частью его отдельного exact grant.
 func projectRoleImageSource(recipe *entity.RoleImageRecipe, builds []entity.ImageBuild, canRead, canEdit bool) {
 	recipe.SourceAvailable = canRead
+	if canRead && !slices.Contains(recipe.NextActions, "COPY") {
+		recipe.NextActions = append(recipe.NextActions, "COPY")
+	}
+	if !canRead {
+		recipe.NextActions = slices.DeleteFunc(recipe.NextActions, func(action string) bool { return action == "COPY" })
+	}
 	for index := range builds {
 		builds[index].SourceAvailable = canRead
 	}

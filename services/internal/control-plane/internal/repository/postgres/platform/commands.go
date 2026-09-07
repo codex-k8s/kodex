@@ -78,6 +78,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if err := repository.refreshSkillReceipt(ctx, tx, scope, &result); err != nil {
 			return command.Result{}, err
 		}
+		if err := repository.refreshCFGReceipt(ctx, tx, scope, &result); err != nil {
+			return command.Result{}, err
+		}
 		if exposesActorActions(input.Principal.CallerWorkload) {
 			if err := repository.applyResultActionPermissions(ctx, tx, scope, &result, ""); err != nil {
 				return command.Result{}, err
@@ -374,7 +377,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		command.PublishIntegrationDefinition, command.RebindIntegrationDefinition,
 		command.CreateSystemSTTDraft, command.ValidateSystemSTTDraft,
 		command.PublishSystemSTTDraft, command.RebindSystemSTT,
-		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration:
+		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration,
+		command.CopyRoleImageConfiguration, command.CopyIntegrationDefinitionConfiguration, command.ArchiveRoleImageConfiguration, command.ArchiveIntegrationDefinitionConfiguration:
 		return repository.changeManagedConfiguration(ctx, tx, scope, input)
 	default:
 		return commandOutcome{}, errs.ErrInvalid

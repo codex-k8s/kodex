@@ -11,6 +11,9 @@ import (
 )
 
 func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
+	if cfgLifecycleCommand(input.Kind) {
+		return repository.authorizeCFGLifecycle(ctx, tx, current, input)
+	}
 	if err := repository.authorizeAssistantContextCommand(ctx, tx, current, input); err != nil {
 		return err
 	}

@@ -708,7 +708,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		t.Fatalf("read runtime environment consumer fixture: %v", err)
 	}
 	roleCatalog, _ := promotionComponentCatalog(t)
-	repository.ConfigureRoleImageCatalog(roleCatalog.Resolve)
+	repository.ConfigureRoleImageCatalog(roleCatalog)
 	roleAgent := createLifecycleAgent(t, ctx, service, owner, environmentProjectRef, "managed-role-image-agent", "Managed image role")
 	roleContent := string(asJSON(map[string]any{"name": "Runtime role image", "roleImage": map[string]any{"roleDefinitionRef": roleAgent.RoleDefinitionRef, "environment": map[string]any{"environmentKey": "promotion"}}}))
 	roleImage := publishAndRebindManagedConfiguration(t, ctx, service, owner,
@@ -827,6 +827,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		t.Fatal("published managed prompt was deletable")
 	}
 	testManagedImpactPagination(t, ctx, service, owner, projectResult.Project.Ref, correctedRebound)
+	testCFGLifecycle(t, ctx, repository, service, owner, integrationReader, projectResult.Project.Ref, connection.Connection.Ref, integrationDefinition)
 }
 
 func testManagedPromptHistoryRedaction(
@@ -1712,7 +1713,7 @@ func testRuntimeConfigurationPublish(t *testing.T, ctx context.Context, reposito
 		recipes[0].PromotedImageReference != repository.roleImages.DefaultImageReference {
 		t.Fatalf("bootstrap role image is not active and promoted: recipes=%#v err=%v", recipes, err)
 	}
-	if recipes[0].ManagedLineage == nil || recipes[0].ManagedLineage.ManagedBy != "SHIPPED" || recipes[0].ManagedLineage.SourceRevision != repository.roleImages.DefaultImageDigest || !sameStrings(recipes[0].NextActions, []string{"OPEN"}) {
+	if recipes[0].ManagedLineage == nil || recipes[0].ManagedLineage.ManagedBy != "SHIPPED" || recipes[0].ManagedLineage.SourceRevision != repository.roleImages.DefaultImageDigest || !sameStrings(recipes[0].NextActions, []string{"OPEN", "COPY"}) {
 		t.Fatal("system base did not expose exact readonly shipped provenance")
 	}
 	for _, action := range []string{"UPDATE", "ARCHIVE", "RESTORE", "REQUEST_BUILD"} {

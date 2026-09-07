@@ -71,6 +71,29 @@ func (catalog *Catalog) List() []Environment {
 	return result
 }
 
+// Bootstrap recipe имеет отдельный ключ; копия выбирает среду по точному образу,
+// не добавляя к исходному образу пакеты либо инструменты каталога.
+func (catalog *Catalog) CopyBootstrapSelection(input entity.RoleImageRecipeInput) (entity.RoleEnvironmentSelection, error) {
+	var selected entity.RoleEnvironmentSelection
+	for _, environment := range catalog.ordered {
+		if !environment.Available || environment.Input.BaseImageReference != input.BaseImageReference || environment.Input.BaseImageDigest != input.BaseImageDigest || len(environment.Input.Packages) != 0 || len(environment.Input.Tools) != 0 {
+			continue
+		}
+		candidate := entity.RoleEnvironmentSelection{EnvironmentKey: environment.Key, Dockerfile: input.Dockerfile}
+		if _, err := catalog.Resolve(candidate); err != nil {
+			continue
+		}
+		if selected.EnvironmentKey != "" {
+			return entity.RoleEnvironmentSelection{}, errs.ErrConflict
+		}
+		selected = candidate
+	}
+	if selected.EnvironmentKey == "" {
+		return selected, errs.ErrConflict
+	}
+	return selected, nil
+}
+
 func (catalog *Catalog) Resolve(selection entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error) {
 	current, ok := catalog.byKey[selection.EnvironmentKey]
 	dockerfile := selection.Dockerfile
