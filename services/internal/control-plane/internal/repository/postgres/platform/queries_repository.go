@@ -27,6 +27,8 @@ var (
 	queryRepositoryBootstrapActivateProviderCredentialRevision string
 	//go:embed sql/provider_credential__get_current_for_reconcile.sql
 	queryProviderCredentialGetCurrentForReconcile string
+	//go:embed sql/provider_credential__historical_bootstrap_pin.sql
+	queryProviderCredentialHistoricalBootstrapPin string
 	//go:embed sql/provider_credential__insert_reconciled_revision.sql
 	queryProviderCredentialInsertReconciledRevision string
 	//go:embed sql/provider_account__activate_reconciled_credential.sql

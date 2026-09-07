@@ -4,11 +4,19 @@ title: Control-plane
 type: service
 status: approved
 owner: backend
-version: 1.3.1
-updated: 2026-09-04
+version: 1.3.2
+updated: 2026-09-07
 ---
 
 # Control-plane
+
+Повторный bootstrap признаёт прежний provider descriptor только при полном
+совпадении name/UID/resourceVersion/digest с immutable revision того же
+authoritative account и organization. Проверка выполняется в owner transaction
+после блокировки current account; исторический pin сохраняет current без
+rollback, bump или новой cleanup task. Неизвестный/частичный исторический pin
+не разрешает rotation. Прежний same-name и same-digest UID/RV recovery остаётся
+отдельным путём и проверяется только после exact history.
 
 `control-plane` — единственный авторитетный владелец универсальной web-first
 модели Kodex. Сервис не зависит от Mattermost, GitHub, Kubernetes или

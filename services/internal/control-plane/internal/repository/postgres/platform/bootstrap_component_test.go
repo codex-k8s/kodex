@@ -222,6 +222,9 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
 		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
+		t.Run("historical bootstrap preserves forward current", func(t *testing.T) {
+			testProviderBootstrapHistory(t, ctx, repository, pool)
+		})
 		seedObservedCatalogFixture(t, ctx, repository)
 	})
 	t.Run("provider credential refresh is fenced idempotent and capacity bounded", func(t *testing.T) {
