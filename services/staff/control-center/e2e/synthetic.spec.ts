@@ -12,6 +12,7 @@ import { checkRunsCatalog } from "./fixtures/runs-catalog";
 import { checkOrganizationCatalog } from "./fixtures/organization-catalog";
 import { checkFileSelection } from "./fixtures/file-selection";
 import { checkAssistantHistory } from "./fixtures/assistant-history";
+import { expectAssistantConversationActions } from "./assistant-readiness";
 import { checkHomeResults } from "./fixtures/home-results";
 import { checkResumableSessions } from "./fixtures/resumable-sessions";
 import { syntheticBrowserSession } from "./fixtures/browser-session";
@@ -447,6 +448,10 @@ for (const { width, height } of [
     await expect(
       page.getByRole("dialog", { name: "Kodex", exact: true }),
     ).toBeVisible();
+    await expectAssistantConversationActions(
+      page.getByRole("dialog", { name: "Kodex", exact: true }),
+      false,
+    );
     await expect
       .poll(() =>
         page.evaluate(

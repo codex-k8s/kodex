@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { authenticateOwner } from "./auth-flow";
+import { expectAssistantConversationActions } from "./assistant-readiness";
 import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
 import { withoutKodexAPICookies, writeStorageState } from "./storage-state";
@@ -99,9 +100,7 @@ test("локальный OIDC, API и основные экраны доступ
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
   const assistant = page.getByRole("dialog", { name: "Kodex" });
   await expect(assistant).toBeVisible();
-  await expect(
-    assistant.getByRole("button", { name: "Новый диалог", exact: true }),
-  ).toBeEnabled();
+  await expectAssistantConversationActions(assistant, true);
   expect(browserFailures).toEqual([]);
   await writeStorageState(
     environment.outputStorageState,
