@@ -8,9 +8,10 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport" \
+    "Usage: $0 host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport|orphan-plan|orphan-apply|reset-local" \
     '  [--env-file <private-path>] [--resource-prefix <slug>]' \
-    '  [--run-timeout-ms <milliseconds>] [--expected-sha <40-hex-commit>]' >&2
+    '  [--run-timeout-ms <milliseconds>] [--expected-sha <40-hex-commit>]' \
+    '  [--plan-file <private-path>] [--secret-name <single-metadata-name>] [--confirm DELETE-KODEX-LOCAL-DATA]' >&2
 }
 
 command_name=${1:-}
@@ -21,12 +22,18 @@ env_file=/srv/kodex-dev/private/remote.env
 resource_prefix=""
 run_timeout_ms=""
 expected_sha=""
+plan_file=""
+secret_name=""
+reset_confirmation=""
 while (($# > 0)); do
   case "$1" in
     --env-file) env_file=${2:-}; shift 2 ;;
     --resource-prefix) resource_prefix=${2:-}; shift 2 ;;
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
+    --plan-file) plan_file=${2:-}; shift 2 ;;
+    --secret-name) secret_name=${2:-}; shift 2 ;;
+    --confirm) reset_confirmation=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -41,8 +48,13 @@ esac
 [[ -f "$env_file" && $((8#$(stat -c '%a' "$env_file") & 8#077)) == 0 ]] ||
   fail 'private remote env must be a private regular file outside the source checkout'
 case "$command_name" in
-  host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport) ;;
+  host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport|orphan-plan|orphan-apply|reset-local) ;;
   *) usage; fail 'command is invalid' ;;
+esac
+
+case "$command_name" in
+  orphan-plan|orphan-apply|reset-local) ;;
+  *) [[ -z "$plan_file" && -z "$secret_name" && -z "$reset_confirmation" ]] || fail 'maintenance arguments require a maintenance command' ;;
 esac
 
 # shellcheck source=tools/install/load-env.sh
@@ -185,7 +197,7 @@ validate_source_checkout() {
     esac
   done < <(git -C "$repository_root" ls-files --others --exclude-standard -z)
   case "$command_name" in
-    host-preflight|host-apply|host-readback|up|acceptance|teleport)
+    host-preflight|host-apply|host-readback|up|acceptance|teleport|orphan-plan|orphan-apply|reset-local)
       [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
         fail 'initial remote deployment requires a clean source checkout'
       ;;
@@ -235,6 +247,27 @@ fi
 
 create_temporary_kubeconfig
 verify_cluster_marker
+case "$command_name" in
+  orphan-plan|orphan-apply)
+    [[ -n "$plan_file" && -z "$reset_confirmation" ]] || fail 'orphan maintenance arguments are invalid'
+    maintenance_args=(--mode "${command_name#orphan-}" --context "$context"
+      --expected-sha "$expected_sha" --cluster-marker "$cluster_marker" --plan-file "$plan_file")
+    if [[ "$command_name" == orphan-plan ]]; then
+      [[ -n "$secret_name" ]] || fail 'one metadata target is required'
+      maintenance_args+=(--secret-name "$secret_name")
+    else
+      [[ -z "$secret_name" ]] || fail 'apply target belongs to the private plan'
+    fi
+    bash "$repository_root/tools/dev/runtime-secret-maintenance.sh" "${maintenance_args[@]}"
+    exit 0
+    ;;
+  reset-local)
+    [[ -z "$plan_file" && -z "$secret_name" ]] || fail 'reset arguments are invalid'
+    bash "$repository_root/tools/dev/reset-local.sh" --context "$context" --expected-sha "$expected_sha" \
+      --cluster-marker "$cluster_marker" --confirm "$reset_confirmation"
+    exit 0
+    ;;
+esac
 case "$command_name" in
   up|status|smoke|e2e|acceptance)
     sudo -n "$repository_root/tools/install/prepare-host.sh" --mode readback \

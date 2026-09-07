@@ -32,6 +32,7 @@ require (
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/oapi-codegen/runtime v1.7.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/tools v0.47.0 // indirect
 )

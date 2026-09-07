@@ -62,6 +62,14 @@ test-install-contract:
 test-worker-strategy-upgrade:
 	@timeout 180s python3 scripts/tests/worker-strategy-upgrade-test.py
 
+.PHONY: test-runtime-orphan-api
+test-runtime-orphan-api:
+	@CGO_ENABLED=0 timeout 240s python3 scripts/tests/runtime-orphan-api-test.py
+
+.PHONY: test-runtime-orphan-postgres
+test-runtime-orphan-postgres:
+	@CGO_ENABLED=0 timeout 240s python3 scripts/tests/runtime-orphan-postgres-test.py
+
 test-authority-policy-codegen:
 	@./scripts/tests/authority-policy-codegen-test.sh
 
