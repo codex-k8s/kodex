@@ -10,7 +10,8 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --output-directory <new-directory>" \
     '  --release-registry-host <dns> --promoted-pull-host <dns>' \
-    '  [--release-registry-username-file <path> --release-registry-password-file <path>]' >&2
+    '  [--release-registry-username-file <path> --release-registry-password-file <path>]' \
+    '  [--secret-draft-keyring-file <exact-private-retained-file>]' >&2
 }
 
 output_directory=""
@@ -18,6 +19,7 @@ release_registry_host=""
 promoted_pull_host=""
 release_registry_username_file=""
 release_registry_password_file=""
+secret_draft_keyring_file=""
 while (($# > 0)); do
   case "$1" in
     --output-directory) output_directory="${2:-}"; shift 2 ;;
@@ -25,6 +27,7 @@ while (($# > 0)); do
     --promoted-pull-host) promoted_pull_host="${2:-}"; shift 2 ;;
     --release-registry-username-file) release_registry_username_file="${2:-}"; shift 2 ;;
     --release-registry-password-file) release_registry_password_file="${2:-}"; shift 2 ;;
+    --secret-draft-keyring-file) secret_draft_keyring_file="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -369,8 +372,12 @@ put_material kodex/image-admission/signing public_key "$output_directory/registr
 # установка использует create-only readback; blind apply не вращает этот ключ.
 mkdir -p "$output_directory/crypto/secret-drafts"
 secret_draft_key_directory=$(cd -- "$output_directory/crypto/secret-drafts" && pwd -P)
+secret_draft_arguments=(generate)
+if [[ -n "$secret_draft_keyring_file" ]]; then
+  secret_draft_arguments=(copy --input-file "$secret_draft_keyring_file")
+fi
 (cd "$repository_root/services/internal/secret-broker" &&
-  go run ./cmd/secret-draft-keys generate --output-file "$secret_draft_key_directory/keyring.json") ||
+  go run ./cmd/secret-draft-keys "${secret_draft_arguments[@]}" --output-file "$secret_draft_key_directory/keyring.json") ||
   fail 'secret draft keyring generation failed'
 put_material kodex/secret-broker-draft-keyring keyring.json "$secret_draft_key_directory/keyring.json"
 

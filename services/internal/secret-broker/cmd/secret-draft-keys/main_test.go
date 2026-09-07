@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestPrivateMaterialCommandsAndSafeCheck(t *testing.T) {
@@ -48,6 +51,53 @@ func TestPrivateMaterialCommandsAndSafeCheck(t *testing.T) {
 	for _, key := range doc.Keys {
 		if strings.Contains(output.String(), key.ID) || strings.Contains(output.String(), key.Material) {
 			t.Fatal("key identity or material exposed")
+		}
+	}
+	copyPath := filepath.Join(dir, "copy.json")
+	output.Reset()
+	if err := run([]string{"copy", "--input-file", second, "--output-file", copyPath}, &output); err != nil || output.Len() != 0 {
+		t.Fatal("private copy failed")
+	}
+	copied, err := os.ReadFile(copyPath)
+	defer clear(copied)
+	if err != nil || !bytes.Equal(copied, raw) {
+		t.Fatal("private copy changed keyring")
+	}
+	if err := run([]string{"copy", "--input-file", first, "--output-file", copyPath}, &output); err == nil {
+		t.Fatal("copy overwrote existing material")
+	}
+	var pretty bytes.Buffer
+	if json.Indent(&pretty, raw, "", "  ") != nil {
+		t.Fatal("fixture formatting failed")
+	}
+	prettyPath := filepath.Join(dir, "pretty.json")
+	if os.WriteFile(prettyPath, pretty.Bytes(), 0o600) != nil {
+		t.Fatal("fixture write failed")
+	}
+	prettyCopy := filepath.Join(dir, "pretty-copy.json")
+	if err := run([]string{"copy", "--input-file", prettyPath, "--output-file", prettyCopy}, &output); err != nil {
+		t.Fatal("formatted private copy failed")
+	}
+	canonical, err := os.ReadFile(prettyCopy)
+	defer clear(canonical)
+	if err != nil || !bytes.Equal(canonical, raw) {
+		t.Fatal("formatted copy changed key identities")
+	}
+}
+
+func TestGuardCheckUsesRuntimeParserAndSafeSummary(t *testing.T) {
+	object := corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "secret-broker-draft-key-guard", Namespace: "kodex-secret-drafts", UID: "fixture", ResourceVersion: "1", Labels: map[string]string{"app.kubernetes.io/managed-by": "kodex-secret-broker-bootstrap", "kodex.dev/purpose": "secret-draft-key-guard"}}, Data: map[string]string{"state.json": `{"v":1,"manifest":null,"uses":[]}`}}
+	for _, state := range []string{`{"v":1,"manifest":null,"uses":[]}`, `{"v":1,"manifest":null,"uses":[{"id":"private-marker","generation":1,"encryptions":0}]}`, `{"v":1,"manifest":null,"uses":[],"unknown":"private-marker"}`} {
+		object.Data["state.json"] = state
+		raw, _ := json.Marshal(object)
+		var output bytes.Buffer
+		err := checkGuard(bytes.NewReader(raw), &output)
+		if state == `{"v":1,"manifest":null,"uses":[]}` {
+			if err != nil || output.String() != "null\n" {
+				t.Fatal("genesis guard check failed")
+			}
+		} else if err == nil || output.Len() != 0 {
+			t.Fatal("invalid retained guard accepted or exposed")
 		}
 	}
 }

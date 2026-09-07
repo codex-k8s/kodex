@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"syscall"
 )
 
@@ -59,6 +60,17 @@ func CheckFile(input string) (MaterialSummary, error) {
 	document, summary, err := readMaterial(input)
 	clearKeyring(&document)
 	return summary, err
+}
+
+// CopyFile переносит только проверенный private keyring в новый O_EXCL файл.
+func CopyFile(input, output string) error {
+	document, _, err := readMaterial(input)
+	defer clearKeyring(&document)
+	if err != nil {
+		return err
+	}
+	sort.Slice(document.Keys, func(i, j int) bool { return document.Keys[i].Generation < document.Keys[j].Generation })
+	return writeMaterial(output, document)
 }
 
 func appendRandomKey(document *keyringDocument, generation int64) error {

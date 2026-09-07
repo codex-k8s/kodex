@@ -4,11 +4,11 @@ umask 077
 
 fail() { printf 'Secret draft bootstrap failed: %s\n' "$1" >&2; exit 1; }
 usage() {
-  printf '%s\n' 'Usage: bootstrap-secret-drafts.sh ensure|rotate --context <exact-context> --keyring-file <private-file> [--kubeconfig-file <private-file>] [--expected-revision <revision>]' >&2
+  printf '%s\n' 'Usage: bootstrap-secret-drafts.sh ensure|rotate|restore --context <exact-context> --keyring-file <private-file> [--kubeconfig-file <private-file>] [--expected-revision <revision>]' >&2
 }
 
 mode=${1:-}
-[[ "$mode" == ensure || "$mode" == rotate ]] || { usage; exit 1; }
+[[ "$mode" == ensure || "$mode" == rotate || "$mode" == restore ]] || { usage; exit 1; }
 shift
 expected_context=""
 keyring_file=""
@@ -27,7 +27,7 @@ while (($# > 0)); do
 done
 [[ -n "$expected_context" && "$keyring_file" == /* && -s "$keyring_file" && ! -L "$keyring_file" ]] || fail 'exact context and private keyring file are required'
 [[ "$mode" != rotate || "$expected_revision" =~ ^[1-9][0-9]{0,8}$ ]] || fail 'rotation expected revision is required'
-[[ "$mode" != ensure || -z "$expected_revision" ]] || fail 'bootstrap does not accept a rotation revision'
+[[ "$mode" == rotate || -z "$expected_revision" ]] || fail 'bootstrap does not accept a rotation revision'
 [[ "$readback_timeout" =~ ^[1-9][0-9]?$ ]] && ((readback_timeout <= 60)) || fail 'readback timeout is invalid'
 for command_name in kubectl jq go cmp stat mktemp; do
   command -v "$command_name" >/dev/null 2>&1 || fail 'required bootstrap tool is unavailable'
@@ -42,7 +42,15 @@ if [[ -n "$kubeconfig_file" ]]; then
   kube_arguments+=(--kubeconfig "$kubeconfig_file")
 fi
 kube() { kubectl "${kube_arguments[@]}" "$@"; }
+recovery_arguments=(--context "$expected_context")
+[[ -z "$kubeconfig_file" ]] || recovery_arguments+=(--kubeconfig-file "$kubeconfig_file")
+recovery() { python3 "$repository_root/tools/install/draft-key-recovery.py" "$1" \
+  "${recovery_arguments[@]}" --keyring-file "$keyring_file"; }
 keyring_check() { (cd "$broker_root" && go run ./cmd/secret-draft-keys check --input-file "$1"); }
+# Нормализуем только сериализацию проверенного private keyring, не key identity.
+(cd "$broker_root" && go run ./cmd/secret-draft-keys copy --input-file "$keyring_file" \
+  --output-file "$temporary_directory/candidate-keyring.json") >/dev/null 2>&1 || fail 'candidate keyring is invalid'
+keyring_file="$temporary_directory/candidate-keyring.json"
 keyring_check "$keyring_file" >"$temporary_directory/candidate-summary.json" 2>/dev/null || fail 'candidate keyring is invalid'
 candidate_revision=$(jq -er '.revision' "$temporary_directory/candidate-summary.json")
 candidate_digest=$(jq -er '.digest' "$temporary_directory/candidate-summary.json")
@@ -54,6 +62,7 @@ kube -n kodex-secret-drafts get configmap secret-broker-draft-key-guard --ignore
 kube -n kodex-system get secret secret-broker-draft-keyring --ignore-not-found -o json >"$temporary_directory/current.json" 2>/dev/null || fail 'keyring projection read failed'
 if [[ ! -s "$temporary_directory/guard.json" ]]; then
   [[ "$mode" == ensure && ! -s "$temporary_directory/current.json" && "$candidate_revision" == 1 ]] || fail 'missing durable key guard cannot be reinitialized'
+  recovery validate-genesis || fail 'retained objects forbid key guard genesis'
   jq -n '{apiVersion:"v1",kind:"ConfigMap",metadata:{name:"secret-broker-draft-key-guard",namespace:"kodex-secret-drafts",labels:{
     "app.kubernetes.io/managed-by":"kodex-secret-broker-bootstrap","kodex.dev/purpose":"secret-draft-key-guard"}},
     data:{"state.json":"{\"v\":1,\"manifest\":null,\"uses\":[]}"}}' >"$temporary_directory/genesis.json"
@@ -71,6 +80,7 @@ jq -e '
   (.data["state.json"] | fromjson | .v == 1 and (.uses | type == "array"))
 ' "$temporary_directory/guard.json" >/dev/null 2>&1 || fail 'key guard identity or state is invalid'
 
+current_read_number=0
 read_current() {
   jq -e '.metadata.namespace == "kodex-system" and .metadata.name == "secret-broker-draft-keyring" and
     (.metadata.uid | type == "string" and length > 0) and (.metadata.resourceVersion | type == "string" and length > 0) and
@@ -80,11 +90,21 @@ read_current() {
   ' "$temporary_directory/current.json" >/dev/null 2>&1 || fail 'keyring projection identity is invalid'
   jq -rj '.data["keyring.json"] | @base64d' "$temporary_directory/current.json" >"$temporary_directory/current-keyring.json" 2>/dev/null || fail 'keyring projection payload is invalid'
   keyring_check "$temporary_directory/current-keyring.json" >"$temporary_directory/current-summary.json" 2>/dev/null || fail 'serving keyring is invalid'
+  current_read_number=$((current_read_number + 1))
+  (cd "$broker_root" && go run ./cmd/secret-draft-keys copy \
+    --input-file "$temporary_directory/current-keyring.json" \
+    --output-file "$temporary_directory/current-canonical-$current_read_number.json") >/dev/null 2>&1 || fail 'serving keyring is invalid'
+  cp "$temporary_directory/current-canonical-$current_read_number.json" "$temporary_directory/current-keyring.json"
 }
 
 if [[ ! -s "$temporary_directory/current.json" ]]; then
-  [[ "$mode" == ensure && "$candidate_revision" == 1 ]] || fail 'rotation requires an existing keyring'
-  jq -e '.data["state.json"] | fromjson | .manifest == null and .uses == []' "$temporary_directory/guard.json" >/dev/null 2>&1 || fail 'retained key guard forbids replacing a missing keyring'
+  [[ "$mode" != rotate ]] || fail 'rotation requires an existing keyring'
+  if jq -e '.data["state.json"] | fromjson | .manifest == null and .uses == []' "$temporary_directory/guard.json" >/dev/null 2>&1; then
+    [[ "$mode" == ensure && "$candidate_revision" == 1 ]] || fail 'genesis requires an initial keyring'
+  else
+    recovery validate-restore || fail 'retained key guard forbids replacing a missing keyring'
+  fi
+  recovery backup || fail 'retained key backup is unavailable'
   jq -n --rawfile keyring "$keyring_file" '{apiVersion:"v1",kind:"Secret",type:"Opaque",metadata:{
     name:"secret-broker-draft-keyring",namespace:"kodex-system",labels:{
     "app.kubernetes.io/managed-by":"kodex-secret-broker-bootstrap","kodex.dev/purpose":"secret-draft-keyring"}},
@@ -93,6 +113,9 @@ if [[ ! -s "$temporary_directory/current.json" ]]; then
   kube -n kodex-system get secret secret-broker-draft-keyring -o json >"$temporary_directory/current.json" 2>/dev/null || fail 'keyring bootstrap readback failed'
 fi
 read_current
+if [[ "$mode" == restore ]]; then
+  recovery validate-restore || fail 'restore does not match retained key guard'
+fi
 if ! cmp -s "$keyring_file" "$temporary_directory/current-keyring.json"; then
   [[ "$mode" == rotate ]] || fail 'existing keyring differs; explicit rotation is required'
   current_revision=$(jq -er '.revision' "$temporary_directory/current-summary.json")
@@ -103,12 +126,14 @@ if ! cmp -s "$keyring_file" "$temporary_directory/current-keyring.json"; then
     ($new.keys | length) == ($old.keys | length) + 1 and
     $new.current != $old.current
   ' >/dev/null 2>&1 || fail 'rotation must retain every previous read key'
+  recovery backup || fail 'retained key backup is unavailable'
   jq --rawfile keyring "$keyring_file" '.data = {"keyring.json":($keyring | @base64)}' "$temporary_directory/current.json" >"$temporary_directory/replace.json"
   # metadata.resourceVersion — обязательный CAS; force/apply здесь запрещены.
   kube replace -f "$temporary_directory/replace.json" >/dev/null 2>&1 || fail 'keyring rotation outcome requires exact readback'
 elif [[ "$mode" == rotate ]]; then
   [[ "$candidate_revision" == "$((expected_revision + 1))" ]] || fail 'rotation retry does not match expected revision'
 fi
+recovery backup || fail 'retained key backup readback failed'
 kube -n kodex-system get secret secret-broker-draft-keyring -o json >"$temporary_directory/current.json" 2>/dev/null || fail 'keyring final readback failed'
 read_current
 cmp -s "$keyring_file" "$temporary_directory/current-keyring.json" || fail 'keyring final bytes do not match candidate'

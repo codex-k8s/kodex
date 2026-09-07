@@ -66,7 +66,31 @@ if env "${fixture_environment[@]}" KODEX_TEST_LOCAL_DOWN_FAIL=true \
 fi
 [[ -f "$temporary/state/render.yaml" && -f "$temporary/state/authority-source-state.json" ]] ||
   fail 'failed reset removed the profile or authority marker'
+mkdir "$temporary/namespaces"
+for namespace in kodex-runtime kodex-system kodex-secret-drafts identity kodex-trust teleport; do
+  touch "$temporary/namespaces/$namespace"
+done
+fixture_environment+=("KODEX_TEST_LOCAL_NAMESPACE_STATE=$temporary/namespaces")
+printf 'private fixture\n' >"$temporary/state/credentials.env"
+if env "${fixture_environment[@]}" KODEX_DEV_CONFIRM_DOWN=unconfirmed \
+  "$root/dev.sh" "${down_arguments[@]}" >/dev/null 2>&1; then
+  fail 'unconfirmed destructive down was accepted'
+fi
+[[ ! -e "$temporary/namespaces/deleted" && -e "$temporary/namespaces/kodex-secret-drafts" ]] ||
+  fail 'unconfirmed down changed retained namespace'
+if env "${fixture_environment[@]}" KODEX_TEST_LOCAL_DOWN_NAMESPACE_FAIL=kodex-secret-drafts \
+  "$root/dev.sh" "${down_arguments[@]}" >/dev/null 2>&1; then
+  fail 'failed retained namespace deletion was accepted'
+fi
+[[ -f "$temporary/state/render.yaml" && -e "$temporary/namespaces/kodex-secret-drafts" &&
+  -e "$temporary/namespaces/identity" ]] || fail 'partial failed down continued or removed state markers'
+for namespace in kodex-runtime kodex-system; do touch "$temporary/namespaces/$namespace"; done
+rm "$temporary/namespaces/deleted"
 env "${fixture_environment[@]}" "$root/dev.sh" "${down_arguments[@]}" >/dev/null
+[[ "$(cat "$temporary/namespaces/deleted")" == $'kodex-runtime\nkodex-system\nkodex-secret-drafts\nidentity\nkodex-trust' ]] ||
+  fail 'explicit down omitted retained state or changed deletion order'
+[[ -e "$temporary/namespaces/teleport" && -f "$temporary/state/credentials.env" ]] ||
+  fail 'explicit down removed unrelated namespace or private inputs'
 [[ ! -e "$temporary/state/render.yaml" && ! -e "$temporary/state/authority-source-state.json" ]] ||
   fail 'successful reset retained the old profile or authority marker'
 [[ "$("$resolver" web-only "$temporary/state/render.yaml")" == web-only ]] ||

@@ -10,6 +10,14 @@ updated: 2026-09-07
 
 # Безопасность распределенных сервисов и служебного состояния
 
+Refresh namespace не удаляет последнюю копию ключей retained ciphertext.
+Bootstrap/rotation сначала сохраняет отдельный immutable backup, подтверждает
+его exact readback, затем публикует serving projection. Backup принадлежит
+закрытому purpose, не является draft/orphan и не выдаётся обычным клиентам.
+Восстановление проверяет существующий durable manifest и namespace UID, не
+обнуляет antirollback или счётчики. Отсутствие ciphertext либо нулевой счётчик
+не доказывают разрешение заменить неизвестный ключ.
+
 Bootstrap/import credential публикует новый immutable объект от собственного
 закрытого publisher после разрешения actual account владельцем. Он не копирует
 provenance runtime writer на старый объект. Reader проверяет exact account,

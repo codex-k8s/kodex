@@ -4,8 +4,8 @@ title: Защищённые черновики Runtime Secret
 type: operations
 status: approved
 owner: developer
-version: 1.3.0
-updated: 2026-09-06
+version: 1.4.0
+updated: 2026-09-07
 ---
 
 # Граница поставки
@@ -70,13 +70,80 @@ workload и действует deny-all NetworkPolicy. Broker получает �
 находится в `kodex-system` и проецируется read-only только в контейнер broker,
 без `subPath`. Доступ к прочим platform Secrets через этот Role не появляется.
 
-`generate-material.sh` создаёт новый installation keyring. Его material и
+`generate-material.sh` создаёт новый installation keyring только для genesis;
+`--secret-draft-keyring-file` переносит проверенную retained копию. Его material и
 projection files остаются в owner-private installation directory.
 `materialize-secrets.sh` передаёт этот единственный Secret отдельному
 `bootstrap-secret-drafts.sh ensure`; общий declarative apply его не обновляет.
 Genesis guard создаётся только при отсутствии и keyring, и guard. Существующий
 guard никогда не сбрасывается. Удалённый guard при сохранённом keyring требует
 восстановления точного защищённого backup, а не повторной инициализации.
+Если guard и serving projection отсутствуют одновременно, genesis также
+запрещён при любом Secret в retained namespace, включая backup и ciphertext.
+
+## Сохранение и exact recovery после refresh (#1156)
+
+`draft-key-recovery.py` сохраняет immutable Secret отдельного purpose
+`secret-draft-key-backup` в retained `kodex-secret-drafts`. Имя связывает revision
+и digest, annotations — полный canonical digest и UID retained namespace.
+Перед serving create/rotation выполняется backup и независимый readback; старые
+backup не перезаписываются и не удаляются. Это не клиентский draft payload:
+label encrypted draft отсутствует, exact Store Read/Lookup/Delete его отвергают.
+RBAC не расширяется: broker уже получает тот же материал через serving volume;
+в retained namespace только его RoleBinding, без list, с get/create/delete.
+Обычным PWA/CP клиентам Kubernetes backup не выдаётся.
+
+| Переход | Предусловие и эффект | Crash/replay |
+| --- | --- | --- |
+| Первый ensure | Genesis guard, новый keyring revision1; backup → serving create | UNKNOWN backup останавливает запуск; повтор начинает GET, не повторяет POST вслепую |
+| Rotation | Сохранение всех read keys, next revision, backup → serving resourceVersion CAS | Неуспешный CAS сохраняет прежний current и безопасный неиспользованный backup; broker ACK обязателен |
+| Local refresh | `preserve` до namespace DELETE/rm material; serving UID/RV и retained manifest/namespace повторно проверены | Missing/mismatched backup блокирует destructive шаг; rotation использует тот же backup-before-publish protocol |
+| Generate после refresh | `export` exact backup принятого manifest, затем canonical private copy | Файлы под material не являются единственной копией; повтор readback без замены ключей |
+| Missing serving | `restore` или ensure с exact candidate совпадающего retained manifest | Восстанавливается только projection; guard/uses не меняются, повтор подтверждает bytes |
+| Lost keys | Нет копии с exact canonical manifest | Закрытый отказ; пустой список drafts/нулевые encryptions не разрешают reset |
+
+Повторный guard read допускает рост encryptions, но не уменьшение; смена manifest,
+guard UID или namespace UID останавливает операцию. Операторы применяют текущий
+repo-owned protocol последовательно; конкурирующий старый installer не считается
+поддерживаемым способом rotation. Serving keyring, не подтверждённый retained
+manifest, блокирует refresh до завершения rotation. Retained backup не является
+заменой внешней защищённой резервной копии всего контура.
+
+Для уже отсутствующей projection и найденной внешней private копии:
+
+```bash
+./tools/install/bootstrap-secret-drafts.sh restore --context "$EXACT_CONTEXT" \
+  --keyring-file "$EXACT_RETAINED_KEYRING_FILE"
+```
+
+Для подготовки нового material вручную через repo-owned installer:
+
+```bash
+python3 tools/install/draft-key-recovery.py export --context "$EXACT_CONTEXT" \
+  --output-directory "$PRIVATE_RECOVERY_DIRECTORY"
+```
+
+Каталог должен уже существовать, иметь mode0700 и принадлежать оператору. Вывод —
+только путь нового private0400 файла; `generate-material.sh` принимает этот путь
+через `--secret-draft-keyring-file`. Обычный `dev.sh up` соединяет шаги сам.
+`reset-local` не расширялся; он не заявляется полным безопасным reset D6.
+Отдельный явный `dev.sh down` с exact `KODEX_DEV_CONFIRM_DOWN` удаляет также
+`kodex-secret-drafts` после runtime/system и до identity/trust. Это полный снос
+старой draft identity: ciphertext, guard/uses и backup уничтожаются вместе;
+такой операторский выбор разрешён только для заведомо ненужной disposable
+установки. Без подтверждения удалений нет. Host/SSH/Teleport, private inputs и
+evidence этим действием не удаляются. Обычные preserve/ensure/refresh сохраняют
+retained state; автоматический reset при потерянных ключах не добавлен.
+Для инцидента 5e864d32 отсутствие старых ключей остаётся невосстановленным
+состоянием, пока не найдена exact копия. Prevention не объявляет live recovery PASS.
+
+Проверки: existing `test-secret-broker-drafts`,
+`test-local-material-contract-revision`, install/render и
+`make test-secret-draft-key-recovery-api` с `KODEX_DRAFT_RECOVERY_TEST_IMAGE`
+(локальный cached immutable k3s image ID, без pull), бюджет360s. API fixture
+не запускает workloads/provider; ACK manifest задаётся test-owned записью,
+реальный parser/crypto проверяется broker unit. Context7 `/kubernetes/website`:
+namespace deletion, immutable Secret и UID/resourceVersion preconditions.
 
 Для согласованной ротации используются только repo-owned команды. Переменные
 с путями указывают на private файлы, `EXACT_CONTEXT` — на разрешённый disposable
