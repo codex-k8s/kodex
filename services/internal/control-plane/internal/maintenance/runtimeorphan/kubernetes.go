@@ -344,7 +344,7 @@ func (k *Kubernetes) Delete(ctx context.Context, d Descriptor) error {
 }
 func (k *Kubernetes) Absent(ctx context.Context, d Descriptor) (bool, error) {
 	s, r, err := k.Namespaces(ctx)
-	if err != nil || s != k.System || r != k.Runtime {
+	if err != nil || !s.Equal(k.System) || !r.Equal(k.Runtime) {
 		return false, ErrGuard
 	}
 	_, absent, err := k.Metadata(ctx, d.Name)

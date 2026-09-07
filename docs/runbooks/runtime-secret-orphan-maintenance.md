@@ -4,11 +4,17 @@ title: Очистка старой disposable RuntimeSecret materialization
 type: runbook
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-07
 ---
 
 # Очистка старой disposable materialization
+
+Сравнение creation timestamps между API и JSON receipt использует точный момент,
+а не Go `time.Time` Location. UID/RV и остальные guards сохраняются. После
+обновления CLI старый неизменённый PLANNED receipt сохраняется как evidence;
+новый plan создаётся и сверяется отдельно на новом source SHA. Receipt UNKNOWN
+не обходится новым plan. Основание сравнения времени: [Go time.Time](https://pkg.go.dev/time#Time).
 
 Refs #1141, #1031. Это операторская CLI владельца CP, а не runtime recovery
 и не новый deployable. Production запрещён. Исполнение допускается после

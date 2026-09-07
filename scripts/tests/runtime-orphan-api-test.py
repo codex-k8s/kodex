@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory() as tmp:
         while run(["docker", "exec", name, "kubectl", "get", "--raw=/readyz"]).returncode:
             assert time.monotonic() < deadline, "API readiness deadline"
             time.sleep(1)
-        result = run(["docker", "exec", "-e", "KODEX_ORPHAN_API_FIXTURE=1", name,
+        result = run(["docker", "exec", "-e", "KODEX_ORPHAN_API_FIXTURE=1", "-e", "TZ=UTC", name,
                       "/orphan.test", "-test.run=^TestOrphanActualAPI$", "-test.v", "-test.timeout=100s"], timeout=110)
         print(result.stdout, end="")
         assert result.returncode == 0, "actual orphan API regression failed"

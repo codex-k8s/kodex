@@ -142,7 +142,7 @@ func run(ctx context.Context, args []string) error {
 		return op.ErrGuard
 	}
 	s, r, err := k.Namespaces(ctx)
-	if err != nil || s != p.Snapshot.System || r != p.Snapshot.Runtime {
+	if err != nil || !s.Equal(p.Snapshot.System) || !r.Equal(p.Snapshot.Runtime) {
 		return op.ErrGuard
 	}
 	k.System = s
