@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 75, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 76, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -419,7 +419,7 @@ func delegatedTargetedWorker(
 	result.AuthoritySources = []string{"DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"}
 	result.ProjectRequired = make(map[string]struct{}, len(operations))
 	for operation := range operations {
-		if operation != "platform.runtime.credentials.system-assistant.materialize" {
+		if operation == "platform.runtime.credentials.materialize" {
 			result.ProjectRequired[operation] = struct{}{}
 		}
 	}

@@ -11,6 +11,9 @@ import (
 const sttModelCatalogOperation = "platform.stt.model-catalog.get"
 
 func (repository *Repository) ResolveProofAuthority(ctx context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
+	if runtimeMaterializationProofOperation(input.Operation) {
+		return repository.resolveRuntimeMaterializationProof(ctx, input)
+	}
 	if input.Operation == platformrepo.ProviderModelCatalogOperation {
 		return repository.ResolveProviderModelCatalogProof(ctx, input)
 	}

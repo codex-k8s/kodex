@@ -1903,6 +1903,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	if stringMap(lease, "effectiveReasoningEffort") != "high" || stringMap(lease, "reasoningMode") != "SUPPORTED" {
 		t.Fatal("materialization lost server-owned model effort")
 	}
+	testClaimedRuntimeMaterializationProof(t, ctx, repository, lease, "runtime-provider-affinity", true)
 	workspacePolicy, ok := lease["workspacePolicy"].(entity.RuntimeWorkspacePolicy)
 	if !ok || !reflect.DeepEqual(workspacePolicy, runtimeWorkspacePolicy()) {
 		t.Fatalf("claim does not carry a bounded workspace policy: %#v", lease["workspacePolicy"])
@@ -1949,6 +1950,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		t.Fatal(err)
 	}
 	completed := completeClaimedExecution(t, ctx, service, worker, lease, "provider-affinity-first", false)
+	testClaimedRuntimeMaterializationProof(t, ctx, repository, lease, "runtime-provider-affinity", false)
 	if completed.Run == nil || completed.Run.State != "SUCCEEDED" {
 		t.Fatalf("complete provider affinity run: run=%#v", completed.Run)
 	}

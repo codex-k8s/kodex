@@ -350,6 +350,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	actorReference := ""
 	actorRevision := uint64(1)
 	callerCredentialRevision := uint64(1)
+	var workerGrantExpiresAt time.Time
 	credentialDigest := sha256.Sum256([]byte(credential))
 	if producer.CallerWorkloadID == "control-api-gateway" {
 		verified, err := service.oidc.VerifyToken(ctx, credential)
@@ -380,6 +381,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = "kodex-system-subject", "kodex-installation"
 		callerCredentialRevision = grant.CredentialGeneration
+		workerGrantExpiresAt = time.Unix(grant.ExpiresAt, 0)
 	}
 	resolved, err := service.owner.ResolveProofAuthority(ctx, principal)
 	if err != nil {
@@ -390,6 +392,12 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 		actorRevision = resolved.ActorVersion
 	}
 	actor := identity{ID: resolved.ActorID, Provenance: provenance{Source: actorSource, Reference: actorReference, Revision: actorRevision, DigestSHA256: hex.EncodeToString(credentialDigest[:])}}
+	if runtimeMaterializationProofRequired(input.OperationID) || resolved.RuntimeExecution != nil {
+		actor, actorKind, err = runtimeExecutionActor(resolved, producer.CallerWorkloadID, input.OperationID)
+		if err != nil {
+			return ResolveResult{}, err
+		}
+	}
 	tenant := domainIdentity("DOMAIN_STATE", resolved.OrganizationID, resolved.OrganizationVersion)
 	proofAuthority := authority{ActorKind: actorKind, Actor: actor, Tenant: tenant}
 	if binding.ProjectRequired {
@@ -405,6 +413,12 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	}
 	now := service.now().UTC().Truncate(time.Second)
 	expiresAt := now.Add(time.Duration(producer.AuthorityProofMaxAgeSeconds) * time.Second)
+	if resolved.RuntimeExecution != nil {
+		expiresAt, err = runtimeExecutionProofExpiry(now, expiresAt, resolved.RuntimeExecution.ExpiresAt, workerGrantExpiresAt)
+		if err != nil {
+			return ResolveResult{}, err
+		}
+	}
 	var authentication *credentialAuthentication
 	if actorKind == "HUMAN" && !principal.ExternalAuthenticatedAt.IsZero() {
 		authentication = &credentialAuthentication{AuthenticatedAt: principal.ExternalAuthenticatedAt.Unix(), ACR: principal.ExternalACR, AMR: append([]string(nil), principal.ExternalAMR...)}

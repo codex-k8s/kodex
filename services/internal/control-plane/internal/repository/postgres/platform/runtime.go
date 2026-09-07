@@ -875,6 +875,14 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				inputDigestHex, expiresAt); err != nil {
 				return commandOutcome{}, fmt.Errorf("insert runtime lease: %w", errs.ErrUnavailable)
 			}
+			if err := registerRuntimeMaterializationTx(ctx, tx, scope.organizationID, runtimeMaterializationInput{
+				WorkloadInstance: payload.WorkloadInstance, LeaseRef: leaseRef, Fence: fence,
+				Generation: int64(generation), RuntimeRevisionRef: revisionRef, RuntimeRevisionDigest: revisionDigestHex,
+				SessionRef: sessionRef, TurnRef: turnRef, Attempt: int64(attempt), InputDigest: inputDigestHex,
+				SystemAssistant: projectRef == "",
+			}); err != nil {
+				return commandOutcome{}, err
+			}
 			if _, err := tx.Exec(ctx, queryRuntimeClaimexecutionUpdateRunNodesStateStartedAtVersion, nodeID); err != nil {
 				return commandOutcome{}, fmt.Errorf("start claimed execution node: %w", errs.ErrUnavailable)
 			}

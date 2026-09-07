@@ -16,6 +16,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/objectstorage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
+	github.com/codex-k8s/kodex/libs/go/secretbrokerapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimesecret v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
@@ -129,6 +130,8 @@ require (
 replace github.com/codex-k8s/kodex/libs/go/cache => ../../../libs/go/cache
 
 replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../../../libs/go/controlplaneapi
+
+replace github.com/codex-k8s/kodex/libs/go/secretbrokerapi => ../../../libs/go/secretbrokerapi
 
 replace github.com/codex-k8s/kodex/libs/go/controlplaneclient => ../../../libs/go/controlplaneclient
 

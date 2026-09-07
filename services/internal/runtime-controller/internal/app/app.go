@@ -81,7 +81,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	proofOperations := mergeOperations(runtimeOperations, controlplaneclient.RuntimeCredentialProjectionOperations())
 	projectionProjects := make(map[string]struct{})
 	for operation := range controlplaneclient.RuntimeCredentialProjectionOperations() {
-		projectionProjects[operation] = struct{}{}
+		if operation == "platform.runtime.credentials.materialize" {
+			projectionProjects[operation] = struct{}{}
+		}
 	}
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
