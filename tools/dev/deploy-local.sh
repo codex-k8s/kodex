@@ -69,6 +69,7 @@ filter_render() {
 apply_render() {
   local name=$1 expression=$2 output
   output=$(filter_render "$name" "$expression")
+  bash "$script_directory/migrate-worker-grant-strategy.sh" "$output"
   kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev -f "$output" >/dev/null
 }
 
