@@ -49,6 +49,17 @@ bounded join. CONNECT проверяет readiness до ответа и до в�
 `NetworkPolicy` разрешает CONNECT не к объекту Service, а к указанным устойчивым
 Pod labels в точном namespace и на точном порту.
 
+Secret Broker допускается только из `kodex-system` с обоими labels
+`app.kubernetes.io/name=secret-broker` и
+`app.kubernetes.io/component=secret-broker` к `8080/TCP`. Это путь наблюдения
+provider catalog и device authorization; STT/mail listeners для broker закрыты.
+Регрессия `make test-egress-broker-network-policy` (бюджет150 секунд)
+проверяет двусторонний путь и объединение ingress policies в обоих profiles,
+чужие namespace/name/component, UDP и порты8081/8082. Удаление peer,
+расширение selector и отдельная allow-all policy должны приводить к FAIL.
+Это render-проверка; реальный CNI и успешный свежий provider catalog после
+rollout фиксируются отдельно в #1160/#1158.
+
 Нулевой image digest в repository base — только явный render input pattern.
 Принадлежащие unit overlays находятся в
 `deploy/k8s/overlays/{staging,production}/egress-gateway`. Перед rollout
