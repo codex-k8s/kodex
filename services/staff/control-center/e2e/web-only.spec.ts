@@ -24,6 +24,7 @@ import {
   discoveryMode,
   loadDiscoveryRefs,
   saveDiscoveryRefs,
+  selectDiscoveryProviderAccount,
   type DiscoveryRefs,
 } from "./discovery-state";
 import { expect, test } from "./fixtures";
@@ -69,6 +70,9 @@ let automationRef = initialRefs.automationRef ?? "";
 let writerRef = initialRefs.writerRef ?? "";
 let workflowRef = initialRefs.workflowRef ?? "";
 let firstRunRef = initialRefs.firstRunRef ?? "";
+let coordinatorProviderAccountRef =
+  initialRefs.coordinatorProviderAccountRef ?? "";
+let analystProviderAccountRef = initialRefs.analystProviderAccountRef ?? "";
 let continuationRunRef = initialRefs.continuationRunRef ?? "";
 let instructionRunRef = initialRefs.instructionRunRef ?? "";
 let publishedInstructionRef = initialRefs.publishedInstructionRef ?? "";
@@ -3678,6 +3682,8 @@ function persistRefs(): void {
 
 function currentRefs(): DiscoveryRefs {
   return {
+    coordinatorProviderAccountRef,
+    analystProviderAccountRef,
     projectRef,
     coordinatorRef,
     analystRef,
@@ -3698,6 +3704,10 @@ function currentRefs(): DiscoveryRefs {
 function requireRefs(...required: ReadonlyArray<keyof DiscoveryRefs>): void {
   if (!discoveryMode) return;
   const persisted = loadDiscoveryRefs(environment.resourcePrefix);
+  coordinatorProviderAccountRef =
+    persisted.coordinatorProviderAccountRef ?? coordinatorProviderAccountRef;
+  analystProviderAccountRef =
+    persisted.analystProviderAccountRef ?? analystProviderAccountRef;
   projectRef = persisted.projectRef ?? projectRef;
   coordinatorRef = persisted.coordinatorRef ?? coordinatorRef;
   analystRef = persisted.analystRef ?? analystRef;
@@ -3728,6 +3738,24 @@ async function ensureAuthorizedProviderAffinity(
   agentRef: string,
   eligibleIndex = 0,
 ): Promise<void> {
+  expect([0, 1]).toContain(eligibleIndex);
+  const retained =
+    eligibleIndex === 0
+      ? coordinatorProviderAccountRef
+      : analystProviderAccountRef;
+  const other =
+    eligibleIndex === 0
+      ? analystProviderAccountRef
+      : coordinatorProviderAccountRef;
+  if (
+    discoveryMode &&
+    !retained &&
+    (eligibleIndex === 0 ? firstRunRef : scheduledRunRef)
+  ) {
+    throw new Error(
+      "BLOCKED: existing discovery run has no provider fixture pin",
+    );
+  }
   const response = await readJsonWithNetworkRetry<{
     items: Array<{
       enabled: boolean;
@@ -3754,7 +3782,11 @@ async function ensureAuthorizedProviderAffinity(
       return result;
     }, {});
     return {
-      accountRef: eligible[eligibleIndex]?.ref ?? "",
+      accountRef: selectDiscoveryProviderAccount(
+        eligible.map((item) => item.ref),
+        retained,
+        other,
+      ),
       eligibleCount: eligible.length,
       status: response.status,
       summary: Object.entries(states)
@@ -3764,12 +3796,17 @@ async function ensureAuthorizedProviderAffinity(
     };
   })();
   expect(preflight.status, preflight.summary).toBe(200);
+  expect(preflight.eligibleCount, preflight.summary).toBeGreaterThanOrEqual(2);
   if (!preflight.accountRef) {
     const blocker = `BLOCKED: AUTHORIZED+enabled+ready provider account index ${String(eligibleIndex)} is unavailable; eligible=${String(preflight.eligibleCount)} (${preflight.summary || "empty catalog"})`;
     test.info().annotations.push({ type: "blocked", description: blocker });
     throw new Error(blocker);
   }
   await pinAgentProviderAccount(page, agentRef, preflight.accountRef);
+  expect(preflight.accountRef).not.toBe(other);
+  if (eligibleIndex === 0) coordinatorProviderAccountRef = preflight.accountRef;
+  else analystProviderAccountRef = preflight.accountRef;
+  persistRefs();
 }
 
 async function pinAgentProviderAccount(

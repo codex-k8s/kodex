@@ -10,6 +10,8 @@ import {
 import { dirname, isAbsolute, resolve } from "node:path";
 
 export interface DiscoveryRefs {
+  readonly coordinatorProviderAccountRef?: string;
+  readonly analystProviderAccountRef?: string;
   readonly analystRef?: string;
   readonly automationRef?: string;
   readonly continuationRunRef?: string;
@@ -34,6 +36,17 @@ interface DiscoveryState {
 }
 
 export const discoveryMode = process.env.KODEX_E2E_DISCOVERY === "1";
+
+export function selectDiscoveryProviderAccount(
+  eligibleRefs: readonly string[],
+  retained: string,
+  other: string,
+): string {
+  const eligible = [...new Set(eligibleRefs)].sort();
+  if (eligible.length < 2 || (retained && retained === other)) return "";
+  if (retained) return eligible.includes(retained) ? retained : "";
+  return eligible.find((ref) => ref !== other) ?? "";
+}
 
 export function loadDiscoveryRefs(resourcePrefix: string): DiscoveryRefs {
   if (!discoveryMode || process.env.KODEX_E2E_CHECK_ONLY === "1") return {};

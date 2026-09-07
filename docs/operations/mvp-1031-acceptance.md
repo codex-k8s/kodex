@@ -201,6 +201,19 @@ timeout 240s bash scripts/tests/local-role-image-render-contract-test.sh \
 
 ## Текущий состав интеграции
 
+Discovery сохраняет выбранные через каталог `coordinatorProviderAccountRef` и
+`analystProviderAccountRef` в приватном `KODEX_E2E_RUN_STATE` после readback
+точной FIXED policy и до запуска Run. При продолжении используются те же refs;
+исчезновение выбранного account закрывает проверку, а третий активный account
+не меняет fixtures. Stable key назначает сервер: UI-created account не обязан
+иметь bootstrap-имя. Readback проверяет активность выбранной пары и независимо
+сопоставляет сохранённое ожидание с фактическими session/runtime привязками
+пяти Run; workflow использует account координатора, scheduled Run — аналитика.
+Старый state с уже созданными Run, но без этих pins, непригоден для доказательства
+affinity: ожидание нельзя восстанавливать из проверяемых записей PostgreSQL.
+Локальная оснастка `make test-discovery-provider-fixtures` (90 секунд) проверяет
+эти readback-границы на синтетическом transport; она не заменяет живой discovery.
+
 На `177b307f247297629bec8115b5440e8a66d1037d` включены следующие
 проверяемые зависимости. Это промежуточная интеграция полного scope,
 а не завершённый `main` или допуск стенда.

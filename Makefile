@@ -288,6 +288,10 @@ lint-proto: check-proto-toolchain
 
 .PHONY: test-secret-broker-drafts
 .PHONY: test-egress-broker-network-policy
+.PHONY: test-discovery-provider-fixtures
+test-discovery-provider-fixtures:
+	@timeout 90s python3 -B scripts/tests/discovery-provider-fixtures-test.py
+
 test-egress-broker-network-policy:
 	@timeout 150s python3 -B scripts/tests/egress-broker-network-policy-test.py
 
