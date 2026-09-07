@@ -181,6 +181,13 @@ Kubernetes access, но не execution-local ServiceAccount, который ме
 
 ## Локальная проверка
 
+Warm reconcile различает отказ owner RPC и отсутствие `DesiredRevision` в
+успешном ответе. Для `ReconcileWarmRuntime` и `ReportWarmRuntime` локальная
+граница логирует только закрытый `grpc_code` и, для типизированного
+`LocalAuthorityError`, существующий `Diagnostic`. Upstream message, details,
+correlation, refs и исходная цепочка ошибок не сохраняются. Диагностика не
+меняет authority, timeout, повтор reconcile или переходы readiness.
+
 ```bash
 cd services/internal/runtime-controller
 GOWORK=off go test ./internal/credentialprojection ./internal/workload ./internal/app ./internal/callback

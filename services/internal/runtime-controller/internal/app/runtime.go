@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/callback"
@@ -22,6 +24,9 @@ const (
 	defaultTurnInspectionInterval = 2 * time.Second
 	defaultTerminalCallbackGrace  = 120 * time.Second
 	failureCompletionMaximumTries = 5
+	warmReconcileRPCFailure       = "reconcile system assistant warm runtime"
+	warmReportRPCFailure          = "report system assistant warm runtime"
+	warmDesiredRevisionMissing    = "system assistant warm runtime desired revision is missing"
 )
 
 var defaultFailureCompletionRetryDelays = [...]time.Duration{
@@ -115,8 +120,11 @@ func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
 	response, err := runtime.control.ReconcileWarmRuntime(request, &controlplanev1.ReconcileWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID})
-	if err != nil || response.GetDesiredRevision() == nil {
-		return errors.New("reconcile system assistant warm runtime")
+	if err != nil {
+		return warmRPCFailure(warmReconcileRPCFailure, err)
+	}
+	if response.GetDesiredRevision() == nil {
+		return errors.New(warmDesiredRevisionMissing)
 	}
 	input, providerBinding, err := runtime.manager.BuildWarmInput(response.GetDesiredRevision())
 	if err != nil {
@@ -159,7 +167,23 @@ func (runtime *runtime) reportWarm(ctx context.Context, revision string, state c
 	request, cancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 	defer cancel()
 	_, err := runtime.control.ReportWarmRuntime(request, &controlplanev1.ReportWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID, RuntimeRevision: revision, State: state, SafeErrorCode: code})
-	return err
+	if err != nil {
+		return warmRPCFailure(warmReportRPCFailure, err)
+	}
+	return nil
+}
+
+// В logger передаются только закрытые классы, без исходной цепочки ошибок.
+func warmRPCFailure(operation string, cause error) error {
+	code := status.Code(cause)
+	if code < codes.Canceled || code > codes.Unauthenticated {
+		code = codes.Unknown
+	}
+	var local *authorityclient.LocalAuthorityError
+	if errors.As(cause, &local) && local != nil {
+		return fmt.Errorf("%s: grpc_code=%s [%s]", operation, code, local.Diagnostic())
+	}
+	return fmt.Errorf("%s: grpc_code=%s", operation, code)
 }
 
 func (runtime *runtime) setAssistantUnavailable(ctx context.Context) {
