@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.19
+version: 1.4.20
 updated: 2026-09-07
 ---
 
@@ -334,6 +334,13 @@ Client adapter явно собирает все принятые слои:
 3. обязательный application credential;
 4. точный audience, caller, actor class, полный метод и permissions;
 5. correlation, expiry и replay state, если они входят в policy.
+
+Сгенерированный RPC permission проверяется тестом против исполняемого consumer.
+Доменное право и capability не заменяют transport permission: например,
+`platform.stt.transcribe` преобразуется сервисом в `stt.transcribe`, но policy
+не должна выдавать доменный псевдоним вместо точного transport permission.
+Успешная проверка подписи verifier сама по себе не доказывает, что доменный
+consumer принимает выданный контекст.
 
 Отказ workload-local issuer/resolver классифицируется отдельно от отказа в
 аутентификации. `PermissionDenied` и `Unauthenticated` закрыто отклоняются без

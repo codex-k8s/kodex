@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 74, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 75, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -361,7 +361,6 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 func permissionForOperation(operationID string) string {
 	permissions := map[string]string{
 		"platform.stt.model-catalog.get":                       "system.configuration.manage",
-		"platform.stt.transcribe":                              "stt.transcribe",
 		"platform.command.agents.avatar.upload":                "agent.avatar.manage",
 		"platform.command.organization-artifacts.upload":       "platform.command.artifacts.upload",
 		"platform.command.organization-attachment-sets.create": "platform.command.attachment-sets.create-draft",
