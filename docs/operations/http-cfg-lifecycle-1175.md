@@ -33,7 +33,10 @@ CSRF, `Idempotency-Key` и `If-Match`; owner проверяет доступ к 
 Copy возвращает 201 `{configuration, revision}` и ETag конфигурации; archive
 возвращает 200 `{configuration}` с `archived=true`. Архивирование не удаляет
 историю и не отзывает существующие pinned потребления. Владелец атомарно
-сохраняет состояние, receipt, аудит и предусмотренный его command event;
+сохраняет состояние, receipt и аудит. У обоих copy и IntegrationDefinition
+archive отдельного domain event нет: используется авторитетное get/list/history
+чтение. RoleImage archive дополнительно фиксирует `ROLE_IMAGE_RECIPE_CHANGED`
+в той же транзакции и сохраняет штатные события отмены build/promotion.
 HTTP не создаёт собственных событий. Авторитетный get/list owner projection
 возвращает `archived`, `copyProvenance` и `nextActions` одинаково для карточки
 и детального чтения. PWA использует COPY/ARCHIVE только из `nextActions`,
