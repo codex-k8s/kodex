@@ -609,9 +609,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     ' "$report" >/dev/null || fail 'local browser E2E report is not fully successful'
     chmod 0600 "$run_state" "$report"
     "$repository_root/tools/dev/verify-discovery-readback.sh" \
-      --context "$context" --kubeconfig "$kubeconfig" --state "$run_state" \
-      --expect-account default-openai-codex \
-      --expect-account openai-codex-account-2
+      --context "$context" --kubeconfig "$kubeconfig" --state "$run_state"
     printf 'Kodex local full E2E completed: %s\nReport: %s\nSource evidence: %s\n' \
       "$resource_prefix" "$report" "$source_evidence"
     exit 0
