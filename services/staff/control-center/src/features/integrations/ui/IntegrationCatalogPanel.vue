@@ -9,6 +9,12 @@ import {
 } from "@lucide/vue";
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
+import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
+import {
+  integrationCopySource,
+  type ConfigurationCopySource,
+} from "@/features/managed-configurations/copy-source";
+import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 
 import type { IntegrationPackagePresentation } from "@/features/integrations/ui/model";
 import type { IntegrationConfigurationField } from "@/shared/api/generated/openapi/types.gen";
@@ -32,12 +38,18 @@ const emit = defineEmits<{
   "update:search": [value: string];
   "update:category": [value: string];
   connect: [definitionKey: string];
+  copied: [configuration: ManagedConfiguration];
   more: [];
   retry: [];
 }>();
 
 const { t } = useI18n();
 const expandedKey = ref("");
+const copySource = ref<ConfigurationCopySource>();
+function copied(configuration: ManagedConfiguration): void {
+  copySource.value = undefined;
+  emit("copied", configuration);
+}
 
 function toggleDetails(key: string): void {
   expandedKey.value = expandedKey.value === key ? "" : key;
@@ -59,6 +71,12 @@ function fieldType(field: IntegrationConfigurationField): string {
 
 <template>
   <section class="catalog-panel" aria-labelledby="integration-catalog-title">
+    <ConfigurationCopyDialog
+      v-if="copySource"
+      :source="copySource"
+      @close="copySource = undefined"
+      @created="copied"
+    />
     <header class="panel-heading">
       <div>
         <h2 id="integration-catalog-title">
@@ -302,6 +320,14 @@ function fieldType(field: IntegrationConfigurationField): string {
         </ModalDialog>
 
         <footer class="package-card__actions">
+          <button
+            v-if="integrationCopySource(item.definition)"
+            class="button"
+            type="button"
+            @click="copySource = integrationCopySource(item.definition)"
+          >
+            {{ t("managed.copy") }}
+          </button>
           <button
             class="button"
             type="button"

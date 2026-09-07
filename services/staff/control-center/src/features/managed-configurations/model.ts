@@ -9,6 +9,7 @@ export function canValidate(
   revision: ManagedConfigurationRevision,
 ): boolean {
   return (
+    !configuration.archived &&
     (configuration.kind !== "ROLE_IMAGE" ||
       configuration.sourceEditable === true) &&
     configuration.managedBy === "UI" &&
@@ -20,6 +21,7 @@ export function canChangeDraft(
   revision: ManagedConfigurationRevision,
 ): boolean {
   return (
+    !configuration.archived &&
     (configuration.kind !== "ROLE_IMAGE" ||
       configuration.sourceEditable === true) &&
     configuration.managedBy === "UI" &&
@@ -31,6 +33,7 @@ export function canPublish(
   revision: ManagedConfigurationRevision,
 ): boolean {
   return (
+    !configuration.archived &&
     (configuration.kind !== "ROLE_IMAGE" ||
       configuration.sourceEditable === true) &&
     configuration.managedBy === "UI" &&

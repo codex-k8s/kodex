@@ -27,11 +27,27 @@ const configuration: ManagedConfiguration = {
   kind: "PROMPT_TEMPLATE",
   name: "test",
   managedBy: "UI",
+  archived: false,
+  nextActions: [],
   source: "ui",
   sourceRevision: "1",
   updatedAt: revision.createdAt,
 };
 describe("managed configuration lifecycle", () => {
+  it("архив запрещает изменение и публикацию, сохраняя историю revisions", () => {
+    for (const kind of ["ROLE_IMAGE", "INTEGRATION_DEFINITION"] as const) {
+      const archived = {
+        ...configuration,
+        kind,
+        archived: true,
+        sourceEditable: true,
+      };
+      expect(canChangeDraft(archived, revision)).toBe(false);
+      expect(canValidate(archived, revision)).toBe(false);
+      expect(canPublish(archived, { ...revision, state: "VALID" })).toBe(false);
+      expect(revision.content).toBe("test");
+    }
+  });
   it("ROLE_IMAGE требует явного допуска исходника, другие виды сохраняют свой контракт", () => {
     for (const sourceEditable of [undefined, false, true]) {
       const image = {

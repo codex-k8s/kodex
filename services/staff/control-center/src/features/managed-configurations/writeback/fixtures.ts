@@ -38,6 +38,8 @@ export async function writeBackFixture() {
     kind: "ROLE_IMAGE",
     name: "Fixture",
     managedBy: "GIT",
+    archived: false,
+    nextActions: [],
     source: proposal.sourceRef,
     sourceRevision: proposal.baseCommitSha,
     updatedAt: proposal.createdAt,

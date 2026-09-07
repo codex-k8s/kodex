@@ -596,6 +596,18 @@ const ru = {
     noConsumers: "Привязок нет",
     detach: "Отсоединить от Git",
     copy: "Создать копию",
+    copyConfirm:
+      "Сервер создаст отдельный черновик под управлением UI. Исходная конфигурация и её опубликованные версии останутся прежними.",
+    copyProvenance: "Происхождение копии",
+    shippedReadOnly:
+      "Поставляется с Kodex. Изменение на месте запрещено; для редактирования создайте UI-копию.",
+    archive: "Архивировать",
+    archiveConfirm:
+      "Архивировать эту конфигурацию? Новые назначения будут запрещены. История и законные прежние привязки сохранятся.",
+    archived:
+      "Конфигурация в архиве. История и прежние привязки сохранены; новые назначения и изменения запрещены.",
+    outcomeUnknown:
+      "Результат команды не подтверждён. Автоматического повтора не было. Обновите каталог и проверьте состояние перед следующей командой.",
     discard: "Отменить несохранённые изменения?",
     gitOwned:
       "Конфигурация управляется Git. Для редактирования создайте копию или отсоедините её от Git.",
@@ -3376,6 +3388,18 @@ const en = {
     noConsumers: "No bindings",
     detach: "Detach from Git",
     copy: "Create copy",
+    copyConfirm:
+      "The server will create a separate UI-managed draft. The source configuration and its published revisions will remain unchanged.",
+    copyProvenance: "Copy provenance",
+    shippedReadOnly:
+      "Shipped with Kodex. This definition cannot be edited in place; create a UI copy to edit it.",
+    archive: "Archive",
+    archiveConfirm:
+      "Archive this configuration? New assignments will be blocked. History and valid existing pins will be preserved.",
+    archived:
+      "This configuration is archived. History and existing pins are preserved; new assignments and changes are blocked.",
+    outcomeUnknown:
+      "The command outcome is not confirmed. No automatic retry was made. Refresh the catalog and verify the state before another command.",
     discard: "Discard unsaved changes?",
     gitOwned:
       "This configuration is managed by Git. Create a copy or detach it from Git to edit.",

@@ -16,6 +16,9 @@ import { useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
+import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
+import { recipeCopySource } from "@/features/managed-configurations/copy-source";
+import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import {
   buildIsActive,
   buildRevisionIdentity,
@@ -54,6 +57,18 @@ function toggleBuildSource(ref: string, event: Event): void {
   else openedBuildSources.value.delete(ref);
 }
 const confirmationAction = ref<"ARCHIVE" | "RESTORE">();
+const copyOpen = ref(false);
+const copySource = computed(() =>
+  recipe.value ? recipeCopySource(recipe.value) : undefined,
+);
+function copied(configuration: ManagedConfiguration): void {
+  copyOpen.value = false;
+  void router.push({
+    name: "configuration",
+    params: { kind: configuration.kind, configurationRef: configuration.ref },
+    query: { projectRef: configuration.projectRef },
+  });
+}
 const recipe = computed(() =>
   props.recipeRef ? store.recipes[props.recipeRef] : undefined,
 );
@@ -330,6 +345,34 @@ onBeforeUnmount(() => {
           "
         />
         <div v-if="recipe" class="image-summary__actions">
+          <ConfigurationCopyDialog
+            v-if="copyOpen && copySource"
+            :source="copySource"
+            @close="copyOpen = false"
+            @created="copied"
+          />
+          <button
+            v-if="copySource"
+            class="button"
+            type="button"
+            :disabled="store.mutating || hasLocalChanges"
+            @click="copyOpen = true"
+          >
+            {{ t("managed.copy") }}
+          </button>
+          <RouterLink
+            v-if="recipe.managedLineage?.configurationRef"
+            class="button"
+            :to="{
+              name: 'configuration',
+              params: {
+                kind: 'ROLE_IMAGE',
+                configurationRef: recipe.managedLineage.configurationRef,
+              },
+              query: { projectRef },
+            }"
+            >{{ t("managed.history") }}</RouterLink
+          >
           <button
             v-if="canRequestBuild(recipe)"
             class="button button--primary"

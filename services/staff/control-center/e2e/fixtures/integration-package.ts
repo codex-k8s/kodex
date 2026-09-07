@@ -4,9 +4,13 @@ import { load, JSON_SCHEMA } from "js-yaml";
 import type {
   ManagedConfiguration,
   ManagedConfigurationRevision,
+  IntegrationDefinition,
 } from "../../src/shared/api/generated/openapi/types.gen";
 
-export async function checkIntegrationPackage(page: Page): Promise<void> {
+export async function checkIntegrationPackage(
+  page: Page,
+  definition: IntegrationDefinition,
+): Promise<void> {
   const source = readFileSync(
     new URL(
       "../../../../../contracts/integrations/v1/definitions/github.yaml",
@@ -24,6 +28,15 @@ export async function checkIntegrationPackage(page: Page): Promise<void> {
     name: "GitHub",
     version: 1,
     managedBy: "UI",
+    archived: false,
+    nextActions: ["COPY", "ARCHIVE"],
+    copyProvenance: {
+      origin: "SHIPPED",
+      sourceRef: definition.key,
+      sourceRevision: definition.definitionVersion,
+      sourceVersion: definition.version,
+      sourceDigest: definition.digest,
+    },
     source: "ui",
     sourceRevision: "1",
     updatedAt: "2026-09-04T11:00:00Z",
@@ -40,6 +53,38 @@ export async function checkIntegrationPackage(page: Page): Promise<void> {
   };
   let saved: Record<string, unknown> | undefined;
   const previous: ManagedConfigurationRevision[] = [];
+  let copies = 0;
+  await page.route("**/api/v1/integration-definitions**", (route) =>
+    route.fulfill({
+      json: {
+        items: [{ ...definition, nextActions: ["COPY"] }],
+        coreReady: true,
+        nextActions: ["CREATE_CONNECTION"],
+      },
+    }),
+  );
+  await page.route(
+    "**/api/v1/integration-definition-configurations/copies",
+    async (route) => {
+      expect(route.request().headers()["if-match"]).toBe(
+        `"${String(definition.version)}"`,
+      );
+      expect(route.request().postDataJSON()).toEqual({
+        name: "GitHub",
+        shipped: {
+          key: definition.key,
+          definitionVersion: definition.definitionVersion,
+          digest: definition.digest,
+        },
+      });
+      copies++;
+      await route.fulfill({
+        status: 201,
+        headers: { ETag: '"1"' },
+        json: { configuration, revision },
+      });
+    },
+  );
   await page.route(
     "**/api/v1/managed-configurations/package_synthetic/revisions*",
     async (route) => {
@@ -92,7 +137,27 @@ export async function checkIntegrationPackage(page: Page): Promise<void> {
       });
     },
   );
-  await page.goto("/configurations/INTEGRATION_DEFINITION/package_synthetic");
+  await page.goto("/integrations");
+  await page.getByRole("tab", { name: /Каталог/ }).click();
+  await page
+    .locator(".package-card")
+    .getByRole("button", { name: "Создать копию", exact: true })
+    .click();
+  const copyDialog = page.getByRole("dialog", {
+    name: "Создать копию",
+    exact: true,
+  });
+  await expect(copyDialog).toContainText("Поставляется с Kodex");
+  await copyDialog
+    .getByRole("button", { name: "Создать копию", exact: true })
+    .click();
+  await expect(page).toHaveURL(
+    /configurations\/INTEGRATION_DEFINITION\/package_synthetic/,
+  );
+  expect(copies).toBe(1);
+  await expect(page.locator(".configuration-editor")).toContainText(
+    definition.digest,
+  );
   const form = page.locator(".configuration-fields");
   await expect(form.getByLabel("Версия API", { exact: true })).toHaveValue(
     "integrations.kodex.io/v1",
@@ -151,6 +216,44 @@ export async function checkIntegrationPackage(page: Page): Promise<void> {
   await expect(
     page.locator(".configuration-editor > header [data-state='DISCARDED']"),
   ).toBeVisible();
+  await page.route(
+    "**/api/v1/integration-definition-configurations/package_synthetic/archive",
+    async (route) => {
+      expect(route.request().headers()["if-match"]).toBe('"3"');
+      configuration = {
+        ...configuration,
+        version: 4,
+        archived: true,
+        nextActions: ["COPY"],
+      };
+      await route.fulfill({
+        headers: { ETag: '"4"' },
+        json: { configuration },
+      });
+    },
+  );
+  await page.getByRole("button", { name: "Архивировать", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Архивировать", exact: true })
+    .getByRole("button", { name: "Архивировать", exact: true })
+    .click();
+  await expect(
+    page.getByText("Конфигурация в архиве.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Сохранить черновик", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "История", exact: true }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "История", exact: true })
+      .locator("[data-state='DISCARDED']"),
+  ).toHaveCount(2);
+  await page
+    .getByRole("dialog", { name: "История", exact: true })
+    .getByRole("button", { name: "Закрыть", exact: true })
+    .click();
+  expect(definition.origin).toBe("SHIPPED");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

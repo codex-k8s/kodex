@@ -48,6 +48,8 @@ function githubDefinition(): IntegrationDefinition {
     description: "Репозитории и задачи",
     category: "source-control",
     builtIn: true,
+    version: 1,
+    nextActions: [],
     available: true,
     capabilities: [
       {

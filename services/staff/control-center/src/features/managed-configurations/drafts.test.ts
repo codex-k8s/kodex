@@ -44,6 +44,8 @@ const configuration: ManagedConfiguration = {
   kind: "PROMPT_TEMPLATE",
   name: "Synthetic",
   managedBy: "UI",
+  archived: false,
+  nextActions: [],
   source: "UI",
   sourceRevision: "",
   updatedAt: "2026-09-05T00:00:00Z",

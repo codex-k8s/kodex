@@ -34,6 +34,8 @@ function view(enabled = true): EmailMailboxConfigurationView {
       kind: "EMAIL_MAILBOX",
       name: "Mail",
       managedBy: "UI",
+      archived: false,
+      nextActions: [],
       source: "",
       sourceRevision: "",
       updatedAt: "2026-09-05T00:00:00Z",
