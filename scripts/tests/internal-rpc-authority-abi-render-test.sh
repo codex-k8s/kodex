@@ -38,8 +38,10 @@ validate_controller_sidecars() {
   any(.[];
     .kind == "Deployment" and .metadata.name == "runtime-controller" and
     ([.spec.template.spec.initContainers[].name] ==
-      ["internal-rpc-authority-socket-init", "internal-rpc-authority-issuer", "platform-worker-grant-agent"]) and
-    all(.spec.template.spec.initContainers[] | select(.name != "internal-rpc-authority-socket-init");
+      ["internal-rpc-authority-socket-init", "internal-rpc-authority-issuer", "platform-worker-grant-agent", "artifact-spool-init"]) and
+    all(.spec.template.spec.initContainers[] | select(.name == "internal-rpc-authority-socket-init" or .name == "artifact-spool-init");
+      .restartPolicy == null and .startupProbe == null and .readinessProbe == null and .livenessProbe == null) and
+    all(.spec.template.spec.initContainers[] | select(.name == "internal-rpc-authority-issuer" or .name == "platform-worker-grant-agent");
       .restartPolicy == "Always" and .startupProbe.httpGet.path == "/readyz" and
       .readinessProbe.httpGet.path == "/readyz" and
       .resources.requests.cpu != null and .resources.requests.memory != null and
@@ -48,6 +50,26 @@ validate_controller_sidecars() {
   ' >/dev/null
 }
 validate_controller_sidecars "$render" || fail 'controller authority sidecar startup or termination ordering is invalid'
+
+# Каждая мутация независимо проверяет закрытый набор, порядок и native sidecar policy.
+for mutation in \
+  '.spec.template.spec.initContainers |= reverse' \
+  'del(.spec.template.spec.initContainers[3])' \
+  '.spec.template.spec.initContainers += [{"name":"unknown-init"}]' \
+  '.spec.template.spec.initContainers[3].name = "unknown-init"' \
+  '.spec.template.spec.initContainers[3].restartPolicy = "Always"' \
+  '.spec.template.spec.initContainers[0].restartPolicy = "Always"' \
+  '.spec.template.spec.initContainers[2].restartPolicy = "Never"' \
+  'del(.spec.template.spec.initContainers[1].startupProbe)' \
+  'del(.spec.template.spec.initContainers[2].readinessProbe)' \
+  '.spec.template.spec.initContainers[3].startupProbe.httpGet.path = "/readyz"'; do
+  yq -o=json -I=0 '.' "$render" | jq -s \
+    'map(select(.kind == "Deployment" and .metadata.name == "runtime-controller"))[0]' |
+    jq "$mutation" >"$mutated"
+  if validate_controller_sidecars "$mutated"; then
+    fail 'invalid controller initializer mutation was accepted'
+  fi
+done
 
 yq 'select(.kind == "Deployment" and .metadata.name == "runtime-controller") |
   del(.spec.template.spec.initContainers[] | select(.name == "internal-rpc-authority-issuer") | .restartPolicy)' \
