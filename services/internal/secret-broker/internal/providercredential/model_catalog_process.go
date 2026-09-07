@@ -24,34 +24,34 @@ func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJS
 	}
 	auth, err := catalogAuthentication(authJSON, method)
 	if err != nil {
-		return catalogFailure(ctx, err)
+		return catalogFailure(ctx, atCatalogStage(catalogStageAuthentication, err))
 	}
 	defer clear(auth.apiKey)
 	ctx, cancel := context.WithTimeout(ctx, modelCatalogTimeout)
 	defer cancel()
 	if err := process.Check(ctx); err != nil {
-		return catalogFailure(ctx, err)
+		return catalogFailure(ctx, atCatalogStage(catalogStageRuntime, err))
 	}
 	if method == CatalogMethodAPIKey {
 		models, err := readAPIModelCatalog(ctx, process.catalogHTTP, auth.apiKey)
 		if err != nil {
-			return catalogFailure(ctx, err)
+			return catalogFailure(ctx, atCatalogStage(catalogStageAPI, err))
 		}
 		return ModelCatalog{ObservedAt: time.Now().UTC(), Source: CatalogRemoteAPI, Models: models, Failure: CatalogFailureNone}, nil
 	}
 	home, err := os.MkdirTemp(process.root, "catalog-")
 	if err != nil {
-		return catalogFailure(ctx, errors.New("create model catalog state directory"))
+		return catalogFailure(ctx, atCatalogStage(catalogStageProcess, errors.New("create model catalog state directory")))
 	}
 	defer func() {
 		if err := os.RemoveAll(home); err != nil {
-			result, resultErr = catalogFailure(ctx, errors.New("remove model catalog state directory"))
+			result, resultErr = catalogFailure(ctx, atCatalogStage(catalogStageCleanup, errors.New("remove model catalog state directory")))
 		}
 	}()
 	started := time.Now().UTC()
 	server, err := startAppServer(process.binary, home)
 	if err != nil {
-		return catalogFailure(ctx, err)
+		return catalogFailure(ctx, atCatalogStage(catalogStageProcess, err))
 	}
 	stopWatch, watched := make(chan struct{}), make(chan struct{})
 	go func() {
@@ -66,17 +66,17 @@ func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJS
 		close(stopWatch)
 		<-watched
 		if err := server.terminate(); err != nil {
-			result, resultErr = catalogFailure(ctx, err)
+			result, resultErr = catalogFailure(ctx, atCatalogStage(catalogStageCleanup, err))
 		}
 	}()
 	if _, err := server.call(ctx, "initialize", map[string]any{
 		"clientInfo":   map[string]string{"name": "kodex-secret-broker", "title": "Kodex secret-broker", "version": "1"},
 		"capabilities": map[string]any{"experimentalApi": method == CatalogMethodDeviceCode},
 	}); err != nil {
-		return catalogFailure(ctx, err)
+		return catalogFailure(ctx, atCatalogStage(catalogStageInitialize, err))
 	}
 	if err := server.write(map[string]any{"method": "initialized"}); err != nil {
-		return catalogFailure(ctx, err)
+		return catalogFailure(ctx, atCatalogStage(catalogStageInitialize, err))
 	}
 	if method == CatalogMethodDeviceCode {
 		// Наблюдение получает только access token: обновление OAuth остаётся у владельца credential.
@@ -84,13 +84,13 @@ func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJS
 			"type": "chatgptAuthTokens", "accessToken": auth.accessToken, "chatgptAccountId": auth.accountID,
 		})
 		if err != nil {
-			return catalogFailure(ctx, err)
+			return catalogFailure(ctx, atCatalogStage(catalogStageLogin, err))
 		}
 		var login struct {
 			Type string `json:"type"`
 		}
 		if json.Unmarshal(raw, &login) != nil || login.Type != "chatgptAuthTokens" {
-			return catalogFailure(ctx, errModelCatalogUnverified)
+			return catalogFailure(ctx, atCatalogStage(catalogStageLogin, errModelCatalogUnverified))
 		}
 	}
 	models, err := readAppServerCatalog(ctx, server)
@@ -156,7 +156,7 @@ func readAppServerCatalog(ctx context.Context, server *appServer) ([]CatalogMode
 		}
 		raw, err := server.call(ctx, "model/list", params)
 		if err != nil {
-			return nil, err
+			return nil, atCatalogStage(catalogStageListCall, err)
 		}
 		var result struct {
 			Data *[]struct {
@@ -170,11 +170,11 @@ func readAppServerCatalog(ctx context.Context, server *appServer) ([]CatalogMode
 			NextCursor *string `json:"nextCursor"`
 		}
 		if json.Unmarshal(raw, &result) != nil || result.Data == nil || len(*result.Data) > 32 {
-			return nil, errModelCatalogUnverified
+			return nil, atCatalogStage(catalogStageListSchema, errModelCatalogUnverified)
 		}
 		for _, item := range *result.Data {
 			if item.Model != item.ID {
-				return nil, errModelCatalogUnverified
+				return nil, atCatalogStage(catalogStageListIdentity, errModelCatalogUnverified)
 			}
 			model := CatalogModel{ID: item.Model, DefaultReasoningEffort: item.Default}
 			for _, effort := range item.Efforts {
@@ -186,37 +186,37 @@ func readAppServerCatalog(ctx context.Context, server *appServer) ([]CatalogMode
 			models = append(models, model)
 		}
 		if validateCatalogModels(models) != nil {
-			return nil, errModelCatalogUnverified
+			return nil, atCatalogStage(catalogStageListCapabilities, errModelCatalogUnverified)
 		}
 		if result.NextCursor == nil {
 			return models, nil
 		}
 		cursor = *result.NextCursor
 		if cursor == "" || len(cursor) > 1024 || seenCursors[cursor] {
-			return nil, errModelCatalogUnverified
+			return nil, atCatalogStage(catalogStageListCursor, errModelCatalogUnverified)
 		}
 		seenCursors[cursor] = true
 	}
-	return nil, errModelCatalogUnverified
+	return nil, atCatalogStage(catalogStageListCursor, errModelCatalogUnverified)
 }
 
 func readRemoteCodexCatalog(home string, started time.Time, capabilities []CatalogModel) ([]CatalogModel, error) {
 	file, err := os.OpenFile(filepath.Join(home, "models_cache.json"), os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return nil, errModelCatalogUnverified
+		return nil, atCatalogStage(catalogStageCacheOpen, errModelCatalogUnverified)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > maximumModelCatalogBytes {
-		return nil, errModelCatalogUnverified
+		return nil, atCatalogStage(catalogStageCacheMetadata, errModelCatalogUnverified)
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || stat.Nlink != 1 || stat.Uid != uint32(os.Geteuid()) {
-		return nil, errModelCatalogUnverified
+		return nil, atCatalogStage(catalogStageCacheMetadata, errModelCatalogUnverified)
 	}
 	raw, err := io.ReadAll(io.LimitReader(file, maximumModelCatalogBytes+1))
 	if err != nil || len(raw) > maximumModelCatalogBytes {
-		return nil, errModelCatalogUnverified
+		return nil, atCatalogStage(catalogStageCacheRead, errModelCatalogUnverified)
 	}
 	defer clear(raw)
 	return parseRemoteCodexCatalog(raw, started, time.Now().UTC(), capabilities)
@@ -224,7 +224,7 @@ func readRemoteCodexCatalog(home string, started time.Time, capabilities []Catal
 
 func parseRemoteCodexCatalog(raw []byte, started, now time.Time, capabilities []CatalogModel) ([]CatalogModel, error) {
 	if validateCatalogModels(capabilities) != nil {
-		return nil, errModelCatalogUnverified
+		return nil, atCatalogStage(catalogStageListCapabilities, errModelCatalogUnverified)
 	}
 	var snapshot struct {
 		FetchedAt     time.Time `json:"fetched_at"`
@@ -237,13 +237,19 @@ func parseRemoteCodexCatalog(raw []byte, started, now time.Time, capabilities []
 			} `json:"supported_reasoning_levels"`
 		} `json:"models"`
 	}
-	if len(raw) > maximumModelCatalogBytes || json.Unmarshal(raw, &snapshot) != nil || snapshot.ClientVersion != catalogCodexVersion || snapshot.FetchedAt.Before(started) || snapshot.FetchedAt.After(now) || snapshot.Models == nil || len(*snapshot.Models) > maximumCatalogModels {
-		return nil, errModelCatalogUnverified
+	if len(raw) > maximumModelCatalogBytes || json.Unmarshal(raw, &snapshot) != nil || snapshot.Models == nil || len(*snapshot.Models) > maximumCatalogModels {
+		return nil, atCatalogStage(catalogStageCacheSchema, errModelCatalogUnverified)
+	}
+	if snapshot.ClientVersion != catalogCodexVersion {
+		return nil, atCatalogStage(catalogStageCacheVersion, errModelCatalogUnverified)
+	}
+	if snapshot.FetchedAt.Before(started) || snapshot.FetchedAt.After(now) {
+		return nil, atCatalogStage(catalogStageCacheFreshness, errModelCatalogUnverified)
 	}
 	ids := map[string]CatalogModel{}
 	for _, model := range *snapshot.Models {
 		if _, duplicate := ids[model.Slug]; !modelCatalogIDPattern.MatchString(model.Slug) || duplicate {
-			return nil, errModelCatalogUnverified
+			return nil, atCatalogStage(catalogStageCacheIdentity, errModelCatalogUnverified)
 		}
 		remote := CatalogModel{ID: model.Slug}
 		if model.Default != nil {
@@ -258,7 +264,7 @@ func parseRemoteCodexCatalog(raw []byte, started, now time.Time, capabilities []
 			remote.DefaultReasoningEffort = ""
 		}
 		if validateCatalogModels([]CatalogModel{remote}) != nil {
-			return nil, errModelCatalogUnverified
+			return nil, atCatalogStage(catalogStageCacheCapabilities, errModelCatalogUnverified)
 		}
 		ids[model.Slug] = remote
 	}
@@ -266,7 +272,7 @@ func parseRemoteCodexCatalog(raw []byte, started, now time.Time, capabilities []
 	for _, model := range capabilities {
 		if remote, present := ids[model.ID]; present {
 			if remote.DefaultReasoningEffort != model.DefaultReasoningEffort || !slices.Equal(remote.ReasoningEfforts, model.ReasoningEfforts) {
-				return nil, errModelCatalogUnverified
+				return nil, atCatalogStage(catalogStageCapabilitiesMatch, errModelCatalogUnverified)
 			}
 			models = append(models, model)
 		}

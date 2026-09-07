@@ -57,3 +57,6 @@ make test-authority-policy-codegen
 
 Полномочия, источник и ограничения каталога моделей описаны в
 [`provider-model-catalog-1068.md`](../../../docs/operations/provider-model-catalog-1068.md).
+
+Закрытые этапы отказа наблюдения и порядок локализации без provider payload — в
+[`provider-catalog-diagnostics-1158.md`](../../../docs/operations/provider-catalog-diagnostics-1158.md).

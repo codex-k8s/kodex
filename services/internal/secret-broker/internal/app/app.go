@@ -147,7 +147,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, verifier.Close()) }()
 	handler, err := transportgrpc.New(owner, store, reconciler, config.MaximumSecretBytes,
-		transportgrpc.WithProviderCredentialMaterializer(providerCredentials), transportgrpc.WithDraftCommands(drafts))
+		transportgrpc.WithProviderCredentialMaterializer(providerCredentials), transportgrpc.WithDraftCommands(drafts),
+		transportgrpc.WithCatalogLogger(logger))
 	if err != nil {
 		return err
 	}
