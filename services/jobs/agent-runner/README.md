@@ -91,6 +91,24 @@ files не переиспользует warm Pod и получает собст�
 
 ## Workspace
 
+Новые owner snapshots передают `prompt-service-v2` provenance отдельными полями
+runtime input: service revision/digest и target kind. Runner проверяет JSON
+envelope, точный набор обязательных PLATFORM slots и effective capabilities.
+USER_TEMPLATE content не определяет служебный формат или continuation; похожий
+XML/JSON marker внутри текста остаётся пользовательским содержимым.
+Continuation добавляет проверенные PLATFORM sections, включая RUNTIME_CHANGES,
+вместе с текущей revision delta. Дубликаты JSON keys/slots, неизвестные
+поля/версии, неполные секции и materialization больше 256 KiB отклоняются.
+
+Warm owner тоже использует canonical materializer: idle capabilities пусты,
+core/owner инструкции передаются буквально, без выполнения template markers.
+Snapshot marker `promptRuntimeContractVersion=1` включает новые поля в immutable
+digest. Historical snapshots без marker сохраняют прежний digest и legacy XML
+semantics; untyped v2/raw инструкции не получают угадываемого fallback.
+Для ранее неисполняемого snapshot нужна свежая owner revision, не его перезапись.
+Source-owned rollout согласованно доставляет CP, controller, runner и новый
+hash v7 schema; публичные API не расширяются.
+
 Перед nested mounts одноразовый `workspace-prepare` запускает защищённую
 `runtime-prepare-workspace` от UID 10001 с единственным mount `/workspace`.
 Он создаёт `.kodex` через прежний owner/symlink guard, без runtime input,

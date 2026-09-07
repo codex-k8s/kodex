@@ -10,6 +10,15 @@ updated: 2026-08-24
 
 # Общие библиотеки Go
 
+Формат server-materialized prompt выбирается по отдельной provenance из
+immutable owner snapshot, а не по marker в пользовательском тексте. Producer,
+внутренний RPC, runtime input и consumer сохраняют service revision, target kind
+и digest. Новый binding версионируется без изменения digest исторических
+snapshots. Semantic PLATFORM sections проверяются по закрытому набору обязательных
+slots и effective capabilities; user sections не могут назначать platform slot.
+Строгий JSON consumer отклоняет duplicate keys до typed decode: один
+`DisallowUnknownFields` эту неоднозначность не закрывает.
+
 `GO-DOC-006` определяет, какой код принадлежит `libs/go`, а какой остается в
 deployable-компоненте. Структуру сервиса задают `GO-DOC-001` и
 `REPO-DOC-001`, наблюдаемость - `GO-DOC-003`, события и NATS -

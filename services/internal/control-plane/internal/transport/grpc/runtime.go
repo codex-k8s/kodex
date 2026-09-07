@@ -96,6 +96,16 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	result.PromptTemplateRef = mapString(values, "promptTemplateRef")
 	result.PromptTemplateDigest = mapString(values, "promptTemplateDigest")
 	result.PromptMaterializationDigest = mapString(values, "promptMaterializationDigest")
+	if runtimecontract.PromptRuntimeContractVersion(values["promptRuntimeContractVersion"]) {
+		result.PromptServiceTemplateRevision = mapString(values, "promptServiceTemplateRevision")
+		result.PromptServiceTemplateDigest = mapString(values, "promptServiceTemplateDigest")
+		result.PromptTargetKind = mapString(values, "promptTargetKind")
+		if result.PromptServiceTemplateRevision != runtimecontract.PromptServiceRevision || result.PromptServiceTemplateDigest == "" || result.PromptTargetKind == "" {
+			return nil
+		}
+	} else if _, present := values["promptRuntimeContractVersion"]; present {
+		return nil
+	}
 	result.SystemSttConfigurationRef = mapString(values, "systemSTTConfigurationRef")
 	result.SystemSttConfigurationRevisionRef = mapString(values, "systemSTTConfigurationRevisionRef")
 	result.SystemSttConfigurationVersion = mapInt64(values, "systemSTTConfigurationVersion")

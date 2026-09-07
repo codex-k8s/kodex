@@ -773,6 +773,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				"promptTemplateDigest":          materializedPrompt.TemplateDigest,
 				"promptMaterializationDigest":   materializedPrompt.Digest,
 				"promptServiceTemplateRevision": materializedPrompt.ServiceTemplateRevision,
+				"promptRuntimeContractVersion":  1,
 				"promptServiceTemplateDigest":   materializedPrompt.ServiceTemplateDigest,
 				"promptVariableSnapshotDigest":  materializedPrompt.VariableSnapshotDigest,
 				"promptSlots":                   materializedPrompt.Slots,
@@ -1208,6 +1209,16 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 			context.EntityVersion = &version
 		}
 		input.AssistantContext = context
+	}
+	if runtimecontract.PromptRuntimeContractVersion(values["promptRuntimeContractVersion"]) {
+		input.PromptServiceTemplateRevision = stringMap(values, "promptServiceTemplateRevision")
+		input.PromptServiceTemplateDigest = stringMap(values, "promptServiceTemplateDigest")
+		input.PromptTargetKind = stringMap(values, "promptTargetKind")
+		if _, err := runtimecontract.DecodePromptService(input); err != nil {
+			return "", err
+		}
+	} else if _, present := values["promptRuntimeContractVersion"]; present {
+		return "", errs.ErrConflict
 	}
 	return runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
 		SecretName: stringMap(values, "providerSecretName"), SecretUID: stringMap(values, "providerSecretUID"),

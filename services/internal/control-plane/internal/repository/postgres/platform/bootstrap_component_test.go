@@ -1277,6 +1277,15 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		t.Fatalf("reconcile rejected warm provider: assistant=%#v required=%v err=%v", failedOver, required, err)
 	}
 	selectedFallback := stringMap(desired, "providerAccountRef")
+	if runtimeRevisionMapInt64(desired, "promptRuntimeContractVersion") != 1 {
+		t.Fatal("warm prompt provenance missing")
+	}
+	if _, err := runtimecontract.DecodePromptService(runtimecontract.RunnerInput{
+		Instructions: stringMap(desired, "instructions"), PromptServiceTemplateRevision: stringMap(desired, "promptServiceTemplateRevision"),
+		PromptServiceTemplateDigest: stringMap(desired, "promptServiceTemplateDigest"), PromptTargetKind: stringMap(desired, "promptTargetKind"),
+	}); err != nil {
+		t.Fatal("warm producer prompt rejected by runtime consumer")
+	}
 	if failedOver.WarmSessionRef == currentSessionRef || failedOver.RuntimeState != "RECOVERING" ||
 		failedOver.LastHeartbeatAt != nil || selectedFallback == "" || selectedFallback == currentAccountRef || stringMap(desired, "reasoningMode") != "SUPPORTED" || stringMap(desired, "effectiveReasoningEffort") == "" {
 		t.Fatalf("warm provider failover readback mismatch: assistant=%#v desired=%#v", failedOver, desired)

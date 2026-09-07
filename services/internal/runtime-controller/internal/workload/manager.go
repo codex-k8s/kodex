@@ -575,6 +575,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		RoleDefinitionRef: revision.GetRoleDefinitionRef(), RuntimeProfileRef: revision.GetRuntime().GetRef(), RuntimeProfileRevision: revision.GetRuntime().GetRevision(),
 		InstructionRef: revision.GetInstructionRef(), InstructionDigest: revision.GetInstructionDigest(),
 		PromptTemplateRef: revision.GetPromptTemplateRef(), PromptTemplateDigest: revision.GetPromptTemplateDigest(), PromptMaterializationDigest: revision.GetPromptMaterializationDigest(),
+		PromptServiceTemplateRevision: revision.GetPromptServiceTemplateRevision(), PromptServiceTemplateDigest: revision.GetPromptServiceTemplateDigest(), PromptTargetKind: revision.GetPromptTargetKind(),
 		SystemSTTConfigurationRef: revision.GetSystemSttConfigurationRef(), SystemSTTConfigurationRevisionRef: revision.GetSystemSttConfigurationRevisionRef(), SystemSTTConfigurationVersion: revision.GetSystemSttConfigurationVersion(), SystemSTTConfigurationDigest: revision.GetSystemSttConfigurationDigest(),
 		SystemAssistant: revision.GetSystemAssistant(), Instructions: revision.GetInstructions(), Provider: revision.GetRuntime().GetProvider(), Model: revision.GetRuntime().GetModel(),
 		CodexSessionID:             revision.GetCodexSessionId(),

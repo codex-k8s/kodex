@@ -2931,6 +2931,10 @@ message RuntimeRevisionSnapshot {
   string effective_reasoning_effort = 71;
   RuntimeReasoningMode reasoning_mode = 72;
   RuntimeFileCatalog file_catalog = 73;
+  // Provenance назначается owner для новой semantic runtime materialization.
+  string prompt_service_template_revision = 74;
+  string prompt_service_template_digest = 75;
+  string prompt_target_kind = 76;
 }
 
 enum RuntimeFilePurpose {

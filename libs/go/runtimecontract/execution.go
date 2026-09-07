@@ -163,6 +163,9 @@ type RunnerInput struct {
 	PromptTemplateRef                 string                    `json:"prompt_template_ref"`
 	PromptTemplateDigest              string                    `json:"prompt_template_digest"`
 	PromptMaterializationDigest       string                    `json:"prompt_materialization_digest"`
+	PromptServiceTemplateRevision     string                    `json:"prompt_service_template_revision,omitempty"`
+	PromptServiceTemplateDigest       string                    `json:"prompt_service_template_digest,omitempty"`
+	PromptTargetKind                  string                    `json:"prompt_target_kind,omitempty"`
 	SystemSTTConfigurationRef         string                    `json:"system_stt_configuration_ref,omitempty"`
 	SystemSTTConfigurationRevisionRef string                    `json:"system_stt_configuration_revision_ref,omitempty"`
 	SystemSTTConfigurationVersion     int64                     `json:"system_stt_configuration_version,omitempty"`
@@ -251,6 +254,13 @@ func (request RunnerProviderCredentialRefreshRequest) Validate() error {
 }
 
 func (input RunnerInput) Validate() error {
+	if input.PromptServiceTemplateRevision != "" {
+		if _, err := DecodePromptService(input); err != nil {
+			return err
+		}
+	} else if input.PromptServiceTemplateDigest != "" || input.PromptTargetKind != "" {
+		return errPromptService
+	}
 	if input.ContextSnapshot != nil && input.ContextSnapshot.ValidateFor(input, time.Now()) != nil {
 		return ErrRuntimeContext
 	}
@@ -508,61 +518,64 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 	capabilities := append([]string(nil), input.Capabilities...)
 	sort.Strings(capabilities)
 	payload := struct {
-		OrganizationRef             string
-		SessionRef                  string
-		AgentRef                    string
-		ImageReference              string
-		ImageManifestDigest         string
-		EnvironmentImage            RuntimeEnvironmentImage
-		EnvironmentTools            []RuntimeEnvironmentTool
-		RoleRuntimeContractRevision uint64
-		RoleRuntimeContractSHA256   string
-		RoleDefinitionRef           string
-		RuntimeProfileRef           string
-		RuntimeProfileRevision      string
-		Instructions                string
-		InstructionRef              string
-		InstructionDigest           string
-		PromptTemplateRef           string
-		PromptTemplateDigest        string
-		PromptMaterializationDigest string
-		SystemSTTConfigurationRef   string
-		SystemSTTRevisionRef        string
-		SystemSTTVersion            int64
-		SystemSTTDigest             string
-		Provider                    string
-		Model                       string
-		ProviderAccountRef          string
-		ProviderCredentialRef       string
-		ProviderCredentialRevision  int64
-		ProviderCredentialSHA256    string
-		CodexSandbox                string
-		CodexApprovalPolicy         string
-		Capabilities                []string
-		RuntimeConfigRef            string
-		RuntimeConfigVersion        int64
-		RuntimeConfigDigest         string
-		ProviderPolicyRef           string
-		ProviderPolicyVersion       int64
-		ProviderPolicyDigest        string
-		ConfigOverlayRef            string
-		ConfigOverlayVersion        int64
-		ConfigOverlayDigest         string
-		ConfigOverlay               string
-		EffectiveReasoningEffort    string
-		ReasoningMode               string
-		RuntimeEnvironmentRef       string
-		RuntimeEnvironmentVersion   int64
-		RuntimeEnvironmentDigest    string
-		EnvironmentBindingRef       string
-		EnvironmentBindingVersion   int64
-		EnvironmentBindingDigest    string
-		EnvironmentValues           []RuntimeEnvironmentValue
-		SecretProjections           []RuntimeSecretProjection
-		EnvironmentPolicy           RuntimeEnvironmentPolicy
-		WorkspacePolicy             RuntimeWorkspacePolicy
-		ContextSnapshot             *RuntimeContextSnapshot
-		KubernetesAccessProfile     RuntimeKubernetesAccessProfile
+		OrganizationRef               string
+		SessionRef                    string
+		AgentRef                      string
+		ImageReference                string
+		ImageManifestDigest           string
+		EnvironmentImage              RuntimeEnvironmentImage
+		EnvironmentTools              []RuntimeEnvironmentTool
+		RoleRuntimeContractRevision   uint64
+		RoleRuntimeContractSHA256     string
+		RoleDefinitionRef             string
+		RuntimeProfileRef             string
+		RuntimeProfileRevision        string
+		Instructions                  string
+		InstructionRef                string
+		InstructionDigest             string
+		PromptTemplateRef             string
+		PromptTemplateDigest          string
+		PromptMaterializationDigest   string
+		PromptServiceTemplateRevision string `json:",omitempty"`
+		PromptServiceTemplateDigest   string `json:",omitempty"`
+		PromptTargetKind              string `json:",omitempty"`
+		SystemSTTConfigurationRef     string
+		SystemSTTRevisionRef          string
+		SystemSTTVersion              int64
+		SystemSTTDigest               string
+		Provider                      string
+		Model                         string
+		ProviderAccountRef            string
+		ProviderCredentialRef         string
+		ProviderCredentialRevision    int64
+		ProviderCredentialSHA256      string
+		CodexSandbox                  string
+		CodexApprovalPolicy           string
+		Capabilities                  []string
+		RuntimeConfigRef              string
+		RuntimeConfigVersion          int64
+		RuntimeConfigDigest           string
+		ProviderPolicyRef             string
+		ProviderPolicyVersion         int64
+		ProviderPolicyDigest          string
+		ConfigOverlayRef              string
+		ConfigOverlayVersion          int64
+		ConfigOverlayDigest           string
+		ConfigOverlay                 string
+		EffectiveReasoningEffort      string
+		ReasoningMode                 string
+		RuntimeEnvironmentRef         string
+		RuntimeEnvironmentVersion     int64
+		RuntimeEnvironmentDigest      string
+		EnvironmentBindingRef         string
+		EnvironmentBindingVersion     int64
+		EnvironmentBindingDigest      string
+		EnvironmentValues             []RuntimeEnvironmentValue
+		SecretProjections             []RuntimeSecretProjection
+		EnvironmentPolicy             RuntimeEnvironmentPolicy
+		WorkspacePolicy               RuntimeWorkspacePolicy
+		ContextSnapshot               *RuntimeContextSnapshot
+		KubernetesAccessProfile       RuntimeKubernetesAccessProfile
 	}{
 		OrganizationRef: input.OrganizationRef, SessionRef: input.SessionRef, AgentRef: input.AgentRef,
 		ImageReference: input.ImageReference, ImageManifestDigest: input.ImageManifestDigest,
@@ -573,8 +586,11 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		RuntimeProfileRevision: input.RuntimeProfileRevision, Instructions: input.Instructions,
 		InstructionRef: input.InstructionRef, InstructionDigest: input.InstructionDigest,
 		PromptTemplateRef: input.PromptTemplateRef, PromptTemplateDigest: input.PromptTemplateDigest,
-		PromptMaterializationDigest: input.PromptMaterializationDigest,
-		SystemSTTConfigurationRef:   input.SystemSTTConfigurationRef, SystemSTTRevisionRef: input.SystemSTTConfigurationRevisionRef,
+		PromptMaterializationDigest:   input.PromptMaterializationDigest,
+		PromptServiceTemplateRevision: input.PromptServiceTemplateRevision,
+		PromptServiceTemplateDigest:   input.PromptServiceTemplateDigest,
+		PromptTargetKind:              input.PromptTargetKind,
+		SystemSTTConfigurationRef:     input.SystemSTTConfigurationRef, SystemSTTRevisionRef: input.SystemSTTConfigurationRevisionRef,
 		SystemSTTVersion: input.SystemSTTConfigurationVersion, SystemSTTDigest: input.SystemSTTConfigurationDigest,
 		Provider: input.Provider, Model: input.Model,
 		ProviderAccountRef: input.ProviderAccountRef, ProviderCredentialRef: input.ProviderCredentialRef,

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"mime"
@@ -442,9 +443,15 @@ func buildPrompt(input model.Input) ([]byte, error) {
 	if input.Mode != runtimecontract.RunnerModeTurn {
 		return nil, errors.New("turn prompt is unavailable")
 	}
+	if input.PromptServiceTemplateRevision != "" || input.PromptServiceTemplateDigest != "" || input.PromptTargetKind != "" {
+		if err := validateMaterializedInstructions(input); err != nil {
+			return nil, err
+		}
+	}
 	var builder strings.Builder
 	builder.WriteString(input.Task)
-	if input.CodexSessionID != "" || strings.Contains(input.Instructions, `<session-continuation used="true">`) {
+	if input.CodexSessionID != "" || input.PromptTargetKind == "SESSION_CONTINUATION" ||
+		(input.PromptServiceTemplateRevision == "" && strings.Contains(input.Instructions, `<session-continuation used="true">`)) {
 		if err := appendContinuationRevision(&builder, input); err != nil {
 			return nil, err
 		}
@@ -492,6 +499,26 @@ func appendContinuationRevision(builder *strings.Builder, input model.Input) err
 		input.RuntimeEnvironmentDigest + ":" + input.EnvironmentBindingRef + ":" + strconv.FormatInt(input.EnvironmentBindingVersion, 10) +
 		":" + input.EnvironmentBindingDigest + "\n")
 	builder.WriteString("</runtime-revision-delta>\n")
+	if input.PromptServiceTemplateRevision != "" {
+		envelope, err := runtimecontract.DecodePromptService(input)
+		if err != nil {
+			return err
+		}
+		sections := envelope.Sections[:0]
+		for _, section := range envelope.Sections {
+			if section.Source == "PLATFORM" {
+				sections = append(sections, section)
+			}
+		}
+		envelope.Sections = sections
+		raw, err := json.Marshal(envelope)
+		if err != nil {
+			return err
+		}
+		builder.Write(raw)
+		builder.WriteByte('\n')
+		return nil
+	}
 	for _, name := range []string{"workflow-stage", "automation", "session-continuation", "effective-capabilities"} {
 		block, blockErr := materializedServiceBlock(input.Instructions, name)
 		if blockErr != nil {
@@ -504,6 +531,13 @@ func appendContinuationRevision(builder *strings.Builder, input model.Input) err
 }
 
 func validateMaterializedInstructions(input model.Input) error {
+	if input.PromptServiceTemplateRevision != "" {
+		_, err := runtimecontract.DecodePromptService(input)
+		return err
+	}
+	if input.PromptServiceTemplateDigest != "" || input.PromptTargetKind != "" {
+		return errors.New("runtime prompt service provenance is invalid")
+	}
 	value := input.Instructions
 	if strings.TrimSpace(value) == "" || len(value) > 1<<20 || !utf8.ValidString(value) ||
 		strings.Contains(value, "{{") || strings.Contains(value, "}}") {

@@ -4,6 +4,11 @@
   "title": "Kodex agent runner input v7",
   "type": "object",
   "additionalProperties": false,
+  "dependentRequired": {
+    "prompt_service_template_revision": ["prompt_service_template_digest", "prompt_target_kind"],
+    "prompt_service_template_digest": ["prompt_service_template_revision", "prompt_target_kind"],
+    "prompt_target_kind": ["prompt_service_template_revision", "prompt_service_template_digest"]
+  },
   "required": [
     "schema",
     "mode",
@@ -114,6 +119,9 @@
     "prompt_template_ref": {"$ref": "#/$defs/opaque_ref"},
     "prompt_template_digest": {"$ref": "#/$defs/sha256"},
     "prompt_materialization_digest": {"$ref": "#/$defs/sha256"},
+    "prompt_service_template_revision": {"type": "string", "const": "prompt-service-v2"},
+    "prompt_service_template_digest": {"$ref": "#/$defs/sha256"},
+    "prompt_target_kind": {"type": "string", "enum": ["AGENT", "WORKFLOW_STAGE", "AUTOMATION", "SESSION_CONTINUATION"]},
     "system_stt_configuration_ref": {"$ref": "#/$defs/opaque_ref"},
     "system_stt_configuration_revision_ref": {"$ref": "#/$defs/opaque_ref"},
     "system_stt_configuration_version": {"type": "integer", "minimum": 1},

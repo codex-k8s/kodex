@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
+	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -172,10 +173,11 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		assistant.RuntimeState = "RECOVERING"
 		assistant.Version++
 	}
-	resolvedInstructions := promptContent
-	if ownerInstructions != "" {
-		resolvedInstructions += "\n\n<owner-instructions>\n" + ownerInstructions + "\n</owner-instructions>"
+	materializedPrompt, err := promptservice.MaterializeWarm(promptContent, ownerInstructions, promptRef, promptDigest, assistant.Ref, systemSessionRef)
+	if err != nil || !materializedPrompt.Complete {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
+	resolvedInstructions := materializedPrompt.Prompt
 	resolvedInstructionsSum := sha256.Sum256([]byte(resolvedInstructions))
 	resolvedInstructionsDigest := hex.EncodeToString(resolvedInstructionsSum[:])
 	workspacePolicy := runtimeWorkspacePolicy()
@@ -195,12 +197,16 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"providerSecretResourceVersion":    providerSecretResourceVersion,
 		"providerCredentialSHA256":         providerCredentialSHA256,
 		"corePromptDigest":                 promptDigest, "corePrompt": promptContent,
-		"instructionRef":              promptRef,
-		"instructionDigest":           resolvedInstructionsDigest,
-		"promptTemplateRef":           promptRef,
-		"promptTemplateDigest":        promptDigest,
-		"promptMaterializationDigest": resolvedInstructionsDigest,
-		"ownerInstructions":           ownerInstructions, "instructions": resolvedInstructions,
+		"instructionRef":                promptRef,
+		"instructionDigest":             resolvedInstructionsDigest,
+		"promptTemplateRef":             promptRef,
+		"promptTemplateDigest":          promptDigest,
+		"promptMaterializationDigest":   materializedPrompt.Digest,
+		"promptRuntimeContractVersion":  1,
+		"promptServiceTemplateRevision": materializedPrompt.ServiceTemplateRevision,
+		"promptServiceTemplateDigest":   materializedPrompt.ServiceTemplateDigest,
+		"promptTargetKind":              promptservice.TargetAgent,
+		"ownerInstructions":             ownerInstructions, "instructions": resolvedInstructions,
 		"resourceLimits": assistant.ResourceLimits, "directSecretAccess": false,
 		"roleDefinitionRef":           roleDefinitionRef,
 		"imageReference":              repository.roleImages.DefaultImageReference,

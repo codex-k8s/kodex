@@ -27551,8 +27551,12 @@ type RuntimeRevisionSnapshot struct {
 	EffectiveReasoningEffort string               `protobuf:"bytes,71,opt,name=effective_reasoning_effort,json=effectiveReasoningEffort,proto3" json:"effective_reasoning_effort,omitempty"`
 	ReasoningMode            RuntimeReasoningMode `protobuf:"varint,72,opt,name=reasoning_mode,json=reasoningMode,proto3,enum=controlplane.v1.RuntimeReasoningMode" json:"reasoning_mode,omitempty"`
 	FileCatalog              *RuntimeFileCatalog  `protobuf:"bytes,73,opt,name=file_catalog,json=fileCatalog,proto3" json:"file_catalog,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// Provenance назначается owner для новой semantic runtime materialization.
+	PromptServiceTemplateRevision string `protobuf:"bytes,74,opt,name=prompt_service_template_revision,json=promptServiceTemplateRevision,proto3" json:"prompt_service_template_revision,omitempty"`
+	PromptServiceTemplateDigest   string `protobuf:"bytes,75,opt,name=prompt_service_template_digest,json=promptServiceTemplateDigest,proto3" json:"prompt_service_template_digest,omitempty"`
+	PromptTargetKind              string `protobuf:"bytes,76,opt,name=prompt_target_kind,json=promptTargetKind,proto3" json:"prompt_target_kind,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *RuntimeRevisionSnapshot) Reset() {
@@ -28094,6 +28098,27 @@ func (x *RuntimeRevisionSnapshot) GetFileCatalog() *RuntimeFileCatalog {
 		return x.FileCatalog
 	}
 	return nil
+}
+
+func (x *RuntimeRevisionSnapshot) GetPromptServiceTemplateRevision() string {
+	if x != nil {
+		return x.PromptServiceTemplateRevision
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetPromptServiceTemplateDigest() string {
+	if x != nil {
+		return x.PromptServiceTemplateDigest
+	}
+	return ""
+}
+
+func (x *RuntimeRevisionSnapshot) GetPromptTargetKind() string {
+	if x != nil {
+		return x.PromptTargetKind
+	}
+	return ""
 }
 
 // Descriptor входит в digest RuntimeRevision; записи каталога остаются у CP.
@@ -74446,7 +74471,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1eGetRuntimeRevisionDiffResponse\x12H\n" +
 	"\acurrent\x18\x01 \x01(\v2..controlplane.v1.PublicRuntimeRevisionIdentityR\acurrent\x12J\n" +
 	"\bprevious\x18\x02 \x01(\v2..controlplane.v1.PublicRuntimeRevisionIdentityR\bprevious\x12D\n" +
-	"\achanges\x18\x03 \x03(\v2*.controlplane.v1.RuntimeRevisionDiffChangeR\achanges\"\xd2!\n" +
+	"\achanges\x18\x03 \x03(\v2*.controlplane.v1.RuntimeRevisionDiffChangeR\achanges\"\x8e#\n" +
 	"\x17RuntimeRevisionSnapshot\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
@@ -74522,7 +74547,10 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0ememory_records\x18F \x03(\v2,.controlplane.v1.RuntimeMemoryRecordSnapshotR\rmemoryRecords\x12<\n" +
 	"\x1aeffective_reasoning_effort\x18G \x01(\tR\x18effectiveReasoningEffort\x12L\n" +
 	"\x0ereasoning_mode\x18H \x01(\x0e2%.controlplane.v1.RuntimeReasoningModeR\rreasoningMode\x12F\n" +
-	"\ffile_catalog\x18I \x01(\v2#.controlplane.v1.RuntimeFileCatalogR\vfileCatalog\"\x95\x01\n" +
+	"\ffile_catalog\x18I \x01(\v2#.controlplane.v1.RuntimeFileCatalogR\vfileCatalog\x12G\n" +
+	" prompt_service_template_revision\x18J \x01(\tR\x1dpromptServiceTemplateRevision\x12C\n" +
+	"\x1eprompt_service_template_digest\x18K \x01(\tR\x1bpromptServiceTemplateDigest\x12,\n" +
+	"\x12prompt_target_kind\x18L \x01(\tR\x10promptTargetKind\"\x95\x01\n" +
 	"\x12RuntimeFileCatalog\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x16\n" +
 	"\x06digest\x18\x02 \x01(\tR\x06digest\x12\x14\n" +
