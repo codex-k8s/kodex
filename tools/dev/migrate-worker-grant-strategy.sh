@@ -36,19 +36,20 @@ while IFS= read -r desired; do
       any(((.command // []) + (.args // []))[];
         test("(^|/)internal-rpc-authority-platform-worker-grant-agent$")))
   ' "$temporary/current.json" >/dev/null || fail 'existing workload binding is invalid'
+  cp "$temporary/current.json" "$temporary/before.json"
   if jq -e '.spec.strategy == {type:"Recreate"}' "$temporary/current.json" >/dev/null; then
     continue
   fi
   jq -e '.spec.strategy.type == "RollingUpdate"' "$temporary/current.json" >/dev/null || fail 'existing strategy is unsupported'
-  jq '[
-    {op:"test",path:"/metadata/uid",value:.metadata.uid},
-    {op:"test",path:"/metadata/resourceVersion",value:.metadata.resourceVersion},
-    {op:"test",path:"/spec/strategy",value:.spec.strategy},
-    {op:"replace",path:"/spec/strategy",value:{type:"Recreate"}},
-    {op:"add",path:"/spec/replicas",value:1}
-  ]' "$temporary/current.json" >"$temporary/patch.json"
-  kubectl -n kodex-system patch deployment "$name" --type=json --field-manager=kodex-local-dev \
-    --request-timeout=20s --patch-file "$temporary/patch.json" >/dev/null 2>&1 || fail 'atomic patch failed'
+  migrated=false
+  for attempt in 1 2 3 4 5; do
+    kubectl -n kodex-system get deployment "$name" --request-timeout=20s -o json >"$temporary/current.json" 2>/dev/null || fail 'read failed'
+    jq -e --arg name "$name" --argjson desired "$desired" '.metadata.name == $name and .metadata.uid == $before[0].metadata.uid and .metadata.deletionTimestamp == null and .spec.selector == $desired.spec.selector and .spec.template == $before[0].spec.template and .spec.strategy.type == "RollingUpdate"' --slurpfile before "$temporary/before.json" "$temporary/current.json" >/dev/null || fail 'concurrent workload mutation'
+    jq '[{op:"test",path:"/metadata/uid",value:.metadata.uid},{op:"test",path:"/metadata/resourceVersion",value:.metadata.resourceVersion},{op:"test",path:"/spec/strategy",value:.spec.strategy},{op:"replace",path:"/spec/strategy",value:{type:"Recreate"}},{op:"add",path:"/spec/replicas",value:1}]' "$temporary/current.json" >"$temporary/patch.json"
+    if kubectl -n kodex-system patch deployment "$name" --type=json --field-manager=kodex-local-dev --request-timeout=20s --patch-file "$temporary/patch.json" >/dev/null 2>&1; then migrated=true; break; fi
+    [[ "$attempt" == 5 ]] || sleep 0.2
+  done
+  [[ "$migrated" == true ]] || fail 'atomic patch failed'
   kubectl -n kodex-system get deployment "$name" --request-timeout=20s -o json >"$temporary/after.json" 2>/dev/null || fail 'readback failed'
   jq -e --slurpfile before "$temporary/current.json" '
     .metadata.uid == $before[0].metadata.uid and .metadata.deletionTimestamp == null and
