@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.18
+version: 1.4.19
 updated: 2026-09-07
 ---
 
@@ -60,7 +60,14 @@ owner-published snapshot, связанном с проверенными history
 отключённых traces. Node-only запрос использует проверенную owner session,
 exact Origin/CSRF и свежую OCC/idempotency boundary; неизвестный результат
 mutation не повторяется автоматически. В браузер возвращается только отдельно
-проверенная cookie-пара для продолжения сценария, без credential/response body.
+проверенный набор cookies необходимых слоёв для продолжения сценария, без
+credential/response body. Внешний ForwardAuth и прикладная BFF session остаются
+разными границами: клиент переносит только cookies закрытого реестра имён с
+exact origin/host/path, security flags, expiry и ограничениями chunks/размера.
+Ротация каждого слоя проверяется целиком до adoption; browser handoff удаляет
+устаревшие части и сверяет конкурентное изменение прежнего состояния. Cookies
+IdP не копируются в API transport. Отказ внешнего слоя не является основанием
+для BFF refresh или повторения бизнес-запроса.
 Ошибки не сохраняют сырые request/response либо cause; regression использует
 synthetic sentinel и проверяет actual call path, а не текст private handoff.
 
