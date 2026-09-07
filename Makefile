@@ -289,6 +289,10 @@ lint-proto: check-proto-toolchain
 .PHONY: test-secret-broker-drafts
 .PHONY: test-egress-broker-network-policy
 .PHONY: test-discovery-provider-fixtures
+.PHONY: test-workspace-parent-container
+test-workspace-parent-container:
+	@timeout 360s bash scripts/tests/workspace-parent-container-test.sh
+
 test-discovery-provider-fixtures:
 	@timeout 90s python3 -B scripts/tests/discovery-provider-fixtures-test.py
 

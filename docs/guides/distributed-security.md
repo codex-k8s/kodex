@@ -1056,6 +1056,12 @@ Registry credentials, private PEM и обратимый Docker auth не пер�
 ошибку. CLI-флаг, принимающий PEM contents, нельзя заменять путём к файлу:
 нужен поддерживаемый config/file loader с прежней exact TLS/mTLS identity.
 
+Промежуточные каталоги вложенных workspace mounts создаются узким non-root init
+до контейнера с nested mounts: OCI runtime иначе может создать parent с UID 0.
+Preparer видит только родительский workspace; owner/symlink guard не ослабляется
+до приёма чужого каталога. Порядок одноразовых init и отсутствие у preparer
+credentials закрепляются в canonical Pod admission и container regression.
+
 Writable spool и read-only authority/credential mounts не пересекаются после
 разрешения filesystem aliases внутри образа, включая `/var/run -> /run`.
 Операционные каталоги размещаются отдельно с прежними ограничениями объёма,
