@@ -4,11 +4,19 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.17
+version: 1.4.18
 updated: 2026-09-07
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Metadata, сохранённая в durable JSON plan и повторно прочитанная из Kubernetes,
+сравнивает timestamp по точному моменту, независимо от timezone/Location и
+локального monotonic reading. Структурное `time.Time ==` не является проверкой
+этого равенства. Нормализация представления не округляет время и не исключает
+UID/resourceVersion/profile/descriptor/spec из exact fencing. Regression
+проходит API plan → private Save → новый Read → Apply и отвергает изменение
+самого момента, включая субсекундное, до внешнего эффекта.
 
 Отказ выдачи межсервисного контекста различает локальную стадию чтения grant,
 обращение к авторитетному proof resolver и обращение к issuer. Закрытый gRPC

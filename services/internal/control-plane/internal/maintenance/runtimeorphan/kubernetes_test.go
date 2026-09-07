@@ -108,8 +108,14 @@ func TestOrphanActualAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// API metadata → private JSON → новый reader перед любым Apply.
+	p, store := persistedPlan(t, p)
 	k.System = p.Snapshot.System
 	k.Runtime = p.Snapshot.Runtime
+	system, runtimeNamespace, err := k.Namespaces(ctx)
+	if err != nil || !system.Equal(p.Snapshot.System) || !runtimeNamespace.Equal(p.Snapshot.Runtime) {
+		t.Fatal("namespace receipt roundtrip rejected")
+	}
 	wrong := p.Snapshot.Secret
 	wrong.UID = "other-uid"
 	if k.Delete(ctx, wrong) == nil {
@@ -124,13 +130,17 @@ func TestOrphanActualAPI(t *testing.T) {
 	if err != nil || absent || metadata.UID != secret.UID {
 		t.Fatal("negative DELETE changed object")
 	}
-	if err = Apply(ctx, k, &p, func() error { return nil }); err != nil {
+	if err = Apply(ctx, k, &p, func() error { return store.Save(p, false) }); err != nil {
 		t.Fatal(err)
 	}
 	if p.State != "COMPLETE" || !p.Restored {
 		t.Fatal("incomplete receipt")
 	}
-	if err = Apply(ctx, k, &p, func() error { return nil }); err != nil {
+	p, err = store.Read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Apply(ctx, k, &p, func() error { return store.Save(p, false) }); err != nil {
 		t.Fatal(err)
 	}
 	// Scoped reset должен удалить runtime и system, сохранив identity.

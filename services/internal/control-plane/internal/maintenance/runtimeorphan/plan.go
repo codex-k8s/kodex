@@ -32,6 +32,14 @@ type Namespace struct {
 	Profile string    `json:"profile"`
 }
 
+// Equal сравнивает точные metadata и момент времени, независимо от Location
+// и непереносимого monotonic reading после JSON roundtrip.
+func (n Namespace) Equal(other Namespace) bool {
+	n.Created = n.Created.UTC()
+	other.Created = other.Created.UTC()
+	return n == other
+}
+
 type Descriptor struct {
 	Name           string    `json:"name"`
 	UID            string    `json:"uid"`
@@ -59,6 +67,14 @@ type Snapshot struct {
 	Runtime Namespace  `json:"runtime"`
 	Secret  Descriptor `json:"secret"`
 	Writer  Writer     `json:"writer"`
+}
+
+// Equal сохраняет все identity/fencing поля, нормализуя только представление времени.
+func (s Snapshot) Equal(other Snapshot) bool {
+	s.System.Created, other.System.Created = s.System.Created.UTC(), other.System.Created.UTC()
+	s.Runtime.Created, other.Runtime.Created = s.Runtime.Created.UTC(), other.Runtime.Created.UTC()
+	s.Secret.Created, other.Secret.Created = s.Secret.Created.UTC(), other.Secret.Created.UTC()
+	return s == other
 }
 
 type Plan struct {
@@ -161,7 +177,7 @@ func Apply(ctx context.Context, b Boundary, p *Plan, save func() error) (result 
 	}
 	if p.State == "PLANNED" {
 		current, err := b.Snapshot(ctx, p.Snapshot.Secret.Name)
-		if err != nil || current != p.Snapshot {
+		if err != nil || !current.Equal(p.Snapshot) {
 			return ErrGuard
 		}
 		if err = noReferences(ctx, b, p.Snapshot.Secret); err != nil {
@@ -200,7 +216,7 @@ func Apply(ctx context.Context, b Boundary, p *Plan, save func() error) (result 
 			return ErrGuard
 		}
 		current.Writer = p.Snapshot.Writer
-		if current != p.Snapshot {
+		if !current.Equal(p.Snapshot) {
 			return ErrGuard
 		}
 		if err = noReferences(ctx, b, p.Snapshot.Secret); err != nil {
