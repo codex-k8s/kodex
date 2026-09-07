@@ -19,12 +19,20 @@ import {
 import { dirname, resolve } from "node:path";
 import { createOwnerSessionClient } from "./owner-session-client.mjs";
 import { exactOrigin } from "./owner-session-storage.mjs";
+import {
+  selectWorkspaceProviderAccount,
+  workspaceModelQuery,
+  workspaceProviderAccountRef,
+} from "./runtime-provider-catalog.mjs";
 
 function fail(message) {
   throw new Error(`Kodex local RoleImage E2E failed: ${message}`);
 }
 
 const phase = process.argv[2] ?? "";
+const requestedAccountRef = workspaceProviderAccountRef(
+  process.env.KODEX_ROLE_IMAGE_E2E_PROVIDER_ACCOUNT_REF,
+);
 if (
   !new Set([
     "prepare",
@@ -439,24 +447,20 @@ async function launch() {
     `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
     { expectedStatus: 200 },
   );
-  const modelQuery = new URLSearchParams({
-    query: runtime.configuration.model,
-    providerDefinitionKey: "openai-codex",
-    pageSize: "100",
-  });
+  const modelQuery = workspaceModelQuery(
+    runtime.configuration.model,
+    requestedAccountRef,
+  );
   const models = await request(
     "GET",
     `/api/v1/model-capabilities?${modelQuery}`,
     { expectedStatus: 200 },
   );
-  const accountRef = models.items?.find(
-    (model) => model.id === runtime.configuration.model && model.available,
-  )?.eligibleProviderAccountRefs?.[0];
-  if (
-    typeof accountRef !== "string" ||
-    !/^pacc_[A-Za-z0-9_-]+$/.test(accountRef)
-  )
-    fail("configured runtime model has no eligible provider account");
+  const accountRef = selectWorkspaceProviderAccount(
+    models.items,
+    runtime.configuration.model,
+    requestedAccountRef,
+  );
   modelQuery.set("providerAccountRef", accountRef);
   const accountModels = await request(
     "GET",

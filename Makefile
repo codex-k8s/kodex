@@ -167,7 +167,7 @@ test-runtime-controller-artifact-transfer:
 
 .PHONY: test-runtime-workspace-acceptance
 test-runtime-workspace-acceptance:
-	@timeout 30s node --test tools/dev/runtime-workspace-acceptance.test.mjs
+	@timeout 30s node --test tools/dev/runtime-workspace-acceptance.test.mjs tools/dev/runtime-provider-catalog.test.mjs
 
 .PHONY: test-stt-http-acceptance
 test-stt-http-acceptance:
