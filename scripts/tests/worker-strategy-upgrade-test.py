@@ -11,6 +11,7 @@ root = Path(__file__).resolve().parents[2]
 image = os.environ["KODEX_STRATEGY_TEST_IMAGE"]
 assert image.startswith("sha256:") and len(image) == 71
 name = f"kodex-strategy-upgrade-{os.getpid()}"
+volumes = []
 
 
 def run(args, value=None, env=None):
@@ -42,6 +43,8 @@ try:
                 "--disable-agent", "--disable=traefik,servicelb,metrics-server,coredns,local-storage",
                 "--disable-helm-controller", "--disable-network-policy", "--flannel-backend=none",
                 "--node-ip=127.0.0.1", "--bind-address=127.0.0.1", "--advertise-address=127.0.0.1"]).returncode == 0
+    volumes = [mount["Name"] for mount in json.loads(run(["docker", "inspect", name]).stdout)[0]["Mounts"]
+               if mount["Type"] == "volume"]
     deadline = time.monotonic() + 60
     while kube(["get", "--raw=/readyz"]).returncode:
         assert time.monotonic() < deadline, "API startup deadline"
@@ -120,4 +123,5 @@ try:
     assert json.loads(kube(["get", "nodes", "-o", "json"]).stdout)["items"] == []
     print("Worker strategy API upgrade passed: default/owned, omitted/null rejection, CAS race, replay, fresh, unknown")
 finally:
-    assert run(["docker", "rm", "-f", name]).returncode == 0
+    assert run(["docker", "rm", "-fv", name]).returncode == 0
+    assert all(run(["docker", "volume", "inspect", volume]).returncode != 0 for volume in volumes)
