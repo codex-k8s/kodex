@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
@@ -137,6 +138,10 @@ func TestIssueContinuationInheritsVerifiedRootAndReservesChild(t *testing.T) {
 		t.Fatalf("подписать parent context: %v", err)
 	}
 	authority.now = func() time.Time { return now.Add(5 * time.Second) }
+	// Загруженная parent policy не разрешает STT подписывать вызовы за gateway.
+	if _, _, err := authority.Issue(t.Context(), parentOperation, "synthetic-proof", requestDigest); !failure.IsKind(err, failure.OperationNotAllowed) {
+		t.Fatal("foreign issuer operation was not rejected before proof processing")
+	}
 
 	childCompact, childClaims, err := authority.IssueContinuation(
 		t.Context(), childOperation, parentCompact, requestID, correlationID, requestDigest,

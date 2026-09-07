@@ -43,6 +43,7 @@ var supportedWorkloads = map[string]struct{}{
 
 type config struct {
 	WorkloadID      string        `env:"PLATFORM_WORKER_GRANT_WORKLOAD_ID"`
+	InstanceID      string        `env:"PLATFORM_WORKER_GRANT_INSTANCE_ID"`
 	PrivateJWKFile  string        `env:"PLATFORM_WORKER_GRANT_PRIVATE_JWK_FILE"`
 	OutputFile      string        `env:"PLATFORM_WORKER_GRANT_OUTPUT_FILE"`
 	TechnicalListen string        `env:"PLATFORM_WORKER_GRANT_TECHNICAL_LISTEN"`
@@ -52,6 +53,7 @@ type config struct {
 
 type claims struct {
 	Version              int    `json:"v"`
+	InstanceID           string `json:"instance_id,omitempty"`
 	Issuer               string `json:"iss"`
 	Audience             string `json:"aud"`
 	Subject              string `json:"sub"`
@@ -83,7 +85,9 @@ func Run(lifecycle, shutdownBase context.Context) error {
 		return fmt.Errorf("materialize initial platform worker grant: %w", err)
 	}
 	readiness.Set(true, "ready")
-	server := technicalServer(configuration.TechnicalListen, readiness)
+	server := technicalServer(configuration.TechnicalListen, readiness, func() bool {
+		return readCurrent(configuration, key, time.Now()) == nil
+	})
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveHTTP(server, configuration.ShutdownTimeout),
 		rotationWorker(configuration, key, readiness, slog.Default()),
@@ -107,7 +111,7 @@ func loadConfig() (config, error) {
 	if err := env.Parse(&configuration); err != nil {
 		return config{}, errors.New("parse platform worker grant environment")
 	}
-	if _, ok := supportedWorkloads[configuration.WorkloadID]; !ok ||
+	if _, ok := supportedWorkloads[configuration.WorkloadID]; !ok || !validInstanceID(configuration.InstanceID) ||
 		!filepath.IsAbs(configuration.PrivateJWKFile) || !filepath.IsAbs(configuration.OutputFile) ||
 		filepath.Clean(configuration.PrivateJWKFile) != configuration.PrivateJWKFile || filepath.Clean(configuration.OutputFile) != configuration.OutputFile ||
 		filepath.Dir(configuration.PrivateJWKFile) == filepath.Dir(configuration.OutputFile) ||
@@ -138,13 +142,18 @@ func loadKey(path string) (internalrpcauth.ES256Key, error) {
 
 func rotate(configuration config, key internalrpcauth.ES256Key, now func() time.Time) error {
 	credentialGeneration, err := internalrpcauth.KeyGeneration(key.KeyID)
-	if _, ok := supportedWorkloads[configuration.WorkloadID]; !ok || err != nil ||
+	if _, ok := supportedWorkloads[configuration.WorkloadID]; !ok || !validInstanceID(configuration.InstanceID) || err != nil ||
 		key.KeyID != fmt.Sprintf("%s-platform-worker-g%d", configuration.WorkloadID, credentialGeneration) {
 		return errors.New("platform worker grant signing key binding is invalid")
 	}
 	issuedAt := now().UTC().Truncate(time.Second)
 	if issuedAt.Unix() <= 0 {
 		return errors.New("platform worker grant issue time is invalid")
+	}
+	// Restart в той же секунде сохраняет exact envelope и не конфликтует
+	// с уже принятым durable watermark этого Pod.
+	if readBack(configuration, key, issuedAt) == nil {
+		return nil
 	}
 	workloadSPIFFE := "spiffe://kodex.local/ns/kodex-system/sa/" + configuration.WorkloadID
 	value := claims{
@@ -156,6 +165,10 @@ func rotate(configuration config, key internalrpcauth.ES256Key, now func() time.
 		Revision: uint64(issuedAt.Unix()), CredentialGeneration: credentialGeneration, JTI: uuid.NewString(),
 		AuthorityABIVersion: internalrpcauth.AuthorityABIVersion,
 		IssuedAt:            issuedAt.Unix(), NotBefore: issuedAt.Unix(), ExpiresAt: issuedAt.Add(grantTTL).Unix(),
+	}
+	if configuration.InstanceID != "" {
+		value.Version = 2
+		value.InstanceID = configuration.InstanceID
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(value, key, internalrpcauth.ProtectedHeaderExpectation{Type: grantType, KeyID: key.KeyID})
 	if err != nil {
@@ -204,6 +217,22 @@ func writeAtomic(path string, value []byte) error {
 }
 
 func readBack(configuration config, key internalrpcauth.ES256Key, now time.Time) error {
+	return readGrant(configuration, key, now, true)
+}
+
+func readCurrent(configuration config, key internalrpcauth.ES256Key, now time.Time) error {
+	return readGrant(configuration, key, now, false)
+}
+
+func validInstanceID(value string) bool {
+	if value == "" {
+		return true
+	}
+	instance, err := uuid.Parse(value)
+	return err == nil && instance != uuid.Nil && instance.String() == value
+}
+
+func readGrant(configuration config, key internalrpcauth.ES256Key, now time.Time, exactIssuedAt bool) error {
 	raw, err := os.ReadFile(configuration.OutputFile)
 	if err != nil || len(raw) == 0 || len(raw) > 16<<10 {
 		return errors.New("read back platform worker grant")
@@ -213,9 +242,16 @@ func readBack(configuration config, key internalrpcauth.ES256Key, now time.Time)
 		return errors.New("verify platform worker grant readback")
 	}
 	var value claims
+	expectedVersion := 1
+	if configuration.InstanceID != "" {
+		expectedVersion = 2
+	}
 	credentialGeneration, generationErr := internalrpcauth.KeyGeneration(key.KeyID)
 	if internalrpcauth.DecodeCanonicalJSON(verified.CanonicalPayload, &value) != nil ||
-		generationErr != nil || value.Version != 1 || value.WorkloadID != configuration.WorkloadID || value.Revision != uint64(now.Unix()) ||
+		generationErr != nil || !validInstanceID(configuration.InstanceID) || value.Version != expectedVersion ||
+		value.InstanceID != configuration.InstanceID || value.WorkloadID != configuration.WorkloadID ||
+		value.IssuedAt <= 0 || value.Revision != uint64(value.IssuedAt) ||
+		(exactIssuedAt && value.Revision != uint64(now.Unix())) || now.Unix() >= value.ExpiresAt ||
 		value.Issuer != "https://control-plane.kodex-system.svc.cluster.local/authority/platform-worker/"+configuration.WorkloadID ||
 		value.Audience != "urn:kodex:platform-worker:"+configuration.WorkloadID ||
 		value.CallerSPIFFEID != "spiffe://kodex.local/ns/kodex-system/sa/"+configuration.WorkloadID ||
@@ -238,7 +274,11 @@ func rotationWorker(configuration config, key internalrpcauth.ES256Key, readines
 				return ctx.Err()
 			case <-ticker.C:
 				if err := rotate(configuration, key, time.Now); err != nil {
-					if readiness.Set(false, "local_grant_materialization_failed") {
+					if readCurrent(configuration, key, time.Now()) == nil {
+						if readiness.Set(true, "grant_refresh_deferred") {
+							logger.WarnContext(ctx, "platform worker grant refresh deferred", "error_class", "local_storage")
+						}
+					} else if readiness.Set(false, "local_grant_materialization_failed") {
 						logger.ErrorContext(ctx, "platform worker grant materialization failed", "error_class", "local_storage")
 					}
 					continue
@@ -251,12 +291,15 @@ func rotationWorker(configuration config, key internalrpcauth.ES256Key, readines
 	}
 }
 
-func technicalServer(address string, readiness *serviceruntime.Readiness) *http.Server {
+func technicalServer(address string, readiness *serviceruntime.Readiness, grantReady func() bool) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("/livez", func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("/readyz", func(writer http.ResponseWriter, _ *http.Request) {
 		ready, reason := readiness.Ready()
+		if ready && !grantReady() {
+			ready, reason = false, "local_grant_unavailable"
+		}
 		if !ready {
 			http.Error(writer, reason, http.StatusServiceUnavailable)
 			return
