@@ -61,6 +61,19 @@ func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	}
 }
 
+func TestRuntimeExecutionProviderUsesClosedAdapterRegistry(t *testing.T) {
+	t.Parallel()
+	provider, err := runtimeExecutionProvider("openai-codex")
+	if err != nil || provider != "openai" {
+		t.Fatalf("runtime provider = %q, err = %v", provider, err)
+	}
+	for _, invalid := range []string{"", "openai", "other-provider"} {
+		if provider, err := runtimeExecutionProvider(invalid); err == nil || provider != "" {
+			t.Fatalf("definition key %q produced provider %q, err = %v", invalid, provider, err)
+		}
+	}
+}
+
 func TestRuntimeWorkspacePolicyIsBoundedAndServerOwned(t *testing.T) {
 	policy := runtimeWorkspacePolicy()
 	if policy.Revision != 1 || policy.Root != "/workspace" || policy.MaximumWritableBytes != 1<<30 ||
