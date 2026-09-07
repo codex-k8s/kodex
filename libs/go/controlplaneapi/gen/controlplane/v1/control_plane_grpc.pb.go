@@ -3621,168 +3621,172 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	PlatformCommandService_CreateEmailMailboxDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateEmailMailboxDraft"
-	PlatformCommandService_SaveEmailMailboxDraft_FullMethodName                    = "/controlplane.v1.PlatformCommandService/SaveEmailMailboxDraft"
-	PlatformCommandService_ValidateEmailMailboxDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/ValidateEmailMailboxDraft"
-	PlatformCommandService_PublishEmailMailboxDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/PublishEmailMailboxDraft"
-	PlatformCommandService_DiscardEmailMailboxDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/DiscardEmailMailboxDraft"
-	PlatformCommandService_BindEmailMailboxConfiguration_FullMethodName            = "/controlplane.v1.PlatformCommandService/BindEmailMailboxConfiguration"
-	PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName          = "/controlplane.v1.PlatformCommandService/UnbindEmailMailboxConfiguration"
-	PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName          = "/controlplane.v1.PlatformCommandService/PrepareRuntimeSecretDraftImpact"
-	PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PrepareSaveRuntimeSecretDraft"
-	PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/PrepareValidateRuntimeSecretDraft"
-	PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PreparePublishRuntimeSecretDraft"
-	PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PrepareDiscardRuntimeSecretDraft"
-	PlatformCommandService_SavePromptTemplateDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/SavePromptTemplateDraft"
-	PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/DiscardPromptTemplateDraft"
-	PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/SaveRoleImageRevisionDraft"
-	PlatformCommandService_DiscardRoleImageRevisionDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/DiscardRoleImageRevisionDraft"
-	PlatformCommandService_SaveIntegrationDefinitionDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/SaveIntegrationDefinitionDraft"
-	PlatformCommandService_DiscardIntegrationDefinitionDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/DiscardIntegrationDefinitionDraft"
-	PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/SaveSystemSTTConfigurationDraft"
-	PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/DiscardSystemSTTConfigurationDraft"
-	PlatformCommandService_ReconcileEmailEffect_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ReconcileEmailEffect"
-	PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName          = "/controlplane.v1.PlatformCommandService/ConfigureEmailMailboxCredential"
-	PlatformCommandService_CreateSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateSkillBundleDraft"
-	PlatformCommandService_SaveSkillBundleDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/SaveSkillBundleDraft"
-	PlatformCommandService_ValidateSkillBundleDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ValidateSkillBundleDraft"
-	PlatformCommandService_ReviewSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/ReviewSkillBundleDraft"
-	PlatformCommandService_PublishSkillBundleDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/PublishSkillBundleDraft"
-	PlatformCommandService_DiscardSkillBundleDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/DiscardSkillBundleDraft"
-	PlatformCommandService_ArchiveSkillBundle_FullMethodName                       = "/controlplane.v1.PlatformCommandService/ArchiveSkillBundle"
-	PlatformCommandService_RestoreSkillBundle_FullMethodName                       = "/controlplane.v1.PlatformCommandService/RestoreSkillBundle"
-	PlatformCommandService_PurgeSkillBundle_FullMethodName                         = "/controlplane.v1.PlatformCommandService/PurgeSkillBundle"
-	PlatformCommandService_BindAgentSkillBundle_FullMethodName                     = "/controlplane.v1.PlatformCommandService/BindAgentSkillBundle"
-	PlatformCommandService_UnbindAgentSkillBundle_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UnbindAgentSkillBundle"
-	PlatformCommandService_CreateMemoryRecord_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CreateMemoryRecord"
-	PlatformCommandService_ReviseMemoryRecord_FullMethodName                       = "/controlplane.v1.PlatformCommandService/ReviseMemoryRecord"
-	PlatformCommandService_ArchiveMemoryRecord_FullMethodName                      = "/controlplane.v1.PlatformCommandService/ArchiveMemoryRecord"
-	PlatformCommandService_RestoreMemoryRecord_FullMethodName                      = "/controlplane.v1.PlatformCommandService/RestoreMemoryRecord"
-	PlatformCommandService_PurgeMemoryRecord_FullMethodName                        = "/controlplane.v1.PlatformCommandService/PurgeMemoryRecord"
-	PlatformCommandService_BindAgentMemoryRecord_FullMethodName                    = "/controlplane.v1.PlatformCommandService/BindAgentMemoryRecord"
-	PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName                  = "/controlplane.v1.PlatformCommandService/UnbindAgentMemoryRecord"
-	PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentDraft"
-	PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName              = "/controlplane.v1.PlatformCommandService/SaveRuntimeEnvironmentDraft"
-	PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/ValidateRuntimeEnvironmentDraft"
-	PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentDraft"
-	PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/DiscardRuntimeEnvironmentDraft"
-	PlatformCommandService_RebindRuntimeEnvironment_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindRuntimeEnvironment"
-	PlatformCommandService_RebindRuntimeSecret_FullMethodName                      = "/controlplane.v1.PlatformCommandService/RebindRuntimeSecret"
-	PlatformCommandService_BindInteractionIdentity_FullMethodName                  = "/controlplane.v1.PlatformCommandService/BindInteractionIdentity"
-	PlatformCommandService_RevokeInteractionIdentity_FullMethodName                = "/controlplane.v1.PlatformCommandService/RevokeInteractionIdentity"
-	PlatformCommandService_CompleteOnboarding_FullMethodName                       = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
-	PlatformCommandService_CreateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/CreateProject"
-	PlatformCommandService_UpdateProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UpdateProject"
-	PlatformCommandService_AddPlatformMembership_FullMethodName                    = "/controlplane.v1.PlatformCommandService/AddPlatformMembership"
-	PlatformCommandService_ChangePlatformMembership_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ChangePlatformMembership"
-	PlatformCommandService_RemovePlatformMembership_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RemovePlatformMembership"
-	PlatformCommandService_AddProjectMembership_FullMethodName                     = "/controlplane.v1.PlatformCommandService/AddProjectMembership"
-	PlatformCommandService_ChangeProjectMembership_FullMethodName                  = "/controlplane.v1.PlatformCommandService/ChangeProjectMembership"
-	PlatformCommandService_RemoveProjectMembership_FullMethodName                  = "/controlplane.v1.PlatformCommandService/RemoveProjectMembership"
-	PlatformCommandService_CreateAgent_FullMethodName                              = "/controlplane.v1.PlatformCommandService/CreateAgent"
-	PlatformCommandService_UpdateAgent_FullMethodName                              = "/controlplane.v1.PlatformCommandService/UpdateAgent"
-	PlatformCommandService_SetAgentEnabled_FullMethodName                          = "/controlplane.v1.PlatformCommandService/SetAgentEnabled"
-	PlatformCommandService_ArchiveAgent_FullMethodName                             = "/controlplane.v1.PlatformCommandService/ArchiveAgent"
-	PlatformCommandService_SetAgentAvatar_FullMethodName                           = "/controlplane.v1.PlatformCommandService/SetAgentAvatar"
-	PlatformCommandService_RemoveAgentAvatar_FullMethodName                        = "/controlplane.v1.PlatformCommandService/RemoveAgentAvatar"
-	PlatformCommandService_CreateInstructionDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateInstructionDraft"
-	PlatformCommandService_ValidateInstructionDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ValidateInstructionDraft"
-	PlatformCommandService_PublishInstructionDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/PublishInstructionDraft"
-	PlatformCommandService_RollbackInstructions_FullMethodName                     = "/controlplane.v1.PlatformCommandService/RollbackInstructions"
-	PlatformCommandService_ChangeAgentCapability_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ChangeAgentCapability"
-	PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName              = "/controlplane.v1.PlatformCommandService/ChangeAgentIntegrationGrant"
-	PlatformCommandService_CreateWorkflow_FullMethodName                           = "/controlplane.v1.PlatformCommandService/CreateWorkflow"
-	PlatformCommandService_UpdateWorkflowDraft_FullMethodName                      = "/controlplane.v1.PlatformCommandService/UpdateWorkflowDraft"
-	PlatformCommandService_ValidateWorkflowDraft_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ValidateWorkflowDraft"
-	PlatformCommandService_PublishWorkflowDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/PublishWorkflowDraft"
-	PlatformCommandService_ArchiveWorkflow_FullMethodName                          = "/controlplane.v1.PlatformCommandService/ArchiveWorkflow"
-	PlatformCommandService_LaunchRun_FullMethodName                                = "/controlplane.v1.PlatformCommandService/LaunchRun"
-	PlatformCommandService_AddSessionTurn_FullMethodName                           = "/controlplane.v1.PlatformCommandService/AddSessionTurn"
-	PlatformCommandService_CancelRun_FullMethodName                                = "/controlplane.v1.PlatformCommandService/CancelRun"
-	PlatformCommandService_RetryRun_FullMethodName                                 = "/controlplane.v1.PlatformCommandService/RetryRun"
-	PlatformCommandService_ResolveOwnerGate_FullMethodName                         = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
-	PlatformCommandService_UploadAgentAvatar_FullMethodName                        = "/controlplane.v1.PlatformCommandService/UploadAgentAvatar"
-	PlatformCommandService_UploadArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UploadArtifact"
-	PlatformCommandService_UploadOrganizationArtifact_FullMethodName               = "/controlplane.v1.PlatformCommandService/UploadOrganizationArtifact"
-	PlatformCommandService_DownloadArtifact_FullMethodName                         = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
-	PlatformCommandService_ChangeArtifactBinding_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
-	PlatformCommandService_DeleteArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/DeleteArtifact"
-	PlatformCommandService_RestoreArtifact_FullMethodName                          = "/controlplane.v1.PlatformCommandService/RestoreArtifact"
-	PlatformCommandService_PurgeArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/PurgeArtifact"
-	PlatformCommandService_CreateAttachmentSetDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/CreateAttachmentSetDraft"
-	PlatformCommandService_CreateOrganizationAttachmentSetDraft_FullMethodName     = "/controlplane.v1.PlatformCommandService/CreateOrganizationAttachmentSetDraft"
-	PlatformCommandService_AddAttachmentSetItems_FullMethodName                    = "/controlplane.v1.PlatformCommandService/AddAttachmentSetItems"
-	PlatformCommandService_RemoveAttachmentSetItems_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RemoveAttachmentSetItems"
-	PlatformCommandService_FinalizeAttachmentSet_FullMethodName                    = "/controlplane.v1.PlatformCommandService/FinalizeAttachmentSet"
-	PlatformCommandService_CreateSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/CreateSchedule"
-	PlatformCommandService_UpdateSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
-	PlatformCommandService_SetScheduleEnabled_FullMethodName                       = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
-	PlatformCommandService_ArchiveSchedule_FullMethodName                          = "/controlplane.v1.PlatformCommandService/ArchiveSchedule"
-	PlatformCommandService_DeleteSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/DeleteSchedule"
-	PlatformCommandService_CreateProviderAccount_FullMethodName                    = "/controlplane.v1.PlatformCommandService/CreateProviderAccount"
-	PlatformCommandService_StartProviderAccountDeviceAuthorization_FullMethodName  = "/controlplane.v1.PlatformCommandService/StartProviderAccountDeviceAuthorization"
-	PlatformCommandService_AuthorizeProviderAccountAPIKey_FullMethodName           = "/controlplane.v1.PlatformCommandService/AuthorizeProviderAccountAPIKey"
-	PlatformCommandService_RefreshProviderAccountAuthorization_FullMethodName      = "/controlplane.v1.PlatformCommandService/RefreshProviderAccountAuthorization"
-	PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName = "/controlplane.v1.PlatformCommandService/VerifyProviderAccountDeviceAuthorization"
-	PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName     = "/controlplane.v1.PlatformCommandService/ReauthorizeProviderAccountDeviceCode"
-	PlatformCommandService_RevokeProviderAccount_FullMethodName                    = "/controlplane.v1.PlatformCommandService/RevokeProviderAccount"
-	PlatformCommandService_DeleteProviderAccount_FullMethodName                    = "/controlplane.v1.PlatformCommandService/DeleteProviderAccount"
-	PlatformCommandService_CancelProviderAccountQueuedWork_FullMethodName          = "/controlplane.v1.PlatformCommandService/CancelProviderAccountQueuedWork"
-	PlatformCommandService_SetProviderAccountEnabled_FullMethodName                = "/controlplane.v1.PlatformCommandService/SetProviderAccountEnabled"
-	PlatformCommandService_CreateIntegrationConnection_FullMethodName              = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
-	PlatformCommandService_UpdateIntegrationConnection_FullMethodName              = "/controlplane.v1.PlatformCommandService/UpdateIntegrationConnection"
-	PlatformCommandService_DeleteIntegrationConnection_FullMethodName              = "/controlplane.v1.PlatformCommandService/DeleteIntegrationConnection"
-	PlatformCommandService_ConfigureIntegrationConnectionCredential_FullMethodName = "/controlplane.v1.PlatformCommandService/ConfigureIntegrationConnectionCredential"
-	PlatformCommandService_TestIntegrationConnection_FullMethodName                = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
-	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName          = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
-	PlatformCommandService_ChangeIntegrationGrant_FullMethodName                   = "/controlplane.v1.PlatformCommandService/ChangeIntegrationGrant"
-	PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName         = "/controlplane.v1.PlatformCommandService/PublishAgentRuntimeConfiguration"
-	PlatformCommandService_CreateConfigOverlayDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/CreateConfigOverlayDraft"
-	PlatformCommandService_ValidateConfigOverlayDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/ValidateConfigOverlayDraft"
-	PlatformCommandService_PublishConfigOverlayDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/PublishConfigOverlayDraft"
-	PlatformCommandService_RollbackConfigOverlay_FullMethodName                    = "/controlplane.v1.PlatformCommandService/RollbackConfigOverlay"
-	PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName              = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentSet"
-	PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName         = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentVersion"
-	PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName               = "/controlplane.v1.PlatformCommandService/RollbackRuntimeEnvironment"
-	PlatformCommandService_SetRuntimeEnvironmentEnabled_FullMethodName             = "/controlplane.v1.PlatformCommandService/SetRuntimeEnvironmentEnabled"
-	PlatformCommandService_DeleteRuntimeEnvironment_FullMethodName                 = "/controlplane.v1.PlatformCommandService/DeleteRuntimeEnvironment"
-	PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName              = "/controlplane.v1.PlatformCommandService/BindAgentRuntimeEnvironment"
-	PlatformCommandService_PromoteRoleImage_FullMethodName                         = "/controlplane.v1.PlatformCommandService/PromoteRoleImage"
-	PlatformCommandService_PrepareCreateRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareCreateRuntimeSecret"
-	PlatformCommandService_PrepareRotateRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRotateRuntimeSecret"
-	PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRevealRuntimeSecret"
-	PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRevokeRuntimeSecret"
-	PlatformCommandService_CreatePromptTemplateDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/CreatePromptTemplateDraft"
-	PlatformCommandService_ValidatePromptTemplateDraft_FullMethodName              = "/controlplane.v1.PlatformCommandService/ValidatePromptTemplateDraft"
-	PlatformCommandService_PublishPromptTemplateDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/PublishPromptTemplateDraft"
-	PlatformCommandService_RebindPromptTemplateConsumers_FullMethodName            = "/controlplane.v1.PlatformCommandService/RebindPromptTemplateConsumers"
-	PlatformCommandService_CreateRoleImageRevisionDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/CreateRoleImageRevisionDraft"
-	PlatformCommandService_ValidateRoleImageRevisionDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateRoleImageRevisionDraft"
-	PlatformCommandService_PublishRoleImageRevisionDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PublishRoleImageRevisionDraft"
-	PlatformCommandService_RebindRoleImageConsumers_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindRoleImageConsumers"
-	PlatformCommandService_PrepareRoleImageImpactPlan_FullMethodName               = "/controlplane.v1.PlatformCommandService/PrepareRoleImageImpactPlan"
-	PlatformCommandService_PrepareEnvironmentDraftImpact_FullMethodName            = "/controlplane.v1.PlatformCommandService/PrepareEnvironmentDraftImpact"
-	PlatformCommandService_PrepareInstructionsImpact_FullMethodName                = "/controlplane.v1.PlatformCommandService/PrepareInstructionsImpact"
-	PlatformCommandService_PreparePromptTemplateImpact_FullMethodName              = "/controlplane.v1.PlatformCommandService/PreparePromptTemplateImpact"
-	PlatformCommandService_CreateIntegrationDefinitionDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/CreateIntegrationDefinitionDraft"
-	PlatformCommandService_ValidateIntegrationDefinitionDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/ValidateIntegrationDefinitionDraft"
-	PlatformCommandService_PublishIntegrationDefinitionDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/PublishIntegrationDefinitionDraft"
-	PlatformCommandService_RebindIntegrationDefinitionConsumers_FullMethodName     = "/controlplane.v1.PlatformCommandService/RebindIntegrationDefinitionConsumers"
-	PlatformCommandService_CreateSystemSTTConfigurationDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/CreateSystemSTTConfigurationDraft"
-	PlatformCommandService_ValidateSystemSTTConfigurationDraft_FullMethodName      = "/controlplane.v1.PlatformCommandService/ValidateSystemSTTConfigurationDraft"
-	PlatformCommandService_PublishSystemSTTConfigurationDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/PublishSystemSTTConfigurationDraft"
-	PlatformCommandService_RebindSystemSTTConsumers_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RebindSystemSTTConsumers"
-	PlatformCommandService_DetachGitManagedConfiguration_FullMethodName            = "/controlplane.v1.PlatformCommandService/DetachGitManagedConfiguration"
-	PlatformCommandService_CopyGitManagedConfiguration_FullMethodName              = "/controlplane.v1.PlatformCommandService/CopyGitManagedConfiguration"
-	PlatformCommandService_ConfigureRoleImageGitSource_FullMethodName              = "/controlplane.v1.PlatformCommandService/ConfigureRoleImageGitSource"
-	PlatformCommandService_ConfigureIntegrationDefinitionGitSource_FullMethodName  = "/controlplane.v1.PlatformCommandService/ConfigureIntegrationDefinitionGitSource"
-	PlatformCommandService_RefreshRoleImageGitSource_FullMethodName                = "/controlplane.v1.PlatformCommandService/RefreshRoleImageGitSource"
-	PlatformCommandService_RefreshIntegrationDefinitionGitSource_FullMethodName    = "/controlplane.v1.PlatformCommandService/RefreshIntegrationDefinitionGitSource"
-	PlatformCommandService_PrepareRoleImageGitWriteBack_FullMethodName             = "/controlplane.v1.PlatformCommandService/PrepareRoleImageGitWriteBack"
-	PlatformCommandService_PrepareIntegrationDefinitionGitWriteBack_FullMethodName = "/controlplane.v1.PlatformCommandService/PrepareIntegrationDefinitionGitWriteBack"
-	PlatformCommandService_ApproveManagedConfigurationGitWriteBack_FullMethodName  = "/controlplane.v1.PlatformCommandService/ApproveManagedConfigurationGitWriteBack"
-	PlatformCommandService_RejectManagedConfigurationGitWriteBack_FullMethodName   = "/controlplane.v1.PlatformCommandService/RejectManagedConfigurationGitWriteBack"
-	PlatformCommandService_CancelManagedConfigurationGitWriteBack_FullMethodName   = "/controlplane.v1.PlatformCommandService/CancelManagedConfigurationGitWriteBack"
+	PlatformCommandService_CreateEmailMailboxDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/CreateEmailMailboxDraft"
+	PlatformCommandService_SaveEmailMailboxDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/SaveEmailMailboxDraft"
+	PlatformCommandService_ValidateEmailMailboxDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/ValidateEmailMailboxDraft"
+	PlatformCommandService_PublishEmailMailboxDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/PublishEmailMailboxDraft"
+	PlatformCommandService_DiscardEmailMailboxDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/DiscardEmailMailboxDraft"
+	PlatformCommandService_BindEmailMailboxConfiguration_FullMethodName             = "/controlplane.v1.PlatformCommandService/BindEmailMailboxConfiguration"
+	PlatformCommandService_UnbindEmailMailboxConfiguration_FullMethodName           = "/controlplane.v1.PlatformCommandService/UnbindEmailMailboxConfiguration"
+	PlatformCommandService_PrepareRuntimeSecretDraftImpact_FullMethodName           = "/controlplane.v1.PlatformCommandService/PrepareRuntimeSecretDraftImpact"
+	PlatformCommandService_PrepareSaveRuntimeSecretDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/PrepareSaveRuntimeSecretDraft"
+	PlatformCommandService_PrepareValidateRuntimeSecretDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PrepareValidateRuntimeSecretDraft"
+	PlatformCommandService_PreparePublishRuntimeSecretDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/PreparePublishRuntimeSecretDraft"
+	PlatformCommandService_PrepareDiscardRuntimeSecretDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/PrepareDiscardRuntimeSecretDraft"
+	PlatformCommandService_SavePromptTemplateDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/SavePromptTemplateDraft"
+	PlatformCommandService_DiscardPromptTemplateDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/DiscardPromptTemplateDraft"
+	PlatformCommandService_SaveRoleImageRevisionDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/SaveRoleImageRevisionDraft"
+	PlatformCommandService_DiscardRoleImageRevisionDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/DiscardRoleImageRevisionDraft"
+	PlatformCommandService_SaveIntegrationDefinitionDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/SaveIntegrationDefinitionDraft"
+	PlatformCommandService_DiscardIntegrationDefinitionDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/DiscardIntegrationDefinitionDraft"
+	PlatformCommandService_SaveSystemSTTConfigurationDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/SaveSystemSTTConfigurationDraft"
+	PlatformCommandService_DiscardSystemSTTConfigurationDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/DiscardSystemSTTConfigurationDraft"
+	PlatformCommandService_ReconcileEmailEffect_FullMethodName                      = "/controlplane.v1.PlatformCommandService/ReconcileEmailEffect"
+	PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName           = "/controlplane.v1.PlatformCommandService/ConfigureEmailMailboxCredential"
+	PlatformCommandService_CreateSkillBundleDraft_FullMethodName                    = "/controlplane.v1.PlatformCommandService/CreateSkillBundleDraft"
+	PlatformCommandService_SaveSkillBundleDraft_FullMethodName                      = "/controlplane.v1.PlatformCommandService/SaveSkillBundleDraft"
+	PlatformCommandService_ValidateSkillBundleDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/ValidateSkillBundleDraft"
+	PlatformCommandService_ReviewSkillBundleDraft_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ReviewSkillBundleDraft"
+	PlatformCommandService_PublishSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/PublishSkillBundleDraft"
+	PlatformCommandService_DiscardSkillBundleDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/DiscardSkillBundleDraft"
+	PlatformCommandService_ArchiveSkillBundle_FullMethodName                        = "/controlplane.v1.PlatformCommandService/ArchiveSkillBundle"
+	PlatformCommandService_RestoreSkillBundle_FullMethodName                        = "/controlplane.v1.PlatformCommandService/RestoreSkillBundle"
+	PlatformCommandService_PurgeSkillBundle_FullMethodName                          = "/controlplane.v1.PlatformCommandService/PurgeSkillBundle"
+	PlatformCommandService_BindAgentSkillBundle_FullMethodName                      = "/controlplane.v1.PlatformCommandService/BindAgentSkillBundle"
+	PlatformCommandService_UnbindAgentSkillBundle_FullMethodName                    = "/controlplane.v1.PlatformCommandService/UnbindAgentSkillBundle"
+	PlatformCommandService_CreateMemoryRecord_FullMethodName                        = "/controlplane.v1.PlatformCommandService/CreateMemoryRecord"
+	PlatformCommandService_ReviseMemoryRecord_FullMethodName                        = "/controlplane.v1.PlatformCommandService/ReviseMemoryRecord"
+	PlatformCommandService_ArchiveMemoryRecord_FullMethodName                       = "/controlplane.v1.PlatformCommandService/ArchiveMemoryRecord"
+	PlatformCommandService_RestoreMemoryRecord_FullMethodName                       = "/controlplane.v1.PlatformCommandService/RestoreMemoryRecord"
+	PlatformCommandService_PurgeMemoryRecord_FullMethodName                         = "/controlplane.v1.PlatformCommandService/PurgeMemoryRecord"
+	PlatformCommandService_BindAgentMemoryRecord_FullMethodName                     = "/controlplane.v1.PlatformCommandService/BindAgentMemoryRecord"
+	PlatformCommandService_UnbindAgentMemoryRecord_FullMethodName                   = "/controlplane.v1.PlatformCommandService/UnbindAgentMemoryRecord"
+	PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentDraft"
+	PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/SaveRuntimeEnvironmentDraft"
+	PlatformCommandService_ValidateRuntimeEnvironmentDraft_FullMethodName           = "/controlplane.v1.PlatformCommandService/ValidateRuntimeEnvironmentDraft"
+	PlatformCommandService_PublishRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentDraft"
+	PlatformCommandService_DiscardRuntimeEnvironmentDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/DiscardRuntimeEnvironmentDraft"
+	PlatformCommandService_RebindRuntimeEnvironment_FullMethodName                  = "/controlplane.v1.PlatformCommandService/RebindRuntimeEnvironment"
+	PlatformCommandService_RebindRuntimeSecret_FullMethodName                       = "/controlplane.v1.PlatformCommandService/RebindRuntimeSecret"
+	PlatformCommandService_BindInteractionIdentity_FullMethodName                   = "/controlplane.v1.PlatformCommandService/BindInteractionIdentity"
+	PlatformCommandService_RevokeInteractionIdentity_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RevokeInteractionIdentity"
+	PlatformCommandService_CompleteOnboarding_FullMethodName                        = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
+	PlatformCommandService_CreateProject_FullMethodName                             = "/controlplane.v1.PlatformCommandService/CreateProject"
+	PlatformCommandService_UpdateProject_FullMethodName                             = "/controlplane.v1.PlatformCommandService/UpdateProject"
+	PlatformCommandService_AddPlatformMembership_FullMethodName                     = "/controlplane.v1.PlatformCommandService/AddPlatformMembership"
+	PlatformCommandService_ChangePlatformMembership_FullMethodName                  = "/controlplane.v1.PlatformCommandService/ChangePlatformMembership"
+	PlatformCommandService_RemovePlatformMembership_FullMethodName                  = "/controlplane.v1.PlatformCommandService/RemovePlatformMembership"
+	PlatformCommandService_AddProjectMembership_FullMethodName                      = "/controlplane.v1.PlatformCommandService/AddProjectMembership"
+	PlatformCommandService_ChangeProjectMembership_FullMethodName                   = "/controlplane.v1.PlatformCommandService/ChangeProjectMembership"
+	PlatformCommandService_RemoveProjectMembership_FullMethodName                   = "/controlplane.v1.PlatformCommandService/RemoveProjectMembership"
+	PlatformCommandService_CreateAgent_FullMethodName                               = "/controlplane.v1.PlatformCommandService/CreateAgent"
+	PlatformCommandService_UpdateAgent_FullMethodName                               = "/controlplane.v1.PlatformCommandService/UpdateAgent"
+	PlatformCommandService_SetAgentEnabled_FullMethodName                           = "/controlplane.v1.PlatformCommandService/SetAgentEnabled"
+	PlatformCommandService_ArchiveAgent_FullMethodName                              = "/controlplane.v1.PlatformCommandService/ArchiveAgent"
+	PlatformCommandService_SetAgentAvatar_FullMethodName                            = "/controlplane.v1.PlatformCommandService/SetAgentAvatar"
+	PlatformCommandService_RemoveAgentAvatar_FullMethodName                         = "/controlplane.v1.PlatformCommandService/RemoveAgentAvatar"
+	PlatformCommandService_CreateInstructionDraft_FullMethodName                    = "/controlplane.v1.PlatformCommandService/CreateInstructionDraft"
+	PlatformCommandService_ValidateInstructionDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/ValidateInstructionDraft"
+	PlatformCommandService_PublishInstructionDraft_FullMethodName                   = "/controlplane.v1.PlatformCommandService/PublishInstructionDraft"
+	PlatformCommandService_RollbackInstructions_FullMethodName                      = "/controlplane.v1.PlatformCommandService/RollbackInstructions"
+	PlatformCommandService_ChangeAgentCapability_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ChangeAgentCapability"
+	PlatformCommandService_ChangeAgentIntegrationGrant_FullMethodName               = "/controlplane.v1.PlatformCommandService/ChangeAgentIntegrationGrant"
+	PlatformCommandService_CreateWorkflow_FullMethodName                            = "/controlplane.v1.PlatformCommandService/CreateWorkflow"
+	PlatformCommandService_UpdateWorkflowDraft_FullMethodName                       = "/controlplane.v1.PlatformCommandService/UpdateWorkflowDraft"
+	PlatformCommandService_ValidateWorkflowDraft_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ValidateWorkflowDraft"
+	PlatformCommandService_PublishWorkflowDraft_FullMethodName                      = "/controlplane.v1.PlatformCommandService/PublishWorkflowDraft"
+	PlatformCommandService_ArchiveWorkflow_FullMethodName                           = "/controlplane.v1.PlatformCommandService/ArchiveWorkflow"
+	PlatformCommandService_LaunchRun_FullMethodName                                 = "/controlplane.v1.PlatformCommandService/LaunchRun"
+	PlatformCommandService_AddSessionTurn_FullMethodName                            = "/controlplane.v1.PlatformCommandService/AddSessionTurn"
+	PlatformCommandService_CancelRun_FullMethodName                                 = "/controlplane.v1.PlatformCommandService/CancelRun"
+	PlatformCommandService_RetryRun_FullMethodName                                  = "/controlplane.v1.PlatformCommandService/RetryRun"
+	PlatformCommandService_ResolveOwnerGate_FullMethodName                          = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
+	PlatformCommandService_UploadAgentAvatar_FullMethodName                         = "/controlplane.v1.PlatformCommandService/UploadAgentAvatar"
+	PlatformCommandService_UploadArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UploadArtifact"
+	PlatformCommandService_UploadOrganizationArtifact_FullMethodName                = "/controlplane.v1.PlatformCommandService/UploadOrganizationArtifact"
+	PlatformCommandService_DownloadArtifact_FullMethodName                          = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
+	PlatformCommandService_ChangeArtifactBinding_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
+	PlatformCommandService_DeleteArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/DeleteArtifact"
+	PlatformCommandService_RestoreArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/RestoreArtifact"
+	PlatformCommandService_PurgeArtifact_FullMethodName                             = "/controlplane.v1.PlatformCommandService/PurgeArtifact"
+	PlatformCommandService_CreateAttachmentSetDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateAttachmentSetDraft"
+	PlatformCommandService_CreateOrganizationAttachmentSetDraft_FullMethodName      = "/controlplane.v1.PlatformCommandService/CreateOrganizationAttachmentSetDraft"
+	PlatformCommandService_AddAttachmentSetItems_FullMethodName                     = "/controlplane.v1.PlatformCommandService/AddAttachmentSetItems"
+	PlatformCommandService_RemoveAttachmentSetItems_FullMethodName                  = "/controlplane.v1.PlatformCommandService/RemoveAttachmentSetItems"
+	PlatformCommandService_FinalizeAttachmentSet_FullMethodName                     = "/controlplane.v1.PlatformCommandService/FinalizeAttachmentSet"
+	PlatformCommandService_CreateSchedule_FullMethodName                            = "/controlplane.v1.PlatformCommandService/CreateSchedule"
+	PlatformCommandService_UpdateSchedule_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UpdateSchedule"
+	PlatformCommandService_SetScheduleEnabled_FullMethodName                        = "/controlplane.v1.PlatformCommandService/SetScheduleEnabled"
+	PlatformCommandService_ArchiveSchedule_FullMethodName                           = "/controlplane.v1.PlatformCommandService/ArchiveSchedule"
+	PlatformCommandService_DeleteSchedule_FullMethodName                            = "/controlplane.v1.PlatformCommandService/DeleteSchedule"
+	PlatformCommandService_CreateProviderAccount_FullMethodName                     = "/controlplane.v1.PlatformCommandService/CreateProviderAccount"
+	PlatformCommandService_StartProviderAccountDeviceAuthorization_FullMethodName   = "/controlplane.v1.PlatformCommandService/StartProviderAccountDeviceAuthorization"
+	PlatformCommandService_AuthorizeProviderAccountAPIKey_FullMethodName            = "/controlplane.v1.PlatformCommandService/AuthorizeProviderAccountAPIKey"
+	PlatformCommandService_RefreshProviderAccountAuthorization_FullMethodName       = "/controlplane.v1.PlatformCommandService/RefreshProviderAccountAuthorization"
+	PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName  = "/controlplane.v1.PlatformCommandService/VerifyProviderAccountDeviceAuthorization"
+	PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName      = "/controlplane.v1.PlatformCommandService/ReauthorizeProviderAccountDeviceCode"
+	PlatformCommandService_RevokeProviderAccount_FullMethodName                     = "/controlplane.v1.PlatformCommandService/RevokeProviderAccount"
+	PlatformCommandService_DeleteProviderAccount_FullMethodName                     = "/controlplane.v1.PlatformCommandService/DeleteProviderAccount"
+	PlatformCommandService_CancelProviderAccountQueuedWork_FullMethodName           = "/controlplane.v1.PlatformCommandService/CancelProviderAccountQueuedWork"
+	PlatformCommandService_SetProviderAccountEnabled_FullMethodName                 = "/controlplane.v1.PlatformCommandService/SetProviderAccountEnabled"
+	PlatformCommandService_CreateIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
+	PlatformCommandService_UpdateIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/UpdateIntegrationConnection"
+	PlatformCommandService_DeleteIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/DeleteIntegrationConnection"
+	PlatformCommandService_ConfigureIntegrationConnectionCredential_FullMethodName  = "/controlplane.v1.PlatformCommandService/ConfigureIntegrationConnectionCredential"
+	PlatformCommandService_TestIntegrationConnection_FullMethodName                 = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
+	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName           = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
+	PlatformCommandService_ChangeIntegrationGrant_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ChangeIntegrationGrant"
+	PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName          = "/controlplane.v1.PlatformCommandService/PublishAgentRuntimeConfiguration"
+	PlatformCommandService_CreateConfigOverlayDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateConfigOverlayDraft"
+	PlatformCommandService_ValidateConfigOverlayDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/ValidateConfigOverlayDraft"
+	PlatformCommandService_PublishConfigOverlayDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/PublishConfigOverlayDraft"
+	PlatformCommandService_RollbackConfigOverlay_FullMethodName                     = "/controlplane.v1.PlatformCommandService/RollbackConfigOverlay"
+	PlatformCommandService_CreateRuntimeEnvironmentSet_FullMethodName               = "/controlplane.v1.PlatformCommandService/CreateRuntimeEnvironmentSet"
+	PlatformCommandService_PublishRuntimeEnvironmentVersion_FullMethodName          = "/controlplane.v1.PlatformCommandService/PublishRuntimeEnvironmentVersion"
+	PlatformCommandService_RollbackRuntimeEnvironment_FullMethodName                = "/controlplane.v1.PlatformCommandService/RollbackRuntimeEnvironment"
+	PlatformCommandService_SetRuntimeEnvironmentEnabled_FullMethodName              = "/controlplane.v1.PlatformCommandService/SetRuntimeEnvironmentEnabled"
+	PlatformCommandService_DeleteRuntimeEnvironment_FullMethodName                  = "/controlplane.v1.PlatformCommandService/DeleteRuntimeEnvironment"
+	PlatformCommandService_BindAgentRuntimeEnvironment_FullMethodName               = "/controlplane.v1.PlatformCommandService/BindAgentRuntimeEnvironment"
+	PlatformCommandService_PromoteRoleImage_FullMethodName                          = "/controlplane.v1.PlatformCommandService/PromoteRoleImage"
+	PlatformCommandService_PrepareCreateRuntimeSecret_FullMethodName                = "/controlplane.v1.PlatformCommandService/PrepareCreateRuntimeSecret"
+	PlatformCommandService_PrepareRotateRuntimeSecret_FullMethodName                = "/controlplane.v1.PlatformCommandService/PrepareRotateRuntimeSecret"
+	PlatformCommandService_PrepareRevealRuntimeSecret_FullMethodName                = "/controlplane.v1.PlatformCommandService/PrepareRevealRuntimeSecret"
+	PlatformCommandService_PrepareRevokeRuntimeSecret_FullMethodName                = "/controlplane.v1.PlatformCommandService/PrepareRevokeRuntimeSecret"
+	PlatformCommandService_CreatePromptTemplateDraft_FullMethodName                 = "/controlplane.v1.PlatformCommandService/CreatePromptTemplateDraft"
+	PlatformCommandService_ValidatePromptTemplateDraft_FullMethodName               = "/controlplane.v1.PlatformCommandService/ValidatePromptTemplateDraft"
+	PlatformCommandService_PublishPromptTemplateDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/PublishPromptTemplateDraft"
+	PlatformCommandService_RebindPromptTemplateConsumers_FullMethodName             = "/controlplane.v1.PlatformCommandService/RebindPromptTemplateConsumers"
+	PlatformCommandService_CreateRoleImageRevisionDraft_FullMethodName              = "/controlplane.v1.PlatformCommandService/CreateRoleImageRevisionDraft"
+	PlatformCommandService_ValidateRoleImageRevisionDraft_FullMethodName            = "/controlplane.v1.PlatformCommandService/ValidateRoleImageRevisionDraft"
+	PlatformCommandService_PublishRoleImageRevisionDraft_FullMethodName             = "/controlplane.v1.PlatformCommandService/PublishRoleImageRevisionDraft"
+	PlatformCommandService_RebindRoleImageConsumers_FullMethodName                  = "/controlplane.v1.PlatformCommandService/RebindRoleImageConsumers"
+	PlatformCommandService_PrepareRoleImageImpactPlan_FullMethodName                = "/controlplane.v1.PlatformCommandService/PrepareRoleImageImpactPlan"
+	PlatformCommandService_PrepareEnvironmentDraftImpact_FullMethodName             = "/controlplane.v1.PlatformCommandService/PrepareEnvironmentDraftImpact"
+	PlatformCommandService_PrepareInstructionsImpact_FullMethodName                 = "/controlplane.v1.PlatformCommandService/PrepareInstructionsImpact"
+	PlatformCommandService_PreparePromptTemplateImpact_FullMethodName               = "/controlplane.v1.PlatformCommandService/PreparePromptTemplateImpact"
+	PlatformCommandService_CreateIntegrationDefinitionDraft_FullMethodName          = "/controlplane.v1.PlatformCommandService/CreateIntegrationDefinitionDraft"
+	PlatformCommandService_ValidateIntegrationDefinitionDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/ValidateIntegrationDefinitionDraft"
+	PlatformCommandService_PublishIntegrationDefinitionDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/PublishIntegrationDefinitionDraft"
+	PlatformCommandService_RebindIntegrationDefinitionConsumers_FullMethodName      = "/controlplane.v1.PlatformCommandService/RebindIntegrationDefinitionConsumers"
+	PlatformCommandService_CreateSystemSTTConfigurationDraft_FullMethodName         = "/controlplane.v1.PlatformCommandService/CreateSystemSTTConfigurationDraft"
+	PlatformCommandService_ValidateSystemSTTConfigurationDraft_FullMethodName       = "/controlplane.v1.PlatformCommandService/ValidateSystemSTTConfigurationDraft"
+	PlatformCommandService_PublishSystemSTTConfigurationDraft_FullMethodName        = "/controlplane.v1.PlatformCommandService/PublishSystemSTTConfigurationDraft"
+	PlatformCommandService_RebindSystemSTTConsumers_FullMethodName                  = "/controlplane.v1.PlatformCommandService/RebindSystemSTTConsumers"
+	PlatformCommandService_DetachGitManagedConfiguration_FullMethodName             = "/controlplane.v1.PlatformCommandService/DetachGitManagedConfiguration"
+	PlatformCommandService_CopyGitManagedConfiguration_FullMethodName               = "/controlplane.v1.PlatformCommandService/CopyGitManagedConfiguration"
+	PlatformCommandService_CopyRoleImageConfiguration_FullMethodName                = "/controlplane.v1.PlatformCommandService/CopyRoleImageConfiguration"
+	PlatformCommandService_CopyIntegrationDefinitionConfiguration_FullMethodName    = "/controlplane.v1.PlatformCommandService/CopyIntegrationDefinitionConfiguration"
+	PlatformCommandService_ArchiveRoleImageConfiguration_FullMethodName             = "/controlplane.v1.PlatformCommandService/ArchiveRoleImageConfiguration"
+	PlatformCommandService_ArchiveIntegrationDefinitionConfiguration_FullMethodName = "/controlplane.v1.PlatformCommandService/ArchiveIntegrationDefinitionConfiguration"
+	PlatformCommandService_ConfigureRoleImageGitSource_FullMethodName               = "/controlplane.v1.PlatformCommandService/ConfigureRoleImageGitSource"
+	PlatformCommandService_ConfigureIntegrationDefinitionGitSource_FullMethodName   = "/controlplane.v1.PlatformCommandService/ConfigureIntegrationDefinitionGitSource"
+	PlatformCommandService_RefreshRoleImageGitSource_FullMethodName                 = "/controlplane.v1.PlatformCommandService/RefreshRoleImageGitSource"
+	PlatformCommandService_RefreshIntegrationDefinitionGitSource_FullMethodName     = "/controlplane.v1.PlatformCommandService/RefreshIntegrationDefinitionGitSource"
+	PlatformCommandService_PrepareRoleImageGitWriteBack_FullMethodName              = "/controlplane.v1.PlatformCommandService/PrepareRoleImageGitWriteBack"
+	PlatformCommandService_PrepareIntegrationDefinitionGitWriteBack_FullMethodName  = "/controlplane.v1.PlatformCommandService/PrepareIntegrationDefinitionGitWriteBack"
+	PlatformCommandService_ApproveManagedConfigurationGitWriteBack_FullMethodName   = "/controlplane.v1.PlatformCommandService/ApproveManagedConfigurationGitWriteBack"
+	PlatformCommandService_RejectManagedConfigurationGitWriteBack_FullMethodName    = "/controlplane.v1.PlatformCommandService/RejectManagedConfigurationGitWriteBack"
+	PlatformCommandService_CancelManagedConfigurationGitWriteBack_FullMethodName    = "/controlplane.v1.PlatformCommandService/CancelManagedConfigurationGitWriteBack"
 )
 
 // PlatformCommandServiceClient is the client API for PlatformCommandService service.
@@ -3947,6 +3951,10 @@ type PlatformCommandServiceClient interface {
 	RebindSystemSTTConsumers(ctx context.Context, in *RebindSystemSTTConsumersRequest, opts ...grpc.CallOption) (*RebindSystemSTTConsumersResponse, error)
 	DetachGitManagedConfiguration(ctx context.Context, in *DetachGitManagedConfigurationRequest, opts ...grpc.CallOption) (*DetachGitManagedConfigurationResponse, error)
 	CopyGitManagedConfiguration(ctx context.Context, in *CopyGitManagedConfigurationRequest, opts ...grpc.CallOption) (*CopyGitManagedConfigurationResponse, error)
+	CopyRoleImageConfiguration(ctx context.Context, in *CopyRoleImageConfigurationRequest, opts ...grpc.CallOption) (*CopyRoleImageConfigurationResponse, error)
+	CopyIntegrationDefinitionConfiguration(ctx context.Context, in *CopyIntegrationDefinitionConfigurationRequest, opts ...grpc.CallOption) (*CopyIntegrationDefinitionConfigurationResponse, error)
+	ArchiveRoleImageConfiguration(ctx context.Context, in *ArchiveRoleImageConfigurationRequest, opts ...grpc.CallOption) (*ArchiveRoleImageConfigurationResponse, error)
+	ArchiveIntegrationDefinitionConfiguration(ctx context.Context, in *ArchiveIntegrationDefinitionConfigurationRequest, opts ...grpc.CallOption) (*ArchiveIntegrationDefinitionConfigurationResponse, error)
 	ConfigureRoleImageGitSource(ctx context.Context, in *ConfigureRoleImageGitSourceRequest, opts ...grpc.CallOption) (*ConfigureRoleImageGitSourceResponse, error)
 	ConfigureIntegrationDefinitionGitSource(ctx context.Context, in *ConfigureIntegrationDefinitionGitSourceRequest, opts ...grpc.CallOption) (*ConfigureIntegrationDefinitionGitSourceResponse, error)
 	RefreshRoleImageGitSource(ctx context.Context, in *RefreshRoleImageGitSourceRequest, opts ...grpc.CallOption) (*RefreshRoleImageGitSourceResponse, error)
@@ -5514,6 +5522,46 @@ func (c *platformCommandServiceClient) CopyGitManagedConfiguration(ctx context.C
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) CopyRoleImageConfiguration(ctx context.Context, in *CopyRoleImageConfigurationRequest, opts ...grpc.CallOption) (*CopyRoleImageConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CopyRoleImageConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CopyRoleImageConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) CopyIntegrationDefinitionConfiguration(ctx context.Context, in *CopyIntegrationDefinitionConfigurationRequest, opts ...grpc.CallOption) (*CopyIntegrationDefinitionConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CopyIntegrationDefinitionConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_CopyIntegrationDefinitionConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ArchiveRoleImageConfiguration(ctx context.Context, in *ArchiveRoleImageConfigurationRequest, opts ...grpc.CallOption) (*ArchiveRoleImageConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveRoleImageConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ArchiveRoleImageConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) ArchiveIntegrationDefinitionConfiguration(ctx context.Context, in *ArchiveIntegrationDefinitionConfigurationRequest, opts ...grpc.CallOption) (*ArchiveIntegrationDefinitionConfigurationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveIntegrationDefinitionConfigurationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ArchiveIntegrationDefinitionConfiguration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) ConfigureRoleImageGitSource(ctx context.Context, in *ConfigureRoleImageGitSourceRequest, opts ...grpc.CallOption) (*ConfigureRoleImageGitSourceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ConfigureRoleImageGitSourceResponse)
@@ -5766,6 +5814,10 @@ type PlatformCommandServiceServer interface {
 	RebindSystemSTTConsumers(context.Context, *RebindSystemSTTConsumersRequest) (*RebindSystemSTTConsumersResponse, error)
 	DetachGitManagedConfiguration(context.Context, *DetachGitManagedConfigurationRequest) (*DetachGitManagedConfigurationResponse, error)
 	CopyGitManagedConfiguration(context.Context, *CopyGitManagedConfigurationRequest) (*CopyGitManagedConfigurationResponse, error)
+	CopyRoleImageConfiguration(context.Context, *CopyRoleImageConfigurationRequest) (*CopyRoleImageConfigurationResponse, error)
+	CopyIntegrationDefinitionConfiguration(context.Context, *CopyIntegrationDefinitionConfigurationRequest) (*CopyIntegrationDefinitionConfigurationResponse, error)
+	ArchiveRoleImageConfiguration(context.Context, *ArchiveRoleImageConfigurationRequest) (*ArchiveRoleImageConfigurationResponse, error)
+	ArchiveIntegrationDefinitionConfiguration(context.Context, *ArchiveIntegrationDefinitionConfigurationRequest) (*ArchiveIntegrationDefinitionConfigurationResponse, error)
 	ConfigureRoleImageGitSource(context.Context, *ConfigureRoleImageGitSourceRequest) (*ConfigureRoleImageGitSourceResponse, error)
 	ConfigureIntegrationDefinitionGitSource(context.Context, *ConfigureIntegrationDefinitionGitSourceRequest) (*ConfigureIntegrationDefinitionGitSourceResponse, error)
 	RefreshRoleImageGitSource(context.Context, *RefreshRoleImageGitSourceRequest) (*RefreshRoleImageGitSourceResponse, error)
@@ -6243,6 +6295,18 @@ func (UnimplementedPlatformCommandServiceServer) DetachGitManagedConfiguration(c
 }
 func (UnimplementedPlatformCommandServiceServer) CopyGitManagedConfiguration(context.Context, *CopyGitManagedConfigurationRequest) (*CopyGitManagedConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CopyGitManagedConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CopyRoleImageConfiguration(context.Context, *CopyRoleImageConfigurationRequest) (*CopyRoleImageConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CopyRoleImageConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) CopyIntegrationDefinitionConfiguration(context.Context, *CopyIntegrationDefinitionConfigurationRequest) (*CopyIntegrationDefinitionConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CopyIntegrationDefinitionConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ArchiveRoleImageConfiguration(context.Context, *ArchiveRoleImageConfigurationRequest) (*ArchiveRoleImageConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveRoleImageConfiguration not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ArchiveIntegrationDefinitionConfiguration(context.Context, *ArchiveIntegrationDefinitionConfigurationRequest) (*ArchiveIntegrationDefinitionConfigurationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveIntegrationDefinitionConfiguration not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) ConfigureRoleImageGitSource(context.Context, *ConfigureRoleImageGitSourceRequest) (*ConfigureRoleImageGitSourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConfigureRoleImageGitSource not implemented")
@@ -9007,6 +9071,78 @@ func _PlatformCommandService_CopyGitManagedConfiguration_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_CopyRoleImageConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CopyRoleImageConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CopyRoleImageConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CopyRoleImageConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CopyRoleImageConfiguration(ctx, req.(*CopyRoleImageConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_CopyIntegrationDefinitionConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CopyIntegrationDefinitionConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).CopyIntegrationDefinitionConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_CopyIntegrationDefinitionConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).CopyIntegrationDefinitionConfiguration(ctx, req.(*CopyIntegrationDefinitionConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ArchiveRoleImageConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveRoleImageConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ArchiveRoleImageConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ArchiveRoleImageConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ArchiveRoleImageConfiguration(ctx, req.(*ArchiveRoleImageConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_ArchiveIntegrationDefinitionConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveIntegrationDefinitionConfigurationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ArchiveIntegrationDefinitionConfiguration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ArchiveIntegrationDefinitionConfiguration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ArchiveIntegrationDefinitionConfiguration(ctx, req.(*ArchiveIntegrationDefinitionConfigurationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_ConfigureRoleImageGitSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ConfigureRoleImageGitSourceRequest)
 	if err := dec(in); err != nil {
@@ -9771,6 +9907,22 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CopyGitManagedConfiguration",
 			Handler:    _PlatformCommandService_CopyGitManagedConfiguration_Handler,
+		},
+		{
+			MethodName: "CopyRoleImageConfiguration",
+			Handler:    _PlatformCommandService_CopyRoleImageConfiguration_Handler,
+		},
+		{
+			MethodName: "CopyIntegrationDefinitionConfiguration",
+			Handler:    _PlatformCommandService_CopyIntegrationDefinitionConfiguration_Handler,
+		},
+		{
+			MethodName: "ArchiveRoleImageConfiguration",
+			Handler:    _PlatformCommandService_ArchiveRoleImageConfiguration_Handler,
+		},
+		{
+			MethodName: "ArchiveIntegrationDefinitionConfiguration",
+			Handler:    _PlatformCommandService_ArchiveIntegrationDefinitionConfiguration_Handler,
 		},
 		{
 			MethodName: "ConfigureRoleImageGitSource",
