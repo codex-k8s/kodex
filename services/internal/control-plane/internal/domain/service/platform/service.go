@@ -1329,6 +1329,7 @@ func knownCommand(kind command.Kind) bool {
 		command.CreateSystemSTTDraft, command.ValidateSystemSTTDraft,
 		command.PublishSystemSTTDraft, command.RebindSystemSTT,
 		command.DetachGitManagedConfiguration, command.CopyGitManagedConfiguration,
+		command.CopyRoleImageConfiguration, command.CopyIntegrationDefinitionConfiguration, command.ArchiveRoleImageConfiguration, command.ArchiveIntegrationDefinitionConfiguration,
 		command.CreateEmailMailboxDraft, command.SaveEmailMailboxDraft, command.ValidateEmailMailboxDraft,
 		command.PublishEmailMailboxDraft, command.DiscardEmailMailboxDraft,
 		command.BindEmailMailboxConfiguration, command.UnbindEmailMailboxConfiguration:

@@ -125,6 +125,9 @@ func (repository *Repository) configurationSourceAuthority(ctx context.Context, 
 	if err := rejectShippedRoleImageMutation(ctx, tx, current.organizationID, set); err != nil {
 		return managedSet{}, err
 	}
+	if set.Archived {
+		return managedSet{}, errs.ErrConflict
+	}
 	connectionRef := payload.ConnectionRef
 	if !configure {
 		source, err := readConfigurationSource(ctx, tx, current.organizationID, set.Ref)

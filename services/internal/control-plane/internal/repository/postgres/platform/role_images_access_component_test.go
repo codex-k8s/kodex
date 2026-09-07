@@ -121,6 +121,10 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	if listed.SourceAvailable || listed.Input.Dockerfile != "" || listed.Input.InstallationBlock != "" {
 		t.Fatal("metadata viewer received recipe source")
 	}
+	copyVersion := int64(created.Recipe.Version)
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CopyRoleImageConfiguration, Principal: candidate, Mutation: value.Mutation{IdempotencyKey: "cfg-copy-source-denied", ExpectedVersion: &copyVersion}, Payload: command.ManagedConfigurationInput{RecipeRef: created.Recipe.Ref, ProjectRef: project.Ref, Name: "Forbidden source copy"}}); !errors.Is(err, domainerrs.ErrForbidden) && !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("metadata viewer copied private source: %v", err)
+	}
 	filtered, _, filteredTotal, err := repository.List(ctx, roleImageCandidate, roleimagerepo.Filter{ProjectRef: project.Ref, Query: "Application RBAC", State: "ACTIVE", Page: query.Page{Size: 1}})
 	if err != nil || filteredTotal != 1 || len(filtered) != 1 || filtered[0].Ref != created.Recipe.Ref || filtered[0].ManagedLineage == nil {
 		t.Fatalf("filtered recipe lineage/count mismatch: %v", err)

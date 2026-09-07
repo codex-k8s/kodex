@@ -201,6 +201,13 @@ const (
 	CopyGitManagedConfiguration        Kind = "COPY_GIT_MANAGED_CONFIGURATION"
 )
 
+const (
+	CopyRoleImageConfiguration                Kind = "COPY_ROLE_IMAGE_CONFIGURATION"
+	CopyIntegrationDefinitionConfiguration    Kind = "COPY_INTEGRATION_DEFINITION_CONFIGURATION"
+	ArchiveRoleImageConfiguration             Kind = "ARCHIVE_ROLE_IMAGE_CONFIGURATION"
+	ArchiveIntegrationDefinitionConfiguration Kind = "ARCHIVE_INTEGRATION_DEFINITION_CONFIGURATION"
+)
+
 const CommitProviderCredentialRefresh Kind = "COMMIT_PROVIDER_CREDENTIAL_REFRESH"
 
 type Command struct {
@@ -467,6 +474,7 @@ type InteractionIdentityInput struct {
 }
 
 type ManagedConfigurationInput struct {
+	RecipeRef, DefinitionKey, DefinitionVersion, DefinitionDigest                               string
 	PromptScope                                                                                 *PromptTemplateScopeInput
 	PlanRef                                                                                     string
 	SelectedItemRefs                                                                            []string

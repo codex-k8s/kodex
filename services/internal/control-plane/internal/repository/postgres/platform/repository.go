@@ -36,17 +36,18 @@ const (
 )
 
 type Repository struct {
-	pool                          *pgxpool.Pool
-	defaultRuntimeProvider        string
-	defaultRuntimeModel           string
-	providerCredential            ProviderCredentialConfig
-	roleImages                    RoleImageConfig
-	objects                       objectstorage.Store
-	skillScanner                  skillpolicy.Scanner
-	integrationDefinitions        map[string]integrationpackage.Package
-	roleImageCatalogResolver      func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)
-	runtimeSecretNamespace        string
-	runtimeSecretStagingNamespace string
+	pool                            *pgxpool.Pool
+	defaultRuntimeProvider          string
+	defaultRuntimeModel             string
+	providerCredential              ProviderCredentialConfig
+	roleImages                      RoleImageConfig
+	objects                         objectstorage.Store
+	skillScanner                    skillpolicy.Scanner
+	integrationDefinitions          map[string]integrationpackage.Package
+	roleImageCatalogResolver        func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)
+	roleImageBootstrapCopySelection func(entity.RoleImageRecipeInput) (entity.RoleEnvironmentSelection, error)
+	runtimeSecretNamespace          string
+	runtimeSecretStagingNamespace   string
 }
 
 // ProviderCredentialConfig содержит только безопасную identity неизменяемой

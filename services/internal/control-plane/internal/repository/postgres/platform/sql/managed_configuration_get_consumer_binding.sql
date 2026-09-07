@@ -7,7 +7,7 @@ SELECT binding.ref, binding.version, binding.consumer_kind, binding.consumer_ref
        revision.id::text, revision.ref, revision.revision, revision.state,
        revision.content_format, revision.content, revision.digest,
        COALESCE(parent.ref, ''), revision.validation_diagnostics,
-       revision.created_at, revision.validated_at, revision.published_at
+       revision.created_at, revision.validated_at, revision.published_at, configuration.archived, configuration.copy_provenance
 FROM control_plane.managed_configuration_bindings binding
 JOIN control_plane.managed_configuration_sets configuration
   ON configuration.id = binding.configuration_set_id

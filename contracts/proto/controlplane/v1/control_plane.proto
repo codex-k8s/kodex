@@ -268,6 +268,10 @@ service PlatformCommandService {
   rpc RebindSystemSTTConsumers(RebindSystemSTTConsumersRequest) returns (RebindSystemSTTConsumersResponse);
   rpc DetachGitManagedConfiguration(DetachGitManagedConfigurationRequest) returns (DetachGitManagedConfigurationResponse);
   rpc CopyGitManagedConfiguration(CopyGitManagedConfigurationRequest) returns (CopyGitManagedConfigurationResponse);
+  rpc CopyRoleImageConfiguration(CopyRoleImageConfigurationRequest) returns (CopyRoleImageConfigurationResponse);
+  rpc CopyIntegrationDefinitionConfiguration(CopyIntegrationDefinitionConfigurationRequest) returns (CopyIntegrationDefinitionConfigurationResponse);
+  rpc ArchiveRoleImageConfiguration(ArchiveRoleImageConfigurationRequest) returns (ArchiveRoleImageConfigurationResponse);
+  rpc ArchiveIntegrationDefinitionConfiguration(ArchiveIntegrationDefinitionConfigurationRequest) returns (ArchiveIntegrationDefinitionConfigurationResponse);
   rpc ConfigureRoleImageGitSource(ConfigureRoleImageGitSourceRequest) returns (ConfigureRoleImageGitSourceResponse);
   rpc ConfigureIntegrationDefinitionGitSource(ConfigureIntegrationDefinitionGitSourceRequest) returns (ConfigureIntegrationDefinitionGitSourceResponse);
   rpc RefreshRoleImageGitSource(RefreshRoleImageGitSourceRequest) returns (RefreshRoleImageGitSourceResponse);
@@ -1357,6 +1361,8 @@ message IntegrationDefinition {
   string adapter_owner = 15;
   string execution_route = 16;
   string adapter_readiness = 17;
+  int64 version = 18;
+  repeated string next_actions = 19;
 }
 
 // IntegrationResourceScope содержит только server-derived exact resource values.
@@ -5959,6 +5965,66 @@ message ManagedConfigurationSet {
   ManagedConfigurationGitSource git_source = 11;
   // Дополнительный source boundary ROLE_IMAGE; не заменяет общую command authority.
   optional bool source_editable = 12;
+  bool archived = 13;
+  ManagedConfigurationCopyProvenance copy_provenance = 14;
+  repeated string next_actions = 15;
+}
+message ManagedConfigurationCopyProvenance {
+  ManagedConfigurationCopyOrigin origin = 1;
+  string source_ref = 2;
+  string source_revision = 3;
+  int64 source_version = 4;
+  string source_digest = 5;
+}
+enum ManagedConfigurationCopyOrigin {
+  MANAGED_CONFIGURATION_COPY_ORIGIN_UNSPECIFIED = 0;
+  MANAGED_CONFIGURATION_COPY_ORIGIN_SHIPPED = 1;
+  MANAGED_CONFIGURATION_COPY_ORIGIN_UI = 2;
+  MANAGED_CONFIGURATION_COPY_ORIGIN_GIT = 3;
+}
+message CopyRoleImageConfigurationRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string name = 3;
+  oneof source {
+    string recipe_ref = 4;
+    string configuration_ref = 5;
+  }
+}
+message CopyRoleImageConfigurationResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message ShippedIntegrationDefinitionCopySource {
+  string key = 1;
+  string definition_version = 2;
+  string digest = 3;
+}
+message CopyIntegrationDefinitionConfigurationRequest {
+  MutationContext mutation = 1;
+  string name = 2;
+  oneof source {
+    ShippedIntegrationDefinitionCopySource shipped = 3;
+    string configuration_ref = 4;
+  }
+}
+message CopyIntegrationDefinitionConfigurationResponse {
+  ManagedConfigurationSet configuration = 1;
+  ManagedConfigurationRevision revision = 2;
+}
+message ArchiveRoleImageConfigurationRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+}
+message ArchiveRoleImageConfigurationResponse {
+  ManagedConfigurationSet configuration = 1;
+}
+message ArchiveIntegrationDefinitionConfigurationRequest {
+  MutationContext mutation = 1;
+  string configuration_ref = 2;
+}
+message ArchiveIntegrationDefinitionConfigurationResponse {
+  ManagedConfigurationSet configuration = 1;
 }
 message ManagedConfigurationConsumer {
   string kind = 1;
