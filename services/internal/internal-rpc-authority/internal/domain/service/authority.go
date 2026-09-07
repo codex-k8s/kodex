@@ -162,7 +162,7 @@ func (authority *Authority) Issue(
 		return "", model.AuthorizationClaims{}, err
 	}
 	binding, ok := authority.bindings[operationID]
-	if !ok || binding.Continuation != nil {
+	if !ok || binding.Continuation != nil || binding.Issuer != authority.policy.Issuer || binding.CallerSPIFFEID != authority.policy.Issuer {
 		return "", model.AuthorizationClaims{}, failure.New(
 			failure.OperationNotAllowed,
 			"operation is not allowed",
@@ -366,7 +366,7 @@ func (authority *Authority) IssueContinuation(
 		return "", model.AuthorizationClaims{}, err
 	}
 	binding, ok := authority.bindings[operationID]
-	if !ok || binding.Continuation == nil || !validRequestDigest(binding.RequestProfile.Mode, requestDigest) ||
+	if !ok || binding.Continuation == nil || binding.Issuer != authority.policy.Issuer || binding.CallerSPIFFEID != authority.policy.Issuer || !validRequestDigest(binding.RequestProfile.Mode, requestDigest) ||
 		!uuidPattern.MatchString(requestID) || correlationID == "" || len(correlationID) > 128 {
 		return "", model.AuthorizationClaims{}, failure.New(failure.OperationNotAllowed, "continuation operation is not allowed")
 	}

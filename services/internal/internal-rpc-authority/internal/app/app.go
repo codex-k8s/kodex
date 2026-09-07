@@ -817,8 +817,9 @@ func readPrivateFile(path string, limit int64) ([]byte, error) {
 func allowedMethods(mode Mode) map[string]string {
 	if mode == ModeIssuer {
 		return map[string]string{
-			internalrpcauthorityv1.AuthorizationIssuerService_IssueAuthorizationContext_FullMethodName: "issue_authorization_context",
-			internalrpcauthorityv1.AuthorizationIssuerService_CheckReadiness_FullMethodName:            "check_readiness",
+			internalrpcauthorityv1.AuthorizationIssuerService_IssueContinuationAuthorizationContext_FullMethodName: "issue_continuation_authorization_context",
+			internalrpcauthorityv1.AuthorizationIssuerService_IssueAuthorizationContext_FullMethodName:             "issue_authorization_context",
+			internalrpcauthorityv1.AuthorizationIssuerService_CheckReadiness_FullMethodName:                        "check_readiness",
 		}
 	}
 	return map[string]string{

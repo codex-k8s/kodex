@@ -314,11 +314,12 @@ func Load(options LoadOptions) (Loaded, error) {
 		}
 		producers[producer.ProducerID] = producer
 	}
-	bindings := make([]model.OperationBinding, 0, len(snapshot.Policy.OperationBindings))
-	for _, binding := range snapshot.Policy.OperationBindings {
-		if !bindingApplies(options.Role, options.WorkloadID, binding) {
-			continue
-		}
+	selectedBindings, err := selectRoleBindings(options.Role, options.WorkloadID, snapshot.Policy.OperationBindings)
+	if err != nil {
+		return Loaded{}, err
+	}
+	bindings := make([]model.OperationBinding, 0, len(selectedBindings))
+	for _, binding := range selectedBindings {
 		var proofIssuer, proofAudience string
 		if binding.Continuation == nil {
 			producer, ok := producers[binding.ProofProducerID]
