@@ -4,7 +4,7 @@ title: Сквозная приёмка доработок MVP
 type: verification-plan
 status: approved
 owner: qa
-version: 1.22.0
+version: 1.23.0
 updated: 2026-09-07
 ---
 
@@ -105,6 +105,35 @@ rename/fsync/readback в каталоге0700, файлах0600 без symlink/h
 временной RoleImage сессии удаляет оба файла. Логи и отчёты не содержат cookies,
 provider data или содержимого браузерного storage.
 
+Дополнение #1192: Node transport сохраняет оба независимых слоя: BFF-пару
+`__Host-kodex-session` / `__Host-kodex-csrf` и, если он присутствует,
+внешний OAuth2 Proxy из `infra/management-surfaces/oauth2-proxy-values.yaml`.
+Разрешено только имя `_kodex_control_center_oauth2` либо непрерывный набор
+из 2–4 частей `_0`…`_3`, без смеси одиночного cookie и chunks. Каждая часть
+ограничена 4096 ASCII-символами, весь proxy-набор — 16384; exact host без
+Domain suffix, path `/`, Secure, HttpOnly, SameSite=Lax и живой срок не более
+настроенных 8 часов обязательны. IdP cookies и login CSRF не отправляются.
+Установка без внешнего proxy сохраняет прежний BFF-путь.
+
+| Переход внешнего слоя | Проверка и результат |
+| --- | --- |
+| Browser snapshot → Node GET metadata → business endpoint | Один exact HTTPS origin через штатный ingress; заголовки несут оба проверенных слоя, authority подтверждают ForwardAuth и BFF. |
+| Proxy Set-Cookie при GET или business response | Полный новый набор принимается атомарно с необязательной полной BFF-парой; partial/malformed/foreign response закрывает фазу. Business response с rotation требует нового GET metadata. |
+| Изменение числа proxy chunks | Новое поколение заменяет прежний набор целиком; browser handoff проверяет отсутствие конкурентных изменений, удаляет устаревшие части и делает readback. |
+| Proxy expiry, удаление без замены или ingress 401 text/plain | Закрытый отказ, без попытки лечить внешнюю сессию BFF PUT; нужен свежий штатный вход. |
+| BFF PUT | Полная BFF-пара обязательна независимо от proxy rotation; сроки proxy не продлеваются локально. |
+
+`authenticatedCookies()` возвращает только изолированный snapshot этих слоёв.
+Provider credential не входит в browser handoff; неизвестный результат mutation
+не повторяется. Значения cookies отсутствуют в exceptions/receipts, а digest
+для межфазного OCC учитывает оба слоя. Локальная регрессия использует synthetic
+fixtures через `make test-owner-session-acceptance`, `make test-stt-http-acceptance`,
+`make test-provider-api-key-acceptance` и `make test-stt-fixture-setup`.
+Ручная live-проверка root в рамках #1031: fresh штатная API-session, затем
+Node GET metadata/bootstrap через этот transport; платные действия отдельно.
+Проверены Context7 Playwright BrowserContext cookies/storageState/addCookies и
+OAuth2 Proxy session storage/ForwardAuth, а также pinned v7.15.3 cookie writer.
+
 Локальный публичный вход: `make test-owner-session-acceptance`; тот же набор
 входит в `make test-stt-http-acceptance`. Проверяются expiry/concurrent renew,
 переход между фазами, lost ACK, cookie rotation и отрицательные transport/file
@@ -116,7 +145,7 @@ fetch/Headers Set-Cookie, AbortSignal, private file descriptors и fsync/rename.
 credential только в Node helper `provider-api-key-acceptance.mjs`. UI создаёт
 account и проверяет descriptor/status; Node-only owner-session client выполняет
 fresh GET с ETag и один write-only POST с Origin/CSRF/If-Match/idempotency.
-Повтор при неизвестном исходе запрещён. Проверенная cookie-пара после renewal
+Повтор при неизвестном исходе запрещён. Проверенные cookies обоих слоёв после renewal
 возвращается браузеру отдельно, включая cleanup после потерянного ACK; key и
 ответ authorization в browser context/storage не передаются. Ошибки фиксированы
 и не содержат response body либо cause. Trace/video/screenshots остаются off.
@@ -873,7 +902,8 @@ receipt → проверка configuration readback. Дополнительны�
 не значение ключа. State directory должен быть owner-private0700,
 authenticated storage file —0600 непосредственно в нём. Значения cookie/key
 не передаются аргументами и не выводятся. Проверяется чистый checkout exact
-SHA, HTTPS origin без redirect и только два exact host API cookie.
+SHA, HTTPS origin без redirect, exact host BFF-пара и ограниченный набор
+OAuth2 Proxy cookies по правилам #1192 выше.
 
 ```bash
 node tools/dev/stt-http-acceptance.mjs --expected-sha "$EXPECTED_SHA"

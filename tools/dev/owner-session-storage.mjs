@@ -15,6 +15,54 @@ import { basename, dirname, isAbsolute } from "node:path";
 
 const maximumBytes = 1 << 20;
 export const sessionCookieNames = ["__Host-kodex-session", "__Host-kodex-csrf"];
+export const proxyCookieName = "_kodex_control_center_oauth2";
+export const maximumProxyCookies = 4;
+export const maximumProxyAge = 8 * 60 * 60;
+
+// Имена OAuth2 CSRF относятся только к login, а не к authenticated API transport.
+export function isProxySessionCookie(name) {
+  return (
+    typeof name === "string" &&
+    (name === proxyCookieName ||
+      (name.startsWith(`${proxyCookieName}_`) &&
+        name !== `${proxyCookieName}_csrf` &&
+        !name.startsWith(`${proxyCookieName}_csrf_`)))
+  );
+}
+
+export function proxySessionCookies(cookies, origin, now) {
+  const selected = cookies.filter((cookie) =>
+    isProxySessionCookie(cookie?.name),
+  );
+  requireSession(
+    selected.length <= maximumProxyCookies,
+    "proxy cookie count is invalid",
+  );
+  selected.sort((left, right) => left.name.localeCompare(right.name));
+  for (const [index, cookie] of selected.entries()) {
+    requireSession(
+      cookie.name ===
+        (selected.length === 1
+          ? proxyCookieName
+          : `${proxyCookieName}_${index}`) &&
+        cookie.domain === new URL(origin).hostname &&
+        cookie.path === "/" &&
+        cookie.secure === true &&
+        cookie.httpOnly === true &&
+        cookie.sameSite === "Lax" &&
+        cookie.partitionKey === undefined &&
+        Number.isFinite(cookie.expires) &&
+        cookie.expires * 1000 > now &&
+        cookie.expires * 1000 <= now + maximumProxyAge * 1000 &&
+        typeof cookie.value === "string" &&
+        cookie.value.length > 0 &&
+        cookie.value.length <= 4096 &&
+        /^[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]+$/.test(cookie.value),
+      "proxy cookie boundary is invalid",
+    );
+  }
+  return selected;
+}
 
 export function requireSession(condition, message) {
   if (!condition) throw new Error(`Owner session acceptance ${message}`);
@@ -35,7 +83,8 @@ export function exactOrigin(value) {
   return url.origin;
 }
 
-export function sessionHeaders(storage, origin, now = Date.now()) {
+export function selectedSessionCookies(storage, origin, now = Date.now()) {
+  origin = exactOrigin(origin);
   requireSession(Array.isArray(storage?.cookies), "cookies are absent");
   const hostname = new URL(origin).hostname;
   const selected = sessionCookieNames.map((name) => {
@@ -63,6 +112,12 @@ export function sessionHeaders(storage, origin, now = Date.now()) {
     );
     return cookie;
   });
+  return [...selected, ...proxySessionCookies(storage.cookies, origin, now)];
+}
+
+export function sessionHeaders(storage, origin, now = Date.now()) {
+  origin = exactOrigin(origin);
+  const selected = selectedSessionCookies(storage, origin, now);
   return {
     Accept: "application/json",
     Origin: origin,
@@ -71,6 +126,67 @@ export function sessionHeaders(storage, origin, now = Date.now()) {
       .join("; "),
     "X-CSRF-Token": selected[1].value,
   };
+}
+
+// Browser handoff не принимает provider credential и не переносит IdP state.
+export async function replaceAuthenticatedCookies(
+  context,
+  origin,
+  previous,
+  cookies,
+) {
+  try {
+    origin = exactOrigin(origin);
+    const now = Date.now();
+    const before = selectedSessionCookies(previous, origin, now);
+    const next = selectedSessionCookies({ cookies }, origin, now);
+    requireSession(
+      next.length === cookies.length,
+      "cookie handoff contains foreign state",
+    );
+    const fingerprint = (items) =>
+      JSON.stringify(
+        items.map((cookie) => [
+          cookie.name,
+          cookie.value,
+          cookie.domain,
+          cookie.path,
+          cookie.expires,
+          cookie.secure,
+          cookie.httpOnly,
+          cookie.sameSite,
+        ]),
+      );
+    const current = selectedSessionCookies(
+      { cookies: await context.cookies() },
+      origin,
+      now,
+    );
+    requireSession(
+      fingerprint(current) === fingerprint(before),
+      "browser session changed during Node-only authorization",
+    );
+    for (const cookie of before) {
+      if (!next.some((item) => item.name === cookie.name))
+        await context.clearCookies({
+          name: cookie.name,
+          domain: cookie.domain,
+          path: cookie.path,
+        });
+    }
+    await context.addCookies(structuredClone(next));
+    const observed = selectedSessionCookies(
+      { cookies: await context.cookies() },
+      origin,
+      Date.now(),
+    );
+    requireSession(
+      fingerprint(observed) === fingerprint(next),
+      "browser cookie readback changed",
+    );
+  } catch {
+    throw new Error("Owner session acceptance browser handoff failed");
+  }
 }
 
 function openDirectory(path) {

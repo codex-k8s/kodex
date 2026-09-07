@@ -6,7 +6,7 @@ interface AuthenticatedCookie {
   expires: number;
   httpOnly: boolean;
   secure: boolean;
-  sameSite: "Strict";
+  sameSite: "Strict" | "Lax";
 }
 
 export function authorizeProviderAPIKeyFixture(options: {

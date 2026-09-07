@@ -17,6 +17,8 @@ import {
   readAuthenticatedState,
   sessionCookieNames,
   sessionHeaders,
+  proxyCookieName,
+  replaceAuthenticatedCookies,
   writeAuthenticatedState,
 } from "./owner-session-storage.mjs";
 
@@ -100,6 +102,379 @@ function fixture(options = {}) {
 const close = async (response) => {
   await response.body?.cancel();
 };
+
+const proxyCookies = (count = 2, version = 1, time = initialTime) =>
+  Array.from({ length: count }, (_, index) => ({
+    name: count === 1 ? proxyCookieName : `${proxyCookieName}_${index}`,
+    value: `synthetic-proxy-${version}-${index}|signed=`,
+    domain: "control.disposable.invalid",
+    path: "/",
+    secure: true,
+    httpOnly: true,
+    sameSite: "Lax",
+    expires: time / 1000 + 28800,
+  }));
+const proxyLines = (count = 2, version = 2) =>
+  proxyCookies(count, version).map(
+    (cookie) =>
+      `${cookie.name}=${cookie.value}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax`,
+  );
+const withProxy = (count = 2) => ({
+  ...storage(),
+  cookies: [...storage().cookies, ...proxyCookies(count)],
+});
+
+test("оба слоя отправляются в session GET и business, IdP и login CSRF не передаются", async () => {
+  for (const count of [1, 2, 4]) {
+    const state = withProxy(count);
+    state.cookies.push({
+      ...proxyCookies(1)[0],
+      name: "KEYCLOAK_SESSION",
+      domain: "idp.disposable.invalid",
+      value: "synthetic-idp-sentinel",
+    });
+    state.cookies.push({
+      ...proxyCookies(1)[0],
+      name: `${proxyCookieName}_csrf_nonce`,
+      value: "synthetic-login-sentinel",
+    });
+    const f = fixture();
+    const client = createOwnerSessionClient({ origin, storage: state, ...f });
+    await close(await client.request("/api/v1/bootstrap"));
+    for (const call of f.calls) {
+      for (const cookie of proxyCookies(count))
+        assert.ok(
+          call.headers.get("cookie").includes(`${cookie.name}=${cookie.value}`),
+        );
+      assert.equal(call.headers.get("cookie").includes("sentinel"), false);
+      assert.equal(call.headers.get("x-csrf-token"), "1".repeat(43));
+    }
+    assert.equal(client.authenticatedCookies().length, 2 + count);
+  }
+});
+
+test("foreign, expired, ambiguous и malformed proxy cookies закрывают network без раскрытия значений", () => {
+  for (const mutate of [
+    (cookies) => {
+      cookies[0].domain = ".disposable.invalid";
+    },
+    (cookies) => {
+      cookies[0].domain = "foreign.invalid";
+    },
+    (cookies) => {
+      cookies[0].path = "/api";
+    },
+    (cookies) => {
+      cookies[0].secure = false;
+    },
+    (cookies) => {
+      cookies[0].httpOnly = false;
+    },
+    (cookies) => {
+      cookies[0].sameSite = "None";
+    },
+    (cookies) => {
+      cookies[0].partitionKey = origin;
+    },
+    (cookies) => {
+      cookies[0].expires = initialTime / 1000;
+    },
+    (cookies) => {
+      cookies[0].expires = initialTime / 1000 + 28801;
+    },
+    (cookies) => {
+      cookies[0].expires = -1;
+    },
+    (cookies) => {
+      cookies[0].value = "synthetic-secret;injection";
+    },
+    (cookies) => {
+      cookies[0].value = "s".repeat(4097);
+    },
+    (cookies) => {
+      cookies[0].name = `${proxyCookieName}_00`;
+    },
+    (cookies) => {
+      cookies[1].name = `${proxyCookieName}_3`;
+    },
+    (cookies) => {
+      cookies.pop();
+    },
+    (cookies) => {
+      cookies.push(cookies[0]);
+    },
+    (cookies) => {
+      cookies.push(...proxyCookies(1));
+    },
+    (cookies) => {
+      cookies.push(...proxyCookies(4));
+    },
+  ]) {
+    const proxy = proxyCookies();
+    mutate(proxy);
+    const f = fixture();
+    assert.throws(
+      () =>
+        createOwnerSessionClient({
+          origin,
+          storage: { cookies: [...storage().cookies, ...proxy] },
+          ...f,
+        }),
+      (error) =>
+        error.message.startsWith("Owner session acceptance proxy cookie") &&
+        !error.message.includes("synthetic-secret"),
+    );
+    assert.equal(f.calls.length, 0);
+  }
+  assert.throws(
+    () =>
+      sessionHeaders(
+        withProxy(),
+        "http://control.disposable.invalid",
+        initialTime,
+      ),
+    /origin is invalid/,
+  );
+});
+
+test("proxy rotation меняет весь набор chunks, BFF renewal сохраняет оба слоя", async () => {
+  for (const [before, after] of [
+    [1, 2],
+    [2, 1],
+    [4, 2],
+    [2, 4],
+  ]) {
+    let rotated = false;
+    const f = fixture({
+      business: () => {
+        if (rotated) return;
+        rotated = true;
+        return json({ ok: true }, proxyLines(after));
+      },
+    });
+    const client = createOwnerSessionClient({
+      origin,
+      storage: withProxy(before),
+      ...f,
+    });
+    await close(await client.request("/api/v1/bootstrap"));
+    assert.deepEqual(
+      client
+        .authenticatedCookies()
+        .slice(2)
+        .map((cookie) => cookie.name),
+      proxyCookies(after).map((cookie) => cookie.name),
+    );
+    f.advance(181000);
+    await close(await client.request("/api/v1/runs", { method: "POST" }));
+    const last = f.calls.at(-1);
+    assert.equal(last.headers.get("x-csrf-token"), "2".repeat(43));
+    for (const cookie of proxyCookies(after, 2))
+      assert.ok(
+        last.headers.get("cookie").includes(`${cookie.name}=${cookie.value}`),
+      );
+    assert.equal(f.calls.filter((call) => call.method === "POST").length, 1);
+  }
+});
+
+test("полная совместная rotation и удаление старых proxy chunks принимаются атомарно", async () => {
+  const f = fixture({
+    session: ({ time }) =>
+      json(metadata(time), [
+        ...cookieLines(2),
+        ...proxyLines(1),
+        ...proxyCookies().map(
+          (cookie) =>
+            `${cookie.name}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
+        ),
+      ]),
+  });
+  const client = createOwnerSessionClient({
+    origin,
+    storage: withProxy(),
+    ...f,
+  });
+  await close(await client.request("/api/v1/bootstrap"));
+  assert.equal(client.authenticatedCookies().length, 3);
+  assert.equal(f.calls.at(-1).headers.get("x-csrf-token"), "2".repeat(43));
+});
+
+test("неполная, foreign и небезопасная rotation запрещает effect и повтор", async () => {
+  for (const lines of [
+    proxyLines().slice(0, 1),
+    [proxyLines()[0], proxyLines()[0]],
+    [...proxyLines(), proxyLines(1)[0]],
+    [proxyLines(1)[0] + "; Domain=control.disposable.invalid"],
+    [proxyLines(1)[0].replace("Max-Age=28800", "Max-Age=28801")],
+    [proxyLines(1)[0].replace("HttpOnly; ", "")],
+    [proxyLines(1)[0].replace("SameSite=Lax", "SameSite=Strict")],
+    [`${proxyCookieName}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`],
+    [
+      "KEYCLOAK_SESSION=synthetic-secret; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax",
+    ],
+    [cookieLines()[0], ...proxyLines()],
+  ]) {
+    const f = fixture({ session: () => json(metadata(), lines) });
+    const client = createOwnerSessionClient({
+      origin,
+      storage: withProxy(),
+      ...f,
+    });
+    await assert.rejects(
+      client.request("/api/v1/runs", { method: "POST" }),
+      /preflight failed/,
+    );
+    await assert.rejects(
+      client.request("/api/v1/runs", { method: "POST" }),
+      /preflight failed/,
+    );
+    assert.equal(f.calls.length, 1);
+    assert.throws(
+      () => client.authenticatedCookies(),
+      /snapshot is unavailable/,
+    );
+  }
+});
+
+test("proxy expiry после prepare закрывает последующий запрос", async () => {
+  const state = withProxy();
+  for (const cookie of state.cookies.slice(2))
+    cookie.expires = initialTime / 1000 + 1;
+  const f = fixture();
+  const client = createOwnerSessionClient({ origin, storage: state, ...f });
+  await close(await client.request("/api/v1/bootstrap"));
+  f.advance(1000);
+  await assert.rejects(
+    client.request("/api/v1/runs", { method: "POST" }),
+    /proxy cookie boundary/,
+  );
+  assert.equal(f.calls.length, 2);
+});
+
+test("private persistence учитывает proxy rotation, ingress 401 не разрешает BFF refresh", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "kodex-owner-proxy-"));
+  const path = join(directory, "authenticated.json");
+  try {
+    writeAuthenticatedState(path, withProxy());
+    const first = fixture({
+      session: ({ time }) => json(metadata(time), proxyLines(1)),
+    });
+    await close(
+      await createOwnerSessionClient({
+        origin,
+        storagePath: path,
+        ...first,
+      }).request("/api/v1/bootstrap"),
+    );
+    assert.equal(readAuthenticatedState(path).cookies.length, 3);
+    assert.equal(readAuthenticatedState(path).cookies[2].name, proxyCookieName);
+    assert.equal(
+      readFileSync(`${path}.session.json`, "utf8").includes("synthetic-proxy"),
+      false,
+    );
+    const second = fixture({
+      session: () =>
+        new Response("Unauthorized", {
+          status: 401,
+          headers: { "Content-Type": "text/plain" },
+        }),
+    });
+    const client = createOwnerSessionClient({
+      origin,
+      storagePath: path,
+      ...second,
+    });
+    await assert.rejects(
+      client.request("/api/v1/bootstrap"),
+      /preflight failed/,
+    );
+    assert.deepEqual(
+      second.calls.map((call) => call.method),
+      ["GET"],
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("network exception не раскрывает cookies и не повторяет UNKNOWN mutation", async () => {
+  const f = fixture({
+    business: () => {
+      throw new Error("synthetic-proxy-private-sentinel");
+    },
+  });
+  const client = createOwnerSessionClient({
+    origin,
+    storage: withProxy(),
+    ...f,
+  });
+  await assert.rejects(client.request("/api/v1/runs", { method: "POST" }), {
+    message:
+      "Owner session acceptance request failed; no automatic retry was performed",
+  });
+  assert.equal(f.calls.filter((call) => call.method === "POST").length, 1);
+});
+
+test("browser handoff удаляет старые chunks и сохраняет IdP; concurrent change закрывает запись", async () => {
+  for (const changed of [false, true]) {
+    const previous = storage();
+    previous.cookies.push(...proxyCookies(2, 1, Date.now()));
+    const next = [...storage(2).cookies, ...proxyCookies(1, 2, Date.now())];
+    let current = structuredClone(previous.cookies);
+    current.push({
+      ...proxyCookies(1, 1, Date.now())[0],
+      name: "KEYCLOAK_SESSION",
+      domain: "idp.disposable.invalid",
+    });
+    if (changed) current[2].value = "synthetic-concurrent-generation";
+    let writes = 0;
+    const context = {
+      cookies: async () => structuredClone(current),
+      clearCookies: async (filter) => {
+        writes++;
+        current = current.filter(
+          (cookie) =>
+            !(
+              cookie.name === filter.name &&
+              cookie.domain === filter.domain &&
+              cookie.path === filter.path
+            ),
+        );
+      },
+      addCookies: async (cookies) => {
+        writes++;
+        current = [
+          ...current.filter(
+            (cookie) =>
+              !cookies.some(
+                (item) =>
+                  item.name === cookie.name &&
+                  item.domain === cookie.domain &&
+                  item.path === cookie.path,
+              ),
+          ),
+          ...cookies,
+        ];
+      },
+    };
+    if (changed) {
+      await assert.rejects(
+        replaceAuthenticatedCookies(context, origin, previous, next),
+        /browser handoff failed/,
+      );
+      assert.equal(writes, 0);
+    } else {
+      await replaceAuthenticatedCookies(context, origin, previous, next);
+      assert.equal(current.length, 4);
+      assert.ok(current.some((cookie) => cookie.name === "KEYCLOAK_SESSION"));
+      assert.ok(
+        !current.some(
+          (cookie) => cookie.name.endsWith("_0") || cookie.name.endsWith("_1"),
+        ),
+      );
+    }
+  }
+});
 
 test("cookie snapshot после renewal изолирован от внутреннего state и origins", async () => {
   const f = fixture();

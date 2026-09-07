@@ -5,6 +5,11 @@ import {
   readAuthenticatedState,
   requireSession,
   sessionCookieNames,
+  selectedSessionCookies,
+  isProxySessionCookie,
+  maximumProxyCookies,
+  maximumProxyAge,
+  proxyCookieName,
   sessionHeaders,
   writeAuthenticatedState,
 } from "./owner-session-storage.mjs";
@@ -74,12 +79,14 @@ function metadata(value) {
   return { ...value, times };
 }
 
-// Host-only Set-Cookie принимаются атомарной парой. Значения не попадают в ошибки.
+// BFF принимает только полную пару, proxy — полное новое поколение chunks.
+// Оба слоя проверяются до изменения state. Значения не попадают в ошибки.
 function adoptCookies(response, state, origin, now, required = false) {
   const lines = response.headers.getSetCookie();
   if (!lines.length && !required) return false;
   requireSession(
-    lines.length === 2 && lines.every((line) => line.length <= 4608),
+    lines.length <= 2 + maximumProxyCookies * 2 &&
+      lines.every((line) => line.length <= 4608),
     "cookie response is invalid",
   );
   const cookies = lines.map((line) => {
@@ -87,8 +94,9 @@ function adoptCookies(response, state, origin, now, required = false) {
     const separator = parts[0].indexOf("=");
     const name = parts[0].slice(0, separator);
     const value = parts[0].slice(separator + 1);
+    const proxy = isProxySessionCookie(name);
     requireSession(
-      separator > 0 && sessionCookieNames.includes(name),
+      separator > 0 && (sessionCookieNames.includes(name) || proxy),
       "cookie name is invalid",
     );
     const attributes = new Map();
@@ -107,12 +115,15 @@ function adoptCookies(response, state, origin, now, required = false) {
     requireSession(
       attributes.get("path") === "/" &&
         attributes.get("secure") === true &&
-        attributes.get("samesite") === "Strict" &&
-        attributes.has("httponly") === (name === sessionCookieNames[0]) &&
+        attributes.get("samesite") === (proxy ? "Lax" : "Strict") &&
+        attributes.has("httponly") ===
+          (proxy || name === sessionCookieNames[0]) &&
         (!attributes.has("httponly") || attributes.get("httponly") === true) &&
         typeof maxAge === "string" &&
-        /^[1-9][0-9]{0,3}$/.test(maxAge) &&
-        Number(maxAge) <= 3600,
+        (proxy ? /^(?:0|[1-9][0-9]{0,4})$/ : /^[1-9][0-9]{0,3}$/).test(
+          maxAge,
+        ) &&
+        Number(maxAge) <= (proxy ? maximumProxyAge : 3600),
       "cookie attributes are invalid",
     );
     return {
@@ -121,18 +132,50 @@ function adoptCookies(response, state, origin, now, required = false) {
       domain: new URL(origin).hostname,
       path: "/",
       secure: true,
-      httpOnly: name === sessionCookieNames[0],
-      sameSite: "Strict",
+      httpOnly: proxy || name === sessionCookieNames[0],
+      sameSite: proxy ? "Lax" : "Strict",
       expires: now / 1000 + Number(maxAge),
     };
   });
+  requireSession(
+    new Set(cookies.map((cookie) => cookie.name)).size === cookies.length,
+    "cookie response is ambiguous",
+  );
+  const bff = cookies.filter((cookie) =>
+    sessionCookieNames.includes(cookie.name),
+  );
+  const proxy = cookies.filter((cookie) => isProxySessionCookie(cookie.name));
+  requireSession(
+    bff.length === 2 || (!required && bff.length === 0),
+    "cookie pair is incomplete",
+  );
+  for (const cookie of proxy) {
+    requireSession(
+      cookie.name === proxyCookieName ||
+        Array.from(
+          { length: maximumProxyCookies },
+          (_, index) => `${proxyCookieName}_${index}`,
+        ).includes(cookie.name),
+      "proxy cookie name is invalid",
+    );
+    if (cookie.expires * 1000 <= now)
+      requireSession(cookie.value === "", "proxy cookie deletion is invalid");
+  }
+  const activeProxy = proxy.filter((cookie) => cookie.expires * 1000 > now);
+  requireSession(
+    !proxy.length || activeProxy.length > 0,
+    "proxy session requires reauthentication",
+  );
   const next = {
     ...state,
     cookies: [
       ...state.cookies.filter(
-        (cookie) => !sessionCookieNames.includes(cookie.name),
+        (cookie) =>
+          !(bff.length && sessionCookieNames.includes(cookie.name)) &&
+          !(proxy.length && isProxySessionCookie(cookie.name)),
       ),
-      ...cookies,
+      ...bff,
+      ...activeProxy,
     ],
   };
   sessionHeaders(next, origin, now);
@@ -233,6 +276,14 @@ export function createOwnerSessionClient({
     });
     if (response.status !== 200) {
       await response.body?.cancel().catch(() => {});
+      // ForwardAuth 401 не доказывает истечение access token внутри BFF.
+      requireSession(
+        response.status !== 401 ||
+          !state.cookies.some((cookie) => isProxySessionCookie(cookie.name)) ||
+          response.headers.get("content-type")?.split(";")[0].trim() ===
+            "application/problem+json",
+        "proxy authentication failed",
+      );
       return response.status;
     }
     try {
@@ -309,15 +360,13 @@ export function createOwnerSessionClient({
   }
 
   return {
-    // Только проверенная cookie-пара для продолжения browser acceptance после
+    // Только проверенные cookies обоих слоёв для продолжения browser acceptance после
     // Node-only запроса. Snapshot не содержит origins/localStorage и не даёт
     // вызывающей стороне менять внутреннее состояние клиента.
     authenticatedCookies() {
       requireSession(ready && !failed, "session snapshot is unavailable");
       sessionHeaders(state, origin, now());
-      return structuredClone(
-        state.cookies.filter((cookie) => sessionCookieNames.includes(cookie.name)),
-      );
+      return structuredClone(selectedSessionCookies(state, origin, now()));
     },
     // Сериализация включает refresh и adoption; бизнес-запрос никогда не
     // повторяется здесь, даже после 401 либо неизвестного результата mutation.
@@ -348,12 +397,19 @@ export function createOwnerSessionClient({
           if (key === "Accept" && supplied.has("accept")) continue;
           headers[key] = value;
         }
-        const response = await fetchAPI(url, {
-          ...options,
-          headers,
-          signal: options.signal ?? signal,
-          redirect: "error",
-        });
+        let response;
+        try {
+          response = await fetchAPI(url, {
+            ...options,
+            headers,
+            signal: options.signal ?? signal,
+            redirect: "error",
+          });
+        } catch {
+          throw new Error(
+            "Owner session acceptance request failed; no automatic retry was performed",
+          );
+        }
         try {
           if (adoptCookies(response, state, origin, now())) {
             requireSession(

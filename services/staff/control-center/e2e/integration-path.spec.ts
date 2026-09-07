@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 
 import { type Page } from "@playwright/test";
 import { authorizeProviderAPIKeyFixture } from "../../../../tools/dev/provider-api-key-acceptance.mjs";
+import { replaceAuthenticatedCookies } from "../../../../tools/dev/owner-session-storage.mjs";
 
 import type {
   AgentRuntimeConfigurationView,
@@ -535,23 +536,12 @@ test.describe("deployed local integration path", () => {
         accountRef: account.ref,
         apiKey,
         onSessionCookies: async (cookies) => {
-          const current = await page.context().cookies(environment.baseURL);
-          const unchanged = cookies.every((cookie) => {
-            const before = authorizationStorage.cookies.find(
-              (item) => item.name === cookie.name,
-            );
-            const observed = current.filter(
-              (item) => item.name === cookie.name,
-            );
-            return (
-              observed.length === 1 && observed[0]?.value === before?.value
-            );
-          });
-          if (!unchanged)
-            throw new Error(
-              "Browser session changed during Node-only authorization",
-            );
-          await page.context().addCookies(cookies);
+          await replaceAuthenticatedCookies(
+            page.context(),
+            environment.baseURL,
+            authorizationStorage,
+            cookies,
+          );
         },
       });
       apiKey = undefined;
