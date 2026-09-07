@@ -60,6 +60,12 @@ func TestArtifactSpoolPreparationRejectsUntrustedChild(t *testing.T) {
 				if err := os.Mkdir(child, 0755); err != nil {
 					t.Fatal(err)
 				}
+				if err := os.Chmod(child, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if info, err := os.Stat(child); err != nil || info.Mode().Perm() != 0755 {
+					t.Fatal("unsafe child fixture has unexpected permissions")
+				}
 			case "file-child":
 				if err := os.WriteFile(child, nil, 0600); err != nil {
 					t.Fatal(err)
