@@ -4,7 +4,7 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.2.1
+version: 1.2.2
 updated: 2026-09-07
 ---
 
@@ -54,6 +54,21 @@ Disposable renderer задаёт `replicas: 1` и `strategy: Recreate` всем 
 до запуска нового. Одновременные writers одного workload могут выпускать разные
 revision одного поколения, и устойчивый watermark отвергает прежний grant.
 Base и production strategy этим правилом не изменяются.
+
+Перед SSA выбранной фазы `deploy-local.sh` мигрирует прежнюю strategy через
+`migrate-worker-grant-strategy.sh`. API-default `rollingUpdate` может сохраняться
+даже при explicit null в SSA, поэтому используется атомарная JSON Patch всего
+strategy с проверками UID, resourceVersion и прежнего значения. Guard проверяет
+закрытый workload registry, namespace, disposable profile и selector; readback
+подтверждает ту же identity, replicas1 и неизменный Pod template. Отсутствующий
+Deployment создаётся обычным SSA; уже Recreate не требует patch. Конфликт,
+ошибка или неоднозначный ответ останавливают фазу без скрытого повтора.
+
+`make test-worker-strategy-upgrade` с `KODEX_STRATEGY_TEST_IMAGE=sha256:...`
+запускает cached disposable k3s API без agent, сети и работающих Pods. Проверяются
+upgrade API-default и явно заданного RollingUpdate, отказ старого SSA/null,
+UID/version/owner guards, replay и создание нового Deployment. Образ предварительно
+должен находиться локально; pull и доступ к живому kubeconfig отсутствуют.
 
 `Recreate` не гарантирует эту последовательность при ручном удалении Pod:
 ReplicaSet может создать замену, пока удаляемый Pod ещё завершается. Используйте

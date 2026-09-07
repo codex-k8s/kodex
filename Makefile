@@ -58,6 +58,10 @@ test-install-contract:
 	@./scripts/tests/install-contract-test.sh
 	@./scripts/tests/ipv6-ingress-bridge-test.sh
 
+.PHONY: test-worker-strategy-upgrade
+test-worker-strategy-upgrade:
+	@timeout 180s python3 scripts/tests/worker-strategy-upgrade-test.py
+
 test-authority-policy-codegen:
 	@./scripts/tests/authority-policy-codegen-test.sh
 
