@@ -9486,17 +9486,21 @@ type IntegrationCapabilityRisk string
 
 // IntegrationConfigurationField defines model for IntegrationConfigurationField.
 type IntegrationConfigurationField struct {
-	AllowedValues *[]string                              `json:"allowedValues,omitempty"`
-	Format        *string                                `json:"format,omitempty"`
-	Help          string                                 `json:"help"`
-	Key           string                                 `json:"key"`
-	Label         string                                 `json:"label"`
-	Maximum       *int64                                 `json:"maximum,omitempty"`
-	MaximumLength *int32                                 `json:"maximumLength,omitempty"`
-	Minimum       *int64                                 `json:"minimum,omitempty"`
-	Placeholder   *string                                `json:"placeholder,omitempty"`
-	Required      bool                                   `json:"required"`
-	ValueType     IntegrationConfigurationFieldValueType `json:"valueType"`
+	AllowedValues *[]string `json:"allowedValues,omitempty"`
+	Format        *string   `json:"format,omitempty"`
+	Help          string    `json:"help"`
+	Key           string    `json:"key"`
+	Label         string    `json:"label"`
+
+	// Maximum Точная граница int64. Значение вне безопасного диапазона JSON integer передаётся десятичной строкой; consumer сравнивает через BigInt без преобразования строки в Number.
+	Maximum       *IntegrationIntegerBound `json:"maximum,omitempty"`
+	MaximumLength *int32                   `json:"maximumLength,omitempty"`
+
+	// Minimum Точная граница int64. Значение вне безопасного диапазона JSON integer передаётся десятичной строкой; consumer сравнивает через BigInt без преобразования строки в Number.
+	Minimum     *IntegrationIntegerBound               `json:"minimum,omitempty"`
+	Placeholder *string                                `json:"placeholder,omitempty"`
+	Required    bool                                   `json:"required"`
+	ValueType   IntegrationConfigurationFieldValueType `json:"valueType"`
 }
 
 // IntegrationConfigurationFieldValueType defines model for IntegrationConfigurationField.ValueType.
@@ -9770,6 +9774,17 @@ type IntegrationGrantRecipientCandidatePage struct {
 	Pins          IntegrationGrantCandidatePins        `json:"pins"`
 	Total         int64                                `json:"total"`
 }
+
+// IntegrationIntegerBound Точная граница int64. Значение вне безопасного диапазона JSON integer передаётся десятичной строкой; consumer сравнивает через BigInt без преобразования строки в Number.
+type IntegrationIntegerBound struct {
+	union json.RawMessage
+}
+
+// IntegrationIntegerBound0 defines model for .
+type IntegrationIntegerBound0 = int64
+
+// IntegrationIntegerBound1 defines model for .
+type IntegrationIntegerBound1 = string
 
 // IntegrationIntent defines model for IntegrationIntent.
 type IntegrationIntent struct {
@@ -15749,6 +15764,68 @@ func (t IntegrationDefinitionConfigurationCopyInput) MarshalJSON() ([]byte, erro
 }
 
 func (t *IntegrationDefinitionConfigurationCopyInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsIntegrationIntegerBound0 returns the union data inside the IntegrationIntegerBound as a IntegrationIntegerBound0
+func (t IntegrationIntegerBound) AsIntegrationIntegerBound0() (IntegrationIntegerBound0, error) {
+	var body IntegrationIntegerBound0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIntegrationIntegerBound0 overwrites any union data inside the IntegrationIntegerBound as the provided IntegrationIntegerBound0
+func (t *IntegrationIntegerBound) FromIntegrationIntegerBound0(v IntegrationIntegerBound0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIntegrationIntegerBound0 performs a merge with any union data inside the IntegrationIntegerBound, using the provided IntegrationIntegerBound0
+func (t *IntegrationIntegerBound) MergeIntegrationIntegerBound0(v IntegrationIntegerBound0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsIntegrationIntegerBound1 returns the union data inside the IntegrationIntegerBound as a IntegrationIntegerBound1
+func (t IntegrationIntegerBound) AsIntegrationIntegerBound1() (IntegrationIntegerBound1, error) {
+	var body IntegrationIntegerBound1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIntegrationIntegerBound1 overwrites any union data inside the IntegrationIntegerBound as the provided IntegrationIntegerBound1
+func (t *IntegrationIntegerBound) FromIntegrationIntegerBound1(v IntegrationIntegerBound1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIntegrationIntegerBound1 performs a merge with any union data inside the IntegrationIntegerBound, using the provided IntegrationIntegerBound1
+func (t *IntegrationIntegerBound) MergeIntegrationIntegerBound1(v IntegrationIntegerBound1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t IntegrationIntegerBound) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *IntegrationIntegerBound) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

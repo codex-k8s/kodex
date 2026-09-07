@@ -3374,6 +3374,11 @@ export type IntegrationCapability = {
     inputSchemaSha256?: string;
 };
 
+/**
+ * Точная граница int64. Значение вне безопасного диапазона JSON integer передаётся десятичной строкой; consumer сравнивает через BigInt без преобразования строки в Number.
+ */
+export type IntegrationIntegerBound = number | string;
+
 export type IntegrationConfigurationField = {
     key: string;
     label: string;
@@ -3383,8 +3388,8 @@ export type IntegrationConfigurationField = {
     placeholder?: string;
     allowedValues?: Array<string>;
     format?: string;
-    minimum?: number;
-    maximum?: number;
+    minimum?: IntegrationIntegerBound;
+    maximum?: IntegrationIntegerBound;
     maximumLength?: number;
 };
 

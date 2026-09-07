@@ -9072,6 +9072,11 @@ components:
         inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
         inputSchema: { type: string, minLength: 2, maxLength: 262144 }
         inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+    IntegrationIntegerBound:
+      description: Точная граница int64. Значение вне безопасного диапазона JSON integer передаётся десятичной строкой; consumer сравнивает через BigInt без преобразования строки в Number.
+      oneOf:
+        - { type: integer, format: int64, minimum: -9007199254740991, maximum: 9007199254740991 }
+        - { type: string, pattern: '^(0|-?[1-9][0-9]{0,18})$', maxLength: 20 }
     IntegrationConfigurationField:
       type: object
       additionalProperties: false
@@ -9085,8 +9090,8 @@ components:
         placeholder: { type: string, maxLength: 300 }
         allowedValues: { type: array, uniqueItems: true, maxItems: 100, items: { type: string, maxLength: 500 } }
         format: { type: string, maxLength: 80 }
-        minimum: { type: integer, format: int64 }
-        maximum: { type: integer, format: int64 }
+        minimum: { $ref: '#/components/schemas/IntegrationIntegerBound' }
+        maximum: { $ref: '#/components/schemas/IntegrationIntegerBound' }
         maximumLength: { type: integer, format: int32, minimum: 0, maximum: 1048576 }
     IntegrationDefinition:
       type: object
