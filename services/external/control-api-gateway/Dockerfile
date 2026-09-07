@@ -11,6 +11,7 @@ COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
 COPY libs/go/eventing/ libs/go/eventing/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/i18n/ libs/go/i18n/
+COPY libs/go/integrationpackage/ libs/go/integrationpackage/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/oidcidentity/ libs/go/oidcidentity/
