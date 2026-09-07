@@ -13,9 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-//go:embed sql/proof_system_resolve_identity.sql
-var runtimeMaterializationSystemIdentitySQL string
-
 //go:embed sql/runtime_materialization_resolve_proof.sql
 var runtimeMaterializationResolveProofSQL string
 
@@ -35,7 +32,7 @@ func (repository *Repository) resolveRuntimeMaterializationProof(ctx context.Con
 	var authority platformrepo.ProofAuthority
 	var systemActorID string
 	var systemUpdatedAt time.Time
-	err := repository.pool.QueryRow(ctx, runtimeMaterializationSystemIdentitySQL).Scan(
+	err := repository.pool.QueryRow(ctx, queryResolveSystemWorkloadIdentity).Scan(
 		&systemActorID, &authority.OrganizationID, &systemUpdatedAt, &authority.OrganizationVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
