@@ -1202,8 +1202,9 @@ yq -i '
 
 yq -o=json -I=0 '.' "$render" | jq -sc '
   map(select(.kind != null)) |
-  unique_by([.apiVersion,.kind,(.metadata.namespace // ""),.metadata.name])[]
-' | yq -p=json -P >"$output"
+  unique_by([.apiVersion,.kind,(.metadata.namespace // ""),.metadata.name])
+' | jq -f "$repository_root/tools/dev/worker-grant-rollout.jq" |
+  jq -c '.[]' | yq -p=json -P >"$output"
 
 if [[ -z "$mail_configuration" ]]; then
   mail_configuration="$temporary_directory/mail-bootstrap.json"

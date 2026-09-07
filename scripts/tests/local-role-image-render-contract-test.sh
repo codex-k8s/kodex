@@ -27,6 +27,7 @@ done
   -x "$source_root/tools/render-image-admission-job.sh" ]] ||
   fail 'source root is invalid'
 timeout 30s python3 "$source_root/scripts/tests/registry-credential-files-test.py"
+timeout 30s python3 "$source_root/scripts/tests/worker-grant-rollout-test.py"
 [[ -n "$cache_root" ]] || cache_root="$source_root/.kodex-dev/cache"
 [[ "$cache_root" == /* && "$cache_root" != / && "$cache_root" != "$HOME" ]] ||
   fail 'cache root is invalid'
@@ -227,6 +228,18 @@ for mutation in \
 done
 
 bash "$source_root/scripts/tests/local-email-render-contract-test.sh" "$render"
+
+yq -o=json -I=0 '.' "$render" | jq -s -e --arg profile "$deployment_profile" '
+  . as $resources |
+  (["control-plane", "secret-broker", "email-bridge", "runtime-controller",
+    "integration-gateway", "automation-scheduler", "session-archive", "role-image-builder"] +
+    (if $profile == "web-with-mattermost" then ["interaction-gateway"] else [] end)) as $workers |
+  all($workers[]; . as $name |
+    any($resources[]; .kind == "Deployment" and .metadata.name == $name and
+      .spec.replicas == 1 and .spec.strategy == {type:"Recreate"} and
+      any(.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?;
+        (.name | endswith("platform-worker-grant-agent")))))
+' >/dev/null || fail 'local worker grant Deployments do not serialize their rollout'
 
 air_binary="$cache_root/go-tools/air"
 [[ -x "$air_binary" ]] || fail 'pinned Air executable is absent from the local tool cache'

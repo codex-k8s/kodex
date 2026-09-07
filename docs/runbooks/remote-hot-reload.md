@@ -4,8 +4,8 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.2.0
-updated: 2026-09-02
+version: 1.2.1
+updated: 2026-09-07
 ---
 
 # Удалённый hot-reload контур Kodex
@@ -44,6 +44,22 @@ GitHub-пользователь входит через Teleport как отде
 bootstrap использует временную приватную копию root-owned k3s kubeconfig, а
 в приватной копии Teleport единственный context получает имя `kodex-dev`.
 Пользователь работает через `tsh kube login`.
+
+## Сериализация worker grant при обновлении
+
+Disposable renderer задаёт `replicas: 1` и `strategy: Recreate` всем Deployment
+с `platform-worker-grant-agent`, включая native sidecars в `initContainers`.
+Неизвестный workload с таким агентом закрыто отклоняется до применения.
+Это сериализует штатное обновление Deployment: старый grant writer завершается
+до запуска нового. Одновременные writers одного workload могут выпускать разные
+revision одного поколения, и устойчивый watermark отвергает прежний grant.
+Base и production strategy этим правилом не изменяются.
+
+`Recreate` не гарантирует эту последовательность при ручном удалении Pod:
+ReplicaSet может создать замену, пока удаляемый Pod ещё завершается. Используйте
+штатный code-owned rollout. Подтверждённый отказ старого broker grant не доказывает,
+что конкуренция writers была единственной причиной его неготовности; после
+развёртывания отдельно проверяются protected owner readiness и API readiness.
 
 ## Образ интеграционного gateway
 
