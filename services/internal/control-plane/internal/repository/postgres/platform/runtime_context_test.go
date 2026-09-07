@@ -5,7 +5,39 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 )
+
+func TestPromptProvenanceVersionPreservesHistoricalDigest(t *testing.T) {
+	values := map[string]any{"runtimeRevisionRef": "revision", "runtimeRevisionVersion": int64(1), "providerSecretName": "secret", "providerSecretUID": "uid", "providerSecretResourceVersion": "1"}
+	before, err := runtimeRevisionDigestFromSnapshot(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values["promptServiceTemplateRevision"] = "historical-v2"
+	values["promptServiceTemplateDigest"] = strings.Repeat("a", 64)
+	values["promptTargetKind"] = "AGENT"
+	if after, err := runtimeRevisionDigestFromSnapshot(values); err != nil || after != before {
+		t.Fatal("historical immutable digest changed")
+	}
+	materialized, err := promptservice.MaterializeWarm("Core", "Owner", "ins_example", strings.Repeat("a", 64), "agt_example", "ses_example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	values["instructions"] = materialized.Prompt
+	values["promptRuntimeContractVersion"] = 1
+	values["promptServiceTemplateRevision"] = materialized.ServiceTemplateRevision
+	values["promptServiceTemplateDigest"] = materialized.ServiceTemplateDigest
+	if _, err := runtimeRevisionDigestFromSnapshot(values); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []any{0, 2, 1.5, "1", "invalid"} {
+		values["promptRuntimeContractVersion"] = version
+		if _, err := runtimeRevisionDigestFromSnapshot(values); err == nil {
+			t.Fatal("invalid provenance version accepted")
+		}
+	}
+}
 
 func TestRuntimeContextSessionID(t *testing.T) {
 	digest := strings.Repeat("a", 64)

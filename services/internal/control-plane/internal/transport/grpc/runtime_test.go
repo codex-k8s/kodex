@@ -9,6 +9,27 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+func TestRuntimePromptProvenanceRequiresVersionedOwnerSnapshot(t *testing.T) {
+	values := map[string]any{"promptServiceTemplateRevision": runtimecontract.PromptServiceRevision,
+		"promptServiceTemplateDigest": strings.Repeat("a", 64), "promptTargetKind": "AGENT"}
+	if got := castRuntimeRevision(values); got == nil || got.GetPromptServiceTemplateRevision() != "" {
+		t.Fatal("historical snapshot binding changed")
+	}
+	values["promptRuntimeContractVersion"] = 1
+	if got := castRuntimeRevision(values); got == nil || got.GetPromptServiceTemplateRevision() != runtimecontract.PromptServiceRevision || got.GetPromptTargetKind() != "AGENT" || got.GetPromptServiceTemplateDigest() != strings.Repeat("a", 64) {
+		t.Fatal("new owner provenance lost")
+	}
+	values["promptRuntimeContractVersion"] = 2
+	if castRuntimeRevision(values) != nil {
+		t.Fatal("unknown snapshot version accepted")
+	}
+	values["promptRuntimeContractVersion"] = 1
+	delete(values, "promptServiceTemplateRevision")
+	if castRuntimeRevision(values) != nil {
+		t.Fatal("incomplete owner provenance accepted")
+	}
+}
+
 func TestMapInt64AcceptsUnsignedValuesAndRejectsOverflow(t *testing.T) {
 	t.Parallel()
 
