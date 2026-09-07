@@ -474,6 +474,14 @@ test "$(git rev-parse "$TARGET_COMMIT^{tree}")" = \
 
 ## Настоящий файловый запуск в приёмке
 
+Для заранее подготовленной тестовой учётной записи оснастка принимает
+`KODEX_ROLE_IMAGE_E2E_PROVIDER_ACCOUNT_REF`. Тогда модель проверяется в точном
+каталоге этой account, даже если общий каталог имеет конфликт capabilities
+между другими accounts. Модель берётся из текущей runtime configuration;
+недоступная выбранная account не заменяется другой. Свежие catalog pins и
+серверная проверка полномочий остаются обязательными. Без этой env сохраняется
+выбор account из общего каталога.
+
 В code `d52cb2321ae278668f19f0c3e1a239f1f1074da9` RoleImage phase после exact
 image/imageID readback ждёт terminal Run и проверяет результат настоящего
 provider/agent. `tools/dev/runtime-workspace-acceptance.mjs` передаёт модели
