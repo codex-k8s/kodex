@@ -1,4 +1,4 @@
-import schema from "../../../../../../contracts/integrations/v1/integration-package.schema.json";
+import schema from "@/shared/api/generated/integration-package/schema.json";
 import validate from "@/shared/api/generated/integration-package/validate";
 
 export interface PackageFieldSchema {
