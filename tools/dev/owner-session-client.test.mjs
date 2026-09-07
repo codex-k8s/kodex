@@ -138,6 +138,11 @@ test("оба слоя отправляются в session GET и business, IdP �
       name: `${proxyCookieName}_csrf_nonce`,
       value: "synthetic-login-sentinel",
     });
+    state.cookies.push({
+      ...proxyCookies(1)[0],
+      name: `${proxyCookieName}_nonce_csrf`,
+      value: "synthetic-login-sentinel",
+    });
     const f = fixture();
     const client = createOwnerSessionClient({ origin, storage: state, ...f });
     await close(await client.request("/api/v1/bootstrap"));
