@@ -32,7 +32,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 74 and .policy.authority_abi_version == 2 and
+	.policy_revision == 75 and .policy.authority_abi_version == 2 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.command.role-images.copy" or .operation_id == "platform.command.integration-definitions.copy" or .operation_id == "platform.command.role-images.archive-configuration" or .operation_id == "platform.command.integration-definitions.archive") |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
       .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 4 and
@@ -132,7 +132,7 @@ jq -e '
       .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 1 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.stt.transcribe" and
       .caller_workload_id == "control-api-gateway" and .target_workload_id == "stt-tts-service" and
-      .full_method == "/stt.v1.SpeechToTextService/Transcribe" and .project_required == false and .permission == "stt.transcribe" and
+      .full_method == "/stt.v1.SpeechToTextService/Transcribe" and .project_required == false and .permission == "platform.stt.transcribe" and
       .request_profile == {"mode":"STREAM_SESSION","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 1 and
 	all(.policy.operation_bindings[] | select(.operation_id == "platform.stt.policy.resolve" or .operation_id == "platform.stt.credential.project");
 		.caller_workload_id == "stt-tts-service" and .project_required == false and

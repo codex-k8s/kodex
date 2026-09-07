@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 74,
+  "policy_revision": 75,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -15056,7 +15056,7 @@
         "full_method": "/stt.v1.SpeechToTextService/Transcribe",
         "target_tls_server_name": "stt-tts-service.kodex-system.svc.cluster.local",
         "target_trust_bundle_id": "kodex-internal-ca-g1",
-        "permission": "stt.transcribe",
+        "permission": "platform.stt.transcribe",
         "authority_proof_producer_id": "control-plane.oidc-stt",
         "authority_sources": [
           "OIDC_SESSION",
