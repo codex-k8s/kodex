@@ -71,7 +71,11 @@ export class SessionRenewalCoordinator {
 
   complete(nextRenewalInMs: number): number {
     const currentTime = this.now();
-    const nextRenewalAt = currentTime + nextRenewalInMs;
+    // Задержка включает дробный performance.now(); межвкладочный контракт
+    // хранит целые миллисекунды. Округление вниз не продлевает серверный срок.
+    const nextRenewalAt = Math.floor(currentTime + nextRenewalInMs);
+    if (!Number.isSafeInteger(nextRenewalAt) || nextRenewalAt <= currentTime)
+      throw new Error("Session renewal deadline is invalid");
     const current = this.read();
     if (
       this.lease &&
