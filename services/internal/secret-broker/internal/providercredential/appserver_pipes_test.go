@@ -138,3 +138,38 @@ func TestAppServerStartFailureClosesDescriptors(t *testing.T) {
 		t.Fatal("start failure leaked descriptors")
 	}
 }
+
+func TestAppServerDeviceSessionCloseAndReplay(t *testing.T) {
+	home := t.TempDir()
+	server := pipeFixture(t, "cat >/dev/null; printf synthetic >&2")
+	session := &deviceSession{server: server, home: home}
+	if session.Close() != nil || session.Close() != nil {
+		t.Fatal("device cleanup failed")
+	}
+	if _, err := os.Stat(home); !os.IsNotExist(err) {
+		t.Fatal("device private home retained")
+	}
+}
+
+func TestAppServerDeviceInitializationFailureCleanup(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal("fixture binary unavailable")
+	}
+	root := t.TempDir()
+	if os.Chmod(root, 0o700) != nil {
+		t.Fatal("fixture mode unavailable")
+	}
+	process, err := NewAppServerProcess(binary, root)
+	if err != nil {
+		t.Fatal("fixture process unavailable")
+	}
+	// Catalog fixture не принимает device-code login; этот реальный child завершится с ошибкой.
+	if _, err := process.StartDeviceAuthorization(t.Context(), "synthetic-attempt", "device"); err == nil {
+		t.Fatal("device initialization failure hidden")
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("failed device initialization retained private home")
+	}
+}
