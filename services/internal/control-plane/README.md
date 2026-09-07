@@ -288,6 +288,22 @@ Production DSN и live data не используются.
 
 ## Развёртывание
 
+Warm desired specification имеет отдельные owner-owned `desired_spec_ref`,
+`desired_spec_version`, `desired_spec_digest`. Fingerprint полного canonical
+runtime input исключает только собственную revision identity. Под блокировкой
+ассистента изменение зависимости повышает spec version и создаёт новый ref;
+возврат A→B→A не переиспользует ref A. Heartbeat/status/OCC version остаётся
+отдельной и не меняет immutable input. Controller продолжает сверять полный
+runtime digest и меняет Pod при настоящем изменении спецификации.
+
+Миграция инициализирует только пустой текущий spec pointer. Первый успешный
+reconcile связывает актуальные проверенные зависимости; исторические snapshots
+не переписываются. Новая спецификация, audit и `SYSTEM_ASSISTANT_CHANGED`
+фиксируются в одной owner transaction; authoritative read — ответ reconcile.
+Report/heartbeat не публикуют новую spec, stale report прежнего ref отклоняется.
+Полный PG fixture проверяет reconcile/report/status/повтор и изменение prompt
+с возвратом, сохраняя отдельную проверку отрицательных authority boundaries.
+
 Canonical application render создаётся только через
 `tools/release/render-web-only.sh` из immutable release lock. Скрипт не
 выполняет apply. Диагностика migration, bootstrap, authority и outbox описана

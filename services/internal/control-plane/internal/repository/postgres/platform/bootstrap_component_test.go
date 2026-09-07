@@ -1456,6 +1456,40 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		t.Fatalf("stable reconcile repeated session migration: failed_over=%#v reported=%#v stable=%#v",
 			failedOver, reported, stable)
 	}
+	// Статус и heartbeat не являются новой immutable спецификацией.
+	for _, state := range []string{"STARTING", "RECOVERING", "READY", "BUSY", "READY", "READY"} {
+		if _, err := service.ReportWarmRuntime(ctx, reportWorker, command.WarmRuntimeInput{WorkloadInstance: workloadInstance, RuntimeRevision: stable.DesiredRuntimeRevision, State: state}); err != nil {
+			t.Fatalf("report stable specification: %v", err)
+		}
+		_, next, _, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, workloadInstance)
+		if err != nil || next["runtimeRevisionRef"] != stableDesired["runtimeRevisionRef"] || next["runtimeRevisionVersion"] != stableDesired["runtimeRevisionVersion"] || next["revisionDigest"] != stableDesired["revisionDigest"] {
+			t.Fatal("lifecycle metadata changed warm specification")
+		}
+	}
+	// Изменение зависимости и возврат к прежнему содержимому получают новые refs.
+	previous := stableDesired
+	for index, instructions := range []string{"synthetic warm specification update", stable.OwnerInstructions} {
+		current, err := service.GetSystemAssistant(ctx, owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantInstructions, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("warm-specification-%d", index), ExpectedVersion: &current.Version},
+			Payload:  command.AssistantInstructionsInput{Instructions: instructions}}); err != nil {
+			t.Fatalf("update warm dependency: %v", err)
+		}
+		changed, next, required, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, workloadInstance)
+		if err != nil || !required || next["runtimeRevisionRef"] == previous["runtimeRevisionRef"] || next["runtimeRevisionVersion"].(int64) != previous["runtimeRevisionVersion"].(int64)+1 || next["revisionDigest"] == previous["revisionDigest"] {
+			t.Fatal("dependency change retained warm identity")
+		}
+		if _, err := service.ReportWarmRuntime(ctx, reportWorker, command.WarmRuntimeInput{WorkloadInstance: workloadInstance, RuntimeRevision: stable.DesiredRuntimeRevision, State: "READY"}); !errors.Is(err, domainerrs.ErrConflict) {
+			t.Fatal("stale specification report accepted")
+		}
+		if _, err := service.ReportWarmRuntime(ctx, reportWorker, command.WarmRuntimeInput{WorkloadInstance: workloadInstance, RuntimeRevision: changed.DesiredRuntimeRevision, State: "READY"}); err != nil {
+			t.Fatal(err)
+		}
+		previous = next
+	}
 	var stableConfigurationCount int64
 	if err := pool.QueryRow(ctx, `
 		SELECT count(*)::bigint
