@@ -4,7 +4,14 @@ set -euo pipefail
 case "$*" in
   'config current-context') printf 'fixture-local\n' ;;
   'get --raw=/readyz') exit 0 ;;
-  'get namespace '*) exit 1 ;;
+  'get namespace '*)
+    [[ -n "${KODEX_TEST_LOCAL_NAMESPACE_STATE:-}" && -f "$KODEX_TEST_LOCAL_NAMESPACE_STATE/$3" ]]
+    ;;
+  'delete namespace '* )
+    [[ -n "${KODEX_TEST_LOCAL_NAMESPACE_STATE:-}" && "${KODEX_TEST_LOCAL_DOWN_NAMESPACE_FAIL:-}" != "$3" ]] || exit 1
+    printf '%s\n' "$3" >>"$KODEX_TEST_LOCAL_NAMESPACE_STATE/deleted"
+    rm "$KODEX_TEST_LOCAL_NAMESPACE_STATE/$3"
+    ;;
   'delete validatingadmissionpolicybindings.admissionregistration.k8s.io '*|\
   'delete validatingadmissionpolicies.admissionregistration.k8s.io '*)
     [[ "${KODEX_TEST_LOCAL_DOWN_FAIL:-false}" != true ]]

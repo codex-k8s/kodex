@@ -168,7 +168,7 @@ if [[ "$command_name" == down ]]; then
     "${local_admission_resources[@]}" --ignore-not-found --wait=true --timeout=2m >/dev/null
   kubectl delete validatingadmissionpolicies.admissionregistration.k8s.io \
     "${local_admission_resources[@]}" --ignore-not-found --wait=true --timeout=2m >/dev/null
-  for namespace in kodex-runtime kodex-system identity kodex-trust; do
+  for namespace in kodex-runtime kodex-system kodex-secret-drafts identity kodex-trust; do
     kubectl get namespace "$namespace" >/dev/null 2>&1 || continue
     kubectl delete namespace "$namespace" --wait=false >/dev/null
     deadline=$((SECONDS + 600))

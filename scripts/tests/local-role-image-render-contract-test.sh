@@ -46,7 +46,7 @@ policy_cleanup_line=$(rg -n -F \
   'kubectl delete validatingadmissionpolicies.admissionregistration.k8s.io' \
   "$source_root/dev.sh" | cut -d: -f1)
 namespace_cleanup_line=$(rg -n -F \
-  'for namespace in kodex-runtime kodex-system identity kodex-trust; do' \
+  'for namespace in kodex-runtime kodex-system kodex-secret-drafts identity kodex-trust; do' \
   "$source_root/dev.sh" | cut -d: -f1)
 [[ "$binding_cleanup_line" -lt "$policy_cleanup_line" &&
   "$policy_cleanup_line" -lt "$namespace_cleanup_line" ]] ||

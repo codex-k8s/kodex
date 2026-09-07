@@ -127,6 +127,13 @@ python3 tools/install/draft-key-recovery.py export --context "$EXACT_CONTEXT" \
 только путь нового private0400 файла; `generate-material.sh` принимает этот путь
 через `--secret-draft-keyring-file`. Обычный `dev.sh up` соединяет шаги сам.
 `reset-local` не расширялся; он не заявляется полным безопасным reset D6.
+Отдельный явный `dev.sh down` с exact `KODEX_DEV_CONFIRM_DOWN` удаляет также
+`kodex-secret-drafts` после runtime/system и до identity/trust. Это полный снос
+старой draft identity: ciphertext, guard/uses и backup уничтожаются вместе;
+такой операторский выбор разрешён только для заведомо ненужной disposable
+установки. Без подтверждения удалений нет. Host/SSH/Teleport, private inputs и
+evidence этим действием не удаляются. Обычные preserve/ensure/refresh сохраняют
+retained state; автоматический reset при потерянных ключах не добавлен.
 Для инцидента 5e864d32 отсутствие старых ключей остаётся невосстановленным
 состоянием, пока не найдена exact копия. Prevention не объявляет live recovery PASS.
 
