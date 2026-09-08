@@ -142,6 +142,19 @@ func TestVerifyAcceptsCallerKeyGenerationIndependentFromVerifierGeneration(t *te
 	if _, err := authority.Verify(context.Background(), compact, method, callerSPIFFE, ""); err == nil {
 		t.Fatal("caller generation not matching its trusted key was accepted")
 	}
+	// Свежий exp и разрешённый skew не продлевают первоначальный receipt.
+	claims.SignerGeneration = 1
+	claims.IssuedAt = now.Add(20 * time.Second).Unix()
+	claims.NotBefore = claims.IssuedAt
+	claims.ExpiresAt = claims.IssuedAt + 30
+	compact, err = internalrpcauth.SignCanonicalJSON(claims, callerKey, internalrpcauth.ProtectedHeaderExpectation{Type: internalrpcauth.AuthorizationContextProtectedType, KeyID: callerKey.KeyID})
+	if err != nil {
+		t.Fatal("sign bounded freshness fixture")
+	}
+	now = now.Add(31 * time.Second)
+	if _, err := authority.Verify(t.Context(), compact, method, callerSPIFFE, ""); err == nil {
+		t.Fatal("signed unexpired context bypassed receipt deadline")
+	}
 }
 
 func TestAuthorizationMetadataLastKnownGoodWindowIsNonSliding(t *testing.T) {
@@ -201,3 +214,12 @@ func (testAuthorityStore) AcceptVerification(
 }
 func (testAuthorityStore) Ready(context.Context, repository.SnapshotState) error { return nil }
 func (testAuthorityStore) Close()                                                {}
+
+func (testAuthorityStore) Freshness(_ context.Context, state repository.SnapshotState) (repository.SnapshotFreshness, error) {
+	now := time.Now()
+	return repository.SnapshotFreshness{ReceiptID: state.AttestationReceiptID, ObservedAt: now, ValidUntil: now.Add(30 * time.Second)}, nil
+}
+
+func (testAuthorityStore) RegisterIssuedContext(context.Context, repository.SnapshotState, repository.IssuedContextBinding) error {
+	return nil
+}

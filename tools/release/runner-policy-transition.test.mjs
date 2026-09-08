@@ -31,7 +31,7 @@ function fixtures() {
   data.policySHA256 = policyDigest(data);
   const policy = { apiVersion: "v1", kind: "ConfigMap", metadata: { ...metadata(policyBase), annotations: { "kodex.dev/admission-tools-sha256": `sha256:${"e".repeat(64)}` } }, immutable: true, data };
   const parameters = { apiVersion: "supplychain.kodex.dev/v1alpha1", kind: "ImageAdmissionPolicyParameters", metadata: metadata(policyBase), spec: structuredClone(data) };
-  const catalog = { apiVersion: "v1", kind: "ConfigMap", metadata: metadata("kodex-role-environments"), data: { "catalog.json": JSON.stringify({ schemaVersion: 1,
+  const catalog = { apiVersion: "v1", kind: "ConfigMap", metadata: metadata("kodex-role-environments"), immutable:true, data: { "catalog.json": JSON.stringify({ schemaVersion: 1,
     context: { contextRef: "unchanged-exact-context" }, environments: [
       { key: "standard", available: true, baseImageReference: data.trustedRoleBaseRepository, baseImageDigest: oldDigest },
       { key: "documents", available: false, baseImageDigest: `sha256:${"0".repeat(64)}` },
@@ -146,7 +146,7 @@ test("saved plan cannot survive another resourceVersion, operation, cluster or p
   }
 });
 
-test("public CLI completes ordered maintenance and preserves predecessors; lost patch ACK is UNKNOWN without retry", () => {
+for (const issuerOnly of [false,true]) test("public CLI ordered maintenance, exact predecessors and UNKNOWN: "+(issuerOnly?"issuer":"runner"), () => {
   const directory = mkdtempSync(join(tmpdir(), "kodex-policy-cli-"));
   try {
     const bin = join(directory, "bin"); mkdirSync(bin);
@@ -154,7 +154,8 @@ test("public CLI completes ordered maintenance and preserves predecessors; lost 
     const f = fixtures(), objects = [f.policy, f.parameters, f.catalog,
       ...["control-plane", "role-image-builder", "image-admission-controller", "control-api-gateway"].map(deployment),
       ...["kube-system", "kodex-system"].map((name) => ({ kind: "Namespace", metadata: metadata(name) })),
-      { kind: "ValidatingAdmissionPolicy", metadata: metadata("kodex-image-admission-controller-jobs"), spec: { failurePolicy: "Fail" } },
+      { kind: "ValidatingAdmissionPolicy", metadata: metadata("kodex-image-admission-controller-jobs"), spec: { failurePolicy: "Fail", validations:[{expression:"variables.pod.initContainers[1].image == params.spec.authorityImage"}] } },
+      {kind:"CustomResourceDefinition",metadata:metadata("imageadmissionpolicyparameters.supplychain.kodex.dev"),spec:{versions:[{schema:{openAPIV3Schema:{properties:{spec:{properties:{authorityImage:{type:"string",minLength:1}}}}}}}]}},
       { kind: "ValidatingAdmissionPolicyBinding", metadata: metadata("kodex-image-admission-controller-jobs"), spec: {
         policyName: "kodex-image-admission-controller-jobs", paramRef: { name: policyBase, namespace: "kodex-system", parameterNotFoundAction: "Deny" }, validationActions: ["Deny"] } },
       { kind: "Role", metadata: metadata("image-admission-controller"), rules: ["configmaps", "imageadmissionpolicyparameters"].map((resource) => ({ resources: [resource], verbs: ["get"], resourceNames: [policyBase] })) },
@@ -192,13 +193,18 @@ if(args[0]==='get') {
   if(process.env.FIXTURE_LOST_ACK==='true')process.exit(7);
 } else if(args[0]!=='rollout')process.exit(8);
 `, { mode: 0o700 });
+    writeFileSync(join(bin, "sudo"), `#!/usr/bin/env node
+const cp=require('node:child_process'),path=require('node:path'),a=process.argv.slice(2);
+if(JSON.stringify(a.slice(0,3))!==JSON.stringify(['-n','k3s','kubectl']))process.exit(98);
+const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(3),{stdio:'inherit'});process.exit(r.status??99);
+`,{mode:0o755});
     const cli = fileURLToPath(new URL("./runner-policy-transition.mjs", import.meta.url));
     const environment = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_STATE: statePath, FIXTURE_CALLS: callsPath };
-    const run = (args) => execFileSync(process.execPath, [cli, ...args], { env: environment, stdio: "pipe" });
+    const run = (args) => execFileSync(process.execPath, [cli, ...args, ...(issuerOnly?["--k3s-sudo"]:[])], { env: environment, stdio: "pipe" });
     const bundle = join(directory, "bundle.json");
-    run(["prepare", "--context", "default", "--runner-digest", newDigest, "--output", bundle]);
+    run(["prepare", "--context", "default", "--runner-digest", issuerOnly?oldDigest:newDigest, ...(issuerOnly?["--authority-issuer-image",`registry.example.test/kodex/authority@sha256:${"c".repeat(64)}`]:[]), "--output", bundle]);
     const common = ["--context", "default", "--bundle", bundle, "--reader-image", readerImage];
-    const phases = ["maintenance", "reader", "resources", "binding", "control-plane", "role-image-builder", "controller", "resume", "open"];
+    const phases = ["maintenance", "reader", ...(issuerOnly?["schema","admission"]:[]), "resources", "binding", "control-plane", "role-image-builder", "controller", "resume", "open"];
     for (const phase of phases) {
       const plan = join(directory, `${phase}.json`), evidence = join(directory, `${phase}.jsonl`);
       run(["plan", ...common, "--phase", phase, "--output", plan]);
@@ -214,7 +220,7 @@ if(args[0]==='get') {
     const plan = join(directory, "lost.json"), evidence = join(directory, "lost.jsonl");
     run(["plan", ...common, "--phase", "maintenance", "--output", plan]);
     const before = readFileSync(callsPath, "utf8").trim().split("\n").length;
-    const result = spawnSync(process.execPath, [cli, "apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", "APPLY-STAGING-RUNNER-POLICY"], { env: { ...environment, FIXTURE_LOST_ACK: "true" }, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [cli, "apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", "APPLY-STAGING-RUNNER-POLICY", ...(issuerOnly?["--k3s-sudo"]:[])], { env: { ...environment, FIXTURE_LOST_ACK: "true" }, encoding: "utf8" });
     assert.equal(result.status, 1);
     assert.equal(JSON.parse(readFileSync(evidence, "utf8").trim().split("\n").at(-1)).status, "UNKNOWN");
     assert.equal(readFileSync(callsPath, "utf8").trim().split("\n").length, before + 1);
@@ -272,4 +278,22 @@ else if(a.includes("patch")){const file=a.find(x=>x.startsWith("--patch-file="))
     const bad = structuredClone(initial); bad.policy.metadata.annotations = { "kodex.dev/admission-tools-sha256": oldDigest };
     assert.throws(() => planToolsMetadata(bad.policy, bad.parameters, bad.binding, bad.controller), /CONFLICT/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test("authority issuer update preserves runner, worker image, catalog and old reader run identity", () => {
+ const f=fixtures(),image=`registry.example.test/kodex/authority@sha256:${"c".repeat(64)}`;
+ const bundle=preparePolicy(f.policy,f.parameters,f.catalog,oldDigest,image);
+ assert.equal(bundle.resources[0].data.authorityIssuerImage,image);
+ assert.equal(bundle.resources[0].data.authorityImage,f.policy.data.authorityImage);
+ assert.equal(bundle.resources[0].data.trustedRoleBaseDigest,oldDigest);
+ assert.equal(bundle.resources[2].metadata.name,f.catalog.metadata.name);
+ assert.deepEqual(bundle.resources[2].data,f.catalog.data);
+ for(const phase of ["claim","admit","promote"]) {
+  const rendered=execFileSync("bash",[fileURLToPath(new URL("../render-image-admission-job.sh",import.meta.url)),"staging",`v20260908160000-${"a".repeat(40)}`,phase],{encoding:"utf8",env:{...process.env,IMAGE_ADMISSION_POLICY_JSON:JSON.stringify(bundle.resources[0])}});
+  assert.match(rendered,new RegExp(`name: internal-rpc-authority-issuer\\n          restartPolicy: Always\\n          image: ${image.replaceAll(".","\\.")}`));
+  assert.ok(rendered.includes(`name: platform-worker-grant-agent\n          restartPolicy: Always\n          image: ${f.policy.data.authorityImage}`));
+ }
+ const controller=deployment("image-admission-controller");controller.spec.template.spec.containers[0].env.push({name:"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS",value:"false"});
+ assert.equal(planDeployment(controller,bundle,"reader",readerImage).next.template.spec.containers[0].env.find(e=>e.name==="IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS").value,"true");
 });

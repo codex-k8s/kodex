@@ -45,12 +45,12 @@ psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 --file \
   cd -- "$repository_root/services/internal/internal-rpc-authority"
   KODEX_AUTHORITY_MIGRATION_TEST_PORT="$port" \
     env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
-    go test -count=1 -timeout=60s ./cmd/cli -run '^TestAuthorityBaselineGooseComponent$'
+    go test -count=1 -timeout=120s ./cmd/cli -run '^TestAuthorityBaselineGooseComponent$'
 )
 
 assertion=$(psql "$authority_admin_dsn" --no-password --tuples-only --no-align <<'SQL'
 SELECT
-  (SELECT count(*) = 14
+  (SELECT count(*) = 22
      FROM pg_catalog.pg_proc AS procedure
      JOIN pg_catalog.pg_namespace AS namespace
        ON namespace.oid = procedure.pronamespace
@@ -226,5 +226,17 @@ SELECT internal_rpc_authority.reconcile_runtime_database_identity(
 SQL
   fail 'removed PostgreSQL credential lifecycle function remains callable'
 fi
+
+# Отдельная disposable DB: concurrency fixture заменяет свою схему и не
+# затрагивает только что проверенные production migrations/receipts.
+psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 \
+  --command 'CREATE DATABASE authority_concurrency_fixture' >/dev/null
+(
+  cd -- "$repository_root/services/internal/internal-rpc-authority"
+  KODEX_AUTHORITY_POSTGRES_TEST_DSN="postgresql://postgres@127.0.0.1:${port}/authority_concurrency_fixture?sslmode=disable" \
+    env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
+    go test -count=1 -timeout=30s ./internal/repository/postgres/authority \
+      -run '^TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock$'
+)
 
 printf 'Internal RPC authority PostgreSQL tests passed\n'

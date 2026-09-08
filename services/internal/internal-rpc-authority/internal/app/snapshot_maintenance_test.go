@@ -136,3 +136,25 @@ func TestMaintainServedSnapshotKeepsFailureClosed(t *testing.T) {
 		t.Fatalf("unexpected failed recovery result: refreshed=%s ready_calls=%d activations=%d", refreshedAt, stub.readyCalls, stub.activations)
 	}
 }
+
+func TestReplacementFailurePreservesOnlyAuthoritativeBoundedReceipt(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		cause, ready error
+		retained     bool
+		reads        int
+	}{
+		{"transient", status.Error(codes.Unavailable, "attestor unavailable"), nil, true, 1},
+		{"expired", status.Error(codes.Unavailable, "attestor unavailable"), errors.New("receipt expired"), false, 1},
+		{"database unavailable", status.Error(codes.Unavailable, "attestor unavailable"), errors.New("database unavailable"), false, 1},
+		{"denied", status.Error(codes.PermissionDenied, "readback denied"), nil, false, 0},
+		{"corruption", errors.New("snapshot signature rejected"), nil, false, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stub := &snapshotMaintenanceStub{readyErr: test.ready}
+			if retained := retainServedSnapshotAfterReplacementFailure(t.Context(), stub, test.cause); retained != test.retained || stub.readyCalls != test.reads || stub.activations != 0 {
+				t.Fatal("replacement failure changed fixed served receipt policy")
+			}
+		})
+	}
+}

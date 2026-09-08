@@ -260,3 +260,18 @@ SHA256 файла manifest. Поддержанный readback выполняет
 включает Node negative/CLI fixtures и shell entrypoint contract, не обращается
 к staging и не является live acceptance. Актуальная документация Kubernetes
 Deployment/ReplicaSet/Pod readback проверена через Context7 `/kubernetes/website`.
+
+## Authority freshness и отдельный issuer image
+
+Полный порядок additive SQL → security sidecars → future Job producer →
+CAS activation30s, capability/readback, независимые partition и точное
+восстановление описаны в [OPS-DOC-1313](../../docs/operations/authority-freshness-1313.md).
+Application-only scoped release не изменяет эти ресурсы. `runner-policy-transition`
+дополнительно принимает `--authority-issuer-image` при сохранении текущего
+`--runner-digest`; перед resource phase используются additive `schema` и `admission`.
+
+Для #1313 узкий `tools/dev/build-local-image-supply-chain.sh --component authority-security`
+с обязательным `--context` собирает только authority runtime и admission reader,
+импортирует их в локальный k3s image store и проверяет manifest digests.
+Точные аргументы и граница single-host профиля приведены в OPS-DOC-1313;
+это не registry push и не global `up`.

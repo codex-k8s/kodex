@@ -118,7 +118,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 3 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration {
+	if len(entries) != 4 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)

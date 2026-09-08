@@ -32,7 +32,7 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 	}
 	database := stdlib.OpenDB(*config)
 	defer database.Close()
-	ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Second)
 	defer cancel()
 	goose.SetBaseFS(migrations)
 	goose.SetTableName("public.goose_db_version")
@@ -59,13 +59,13 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 			t.Fatalf("apply authority migration attempt %d: %T", attempt+1, err)
 		}
 		version, err := goose.GetDBVersionContext(ctx, database)
-		if err != nil || version != 20260907000100 {
+		if err != nil || version != 20260908000100 {
 			t.Fatal("authority migration version readback failed")
 		}
 		var rows, maximumID int64
 		if err := database.QueryRowContext(ctx,
 			"SELECT count(*), max(id) FROM public.goose_db_version",
-		).Scan(&rows, &maximumID); err != nil || rows != 4 {
+		).Scan(&rows, &maximumID); err != nil || rows != 5 {
 			t.Fatal("authority migration history readback failed")
 		}
 		if attempt == 0 {
@@ -77,4 +77,5 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 	t.Run("workload boundary", func(t *testing.T) {
 		testWorkloadDatabaseBoundary(t, port)
 	})
+	t.Run("bounded freshness protocol", func(t *testing.T) { testAuthorityFreshnessProtocol(t, port) })
 }

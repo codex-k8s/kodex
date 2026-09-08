@@ -30,6 +30,7 @@ fi
 tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
 admission_image=$(jq -er '.data.admissionImage' <<<"$intent")
 authority_image=$(jq -er '.data.authorityImage' <<<"$intent")
+authority_issuer_image=$(jq -er '.data | if has("authorityIssuerImage") then .authorityIssuerImage else .authorityImage end' <<<"$intent")
 promotion_repository=$(jq -er '.data.promotionRepository' <<<"$intent")
 promotion_evidence_repository=$(jq -er '.data.promotionEvidenceRepository' <<<"$intent")
 evidence_repository=$(jq -er '.data.evidenceRepository' <<<"$intent")
@@ -49,7 +50,7 @@ jq -e '.immutable == true and .metadata.labels["kodex.dev/owner-intent"] == "tru
   { echo "admission owner intent is not immutable" >&2; exit 78; }
 [[ -z $local_profile || $local_profile == hot-reload ]] ||
   { echo "admission local profile is invalid" >&2; exit 78; }
-for image in "$tools_image" "$admission_image" "$authority_image"; do
+for image in "$tools_image" "$admission_image" "$authority_image" "$authority_issuer_image"; do
   [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
     { echo "admission image binding is invalid" >&2; exit 78; }
 done
@@ -81,6 +82,10 @@ done
 run_sha256=$(printf '%s\n' "$environment_name" "$run_id" "$admission_image" "$authority_image" "$tools_digest" \
   "$policy_revision" "$policy_sha256" "$promotion_repository" "$promotion_evidence_repository" \
   "$evidence_repository" "$promoted_pull_repository" | sha256sum | awk '{print $1}')
+# Legacy reader сохраняет прежнюю identity, новая policy отдельно закрепляет issuer.
+if jq -e '.data | has("authorityIssuerImage")' <<<"$intent" >/dev/null; then
+  run_sha256=$(printf '%s\n' "$run_sha256" "$authority_issuer_image" | sha256sum | awk '{print $1}')
+fi
 suffix=${run_sha256:0:32}
 claim_name="mc-admit-$suffix"
 # Claim TTL равен 15 минутам; каждый Job вместе с повторами завершается раньше.
@@ -181,7 +186,7 @@ EOF
           volumeMounts: [{name: authority-sockets, mountPath: /run/kodex}]
         - name: internal-rpc-authority-issuer
           restartPolicy: Always
-          image: ${authority_image}
+          image: ${authority_issuer_image}
           command: [/usr/local/bin/internal-rpc-authority-issuer]
           env:
             - {name: DEPLOYMENT_ENVIRONMENT, value: "${environment_name}"}

@@ -7,23 +7,25 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --source-root <path> --state-directory <path> [--component all|image-admission]\n' "$0" >&2
+  printf 'Usage: %s --source-root <path> --state-directory <path> [--component all|image-admission|authority-security] [--context <exact-staging-context>]\n' "$0" >&2
 }
 
 source_root=""
 state_directory=""
 component=all
+context=""
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --component) component=${2:-}; shift 2 ;;
+    --context) context=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
-[[ "$component" == all || "$component" == image-admission ]] || fail 'component is invalid'
+[[ "$component" == all || "$component" == image-admission || "$component" == authority-security ]] || fail 'component is invalid'
 
 [[ "$source_root" == /* && -f "$source_root/tools/dev/Dockerfile.local-image-supply-chain" &&
   -f "$source_root/services/jobs/role-image-builder/Dockerfile" &&
@@ -35,8 +37,25 @@ for command_name in docker git jq k3s sha256sum sudo tar; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
-[[ -S /run/k3s/containerd/containerd.sock ]] || fail 'local k3s containerd socket is absent'
+sudo -n k3s ctr version >/dev/null 2>&1 || fail 'local k3s containerd is unavailable'
 sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for local k3s image import'
+
+if [[ "$component" == authority-security ]]; then
+  [[ -n "$context" && "${context,,}" != *prod* &&
+    "$(sudo -n k3s kubectl --context "$context" config current-context)" == "$context" ]] ||
+    fail 'exact staging context is required'
+  sudo -n k3s kubectl --context "$context" get namespace kodex-system -o json | jq -e '
+    .metadata.labels."app.kubernetes.io/part-of" == "kodex" and
+    .metadata.labels."kodex.dev/environment" == "staging"' >/dev/null || fail 'staging namespace is required'
+  [[ "$state_directory" != "$source_root" && "$state_directory" != "$source_root/"* && ! -L "$state_directory" ]] ||
+    fail 'private state must be outside source'
+  node --input-type=module - "$source_root" <<'JS'
+import {pathToFileURL} from 'node:url';
+const root=process.argv[2];
+const {inspectSource}=await import(pathToFileURL(root+'/tools/release/application-source.mjs'));
+try {inspectSource(root);} catch {process.stderr.write('Exact clean application source required\n');process.exit(1);}
+JS
+fi
 
 builder=kodex-local-dev
 "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
@@ -57,6 +76,11 @@ input_digest=$(
     sha256sum | awk '{print $1}'
 )
 [[ "$input_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'supply-chain input digest is invalid'
+if [[ "$component" == authority-security ]]; then
+  # VERSION/SOURCE_SHA входят в recipe: одинаковое дерево нового commit не
+  # должно возвращать старую versioned binary из прежнего cache key.
+  input_digest=$(printf '%s\n%s\n%s\n' "$input_digest" "$source_revision" "$component" | sha256sum | awk '{print $1}')
+fi
 
 import_oci() {
   local archive=$1 tag=$2 repository=$3 manifest_digest exact_reference
@@ -95,6 +119,32 @@ build_target() {
   printf '%s\n' "$exact_reference" >"$state_directory/$name-image"
   chmod 0600 "$state_directory/$name-image"
 }
+
+# Узкая поставка security binaries не меняет policy или работающие workloads.
+if [[ "$component" == authority-security ]]; then
+  build_target internal-rpc-authority services/internal/internal-rpc-authority/Dockerfile \
+    runtime registry.local.kodex/kodex/internal-rpc-authority \
+    --build-arg "VERSION=$source_revision"
+  build_target image-admission tools/dev/Dockerfile.local-image-supply-chain \
+    image-admission registry.local.kodex/kodex/image-admission \
+    --build-arg "SOURCE_SHA=$source_revision"
+  for name in internal-rpc-authority image-admission; do
+    reference=$(<"$state_directory/$name-image")
+    sudo -n k3s ctr -n k8s.io images list --quiet | grep -Fx "$reference" >/dev/null ||
+      fail 'imported immutable image reference is absent'
+    sudo -n k3s ctr -n k8s.io content get "${reference#*@}" | sha256sum |
+      awk -v expected="${reference#*@sha256:}" '$1 == expected { found=1 } END { exit !found }' ||
+      fail 'imported image manifest digest mismatch'
+  done
+  jq -n --arg revision "$source_revision" \
+    --arg authority "$(<"$state_directory/internal-rpc-authority-image")" \
+    --arg admission "$(<"$state_directory/image-admission-image")" \
+    '{version:1,profile:"single-host-k3s-image-store",revision:$revision,authorityImage:$authority,imageAdmissionImage:$admission,digestReadback:true}' \
+    >"$state_directory/authority-security-images.json"
+  chmod 0600 "$state_directory/authority-security-images.json"
+  printf 'Authority security images imported with exact digest readback for source %s\n' "$source_revision"
+  exit 0
+fi
 
 # Совместимый reader обновляется отдельно от signer/registry и других runtime images.
 if [[ "$component" == image-admission ]]; then

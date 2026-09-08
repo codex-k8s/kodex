@@ -24,7 +24,7 @@ const (
 	keyStatusCurrent               = "CURRENT"
 	keyStatusPrevious              = "PREVIOUS"
 	maxProofTTL                    = 15 * time.Second
-	authorizationMetadataLKGWindow = 2 * time.Minute
+	authorizationMetadataLKGWindow = 30 * time.Second
 )
 
 var (
@@ -45,6 +45,7 @@ type Authority struct {
 	activationMu         sync.RWMutex
 	attestationReceiptID string
 	metadataValidUntil   time.Time
+	metadataReceiptID    string
 }
 
 // KeyMaterial объединяет ключ подписи и доверенные ключи проверки.
@@ -156,8 +157,8 @@ func (authority *Authority) Issue(
 	proofCompact string,
 	requestDigest string,
 ) (string, model.AuthorizationClaims, error) {
-	now := authority.now().UTC().Truncate(time.Second)
-	metadataValidUntil, err := authority.freshMetadataDeadline(now)
+	now := authority.now().UTC()
+	_, err := authority.freshMetadataDeadline(ctx)
 	if err != nil {
 		return "", model.AuthorizationClaims{}, err
 	}
@@ -302,11 +303,7 @@ func (authority *Authority) Issue(
 			err,
 		)
 	}
-	expiresAt := authorizationExpiry(
-		now,
-		time.Duration(binding.TokenTTLSeconds)*time.Second,
-		metadataValidUntil,
-	)
+	expiresAt := now.Truncate(time.Second).Add(time.Duration(binding.TokenTTLSeconds) * time.Second)
 	claims := model.AuthorizationClaims{
 		Version:  model.ContractVersion,
 		Issuer:   binding.Issuer,
@@ -352,6 +349,9 @@ func (authority *Authority) Issue(
 			err,
 		)
 	}
+	if err := authority.registerIssuedContext(ctx, compact, claims, ""); err != nil {
+		return "", model.AuthorizationClaims{}, err
+	}
 	return compact, claims, nil
 }
 
@@ -360,8 +360,8 @@ func (authority *Authority) IssueContinuation(
 	ctx context.Context,
 	operationID, parentCompact, requestID, correlationID, requestDigest string,
 ) (string, model.AuthorizationClaims, error) {
-	now := authority.now().UTC().Truncate(time.Second)
-	metadataValidUntil, err := authority.freshMetadataDeadline(now)
+	now := authority.now().UTC()
+	metadataValidUntil, err := authority.freshMetadataDeadline(ctx)
 	if err != nil {
 		return "", model.AuthorizationClaims{}, err
 	}
@@ -422,6 +422,9 @@ func (authority *Authority) IssueContinuation(
 			return "", model.AuthorizationClaims{}, failure.Wrap(failure.ReplayDetected, "continuation replay rejected", err)
 		}
 		return "", model.AuthorizationClaims{}, failure.Wrap(failure.PersistenceUnavailable, "continuation replay store unavailable", err)
+	}
+	if err := authority.registerIssuedContext(ctx, compact, claims, parentDigest); err != nil {
+		return "", model.AuthorizationClaims{}, err
 	}
 	return compact, claims, nil
 }
@@ -492,9 +495,7 @@ func (authority *Authority) Verify(
 	downstreamSPIFFEID string,
 	observedRequestDigest string,
 ) (model.AuthorizationClaims, error) {
-	if _, err := authority.freshMetadataDeadline(
-		authority.now().UTC().Truncate(time.Second),
-	); err != nil {
+	if _, err := authority.freshMetadataDeadline(ctx); err != nil {
 		return model.AuthorizationClaims{}, err
 	}
 	header, err := internalrpcauth.ParseProtectedHeader(compact)
@@ -542,7 +543,7 @@ func (authority *Authority) Verify(
 			"operation is not allowed",
 		)
 	}
-	now := authority.now().UTC().Truncate(time.Second)
+	now := authority.now().UTC()
 	if err := validateAuthorizationTimes(now, claims, binding, authority.policy.AllowedClockSkewSeconds); err != nil {
 		return model.AuthorizationClaims{}, failure.Wrap(
 			failure.Unauthenticated,
@@ -592,11 +593,13 @@ func (authority *Authority) Verify(
 		ctx,
 		authority.SnapshotState(),
 		repository.Reservation{
-			Kind:      repository.ReservationAuthorizationContext,
-			ScopeID:   binding.TargetWorkloadID,
-			JTI:       claims.JTI,
-			Digest:    hex.EncodeToString(tokenDigest[:]),
-			ExpiresAt: claims.ExpiryTime(),
+			Kind:             repository.ReservationAuthorizationContext,
+			CallerWorkloadID: claims.Caller.WorkloadID,
+			SignerGeneration: claims.SignerGeneration,
+			ScopeID:          binding.TargetWorkloadID,
+			JTI:              claims.JTI,
+			Digest:           hex.EncodeToString(tokenDigest[:]),
+			ExpiresAt:        claims.ExpiryTime(),
 		},
 	); err != nil {
 		switch {
@@ -705,10 +708,9 @@ func (authority *Authority) ActivateSnapshot(
 	}
 	authority.activationMu.Lock()
 	authority.attestationReceiptID = attestationReceiptID
-	authority.metadataValidUntil = authority.now().UTC().Truncate(time.Second).
-		Add(authorizationMetadataLKGWindow)
 	authority.activationMu.Unlock()
-	return nil
+	_, err := authority.freshMetadataDeadline(ctx)
+	return err
 }
 
 // SnapshotState возвращает фактически обслуживаемое состояние снимка.
@@ -804,6 +806,10 @@ func validateAuthorizationTimes(
 	binding model.OperationBinding,
 	allowedClockSkewSeconds int64,
 ) error {
+	if !now.Before(claims.ExpiryTime()) {
+		return errors.New("authorization context expired")
+	}
+
 	maximumTTL := time.Duration(binding.TokenTTLSeconds) * time.Second
 	actualTTL := maximumTTL
 	if binding.Continuation != nil {
@@ -841,25 +847,45 @@ func deterministicContinuationJTI(parentJTI, operationID, requestID string) stri
 
 // Ready подтверждает готовность хранилища и активированного снимка.
 func (authority *Authority) Ready(ctx context.Context) error {
-	if _, err := authority.freshMetadataDeadline(
-		authority.now().UTC().Truncate(time.Second),
-	); err != nil {
+	if _, err := authority.freshMetadataDeadline(ctx); err != nil {
 		return err
 	}
 	return authority.store.Ready(ctx, authority.SnapshotState())
 }
 
-func (authority *Authority) freshMetadataDeadline(now time.Time) (time.Time, error) {
-	authority.activationMu.RLock()
-	validUntil := authority.metadataValidUntil
-	authority.activationMu.RUnlock()
-	if validUntil.IsZero() || !now.Before(validUntil) {
-		return time.Time{}, failure.New(
-			failure.PersistenceUnavailable,
-			"authorization metadata last-known-good window expired",
-		)
+func (authority *Authority) freshMetadataDeadline(ctx context.Context) (time.Time, error) {
+	started := authority.now()
+	state := authority.SnapshotState()
+	if state.AttestationReceiptID == "" {
+		return time.Time{}, failure.New(failure.PersistenceUnavailable, "authorization snapshot is not activated")
 	}
-	return validUntil, nil
+	freshness, err := authority.store.Freshness(ctx, state)
+	if err != nil {
+		return time.Time{}, failure.Wrap(failure.PersistenceUnavailable, "authorization snapshot freshness unavailable", err)
+	}
+	remaining := freshness.ValidUntil.Sub(freshness.ObservedAt)
+	if !uuidPattern.MatchString(freshness.ReceiptID) || remaining <= 0 || remaining > authorizationMetadataLKGWindow {
+		return time.Time{}, failure.New(failure.PersistenceUnavailable, "authorization metadata freshness rejected")
+	}
+	// До запроса сохраняется monotonic clock: сетевой RTT расходует, а не
+	// продлевает остаток, выданный DB clock. Повтор receipt не обновляет lease.
+	deadline := started.Add(remaining)
+	authority.activationMu.Lock()
+	if authority.metadataReceiptID == freshness.ReceiptID &&
+		!authority.metadataValidUntil.IsZero() && authority.metadataValidUntil.Before(deadline) {
+		deadline = authority.metadataValidUntil
+	}
+	// Freshness разрешает только exact source/key/policy/signer этого workload.
+	// Другой Pod может обновить общий watermark: рабочий accept использует тот
+	// же authoritative receipt, что readiness. Старые issued bindings неизменны.
+	authority.attestationReceiptID = freshness.ReceiptID
+	authority.metadataReceiptID = freshness.ReceiptID
+	authority.metadataValidUntil = deadline
+	authority.activationMu.Unlock()
+	if !authority.now().Before(deadline) {
+		return time.Time{}, failure.New(failure.PersistenceUnavailable, "authorization metadata last-known-good window expired")
+	}
+	return deadline, nil
 }
 
 func authorizationExpiry(now time.Time, ttl time.Duration, validUntil time.Time) time.Time {
@@ -867,7 +893,7 @@ func authorizationExpiry(now time.Time, ttl time.Duration, validUntil time.Time)
 	if validUntil.Before(expiresAt) {
 		return validUntil
 	}
-	return expiresAt
+	return expiresAt.UTC().Truncate(time.Second)
 }
 
 func newUUID() (string, error) {
@@ -880,4 +906,16 @@ func newUUID() (string, error) {
 	encoded := hex.EncodeToString(value[:])
 	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
 		encoded[16:20] + "-" + encoded[20:32], nil
+}
+
+func (authority *Authority) registerIssuedContext(ctx context.Context, compact string, claims model.AuthorizationClaims, parentDigest string) error {
+	digest := sha256.Sum256([]byte(compact))
+	binding := repository.IssuedContextBinding{JTI: claims.JTI, Digest: hex.EncodeToString(digest[:]), CallerWorkloadID: claims.Caller.WorkloadID, TargetWorkloadID: claims.Target.WorkloadID, IssuedAt: time.Unix(claims.IssuedAt, 0), ExpiresAt: claims.ExpiryTime(), ParentDigest: parentDigest}
+	if claims.Continuation != nil {
+		binding.ParentJTI = claims.Continuation.ParentJTI
+	}
+	if err := authority.store.RegisterIssuedContext(ctx, authority.SnapshotState(), binding); err != nil {
+		return failure.Wrap(failure.PersistenceUnavailable, "issued context registration unavailable", err)
+	}
+	return nil
 }

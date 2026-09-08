@@ -404,7 +404,7 @@ func (config Config) Validate() error {
 		config.ShutdownTimeout < time.Second ||
 		config.ShutdownTimeout > 30*time.Second ||
 		config.SnapshotReloadInterval < time.Second ||
-		config.SnapshotReloadInterval > time.Minute ||
+		config.SnapshotReloadInterval > 5*time.Second ||
 		config.ReplayCleanupInterval < 10*time.Second ||
 		config.ReplayCleanupInterval > 10*time.Minute {
 		return errors.New("authority duration is outside the allowed boundary")

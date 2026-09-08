@@ -1,20 +1,29 @@
 -- name: verifier__accept_context :one
-WITH exact_snapshot AS MATERIALIZED (
-    SELECT true AS accepted
+WITH issued_binding AS MATERIALIZED (
+ SELECT internal_rpc_authority.validate_issued_context_binding(
+     @jti, @canonical_digest_sha256, @caller_workload_id, @target_workload_id,
+     @source_revision, @source_digest_sha256, @key_set_revision, @policy_revision, @context_signer_generation
+ ) AS accepted
+), exact_snapshot AS MATERIALIZED (
+    SELECT true AS accepted, @attestation_receipt_id::uuid AS receipt_id
     FROM internal_rpc_authority.authority_snapshot_watermarks AS current
-    WHERE current.target_workload_id = @target_workload_id
+    WHERE (SELECT accepted FROM issued_binding)
+      AND current.target_workload_id = @target_workload_id
       AND current.source_revision = @source_revision
       AND current.source_digest_sha256 = @source_digest_sha256
       AND current.key_set_revision = @key_set_revision
       AND current.policy_revision = @policy_revision
       AND current.signer_generation = @signer_generation
       AND internal_rpc_authority.runtime_restore_fence_allows_work()
-      AND internal_rpc_authority.validate_snapshot_attestation_receipt(
-          @attestation_receipt_id,
+      AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
+          @attestation_receipt_id, @target_workload_id, @source_revision, @source_digest_sha256
+      ) IS NOT NULL
+      AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
+          current.readback_attestation_receipt_id,
           @target_workload_id,
           @source_revision,
           @source_digest_sha256
-      )
+      ) IS NOT NULL
 ),
 advanced_snapshot AS (
     INSERT INTO internal_rpc_authority.authority_snapshot_watermarks (
@@ -36,14 +45,15 @@ advanced_snapshot AS (
         @signer_generation,
         @attestation_receipt_id,
         clock_timestamp()
-    WHERE NOT EXISTS (SELECT 1 FROM exact_snapshot)
+    WHERE (SELECT accepted FROM issued_binding)
+      AND NOT EXISTS (SELECT 1 FROM exact_snapshot)
       AND internal_rpc_authority.runtime_restore_fence_allows_work()
-      AND internal_rpc_authority.validate_snapshot_attestation_receipt(
+      AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
           @attestation_receipt_id,
           @target_workload_id,
           @source_revision,
           @source_digest_sha256
-      )
+      ) IS NOT NULL
       AND (
           (
               NOT EXISTS (
@@ -139,12 +149,12 @@ advanced_snapshot AS (
           OR internal_rpc_authority.authority_snapshot_watermarks.readback_attestation_receipt_id
               IS DISTINCT FROM EXCLUDED.readback_attestation_receipt_id
       )
-    RETURNING true AS accepted
+    RETURNING true AS accepted, readback_attestation_receipt_id AS receipt_id
 ),
 accepted_snapshot AS (
-    SELECT accepted FROM exact_snapshot
+    SELECT accepted, receipt_id FROM exact_snapshot
     UNION ALL
-    SELECT accepted FROM advanced_snapshot
+    SELECT accepted, receipt_id FROM advanced_snapshot
 ),
 reserved AS (
     INSERT INTO internal_rpc_authority.authority_replay_reservations (
@@ -160,8 +170,14 @@ reserved AS (
         @expires_at
     FROM accepted_snapshot
     ON CONFLICT (target_workload_id, jti) DO NOTHING
-    RETURNING true
+    RETURNING internal_rpc_authority.validate_issued_context_binding(
+        @jti, @canonical_digest_sha256, @caller_workload_id, @target_workload_id,
+        @source_revision, @source_digest_sha256, @key_set_revision, @policy_revision, @context_signer_generation
+    ) AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
+        (SELECT receipt_id FROM accepted_snapshot LIMIT 1),
+        @target_workload_id, @source_revision, @source_digest_sha256
+    ) IS NOT NULL AS still_valid
 )
 SELECT
-    EXISTS (SELECT 1 FROM accepted_snapshot),
-    EXISTS (SELECT 1 FROM reserved);
+    EXISTS (SELECT 1 FROM accepted_snapshot) AND NOT EXISTS (SELECT 1 FROM reserved WHERE NOT still_valid),
+    EXISTS (SELECT 1 FROM reserved WHERE still_valid);

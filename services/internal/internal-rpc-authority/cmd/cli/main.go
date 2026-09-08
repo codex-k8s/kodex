@@ -24,8 +24,11 @@ var migrations embed.FS
 type command string
 
 const (
-	commandUp     command = "up"
-	commandStatus command = "status"
+	commandUp                command = "up"
+	commandStatus            command = "status"
+	commandFreshnessStatus   command = "freshness-status"
+	commandFreshnessWatch    command = "freshness-watch"
+	commandFreshnessActivate command = "freshness-activate"
 )
 
 func main() {
@@ -43,6 +46,10 @@ func main() {
 
 func run(ctx context.Context, arguments []string) error {
 	action, err := parseCommand(arguments)
+	if err != nil {
+		return err
+	}
+	options, err := parseFreshnessOptions(action, arguments)
 	if err != nil {
 		return err
 	}
@@ -83,6 +90,8 @@ func run(ctx context.Context, arguments []string) error {
 		return errors.New("configure PostgreSQL migration dialect")
 	}
 	switch action {
+	case commandFreshnessStatus, commandFreshnessWatch, commandFreshnessActivate:
+		return runFreshness(ctx, database, action, options, os.Stdout)
 	case commandUp:
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			return fmt.Errorf("apply internal-rpc-authority migrations: %w", err)
@@ -96,14 +105,17 @@ func run(ctx context.Context, arguments []string) error {
 }
 
 func parseCommand(arguments []string) (command, error) {
+	if len(arguments) == 7 && arguments[0] == string(commandFreshnessActivate) {
+		return commandFreshnessActivate, nil
+	}
 	if len(arguments) != 1 {
-		return "", errors.New("usage: internal-rpc-authority-cli <up|status>")
+		return "", errors.New("usage: internal-rpc-authority-cli <up|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS>")
 	}
 	switch command(arguments[0]) {
-	case commandUp, commandStatus:
+	case commandUp, commandStatus, commandFreshnessStatus, commandFreshnessWatch:
 		return command(arguments[0]), nil
 	default:
-		return "", errors.New("usage: internal-rpc-authority-cli <up|status>")
+		return "", errors.New("usage: internal-rpc-authority-cli <up|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS>")
 	}
 }
 

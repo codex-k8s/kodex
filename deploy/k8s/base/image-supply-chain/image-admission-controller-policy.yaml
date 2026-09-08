@@ -214,7 +214,8 @@ spec:
            variables.pod.initContainers[0].command ==
              ['/usr/local/bin/internal-rpc-authority-socket-init'] &&
            variables.pod.initContainers[0].name == 'internal-rpc-authority-socket-init' &&
-           variables.pod.initContainers[1].image == params.spec.authorityImage &&
+           variables.pod.initContainers[1].image ==
+             (has(params.spec.authorityIssuerImage) ? params.spec.authorityIssuerImage : params.spec.authorityImage) &&
            variables.pod.initContainers[1].command ==
              ['/usr/local/bin/internal-rpc-authority-issuer'] &&
            variables.pod.initContainers[1].name == 'internal-rpc-authority-issuer' &&

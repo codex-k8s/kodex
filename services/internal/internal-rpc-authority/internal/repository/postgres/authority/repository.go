@@ -121,6 +121,8 @@ func (store *Store) AcceptVerification(
 	for key, value := range contextReservationArgs(reservation) {
 		args[key] = value
 	}
+	args["caller_workload_id"] = reservation.CallerWorkloadID
+	args["context_signer_generation"] = reservation.SignerGeneration
 	var snapshotAccepted bool
 	var replayAccepted bool
 	if err := store.pool.QueryRow(
@@ -223,6 +225,10 @@ func (store *Store) DeleteExpired(
 	var query string
 	switch kind {
 	case repository.ReservationAuthorityProof:
+		var removed int64
+		if err := store.pool.QueryRow(ctx, store.queries.contextBindingsCleanup, pgx.StrictNamedArgs{"caller_workload_id": store.targetWorkloadID}).Scan(&removed); err != nil {
+			return fmt.Errorf("cleanup issued context bindings: %w", err)
+		}
 		query = store.queries.proofReservationsDeleteExpired
 	case repository.ReservationAuthorizationContext:
 		query = store.queries.contextReservationsDeleteExpired
@@ -326,4 +332,50 @@ func randomUUID() (string, error) {
 	encoded := hex.EncodeToString(value[:])
 	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" +
 		encoded[16:20] + "-" + encoded[20:32], nil
+}
+
+// Freshness читает receipt общего workload watermark, а не локальный pod receipt.
+func (store *Store) Freshness(ctx context.Context, state repository.SnapshotState) (repository.SnapshotFreshness, error) {
+	var result repository.SnapshotFreshness
+	var deadline *time.Time
+	err := store.pool.QueryRow(ctx, store.queries.verifierFreshness,
+		snapshotReadinessArgs(store.targetWorkloadID, state)).Scan(&result.ReceiptID, &deadline, &result.ObservedAt)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && deadline == nil {
+		return repository.SnapshotFreshness{}, repository.ErrNotReady
+	}
+	if err != nil {
+		return repository.SnapshotFreshness{}, fmt.Errorf("read snapshot freshness: %w", err)
+	}
+	result.ValidUntil = *deadline
+	if !result.ObservedAt.Before(result.ValidUntil) {
+		return repository.SnapshotFreshness{}, repository.ErrNotReady
+	}
+	return result, nil
+}
+
+// RegisterIssuedContext не повторяет UNKNOWN: исходный JTI остаётся единственным
+// намерением, proof reservation не позволяет автоматически выпустить второй.
+func (store *Store) RegisterIssuedContext(ctx context.Context, state repository.SnapshotState, binding repository.IssuedContextBinding) error {
+	var parent *string
+	if binding.ParentJTI != "" {
+		parent = &binding.ParentJTI
+	}
+	args := pgx.StrictNamedArgs{
+		"jti": binding.JTI, "canonical_digest_sha256": binding.Digest, "caller_workload_id": binding.CallerWorkloadID,
+		"target_workload_id": binding.TargetWorkloadID, "source_revision": state.SourceRevision, "source_digest_sha256": state.SourceDigestSHA256,
+		"key_set_revision": state.KeySetRevision, "policy_revision": state.PolicyRevision, "signer_generation": state.SignerGeneration,
+		"issued_at": binding.IssuedAt, "expires_at": binding.ExpiresAt, "parent_jti": parent, "parent_digest_sha256": binding.ParentDigest,
+	}
+	var accepted bool
+	if err := store.pool.QueryRow(ctx, store.queries.contextRegisterIssued, args).Scan(&accepted); err != nil {
+		// После неопределённого результата читается только тот же exact binding.
+		// Истёкший/cancelled context не получает нового бюджета или нового JTI.
+		if readErr := store.pool.QueryRow(ctx, store.queries.contextIssuedReadback, args).Scan(&accepted); readErr != nil || !accepted {
+			return fmt.Errorf("register issued context outcome uncertain: %w", err)
+		}
+	}
+	if !accepted {
+		return repository.ErrNotReady
+	}
+	return nil
 }
