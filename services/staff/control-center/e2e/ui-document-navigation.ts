@@ -3,9 +3,11 @@ export type NavigationAction = "GOTO" | "RELOAD" | "CLOSE";
 type Navigation = {
   action: NavigationAction;
   start: number;
+  startOrder: number;
   from?: number;
   to?: number;
   end?: number;
+  endOrder?: number;
   complete: boolean;
   ambiguous: boolean;
 };
@@ -20,11 +22,13 @@ export class DocumentNavigation<T extends object> {
       mainFrame: boolean;
       started: number;
       terminal?: number;
+      terminalOrder?: number;
       intent?: number;
     }
   >();
   private readonly navigations = new Map<number, Navigation>();
   private overflow = 0;
+  private order = 0;
   document(id: string, at = Date.now()): void {
     if (!documentID.test(id) || this.documents.has(id)) return;
     if (this.documents.size >= 512) {
@@ -57,7 +61,10 @@ export class DocumentNavigation<T extends object> {
   }
   terminal(request: T, at = Date.now()): void {
     const value = this.requests.get(request);
-    if (value) value.terminal = at;
+    if (value && value.terminal === undefined) {
+      value.terminal = at;
+      value.terminalOrder = ++this.order;
+    }
   }
   begin(action: NavigationAction, at = Date.now()): number {
     if (this.navigations.size >= 512) {
@@ -74,6 +81,7 @@ export class DocumentNavigation<T extends object> {
     this.navigations.set(id, {
       action,
       start: at,
+      startOrder: ++this.order,
       from: this.current,
       complete: false,
       ambiguous: active.length > 0,
@@ -100,6 +108,7 @@ export class DocumentNavigation<T extends object> {
     const value = this.navigations.get(id);
     if (!value || value.end !== undefined) return;
     value.end = at;
+    value.endOrder = ++this.order;
     value.complete = complete;
     if (!sameDocument && value.action !== "CLOSE" && value.to === undefined)
       this.current = undefined;
@@ -129,6 +138,10 @@ export class DocumentNavigation<T extends object> {
         !!intent &&
         value?.terminal !== undefined &&
         intent.end !== undefined &&
+        value.terminalOrder !== undefined &&
+        intent.endOrder !== undefined &&
+        value.terminalOrder >= intent.startOrder &&
+        value.terminalOrder <= intent.endOrder &&
         value.terminal >= intent.start &&
         value.terminal <= intent.end,
     };

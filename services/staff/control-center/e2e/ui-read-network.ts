@@ -438,6 +438,7 @@ export async function installReadNetworkObserver(
     }
   };
   page.close = async (...args: Parameters<typeof close>) => {
+    if (page.isClosed()) return close(...args);
     const id = observer.navigation("CLOSE");
     try {
       await close(...args);

@@ -103,3 +103,15 @@ it("failed navigation with unknown resulting document invalidates subsequent pro
   c.end(next, true, 8);
   expect(c.confirmed(r)).toBe(false);
 });
+
+it("same-millisecond late failure is rejected by observation order", () => {
+  const c = new DocumentNavigation<object>(),
+    r = {};
+  c.document(oldDocument, 1);
+  c.request(r, true, 2);
+  const intent = c.begin("GOTO", 3);
+  c.document(newDocument, 4);
+  c.end(intent, true, 5);
+  c.terminal(r, 5);
+  expect(c.confirmed(r)).toBe(false);
+});
