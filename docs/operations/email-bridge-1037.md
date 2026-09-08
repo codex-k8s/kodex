@@ -901,9 +901,12 @@ cluster UID, Job UID/resourceVersion/spec hash, source revision и SQL digest.
 Apply сначала делает UID/resourceVersion CAS reservation на старой завершённой
 Job; durable intent предшествует reservation и созданию. Имя новой Job фиксировано
 для этой migration: конкурентное создание не приводит ко второй Job. Повтор apply
-после CREATE_INTENT выполняет только readback; UNKNOWN reservation требует
-отдельной диагностики и не разрешает автоматический create. Reservation не
-очищается для обхода этого ограничения. Failed Job и исходные UNKNOWN сохраняются.
+после CREATE_INTENT выполняет только readback; UNKNOWN reservation проверяется тем же `inspect`: exact original UID/spec,
+reservation digest и GET фиксированной Job. `RESERVED_NOT_CREATED` позволяет
+тому же `apply` после свежего authoritative readback продолжить один create,
+не повторяя PATCH. `RESERVATION_NOT_APPLIED` наблюдаем, но не вызывает повторный
+PATCH; нужен новый проверенный план. Чужая reservation или Job без CREATE_INTENT
+не допускают продолжение. Reservation не очищается для обхода ограничений. Failed Job и исходные UNKNOWN сохраняются.
 `RUNNING` не означает PASS: нужны Complete, исходный Job UID/pod spec и exact goose
 version 20260908000300. Логи читаются внутри процесса, наружу выходят только закрытые
 статусы/версии/UID. После успешной migration выполняются CP rollout и controlled

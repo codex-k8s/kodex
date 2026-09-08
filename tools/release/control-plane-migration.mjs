@@ -70,16 +70,37 @@ async function main() {
   const journal = privateJournal(options['--evidence'], { version:1, kind:'CONTROL_PLANE_MIGRATION', planSHA256:fingerprint(plan) });
   try {
     const attempts = journal.events.filter((e) => e.type === 'CREATE_INTENT');
+    const reservations = journal.events.filter((e) => e.type === 'RESERVE_INTENT');
+    const optionalJob = () => { const raw = kube(['-n',namespace,'get','job',plan.job.metadata.name,'--ignore-not-found=true','-o','json']); return raw.trim() ? JSON.parse(raw) : undefined; };
+    const inspectReservation = (actual) => {
+      ensure(actual.metadata.uid === plan.beforeUID && fingerprint(actual.spec) === plan.beforeSpecSHA256, 'MIGRATION_RESERVATION_SCOPE_CHANGED');
+      const marker = actual.metadata.annotations?.[annotation];
+      ensure(!marker || marker === fingerprint(plan), 'MIGRATION_RESERVATION_SCOPE_CHANGED');
+      const existing = optionalJob();
+      if (existing) migrationReadback(existing,plan,'');
+      const result = {status:existing ? 'JOB_EXISTS_WITHOUT_CREATE_INTENT' : marker ? 'RESERVED_NOT_CREATED' : 'RESERVATION_NOT_APPLIED', beforeUID:actual.metadata.uid, resourceVersion:actual.metadata.resourceVersion, jobName:plan.job.metadata.name, ...(existing ? {jobUID:existing.metadata.uid} : {})};
+      journal.append({type:'RESERVATION_READBACK',...result}); return result;
+    };
+    if (phase === 'inspect' && attempts.length === 0) {
+      ensure(reservations.length === 1, 'MIGRATION_RESERVATION_INTENT_REQUIRED');
+      process.stdout.write(`${JSON.stringify(inspectReservation(base()))}\n`); return;
+    }
     if (phase === 'apply' && attempts.length === 0) {
-      ensure(!journal.events.some((e) => ['RESERVE_INTENT', 'UNKNOWN'].includes(e.type)), 'MIGRATION_RESERVATION_REQUIRES_INSPECTION');
       const actual = base(); const rebuilt = planControlPlaneMigration(actual,plan.source,inspectSource,plan.id);
-      ensure(actual.metadata.uid === plan.beforeUID && actual.metadata.resourceVersion === plan.beforeResourceVersion && fingerprint(actual.spec) === plan.beforeSpecSHA256 && fingerprint(rebuilt.job) === fingerprint(plan.job) && fileDigest(`${plan.source.path}/${migrationPath}`) === plan.migrationFileSHA256, 'MIGRATION_PLAN_DRIFT');
+      ensure(actual.metadata.uid === plan.beforeUID && fingerprint(actual.spec) === plan.beforeSpecSHA256 && fingerprint(rebuilt.job) === fingerprint(plan.job) && fileDigest(`${plan.source.path}/${migrationPath}`) === plan.migrationFileSHA256, 'MIGRATION_PLAN_DRIFT');
+      if (reservations.length) {
+        ensure(reservations.length === 1 && inspectReservation(actual).status === 'RESERVED_NOT_CREATED', 'MIGRATION_RESERVATION_NOT_RESUMABLE');
+      } else {
+        ensure(actual.metadata.resourceVersion === plan.beforeResourceVersion && !actual.metadata.annotations?.[annotation], 'MIGRATION_PLAN_DRIFT');
+        ensure(!optionalJob(), 'MIGRATION_JOB_ALREADY_EXISTS');
+      }
       const jobs = JSON.parse(kube(['-n',namespace,'get','jobs','-l','app.kubernetes.io/name=control-plane,app.kubernetes.io/component=migration','-o','json'])).items;
       ensure(jobs.every((j) => j.status?.conditions?.some((c) => ['Complete','Failed'].includes(c.type) && c.status === 'True')), 'MIGRATION_ALREADY_RUNNING');
-      ensure(!actual.metadata.annotations?.[annotation], 'MIGRATION_RESERVATION_EXISTS');
-      const patch = [ {op:'test',path:'/metadata/uid',value:plan.beforeUID}, {op:'test',path:'/metadata/resourceVersion',value:plan.beforeResourceVersion}, {op:'add',path:'/metadata/annotations',value:{...(actual.metadata.annotations ?? {}),[annotation]:fingerprint(plan)}} ];
-      journal.append({type:'RESERVE_INTENT', beforeUID:plan.beforeUID, beforeResourceVersion:plan.beforeResourceVersion});
-      try { const reserved = JSON.parse(kube(['-n',namespace,'patch','job','control-plane-migrate','--type=json','-p',JSON.stringify(patch),'-o','json'])); ensure(reserved.metadata.annotations?.[annotation] === fingerprint(plan), 'MIGRATION_RESERVATION_UNCONFIRMED'); journal.append({type:'RESERVE_ACK',resourceVersion:reserved.metadata.resourceVersion}); } catch(error) { journal.append({type:'UNKNOWN',code:error.message}); throw error; }
+      if (!reservations.length) {
+        const patch = [ {op:'test',path:'/metadata/uid',value:plan.beforeUID}, {op:'test',path:'/metadata/resourceVersion',value:plan.beforeResourceVersion}, {op:'add',path:'/metadata/annotations',value:{...(actual.metadata.annotations ?? {}),[annotation]:fingerprint(plan)}} ];
+        journal.append({type:'RESERVE_INTENT', beforeUID:plan.beforeUID, beforeResourceVersion:plan.beforeResourceVersion});
+        try { const reserved = JSON.parse(kube(['-n',namespace,'patch','job','control-plane-migrate','--type=json','-p',JSON.stringify(patch),'-o','json'])); ensure(reserved.metadata.annotations?.[annotation] === fingerprint(plan), 'MIGRATION_RESERVATION_UNCONFIRMED'); journal.append({type:'RESERVE_ACK',resourceVersion:reserved.metadata.resourceVersion}); } catch(error) { journal.append({type:'UNKNOWN',code:error.message}); throw error; }
+      }
       const job = structuredClone(plan.job); job.metadata.annotations = { [annotation]:fingerprint(plan) };
       journal.append({ type:'CREATE_INTENT', jobName:job.metadata.name });
       try { const created = JSON.parse(kube(['create','-f','-','-o','json'],JSON.stringify(job))); journal.append({type:'CREATE_ACK', jobUID:created.metadata.uid}); } catch(error) { journal.append({type:'UNKNOWN', code:error.message}); throw error; }
