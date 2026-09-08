@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { openSync, writeSync, fsyncSync, closeSync, readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { openSync, writeSync, fsyncSync, closeSync, readFileSync, mkdtempSync, writeFileSync, rmSync, lstatSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -113,7 +113,7 @@ function privateRecord(path, value) {
 
 export function requireUnchangedPlan(saved, current) {
   requireValue(saved.version === 1 && uuid.test(saved.id) &&
-    ["context", "target", "phase", "uid", "resourceVersion", "beforeSpecSHA256", "afterSpecSHA256", "clusterUID", "namespaceUID"]
+    ["context", "target", "phase", "uid", "resourceVersion", "beforeSpecSHA256", "afterSpecSHA256", "clusterUID", "namespaceUID", "handoffProofSHA256"]
       .every((key) => saved[key] === current[key]) &&
     fingerprint(saved.readers) === fingerprint(current.readers), "PLAN_PRECONDITION_CHANGED");
 }
@@ -123,7 +123,7 @@ async function main(args) {
   requireValue(["inspect", "plan", "apply"].includes(command), "INVALID_COMMAND");
   while (args.length) {
     const key = args.shift();
-    requireValue(["--context", "--target", "--phase", "--output", "--plan", "--evidence", "--confirm"].includes(key) &&
+    requireValue(["--context", "--target", "--phase", "--output", "--plan", "--evidence", "--confirm", "--handoff-proof"].includes(key) &&
       !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS"); options[key] = args.shift();
   }
   requireValue(options["--context"] && workers.has(options["--target"]), "CONTEXT_AND_TARGET_REQUIRED");
@@ -186,9 +186,24 @@ async function main(args) {
   const saved = command === "apply" ? JSON.parse(readFileSync(options["--plan"], "utf8")) : null;
   const phase = saved?.phase ?? options["--phase"];
   const plan = planWorkerTransition(deployment, phase);
+  let handoffProofSHA256;
+  if (options["--handoff-proof"]) {
+    requireValue(phase === "rolling" && snapshot.target === "runtime-controller", "HANDOFF_PROFILE_MISMATCH");
+    const file = lstatSync(options["--handoff-proof"]);
+    requireValue(file.isFile() && (file.mode & 0o077) === 0 && file.size > 0 && file.size <= 1 << 20, "PRIVATE_HANDOFF_PROOF_REQUIRED");
+    const proof = JSON.parse(readFileSync(options["--handoff-proof"], "utf8"));
+    const { verifyLeaderHandoff, describePodProcesses } = await import("./runtime-leader-handoff.mjs");
+    snapshot.leaderUID = get("lease", "runtime-controller-leader").spec.holderIdentity;
+    snapshot.podDetails = pods.map(describePodProcesses);
+    snapshot.activeJobs = JSON.parse(kubectl(["--namespace", "kodex-runtime", "get", "jobs", "-o", "json"])).items
+      .filter((job) => !job.status?.conditions?.some((item) => ["Complete", "Failed"].includes(item.type) && item.status === "True")).length;
+    verifyLeaderHandoff(proof, snapshot);
+    handoffProofSHA256 = fingerprint(proof);
+  }
   const identity = { clusterUID, namespaceUID, readers: readerState };
   const safePlan = { version: 1, id: saved?.id ?? randomUUID(), at: new Date().toISOString(), context: options["--context"],
-    ...identity, ...Object.fromEntries(Object.entries(plan).filter(([key]) => key !== "patch")) };
+    ...identity, ...Object.fromEntries(Object.entries(plan).filter(([key]) => key !== "patch")),
+    ...(handoffProofSHA256 ? { handoffProofSHA256 } : {}) };
   if (command === "plan") {
     requireValue(options["--output"] && !options["--confirm"], "PLAN_OUTPUT_REQUIRED");
     privateRecord(options["--output"], safePlan);
@@ -197,25 +212,41 @@ async function main(args) {
   }
   requireValue(options["--confirm"] === "TRANSITION-STAGING-WORKER-GRANTS" && options["--evidence"], "TRANSITION_CONFIRMATION_REQUIRED");
   requireUnchangedPlan(saved, safePlan);
-  if (phase === "rolling") {
-    // Ожидание ограничено; обе реплики продолжают обслуживать рабочие RPC.
-    process.stdout.write("{\"status\":\"OBSERVING_DURABLE_INSTANCES\",\"seconds\":95}\n");
-    await new Promise((done) => setTimeout(done, 95_000));
-    verifyOverlap(database, readDB(), snapshot.target, pods.map((pod) => pod.metadata.uid));
-    sourceCache.clear();
-    requireValue(fingerprint(readers()) === fingerprint(readerState), "READERS_CHANGED_DURING_OBSERVATION");
-    const current = get("deployment", snapshot.target);
-    requireValue(current.metadata.resourceVersion === plan.resourceVersion, "PLAN_PRECONDITION_CHANGED");
-    requireValue(fingerprint(podsFor(current).map((pod) => pod.metadata.uid).sort()) === fingerprint(pods.map((pod) => pod.metadata.uid).sort()), "PODS_CHANGED_DURING_OBSERVATION");
-  }
   const fd = openSync(options["--evidence"], "wx", 0o600);
   const record = (value) => { writeSync(fd, `${JSON.stringify({ at: new Date().toISOString(), id: safePlan.id, target: snapshot.target, phase, ...value })}\n`); fsyncSync(fd); };
   const directory = mkdtempSync(join(tmpdir(), "kodex-grant-transition-"));
   let applied = false;
+  let patchAttempted = false;
   try {
     record({ status: "INTENT", plan: safePlan });
+    if (phase === "rolling" && !handoffProofSHA256) {
+      const probeReaders = async () => {
+        if (snapshot.target !== "control-plane") return;
+        const { probeControlPlaneReader } = await import("./control-plane-reader-probe.mjs");
+        for (const expected of pods) {
+          const actual = get("pod", expected.metadata.name);
+          requireValue(actual.metadata.uid === expected.metadata.uid, "READER_POD_CHANGED");
+          record({ status: "READER_PROBE_ATTEMPT", podUID: actual.metadata.uid });
+          record({ status: "READER_PROBE", result: await probeControlPlaneReader(actual) });
+        }
+      };
+      // CP own-grant readiness вызывается адресно, а не через sticky Service connection.
+      await probeReaders();
+      const before = readDB(); record({ status: "OBSERVATION_START", database: before });
+      process.stdout.write("{\"status\":\"OBSERVING_DURABLE_INSTANCES\",\"seconds\":95}\n");
+      await new Promise((done) => setTimeout(done, 95_000));
+      await probeReaders();
+      const after = readDB(); record({ status: "OBSERVATION_END", database: after });
+      verifyOverlap(before, after, snapshot.target, pods.map((pod) => pod.metadata.uid));
+      sourceCache.clear();
+      requireValue(fingerprint(readers()) === fingerprint(readerState), "READERS_CHANGED_DURING_OBSERVATION");
+      const current = get("deployment", snapshot.target);
+      requireValue(current.metadata.resourceVersion === plan.resourceVersion, "PLAN_PRECONDITION_CHANGED");
+      requireValue(fingerprint(podsFor(current).map((pod) => pod.metadata.uid).sort()) === fingerprint(pods.map((pod) => pod.metadata.uid).sort()), "PODS_CHANGED_DURING_OBSERVATION");
+    }
     const path = join(directory, "patch.json"); writeFileSync(path, JSON.stringify(plan.patch), { mode: 0o600, flag: "wx" });
     record({ status: "PATCH_ATTEMPT" });
+    patchAttempted = true;
     kubectl(["patch", "deployment", snapshot.target, "--type=json", "--patch-file", path]);
     const actual = get("deployment", snapshot.target);
     requireValue(actual.metadata.uid === plan.uid && fingerprint(actual.spec) === plan.afterSpecSHA256, "TRANSITION_READBACK_MISMATCH");
@@ -227,7 +258,7 @@ async function main(args) {
     record({ status: "PASS", pods: podsFor(final).map((pod) => ({ uid: pod.metadata.uid, name: pod.metadata.name })), database: readDB() });
     process.stdout.write(`${JSON.stringify({ status: "PASS", id: safePlan.id, target: snapshot.target, phase })}\n`);
   } catch {
-    record({ status: applied ? "FAIL" : "UNKNOWN", code: "AUTHORITATIVE_READBACK_REQUIRED" }); throw new Error("AUTHORITATIVE_READBACK_REQUIRED");
+    record({ status: !patchAttempted || applied ? "FAIL" : "UNKNOWN", code: "AUTHORITATIVE_READBACK_REQUIRED" }); throw new Error("AUTHORITATIVE_READBACK_REQUIRED");
   } finally { closeSync(fd); rmSync(directory, { recursive: true, force: true }); }
 }
 

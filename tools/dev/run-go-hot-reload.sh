@@ -57,6 +57,7 @@ air_is_usable || fail 'Air executable is unavailable'
 
 runtime_root="/tmp/kodex-dev-$name"
 config="$runtime_root/air.toml"
+kill_delay=$(sh "$repository_root/tools/dev/go-shutdown-budget.sh" "$name")
 entrypoint="\"$runtime_root/build/main\""
 for argument in "$@"; do
   printf '%s' "$argument" | grep -Eq '^[A-Za-z0-9._:/=-]+$' || fail 'process argument is invalid'
@@ -79,7 +80,7 @@ poll = true
 poll_interval = 500
 stop_on_error = true
 send_interrupt = true
-kill_delay = "90s"
+kill_delay = "$kill_delay"
 # Локальные sidecar и service процессы могут стартовать раньше соседней
 # зависимости во время одновременного apply. Air повторяет только запуск уже
 # собранного бинаря; production lifecycle этим профилем не изменяется.

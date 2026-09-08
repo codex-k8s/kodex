@@ -108,7 +108,7 @@ test("persisted plan rejects target, reader, cluster and CAS drift before any pa
     context: "staging", clusterUID: uid, namespaceUID: otherUID,
     readers: { uid, specSHA256: "reader-spec", pods: [{ uid: otherUID, source: { revision: "exact-reader" } }] } };
   requireUnchangedPlan(plan, structuredClone(plan));
-  for (const key of ["context", "target", "phase", "uid", "resourceVersion", "beforeSpecSHA256", "afterSpecSHA256", "clusterUID", "namespaceUID"]) {
+  for (const key of ["context", "target", "phase", "uid", "resourceVersion", "beforeSpecSHA256", "afterSpecSHA256", "clusterUID", "namespaceUID", "handoffProofSHA256"]) {
     const current = structuredClone(plan); current[key] = "changed";
     assert.throws(() => requireUnchangedPlan(plan, current), /PLAN_PRECONDITION_CHANGED/);
   }

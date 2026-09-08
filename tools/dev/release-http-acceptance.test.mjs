@@ -76,3 +76,31 @@ test("HTML negotiation is distinct from JSON and real HTML failures remain failu
   assert.equal(failed.result.rounds, 6);
   assert.equal(JSON.stringify(failed.rows).includes("private fixture"), false);
 });
+
+test("HTML and session probe proxy rotation is adopted before the next request", async () => {
+  for (const rotatePath of ["/", "/api/v1/session"]) {
+    let clock = Date.now(), rotated = false, sessionReads = 0, calls = 0;
+    const initial = structuredClone(storage);
+    initial.cookies.push({ name: "_kodex_control_center_oauth2", value: "synthetic-old", domain: "control.disposable.invalid",
+      path: "/", secure: true, httpOnly: true, sameSite: "Lax", expires: clock / 1000 + 3600 });
+    const result = await observeHTTPRelease({ origin, storage: initial, durationSeconds: 6, now: () => clock,
+      wait: async (milliseconds) => { clock += milliseconds; }, fetchAPI: async (url, options) => {
+        calls++;
+        assert.ok(new Headers(options.headers).get("cookie").includes(`_kodex_control_center_oauth2=synthetic-${rotated ? "new" : "old"}`));
+        assert.equal(options.method ?? "GET", "GET");
+        if (url.pathname === "/api/v1/session") sessionReads++;
+        const headers = new Headers({ "Content-Type": url.pathname === "/" ? "text/html" : "application/json", "Cache-Control": "no-store" });
+        if (!rotated && url.pathname === rotatePath && (rotatePath === "/" || sessionReads > 1)) {
+          rotated = true;
+          headers.append("Set-Cookie", "_kodex_control_center_oauth2=synthetic-new; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=3600");
+        }
+        const value = { generation: "11111111-1111-4111-8111-111111111111", version: 1, sessionRevision: 2,
+          renewalMode: "BACKEND_REFRESH", serverTime: new Date(clock).toISOString(), accessExpiresAt: new Date(clock + 600000).toISOString(),
+          expiresAt: new Date(clock + 1800000).toISOString(), absoluteExpiresAt: new Date(clock + 3600000).toISOString(), renewAfter: new Date(clock + 480000).toISOString() };
+        return new Response(url.pathname === "/" ? "<html></html>" : JSON.stringify(url.pathname === "/api/v1/session" ? value : {}), { headers });
+      } });
+    assert.equal(result.status, "PASS");
+    assert.equal(rotated, true);
+    assert.equal(calls, 16); // 12 probes, 2 bootstrap, initial metadata и rotation readback.
+  }
+});

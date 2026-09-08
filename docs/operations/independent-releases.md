@@ -4,7 +4,7 @@ title: Независимые релизы и переход worker grants
 type: operations
 status: approved
 owner: manager
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-08
 ---
 
@@ -90,7 +90,8 @@ Read-only `inspect` проверяет всех CP Pods через владел�
 
 `worker-grant-readback.sql` — фиксированное чтение в `READ ONLY` transaction
 с `statement_timeout=10s` через существующий SRE local PostgreSQL entrypoint.
-Один SELECT читает generation floors и instance watermarks из одного snapshot.
+Один SELECT читает generation floors, instance watermarks и количества активных
+runs/claimed runtime leases из одного snapshot.
 Результат содержит только workload, Pod UID, числовые revisions/generations и
 timestamps; не содержит токены, подписи, payload или пользовательские данные.
 SQL запускается только для этого Issue/runbook; произвольные SQL не добавляются
@@ -101,7 +102,7 @@ SQL запускается только для этого Issue/runbook; про�
 | inspect / plan | SRE, выданный exact kubecontext | CP readers совместимы, additive schema доступна, writer source известен | Только private metadata, без domain event; authoritative read — Deployment + PostgreSQL |
 | activate | SRE → Kubernetes JSON Patch, UID/resourceVersion CAS | Один здоровый v1 Pod, Recreate; каждому writer назначается Downward API Pod UID | Новый Pod выпускает v2; одна временная Recreate-пауза должна быть отражена в HTTP/task evidence |
 | overlap | Тот же SRE CAS | v2 уже включён; один здоровый Pod → две реплики без изменения template | Проверить рабочие RPC обеих реплик и durable registration; Ready сам по себе недостаточен |
-| rolling | Тот же SRE CAS | Два одинаковых Pod UID в наблюдении 95s; оба durable watermark растут, поколение неизменно, оба grants не истекли | Только стратегия RollingUpdate/maxUnavailable0/maxSurge1; отсутствие активности закрыто блокирует переход |
+| rolling | Тот же SRE CAS | Два неизменных Pod UID: 95s продвижения обоих durable watermark либо отдельное свежее A→B→A доказательство для idle runtime-controller; поколение неизменно, grants не истекли | Только стратегия RollingUpdate/maxUnavailable0/maxSurge1; отсутствие доказательства закрыто блокирует переход |
 | settle | Тот же SRE CAS | Две здоровые v2 реплики с RollingUpdate | Возврат к одной реплике; grants/revocation/history не откатываются |
 | CAS drift / потеря ACK / timeout | SRE, без автоматического повтора | План или actual readback не совпал / исход PATCH неизвестен | Сохранить INTENT/PATCH_ATTEMPT/APPLIED и terminal evidence; read-only inspect, новый план только после выяснения исхода |
 
@@ -145,6 +146,77 @@ bash scripts/tests/control-plane-postgres-test.sh '^(TestBootstrapComponent|Test
 
 Context7: `/kubernetes/website` (Downward API, Deployment, JSON Patch CAS),
 `/websites/postgresql_17` (read-only transaction и snapshot одного SELECT).
+
+#### Адресное доказательство CP и передача лидерства
+
+Для CP `rolling` вызывает существующий mTLS
+`AuthorityProofResolverService/CheckReadiness` на каждом точном Pod до и после
+95s. Этот контракт проверяет собственный подписанный grant reader и durable
+owner state; он не является business command и не принимает изготовленный
+bearer. Инструмент сопоставляет Kubernetes containerID/Pod UID с CRI PID,
+читает CA/certificate/key через mount namespace этого контейнера и проверяет
+точный server hostname и SPIFFE client identity. Ключ остаётся в памяти SRE
+процесса, очищается после вызова и не передаётся в argv, QA либо artifacts.
+Проверка из host network не доказывает DNS/NetworkPolicy рабочего клиента.
+Журнал сохраняет попытку RPC до вызова и metadata после; ошибка до PATCH —
+FAIL, неизвестный исход PATCH — UNKNOWN. Повтор старого плана запрещён.
+
+Runtime-controller вызывает рабочие RPC только как leader, поэтому обычное
+ожидание двух advancing rows не проверяет standby. Для #1254 отдельный
+`runtime-leader-handoff.mjs` допускает только idle профиль: нет активных runs,
+claimed leases и незавершённых Jobs. Он фиксирует lease holder, Deployment,
+два Pod UID, application и native sidecar restart counts и generation floor.
+Перед каждым сигналом повторяется preflight; свежая работа закрыто блокирует
+продолжение. Штатный SIGTERM получает PID1 Air только текущего leader с
+проверкой Downward API UID и пути бинаря. Kubernetes восстанавливает тот же
+application container; grant agents, leases и файлы вручную не изменяются.
+
+| Переход | Авторитетный результат | Ошибка / отсутствие события |
+| --- | --- | --- |
+| A→B | Обычный drain/release Kubernetes Lease; B выполняет защищённый RPC и регистрирует собственный durable instance | Потеря exec ACK не повторяет сигнал; readback того же Pod до 240s |
+| B→A | A вновь становится leader, его revision продвигается после второго handoff | Новая работа, замена Pod/reader, sidecar restart или floor drift закрыто останавливают proof |
+| Proof→rolling | PASS моложе 300s, тот же cluster/Deployment/spec/Pods/processes и A leader; hash proof закреплён в plan | Новый activity/lease, stale proof или CAS drift не разрешают PATCH |
+
+Отдельного domain event нет: authoritative read — Kubernetes Lease/Pod и
+PostgreSQL watermarks. Fsync journal хранит SIGNAL_INTENT, неопределённый ACK
+и readback; повторного сигнала после timeout нет. Это доказательство idle
+restart recovery, не сохранения активной задачи/внешнего эффекта. Такие
+сценарии по-прежнему обязательны в #1223.
+
+```bash
+node tools/release/runtime-leader-handoff.mjs \
+  --context "$KODEX_RELEASE_CONTEXT" --output "$PRIVATE_HANDOFF_PROOF" \
+  --evidence "$PRIVATE_HANDOFF_JOURNAL" \
+  --confirm OBSERVE-IDLE-RUNTIME-LEADER-HANDOFF
+node tools/release/worker-grant-transition.mjs plan \
+  --context "$KODEX_RELEASE_CONTEXT" --target runtime-controller --phase rolling \
+  --handoff-proof "$PRIVATE_HANDOFF_PROOF" --output "$PRIVATE_PLAN"
+node tools/release/worker-grant-transition.mjs apply \
+  --context "$KODEX_RELEASE_CONTEXT" --target runtime-controller \
+  --handoff-proof "$PRIVATE_HANDOFF_PROOF" --plan "$PRIVATE_PLAN" \
+  --evidence "$PRIVATE_JOURNAL" --confirm TRANSITION-STAGING-WORKER-GRANTS
+```
+
+Air runtime-controller получает `kill_delay=230s`: 210s application drain и
+20s cleanup до 240s Pod grace. Остальные Air процессы сохраняют 90s. Новая
+настройка применяется при следующем штатном application rollout; изменение
+исходников SRE инструмента само по себе не меняет запущенный supervisor.
+
+HTTP monitor принимает proxy cookie rotation также из HTML/session GET через
+общую очередь owner-session-client. Redirect не выполняется, каждый non-200
+сохраняется как FAIL; refresh не продлевает absolute expiry и не повторяется
+после неопределённого ответа. Это исправление оснастки #1256 не превращает
+предыдущие live 503/401 в PASS и требует нового естественного окна.
+
+Дополнительные локальные проверки:
+
+```bash
+node --test tools/release/control-plane-reader-probe.test.mjs tools/release/runtime-leader-handoff.test.mjs tools/release/go-shutdown-budget.test.mjs
+node --test tools/dev/owner-session-client.test.mjs tools/dev/release-http-acceptance.test.mjs
+```
+
+Context7: `/websites/nodejs_latest-v24_x_api` (HTTP2, TLS, trailers),
+`/air-verse/air` (interrupt и kill_delay), `/kubernetes/website` (graceful termination).
 
 ### Остаток приёмки
 

@@ -50,6 +50,17 @@ const metadata = (time = initialTime, version = 1) => ({
   absoluteExpiresAt: new Date(initialTime + 3600000).toISOString(),
   renewAfter: new Date(time + 180000).toISOString(),
 });
+
+test("observation cannot perform effects, foreign requests or arbitrary same-origin reads", async () => {
+  let calls = 0;
+  const client = createOwnerSessionClient({ origin, storage: storage(), now: () => initialTime,
+    fetchAPI: async () => { calls++; throw new Error("Unexpected network"); } });
+  for (const [path, options] of [["/api/v1/session", { method: "PUT" }], ["/api/v1/bootstrap", {}],
+    ["/?q=private", {}], ["https://foreign.invalid/", {}], ["/", { headers: { cookie: "synthetic" } }]]) {
+    await assert.rejects(client.observe(path, options));
+  }
+  assert.equal(calls, 0);
+});
 const cookieLines = (version = 2) =>
   storage(version).cookies.map(
     (cookie) =>

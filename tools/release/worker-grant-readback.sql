@@ -3,6 +3,10 @@ BEGIN TRANSACTION READ ONLY;
 SET LOCAL statement_timeout = '10s';
 SELECT jsonb_build_object(
     'at', clock_timestamp(),
+    'activeRuntimeRuns', (SELECT count(*) FROM control_plane.runs
+        WHERE state IN ('QUEUED', 'RUNNING', 'CANCELLING')),
+    'claimedRuntimeLeases', (SELECT count(*) FROM control_plane.runtime_leases
+        WHERE state = 'CLAIMED'),
     'floors', COALESCE((SELECT jsonb_agg(jsonb_build_object(
         'workload', workload_id, 'generation', credential_generation,
         'revision', revision, 'updatedAt', updated_at

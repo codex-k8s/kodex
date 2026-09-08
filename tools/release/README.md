@@ -139,3 +139,8 @@ node --test tools/release/scoped-release.test.mjs tools/release/application-sour
 `worker-grant-transition.mjs`: [порядок, ограничения и evidence](../../docs/operations/independent-releases.md#управляемая-активация-disposable-hot-reload).
 Проверка application release охватывает также native grant sidecars в
 `initContainers`; одной аннотации v2 без точного Pod UID каждого writer недостаточно.
+CP проверяется адресными mTLS RPC обеих реплик; для runtime-controller
+используется отдельный idle A→B→A proof из `runtime-leader-handoff.mjs`,
+передаваемый как `--handoff-proof` и в plan, и в apply. Точные команды,
+authority/lifecycle, пределы доказательства и запрет повторного сигнала после
+неопределённого ACK приведены в том же runbook.

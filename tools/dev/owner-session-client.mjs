@@ -359,6 +359,67 @@ export function createOwnerSessionClient({
     }
   }
 
+  function request(path, options = {}, observation = false) {
+    const task = queue.then(async () => {
+      const url = new URL(path, origin);
+      requireSession(
+        url.origin === origin &&
+          !url.username &&
+          !url.password &&
+          !url.hash &&
+          (observation
+            ? ["/", sessionPath].includes(url.pathname) && !url.search && (options.method ?? "GET") === "GET"
+            : url.pathname.startsWith("/api/v1/") && url.pathname !== sessionPath),
+        "request path is invalid",
+      );
+      const supplied = new Headers(options.headers);
+      for (const key of ["authorization", "cookie", "origin", "x-csrf-token"])
+        requireSession(
+          !supplied.has(key),
+          "caller supplied an authentication header",
+        );
+      const signal = metadataSignal(options.signal);
+      await prepare(signal);
+      const headers = Object.fromEntries(supplied);
+      for (const [key, value] of Object.entries(
+        sessionHeaders(state, origin, now()),
+      )) {
+        if (key === "Accept" && supplied.has("accept")) continue;
+        headers[key] = value;
+      }
+      let response;
+      try {
+        response = await fetchAPI(url, {
+          ...options,
+          headers,
+          signal: options.signal ?? signal,
+          redirect: observation ? "manual" : "error",
+        });
+      } catch {
+        throw new Error(
+          "Owner session acceptance request failed; no automatic retry was performed",
+        );
+      }
+      try {
+        if (adoptCookies(response, state, origin, now())) {
+          requireSession(
+            (await readMetadata("GET", metadataSignal(options.signal))) ===
+              200,
+            "rotated session read failed",
+          );
+        }
+        if (response.status === 401) failed = true;
+        return response;
+      } catch {
+        failed = true;
+        await response.body?.cancel().catch(() => {});
+        throw new Error("Owner session acceptance cookie readback failed");
+      }
+    });
+    queue = task.catch(() => {});
+    return task;
+  }
+
   return {
     // Только проверенные cookies обоих слоёв для продолжения browser acceptance после
     // Node-only запроса. Snapshot не содержит origins/localStorage и не даёт
@@ -370,64 +431,8 @@ export function createOwnerSessionClient({
     },
     // Сериализация включает refresh и adoption; бизнес-запрос никогда не
     // повторяется здесь, даже после 401 либо неизвестного результата mutation.
-    request(path, options = {}) {
-      const task = queue.then(async () => {
-        const url = new URL(path, origin);
-        requireSession(
-          url.origin === origin &&
-            !url.username &&
-            !url.password &&
-            !url.hash &&
-            url.pathname.startsWith("/api/v1/") &&
-            url.pathname !== sessionPath,
-          "request path is invalid",
-        );
-        const supplied = new Headers(options.headers);
-        for (const key of ["authorization", "cookie", "origin", "x-csrf-token"])
-          requireSession(
-            !supplied.has(key),
-            "caller supplied an authentication header",
-          );
-        const signal = metadataSignal(options.signal);
-        await prepare(signal);
-        const headers = Object.fromEntries(supplied);
-        for (const [key, value] of Object.entries(
-          sessionHeaders(state, origin, now()),
-        )) {
-          if (key === "Accept" && supplied.has("accept")) continue;
-          headers[key] = value;
-        }
-        let response;
-        try {
-          response = await fetchAPI(url, {
-            ...options,
-            headers,
-            signal: options.signal ?? signal,
-            redirect: "error",
-          });
-        } catch {
-          throw new Error(
-            "Owner session acceptance request failed; no automatic retry was performed",
-          );
-        }
-        try {
-          if (adoptCookies(response, state, origin, now())) {
-            requireSession(
-              (await readMetadata("GET", metadataSignal(options.signal))) ===
-                200,
-              "rotated session read failed",
-            );
-          }
-          if (response.status === 401) failed = true;
-          return response;
-        } catch {
-          failed = true;
-          await response.body?.cancel().catch(() => {});
-          throw new Error("Owner session acceptance cookie readback failed");
-        }
-      });
-      queue = task.catch(() => {});
-      return task;
-    },
+    request,
+    // Ограниченный GET monitor использует то же принятие cookies и очередь refresh.
+    observe(path, options = {}) { return request(path, options, true); },
   };
 }
