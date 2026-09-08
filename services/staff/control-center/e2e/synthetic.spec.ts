@@ -7,6 +7,7 @@ import {
   isConfirmedSyntheticCancellation,
 } from "./synthetic-diagnostics";
 import { prepareSyntheticMicrophone } from "./synthetic-microphone";
+import { installSyntheticAbortObserver } from "./synthetic-abort-observer";
 import { test } from "./fixtures/browser-diagnostics";
 import { installEnvironmentFixture } from "./fixtures/environment";
 import { installProviderFixture } from "./fixtures/providers";
@@ -232,6 +233,22 @@ for (const { width, height } of [
     });
     const pendingRequests = new Map<Request, string>();
     const cancelledRequests = new WeakSet<Request>();
+    const failedRequests: Array<{
+      request: Request;
+      changedRoute: boolean;
+      code: string;
+    }> = [];
+    await installSyntheticAbortObserver(page, (url) => {
+      const matching = [
+        ...pendingRequests.keys(),
+        ...failedRequests.map((failure) => failure.request),
+      ].filter(
+        (request) => request.url() === url && !cancelledRequests.has(request),
+      );
+      // Несколько одновременных запросов одного URL не позволяют доказать identity.
+      if (matching.length === 1 && matching[0])
+        cancelledRequests.add(matching[0]);
+    });
     const cancelInspectorRequests = () => {
       for (const request of pendingRequests.keys())
         if (
@@ -260,28 +277,16 @@ for (const { width, height } of [
         cancelInspectorRequests();
     });
     page.on("requestfailed", (request) => {
-      const changedRoute =
-        pendingRequests.has(request) &&
-        pendingRequests.get(request) !== page.url();
-      const explicitCancellation = cancelledRequests.has(request);
-      const code = request.failure()?.errorText ?? "UNKNOWN";
+      failedRequests.push({
+        request,
+        changedRoute:
+          pendingRequests.has(request) &&
+          pendingRequests.get(request) !== page.url(),
+        code: request.failure()?.errorText ?? "UNKNOWN",
+      });
+      // Binding AbortSignal может прийти после network event. Проверка — в конце,
+      // при этом неизвестный исход не становится успешным по истечению времени.
       pendingRequests.delete(request);
-      if (
-        isConfirmedSyntheticCancellation(
-          browserName,
-          code,
-          changedRoute || explicitCancellation,
-        )
-      ) {
-        testInfo.annotations.push({
-          type: "request-cancelled",
-          description: `${code}; ${changedRoute ? "route changed" : "explicit navigation/inspector generation"}`,
-        });
-        return;
-      }
-      failures.push(
-        `Failed request: ${new URL(request.url()).pathname}; code=${code}; routeChanged=${String(changedRoute)}; cancelled=${String(explicitCancellation)}`,
-      );
     });
     await context.addCookies([
       {
@@ -1678,6 +1683,24 @@ for (const { width, height } of [
       width === 390 || width === 2900 ? 1 : 0,
     );
     expect(publicationTimeoutDiagnostics).toBe(2);
+    for (const { request, changedRoute, code } of failedRequests) {
+      const explicitCancellation = cancelledRequests.has(request);
+      if (
+        isConfirmedSyntheticCancellation(
+          browserName,
+          code,
+          changedRoute || explicitCancellation,
+        )
+      )
+        testInfo.annotations.push({
+          type: "request-cancelled",
+          description: `${code}; ${changedRoute ? "route changed" : "explicit navigation/inspector/AbortSignal generation"}`,
+        });
+      else
+        failures.push(
+          `Failed request: ${new URL(request.url()).pathname}; code=${code}; routeChanged=${String(changedRoute)}; cancelled=${String(explicitCancellation)}`,
+        );
+    }
     expect(failures).toEqual([]);
   });
 }

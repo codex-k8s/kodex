@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { expect, test } from "@playwright/test";
+import { installSyntheticAbortObserver } from "./synthetic-abort-observer";
 
 // Отдельный loopback wire proof: без Kodex API, credentials и внешних effects.
 test("synthetic: File upload доставляет точные bytes независимо от protocol readback", async ({
@@ -20,7 +21,7 @@ test("synthetic: File upload доставляет точные bytes незав�
       response.end("<!doctype html><title>Synthetic upload</title>");
       return;
     }
-    if (request.method !== "POST" || request.url !== "/upload") {
+    if (request.method !== "POST" || request.url !== "/api/v1/upload") {
       response.writeHead(404).end();
       return;
     }
@@ -58,10 +59,17 @@ test("synthetic: File upload доставляет точные bytes незав�
     const address = server.address();
     if (!address || typeof address === "string")
       throw new Error("Missing loopback listener address");
-    await page.goto(`http://127.0.0.1:${String(address.port)}/`);
+    const origin = `http://127.0.0.1:${String(address.port)}`;
+    const aborted: string[] = [];
+    await installSyntheticAbortObserver(
+      page,
+      (url) => aborted.push(new URL(url).pathname),
+      origin,
+    );
+    await page.goto(`${origin}/`);
     const actual = await page.evaluate(async (body) => {
       const file = new File([body], "SKILL.md", { type: "text/markdown" });
-      const response = await fetch("/upload", {
+      const response = await fetch("/api/v1/upload", {
         method: "POST",
         body: file,
         credentials: "omit",
@@ -77,6 +85,19 @@ test("synthetic: File upload доставляет точные bytes незав�
       mediaType: "text/markdown",
     };
     expect(actual).toEqual({ status: 201, receipt: expectedReceipt });
+    expect(receipts).toEqual([expectedReceipt]);
+    const cancellation = await page.evaluate(async () => {
+      const controller = new AbortController();
+      const pending = fetch("/api/v1/cancelled", {
+        signal: controller.signal,
+      }).catch((error: unknown) =>
+        error instanceof DOMException ? error.name : "UNKNOWN",
+      );
+      controller.abort();
+      return pending;
+    });
+    expect(cancellation).toBe("AbortError");
+    await expect.poll(() => aborted).toEqual(["/api/v1/cancelled"]);
     expect(receipts).toEqual([expectedReceipt]);
     testInfo.annotations.push({
       type: "upload-wire",

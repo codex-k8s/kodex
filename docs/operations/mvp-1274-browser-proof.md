@@ -36,6 +36,9 @@ npx playwright test --config playwright.synthetic.config.ts --project=webkit
 переиспользования чужого preview. Только `vite.synthetic.config.ts` разрешает
 Host `kodex.test`; production config не меняется. Chromium fake-media flags
 не передаются Firefox/WebKit.
+Длинный Home охватывает более двадцати экранов и имеет общий бюджет 120 секунд;
+отдельные expect/API budgets не увеличены. Исторический timeout 75 секунд
+остаётся FAIL, функциональный успех не означает performance PASS.
 
 ## Что означает проверка голоса
 
@@ -86,6 +89,15 @@ HTTP 412/503/504 использует точные response status/path, не н
 #1285 (console diagnostics) и #1286 (catalog autoload). Ни один из этих
 fixture failures не объявляется доказанным живым дефектом приложения.
 
+Подтверждённая отмена запроса требует закрытого browser code и наблюдения
+конкретного поколения: явного перехода сценария, закрытия/404 инспектора либо
+AbortSignal исходного fetch. Наблюдатель передаёт input/init и Promise без
+подмены. Binding может прийти после network event, поэтому незавершённая
+диагностика сохраняется до итоговой проверки; неоднозначные запросы одного URL
+не получают разрешение автоматически. Неизвестный код или отсутствие факта
+отмены остаётся FAIL. Native font-preload/Firefox scroll advisory сохраняются
+annotations; их предупреждения о производительности не считаются устранёнными.
+
 ## Прикладные исправления
 
 - #1290: два canonical pattern IntegrationDefinition экранируют literal dash.
@@ -96,6 +108,8 @@ fixture failures не объявляется доказанным живым д�
   с проверкой текущего focus. Два native autofocus в Projects/Integrations
   заменены маркером; Tab/Escape/return path сохранены. WebKit probe зафиксировал
   поздний переход owner → name без пользовательского действия до исправления.
+- #1296: сравнение геометрии принимает только конечные DOMRect и погрешность
+  менее 0.005px; больший сдвиг, отсутствие элемента, NaN/Infinity остаются FAIL.
 - #1293: WebKit protocol может не отдавать File body в `request.postData`.
   Это помечается как NOT RUN конкретного readback; method/header и UI import
   проверяются. Отдельный loopback HTTP fixture получает реальные байты `File`
@@ -120,6 +134,19 @@ fixture failures не объявляется доказанным живым д�
 | webkit-voice4        | 9 PASS/12 FAIL. Промежуточная замена источника потока не устранила потерю shim; это не подтверждение проблемы AudioContext в приложении                                |
 | browser5, Home/voice | Chromium 29/29 PASS; Firefox 21 PASS/7 FAIL/1 timeout; WebKit 22 PASS/7 FAIL, exit 1. Все 20 voice UI сценариев каждого движка прошли, Home выявил #1290/#1292         |
 | focus7               | Диагностический WebKit Home: поздний native autofocus подтверждён событиями; далее FAIL #1293 до ответа upload fixture                                                 |
+
+Дополнительные попытки:
+
+- browser8: Chromium 9/9 PASS; Firefox 2 PASS/6 FAIL/1 timeout; WebKit 2 PASS/7 FAIL.
+  Все три loopback POST byte/digest proofs прошли; выявлены оставшиеся
+  browser diagnostics, вложенный microphone grant и субпиксельное сравнение.
+- aborts10: 1 PASS/3 FAIL, сняты точные NS_BINDING_ABORTED/Load request cancelled.
+- final-browser14: прерванный диагностический пакет, а не финальное evidence:
+  Chromium 92 PASS/5 FAIL; Firefox 48 PASS/2 FAIL/3 interrupted/44 NOT RUN;
+  WebKit 97 NOT RUN. Во время работы началась правка наблюдателя, поэтому partial
+  результаты не объявляются проверкой итогового immutable head.
+- observer15: 5 PASS/1 FAIL; binding AbortSignal мог приходить после network event.
+- observer16: 6/6 PASS: Home 900 и File wire/AbortSignal proof в каждом движке.
 
 Первоначальный Linux capability readback: secure context и mediaDevices есть
 во всех трёх движках; MediaRecorder есть в Chromium/Firefox. Chromium
