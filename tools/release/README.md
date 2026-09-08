@@ -137,6 +137,10 @@ node --test tools/release/scoped-release.test.mjs tools/release/application-sour
 
 Переход Recreate/v1 → instance grants/v2 → RollingUpdate выполняет отдельный
 `worker-grant-transition.mjs`: [порядок, ограничения и evidence](../../docs/operations/independent-releases.md#управляемая-активация-disposable-hot-reload).
+
+`runner-policy-transition.mjs`: [отдельная выкладка runner base и admission policy](../../docs/operations/runner-policy-release.md).
+Профиль использует разрешённое окно остановки приложения, сохраняет прежние
+immutable policies и опубликованные pins; обычный application release его не запускает.
 Проверка application release охватывает также native grant sidecars в
 `initContainers`; одной аннотации v2 без точного Pod UID каждого writer недостаточно.
 CP проверяется адресными mTLS RPC обеих реплик; для runtime-controller

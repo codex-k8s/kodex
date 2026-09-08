@@ -75,6 +75,20 @@ run_migration() {
         throw new Error("Worker grant readback shape is invalid");
       process.stdout.write("Worker grant read-only query passed\n");
     '
+  psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
+    --no-password -X -qAt -v ON_ERROR_STOP=1 \
+    --file "$repository_root/tools/release/runner-policy-readback.sql" | \
+    node --input-type=module -e '
+      let input = "";
+      for await (const chunk of process.stdin) input += chunk;
+      const state = JSON.parse(input);
+      if (!Number.isFinite(Date.parse(state.at)) ||
+          !["openBuilds", "pendingAdmissions", "pendingPromotions", "activeRuntimeRuns", "claimedRuntimeLeases", "promotedArtifactCount"]
+            .every((key) => Number.isSafeInteger(state[key]) && state[key] >= 0) ||
+          !/^[a-f0-9]{64}$/.test(state.promotedPinsSHA256))
+        throw new Error("Runner policy readback shape is invalid");
+      process.stdout.write("Runner policy read-only query passed\n");
+    '
   if [[ $# -eq 0 && -z "${KODEX_CONTROL_PLANE_TEST_FILTER:-}" ]]; then
     KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
       env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \

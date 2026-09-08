@@ -13,6 +13,7 @@ type Config struct {
 	Environment         string
 	Namespace           string
 	PolicyConfigMap     string
+	PauseNewRuns        bool
 	RendererPath        string
 	TechnicalListen     string
 	ReconcileInterval   time.Duration
@@ -24,7 +25,7 @@ type Config struct {
 func (config Config) Validate() error {
 	if config.Environment != "staging" && config.Environment != "production" ||
 		config.Namespace != "kodex-system" ||
-		config.PolicyConfigMap != "kodex-image-admission-policy" ||
+		!validPolicyName(config.PolicyConfigMap) ||
 		!filepath.IsAbs(config.RendererPath) || filepath.Clean(config.RendererPath) != config.RendererPath {
 		return errors.New("image admission controller identity is invalid")
 	}
