@@ -186,7 +186,8 @@ forward apply требует capability протокола2 и actual binary rea
 фазы `maintenance, reader, schema, admission, resources, binding, control-plane,
 role-image-builder, controller, resume, open`. Значения берутся из readback.
 Catalog, runner, tools, worker/socket image и старые immutable resources остаются.
-Для managed policy helper нужен штатный kubectl wrapper, как в его README.
+Managed policy helper поддерживает тот же явный `--k3s-sudo`; private wrapper
+или экспорт kubeconfig для этого пути не требуются.
 
 ```sh
 node tools/release/authority-freshness-job-proof.mjs --context "$CONTEXT" \

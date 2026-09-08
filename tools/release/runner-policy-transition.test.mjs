@@ -193,9 +193,14 @@ if(args[0]==='get') {
   if(process.env.FIXTURE_LOST_ACK==='true')process.exit(7);
 } else if(args[0]!=='rollout')process.exit(8);
 `, { mode: 0o700 });
+    writeFileSync(join(bin, "sudo"), `#!/usr/bin/env node
+const cp=require('node:child_process'),path=require('node:path'),a=process.argv.slice(2);
+if(JSON.stringify(a.slice(0,3))!==JSON.stringify(['-n','k3s','kubectl']))process.exit(98);
+const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(3),{stdio:'inherit'});process.exit(r.status??99);
+`,{mode:0o755});
     const cli = fileURLToPath(new URL("./runner-policy-transition.mjs", import.meta.url));
     const environment = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_STATE: statePath, FIXTURE_CALLS: callsPath };
-    const run = (args) => execFileSync(process.execPath, [cli, ...args], { env: environment, stdio: "pipe" });
+    const run = (args) => execFileSync(process.execPath, [cli, ...args, ...(issuerOnly?["--k3s-sudo"]:[])], { env: environment, stdio: "pipe" });
     const bundle = join(directory, "bundle.json");
     run(["prepare", "--context", "default", "--runner-digest", issuerOnly?oldDigest:newDigest, ...(issuerOnly?["--authority-issuer-image",`registry.example.test/kodex/authority@sha256:${"c".repeat(64)}`]:[]), "--output", bundle]);
     const common = ["--context", "default", "--bundle", bundle, "--reader-image", readerImage];
@@ -215,7 +220,7 @@ if(args[0]==='get') {
     const plan = join(directory, "lost.json"), evidence = join(directory, "lost.jsonl");
     run(["plan", ...common, "--phase", "maintenance", "--output", plan]);
     const before = readFileSync(callsPath, "utf8").trim().split("\n").length;
-    const result = spawnSync(process.execPath, [cli, "apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", "APPLY-STAGING-RUNNER-POLICY"], { env: { ...environment, FIXTURE_LOST_ACK: "true" }, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [cli, "apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", "APPLY-STAGING-RUNNER-POLICY", ...(issuerOnly?["--k3s-sudo"]:[])], { env: { ...environment, FIXTURE_LOST_ACK: "true" }, encoding: "utf8" });
     assert.equal(result.status, 1);
     assert.equal(JSON.parse(readFileSync(evidence, "utf8").trim().split("\n").at(-1)).status, "UNKNOWN");
     assert.equal(readFileSync(callsPath, "utf8").trim().split("\n").length, before + 1);

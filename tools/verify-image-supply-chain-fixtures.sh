@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Проверки grep ниже намеренно сравнивают буквальный shell source, включая $.
+# shellcheck disable=SC2016
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -10,7 +12,6 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 image_hex=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 base_hex=dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 frontend_hex=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-source_digest=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 build_tag=v20260801000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 subject=registry.example.test/kodex/control-plane
 builder_identity=spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
@@ -77,7 +78,6 @@ if jq -e "${policy_args[@]}" -f "$policy" "$temporary_directory/duplicate-materi
   exit 1
 fi
 
-control_digest=sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 authority_digest=sha256:abababababababababababababababababababababababababababababababab
 tools_image="registry.example.test/kodex/admission-tools@$tools_digest"
 admission_image="registry.example.test/kodex/image-admission@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
@@ -178,10 +178,10 @@ for binary in registry-pull-authorizer registry-write-authorizer; do
     select(.kind == "Deployment" or .kind == "DaemonSet") |
     .spec.template.spec.containers[] | select(.command[]? == strenv(MC195_BINARY)) | .image' \
     "$temporary_directory/supply.yaml" | grep -v '^---$')
-  [[ -n $binary_images ]] && ! grep -Fvxq "$render_admission_image" <<<"$binary_images" || {
+  if [[ -z $binary_images ]] || grep -Fvx "$render_admission_image" <<<"$binary_images" >/dev/null; then
     echo "$binary does not use the image that contains the compiled binary" >&2
     exit 1
-  }
+  fi
 done
 grep -Fq 'openssl x509 -in /identity/tls.crt -checkend 900' "$temporary_directory/supply.yaml"
 grep -Fq 'DOCKER_CONFIG_FILE' "$temporary_directory/supply.yaml"
@@ -491,8 +491,12 @@ done
 [[ $(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name' \
   "$temporary_directory/admission-claim.yaml" | grep -c '^mc-admit-') -eq 1 ]]
 for phase in scan sign admit promote; do
-  [[ -z $(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name' \
-    "$temporary_directory/admission-$phase.yaml" | grep -v '^---$') ]]
+  pvc_names=$(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name' \
+    "$temporary_directory/admission-$phase.yaml") || exit 1
+  if grep -v '^---$' <<<"$pvc_names" | grep '[^[:space:]]' >/dev/null; then
+    printf 'Unexpected PVC in admission phase: %s\n' "$phase" >&2
+    exit 1
+  fi
 done
 [[ $(yq eval-all 'select(.kind == "Job") | .metadata.name' \
   "$temporary_directory/admission.yaml" | grep -c '^mc-admit-') -eq 5 ]]

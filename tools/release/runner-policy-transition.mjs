@@ -39,12 +39,13 @@ function main(args) {
   requireValue(["prepare", "inspect", "plan", "apply"].includes(command), "INVALID_COMMAND");
   while (args.length) {
     const key = args.shift();
+    if (key === "--k3s-sudo") { requireValue(!options[key], "INVALID_ARGUMENTS"); options[key] = true; continue; }
     requireValue(["--context", "--authority-issuer-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
     options[key] = args.shift();
   }
   const context = options["--context"];
   requireValue(typeof context === "string" && context.length > 0 && !/prod/i.test(context), "STAGING_CONTEXT_REQUIRED");
-  const kubectl = (args, input) => execFileSync("kubectl", ["--context", context, "--namespace", namespace, ...args],
+  const kubectl = (args, input) => execFileSync(options["--k3s-sudo"] ? "sudo" : "kubectl", [...(options["--k3s-sudo"] ? ["-n", "k3s", "kubectl"] : []), "--context", context, "--namespace", namespace, ...args],
     { encoding: "utf8", input, timeout: 310_000, maxBuffer: 16 << 20, stdio: [input ? "pipe" : "ignore", "pipe", "pipe"] });
   const get = (kind, name) => JSON.parse(kubectl(["get", kind, name, "-o", "json"]));
   const clusterUID = get("namespace", "kube-system").metadata.uid;
