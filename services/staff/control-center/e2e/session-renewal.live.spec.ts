@@ -1,3 +1,7 @@
+import {
+  PageErrorDiagnostics,
+  installPageErrorDiagnostics,
+} from "./page-error-diagnostics";
 import { test, type Request } from "@playwright/test";
 import {
   installSessionBootstrapObserver,
@@ -54,7 +58,9 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
   const requestDiagnostics = new SessionRequestDiagnostics<Request>(
     environment.baseURL,
   );
+  const pageErrors = new PageErrorDiagnostics(environment.baseURL);
   let passed = false;
+  let cleaningUp = false;
   let initial: ReturnType<typeof renewalWindow> | undefined;
   let naturalRenewalAt = 0;
   const refreshObservedAt: number[] = [];
@@ -99,6 +105,9 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
           environment.baseURL,
           (event) => bootstrapObserver.observe(event),
         );
+      installPageErrorDiagnostics(page, pageErrors, index, () =>
+        cleaningUp ? "CLEANUP" : stage,
+      );
       page.on("pageerror", () => counters.pageErrors++);
       page.on("console", (message) => {
         if (message.type() === "error") counters.consoleErrors++;
@@ -196,6 +205,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       if (
         counters.refreshRequests > 1 ||
         counters.badResponses ||
+        pageErrors.failed() ||
         counters.pageErrors ||
         counters.consoleErrors ||
         counters.metadataErrors
@@ -244,6 +254,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       requestDiagnostics.snapshot().overflow > 0 ||
       bootstrapObservers.some((observer) => observer.snapshot().overflow > 0) ||
       counters.badResponses ||
+      pageErrors.failed() ||
       counters.pageErrors ||
       counters.consoleErrors ||
       counters.metadataErrors ||
@@ -265,10 +276,12 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
     const observedTabs = structuredClone(tabs);
     const observedCounters = { ...counters };
     const observedRequests = requestDiagnostics.snapshot();
+    cleaningUp = true;
     // Закрываем страницы до teardown: автоматический error-context не получает DOM.
     await Promise.all(
       context.pages().map((page) => page.close().catch(() => undefined)),
     );
+    if (pageErrors.failed()) passed = false;
     const evidence = {
       schemaVersion: 1,
       requirement: "MVP-UI-11",
@@ -301,6 +314,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
         "operator-supplied; serving readback is a separate prerequisite",
       counters: observedCounters,
       requestDiagnostics: observedRequests,
+      pageErrorDiagnostics: pageErrors.snapshot(),
       protocols: protocolReadback,
       tabs: observedTabs,
       absoluteExpiryUnchanged:
@@ -323,4 +337,6 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
     };
     await persistSessionRenewalEvidence(testInfo, evidence);
   }
+  if (pageErrors.failed())
+    throw new Error("Session page error observation failed");
 });

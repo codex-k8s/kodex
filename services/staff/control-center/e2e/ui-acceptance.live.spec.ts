@@ -1,4 +1,8 @@
 import {
+  PageErrorDiagnostics,
+  installPageErrorDiagnostics,
+} from "./page-error-diagnostics";
+import {
   loadFixtureManifest,
   validateFixture,
   FixtureUnavailable,
@@ -150,6 +154,8 @@ test("широкая UI-приёмка сохраняет независимые
     await validateFixture(context.request, selected);
     return selected;
   };
+  const pageErrors = new PageErrorDiagnostics(environment.baseURL);
+  installPageErrorDiagnostics(page, pageErrors, 0);
   page.on("pageerror", () => counters.pageErrors++);
   page.on("console", (message) => {
     if (message.type() === "error") counters.consoleErrors++;
@@ -222,6 +228,7 @@ test("широкая UI-приёмка сохраняет независимые
       creatingProject = false;
     await route.continue();
   });
+  let diagnosticStep = 0;
   const record = async (
     id: string,
     ids: readonly string[],
@@ -237,7 +244,7 @@ test("широкая UI-приёмка сохраняет независимые
       reason,
       locale,
       width,
-      metrics,
+      metrics: { ...metrics, pageErrorStepSequence: diagnosticStep },
       ...(condition === undefined ? {} : { condition }),
       timestampUTC: new Date().toISOString(),
     };
@@ -270,6 +277,7 @@ test("широкая UI-приёмка сохраняет независимые
       );
       return false;
     }
+    diagnosticStep = pageErrors.beginStep();
     connectionShape = {};
     const before = { ...counters };
     const networkBefore = network.snapshot();
@@ -298,6 +306,7 @@ test("широкая UI-приёмка сохраняет независимые
       checkGeometry(settled);
       checkCondition("HTTP_ERRORS", counters.httpErrors - before.httpErrors, 0);
       checkCondition("PAGE_ERRORS", counters.pageErrors - before.pageErrors, 0);
+      checkCondition("PAGE_ERRORS", pageErrors.snapshot().overflow, 0);
       checkCondition(
         "NETWORK_ERRORS",
         Math.max(0, counters.networkErrors - before.networkErrors),
@@ -407,6 +416,9 @@ test("широкая UI-приёмка сохраняет независимые
         failure.condition,
       );
       return false;
+    } finally {
+      pageErrors.endStep();
+      diagnosticStep = 0;
     }
   };
   try {
@@ -986,6 +998,7 @@ test("широкая UI-приёмка сохраняет независимые
   } finally {
     // Закрываем страницы до reporter/error-context; персональные данные не снимаются.
     network.setStage("COMPLETE");
+    pageErrors.setStage("CLEANUP");
     const closed = await page.close().then(
       () => true,
       () => false,
@@ -997,6 +1010,22 @@ test("широкая UI-приёмка сохраняет независимые
         "FAIL",
         "UI_ASSERTION_FAILED",
       );
+    if (
+      pageErrors.failed() &&
+      !variants.some((value) => value.status === "FAIL")
+    )
+      await record(
+        "browser-javascript-errors",
+        ["MVP-UI-03", "MVP-UI-11"],
+        "FAIL",
+        "UI_ASSERTION_FAILED",
+        {
+          pageErrors: pageErrors.snapshot().total,
+          pageErrorOverflow: pageErrors.snapshot().overflow,
+        },
+        "PAGE_ERRORS",
+      );
+    await journal.pageErrors(pageErrors);
     await journal.network(network);
     await journal.close(variants);
     await testInfo.attach("ui-acceptance-safe-evidence", {

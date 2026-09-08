@@ -1,3 +1,4 @@
+import type { PageErrorDiagnostics } from "./page-error-diagnostics";
 import type { ReadNetworkCorrelator } from "./ui-read-network";
 import { populatedVariants } from "./ui-populated-variants";
 import { readonlyFormVariants } from "./ui-readonly-variant-ids";
@@ -342,6 +343,14 @@ export async function createJournal(
         fixtureManifestSHA256,
         summary: value.snapshot(),
         diagnostics: value.safeDiagnostics(),
+      }),
+    pageErrors: async (value: PageErrorDiagnostics) =>
+      append({
+        type: "page-errors",
+        timestampUTC: new Date().toISOString(),
+        browser,
+        fixtureManifestSHA256,
+        ...value.snapshot(),
       }),
     projectIntent: async (slot: 0 | 1) =>
       append({
