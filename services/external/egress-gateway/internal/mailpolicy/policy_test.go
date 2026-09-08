@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -188,5 +189,109 @@ func TestReadinessExpiresWithoutRefreshAndWorkerJoins(t *testing.T) {
 	}
 	if ready, _ := r.Ready(); ready {
 		t.Fatal("cancelled worker remains ready")
+	}
+}
+
+type expiringResolver struct {
+	calls atomic.Int64
+	ttl   time.Duration
+}
+
+func (r *expiringResolver) Resolve(context.Context, string) (dnsresolver.Snapshot, error) {
+	r.calls.Add(1)
+	return dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(r.ttl)}, nil
+}
+
+func TestReadinessRefreshesBeforeShortAuthoritativeTTLExpires(t *testing.T) {
+	doc := fixtureDocument(t)
+	raw, _ := json.Marshal(doc)
+	active, err := LoadMail(raw, doc.Digest(), fixtureBase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := &expiringResolver{ttl: 400 * time.Millisecond}
+	r := NewReadiness(active, resolver)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(2 * time.Second)(ctx) }()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if ready, _ := r.Ready(); ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatal("initial mail readiness was not established")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	for until := time.Now().Add(1200 * time.Millisecond); time.Now().Before(until); {
+		if ready, _ := r.Ready(); !ready {
+			cancel()
+			<-done
+			t.Fatal("mail readiness expired before a successful short-TTL refresh")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	if err := <-done; err != context.Canceled {
+		t.Fatal("unexpected worker outcome", err)
+	}
+	if resolver.calls.Load() < 4 {
+		t.Fatal("short-TTL source was not refreshed before expiry")
+	}
+}
+
+type blockingRefreshResolver struct {
+	calls   atomic.Int64
+	started chan struct{}
+	release chan struct{}
+}
+
+func (r *blockingRefreshResolver) Resolve(ctx context.Context, _ string) (dnsresolver.Snapshot, error) {
+	if r.calls.Add(1) == 2 {
+		close(r.started)
+		select {
+		case <-ctx.Done():
+			return dnsresolver.Snapshot{}, ctx.Err()
+		case <-r.release:
+		}
+	}
+	return dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(2 * time.Second)}, nil
+}
+
+func TestReadinessRefreshIsAppliedAtomically(t *testing.T) {
+	doc := fixtureDocument(t)
+	raw, _ := json.Marshal(doc)
+	active, err := LoadMail(raw, doc.Digest(), fixtureBase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := &blockingRefreshResolver{started: make(chan struct{}), release: make(chan struct{})}
+	r := NewReadiness(active, resolver)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(100 * time.Millisecond)(ctx) }()
+	select {
+	case <-resolver.started:
+	case <-time.After(time.Second):
+		cancel()
+		<-done
+		t.Fatal("refresh did not start")
+	}
+	if ready, _ := r.Ready(); !ready {
+		close(resolver.release)
+		cancel()
+		<-done
+		t.Fatal("last valid DNS snapshot was removed before refresh validation")
+	}
+	close(resolver.release)
+	cancel()
+	if err := <-done; err != context.Canceled {
+		t.Fatal("unexpected worker outcome", err)
+	}
+	if err := r.Run(0)(t.Context()); err == nil {
+		t.Fatal("invalid refresh interval accepted")
 	}
 }
