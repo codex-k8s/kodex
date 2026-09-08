@@ -1,6 +1,127 @@
 import { expect, test } from "@playwright/test";
-import { projectForm, searchAssistantHistory } from "./ui-readonly-forms";
+import {
+  projectForm,
+  projectCollection,
+  searchAssistantHistory,
+  ReadonlyFixtureMissing,
+} from "./ui-readonly-forms";
 import { permittedRequest } from "./ui-acceptance-proof";
+
+test("synthetic: exact permission query читается, соседняя mutation блокируется", async ({
+  page,
+}) => {
+  let allowed = 0,
+    blocked = 0;
+  await page.route("https://kodex.test/**", async (route) => {
+    const request = route.request(),
+      url = new URL(request.url());
+    if (request.method() === "POST") {
+      if (
+        !permittedRequest(
+          request.method(),
+          url.pathname,
+          false,
+          request.postDataJSON(),
+        )
+      ) {
+        blocked++;
+        await route.abort("blockedbyclient");
+      } else {
+        allowed++;
+        await route.fulfill({ json: { items: [] } });
+      }
+      return;
+    }
+    await route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>Fixture</title>",
+    });
+  });
+  await page.goto("https://kodex.test");
+  const read = await page.evaluate(async () => {
+    const body = JSON.stringify({
+      target: { kind: "ORGANIZATION" },
+      permissionKeys: [
+        "image.build",
+        "image.source.view",
+        "image.source.manage",
+      ],
+    });
+    const response = await fetch(
+      "/api/v1/administration/access/effective-access/query",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body },
+    );
+    const rejected = await fetch("/api/v1/administration/access/bindings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    }).then(
+      () => false,
+      () => true,
+    );
+    return { status: response.status, rejected };
+  });
+  expect(read).toEqual({ status: 200, rejected: true });
+  expect({ allowed, blocked }).toEqual({ allowed: 1, blocked: 1 });
+});
+
+for (const outcome of ["populated", "empty", "error"] as const) {
+  test(`synthetic: collection ждёт delayed read и различает ${outcome}`, async ({
+    page,
+  }) => {
+    let release!: () => void;
+    const delayed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let requested = false,
+      finished = false;
+    await page.route("https://kodex.test/**", async (route) => {
+      if (new URL(route.request().url()).pathname === "/api/v1/projects") {
+        requested = true;
+        await delayed;
+        await route.fulfill({
+          status: outcome === "error" ? 503 : 200,
+          json: { items: outcome === "populated" ? [{}] : [] },
+        });
+        return;
+      }
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<!doctype html><meta charset="UTF-8"><style>body{margin:0}.topbar{height:58px}</style><div class="app-shell"><div class="topbar"></div><main class="page-frame"><div class="page-header"><h1>Fixture</h1></div><div class="projects-toolbar"><button class="icon-button">Expand</button></div><p role="status">Loading</p><div id="rows"></div></main></div><script>
+      fetch('/api/v1/projects?pageSize=30').then(async response => {const data=await response.json();document.querySelector('[role=status]').remove();if(response.ok && data.items.length)document.querySelector('#rows').innerHTML='<div class="project-list__item">Fixture</div>';});
+      document.querySelector('button').onclick=()=>{document.querySelector('#rows').innerHTML='<div role="dialog" aria-label="Projects"><div class="project-list__item">Fixture</div><button aria-label="Close" onclick="this.parentElement.remove()">Close</button></div>'};
+      </script>`,
+      });
+    });
+    const result = projectCollection(page, "en").then(
+      (value) => {
+        finished = true;
+        return { value };
+      },
+      (error: unknown) => {
+        finished = true;
+        return { error };
+      },
+    );
+    await expect.poll(() => requested).toBe(true);
+    await expect(page.getByRole("status")).toBeVisible();
+    expect(finished).toBe(false);
+    release();
+    const actual = await result;
+    if (outcome === "populated")
+      expect(actual).toHaveProperty("value.collapsedRows", 1);
+    else if (outcome === "empty") {
+      expect(actual).toHaveProperty("error");
+      if ("error" in actual)
+        expect(actual.error).toBeInstanceOf(ReadonlyFixtureMissing);
+    } else {
+      expect(actual).toHaveProperty("error");
+      if ("error" in actual)
+        expect(actual.error).not.toBeInstanceOf(ReadonlyFixtureMissing);
+    }
+    await page.unrouteAll({ behavior: "wait" });
+  });
+}
 
 test("synthetic: поздний initial response и пустой список не заменяют exact query", async ({
   page,

@@ -5,6 +5,42 @@ const url = "https://kodex.test/api/v1/bootstrap";
 const one = "11111111-1111-4111-8111-111111111111:1";
 const two = "11111111-1111-4111-8111-111111111111:2";
 describe("synthetic fetch identity", () => {
+  it("navigation связывает START до goto с поздним network Request", () => {
+    const observer = new SyntheticFetchCorrelator();
+    const late = {},
+      current = {};
+    observer.observe({ phase: "start", id: one, url });
+    observer.navigationStarted();
+    observer.request(late, url, one);
+    observer.observe({ phase: "start", id: two, url });
+    observer.request(current, url, two);
+    expect(observer.cancelled(late)).toBe(true);
+    expect(observer.cancelled(current)).toBe(false);
+  });
+  it("последующий goto не переклассифицирует уже случившийся network FAIL", () => {
+    const observer = new SyntheticFetchCorrelator();
+    const failed = {};
+    observer.observe({ phase: "start", id: one, url });
+    observer.request(failed, url, one);
+    observer.terminal(failed);
+    observer.navigationStarted();
+    expect(observer.cancelled(failed)).toBe(false);
+  });
+  it("navigation не принимает duplicate и несовпадающий URL", () => {
+    const observer = new SyntheticFetchCorrelator();
+    const first = {},
+      duplicate = {},
+      foreign = {};
+    observer.observe({ phase: "start", id: one, url });
+    observer.observe({ phase: "start", id: two, url });
+    observer.navigationStarted();
+    observer.request(first, url, one);
+    observer.request(duplicate, url, one);
+    observer.request(foreign, `${url}/other`, two);
+    expect(observer.cancelled(first)).toBe(false);
+    expect(observer.cancelled(duplicate)).toBe(false);
+    expect(observer.cancelled(foreign)).toBe(false);
+  });
   it.each([true, false])(
     "связывает receipt до/после request: %s",
     (receiptFirst) => {
