@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { closeSync, fsyncSync, lstatSync, openSync, readFileSync, writeFileSync, writeSync } from "node:fs";
-import { resolve } from "node:path";
+import { closeSync, fsyncSync, lstatSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { fingerprint } from "./scoped-release.mjs";
 import { namespace, policyBase, policyDigest, policyToolsDigest, requireStaging, toolsDigestAnnotation } from "./runner-policy-model.mjs";
@@ -74,7 +75,14 @@ function main(args) {
       record({ status: "INTENT", toolsDigest: plan.toolsDigest }); attempted = true;
       const patch = [{ op: "test", path: "/metadata/uid", value: plan.uid }, { op: "test", path: "/metadata/resourceVersion", value: plan.resourceVersion },
         { op: "add", path: "/metadata/annotations", value: plan.annotationsAfter }];
-      kubectl(["patch", "configmap", name, "--type=json", "--patch-file=/dev/stdin"], JSON.stringify(patch));
+      // Node передаёт child stdin через socket: повторное открытие /dev/stdin
+      // из kubectl завершается ENXIO. Файл существует только в private temp dir.
+      const directory = mkdtempSync(join(tmpdir(), "kodex-policy-patch-"));
+      try {
+        const path = join(directory, "patch.json");
+        writeFileSync(path, JSON.stringify(patch), { flag: "wx", mode: 0o600 });
+        kubectl(["patch", "configmap", name, "--type=json", `--patch-file=${path}`]);
+      } finally { rmSync(directory, { recursive: true, force: true }); }
     }
     const actual = get("configmap", name);
     requireValue(actual.metadata.uid === plan.uid && actual.immutable === true && fingerprint(actual.data) === plan.dataSHA256 &&
