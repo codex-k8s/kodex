@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -34,7 +35,7 @@ func (p *Provider) smtp(ctx context.Context, m api.Mailbox) (*smtp.Client, func(
 		client, e = smtp.NewClientStartTLS(c, t)
 		if e != nil {
 			cleanup()
-			return nil, nil, errs.Unavailable
+			return nil, nil, healthFailure(api.ProtocolReadinessReasonTLSUnavailable)
 		}
 	}
 	client.CommandTimeout = time.Duration(m.Limits.TimeoutSeconds) * time.Second
@@ -43,9 +44,17 @@ func (p *Provider) smtp(ctx context.Context, m api.Mailbox) (*smtp.Client, func(
 	if m.Smtp.AuthMethod == "oauthbearer" {
 		auth = sasl.NewOAuthBearerClient(&sasl.OAuthBearerOptions{Username: u, Token: pw})
 	}
-	if client.Hello(m.HelloName) != nil || client.Auth(auth) != nil {
+	if err := client.Hello(m.HelloName); err != nil {
 		cleanup()
-		return nil, nil, errs.Unavailable
+		return nil, nil, responseFailure(err)
+	}
+	if err := client.Auth(auth); err != nil {
+		cleanup()
+		var protocol *smtp.SMTPError
+		if errors.As(err, &protocol) && (protocol.Code == 535 || protocol.Code == 534 || protocol.Code == 530) {
+			return nil, nil, healthFailure(api.ProtocolReadinessReasonAuthRejected)
+		}
+		return nil, nil, responseFailure(err)
 	}
 	return client, cleanup, nil
 }
@@ -56,36 +65,42 @@ func (p *Provider) Ready(ctx context.Context, m api.Mailbox) error {
 	return nil
 }
 func (p *Provider) Probe(ctx context.Context, m api.Mailbox) api.Result {
-	report := &api.ProtocolReadiness{Smtp: api.ProtocolReadinessSmtpNotReady, Imap: api.ProtocolReadinessImapNotConfigured, Pop3: api.ProtocolReadinessPop3NotConfigured}
-	if c, done, err := p.smtp(ctx, m); err == nil {
-		if c.Noop() == nil {
-			report.Smtp = api.ProtocolReadinessSmtpReady
-		}
+	report := &api.ProtocolReadiness{Smtp: api.ProtocolReadinessSmtpNotReady, Imap: api.ProtocolReadinessImapNotConfigured, Pop3: api.ProtocolReadinessPop3NotConfigured, ImapReason: healthReason(nil), Pop3Reason: healthReason(nil)}
+	c, done, err := p.smtp(ctx, m)
+	if err == nil {
+		err = responseFailure(c.Noop())
 		done()
+	}
+	report.SmtpReason = healthReason(err)
+	if err == nil {
+		report.Smtp = api.ProtocolReadinessSmtpReady
 	}
 	if m.Imap != nil {
 		report.Imap = api.ProtocolReadinessImapNotReady
-		if c, done, err := p.imap(ctx, m); err == nil {
-			ready := true
+		c, done, err := p.imap(ctx, m)
+		if err == nil {
 			for _, folder := range m.AllowedFolders {
-				if _, err := selectIMAP(c, folder, 0, true); err != nil {
-					ready = false
+				if _, err = selectIMAP(c, folder, 0, true); err != nil {
 					break
 				}
 			}
-			if ready {
-				report.Imap = api.ProtocolReadinessImapReady
-			}
 			done()
+		}
+		report.ImapReason = healthReason(err)
+		if err == nil {
+			report.Imap = api.ProtocolReadinessImapReady
 		}
 	}
 	if m.Pop != nil {
 		report.Pop3 = api.ProtocolReadinessPop3NotReady
-		if c, done, err := p.pop(ctx, m); err == nil {
-			if _, _, err := snapshot(c, m); err == nil {
-				report.Pop3 = api.ProtocolReadinessPop3Ready
-			}
+		c, done, err := p.pop(ctx, m)
+		if err == nil {
+			_, _, err = snapshot(c, m)
 			done()
+		}
+		report.Pop3Reason = healthReason(err)
+		if err == nil {
+			report.Pop3 = api.ProtocolReadinessPop3Ready
 		}
 	}
 	status := "not_ready"

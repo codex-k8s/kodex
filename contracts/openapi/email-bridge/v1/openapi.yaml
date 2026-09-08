@@ -1403,6 +1403,15 @@
               "not_ready",
               "not_configured"
             ]
+          },
+          "smtp_reason": {
+            "$ref": "#/components/schemas/ProtocolReadinessReason"
+          },
+          "imap_reason": {
+            "$ref": "#/components/schemas/ProtocolReadinessReason"
+          },
+          "pop3_reason": {
+            "$ref": "#/components/schemas/ProtocolReadinessReason"
           }
         }
       },
@@ -1457,6 +1466,31 @@
           "fence",
           "generation",
           "expires_at"
+        ]
+      },
+      "ProtocolReadinessReason": {
+        "type": "string",
+        "enum": [
+          "none",
+          "auth_rejected",
+          "credential_unavailable",
+          "tls_unavailable",
+          "network_unavailable",
+          "response_invalid",
+          "scan_limit",
+          "configuration_invalid",
+          "unavailable"
+        ],
+        "x-enum-varnames": [
+          "ProtocolReadinessReasonNone",
+          "ProtocolReadinessReasonAuthRejected",
+          "ProtocolReadinessReasonCredentialUnavailable",
+          "ProtocolReadinessReasonTLSUnavailable",
+          "ProtocolReadinessReasonNetworkUnavailable",
+          "ProtocolReadinessReasonResponseInvalid",
+          "ProtocolReadinessReasonScanLimit",
+          "ProtocolReadinessReasonConfigurationInvalid",
+          "ProtocolReadinessReasonUnavailable"
         ]
       }
     }

@@ -139,10 +139,23 @@ func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capab
 		return providerResult(request, "email-message:"+result.MessageId, map[string]any{"message_id": result.MessageId, "status": result.Status, "result_json": string(raw)})
 	}
 	if command.Operation == api.OperationHealth {
-		if result.Status != "ready" {
-			return Result{}, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+		// Старый bridge мог вернуть только статус без protocol report.
+		if result.ProtocolReadiness == nil {
+			if result.Status != "ready" {
+				return Result{}, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+			}
+			return providerResult(request, "email-bridge:health", map[string]any{"status": result.Status, "result_json": string(raw)})
 		}
-		return providerResult(request, "email-bridge:health", map[string]any{"status": result.Status, "result_json": string(raw)})
+		summary, err := api.HealthSummary(result.Status, result.ProtocolReadiness)
+		if err != nil {
+			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		}
+		if result.Status != "ready" {
+			return Result{}, &SafeError{Code: api.HealthNotReadyCode, HealthSummary: summary}
+		}
+		output, err := providerResult(request, "email-bridge:health", map[string]any{"status": result.Status, "result_json": string(raw)})
+		output.HealthSummary = summary
+		return output, err
 	}
 	if command.Operation == api.OperationReceipt {
 		if result.MessageId == "" || (command.ReceiptId != "" && result.MessageId != command.ReceiptId) || !strings.Contains("|accepted|failed|unknown|deleted|", "|"+result.Status+"|") {

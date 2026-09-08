@@ -67,12 +67,34 @@ func testMailboxObservationLifecycle(t *testing.T, ctx context.Context, reposito
 		}
 		payload := command.IntegrationConnectionTestInput{TestRef: stringMap(claim, "testRef"), LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"), Generation: claim["generation"].(int64), Success: success}
 		if !success {
-			payload.SafeErrorCode = "INTEGRATION_CREDENTIAL_UNAVAILABLE"
+			reason := api.ProtocolReadinessReasonAuthRejected
+			payload.SafeErrorCode = api.HealthNotReadyCode
+			payload.ResultSummary, err = api.HealthSummary("not_ready", &api.ProtocolReadiness{Smtp: "ready", Imap: "not_ready", Pop3: "not_configured", ImapReason: &reason})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for index, bad := range []string{strings.Replace(payload.ResultSummary, "auth_rejected", "fixture-private-text", 1), payload.ResultSummary + " ", ""} {
+				invalid := payload
+				invalid.ResultSummary = bad
+				_, err = service.Execute(ctx, command.Command{Kind: command.CompleteConnectionTest, Principal: gateway, Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("%s-invalid-%d", key, index)}, Payload: invalid})
+				if !errors.Is(err, errs.ErrInvalid) {
+					t.Fatalf("invalid health observation accepted: %v", err)
+				}
+			}
 		}
 		complete := command.Command{Kind: command.CompleteConnectionTest, Principal: gateway, Mutation: value.Mutation{IdempotencyKey: key + "-complete"}, Payload: payload}
 		done, err := service.Execute(ctx, complete)
 		if err != nil {
 			t.Fatalf("complete health: %v", err)
+		}
+		if !success {
+			if done.Connection.LastTestSummary != payload.ResultSummary {
+				t.Fatal("typed observation not stored")
+			}
+			var stored string
+			if err := repository.pool.QueryRow(ctx, `SELECT result_summary FROM control_plane.integration_connection_tests WHERE ref=$1`, payload.TestRef).Scan(&stored); err != nil || stored != payload.ResultSummary {
+				t.Fatalf("terminal observation mismatch: %v", err)
+			}
 		}
 		replay, err := service.Execute(ctx, complete)
 		if err != nil || replay.Connection.Version != done.Connection.Version {

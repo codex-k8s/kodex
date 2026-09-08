@@ -4,8 +4,8 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.6.1
-updated: 2026-09-08
+version: 1.7.0
+updated: 2026-09-09
 ---
 
 # Сценарии #1037
@@ -1112,3 +1112,62 @@ Transport исправление #1350 не меняет schema/source pins ст
 `inspect`. Public CLI fixture проверяет фактический patch-file и cleanup;
 локальный real kubectl `patch --local` доказывает positive и stale JSON CAS без
 доступа к кластеру. Для этой проверки kubectl должен быть установлен локально.
+
+## HEALTH: безопасная диагностика #1354
+
+| Инициатор → consumer | Authority и immutable binding | Переход / read path |
+| --- | --- | --- |
+| Управляющий пользователь → POST integration connection TEST → API gateway → CP TestIntegrationConnection | OIDC/session/CSRF, exact tenant connection/version, owner idempotency | CP атомарно QUEUED + receipt + event; повтор ACK не создаёт новый TEST |
+| Integration worker → CP claim → email HTTPS HEALTH → mail adapter | mTLS/application context, exact test/lease/fence/generation, mailbox/config/credential pins | Только HEALTH; SMTP/IMAP/POP3 AUTH/readiness, без отправки/изменения писем |
+| Mail adapter → email HTTP ProtocolReadiness → gateway → CP CompleteIntegrationConnectionTest | Только закрытые protocol status/reason; никаких response text, host, user, UIDL или message counts | Exact terminal completion и connection observation в одной owner transaction; FAILED не означает UNKNOWN |
+| CP immutable test observation → public IntegrationConnection.lastTestOutcome → API/PWA ru/en | Проверенное owner read, DTO сохраняет существующий string field | Локализованная причина каждого protocol; нет нового API authority или retry |
+
+OpenAPI email получает additive optional reasons: auth_rejected,
+credential_unavailable, tls_unavailable, network_unavailable, response_invalid,
+scan_limit, configuration_invalid, unavailable; none соответствует отсутствию
+отказа. Старое ready/not_ready/not_configured поддерживается; отсутствие reason
+у старого not_ready означает только unavailable. Неизвестное enum значение
+закрыто отклоняется. Не выводить причину из произвольного текста провайдера.
+
+Readiness Deployment не зависит от HEALTH конкретного mailbox; error не
+запускает рестарт соседей. Intent/ACK/UNKNOWN, lease expiry и replay не меняются.
+Новая диагностика не разрешает повторить прежний terminal TEST: отдельный
+forward TEST требует owner решения после exact readback.
+
+
+HEALTH completion использует существующий `ResultSummary` с префиксом
+`email-health:v1:` и canonical JSON `HealthObservation`: ровно status и
+protocols; protocols содержит три status и три reason. Префикс — версия
+закрытого формата, не произвольная грамматика error code. При неготовности
+`SafeErrorCode=EMAIL_HEALTH_NOT_READY`; success оставляет error code пустым.
+CP принимает report только при согласованных status/success/code, без лишних
+полей, неизвестных enum, duplicate JSON keys, whitespace или trailing bytes.
+Старый generic outcome и старое сообщение успеха по-прежнему читаются.
+`lastTestOutcome` сохраняет прежний public string ABI; API и PWA локализуют
+каждый протокол из фиксированного набора ключей. Неизвестный report показывает
+безопасную contract error, без вывода исходной строки.
+
+Порядок независимой поставки: сначала API/PWA и CP readers; затем gateway,
+принимающий старый bridge без report/reasons; после него email writer reasons.
+Старый gateway использует strict HTTP schema и не принимает новые поля, поэтому
+email раньше gateway не выкатывается. API получает зависимость emailbridgeapi:
+Go module/cache и нужные runtime image prerequisites подготовить до source
+rollout. Proto/public OpenAPI/AsyncAPI ABI и SQL schema не меняются; goose
+migration для этой диагностики не нужна. Старые generic terminal rows не
+переписываются. После new summaries старые API/PWA readers возвращать нельзя:
+сначала совместимый reader fix; rollback email writer возможен при новом
+gateway (missing reasons → unavailable). Возврат gateway после остановки
+новых writers сохраняет старые CP observations и не повторяет HEALTH.
+
+Context7 `/emersion/go-imap` проверен для typed Error/StatusResponseType и
+Login; реально закреплённый v2.0.0-beta.8 сверён с module source. go-pop3v1.0.2
+не типизирует -ERR: bounded observer сохраняет только boolean rejection из
+префикса строки, никогда server text; USER/PASS и NOOP классифицируются
+отдельно. AUTH error не объединяется с malformed UIDL/LIST или scan limit.
+
+IMAP HEALTH проверяет read-only SELECT разрешённых папок; число сообщений не
+становится искусственным scan-limit отказом: обычное IMAP чтение ограничено
+UID-окнами. POP HEALTH требует bounded UIDL/LIST snapshot и поэтому отдельно
+возвращает scan_limit, не читая headers/body. SMTP и IMAP ошибки auth извлекаются
+из типизированных protocol status codes; network errors и malformed response
+не копируют error text в diagnostics.

@@ -225,6 +225,44 @@ export const serverTokenTranslations = {
     "Учётные данные интеграции недоступны",
     "Integration credentials unavailable",
   ],
+  EMAIL_HEALTH_READY: ["готов", "ready"],
+  EMAIL_HEALTH_NOT_CONFIGURED: ["не настроен", "not configured"],
+  EMAIL_HEALTH_AUTH_REJECTED: [
+    "доступ отклонён; проверьте авторизацию и разрешение протокола",
+    "access rejected; check authentication and protocol access",
+  ],
+  EMAIL_HEALTH_CREDENTIAL_UNAVAILABLE: [
+    "учётные данные недоступны",
+    "credentials unavailable",
+  ],
+  EMAIL_HEALTH_TLS_UNAVAILABLE: [
+    "защищённое соединение недоступно; проверьте TLS",
+    "secure connection unavailable; check TLS",
+  ],
+  EMAIL_HEALTH_NETWORK_UNAVAILABLE: [
+    "сетевое соединение недоступно",
+    "network connection unavailable",
+  ],
+  EMAIL_HEALTH_RESPONSE_INVALID: [
+    "некорректный ответ сервера",
+    "invalid server response",
+  ],
+  EMAIL_HEALTH_SCAN_LIMIT: [
+    "превышен предел проверки сообщений",
+    "message scan limit exceeded",
+  ],
+  EMAIL_HEALTH_CONFIGURATION_INVALID: [
+    "некорректная настройка протокола",
+    "invalid protocol configuration",
+  ],
+  EMAIL_HEALTH_UNAVAILABLE: [
+    "протокол недоступен; причина не уточнена",
+    "protocol unavailable; reason unspecified",
+  ],
+  EMAIL_HEALTH_NOT_READY: [
+    "почтовый протокол не готов",
+    "mail protocol not ready",
+  ],
   INTEGRATION_UNAVAILABLE: ["Интеграция недоступна", "Integration unavailable"],
   INTEGRATION_RATE_LIMITED: [
     "Достигнут лимит запросов интеграции",
