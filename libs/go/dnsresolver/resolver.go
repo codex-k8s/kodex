@@ -134,6 +134,15 @@ func (resolver *Resolver) Healthy() bool { return resolver != nil && resolver.he
 
 // Resolve возвращает только полный validated snapshot; stale fallback отсутствует.
 func (resolver *Resolver) Resolve(ctx context.Context, hostname string) (Snapshot, error) {
+	return resolver.resolve(ctx, hostname, false)
+}
+
+// Refresh получает новый authoritative snapshot, не продлевая действующий cache.
+func (resolver *Resolver) Refresh(ctx context.Context, hostname string) (Snapshot, error) {
+	return resolver.resolve(ctx, hostname, true)
+}
+
+func (resolver *Resolver) resolve(ctx context.Context, hostname string, refresh bool) (Snapshot, error) {
 	if ctx.Err() != nil {
 		return resolver.reject(ReasonTimeout)
 	}
@@ -141,23 +150,27 @@ func (resolver *Resolver) Resolve(ctx context.Context, hostname string) (Snapsho
 	if err != nil {
 		return resolver.reject(ReasonMalformed)
 	}
+	reject := func(reason Reason) (Snapshot, error) {
+		if refresh {
+			resolver.discard(hostname)
+		}
+		return resolver.reject(reason)
+	}
 	now := resolver.now()
 	resolver.cacheMu.Lock()
 	cached, exists := resolver.cache[hostname]
-	if exists && now.Before(cached.ExpiresAt) {
+	if !refresh && exists && now.Before(cached.ExpiresAt) {
 		cached.Addresses = append([]netip.Addr(nil), cached.Addresses...)
 		resolver.cacheMu.Unlock()
 		if err := ValidateAddresses(cached.Addresses); err != nil {
-			resolver.cacheMu.Lock()
-			delete(resolver.cache, hostname)
-			resolver.cacheMu.Unlock()
-			return resolver.reject(ReasonSpecial)
+			resolver.discard(hostname)
+			return reject(ReasonSpecial)
 		}
 		resolver.healthy.Store(true)
 		resolver.observe("cache_hit", ReasonNone)
 		return cached, nil
 	}
-	if exists {
+	if exists && !now.Before(cached.ExpiresAt) {
 		delete(resolver.cache, hostname)
 	}
 	resolver.cacheMu.Unlock()
@@ -165,23 +178,23 @@ func (resolver *Resolver) Resolve(ctx context.Context, hostname string) (Snapsho
 	queries := 0
 	addressesA, ttlA, err := resolver.resolveType(ctx, hostname, dns.TypeA, &queries)
 	if err != nil {
-		return resolver.reject(errorReason(err))
+		return reject(errorReason(err))
 	}
 	addressesAAAA, ttlAAAA, err := resolver.resolveType(ctx, hostname, dns.TypeAAAA, &queries)
 	if err != nil {
-		return resolver.reject(errorReason(err))
+		return reject(errorReason(err))
 	}
 	addresses := append(addressesA, addressesAAAA...)
 	if len(addresses) == 0 {
-		return resolver.reject(ReasonEmpty)
+		return reject(ReasonEmpty)
 	}
 	addresses = uniqueSorted(addresses)
 	if err := ValidateAddresses(addresses); err != nil {
-		return resolver.reject(ReasonSpecial)
+		return reject(ReasonSpecial)
 	}
 	ttl := minimumResolvedTTL(ttlA, ttlAAAA)
 	if ttl <= 0 {
-		return resolver.reject(ReasonMalformed)
+		return reject(ReasonMalformed)
 	}
 	minimumTTL := time.Duration(resolver.config.MinimumTTLSeconds) * time.Second
 	maximumTTL := time.Duration(resolver.config.MaximumTTLSeconds) * time.Second
@@ -190,17 +203,25 @@ func (resolver *Resolver) Resolve(ctx context.Context, hostname string) (Snapsho
 	}
 	snapshot := Snapshot{Addresses: append([]netip.Addr(nil), addresses...), ExpiresAt: now.Add(ttl)}
 	if ctx.Err() != nil || !resolver.now().Before(snapshot.ExpiresAt) {
-		return resolver.reject(ReasonTimeout)
+		return reject(ReasonTimeout)
 	}
 	// Нижний предел относится к кэшу, но не продлевает TTL авторитетного DNS.
 	if ttl >= minimumTTL {
 		resolver.cacheMu.Lock()
 		resolver.store(hostname, snapshot)
 		resolver.cacheMu.Unlock()
+	} else if refresh {
+		resolver.discard(hostname)
 	}
 	resolver.healthy.Store(true)
 	resolver.observe("validated", ReasonNone)
 	return snapshot, nil
+}
+
+func (resolver *Resolver) discard(hostname string) {
+	resolver.cacheMu.Lock()
+	delete(resolver.cache, hostname)
+	resolver.cacheMu.Unlock()
 }
 
 func (resolver *Resolver) resolveType(ctx context.Context, hostname string, queryType uint16, queries *int) ([]netip.Addr, time.Duration, error) {

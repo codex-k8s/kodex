@@ -25,6 +25,10 @@ func (r *fixtureResolver) Resolve(context.Context, string) (dnsresolver.Snapshot
 	return r.snapshot, nil
 }
 
+func (r *fixtureResolver) Refresh(ctx context.Context, hostname string) (dnsresolver.Snapshot, error) {
+	return r.Resolve(ctx, hostname)
+}
+
 func fixtureBase(t *testing.T) *policy.Active {
 	t.Helper()
 	path := "../../../../../deploy/k8s/base/egress-gateway/policy.json"
@@ -202,6 +206,10 @@ func (r *expiringResolver) Resolve(context.Context, string) (dnsresolver.Snapsho
 	return dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(r.ttl)}, nil
 }
 
+func (r *expiringResolver) Refresh(ctx context.Context, hostname string) (dnsresolver.Snapshot, error) {
+	return r.Resolve(ctx, hostname)
+}
+
 func TestReadinessRefreshesBeforeShortAuthoritativeTTLExpires(t *testing.T) {
 	doc := fixtureDocument(t)
 	raw, _ := json.Marshal(doc)
@@ -259,6 +267,10 @@ func (r *blockingRefreshResolver) Resolve(ctx context.Context, _ string) (dnsres
 		}
 	}
 	return dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(2 * time.Second)}, nil
+}
+
+func (r *blockingRefreshResolver) Refresh(ctx context.Context, hostname string) (dnsresolver.Snapshot, error) {
+	return r.Resolve(ctx, hostname)
 }
 
 func TestReadinessRefreshIsAppliedAtomically(t *testing.T) {
