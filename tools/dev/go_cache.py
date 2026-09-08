@@ -90,6 +90,7 @@ def source_state(source, process, clean):
 
 
 def safe_tree(root):
+    require(not root.is_symlink(), "CACHE_ENTRY_UNSAFE")
     if not root.exists():
         return []
     require(root.is_dir() and not root.is_symlink(), "CACHE_ENTRY_UNSAFE")
@@ -102,6 +103,15 @@ def safe_tree(root):
                 (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)) and
                 (stat.S_ISDIR(info.st_mode) or info.st_nlink == 1), "CACHE_ENTRY_UNSAFE")
     return paths
+
+
+def check_host_cache(cache):
+    build = exact_path(str(cache / "go-build-v2"), exists=False)
+    if build.exists():
+        require(build.is_dir() and build.stat().st_uid == os.getuid(), "HOST_PRIME_CACHE_UNSAFE")
+    host = exact_path(str(build / "host-prime"), exists=False)
+    safe_tree(host)
+    return build, host
 
 
 def permissions(roots, writable):
@@ -216,6 +226,7 @@ def prime(source, cache, modules, revision, *, process, clean=True, air=False,
     roots = [cache / "go-mod-v2", cache / "go-sumdb"] + ([cache / "go-tools"] if air else [])
     for root in roots:
         safe_tree(root)
+    check_host_cache(cache)
     # Эта временная копия не содержит source, .env или Git credentials.
     with tempfile.TemporaryDirectory(prefix="kodex-go-manifests-") as temporary:
         mirror = Path(temporary)
@@ -252,15 +263,11 @@ def prime(source, cache, modules, revision, *, process, clean=True, air=False,
             try:
                 for root in roots:
                     root.mkdir(mode=0o755, exist_ok=True)
-                build = cache / "go-build-v2"
-                # Проверка до mkdir/chmod исключает изменение чужого дерева через symlink.
-                exact_path(str(build), exists=False)
+                # Повтор под общим lock до mkdir/chmod и использования GOCACHE.
+                build, host = check_host_cache(cache)
                 build.mkdir(mode=0o755, exist_ok=True)
-                require(build.stat().st_uid == os.getuid(), "HOST_PRIME_CACHE_UNSAFE")
-                host = build / "host-prime"
-                exact_path(str(host), exists=False)
                 host.mkdir(mode=0o700, exist_ok=True)
-                require(host.stat().st_uid == os.getuid(), "HOST_PRIME_CACHE_UNSAFE")
+                check_host_cache(cache)
                 host.chmod(0o700)
                 permissions(roots, True)
                 for path in (cache / "go-mod-v2/cache/download/sumdb/sum.golang.org", cache / "go-sumdb/sum.golang.org"):

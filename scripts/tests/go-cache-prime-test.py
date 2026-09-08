@@ -200,7 +200,7 @@ class CachePrime(unittest.TestCase):
         self.assertIn('CACHE_LOCK_TIMEOUT', result.stderr)
         self.assertFalse((self.cache / 'go-mod-v2').exists())
 
-    def test_unsafe_build_root_still_seals_new_module_roots(self):
+    def test_unsafe_build_root_rejected_before_cache_write(self):
         target = self.directory / 'unrelated-build-cache'
         target.mkdir(mode=0o700)
         (self.cache / 'go-build-v2').symlink_to(target)
@@ -208,7 +208,32 @@ class CachePrime(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(list(target.iterdir()), [])
         self.assertEqual(target.stat().st_mode & 0o777, 0o700)
-        self.sealed()
+        self.assertFalse((self.cache / 'go-mod-v2').exists())
+
+    def test_nested_host_cache_links_rejected_without_target_change(self):
+        host = self.cache / 'go-build-v2/host-prime'
+        host.mkdir(parents=True, mode=0o700)
+        nested = host / 'ab'
+        nested.mkdir(mode=0o700)
+        target = self.directory / 'unrelated-host-cache'
+        target.write_bytes(b'unchanged')
+        target.chmod(0o600)
+        before = (target.read_bytes(), target.stat().st_mode, target.stat().st_mtime_ns)
+        for kind in ('symlink', 'hardlink'):
+            with self.subTest(kind=kind):
+                link = nested / 'entry'
+                if kind == 'symlink':
+                    link.symlink_to(target)
+                else:
+                    os.link(target, link)
+                for phase in ('plan', 'prime'):
+                    result, _ = self.run_cli(phase=phase)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('CACHE_ENTRY_UNSAFE', result.stderr)
+                    self.assertEqual((target.read_bytes(), target.stat().st_mode, target.stat().st_mtime_ns), before)
+                    self.assertFalse((self.cache / 'go-mod-v2').exists())
+                    self.assertFalse((self.bin / 'calls.jsonl').exists())
+                link.unlink()
 
     def test_replacement_traversal_rejected_before_cache_write(self):
         mod = self.source / MODULE / 'go.mod'
