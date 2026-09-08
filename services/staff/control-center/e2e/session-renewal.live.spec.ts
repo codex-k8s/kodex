@@ -1,4 +1,8 @@
 import {
+  ConsoleErrorDiagnostics,
+  installConsoleErrorDiagnostics,
+} from "./console-error-diagnostics";
+import {
   PageErrorDiagnostics,
   installPageErrorDiagnostics,
 } from "./page-error-diagnostics";
@@ -58,6 +62,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
   const requestDiagnostics = new SessionRequestDiagnostics<Request>(
     environment.baseURL,
   );
+  const consoleErrors = new ConsoleErrorDiagnostics(environment.baseURL);
   const pageErrors = new PageErrorDiagnostics(environment.baseURL);
   let passed = false;
   let cleaningUp = false;
@@ -105,6 +110,9 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
           environment.baseURL,
           (event) => bootstrapObserver.observe(event),
         );
+      installConsoleErrorDiagnostics(page, consoleErrors, index, () =>
+        cleaningUp ? "CLEANUP" : stage,
+      );
       installPageErrorDiagnostics(page, pageErrors, index, () =>
         cleaningUp ? "CLEANUP" : stage,
       );
@@ -206,6 +214,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
         counters.refreshRequests > 1 ||
         counters.badResponses ||
         pageErrors.failed() ||
+        consoleErrors.failed() ||
         counters.pageErrors ||
         counters.consoleErrors ||
         counters.metadataErrors
@@ -255,6 +264,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       bootstrapObservers.some((observer) => observer.snapshot().overflow > 0) ||
       counters.badResponses ||
       pageErrors.failed() ||
+      consoleErrors.failed() ||
       counters.pageErrors ||
       counters.consoleErrors ||
       counters.metadataErrors ||
@@ -281,7 +291,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
     await Promise.all(
       context.pages().map((page) => page.close().catch(() => undefined)),
     );
-    if (pageErrors.failed()) passed = false;
+    if (pageErrors.failed() || consoleErrors.failed()) passed = false;
     const evidence = {
       schemaVersion: 1,
       requirement: "MVP-UI-11",
@@ -315,6 +325,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       counters: observedCounters,
       requestDiagnostics: observedRequests,
       pageErrorDiagnostics: pageErrors.snapshot(),
+      consoleErrorDiagnostics: consoleErrors.snapshot(),
       protocols: protocolReadback,
       tabs: observedTabs,
       absoluteExpiryUnchanged:
@@ -337,6 +348,6 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
     };
     await persistSessionRenewalEvidence(testInfo, evidence);
   }
-  if (pageErrors.failed())
-    throw new Error("Session page error observation failed");
+  if (pageErrors.failed() || consoleErrors.failed())
+    throw new Error("Session browser error observation failed");
 });

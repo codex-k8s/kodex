@@ -4,8 +4,8 @@ title: Точечная приёмка наполненных интерфейс
 status: approved
 type: operations
 owner: manager
-version: 1.2.0
-updated: 2026-09-08
+version: 1.3.0
+updated: 2026-09-09
 ---
 
 # Точечная приёмка наполненных интерфейсов
@@ -203,3 +203,40 @@ Document observation ограничен 512 событиями, шаги — 100
 установленные `pageerror`, `request`, `domcontentloaded`; новый `WebError.location`
 не требуется. Повторяющиеся одинаковые исключения WebKit может объединять:
 лимит относится к реально полученным событиям, а не к числу JavaScript throw.
+
+
+## Безопасные ошибки консоли (#1365)
+
+Общий `e2e/console-error-diagnostics.ts` обслуживает UI и session-renewal.
+UI journal добавляет строку `console-errors`; session evidence содержит
+`consoleErrorDiagnostics`. Счётчики ошибок и правило FAIL сохраняются,
+включая ошибки между шагами и при cleanup. Warning/log не считаются error.
+
+Сохраняются только закрытые class/code, SHA256 текста, SHA256 source origin/path,
+категория источника, координаты с нулевой базой и признаком наличия,
+номер страницы, наблюдаемого документа, шага, стадия и ограниченное время.
+`TEXT_ONLY` означает классификацию по тексту, а не доказанный тип исключения;
+`BROWSER_REPORTED` — location, которую сообщил Playwright. Текущий DCL имеет
+`OBSERVATION_ONLY`: поздняя ошибка не получает выдуманную causal attribution.
+URL/query/fragment, исходный текст, console args/JSHandle и DOM не записываются.
+Имена Error ограничены закрытым набором, неизвестные значения дают UNKNOWN.
+
+Лимиты:32 события,4096 символов текста и URL,512 документов,10000 шагов,
+24 часа времени и координаты до10000000. Усечение текста выдаёт digest
+ограниченного префикса, усечённая location не разбирается; любое переполнение
+блокирует PASS. Возвращаемые snapshots не позволяют менять внутренние события.
+
+Локальные публичные проверки из PWA:
+
+```bash
+npx vitest run e2e
+npx playwright test --config e2e/console-error.fixture.config.ts
+npm run build
+```
+
+Browser fixtures выполняют настоящие console events в Chromium/Firefox/WebKit:
+две страницы, навигация и hash-переход, шаги/cleanup, cap, безопасный attachment.
+Все эффекты синтетические. Live после source rollout требует отдельного GO;
+историческую console-error без записанного текста/location восстановить нельзя.
+Context7 `/microsoft/playwright` и установленные типы1.61.0 подтверждают
+`ConsoleMessage.text()`, `location().url/line/column` и `Page.console`.

@@ -1,3 +1,4 @@
+import type { ConsoleErrorDiagnostics } from "./console-error-diagnostics";
 import type { PageErrorDiagnostics } from "./page-error-diagnostics";
 import type { ReadNetworkCorrelator } from "./ui-read-network";
 import { populatedVariants } from "./ui-populated-variants";
@@ -343,6 +344,14 @@ export async function createJournal(
         fixtureManifestSHA256,
         summary: value.snapshot(),
         diagnostics: value.safeDiagnostics(),
+      }),
+    consoleErrors: async (value: ConsoleErrorDiagnostics) =>
+      append({
+        type: "console-errors",
+        timestampUTC: new Date().toISOString(),
+        browser,
+        fixtureManifestSHA256,
+        ...value.snapshot(),
       }),
     pageErrors: async (value: PageErrorDiagnostics) =>
       append({
