@@ -44,12 +44,15 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 		return errExecutableRevision
 	}
 	if candidate.Metadata.Origin == Origin {
-		if candidate.Digest != shipped.Digest {
+		if _, ok := ResolveShippedRevision(shipped, candidate.Metadata.Version, candidate.Digest); !ok {
 			return errExecutableRevision
 		}
 		return nil
 	}
 	c, s := candidate.Spec, shipped.Spec
+	if legacy, ok := legacyManagedMailbox(shipped); ok && reflect.DeepEqual(c.Credential, legacy.Spec.Credential) {
+		s = legacy.Spec
+	}
 	if c.Adapter != s.Adapter || c.AdapterOwner != s.AdapterOwner || c.ExecutionRoute != s.ExecutionRoute ||
 		c.Readiness != s.Readiness || !reflect.DeepEqual(c.Credential, s.Credential) ||
 		!narrowNetworkDestinations(c.NetworkDestinations, s.NetworkDestinations) || !narrowFields(c.ConfigurationFields, s.ConfigurationFields) ||

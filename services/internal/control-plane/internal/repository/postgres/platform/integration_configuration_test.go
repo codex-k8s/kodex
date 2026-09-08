@@ -120,3 +120,23 @@ func TestDeletedCommandReplayRequiresExactCompleteTerminalSnapshot(t *testing.T)
 		t.Fatal("complete runtime environment terminal snapshot was not replayable")
 	}
 }
+
+func TestManagedMailboxCredentialActionsKeepOwnerBoundary(t *testing.T) {
+	for _, scenario := range []struct {
+		state                     string
+		enabled, manage, expected bool
+	}{
+		{"READY", true, true, true}, {"READY", true, false, false}, {"TESTING", true, true, false}, {"DISABLED", false, true, false},
+	} {
+		item := entity.IntegrationConnection{DefinitionKey: "email", State: scenario.state, Enabled: scenario.enabled}
+		found := false
+		for _, action := range connectionActions(item, scenario.manage, true) {
+			if action == "CONFIGURE_CREDENTIAL" {
+				found = true
+			}
+		}
+		if found != scenario.expected {
+			t.Fatalf("mailbox credential action boundary failed: %+v", scenario)
+		}
+	}
+}
