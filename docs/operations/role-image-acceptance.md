@@ -4,7 +4,7 @@ title: Пользовательская API-приёмка RoleImage и forward 
 type: acceptance-runbook
 status: approved
 owner: developer
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-08
 ---
 
@@ -169,3 +169,99 @@ Fixture tests не заменяют staging. Актуальные Node.js fs exc
 проверены через Context7 `/websites/nodejs_latest-v24_x_api`.
 
 Публичный CLI дополнительно проверяется в отдельном чистом Git checkout с private синтетическими session/manifest/journal и полностью подменённым transport: `prepare` либо `recover-project`, затем `advance`, `restore`, `inspect`. Проверка фиксирует прежний ключ recovery, три публикации, отсутствие provider Run, отказ неверных параметров, expired preflight и lost ACK без повторной отправки. Она не обращается к staging и не доказывает живую сборку образа.
+
+## Настоящий runtime Pod из существующего fixture
+
+`tools/dev/role-image-runtime-proof.mjs` продолжает существующий завершённый CFG
+fixture из append-only journal. Он не создаёт ещё один project/image/environment.
+Точный SHA256 исходного CFG journal проверяется при каждом вызове; исходный файл
+открывается read-only. Новый отдельный runtime journal закрепляет source SHA,
+origin, CFG journal digest и **новый фактический serving manifest**. Исторический
+HEADER CFG не заменяется новым manifest. Между фазами runtime journal требует
+того же чистого exact checkout и тех же bytes входных файлов.
+
+В этом профиле runtime-controller создаёт `corev1.Pod` напрямую (`mode=turn`),
+а не Kubernetes Job. Build/admission Jobs — другая цепочка. Оснастка не должна
+выдумывать Job UID или ownerReference у настоящего runtime Pod.
+
+| Фаза | Разрешённый путь | Эффект / доказательство |
+| --- | --- | --- |
+| `plan` | GET agent, recipe, runtime-configuration, все страницы effective-capabilities, exact account model catalog | Проверяет ACCEPTED/promoted receipt, существующие environment/binding pins и capability `platform.artifact.manage`; никаких business mutations |
+| `launch` | Fresh preflight + повтор GET плана; POST `/api/v1/runs` → CP owner CreateRun, server actor/project lineage, immutable Session/Turn/RuntimeRevision, outbox | Fsync INTENT до единственного POST, owner Idempotency-Key; ACK содержит только Run/Session/attempt/task digest. Асинхронный provider effect может начаться **до** HTTP ACK |
+| `capture` | GET Run и `/runtime-revision-diff` | Exact project/agent/session/attempt, обязательный turnRef, revision ref/version/digest и IMAGE manifest digest; hash проекта/session/turn для сопоставления Pod |
+| Root SRE readback | Реальный managed Pod в проверенном runtime namespace | UID, lease, immutable revision/attempt/hash annotations, exact spec images/imageIDs и SHA256 работающего runner binary; никаких env/credentials/runtime input |
+
+`plan` требует существующую FIXED policy с одним аккаунтом, действующие exact
+catalog pins, доступную модель openai-codex и эффективное право на результаты.
+При отсутствии prerequisites возвращается `BLOCKED` с закрытыми кодами;
+последующий `launch` отклоняется. Оснастка не выдаёт capability, не меняет
+аккаунт/model/effort и не выполняет provider probe. Если plan выявил необходимость
+настройки, она отдельно выполняется штатной пользовательской командой, затем
+повторяется read-only `plan` до первого INTENT. Owner разрешает конкретный READY
+план; `launch` повторно сравнивает его digest и закрыто отклоняет drift.
+
+Для всех трёх фаз общие параметры одинаковы:
+
+```bash
+node tools/dev/role-image-runtime-proof.mjs plan \
+  --origin "$QA_ORIGIN" --storage-state "$QA_STORAGE_STATE" \
+  --fixture-state "$COMPLETED_CFG_JOURNAL" \
+  --fixture-sha256 "$EXACT_CFG_JOURNAL_SHA256" \
+  --state "$NEW_RUNTIME_JOURNAL" --serving-manifest "$CURRENT_SERVING_MANIFEST" \
+  --timeout-ms 1200000
+```
+
+Только после отдельного GO заменить `plan` на `launch` и добавить
+`--confirm START-ONE-STAGING-AGENT-RUN`. Затем заменить фазу на `capture`,
+убрав `--confirm`. Budget 60–1800 секунд; HTTP до 30 секунд. `capture` ждёт выхода
+из QUEUED, но не требует успешного результата провайдера: `runState` отражается
+отдельно. Повтор `launch` после ACK возвращает прежний Run без нового POST.
+Любой unresolved INTENT, в том числе lost ACK/409, запрещает следующий POST.
+Повтор `plan` после INTENT тоже запрещён. Readback неопределённого Run root делает
+по прежнему owner idempotency receipt; оснастка не угадывает Run по названию,
+не меняет key, не вызывает retry/cancel/repair и не использует project recovery.
+
+До GO можно выполнить только `plan`: поддержанного provider-free `dryRun` или
+`suspend` у RunInput нет. Нельзя создавать Run и рассчитывать успеть отменить его
+до provider effect. `launch` передаёт существующий `workspaceAcceptanceTask`
+настоящему агенту; subprocess/canary не подменяют выполнение.
+
+Root до `launch` включает ограниченный наблюдатель metadata runtime Pods, чтобы
+не потерять короткоживущий Pod. Readback связывает:
+
+- API revisionDigest, projectHash, sessionHash, turnHash, attempt с одноимёнными
+  `runtime.kodex.dev/*` annotations, mode=turn и managed=true;
+- один Pod UID и lease-ref, nodeName, timestamps/restarts; для
+  `workspace-prepare`, `workspace-init`, `role-runtime`, `provider-runtime`
+  spec.image равен `imageReference`, каждый фактический imageID сохраняется;
+- imageID с digest promoted manifest. Если runtime возвращает platform child
+  digest OCI index, нужен отдельный exact registry index → platform manifest
+  proof; одинаковые imageIDs сами по себе равенство approved image не доказывают;
+- SHA256 `/usr/local/bin/kodex-agent-runner` в том же Pod UID с эталонным runner
+  binary SHA из exact trusted base. Чтение выполняет root repo-owned SRE tool;
+  QA не получает exec, kubeconfig или новую browser authority.
+
+API `capture: PASS` доказывает только owner projections. `runtimePod`,
+`runningRunnerBinary`, `workspaceResult` сохраняются `NOT_RUN` до независимых
+доказательств. Для workspace результата отдельно нужен успешный Run, реальные
+CODEX_SHELL events и `verifyWorkspaceAcceptance` из существующей оснастки:
+exact nonce/artifacts/provenance/CRUD/защищённые пути. Один imageID не закрывает
+runtime, CFG, browser или весь MVP.
+
+Локальный публичный CLI regression без сети:
+
+```bash
+node --check tools/dev/role-image-runtime-proof.mjs
+node --test tools/dev/role-image-runtime-proof.test.mjs tools/dev/runtime-workspace-acceptance.test.mjs tools/dev/runtime-provider-catalog.test.mjs
+git diff --check
+```
+
+Тесты запускают настоящий Node CLI в чистом temporary Git checkout, private
+session/manifest/predecessor/new journal и подменённый transport. Проверяются
+plan → launch → capture, единственный Run после ACK, preflight без dispatch,
+UNKNOWN/409 без повтора, stale plan/pins/catalog/capability, изменённые
+attempt/turn/image и deadline. Fixtures не выполняют vendor/provider effects.
+
+CLI preload `--import` и subprocess API сверены через Context7
+`/websites/nodejs_latest-v24_x_api`; локальные fixtures подменяют только transport
+и не обходят production origin/session/CSRF или journal guards.
