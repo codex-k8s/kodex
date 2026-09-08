@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { FixtureUnavailable, type FixturePin } from "./ui-fixture-manifest";
 import { matchesAssistantSearch } from "./ui-readonly-search-proof";
 import {
   assistantDialog,
@@ -212,5 +213,150 @@ export async function assistantDraft(
   } finally {
     if (await composer.count()) await composer.fill("").catch(() => undefined);
     await cleanupAssistant(page, locale);
+  }
+}
+
+// История читается независимо от доступности composer и runtime provider.
+export async function assistantHistory(
+  page: Page,
+  locale: "ru" | "en",
+  prefix: string,
+  pin: FixturePin,
+  pagination = false,
+) {
+  if (pin.kind !== "ASSISTANT" || !pin.query)
+    throw new FixtureUnavailable("MISSING");
+  await visit(page, pin.projectRef ? `/projects/${pin.projectRef}` : "/");
+  await page
+    .getByRole("button", {
+      name: locale === "ru" ? "Открыть Kodex" : "Open Kodex",
+      exact: true,
+    })
+    .click();
+  const dialog = assistantDialog(page, locale),
+    mobile = (page.viewportSize()?.width ?? 1440) < 1001;
+  const toggle = dialog.getByRole("button", {
+    name: locale === "ru" ? "История диалогов" : "Conversation history",
+    exact: true,
+  });
+  try {
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute("aria-busy", "false");
+    if (mobile) await toggle.click();
+    const history = page.locator(
+      mobile ? ".assistant-history__menu" : ".assistant-conversation-sidebar",
+    );
+    const search = history.getByRole("searchbox");
+    await expect(search).toBeVisible();
+    const response = await observeActionResponse(
+      page,
+      (value) =>
+        matchesAssistantSearch(
+          value.request().method(),
+          value.url(),
+          pin.query ?? "",
+        ),
+      () => search.fill(pin.query ?? ""),
+    );
+    checkCondition("HTTP_STATUS", response.status(), 200);
+    const data: unknown = await response.json();
+    if (
+      !data ||
+      typeof data !== "object" ||
+      !Array.isArray((data as { items?: unknown }).items)
+    )
+      throw new Error("Invalid history response");
+    const items = (
+      data as { items: Array<{ ref: string; version: number; title: string }> }
+    ).items;
+    const selected = items.filter(
+      (item) => item.ref === pin.ref && item.version === pin.version,
+    );
+    if (selected.length !== 1 || typeof selected[0]?.title !== "string")
+      throw new FixtureUnavailable("VERSION_DRIFT");
+    const title = selected[0].title;
+    await history.getByText(title, { exact: true }).click();
+    await expect(dialog).toHaveAttribute("aria-busy", "false");
+    if (mobile) await toggle.click();
+    const entries = history.locator(
+      mobile ? ":scope > button" : ".assistant-conversation-entry",
+    );
+    await searchAssistantHistory(page, search, entries, `${prefix}-absent`);
+    const historyPages: import("@playwright/test").Response[] = [];
+    const pageListener = (value: import("@playwright/test").Response) => {
+      const url = new URL(value.url());
+      if (
+        value.request().method() === "GET" &&
+        url.pathname === "/api/v1/assistant-conversations" &&
+        url.searchParams.get("pageToken")
+      )
+        historyPages.push(value);
+    };
+    if (pagination) page.on("response", pageListener);
+    try {
+      const clear = await observeActionResponse(
+        page,
+        (value) =>
+          matchesAssistantSearch(value.request().method(), value.url(), ""),
+        () => search.fill(""),
+      );
+      checkCondition("HTTP_STATUS", clear.status(), 200);
+      await expect(history.getByText(title, { exact: true })).toBeVisible();
+      if (pagination) {
+        const raw: unknown = await clear.json();
+        const cursor =
+          raw && typeof raw === "object"
+            ? (raw as { nextPageToken?: unknown }).nextPageToken
+            : undefined;
+        if (typeof cursor !== "string" || !cursor)
+          throw new FixtureUnavailable("EMPTY_PAGE");
+        const matchesPage = (value: import("@playwright/test").Response) => {
+          const url = new URL(value.url());
+          return (
+            value.request().method() === "GET" &&
+            url.pathname === "/api/v1/assistant-conversations" &&
+            url.searchParams.get("pageToken") === cursor &&
+            (url.searchParams.get("query") ?? "") === "" &&
+            (url.searchParams.get("projectRef") ?? "") ===
+              (pin.projectRef ?? "")
+          );
+        };
+        const next =
+          historyPages.find(matchesPage) ??
+          (await observeActionResponse(page, matchesPage, () =>
+            history.evaluate((node) => {
+              node.scrollTop = node.scrollHeight;
+            }),
+          ));
+        checkCondition("HTTP_STATUS", next.status(), 200);
+        const nextBody = (await next.json()) as {
+          items: Array<{ ref: string; title: string }>;
+        };
+        const firstBody = raw as { items: Array<{ ref: string }> };
+        if (
+          !Array.isArray(nextBody.items) ||
+          !nextBody.items.length ||
+          nextBody.items.some((item) =>
+            firstBody.items.some((previous) => previous.ref === item.ref),
+          )
+        )
+          throw new Error("Invalid history page continuity");
+        for (const item of nextBody.items)
+          await expect(
+            history.getByText(item.title, { exact: true }),
+          ).toHaveCount(1);
+      }
+      return {
+        historyExactPin: true,
+        searchReadback: true,
+        clearReadback: true,
+        openedWithoutComposer: true,
+        pagination,
+      };
+    } finally {
+      page.off("response", pageListener);
+    }
+  } finally {
+    if (!page.isClosed()) await cleanupAssistant(page, locale);
   }
 }

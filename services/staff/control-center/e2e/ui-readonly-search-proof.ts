@@ -7,7 +7,7 @@ export function matchesAssistantSearch(
   return (
     method === "GET" &&
     parsed.pathname === "/api/v1/assistant-conversations" &&
-    parsed.searchParams.get("query") === query &&
+    (parsed.searchParams.get("query") ?? "") === query &&
     !parsed.searchParams.get("pageToken")
   );
 }

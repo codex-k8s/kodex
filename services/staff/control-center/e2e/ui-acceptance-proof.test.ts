@@ -1,3 +1,5 @@
+import { ReadNetworkCorrelator } from "./ui-read-network";
+import { populatedVariants } from "./ui-populated-variants";
 import { readonlyFormVariants } from "./ui-readonly-variant-ids";
 import { createHash } from "node:crypto";
 import { chmod, mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises";
@@ -302,4 +304,63 @@ test("forms профиль имеет24 закрытых IDs и не разре�
   expect(() =>
     selectedVariants("configuration-create-editor-untrusted-ru-1440", "0"),
   ).toThrow("selection");
+});
+
+test("all populated selectors are readonly and reject unknown suffixes", () => {
+  expect(selectedVariants(populatedVariants.join(","), "0")?.size).toBe(
+    populatedVariants.length,
+  );
+  expect(() => selectedVariants(populatedVariants[0], "1")).toThrow();
+  expect(() =>
+    selectedVariants("fixture-global-search-untrusted", "0"),
+  ).toThrow();
+});
+
+test("safe network journal records browser and fixture key without raw request material", async () => {
+  const parent = await temporary(),
+    journal = await createJournal(
+      join(parent, "network"),
+      versions,
+      "webkit",
+      "e".repeat(64),
+    );
+  const network = new ReadNetworkCorrelator<object>("https://fixture.invalid"),
+    request = {};
+  network.request(
+    request,
+    "https://fixture.invalid/api/v1/bootstrap?private-query",
+    "GET",
+    undefined,
+    "fetch",
+  );
+  network.failed(request, "Load request cancelled");
+  await journal.network(network);
+  await journal.variant(variant);
+  await journal.close([variant]);
+  const payload = await readFile(journal.path, "utf8");
+  expect(payload).not.toContain("private-query");
+  expect(payload).not.toContain("fixture.invalid");
+  const records = payload
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  expect(records[1]).toMatchObject({
+    type: "read-network",
+    browser: "webkit",
+    fixtureManifestSHA256: "e".repeat(64),
+    summary: { rawFailedRequests: 1, confirmedCancellations: 0 },
+    diagnostics: {
+      failures: [
+        {
+          route: "BOOTSTRAP",
+          code: "WEBKIT_CANCELLED",
+          exactCancellation: false,
+        },
+      ],
+    },
+  });
+  expect(records[2]).toMatchObject({
+    browser: "webkit",
+    fixtureManifestSHA256: "e".repeat(64),
+  });
 });
