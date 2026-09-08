@@ -25,6 +25,7 @@ spec:
         kodex.dev/runtime-config-revision: "da102ac75208e1f39cfac92725cad4f5a97b7e81f14f4bdf71e9b2afa0f91398"
     spec:
       serviceAccountName: staff-control-center
+      terminationGracePeriodSeconds: 45
       automountServiceAccountToken: false
       enableServiceLinks: false
       securityContext:
@@ -36,6 +37,9 @@ spec:
         - name: staff-control-center
           image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/staff-control-center@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              sleep: {seconds: 10}
           ports:
             - {name: https, containerPort: 8443, protocol: TCP}
           startupProbe:
