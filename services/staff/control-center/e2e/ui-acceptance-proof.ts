@@ -1,0 +1,230 @@
+import { createHash } from "node:crypto";
+import { lstat, mkdir, open, realpath } from "node:fs/promises";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+
+export const requirements = [
+  ...Array.from(
+    { length: 61 },
+    (_, i) => `MVP-UI-${String(i + 1).padStart(2, "0")}`,
+  ),
+  "CFG-01",
+  "CFG-02",
+  "CFG-03",
+];
+export const widths = [1280, 1440, 1920, 2560, 2900, 390, 768] as const;
+export type Outcome = "PASS" | "FAIL" | "NOT RUN";
+export type Reason =
+  | "OBSERVED"
+  | "UI_ASSERTION_FAILED"
+  | "DEPENDENCY_UNAVAILABLE"
+  | "FIXTURE_UNAVAILABLE"
+  | "BUDGET_EXHAUSTED"
+  | "OUTSIDE_PROFILE"
+  | "UNKNOWN_OUTCOME";
+export interface Variant {
+  id: string;
+  requirements: readonly string[];
+  status: Outcome;
+  reason: Reason;
+  locale: "ru" | "en";
+  width: number;
+  metrics: Record<string, number | boolean>;
+  timestampUTC: string;
+}
+export interface Versions {
+  harness: string;
+  api: string;
+  pwa: string;
+  servingManifestSHA256: string;
+}
+export function versionsFromEnvironment(env: NodeJS.ProcessEnv): Versions {
+  const values = {
+    harness: env.KODEX_E2E_SOURCE_REVISION ?? "",
+    api: env.KODEX_E2E_API_REVISION ?? "",
+    pwa: env.KODEX_E2E_PWA_REVISION ?? "",
+    servingManifestSHA256: env.KODEX_E2E_SERVING_MANIFEST_SHA256 ?? "",
+  };
+  if (
+    ![values.harness, values.api, values.pwa].every((v) =>
+      /^[a-f0-9]{40}$/.test(v),
+    ) ||
+    !/^[a-f0-9]{64}$/.test(values.servingManifestSHA256)
+  )
+    throw new Error(
+      "UI proof requires exact component revisions and manifest digest",
+    );
+  return values;
+}
+export function safeVariant(variant: Variant): Variant {
+  if (
+    !/^[a-z][a-z0-9-]{0,95}$/.test(variant.id) ||
+    !variant.requirements.length ||
+    !variant.requirements.every((id) => requirements.includes(id))
+  )
+    throw new Error("Invalid UI proof variant");
+  if (
+    !["PASS", "FAIL", "NOT RUN"].includes(variant.status) ||
+    ![
+      "OBSERVED",
+      "UI_ASSERTION_FAILED",
+      "DEPENDENCY_UNAVAILABLE",
+      "FIXTURE_UNAVAILABLE",
+      "BUDGET_EXHAUSTED",
+      "OUTSIDE_PROFILE",
+      "UNKNOWN_OUTCOME",
+    ].includes(variant.reason)
+  )
+    throw new Error("Invalid UI proof outcome");
+  if (
+    !["ru", "en"].includes(variant.locale) ||
+    !widths.includes(variant.width as (typeof widths)[number]) ||
+    !Number.isFinite(Date.parse(variant.timestampUTC))
+  )
+    throw new Error("Invalid UI proof dimensions");
+  if (
+    Object.entries(variant.metrics).some(
+      ([key, value]) =>
+        !/^[a-z][a-zA-Z0-9]{0,39}$/.test(key) ||
+        !(
+          typeof value === "boolean" ||
+          (typeof value === "number" && Number.isFinite(value))
+        ),
+    )
+  )
+    throw new Error("Invalid UI proof metrics");
+  // Только закрытые поля: случайно переданный DOM, URL или response отбрасывается.
+  return {
+    id: variant.id,
+    requirements: [...variant.requirements],
+    status: variant.status,
+    reason: variant.reason,
+    locale: variant.locale,
+    width: variant.width,
+    metrics: { ...variant.metrics },
+    timestampUTC: variant.timestampUTC,
+  };
+}
+export function applicability(variants: readonly Variant[]) {
+  return requirements.map((requirement) => ({
+    requirement,
+    fullRequirementStatus: "NOT RUN" as const,
+    variants: variants
+      .filter((v) => v.requirements.includes(requirement))
+      .map((v) => ({ id: v.id, status: v.status })),
+    remaining: "MUTATION_RUNTIME_PROVIDER_AND_REQUIRED_VARIANTS",
+  }));
+}
+export function projectRefs(value: unknown): string[] {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !Array.isArray((value as { items?: unknown }).items)
+  )
+    throw new Error("Invalid project fixture page");
+  const result = (value as { items: unknown[] }).items
+    .slice(0, 2)
+    .map((item) => {
+      const ref =
+        item && typeof item === "object"
+          ? (item as { ref?: unknown }).ref
+          : undefined;
+      if (typeof ref !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(ref))
+        throw new Error("Invalid project fixture reference");
+      return ref;
+    });
+  if (new Set(result).size !== result.length)
+    throw new Error("Duplicate project fixture reference");
+  return result;
+}
+export function permittedRequest(
+  method: string,
+  pathname: string,
+  creatingProject: boolean,
+): boolean {
+  return (
+    ["GET", "HEAD", "OPTIONS"].includes(method) ||
+    (pathname === "/api/v1/session" && method === "PUT") ||
+    (pathname === "/api/v1/session/ticket" && method === "POST") ||
+    (creatingProject && pathname === "/api/v1/projects" && method === "POST")
+  );
+}
+export async function createJournal(
+  rawPath: string,
+  versions: Versions,
+  browser: string,
+) {
+  if (
+    !isAbsolute(rawPath) ||
+    rawPath !== resolve(rawPath) ||
+    !["chromium", "firefox", "webkit"].includes(browser)
+  )
+    throw new Error("Invalid UI evidence configuration");
+  const parent = dirname(resolve(rawPath));
+  const info = await lstat(parent);
+  if (
+    !info.isDirectory() ||
+    info.isSymbolicLink() ||
+    (info.mode & 0o077) !== 0 ||
+    (await realpath(parent)) !== parent
+  )
+    throw new Error("UI evidence parent must be private and canonical");
+  // Новый каталог служит guard повторного intent; Playwright его не удаляет.
+  await mkdir(rawPath, { mode: 0o700 });
+  const path = join(rawPath, "ui-acceptance-safe.jsonl");
+  const file = await open(path, "wx", 0o600);
+  const digest = createHash("sha256");
+  const append = async (value: unknown) => {
+    const line = `${JSON.stringify(value)}\n`;
+    if (Buffer.byteLength(line) > 65_536)
+      throw new Error("UI evidence record exceeds size limit");
+    await file.writeFile(line);
+    await file.sync();
+    digest.update(line);
+  };
+  await append({
+    schemaVersion: 1,
+    type: "metadata",
+    sourceRole: "harness",
+    versions,
+    browser,
+    timestampUTC: new Date().toISOString(),
+  });
+  return {
+    path,
+    variant: async (value: Variant) =>
+      append({ type: "variant", ...safeVariant(value) }),
+    projectIntent: async (slot: 0 | 1) =>
+      append({
+        type: "fixture-intent",
+        operation: "PROJECT_CREATE",
+        slot,
+        timestampUTC: new Date().toISOString(),
+      }),
+    projectReceipt: async (slot: 0 | 1, ref: string) =>
+      append({
+        type: "fixture-receipt",
+        operation: "PROJECT_CREATE",
+        slot,
+        refSHA256: createHash("sha256").update(ref).digest("hex"),
+        timestampUTC: new Date().toISOString(),
+      }),
+    close: async (variants: readonly Variant[]) => {
+      try {
+        await append({ type: "applicability", items: applicability(variants) });
+      } finally {
+        await file.close();
+      }
+      const hash = await open(
+        join(rawPath, "ui-acceptance-safe.sha256"),
+        "wx",
+        0o600,
+      );
+      try {
+        await hash.writeFile(`${digest.digest("hex")}\n`);
+        await hash.sync();
+      } finally {
+        await hash.close();
+      }
+    },
+  };
+}
