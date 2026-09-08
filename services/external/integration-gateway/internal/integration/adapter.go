@@ -270,6 +270,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	case "CONFLUENCE":
 		result, err = adapter.executeConfluence(ctx, request, capability, configuration, canonicalInput)
 	case "EMAIL_HTTPS":
+		// Legacy metadata уже проверена вместе с owner claim; в mail adapter она не передаётся.
+		request.Credential = nil
 		result, err = adapter.executeEmail(ctx, request, capability, configuration, canonicalInput)
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
@@ -323,7 +325,8 @@ func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.
 	if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_ROUTE_NOT_OWNED"}
 	}
-	if definition.RequiresConnectionCredential() != (request.Credential != nil) {
+	if definition.RequiresConnectionCredential() != (request.Credential != nil) &&
+		!(definition.HasLegacyEmailCredentialDescriptor(shipped) && validLegacyEmailCredentialMetadata(request.Credential)) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
 	return definition, nil

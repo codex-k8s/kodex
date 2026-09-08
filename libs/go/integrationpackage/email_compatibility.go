@@ -35,3 +35,11 @@ func legacyManagedMailbox(current Package) (Package, bool) {
 	legacy, err = Parse(raw)
 	return legacy, err == nil && legacy.Digest == legacyEmailDigest
 }
+
+// HasLegacyEmailCredentialDescriptor принимает только прежний descriptor в уже
+// допустимой immutable revision, включая UI/GIT narrowing. Полномочия не расширяет.
+func (p Package) HasLegacyEmailCredentialDescriptor(shipped Package) bool {
+	legacy, ok := legacyManagedMailbox(shipped)
+	return ok && p.Spec.Credential != nil && *p.Spec.Credential == *legacy.Spec.Credential &&
+		ValidateExecutableRevision(p, legacy) == nil
+}

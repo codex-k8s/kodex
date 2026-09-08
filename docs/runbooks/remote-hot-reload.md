@@ -4,7 +4,7 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.3.0
+version: 1.4.0
 updated: 2026-09-08
 ---
 
@@ -17,6 +17,36 @@ updated: 2026-09-08
 cert-manager, SeaweedFS, Kodex с монтированием исходников и Teleport Community
 Edition. Для публичных интерфейсов используются реальные сертификаты Let's
 Encrypt. Production-данные и production-секреты в контур не переносятся.
+
+## Профиль разработки
+
+По [решению владельца от 2026-09-08, #1343](https://github.com/codex-k8s/kodex/issues/1343)
+hot reload сохраняется на весь период разработки Kodex и последующих циклов
+ручной приёмки. Для Go/Vue с монтируемым кодом основной путь — точная новая
+source revision и штатный scoped source release. Новый Git SHA сам по себе
+не требует Docker build неизменного образа с toolchain. Завершение MVP не
+предполагает перевод всех dev units на immutable application images; смена
+этого профиля требует отдельного решения владельца.
+
+Go/npm manifests сначала требуют штатной подготовки зависимостей и кэша.
+Она не равна обязательной пересборке toolchain image. Docker build нужен при
+реальном изменении содержимого образа: Dockerfile/base, OS packages, toolchain,
+native dependencies либо встроенных binary/assets. Для runner/runtime/RoleImage
+с встроенным исполняемым кодом сохраняется полный build/admission/promotion/
+exact digest путь. Смена source Deployment не обновляет такой binary в Jobs;
+active attempt pins и immutable inputs не перепривязываются ради обхода сборки.
+
+Каждая поставка остаётся code-first: Issue/PR, точный source, preflight, scoped
+plan/apply и actual readback совместимых component revisions. Application source
+не меняет соседние sidecars, keys/trust/grants; DB migration, config и security
+переходы выполняются отдельно. Существующие данные, accounts, sessions и fixture
+history сохраняются: повторный wipe и `down` текущего контура запрещены.
+Обычный цикл исправления не запускает глобальный `up`.
+
+Обычные переносимые установки по-прежнему поддерживают immutable application
+images без hostPath/Air/Vite/SSH; production требует отдельного решения владельца.
+Критерии выбора сборки и команды ежедневной поставки находятся в
+[руководстве релиза](../../tools/release/README.md#выбор-source-и-image).
 
 Только bare-metal bootstrap удалённого контура устанавливает именованный AppArmor profile
 `kodex-provider-runtime`. Он точечно разрешает `userns` только provider-контейнеру,
@@ -198,7 +228,12 @@ KUBECONFIG="$HOME/.tsh-kodex-home/.kube/config" kubectl auth can-i create cluste
 создание ClusterRoleBinding запрещены. Break-glass SSH-сессию нельзя закрывать,
 пока новая Teleport SSH-сессия и Kubernetes readback не подтверждены.
 
-## Запуск и проверка
+## Первичный запуск и проверка bootstrap
+
+Следующие команды относятся к первичной настройке либо отдельно согласованной
+infrastructure-фазе. Для текущего контура и дальнейших исправлений применяется
+[scoped source workflow](../../tools/release/README.md#использование), без повторного
+bootstrap, сброса состояния или обязательного Teleport cutover.
 
 ```bash
 ./tools/dev/remote-dev.sh teleport --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
@@ -274,6 +309,10 @@ Host-owned Teleport применяется отдельно до application rol
 
 ## Завершение
 
+Этот destructive workflow описывает отдельное удаление disposable установки,
+а не шаг ручной приёмки. Для действующего dev контура он запрещён решением выше;
+само наличие команды и confirmation phrase не даёт разрешения на удаление.
+
 ```bash
 KODEX_DEV_CONFIRM_DOWN=I_UNDERSTAND_THIS_REMOVES_KODEX_FROM_THE_BOUND_DISPOSABLE_CLUSTER \
   ./tools/dev/remote-dev.sh down --env-file "$REMOTE_ENV" --expected-sha "$EXPECTED_SHA"
@@ -282,5 +321,5 @@ KODEX_DEV_CONFIRM_DOWN=I_UNDERSTAND_THIS_REMOVES_KODEX_FROM_THE_BOUND_DISPOSABLE
 Команда удаляет application namespaces, но оставляет общие dev-контроллеры и
 host-owned Teleport для диагностики. Она требует отдельную точную фразу
 подтверждения disposable-среды и сверяет UID, API endpoint и CA текущего
-кластера с root-owned marker. Перед production-релизом сервер очищается
-полностью, после чего production-инсталлятор запускается на чистом хосте.
+кластера с root-owned marker. Отдельная production-установка использует чистый
+хост; решение о ней не является разрешением очищать текущий dev сервер.

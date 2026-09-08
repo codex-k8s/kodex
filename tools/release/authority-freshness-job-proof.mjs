@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -38,8 +39,7 @@ function main(args) {
  requireValue(issuer?.image===policy.data.authorityIssuerImage&&fingerprint(issuer.command)===fingerprint(['/usr/local/bin/internal-rpc-authority-issuer'])&&state?.ready&&state.state?.running,'EXACT_JOB_ISSUER_REQUIRED');
  for(const name of ['internal-rpc-authority-socket-init','platform-worker-grant-agent'])requireValue(pod.spec.initContainers?.find(c=>c.name===name)?.image===policy.data.authorityImage,'UNCHANGED_JOB_WORKER_IMAGE_REQUIRED');
  const capability=JSON.parse(readFileSync(options['--capability'],'utf8'));
- const script='count=0; result=; for entry in /proc/[0-9]*/exe; do target=$(readlink "$entry" 2>/dev/null) || continue; if [ "$target" = /usr/local/bin/internal-rpc-authority-issuer ]; then count=$((count+1)); result=$(sha256sum "$entry") || exit 1; fi; done; [ "$count" = 1 ] || exit 1; printf "%s\\n" "$result"';
- const binarySHA256=kube('exec',pod.metadata.name,'-n',namespace,'-c',issuer.name,'--','sh','-c',script).split(/\s/)[0];
+ const binarySHA256=readAuthorityExecutable(pod,issuer,{kube,k3sSudo:options['--k3s-sudo']});
  requireValue(binarySHA256===capability.imageBinaries?.issuer,'JOB_ISSUER_BINARY_MISMATCH');
  const after=get('pod',pod.metadata.name,'-n',namespace),afterState=after.status.initContainerStatuses?.find(c=>c.name===issuer.name);
  requireValue(after.metadata.uid===pod.metadata.uid&&afterState?.containerID===state.containerID&&afterState.imageID===state.imageID&&fingerprint(after.spec)===fingerprint(pod.spec),'JOB_CHANGED_DURING_PROOF');

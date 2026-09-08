@@ -183,6 +183,14 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 
 ## Публичная и привилегированная выдача
 
+Serving executable proof учитывает фактический image profile. Distroless
+проверяется нативным read-only helper либо SRE host CRI binding
+Pod/container/image → PID → открытый `/proc/PID/exe`, с повторной проверкой
+start time и identity. Наличие shell не предполагается. Image digest и файл
+на диске не заменяют digest работающего процесса; добавление shell/root/debug
+container ради readback запрещено. Native helper не принимает произвольные
+пути и не читает env/credentials, неизвестный профиль закрыто отклоняется.
+
 Публичные ORGANIZATION/PROJECT/RESOURCE_KIND scopes проверяются по каноническому
 валидатору и разрешаются владельцем состояния внутри проверенного tenant.
 Отсутствующие внутренние locator поля не заменяются выдуманным проектом и не
