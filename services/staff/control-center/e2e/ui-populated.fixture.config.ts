@@ -3,7 +3,10 @@ import base from "../playwright.synthetic.config";
 export default defineConfig({
   ...base,
   testDir: ".",
-  testMatch: "ui-populated.synthetic.spec.ts",
+  testMatch: [
+    "ui-populated.synthetic.spec.ts",
+    "ui-document-navigation.synthetic.spec.ts",
+  ],
   workers: 3,
   timeout: 30000,
   globalTimeout: 300000,

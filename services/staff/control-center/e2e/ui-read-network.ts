@@ -1,4 +1,8 @@
 import {
+  DocumentNavigation,
+  type NavigationAction,
+} from "./ui-document-navigation";
+import {
   SessionRequestDiagnostics,
   type SessionProofStage,
 } from "./session-request-diagnostics";
@@ -24,6 +28,7 @@ const cancelledCodes = new Set([
 // Private runtime correlation; адреса, identity и тексты ошибок в evidence не выходят.
 export class ReadNetworkCorrelator<T extends object> {
   private readonly diagnostics: SessionRequestDiagnostics<T>;
+  private readonly documents = new DocumentNavigation<T>();
   private stage: SessionProofStage = "INITIAL_READY";
   constructor(origin = "https://fixture.invalid") {
     this.diagnostics = new SessionRequestDiagnostics<T>(origin);
@@ -40,7 +45,6 @@ export class ReadNetworkCorrelator<T extends object> {
       abort?: number;
       rejected: boolean;
       invalid: boolean;
-      navigation?: number;
     }
   >();
   private readonly requests = new Map<
@@ -92,12 +96,14 @@ export class ReadNetworkCorrelator<T extends object> {
     method: string,
     id?: string,
     resourceType = "other",
+    mainFrame = true,
   ): void {
     if (this.requests.has(request)) return;
     if (this.requests.size >= 4096) {
       this.overflow++;
       return;
     }
+    this.documents.request(request, mainFrame);
     this.diagnostics.start(request, {
       url: address,
       method,
@@ -120,40 +126,45 @@ export class ReadNetworkCorrelator<T extends object> {
   terminal(request: T, at = Date.now()): void {
     const item = this.requests.get(request);
     if (item) item.terminal = at;
+    this.documents.terminal(request, at);
   }
   failed(request: T, code: string, at = Date.now()): void {
     const item = this.requests.get(request);
     if (item) {
+      this.documents.terminal(request, at);
       this.diagnostics.failed(request, this.stage, code, at);
       item.failed = at;
       item.terminal = at;
       item.code = code;
     }
   }
-  navigation(at = Date.now()): void {
-    for (const [id, item] of this.signals) {
-      if (
-        item.start !== undefined &&
-        item.start <= at &&
-        !item.invalid &&
-        ![...(this.ids.get(id) ?? [])].some(
-          (request) => this.requests.get(request)?.terminal !== undefined,
-        )
-      )
-        item.navigation ??= at;
-    }
+  documentObserved(id: string, at = Date.now()): void {
+    this.documents.document(id, at);
+  }
+  navigation(action: NavigationAction = "GOTO", at = Date.now()): number {
+    return this.documents.begin(action, at);
+  }
+  navigationFinished(
+    id: number,
+    complete: boolean,
+    at = Date.now(),
+    sameDocument = false,
+  ): void {
+    this.documents.end(id, complete, at, sameDocument);
   }
   confirmed(request: T): boolean {
     const item = this.requests.get(request);
     if (
-      !item?.id ||
+      !item ||
       item.failed === undefined ||
       !cancelledCodes.has(item.code ?? "") ||
       this.overflow ||
-      this.ids.get(item.id)?.size !== 1
+      this.documents.overflowCount() ||
+      (item.id !== undefined && this.ids.get(item.id)?.size !== 1)
     )
       return false;
-    const signal = this.signals.get(item.id);
+    if (this.documents.confirmed(request)) return true;
+    const signal = item.id ? this.signals.get(item.id) : undefined;
     return (
       !!signal &&
       !signal.invalid &&
@@ -161,10 +172,9 @@ export class ReadNetworkCorrelator<T extends object> {
       signal.start <= item.failed &&
       signal.address === item.address &&
       signal.method === item.method &&
-      ((signal.abort !== undefined &&
-        signal.abort <= item.failed &&
-        signal.rejected) ||
-        (signal.navigation !== undefined && signal.navigation <= item.failed))
+      signal.abort !== undefined &&
+      signal.abort <= item.failed &&
+      signal.rejected
     );
   }
   safeDiagnostics() {
@@ -184,7 +194,10 @@ export class ReadNetworkCorrelator<T extends object> {
           nativeIdentityKnown: !!signal && !signal.invalid,
           nativeAbortObserved: signal?.abort !== undefined,
           nativeRejected: signal?.rejected ?? false,
-          navigationIntentObserved: signal?.navigation !== undefined,
+          navigationIntentObserved: entry
+            ? this.documents.evidence(entry[0]).documentNavigationIntent
+            : false,
+          ...(entry ? this.documents.evidence(entry[0]) : {}),
         };
       }),
     };
@@ -196,7 +209,7 @@ export class ReadNetworkCorrelator<T extends object> {
     return {
       observedRequests: this.requests.size,
       signalEvents: Math.min(this.events, 4096),
-      overflow: this.overflow,
+      overflow: this.overflow + this.documents.overflowCount(),
       rawFailedRequests: failed.length,
       confirmedCancellations: failed.filter(([request]) =>
         this.confirmed(request),
@@ -249,10 +262,43 @@ export async function installReadNetworkObserver(
       });
     },
   );
+  await page.exposeBinding(
+    "__kodexUIReadDocument",
+    (
+      { frame },
+      value: { id?: unknown; at?: unknown; origin?: unknown } | null,
+    ) => {
+      if (
+        frame !== page.mainFrame() ||
+        !value ||
+        value.origin !== origin ||
+        typeof value.id !== "string" ||
+        !Number.isSafeInteger(value.at)
+      )
+        return;
+      observer.documentObserved(value.id, Number(value.at));
+    },
+  );
   await page.addInitScript(
     ({ origin, header }) => {
       const original = window.fetch.bind(window),
         documentID = crypto.randomUUID();
+      if (location.origin === origin)
+        void (
+          window as unknown as {
+            __kodexUIReadDocument(value: {
+              id: string;
+              at: number;
+              origin: string;
+            }): Promise<void>;
+          }
+        )
+          .__kodexUIReadDocument({
+            id: documentID,
+            at: Date.now(),
+            origin: location.origin,
+          })
+          .catch(() => undefined);
       let sequence = 0;
       window.fetch = (input, init) => {
         let address: URL;
@@ -335,6 +381,13 @@ export async function installReadNetworkObserver(
     { origin, header: uiReadIdentityHeader },
   );
   page.on("request", (request) => {
+    let mainFrame = false;
+    try {
+      mainFrame =
+        !request.isNavigationRequest() && request.frame() === page.mainFrame();
+    } catch {
+      /* Service worker/frame уже недоступен: без подтверждения. */
+    }
     if (new URL(request.url()).origin === origin)
       observer.request(
         request,
@@ -342,6 +395,7 @@ export async function installReadNetworkObserver(
         request.method(),
         request.headers()[uiReadIdentityHeader],
         request.resourceType(),
+        mainFrame,
       );
   });
   page.on("requestfinished", (request) => observer.terminal(request));
@@ -349,14 +403,50 @@ export async function installReadNetworkObserver(
     observer.failed(request, request.failure()?.errorText ?? "UNKNOWN"),
   );
   const goto = page.goto.bind(page),
-    reload = page.reload.bind(page);
-  page.goto = (...args: Parameters<typeof goto>) => {
-    observer.navigation();
-    return goto(...args);
+    reload = page.reload.bind(page),
+    close = page.close.bind(page);
+  page.goto = async (...args: Parameters<typeof goto>) => {
+    const id = observer.navigation("GOTO");
+    try {
+      const value = await goto(...args);
+      observer.navigationFinished(
+        id,
+        value !== null,
+        Date.now(),
+        value === null,
+      );
+      return value;
+    } catch (error) {
+      observer.navigationFinished(id, false);
+      throw error;
+    }
   };
-  page.reload = (...args: Parameters<typeof reload>) => {
-    observer.navigation();
-    return reload(...args);
+  page.reload = async (...args: Parameters<typeof reload>) => {
+    const id = observer.navigation("RELOAD");
+    try {
+      const value = await reload(...args);
+      observer.navigationFinished(
+        id,
+        value !== null,
+        Date.now(),
+        value === null,
+      );
+      return value;
+    } catch (error) {
+      observer.navigationFinished(id, false);
+      throw error;
+    }
+  };
+  page.close = async (...args: Parameters<typeof close>) => {
+    if (page.isClosed()) return close(...args);
+    const id = observer.navigation("CLOSE");
+    try {
+      await close(...args);
+      observer.navigationFinished(id, page.isClosed());
+    } catch (error) {
+      observer.navigationFinished(id, false);
+      throw error;
+    }
   };
   return observer;
 }
