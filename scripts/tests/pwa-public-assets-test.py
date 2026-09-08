@@ -118,14 +118,42 @@ def http_fixture(directory, resources):
         shutil.copyfile(PUBLIC / asset[1:], assets / asset[1:])
     (assets / "index.html").write_text("<html>Private fixture shell</html>")
     # Внешний OIDC/provider не вызывается. Только контракт /auth 202/401.
-    (directory / "auth.conf").write_text('''server {
+    proxy_cookie = "_kodex_control_center_oauth2"
+    cookie_maps = []
+    cookie_headers = []
+    for index, suffix in enumerate(["", "_0", "_1", "_2", "_3", "_4"]):
+        modes = ["base"] if not suffix else (["split2", "split4"] if index <= 2 else ["split4"])
+        value = f"{proxy_cookie}{suffix}=rotated; Path=/; Secure; HttpOnly; SameSite=Lax"
+        cookie_maps.append(f'map $http_x_fixture_cookie_mode $renewed{index} {{ default ""; ' + " ".join(f'{mode} "{value}";' for mode in modes) + " }")
+        cookie_headers.append(f"add_header Set-Cookie $renewed{index} always;")
+    (directory / "auth.conf").write_text("\n".join(cookie_maps) + '''
+    map "$http_x_fixture_require_renewed:$http_cookie" $fixture_expired {
+      default 0;
+      ~^true:.*_kodex_control_center_oauth2=rotated 0;
+      ~^true: 1;
+    }
+    server {
       listen 8081;
       location = /oauth2/auth {
         if ($http_x_fixture_session != "granted") { return 401; }
+        if ($fixture_expired) { return 401; }
+        ''' + "\n".join(cookie_headers) + '''
+        add_header Set-Cookie "_kodex_control_center_oauth2_csrf=excluded; Path=/; Secure; HttpOnly" always;
+        add_header Set-Cookie "_kodex_control_center_oauth2_csrf_attempt=excluded; Path=/; Secure; HttpOnly" always;
+        add_header Set-Cookie "_foreign_session=excluded; Path=/; Secure; HttpOnly" always;
+        add_header Set-Cookie "__Host-kodex-session=auth-excluded; Path=/; Secure; HttpOnly" always;
+        add_header Set-Cookie "__Host-kodex-csrf=auth-excluded; Path=/; Secure" always;
         return 202;
       }
       location = /oauth2/sign_in { return 302 /oauth2/start; }
-      location / { return 200 '{"fixture":true}'; }
+      location / {
+        add_header Set-Cookie "__Host-kodex-session=backend-preserved; Path=/; Secure; HttpOnly" always;
+        add_header Set-Cookie "__Host-kodex-csrf=backend-preserved; Path=/; Secure" always;
+        add_header Set-Cookie "_kodex_control_center_oauth2=backend-stale; Path=/; Secure; HttpOnly; SameSite=Lax" always;
+        add_header Set-Cookie "_kodex_control_center_oauth2_0=backend-stale; Path=/; Secure; HttpOnly; SameSite=Lax" always;
+        add_header X-Fixture-Upstream-Set-Cookie $http_set_cookie always;
+        return 200 '{"fixture":true}';
+      }
     }
     ''')
     # Один worker соответствует CPU budget fixture; production routes неизменны.
@@ -154,6 +182,10 @@ def http_fixture(directory, resources):
     errors = next(r["spec"] for r in management if r.get("kind") == "Middleware" and r["metadata"]["name"] == "oauth2-control-center-errors")
     errors["errors"]["service"] = "auth"
     dynamic = {"http": {"routers": routes, "middlewares": {"auth": auth, "errors": errors}, "services": {"pwa": {"loadBalancer": {"servers": [{"url": "https://backend:8443"}], "serversTransport": "backend"}}, "api": {"loadBalancer": {"servers": [{"url": "http://backend:8081"}]}}, "auth": {"loadBalancer": {"servers": [{"url": "http://backend:8081"}]}}}, "serversTransports": {"backend": {"serverName": "staff-control-center.kodex-system.svc.cluster.local", "rootCAs": ["/fixture/tls/ca.crt"], "certificates": [{"certFile": "/fixture/tls/client.crt", "keyFile": "/fixture/tls/client.key"}]}}}, "tls": {"certificates": [{"certFile": "/fixture/tls/server.crt", "keyFile": "/fixture/tls/server.key"}]}}
+    legacy_auth = json.loads(json.dumps(auth))
+    legacy_auth["forwardAuth"].pop("addAuthCookiesToResponse", None)
+    dynamic["http"]["middlewares"]["auth-no-copy"] = legacy_auth
+    dynamic["http"]["routers"]["cookie-no-copy"] = {"rule": "Host(`localhost`) && Path(`/api/v1/fixture-cookie-no-copy`)", "priority": 350, "entryPoints": ["websecure"], "tls": {}, "service": "api", "middlewares": ["auth-no-copy"]}
     (directory / "dynamic.yaml").write_text(json.dumps(dynamic))
     for f in directory.rglob("*"):
         f.chmod(0o755 if f.is_dir() else 0o444)
@@ -169,7 +201,7 @@ def http_fixture(directory, resources):
         run(*args, nginx, "-g", "daemon off;")
         run("docker", "run", *common, "--name", names[1], "--network-alias", "frontend", "--user", "65532:65532", *mount(directory, "/fixture"), TRAEFIK, "--entrypoints.websecure.address=:8443", "--providers.file.filename=/fixture/dynamic.yaml", "--log.level=ERROR")
 
-        def request(path, authenticated=False, method="GET"):
+        def request(path, authenticated=False, method="GET", extra_headers=()):
             # Клиент тоже внутри internal network: host port и внешний egress не нужны.
             command = ["docker", "exec", names[0], "curl", "--silent", "--show-error",
                        "--max-time", "5", "--http1.1", "--path-as-is", "--noproxy", "*",
@@ -178,6 +210,8 @@ def http_fixture(directory, resources):
                        "--dump-header", "-"]
             if authenticated:
                 command += ["--header", "X-Fixture-Session: granted"]
+            for header in extra_headers:
+                command += ["--header", header]
             command += ["--head"] if method == "HEAD" else ["--request", method]
             command += ["https://localhost:8443" + path]
             result = subprocess.run(command, capture_output=True, timeout=8)
@@ -185,7 +219,9 @@ def http_fixture(directory, resources):
                 raise RuntimeError("fixture HTTPS request failed")
             header, _, body = result.stdout.partition(b"\r\n\r\n")
             lines = header.decode("ascii").split("\r\n")
-            headers = dict(line.split(": ", 1) for line in lines[1:] if ": " in line)
+            pairs = [line.split(": ", 1) for line in lines[1:] if ": " in line]
+            headers = dict(pairs)
+            headers["Set-Cookie"] = [value for key, value in pairs if key.lower() == "set-cookie"]
             return int(lines[0].split()[1]), headers, body
 
         deadline = time.monotonic() + 20
@@ -232,6 +268,33 @@ def http_fixture(directory, resources):
             finally:
                 hidden.rename(present)
             count += 1
+        def cookie_values(headers):
+            from http.cookies import SimpleCookie
+            result = {}
+            for line in headers["Set-Cookie"]:
+                cookie = SimpleCookie(); cookie.load(line)
+                for name, value in cookie.items():
+                    assert name not in result, "duplicate response cookie"
+                    if name.startswith(proxy_cookie):
+                        assert value["path"] == "/" and value["secure"] and value["httponly"] and value["samesite"] == "Lax", "proxy cookie attributes changed"
+                    result[name] = value.value
+            return result
+
+        for mode, suffixes in [("base", [""]), ("split2", ["_0", "_1"]), ("split4", ["_0", "_1", "_2", "_3"])]:
+            status, headers, _ = request("/api/v1/bootstrap", True, extra_headers=["X-Fixture-Cookie-Mode: " + mode])
+            received = cookie_values(headers)
+            assert status == 200 and set(received) == {proxy_cookie + suffix for suffix in suffixes} | {"__Host-kodex-session", "__Host-kodex-csrf"}, "forwardAuth cookie allowlist mismatch"
+            assert all(received[proxy_cookie + suffix] == "rotated" for suffix in suffixes), "renewed proxy cookies were lost"
+            assert received["__Host-kodex-session"] == received["__Host-kodex-csrf"] == "backend-preserved", "BFF cookies were replaced"
+            assert "X-Fixture-Upstream-Set-Cookie" not in headers, "response cookies leaked into backend request"
+            if mode == "base":
+                renewed_cookie = proxy_cookie + "=" + received[proxy_cookie]
+            count += 1
+        status, legacy, _ = request("/api/v1/fixture-cookie-no-copy", True, extra_headers=["X-Fixture-Cookie-Mode: base"])
+        assert status == 200 and cookie_values(legacy).get(proxy_cookie) == "backend-stale", "legacy fixture unexpectedly copied auth cookie"
+        assert request("/api/v1/bootstrap", True, extra_headers=["X-Fixture-Require-Renewed: true", "Cookie: " + proxy_cookie + "=old"])[0] == 401
+        assert request("/api/v1/bootstrap", True, extra_headers=["X-Fixture-Require-Renewed: true", "Cookie: " + renewed_cookie])[0] == 200
+        count += 3
         print(f"PWA public assets HTTP fixture PASS: {count} requests; real Traefik/nginx, synthetic auth, isolated network")
     except Exception:
         # Только журналы созданных оснасткой контейнеров: живых данных здесь нет.
