@@ -969,7 +969,7 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 			"configuration": configuration, "leaseRef": leaseRef, "fence": fence,
 			"generation": generation, "expiresAt": expiresAt,
 		}
-		if item.credential.Ref != "" && item.credentialCreatedAt != nil {
+		if definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
 			item.credential.CreatedAt = *item.credentialCreatedAt
 			claim["credential"] = item.credential
 		}
@@ -1263,7 +1263,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			"resourceScopeDigest": item.resourceScopeDigest, "effectKey": item.effectKey, "inputDigest": item.inputDigest,
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
 		}
-		if item.credential.Ref != "" && item.credentialCreatedAt != nil {
+		if definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
 			item.credential.CreatedAt = *item.credentialCreatedAt
 			claim["credential"] = item.credential
 		}

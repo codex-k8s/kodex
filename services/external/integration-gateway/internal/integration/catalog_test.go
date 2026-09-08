@@ -168,7 +168,7 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 				}
 				adapter := testAdapter(t)
 				var credential *CredentialRevision
-				if definition.Spec.Credential != nil {
+				if definition.RequiresConnectionCredential() {
 					credential = testCredential(t, adapter, "test-token")
 				}
 				calls := 0
@@ -411,7 +411,10 @@ func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 			continue
 		}
 		t.Run(operation, func(t *testing.T) {
-			credential := testCredential(t, adapter, "test-token")
+			var credential *CredentialRevision
+			if definition.RequiresConnectionCredential() {
+				credential = testCredential(t, adapter, "test-token")
+			}
 			mutations := 0
 			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				if r.Method != "GET" {
@@ -447,7 +450,7 @@ func TestScopeDeniedBeforeCredentialRead(t *testing.T) {
 			adapter := testAdapter(t)
 			definition := adapter.definitions[strings.Split(operation, ".")[0]]
 			var credential *CredentialRevision
-			if definition.Spec.Credential != nil {
+			if definition.RequiresConnectionCredential() {
 				credential = &CredentialRevision{}
 			}
 			var input map[string]any
@@ -476,7 +479,10 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 			continue
 		}
 		t.Run(operation, func(t *testing.T) {
-			credential := testCredential(t, adapter, "test-token")
+			var credential *CredentialRevision
+			if definition.RequiresConnectionCredential() {
+				credential = testCredential(t, adapter, "test-token")
+			}
 			calls := 0
 			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				calls++
@@ -521,7 +527,7 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 
 func TestEmailNotReadyCannotSend(t *testing.T) {
 	adapter := testAdapter(t)
-	credential := testCredential(t, adapter, "test-token")
+	var credential *CredentialRevision
 	calls := 0
 	adapter.emailHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		calls++

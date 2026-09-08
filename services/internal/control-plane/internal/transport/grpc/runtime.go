@@ -570,17 +570,7 @@ func (server *Server) ClaimIntegrationConnectionTests(ctx context.Context, reque
 	}
 	response := &controlplanev1.ClaimIntegrationConnectionTestsResponse{}
 	for _, item := range items {
-		configuration, _ := item["configuration"].(map[string]any)
-		claim := &controlplanev1.IntegrationConnectionTestClaim{
-			TestRef: mapString(item, "testRef"), ConnectionRef: mapString(item, "connectionRef"),
-			DefinitionKey: mapString(item, "definitionKey"), PublicConfiguration: structure(configuration), Lease: castLease(item),
-			DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
-		}
-		claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
-		if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
-			claim.CredentialRevision = castIntegrationCredential(credential)
-		}
-		response.Claims = append(response.Claims, claim)
+		response.Claims = append(response.Claims, CastIntegrationConnectionTestClaim(item))
 	}
 	return response, nil
 }
@@ -625,27 +615,7 @@ func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *
 	}
 	response := &controlplanev1.ClaimIntegrationInvocationsResponse{}
 	for _, item := range items {
-		configuration, _ := item["configuration"].(map[string]any)
-		boundedInput, _ := item["boundedInput"].(map[string]any)
-		resourceScope, _ := item["resourceScope"].(map[string]string)
-		claim := &controlplanev1.IntegrationInvocationClaim{
-			InvocationRef: mapString(item, "invocationRef"), DefinitionKey: mapString(item, "definitionKey"),
-			ConnectionRef: mapString(item, "connectionRef"), CapabilityKey: mapString(item, "capabilityKey"),
-			PublicConfiguration: structure(configuration), BoundedInput: structure(boundedInput), Lease: castLease(item),
-			DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
-			Operation: mapString(item, "operation"), Risk: integrationRisk(mapString(item, "risk")),
-			ApprovalPolicy: integrationApprovalPolicy(mapString(item, "approvalPolicy")),
-			ResourceScope: &controlplanev1.IntegrationResourceScope{
-				Kind: integrationResourceKind(mapString(item, "resourceKind")), Values: resourceScope,
-				Digest: mapString(item, "resourceScopeDigest"),
-			},
-			EffectKey: mapString(item, "effectKey"), InputDigest: mapString(item, "inputDigest"),
-		}
-		claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
-		if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
-			claim.CredentialRevision = castIntegrationCredential(credential)
-		}
-		response.Claims = append(response.Claims, claim)
+		response.Claims = append(response.Claims, CastIntegrationInvocationClaim(item))
 	}
 	return response, nil
 }
@@ -680,4 +650,44 @@ func (server *Server) CompleteIntegrationInvocation(ctx context.Context, request
 		return nil, err
 	}
 	return &controlplanev1.CompleteIntegrationInvocationResponse{Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}, nil
+}
+
+// CastIntegrationConnectionTestClaim сохраняет точные owner pins и отсутствие generic credential.
+func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.IntegrationConnectionTestClaim {
+	configuration, _ := item["configuration"].(map[string]any)
+	claim := &controlplanev1.IntegrationConnectionTestClaim{
+		TestRef: mapString(item, "testRef"), ConnectionRef: mapString(item, "connectionRef"),
+		DefinitionKey: mapString(item, "definitionKey"), PublicConfiguration: structure(configuration), Lease: castLease(item),
+		DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
+	}
+	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
+	if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
+		claim.CredentialRevision = castIntegrationCredential(credential)
+	}
+	return claim
+}
+
+// CastIntegrationInvocationClaim сохраняет точные owner pins и отсутствие generic credential.
+func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.IntegrationInvocationClaim {
+	configuration, _ := item["configuration"].(map[string]any)
+	boundedInput, _ := item["boundedInput"].(map[string]any)
+	resourceScope, _ := item["resourceScope"].(map[string]string)
+	claim := &controlplanev1.IntegrationInvocationClaim{
+		InvocationRef: mapString(item, "invocationRef"), DefinitionKey: mapString(item, "definitionKey"),
+		ConnectionRef: mapString(item, "connectionRef"), CapabilityKey: mapString(item, "capabilityKey"),
+		PublicConfiguration: structure(configuration), BoundedInput: structure(boundedInput), Lease: castLease(item),
+		DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
+		Operation: mapString(item, "operation"), Risk: integrationRisk(mapString(item, "risk")),
+		ApprovalPolicy: integrationApprovalPolicy(mapString(item, "approvalPolicy")),
+		ResourceScope: &controlplanev1.IntegrationResourceScope{
+			Kind: integrationResourceKind(mapString(item, "resourceKind")), Values: resourceScope,
+			Digest: mapString(item, "resourceScopeDigest"),
+		},
+		EffectKey: mapString(item, "effectKey"), InputDigest: mapString(item, "inputDigest"),
+	}
+	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
+	if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {
+		claim.CredentialRevision = castIntegrationCredential(credential)
+	}
+	return claim
 }

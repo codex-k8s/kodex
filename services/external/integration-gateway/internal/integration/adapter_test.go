@@ -202,7 +202,7 @@ func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 func TestEmailTypedMailboxAndEffect(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
-	credential := testCredential(t, adapter, "email-token")
+	var credential *CredentialRevision
 	requests := 0
 	adapter.emailHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		requests++
@@ -245,7 +245,7 @@ func TestEmailTypedMailboxAndEffect(t *testing.T) {
 func TestEmailReceiptReadByEffectKey(t *testing.T) {
 	t.Parallel()
 	adapter := testAdapter(t)
-	credential := testCredential(t, adapter, "email-token")
+	var credential *CredentialRevision
 	calls := 0
 	adapter.emailHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		calls++

@@ -80,9 +80,9 @@ func (repository *Repository) emailAuthorization(ctx context.Context, tx pgx.Tx,
 			}
 		}
 	}
-	definition, found := repository.integrationDefinitions["email"]
+	definition, packageErr := repository.integrationPackage(ctx, tx, current.organizationID, source.connectionRef, "email", source.definitionVersion, source.definitionDigest)
 	capability, capabilityFound := definition.Capability(source.operation)
-	if !found || !capabilityFound || !capability.CallableByAgent() || definition.Metadata.Version != source.definitionVersion ||
+	if packageErr != nil || !capabilityFound || !capability.CallableByAgent() || definition.Metadata.Version != source.definitionVersion ||
 		definition.Digest != source.definitionDigest || capability.Risk != source.risk {
 		return entity.EmailAuthorization{}, source, errs.ErrForbidden
 	}

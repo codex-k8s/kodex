@@ -58,7 +58,7 @@ func TestEmailEveryMutationHTTPFailureIsNotRetried(t *testing.T) {
 				})
 				var input map[string]any
 				_ = json.Unmarshal([]byte(raw), &input)
-				request := invocationRequest(t, adapter.definitions["email"], operation, input, testCredential(t, adapter, "unused-email-credential"))
+				request := invocationRequest(t, adapter.definitions["email"], operation, input, nil)
 				_, err := adapter.Execute(t.Context(), request)
 				unknown := failure != "forbidden" && failure != "failed"
 				if err == nil || IsUnknownOutcome(err) != unknown || calls.Load() != 1 {
@@ -80,7 +80,7 @@ func TestEmailClaimExpiryBoundsHTTP(t *testing.T) {
 		case <-time.After(time.Second):
 		}
 	})
-	request := invocationRequest(t, adapter.definitions["email"], "email.message.send", map[string]any{"to": "recipient@example.test", "subject": "Title", "body_text": "Text"}, testCredential(t, adapter, "unused"))
+	request := invocationRequest(t, adapter.definitions["email"], "email.message.send", map[string]any{"to": "recipient@example.test", "subject": "Title", "body_text": "Text"}, nil)
 	request.EmailExecution.Lease.ExpiresAt = time.Now().Add(150 * time.Millisecond)
 	start := time.Now()
 	_, err := adapter.Execute(t.Context(), request)
@@ -97,7 +97,7 @@ func TestEmailTestBindingCannotAuthorizeMutation(t *testing.T) {
 	adapter := testAdapter(t)
 	var calls atomic.Int32
 	emailFixture(t, adapter, func(http.ResponseWriter, *http.Request) { calls.Add(1) })
-	request := invocationRequest(t, adapter.definitions["email"], "email.message.send", map[string]any{"to": "recipient@example.test", "subject": "Title", "body_text": "Text"}, testCredential(t, adapter, "unused"))
+	request := invocationRequest(t, adapter.definitions["email"], "email.message.send", map[string]any{"to": "recipient@example.test", "subject": "Title", "body_text": "Text"}, nil)
 	testRef := "test_fixture01"
 	request.EmailExecution.InvocationRef, request.EmailExecution.ConnectionTestRef = nil, &testRef
 	if _, err := adapter.Execute(t.Context(), request); err == nil || calls.Load() != 0 {

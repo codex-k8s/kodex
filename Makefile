@@ -348,3 +348,7 @@ test-email-mailbox-acceptance:
 .PHONY: test-email-mailbox-materialization
 test-email-mailbox-materialization:
 	GOWORK=off GOMAXPROCS=4 TMPDIR=/tmp go -C services/internal/control-plane test -p 2 -count=1 ./internal/transport/grpc -run '^TestOwnerEmailHelperMaterialization$$'
+
+.PHONY: test-email-managed-claim
+test-email-managed-claim: check-go-toolchain
+	@./scripts/tests/email-managed-claim-test.sh

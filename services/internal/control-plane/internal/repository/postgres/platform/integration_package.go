@@ -97,8 +97,8 @@ func (repository *Repository) integrationPackage(ctx context.Context, tx pgx.Tx,
 	if !ok {
 		return integrationpackage.Package{}, errs.ErrForbidden
 	}
-	if shipped.Metadata.Version == version && shipped.Digest == digest {
-		return shipped, nil
+	if compatible, ok := integrationpackage.ResolveShippedRevision(shipped, version, digest); ok {
+		return compatible, nil
 	}
 	var format, content string
 	err := tx.QueryRow(ctx, queryIntegrationPackageBoundRevision, organizationID, connectionRef).Scan(&format, &content)
