@@ -14,6 +14,12 @@ metadata: { name: oauth2-control-center-auth, namespace: kodex-system }
 spec:
   forwardAuth:
     address: http://oauth2-control-center.kodex-system.svc.cluster.local/oauth2/auth
+    addAuthCookiesToResponse:
+      - _kodex_control_center_oauth2
+      - _kodex_control_center_oauth2_0
+      - _kodex_control_center_oauth2_1
+      - _kodex_control_center_oauth2_2
+      - _kodex_control_center_oauth2_3
     trustForwardHeader: true
     authResponseHeaders:
       [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
@@ -43,6 +49,12 @@ metadata: { name: oauth2-grafana-auth, namespace: observability }
 spec:
   forwardAuth:
     address: http://oauth2-grafana.observability.svc.cluster.local/oauth2/auth
+    addAuthCookiesToResponse:
+      - _kodex_grafana_oauth2
+      - _kodex_grafana_oauth2_0
+      - _kodex_grafana_oauth2_1
+      - _kodex_grafana_oauth2_2
+      - _kodex_grafana_oauth2_3
     trustForwardHeader: true
     authResponseHeaders:
       [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]
@@ -72,6 +84,12 @@ metadata: { name: oauth2-headlamp-auth, namespace: platform-admin }
 spec:
   forwardAuth:
     address: http://oauth2-headlamp.platform-admin.svc.cluster.local/oauth2/auth
+    addAuthCookiesToResponse:
+      - _kodex_headlamp_oauth2
+      - _kodex_headlamp_oauth2_0
+      - _kodex_headlamp_oauth2_1
+      - _kodex_headlamp_oauth2_2
+      - _kodex_headlamp_oauth2_3
     trustForwardHeader: true
     authResponseHeaders:
       [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Groups]

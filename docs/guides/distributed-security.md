@@ -1174,3 +1174,15 @@ rotation protocol. Его выполнение доказывается отде
 включая network partition, рестарт, emergency revoke и сохранение durable
 high-watermarks. Изменение одной константы last-known-good не является таким
 доказательством и не заменяет согласованный протокол распространения отзыва.
+
+## Обновление сессии через forward authentication
+
+Если authentication proxy обновляет credentials через response cookies,
+промежуточный HTTP gateway передаёт клиенту полный ограниченный набор cookies
+этого владельца с исходными атрибутами. Разрешаются точные имена, включая
+утверждённые split chunks; общий `Set-Cookie` или wildcard не заменяет этот
+контракт. Cookies BFF, CSRF/login и соседнего приложения имеют отдельного
+владельца и не перезаписываются auth response. Response cookies не становятся
+upstream request headers. Проверка включает следующий запрос с реально
+полученным обновлением, потерю обновления, отказ authority и независимые сроки
+proxy/BFF; наличие неистёкшего client cookie не доказывает живую серверную сессию.

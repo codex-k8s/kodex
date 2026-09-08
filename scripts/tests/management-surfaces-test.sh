@@ -301,6 +301,16 @@ for surface in control-center grafana headlamp; do
     .spec.errors.statusRewrites."401" == 302
   ' "$routes" >/dev/null || fail "OAuth2 browser redirect is absent: $surface"
 done
+for surface in control-center grafana headlamp; do
+  MIDDLEWARE_NAME="oauth2-$surface-auth" yq -o=json -I=0 '
+    select(.kind == "Middleware" and .metadata.name == strenv(MIDDLEWARE_NAME)) |
+    .spec.forwardAuth
+  ' "$routes" | jq -e --arg cookie "_kodex_${surface//-/_}_oauth2" '
+    .addAuthCookiesToResponse == [$cookie, $cookie + "_0", $cookie + "_1",
+      $cookie + "_2", $cookie + "_3"] and
+    .authResponseHeaders == ["X-Auth-Request-User", "X-Auth-Request-Email", "X-Auth-Request-Groups"]
+  ' >/dev/null || fail "exact OAuth2 response cookie list is invalid: $surface"
+done
 for ingress in kodex-grafana kodex-headlamp; do
   INGRESS_NAME="$ingress" yq -e \
     'select(.kind == "Ingress" and .metadata.name == strenv(INGRESS_NAME))' "$routes" >/dev/null ||
