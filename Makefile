@@ -51,6 +51,7 @@ test-service-infrastructure-bootstrap:
 	@./scripts/tests/local-storage-e2e-reliability-contract-test.sh
 
 test-management-surfaces:
+	@node --test tools/release/proxy-session-cookies.test.mjs
 	@./scripts/tests/keycloak-protocol-mapper-reconcile-test.sh
 	@./scripts/tests/management-surfaces-test.sh
 

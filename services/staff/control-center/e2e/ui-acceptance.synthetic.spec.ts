@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
 import {
   geometry,
+  focused,
+  observeCondition,
   visit,
   observeActionResponse,
 } from "./ui-acceptance-browser";
-import { permittedRequest } from "./ui-acceptance-proof";
+import { permittedRequest, conditionFailure } from "./ui-acceptance-proof";
 
 // Настоящий Chromium проверяет helper и границу оснастки; это не live PWA/OIDC.
 test("synthetic: чтение геометрии и блокировка незапланированного POST", async ({
@@ -67,4 +69,53 @@ test("synthetic: ранний отказ действия не оставляе�
   ).rejects.toThrow("Expected fixture action failure");
   // Playwright фиксирует поздний unhandled rejection как FAIL самого теста.
   await page.waitForTimeout(100);
+});
+
+for (const [kind, expectedCondition, actual, expectedValue] of [
+  ["overflow", "DOCUMENT_OVERFLOW", 560, 1],
+  ["alert", "VISIBLE_ALERT", 1, 0],
+  ["route", "ROUTE_MISMATCH", false, true],
+] as const) {
+  test(`synthetic: ${kind} сохраняет закрытое измерение без DOM`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.route("https://kodex.test/**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: `<!doctype html><style>body{margin:0;${kind === "overflow" ? "width:2000px" : ""}}.topbar{height:48px}</style><div class="app-shell"><div class="topbar"></div><div class="page-header"><h1>cookie=private-sentinel</h1></div></div>${kind === "alert" ? '<p role="alert">private-sentinel</p>' : ""}${kind === "route" ? '<script>history.replaceState(null,"","/unexpected?private-sentinel")</script>' : ""}`,
+      }),
+    );
+    const failure = await visit(page, "/projects").then(
+      () => null,
+      conditionFailure,
+    );
+    expect(failure).toEqual({
+      condition: expectedCondition,
+      metrics: { measurementAvailable: true, actual, expected: expectedValue },
+    });
+    expect(JSON.stringify(failure)).not.toContain("private-sentinel");
+  });
+}
+test("synthetic: ранний click и фокус дают разные закрытые причины", async ({
+  page,
+}) => {
+  await page.setContent(
+    '<input id="field"><button id="trigger">private-sentinel</button>',
+  );
+  const early = await observeCondition("SELECTOR_OPEN", () =>
+    page.locator("#missing").click({ timeout: 50 }),
+  ).then(() => null, conditionFailure);
+  expect(early).toEqual({
+    condition: "SELECTOR_OPEN",
+    metrics: { measurementAvailable: false },
+  });
+  const focus = await focused("SELECTOR_FOCUS", page.locator("#field")).then(
+    () => null,
+    conditionFailure,
+  );
+  expect(focus).toEqual({
+    condition: "SELECTOR_FOCUS",
+    metrics: { measurementAvailable: true, actual: false, expected: true },
+  });
 });

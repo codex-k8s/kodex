@@ -21,11 +21,90 @@ export type Reason =
   | "BUDGET_EXHAUSTED"
   | "OUTSIDE_PROFILE"
   | "UNKNOWN_OUTCOME";
+export const conditions = [
+  "HTTP_STATUS",
+  "ROUTE_MISMATCH",
+  "APP_SHELL",
+  "PAGE_HEADING",
+  "DOCUMENT_OVERFLOW",
+  "HEADER_HEIGHT",
+  "VISIBLE_ALERT",
+  "UNTRANSLATED",
+  "API_READINESS",
+  "HTTP_ERRORS",
+  "PAGE_ERRORS",
+  "NETWORK_ERRORS",
+  "CONSOLE_ERRORS",
+  "BLOCKED_WRITES",
+  "SELECTOR_OPEN",
+  "SELECTOR_FOCUS",
+  "SELECTOR_ESCAPE",
+  "SELECTOR_RETURN_FOCUS",
+  "ASSISTANT_OPEN",
+  "ASSISTANT_VISIBLE",
+  "ASSISTANT_FOCUS",
+  "ASSISTANT_ESCAPE",
+  "UI_ACTION",
+  "CLEANUP",
+] as const;
+export type Condition = (typeof conditions)[number];
+export class UIConditionError extends Error {
+  constructor(
+    readonly condition: Condition,
+    readonly actual?: number | boolean,
+    readonly expected?: number | boolean,
+  ) {
+    super("UI condition failed");
+  }
+}
+export function conditionFailure(
+  error: unknown,
+): Pick<Variant, "condition" | "metrics"> {
+  if (!(error instanceof UIConditionError))
+    return { condition: "UI_ACTION", metrics: { measurementAvailable: false } };
+  return {
+    condition: error.condition,
+    metrics: {
+      measurementAvailable: error.actual !== undefined,
+      ...(error.actual === undefined ? {} : { actual: error.actual }),
+      ...(error.expected === undefined ? {} : { expected: error.expected }),
+    },
+  };
+}
+export const targetedVariants = [
+  "route-integrations-ru-1440",
+  "route-integrations-ru-390",
+  "route-integrations-en-1440",
+  "route-integrations-en-390",
+  "project-picker-keyboard-escape",
+  "assistant-history-shell-1440",
+  "assistant-history-shell-768",
+  "assistant-history-shell-390",
+] as const;
+export function selectedVariants(
+  raw: string | undefined,
+  createMode: string,
+): Set<string> | undefined {
+  if (raw === undefined) return undefined;
+  const values = raw.split(",");
+  if (
+    createMode !== "0" ||
+    !values.length ||
+    new Set(values).size !== values.length ||
+    values.some(
+      (value) =>
+        !targetedVariants.includes(value as (typeof targetedVariants)[number]),
+    )
+  )
+    throw new Error("Invalid read-only UI variant selection");
+  return new Set(values);
+}
 export interface Variant {
   id: string;
   requirements: readonly string[];
   status: Outcome;
   reason: Reason;
+  condition?: Condition;
   locale: "ru" | "en";
   width: number;
   metrics: Record<string, number | boolean>;
@@ -92,12 +171,20 @@ export function safeVariant(variant: Variant): Variant {
     )
   )
     throw new Error("Invalid UI proof metrics");
+  if (
+    variant.condition !== undefined &&
+    !conditions.includes(variant.condition)
+  )
+    throw new Error("Invalid UI proof condition");
   // Только закрытые поля: случайно переданный DOM, URL или response отбрасывается.
   return {
     id: variant.id,
     requirements: [...variant.requirements],
     status: variant.status,
     reason: variant.reason,
+    ...(variant.condition === undefined
+      ? {}
+      : { condition: variant.condition }),
     locale: variant.locale,
     width: variant.width,
     metrics: { ...variant.metrics },

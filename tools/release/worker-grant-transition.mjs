@@ -30,6 +30,30 @@ function healthy(deployment) {
     t.availableReplicas === s.replicas, "COMPLETED_HEALTHY_ROLLOUT_REQUIRED");
 }
 
+// Deployment rollout может завершиться до удаления старого terminating Pod.
+// После единственного PATCH ждём только точный readback, не повторяя mutation.
+export async function waitForWorkerDrain({ readDeployment, readPods, uid, specSHA256, timeoutMs = 300_000, pollIntervalMs = 250 }) {
+  requireValue(Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 300_000 &&
+    Number.isSafeInteger(pollIntervalMs) && pollIntervalMs > 0, "BOUNDED_DRAIN_WAIT_REQUIRED");
+  const deadline = performance.now() + timeoutMs;
+  while (true) {
+    const deployment = await readDeployment();
+    requireValue(deployment.metadata.uid === uid && fingerprint(deployment.spec) === specSHA256, "TRANSITION_READBACK_MISMATCH");
+    requireValue(performance.now() < deadline, "WORKER_DRAIN_TIMEOUT");
+    try {
+      healthy(deployment);
+      const pods = await readPods(deployment);
+      requireValue(performance.now() < deadline, "WORKER_DRAIN_TIMEOUT");
+      return { deployment, pods };
+    } catch (error) {
+      if (!["COMPLETED_HEALTHY_ROLLOUT_REQUIRED", "ALL_READER_PODS_REQUIRED"].includes(error?.message)) throw error;
+    }
+    const remaining = deadline - performance.now();
+    requireValue(remaining > 0, "WORKER_DRAIN_TIMEOUT");
+    await new Promise((done) => setTimeout(done, Math.min(pollIntervalMs, remaining)));
+  }
+}
+
 export function requireInstanceWriters(template) {
   const agents = workerGrantAgents(template.spec);
   requireValue(agents.length > 0 && template.metadata?.annotations?.[formatAnnotation] === "2", "INSTANCE_GRANTS_REQUIRED");
@@ -253,9 +277,10 @@ async function main(args) {
     applied = true;
     record({ status: "APPLIED", afterSpecSHA256: plan.afterSpecSHA256 });
     kubectl(["rollout", "status", `deployment/${snapshot.target}`, "--timeout=300s"]);
-    const final = get("deployment", snapshot.target); healthy(final);
-    requireValue(final.metadata.uid === plan.uid && fingerprint(final.spec) === plan.afterSpecSHA256, "TRANSITION_READBACK_MISMATCH");
-    record({ status: "PASS", pods: podsFor(final).map((pod) => ({ uid: pod.metadata.uid, name: pod.metadata.name })), database: readDB() });
+    record({ status: "WAITING_FOR_POD_DRAIN" });
+    const final = await waitForWorkerDrain({ readDeployment: () => get("deployment", snapshot.target), readPods: podsFor,
+      uid: plan.uid, specSHA256: plan.afterSpecSHA256 });
+    record({ status: "PASS", pods: final.pods.map((pod) => ({ uid: pod.metadata.uid, name: pod.metadata.name })), database: readDB() });
     process.stdout.write(`${JSON.stringify({ status: "PASS", id: safePlan.id, target: snapshot.target, phase })}\n`);
   } catch {
     record({ status: !patchAttempted || applied ? "FAIL" : "UNKNOWN", code: "AUTHORITATIVE_READBACK_REQUIRED" }); throw new Error("AUTHORITATIVE_READBACK_REQUIRED");

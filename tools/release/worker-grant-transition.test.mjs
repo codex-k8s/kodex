@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planWorkerTransition, requireInstanceWriters, verifyOverlap, requireUnchangedPlan } from "./worker-grant-transition.mjs";
+import { planWorkerTransition, requireInstanceWriters, verifyOverlap, requireUnchangedPlan, waitForWorkerDrain } from "./worker-grant-transition.mjs";
 import { fingerprint } from "./scoped-release.mjs";
 
 const uid = "11111111-1111-4111-8111-111111111111";
@@ -117,4 +117,42 @@ test("persisted plan rejects target, reader, cluster and CAS drift before any pa
     (p) => { p.readers.pods[0].source.revision = "old-reader"; },
     (p) => { p.readers.specSHA256 = "changed"; },
   ]) { const current = structuredClone(plan); mutate(current); assert.throws(() => requireUnchangedPlan(plan, current)); }
+});
+
+test("healthy Deployment waits for terminating predecessor Pod to leave exact inventory", async () => {
+  const deployment = fixture(); let reads = 0;
+  const pods = [{ metadata: { uid, name: "remaining" } }];
+  const result = await waitForWorkerDrain({ readDeployment: () => deployment, readPods: () => {
+    if (++reads === 1) throw new Error("ALL_READER_PODS_REQUIRED");
+    return pods;
+  }, uid, specSHA256: fingerprint(deployment.spec), pollIntervalMs: 1 });
+  assert.equal(reads, 2); assert.deepEqual(result.pods, pods);
+});
+
+test("readiness can converge after scale down, but permanent drain is bounded failure", async () => {
+  const deployment = fixture(); const initial = structuredClone(deployment); initial.status.replicas = 2;
+  let reads = 0;
+  await waitForWorkerDrain({ readDeployment: () => ++reads === 1 ? initial : deployment, readPods: () => [],
+    uid, specSHA256: fingerprint(deployment.spec), pollIntervalMs: 1 });
+  assert.equal(reads, 2);
+  await assert.rejects(waitForWorkerDrain({ readDeployment: () => deployment, readPods: () => { throw new Error("ALL_READER_PODS_REQUIRED"); },
+    uid, specSHA256: fingerprint(deployment.spec), pollIntervalMs: 1, timeoutMs: 5 }), /WORKER_DRAIN_TIMEOUT/);
+  await assert.rejects(waitForWorkerDrain({ readDeployment: () => deployment, readPods: async () => {
+    await new Promise((done) => setTimeout(done, 10)); return [];
+  }, uid, specSHA256: fingerprint(deployment.spec), timeoutMs: 5 }), /WORKER_DRAIN_TIMEOUT/);
+});
+
+test("drain never tolerates identity or spec drift and does not hide transport failures", async () => {
+  for (const mutate of [(d) => { d.metadata.uid = otherUID; }, (d) => { d.spec.replicas = 2; }]) {
+    const initial = fixture(); const changed = structuredClone(initial); mutate(changed); let reads = 0;
+    await assert.rejects(waitForWorkerDrain({ readDeployment: () => ++reads === 1 ? initial : changed,
+      readPods: () => { throw new Error("ALL_READER_PODS_REQUIRED"); }, uid,
+      specSHA256: fingerprint(initial.spec), pollIntervalMs: 1 }), /TRANSITION_READBACK_MISMATCH/);
+    assert.equal(reads, 2);
+  }
+  const deployment = fixture(); let reads = 0;
+  await assert.rejects(waitForWorkerDrain({ readDeployment: () => { reads++; return deployment; },
+    readPods: () => { throw new Error("KUBERNETES_UNAVAILABLE"); }, uid,
+    specSHA256: fingerprint(deployment.spec) }), /KUBERNETES_UNAVAILABLE/);
+  assert.equal(reads, 1);
 });
