@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.1
-updated: 2026-09-06
+version: 1.1.2
+updated: 2026-09-08
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -175,6 +175,15 @@ delivery ID, canonical payload digest и фактический post/interaction
   current tuple процесса, occurrence и `ScheduledRun`.
 
 ## Свежая `RuntimeRevision`
+
+Материализованные `SessionContext` и continuation notice имеют исполняемый
+consumer вплоть до фактического provider input, а не только запись в snapshot
+или projection. Свежий provider thread получает ограниченную историю как данные;
+`thread/resume` не переигрывает уже сохранённую историю и получает только новое
+сообщение продолжения, привязанное к текущим revision/session/turn/attempt.
+Это сообщение доставляется один раз без дополнительного дублирующего delta;
+повтор terminal callback не запускает provider turn заново. Роль сообщения
+в истории не становится источником новых полномочий.
 
 Версия immutable исполняемой спецификации не совпадает с OCC-версией её
 наблюдаемого lifecycle. Heartbeat, provisioning и health report могут менять

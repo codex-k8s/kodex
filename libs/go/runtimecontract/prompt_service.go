@@ -56,8 +56,12 @@ func DecodePromptService(input RunnerInput) (PromptServiceEnvelope, error) {
 	default:
 		return value, errPromptService
 	}
-	if input.CodexSessionID != "" && input.PromptTargetKind != "SESSION_CONTINUATION" {
-		return value, errPromptService
+	if input.CodexSessionID != "" {
+		// Вид базовых инструкций не меняется при resume. Сообщение продолжения
+		// находится отдельно в owner-sealed SessionContext и обязательно для него.
+		if notice, err := CurrentContinuationNotice(input); err != nil || !notice {
+			return value, errPromptService
+		}
 	}
 	if promptJSONUnique(json.NewDecoder(strings.NewReader(input.Instructions)), 0) != nil {
 		return value, errPromptService
