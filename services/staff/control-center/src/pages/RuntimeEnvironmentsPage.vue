@@ -217,8 +217,11 @@ watch(
     onCleanup(() => controller.abort());
     if (value) void loadOperationalState(value, controller.signal);
   },
-  { immediate: true },
+  { immediate: true, flush: "sync" },
 );
+function dismissInspectorWithKeyboard(event: KeyboardEvent): void {
+  if (event.key === "Escape" && !event.defaultPrevented) selectedRef.value = "";
+}
 function dismissInspector(event: PointerEvent): void {
   if (event.target instanceof Node && !registry.value?.contains(event.target))
     selectedRef.value = "";
@@ -248,11 +251,14 @@ function openEditor(environmentRef: string): void {
 onMounted(() => {
   void load();
   document.addEventListener("pointerdown", dismissInspector);
+  document.addEventListener("keydown", dismissInspectorWithKeyboard);
 });
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", dismissInspector);
+  document.removeEventListener("keydown", dismissInspectorWithKeyboard);
   generation += 1;
   listController?.abort();
+  inspectorController?.abort();
   if (debounceTimer) clearTimeout(debounceTimer);
 });
 </script>
@@ -301,7 +307,6 @@ onBeforeUnmount(() => {
         ref="registry"
         class="environment-registry__content"
         :class="{ 'environment-registry__content--selected': selected }"
-        @keydown.esc="selectedRef = ''"
       >
         <div
           class="environment-table-wrap"

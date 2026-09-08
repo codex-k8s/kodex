@@ -215,6 +215,20 @@ const selectedImage = ref<AsyncEntityOption>();
 const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
 const imageProblem = ref<AppProblem>();
+let imageGeneration = 0;
+let imageController: AbortController | undefined;
+function cancelImageRequest(): void {
+  imageGeneration += 1;
+  imageController?.abort();
+  imageArtifact.value = undefined;
+  imageProblem.value = undefined;
+  imageLoading.value = false;
+}
+watch(
+  () => [projectRef.value, environmentRef.value, input.imageArtifactRef],
+  cancelImageRequest,
+  { flush: "sync" },
+);
 const validation = computed(() => validateEnvironmentInput(input));
 const serverReadiness = computed(() =>
   environmentRef.value
@@ -376,19 +390,33 @@ async function loadImageArtifact(
   recipeRef: string,
   artifactRef: string,
 ): Promise<void> {
+  cancelImageRequest();
+  const generation = imageGeneration;
+  const project = projectRef.value;
+  const environment = environmentRef.value;
+  const controller = new AbortController();
+  imageController = controller;
+  const applicable = () =>
+    !disposed &&
+    !controller.signal.aborted &&
+    generation === imageGeneration &&
+    project === projectRef.value &&
+    environment === environmentRef.value &&
+    artifactRef === input.imageArtifactRef;
   imageLoading.value = true;
   imageProblem.value = undefined;
   try {
-    imageArtifact.value = await runtime.loadPromotedRoleImageArtifact(
-      projectRef.value,
+    const artifact = await runtime.loadPromotedRoleImageArtifact(
+      project,
       recipeRef,
       artifactRef,
+      controller.signal,
     );
+    if (applicable()) imageArtifact.value = artifact;
   } catch (error) {
-    imageArtifact.value = undefined;
-    imageProblem.value = asProblem(error);
+    if (applicable()) imageProblem.value = asProblem(error);
   } finally {
-    imageLoading.value = false;
+    if (applicable()) imageLoading.value = false;
   }
 }
 
@@ -544,11 +572,21 @@ function volumeMountPath(name: string): string {
 }
 
 async function load(): Promise<void> {
-  if (!environmentRef.value) return;
+  const environment = environmentRef.value;
+  const project = projectRef.value;
+  const generation = initializationGeneration;
+  if (!environment) return;
   await Promise.all([
-    runtime.loadEnvironment(environmentRef.value),
-    runtime.loadEnvironmentVersions(environmentRef.value),
+    runtime.loadEnvironment(environment),
+    runtime.loadEnvironmentVersions(environment),
   ]);
+  if (
+    disposed ||
+    generation !== initializationGeneration ||
+    environment !== environmentRef.value ||
+    project !== projectRef.value
+  )
+    return;
   sync();
   if (current.value)
     await Promise.all([
@@ -1073,6 +1111,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", beforeUnload);
   finishLeave(false);
   disposed = true;
+  cancelImageRequest();
   draftController.abort();
 });
 </script>
