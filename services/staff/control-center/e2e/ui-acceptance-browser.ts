@@ -111,3 +111,62 @@ export async function observeActionResponse(
   ]);
   return response;
 }
+
+export function assistantDialog(page: Page, locale: "ru" | "en") {
+  return page.getByRole("dialog", {
+    name: locale === "ru" ? "Kodex" : "Kodex Assistant",
+    exact: true,
+  });
+}
+// Cleanup не зависит от проверяемого имени: неверный title тоже должен
+// сохранять FAIL, но не оставлять окно для следующего независимого варианта.
+export async function cleanupAssistant(page: Page, locale: "ru" | "en") {
+  const component = page.locator("#assistant-workspace");
+  if (!(await component.isVisible())) return;
+  await component
+    .getByRole("button", {
+      name: locale === "ru" ? "Закрыть" : "Close",
+      exact: true,
+    })
+    .click();
+  await expect(component).toHaveCount(0);
+}
+export async function safeFocusMetrics(page: Page) {
+  return page.evaluate(() => {
+    const active = document.activeElement;
+    return {
+      focusOnPickerInput: !!active?.matches(
+        '.async-picker__popover input[role="combobox"]',
+      ),
+      focusOnPickerTrigger: !!active?.matches(".async-picker__trigger"),
+      focusOnPopoverPanel: !!active?.matches(".dismissible-popover"),
+      focusOnAssistant: active?.id === "assistant-workspace",
+      focusOnBody: active === document.body,
+    };
+  });
+}
+
+export async function safeAlertMetrics(page: Page) {
+  return page.evaluate(() => {
+    const alerts = Array.from(
+      document.querySelectorAll('[role="alert"]'),
+    ).filter((item) => (item as HTMLElement).offsetHeight > 0);
+    // Сравнение только с canonical errors.default ru/en, сам текст не возвращается.
+    const known = [
+      "Не удалось выполнить действие. Повторите попытку.",
+      "The action could not be completed. Try again.",
+    ];
+    return {
+      alertProblemNotice: alerts.some((item) =>
+        item.classList.contains("problem-notice"),
+      ),
+      alertDefaultError: alerts.some((item) =>
+        known.includes(item.querySelector("p")?.textContent.trim() ?? ""),
+      ),
+      alertUnclassified: alerts.some(
+        (item) =>
+          !known.includes(item.querySelector("p")?.textContent.trim() ?? ""),
+      ),
+    };
+  });
+}

@@ -79,7 +79,9 @@ func (repository *Repository) GetAgentEffectiveCapabilities(ctx context.Context,
 	}
 	result.RuntimeConfigurationRef, result.RuntimeConfigurationVersion = view.Configuration.Ref, view.Configuration.Version
 	result.EnvironmentVersionRef = view.EnvironmentBinding.VersionRef
-	result.RuntimeReady = enabled && repository.runtimeEnvironmentReadiness(view.Environment).Ready
+	// Scanner проверил полный image contract в этой транзакции до удаления
+	// внутренних полей из public view; повторная проверка очищенного image неверна.
+	result.RuntimeReady = enabled && view.Environment.Ready
 	if result.RuntimeReady {
 		result.RuntimeReady, err = capabilityCatalogReady(ctx, tx, current, view.Configuration)
 		if err != nil {
