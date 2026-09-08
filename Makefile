@@ -344,3 +344,7 @@ test-managed-consumer-contract:
 .PHONY: test-email-mailbox-acceptance
 test-email-mailbox-acceptance:
 	node --test tools/dev/email-mailbox-acceptance.test.mjs tools/dev/prepare-email-acceptance-input.test.mjs
+
+.PHONY: test-email-mailbox-materialization
+test-email-mailbox-materialization:
+	GOWORK=off GOMAXPROCS=4 TMPDIR=/tmp go -C services/internal/control-plane test -p 2 -count=1 ./internal/transport/grpc -run '^TestOwnerEmailHelperMaterialization$$'

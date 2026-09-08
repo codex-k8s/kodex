@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { lstatSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { constants, closeSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { privateJournal, mutationDriver } from './role-image-acceptance.mjs';
 import { createOwnerSessionClient } from './owner-session-client.mjs';
@@ -21,7 +21,7 @@ const checkpoint = (journal, step, result) => { journal.append({ type: 'CHECKPOI
 const operations = ['HEALTH', 'MAILBOXES', 'LIST', 'SEARCH', 'FETCH', 'DOWNLOAD', 'SEND', 'REPLY', 'REPLY_ALL', 'FORWARD', 'DELETE', 'RECEIPT', 'THREAD', 'ATTACHMENTS', 'MARK_READ', 'MARK_UNREAD', 'MOVE', 'ARCHIVE', 'DRAFT_CREATE', 'DRAFT_UPDATE', 'DRAFT_DELETE'];
 const kinds = { ca: 'CA_CERTIFICATE', username: 'USERNAME', secret: 'AUTH_SECRET' };
 const definition = JSON.parse(readFileSync(new URL('../../contracts/integrations/v1/definitions/email.yaml', import.meta.url)));
-const phases = ['plan', 'inspect', 'connection', 'credentials', 'publish', 'bind', 'readback', 'health', 'grants', 'receipt'];
+const phases = ['recover-invalid', 'plan', 'inspect', 'connection', 'credentials', 'publish', 'bind', 'readback', 'health', 'grants', 'receipt'];
 const configurationPhases = ['connection', 'credentials', 'publish', 'bind', 'grants'];
 
 export function validateEmailProfile(profile) {
@@ -59,8 +59,10 @@ function mailboxPin(body, connectionRef) {
 
 // Только owner API. HEALTH — отдельный effect gate; SMTP/IMAP операции выполняет
 // настоящий Runtime/MCP, а этот driver лишь читает его типизированный receipt.
-export async function emailAcceptance({ phase, profile, credentials, grantInput, journal, get, request, preflight, invocationRef, projectRef, timeoutMs = 1200000, now = Date.now, sleep = (ms) => new Promise((done) => setTimeout(done, ms)) }) {
+export async function emailAcceptance({ phase, profile, credentials, grantInput, recovery, journal, get, request, preflight, invocationRef, projectRef, timeoutMs = 1200000, now = Date.now, sleep = (ms) => new Promise((done) => setTimeout(done, ms)) }) {
   const slots = validateEmailProfile(profile); await preflight();
+  check(!journal.events[0]?.predecessorSHA256 || !['connection', 'credentials'].includes(phase), 'RECOVERY_CREATE_FORBIDDEN');
+  if (phase === 'recover-invalid') return recoverInvalidMailbox({ recovery, profile, journal, get, request });
   if (phase === 'plan') return checkpoint(journal, 'plan', { status: 'PLANNED', protocol: profile.specification.receiveProtocol, credentialSlots: slots.map((s) => s.slot), operations: profile.specification.policies.map((p) => ({ operation: p.operation, policy: p.policy })), providerEffect: 'NOT_RUN' });
   const mutate = mutationDriver(journal, request);
   if (phase === 'connection') {
@@ -111,7 +113,7 @@ export async function emailAcceptance({ phase, profile, credentials, grantInput,
   if (phase === 'publish') {
     const specification = structuredClone(profile.specification);
     for (const slot of slots) { const descriptor = saved(journal, slot.slot); check(descriptor, 'CREDENTIAL_ACK_REQUIRED'); specification[slot.protocol][slot.field] = { name: descriptor.name, generation: descriptor.generation }; }
-    await mutate('draft', 'POST', `${path}/email-mailbox/drafts`, { name: profile.prefix, content: { specification } }, 201, undefined, (body) => mailboxPin(body, connection.connectionRef));
+    if (!saved(journal, 'draft')) await mutate('draft', 'POST', `${path}/email-mailbox/drafts`, { name: profile.prefix, content: { specification } }, 201, undefined, (body) => mailboxPin(body, connection.connectionRef));
     for (const [step, suffix, expected] of [['validate', 'validation', 'VALID'], ['publish', 'publication', 'PUBLISHED']]) {
       const previous = saved(journal, step); if (previous) { check(previous.state === expected, `MAILBOX_${step.toUpperCase()}_FAILED`); continue; }
       const pin = await readMailbox();
@@ -182,6 +184,59 @@ export async function emailAcceptance({ phase, profile, credentials, grantInput,
   throw new Error('PHASE_INVALID');
 }
 
+// Узкий перенос только terminal INVALID draft с девятью подтверждёнными командами.
+// Старый journal/profile остаются неизменными; импорт ниже — CHECKPOINT, не новый ACK.
+export function emailRecoveryPredecessor(path, expectedDigest, profileBytes, origin) {
+  const previous = privateJournal(path, { version: 1, kind: 'EMAIL_MAILBOX_ACCEPTANCE', origin }, { readOnly: true });
+  try {
+    check(previous.bytesSHA256 === digest(expectedDigest), 'PREDECESSOR_DIGEST_MISMATCH');
+    const header = previous.events[0]; const profile = JSON.parse(profileBytes); const slots = validateEmailProfile(profile);
+    check(header.profileSHA256 === hash(profileBytes) && /^[a-f0-9]{40}$/.test(header.sourceSHA ?? '') && !profile.specification.replyTo, 'PREDECESSOR_PROFILE_MISMATCH');
+    const intents = previous.events.filter((e) => e.type === 'INTENT'); const acks = previous.events.filter((e) => e.type === 'ACK');
+    const steps = ['connection', ...slots.map((slot) => slot.slot), 'draft', 'validate'];
+    check(intents.length === 9 && acks.length === 9 && new Set(intents.map((e) => e.step)).size === 9 && intents.every((e) => steps.includes(e.step) && /^[a-f0-9-]{36}$/.test(e.key ?? '') && /^[a-f0-9]{64}$/.test(e.bodySHA256 ?? '') && acks.filter((a) => a.key === e.key && a.step === e.step).length === 1) && !previous.events.some((e) => e.type === 'STOP'), 'PREDECESSOR_NOT_COMPLETE_INVALID_DRAFT');
+    const connection = saved(previous, 'connection'); const invalid = saved(previous, 'validate'); const draft = saved(previous, 'draft');
+    ref(connection?.connectionRef); positive(connection.connectionVersion);
+    check(invalid?.state === 'INVALID' && draft?.state === 'DRAFT' && invalid.configurationRef === draft.configurationRef && invalid.revisionRef === draft.revisionRef && invalid.revisionDigest === draft.revisionDigest && invalid.connectionRef === connection.connectionRef && !invalid.publication, 'PREDECESSOR_REVISION_INVALID');
+    const receipts = slots.map((slot) => {
+      const receipt = saved(previous, slot.slot); const intent = intents.find((e) => e.step === slot.slot);
+      check(receipt?.kind === slot.kind && receipt.connectionRef === connection.connectionRef && intent.method === 'PUT' && intent.path === `/api/v1/integration-connections/${enc(connection.connectionRef)}/email-mailbox/credential`, 'PREDECESSOR_CREDENTIAL_INVALID');
+      ref(receipt.name); positive(receipt.generation); positive(receipt.connectionVersion);
+      return { ...slot, receipt, key: intent.key };
+    });
+    const expectedSpec = structuredClone(profile.specification);
+    for (const slot of receipts) expectedSpec[slot.protocol][slot.field] = { name: slot.receipt.name, generation: slot.receipt.generation };
+    const draftIntent = intents.find((e) => e.step === 'draft'); const validateIntent = intents.find((e) => e.step === 'validate');
+    check(draftIntent.method === 'POST' && draftIntent.path === `/api/v1/integration-connections/${enc(connection.connectionRef)}/email-mailbox/drafts` && draftIntent.bodySHA256 === hash({ name: profile.prefix, content: { specification: expectedSpec } }) && validateIntent.method === 'POST' && validateIntent.path === `/api/v1/email-mailbox-configurations/${enc(invalid.configurationRef)}/revisions/${enc(invalid.revisionRef)}/validation` && validateIntent.bodySHA256 === hash(null), 'PREDECESSOR_COMMAND_CHANGED');
+    profile.specification.replyTo = profile.specification.sender;
+    return { sha256: expectedDigest, sourceSHA: header.sourceSHA, profileSHA256: header.profileSHA256, manifestSHA256: digest(header.servingManifestSHA256), profile, connection, invalid, receipts };
+  } finally { previous.close(); }
+}
+async function recoverInvalidMailbox({ recovery, profile, journal, get, request }) {
+  check(recovery && journal.events[0].predecessorSHA256 === recovery.sha256, 'RECOVERY_PREDECESSOR_REQUIRED');
+  const acknowledged = saved(journal, 'recover-draft');
+  if (acknowledged) { if (!saved(journal, 'draft')) checkpoint(journal, 'draft', acknowledged); return { status: 'ACKNOWLEDGED', ...acknowledged }; }
+  const { connection, invalid, receipts } = recovery; const path = `/api/v1/integration-connections/${enc(connection.connectionRef)}`;
+  const current = await get(path); connectionPin(current, connection.connectionRef);
+  check(current.version === receipts.at(-1).receipt.connectionVersion, 'PREDECESSOR_CONNECTION_CHANGED');
+  const view = await get(`${path}/email-mailbox/configuration?configurationRef=${enc(invalid.configurationRef)}&revisionRef=${enc(invalid.revisionRef)}`); const pin = mailboxPin(view, connection.connectionRef);
+  check(pin.configurationRef === invalid.configurationRef && pin.configurationVersion === invalid.configurationVersion && pin.revisionRef === invalid.revisionRef && pin.revisionDigest === invalid.revisionDigest && pin.state === 'INVALID' && !pin.publication && !view.boundRevisionRef && !view.configuration.currentRevision, 'PREDECESSOR_REVISION_CHANGED');
+  for (const slot of receipts) {
+    const value = await get(`${path}/email-mailbox/credential-receipt?idempotencyKey=${enc(slot.key)}`);
+    check(value.connectionRef === slot.receipt.connectionRef && value.connectionVersion === slot.receipt.connectionVersion && value.kind === slot.kind && value.name === slot.receipt.name && value.generation === slot.receipt.generation, 'PREDECESSOR_CREDENTIAL_CHANGED');
+  }
+  if (!saved(journal, 'connection')) checkpoint(journal, 'connection', connection);
+  for (const slot of receipts) if (!saved(journal, slot.slot)) checkpoint(journal, slot.slot, slot.receipt);
+  const specification = structuredClone(profile.specification);
+  for (const slot of receipts) specification[slot.protocol][slot.field] = { name: slot.receipt.name, generation: slot.receipt.generation };
+  const result = await mutationDriver(journal, request)('recover-draft', 'POST', `/api/v1/email-mailbox-configurations/${enc(invalid.configurationRef)}/revisions/${enc(invalid.revisionRef)}/saves`, { specification }, 200, invalid.configurationVersion, (body) => {
+    const value = mailboxPin(body, connection.connectionRef);
+    check(value.configurationRef === invalid.configurationRef && value.configurationVersion > invalid.configurationVersion && value.revisionRef !== invalid.revisionRef && value.state === 'DRAFT' && body.revision.parentRevisionRef === invalid.revisionRef && !value.publication, 'RECOVERY_FORWARD_REVISION_INVALID');
+    return value;
+  });
+  checkpoint(journal, 'draft', result); return { status: 'ACKNOWLEDGED', ...result, providerEffect: 'NOT_RUN' };
+}
+
 function privateInput(path) {
   check(path, 'PRIVATE_INPUT_REQUIRED'); const info = lstatSync(path);
   check(info.isFile() && !info.isSymbolicLink() && info.nlink === 1 && (info.mode & 0o077) === 0 && info.size > 0 && info.size <= (2 << 20), 'PRIVATE_INPUT_INVALID'); return readFileSync(path);
@@ -190,24 +245,34 @@ async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); check(/^--[a-z][a-z0-9-]*$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
   check(phases.includes(phase), 'PHASE_INVALID');
-  check(Object.keys(options).every((k) => ['--origin', '--storage-state', '--state', '--profile', '--credentials', '--grant-input', '--serving-manifest', '--timeout-ms', '--confirm', '--invocation-ref', '--project-ref'].includes(k)), 'ARGUMENT_UNKNOWN');
-  check(options['--confirm'] === (configurationPhases.includes(phase) ? 'CONFIGURE-STAGING-MAILBOX' : phase === 'health' ? 'CHECK-STAGING-MAILBOX-HEALTH' : undefined), 'CONFIRMATION_INVALID');
+  check(Object.keys(options).every((k) => ['--origin', '--storage-state', '--state', '--profile', '--previous-state', '--previous-sha256', '--previous-profile', '--credentials', '--grant-input', '--serving-manifest', '--timeout-ms', '--confirm', '--invocation-ref', '--project-ref'].includes(k)), 'ARGUMENT_UNKNOWN');
+  check(options['--confirm'] === (phase === 'recover-invalid' ? 'RECOVER-STAGING-INVALID-MAILBOX' : configurationPhases.includes(phase) ? 'CONFIGURE-STAGING-MAILBOX' : phase === 'health' ? 'CHECK-STAGING-MAILBOX-HEALTH' : undefined), 'CONFIRMATION_INVALID');
   check((phase === 'credentials') === Boolean(options['--credentials']), 'CREDENTIAL_PHASE_REQUIRED');
   check((phase === 'grants') === Boolean(options['--grant-input']), 'GRANT_PHASE_REQUIRED');
   check(phase === 'receipt' ? Boolean(options['--invocation-ref'] && options['--project-ref']) : !options['--invocation-ref'] && !options['--project-ref'], 'RECEIPT_ARGUMENTS_INVALID');
   const origin = exactOrigin(options['--origin'] ?? ''); check(new URL(origin).protocol === 'https:' && !/prod(?:uction)?/i.test(new URL(origin).hostname), 'STAGING_ORIGIN_REQUIRED');
+  const recoveryArguments = ['--previous-state', '--previous-sha256', '--previous-profile'];
+  check(phase === 'recover-invalid' ? recoveryArguments.every((key) => options[key]) : recoveryArguments.every((key) => !options[key]), 'RECOVERY_ARGUMENTS_INVALID');
+  const recovery = phase === 'recover-invalid' ? emailRecoveryPredecessor(options['--previous-state'], options['--previous-sha256'], privateInput(options['--previous-profile']), origin) : undefined;
+  if (recovery) {
+    const path = resolve(options['--profile']); check(path !== resolve(options['--previous-profile']) && resolve(options['--state']) !== resolve(options['--previous-state']), 'RECOVERY_PATH_REUSED');
+    const bytes = Buffer.from(`${JSON.stringify(recovery.profile)}\n`); const directory = dirname(path);
+    check(realpathSync(directory) === directory && (lstatSync(directory).mode & 0o077) === 0, 'PRIVATE_DIRECTORY_REQUIRED');
+    if (existsSync(path)) check(hash(privateInput(path)) === hash(bytes), 'RECOVERED_PROFILE_CHANGED');
+    else { const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); } const dirFD = openSync(directory, constants.O_RDONLY); try { fsyncSync(dirFD); } finally { closeSync(dirFD); } }
+  }
   const raw = privateInput(options['--profile']); const profile = JSON.parse(raw); validateEmailProfile(profile);
   const credentials = options['--credentials'] ? JSON.parse(privateInput(options['--credentials'])) : undefined;
   const grantInput = options['--grant-input'] ? JSON.parse(privateInput(options['--grant-input'])) : undefined;
   const sourceSHA = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   check(execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim() === '', 'CLEAN_CHECKOUT_REQUIRED');
   const timeoutMs = Number(options['--timeout-ms'] ?? 1200000); check(Number.isSafeInteger(timeoutMs) && timeoutMs >= 1000 && timeoutMs <= 1200000, 'TIMEOUT_INVALID');
-  const journal = privateJournal(options['--state'], { version: 1, kind: 'EMAIL_MAILBOX_ACCEPTANCE', origin, sourceSHA, profileSHA256: hash(raw), servingManifestSHA256: hash(privateInput(options['--serving-manifest'])) });
+  const journal = privateJournal(options['--state'], { version: 1, kind: 'EMAIL_MAILBOX_ACCEPTANCE', origin, sourceSHA, profileSHA256: hash(raw), servingManifestSHA256: hash(privateInput(options['--serving-manifest'])), ...(recovery ? { predecessorSHA256: recovery.sha256, predecessorSourceSHA: recovery.sourceSHA, predecessorProfileSHA256: recovery.profileSHA256, predecessorManifestSHA256: recovery.manifestSHA256 } : {}) });
   try {
     const client = createOwnerSessionClient({ origin, storagePath: resolve(options['--storage-state']) }); const deadline = Date.now() + timeoutMs;
     const request = (path, init = {}) => { check(Date.now() < deadline, 'REQUEST_DEADLINE'); return client.request(path, { ...init, signal: AbortSignal.timeout(Math.max(1, Math.min(30000, deadline - Date.now()))) }); };
     const get = async (path) => { const response = await request(path, { method: 'GET', headers: { Accept: 'application/json' } }); check(response.status === 200, `READ_HTTP_${response.status}`); return JSON.parse((await boundedResponseBody(response, 2 << 20)).toString('utf8')); };
-    const result = await emailAcceptance({ phase, profile, credentials, grantInput, journal, request, get, timeoutMs, invocationRef: options['--invocation-ref'], projectRef: options['--project-ref'], preflight: async () => { const response = await client.observe('/api/v1/session', { signal: AbortSignal.timeout(30000) }); check(response.status === 200, 'SESSION_PREFLIGHT_FAILED'); await response.body?.cancel(); } });
+    const result = await emailAcceptance({ phase, profile, credentials, grantInput, recovery, journal, request, get, timeoutMs, invocationRef: options['--invocation-ref'], projectRef: options['--project-ref'], preflight: async () => { const response = await client.observe('/api/v1/session', { signal: AbortSignal.timeout(30000) }); check(response.status === 200, 'SESSION_PREFLIGHT_FAILED'); await response.body?.cancel(); } });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } finally { journal.close(); }
 }

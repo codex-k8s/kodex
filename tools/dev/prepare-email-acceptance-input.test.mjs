@@ -9,7 +9,7 @@ import { prepareEmailInput } from './prepare-email-acceptance-input.mjs';
 const makeEnv = (ca = 'fixture-ca') => ({ KODEX_QA_EMAIL_ADDRESS: 'sender@example.invalid', KODEX_QA_EMAIL_RECIPIENT: 'recipient@example.invalid', KODEX_QA_EMAIL_CA_PEM_PATH: ca, ...Object.fromEntries(['SMTP', 'IMAP', 'POP3'].flatMap((p) => Object.entries({ HOST: `${p.toLowerCase()}.example.invalid`, PORT: { SMTP: '465', IMAP: '993', POP3: '995' }[p], TLS_MODE: 'implicit', USERNAME: 'fixture-sensitive-username', PASSWORD: 'fixture-sensitive-password' }).map(([k, v]) => [`KODEX_QA_EMAIL_${p}_${k}`, v]))) });
 for (const protocol of ['IMAP', 'POP3']) test(`root input ${protocol}: six exact slots, no credential values in profile, 21 explicit policies`, () => {
   const result = prepareEmailInput(makeEnv(), protocol, 'mvp1031-fixture', () => rootCertificates[0]);
-  assert.equal(Object.keys(result.credentials).length, 6); assert.equal(result.profile.specification.policies.length, 21); assert.deepEqual(result.profile.specification.allowedFolders, ['INBOX']);
+  assert.equal(result.profile.specification.replyTo, result.profile.specification.sender); assert.equal(Object.keys(result.credentials).length, 6); assert.equal(result.profile.specification.policies.length, 21); assert.deepEqual(result.profile.specification.allowedFolders, ['INBOX']);
   assert(!JSON.stringify(result.profile).includes('fixture-sensitive')); assert.equal(result.profile.specification.policies.find((p) => p.operation === 'SEND').policy, 'HUMAN_GATE');
   assert.equal(result.profile.specification.policies.find((p) => p.operation === 'DELETE').policy, 'DENY');
 });

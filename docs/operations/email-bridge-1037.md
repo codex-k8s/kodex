@@ -4,7 +4,7 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.3.0
+version: 1.4.0
 updated: 2026-09-08
 ---
 
@@ -714,3 +714,71 @@ node tools/dev/email-mailbox-acceptance.mjs receipt "${EMAIL_ARGS[@]}" \
 неизменность profile/grant plan, expiry, publication drift, foreign receipt и
 отсутствие повторных effects. Это проверка harness, не vendor PASS. Node.js v24
 fs/CLI/test docs проверены через Context7.
+
+
+### Исправление materialization и forward recovery #1321
+
+Первый live запуск #1319 обнаружил два независимых дефекта до provider I/O:
+helper не задавал обязательный `replyTo`, а публичные 21 policy не содержат
+legacy MARK, требуемую 22-операционным runtime-форматом. Теперь helper назначает
+`replyTo=sender`, CP материализует legacy `mark` только DENY, сохраняя исходную
+immutable публичную revision из 21 операции. Ни catalog, ни grants не расширены.
+
+`make test-email-mailbox-materialization` вызывает настоящий Node helper с
+обезличенными example.invalid данными, затем protobuf JSON → CP request caster
+→ MaterializeMailbox → runtime validator. IMAP/POP3 проверяются вместе с
+missing replyTo/policy/CA, duplicate/unknown policy и wrong SNI. Это реальная
+Go-проверка domain boundary, а не HTTP stub. Node является prerequisite этого
+локального теста. Disposable PG также проходит INVALID → новый SAVE с parent
+revision → VALID → PUBLISHED → binding/delivery на 21 публичной policy.
+
+Для уже существующего INVALID draft разрешён только следующий узкий переход.
+Root сохраняет исходные profile/журнал/SHA и использует новый каталог0700,
+новую legitimate ограниченную сессию, актуальный serving manifest и чистый
+merged checkout, содержащий исправление. Старый source не переиспользуется.
+
+```bash
+EMAIL_RECOVERY_ARGS=(--origin https://control.kodex.works
+  --storage-state "$EMAIL_QA_SESSION"
+  --state "$EMAIL_RECOVERY_PRIVATE/acceptance.jsonl"
+  --profile "$EMAIL_RECOVERY_PRIVATE/profile.json"
+  --serving-manifest "$EMAIL_QA_MANIFEST" --timeout-ms 1200000)
+node tools/dev/email-mailbox-acceptance.mjs recover-invalid \
+  "${EMAIL_RECOVERY_ARGS[@]}" \
+  --previous-state "$EMAIL_PREVIOUS_JOURNAL" \
+  --previous-sha256 "$EMAIL_PREVIOUS_JOURNAL_SHA256" \
+  --previous-profile "$EMAIL_PREVIOUS_PROFILE" \
+  --confirm RECOVER-STAGING-INVALID-MAILBOX
+```
+
+Фаза принимает ровно прежние девять INTENT/ACK: connection, шесть credentials,
+draft и INVALID validation; STOP/UNKNOWN/прочие mutations запрещены. Проверяет
+exact predecessor bytes, старый profile hash и исходное тело draft. Создаёт
+отдельную исправленную profile-копию только с `replyTo=sender`, не читая
+credential values. Новый HEADER связывает старые source/profile/manifest SHA
+с текущими source/profile/manifest SHA; прошлый HEADER не переписывается.
+
+После session preflight — GET exact connection version, старой INVALID
+revision/configuration version/digest и шести credential receipts по прежним
+idempotency keys. Только затем один новый durable INTENT на POST `saves` с
+If-Match прежней configuration version. Проверяется новая DRAFT revision с
+parentRef старой revision. Импортированные прошлые owner receipts записываются
+как CHECKPOINT, не как повторные ACK. Повтор `recover-invalid` после ACK не
+сохраняет draft ещё раз. При UNKNOWN journal сохраняется, автоматического
+повторения или переноса в очередной prefix нет.
+
+После ACK root продолжает **по одной фазе**, проверяя каждый результат:
+
+```bash
+node tools/dev/email-mailbox-acceptance.mjs publish "${EMAIL_RECOVERY_ARGS[@]}" \
+  --confirm CONFIGURE-STAGING-MAILBOX
+node tools/dev/email-mailbox-acceptance.mjs bind "${EMAIL_RECOVERY_ARGS[@]}" \
+  --confirm CONFIGURE-STAGING-MAILBOX
+node tools/dev/email-mailbox-acceptance.mjs readback "${EMAIL_RECOVERY_ARGS[@]}"
+```
+
+`publish` использует восстановленный draft и прежние descriptor receipts,
+не вызывает create. Фазы connection/credentials для linked recovery-журнала
+запрещены. HEALTH, grants, Gate/SMTP/IMAP/POP3 эффекты остаются отдельными
+проверками с прежними разрешениями; восстановление configuration не является
+доказательством provider authentication или доставки письма.

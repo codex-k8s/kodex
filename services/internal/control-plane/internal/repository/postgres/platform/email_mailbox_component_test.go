@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -49,6 +50,28 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 		AllowedFolders: mailbox.AllowedFolders, ArchiveFolder: mailbox.ArchiveFolder, DraftsFolder: mailbox.DraftsFolder,
 		Folder: mailbox.Folder, Sender: mailbox.Sender, ReplyTo: mailbox.ReplyTo, Recipients: mailbox.Recipients, HelloName: mailbox.HelloName,
 		SMTP: mailbox.Smtp, IMAP: mailbox.Imap, POP: mailbox.Pop, Limits: mailbox.Limits, Policies: mailbox.Policies}
+	// Публичный typed профиль не может содержать legacy MARK. Старый helper
+	// также пропускал replyTo: сохраняем его INVALID, затем новую forward revision.
+	spec.Policies = slices.DeleteFunc(slices.Clone(spec.Policies), func(policy api.OperationPolicy) bool { return policy.Operation == api.OperationMark })
+	if len(spec.Policies) != 21 {
+		t.Fatal("public mailbox policy count mismatch")
+	}
+	incomplete := spec
+	incomplete.ReplyTo = ""
+	incompleteRaw, err := json.Marshal(incomplete)
+	if err != nil {
+		t.Fatal(err)
+	}
+	incompleteSaved, err := change(command.SaveEmailMailboxDraft, "mailbox-helper-incomplete-save", string(incompleteRaw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	view = incompleteSaved.EmailMailbox
+	incompleteValidated, err := change(command.ValidateEmailMailboxDraft, "mailbox-helper-incomplete-validate", "")
+	if err != nil || incompleteValidated.EmailMailbox == nil || incompleteValidated.EmailMailbox.Revision.State != "INVALID" {
+		t.Fatalf("helper without replyTo accepted: %v", err)
+	}
+	view = incompleteValidated.EmailMailbox
 	disabled := spec
 	disabled.Enabled = false
 	disabled.SMTP.Secret.Name = "email-" + strings.Repeat("0", 32)
@@ -75,7 +98,7 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 		t.Fatal(err)
 	}
 	saved, err := change(command.SaveEmailMailboxDraft, "mailbox-owner-save", string(raw))
-	if err != nil || saved.EmailMailbox == nil || saved.EmailMailbox.Revision.Ref == view.Revision.Ref {
+	if err != nil || saved.EmailMailbox == nil || saved.EmailMailbox.Revision.Ref == view.Revision.Ref || saved.EmailMailbox.Revision.ParentRevisionRef != view.Revision.Ref || len(saved.EmailMailbox.Specification.Policies) != 21 {
 		t.Fatalf("save immutable mailbox revision: %v", err)
 	}
 	view = saved.EmailMailbox

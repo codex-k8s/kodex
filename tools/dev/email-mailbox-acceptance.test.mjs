@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,7 +16,7 @@ function fixture(t) {
   const contracts = join(repo, 'contracts/integrations/v1/definitions'); mkdirSync(contracts, { recursive: true }); copyFileSync(new URL('../../contracts/integrations/v1/definitions/email.yaml', import.meta.url), join(contracts, 'email.yaml'));
   const git = (...args) => execFileSync('git', args, { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] });
   git('init', '--quiet'); git('add', '.'); git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Синтетический email owner');
-  const files = Object.fromEntries(['state', 'profile', 'credentials', 'grant', 'manifest', 'storage', 'calls', 'owner', 'mode', 'loader'].map((key) => [key, join(directory, `${key}.${key === 'loader' ? 'mjs' : 'json'}`)]));
+  const files = Object.fromEntries(['activeState', 'state', 'profile', 'credentials', 'grant', 'manifest', 'storage', 'calls', 'owner', 'mode', 'loader'].map((key) => [key, join(directory, `${key}.${key === 'loader' ? 'mjs' : 'json'}`)]));
   const put = (key, value) => writeFileSync(files[key], JSON.stringify(value), { mode: 0o600 });
   put('profile', emailFixtureProfile); put('grant', { agentRef: 'agt_email', projectRef: 'prj_email', capabilities: ['email.message.send'] }); put('credentials', Object.fromEntries(validateEmailProfile(emailFixtureProfile).map((slot) => [slot.slot, `sensitive-fixture-${slot.slot}`]))); put('manifest', {}); put('calls', []); put('owner', {}); put('mode', '');
   put('storage', { cookies: ['__Host-kodex-session', '__Host-kodex-csrf'].map((name, i) => ({ name, value: i ? '1'.repeat(43) : `v1.${'1'.repeat(64)}`, domain: 'fixture.invalid', path: '/', secure: true, httpOnly: !i, sameSite: 'Strict', expires: -1 })), origins: [] });
@@ -33,14 +34,15 @@ globalThis.fetch=async(url,init={})=>{
  if(method!=='GET'){
   const headers=new Headers(init.headers); assert(headers.get('Idempotency-Key')); assert(headers.get('X-CSRF-Token'));
   if(path.endsWith('/credential')||path.endsWith('/commands')||path.endsWith('/grants'))assert.equal(headers.get('If-Match'),'"'+state.version+'"');
-  if(path.endsWith('/validation')||path.endsWith('/publication')||path.endsWith('/binding'))assert.equal(headers.get('If-Match'),'"'+(state.configVersion??1)+'"');
-  const events=readFileSync(files.state,'utf8').trim().split('\\n').map(JSON.parse); assert.equal(events.at(-1).type,'INTENT'); assert.equal(events.at(-1).key,headers.get('Idempotency-Key'));
+  if(path.endsWith('/validation')||path.endsWith('/publication')||path.endsWith('/binding')||path.endsWith('/saves'))assert.equal(headers.get('If-Match'),'"'+(state.configVersion??1)+'"');
+  const events=readFileSync(read('activeState'),'utf8').trim().split('\\n').map(JSON.parse); assert.equal(events.at(-1).type,'INTENT'); assert.equal(events.at(-1).key,headers.get('Idempotency-Key'));
   if(mode==='lost-ack')throw new Error('SYNTHETIC_UNKNOWN'); if(mode==='rejected')return new Response('{}',{status:409});
  }
- const result=emailFixtureTransport(state,path,method,body,mode);write('owner',state); if(mode==='credential-lost-ack'&&path.endsWith('/credential'))throw new Error('SYNTHETIC_LOST_ACK'); return new Response(JSON.stringify(result.body),{status:result.status??200,headers:{'Content-Type':'application/json'}});
+ const result=emailFixtureTransport(state,path,method,body,mode); if(path.endsWith('/credential')&&method==='PUT'){state.credentials??={};state.credentials[new Headers(init.headers).get('Idempotency-Key')]=result.body;} write('owner',state); if(mode==='credential-lost-ack'&&path.endsWith('/credential'))throw new Error('SYNTHETIC_LOST_ACK'); return new Response(JSON.stringify(result.body),{status:result.status??200,headers:{'Content-Type':'application/json'}});
 };`, { mode: 0o600 });
   const run = (phase, extra = [], automatic = true) => {
-    const flags = automatic ? mutationPhases.includes(phase) ? ['--confirm', 'CONFIGURE-STAGING-MAILBOX'] : phase === 'health' ? ['--confirm', 'CHECK-STAGING-MAILBOX-HEALTH'] : [] : [];
+    put('activeState', files.state);
+    const flags = automatic ? phase === 'recover-invalid' ? ['--confirm', 'RECOVER-STAGING-INVALID-MAILBOX'] : mutationPhases.includes(phase) ? ['--confirm', 'CONFIGURE-STAGING-MAILBOX'] : phase === 'health' ? ['--confirm', 'CHECK-STAGING-MAILBOX-HEALTH'] : [] : [];
     if (phase === 'credentials') flags.push('--credentials', files.credentials);
     if (phase === 'grants') flags.push('--grant-input', files.grant);
     return spawnSync(process.execPath, ['--import', files.loader, join(scripts, 'email-mailbox-acceptance.mjs'), phase, '--origin', origin, '--storage-state', files.storage, '--state', files.state, '--profile', files.profile, '--serving-manifest', files.manifest, '--timeout-ms', '1000', ...flags, ...extra], { encoding: 'utf8', timeout: 8000 });
@@ -93,4 +95,31 @@ test('old effect receipt readback survives publication supersession without new 
 test('acknowledged INVALID validation cannot be skipped on a later publish invocation', (t) => {
   const f = fixture(t); f.pass('connection'); f.pass('credentials'); f.mode('invalid'); assert.match(f.run('publish').stderr, /MAILBOX_VALIDATE_FAILED/); f.mode(''); assert.match(f.run('publish').stderr, /MAILBOX_VALIDATE_FAILED/);
   assert(!f.calls().some((c) => c.path.endsWith('/publication')));
+});
+
+function invalidPredecessor(f) {
+  f.pass('connection'); f.pass('credentials'); f.mode('invalid'); assert.match(f.run('publish').stderr, /MAILBOX_VALIDATE_FAILED/); f.mode('');
+  const previousState = f.files.state; const previousProfile = f.files.profile; const bytes = readFileSync(previousState); const profileBytes = readFileSync(previousProfile);
+  f.files.state = `${previousState}.recovery`; f.files.profile = `${previousProfile}.recovery`;
+  return { previousState, previousProfile, bytes, profileBytes, args: ['--previous-state', previousState, '--previous-profile', previousProfile, '--previous-sha256', createHash('sha256').update(bytes).digest('hex')] };
+}
+test('public CLI recovery: immutable predecessor → one forward save → publish/bind without connection or credential recreation', (t) => {
+  const f = fixture(t); const p = invalidPredecessor(f); const result = f.pass('recover-invalid', p.args);
+  assert.equal(result.revisionRef, 'mrev_email_2'); assert.equal(f.events().filter((e) => e.type === 'INTENT').length, 1); assert.equal(f.events().filter((e) => e.type === 'ACK').length, 1);
+  assert.equal(JSON.parse(readFileSync(f.files.profile)).specification.replyTo, emailFixtureProfile.specification.sender);
+  f.pass('recover-invalid', p.args); f.pass('publish'); f.pass('bind'); f.pass('readback');
+  assert.match(f.run('connection').stderr, /RECOVERY_CREATE_FORBIDDEN/); assert.match(f.run('credentials').stderr, /RECOVERY_CREATE_FORBIDDEN/);
+  assert.equal(f.calls().filter((c) => c.path === '/api/v1/integration-connections' && c.method === 'POST').length, 1); assert.equal(f.calls().filter((c) => c.method === 'PUT').length, 6); assert.equal(f.calls().filter((c) => c.path.endsWith('/saves')).length, 1);
+  assert.deepEqual(readFileSync(p.previousState), p.bytes); assert.deepEqual(readFileSync(p.previousProfile), p.profileBytes);
+});
+for (const mode of ['lost-ack', 'rejected', 'expired']) test(`recovery ${mode}: no repeated save and predecessor unchanged`, (t) => {
+  const f = fixture(t); const p = invalidPredecessor(f); f.mode(mode); assert.notEqual(f.run('recover-invalid', p.args).status, 0);
+  if (mode !== 'expired') { f.mode(''); assert.notEqual(f.run('recover-invalid', p.args).status, 0); }
+  assert.equal(f.calls().filter((c) => c.path.endsWith('/saves')).length, mode === 'expired' ? 0 : 1); assert.deepEqual(readFileSync(p.previousState), p.bytes);
+});
+test('changed predecessor digest, stale owner revision and unsafe recovery flags reject before save', (t) => {
+  const f = fixture(t); const p = invalidPredecessor(f); const bad = [...p.args]; bad[bad.length-1] = '0'.repeat(64);
+  assert.match(f.run('recover-invalid', bad).stderr, /PREDECESSOR_DIGEST_MISMATCH/);
+  f.mode('drift'); assert.match(f.run('recover-invalid', p.args).stderr, /PREDECESSOR_REVISION_CHANGED/);
+  assert(!f.calls().some((c) => c.path.endsWith('/saves')));
 });
