@@ -3,6 +3,9 @@ import { mergeConfig } from "vite";
 import base from "./vite.config";
 
 export default mergeConfig(base, {
+  preview: {
+    allowedHosts: ["kodex.test"],
+  },
   build: {
     outDir: "dist-synthetic",
     rolldownOptions: {

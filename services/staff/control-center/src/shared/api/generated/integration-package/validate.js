@@ -83,10 +83,10 @@ var require_equal = __commonJS({
 // integration-package.js
 var validate = validate20;
 var integration_package_default = validate20;
-var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://kodex.dev/contracts/integrations/v1/integration-package.schema.json", "title": "Kodex Integration Package v1", "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "metadata", "spec"], "properties": { "apiVersion": { "const": "integrations.kodex.io/v1" }, "kind": { "const": "IntegrationPackage" }, "metadata": { "type": "object", "additionalProperties": false, "required": ["key", "version", "origin"], "properties": { "key": { "$ref": "#/$defs/key" }, "version": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$", "maxLength": 32 }, "origin": { "enum": ["SHIPPED", "UI", "GIT"] } } }, "spec": { "type": "object", "additionalProperties": false, "required": ["name", "description", "category", "adapter", "adapterOwner", "executionRoute", "readiness", "configurationFields", "networkDestinations", "healthCheck", "capabilities"], "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "category": { "$ref": "#/$defs/key" }, "adapter": { "enum": ["SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "MATTERMOST_INTERACTION"] }, "adapterOwner": { "enum": ["integration-gateway", "interaction-gateway"] }, "executionRoute": { "enum": ["MANAGED_MCP", "INTERACTION"] }, "readiness": { "enum": ["READY", "NOT_READY"] }, "credential": { "$ref": "#/$defs/credential" }, "configurationFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field", "type": "object", "properties": { "allowEmpty": { "const": false } } } }, "networkDestinations": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/networkDestination" } }, "healthCheck": { "$ref": "#/$defs/healthCheck" }, "capabilities": { "type": "array", "minItems": 1, "maxItems": 48, "items": { "$ref": "#/$defs/capability" } } } } }, "$defs": { "key": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 120 }, "field": { "type": "object", "additionalProperties": false, "required": ["key", "type", "required"], "properties": { "key": { "$ref": "#/$defs/key" }, "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] }, "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER"] }, "required": { "type": "boolean" }, "maximumLength": { "type": "integer", "minimum": 1, "maximum": 349528 }, "allowEmpty": { "type": "boolean", "description": "\u041F\u0443\u0441\u0442\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0432 PLAIN input/output, \u043D\u0435 \u0432 \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." }, "minimum": { "type": "integer", "minimum": 0 }, "maximum": { "type": "integer", "minimum": 0 }, "allowedValues": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } } }, "allOf": [{ "if": { "properties": { "allowEmpty": { "const": true } }, "required": ["allowEmpty"] }, "then": { "properties": { "type": { "const": "STRING" }, "format": { "const": "PLAIN" } }, "required": ["format"], "not": { "required": ["allowedValues"] } } }] }, "credential": { "type": "object", "additionalProperties": false, "required": ["secretKey", "kind"], "properties": { "secretKey": { "$ref": "#/$defs/key" }, "kind": { "enum": ["TOKEN", "PASSWORD"] } } }, "networkDestination": { "type": "object", "additionalProperties": false, "required": ["key", "source", "port", "tls"], "properties": { "key": { "$ref": "#/$defs/key" }, "source": { "enum": ["STATIC", "CONFIGURATION"] }, "hostname": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$", "maxLength": 253 }, "configurationField": { "$ref": "#/$defs/key" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "tls": { "enum": ["REQUIRED", "NONE"] } }, "allOf": [{ "if": { "properties": { "source": { "const": "STATIC" } } }, "then": { "required": ["hostname"], "not": { "required": ["configurationField"] } } }, { "if": { "properties": { "source": { "const": "CONFIGURATION" } } }, "then": { "required": ["configurationField"], "not": { "required": ["hostname"] } } }] }, "healthCheck": { "type": "object", "additionalProperties": false, "required": ["operation", "timeoutSeconds", "maxAttempts"], "properties": { "operation": { "$ref": "#/$defs/key" }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 60 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 3 } } }, "resourceScope": { "type": "object", "additionalProperties": false, "required": ["kind", "connectionFields"], "properties": { "kind": { "enum": ["SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL"] }, "connectionFields": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/key" } } } }, "execution": { "type": "object", "additionalProperties": false, "required": ["idempotency", "timeoutSeconds", "maxAttempts", "retryBackoffMilliseconds"], "properties": { "idempotency": { "enum": ["READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE"] }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 120 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 4 }, "retryBackoffMilliseconds": { "type": "integer", "minimum": 50, "maximum": 5e3 } } }, "capability": { "type": "object", "additionalProperties": false, "required": ["key", "name", "description", "operation", "risk", "approvalPolicy", "resourceScope", "inputFields", "outputFields", "execution"], "properties": { "key": { "$ref": "#/$defs/key" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "operation": { "$ref": "#/$defs/key" }, "risk": { "enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"] }, "approvalPolicy": { "enum": ["NONE", "HUMAN_EACH_EFFECT"] }, "resourceScope": { "$ref": "#/$defs/resourceScope" }, "inputFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "outputFields": { "type": "array", "minItems": 1, "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "execution": { "$ref": "#/$defs/execution" } } } } };
+var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://kodex.dev/contracts/integrations/v1/integration-package.schema.json", "title": "Kodex Integration Package v1", "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "metadata", "spec"], "properties": { "apiVersion": { "const": "integrations.kodex.io/v1" }, "kind": { "const": "IntegrationPackage" }, "metadata": { "type": "object", "additionalProperties": false, "required": ["key", "version", "origin"], "properties": { "key": { "$ref": "#/$defs/key" }, "version": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$", "maxLength": 32 }, "origin": { "enum": ["SHIPPED", "UI", "GIT"] } } }, "spec": { "type": "object", "additionalProperties": false, "required": ["name", "description", "category", "adapter", "adapterOwner", "executionRoute", "readiness", "configurationFields", "networkDestinations", "healthCheck", "capabilities"], "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "category": { "$ref": "#/$defs/key" }, "adapter": { "enum": ["SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "MATTERMOST_INTERACTION"] }, "adapterOwner": { "enum": ["integration-gateway", "interaction-gateway"] }, "executionRoute": { "enum": ["MANAGED_MCP", "INTERACTION"] }, "readiness": { "enum": ["READY", "NOT_READY"] }, "credential": { "$ref": "#/$defs/credential" }, "configurationFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field", "type": "object", "properties": { "allowEmpty": { "const": false } } } }, "networkDestinations": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/networkDestination" } }, "healthCheck": { "$ref": "#/$defs/healthCheck" }, "capabilities": { "type": "array", "minItems": 1, "maxItems": 48, "items": { "$ref": "#/$defs/capability" } } } } }, "$defs": { "key": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$", "maxLength": 120 }, "field": { "type": "object", "additionalProperties": false, "required": ["key", "type", "required"], "properties": { "key": { "$ref": "#/$defs/key" }, "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] }, "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER"] }, "required": { "type": "boolean" }, "maximumLength": { "type": "integer", "minimum": 1, "maximum": 349528 }, "allowEmpty": { "type": "boolean", "description": "\u041F\u0443\u0441\u0442\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0432 PLAIN input/output, \u043D\u0435 \u0432 \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." }, "minimum": { "type": "integer", "minimum": 0 }, "maximum": { "type": "integer", "minimum": 0 }, "allowedValues": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } } }, "allOf": [{ "if": { "properties": { "allowEmpty": { "const": true } }, "required": ["allowEmpty"] }, "then": { "properties": { "type": { "const": "STRING" }, "format": { "const": "PLAIN" } }, "required": ["format"], "not": { "required": ["allowedValues"] } } }] }, "credential": { "type": "object", "additionalProperties": false, "required": ["secretKey", "kind"], "properties": { "secretKey": { "$ref": "#/$defs/key" }, "kind": { "enum": ["TOKEN", "PASSWORD"] } } }, "networkDestination": { "type": "object", "additionalProperties": false, "required": ["key", "source", "port", "tls"], "properties": { "key": { "$ref": "#/$defs/key" }, "source": { "enum": ["STATIC", "CONFIGURATION"] }, "hostname": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.\\-]{0,251}[a-z0-9])?$", "maxLength": 253 }, "configurationField": { "$ref": "#/$defs/key" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "tls": { "enum": ["REQUIRED", "NONE"] } }, "allOf": [{ "if": { "properties": { "source": { "const": "STATIC" } } }, "then": { "required": ["hostname"], "not": { "required": ["configurationField"] } } }, { "if": { "properties": { "source": { "const": "CONFIGURATION" } } }, "then": { "required": ["configurationField"], "not": { "required": ["hostname"] } } }] }, "healthCheck": { "type": "object", "additionalProperties": false, "required": ["operation", "timeoutSeconds", "maxAttempts"], "properties": { "operation": { "$ref": "#/$defs/key" }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 60 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 3 } } }, "resourceScope": { "type": "object", "additionalProperties": false, "required": ["kind", "connectionFields"], "properties": { "kind": { "enum": ["SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITLAB_PROJECT", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL"] }, "connectionFields": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/key" } } } }, "execution": { "type": "object", "additionalProperties": false, "required": ["idempotency", "timeoutSeconds", "maxAttempts", "retryBackoffMilliseconds"], "properties": { "idempotency": { "enum": ["READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE"] }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 120 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 4 }, "retryBackoffMilliseconds": { "type": "integer", "minimum": 50, "maximum": 5e3 } } }, "capability": { "type": "object", "additionalProperties": false, "required": ["key", "name", "description", "operation", "risk", "approvalPolicy", "resourceScope", "inputFields", "outputFields", "execution"], "properties": { "key": { "$ref": "#/$defs/key" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "operation": { "$ref": "#/$defs/key" }, "risk": { "enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"] }, "approvalPolicy": { "enum": ["NONE", "HUMAN_EACH_EFFECT"] }, "resourceScope": { "$ref": "#/$defs/resourceScope" }, "inputFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "outputFields": { "type": "array", "minItems": 1, "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "execution": { "$ref": "#/$defs/execution" } } } } };
 var func1 = require_ucs2length().default;
 var func3 = Object.prototype.hasOwnProperty;
-var pattern4 = new RegExp("^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "u");
+var pattern4 = new RegExp("^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$", "u");
 var pattern5 = new RegExp("^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$", "u");
 var schema34 = { "type": "object", "additionalProperties": false, "required": ["secretKey", "kind"], "properties": { "secretKey": { "$ref": "#/$defs/key" }, "kind": { "enum": ["TOKEN", "PASSWORD"] } } };
 function validate21(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
@@ -142,7 +142,7 @@ function validate21(data, { instancePath = "", parentData, parentDataProperty, r
           errors++;
         }
         if (!pattern4.test(data0)) {
-          const err4 = { instancePath: instancePath + "/secretKey", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+          const err4 = { instancePath: instancePath + "/secretKey", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
           if (vErrors === null) {
             vErrors = [err4];
           } else {
@@ -370,7 +370,7 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
           errors++;
         }
         if (!pattern4.test(data3)) {
-          const err13 = { instancePath: instancePath + "/key", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+          const err13 = { instancePath: instancePath + "/key", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
           if (vErrors === null) {
             vErrors = [err13];
           } else {
@@ -611,8 +611,8 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate23.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema38 = { "type": "object", "additionalProperties": false, "required": ["key", "source", "port", "tls"], "properties": { "key": { "$ref": "#/$defs/key" }, "source": { "enum": ["STATIC", "CONFIGURATION"] }, "hostname": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$", "maxLength": 253 }, "configurationField": { "$ref": "#/$defs/key" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "tls": { "enum": ["REQUIRED", "NONE"] } }, "allOf": [{ "if": { "properties": { "source": { "const": "STATIC" } } }, "then": { "required": ["hostname"], "not": { "required": ["configurationField"] } } }, { "if": { "properties": { "source": { "const": "CONFIGURATION" } } }, "then": { "required": ["configurationField"], "not": { "required": ["hostname"] } } }] };
-var pattern10 = new RegExp("^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$", "u");
+var schema38 = { "type": "object", "additionalProperties": false, "required": ["key", "source", "port", "tls"], "properties": { "key": { "$ref": "#/$defs/key" }, "source": { "enum": ["STATIC", "CONFIGURATION"] }, "hostname": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.\\-]{0,251}[a-z0-9])?$", "maxLength": 253 }, "configurationField": { "$ref": "#/$defs/key" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "tls": { "enum": ["REQUIRED", "NONE"] } }, "allOf": [{ "if": { "properties": { "source": { "const": "STATIC" } } }, "then": { "required": ["hostname"], "not": { "required": ["configurationField"] } } }, { "if": { "properties": { "source": { "const": "CONFIGURATION" } } }, "then": { "required": ["configurationField"], "not": { "required": ["hostname"] } } }] };
+var pattern10 = new RegExp("^[a-z0-9](?:[a-z0-9.\\-]{0,251}[a-z0-9])?$", "u");
 function validate25(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -850,7 +850,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
           errors++;
         }
         if (!pattern4.test(data2)) {
-          const err16 = { instancePath: instancePath + "/key", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+          const err16 = { instancePath: instancePath + "/key", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
           if (vErrors === null) {
             vErrors = [err16];
           } else {
@@ -893,7 +893,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
           errors++;
         }
         if (!pattern10.test(data4)) {
-          const err20 = { instancePath: instancePath + "/hostname", schemaPath: "#/properties/hostname/pattern", keyword: "pattern", params: { pattern: "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$" }, message: 'must match pattern "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$"' };
+          const err20 = { instancePath: instancePath + "/hostname", schemaPath: "#/properties/hostname/pattern", keyword: "pattern", params: { pattern: "^[a-z0-9](?:[a-z0-9.\\-]{0,251}[a-z0-9])?$" }, message: 'must match pattern "^[a-z0-9](?:[a-z0-9.\\-]{0,251}[a-z0-9])?$"' };
           if (vErrors === null) {
             vErrors = [err20];
           } else {
@@ -924,7 +924,7 @@ function validate25(data, { instancePath = "", parentData, parentDataProperty, r
           errors++;
         }
         if (!pattern4.test(data5)) {
-          const err23 = { instancePath: instancePath + "/configurationField", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+          const err23 = { instancePath: instancePath + "/configurationField", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
           if (vErrors === null) {
             vErrors = [err23];
           } else {
@@ -1061,7 +1061,7 @@ function validate27(data, { instancePath = "", parentData, parentDataProperty, r
           errors++;
         }
         if (!pattern4.test(data0)) {
-          const err5 = { instancePath: instancePath + "/operation", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+          const err5 = { instancePath: instancePath + "/operation", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
           if (vErrors === null) {
             vErrors = [err5];
           } else {
@@ -1247,7 +1247,7 @@ function validate30(data, { instancePath = "", parentData, parentDataProperty, r
               errors++;
             }
             if (!pattern4.test(data2)) {
-              const err7 = { instancePath: instancePath + "/connectionFields/" + i0, schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+              const err7 = { instancePath: instancePath + "/connectionFields/" + i0, schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
               if (vErrors === null) {
                 vErrors = [err7];
               } else {
@@ -1431,7 +1431,7 @@ function validate29(data, { instancePath = "", parentData, parentDataProperty, r
           errors++;
         }
         if (!pattern4.test(data0)) {
-          const err12 = { instancePath: instancePath + "/key", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+          const err12 = { instancePath: instancePath + "/key", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
           if (vErrors === null) {
             vErrors = [err12];
           } else {
@@ -1524,7 +1524,7 @@ function validate29(data, { instancePath = "", parentData, parentDataProperty, r
           errors++;
         }
         if (!pattern4.test(data3)) {
-          const err21 = { instancePath: instancePath + "/operation", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+          const err21 = { instancePath: instancePath + "/operation", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
           if (vErrors === null) {
             vErrors = [err21];
           } else {
@@ -1955,7 +1955,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
               errors++;
             }
             if (!pattern4.test(data3)) {
-              const err12 = { instancePath: instancePath + "/metadata/key", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+              const err12 = { instancePath: instancePath + "/metadata/key", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
               if (vErrors === null) {
                 vErrors = [err12];
               } else {
@@ -2214,7 +2214,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
               errors++;
             }
             if (!pattern4.test(data9)) {
-              const err38 = { instancePath: instancePath + "/spec/category", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"' };
+              const err38 = { instancePath: instancePath + "/spec/category", schemaPath: "#/$defs/key/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$" }, message: 'must match pattern "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$"' };
               if (vErrors === null) {
                 vErrors = [err38];
               } else {

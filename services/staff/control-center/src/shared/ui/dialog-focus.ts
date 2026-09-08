@@ -23,3 +23,15 @@ export function trappedFocusTarget(
   if (!backwards && current === elements.length - 1) return elements[0];
   return undefined;
 }
+
+// Вызывается после nextTick: уже выбранный внутри панели focus сохраняется.
+export function initialDialogFocusTarget(
+  container: HTMLElement,
+  activeElement: Element | null,
+): HTMLElement | undefined {
+  if (container.contains(activeElement)) return;
+  return (
+    container.querySelector<HTMLElement>("[data-dialog-initial-focus]") ??
+    container
+  );
+}

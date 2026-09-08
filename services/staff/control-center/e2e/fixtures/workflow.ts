@@ -43,9 +43,7 @@ export async function checkWorkflowEditor(
     });
   };
   if (speechBootstrap) {
-    await page
-      .context()
-      .grantPermissions(["microphone"], { origin: "https://kodex.test" });
+    // Вызывающий browser profile уже подготовил выбранный native/fixture recorder.
     await page.route("**/api/v1/bootstrap", bootstrapRoute);
   }
   let transcriptions = 0;

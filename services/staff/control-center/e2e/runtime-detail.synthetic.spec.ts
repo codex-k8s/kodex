@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { isFirefoxScrollAdvisory } from "./synthetic-diagnostics";
 import { overlaySchemaFixture } from "../src/test-utils/runtime-catalog-fixture";
 import { providerUsageFixture } from "../src/test-utils/provider-usage-fixture";
 import type {
@@ -11,6 +12,7 @@ import type {
 for (const width of [1440, 390, 2900]) {
   test(`synthetic: runtime editor и revision diff ${String(width)}px`, async ({
     page,
+    browserName,
   }, testInfo) => {
     await page.setViewportSize({
       width,
@@ -19,6 +21,13 @@ for (const width of [1440, 390, 2900]) {
     const failures: string[] = [];
     page.on("pageerror", (error) => failures.push(error.message));
     page.on("console", (message) => {
+      if (isFirefoxScrollAdvisory(browserName, message.text())) {
+        testInfo.annotations.push({
+          type: "browser-advisory",
+          description: "FIREFOX_SCROLL_LINKED_POSITIONING",
+        });
+        return;
+      }
       if (["warning", "error"].includes(message.type()))
         failures.push(message.text());
     });

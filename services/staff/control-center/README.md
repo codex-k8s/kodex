@@ -109,9 +109,16 @@ actions. Кнопок ручного обновления нет: после rec
 
 ## Browser E2E
 
-Playwright suite работает только с реальной одноразовой установкой. Она не
-перехватывает HTTP/WebSocket, не создаёт production test mode и не использует
+Основной `playwright.config.ts` работает только с реальной одноразовой установкой.
+Он не перехватывает HTTP/WebSocket, не создаёт production test mode и не использует
 mock server. Перед запуском оператор обязан явно подтвердить disposable scope.
+
+Отдельный локальный `playwright.synthetic.config.ts` проверяет настоящие компоненты
+с синтетическими ответами. Он поддерживает `--project=chromium|firefox|webkit`;
+без выбора выполняются все три движка. Команды, семь ширин и границы нативной
+записи/явной WebKit recorder-модели описаны в
+[OPS-DOC-1274](../../../docs/operations/mvp-1274-browser-proof.md).
+Synthetic результаты не заменяют живую приёмку или hardware microphone.
 
 Установить закреплённый Chromium:
 

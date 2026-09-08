@@ -4,7 +4,7 @@ title: PWA на Vue и TypeScript
 type: guide
 status: approved
 owner: developer
-version: 1.2.1
+version: 1.2.2
 updated: 2026-09-08
 ---
 
@@ -159,6 +159,17 @@ Frontend не подменяет серверное ограждение: под
 - Интерфейс проверяется на desktop и mobile без пересечения текста и controls.
 - Пользователь не видит сырой backend error, stack trace, secret или внутренний
   identifier вместо понятного имени.
+
+Начальный focus модального окна назначается общим `ModalDialog` один раз
+после render и только если пользователь ещё не выбрал элемент внутри панели.
+Поле отмечается `data-dialog-initial-focus`; native `autofocus` в динамической
+модалке не используется, поскольку поздний browser callback может перенести
+ввод в соседнее поле. Escape, Tab trap и возврат focus сохраняются.
+
+JSON Schema pattern, используемый как HTML `pattern`, обязан компилироваться
+и сохранять одинаковую семантику в режимах `u` и `v`. Literal characters внутри
+классов экранируются в канонической схеме, generated validator обновляется
+штатно. Невалидный HTML pattern нельзя компенсировать подавлением console error.
 
 После browser capture потенциально платная отправка аудио допускается только
 по явному действию пользователя: штатный повторный клик остановки записи уже
