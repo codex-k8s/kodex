@@ -370,6 +370,9 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 	if value := input.GetPromotedReference(); value != "" {
 		result.PromotedReference = &value
 	}
+	if value := input.GetPromotionReadbackSha256(); value != "" {
+		result.PromotionReceiptSha256 = &value
+	}
 	if input.GetPromotedAt() != nil {
 		value := generated.Timestamp(protoTime(input.GetPromotedAt()))
 		result.PromotedAt = &value
