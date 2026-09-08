@@ -449,9 +449,13 @@ func buildPrompt(input model.Input) ([]byte, error) {
 		}
 	}
 	var builder strings.Builder
+	continuationNotice, err := appendSessionContext(&builder, input)
+	if err != nil {
+		return nil, err
+	}
 	builder.WriteString(input.Task)
-	if input.CodexSessionID != "" || input.PromptTargetKind == "SESSION_CONTINUATION" ||
-		(input.PromptServiceTemplateRevision == "" && strings.Contains(input.Instructions, `<session-continuation used="true">`)) {
+	if !continuationNotice && (input.CodexSessionID != "" || input.PromptTargetKind == "SESSION_CONTINUATION" ||
+		(input.PromptServiceTemplateRevision == "" && strings.Contains(input.Instructions, `<session-continuation used="true">`))) {
 		if err := appendContinuationRevision(&builder, input); err != nil {
 			return nil, err
 		}

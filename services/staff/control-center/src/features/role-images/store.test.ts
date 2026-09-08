@@ -8,6 +8,7 @@ import type {
 const api = vi.hoisted(() => ({
   loadRoleImagePage: vi.fn(),
   loadRoleImageDetail: vi.fn(),
+  loadRoleImageRevisionPage: vi.fn(),
 }));
 vi.mock("./api", () => api);
 import { useRoleImagesStore } from "./store";
@@ -134,5 +135,60 @@ describe("role image catalog store", () => {
       { query: "Среда", state: "ACTIVE" },
     );
     expect(store.projectTotal[recipe.projectRef]).toBe(43);
+  });
+  it.each(["dispose", "denied", "different-detail"] as const)(
+    "не возвращает исходник из поздней history page после %s",
+    async (transition) => {
+      const store = useRoleImagesStore();
+      store.revisionNextPageToken[recipe.ref] = "next";
+      let resolve!: (page: { items: unknown[] }) => void;
+      api.loadRoleImageRevisionPage.mockReturnValue(
+        new Promise((ready) => {
+          resolve = ready;
+        }),
+      );
+      const pending = store.loadMoreRevisions(recipe.projectRef, recipe.ref);
+      if (transition === "dispose") store.dispose();
+      else {
+        if (transition === "denied")
+          api.loadRoleImageDetail.mockRejectedValueOnce(
+            new Error("Access denied"),
+          );
+        else
+          api.loadRoleImageDetail.mockResolvedValueOnce({
+            recipe: { ...recipe, ref: "another_image" },
+            builds: [],
+          });
+        await store.loadDetail(
+          recipe.projectRef,
+          transition === "denied" ? recipe.ref : "another_image",
+          false,
+        );
+      }
+      resolve({
+        items: [
+          {
+            ref: "late_source",
+            sourceAvailable: true,
+            environment: recipe.environment,
+          },
+        ],
+      });
+      await pending;
+      expect(store.revisions[recipe.ref]).toBeUndefined();
+      expect(store.loadingDetail).toBe(false);
+    },
+  );
+  it("ошибка history очищает уже прочитанный исходник", async () => {
+    const store = useRoleImagesStore();
+    store.recipes[recipe.ref] = recipe;
+    store.revisionNextPageToken[recipe.ref] = "next";
+    api.loadRoleImageRevisionPage.mockRejectedValueOnce(
+      new Error("Access denied"),
+    );
+    await store.loadMoreRevisions(recipe.projectRef, recipe.ref);
+    expect(store.recipes[recipe.ref]).toBeUndefined();
+    expect(store.revisionNextPageToken[recipe.ref]).toBeUndefined();
+    expect(store.problem).toBeDefined();
   });
 });

@@ -33,6 +33,8 @@ import * as api from "./api";
 import { archiveConfiguration } from "./lifecycle";
 import { managedCopySource, canArchiveConfiguration } from "./copy-source";
 import ConfigurationCopyDialog from "./ConfigurationCopyDialog.vue";
+import RestoreRevisionButton from "./RestoreRevisionButton.vue";
+import { canRestoreRevision, restoreRevision } from "./restore-revision";
 import { loadRoleImageCreateAccess } from "@/features/role-images/api";
 import ConfigurationFields from "./ConfigurationFields.vue";
 import SttActivationPanel from "./SttActivationPanel.vue";
@@ -169,6 +171,7 @@ const copyOpen = ref(false);
 const archiveOpen = ref(false);
 const archiveAttempted = ref(false);
 const archiveUnknown = ref(false);
+const restoreAttempted = ref(false);
 const copySource = computed(() =>
   configuration.value ? managedCopySource(configuration.value) : undefined,
 );
@@ -384,6 +387,7 @@ async function load(more = false): Promise<void> {
       historyCursors.clear();
       archiveAttempted.value = false;
       archiveUnknown.value = false;
+      restoreAttempted.value = false;
       configuration.value = result.configuration;
       name.value = result.configuration.name;
     }
@@ -431,6 +435,25 @@ async function save(): Promise<void> {
     accept(result);
     if (replacing) await refreshHistory(result);
     if (wasNew && !disposed) emit("created", result.configuration);
+  });
+}
+async function restoreFromHistory(): Promise<void> {
+  const current = configuration.value;
+  const source = revision.value;
+  if (
+    !current ||
+    !source ||
+    busy.value ||
+    sourceBusy.value ||
+    dirty.value ||
+    restoreAttempted.value ||
+    !canRestoreRevision(current, source)
+  )
+    return;
+  restoreAttempted.value = true;
+  await perform(async () => {
+    accept(await restoreRevision(current, source, controller.signal));
+    if (!disposed) restoreAttempted.value = false;
   });
 }
 async function refreshHistory(
@@ -1066,6 +1089,9 @@ watch(
     <p v-if="archiveUnknown" role="status">
       {{ $t("managed.outcomeUnknown") }}
     </p>
+    <p v-if="restoreAttempted && problem" role="status">
+      {{ $t("configurationRestore.unknown") }}
+    </p>
     <dl
       v-if="configuration?.copyProvenance"
       class="configuration-editor__source"
@@ -1256,6 +1282,13 @@ watch(
       >
         <GitCompareArrows :size="18" />{{ $t("managed.diff") }}
       </button>
+      <RestoreRevisionButton
+        v-if="configuration && revision"
+        :configuration="configuration"
+        :revision="revision"
+        :disabled="busy || sourceBusy || dirty || restoreAttempted"
+        @restore="restoreFromHistory"
+      />
       <button class="button" :disabled="!canSave" @click="save">
         <Save :size="18" />{{ $t("managed.saveDraft") }}
       </button>

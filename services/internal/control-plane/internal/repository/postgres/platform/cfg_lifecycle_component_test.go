@@ -74,6 +74,7 @@ func testCFGLifecycle(t *testing.T, ctx context.Context, repository *Repository,
 	if _, err := repository.pool.Exec(ctx, `UPDATE control_plane.managed_configuration_sets SET copy_provenance='{}' WHERE ref=$1`, copied.ManagedConfiguration.Ref); err == nil {
 		t.Fatal("copy provenance changed")
 	}
+	published.ManagedConfiguration = testCFGForwardRevision(t, ctx, service, owner, reader, connectionRef, published).ManagedConfiguration
 	archiveVersion := published.ManagedConfiguration.Version
 	archive := command.Command{Kind: command.ArchiveIntegrationDefinitionConfiguration, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "cfg-definition-archive", ExpectedVersion: &archiveVersion}, Payload: command.ManagedConfigurationInput{ConfigurationRef: published.ManagedConfiguration.Ref}}
 	archived, err := service.Execute(ctx, archive)
