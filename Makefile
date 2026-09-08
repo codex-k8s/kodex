@@ -97,6 +97,10 @@ test-session-archive-seaweedfs-e2e:
 test-internal-rpc-authority-postgres:
 	@./scripts/tests/internal-rpc-authority-postgres-test.sh
 
+.PHONY: test-authority-executable-distroless
+test-authority-executable-distroless: check-go-toolchain
+	@./scripts/tests/authority-executable-distroless-test.sh
+
 test-integration-synthetic:
 	@./scripts/tests/integration-synthetic-test.sh
 

@@ -4,7 +4,7 @@ title: Ограниченная свежесть authority и независим
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-08
 ---
 
@@ -200,6 +200,46 @@ node tools/release/authority-freshness-job-proof.mjs --context "$CONTEXT" \
 снят во время работы, завершение перепроверяется сейчас. В plan для
 `--action freshness-activate` дополнительно передаются `--capability` и
 `--job-proofs`. Сама activation выполняется тем же CLI apply и новым journal.
+
+# Distroless actual executable readback
+
+Исправление [#1339](https://github.com/codex-k8s/kodex/issues/1339) относится к
+трём потребителям: sidecar observe, activation consumer check и future Job proof.
+Immutable authority image не содержит shell. Его нельзя проверять через `sh`,
+`readlink` или `sha256sum` внутри контейнера, добавлять debug Pod/root/capabilities
+либо считать digest image-файла доказательством запущенного процесса.
+
+Общий `authority-executable-readback.mjs` сохраняет source путь, а image путь
+имеет два явных профиля:
+
+- `--k3s-sudo`: на том же SRE host запускается exact repository helper через
+  `sudo -n <текущий Node executable>`. Ему передаётся только безопасная projection
+  Pod UID/name/namespace, container ID/image ID/restart count и закрытая роль.
+  `k3s crictl inspect` связывает их с actual PID/args. Дважды проверяются
+  CRI identity, process start ticks, inode и digest открытого `/proc/PID/exe`;
+  в его PID namespace допускается ровно один процесс с каноническим executable.
+  Raw CRI, env и credential mounts не выводятся и не сохраняются. Профиль требует
+  запуска на node точного container; на другой node он закрыто отклоняется.
+  Уже применённый старый distroless image не требует нового apply ради readback.
+- Обычный `kubectl`: явный exec нативного
+  `/usr/local/bin/internal-rpc-authority-executable-proof --role issuer|verifier`.
+  Этот read-only Go helper входит в новые authority images; старый image без него
+  требует отдельной обычной поставки нового image. Он не читает secrets/env,
+  не вызывает authority RPC и не меняет UID/capabilities. Проверяет единственный
+  actual process, start ticks и inode до/после digest открытого proc executable.
+  Helper поддерживает только две роли, произвольный путь передать нельзя.
+
+Оба профиля повторно проверяют Kubernetes Pod/container/spec identity после
+чтения. Digest сравнивается с `imageBinaries` exact capability прежнего или нового
+применённого plan. Версия source оснастки может быть новее serving image: это
+не разрешает подменять capability VERSION. Source/image роли и прежние grants/
+trust/SQL не меняются. Post-activation rollback guard остаётся прежним.
+
+Поддержанная локальная проверка — `make test-authority-executable-distroless`:
+два disposable контейнера на exact distroless base из Dockerfile, nonroot,
+read-only, без network/capabilities и с конечным process budget. Synthetic
+процесс проверяет native digest и отсутствие shell, missing/unsupported role,
+два одинаковых executable. Это не live authority/mTLS/provider proof.
 
 # Partition и восстановление
 

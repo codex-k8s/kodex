@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync } from 'node:fs';
@@ -120,9 +121,9 @@ async function main(args) {
     requireValue(capability?.version===1&&capability.protocol===2&&capability.revision===plan.revision&&sha.test(capability.binaries?.issuer)&&sha.test(capability.binaries?.verifier)&&['issuer','verifier'].every(role=>sha.test(capability.imageBinaries?.[role]))&&capability.imageVersion===plan.revision&&capability.go==='go1.26.6'&&
       capability.recipe==='CGO_ENABLED=0 GOWORK=off GOOS=linux GOARCH=amd64 GOAMD64=v1 go build -trimpath -buildvcs=false ./cmd/internal-rpc-authority-{issuer,verifier}','EXACT_AUTHORITY_CAPABILITY_REQUIRED');
     const verifyExecutables=()=>{for(const consumer of actual) {
-      const script='expected=$1; count=0; result=; for entry in /proc/[0-9]*/exe; do target=$(readlink "$entry" 2>/dev/null) || continue; if [ "$target" = "$expected" ] || [ "$target" = "$expected (deleted)" ]; then count=$((count+1)); result=$(sha256sum "$entry") || exit 1; fi; done; [ "$count" = 1 ] || exit 1; printf "%s\\n" "$result"';
-      const output=kube('-n',namespace,'exec',consumer.pod,'-c',consumer.container,'--','sh','-c',script,'authority-freshness',consumer.process);
-      requireValue(output.split(/\s/)[0]===(consumer.profile==='image'?capability.imageBinaries:capability.binaries)[consumer.role],'AUTHORITY_EXECUTABLE_INCOMPATIBLE');
+      const pod=inventory.find(item=>item.kind==='Pod'&&item.metadata.uid===consumer.podUID);
+      const container=[...(pod.spec.containers??[]),...(pod.spec.initContainers??[])].find(c=>c.name===consumer.container);
+      requireValue(readAuthorityExecutable(pod,container,{kube,k3sSudo:options['--k3s-sudo']})===(consumer.profile==='image'?capability.imageBinaries:capability.binaries)[consumer.role],'AUTHORITY_EXECUTABLE_INCOMPATIBLE');
     }};
     verifyExecutables();
     requireValue(fingerprint(actual)===fingerprint(authorityConsumers(get('deployments,statefulsets,daemonsets,replicasets,pods','-n',namespace).items)),'AUTHORITY_CONSUMER_CHANGED');

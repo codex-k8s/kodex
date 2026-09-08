@@ -32,6 +32,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     ./cmd/internal-rpc-authority-restore-pitr \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
+    -o /out/internal-rpc-authority-executable-proof \
+    ./cmd/internal-rpc-authority-executable-proof \
+ && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
     -o /out/internal-rpc-authority-local-readiness \
     ./cmd/internal-rpc-authority-local-readiness \
  && CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
