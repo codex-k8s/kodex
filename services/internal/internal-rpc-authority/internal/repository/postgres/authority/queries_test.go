@@ -52,8 +52,8 @@ func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 		"AND NOT EXISTS (SELECT 1 FROM exact_snapshot)",
 		"readback_attestation_receipt_id =\n            EXCLUDED.readback_attestation_receipt_id",
 		"IS DISTINCT FROM EXCLUDED.readback_attestation_receipt_id",
-		"SELECT accepted FROM exact_snapshot",
-		"SELECT accepted FROM advanced_snapshot",
+		"SELECT accepted, receipt_id FROM exact_snapshot",
+		"SELECT accepted, receipt_id FROM advanced_snapshot",
 	} {
 		if !strings.Contains(verifierAcceptContextSQL, required) {
 			t.Fatalf("context acceptance query lost receipt invariant %q", required)

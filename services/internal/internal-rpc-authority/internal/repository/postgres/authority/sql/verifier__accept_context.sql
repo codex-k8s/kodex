@@ -5,7 +5,7 @@ WITH issued_binding AS MATERIALIZED (
      @source_revision, @source_digest_sha256, @key_set_revision, @policy_revision, @context_signer_generation
  ) AS accepted
 ), exact_snapshot AS MATERIALIZED (
-    SELECT true AS accepted
+    SELECT true AS accepted, @attestation_receipt_id::uuid AS receipt_id
     FROM internal_rpc_authority.authority_snapshot_watermarks AS current
     WHERE (SELECT accepted FROM issued_binding)
       AND current.target_workload_id = @target_workload_id
@@ -15,6 +15,9 @@ WITH issued_binding AS MATERIALIZED (
       AND current.policy_revision = @policy_revision
       AND current.signer_generation = @signer_generation
       AND internal_rpc_authority.runtime_restore_fence_allows_work()
+      AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
+          @attestation_receipt_id, @target_workload_id, @source_revision, @source_digest_sha256
+      ) IS NOT NULL
       AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
           current.readback_attestation_receipt_id,
           @target_workload_id,
@@ -146,12 +149,12 @@ advanced_snapshot AS (
           OR internal_rpc_authority.authority_snapshot_watermarks.readback_attestation_receipt_id
               IS DISTINCT FROM EXCLUDED.readback_attestation_receipt_id
       )
-    RETURNING true AS accepted
+    RETURNING true AS accepted, readback_attestation_receipt_id AS receipt_id
 ),
 accepted_snapshot AS (
-    SELECT accepted FROM exact_snapshot
+    SELECT accepted, receipt_id FROM exact_snapshot
     UNION ALL
-    SELECT accepted FROM advanced_snapshot
+    SELECT accepted, receipt_id FROM advanced_snapshot
 ),
 reserved AS (
     INSERT INTO internal_rpc_authority.authority_replay_reservations (
@@ -171,8 +174,7 @@ reserved AS (
         @jti, @canonical_digest_sha256, @caller_workload_id, @target_workload_id,
         @source_revision, @source_digest_sha256, @key_set_revision, @policy_revision, @context_signer_generation
     ) AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
-        (SELECT readback_attestation_receipt_id FROM internal_rpc_authority.authority_snapshot_watermarks
-         WHERE target_workload_id = @target_workload_id),
+        (SELECT receipt_id FROM accepted_snapshot LIMIT 1),
         @target_workload_id, @source_revision, @source_digest_sha256
     ) IS NOT NULL AS still_valid
 )

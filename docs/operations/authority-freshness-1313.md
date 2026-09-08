@@ -56,6 +56,9 @@ Go переносит только **остаток** DB deadline на monotonic
 локальный deadline, но не увеличивать его. DB clock остаётся доверенным временем
 протокола; произвольный откат часов PostgreSQL не является поддержанным способом
 эмуляции partition. Локальные смещения ±5 секунд проверяются отдельно от DB time.
+Readiness и следующий рабочий accept используют один exact receipt из
+verifier-owned watermark; обновление другим Pod того же source не продлевает
+сохранённые JTI bindings. Проверка собственного receipt на SQL accept сохраняется.
 Refresh receipt выполняется каждые 10 секунд, reload snapshot — не реже чем раз
 в 5 секунд. Readiness использует тот же durable path, что рабочая авторизация.
 
@@ -112,6 +115,30 @@ node tools/release/authority-freshness-transition.mjs apply \
 node tools/release/authority-freshness-transition.mjs observe \
   --context "$CONTEXT" --k3s-sudo --plan "$PRIVATE/up-plan.json"
 ```
+
+Узкая сборка и доставка в disposable single-host k3s:
+
+```sh
+bash "$SOURCE/tools/dev/build-local-image-supply-chain.sh" \
+  --source-root "$SOURCE" --state-directory "$PRIVATE/security-images" \
+  --component authority-security --context "$CONTEXT"
+jq '{version,profile,revision,authorityImage,imageAdmissionImage,digestReadback}' \
+  "$PRIVATE/security-images/authority-security-images.json"
+```
+
+Команда собирает ровно два image target, импортирует OCI штатным
+`sudo -n k3s ctr -n k8s.io images import`, проверяет наличие exact references
+и SHA256 каждого manifest из containerd content store. Docker работает от
+исходного оператора. `authorityImage` назначается только обновляемым issuer/
+verifier; `imageAdmissionImage` — совместимому controller reader. Эти значения
+не подменяют policy автоматически. Новая policy сохраняет прежний worker image.
+
+`registry.local.kodex` здесь — имя образа в node image store, не успешная
+публикация в удалённый registry. Применимость ограничена текущим single-host
+Linux/amd64 профилем; на новой node этот cache отсутствует. Для обычной
+immutable установки repository/digest поступают из её утверждённого image
+pipeline, после чего тот же sidecar image manifest и actual executable guard
+работают без hostPath. Нельзя выдавать локальный import за remote registry push.
 
 Для immutable authority image сборка использует `--build-arg VERSION="$SHA"`.
 Capability отдельно собирает hot-reload recipe и Dockerfile recipe с
@@ -216,6 +243,10 @@ Owner publication остаётся синтетическим immutable fixture;
 проверяются Go tests. Реальный SQL clock проходит 31 секунду; timestamps receipt
 не подменяются. Проверяются exact replay, CAS/lost ACK, restart, caller boundary,
 receiptB против старого tokenA, continuation и lock wait через deadline.
+Отдельная DB того же disposable container выполняет существующий concurrency
+fixture: 12 параллельных accepts при заблокированном watermark, другой
+attested replica receipt, invalid receipt, advance и rollback. Её упрощённые
+helper fixtures не заменяют настоящий protocol test в первой DB.
 
 Герметичные Go suites проверяют ±5s local skew, spent RTT, non-sliding receipt,
 DB failure, signed context за deadline и отсутствие token при UNKNOWN регистрации.
@@ -231,5 +262,6 @@ live latency, нагрузку, partition, rotation, emergency revoke или п�
 Эти строки остаются NOT RUN до root evidence; #1322 остаётся отдельным блокером.
 
 При разработке проверены Context7 PostgreSQL18 (`clock_timestamp`, privileges
-SECURITY DEFINER) и pgx (`Scan`, NULL, context/connection lifecycle). Wire Proto,
+SECURITY DEFINER), pgx (`Scan`, NULL, context/connection lifecycle) и Docker
+(`/docker/docs`: OCI exporter, attestations и отличие registry push). Wire Proto,
 OpenAPI и формат authority JWS не менялись.

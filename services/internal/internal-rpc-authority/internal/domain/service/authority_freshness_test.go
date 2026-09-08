@@ -102,3 +102,21 @@ func TestDurableFreshnessRejectsCorruptionAndSlidingSameReceipt(t *testing.T) {
 		t.Fatal("overlong database budget accepted")
 	}
 }
+
+func TestFreshnessAdoptsExactReplicaReceiptForWorkingAccept(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	const first = "13130000-0000-4000-8000-000000000100"
+	const second = "13130000-0000-4000-8000-000000000200"
+	store := &controlledFreshnessStore{sample: repository.SnapshotFreshness{ReceiptID: first, ObservedAt: now, ValidUntil: now.Add(30 * time.Second)}}
+	authority := &Authority{store: store, now: func() time.Time { return now }}
+	if err := authority.ActivateSnapshot(t.Context(), first); err != nil {
+		t.Fatal("activation failed")
+	}
+	store.sample.ReceiptID = second
+	if err := authority.Ready(t.Context()); err != nil {
+		t.Fatal("replica receipt readiness rejected")
+	}
+	if authority.SnapshotState().AttestationReceiptID != second {
+		t.Fatal("working accept retained a different receipt than authoritative readiness")
+	}
+}

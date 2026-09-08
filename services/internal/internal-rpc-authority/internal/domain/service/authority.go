@@ -875,6 +875,10 @@ func (authority *Authority) freshMetadataDeadline(ctx context.Context) (time.Tim
 		!authority.metadataValidUntil.IsZero() && authority.metadataValidUntil.Before(deadline) {
 		deadline = authority.metadataValidUntil
 	}
+	// Freshness разрешает только exact source/key/policy/signer этого workload.
+	// Другой Pod может обновить общий watermark: рабочий accept использует тот
+	// же authoritative receipt, что readiness. Старые issued bindings неизменны.
+	authority.attestationReceiptID = freshness.ReceiptID
 	authority.metadataReceiptID = freshness.ReceiptID
 	authority.metadataValidUntil = deadline
 	authority.activationMu.Unlock()

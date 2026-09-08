@@ -269,3 +269,9 @@ CAS activation30s, capability/readback, независимые partition и то
 Application-only scoped release не изменяет эти ресурсы. `runner-policy-transition`
 дополнительно принимает `--authority-issuer-image` при сохранении текущего
 `--runner-digest`; перед resource phase используются additive `schema` и `admission`.
+
+Для #1313 узкий `tools/dev/build-local-image-supply-chain.sh --component authority-security`
+с обязательным `--context` собирает только authority runtime и admission reader,
+импортирует их в локальный k3s image store и проверяет manifest digests.
+Точные аргументы и граница single-host профиля приведены в OPS-DOC-1313;
+это не registry push и не global `up`.

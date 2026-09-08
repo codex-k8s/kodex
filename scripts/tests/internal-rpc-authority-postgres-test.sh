@@ -227,4 +227,16 @@ SQL
   fail 'removed PostgreSQL credential lifecycle function remains callable'
 fi
 
+# Отдельная disposable DB: concurrency fixture заменяет свою схему и не
+# затрагивает только что проверенные production migrations/receipts.
+psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 \
+  --command 'CREATE DATABASE authority_concurrency_fixture' >/dev/null
+(
+  cd -- "$repository_root/services/internal/internal-rpc-authority"
+  KODEX_AUTHORITY_POSTGRES_TEST_DSN="postgresql://postgres@127.0.0.1:${port}/authority_concurrency_fixture?sslmode=disable" \
+    env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
+    go test -count=1 -timeout=30s ./internal/repository/postgres/authority \
+      -run '^TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock$'
+)
+
 printf 'Internal RPC authority PostgreSQL tests passed\n'

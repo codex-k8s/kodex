@@ -274,8 +274,8 @@ jq -e '
   echo "role image builder pod revision does not own exact release inputs" >&2
   exit 1
 }
-grep -Fq 'client-cert "$(cat /identity/registry-client.crt)"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+# Реальные shell-фрагменты проверяют exact credential files, argv и cleanup.
+python3 "$repository_root/scripts/tests/registry-credential-files-test.py"
 grep -Fq 'base-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
 grep -Fq 'staging-registry-client.crt' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
 grep -Fq '[grpc.tls]' "$repository_root/deploy/k8s/base/image-supply-chain/buildkitd.toml"
@@ -436,8 +436,7 @@ for dockerfile in \
     }
   done
 done
-grep -Fq 'client-cert "$(cat "${certificate_file}")"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/cleanup.sh"
+# Cleanup credential path также выполняется в общей fixture выше.
 yq eval-all -e '
   select(.kind == "CronJob" and .metadata.name == "kodex-registry-cleanup") |
   (.spec.jobTemplate.spec.template.spec.volumes[] |
