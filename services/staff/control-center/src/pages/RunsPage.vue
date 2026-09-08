@@ -7,8 +7,12 @@ import { storeToRefs } from "pinia";
 import { usePlatformStore } from "@/features/platform/store";
 import RunsBoard from "@/features/workboard/components/RunsBoard.vue";
 import WorkboardSection from "@/features/workboard/components/WorkboardSection.vue";
-import { filterRuns, type RunFilter } from "@/features/workboard/model";
-import { useRunCatalogStore } from "@/features/workboard/run-catalog";
+import {
+  filterRuns,
+  type RunFilter,
+  type RunLane,
+} from "@/features/workboard/model";
+import { useRunBoardStore } from "@/features/workboard/run-board";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
@@ -26,7 +30,7 @@ const canCreateRun = computed(() =>
   project.value?.nextActions.includes("CREATE_RUN"),
 );
 const filter = ref<RunFilter>("ALL");
-const catalog = useRunCatalogStore();
+const catalog = useRunBoardStore();
 const {
   items: scopedRuns,
   ready: runsReady,
@@ -55,10 +59,11 @@ const list = computed(() =>
 async function refreshRuns(): Promise<void> {
   await loadRuns();
 }
-async function loadRuns(more = false): Promise<void> {
+async function loadRuns(more = false, lane?: RunLane): Promise<void> {
   await catalog.load(
     { projectRef: projectRef.value, query: query.value, filter: filter.value },
     more,
+    lane,
   );
 }
 
@@ -77,7 +82,7 @@ async function refresh(): Promise<void> {
 watch(
   projectRef,
   (next) => {
-    runsReady.value = false;
+    catalog.reset();
     projectReady.value = !next || Boolean(project.value);
     void refresh();
   },
@@ -181,9 +186,10 @@ onBeforeUnmount(() => {
     >
       <RunsBoard
         :runs="list"
+        :columns="catalog.columns"
         :has-more="Boolean(pageToken)"
         :loading-more="loading"
-        @more="loadRuns(true)"
+        @more="loadRuns(true, $event)"
         :preserve-project="Boolean(projectRef)"
       />
     </WorkboardSection>

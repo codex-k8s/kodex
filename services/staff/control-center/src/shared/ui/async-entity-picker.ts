@@ -246,11 +246,19 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     schedule(0);
   }
 
-  function cancel(): void {
+  function cancel(clearSnapshot = false): void {
     generation += 1;
     cancelPending();
     initialLoading.value = false;
     loadingMore.value = false;
+    nextCursor.value = null;
+    cursors.clear();
+    error.value = undefined;
+    if (clearSnapshot) {
+      items.value = [];
+      total.value = undefined;
+      hasLoaded.value = false;
+    }
   }
 
   async function loadMore(): Promise<void> {
@@ -360,7 +368,7 @@ export function useCursorInfiniteScroll(
       toValue(options.enabled),
     ],
     reconnect,
-    { flush: "post" },
+    { flush: "post", immediate: true },
   );
 
   onScopeDispose(() => {

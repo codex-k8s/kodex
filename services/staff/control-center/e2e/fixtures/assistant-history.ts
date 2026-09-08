@@ -84,7 +84,7 @@ export async function checkAssistantHistory(
   const history = page.locator(
     mobile ? ".assistant-history__menu" : ".assistant-conversation-sidebar",
   );
-  await history.getByRole("button", { name: /ещё/ }).click();
+  // Видимый sentinel догружает серверную страницу без ручного нажатия.
   await expect(
     history.getByRole("button", { name: /Предыдущий диалог/ }),
   ).toBeVisible();

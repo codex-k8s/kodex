@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, shallowRef } from "vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import type { AppProblem } from "@/shared/api/problem";
 
 import { groupRuns, type RunLane } from "@/features/workboard/model";
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
@@ -10,20 +12,42 @@ const props = defineProps<{
   hasMore?: boolean;
   loadingMore?: boolean;
   preserveProject?: boolean;
+  columns?: Record<
+    RunLane,
+    { pageToken?: string; loading: boolean; problem?: AppProblem }
+  >;
 }>();
-const emit = defineEmits<{ more: [] }>();
-function onScroll(event: Event): void {
+const emit = defineEmits<{ more: [lane: RunLane] }>();
+function canLoad(lane: RunLane): boolean {
+  const column = props.columns?.[lane];
+  return column
+    ? Boolean(column.pageToken) && !column.loading && !column.problem
+    : props.hasMore && !props.loadingMore;
+}
+function onScroll(event: Event, lane: RunLane): void {
   const element = event.currentTarget;
   if (
-    props.hasMore &&
-    !props.loadingMore &&
+    canLoad(lane) &&
     element instanceof HTMLElement &&
     element.scrollHeight - element.scrollTop - element.clientHeight <= 40
   )
-    emit("more");
+    emit("more", lane);
 }
 const lanes = computed(() => groupRuns(props.runs));
 const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
+const laneRoots = Object.fromEntries(
+  order.map((lane) => [lane, shallowRef<HTMLElement | null>(null)]),
+) as Record<RunLane, ReturnType<typeof shallowRef<HTMLElement | null>>>;
+const laneSentinels = Object.fromEntries(
+  order.map((lane) => [lane, shallowRef<HTMLElement | null>(null)]),
+) as Record<RunLane, ReturnType<typeof shallowRef<HTMLElement | null>>>;
+for (const lane of order)
+  useCursorInfiniteScroll({
+    root: laneRoots[lane],
+    sentinel: laneSentinels[lane],
+    enabled: () => canLoad(lane),
+    loadMore: () => emit("more", lane),
+  });
 </script>
 
 <template>
@@ -35,10 +59,13 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
           <span>{{ lanes[lane].length }}</span>
         </header>
         <div
+          :ref="
+            (element) => (laneRoots[lane].value = element as HTMLElement | null)
+          "
           class="runs-lane__body"
           tabindex="0"
           :aria-label="$t(`workboard.lanes.${lane}`)"
-          @scroll="onScroll"
+          @scroll="onScroll($event, lane)"
         >
           <RunWorkItem
             v-for="run in lanes[lane]"
@@ -50,6 +77,14 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
           <p v-if="lanes[lane].length === 0" class="runs-lane__empty">
             {{ $t("workboard.noRunsInLane") }}
           </p>
+          <div
+            :ref="
+              (element) =>
+                (laneSentinels[lane].value = element as HTMLElement | null)
+            "
+            class="runs-lane__sentinel"
+            aria-hidden="true"
+          />
         </div>
       </section>
     </div>
@@ -107,11 +142,12 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
-  grid-auto-rows: 200px;
+  grid-auto-rows: auto;
 }
 .runs-lane__body :deep(.run-work-item) {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
+  height: 200px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -153,5 +189,10 @@ const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
   padding: 26px 10px;
   color: var(--muted);
   text-align: center;
+}
+.runs-lane__sentinel {
+  height: 1px;
+  min-height: 1px;
+  align-self: start;
 }
 </style>

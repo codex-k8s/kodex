@@ -56,6 +56,7 @@ import {
   type SupportedLocale,
 } from "@/shared/locale";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
 import RealtimeStatus from "@/shared/ui/RealtimeStatus.vue";
 import type { RealtimeStatusLabels } from "@/shared/ui/realtime-status";
@@ -460,7 +461,11 @@ onBeforeUnmount(() => {
         ><span>Kodex</span>
       </RouterLink>
       <div class="topbar-project-picker">
-        <ProjectPicker :project="project" @select="changeProject" />
+        <ProjectPicker
+          :key="route.fullPath"
+          :project="project"
+          @select="changeProject"
+        />
       </div>
       <div ref="searchRoot" class="global-search-wrap">
         <form
@@ -506,12 +511,11 @@ onBeforeUnmount(() => {
           <p v-else-if="platform.loading.search" class="muted" role="status">
             {{ $t("common.loading") }}
           </p>
-          <template v-else-if="platform.problems.search">
-            <p role="alert">{{ $t("errors.default") }}</p>
-            <button class="button" type="button" @click="submitSearch">
-              {{ $t("common.retry") }}
-            </button>
-          </template>
+          <ProblemNotice
+            v-else-if="platform.problems.search"
+            :problem="platform.problems.search"
+            @retry="submitSearch"
+          />
           <p v-else-if="platform.searchResults.length === 0" class="muted">
             {{ $t("app.searchEmpty") }}
           </p>
