@@ -55,7 +55,9 @@ export async function observeHTTPRelease({ origin, storage, storagePath, duratio
       }
       const headers = sessionHeaders({ cookies: client.authenticatedCookies(), origins: [] }, origin, now());
       for (const path of ["/api/v1/session", "/"]) {
-        const response = await observedFetch(new URL(path, origin), { method: "GET", headers, redirect: "manual", signal: AbortSignal.timeout(5000) });
+        const requestHeaders = new Headers(headers);
+        requestHeaders.set("Accept", path === "/" ? "text/html" : "application/json");
+        const response = await observedFetch(new URL(path, origin), { method: "GET", headers: requestHeaders, redirect: "manual", signal: AbortSignal.timeout(5000) });
         await boundedResponseBody(response, 1 << 20);
         if (response.status === 401) throw new Error("Release HTTP acceptance session is unavailable");
       }

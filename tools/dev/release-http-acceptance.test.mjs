@@ -8,10 +8,19 @@ const storage = { origins: [], cookies: [
   { name: "__Host-kodex-csrf", value: "c".repeat(43), domain: "control.disposable.invalid", path: "/", secure: true, httpOnly: false, sameSite: "Strict", expires: -1 },
 ] };
 
-async function run({ failedProbe = false, failedRefresh = false } = {}) {
+async function run({ failedProbe = false, failedRefresh = false, failedHTML = false } = {}) {
   let clock = Date.now(), sessionReads = 0;
   const rows = [];
   const fetchAPI = async (url, options) => {
+    const requested = new Headers(options.headers);
+    assert.equal(requested.get("cookie")?.includes("__Host-kodex-session="), true);
+    if (url.pathname === "/") {
+      const accepted = requested.get("accept") === "text/html" && !failedHTML;
+      return new Response(accepted ? "<!doctype html><title>Fixture</title>" : "private fixture", {
+        status: accepted ? 200 : 404, headers: { "Content-Type": "text/html" },
+      });
+    }
+    assert.equal(requested.get("accept"), "application/json");
     const headers = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
     let value = {};
     if (url.pathname === "/api/v1/session") {
@@ -55,4 +64,15 @@ test("uncertain refresh failure stops observation without a second PUT", async (
   assert.equal(result.status, "FAIL");
   assert.equal(result.counts["/api/v1/session|PUT|502"], 1);
   assert.equal(result.observationFailed, true);
+});
+
+test("HTML negotiation is distinct from JSON and real HTML failures remain failures", async () => {
+  const healthy = await run();
+  assert.equal(healthy.result.counts["/|GET|200"], 6);
+  assert.equal(healthy.rows.filter((row) => row.path === "/").every((row) => row.responseType === "text/html"), true);
+  const failed = await run({ failedHTML: true });
+  assert.equal(failed.result.status, "FAIL");
+  assert.equal(failed.result.counts["/|GET|404"], 6);
+  assert.equal(failed.result.rounds, 6);
+  assert.equal(JSON.stringify(failed.rows).includes("private fixture"), false);
 });
