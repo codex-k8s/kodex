@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "target": "role-image-builder",
+  "container": "platform-worker-grant-agent",
+  "capabilities": [
+    "platform-worker-grant.v1",
+    "platform-worker-grant.v2.pod-uid"
+  ],
+  "image": "registry.local.kodex/kodex/internal-rpc-authority@sha256:2e9bda6d1862788cf0f631492ad76da582919a1b778ab5078ea3d3be05208938",
+  "executable": "/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent",
+  "executableSHA256": "39d06542b3dce25b294498e8b428d3969ee6de170e39e0dd9f4d2e0527149570",
+  "source": {
+    "revision": "6fe0412154b09d37ec654f1dc394e5ca6de48a20",
+    "trees": {
+      "libs/go/exactkubernetessecret": "8b9da556625f25e739b28880828930e4e4442883",
+      "libs/go/grpcserver": "388411200c21ea25a6111f0e59cca7098bc9239a",
+      "libs/go/internalrpcauth": "3fdeefbc082891671f50c925c4d4197b7560d6a7",
+      "libs/go/observability": "a609cbe12ee69d1f5b9bced92572355f54dcc8da",
+      "libs/go/securefile": "739923900715b9e4a030405a24b4b14137d93754",
+      "libs/go/serviceruntime": "f661c5e3cf25f28e25eda68e96cb203b4b205de4",
+      "services/internal/internal-rpc-authority": "c8549c6d7c0816e7f96d4cdc13e0e8c3ce57d77e"
+    }
+  },
+  "build": {
+    "toolchain": "go1.26.6",
+    "environment": {
+      "CGO_ENABLED": "0",
+      "GOOS": "linux",
+      "GOARCH": "amd64",
+      "GOAMD64": "v1",
+      "GOWORK": "off",
+      "GOTOOLCHAIN": "local"
+    },
+    "module": "services/internal/internal-rpc-authority",
+    "arguments": [
+      "build",
+      "-trimpath",
+      "-buildvcs=false",
+      "-ldflags=-s -w",
+      "./cmd/internal-rpc-authority-platform-worker-grant-agent"
+    ],
+    "dockerfile": "services/internal/internal-rpc-authority/Dockerfile"
+  },
+  "evidenceIssue": 1304
+}
