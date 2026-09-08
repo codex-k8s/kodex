@@ -1051,9 +1051,10 @@ Migration `PASS` требует exact Job/source/spec и фактический 
 `20260908000500`; resume повторно проверяет этот receipt. Каждый PATCH имеет
 durable intent, Deployment UID/resourceVersion/spec CAS. `inspect` после
 UNKNOWN различает `before/stopped/replaced/resumed`; повтор уже применённого
-шага делает только readback. UNKNOWN при неизменённом before не допускает
-слепого PATCH: оператор сохраняет журнал и формирует новый ограниченный план
-лишь после доказанного отсутствия эффекта. Нельзя пересоздавать fixed migration
+шага делает только readback. UNKNOWN при неизменённом before требует отдельного
+`inspect` в журнале и новой явной команды той же фазы с confirmation. Повтор
+разрешается только при неизменённом после inspect resourceVersion; оба возможных
+PATCH проверяют точный before spec/RV, поэтому лишь один может примениться. Нельзя пересоздавать fixed migration
 Job или менять reservation вручную. Source меняется только у CP application;
 sidecar images/source, keys, trust, replicas count после resume сохраняются.
 После resume обязательны фактические readiness/binary/component readbacks.

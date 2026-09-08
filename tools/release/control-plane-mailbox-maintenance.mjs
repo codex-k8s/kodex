@@ -24,7 +24,7 @@ export async function mailboxMaintenanceStep({phase,plan,journal,get,pods,patch,
   const actual=get(); ensure(actual.metadata.uid===plan.beforeUID,'CP_UID_CHANGED');
   const stages=['before','stopped','replaced','resumed']; const stage=stages.find((s)=>fingerprint(actual.spec)===fingerprint(plan.specs[s])); ensure(stage,'CP_SPEC_CHANGED');
   const gone=()=>pods().every((p)=>['Succeeded','Failed'].includes(p.status?.phase));
-  if(phase==='inspect') return {status:'OBSERVED',stage,podsGone:gone(),availableReplicas:actual.status?.availableReplicas??0,sourceRevision:plan.source.revision};
+  if(phase==='inspect') { const result={status:'OBSERVED',stage,podsGone:gone(),availableReplicas:actual.status?.availableReplicas??0,sourceRevision:plan.source.revision,resourceVersion:actual.metadata.resourceVersion}; journal.append({type:'INSPECT',...result}); return result; }
   const edges={stop:['before','stopped'],replace:['stopped','replaced'],resume:['replaced','resumed']}; const [from,to]=edges[phase]??[]; ensure(from,'PHASE_INVALID');
   const intent=journal.events.find((e)=>e.type==='INTENT'&&e.step===phase);
   if(stage===to) { ensure(intent,'UNOWNED_CP_TRANSITION'); journal.append({type:'READBACK',step:phase,stage,resourceVersion:actual.metadata.resourceVersion}); return {status:phase==='stop'&&!gone()?'DRAINING':'ACKNOWLEDGED',stage}; }
@@ -33,8 +33,13 @@ export async function mailboxMaintenanceStep({phase,plan,journal,get,pods,patch,
   if(phase!=='stop') { ensure(gone(),'CP_PODS_REMAIN'); ensure(journal.events.some((e)=>e.type==='INTENT'&&e.step===(phase==='replace'?'stop':'replace')),'CP_PREDECESSOR_REQUIRED'); }
   if(phase==='replace'||phase==='resume') ensure(inspectSource(plan.source.path).revision===plan.source.revision,'SOURCE_REVISION_CHANGED');
   if(phase==='resume') ensure(migration().status==='PASS','MIGRATION_READBACK_REQUIRED');
-  // Повтор с неизвестным PATCH допускает только read-only inspect, не новый PATCH.
-  ensure(!intent,'CP_PATCH_OUTCOME_UNKNOWN');
+  // После UNKNOWN нужен отдельный durable inspect того же before и RV.
+  // Оба возможных PATCH имеют exact before-spec CAS: примениться может только один.
+  if(intent) {
+    const lastIntent=journal.events.findLastIndex((e)=>e.type==='INTENT'&&e.step===phase);
+    const observed=journal.events.findLastIndex((e)=>e.type==='INSPECT'&&e.stage===from&&e.resourceVersion===actual.metadata.resourceVersion);
+    ensure(observed>lastIntent,'CP_PATCH_OUTCOME_UNKNOWN');
+  }
   const operations=[{op:'test',path:'/metadata/uid',value:plan.beforeUID},{op:'test',path:'/metadata/resourceVersion',value:actual.metadata.resourceVersion},{op:'test',path:'/spec',value:plan.specs[from]},{op:'replace',path:'/spec',value:plan.specs[to]}];
   journal.append({type:'INTENT',step:phase,patchSHA256:fingerprint(operations)});
   try { patch(operations); } catch { journal.append({type:'UNKNOWN',step:phase}); throw new Error('CP_PATCH_OUTCOME_UNKNOWN'); }
