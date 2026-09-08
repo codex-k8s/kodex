@@ -4,7 +4,7 @@ title: Карта выполнения полной MVP-приёмки и две
 type: operation-plan
 status: approved
 owner: developer
-version: 1.0.2
+version: 1.1.0
 updated: 2026-09-08
 ---
 
@@ -42,6 +42,7 @@ Issue [#1260](https://github.com/codex-k8s/kodex/issues/1260), итоговая 
 | I:название | `npx playwright test --config playwright.integration.config.ts` | `e2e/integration-path.spec.ts`: synthetic установленный adapter и optional GitHub/API-key профили различаются; credentials задаются только по README оснастки. |
 | M | `KODEX_E2E_PROFILE=mattermost npm run test:e2e` | Отдельный optional Mattermost deployment и ограниченная учётная запись. |
 | N | `npx playwright test --config e2e/session-renewal.config.ts` | Новый ограниченный реальный session-only сценарий, описан ниже. |
+| BUI | `npx playwright test --config e2e/ui-acceptance.config.ts` | Независимые browser variants чтения/геометрии; opt-in создаёт только два собственных проекта. Полные IDs остаются NOT RUN до остальных вариантов. |
 | RI | `tools/dev/local-role-image-supply-chain-e2e.mjs` из корня | Операторский профиль полного image lifecycle по [плану](mvp-1031-acceptance.md); QA не получает Kubernetes/root credentials. |
 | W | `tools/dev/runtime-workspace-acceptance.mjs` из корня | Операторский runtime/workspace профиль; exact сценарии/аргументы из текущего `--help`, не writable canary вместо агента. |
 | ST | `tools/dev/stt-http-acceptance.mjs` и direct adapter профиль из [STT-плана](mvp-1031-acceptance.md#защищённый-http-smoke) | Новый платный POST только после допуска, durable intent, без автоматического повтора UNKNOWN. Browser hardware отдельный. |
@@ -266,6 +267,110 @@ trace/video/screenshot configuration. Локальная ошибка прове
 с успешными assertions и потерянным подробным artifact сохраняет отдельные
 статусы: assertions PASS, detailed evidence FAIL; файл не восстанавливается
 из предположений, а новое длительное окно выполняется на финальном кандидате.
+
+# Широкий независимый browser-профиль BUI
+
+BUI расширяет приёмку после N и не запускает длительное ожидание renewal повторно.
+Вместо последовательного общего `web-only.spec.ts`, который создаёт runtime и
+вызывает provider, используется отдельный публичный `ui-acceptance.config.ts`.
+Нужны отдельный GO, свежая legitimate API-only session по canonical loader,
+точные harness/API/PWA revisions и обязательный serving manifest SHA-256.
+Workers=1, retries=0, общий budget ограничен 1800000 мс; зависимые шаги после
+общего session/shell blocker не выполняются, локальный FAIL не отменяет
+независимые route groups. Новый шаг не начинается за 30 секунд до общего предела.
+
+Оператор дополнительно к env N задаёт:
+
+```sh
+export KODEX_E2E_RUN_TIMEOUT_MS=1800000
+export KODEX_E2E_SERVING_MANIFEST_SHA256=<64-символьный-digest-readback>
+export KODEX_E2E_UI_EVIDENCE_DIR=<новый-отсутствующий-каталог-в-private-0700-parent>
+export KODEX_E2E_UI_CREATE_PROJECTS=0
+npx playwright test --config e2e/ui-acceptance.config.ts
+```
+
+`KODEX_E2E_RESOURCE_PREFIX` имеет 4–61 символ: начальная латинская строчная
+буква, далее строчные буквы/цифры/дефис. `KODEX_E2E_UI_CREATE_PROJECTS=1`
+разрешает только два новых проекта с собственным prefix. Перед каждым POST
+записывается и синхронизируется durable intent; разрешение потребляется одним
+POST `/api/v1/projects`. Код не повторяет неопределённый результат и не
+изменяет старые проекты. Fixture остаётся для дальнейшей приёмки; отсутствие
+созданного проекта после lost response сначала выясняется authoritative
+readback, а не повтором под другим prefix. Существующий evidence directory
+отклоняется до нового intent и не удаляется Playwright.
+
+По умолчанию профиль читает до двух доступных проектов. Если создан свой
+fixture, project variants используют только новые refs. Для отображаемых
+конфигураций допустимо чтение существующей истории через UI; source/значения
+не выгружаются в evidence. Request guard разрешает GET/HEAD/OPTIONS и штатные
+session ticket POST/renewal PUT; остальные same-origin writes блокируются,
+кроме единственного opt-in project POST. Provider Run, device start, STT,
+publish, grants, delete и paid effects не входят в BUI. Чтобы service worker
+не обходил browser request interception, BUI использует `serviceWorkers=block`.
+Это ограничение профиля: install/update/offline и полнота MVP-UI-07 остаются
+отдельными обязательными проверками.
+
+План BUI:
+
+- [ ] Session metadata200, authenticated shell и наблюдаемый native WS v2.
+  Этот шаг не доказывает повторное потребление ticket, natural renewal или
+  отсутствие потерь business events.
+- [ ] 17 global route groups: home/projects/agents/workflows/automations/
+  environments/secrets/members/files/runs/integrations/decisions/providers,
+  PROMPT_TEMPLATE/ROLE_IMAGE/INTEGRATION_DEFINITION/SYSTEM_STT catalogs.
+  Все группы на ru/en, desktop 1440 и mobile 390; route сохранён, h1 и header
+  видимы, document overflow<=1px, нет видимых alert/i18n markers и новых
+  HTTP 4xx/5xx, page/console/network errors. Причины намеренных abort считаются
+  отдельно; после действия ожидается завершение текущих API requests.
+- [ ] Home/projects/runs на всех семи контрольных ширинах 1280/1440/1920/
+  2560/2900/390/768 и обеих локалях. Это geometry конкретных страниц, не
+  доказательство каждого редактора, длинного label или populated состояния.
+- [ ] Восемь разделов каждого выбранного проекта и переходы scope;
+  существующие menu links, files/trash и environment inspector
+  без автоматического выбора, click/Escape. Пустой fixture не доказывает
+  populated selection, multiple pages или controlled delayed response.
+- [ ] Rich project selector focus/ArrowDown/Escape/возврат фокуса и настоящий
+  async GET search с empty readback; global search Enter/clear. Точные 499/500 мс,
+  controlled stale response и все четыре маршрута результатов остаются
+  отдельными вариантами исходной 64-матрицы.
+- [ ] Kanban из четырёх колонок: при наличии прокручиваемой колонки настоящий
+  mouse wheel меняет только её scrollTop. Если fixture не прокручивается,
+  этот вариант NOT RUN; независимые server cursors и task delivery не выводятся
+  из одной проверки прокрутки.
+- [ ] Existing configuration detail/history open/Escape для PROMPT_TEMPLATE,
+  ROLE_IMAGE и INTEGRATION_DEFINITION без write/restore; assistant modal
+  open/read/close на desktop/tablet/mobile без нового чата, ввода или отправки.
+
+Каждый шаг пишет отдельный PASS/FAIL/NOT RUN variant в
+`ui-acceptance-safe.jsonl` (0600) и синхронизирует файл. В конце добавляется
+applicability всех 64 требований: partial variants не повышают
+`fullRequirementStatus` из NOT RUN. Рядом сохраняется SHA-256 точных байтов;
+`attach(path)` использует уже записанный файл. Неожиданный interrupt может
+оставить незавершённый JSONL без финального digest: это неполное evidence,
+а не разрешение повторить UNKNOWN fixture intent. Файл содержит закрытые
+case IDs/reasons, numeric/boolean metrics, locale/width, UTC и component
+versions. Произвольные DOM/URL/body поля отбрасываются, string payload в
+metrics отвергается. Нет screenshot/HAR/trace/video, реальных названий,
+source, prompt, cookies, ticket, auth URL или произвольного error text.
+
+Локальные входы без staging/credentials:
+
+```sh
+npm run test:unit -- e2e/ui-acceptance-proof.test.ts
+npx playwright test --config e2e/ui-acceptance.fixture.config.ts
+npx tsc --noEmit -p tsconfig.e2e.json
+npx eslint e2e/ui-acceptance*.ts --max-warnings 0
+KODEX_E2E_CHECK_ONLY=1 npx playwright test --config e2e/ui-acceptance.config.ts --list
+```
+
+Node suite проверяет applicability 64/partial status, safe projection,
+version/manifest guards, refs/traversal/malformed page, закрытый набор
+разрешённых запросов, intent/receipt ordering, durable bytes/digest/mode и
+отказ повторного/публичного/symlink каталога. Настоящий Chromium fixture
+проверяет общий helper чтения геометрии и блокировку POST Run на полностью
+synthetic странице. Он не подменяет live UI и provider acceptance.
+Context7 `/microsoft/playwright/v1.61.0`: проверены BrowserContext routing,
+service worker limitations, response observation и `testInfo.attach(path)`.
 
 # Итоговое evidence
 
