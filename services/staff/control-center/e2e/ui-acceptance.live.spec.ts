@@ -1,6 +1,10 @@
 import { test, expect, type Request } from "@playwright/test";
 import { loadE2ESessionRenewalEnvironment } from "./environment";
-import { geometry, visit } from "./ui-acceptance-browser";
+import {
+  geometry,
+  visit,
+  observeActionResponse,
+} from "./ui-acceptance-browser";
 import { installProtocolObserver } from "./session-renewal-proof";
 import {
   createJournal,
@@ -282,16 +286,16 @@ test("широкая UI-приёмка сохраняет независимые
             await journal.projectIntent(slot);
             creatingProject = true;
             attempt.sent = true;
-            const receipt = page.waitForResponse(
-              (response) =>
-                new URL(response.url()).pathname === "/api/v1/projects" &&
-                response.request().method() === "POST",
-              { timeout: 15_000 },
+            const response = await observeActionResponse(
+              page,
+              (value) =>
+                new URL(value.url()).pathname === "/api/v1/projects" &&
+                value.request().method() === "POST",
+              () =>
+                page
+                  .locator('button[form="project-form"][type="submit"]')
+                  .click(),
             );
-            await page
-              .locator('button[form="project-form"][type="submit"]')
-              .click();
-            const response = await receipt;
             expect(response.status()).toBe(201);
             const refs = projectRefs({ items: [await response.json()] });
             const ref = refs[0];
@@ -479,7 +483,8 @@ test("широкая UI-приёмка сохраняет независимые
           ".async-picker__popover input[role=combobox]",
         );
         const query = `${environment.resourcePrefix}-absent-search-fixture`;
-        const response = page.waitForResponse(
+        const response = await observeActionResponse(
+          page,
           (value) => {
             const url = new URL(value.url());
             return (
@@ -488,10 +493,9 @@ test("широкая UI-приёмка сохраняет независимые
               url.searchParams.get("query") === query
             );
           },
-          { timeout: 15_000 },
+          () => input.fill(query),
         );
-        await input.fill(query);
-        expect((await response).status()).toBe(200);
+        expect(response.status()).toBe(200);
         await expect(
           page.locator('.async-picker__popover [role="option"]'),
         ).toHaveCount(0);
@@ -592,7 +596,17 @@ test("широкая UI-приёмка сохраняет независимые
     );
   } finally {
     // Закрываем страницы до reporter/error-context; персональные данные не снимаются.
-    await page.close();
+    const closed = await page.close().then(
+      () => true,
+      () => false,
+    );
+    if (!closed)
+      await record(
+        "browser-cleanup",
+        ["MVP-UI-09", "MVP-UI-11"],
+        "FAIL",
+        "UI_ASSERTION_FAILED",
+      );
     await journal.close(variants);
     await testInfo.attach("ui-acceptance-safe-evidence", {
       path: journal.path,

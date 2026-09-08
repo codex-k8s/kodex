@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type Response } from "@playwright/test";
 
 export async function geometry(page: Page) {
   return page.evaluate(() => {
@@ -32,4 +32,19 @@ export async function visit(page: Page, path: string) {
   expect(metrics.untranslated).toBe(false);
   expect(metrics.alerts).toBe(0);
   return metrics;
+}
+
+// Оба обещания получают обработчик сразу: ошибка click не оставляет поздний
+// необработанный timeout наблюдателя ответа. Повторного действия здесь нет.
+export async function observeActionResponse(
+  page: Page,
+  predicate: (response: Response) => boolean,
+  action: () => Promise<unknown>,
+  timeout = 15_000,
+): Promise<Response> {
+  const [response] = await Promise.all([
+    page.waitForResponse(predicate, { timeout }),
+    action(),
+  ]);
+  return response;
 }

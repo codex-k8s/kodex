@@ -368,7 +368,8 @@ version/manifest guards, refs/traversal/malformed page, закрытый наб�
 разрешённых запросов, intent/receipt ordering, durable bytes/digest/mode и
 отказ повторного/публичного/symlink каталога. Настоящий Chromium fixture
 проверяет общий helper чтения геометрии и блокировку POST Run на полностью
-synthetic странице. Он не подменяет live UI и provider acceptance.
+synthetic странице. Отдельная browser-регрессия доказывает, что ранний отказ
+UI-действия не оставляет поздний необработанный timeout ожидаемого ответа. Он не подменяет live UI и provider acceptance.
 Context7 `/microsoft/playwright/v1.61.0`: проверены BrowserContext routing,
 service worker limitations, response observation и `testInfo.attach(path)`.
 

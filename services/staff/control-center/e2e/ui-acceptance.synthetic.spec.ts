@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { geometry, visit } from "./ui-acceptance-browser";
+import {
+  geometry,
+  visit,
+  observeActionResponse,
+} from "./ui-acceptance-browser";
 import { permittedRequest } from "./ui-acceptance-proof";
 
 // Настоящий Chromium проверяет helper и границу оснастки; это не live PWA/OIDC.
@@ -48,4 +52,19 @@ test("synthetic: чтение геометрии и блокировка нез�
     document.body.style.width = "2000px";
   });
   expect((await geometry(page)).overflow).toBeGreaterThan(1);
+});
+
+test("synthetic: ранний отказ действия не оставляет необработанный timeout ответа", async ({
+  page,
+}) => {
+  await expect(
+    observeActionResponse(
+      page,
+      () => false,
+      () => Promise.reject(new Error("Expected fixture action failure")),
+      50,
+    ),
+  ).rejects.toThrow("Expected fixture action failure");
+  // Playwright фиксирует поздний unhandled rejection как FAIL самого теста.
+  await page.waitForTimeout(100);
 });
