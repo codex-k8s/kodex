@@ -158,7 +158,7 @@ negatives и другие CFG-01/02/03 сценарии остаются в #103
 
 ```bash
 node --check tools/dev/role-image-acceptance.mjs
-node --test tools/dev/role-image-acceptance.test.mjs tools/dev/owner-session-client.test.mjs
+node --test tools/dev/role-image-acceptance-cli.test.mjs tools/dev/role-image-acceptance.test.mjs tools/dev/owner-session-client.test.mjs
 git diff --check
 ```
 
@@ -167,3 +167,5 @@ UNKNOWN503, private journal/corruption/concurrency, read-only inspect, полн�
 managed последовательность и отказ без exact completed build/SBOM/scan/promotion.
 Fixture tests не заменяют staging. Актуальные Node.js fs exclusive open/write/fsync
 проверены через Context7 `/websites/nodejs_latest-v24_x_api`.
+
+Публичный CLI дополнительно проверяется в отдельном чистом Git checkout с private синтетическими session/manifest/journal и полностью подменённым transport: `prepare` либо `recover-project`, затем `advance`, `restore`, `inspect`. Проверка фиксирует прежний ключ recovery, три публикации, отсутствие provider Run, отказ неверных параметров, expired preflight и lost ACK без повторной отправки. Она не обращается к staging и не доказывает живую сборку образа.

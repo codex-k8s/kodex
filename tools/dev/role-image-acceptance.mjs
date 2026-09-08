@@ -250,7 +250,7 @@ export async function runAcceptance({ phase, journal, request, preflight, predec
 
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
-  while (args.length) { const key = args.shift(); requireValue(/^--[a-z-]+$/.test(key ?? "") && args.length && !(key in options), "ARGUMENT_INVALID"); options[key] = args.shift(); }
+  while (args.length) { const key = args.shift(); requireValue(/^--[a-z][a-z0-9-]*$/.test(key ?? "") && args.length && !(key in options), "ARGUMENT_INVALID"); options[key] = args.shift(); }
   requireValue(Object.keys(options).every((key) => ["--origin", "--storage-state", "--state", "--prefix", "--runner-digest", "--serving-manifest", "--timeout-ms", "--confirm", "--previous-state", "--previous-sha256"].includes(key)), "ARGUMENT_UNKNOWN");
   requireValue(["prepare", "advance", "restore", "inspect", "recover-project"].includes(phase), "PHASE_INVALID");
   const origin = exactOrigin(options["--origin"] ?? "");
