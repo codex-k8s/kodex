@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"sort"
 	"strings"
 	"time"
@@ -986,6 +987,17 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	if !ok || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !safeIntegrationErrorCode(payload.SafeErrorCode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+
+	var healthSummary string
+	var healthCredentialInvalid bool
+	if strings.HasPrefix(payload.ResultSummary, emailbridgeapi.HealthSummaryPrefix) || payload.SafeErrorCode == emailbridgeapi.HealthNotReadyCode {
+		report, err := emailbridgeapi.ParseHealthSummary(payload.ResultSummary)
+		if err != nil || (report.Status == "ready") != payload.Success || !payload.Success && payload.SafeErrorCode != emailbridgeapi.HealthNotReadyCode {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		healthSummary = payload.ResultSummary
+		healthCredentialInvalid = report.CredentialInvalid()
+	}
 	var testID, connectionID, connectionRef, storedDigest, state, leaseRef string
 	var generation int64
 	var expiresAt time.Time
@@ -1001,9 +1013,12 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	if !payload.Success {
 		nextTest, nextConnection = "FAILED", "DEGRADED"
 		summary = "i18n:" + payload.SafeErrorCode
-		if payload.SafeErrorCode == "INTEGRATION_AUTH_REJECTED" || payload.SafeErrorCode == "INTEGRATION_CREDENTIAL_UNAVAILABLE" {
+		if healthCredentialInvalid || payload.SafeErrorCode == "INTEGRATION_AUTH_REJECTED" || payload.SafeErrorCode == "INTEGRATION_CREDENTIAL_UNAVAILABLE" {
 			credentials = "INVALID"
 		}
+	}
+	if healthSummary != "" {
+		summary = healthSummary
 	}
 	if _, err := tx.Exec(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionTestsStateResultSummarySafeErrorCode, testID, nextTest, summary, payload.SafeErrorCode); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -1392,7 +1407,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 
 func safeIntegrationErrorCode(code string) bool {
 	switch code {
-	case "INTEGRATION_AUTH_REJECTED", "INTEGRATION_CREDENTIAL_UNAVAILABLE", "INTEGRATION_UNAVAILABLE", "INTEGRATION_RATE_LIMITED", "INTEGRATION_CONFIGURATION_INVALID", "INTEGRATION_CAPABILITY_UNSUPPORTED", "INTEGRATION_ROUTE_NOT_OWNED", "INTEGRATION_REQUEST_REJECTED", "INTEGRATION_RESPONSE_INVALID", "INTEGRATION_OUTCOME_UNKNOWN":
+	case emailbridgeapi.HealthNotReadyCode, "INTEGRATION_AUTH_REJECTED", "INTEGRATION_CREDENTIAL_UNAVAILABLE", "INTEGRATION_UNAVAILABLE", "INTEGRATION_RATE_LIMITED", "INTEGRATION_CONFIGURATION_INVALID", "INTEGRATION_CAPABILITY_UNSUPPORTED", "INTEGRATION_ROUTE_NOT_OWNED", "INTEGRATION_REQUEST_REJECTED", "INTEGRATION_RESPONSE_INVALID", "INTEGRATION_OUTCOME_UNKNOWN":
 		return true
 	default:
 		return false

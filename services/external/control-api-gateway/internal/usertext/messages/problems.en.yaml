@@ -834,3 +834,26 @@ INTERACTION_DELIVERY_GATE_PROMPT:
   other: Approve sending the result to the external channel
 INTERACTION_DELIVERY_GATE_TITLE:
   other: Send result to external channel
+
+EMAIL_HEALTH_READY:
+  other: "ready"
+EMAIL_HEALTH_NOT_CONFIGURED:
+  other: "not configured"
+EMAIL_HEALTH_AUTH_REJECTED:
+  other: "access rejected; check authentication and protocol access"
+EMAIL_HEALTH_CREDENTIAL_UNAVAILABLE:
+  other: "credentials unavailable"
+EMAIL_HEALTH_TLS_UNAVAILABLE:
+  other: "secure connection unavailable; check TLS"
+EMAIL_HEALTH_NETWORK_UNAVAILABLE:
+  other: "network connection unavailable"
+EMAIL_HEALTH_RESPONSE_INVALID:
+  other: "invalid server response"
+EMAIL_HEALTH_SCAN_LIMIT:
+  other: "message scan limit exceeded"
+EMAIL_HEALTH_CONFIGURATION_INVALID:
+  other: "invalid protocol configuration"
+EMAIL_HEALTH_UNAVAILABLE:
+  other: "protocol unavailable; reason unspecified"
+EMAIL_HEALTH_NOT_READY:
+  other: "mail protocol not ready"

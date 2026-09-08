@@ -112,25 +112,25 @@ type Provider struct {
 func (p *Provider) material(ctx context.Context, e api.Endpoint) (*tls.Config, string, string, error) {
 	ca, err := p.Secrets.Read(ctx, e.Ca)
 	if err != nil {
-		return nil, "", "", errs.Unavailable
+		return nil, "", "", healthFailure(api.ProtocolReadinessReasonCredentialUnavailable)
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(ca) {
-		return nil, "", "", errs.Unavailable
+		return nil, "", "", healthFailure(api.ProtocolReadinessReasonConfigurationInvalid)
 	}
 	u, err := p.Secrets.Read(ctx, e.Username)
 	if err != nil {
-		return nil, "", "", errs.Unavailable
+		return nil, "", "", healthFailure(api.ProtocolReadinessReasonCredentialUnavailable)
 	}
 	pw, err := p.Secrets.Read(ctx, e.Secret)
 	if err != nil {
-		return nil, "", "", errs.Unavailable
+		return nil, "", "", healthFailure(api.ProtocolReadinessReasonCredentialUnavailable)
 	}
 	if len(u) == 0 || len(u) > 320 || len(pw) == 0 || len(pw) > 4096 || strings.ContainsAny(string(u)+string(pw), "\r\n\x00") {
-		return nil, "", "", errs.Unavailable
+		return nil, "", "", healthFailure(api.ProtocolReadinessReasonCredentialUnavailable)
 	}
 	if e.AuthMethod == "oauthbearer" && (strings.ContainsAny(string(u), ",=\x01") || strings.ContainsRune(string(pw), '\x01')) {
-		return nil, "", "", errs.Unavailable
+		return nil, "", "", healthFailure(api.ProtocolReadinessReasonCredentialUnavailable)
 	}
 	return &tls.Config{MinVersion: tls.VersionTLS12, ServerName: e.ServerName, RootCAs: roots}, string(u), string(pw), nil
 }
@@ -174,7 +174,7 @@ func (c *cappedConn) SetWriteDeadline(d time.Time) error {
 func (p *Provider) connect(ctx context.Context, e api.Endpoint, config *tls.Config, maxBytes int) (net.Conn, func(), error) {
 	c, err := p.Dialer.Dial(ctx, net.JoinHostPort(e.Host, strconv.Itoa(e.Port)))
 	if err != nil {
-		return nil, nil, errs.Unavailable
+		return nil, nil, healthFailure(api.ProtocolReadinessReasonNetworkUnavailable)
 	}
 	d, ok := ctx.Deadline()
 	if !ok {
@@ -188,7 +188,7 @@ func (p *Provider) connect(ctx context.Context, e api.Endpoint, config *tls.Conf
 		secured := tls.Client(bounded, config)
 		if secured.HandshakeContext(ctx) != nil {
 			cleanup()
-			return nil, nil, errs.Unavailable
+			return nil, nil, healthFailure(api.ProtocolReadinessReasonTLSUnavailable)
 		}
 		return secured, cleanup, nil
 	}
@@ -199,18 +199,18 @@ func popStartTLS(ctx context.Context, c net.Conn, config *tls.Config) (net.Conn,
 	tp := textproto.NewConn(c)
 	line, e := tp.ReadLine()
 	if e != nil || !strings.HasPrefix(line, "+OK") {
-		return nil, errs.Unavailable
+		return nil, healthFailure(api.ProtocolReadinessReasonTLSUnavailable)
 	}
 	if tp.PrintfLine("STLS") != nil {
-		return nil, errs.Unavailable
+		return nil, healthFailure(api.ProtocolReadinessReasonTLSUnavailable)
 	}
 	line, e = tp.ReadLine()
 	if e != nil || !strings.HasPrefix(line, "+OK") {
-		return nil, errs.Unavailable
+		return nil, healthFailure(api.ProtocolReadinessReasonTLSUnavailable)
 	}
 	secured := tls.Client(c, config)
 	if secured.HandshakeContext(ctx) != nil {
-		return nil, errs.Unavailable
+		return nil, healthFailure(api.ProtocolReadinessReasonTLSUnavailable)
 	}
 	return &greetingConn{Conn: secured, reader: io.MultiReader(strings.NewReader("+OK\r\n"), secured)}, nil
 }

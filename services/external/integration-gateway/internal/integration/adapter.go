@@ -61,11 +61,15 @@ type Receipt struct {
 }
 
 type Result struct {
-	Summary string
-	Receipt Receipt
+	HealthSummary string
+	Summary       string
+	Receipt       Receipt
 }
 
-type SafeError struct{ Code string }
+type SafeError struct {
+	Code          string
+	HealthSummary string
+}
 
 func (err *SafeError) Error() string { return err.Code }
 
@@ -246,7 +250,17 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	scopeDigest, inputDigest := sha256.Sum256(scopeJSON), sha256.Sum256([]byte("{}"))
 	request.ResourceScopeDigest, request.InputDigest = hex.EncodeToString(scopeDigest[:]), hex.EncodeToString(inputDigest[:])
 	request.Input, request.EffectKey = map[string]any{}, "health-check"
-	_, err = adapter.Execute(ctx, request)
+	result, err := adapter.Execute(ctx, request)
+	var safe *SafeError
+	if errors.As(err, &safe) && safe.Code == emailapi.HealthNotReadyCode {
+		return safe.HealthSummary, err
+	}
+	if err == nil && definition.Spec.Adapter == "EMAIL_HTTPS" {
+		if result.HealthSummary != "" {
+			return result.HealthSummary, nil
+		}
+		return "i18n:INTEGRATION_TEST_SUCCEEDED", nil
+	}
 	return "i18n:INTEGRATION_TEST_SUCCEEDED", err
 }
 

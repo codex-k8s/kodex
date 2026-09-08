@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"io"
 	"log/slog"
 	"net/http"
@@ -632,6 +633,9 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 				continue
 			}
 			LocalizeSafeErrors(item, localize)
+			if text, ok := item.(string); ok && (key == "lastTestOutcome" || key == "resultSummary") && strings.HasPrefix(text, emailbridgeapi.HealthSummaryPrefix) {
+				current[key] = emailbridgeapi.LocalizeHealthSummary(text, localize)
+			}
 			if text, ok := item.(string); ok && strings.HasPrefix(text, "i18n:") {
 				current[key] = localize(strings.TrimPrefix(text, "i18n:"))
 			}
