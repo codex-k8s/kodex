@@ -1,3 +1,4 @@
+import { syntheticNetworkJournal } from "./synthetic-network-journal";
 import { expect, test } from "@playwright/test";
 import type {
   ManagedConfiguration,
@@ -5,12 +6,22 @@ import type {
   RuntimeEnvironmentConsumer,
 } from "../src/shared/api/generated/openapi/types.gen";
 
+const journals = new WeakMap<
+  import("@playwright/test").Page,
+  ReturnType<typeof syntheticNetworkJournal>
+>();
+test.afterEach(async ({ page }) => {
+  await journals.get(page)?.finish();
+});
+
 for (const width of [1440, 390]) {
   for (const kind of ["environment", "secret", "managed"] as const) {
     test(`synthetic: impact search и rebind ${kind} ${String(width)}px`, async ({
       page,
       context,
     }, testInfo) => {
+      const networkJournal = syntheticNetworkJournal(page, testInfo);
+      journals.set(page, networkJournal);
       await page.setViewportSize({ width, height: 844 });
       const failures: string[] = [];
       const queries: { query: string; cursor: string | null }[] = [];
@@ -230,8 +241,23 @@ for (const width of [1440, 390]) {
           await route.abort();
           return;
         }
-        const response = await route.fetch({
-          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+        networkJournal.record("asset-fetch-start", { path: url.pathname });
+        const response = await route
+          .fetch({
+            url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+          })
+          .catch((error: unknown) => {
+            networkJournal.record("asset-fetch-error", {
+              path: url.pathname,
+              socketReset:
+                error instanceof Error &&
+                error.message.includes("socket hang up"),
+            });
+            throw error;
+          });
+        networkJournal.record("asset-fetch-response", {
+          path: url.pathname,
+          status: response.status(),
         });
         if (!response.ok()) failures.push("Failed asset");
         await route.fulfill({ response });

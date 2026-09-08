@@ -4,7 +4,7 @@ title: Карта выполнения полной MVP-приёмки и две
 type: operation-plan
 status: approved
 owner: developer
-version: 1.1.3
+version: 1.1.4
 updated: 2026-09-08
 ---
 
@@ -501,3 +501,67 @@ serving inventory; full requirement statuses остаются NOT RUN до ос�
 `npx playwright test --config e2e/ui-readonly.fixture.config.ts`.
 Он проверяет native form/keyboard/Cancel без backend POST на synthetic HTML;
 не является доказательством live ProjectsPage или пользовательской приёмки.
+
+
+## Уточнение read-only профиля после forms24 (#1323/#1324)
+
+Первый live forms24 на harness `2103be1821ff10f4d4d3a95775ab9cbebac2d0dd`,
+API/PWA `1303f0c186f2d02b9ac149451f16df35b8b5b521` сохранил
+17 PASS / 4 FAIL / 7 NOT RUN (24 выбранных варианта, три prerequisites и
+общий remaining). Четыре RoleImage FAIL возникли в guard до сервера;
+четыре assistant и две en collections остались NOT RUN. Journal SHA256:
+`cf27ca6dd63305c6450465828261acbb8aa13ee74f7254e29fc138861ee2dfbb`.
+Новый запуск не переписывает эти результаты.
+
+Новый RoleImage editor читает eligibility через POST
+`/api/v1/administration/access/effective-access/query`. Guard разрешает только
+этот метод/path и точное тело: target ORGANIZATION без дополнительных полей
+либо PROJECT с одним projectRef; ровно три уникальных permissionKeys
+`image.build`, `image.source.view`, `image.source.manage`. Subject/actor,
+дополнительные поля, другие permissions и соседние administration endpoints
+закрыто отклоняются. Новых бизнесовых записей этот допуск не разрешает.
+
+Карта существующего read: authenticated browser cookie/CSRF → generated
+queryEffectiveAccess → BFF QueryEffectiveAccess → CP Access RPC → principal
+из проверенного transport → доменный service → PostgreSQL effective-access
+read → EffectiveAccessPage → source eligibility редактора. Subject в этом
+профиле не передаётся, сервер выбирает текущего actor. Это чтение рассчитанных
+allow-only решений, не изменение grant; idempotency/If-Match, mutation event и
+потребитель эффекта к нему неприменимы. Ошибки CP остаются Problem.
+
+Project collection ждёт ответ именно GET projects pageSize30 без query/cursor
+и окончания видимого loading текущей страницы; alert или HTTP failure остаются
+FAIL. Только settled пустой список становится NOT RUN. Assistant ждёт
+aria-busy=false до чтения истории и после выбора. Evidence сохраняет закрытые
+boolean стадии отсутствия fixtures: projects/history empty либо composer
+unavailable; текст/refs/DOM не сохраняются. Это не доказывает, что все прежние
+NOT RUN были вызваны гонкой, и не создаёт недостающие данные.
+
+Локальные delayed fixtures проверяют populated/empty/HTTP failure, exact
+permission read и блокировку соседней mutation. Точный query search из #1318
+сохраняется. После merge требуется новый ограниченный live readback, остальные
+варианты полного MVP по-прежнему не закрыты.
+
+
+## Безопасная диагностика запроса в session-only профиле (#1327)
+
+Исторический WebKit N на harness9e6/app1303 завершился FAIL READBACK при
+одном failedRequests, несмотря на coordinated refresh и v2/SESSION_READY.
+Исходный artifact не связывал счётчик с конкретным запросом; причину нельзя
+приписывать intentional abort, asset либо продукту без новых данных.
+
+N теперь сохраняет максимум32 failure записей и счётчик overflow. WeakMap
+сопоставляет START и requestfailed одного объекта Playwright Request, без
+нового wire header или изменения fetch. Evidence включает локальный sequence,
+номер вкладки, закрытые route/method/resource категории, stage начала/отказа,
+elapsedMs, closed error enum и SHA256 исходного error. URL/query/headers,
+ticket, DOM, response/body и raw error не сохраняются. Неизвестная категория
+остаётся OTHER/UNKNOWN; отсутствие START явно identityKnown=false. Этот helper
+не подтверждает отмену и не подавляет ни одного failedRequests.
+
+Snapshot фиксируется до закрытия вкладок, чтобы teardown не менял измеренное
+окно. Unit проверяет exact identity, redaction и bounded overflow; synthetic
+browser fixture принудительно разрывает один read и сохраняет его как failure.
+Нужен новый WebKit N live readback после merge. Сохранённый cursor не является
+проверкой доставки новых событий: businessEventDelivery остаётся NOT RUN без
+контролируемого producer и ожидаемого набора событий.

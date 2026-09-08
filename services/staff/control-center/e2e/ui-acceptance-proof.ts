@@ -230,12 +230,49 @@ export function permittedRequest(
   method: string,
   pathname: string,
   creatingProject: boolean,
+  body?: unknown,
 ): boolean {
   return (
     ["GET", "HEAD", "OPTIONS"].includes(method) ||
     (pathname === "/api/v1/session" && method === "PUT") ||
     (pathname === "/api/v1/session/ticket" && method === "POST") ||
+    (method === "POST" &&
+      pathname === "/api/v1/administration/access/effective-access/query" &&
+      roleImagePermissionRead(body)) ||
     (creatingProject && pathname === "/api/v1/projects" && method === "POST")
+  );
+}
+function roleImagePermissionRead(body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const value = body as Record<string, unknown>;
+  if (Object.keys(value).sort().join(",") !== "permissionKeys,target")
+    return false;
+  const permissions = [
+    "image.build",
+    "image.source.manage",
+    "image.source.view",
+  ];
+  if (
+    !Array.isArray(value.permissionKeys) ||
+    value.permissionKeys.length !== 3 ||
+    !value.permissionKeys.every((key) => typeof key === "string") ||
+    [...value.permissionKeys].sort().join(",") !== permissions.join(",")
+  )
+    return false;
+  if (
+    !value.target ||
+    typeof value.target !== "object" ||
+    Array.isArray(value.target)
+  )
+    return false;
+  const target = value.target as Record<string, unknown>;
+  return (
+    (target.kind === "ORGANIZATION" &&
+      Object.keys(target).join(",") === "kind") ||
+    (target.kind === "PROJECT" &&
+      Object.keys(target).sort().join(",") === "kind,projectRef" &&
+      typeof target.projectRef === "string" &&
+      /^[a-zA-Z0-9_-]{1,100}$/.test(target.projectRef))
   );
 }
 export async function createJournal(
