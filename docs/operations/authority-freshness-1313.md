@@ -236,7 +236,7 @@ Immutable authority image не содержит shell. Его нельзя пр�
 trust/SQL не меняются. Post-activation rollback guard остаётся прежним.
 
 Поддержанная локальная проверка — `make test-authority-executable-distroless`:
-два disposable контейнера на exact distroless base из Dockerfile, nonroot,
+три disposable контейнера на exact distroless base из Dockerfile, nonroot,
 read-only, без network/capabilities и с конечным process budget. Synthetic
 процесс проверяет native digest и отсутствие shell, missing/unsupported role,
 два одинаковых executable. Это не live authority/mTLS/provider proof.

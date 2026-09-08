@@ -4,6 +4,10 @@ import {mkdtempSync,mkdirSync,writeFileSync,symlinkSync,rmSync,readFileSync} fro
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {policyDigest} from './runner-policy-model.mjs';
+import {fingerprint} from './scoped-release.mjs';
 import {authorityImageTarget,verifyAuthorityRuntime,inspectHostAuthority,readAuthorityExecutable,readHostProcess} from './authority-executable-readback.mjs';
 const image='registry.invalid/authority@sha256:'+'a'.repeat(64),uid='13390000-0000-4000-8000-000000000001';
 function fixture(){
@@ -47,8 +51,44 @@ test('host proc reads running executable and rejects multiple/missing/wrong proc
   process(733);assert.throws(()=>readHostProcess(731,binary,root),/ONE_AUTHORITY/);rmSync(join(root,'733'),{recursive:true});assert.throws(()=>readHostProcess(731,join(root,'wrong'),root),/ONE_AUTHORITY/);
  }finally{rmSync(root,{recursive:true,force:true});}
 });
-test('all three executable proof consumers use the common closed reader',()=>{
- for(const file of ['authority-sidecar-rollout.mjs','authority-freshness-transition.mjs','authority-freshness-job-proof.mjs']){
-  const source=readFileSync(new URL(file,import.meta.url),'utf8');assert.match(source,/readAuthorityExecutable\(pod,/);assert.doesNotMatch(source,/for entry in \/proc/);
- }
+test('public immutable sidecar observe and future Job capture never request shell and preserve owner proof',()=>{
+ const directory=mkdtempSync(join(tmpdir(),'authority-cli-'));
+ try {
+  const {pod,container}=fixture();pod.kind='Pod';pod.metadata.ownerReferences=[{uid:'rs',controller:true}];
+  const deployment={kind:'Deployment',metadata:{name:'control-api-gateway',uid:'deployment',generation:1},spec:{replicas:1,template:{spec:pod.spec}},status:{observedGeneration:1,replicas:1,updatedReplicas:1,readyReplicas:1,availableReplicas:1}};
+  const rs={kind:'ReplicaSet',metadata:{uid:'rs',ownerReferences:[{uid:'deployment',controller:true}]}};
+  const capability={revision:'d'.repeat(40),imageBinaries:{issuer:proof.binarySHA256}},cap=join(directory,'cap.json');writeFileSync(cap,JSON.stringify(capability));
+  const plan={version:1,context:'synthetic',namespaceUID:uid,intent:'fixture',capability,targets:[{name:deployment.metadata.name,uid:'deployment',before:{},after:deployment.spec,rollback:{profile:'image',roles:['issuer']}}]};
+  const planFile=join(directory,'plan.json');writeFileSync(planFile,JSON.stringify(plan));
+  const policy={metadata:{name:'policy',labels:{'kodex.dev/owner-intent':'true'}},immutable:true,data:{authorityImage:image,authorityIssuerImage:image,policyRevision:'7'}};policy.data.policySHA256=policyDigest(policy.data);
+  const job={kind:'Job',metadata:{name:'mc-admit-'+('e'.repeat(32))+'-admit',uid:'job',labels:{'kodex.dev/image-admission-orchestrated':'true','kodex.dev/image-admission-phase':'admit'},annotations:{'kodex.dev/admission-policy-revision':'7'}},spec:{template:{spec:pod.spec}}};
+  const state={pod,deployment,rs,job,policy,proof:{version:1,role:'issuer',pid:1,...proof}};
+  const stateFile=join(directory,'state.json'),log=join(directory,'commands.jsonl');writeFileSync(stateFile,JSON.stringify(state));
+  writeFileSync(join(directory,'kubectl'),`#!/usr/bin/env node
+const fs=require('node:fs'),a=process.argv.slice(2),s=JSON.parse(fs.readFileSync(process.env.EXECUTABLE_FIXTURE_STATE));
+fs.appendFileSync(process.env.EXECUTABLE_FIXTURE_LOG,JSON.stringify(a)+'\\n');
+if(a.splice(0,2).join(' ')!=='--context synthetic')process.exit(81);
+let out;if(a[0]==='config')out='synthetic';
+else if(a[0]==='exec'){if(a.slice(-3).join(' ')!=='/usr/local/bin/internal-rpc-authority-executable-proof --role issuer')process.exit(82);out=s.proof;}
+else if(a[0]==='get'){
+ if(a[1]==='namespace')out={metadata:{uid:'${uid}',labels:{'kodex.dev/environment':'staging'}}};
+ else if(a[1]==='deployment')out=a[2]==='image-admission-controller'?{spec:{template:{spec:{containers:[{name:'image-admission-controller',env:[{name:'IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP',value:'policy'}]}]}}}}:s.deployment;
+ else if(a[1]==='deployments,replicasets,pods')out={items:[s.deployment,s.rs,s.pod]};
+ else if(a[1]==='pod')out=s.pod;
+ else if(a[1]==='pods')out={items:[s.pod]};
+ else if(a[1]==='job')out=s.job;
+ else if(a[1]==='configmap')out=s.policy;
+ else if(a[1]==='imageadmissionpolicyparameters')out={spec:s.policy.data};
+ else if(a[1]==='validatingadmissionpolicybinding')out={spec:{paramRef:{name:'policy',namespace:'kodex-system',parameterNotFoundAction:'Deny'},validationActions:['Deny']}};
+ else process.exit(83);
+}else process.exit(84);process.stdout.write(typeof out==='string'?out:JSON.stringify(out));
+`,{mode:0o755});
+  const cli=(file,args)=>spawnSync(process.execPath,[fileURLToPath(new URL(file,import.meta.url)),...args,'--context','synthetic'],{encoding:'utf8',timeout:30_000,env:{...process.env,PATH:directory+':'+process.env.PATH,EXECUTABLE_FIXTURE_STATE:stateFile,EXECUTABLE_FIXTURE_LOG:log}});
+  let result=cli('authority-sidecar-rollout.mjs',['observe','--plan',planFile]);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).targets[0].ready,true);
+  pod.metadata.ownerReferences=[{uid:'job',controller:true}];pod.spec.initContainers.push({name:'internal-rpc-authority-socket-init',image},{name:'platform-worker-grant-agent',image});writeFileSync(stateFile,JSON.stringify(state));
+  const output=join(directory,'job-proof.json');result=cli('authority-freshness-job-proof.mjs',['--job',job.metadata.name,'--capability',cap,'--output',output]);assert.equal(result.status,0,result.stderr);
+  const saved=JSON.parse(readFileSync(output));assert.equal(saved.binarySHA256,proof.binarySHA256);assert.equal(saved.jobUID,job.metadata.uid);assert.equal(saved.jobSpecSHA256,fingerprint(job.spec));
+  const calls=readFileSync(log,'utf8').trim().split('\n').map(JSON.parse);assert.equal(calls.filter(a=>a.includes('exec')).length,2);assert.equal(calls.some(a=>a.includes('sh')||a.includes('patch')),false);
+  state.proof.binarySHA256='f'.repeat(64);writeFileSync(stateFile,JSON.stringify(state));result=cli('authority-freshness-job-proof.mjs',['--job',job.metadata.name,'--capability',cap,'--output',join(directory,'rejected.json')]);assert.equal(result.status,1);assert.match(result.stderr,/JOB_ISSUER_BINARY_MISMATCH/);
+ }finally{rmSync(directory,{recursive:true,force:true});}
 });
