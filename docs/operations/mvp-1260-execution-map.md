@@ -4,7 +4,7 @@ title: Карта выполнения полной MVP-приёмки и две
 type: operation-plan
 status: approved
 owner: developer
-version: 1.0.1
+version: 1.0.2
 updated: 2026-09-08
 ---
 
@@ -219,7 +219,13 @@ Root прикладывает отдельный exact manifest/readback к то
 workers=1/retries=0, trace/video/screenshots выключены. Error message содержит
 только закрытое имя фазы; страницы закрываются до teardown, чтобы автоматический
 error-context не снимал DOM. Output содержит только безопасные counters,
-численные cursors, версии, UTC timestamps и digest; ticket/cookies/subprotocol
+численные cursors, версии, UTC timestamps и digest. Исправление #1276 явно
+создаёт через `testInfo.outputPath` файлы `session-renewal-safe-evidence.json`
+и `session-renewal-safe-evidence.sha256` с mode0600 и эксклюзивным `wx`; прежний
+artifact не перезаписывается. SHA-256 относится к точным байтам JSON.
+`attach(path)` передаёт уже сохранённый файл reporter, поэтому JSON остаётся
+доступен и при штатном `reporter=list`, включая FAIL после начала наблюдения.
+Ошибка сохранения блокирует успешное завершение теста. Ticket/cookies/subprotocol
 со значением ticket, response body, auth URL и содержимое сообщений не пишутся.
 
 PASS требует одного штатного PUT200, ticket200 для обоих первоначальных и новых
@@ -234,7 +240,7 @@ SESSION_PROBLEM дают FAIL. Тест не кликает Stop и не зап�
 # Локальная проверка оснастки
 
 ```sh
-npm run test:unit -- e2e/session-renewal-proof.test.ts e2e/api-session-storage.test.ts
+npm run test:unit -- e2e/session-renewal-proof.test.ts e2e/api-session-storage.test.ts e2e/session-renewal-evidence.test.ts
 npm run test:e2e:synthetic -- session-renewal.synthetic.spec.ts
 npx tsc --noEmit -p tsconfig.e2e.json
 npx eslint e2e/session-renewal* --max-warnings 0
@@ -251,6 +257,15 @@ authorization и не подменяет live N. Context7 `/microsoft/playwright
 BrowserContext shared pages/storageState, page WebSocket frame/close events,
 trace/video/screenshot configuration. Локальная ошибка проверки остаётся FAIL
 до исправления и повторного запуска; точные команды/результаты — в PR.
+Регрессия persistence запускает настоящий Playwright CLI с `reporter=list`
+на безопасных локальных PASS/FAIL fixtures без browser/login/network;
+проверяет наличие JSON, mode0600, exact digest, отсутствие отброшенного
+содержимого фрейма, отказ повторной записи и ограничение размера. Context7
+`/websites/nodejs_latest-v24_x_api`: проверены `fsPromises.open` с `wx`/mode,
+`FileHandle.writeFile`, `sync` и `close`. Прежнее живое окно до #1276
+с успешными assertions и потерянным подробным artifact сохраняет отдельные
+статусы: assertions PASS, detailed evidence FAIL; файл не восстанавливается
+из предположений, а новое длительное окно выполняется на финальном кандидате.
 
 # Итоговое evidence
 
