@@ -291,6 +291,19 @@ for (const { width, height } of [
         "/api/v1/system-assistant": assistant,
         "/api/v1/assistant-conversations": { items: [] },
       };
+      if (
+        url.pathname === "/api/v1/session/ticket" &&
+        route.request().method() === "POST"
+      ) {
+        await route.fulfill({
+          json: {
+            ticket: "t".repeat(43),
+            expiresAt: new Date(Date.now() + 30_000).toISOString(),
+          },
+          headers: { "Cache-Control": "no-store" },
+        });
+        return;
+      }
       if (url.pathname in responses && route.request().method() === "GET") {
         await route.fulfill({
           json: responses[url.pathname],

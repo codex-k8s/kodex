@@ -26,6 +26,28 @@ export class SessionRenewalCoordinator {
     private readonly token: () => string = () => crypto.randomUUID(),
   ) {}
 
+  async runExclusive(operation: () => Promise<void>): Promise<boolean> {
+    // Web Locks закрывает межпроцессную гонку read/write localStorage.
+    // Lease остаётся bounded fallback и передаёт срок следующего refresh.
+    const locks =
+      typeof navigator === "undefined"
+        ? undefined
+        : (navigator as Partial<Navigator>).locks;
+    if (!locks) {
+      await operation();
+      return true;
+    }
+    return await locks.request(
+      sessionRenewalLeaseKey,
+      { ifAvailable: true },
+      async (lock) => {
+        if (!lock) return false;
+        await operation();
+        return true;
+      },
+    );
+  }
+
   acquire(): RenewalLeaseResult {
     const currentTime = this.now();
     const current = this.read();

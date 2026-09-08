@@ -10,6 +10,22 @@ import (
 
 const LoginCookieName = "__Host-kodex-login"
 
+func (boundary *Boundary) IssueWebSocketTicket(ctx context.Context) (string, time.Time, error) {
+	identity, ok := IdentityFromContext(ctx)
+	if !ok || identity.FamilyID == "" || boundary.families == nil {
+		return "", time.Time{}, ErrUnauthenticated
+	}
+	return boundary.families.IssueWebSocketTicket(ctx, identity.FamilyID, identity.BrowserSessionID, identity.CSRFHash)
+}
+
+func (boundary *Boundary) ConsumeWebSocketTicket(ctx context.Context, token string) error {
+	identity, ok := IdentityFromContext(ctx)
+	if !ok || identity.FamilyID == "" || boundary.families == nil {
+		return ErrUnauthenticated
+	}
+	return boundary.families.ConsumeWebSocketTicket(ctx, identity.FamilyID, identity.BrowserSessionID, identity.CSRFHash, token)
+}
+
 type SessionMetadata struct {
 	Generation        string
 	Version           uint64

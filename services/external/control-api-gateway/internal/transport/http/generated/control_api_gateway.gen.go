@@ -10318,6 +10318,12 @@ type OwnerSessionPurpose struct {
 // OwnerSessionPurposeKind defines model for OwnerSessionPurpose.Kind.
 type OwnerSessionPurposeKind string
 
+// OwnerSessionTicket defines model for OwnerSessionTicket.
+type OwnerSessionTicket struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+	Ticket    string    `json:"ticket"`
+}
+
 // PermissionDefinition defines model for PermissionDefinition.
 type PermissionDefinition struct {
 	AllowedScopes           []AccessScopeKind    `json:"allowedScopes"`
@@ -15110,6 +15116,11 @@ type CompleteOwnerAuthorizationJSONBody struct {
 	State string `json:"state"`
 }
 
+// CreateOwnerSessionTicketParams defines parameters for CreateOwnerSessionTicket.
+type CreateOwnerSessionTicketParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // AddSessionTurnParams defines parameters for AddSessionTurn.
 type AddSessionTurnParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -16831,6 +16842,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/session/callback)
 	CompleteOwnerAuthorization(w http.ResponseWriter, r *http.Request)
+
+	// (POST /api/v1/session/ticket)
+	CreateOwnerSessionTicket(w http.ResponseWriter, r *http.Request, params CreateOwnerSessionTicketParams)
 
 	// (POST /api/v1/sessions/{sessionRef}/turns)
 	AddSessionTurn(w http.ResponseWriter, r *http.Request, sessionRef SessionRef, params AddSessionTurnParams)
@@ -40611,6 +40625,57 @@ func (siw *ServerInterfaceWrapper) CompleteOwnerAuthorization(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// CreateOwnerSessionTicket operation middleware
+func (siw *ServerInterfaceWrapper) CreateOwnerSessionTicket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateOwnerSessionTicketParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOwnerSessionTicket(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // AddSessionTurn operation middleware
 func (siw *ServerInterfaceWrapper) AddSessionTurn(w http.ResponseWriter, r *http.Request) {
 
@@ -43833,6 +43898,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/session", wrapper.RenewOwnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/session/authorization", wrapper.BeginOwnerAuthorization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/session/callback", wrapper.CompleteOwnerAuthorization)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/session/ticket", wrapper.CreateOwnerSessionTicket)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/sessions/{sessionRef}/turns", wrapper.AddSessionTurn)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/skill-bundles", wrapper.ListSkillBundles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/skill-bundles/{bundleRef}", wrapper.GetSkillBundle)

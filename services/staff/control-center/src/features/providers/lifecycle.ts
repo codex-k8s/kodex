@@ -20,6 +20,7 @@ import {
   deleteProviderAccountRecord,
   loadProviderAccount,
   reauthorizeProviderDevice,
+  startDeviceAuthorization,
   verifyDeviceAuthorization,
 } from "./api";
 import type { ProviderAccount } from "./model";
@@ -35,7 +36,7 @@ export type ProviderLifecycleResult = {
   outcomes?: ProviderAccountQueuedWorkCancellation["outcomes"];
 };
 export type ProviderLifecycleAction =
-  | { action: "DELETE" | "VERIFY" | "REAUTHORIZE" }
+  | { action: "DELETE" | "VERIFY" | "REAUTHORIZE" | "START_DEVICE" }
   | Pick<
       Extract<ProviderLifecycleAttempt, { action: "CANCEL_QUEUED" }>,
       "action" | "body"
@@ -193,6 +194,11 @@ async function performProviderLifecycle(
   try {
     let result: ProviderLifecycleResult;
     switch (attempt.action) {
+      case "START_DEVICE":
+        result = {
+          account: await startDeviceAuthorization(original, attempt.key),
+        };
+        break;
       case "CANCEL_QUEUED":
         result = await cancelProviderQueuedAttempt(attempt, signal);
         break;

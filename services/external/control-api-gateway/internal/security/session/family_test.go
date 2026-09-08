@@ -230,3 +230,43 @@ func TestRefreshRejectsChangedSessionAuthority(t *testing.T) {
 		})
 	}
 }
+
+func TestFamilyRenewalAtAbsoluteLimitDoesNotStorm(t *testing.T) {
+	for _, accessBeforeAbsolute := range []bool{false, true} {
+		t.Run(map[bool]string{false: "access-covers-absolute", true: "access-still-needs-refresh"}[accessBeforeAbsolute], func(t *testing.T) {
+			families, family, _ := familyFixture(t, refreshFunc(func(context.Context, string) (oidcverifier.BrowserTokens, error) {
+				t.Fatal("unexpected refresh")
+				return oidcverifier.BrowserTokens{}, nil
+			}))
+			now := families.now()
+			family.AbsoluteExpiresAt, family.IdleExpiresAt = now.Add(4*time.Minute), now.Add(4*time.Minute)
+			family.Principal.ExpiresAt = family.AbsoluteExpiresAt.Add(time.Minute)
+			if accessBeforeAbsolute {
+				family.Principal.ExpiresAt = now.Add(3 * time.Minute)
+			}
+			family, err := families.write(t.Context(), family)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := family.AbsoluteExpiresAt
+			if accessBeforeAbsolute {
+				expected = now.Add(time.Minute)
+			}
+			if !families.RenewAfter(family).Equal(expected) {
+				t.Fatal("no-op idle renewal scheduled before absolute expiry")
+			}
+			if !accessBeforeAbsolute {
+				for range 42 {
+					renewed, err := families.Renew(t.Context(), family.ID, family.BrowserSessionID, family.CSRFHash)
+					if err != nil || renewed.Version != family.Version || renewed.Sequence != family.Sequence {
+						t.Fatal("no-op refresh mutated session", err)
+					}
+				}
+				families.now = func() time.Time { return family.AbsoluteExpiresAt }
+				if _, err := families.Read(t.Context(), family.ID); !errors.Is(err, ErrReauthentication) {
+					t.Fatal("absolute expiry was extended")
+				}
+			}
+		})
+	}
+}
