@@ -55,14 +55,6 @@ packages:
       go: services/external/control-api-gateway/internal/transport/websocket/generated
     consumers:
       - control-api-gateway
-  - id: integration-gateway-internal-v1
-    format: proto
-    owner: integration-gateway
-    source: contracts/proto/integrationgateway/v1
-    generated:
-      go: libs/go/integrationgatewayapi/gen/integrationgateway/v1
-    consumers:
-      - integration-gateway
   - id: control-plane-events-v1
     format: asyncapi
     owner: control-plane
