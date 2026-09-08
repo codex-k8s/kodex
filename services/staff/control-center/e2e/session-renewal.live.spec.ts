@@ -1,5 +1,6 @@
 import { test } from "@playwright/test";
 import { createHash } from "node:crypto";
+import { persistSessionRenewalEvidence } from "./session-renewal-evidence";
 import {
   installProtocolObserver,
   observeFrame,
@@ -246,9 +247,6 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
         )
         .digest("hex"),
     };
-    await testInfo.attach("session-renewal-safe-evidence", {
-      body: JSON.stringify(evidence, null, 2),
-      contentType: "application/json",
-    });
+    await persistSessionRenewalEvidence(testInfo, evidence);
   }
 });

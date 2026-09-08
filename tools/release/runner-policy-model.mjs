@@ -3,8 +3,15 @@ import { fingerprint } from "./scoped-release.mjs";
 
 export const policyBase = "kodex-image-admission-policy";
 export const namespace = "kodex-system";
+export const toolsDigestAnnotation = "kodex.dev/admission-tools-sha256";
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 const requireValue = (value, code) => { if (!value) throw new Error(code); };
+
+export function policyToolsDigest(policy) {
+  const image = policy?.data?.toolsImage;
+  requireValue(typeof image === "string" && /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/.test(image), "EXACT_TOOLS_IMAGE_REQUIRED");
+  return image.split("@")[1];
+}
 
 export function policyDigest(data) {
   const entries = Object.entries(data).filter(([key]) => !["orchestrationRevision", "policySHA256"].includes(key));
@@ -40,6 +47,8 @@ export function preparePolicy(policy, parameters, catalog, runnerDigest) {
   const data = { ...policy.data, policyRevision: String(revision + 1), trustedRoleBaseDigest: runnerDigest };
   data.policySHA256 = policyDigest(data);
   const name = `${policyBase}-${data.policySHA256.slice(0, 32)}`;
+  const toolsDigest = policyToolsDigest(policy);
+  requireValue(policy.metadata.annotations?.[toolsDigestAnnotation] === toolsDigest, "TOOLS_ANNOTATION_MISMATCH");
   const nextCatalog = JSON.parse(catalog.data["catalog.json"]);
   requireValue(nextCatalog.schemaVersion === 1 && Array.isArray(nextCatalog.environments), "CATALOG_SCHEMA_INVALID");
   const bases = nextCatalog.environments.filter((item) => item.key === "standard");
@@ -52,7 +61,7 @@ export function preparePolicy(policy, parameters, catalog, runnerDigest) {
   return { version: 1, previous: { policyName: policy.metadata.name, policyUID: policy.metadata.uid, policySHA256: policy.data.policySHA256,
     catalogName: catalog.metadata.name, catalogUID: catalog.metadata.uid, catalogSHA256: fingerprint(catalog.data) },
   resources: [
-    { apiVersion: "v1", kind: "ConfigMap", metadata: metadata(policy, name), immutable: true, data },
+    { apiVersion: "v1", kind: "ConfigMap", metadata: { ...metadata(policy, name), annotations: { [toolsDigestAnnotation]: toolsDigest } }, immutable: true, data },
     { apiVersion: parameters.apiVersion, kind: parameters.kind, metadata: metadata(parameters, name), spec: data },
     { apiVersion: "v1", kind: "ConfigMap", metadata: metadata(catalog, catalogName), immutable: true, data: catalogData },
   ] };
