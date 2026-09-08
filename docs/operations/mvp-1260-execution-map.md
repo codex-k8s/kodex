@@ -4,7 +4,7 @@ title: Карта выполнения полной MVP-приёмки и две
 type: operation-plan
 status: approved
 owner: developer
-version: 1.1.2
+version: 1.1.3
 updated: 2026-09-08
 ---
 
@@ -463,3 +463,41 @@ canonical `errors.default` ru/en и закрытую классификацию 
 unclassified; его текст и arbitrary DOM/response не выводятся. Отсутствие
 наблюдения shape не заменяется выдуманным ответом. Всё live evidence пакета
 остаётся NOT RUN до нового GO на фактически выложенных компонентах.
+
+
+## Следующий ограниченный пакет форм и populated collections
+
+Issue #1260. Профиль остаётся BUI, `KODEX_E2E_UI_CREATE_PROJECTS=0`.
+Новые действия включаются только явным `KODEX_E2E_UI_VARIANTS`, поэтому
+прежний широкий профиль не начинает дополнительных сценариев скрыто.
+Реестр `e2e/ui-readonly-variant-ids.ts` содержит 24 IDs: для каждой ru/en и
+ширины1440/390 — шесть вариантов:
+
+- `project-form-cancel-<locale>-<width>`: открыть New Project, начальный focus,
+  ввод локальных name/purpose, Tab, native required validity, Cancel; Submit
+  не вызывается, ACK fixtures прошлого окна не создаются повторно.
+- `project-collection-expand-<locale>-<width>`: непустой существующий список,
+  не более6 строк в свёрнутом виде, раскрытие populated списка, закрытие.
+  Пустая коллекция — NOT RUN, а не проверка populated состояния.
+- `configuration-create-editor-<kind>-<locale>-<width>` для
+  `prompt-template`, `role-image`, `integration-definition`: из каталога открыть
+  новый редактор, проверить поля/геометрию. Save/validate/publish/build не
+  вызываются; этот вариант не закрывает lifecycle CFG.
+- `assistant-history-draft-<locale>-<width>`: выбрать существующий диалог,
+  ввести только локальный unsent текст, отклонить native unsaved-close,
+  очистить composer, выполнить GET search истории и закрыть. Пустая history
+  либо disabled composer — NOT RUN. New chat/send/rename/archive/upload
+  не вызываются; conversation refs/text в evidence не возвращаются.
+
+Все действия проходят прежний request guard. Неизвестный ID, выбор с
+CREATE_PROJECTS=1 и duplicate IDs закрыто отклоняются. Для запуска всех24
+оператор формирует список из опубликованного реестра, а не задаёт wildcard.
+Нужны новый private evidence каталог, отдельный GO/fresh session и точный
+serving inventory; full requirement statuses остаются NOT RUN до остальных
+обязательных вариантов. API responses с credentials/source contents и DOM
+не сохраняются. Нативный confirm учитывается только boolean фактом отказа.
+
+Локальный public regression вход:
+`npx playwright test --config e2e/ui-readonly.fixture.config.ts`.
+Он проверяет native form/keyboard/Cancel без backend POST на synthetic HTML;
+не является доказательством live ProjectsPage или пользовательской приёмки.

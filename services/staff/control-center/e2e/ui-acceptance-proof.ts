@@ -1,3 +1,4 @@
+import { readonlyFormVariants } from "./ui-readonly-variant-ids";
 import { createHash } from "node:crypto";
 import { lstat, mkdir, open, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -93,7 +94,9 @@ export function selectedVariants(
     new Set(values).size !== values.length ||
     values.some(
       (value) =>
-        !targetedVariants.includes(value as (typeof targetedVariants)[number]),
+        !targetedVariants.includes(
+          value as (typeof targetedVariants)[number],
+        ) && !readonlyFormVariants.includes(value),
     )
   )
     throw new Error("Invalid read-only UI variant selection");
