@@ -340,3 +340,7 @@ test-registry-credential-files:
 .PHONY: test-managed-consumer-contract
 test-managed-consumer-contract:
 	@timeout 40s node scripts/tests/managed-consumer-contract-test.mjs
+
+.PHONY: test-email-mailbox-acceptance
+test-email-mailbox-acceptance:
+	node --test tools/dev/email-mailbox-acceptance.test.mjs tools/dev/prepare-email-acceptance-input.test.mjs
