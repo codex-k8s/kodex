@@ -75,7 +75,13 @@ export async function visit(page: Page, path: string) {
   const response = await page.goto(path, { waitUntil: "domcontentloaded" });
   if (!response) throw new UIConditionError("HTTP_STATUS", undefined, 200);
   checkCondition("HTTP_STATUS", response.status(), 200);
-  checkCondition("ROUTE_MISMATCH", new URL(page.url()).pathname === path, true);
+  const expected = new URL(path, page.url());
+  const actual = new URL(page.url());
+  checkCondition(
+    "ROUTE_MISMATCH",
+    actual.pathname === expected.pathname && actual.search === expected.search,
+    true,
+  );
   const shell = page.locator(".app-shell");
   const heading = page.locator(".page-header h1").first();
   await observeCondition(

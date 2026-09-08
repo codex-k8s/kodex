@@ -1,3 +1,18 @@
+import {
+  loadFixtureManifest,
+  validateFixture,
+  FixtureUnavailable,
+  type FixturePin,
+} from "./ui-fixture-manifest";
+import { installReadNetworkObserver } from "./ui-read-network";
+import {
+  environmentInspector,
+  configurationHistory,
+  sourceKeyboard,
+  globalSearch,
+  vfsRead,
+  kanbanPages,
+} from "./ui-populated-browser";
 import { test, expect, type Request } from "@playwright/test";
 import { loadE2ESessionRenewalEnvironment } from "./environment";
 import {
@@ -33,6 +48,7 @@ import {
   projectCollection,
   configurationCreate,
   assistantDraft,
+  assistantHistory,
   ReadonlyFixtureMissing,
 } from "./ui-readonly-forms";
 class MissingFixture extends Error {}
@@ -95,7 +111,17 @@ test("широкая UI-приёмка сохраняет независимые
   )
     throw new Error("Invalid UI fixture profile");
   const selection = selectedVariants(process.env.KODEX_E2E_UI_VARIANTS, mode);
-  const journal = await createJournal(rawJournal, versions, browserName);
+  const fixtures = loadFixtureManifest(
+    process.env.KODEX_E2E_UI_FIXTURE_MANIFEST,
+  );
+  if (fixtures.manifest && mode !== "0")
+    throw new Error("Pinned fixture profile is readonly");
+  const journal = await createJournal(
+    rawJournal,
+    versions,
+    browserName,
+    fixtures.sha256,
+  );
   const variants: Variant[] = [];
   const deadline = Date.now() + environment.runTimeoutMs - 30_000;
   let locale: "ru" | "en" = "ru";
@@ -115,6 +141,15 @@ test("широкая UI-приёмка сохраняет независимые
   };
   await context.addInitScript(installProtocolObserver);
   const page = await context.newPage();
+  const network = await installReadNetworkObserver(page, environment.baseURL);
+  const pin = async (slot: string): Promise<FixturePin> => {
+    const selected = fixtures.manifest?.fixtures.find(
+      (item) => item.slot === slot,
+    );
+    if (!selected) throw new FixtureUnavailable("MISSING");
+    await validateFixture(context.request, selected);
+    return selected;
+  };
   page.on("pageerror", () => counters.pageErrors++);
   page.on("console", (message) => {
     if (message.type() === "error") counters.consoleErrors++;
@@ -128,13 +163,6 @@ test("широкая UI-приёмка сохраняет независимые
   page.on("requestfinished", (request) => pendingReads.delete(request));
   page.on("requestfailed", (request) => {
     pendingReads.delete(request);
-    if (
-      ["net::ERR_ABORTED", "NS_BINDING_ABORTED", "cancelled"].includes(
-        request.failure()?.errorText ?? "",
-      )
-    )
-      counters.abortedRequests++;
-    else counters.networkErrors++;
   });
   page.on("response", (response) => {
     const url = new URL(response.url());
@@ -160,6 +188,8 @@ test("широкая UI-приёмка сохраняет независимые
       response.status() >= 400
     )
       counters.httpErrors++;
+    if (url.origin === environment.baseURL && response.status() === 401)
+      commonBlocked = true;
   });
   await context.route("**/*", async (route) => {
     const request = route.request();
@@ -242,6 +272,7 @@ test("широкая UI-приёмка сохраняет независимые
     }
     connectionShape = {};
     const before = { ...counters };
+    const networkBefore = network.snapshot();
     try {
       const metrics = await action();
       await observeCondition(
@@ -251,13 +282,25 @@ test("широкая UI-приёмка сохраняет независимые
         0,
       );
       await Promise.all(shapeReads);
+      const networkAfter = network.snapshot();
+      counters.networkErrors = networkAfter.unexplainedFailures;
+      counters.abortedRequests = networkAfter.confirmedCancellations;
+      checkCondition(
+        "NETWORK_ERRORS",
+        Math.max(
+          0,
+          networkAfter.unexplainedFailures - networkBefore.unexplainedFailures,
+        ),
+        0,
+      );
+      checkCondition("NETWORK_ERRORS", networkAfter.overflow, 0);
       const settled = await geometry(page);
       checkGeometry(settled);
       checkCondition("HTTP_ERRORS", counters.httpErrors - before.httpErrors, 0);
       checkCondition("PAGE_ERRORS", counters.pageErrors - before.pageErrors, 0);
       checkCondition(
         "NETWORK_ERRORS",
-        counters.networkErrors - before.networkErrors,
+        Math.max(0, counters.networkErrors - before.networkErrors),
         0,
       );
       checkCondition(
@@ -276,9 +319,23 @@ test("широкая UI-приёмка сохраняет независимые
         settledOverflow: settled.overflow,
         consoleErrors: counters.consoleErrors - before.consoleErrors,
         abortedRequests: counters.abortedRequests - before.abortedRequests,
+        rawFailedRequests:
+          networkAfter.rawFailedRequests - networkBefore.rawFailedRequests,
+        confirmedCancellations:
+          networkAfter.confirmedCancellations -
+          networkBefore.confirmedCancellations,
+        unexplainedFailures: networkAfter.unexplainedFailures,
+        networkOverflow: networkAfter.overflow,
       });
       return true;
     } catch (error) {
+      if (error instanceof FixtureUnavailable && error.code === "SESSION") {
+        commonBlocked = true;
+        await record(id, ids, "NOT RUN", "DEPENDENCY_UNAVAILABLE", {
+          sessionUnavailable: true,
+        });
+        return false;
+      }
       if (
         (error instanceof MissingFixture ||
           error instanceof ReadonlyFixtureMissing) &&
@@ -306,6 +363,24 @@ test("широкая UI-приёмка сохраняет независимые
         );
         return false;
       }
+      if (
+        error instanceof FixtureUnavailable &&
+        network.snapshot().unexplainedFailures === 0 &&
+        counters.httpErrors === before.httpErrors &&
+        counters.consoleErrors === before.consoleErrors &&
+        counters.blockedWrites === before.blockedWrites
+      ) {
+        await record(id, ids, "NOT RUN", "FIXTURE_UNAVAILABLE", {
+          fixtureMissing: error.code === "MISSING",
+          fixtureForbidden: error.code === "FORBIDDEN",
+          fixtureNotFound: error.code === "NOT_FOUND",
+          fixtureVersionDrift: error.code === "VERSION_DRIFT",
+          fixtureScopeMismatch: error.code === "SCOPE_MISMATCH",
+          fixtureEmpty: error.code === "EMPTY_PAGE",
+          fixturePageBudget: error.code === "PAGE_BUDGET",
+        });
+        return false;
+      }
       await Promise.all(shapeReads);
       const failure = conditionFailure(error);
       await record(
@@ -318,6 +393,11 @@ test("широкая UI-приёмка сохраняет независимые
           ...connectionShape,
           ...(await safeAlertMetrics(page).catch(() => ({}))),
           ...(await safeFocusMetrics(page).catch(() => ({}))),
+          rawFailedRequests:
+            network.snapshot().rawFailedRequests -
+            networkBefore.rawFailedRequests,
+          unexplainedFailures: network.snapshot().unexplainedFailures,
+          networkOverflow: network.snapshot().overflow,
           httpErrors: counters.httpErrors - before.httpErrors,
           pageErrors: counters.pageErrors - before.pageErrors,
           blockedWrites: counters.blockedWrites - before.blockedWrites,
@@ -360,7 +440,13 @@ test("широкая UI-приёмка сохраняет независимые
       },
     );
     commonBlocked = !initial;
-    if (initial) {
+    network.setStage("READBACK");
+    if (initial && fixtures.manifest) {
+      projects = fixtures.manifest.fixtures
+        .filter((item) => item.kind === "PROJECT")
+        .map((item) => item.ref);
+    }
+    if (initial && !fixtures.manifest) {
       await step("fixture-project-discovery", ["MVP-UI-27"], async () => {
         const response = await context.request.get(
           "/api/v1/projects?pageSize=2",
@@ -505,6 +591,25 @@ test("широкая UI-приёмка сохраняет независимые
           );
         }
       }
+      if (selection)
+        for (const historyWidth of [1440, 768, 390]) {
+          width = historyWidth;
+          await page.setViewportSize({
+            width,
+            height: width === 390 ? 844 : 1024,
+          });
+          await step(
+            `assistant-history-search-${locale}-${String(width)}`,
+            ["MVP-UI-09", "MVP-UI-14"],
+            async () =>
+              assistantHistory(
+                page,
+                locale,
+                environment.resourcePrefix,
+                await pin("assistant-primary"),
+              ),
+          );
+        }
       for (const nextWidth of widths) {
         width = nextWidth;
         await page.setViewportSize({
@@ -539,6 +644,14 @@ test("широкая UI-приёмка сохраняет независимые
         `project-${String(index)}-environment-inspector`,
         ["MVP-UI-44", "MVP-UI-48"],
         async () => {
+          if (selection) {
+            const exact = fixtures.manifest?.fixtures.find(
+              (item) => item.kind === "ENVIRONMENT" && item.projectRef === ref,
+            );
+            if (!exact) throw new FixtureUnavailable("MISSING");
+            await validateFixture(context.request, exact);
+            return environmentInspector(page, exact);
+          }
           await visit(page, `/projects/${ref}/environments`);
           await expect(page.locator(".environment-inspector")).toHaveCount(0);
           const rows = page.locator(".environment-table tbody tr");
@@ -568,6 +681,16 @@ test("широкая UI-приёмка сохраняет независимые
         `configuration-history-${kind.toLowerCase().replaceAll("_", "-")}`,
         ids,
         async () => {
+          if (selection) {
+            const exact = fixtures.manifest?.fixtures.find(
+              (item) =>
+                item.kind === "CONFIGURATION" &&
+                item.configurationKind === kind,
+            );
+            if (!exact) throw new FixtureUnavailable("MISSING");
+            await validateFixture(context.request, exact);
+            return configurationHistory(page, exact, locale);
+          }
           await visit(page, `/configurations/${kind}`);
           const entry = page.locator(".configuration-catalog__row").first();
           if (!(await entry.count())) throw new MissingFixture();
@@ -591,9 +714,91 @@ test("широкая UI-приёмка сохраняет независимые
         },
       );
     }
+    if (selection) {
+      await step(
+        "fixture-environment-inspector",
+        ["MVP-UI-44", "MVP-UI-48"],
+        async () =>
+          environmentInspector(page, await pin("environment-primary")),
+      );
+      await step(
+        "fixture-configuration-history",
+        ["CFG-01", "CFG-02", "CFG-03"],
+        async () =>
+          configurationHistory(
+            page,
+            await pin("configuration-primary"),
+            locale,
+          ),
+      );
+      await step(
+        "fixture-configuration-source-keys",
+        ["MVP-UI-15", "MVP-UI-20", "CFG-01", "CFG-02"],
+        async () =>
+          sourceKeyboard(page, await pin("configuration-primary"), locale),
+      );
+      await step(
+        "fixture-role-image-project-source",
+        ["CFG-01", "CFG-03"],
+        async () => {
+          const exact = await pin("configuration-project-role-image");
+          if (!exact.projectRef || exact.configurationKind !== "ROLE_IMAGE")
+            throw new FixtureUnavailable("MISSING");
+          return sourceKeyboard(page, exact, locale, true);
+        },
+      );
+      await step(
+        "fixture-assistant-history-pagination",
+        ["MVP-UI-09"],
+        async () =>
+          assistantHistory(
+            page,
+            locale,
+            environment.resourcePrefix,
+            await pin("assistant-primary"),
+            true,
+          ),
+      );
+      await step("fixture-global-search-debounce", ["MVP-UI-53"], async () =>
+        globalSearch(page, await pin("search-project"), true),
+      );
+      for (const kind of ["project", "agent", "workflow", "run"])
+        await step(`fixture-global-search-${kind}`, ["MVP-UI-54"], async () => {
+          const exact = await pin(`search-${kind}`);
+          if (exact.kind !== kind.toUpperCase())
+            throw new FixtureUnavailable("SCOPE_MISMATCH");
+          return globalSearch(page, exact);
+        });
+      for (const state of ["active", "trash"])
+        await step(
+          `fixture-vfs-${state}`,
+          ["MVP-UI-25", "MVP-UI-26"],
+          async () => {
+            const exact = await pin(`vfs-${state}`);
+            if (
+              exact.lifecycleState !==
+              (state === "active" ? "ACTIVE" : "DELETED")
+            )
+              throw new FixtureUnavailable("SCOPE_MISMATCH");
+            return vfsRead(page, exact);
+          },
+        );
+      await step(
+        "fixture-vfs-pagination",
+        ["MVP-UI-25", "MVP-UI-26"],
+        async () => vfsRead(page, await pin("vfs-active"), true),
+      );
+      await step("fixture-kanban-pages", ["MVP-UI-24"], async () =>
+        kanbanPages(page, await pin("project-primary")),
+      );
+    }
     await step("project-eight-sections", ["MVP-UI-27"], async () => {
       const ref = projects[0];
       if (!ref) throw new MissingFixture();
+      const exact = fixtures.manifest?.fixtures.find(
+        (item) => item.kind === "PROJECT" && item.ref === ref,
+      );
+      if (exact) await validateFixture(context.request, exact);
       await visit(page, `/projects/${ref}/agents`);
       for (const section of projectSections)
         await expect(
@@ -780,6 +985,8 @@ test("широкая UI-приёмка сохраняет независимые
     );
   } finally {
     // Закрываем страницы до reporter/error-context; персональные данные не снимаются.
+    network.setStage("COMPLETE");
+    network.navigation();
     const closed = await page.close().then(
       () => true,
       () => false,
@@ -791,6 +998,7 @@ test("широкая UI-приёмка сохраняет независимые
         "FAIL",
         "UI_ASSERTION_FAILED",
       );
+    await journal.network(network);
     await journal.close(variants);
     await testInfo.attach("ui-acceptance-safe-evidence", {
       path: journal.path,

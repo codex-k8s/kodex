@@ -1,6 +1,13 @@
 import { defineConfig } from "@playwright/test";
+import { selectedVariants } from "./ui-acceptance-proof";
+import { loadFixtureManifest } from "./ui-fixture-manifest";
 import { loadE2ESessionRenewalEnvironment } from "./environment";
 const environment = loadE2ESessionRenewalEnvironment();
+const createMode = process.env.KODEX_E2E_UI_CREATE_PROJECTS ?? "0";
+selectedVariants(process.env.KODEX_E2E_UI_VARIANTS, createMode);
+const fixture = loadFixtureManifest(process.env.KODEX_E2E_UI_FIXTURE_MANIFEST);
+if (fixture.manifest && createMode !== "0")
+  throw new Error("Pinned fixture profile is readonly");
 const browserName = process.env.KODEX_E2E_BROWSER ?? "chromium";
 if (!["chromium", "firefox", "webkit"].includes(browserName))
   throw new Error("Unsupported UI proof browser");
