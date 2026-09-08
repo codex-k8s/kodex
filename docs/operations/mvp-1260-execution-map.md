@@ -4,7 +4,7 @@ title: Карта выполнения полной MVP-приёмки и две
 type: operation-plan
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-08
 ---
 
@@ -178,7 +178,14 @@ intent и authoritative receipt; смена prefix не разрешает по�
 # Две вкладки: ограниченный воспроизводимый сценарий
 
 Вход N открывает две настоящие страницы одного BrowserContext. Исходный state
-создаётся штатным OIDC/API-session helper оператором; тест не создаёт JWT,
+создаётся штатным OIDC/API-session helper оператором. Специализированный
+`loadE2ESessionRenewalEnvironment` читает API state через private descriptor
+guards и канонический `selectedSessionCookies`: exact control-origin BFF pair
+и, если ingress его использует, полный OAuth2 Proxy single/chunks. IdP cookies,
+чужие cookies и любые origins/localStorage закрыто отклоняются. Общий bootstrap
+reader по-прежнему запрещает BFF cookies. Исправление #1268 устраняет отказ
+оснастки до браузера, обнаруженный при первом live preflight; это не PASS
+серверной авторизации. Тест не создаёт JWT,
 не выполняет login, не меняет срок и не отправляет PUT вручную. Он читает
 metadata и отклоняет preflight, если natural renewAfter уже прошёл, до него
 меньше 15 секунд, он не помещается в бюджет либо законный срок не оставляет
@@ -227,7 +234,7 @@ SESSION_PROBLEM дают FAIL. Тест не кликает Stop и не зап�
 # Локальная проверка оснастки
 
 ```sh
-npm run test:unit -- e2e/session-renewal-proof.test.ts
+npm run test:unit -- e2e/session-renewal-proof.test.ts e2e/api-session-storage.test.ts
 npm run test:e2e:synthetic -- session-renewal.synthetic.spec.ts
 npx tsc --noEmit -p tsconfig.e2e.json
 npx eslint e2e/session-renewal* --max-warnings 0

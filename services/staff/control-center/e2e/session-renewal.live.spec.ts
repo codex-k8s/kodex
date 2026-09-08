@@ -9,9 +9,9 @@ import {
   socketProof,
   type SocketProof,
 } from "./session-renewal-proof";
-import { loadE2EEnvironment } from "./environment";
+import { loadE2ESessionRenewalEnvironment } from "./environment";
 
-const environment = loadE2EEnvironment();
+const environment = loadE2ESessionRenewalEnvironment();
 
 test("две настоящие вкладки сохраняют ticket/v2 при естественном продлении", async ({
   context,

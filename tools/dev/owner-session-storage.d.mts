@@ -29,3 +29,11 @@ export function replaceAuthenticatedCookies(
   previous: unknown,
   cookies: AuthenticatedCookie[],
 ): Promise<void>;
+
+export function readAuthenticatedState(path: string): unknown;
+
+export function selectedSessionCookies(
+  storage: unknown,
+  origin: string,
+  now?: number,
+): AuthenticatedCookie[];
