@@ -138,6 +138,30 @@ policy возврат прежнего reader binary несовместим. API
 после возобновления совместимых consumers; при незавершённой фазе простой
 явно остаётся незавершённым, не объявляется успешной выкладкой.
 
+## Восстановление metadata выбранной policy
+
+Renderer требует аннотацию `kodex.dev/admission-tools-sha256`, равную digest
+закреплённого `toolsImage`. Подготовка следующей policy сохраняет эту связь.
+Если ранее созданная policy потеряла аннотацию (#1279), отдельный инструмент
+восстанавливает только metadata существующего ConfigMap. Его immutable data,
+Parameters, binding, controller, revisions и уже созданные builds не меняются.
+Остановка приложения и повторная публикация пользовательской сборки не нужны.
+
+```bash
+node tools/release/policy-tools-metadata.mjs plan --context "$CONTEXT" \
+  --policy "$EXACT_SELECTED_POLICY" --output "$NEW_PRIVATE_PLAN"
+node tools/release/policy-tools-metadata.mjs apply --context "$CONTEXT" \
+  --plan "$NEW_PRIVATE_PLAN" --evidence "$NEW_PRIVATE_EVIDENCE" \
+  --confirm REPAIR-STAGING-POLICY-TOOLS-METADATA
+```
+
+Plan сверяет выбранную immutable policy, полный payload digest, Parameters,
+закрытый binding и controller, затем вызывает настоящий renderer всех пяти
+фаз. Apply повторяет проверки, фиксирует durable intent и выполняет UID/RV CAS.
+Уже существующая другая аннотация закрыто отклоняется. Readback доказывает
+неизменность payload. При UNKNOWN сначала читать фактическую аннотацию и
+состояние существующей сборки; старый apply и build не повторять.
+
 ## Проверки
 
 Локальные entrypoints:
