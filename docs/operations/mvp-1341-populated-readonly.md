@@ -4,7 +4,7 @@ title: Точечная приёмка наполненных интерфейс
 status: approved
 type: operations
 owner: manager
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-08
 ---
 
@@ -164,3 +164,42 @@ npx playwright test --config e2e/ui-populated.fixture.config.ts
 fixtures не являются vendor/live evidence. Точные исходы и SHA — в PR.
 Актуальный Context7 `/microsoft/playwright/v1.61.0` проверен для request failure,
 route.fetch/fulfill и отсутствия автоматического retry при maxRetries=0.
+
+## Безопасные JavaScript-ошибки (#1352)
+
+Широкий UI-профиль и два таба session renewal используют общий
+`e2e/page-error-diagnostics.ts`. В UI журнал добавлена запись `page-errors`,
+в session artifact — `pageErrorDiagnostics`. Необработанное исключение остаётся
+FAIL, включая закрыто распознанные ResizeObserver сообщения.
+
+Сохраняются закрытый класс/код, SHA256 сообщения и stack, категория первого
+разобранного frame, digest его pathname без query и ограниченные координаты,
+номер страницы, последовательность
+события, шага и последнего наблюдённого DOMContentLoaded. Номер шага сопоставлен
+с `metrics.pageErrorStepSequence` варианта. Между шагами он равен нулю.
+`documentAttribution=OBSERVATION_ONLY` означает контекст получения события,
+а не доказанное происхождение исключения; задержанное событие не приписывается
+задним числом прежнему действию. Пока новый документ не достиг DOMContentLoaded,
+его номер неизвестен (ноль). Same-document навигация нового номера не создаёт.
+`sourceAttribution=UNVERIFIED_STACK`: frame получен из недоверенного error stack,
+не из подтверждённой загрузки файла; категория и координаты не доказывают причину.
+
+Артефакт не содержит raw message/stack, URL/query, имён функций, DOM, cookies
+или содержимого пользователя. Максимум 32 ошибки, сообщение 4096 и stack 16384
+UTF-16 units на событие; превышение явно увеличивает overflow и запрещает PASS.
+Для обрезанного входа `digestScope=BOUNDED_PREFIX`, для полного — `FULL`.
+Document observation ограничен 512 событиями, шаги — 10000; неизвестные/некорректные
+значения не расширяют классификацию. Это диагностические метаданные, не authority.
+
+Локальная публичная проверка:
+`npx playwright test --config e2e/ui-populated.fixture.config.ts --grep pageerror --retries 0`.
+Реальные Chromium/Firefox/WebKit fixtures проверяют разные исключения, позднее
+событие, новый документ, cap и сохранение безопасного JSON через `reporter=list`.
+Исторические live FAIL сохраняются. Новый live запуск требует отдельного GO;
+локальный fixture не доказывает причину старого product exception.
+
+Версия проверенного Playwright — 1.61.0; Context7 `/microsoft/playwright/v1.61.0`
+подтверждает событие `Page.pageerror` с объектом Error. Reporter использует
+установленные `pageerror`, `request`, `domcontentloaded`; новый `WebError.location`
+не требуется. Повторяющиеся одинаковые исключения WebKit может объединять:
+лимит относится к реально полученным событиям, а не к числу JavaScript throw.

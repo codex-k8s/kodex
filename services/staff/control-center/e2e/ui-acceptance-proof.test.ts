@@ -1,3 +1,4 @@
+import { PageErrorDiagnostics } from "./page-error-diagnostics";
 import { ReadNetworkCorrelator } from "./ui-read-network";
 import { populatedVariants } from "./ui-populated-variants";
 import { readonlyFormVariants } from "./ui-readonly-variant-ids";
@@ -363,4 +364,48 @@ test("safe network journal records browser and fixture key without raw request m
     browser: "webkit",
     fixtureManifestSHA256: "e".repeat(64),
   });
+});
+
+test("journal сохраняет pageerror projection без raw сообщения и связывает шаг", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "k1352-ui-"));
+  directories.push(parent);
+  const journal = await createJournal(
+    join(parent, "proof"),
+    versions,
+    "webkit",
+  );
+  const errors = new PageErrorDiagnostics("https://kodex.test");
+  const step = errors.beginStep();
+  errors.observe(new TypeError("private-user-fixture"), 0, 1);
+  const failed = {
+    ...variant,
+    status: "FAIL" as const,
+    condition: "PAGE_ERRORS" as const,
+    metrics: { pageErrors: 1, pageErrorStepSequence: step },
+  };
+  await journal.variant(failed);
+  await journal.pageErrors(errors);
+  await journal.close([failed]);
+  const body = await readFile(journal.path, "utf8");
+  expect(body).not.toContain("private-user-fixture");
+  const lines = body
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  expect(lines[1]).toMatchObject({
+    type: "variant",
+    status: "FAIL",
+    metrics: { pageErrorStepSequence: 1 },
+  });
+  expect(lines[2]).toMatchObject({
+    type: "page-errors",
+    total: 1,
+    overflow: 0,
+    events: [{ errorClass: "TypeError", stepSequence: 1 }],
+  });
+  expect(
+    (
+      await readFile(join(parent, "proof/ui-acceptance-safe.sha256"), "utf8")
+    ).trim(),
+  ).toBe(createHash("sha256").update(body).digest("hex"));
 });

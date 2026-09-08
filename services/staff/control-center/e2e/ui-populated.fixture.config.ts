@@ -6,6 +6,7 @@ export default defineConfig({
   testMatch: [
     "ui-populated.synthetic.spec.ts",
     "ui-document-navigation.synthetic.spec.ts",
+    "page-error.synthetic.spec.ts",
   ],
   workers: 3,
   timeout: 30000,
