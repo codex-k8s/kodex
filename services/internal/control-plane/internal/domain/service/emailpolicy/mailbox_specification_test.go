@@ -120,3 +120,29 @@ func TestTrustedMailboxConfigurationUsesExecutableNetworkMatrix(t *testing.T) {
 		t.Fatal("supported implicit TLS rejected", err)
 	}
 }
+
+func TestMailboxLegacyMarkNeverExpandsPublicAuthority(t *testing.T) {
+	spec := mailboxSpecificationFixture(t)
+	for i := range spec.Policies {
+		if spec.Policies[i].Operation == api.OperationMark {
+			spec.Policies[i].Policy = api.Allow
+		}
+	}
+	original, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mailbox, err := MaterializeMailbox(spec, MailboxBinding{Ref: "server-mailbox", OrganizationRef: "server-tenant", ConnectionRef: "server-connection", Revision: 1, CredentialGeneration: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, policy := range mailbox.Policies {
+		if policy.Operation == api.OperationMark && policy.Policy != api.Deny {
+			t.Fatal("legacy mark expanded authority")
+		}
+	}
+	current, err := json.Marshal(spec)
+	if err != nil || string(current) != string(original) {
+		t.Fatal("immutable public source was rewritten")
+	}
+}
