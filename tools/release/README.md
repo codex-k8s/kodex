@@ -124,7 +124,7 @@ node tools/release/scoped-release.mjs apply \
 ## Локальная проверка механизма
 
 ```bash
-node --test tools/release/scoped-release.test.mjs tools/release/application-source.test.mjs
+node --test tools/release/scoped-release.test.mjs tools/release/application-source.test.mjs tools/release/worker-grant-transition.test.mjs
 ```
 
 Проверяются изоляция sidecar sources, сохранение trust/env, отказ небезопасной
@@ -134,3 +134,8 @@ node --test tools/release/scoped-release.test.mjs tools/release/application-sour
 согласовать весь dev render; для повседневной выкладки используется этот
 выборочный путь. Staging activation и пользовательская доступность проверяются
 отдельно в #1223.
+
+Переход Recreate/v1 → instance grants/v2 → RollingUpdate выполняет отдельный
+`worker-grant-transition.mjs`: [порядок, ограничения и evidence](../../docs/operations/independent-releases.md#управляемая-активация-disposable-hot-reload).
+Проверка application release охватывает также native grant sidecars в
+`initContainers`; одной аннотации v2 без точного Pod UID каждого writer недостаточно.

@@ -34,6 +34,14 @@ export function fingerprint(value) {
   return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
 }
 
+// Native sidecar имеет те же полномочия writer, что обычный контейнер.
+export function workerGrantAgents(podSpec) {
+  return [...(podSpec.containers ?? []), ...(podSpec.initContainers ?? [])].filter((item) =>
+    item.name?.endsWith("platform-worker-grant-agent") ||
+    [...(item.command ?? []), ...(item.args ?? [])].some((argument) =>
+      /(^|\/)internal-rpc-authority-platform-worker-grant-agent$/.test(argument)));
+}
+
 function exactKeys(value, required, optional = []) {
   return value !== null && typeof value === "object" && !Array.isArray(value) &&
     required.every((key) => Object.hasOwn(value, key)) &&
@@ -99,7 +107,7 @@ export function planTarget(deployment, target, releaseID, sourceInspector) {
   requireValue(beforeImage !== image || source?.changed, "APPLICATION_IMAGE_UNCHANGED");
   if (target.expectedSource)
     requireValue(source?.before.path === target.expectedSource.path && source.before.revision === target.expectedSource.revision, "ROLLBACK_SOURCE_MISMATCH");
-  for (const container of containers.filter((item) => item.name.endsWith("platform-worker-grant-agent"))) {
+  for (const container of workerGrantAgents(pod.spec)) {
     const instance = (container.env ?? []).filter((item) => item.name === "PLATFORM_WORKER_GRANT_INSTANCE_ID");
     requireValue(pod.metadata?.annotations?.["kodex.dev/worker-grant-format"] === "2" &&
       instance.length === 1 && instance[0].value === undefined &&

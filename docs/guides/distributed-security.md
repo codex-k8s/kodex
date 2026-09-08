@@ -21,6 +21,13 @@ Reader старого формата сохраняется на этапе expa
 устранением конфликта grants для независимых релизов. Откат бинаря не удаляет
 схему или watermark; подробный порядок задан в OPS-DOC-INDEPENDENT-RELEASES-001.
 
+Release guard учитывает всех grant writers: обычные контейнеры, native sidecars
+в `initContainers` и контейнеры с каноническим writer binary под другим именем.
+Аннотация формата не заменяет проверку единственного `fieldRef: metadata.uid`
+каждого writer. Пропуск native sidecar не разрешает overlap v1. Активация,
+доказательство двух durable instances и изменение стратегии являются разными
+CAS-переходами; application release сам не включает новый формат grants.
+
 Refresh namespace не удаляет последнюю копию ключей retained ciphertext.
 Bootstrap/rotation сначала сохраняет отдельный immutable backup, подтверждает
 его exact readback, затем публикует serving projection. Backup принадлежит

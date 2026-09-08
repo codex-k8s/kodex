@@ -4,8 +4,8 @@ title: Независимые релизы и переход worker grants
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
-updated: 2026-09-07
+version: 1.1.0
+updated: 2026-09-08
 ---
 
 # Независимые релизы
@@ -68,6 +68,85 @@ statement snapshot. Instance watermarks не очищаются при исте�
 сохраняется в явно поддерживаемом диапазоне контрактов.
 
 ## Оставшиеся части общего плана
+
+### Управляемая активация disposable hot-reload
+
+Для #1221/#1222 используется `tools/release/worker-grant-transition.mjs`.
+Оператор SRE с уже выданным доступом запускает его из точного согласованного
+checkout на host. QA и developer credentials этот доступ не получают.
+Это отдельная security-фаза, а не обычный application release. Скрипт не
+меняет source/images, signer keys, поколения, shared ConfigMaps, schema и
+replay history. Он не предназначен для production. Обычная установка продукта
+по-прежнему использует immutable application images; ограничение этого
+одноразового dev-перехода не изменяет install contract.
+
+Read-only `inspect` проверяет всех CP Pods через владельца Deployment/ReplicaSet,
+готовность завершённого rollout, чистый source mount каждого reader и writer,
+наличие совместимого изменения `29652a817cc548282f03747da3ea98717f9e32af`.
+В этом профиле проверка source/Pod не является криптографической аттестацией
+бинаря. Отдельно нужны фактические защищённые RPC и restart recovery.
+Для image-only reader этот инструмент закрыто отказывает: требуется отдельный
+проверенный capability manifest, а не предположение по общему Git SHA.
+
+`worker-grant-readback.sql` — фиксированное чтение в `READ ONLY` transaction
+с `statement_timeout=10s` через существующий SRE local PostgreSQL entrypoint.
+Один SELECT читает generation floors и instance watermarks из одного snapshot.
+Результат содержит только workload, Pod UID, числовые revisions/generations и
+timestamps; не содержит токены, подписи, payload или пользовательские данные.
+SQL запускается только для этого Issue/runbook; произвольные SQL не добавляются
+в параметры. Локальный disposable PostgreSQL harness выполняет тот же файл.
+
+| Переход | Инициатор и полномочия | Предусловие / эффект | Результат и восстановление |
+| --- | --- | --- | --- |
+| inspect / plan | SRE, выданный exact kubecontext | CP readers совместимы, additive schema доступна, writer source известен | Только private metadata, без domain event; authoritative read — Deployment + PostgreSQL |
+| activate | SRE → Kubernetes JSON Patch, UID/resourceVersion CAS | Один здоровый v1 Pod, Recreate; каждому writer назначается Downward API Pod UID | Новый Pod выпускает v2; одна временная Recreate-пауза должна быть отражена в HTTP/task evidence |
+| overlap | Тот же SRE CAS | v2 уже включён; один здоровый Pod → две реплики без изменения template | Проверить рабочие RPC обеих реплик и durable registration; Ready сам по себе недостаточен |
+| rolling | Тот же SRE CAS | Два одинаковых Pod UID в наблюдении 95s; оба durable watermark растут, поколение неизменно, оба grants не истекли | Только стратегия RollingUpdate/maxUnavailable0/maxSurge1; отсутствие активности закрыто блокирует переход |
+| settle | Тот же SRE CAS | Две здоровые v2 реплики с RollingUpdate | Возврат к одной реплике; grants/revocation/history не откатываются |
+| CAS drift / потеря ACK / timeout | SRE, без автоматического повтора | План или actual readback не совпал / исход PATCH неизвестен | Сохранить INTENT/PATCH_ATTEMPT/APPLIED и terminal evidence; read-only inspect, новый план только после выяснения исхода |
+
+У этих SRE-переходов нет domain event. Kubernetes сохраняет собственный
+resourceVersion; private fsync journal сохраняет intent до PATCH и точный
+readback после него. Readiness/обычные RPC продолжают использовать
+канонические authority checks; запросов с изготовленным grant нет.
+Переход не доказывает LKG/outage/rotation/freshness, task loss или отсутствие
+duplicate effects: эти сценарии остаются отдельной приёмкой #1222/#1223.
+После активации старый CP без v2 reader не является допустимым rollback.
+
+Команды выполняются по одному target. Для каждой фазы — новые файлы, без
+перезаписи предыдущих FAIL/UNKNOWN. Значения context/target задаются по preflight.
+
+```bash
+node tools/release/worker-grant-transition.mjs inspect \
+  --context "$KODEX_RELEASE_CONTEXT" --target runtime-controller \
+  --output "$PRIVATE_INSPECTION"
+node tools/release/worker-grant-transition.mjs plan \
+  --context "$KODEX_RELEASE_CONTEXT" --target runtime-controller \
+  --phase activate --output "$PRIVATE_PLAN"
+node tools/release/worker-grant-transition.mjs apply \
+  --context "$KODEX_RELEASE_CONTEXT" --target runtime-controller \
+  --plan "$PRIVATE_PLAN" --evidence "$PRIVATE_JOURNAL" \
+  --confirm TRANSITION-STAGING-WORKER-GRANTS
+```
+
+Затем последовательно `overlap`, `rolling`, `settle` с собственными plan/journal
+и подтверждённым исходом предыдущей фазы. Перед Recreate оператор проверяет
+активные tasks/leases и выполняет разрешённый lifecycle drain; этот инструмент
+не завершает пользовательские задачи и не считает отсутствие Pod отсутствием
+фоновой работы. Не запускать глобальный `up`: старый dev renderer всё ещё
+назначает Recreate и требует отдельного согласования с активированным v2.
+
+Локальные проверки:
+
+```bash
+node --test tools/release/scoped-release.test.mjs tools/release/worker-grant-transition.test.mjs
+bash scripts/tests/control-plane-postgres-test.sh '^(TestBootstrapComponent|TestWorkerGrantInstancesComponent)$'
+```
+
+Context7: `/kubernetes/website` (Downward API, Deployment, JSON Patch CAS),
+`/websites/postgresql_17` (read-only transaction и snapshot одного SELECT).
+
+### Остаток приёмки
 
 - Стабильный sidecar digest и поэтапный trust publish/readback/switch/drain/revoke.
 - Last-known-good в пределах срока/отзыва, atomic adoption, bounded reconnect.

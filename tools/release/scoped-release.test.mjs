@@ -78,6 +78,33 @@ test("image-only rollback accepts stuck rollout but requires exact release", () 
   assert.throws(() => planTarget(current, { ...rollback, rollbackOf: "44444444-4444-4444-8444-444444444444" }, releaseID), /ROLLBACK_RELEASE_MISMATCH/);
 });
 
+test("native and renamed grant writers require exact Downward API instance grants", () => {
+  for (const renamed of [false, true]) {
+    const current = fixture();
+    const [agent] = current.spec.template.spec.containers.splice(1, 1);
+    agent.restartPolicy = "Always";
+    if (renamed) {
+      agent.name = "worker-credentials";
+      agent.command = ["/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent"];
+    }
+    current.spec.template.spec.initContainers = [agent];
+    const before = structuredClone(current);
+    planTarget(current, target, releaseID);
+    assert.deepEqual(current, before);
+    for (const mutate of [
+      (d) => { d.spec.template.metadata.annotations["kodex.dev/worker-grant-format"] = "1"; },
+      (d) => { d.spec.template.spec.initContainers[0].env = []; },
+      (d) => { d.spec.template.spec.initContainers[0].env[0].valueFrom.fieldRef.fieldPath = "metadata.name"; },
+      (d) => { d.spec.template.spec.initContainers[0].env[0].value = "caller-instance"; },
+      (d) => { d.spec.template.spec.initContainers[0].env.push(structuredClone(agent.env[0])); },
+      (d) => { d.spec.template.spec.containers.push({ name: "other-platform-worker-grant-agent", image: image("c"), env: [] }); },
+    ]) {
+      const invalid = structuredClone(current); mutate(invalid);
+      assert.throws(() => planTarget(invalid, target, releaseID), /INSTANCE_GRANTS_REQUIRED/);
+    }
+  }
+});
+
 test("manifest rejects duplicate targets, security units and mutable images", () => {
   for (const targets of [
     [target, target], [], [{ ...target, name: "internal-rpc-authority-publisher" }],
