@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { lstatSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { fingerprint } from './scoped-release.mjs';
 import { inspectSource, planSourceChange } from './application-source.mjs';
@@ -9,6 +10,22 @@ import { migrationReadback } from './control-plane-migration.mjs';
 import { privateJournal } from '../dev/role-image-acceptance.mjs';
 const ensure = (ok,code) => { if (!ok) throw new Error(code); };
 const ns = 'kodex-system';
+// kubectl открывает patch-file по имени: Node pipe stdin нельзя повторно открыть
+// через /dev/stdin (Linux ENXIO). Полный spec остаётся вне argv и общих логов.
+export function withMailboxPatchFile(operations, execute) {
+  const directory=mkdtempSync(join(tmpdir(),'kodex-cp-mailbox-patch-'));
+  try {
+    const path=join(directory,'patch.json');
+    writeFileSync(path,JSON.stringify(operations),{flag:'wx',mode:0o600});
+    return execute(path);
+  } finally { rmSync(directory,{recursive:true,force:true}); }
+}
+export function mailboxKubectlFailureCode(error) {
+  const stderr=String(error?.stderr??'');
+  return /open \/dev\/stdin: no such device or address/.test(stderr)
+    ? 'KUBERNETES_PATCH_INPUT_UNREADABLE' : 'KUBERNETES_OPERATION_UNKNOWN';
+}
+
 export function mailboxMaintenancePlan(before, source, inspect = inspectSource) {
   ensure(before?.kind === 'Deployment' && before.metadata?.name === 'control-plane' && before.metadata.namespace === ns && before.metadata.uid && before.metadata.resourceVersion && before.metadata.labels?.['kodex.dev/environment'] === 'staging' && before.metadata.labels?.['kodex.dev/local-profile'] === 'hot-reload', 'CP_IDENTITY_INVALID');
   ensure(Number.isInteger(before.spec.replicas) && before.spec.replicas > 0 && before.spec.replicas <= 8 && before.status?.availableReplicas === before.spec.replicas, 'CP_HEALTH_REQUIRED');
@@ -42,7 +59,7 @@ export async function mailboxMaintenanceStep({phase,plan,journal,get,pods,patch,
   }
   const operations=[{op:'test',path:'/metadata/uid',value:plan.beforeUID},{op:'test',path:'/metadata/resourceVersion',value:actual.metadata.resourceVersion},{op:'test',path:'/spec',value:plan.specs[from]},{op:'replace',path:'/spec',value:plan.specs[to]}];
   journal.append({type:'INTENT',step:phase,patchSHA256:fingerprint(operations)});
-  try { patch(operations); } catch { journal.append({type:'UNKNOWN',step:phase}); throw new Error('CP_PATCH_OUTCOME_UNKNOWN'); }
+  try { patch(operations); } catch(error) { const code=error?.message==='KUBERNETES_PATCH_INPUT_UNREADABLE'?'CP_PATCH_INPUT_UNREADABLE':'CP_PATCH_OUTCOME_UNKNOWN'; journal.append({type:'UNKNOWN',step:phase,code}); throw new Error(code); }
   const after=get(); ensure(after.metadata.uid===plan.beforeUID&&fingerprint(after.spec)===fingerprint(plan.specs[to]),'CP_READBACK_MISMATCH');
   journal.append({type:'ACK',step:phase,stage:to,resourceVersion:after.metadata.resourceVersion});
   return {status:phase==='stop'&&!gone()?'DRAINING':'ACKNOWLEDGED',stage:to};
@@ -53,12 +70,12 @@ async function main() {
   const context=o['--context'];ensure(/^[A-Za-z0-9_.:@/-]{1,160}$/.test(context??'')&&!/prod(?:uction)?/i.test(context),'STAGING_CONTEXT_REQUIRED');
   ensure(o['--confirm']===(['stop','replace','resume'].includes(phase)?'APPLY-STAGING-CP-MAILBOX-MAINTENANCE':undefined),'CONFIRMATION_INVALID');
   ensure(phase==='plan'?o['--source']&&o['--revision']&&!o['--evidence']&&!o['--migration-plan']:o['--evidence']&&!o['--source']&&!o['--revision']&&(phase==='resume'?!!o['--migration-plan']:!o['--migration-plan']),'PHASE_ARGUMENT_INVALID');
-  const kube=(a,input)=>{try{return execFileSync('kubectl',['--context',context,'--request-timeout=30s',...a],{input,encoding:'utf8',timeout:35000,maxBuffer:4<<20,stdio:['pipe','pipe','pipe']});}catch{throw new Error('KUBERNETES_OPERATION_UNKNOWN');}};
+  const kube=(a,input)=>{try{return execFileSync('kubectl',['--context',context,'--request-timeout=30s',...a],{input,encoding:'utf8',timeout:35000,maxBuffer:4<<20,stdio:['pipe','pipe','pipe']});}catch(error){throw new Error(mailboxKubectlFailureCode(error));}};
   const get=()=>JSON.parse(kube(['-n',ns,'get','deployment','control-plane','-o','json'])); const clusterUID=JSON.parse(kube(['get','namespace','kube-system','-o','json'])).metadata.uid;
   if(phase==='plan'){const plan={...mailboxMaintenancePlan(get(),{path:o['--source'],revision:o['--revision']}),context,clusterUID};writePrivate(o['--plan'],plan);process.stdout.write(JSON.stringify({status:'PLANNED',planSHA256:fingerprint(plan)})+'\n');return;}
   const plan=privateJSON(o['--plan']);ensure(plan.kind==='CP_MAILBOX_MAINTENANCE'&&plan.context===context&&plan.clusterUID===clusterUID,'PLAN_SCOPE_MISMATCH');
   const journal=privateJournal(o['--evidence'],{version:1,kind:plan.kind,planSHA256:fingerprint(plan)});
-  try{const result=await mailboxMaintenanceStep({phase,plan,journal,get,pods:()=>JSON.parse(kube(['-n',ns,'get','pods','-l','app.kubernetes.io/name=control-plane','-o','json'])).items,patch:(ops)=>kube(['-n',ns,'patch','deployment','control-plane','--type=json','--patch-file=/dev/stdin'],JSON.stringify(ops)),migration:()=>{
+  try{const result=await mailboxMaintenanceStep({phase,plan,journal,get,pods:()=>JSON.parse(kube(['-n',ns,'get','pods','-l','app.kubernetes.io/name=control-plane','-o','json'])).items,patch:(ops)=>withMailboxPatchFile(ops,(path)=>kube(['-n',ns,'patch','deployment','control-plane','--type=json',`--patch-file=${path}`])),migration:()=>{
     const p=privateJSON(o['--migration-plan']);ensure(p.profile==='mailbox-observation'&&p.context===context&&p.clusterUID===clusterUID&&fingerprint(p.source)===fingerprint(plan.source),'MIGRATION_SCOPE_CHANGED');
     const job=JSON.parse(kube(['-n',ns,'get','job',p.job.metadata.name,'-o','json']));const logs=kube(['-n',ns,'logs',`job/${p.job.metadata.name}`,'-c','migrate','--tail=50']);return migrationReadback(job,p,logs);
   }});process.stdout.write(JSON.stringify(result)+'\n');}finally{journal.close();}
