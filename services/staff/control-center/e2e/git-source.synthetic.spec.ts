@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { browserHTTPConsoleStatus } from "./synthetic-diagnostics";
 import type {
   ManagedConfiguration,
   ManagedConfigurationRevision,
@@ -11,8 +12,21 @@ for (const width of [390, 2900]) {
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     const failures: string[] = [];
+    let expectedUnavailableResponses = 0;
+    const unavailableURL =
+      "https://kodex.test/api/v1/role-image-configurations/configuration/git-source";
+    page.on("response", (response) => {
+      if (response.url() === unavailableURL && response.status() === 503)
+        expectedUnavailableResponses++;
+    });
     page.on("pageerror", (error) => failures.push(error.message));
     page.on("console", (message) => {
+      if (
+        message.type() === "error" &&
+        browserHTTPConsoleStatus(message.text()) === 503 &&
+        message.location().url === unavailableURL
+      )
+        return;
       if (["warning", "error"].includes(message.type()))
         failures.push(message.text());
     });
@@ -252,10 +266,7 @@ for (const width of [390, 2900]) {
       path: testInfo.outputPath("git-source-ready.png"),
       fullPage: true,
     });
-    expect(failures).toEqual(
-      Array<string>(3).fill(
-        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
-      ),
-    );
+    expect(expectedUnavailableResponses).toBe(3);
+    expect(failures).toEqual([]);
   });
 }

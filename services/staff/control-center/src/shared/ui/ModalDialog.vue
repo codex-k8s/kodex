@@ -4,6 +4,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, useId } from "vue";
 
 import {
   focusableElements,
+  initialDialogFocusTarget,
   trappedFocusTarget,
 } from "@/shared/ui/dialog-focus";
 
@@ -47,7 +48,8 @@ onMounted(() => {
       ? document.activeElement
       : null;
   void nextTick(() => {
-    if (!panel.value?.contains(document.activeElement)) panel.value?.focus();
+    if (panel.value)
+      initialDialogFocusTarget(panel.value, document.activeElement)?.focus();
   });
 });
 onBeforeUnmount(() => {

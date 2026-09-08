@@ -246,7 +246,11 @@ onBeforeUnmount(() => {
       >
         <label class="field field--wide"
           ><span>{{ $t("common.name") }}</span
-          ><input v-model.trim="form.name" required maxlength="120" autofocus
+          ><input
+            v-model.trim="form.name"
+            required
+            maxlength="120"
+            data-dialog-initial-focus
         /></label>
         <label class="field field--wide"
           ><span>{{ $t("common.purpose") }}</span

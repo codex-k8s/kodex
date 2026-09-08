@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Проверка focus и pattern</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from "vue";
+      import { i18n } from "../../src/app/i18n/index";
+      import "../../src/app/styles/base.css";
+      import ModalPatternFixture from "./ModalPatternFixture.vue";
+      createApp(ModalPatternFixture).use(i18n).mount("#app");
+    </script>
+  </body>
+</html>

@@ -172,7 +172,8 @@ export async function checkOrganizationCatalog(
   });
   await page.goto("/members");
   const memberRows = catalog.locator(".organization-catalog__entry");
-  await expect(memberRows).toHaveCount(8);
+  // Общий sentinel может уже загрузить следующую страницу короткого списка.
+  await expect(memberRows.nth(7)).toBeVisible();
   const navigation = page.locator('nav[aria-label="Навигация Проекта"]');
   for (const path of [
     "agents",
@@ -194,6 +195,10 @@ export async function checkOrganizationCatalog(
     element.scrollTop = element.scrollHeight;
   });
   await expect(memberRows).toHaveCount(9);
+  expect(memberRequests.map((request) => request.cursor)).toEqual([
+    null,
+    "members_next",
+  ]);
   await group
     .getByRole("button", { name: "Развернуть список проекта", exact: true })
     .click();

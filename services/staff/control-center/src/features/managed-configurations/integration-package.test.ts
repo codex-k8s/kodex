@@ -15,6 +15,52 @@ const directory = new URL(
   import.meta.url,
 );
 describe("IntegrationPackage canonical schema", () => {
+  it("сохраняет семантику canonical patterns в JSON Schema u и HTML v", () => {
+    const patterns: string[] = [];
+    function visit(value: unknown): void {
+      if (!value || typeof value !== "object") return;
+      for (const [key, child] of Object.entries(value)) {
+        if (key === "pattern" && typeof child === "string")
+          patterns.push(child);
+        else visit(child);
+      }
+    }
+    visit(packageSchema);
+    expect(patterns).toHaveLength(3);
+    const samples = [
+      "a",
+      "a-b",
+      "a_b",
+      "a.b",
+      "a--b",
+      "a..b",
+      "A",
+      "-a",
+      "a-",
+      "a b",
+      "a/b",
+      "github.com",
+      "1.2.3",
+      "0.1.0",
+      "v1.2.3",
+      "",
+      "я",
+    ];
+    for (const pattern of patterns) {
+      const previous = new RegExp(pattern.replaceAll("\\-", "-"), "u");
+      const jsonPattern = new RegExp(pattern, "u");
+      const htmlPattern = new RegExp(pattern, "v");
+      for (const sample of samples) {
+        expect(jsonPattern.test(sample), `${pattern}: ${sample}`).toBe(
+          previous.test(sample),
+        );
+        expect(htmlPattern.test(sample), `${pattern}: ${sample}`).toBe(
+          previous.test(sample),
+        );
+      }
+    }
+  });
+
   for (const file of readdirSync(directory).filter((name) =>
     name.endsWith(".yaml"),
   )) {

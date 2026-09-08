@@ -1125,7 +1125,12 @@ onBeforeUnmount(() => {
         </section>
         <label v-if="dialogMode !== 'CREDENTIAL'" class="field field--wide">
           <span>{{ $t("common.name") }}</span>
-          <input v-model.trim="form.name" required maxlength="160" autofocus />
+          <input
+            v-model.trim="form.name"
+            required
+            maxlength="160"
+            data-dialog-initial-focus
+          />
         </label>
         <div
           v-if="dialogMode !== 'CREDENTIAL'"

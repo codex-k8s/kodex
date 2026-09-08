@@ -133,8 +133,13 @@ export async function installProviderFixture(page: Page) {
         expiresAt: new Date(Date.now() + 120_000).toISOString(),
       };
       account.nextActions = ["REFRESH_AUTHORIZATION", "DELETE"];
-    } else if (url.pathname.endsWith("/device-authorization/verification")) {
-      events.push("verify");
+    } else if (
+      url.pathname.endsWith("/device-authorization/verification") ||
+      url.pathname.endsWith("/authorization-refresh")
+    ) {
+      events.push(
+        url.pathname.endsWith("/authorization-refresh") ? "poll" : "verify",
+      );
       account.state = "AUTHORIZED";
       account.ready = true;
       if (account.authorization)

@@ -39,7 +39,7 @@ export async function checkRunsCatalog(
       json: {
         items: states.includes("FAILED")
           ? [{ ...run(20), state: "FAILED" }]
-          : query
+          : query || !states.includes("QUEUED")
             ? []
             : cursor
               ? [run(9)]
@@ -48,7 +48,7 @@ export async function checkRunsCatalog(
                   ...(newRun ? [run(99)] : []),
                 ],
         nextPageToken:
-          states.includes("FAILED") || query || cursor ? "" : "runs_next",
+          !states.includes("QUEUED") || query || cursor ? "" : "runs_next",
       },
     });
   });
