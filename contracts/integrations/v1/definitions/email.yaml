@@ -3,7 +3,7 @@
   "kind": "IntegrationPackage",
   "metadata": {
     "key": "email",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "origin": "SHIPPED"
   },
   "spec": {
@@ -14,10 +14,6 @@
     "adapterOwner": "integration-gateway",
     "executionRoute": "MANAGED_MCP",
     "readiness": "READY",
-    "credential": {
-      "secretKey": "token",
-      "kind": "TOKEN"
-    },
     "configurationFields": [
       {
         "key": "base_url",

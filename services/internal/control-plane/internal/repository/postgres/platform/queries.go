@@ -1978,7 +1978,7 @@ func connectionActions(item entity.IntegrationConnection, manageConnection, mana
 	if manageConnection {
 		actions = append(actions, "EDIT")
 	}
-	if manageConnection && item.CredentialSecretKey != "" && item.State != "TESTING" {
+	if manageConnection && (item.CredentialSecretKey != "" || item.DefinitionKey == "email") && item.State != "TESTING" {
 		actions = append(actions, "CONFIGURE_CREDENTIAL")
 	}
 	if manageConnection && !item.TestRequiresApproval && item.State != "TESTING" && item.MaskedCredentialsState == "CONFIGURED" {

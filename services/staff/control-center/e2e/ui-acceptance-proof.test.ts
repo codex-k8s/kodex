@@ -49,7 +49,15 @@ test("RoleImage permission read пропускает только exact query bo
       target: { kind: "PROJECT", projectRef: "project_synthetic" },
     }),
   ).toBe(true);
+  expect(
+    permittedRequest("POST", path, false, {
+      ...body,
+      permissionKeys: ["image.source.view", "image.source.manage"],
+    }),
+  ).toBe(true);
   for (const invalid of [
+    { ...body, permissionKeys: ["image.build", "image.source.view"] },
+    { ...body, permissionKeys: ["image.source.view", "image.source.view"] },
     undefined,
     null,
     [],

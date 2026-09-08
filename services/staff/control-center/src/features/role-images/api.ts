@@ -38,11 +38,28 @@ export async function loadRoleImageCreateAccess(
   projectRef: string | undefined,
   signal: AbortSignal,
 ): Promise<boolean> {
-  const permissionKeys = [
+  return loadRoleImageAccess(projectRef, signal, [
     "image.build",
     "image.source.view",
     "image.source.manage",
-  ];
+  ]);
+}
+
+export async function loadRoleImageSourceCreateAccess(
+  projectRef: string | undefined,
+  signal: AbortSignal,
+): Promise<boolean> {
+  return loadRoleImageAccess(projectRef, signal, [
+    "image.source.view",
+    "image.source.manage",
+  ]);
+}
+
+async function loadRoleImageAccess(
+  projectRef: string | undefined,
+  signal: AbortSignal,
+  permissionKeys: string[],
+): Promise<boolean> {
   const page = (
     await unwrap(
       queryEffectiveAccess({

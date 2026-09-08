@@ -44,7 +44,7 @@ dsn="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane?sslmode
 runtime_dsn="postgresql://control_plane_runtime_g1@127.0.0.1:${port}/control_plane?sslmode=disable"
 run_migration() {
   CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE=<(printf '%s' "$dsn") \
-    env -u GOFLAGS GOENV=off GOWORK=off go run ./cmd/cli "$@"
+    env -u GOFLAGS GOENV=off GOWORK=off go run -p 2 ./cmd/cli "$@"
 }
 
 (
@@ -55,13 +55,13 @@ run_migration() {
     psql "postgresql://postgres@127.0.0.1:${port}/control_plane_scheduler_upgrade?sslmode=disable" --no-password -v ON_ERROR_STOP=1 \
       -c 'GRANT USAGE, CREATE ON SCHEMA public TO control_plane_migrator' >/dev/null
     KODEX_CONTROL_PLANE_MIGRATION_TEST_DSN="postgresql://control_plane_migrator@127.0.0.1:${port}/control_plane_scheduler_upgrade?sslmode=disable" \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 -timeout=90s ./cmd/cli -run '^TestScheduleProtocolUpgrade$'
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -count=1 -timeout=90s ./cmd/cli -run '^TestScheduleProtocolUpgrade$'
   fi
   run_migration up
   run_migration status >/dev/null
   run_migration up
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
-    env -u GOFLAGS GOENV=off GOWORK=off go test -v -count=1 \
+    env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 \
       ./internal/repository/postgres/platform -run "$test_pattern"
   # Та же read-only диагностика, которую release использует на staging.
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
@@ -91,7 +91,7 @@ run_migration() {
     '
   if [[ $# -eq 0 && -z "${KODEX_CONTROL_PLANE_TEST_FILTER:-}" ]]; then
     KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -count=1 \
         ./internal/repository/postgres/platform -run '^TestAvatarLifecycleComponent$'
   fi
 )

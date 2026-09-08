@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.23
+version: 1.4.24
 updated: 2026-09-08
 ---
 
@@ -182,6 +182,16 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 домена-владельца.
 
 ## Публичная и привилегированная выдача
+
+Публичные ORGANIZATION/PROJECT/RESOURCE_KIND scopes проверяются по каноническому
+валидатору и разрешаются владельцем состояния внутри проверенного tenant.
+Отсутствующие внутренние locator поля не заменяются выдуманным проектом и не
+требуются от обычного клиента. Query, Explain и Simulate используют один
+resolver и visibility rule; оценка получает authoritative target, а ответ
+сохраняет проверенный публичный scope. Противоречащие locators, чужая
+организация/проект и право на другой subject закрыто отклоняются. Симуляция
+не сохраняет binding. Права просмотра/редактирования source и запуска сборки
+остаются отдельными predicates; исправление UI не расширяет registry/grants.
 
 Публичные PWA manifest, иконки и service worker имеют закрытый список точных
 путей на ingress boundary. Исключение авторизации не распространяется на

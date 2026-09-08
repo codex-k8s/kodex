@@ -35,7 +35,7 @@ import { managedCopySource, canArchiveConfiguration } from "./copy-source";
 import ConfigurationCopyDialog from "./ConfigurationCopyDialog.vue";
 import RestoreRevisionButton from "./RestoreRevisionButton.vue";
 import { canRestoreRevision, restoreRevision } from "./restore-revision";
-import { loadRoleImageCreateAccess } from "@/features/role-images/api";
+import { loadRoleImageSourceCreateAccess } from "@/features/role-images/api";
 import ConfigurationFields from "./ConfigurationFields.vue";
 import SttActivationPanel from "./SttActivationPanel.vue";
 import GitSourcePanel from "./GitSourcePanel.vue";
@@ -972,7 +972,7 @@ watch(
     if (props.kind === "ROLE_IMAGE" && !props.configurationRef) {
       const project = props.projectRef;
       try {
-        const allowed = await loadRoleImageCreateAccess(
+        const allowed = await loadRoleImageSourceCreateAccess(
           project,
           controller.signal,
         );
