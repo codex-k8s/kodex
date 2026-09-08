@@ -105,34 +105,15 @@ export async function writeAuthenticatedStorageState(
   value: unknown,
   expectedOrigin: string,
 ): Promise<void> {
-  const origin = exactHTTPSOrigin(expectedOrigin);
+  exactHTTPSOrigin(expectedOrigin);
   const state = parseStorageState(value, false);
-  const matchingCookies = state.cookies.filter(
-    (cookie) =>
-      cookie.domain.replace(/^\./, "") === origin.hostname &&
-      cookie.path === "/" &&
-      cookie.secure,
-  );
-  const csrf = matchingCookies.find(
-    (cookie) => cookie.name === "__Host-kodex-csrf",
-  );
-  const session = matchingCookies.find(
-    (cookie) => cookie.name === "__Host-kodex-session",
-  );
-  if (
-    !csrf ||
-    csrf.value.length < 43 ||
-    csrf.value.length > 256 ||
-    !session ||
-    !session.httpOnly ||
-    session.value.length < 32 ||
-    session.value.length > 16_384
-  ) {
-    throw new Error(
-      "Authenticated E2E storage state does not contain the exact Kodex API cookies",
-    );
-  }
-  await writeParsedStorageState(rawPath, state);
+  // Warm OIDC jar содержит IdP state; API-only handoff получает только тот же
+  // строгий набор transport cookies, который принимает штатный reader.
+  const cookies = selectedSessionCookies(state, expectedOrigin);
+  await writeParsedStorageState(rawPath, {
+    cookies: structuredClone(cookies),
+    origins: [],
+  });
 }
 
 async function writeParsedStorageState(

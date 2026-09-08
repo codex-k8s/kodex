@@ -1,9 +1,20 @@
-import { chmod, link, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  link,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   readAPISessionStorageState,
+  writeAuthenticatedStorageState,
   readStorageState,
   type BrowserStorageState,
 } from "./storage-state";
@@ -184,5 +195,199 @@ describe("ограниченный API session reader", () => {
     expect(() => readAPISessionStorageState(path, origin)).toThrow(
       "storage JSON is invalid",
     );
+  });
+});
+
+describe("API-only writer и строгий reader", () => {
+  test.each(["none", "single", "chunks"] as const)(
+    "атомарно сохраняет точный transport набор %s без IdP, OAuth CSRF и origins",
+    async (proxy) => {
+      const selected = state(proxy);
+      const first = selected.cookies[0];
+      if (!first) throw new Error("Missing fixture cookie");
+      const foreign = [
+        {
+          ...first,
+          name: "KEYCLOAK_SESSION",
+          domain: "identity.kodex.test",
+          value: "synthetic-idp-session",
+        },
+        {
+          ...first,
+          name: "KEYCLOAK_IDENTITY",
+          domain: "identity.kodex.test",
+          value: "synthetic-idp-identity",
+        },
+        {
+          ...first,
+          name: "AUTH_SESSION_ID",
+          domain: "identity.kodex.test",
+          value: "synthetic-idp-auth",
+        },
+        { ...first, name: "KEYCLOAK_SESSION", value: "synthetic-control-idp" },
+        {
+          ...first,
+          name: "_kodex_control_center_oauth2_csrf",
+          value: "synthetic-oauth-csrf",
+        },
+        {
+          ...first,
+          name: "_kodex_control_center_oauth2_csrf_attempt",
+          value: "synthetic-oauth-attempt",
+        },
+        {
+          ...first,
+          name: "_kodex_control_center_oauth2_attempt_csrf",
+          value: "synthetic-oauth-csrf-suffix",
+        },
+        {
+          ...first,
+          name: "unrelated",
+          domain: "foreign.invalid",
+          expires: 1,
+          value: "synthetic-foreign",
+        },
+      ];
+      const input = {
+        cookies: [...foreign, ...selected.cookies].reverse(),
+        origins: [
+          {
+            origin,
+            localStorage: [{ name: "draft", value: "synthetic-private-draft" }],
+          },
+          {
+            origin: "https://identity.kodex.test",
+            localStorage: [{ name: "idp", value: "synthetic-idp-storage" }],
+          },
+        ],
+      };
+      const unchanged = structuredClone(input);
+      const path = await fixture();
+      await writeAuthenticatedStorageState(path, input, origin);
+      expect(input).toEqual(unchanged);
+      expect(readAPISessionStorageState(path, origin)).toEqual(selected);
+      expect((await stat(path)).mode & 0o777).toBe(0o600);
+      expect(await readdir(dirname(path))).toEqual(["session.json"]);
+      const persisted = await readFile(path, "utf8");
+      for (const cookie of foreign)
+        expect(persisted).not.toContain(cookie.value);
+      expect(persisted).not.toContain("synthetic-private-draft");
+      expect(persisted).not.toContain("synthetic-idp-storage");
+      expect(() => readStorageState(path)).toThrow("Kodex API cookie");
+      const dirtyPath = await fixture(input);
+      expect(() => readAPISessionStorageState(dirtyPath, origin)).toThrow(
+        "foreign browser material",
+      );
+    },
+  );
+  test("сохраняет разрешённые BFF session cookies без искусственного expiry", async () => {
+    const input = state("none");
+    const sessionCookies = {
+      ...input,
+      cookies: input.cookies.map((cookie) => ({ ...cookie, expires: -1 })),
+    };
+    const path = await fixture();
+    await writeAuthenticatedStorageState(path, sessionCookies, origin);
+    expect(readAPISessionStorageState(path, origin)).toEqual(sessionCookies);
+  });
+  test.each([
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: input.cookies.map((cookie) =>
+        cookie.name.startsWith("_kodex") ? { ...cookie, expires: 1 } : cookie,
+      ),
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: [...input.cookies, input.cookies[0]],
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: [
+        ...input.cookies,
+        { ...input.cookies[0], domain: "foreign.invalid" },
+      ],
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: input.cookies.slice(1),
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: input.cookies.map((cookie) => ({ ...cookie, expires: 1 })),
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: input.cookies.map((cookie) =>
+        cookie.name === "__Host-kodex-csrf"
+          ? { ...cookie, httpOnly: true }
+          : cookie,
+      ),
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: input.cookies.map((cookie) => ({
+        ...cookie,
+        domain: ".control.kodex.test",
+      })),
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: input.cookies.map((cookie) => ({
+        ...cookie,
+        partitionKey: origin,
+      })),
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: input.cookies.filter((cookie) => !cookie.name.endsWith("_0")),
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: [
+        ...input.cookies,
+        { ...input.cookies[2], name: "_kodex_control_center_oauth2" },
+      ],
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      cookies: input.cookies.map((cookie) =>
+        cookie.name.startsWith("_kodex")
+          ? { ...cookie, expires: Math.floor(Date.now() / 1000) + 9 * 3600 }
+          : cookie,
+      ),
+    }),
+    (input: BrowserStorageState) => ({
+      ...input,
+      origins: [
+        { origin: "https://identity.kodex.test/private", localStorage: [] },
+      ],
+    }),
+  ])(
+    "отклоняет неоднозначность/границы/expiry до замены прежнего файла",
+    async (change) => {
+      const path = await fixture();
+      const previous = await readFile(path, "utf8");
+      await expect(
+        writeAuthenticatedStorageState(path, change(state()), origin),
+      ).rejects.toThrow();
+      expect(await readFile(path, "utf8")).toBe(previous);
+      expect(await readdir(dirname(path))).toEqual(["session.json"]);
+      expect(readAPISessionStorageState(path, origin)).toEqual(
+        JSON.parse(previous),
+      );
+    },
+  );
+  test.each([
+    "http://control.kodex.test",
+    "https://control.kodex.test/",
+    "https://control.kodex.test?token=fixture",
+  ])("не нормализует неточный expected origin %s", async (invalidOrigin) => {
+    const path = await fixture();
+    const before = await readFile(path, "utf8");
+    await expect(
+      writeAuthenticatedStorageState(path, state(), invalidOrigin),
+    ).rejects.toThrow();
+    expect(await readFile(path, "utf8")).toBe(before);
   });
 });
