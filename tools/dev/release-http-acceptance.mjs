@@ -6,7 +6,7 @@ import { open } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createOwnerSessionClient } from "./owner-session-client.mjs";
-import { exactOrigin, readAuthenticatedState, sessionHeaders } from "./owner-session-storage.mjs";
+import { exactOrigin, readAuthenticatedState } from "./owner-session-storage.mjs";
 import { boundedResponseBody } from "./runtime-workspace-acceptance.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -53,11 +53,10 @@ export async function observeHTTPRelease({ origin, storage, storagePath, duratio
         const response = await client.request("/api/v1/bootstrap", { signal: AbortSignal.timeout(15000) });
         await boundedResponseBody(response, 1 << 20);
       }
-      const headers = sessionHeaders({ cookies: client.authenticatedCookies(), origins: [] }, origin, now());
       for (const path of ["/api/v1/session", "/"]) {
-        const requestHeaders = new Headers(headers);
+        const requestHeaders = new Headers();
         requestHeaders.set("Accept", path === "/" ? "text/html" : "application/json");
-        const response = await observedFetch(new URL(path, origin), { method: "GET", headers: requestHeaders, redirect: "manual", signal: AbortSignal.timeout(5000) });
+        const response = await client.observe(path, { method: "GET", headers: requestHeaders, signal: AbortSignal.timeout(5000) });
         await boundedResponseBody(response, 1 << 20);
         if (response.status === 401) throw new Error("Release HTTP acceptance session is unavailable");
       }

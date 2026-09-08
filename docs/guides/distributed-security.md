@@ -21,6 +21,13 @@ Reader старого формата сохраняется на этапе expa
 устранением конфликта grants для независимых релизов. Откат бинаря не удаляет
 схему или watermark; подробный порядок задан в OPS-DOC-INDEPENDENT-RELEASES-001.
 
+Доказательство mixed-instance использует фактически выполненный защищённый
+RPC каждого instance. У leader/standby workload отсутствие фоновых RPC у
+standby требует управляемой передачи лидерства с durable readback, а не
+ослабления verifier или подстановки чужого grant. Idle restart proof не
+заменяет проверку активных leases/effects. Supervisor budget включает полный
+application drain и cleanup и остаётся внутри Pod termination grace.
+
 Release guard учитывает всех grant writers: обычные контейнеры, native sidecars
 в `initContainers` и контейнеры с каноническим writer binary под другим именем.
 Аннотация формата не заменяет проверку единственного `fieldRef: metadata.uid`
