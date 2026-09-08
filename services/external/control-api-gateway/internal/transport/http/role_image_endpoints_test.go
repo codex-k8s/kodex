@@ -201,15 +201,58 @@ func TestRoleImageCatalogPreservesOwnerDenials(t *testing.T) {
 
 func TestPublicRoleImageArtifactPreservesPromotionIdentity(t *testing.T) {
 	t.Parallel()
-	provenance := strings.Repeat("a", 64)
-	artifact := publicRoleImageArtifact(&controlplanev1.ImageArtifact{
-		Ref: "imgart_12345678", Version: 1, RecipeRef: "imgrec_12345678",
-		RecipeGeneration: 2, ManifestDigest: "sha256:" + strings.Repeat("b", 64),
-		ProvenanceSha256: provenance,
-		AdmissionVerdict: controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_ACCEPTED,
-	})
-
-	if artifact.ProvenanceSha256 != provenance || artifact.AdmissionVerdict != "ACCEPTED" {
-		t.Fatalf("promotion identity was not preserved: %#v", artifact)
+	for _, promoted := range []bool{false, true} {
+		name := "promotionCandidate"
+		if promoted {
+			name = "activeArtifact"
+		}
+		t.Run(name, func(t *testing.T) {
+			provenance := strings.Repeat("a", 64)
+			receipt := strings.Repeat("c", 64)
+			manifest := "sha256:" + strings.Repeat("b", 64)
+			promotedAt := time.Date(2026, 9, 8, 13, 5, 22, 0, time.UTC)
+			artifact := &controlplanev1.ImageArtifact{
+				Ref: "imgart_12345678", Version: 1, RecipeRef: "imgrec_fixture01",
+				RecipeGeneration: 3, ManifestDigest: manifest, ProvenanceSha256: provenance,
+				AdmissionVerdict: controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_ACCEPTED,
+			}
+			response := &controlplanev1.GetRoleImageRecipeResponse{Recipe: roleImageRecipeFixture()}
+			if promoted {
+				artifact.PromotedReference = "registry.example.invalid/kodex/roles@" + manifest
+				artifact.PromotedAt = timestamppb.New(promotedAt)
+				artifact.PromotionReadbackSha256 = receipt
+				response.ActiveArtifact = artifact
+			} else {
+				response.PromotionCandidate = artifact
+			}
+			writer := httptest.NewRecorder()
+			roleImageHTTPHandler(&catalogRPCRecorder{response: response}).ServeHTTP(writer, httptest.NewRequest("GET", "/api/v1/projects/prj_fixture01/role-image-recipes/imgrec_fixture01", nil))
+			var detail map[string]json.RawMessage
+			if writer.Code != http.StatusOK || json.Unmarshal(writer.Body.Bytes(), &detail) != nil {
+				t.Fatalf("artifact response failed: %d", writer.Code)
+			}
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(detail[name], &fields) != nil {
+				t.Fatal("artifact JSON is missing")
+			}
+			expected := map[string]string{"provenanceSha256": provenance, "manifestDigest": manifest, "admissionVerdict": "ACCEPTED"}
+			if promoted {
+				expected["promotionReceiptSha256"] = receipt
+				expected["promotedReference"] = artifact.PromotedReference
+				expected["promotedAt"] = promotedAt.Format(time.RFC3339)
+			} else {
+				for _, field := range []string{"promotionReceiptSha256", "promotedReference", "promotedAt"} {
+					if _, exists := fields[field]; exists {
+						t.Fatalf("unpromoted artifact invented %s", field)
+					}
+				}
+			}
+			for field, expectedValue := range expected {
+				var actual string
+				if json.Unmarshal(fields[field], &actual) != nil || actual != expectedValue {
+					t.Fatalf("artifact field %s was not preserved", field)
+				}
+			}
+		})
 	}
 }
