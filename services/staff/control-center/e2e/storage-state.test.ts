@@ -104,8 +104,15 @@ describe("E2E storage state", () => {
       {
         cookies: [
           cookie("KEYCLOAK_SESSION", "sso"),
-          cookie("__Host-kodex-session", "s".repeat(32)),
-          cookie("__Host-kodex-csrf", "c".repeat(43)),
+          {
+            ...cookie("__Host-kodex-session", `v1.${"s".repeat(43)}`),
+            sameSite: "Strict",
+          },
+          {
+            ...cookie("__Host-kodex-csrf", "c".repeat(43)),
+            httpOnly: false,
+            sameSite: "Strict",
+          },
         ],
         origins: [],
       },
@@ -117,7 +124,6 @@ describe("E2E storage state", () => {
       cookies: Array<{ name: string }>;
     };
     expect(written.cookies.map((item) => item.name)).toEqual([
-      "KEYCLOAK_SESSION",
       "__Host-kodex-session",
       "__Host-kodex-csrf",
     ]);
@@ -131,7 +137,7 @@ describe("E2E storage state", () => {
         { cookies: [cookie("KEYCLOAK_SESSION", "sso")], origins: [] },
         "https://kodex.example.test",
       ),
-    ).rejects.toThrow("exact Kodex API cookies");
+    ).rejects.toThrow("cookie is ambiguous");
   });
 });
 
