@@ -315,3 +315,19 @@ export async function createJournal(
     },
   };
 }
+
+export function integrationPageShape(
+  value: unknown,
+): Record<string, boolean | number> {
+  if (!value || typeof value !== "object")
+    return { connectionShapeObserved: true, connectionObject: false };
+  const page = value as Record<string, unknown>;
+  return {
+    connectionShapeObserved: true,
+    connectionObject: true,
+    connectionItemsArray: Array.isArray(page.items),
+    connectionCursorPresent: Object.hasOwn(page, "nextPageToken"),
+    connectionCursorString: typeof page.nextPageToken === "string",
+    connectionCursorEmpty: page.nextPageToken === "",
+  };
+}

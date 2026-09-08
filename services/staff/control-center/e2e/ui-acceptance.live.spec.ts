@@ -2,6 +2,10 @@ import { test, expect, type Request } from "@playwright/test";
 import { loadE2ESessionRenewalEnvironment } from "./environment";
 import {
   geometry,
+  safeAlertMetrics,
+  assistantDialog,
+  cleanupAssistant,
+  safeFocusMetrics,
   checkCondition,
   checkGeometry,
   observeCondition,
@@ -12,6 +16,7 @@ import {
 import { installProtocolObserver } from "./session-renewal-proof";
 import {
   createJournal,
+  integrationPageShape,
   conditionFailure,
   selectedVariants,
   type Condition,
@@ -91,6 +96,8 @@ test("широкая UI-приёмка сохраняет независимые
   let creatingProject = false;
   let commonBlocked = false;
   let projects: string[] = [];
+  let connectionShape: Record<string, boolean | number> = {};
+  const shapeReads = new Set<Promise<void>>();
   const counters = {
     httpErrors: 0,
     pageErrors: 0,
@@ -124,6 +131,22 @@ test("широкая UI-приёмка сохраняет независимые
   });
   page.on("response", (response) => {
     const url = new URL(response.url());
+    if (
+      url.origin === environment.baseURL &&
+      url.pathname === "/api/v1/integration-connections" &&
+      response.request().method() === "GET"
+    ) {
+      const reading = response.json().then(
+        (value: unknown) => {
+          connectionShape = integrationPageShape(value);
+        },
+        () => {
+          connectionShape = { connectionShapeObserved: false };
+        },
+      );
+      shapeReads.add(reading);
+      void reading.finally(() => shapeReads.delete(reading));
+    }
     if (
       url.origin === environment.baseURL &&
       url.pathname.startsWith("/api/") &&
@@ -194,6 +217,7 @@ test("широкая UI-приёмка сохраняет независимые
       );
       return false;
     }
+    connectionShape = {};
     const before = { ...counters };
     try {
       const metrics = await action();
@@ -203,6 +227,7 @@ test("широкая UI-приёмка сохраняет независимые
         () => Promise.resolve(pendingReads.size),
         0,
       );
+      await Promise.all(shapeReads);
       const settled = await geometry(page);
       checkGeometry(settled);
       checkCondition("HTTP_ERRORS", counters.httpErrors - before.httpErrors, 0);
@@ -224,6 +249,7 @@ test("широкая UI-приёмка сохраняет независимые
       );
       await record(id, ids, "PASS", "OBSERVED", {
         ...metrics,
+        ...connectionShape,
         settledOverflow: settled.overflow,
         consoleErrors: counters.consoleErrors - before.consoleErrors,
         abortedRequests: counters.abortedRequests - before.abortedRequests,
@@ -241,6 +267,7 @@ test("широкая UI-приёмка сохраняет независимые
         await record(id, ids, "NOT RUN", "FIXTURE_UNAVAILABLE");
         return false;
       }
+      await Promise.all(shapeReads);
       const failure = conditionFailure(error);
       await record(
         id,
@@ -249,6 +276,9 @@ test("широкая UI-приёмка сохраняет независимые
         "UI_ASSERTION_FAILED",
         {
           ...failure.metrics,
+          ...connectionShape,
+          ...(await safeAlertMetrics(page).catch(() => ({}))),
+          ...(await safeFocusMetrics(page).catch(() => ({}))),
           httpErrors: counters.httpErrors - before.httpErrors,
           pageErrors: counters.pageErrors - before.pageErrors,
           blockedWrites: counters.blockedWrites - before.blockedWrites,
@@ -597,10 +627,7 @@ test("широкая UI-приёмка сохраняет независимые
         ["MVP-UI-09"],
         async () => {
           await visit(page, "/");
-          const dialog = page.getByRole("dialog", {
-            name: "Kodex",
-            exact: true,
-          });
+          const dialog = assistantDialog(page, locale);
           try {
             await observeCondition("ASSISTANT_OPEN", () =>
               page
@@ -628,29 +655,20 @@ test("широкая UI-приёмка сохраняет независимые
             );
             return { openedAndClosed: true, overflow: result.overflow };
           } finally {
-            if (await dialog.isVisible().catch(() => false)) {
-              const cleaned = await dialog
-                .getByRole("button", {
-                  name: locale === "ru" ? "Закрыть" : "Close",
-                  exact: true,
-                })
-                .click()
-                .then(() => expect(dialog).toHaveCount(0))
-                .then(
-                  () => true,
-                  () => false,
-                );
-              if (!cleaned) {
-                commonBlocked = true;
-                await record(
-                  `assistant-cleanup-${String(width)}`,
-                  ["MVP-UI-09"],
-                  "FAIL",
-                  "UI_ASSERTION_FAILED",
-                  { measurementAvailable: false },
-                  "CLEANUP",
-                );
-              }
+            const cleaned = await cleanupAssistant(page, locale).then(
+              () => true,
+              () => false,
+            );
+            if (!cleaned) {
+              commonBlocked = true;
+              await record(
+                `assistant-cleanup-${String(width)}`,
+                ["MVP-UI-09"],
+                "FAIL",
+                "UI_ASSERTION_FAILED",
+                { measurementAvailable: false },
+                "CLEANUP",
+              );
             }
           }
         },

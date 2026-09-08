@@ -4,7 +4,7 @@ title: Карта выполнения полной MVP-приёмки и две
 type: operation-plan
 status: approved
 owner: developer
-version: 1.1.1
+version: 1.1.2
 updated: 2026-09-08
 ---
 
@@ -419,3 +419,47 @@ Assistant ждёт штатного фокуса после загрузки п�
 зависимые шаги получают NOT RUN. Ошибка варианта при этом сохраняется.
 Сохранённые старые FAIL не заменяются новым PASS. Полные 64 requirement ID
 по-прежнему не закрываются частичным browser-профилем.
+
+
+## Пакет причин #1305/#1306/#1307
+
+Карта read-only сценария #1306: пользователь с действующей BFF session и
+transport/signed organization scope → GET `/api/v1/integration-connections`
+→ `ListIntegrationConnections` → generated PlatformQueryService RPC →
+control-plane authoritative eligibility/query → `ListIntegrationConnectionsResponse`
+→ BFF public page → `IntegrationsPage.loadConnections`. Query/page token не
+задают authority. Version/idempotency mutation неприменимы: состояние, audit
+mutation и domain events не создаются. Denied/неполный owner response сохраняет
+существующую закрытую ошибку; исправляется только обязательное public поле.
+OpenAPI требует `items,nextPageToken`; terminal cursor — пустая строка.
+
+Системные аналоги общего `writeMessage` проверены по конкретным owner response:
+
+| Owner response / public page | Обязательный terminal cursor |
+| --- | --- |
+| ListIntegrationConnectionsResponse / подключения | Возвращается пустой строкой |
+| ListSchedulesResponse / global и project schedules | Возвращается пустой строкой |
+| ListAuditEventsResponse / audit events | Возвращается пустой строкой |
+| ListScheduleRevisionsResponse / история schedules | Возвращается пустой строкой |
+| ListScheduleRunsResponse / occurrences | Возвращается пустой строкой |
+| ListRoleImageRecipeRevisionsResponse / история рецепта образа | Возвращается пустой строкой |
+| ListProviderDefinitionsResponse / каталог providers | Возвращается пустой строкой |
+| InteractionIdentityPage / RuntimeSecretPage | Уже отдельные typed writers с required string; не изменены |
+| Остальные optional pages | Прежнее omission сохранено |
+
+Реестр использует конкретный Proto response type; общий field `revisions`
+или `definitions` не достаточен для выбора формы. Непустые cursors не меняются.
+Исходники контрактов, owner authority, PostgreSQL и схемы не изменяются.
+
+#1307: DismissiblePopover дожидается DOM flush `positioned=true` перед focus;
+watch cleanup, open и connected checks отсекают закрытое/устаревшее окно.
+ModalDialog из #1303 не переписывается. #1305: assistant проверяется по ru/en
+accessible name, а независимый cleanup использует устойчивый ID компонента.
+
+BUI дополнительно сохраняет только safe boolean shape фактического ответа
+подключений (items array, cursor present/string/empty), совпадение alert с
+canonical `errors.default` ru/en и закрытую классификацию activeElement
+(picker input/trigger/popover/assistant/body). Неизвестный alert остаётся
+unclassified; его текст и arbitrary DOM/response не выводятся. Отсутствие
+наблюдения shape не заменяется выдуманным ответом. Всё live evidence пакета
+остаётся NOT RUN до нового GO на фактически выложенных компонентах.
