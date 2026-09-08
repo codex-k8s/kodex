@@ -38,6 +38,23 @@ Go-приложение получает отдельный read-only `dev-appli
 кэш зависимостей. Изменение package.json/package-lock.json требует отдельной
 подготовки runtime/cache и этим быстрым source-путём закрыто отклоняется.
 
+Перед первым source release PWA новая чистая рабочая копия проходит отдельную
+подготовку вложенных mountpoints. Команда не устанавливает зависимости и не
+меняет Kubernetes: создаёт только отсутствующие Git-ignored каталоги под
+проверенными дескрипторами Linux dev host. Существующие файлы и каталоги не
+перезаписываются; symlink, чужая revision и изменения tracked files запрещены.
+
+```bash
+node tools/release/prepare-application-source.mjs \
+  --source /srv/kodex-dev/workspace-new --revision <40-hex-commit> \
+  --confirm PREPARE-STAGING-SOURCE
+```
+
+`plan` и повторный preflight `apply` проверяют готовность `node_modules` и
+`public/config` до PATCH. Неизвестный вложенный mount отклоняется до релиза,
+а не обнаруживается после остановки контейнера. Read-only source и кэш
+зависимостей остаются read-only.
+
 ```bash
 node tools/release/scoped-release.mjs plan \
   --context staging --manifest /private/applications.json \
