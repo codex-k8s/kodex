@@ -4,7 +4,7 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.6.0
+version: 1.6.1
 updated: 2026-09-08
 ---
 
@@ -1100,3 +1100,15 @@ mailbox, published revision/digest и credential refs сохраняются. П
 служебные переходы, replay, гонку revoke, immutable SQL boundaries и forward
 binding; Node — настоящий public CLI argv с controlled transport, CAS,
 UNKNOWN/lost ACK и migration readback. Это не live vendor authentication.
+
+
+Transport исправление #1350 не меняет schema/source pins старого maintenance
+плана. JSON patch передаётся kubectl через temporary regular file0600 в
+каталоге0700, удаляемом при success/error; полный spec не помещается в argv.
+`--patch-file=/dev/stdin` непригоден для Node child pipe на Linux: kubectl
+повторно открывает путь и получает ENXIO ещё до отправки patch. Closed diagnostic
+`CP_PATCH_INPUT_UNREADABLE` не включает raw stderr. Прежние UNKNOWN/header/plan
+остаются неизменными; новый helper продолжает тот же план после отдельного
+`inspect`. Public CLI fixture проверяет фактический patch-file и cleanup;
+локальный real kubectl `patch --local` доказывает positive и stale JSON CAS без
+доступа к кластеру. Для этой проверки kubectl должен быть установлен локально.
