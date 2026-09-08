@@ -379,12 +379,13 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     projectRef: string,
     recipeRef: string,
     expectedArtifactRef: string,
+    signal?: AbortSignal,
   ): Promise<RoleImageArtifact> {
     const detail = (
       await unwrap(
         getRoleImageRecipe({
           path: { projectRef, recipeRef },
-          signal: requestSignal(),
+          signal: requestSignal(signal),
         }),
       )
     ).data;
