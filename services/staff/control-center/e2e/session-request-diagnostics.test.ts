@@ -31,6 +31,9 @@ test("диагностика связывает exact Request и не сохра
   observer.failed(first, "READBACK", "Load request cancelled", 500);
   const result = observer.snapshot();
   expect(result.requestsObserved).toBe(2);
+  expect(observer.sequenceOf(first)).toBe(1);
+  expect(observer.sequenceOf(second)).toBe(2);
+  expect(observer.sequenceOf({})).toBeUndefined();
   expect(
     result.failures.map((value) => [
       value.requestSequence,

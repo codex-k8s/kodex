@@ -10,6 +10,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        bootstrapCancel: fileURLToPath(
+          new URL("./e2e/fixtures/bootstrap-cancel.html", import.meta.url),
+        ),
         modalPattern: fileURLToPath(
           new URL("./e2e/fixtures/modal-pattern.html", import.meta.url),
         ),
