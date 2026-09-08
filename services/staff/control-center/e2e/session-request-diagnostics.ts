@@ -136,4 +136,7 @@ export class SessionRequestDiagnostics<T extends object> {
       failures: structuredClone(this.failures),
     };
   }
+  sequenceOf(request: T): number | undefined {
+    return this.requests.get(request)?.requestSequence;
+  }
 }

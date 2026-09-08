@@ -4,7 +4,7 @@ title: Карта выполнения полной MVP-приёмки и две
 type: operation-plan
 status: approved
 owner: developer
-version: 1.1.4
+version: 1.1.5
 updated: 2026-09-08
 ---
 
@@ -565,3 +565,33 @@ browser fixture принудительно разрывает один read и �
 Нужен новый WebKit N live readback после merge. Сохранённый cursor не является
 проверкой доставки новых событий: businessEventDelivery остаётся NOT RUN без
 контролируемого producer и ожидаемого набора событий.
+
+Повтор N на harness `affcc7a1` уточнил отказ: WebKit, GET BOOTSTRAP,
+INITIAL_READY до продления, `WEBKIT_CANCELLED`. Это ещё не доказывает
+принадлежность запроса штатному AbortSignal. В приложении существует
+конкретный путь: `useSpeechInput` запускает отдельную проверку допуска;
+завершение общего bootstrap вызывает `SpeechAvailabilityLease.synchronize`,
+который отменяет предыдущую проверку и начинает свежую. Допуск при этом не
+продлевается из позднего ответа.
+
+Публичный `S:bootstrap-cancel` воспроизводит этот путь настоящим
+`SpeechAvailabilityLease` и native browser fetch. Fixture удерживает первый
+ответ, вызывает synchronize и связывает отмену с exact Request через
+существующий fixture-only observer; ожидается закрытый допуск. Проверка
+выполняется в Chromium/Firefox/WebKit. Она подтверждает механизм, но не
+атрибутирует прежний live Request по совпадению URL, стадии или тексту ошибки.
+По согласованному opt-in `KODEX_E2E_BOOTSTRAP_SIGNAL_DIAGNOSTICS=1` N добавляет
+случайный неавторитетный `X-Kodex-E2E-Fetch-ID` только в same-origin GET
+`/api/v1/bootstrap` без query. Заголовки auth, credentials и native signal
+сохраняются; прочие routes/methods не инструментируются. Identity связывает
+native START, AbortSignal с причиной AbortError и rejection самого fetch с
+AbortError с exact Playwright Request. TimeoutError, network rejection,
+поздний abort после requestfailed, дублированная identity и overflow не
+подтверждают отмену. Сопоставление по URL/порядку не используется.
+
+Сырой failedRequests и все bounded failure записи сохраняются. Отдельно
+фиксируются confirmedBootstrapAborts, безопасные local request sequences и
+unexplainedFailures. PASS требует отсутствия необъяснённых отказов и overflow;
+код WEBKIT_CANCELLED сам по себе ничего не разрешает. Без opt-in прежний
+критерий zero failedRequests сохраняется. Старый FAIL не переклассифицируется:
+нужен новый разрешённый live readback после exact merge.
