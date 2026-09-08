@@ -8,7 +8,10 @@ import {
 } from "./synthetic-diagnostics";
 import { prepareSyntheticMicrophone } from "./synthetic-microphone";
 import { SyntheticFetchCorrelator } from "./synthetic-fetch-correlator";
-import { installSyntheticAbortObserver } from "./synthetic-abort-observer";
+import {
+  installSyntheticAbortObserver,
+  syntheticFetchIDHeader,
+} from "./synthetic-abort-observer";
 import { test } from "./fixtures/browser-diagnostics";
 import { installEnvironmentFixture } from "./fixtures/environment";
 import { installProviderFixture } from "./fixtures/providers";
@@ -269,7 +272,11 @@ for (const { width, height } of [
     page.on("request", (request) => {
       pendingRequests.set(request, page.url());
       if (request.resourceType() === "fetch")
-        fetches.request(request, request.url());
+        fetches.request(
+          request,
+          request.url(),
+          request.headers()[syntheticFetchIDHeader],
+        );
     });
     page.on("requestfinished", (request) => pendingRequests.delete(request));
     page.on("response", (response) => {

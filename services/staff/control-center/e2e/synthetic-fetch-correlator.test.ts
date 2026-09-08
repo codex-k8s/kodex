@@ -1,44 +1,91 @@
 import { describe, expect, it } from "vitest";
 import { SyntheticFetchCorrelator } from "./synthetic-fetch-correlator";
 
-const url = "https://kodex.test/api/v1/draft";
+const url = "https://kodex.test/api/v1/bootstrap";
+const one = "11111111-1111-4111-8111-111111111111:1";
+const two = "11111111-1111-4111-8111-111111111111:2";
 describe("synthetic fetch identity", () => {
   it.each([true, false])(
     "связывает receipt до/после request: %s",
     (receiptFirst) => {
       const observer = new SyntheticFetchCorrelator();
       const request = {};
-      const start = () => observer.observe({ phase: "start", id: "one", url });
+      const start = () => observer.observe({ phase: "start", id: one, url });
       if (receiptFirst) start();
-      observer.request(request, url);
+      observer.request(request, url, one);
       if (!receiptFirst) start();
       expect(observer.cancelled(request)).toBe(false);
-      observer.observe({ phase: "abort", id: "one", url });
+      observer.observe({ phase: "abort", id: one, url });
       expect(observer.cancelled(request)).toBe(true);
     },
   );
+  it("связывает конкурентные одинаковые URL, даже когда оба start пришли до request", () => {
+    const observer = new SyntheticFetchCorrelator();
+    const first = {},
+      second = {};
+    observer.observe({ phase: "start", id: one, url });
+    observer.observe({ phase: "start", id: two, url });
+    observer.request(second, url, two);
+    observer.request(first, url, one);
+    observer.observe({ phase: "abort", id: one, url });
+    expect(observer.cancelled(first)).toBe(true);
+    expect(observer.cancelled(second)).toBe(false);
+  });
   it("поздний abort завершённого поколения не отменяет новый запрос", () => {
     const observer = new SyntheticFetchCorrelator();
     const old = {},
       current = {};
-    observer.observe({ phase: "start", id: "old", url });
-    observer.request(old, url);
-    observer.observe({ phase: "start", id: "current", url });
-    observer.request(current, url);
-    observer.observe({ phase: "abort", id: "old", url });
+    observer.observe({ phase: "start", id: one, url });
+    observer.request(old, url, one);
+    observer.observe({ phase: "start", id: two, url });
+    observer.request(current, url, two);
+    observer.observe({ phase: "abort", id: one, url });
     expect(observer.cancelled(old)).toBe(true);
     expect(observer.cancelled(current)).toBe(false);
   });
-  it("не принимает неоднозначные и неизвестные поколения", () => {
+  it("не принимает missing, malformed, foreign и duplicate network identity", () => {
+    for (const id of [undefined, "unknown", two]) {
+      const observer = new SyntheticFetchCorrelator();
+      const request = {};
+      observer.observe({ phase: "start", id: one, url });
+      observer.observe({ phase: "abort", id: one, url });
+      observer.request(request, url, id);
+      expect(observer.cancelled(request)).toBe(false);
+    }
     const observer = new SyntheticFetchCorrelator();
     const first = {},
       second = {};
-    observer.request(first, url);
-    observer.request(second, url);
-    observer.observe({ phase: "start", id: "one", url });
-    observer.observe({ phase: "abort", id: "one", url });
-    observer.observe({ phase: "abort", id: "unknown", url });
+    observer.observe({ phase: "start", id: one, url });
+    observer.observe({ phase: "abort", id: one, url });
+    observer.request(first, url, one);
+    observer.request(second, url, one);
     expect(observer.cancelled(first)).toBe(false);
     expect(observer.cancelled(second)).toBe(false);
+  });
+  it("отклоняет другой URL, duplicate start и ошибку без AbortSignal", () => {
+    for (const variant of ["url", "duplicate", "no-abort"] as const) {
+      const observer = new SyntheticFetchCorrelator();
+      const request = {};
+      observer.request(request, url, one);
+      observer.observe({ phase: "start", id: one, url });
+      if (variant === "duplicate")
+        observer.observe({ phase: "start", id: one, url });
+      if (variant !== "no-abort")
+        observer.observe({
+          phase: "abort",
+          id: one,
+          url: variant === "url" ? `${url}/foreign` : url,
+        });
+      expect(observer.cancelled(request)).toBe(false);
+    }
+  });
+  it("поздний start связывает ранний abort лишь после подтверждения обеих частей", () => {
+    const observer = new SyntheticFetchCorrelator();
+    const request = {};
+    observer.request(request, url, one);
+    observer.observe({ phase: "abort", id: one, url });
+    expect(observer.cancelled(request)).toBe(false);
+    observer.observe({ phase: "start", id: one, url });
+    expect(observer.cancelled(request)).toBe(true);
   });
 });

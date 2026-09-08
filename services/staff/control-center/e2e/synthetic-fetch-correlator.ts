@@ -1,55 +1,67 @@
 import type { SyntheticFetchEvent } from "./synthetic-abort-observer";
 
-// Связывает ровно одно поколение fetch с ровно одним network request.
-// Завершённые поколения сохраняются: поздний abort не присваивается следующему URL.
+const identityPattern =
+  /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}:[1-9][0-9]{0,6}$/;
+
+// Identity приходит из одного fixture fetch и заголовка именно его network request.
+// Совпадение URL/порядка или число одновременно завершившихся запросов не используются.
 export class SyntheticFetchCorrelator<T extends object> {
   private readonly events = new Map<
     string,
-    { url: string; aborted: boolean; request?: T }
+    { url: string; started: boolean; aborted: boolean; invalid: boolean }
   >();
-  private readonly requests = new Map<T, { url: string; id?: string }>();
+  private readonly requests = new Map<
+    T,
+    { url: string; id: string | undefined }
+  >();
+  private readonly identities = new Map<string, Set<T>>();
 
   observe(event: SyntheticFetchEvent): void {
+    if (!identityPattern.test(event.id)) return;
     const existing = this.events.get(event.id);
     if (existing) {
-      if (existing.url === event.url && event.phase === "abort")
-        existing.aborted = true;
-    } else if (event.phase === "start") {
-      this.events.set(event.id, { url: event.url, aborted: false });
+      if (
+        existing.url !== event.url ||
+        (existing.started && event.phase === "start")
+      )
+        existing.invalid = true;
+      if (event.phase === "abort") existing.aborted = true;
+      else existing.started = true;
+    } else {
+      this.events.set(event.id, {
+        url: event.url,
+        started: event.phase === "start",
+        aborted: event.phase === "abort",
+        invalid: false,
+      });
     }
-    this.match(event.url);
   }
 
-  request(request: T, url: string): void {
-    this.requests.set(request, { url });
-    this.match(url);
+  request(request: T, url: string, id?: string): void {
+    if (this.requests.has(request)) return;
+    this.requests.set(request, { url, id });
+    if (!id || !identityPattern.test(id)) return;
+    const requests = this.identities.get(id) ?? new Set<T>();
+    requests.add(request);
+    this.identities.set(id, requests);
   }
 
   cancelled(request: T): boolean {
-    const id = this.requests.get(request)?.id;
-    return id !== undefined && this.events.get(id)?.aborted === true;
+    const selected = this.requests.get(request);
+    if (!selected?.id || this.identities.get(selected.id)?.size !== 1)
+      return false;
+    const event = this.events.get(selected.id);
+    return (
+      !!event?.started &&
+      event.aborted &&
+      !event.invalid &&
+      event.url === selected.url
+    );
   }
 
   describe(request: T): string {
-    const matched = this.requests.get(request);
-    const entries = [...this.events.values()].filter(
-      (event) => event.url === matched?.url,
-    );
-    return `requests=${String([...this.requests.values()].filter((entry) => entry.url === matched?.url).length)}; receipts=${String(entries.length)}; bound=${String(!!matched?.id)}; aborted=${String(entries.filter((entry) => entry.aborted).length)}`;
-  }
-
-  private match(url: string): void {
-    const events = [...this.events.entries()].filter(
-      ([, event]) => event.url === url && !event.request,
-    );
-    const requests = [...this.requests.entries()].filter(
-      ([, request]) => request.url === url && !request.id,
-    );
-    if (events.length !== 1 || requests.length !== 1) return;
-    const event = events[0];
-    const request = requests[0];
-    if (!event || !request) return;
-    event[1].request = request[0];
-    request[1].id = event[0];
+    const selected = this.requests.get(request);
+    const event = selected?.id ? this.events.get(selected.id) : undefined;
+    return `identity=${String(!!selected?.id)}; requests=${String(selected?.id ? (this.identities.get(selected.id)?.size ?? 0) : 0)}; started=${String(!!event?.started)}; aborted=${String(!!event?.aborted)}; invalid=${String(!!event?.invalid)}`;
   }
 }
