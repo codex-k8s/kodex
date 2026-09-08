@@ -42,8 +42,9 @@ Git write-back и итоговый owner/profile цикл требуют отд�
   attachments в exact `base_url/project_key` scope;
 - Confluence: 16 операций space/pages/descendants, footer comments и attachments
   в exact `base_url/space_id` scope;
-- электронная почта: health, status и отправка текстового письма через
-  provider-neutral HTTPS bridge с provider-native idempotency;
+- электронная почта: 21 операция health/status, папок, сообщений, threads,
+  вложений, флагов, перемещения, черновиков и SMTP-отправки через типизированный
+  HTTPS bridge; POP3 предоставляет только ограниченный compatibility mode;
 - Mattermost остаётся за отдельным необязательным `interaction-gateway`.
 
 Package также объявляет типизированные output fields, exact network
@@ -102,7 +103,8 @@ GitHub workflow dispatch принимает `workflow_inputs`: JSON-объект
 
 ## Обновление каталога
 
-Версии этого расширения: GitHub `2.2.0`, GitLab/Jira/Confluence `1.2.0`.
+Текущие версии: GitHub `2.3.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
+Mattermost `2.2.0`, Synthetic `3.1.0`.
 Публикация новых packages не расширяет существующие grants автоматически.
 Старая pinned revision не переинтерпретируется: владелец публикует новую
 UI/Git-managed ревизию, явно выполняет rebind/test и выбирает новые capabilities.
@@ -122,7 +124,7 @@ test-integration-synthetic test-integration-gateway-postgres`.
 PG-цель включает подготовку provider capacity: одиночный regex `integration`
 не воспроизводит её fixture и не является поддерживаемой точкой входа.
 
-`TestEveryAdvertisedOperation` вызывает каждую из 121 executable capabilities
+`TestEveryAdvertisedOperation` вызывает каждую из 139 executable capabilities
 текущего каталога, включая неизменённые email/Synthetic. Отдельные проверки
 покрывают scope до credential, version/risk/approval/input mismatch, потерю
 mutation response, 5xx/denial/malformed success, rate limit, pagination,

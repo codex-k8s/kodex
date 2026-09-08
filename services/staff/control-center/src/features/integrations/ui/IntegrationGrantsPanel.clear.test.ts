@@ -9,11 +9,11 @@ import type {
   IntegrationGrantCapabilityCandidate,
 } from "@/shared/api/generated/openapi/types.gen";
 
-const loaders = vi.hoisted(() => ({ projects: vi.fn() }));
+const loaders = vi.hoisted(() => ({ projects: vi.fn(), recipients: vi.fn() }));
 vi.mock("@/features/integrations/grant-candidates", () => ({
   connectionCandidates: () => vi.fn(),
   projectCandidates: () => loaders.projects,
-  recipientCandidates: () => vi.fn(),
+  recipientCandidates: () => loaders.recipients,
   capabilityCandidates: () => vi.fn(),
 }));
 import IntegrationGrantsPanel from "./IntegrationGrantsPanel.vue";
@@ -78,6 +78,14 @@ interface State {
     signal: AbortSignal,
   ): Promise<unknown>;
   chooseProject(option: { ref: string; title: string }): void;
+  chooseRecipient(option: { ref: string; title: string }): void;
+  loadRecipients(
+    query: string,
+    cursor: undefined,
+    signal: AbortSignal,
+  ): Promise<unknown>;
+  recipientContextKey: Ref<string>;
+  capabilityContextKey: Ref<string>;
   projectCandidate: Ref<IntegrationGrantProjectCandidate | undefined>;
   recipientCandidate: Ref<IntegrationGrantRecipientCandidate | undefined>;
   capabilityCandidate: Ref<IntegrationGrantCapabilityCandidate | undefined>;
@@ -174,4 +182,38 @@ it("поздняя страница после очистки не восста�
   state.chooseProject({ ref: "project", title: "Проект" });
   expect(state.projectCandidate.value).toBeUndefined();
   expect(emit).not.toHaveBeenCalled();
+});
+
+it("повторный выбор проекта с новой ревизией синхронно отзывает зависимый выбор", async () => {
+  const { state, emit } = await panel();
+  const previousContext = state.recipientContextKey.value;
+  const refreshed = { ...project, pins: { ...pins, projectVersion: 2 } };
+  loaders.projects.mockResolvedValue({ items: [refreshed], pins, total: 1 });
+  await state.loadProjects("", undefined, new AbortController().signal);
+  emit.mockClear();
+  state.chooseProject({ ref: project.projectRef, title: project.name });
+  state.submit();
+  expect(state.projectCandidate.value).toEqual(refreshed);
+  expect(state.recipientCandidate.value).toBeUndefined();
+  expect(state.capabilityCandidate.value).toBeUndefined();
+  expect(state.recipientContextKey.value).not.toBe(previousContext);
+  expect(emit.mock.calls.some(([name]) => name === "save")).toBe(false);
+  expect(emit).toHaveBeenCalledWith("update:targetRef", "");
+  expect(emit).toHaveBeenCalledWith("update:capabilityKey", "");
+});
+
+it("повторный выбор получателя сбрасывает capability и её загруженные страницы", async () => {
+  const { state, emit } = await panel();
+  const previousContext = state.capabilityContextKey.value;
+  const refreshed = { ...recipient, pins: { ...pins, recipientVersion: 2 } };
+  loaders.recipients.mockResolvedValue({ items: [refreshed], pins, total: 1 });
+  await state.loadRecipients("", undefined, new AbortController().signal);
+  emit.mockClear();
+  state.chooseRecipient({ ref: recipient.recipientRef, title: recipient.name });
+  state.submit();
+  expect(state.recipientCandidate.value).toEqual(refreshed);
+  expect(state.capabilityCandidate.value).toBeUndefined();
+  expect(state.capabilityContextKey.value).not.toBe(previousContext);
+  expect(emit.mock.calls.some(([name]) => name === "save")).toBe(false);
+  expect(emit).toHaveBeenCalledWith("update:capabilityKey", "");
 });
