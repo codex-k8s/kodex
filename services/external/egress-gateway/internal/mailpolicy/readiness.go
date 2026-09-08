@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync/atomic"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 )
 
 const minimumRefreshDelay = 100 * time.Millisecond
@@ -12,11 +14,16 @@ const minimumRefreshDelay = 100 * time.Millisecond
 // Readiness не расширяет pins и не влияет на независимые HTTPS/STT listeners.
 type Readiness struct {
 	policy     *MailActive
-	resolver   Resolver
+	resolver   ReadinessResolver
 	validUntil atomic.Int64
 }
 
-func NewReadiness(active *MailActive, resolver Resolver) *Readiness {
+type ReadinessResolver interface {
+	Resolver
+	Refresh(context.Context, string) (dnsresolver.Snapshot, error)
+}
+
+func NewReadiness(active *MailActive, resolver ReadinessResolver) *Readiness {
 	return &Readiness{policy: active, resolver: resolver}
 }
 
@@ -34,7 +41,7 @@ func (r *Readiness) Check(ctx context.Context) {
 	}
 	var earliest time.Time
 	for _, destination := range r.policy.Destinations() {
-		snapshot, err := r.resolver.Resolve(ctx, destination.Hostname)
+		snapshot, err := r.resolver.Refresh(ctx, destination.Hostname)
 		if err != nil || len(snapshot.Addresses) == 0 || !time.Now().Before(snapshot.ExpiresAt) {
 			r.validUntil.Store(0)
 			return

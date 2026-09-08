@@ -133,7 +133,8 @@ Invalid, partial или digest-mismatched policy не открывает readine
 Mail readiness планирует следующую проверку по фактическому ближайшему TTL,
 если он короче настроенного периодического интервала. Действующий snapshot
 остаётся доступен только до собственного authoritative expiry, а новый
-результат применяется атомарно после полной проверки всех destinations.
+authoritative refresh обходит ещё действующий cache и применяется атомарно
+после полной проверки всех destinations.
 Ошибка refresh, смена pin либо unsafe answer немедленно закрывают mail
 listener. Нижняя граница задержки `100ms` не допускает busy loop при очень
 коротком TTL.

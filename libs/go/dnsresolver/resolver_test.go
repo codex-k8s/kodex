@@ -94,6 +94,28 @@ func TestResolverDoesNotExtendShortTTLOrShareCachedAddresses(t *testing.T) {
 	}
 }
 
+func TestRefreshBypassesAndAtomicallyReplacesValidCache(t *testing.T) {
+	now := time.Unix(1_000, 0)
+	exchange := &sequenceExchanger{a: []string{"93.184.216.34", "8.8.8.8", "10.0.0.1"}, ttl: 10}
+	resolver := newTestResolver(t, exchange)
+	resolver.now = func() time.Time { return now }
+	first, err := resolver.Resolve(t.Context(), "api.openai.com")
+	if err != nil || first.Addresses[0].String() != "93.184.216.34" || exchange.aCalls != 1 {
+		t.Fatal("initial cached snapshot unavailable")
+	}
+	refreshed, err := resolver.Refresh(t.Context(), "api.openai.com")
+	if err != nil || refreshed.Addresses[0].String() != "8.8.8.8" || exchange.aCalls != 2 {
+		t.Fatal("authoritative refresh reused cached snapshot")
+	}
+	readback, err := resolver.Resolve(t.Context(), "api.openai.com")
+	if err != nil || readback.Addresses[0].String() != "8.8.8.8" || exchange.aCalls != 2 {
+		t.Fatal("refreshed snapshot did not replace cache")
+	}
+	if _, err := resolver.Refresh(t.Context(), "api.openai.com"); err == nil || resolver.Healthy() || len(resolver.cache) != 0 {
+		t.Fatal("failed refresh retained a stale cache fallback")
+	}
+}
+
 func TestResolverRejectsCancelledCacheAndExpiredResolution(t *testing.T) {
 	now := time.Unix(1_000, 0)
 	exchange := &sequenceExchanger{a: []string{"93.184.216.34"}, ttl: 5}
