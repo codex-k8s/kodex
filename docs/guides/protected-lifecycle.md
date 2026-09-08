@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.2
+version: 1.1.3
 updated: 2026-09-08
 ---
 
@@ -287,3 +287,13 @@ component, contract, render и lifecycle suites выполняются по `GOV
 Связанные документы: `AGENT-DOC-001`, `GO-DOC-001`, `GO-DOC-002`,
 `GO-DOC-004`, `GO-DOC-005`, `GUIDE-DOC-003`, `GUIDE-DOC-004`,
 `INFRA-DOC-001`.
+
+При сравнении delivery precondition с общим OCC агрегата служебный HEALTH или
+изменение отдельного grant не должны молча становиться отзывом неизменённой
+конфигурации. Исключение оформляется закрытым набором typed transitions и
+owner-transaction append-only receipt exact previous/current version. Исходный
+immutable snapshot/version не переписывается, прежний неизвестный drift не
+усыновляется, а real revoke/config/credential transitions сохраняют отказ.
+Все readers нового receipt вводятся до writers либо в явном maintenance окне;
+старый reader rollback после активации не считается совместимым. Для mailbox
+точная карта и recovery находятся в `OPS-EMAIL-1037`.

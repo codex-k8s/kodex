@@ -21,7 +21,7 @@ const checkpoint = (journal, step, result) => { journal.append({ type: 'CHECKPOI
 const operations = ['HEALTH', 'MAILBOXES', 'LIST', 'SEARCH', 'FETCH', 'DOWNLOAD', 'SEND', 'REPLY', 'REPLY_ALL', 'FORWARD', 'DELETE', 'RECEIPT', 'THREAD', 'ATTACHMENTS', 'MARK_READ', 'MARK_UNREAD', 'MOVE', 'ARCHIVE', 'DRAFT_CREATE', 'DRAFT_UPDATE', 'DRAFT_DELETE'];
 const kinds = { ca: 'CA_CERTIFICATE', username: 'USERNAME', secret: 'AUTH_SECRET' };
 const definition = JSON.parse(readFileSync(new URL('../../contracts/integrations/v1/definitions/email.yaml', import.meta.url)));
-const phases = ['recover-health', 'recover-invalid', 'plan', 'inspect', 'connection', 'credentials', 'publish', 'bind', 'readback', 'health', 'grants', 'receipt'];
+const phases = ['recover-publication', 'recover-health', 'recover-invalid', 'plan', 'inspect', 'connection', 'credentials', 'publish', 'bind', 'readback', 'health', 'grants', 'receipt'];
 const configurationPhases = ['connection', 'credentials', 'publish', 'bind', 'grants'];
 
 export function validateEmailProfile(profile) {
@@ -49,6 +49,8 @@ function mailboxPin(body, connectionRef) {
   check(body?.connectionRef === connectionRef && body.configuration?.kind === 'EMAIL_MAILBOX' && body.configuration.managedBy === 'UI', 'MAILBOX_SCOPE_MISMATCH');
   check(['DRAFT', 'VALID', 'INVALID', 'PUBLISHED'].includes(body.revision?.state), 'REVISION_STATE_INVALID');
   const result = { connectionRef, mailboxRef: ref(body.mailboxRef), connectionVersion: positive(body.connectionVersion), configurationRef: ref(body.configuration.ref), configurationVersion: positive(body.configuration.version), revisionRef: ref(body.revision.ref), revisionDigest: digest(body.revision.digest), state: body.revision.state };
+  result.boundRevisionRef = body.boundRevisionRef || '';
+  result.canBind = body.nextActions?.some((action) => action.action === 'BIND' && action.enabled === true) === true;
   if (body.publication) {
     const p = body.publication;
     check(p.configurationRevisionRef === result.revisionRef && ['PENDING', 'READY', 'FAILED', 'SUPERSEDED'].includes(p.state), 'PUBLICATION_SCOPE_MISMATCH');
@@ -62,7 +64,7 @@ function mailboxPin(body, connectionRef) {
 export async function emailAcceptance({ phase, profile, credentials, grantInput, recovery, journal, get, request, preflight, invocationRef, projectRef, timeoutMs = 1200000, now = Date.now, sleep = (ms) => new Promise((done) => setTimeout(done, ms)) }) {
   const slots = validateEmailProfile(profile); await preflight();
   check(!journal.events[0]?.predecessorSHA256 || !['connection', 'credentials'].includes(phase), 'RECOVERY_CREATE_FORBIDDEN');
-  if (phase === 'recover-health') {
+  if (['recover-health', 'recover-publication'].includes(phase)) {
     check(recovery?.kind === 'HEALTH' && journal.events[0].predecessorSHA256 === recovery.sha256, 'RECOVERY_PREDECESSOR_REQUIRED');
     for (const [step, value] of Object.entries(recovery.pins)) if (!saved(journal, step)) checkpoint(journal, step, value);
   }
@@ -134,12 +136,28 @@ export async function emailAcceptance({ phase, profile, credentials, grantInput,
     check(pin.state === 'PUBLISHED' && pin.connectionVersion === current.version, 'BINDING_VERSION_CHANGED');
     return mutate('bind', 'POST', `${revisionPath(pin)}/binding`, { connectionRef: connection.connectionRef, expectedConnectionVersion: current.version }, 200, pin.configurationVersion, (body) => { const result = mailboxPin(body, connection.connectionRef); check(result.publication, 'PUBLICATION_REQUIRED'); return result; });
   }
+  if (phase === 'recover-publication') {
+    let restored = saved(journal, 'recovery-bind');
+    if (!restored) {
+      const current = await currentConnection();
+      check(current.state === 'DEGRADED' && current.version === recovery.terminalVersion && current.version === recovery.previousHealth.connectionVersion + 1 && current.lastTestedAt === recovery.terminalTestedAt && typeof current.lastTestOutcome === 'string' && hash(current.lastTestOutcome) === recovery.terminalOutcomeSHA256, 'HEALTH_TERMINAL_CHANGED');
+      const pin = await readMailbox(); const previous = recovery.pins.bind;
+      check(pin.state === 'PUBLISHED' && pin.connectionVersion === current.version && !pin.boundRevisionRef && pin.canBind && pin.publication?.state === 'SUPERSEDED' && pin.publication.ref === previous.publication.ref && pin.publication.revision === previous.publication.revision && pin.publication.digest === previous.publication.digest, 'SUPERSEDED_PUBLICATION_CHANGED');
+      // Новый forward BIND прежней immutable revision, никогда не повтор TEST.
+      restored = await mutate('recovery-bind', 'POST', `${revisionPath(pin)}/binding`, { connectionRef: connection.connectionRef, expectedConnectionVersion: current.version }, 200, pin.configurationVersion, (body) => {
+        const value = mailboxPin(body, connection.connectionRef);
+        check(value.configurationRef === pin.configurationRef && value.revisionRef === pin.revisionRef && value.revisionDigest === pin.revisionDigest && value.mailboxRef === pin.mailboxRef && value.publication && value.publication.ref !== previous.publication.ref && value.publication.revision > previous.publication.revision, 'FORWARD_PUBLICATION_INVALID');
+        return value;
+      });
+    }
+    if (saved(journal, 'bind')?.publication?.ref !== restored.publication.ref) checkpoint(journal, 'bind', restored);
+  }
   const bound = saved(journal, 'bind'); check(bound?.publication, 'BIND_ACK_REQUIRED');
   const publication = async () => {
     const pin = await readMailbox(); check(pin.publication?.ref === bound.publication.ref && pin.publication.revision === bound.publication.revision && pin.publication.digest === bound.publication.digest && pin.revisionDigest === bound.revisionDigest, 'PUBLICATION_CHANGED');
     check(!['FAILED', 'SUPERSEDED'].includes(pin.publication.state), 'PUBLICATION_FAILED'); return pin;
   };
-  if (phase === 'readback') {
+  if (phase === 'readback' || phase === 'recover-publication') {
     const deadline = now() + timeoutMs;
     for (;;) {
       check(now() < deadline, 'PUBLICATION_READBACK_DEADLINE'); const pin = await publication();
@@ -273,15 +291,15 @@ async function main() {
   while (args.length) { const key = args.shift(); check(/^--[a-z][a-z0-9-]*$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
   check(phases.includes(phase), 'PHASE_INVALID');
   check(Object.keys(options).every((k) => ['--origin', '--storage-state', '--state', '--profile', '--previous-state', '--previous-sha256', '--previous-profile', '--terminal-version', '--terminal-tested-at', '--terminal-outcome-sha256', '--credentials', '--grant-input', '--serving-manifest', '--timeout-ms', '--confirm', '--invocation-ref', '--project-ref'].includes(k)), 'ARGUMENT_UNKNOWN');
-  check(options['--confirm'] === (phase === 'recover-health' ? 'RECOVER-STAGING-TERMINAL-MAILBOX-HEALTH' : phase === 'recover-invalid' ? 'RECOVER-STAGING-INVALID-MAILBOX' : configurationPhases.includes(phase) ? 'CONFIGURE-STAGING-MAILBOX' : phase === 'health' ? 'CHECK-STAGING-MAILBOX-HEALTH' : undefined), 'CONFIRMATION_INVALID');
+  check(options['--confirm'] === (phase === 'recover-publication' ? 'RECOVER-STAGING-SUPERSEDED-MAILBOX' : phase === 'recover-health' ? 'RECOVER-STAGING-TERMINAL-MAILBOX-HEALTH' : phase === 'recover-invalid' ? 'RECOVER-STAGING-INVALID-MAILBOX' : configurationPhases.includes(phase) ? 'CONFIGURE-STAGING-MAILBOX' : phase === 'health' ? 'CHECK-STAGING-MAILBOX-HEALTH' : undefined), 'CONFIRMATION_INVALID');
   check((phase === 'credentials') === Boolean(options['--credentials']), 'CREDENTIAL_PHASE_REQUIRED');
   check((phase === 'grants') === Boolean(options['--grant-input']), 'GRANT_PHASE_REQUIRED');
   check(phase === 'receipt' ? Boolean(options['--invocation-ref'] && options['--project-ref']) : !options['--invocation-ref'] && !options['--project-ref'], 'RECEIPT_ARGUMENTS_INVALID');
   const origin = exactOrigin(options['--origin'] ?? ''); check(new URL(origin).protocol === 'https:' && !/prod(?:uction)?/i.test(new URL(origin).hostname), 'STAGING_ORIGIN_REQUIRED');
   const recoveryArguments = ['--previous-state', '--previous-sha256', '--previous-profile'];
-  check(phase === 'recover-invalid' ? recoveryArguments.every((key) => options[key]) : phase === 'recover-health' ? options['--previous-state'] && options['--previous-sha256'] && !options['--previous-profile'] : recoveryArguments.every((key) => !options[key]), 'RECOVERY_ARGUMENTS_INVALID');
+  check(phase === 'recover-invalid' ? recoveryArguments.every((key) => options[key]) : ['recover-health', 'recover-publication'].includes(phase) ? options['--previous-state'] && options['--previous-sha256'] && !options['--previous-profile'] : recoveryArguments.every((key) => !options[key]), 'RECOVERY_ARGUMENTS_INVALID');
   const terminalArguments = ['--terminal-version', '--terminal-tested-at', '--terminal-outcome-sha256'];
-  check(phase === 'recover-health' ? terminalArguments.every((key) => options[key]) : terminalArguments.every((key) => !options[key]), 'TERMINAL_ARGUMENTS_INVALID');
+  check(['recover-health', 'recover-publication'].includes(phase) ? terminalArguments.every((key) => options[key]) : terminalArguments.every((key) => !options[key]), 'TERMINAL_ARGUMENTS_INVALID');
   let recovery = phase === 'recover-invalid' ? emailRecoveryPredecessor(options['--previous-state'], options['--previous-sha256'], privateInput(options['--previous-profile']), origin) : undefined;
   if (recovery) {
     const path = resolve(options['--profile']); check(path !== resolve(options['--previous-profile']) && resolve(options['--state']) !== resolve(options['--previous-state']), 'RECOVERY_PATH_REUSED');
@@ -291,7 +309,7 @@ async function main() {
     else { const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); } const dirFD = openSync(directory, constants.O_RDONLY); try { fsyncSync(dirFD); } finally { closeSync(dirFD); } }
   }
   const raw = privateInput(options['--profile']); const profile = JSON.parse(raw); validateEmailProfile(profile);
-  if (phase === 'recover-health') {
+  if (['recover-health', 'recover-publication'].includes(phase)) {
     check(resolve(options['--state']) !== resolve(options['--previous-state']), 'RECOVERY_PATH_REUSED');
     recovery = emailHealthPredecessor(options['--previous-state'], options['--previous-sha256'], raw, origin, { version: Number(options['--terminal-version']), testedAt: options['--terminal-tested-at'], outcomeSHA256: options['--terminal-outcome-sha256'] });
   }

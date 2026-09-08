@@ -1012,6 +1012,9 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestUpdateIntegrationConnectionsStateMaskedCredentialsStateLastTestSummary, connectionID, nextConnection, credentials, summary).Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if err := advanceMailboxObservation(ctx, tx, scope.organizationID, connectionID, item.Version-1, item.Version); err != nil {
+		return commandOutcome{}, err
+	}
 	item, err := readConnection(ctx, tx, scope, connectionRef)
 	if err != nil {
 		return commandOutcome{}, err

@@ -42,7 +42,7 @@ globalThis.fetch=async(url,init={})=>{
 };`, { mode: 0o600 });
   const run = (phase, extra = [], automatic = true) => {
     put('activeState', files.state);
-    const flags = automatic ? phase === 'recover-health' ? ['--confirm', 'RECOVER-STAGING-TERMINAL-MAILBOX-HEALTH'] : phase === 'recover-invalid' ? ['--confirm', 'RECOVER-STAGING-INVALID-MAILBOX'] : mutationPhases.includes(phase) ? ['--confirm', 'CONFIGURE-STAGING-MAILBOX'] : phase === 'health' ? ['--confirm', 'CHECK-STAGING-MAILBOX-HEALTH'] : [] : [];
+    const flags = automatic ? phase === 'recover-publication' ? ['--confirm', 'RECOVER-STAGING-SUPERSEDED-MAILBOX'] : phase === 'recover-health' ? ['--confirm', 'RECOVER-STAGING-TERMINAL-MAILBOX-HEALTH'] : phase === 'recover-invalid' ? ['--confirm', 'RECOVER-STAGING-INVALID-MAILBOX'] : mutationPhases.includes(phase) ? ['--confirm', 'CONFIGURE-STAGING-MAILBOX'] : phase === 'health' ? ['--confirm', 'CHECK-STAGING-MAILBOX-HEALTH'] : [] : [];
     if (phase === 'credentials') flags.push('--credentials', files.credentials);
     if (phase === 'grants') flags.push('--grant-input', files.grant);
     return spawnSync(process.execPath, ['--import', files.loader, join(scripts, 'email-mailbox-acceptance.mjs'), phase, '--origin', origin, '--storage-state', files.storage, '--state', files.state, '--profile', files.profile, '--serving-manifest', files.manifest, '--timeout-ms', '1000', ...flags, ...extra], { encoding: 'utf8', timeout: 8000 });
@@ -159,4 +159,39 @@ test('health recovery requires actual lastTestOutcome field and refuses prior UN
   const invalid = `${p.previous}.unknown`; writeFileSync(invalid, changed, {mode:0o600});
   const args = [...p.args]; args[args.indexOf('--previous-state')+1] = invalid; args[args.indexOf('--previous-sha256')+1] = createHash('sha256').update(changed).digest('hex'); f.files.state += '.unknown';
   assert.notEqual(f.run('recover-health', args).status, 0); assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, 1); assert.deepEqual(readFileSync(p.previous), p.bytes);
+});
+
+function publicationPredecessor(f) {
+  const previous = healthPredecessor(f);
+  const owner = JSON.parse(readFileSync(f.files.owner)); owner.superseded = true; f.put('owner', owner);
+  return previous;
+}
+test('public CLI: removed SUPERSEDED binding → one forward BIND, same published revision, no TEST', (t) => {
+  const f = fixture(t); const p = publicationPredecessor(f);
+  const before = f.calls().filter((c) => c.method !== 'GET').length;
+  const value = f.pass('recover-publication', p.args); assert.equal(value.status, 'PASS'); assert.equal(value.providerEffect, 'NOT_RUN'); assert.equal(value.revisionRef, 'mrev_email'); assert.equal(value.publication.ref, 'empub_email_forward');
+  f.pass('recover-publication', p.args); f.pass('readback');
+  assert.equal(f.calls().filter((c) => c.method !== 'GET').length, before + 1);
+  assert.equal(f.events().filter((e) => e.type === 'INTENT').length, 1);
+  assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, 1);
+  assert.deepEqual(readFileSync(p.previous), p.bytes);
+  // Следующий TEST требует отдельного публичного effect gate.
+  f.pass('health'); assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, 2);
+});
+for (const mode of ['lost-ack', 'rejected', 'expired']) test(`public CLI forward publication ${mode}: no repeated BIND or TEST`, (t) => {
+  const f = fixture(t); const p = publicationPredecessor(f); f.mode(mode);
+  assert.notEqual(f.run('recover-publication', p.args).status, 0);
+  if (mode !== 'expired') { f.mode(''); assert.notEqual(f.run('recover-publication', p.args).status, 0); }
+  assert.equal(f.calls().filter((c) => c.path.endsWith('/binding')).length, mode === 'expired' ? 1 : 2);
+  assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, 1);
+  assert.deepEqual(readFileSync(p.previous), p.bytes);
+});
+for (const variant of ['active', 'denied', 'version', 'revision']) test(`forward publication ${variant} rejects before mutation`, (t) => {
+  const f = fixture(t); const p = publicationPredecessor(f); const owner = JSON.parse(readFileSync(f.files.owner));
+  if (variant === 'active') owner.superseded = false;
+  if (variant === 'denied') owner.bindingDenied = true;
+  if (variant === 'version') owner.version++;
+  if (variant === 'revision') owner.revisionRef = 'mrev_other';
+  f.put('owner', owner); assert.notEqual(f.run('recover-publication', p.args).status, 0);
+  assert(!f.events().some((e) => e.type === 'INTENT'));
 });

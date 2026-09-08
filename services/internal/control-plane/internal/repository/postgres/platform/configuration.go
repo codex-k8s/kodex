@@ -512,6 +512,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		if err := advanceMailboxObservation(ctx, tx, scope.organizationID, connectionID, item.Version-1, item.Version); err != nil {
+			return commandOutcome{}, err
+		}
 		testRef, _ := newRef("tst")
 		if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionTestsRefConnectionIdCreatedBy, testRef, scope.organizationID, connectionID, scope.actorID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
@@ -778,6 +781,9 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	}
 	if tag.RowsAffected() != 1 {
 		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	if err := advanceMailboxObservation(ctx, tx, scope.organizationID, connectionID, connectionVersion, connectionVersion+1); err != nil {
+		return commandOutcome{}, err
 	}
 	connection, err := readConnection(ctx, tx, scope, payload.ConnectionRef)
 	if err != nil {
