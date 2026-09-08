@@ -4,8 +4,8 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.4.0
-updated: 2026-09-08
+version: 1.4.1
+updated: 2026-09-09
 ---
 
 # Удалённый hot-reload контур Kodex
@@ -251,6 +251,23 @@ bootstrap, сброса состояния или обязательного Tel
 Vite отслеживают изменения исходников без пересборки полного release image.
 Тяжёлые runtime/supply-chain образы пересобираются только при изменении их
 входов и импортируются напрямую в containerd k3s.
+
+Dev reload client PWA читает revision отдельным запросом с timeout 3 секунды;
+следующий poll запускается через 1 секунду после завершения прежнего. `pagehide`
+останавливает таймер и отменяет fetch/body, `pageshow` возобновляет один цикл.
+Повторная установка клиента завершает предыдущий экземпляр; поздняя revision
+отменённого запроса не принимается. Только корректная revision от exact endpoint
+может инициировать один reload. При обычном outage/reject клиент продолжает
+ограниченный polling; это не исключение из UI `pageerror` проверок.
+
+Локальный public lifecycle профиль PWA:
+`npx playwright test --config e2e/dev-reload.fixture.config.ts --retries 0`.
+Он не использует staging и проверяет Chromium/Firefox/WebKit с observer и без,
+pagehide/pageshow, native timeout и отсутствие reload loop. Для изменений
+`vite.config.ts` нужно доставить новый source штатным scoped workflow PWA;
+пересборка application image ради SHA не требуется. После доставки отдельно
+проверяется live UI; локальные fixtures не доказывают причину исторического
+исключения `/__kodex_dev_reload.js` из #1358.
 
 `e2e` запускает только browser discovery и остаётся диагностической командой.
 `acceptance` требует чистый exact SHA оснастки до и после выполнения и

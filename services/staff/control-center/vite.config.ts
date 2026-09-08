@@ -96,38 +96,84 @@ function controlCenterRemoteReloadPlugin(): Plugin {
   };
 }
 
-function remoteReloadClientSource(): string {
+export const controlCenterReloadTimeoutMs = 3_000;
+
+export function remoteReloadClientSource(): string {
   return `
-const revisionEndpoint = ${JSON.stringify(controlCenterRevisionPath)};
-const pollIntervalMs = ${String(controlCenterReloadPollIntervalMs)};
-let observedRevision;
+(() => {
+  const revisionEndpoint = ${JSON.stringify(controlCenterRevisionPath)};
+  const pollIntervalMs = ${String(controlCenterReloadPollIntervalMs)};
+  const timeoutMs = ${String(controlCenterReloadTimeoutMs)};
+  const key = Symbol.for("kodex.dev.reload");
+  window[key]?.dispose();
+  let observedRevision;
+  let timer;
+  let active;
+  let paused = false;
+  let disposed = false;
+  let reloading = false;
 
-async function pollRevision() {
-  try {
-    const response = await fetch(revisionEndpoint, {
-      cache: "no-store",
-      credentials: "same-origin",
-    });
-    const responseLocation = new URL(response.url);
-    if (
-      response.ok &&
-      responseLocation.origin === window.location.origin &&
-      responseLocation.pathname === revisionEndpoint
-    ) {
-      const revision = await response.text();
-      if (observedRevision !== undefined && revision !== observedRevision) {
-        window.location.reload();
-        return;
-      }
-      observedRevision = revision;
-    }
-  } catch {
-    // Следующий bounded poll восстановит live reload после краткого outage.
+  function clearTimer() {
+    if (timer !== undefined) window.clearTimeout(timer);
+    timer = undefined;
   }
-  window.setTimeout(pollRevision, pollIntervalMs);
-}
-
-void pollRevision();
+  function pause() {
+    paused = true;
+    clearTimer();
+    active?.controller.abort();
+  }
+  function dispose() {
+    disposed = true;
+    pause();
+    window.removeEventListener("pagehide", pause);
+    window.removeEventListener("pageshow", resume);
+  }
+  function schedule() {
+    if (disposed || paused || reloading || active || timer !== undefined) return;
+    timer = window.setTimeout(() => { timer = undefined; pollRevision(); }, pollIntervalMs);
+  }
+  function resume() {
+    if (!paused || disposed || reloading) return;
+    paused = false;
+    schedule();
+  }
+  function pollRevision() {
+    if (disposed || paused || reloading || active) return;
+    const controller = new AbortController();
+    const attempt = { controller, timeout: undefined };
+    active = attempt;
+    attempt.timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    const current = () => active === attempt && !disposed && !paused && !reloading && !controller.signal.aborted;
+    const finish = () => {
+      window.clearTimeout(attempt.timeout);
+      if (active === attempt) active = undefined;
+      schedule();
+    };
+    // Обработчики обеих ветвей устанавливаются сразу; завершение отменённого
+    // документа не запускает новый poll и не принимает поздний revision.
+    Promise.resolve().then(() => {
+      if (!current()) return;
+      return fetch(revisionEndpoint, { cache: "no-store", credentials: "same-origin", signal: controller.signal })
+        .then(response => {
+          if (!current() || !response.ok) return;
+          const address = new URL(response.url);
+          if (address.origin !== window.location.origin || address.pathname !== revisionEndpoint) return;
+          return response.text().then(revision => {
+            if (!current() || !/^[a-f0-9-]{36}:[0-9]{1,12}$/.test(revision)) return;
+            if (observedRevision !== undefined && revision !== observedRevision) {
+              reloading = true;
+              clearTimer();
+              window.location.reload();
+            } else observedRevision = revision;
+          });
+        });
+    }).then(finish, finish);
+  }
+  window[key] = { dispose };
+  window.addEventListener("pagehide", pause);
+  window.addEventListener("pageshow", resume);
+  pollRevision();
+})();
 `;
 }
 
