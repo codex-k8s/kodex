@@ -268,6 +268,11 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 			items = present
 		}
 		output := map[string]any{"items": items}
+		// Только страницы с обязательным terminal cursor по OpenAPI; optional
+		// страницы сохраняют прежнюю форму без нового поля.
+		if requiresTerminalCursor(message) {
+			output["nextPageToken"] = ""
+		}
 		if pageValue, ok := value["page"].(map[string]any); ok {
 			if next, ok := pageValue["nextPageToken"].(string); ok && next != "" {
 				output["nextPageToken"] = next
@@ -940,3 +945,20 @@ func gateDecision(value string) controlplanev1.OwnerGateDecision {
 }
 
 func jsonEncoder(writer io.Writer) *json.Encoder { return json.NewEncoder(writer) }
+
+// Реестр связывает обязательное public поле с типом owner response,
+// а не с неоднозначными именами collections вроде revisions/definitions.
+func requiresTerminalCursor(message proto.Message) bool {
+	switch message.(type) {
+	case *controlplanev1.ListIntegrationConnectionsResponse,
+		*controlplanev1.ListSchedulesResponse,
+		*controlplanev1.ListAuditEventsResponse,
+		*controlplanev1.ListScheduleRevisionsResponse,
+		*controlplanev1.ListScheduleRunsResponse,
+		*controlplanev1.ListRoleImageRecipeRevisionsResponse,
+		*controlplanev1.ListProviderDefinitionsResponse:
+		return true
+	default:
+		return false
+	}
+}
