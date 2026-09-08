@@ -124,7 +124,7 @@ node tools/release/scoped-release.mjs apply \
 ## Локальная проверка механизма
 
 ```bash
-node --test tools/release/scoped-release.test.mjs tools/release/application-source.test.mjs tools/release/worker-grant-transition.test.mjs
+node --test tools/release/scoped-release.test.mjs tools/release/application-source.test.mjs tools/release/worker-grant-transition.test.mjs tools/release/image-writer-capability.test.mjs
 ```
 
 Проверяются изоляция sidecar sources, сохранение trust/env, отказ небезопасной
@@ -137,6 +137,10 @@ node --test tools/release/scoped-release.test.mjs tools/release/application-sour
 
 Переход Recreate/v1 → instance grants/v2 → RollingUpdate выполняет отдельный
 `worker-grant-transition.mjs`: [порядок, ограничения и evidence](../../docs/operations/independent-releases.md#управляемая-активация-disposable-hot-reload).
+Для единственного image writer `role-image-builder` используется закрытый
+`role-image-builder-writer-capability.json`: exact image + CRI/process readback
+через SRE host root. Новых CLI flags нет; CP reader/source guards сохраняются.
+
 
 `runner-policy-transition.mjs`: [отдельная выкладка runner base и admission policy](../../docs/operations/runner-policy-release.md).
 Профиль использует разрешённое окно остановки приложения, сохраняет прежние

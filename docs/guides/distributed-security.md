@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.20
+version: 1.4.21
 updated: 2026-09-07
 ---
 
@@ -34,6 +34,13 @@ Release guard учитывает всех grant writers: обычные конт
 каждого writer. Пропуск native sidecar не разрешает overlap v1. Активация,
 доказательство двух durable instances и изменение стратегии являются разными
 CAS-переходами; application release сам не включает новый формат grants.
+
+Image writer допускается release guard только через закрытую repo-owned
+capability запись: exact image digest, воспроизводимый source/build recipe и
+hash фактического executable. Pod UID, container ID/imageID и process start
+identity проверяются повторно до CAS и после observation; metadata аннотации
+или имя image не доказывают совместимость. Такое исключение не переносится
+на readers или другие workloads и не меняет grants/floors/replay policy.
 
 Refresh namespace не удаляет последнюю копию ключей retained ciphertext.
 Bootstrap/rotation сначала сохраняет отдельный immutable backup, подтверждает
