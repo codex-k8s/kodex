@@ -2,12 +2,19 @@ import { test, expect, type Request } from "@playwright/test";
 import { loadE2ESessionRenewalEnvironment } from "./environment";
 import {
   geometry,
+  checkCondition,
+  checkGeometry,
+  observeCondition,
+  focused,
   visit,
   observeActionResponse,
 } from "./ui-acceptance-browser";
 import { installProtocolObserver } from "./session-renewal-proof";
 import {
   createJournal,
+  conditionFailure,
+  selectedVariants,
+  type Condition,
   permittedRequest,
   projectRefs,
   versionsFromEnvironment,
@@ -75,6 +82,7 @@ test("широкая UI-приёмка сохраняет независимые
     !/^[a-z][a-z0-9-]{3,60}$/.test(environment.resourcePrefix)
   )
     throw new Error("Invalid UI fixture profile");
+  const selection = selectedVariants(process.env.KODEX_E2E_UI_VARIANTS, mode);
   const journal = await createJournal(rawJournal, versions, browserName);
   const variants: Variant[] = [];
   const deadline = Date.now() + environment.runTimeoutMs - 30_000;
@@ -144,6 +152,7 @@ test("широкая UI-приёмка сохраняет независимые
     status: Variant["status"],
     reason: Reason,
     metrics: Variant["metrics"] = {},
+    condition?: Condition,
   ) => {
     const value: Variant = {
       id,
@@ -153,6 +162,7 @@ test("широкая UI-приёмка сохраняет независимые
       locale,
       width,
       metrics,
+      ...(condition === undefined ? {} : { condition }),
       timestampUTC: new Date().toISOString(),
     };
     variants.push(value);
@@ -164,6 +174,13 @@ test("широкая UI-приёмка сохраняет независимые
     action: () => Promise<Variant["metrics"]>,
     available = true,
   ): Promise<boolean> => {
+    if (
+      selection &&
+      !selection.has(id) &&
+      id !== "initial-session-shell" &&
+      !id.startsWith("locale-")
+    )
+      return false;
     if (commonBlocked || !available || Date.now() >= deadline) {
       await record(
         id,
@@ -180,16 +197,31 @@ test("широкая UI-приёмка сохраняет независимые
     const before = { ...counters };
     try {
       const metrics = await action();
-      await expect.poll(() => pendingReads.size, { timeout: 15_000 }).toBe(0);
+      await observeCondition(
+        "API_READINESS",
+        () => expect.poll(() => pendingReads.size, { timeout: 15_000 }).toBe(0),
+        () => Promise.resolve(pendingReads.size),
+        0,
+      );
       const settled = await geometry(page);
-      expect(settled.overflow).toBeLessThanOrEqual(1);
-      expect(settled.alerts).toBe(0);
-      expect(settled.untranslated).toBe(false);
-      expect(counters.httpErrors - before.httpErrors).toBe(0);
-      expect(counters.pageErrors - before.pageErrors).toBe(0);
-      expect(counters.networkErrors - before.networkErrors).toBe(0);
-      expect(counters.consoleErrors - before.consoleErrors).toBe(0);
-      expect(counters.blockedWrites - before.blockedWrites).toBe(0);
+      checkGeometry(settled);
+      checkCondition("HTTP_ERRORS", counters.httpErrors - before.httpErrors, 0);
+      checkCondition("PAGE_ERRORS", counters.pageErrors - before.pageErrors, 0);
+      checkCondition(
+        "NETWORK_ERRORS",
+        counters.networkErrors - before.networkErrors,
+        0,
+      );
+      checkCondition(
+        "CONSOLE_ERRORS",
+        counters.consoleErrors - before.consoleErrors,
+        0,
+      );
+      checkCondition(
+        "BLOCKED_WRITES",
+        counters.blockedWrites - before.blockedWrites,
+        0,
+      );
       await record(id, ids, "PASS", "OBSERVED", {
         ...metrics,
         settledOverflow: settled.overflow,
@@ -209,13 +241,22 @@ test("широкая UI-приёмка сохраняет независимые
         await record(id, ids, "NOT RUN", "FIXTURE_UNAVAILABLE");
         return false;
       }
-      await record(id, ids, "FAIL", "UI_ASSERTION_FAILED", {
-        httpErrors: counters.httpErrors - before.httpErrors,
-        pageErrors: counters.pageErrors - before.pageErrors,
-        blockedWrites: counters.blockedWrites - before.blockedWrites,
-        networkErrors: counters.networkErrors - before.networkErrors,
-        consoleErrors: counters.consoleErrors - before.consoleErrors,
-      });
+      const failure = conditionFailure(error);
+      await record(
+        id,
+        ids,
+        "FAIL",
+        "UI_ASSERTION_FAILED",
+        {
+          ...failure.metrics,
+          httpErrors: counters.httpErrors - before.httpErrors,
+          pageErrors: counters.pageErrors - before.pageErrors,
+          blockedWrites: counters.blockedWrites - before.blockedWrites,
+          networkErrors: counters.networkErrors - before.networkErrors,
+          consoleErrors: counters.consoleErrors - before.consoleErrors,
+        },
+        failure.condition,
+      );
       return false;
     }
   };
@@ -459,15 +500,21 @@ test("широкая UI-приёмка сохраняет независимые
         const trigger = page.locator(
           ".topbar-project-picker .async-picker__trigger",
         );
-        await trigger.click();
+        await observeCondition("SELECTOR_OPEN", () => trigger.click());
         const input = page.locator(
           ".async-picker__popover input[role=combobox]",
         );
-        await expect(input).toBeFocused();
+        await focused("SELECTOR_FOCUS", input);
         await input.press("ArrowDown");
         await input.press("Escape");
-        await expect(page.locator(".async-picker__popover")).toHaveCount(0);
-        await expect(trigger).toBeFocused();
+        const popover = page.locator(".async-picker__popover");
+        await observeCondition(
+          "SELECTOR_ESCAPE",
+          () => expect(popover).toHaveCount(0),
+          () => popover.count(),
+          0,
+        );
+        await focused("SELECTOR_RETURN_FOCUS", trigger);
         return { focusReturned: true };
       },
     );
@@ -550,26 +597,66 @@ test("широкая UI-приёмка сохраняет независимые
         ["MVP-UI-09"],
         async () => {
           await visit(page, "/");
-          await page
-            .getByRole("button", {
-              name: locale === "ru" ? "Открыть Kodex" : "Open Kodex",
-              exact: true,
-            })
-            .click();
           const dialog = page.getByRole("dialog", {
             name: "Kodex",
             exact: true,
           });
-          await expect(dialog).toBeVisible();
-          const result = await geometry(page);
-          expect(result.overflow).toBeLessThanOrEqual(1);
-          await page.keyboard.press("Escape");
-          await expect(dialog).toHaveCount(0);
-          return { openedAndClosed: true, overflow: result.overflow };
+          try {
+            await observeCondition("ASSISTANT_OPEN", () =>
+              page
+                .getByRole("button", {
+                  name: locale === "ru" ? "Открыть Kodex" : "Open Kodex",
+                  exact: true,
+                })
+                .click(),
+            );
+            await observeCondition(
+              "ASSISTANT_VISIBLE",
+              () => expect(dialog).toBeVisible(),
+              () => dialog.isVisible(),
+              true,
+            );
+            const result = await geometry(page);
+            checkGeometry(result);
+            await focused("ASSISTANT_FOCUS", dialog);
+            await page.keyboard.press("Escape");
+            await observeCondition(
+              "ASSISTANT_ESCAPE",
+              () => expect(dialog).toHaveCount(0),
+              () => dialog.count(),
+              0,
+            );
+            return { openedAndClosed: true, overflow: result.overflow };
+          } finally {
+            if (await dialog.isVisible().catch(() => false)) {
+              const cleaned = await dialog
+                .getByRole("button", {
+                  name: locale === "ru" ? "Закрыть" : "Close",
+                  exact: true,
+                })
+                .click()
+                .then(() => expect(dialog).toHaveCount(0))
+                .then(
+                  () => true,
+                  () => false,
+                );
+              if (!cleaned) {
+                commonBlocked = true;
+                await record(
+                  `assistant-cleanup-${String(width)}`,
+                  ["MVP-UI-09"],
+                  "FAIL",
+                  "UI_ASSERTION_FAILED",
+                  { measurementAvailable: false },
+                  "CLEANUP",
+                );
+              }
+            }
+          }
         },
       );
     }
-    if (!projects.length)
+    if (!selection && !projects.length)
       await record(
         "project-scope-required-fixture",
         ["MVP-UI-27", "MVP-UI-44", "MVP-UI-48"],
