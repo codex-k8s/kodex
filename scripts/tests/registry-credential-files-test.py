@@ -92,13 +92,14 @@ class CredentialFiles(unittest.TestCase):
             digest = "sha256:" + "a"*64
             for name in ["RUNNER", "FRONTEND", "ROLE_INPUT"]:
                 environment["KODEX_"+name+"_DIGEST"] = digest
-            environment.update(KODEX_FRONTEND_REFERENCE="public.invalid/frontend@"+digest,
+            environment.update(KODEX_SEED_COMPONENT="all", KODEX_SEED_READBACK_ONLY="false",
+                               KODEX_FRONTEND_REFERENCE="public.invalid/frontend@"+digest,
                                KODEX_SOURCE_REVISION="b"*40)
             if case == "seed":
                 source = SEED.read_text()
-                body = source.split('--entrypoint /bin/sh "$tools_tag" -ec ', 1)[1].split("'", 2)[1]
+                body = source.split('--entrypoint /bin/sh "$tools_image" -ec ', 1)[1].split("'", 2)[1]
                 cleanup = source.split("cleanup() {", 1)[1].split("\n}\n", 1)[0]
-                script = 'set -eu\ntemporary_directory="'+str(work)+'"\nport_forward_pid=""\ntools_tag=fixture\n'
+                script = 'set -eu\ntemporary_directory="'+str(work)+'"\nport_forward_pid=""\ntools_image=fixture\n'
                 script += "cleanup() {"+cleanup+"\n}\ntrap cleanup EXIT\n"+body
             elif case == "admission":
                 function = ADMISSION.read_text().split("login_registry() {", 1)[1].split("\n}\n", 1)[0]

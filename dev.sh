@@ -15,7 +15,7 @@ usage() {
     "       $0 provider-authorize|provider-import|provider-list [provider options]" \
     '  [--state-directory <path>] [--cluster-marker <root-owned-path>]' \
     '  [--profile web-only|web-with-mattermost]' \
-    '  [--expected-sha <40-hex-commit>]' >&2
+    '  [--expected-sha <40-hex-commit>] [--component-manifest <private-path>]' >&2
 }
 
 command_name=${1:-}
@@ -43,6 +43,7 @@ resource_prefix="local-e2e-$(date -u +%Y%m%d%H%M%S)"
 run_timeout_ms=900000
 cluster_marker=""
 expected_sha=""
+component_manifest=""
 requested_profile=""
 while (($# > 0)); do
   case "$1" in
@@ -53,12 +54,18 @@ while (($# > 0)); do
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
     --cluster-marker) cluster_marker=${2:-}; shift 2 ;;
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
+    --component-manifest) component_manifest=${2:-}; shift 2 ;;
     --profile) requested_profile=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 case "$command_name" in up|status|smoke|e2e|down) ;; *) usage; fail 'command is invalid' ;; esac
+if [[ -n "$component_manifest" ]]; then
+  [[ "$command_name" == status || "$command_name" == smoke || "$command_name" == e2e ]] || fail 'component manifest is restricted to application readback and acceptance'
+  [[ "$component_manifest" == /* && -f "$component_manifest" && ! -L "$component_manifest" ]] || fail 'component manifest is absent or unsafe'
+  [[ -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] || fail 'component acceptance requires a clean harness checkout'
+fi
 [[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'state directory must be an exact safe absolute path'
 case "$requested_profile" in ''|web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
@@ -299,6 +306,22 @@ verify_live_workload_source() {
 }
 
 record_source_provenance_evidence() {
+  if [[ -n "$component_manifest" ]]; then
+    local manifest_evidence temporary_manifest_evidence
+    install -d -m 0700 "$(dirname -- "$1")"
+    manifest_evidence=$(mktemp "$(dirname -- "$1")/.component-readback.XXXXXX")
+    rm -- "$manifest_evidence"
+    node "$repository_root/tools/dev/component-manifest.mjs" verify --context "$context" \
+      --manifest "$component_manifest" --output "$manifest_evidence"
+    temporary_manifest_evidence=$(mktemp "$(dirname -- "$1")/.component-provenance.XXXXXX")
+    jq --arg head "$(git -C "$repository_root" rev-parse HEAD)" \
+      --arg fingerprint "$(calculate_local_source_fingerprint)" \
+      '. + {headSHA:$head,currentContentSHA256:$fingerprint,evidenceProfile:"component-revisions"}' \
+      "$manifest_evidence" >"$temporary_manifest_evidence"
+    chmod 0600 "$temporary_manifest_evidence"
+    mv -- "$temporary_manifest_evidence" "$1"
+    return
+  fi
   local evidence_file=$1 evidence_command=$2 render_provenance current_revision
   local current_fingerprint source_dirty rendered_revision rendered_fingerprint rendered_dirty
   local render_matches sha_attested temporary_evidence
@@ -372,6 +395,10 @@ record_source_provenance_evidence() {
 
 require_exact_source_attestation() {
   local evidence_file=$1
+  if [[ -n "$component_manifest" ]]; then
+    jq -e '.profile == "component-revisions" and .status == "PASS" and (.manifestSHA256 | test("^[a-f0-9]{64}$"))' "$evidence_file" >/dev/null || fail 'component serving readback is required'
+    return
+  fi
   jq -e '
     .shaAttested == true and
     .renderContentMatches == true and
@@ -523,16 +550,21 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
   record_source_provenance_evidence "$source_evidence" "$command_name"
   if [[ "$command_name" == e2e ]]; then
     e2e_start_head=$(jq -r '.headSHA' "$source_evidence")
+    component_start_digest=$(jq -r '.manifestSHA256 // ""' "$source_evidence")
     e2e_start_fingerprint=$(jq -r '.currentContentSHA256' "$source_evidence")
-    "$repository_root/tools/dev/build-local-session-archive.sh" \
-      --source-root "$repository_root" --state-directory "$state_directory"
-    "$repository_root/tools/dev/build-local-stt.sh" \
-      --source-root "$repository_root" --state-directory "$state_directory"
+    if [[ -z "$component_manifest" ]]; then
+      "$repository_root/tools/dev/build-local-session-archive.sh" \
+        --source-root "$repository_root" --state-directory "$state_directory"
+      "$repository_root/tools/dev/build-local-stt.sh" \
+        --source-root "$repository_root" --state-directory "$state_directory"
+    fi
   fi
-  "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
-    --render "$state_directory/render.yaml" --state-directory "$state_directory" \
-    --tls-mode "$tls_mode"
-  verify_live_workload_source "$state_directory/render.yaml"
+  if [[ -z "$component_manifest" ]]; then
+    "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
+      --render "$state_directory/render.yaml" --state-directory "$state_directory" \
+      --tls-mode "$tls_mode"
+    verify_live_workload_source "$state_directory/render.yaml"
+  fi
   record_source_provenance_evidence "$source_evidence" "$command_name"
   if [[ "$command_name" == e2e ]]; then
     require_exact_source_attestation "$source_evidence"
@@ -588,6 +620,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     fi
     record_source_provenance_evidence "$source_evidence" "$command_name"
     require_exact_source_attestation "$source_evidence"
+    [[ "$(jq -r '.manifestSHA256 // ""' "$source_evidence")" == "$component_start_digest" ]] || fail 'component manifest changed during E2E'
     [[ "$(jq -r '.headSHA' "$source_evidence")" == "$e2e_start_head" &&
       "$(jq -r '.currentContentSHA256' "$source_evidence")" == "$e2e_start_fingerprint" ]] ||
       fail 'source content changed while E2E was running'
@@ -607,6 +640,14 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
         .sourceSHA == $expected_sha and
         (.name | test("^visual-(1440x900|1920x1080)-[a-z0-9-]+$")))
     ' "$report" >/dev/null || fail 'local browser E2E report is not fully successful'
+    if [[ -n "$component_manifest" ]]; then
+      temporary_report=$(mktemp "$state_directory/e2e/.component-report.XXXXXX")
+      jq --arg manifest_sha "$component_start_digest" \
+        '. + {sourceRole:"harness",servingManifestSHA256:$manifest_sha} | .visualEvidence |= map(. + {sourceRole:"harness",servingManifestSHA256:$manifest_sha})' \
+        "$report" >"$temporary_report"
+      chmod 0600 "$temporary_report"
+      mv -- "$temporary_report" "$report"
+    fi
     chmod 0600 "$run_state" "$report"
     "$repository_root/tools/dev/verify-discovery-readback.sh" \
       --context "$context" --kubeconfig "$kubeconfig" --state "$run_state"
@@ -614,6 +655,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
       "$resource_prefix" "$report" "$source_evidence"
     exit 0
   fi
+  record_source_provenance_evidence "$source_evidence" "$command_name"
   printf 'Kodex local browser smoke completed\n'
   exit 0
 fi

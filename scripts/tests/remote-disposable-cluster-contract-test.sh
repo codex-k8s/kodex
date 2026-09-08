@@ -24,7 +24,10 @@ case "$*" in
   'config view --minify --raw -o json')
     printf '%s\n' '{"clusters":[{"cluster":{"server":"https://127.0.0.1:6443","certificate-authority-data":"Zml4dHVyZS1jYQ=="}}]}'
     ;;
-  '-n kodex-system get configmap/kodex-image-admission-policy -o json')
+  '-n kodex-system get deployment/image-admission-controller -o json')
+    jq -cn --arg name "${KODEX_TEST_POLICY_NAME:-kodex-image-admission-policy}" '{spec:{template:{spec:{containers:[{name:"image-admission-controller",env:[{name:"IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP",value:$name}]}]}}}}'
+    ;;
+  '-n kodex-system get configmap/kodex-image-admission-policy -o json'|'-n kodex-system get configmap/kodex-image-admission-policy-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -o json')
     printf '%s\n' '{"immutable":true,"data":{"providerAppArmorProfile":"kodex-provider-runtime"}}'
     ;;
   '-n kodex-system get deployment/runtime-controller -o json')
@@ -329,6 +332,29 @@ rg -F -- '--mode readback' "$teleport_host_command_log" >/dev/null ||
   fail 'remote up omitted host-owned Teleport readback'
 rg -F -- '--mode apply' "$teleport_route_command_log" >/dev/null ||
   fail 'remote up omitted the in-cluster Teleport route apply'
+
+application_env="$temporary_directory/application.env"
+sed '/^KODEX_REMOTE_TELEPORT_/d' "$env_file" >"$application_env"
+chmod 0600 "$application_env"
+: >"$teleport_host_command_log"
+: >"$teleport_route_command_log"
+for application_command in status smoke e2e acceptance; do
+  KODEX_TEST_POLICY_NAME=kodex-image-admission-policy-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    "$fixture_root/tools/dev/remote-dev.sh" "$application_command" --env-file "$application_env" \
+      --expected-sha "$expected_sha" --component-manifest "$temporary_directory/components.json" >/dev/null
+  rg -F -- "--component-manifest $temporary_directory/components.json" "$remote_command_log" >/dev/null ||
+    fail 'remote application entrypoint lost the component manifest'
+done
+[[ ! -s "$teleport_host_command_log" && ! -s "$teleport_route_command_log" ]] ||
+  fail 'application acceptance invoked deferred Teleport'
+"$fixture_root/tools/dev/remote-dev.sh" status --env-file "$env_file" \
+  --expected-sha "$expected_sha" --access-profile teleport >/dev/null
+[[ -s "$teleport_host_command_log" && -s "$teleport_route_command_log" ]] ||
+  fail 'explicit Teleport profile omitted readback'
+if KODEX_TEST_POLICY_NAME=unrelated-policy "$fixture_root/tools/dev/remote-dev.sh" status \
+  --env-file "$application_env" --expected-sha "$expected_sha" >/dev/null 2>&1; then
+  fail 'provider readback accepted an unrelated policy name'
+fi
 
 for maintenance_mode in plan apply; do
   maintenance_args=(--plan-file "$temporary_directory/orphan.json")

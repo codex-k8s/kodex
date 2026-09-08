@@ -11,6 +11,7 @@ usage() {
     "Usage: $0 host-preflight|host-apply|host-readback|up|status|smoke|e2e|acceptance|down|teleport|orphan-plan|orphan-apply|reset-local" \
     '  [--env-file <private-path>] [--resource-prefix <slug>]' \
     '  [--run-timeout-ms <milliseconds>] [--expected-sha <40-hex-commit>]' \
+    '  [--component-manifest <private-path>] [--access-profile application|teleport]' \
     '  [--plan-file <private-path>] [--secret-name <single-metadata-name>] [--confirm DELETE-KODEX-LOCAL-DATA]' >&2
 }
 
@@ -22,6 +23,8 @@ env_file=/srv/kodex-dev/private/remote.env
 resource_prefix=""
 run_timeout_ms=""
 expected_sha=""
+component_manifest=""
+access_profile=application
 plan_file=""
 secret_name=""
 reset_confirmation=""
@@ -31,6 +34,8 @@ while (($# > 0)); do
     --resource-prefix) resource_prefix=${2:-}; shift 2 ;;
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
+    --component-manifest) component_manifest=${2:-}; shift 2 ;;
+    --access-profile) access_profile=${2:-}; shift 2 ;;
     --plan-file) plan_file=${2:-}; shift 2 ;;
     --secret-name) secret_name=${2:-}; shift 2 ;;
     --confirm) reset_confirmation=${2:-}; shift 2 ;;
@@ -38,6 +43,12 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+case "$access_profile" in application|teleport) ;; *) fail 'access profile is invalid' ;; esac
+component_arguments=()
+if [[ -n "$component_manifest" ]]; then
+  case "$command_name" in status|smoke|e2e|acceptance) ;; *) fail 'component manifest requires application acceptance command' ;; esac
+  component_arguments=(--component-manifest "$component_manifest")
+fi
 [[ ! -L "$env_file" ]] || fail 'private remote env must not be a symlink'
 env_file=$(realpath -e -- "$env_file") || fail 'private remote env is absent'
 case "$env_file" in
@@ -62,9 +73,13 @@ source "$repository_root/tools/install/load-env.sh"
 kodex_load_env "$env_file" || exit 1
 KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES=${KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES:-}
 kodex_require_env KODEX_REMOTE_SERVER_PUBLIC_IP KODEX_REMOTE_CONTROL_HOST \
-  KODEX_REMOTE_OIDC_HOST KODEX_REMOTE_TELEPORT_HOST KODEX_REMOTE_REGISTRY_HOST \
+  KODEX_REMOTE_OIDC_HOST KODEX_REMOTE_REGISTRY_HOST \
   KODEX_REMOTE_PROMOTED_PULL_HOST KODEX_REMOTE_ACME_EMAIL \
   KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES || exit 1
+KODEX_REMOTE_TELEPORT_HOST=${KODEX_REMOTE_TELEPORT_HOST:-}
+if [[ "$command_name" == up || "$command_name" == teleport || "$access_profile" == teleport ]]; then
+  kodex_require_env KODEX_REMOTE_TELEPORT_HOST || exit 1
+fi
 KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES=${KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES:-}
 KODEX_REMOTE_GRAFANA_HOST=${KODEX_REMOTE_GRAFANA_HOST:-grafana.kodex.works}
 KODEX_REMOTE_HEADLAMP_HOST=${KODEX_REMOTE_HEADLAMP_HOST:-headlamp.kodex.works}
@@ -287,7 +302,7 @@ export KODEX_DEV_GRAFANA_HOST="$KODEX_REMOTE_GRAFANA_HOST"
 export KODEX_DEV_HEADLAMP_HOST="$KODEX_REMOTE_HEADLAMP_HOST"
 export KODEX_DEV_REGISTRY_HOST="$KODEX_REMOTE_REGISTRY_HOST"
 export KODEX_DEV_PROMOTED_PULL_HOST="$KODEX_REMOTE_PROMOTED_PULL_HOST"
-export KODEX_DEV_PUBLIC_TLS_HOSTS="$KODEX_REMOTE_CONTROL_HOST,$KODEX_REMOTE_OIDC_HOST,$KODEX_REMOTE_TELEPORT_HOST,$KODEX_REMOTE_GRAFANA_HOST,$KODEX_REMOTE_HEADLAMP_HOST"
+export KODEX_DEV_PUBLIC_TLS_HOSTS="$KODEX_REMOTE_CONTROL_HOST,$KODEX_REMOTE_OIDC_HOST,$KODEX_REMOTE_GRAFANA_HOST,$KODEX_REMOTE_HEADLAMP_HOST${KODEX_REMOTE_TELEPORT_HOST:+,$KODEX_REMOTE_TELEPORT_HOST}"
 export KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES="$KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES"
 export KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES="$KODEX_REMOTE_PUBLIC_TLS_ALLOWED_IPV6_ADDRESSES"
 
@@ -355,8 +370,14 @@ readback_teleport() {
 }
 
 readback_provider_sandbox() {
-  local inventory pod_name
-  kubectl -n kodex-system get configmap/kodex-image-admission-policy -o json | jq -e '
+  local inventory pod_name policy_name
+  policy_name=$(kubectl -n kodex-system get deployment/image-admission-controller -o json | jq -er '
+    [.spec.template.spec.containers[] | select(.name == "image-admission-controller") |
+      .env[] | select(.name == "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP") | .value] |
+    select(length == 1) | .[0] |
+    select(test("^kodex-image-admission-policy(-[a-f0-9]{32})?$"))
+  ') || fail 'image admission policy owner reference is invalid'
+  kubectl -n kodex-system get "configmap/$policy_name" -o json | jq -e '
     .immutable == true and
     .data.providerAppArmorProfile == "kodex-provider-runtime"
   ' >/dev/null || fail 'provider AppArmor policy projection is invalid'
@@ -414,14 +435,14 @@ case "$command_name" in
   status)
     "$repository_root/dev.sh" status --kubeconfig "$kubeconfig" \
       --context "$context" --state-directory "$state_directory" \
-      --cluster-marker "$cluster_marker" --expected-sha "$expected_sha"
+      --cluster-marker "$cluster_marker" --expected-sha "$expected_sha" "${component_arguments[@]}"
     readback_provider_sandbox
-    readback_teleport
+    if [[ "$access_profile" == teleport ]]; then readback_teleport; fi
     ;;
   smoke)
     "$repository_root/dev.sh" "$command_name" --kubeconfig "$kubeconfig" \
       --context "$context" --state-directory "$state_directory" \
-      --cluster-marker "$cluster_marker" --expected-sha "$expected_sha"
+      --cluster-marker "$cluster_marker" --expected-sha "$expected_sha" "${component_arguments[@]}"
     readback_provider_sandbox
     ;;
   down)
@@ -433,7 +454,7 @@ case "$command_name" in
     readback_provider_sandbox
     e2e_arguments=(--kubeconfig "$kubeconfig" --context "$context" \
       --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
-      --expected-sha "$expected_sha")
+      --expected-sha "$expected_sha" "${component_arguments[@]}")
     [[ -z "$resource_prefix" ]] || e2e_arguments+=(--resource-prefix "$resource_prefix")
     [[ -z "$run_timeout_ms" ]] || e2e_arguments+=(--run-timeout-ms "$run_timeout_ms")
     KODEX_E2E_BASE_HOST_RESOLUTION=loopback \
@@ -441,15 +462,15 @@ case "$command_name" in
     ;;
   acceptance)
     readback_provider_sandbox
-    readback_teleport
+    if [[ "$access_profile" == teleport ]]; then readback_teleport; fi
     acceptance_arguments=(--skip-build --kubeconfig "$kubeconfig" --context "$context" \
       --state-directory "$state_directory" --cluster-marker "$cluster_marker" \
-      --expected-sha "$expected_sha")
+      --expected-sha "$expected_sha" "${component_arguments[@]}")
     [[ -z "$resource_prefix" ]] || acceptance_arguments+=(--resource-prefix "$resource_prefix")
     [[ -z "$run_timeout_ms" ]] || acceptance_arguments+=(--run-timeout-ms "$run_timeout_ms")
     KODEX_E2E_BASE_HOST_RESOLUTION=loopback \
       "$repository_root/dev.sh" full-e2e "${acceptance_arguments[@]}"
     readback_provider_sandbox
-    readback_teleport
+    if [[ "$access_profile" == teleport ]]; then readback_teleport; fi
     ;;
 esac
