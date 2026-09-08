@@ -66,7 +66,7 @@ func (adapter *Adapter) testEmail(ctx context.Context, request Request, configur
 	return e
 }
 func (adapter *Adapter) executeEmail(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, input []byte) (Result, error) {
-	if configuration["base_url"] != emailOrigin || adapter.emailHTTPClient == nil {
+	if request.Credential != nil || configuration["base_url"] != emailOrigin || adapter.emailHTTPClient == nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
 	}
 	command, e := api.CommandForIntegration(request.Operation, configuration["mailbox_id"], configuration["from_address"], request.EffectKey, input)

@@ -911,3 +911,52 @@ PATCH; нужен новый проверенный план. Чужая reserva
 version 20260908000300. Логи читаются внутри процесса, наружу выходят только закрытые
 статусы/версии/UID. После успешной migration выполняются CP rollout и controlled
 catalog import; обычный source rollout сам migration не запускает.
+
+
+## Mixed release со старым CP и сохранённой generic revision (#1338)
+
+Reader принимает generic metadata для точного SHIPPED email 1.4.0
+с canonical digest `df52f45643b6e4464cf20901b6c069b88dac671303dc31e04f23b3d1ad4006fd`
+и для уже допустимых UI/GIT revisions с narrowing относительно этого baseline.
+Descriptor обязан оставаться `token/TOKEN`; используется тот же
+`ValidateExecutableRevision`, без отдельного расширения правил.
+До этого уже проверены package identity/route,
+после этого остаются прежние capability/scope/input и CP lease/fence checks.
+Credential ref/revision, Secret UID/resourceVersion/ref и content digest проходят
+bounded structural validation. Отдельного connectionRef в credential DTO нет:
+связь с подключением назначена прежним CP внутри owner claim, а почтовые
+полномочия проверяются bridge через exact CP lease, tenant и grant.
+
+После успешной проверки локальная копия Request.Credential очищается перед
+executeEmail. Generic Secret не читается и не передаётся в HTTP request; mTLS и
+bearer fence сохраняются. SHIPPED email 1.4.1 требует nil, altered descriptor/digest,
+неполная metadata, чужой scope и отсутствующий/expired lease закрыто отклоняются.
+Для других adapters generic credential validation не изменена. Никакие stored
+pins и credentials не переписываются.
+
+`make test-email-legacy-claim` — отдельный локальный disposable профиль:
+
+1. Из Git archive извлекается exact старый CP `d21a024dbf03fca13b20f0cb30d858d743729ed7`.
+2. Добавляется только test capture hook после настоящих CP health/invocation
+   claims и отдельные UI/GIT producer fixtures; canonical harness получает лишь
+   ограничение `go -p 2`. Все остальные
+   tracked blobs, включая production CP и SQL, сверяются с исходными Git hashes.
+3. Старый канонический owner fixture сохраняет legacy generic revision и выдаёт
+   защищённые claims. Исходная owner map передаётся через stdin в test-only
+   caster binary нового CP, typed JSON поля восстанавливаются без изменения
+   значений, затем настоящие production casters формируют protobuf для gateway.
+4. Gateway исполняет health и typed invocation с controlled HTTP bridge fixture.
+   Lease не продлевается; budget цепочки ограничен 20 секундами. Generic Secret
+   отсутствует в test credential directory — его чтение не требуется.
+
+Дополнительные UI/GIT fixtures создают собственные исторические published
+configuration/revision/binding в disposable БД, затем реальные старые owner
+команды создают health/invocation claims. Это проверка producer/caster/reader,
+не UI/Git publication и не старого email authorizer для managed packages:
+его прежняя проверка global shipped pins исправлена отдельно в #1329.
+Полный исходный SHIPPED authority/Gate/replay профиль сохранён.
+
+Старый CP работает со своим schema/catalog, поэтому эта проверка отдельно
+доказывает reader-before-writer вариант. Современный `test-email-managed-claim`
+остаётся отдельным профилем без generic credential. Ни один профиль не является
+live SMTP/IMAP/POP3, paid provider, mTLS deployment или полной MVP-приёмкой.

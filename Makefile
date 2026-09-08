@@ -352,3 +352,7 @@ test-email-mailbox-materialization:
 .PHONY: test-email-managed-claim
 test-email-managed-claim: check-go-toolchain
 	@./scripts/tests/email-managed-claim-test.sh
+
+.PHONY: test-email-legacy-claim
+test-email-legacy-claim:
+	./scripts/tests/email-legacy-claim-test.sh
