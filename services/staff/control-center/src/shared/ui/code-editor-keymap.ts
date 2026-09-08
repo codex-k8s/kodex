@@ -1,4 +1,8 @@
-import { indentWithTab, toggleTabFocusMode } from "@codemirror/commands";
+import {
+  indentWithTab,
+  isolateHistory,
+  toggleTabFocusMode,
+} from "@codemirror/commands";
 import { keymap, EditorView } from "@codemirror/view";
 import { EditorState, Transaction } from "@codemirror/state";
 
@@ -18,10 +22,15 @@ export function insertVoiceText(
   )
     return;
   const scrollTop = view.scrollDOM.scrollTop;
+  const scrollLeft = view.scrollDOM.scrollLeft;
   view.dispatch({
     ...view.state.replaceSelection(text),
-    annotations: Transaction.userEvent.of("input.voice"),
+    annotations: [
+      Transaction.userEvent.of("input.voice"),
+      isolateHistory.of("full"),
+    ],
   });
   view.focus();
   view.scrollDOM.scrollTop = scrollTop;
+  view.scrollDOM.scrollLeft = scrollLeft;
 }

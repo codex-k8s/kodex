@@ -15,6 +15,137 @@ async function dictate(section: Locator): Promise<void> {
   ).toBeVisible();
 }
 
+for (const transition of [
+  "route",
+  "unmount",
+  "availability",
+  "pagehide",
+] as const) {
+  test(`synthetic: voice отменяет поздний ответ при ${transition}`, async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(["microphone"], {
+      origin: "http://127.0.0.1:43122",
+    });
+    await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
+    await page.getByLabel("Задержка", { exact: true }).check();
+    const field = page.getByTestId("textarea");
+    await field.locator(".voice-input button").click();
+    await expect(field.locator(".voice-input")).toHaveAttribute(
+      "data-state",
+      "recording",
+    );
+    await page.waitForTimeout(350);
+    await field.locator(".voice-input button").first().click();
+    await expect(field.locator(".voice-input")).toHaveAttribute(
+      "data-state",
+      "transcribing",
+    );
+    if (transition === "route")
+      await page.getByRole("button", { name: "Перейти", exact: true }).click();
+    else if (transition === "unmount")
+      await page.getByLabel("Показывать поле", { exact: true }).uncheck();
+    else if (transition === "availability")
+      await page.getByLabel("Доступность", { exact: true }).uncheck();
+    else
+      await page.evaluate(() =>
+        window.dispatchEvent(new PageTransitionEvent("pagehide")),
+      );
+    await page.waitForTimeout(1100);
+    if (transition === "unmount")
+      await page.getByLabel("Показывать поле", { exact: true }).check();
+    if (transition === "availability")
+      await page.getByLabel("Доступность", { exact: true }).check();
+    await expect(field.getByRole("textbox")).toHaveValue("Начало конец");
+    await expect(field.locator(".voice-input")).toHaveAttribute(
+      "data-state",
+      "idle",
+    );
+    await expect(page.getByTestId("calls")).toHaveText("1");
+  });
+}
+
+for (const width of [390, 1440]) {
+  test(`synthetic: voice заменяет выделение и изолирует undo ${String(width)}px`, async ({
+    page,
+    context,
+  }) => {
+    await page.setViewportSize({ width, height: 1080 });
+    await context.grantPermissions(["microphone"], {
+      origin: "http://127.0.0.1:43122",
+    });
+    await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
+    const textarea = page.getByTestId("textarea").getByRole("textbox");
+    await textarea.focus();
+    await textarea.evaluate((element) =>
+      (element as HTMLTextAreaElement).setSelectionRange(7, 12),
+    );
+    await dictate(page.getByTestId("textarea"));
+    await expect(textarea).toHaveValue("Начало диктовка ");
+    await expect(textarea).toBeFocused();
+    await textarea.press("Control+z");
+    await expect(textarea).toHaveValue("Начало конец");
+    const code = page.getByRole("textbox", { name: "Код", exact: true });
+    await code.focus();
+    await code.press("Control+End");
+    await code.press("a");
+    for (let index = 0; index < 6; index++) await code.press("Shift+ArrowLeft");
+    await dictate(page.getByTestId("code"));
+    await expect(code).toHaveText("Начало диктовка ");
+    await expect(code).toBeFocused();
+    await code.press("z");
+    await code.press("Control+z");
+    await expect(code).toHaveText("Начало диктовка ");
+    await code.press("Control+z");
+    await expect(code).toHaveText("Начало конецa");
+    await code.press("Control+z");
+    await expect(code).toHaveText("Начало конец");
+  });
+}
+
+test("synthetic: voice сохраняет scroll длинного textarea", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["microphone"], {
+    origin: "http://127.0.0.1:43122",
+  });
+  await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
+  const field = page.getByTestId("textarea");
+  const textarea = field.getByRole("textbox");
+  await textarea.fill("Синтетическая строка\n".repeat(60));
+  await textarea.evaluate((element) => {
+    const input = element as HTMLTextAreaElement;
+    input.focus();
+    input.setSelectionRange(400, 400);
+    input.scrollTop = 250;
+  });
+  const scrollTop = await textarea.evaluate((element) => element.scrollTop);
+  await dictate(field);
+  await expect(textarea).toBeFocused();
+  expect(await textarea.evaluate((element) => element.scrollTop)).toBe(
+    scrollTop,
+  );
+  await textarea.press("Control+z");
+  await expect(textarea).toHaveValue("Синтетическая строка\n".repeat(60));
+});
+
+test("synthetic: unsupported codec показывает безопасную причину без audio", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    MediaRecorder.isTypeSupported = () => false;
+  });
+  await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
+  const field = page.getByTestId("textarea");
+  await field.locator(".voice-input button").click();
+  await expect(field.getByRole("alert")).toContainText(
+    "Формат записи не поддерживается",
+  );
+  await expect(page.getByTestId("calls")).toHaveText("0");
+});
+
 for (const width of [1440, 390]) {
   test(`synthetic: блокировка managed voice во время записи ${String(width)}px`, async ({
     page,

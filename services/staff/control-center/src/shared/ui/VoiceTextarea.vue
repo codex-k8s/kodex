@@ -36,6 +36,7 @@ function insert(text: string): void {
   const target = field.value;
   if (!target || !enabled.value || target.matches(":disabled")) return;
   const scrollTop = target.scrollTop;
+  const scrollLeft = target.scrollLeft;
   target.focus({ preventScroll: true });
   // insertText сохраняет нативную историю undo; setRangeText остаётся fallback для браузеров без этой команды.
   // eslint-disable-next-line @typescript-eslint/no-deprecated -- Стандартной замены с сохранением native undo для textarea пока нет (MDN execCommand).
@@ -49,6 +50,7 @@ function insert(text: string): void {
     target.dispatchEvent(new Event("input", { bubbles: true }));
   }
   target.scrollTop = scrollTop;
+  target.scrollLeft = scrollLeft;
 }
 defineExpose({ focus: () => field.value?.focus() });
 </script>

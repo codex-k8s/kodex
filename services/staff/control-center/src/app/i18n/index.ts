@@ -636,6 +636,27 @@ const ru = {
     recording: "Остановить запись",
     transcribing: "Распознавание",
     error: "Не удалось распознать. Записать заново",
+    permissionDenied:
+      "Доступ к микрофону запрещён. Разрешите его в настройках браузера и начните новую запись.",
+    microphoneUnavailable:
+      "Микрофон или запись аудио недоступны в этом браузере.",
+    interrupted:
+      "Запись прервана устройством или браузером. Аудио не отправлено; начните новую запись.",
+    unsupportedFormat:
+      "Формат записи не поддерживается. Используйте браузер с поддержкой WebM, Ogg или MP4.",
+    limitExceeded:
+      "Превышен допустимый размер или длительность записи. Запишите более короткий фрагмент.",
+    empty: "Запись пуста. Запишите новый фрагмент.",
+    forbidden: "Распознавание речи недоступно с текущими правами.",
+    notConfigured: "Системное распознавание речи выключено или не настроено.",
+    credentialUnavailable:
+      "Системный ключ распознавания недоступен. Обратитесь к администратору.",
+    modelUnavailable:
+      "Настроенная модель распознавания недоступна. Обратитесь к администратору.",
+    timeout:
+      "Время ожидания распознавания истекло. Повторная отправка не выполнялась; начните новую запись при необходимости.",
+    providerUnavailable:
+      "Сервис распознавания временно недоступен. Повторная отправка не выполнялась.",
     rateLimited:
       "Сервис ограничил частоту распознавания. Попробуйте новую запись позже; автоматической повторной отправки нет.",
     rateLimitedWait:
@@ -3691,6 +3712,27 @@ const en = {
     recording: "Stop recording",
     transcribing: "Transcribing",
     error: "Transcription failed. Record again",
+    permissionDenied:
+      "Microphone access was denied. Allow it in browser settings and start a new recording.",
+    microphoneUnavailable:
+      "The microphone or audio recording is unavailable in this browser.",
+    interrupted:
+      "The device or browser interrupted recording. Audio was not sent; start a new recording.",
+    unsupportedFormat:
+      "The audio format is unsupported. Use a browser supporting WebM, Ogg or MP4.",
+    limitExceeded:
+      "The recording size or duration limit was reached. Record a shorter clip.",
+    empty: "The recording is empty. Record a new clip.",
+    forbidden: "Your current permissions do not allow speech transcription.",
+    notConfigured: "System speech transcription is disabled or not configured.",
+    credentialUnavailable:
+      "The system transcription credential is unavailable. Contact an administrator.",
+    modelUnavailable:
+      "The configured transcription model is unavailable. Contact an administrator.",
+    timeout:
+      "Transcription timed out. The request was not retried; start a new recording if needed.",
+    providerUnavailable:
+      "The transcription service is temporarily unavailable. The request was not retried.",
     rateLimited:
       "The transcription service rate limit was reached. Try a new recording later; the request is not retried automatically.",
     rateLimitedWait:
