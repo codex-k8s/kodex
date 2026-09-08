@@ -102,6 +102,22 @@ const capabilityLoader = computed(() =>
     recipientCandidate.value?.pins,
   ),
 );
+const recipientContextKey = computed(() =>
+  JSON.stringify([
+    props.selectedConnection?.ref,
+    props.selectedConnection?.version,
+    props.projectRef,
+    props.targetKind,
+    projectCandidate.value?.pins,
+  ]),
+);
+const capabilityContextKey = computed(() =>
+  JSON.stringify([
+    recipientContextKey.value,
+    props.targetRef,
+    recipientCandidate.value?.pins,
+  ]),
+);
 const selection = computed<IntegrationGrantSelection | undefined>(() => {
   const connection = props.selectedConnection,
     project = projectCandidate.value,
@@ -161,6 +177,8 @@ function changeConnection(value: string | readonly string[] | null): void {
 function chooseProject(option: AsyncEntityOption): void {
   const candidate = projectRows.get(option.ref);
   if (!candidate?.grantable) return;
+  // Тот же ref может обозначать новую ревизию; props watcher её не замечает.
+  clearRecipient();
   projectCandidate.value = candidate;
   chosenProject.value = option;
   emit("update:projectRef", option.ref);
@@ -168,6 +186,7 @@ function chooseProject(option: AsyncEntityOption): void {
 function chooseRecipient(option: AsyncEntityOption): void {
   const candidate = recipientRows.get(option.ref);
   if (!candidate?.grantable) return;
+  clearCapability();
   recipientCandidate.value = candidate;
   chosenTarget.value = option;
   emit("update:targetRef", option.ref);
@@ -502,14 +521,7 @@ const canManageSelected = computed(
           <label class="field">
             <span>{{ t("integrations.target") }}</span>
             <AsyncEntityPicker
-              :key="
-                [
-                  'recipient',
-                  projectRef,
-                  targetKind,
-                  selectedConnection?.ref,
-                ].join(':')
-              "
+              :key="recipientContextKey"
               :model-value="targetRef"
               :selected="targetOption"
               :load-page="loadRecipients"
@@ -523,15 +535,7 @@ const canManageSelected = computed(
           <label class="field">
             <span>{{ t("integrations.capability") }}</span>
             <AsyncEntityPicker
-              :key="
-                [
-                  'capability',
-                  selectedConnection?.ref,
-                  projectRef,
-                  targetKind,
-                  targetRef,
-                ].join(':')
-              "
+              :key="capabilityContextKey"
               :model-value="capabilityKey"
               :selected="chosenCapability"
               :load-page="loadCapabilities"

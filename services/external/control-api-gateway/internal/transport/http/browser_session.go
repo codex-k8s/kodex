@@ -28,6 +28,16 @@ func (server *Server) GetOwnerSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, body)
 }
 
+func (server *Server) CreateOwnerSessionTicket(w http.ResponseWriter, r *http.Request, _ generated.CreateOwnerSessionTicketParams) {
+	ticket, expires, err := server.boundary.IssueWebSocketTicket(r.Context())
+	if err != nil {
+		writeSessionProblem(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, generated.OwnerSessionTicket{Ticket: ticket, ExpiresAt: expires})
+}
+
 func (server *Server) BeginOwnerAuthorization(w http.ResponseWriter, r *http.Request) {
 	body, ok := decodeOptionalJSON[generated.OwnerAuthorizationInput](w, r)
 	if !ok {

@@ -4,7 +4,7 @@ const prefix = "kodex.provider-lifecycle:";
 type Base = { accountRef: string; version: number; key: string };
 export type ProviderLifecycleAttempt = Base &
   (
-    | { action: "DELETE" | "VERIFY" | "REAUTHORIZE" }
+    | { action: "DELETE" | "VERIFY" | "REAUTHORIZE" | "START_DEVICE" }
     | {
         action: "CANCEL_QUEUED";
         body: ProviderAccountQueuedWorkCancellationInput;
@@ -33,7 +33,8 @@ function checked(value: unknown, accountRef: string): ProviderLifecycleAttempt {
   if (
     record.action === "DELETE" ||
     record.action === "VERIFY" ||
-    record.action === "REAUTHORIZE"
+    record.action === "REAUTHORIZE" ||
+    record.action === "START_DEVICE"
   )
     return { ...base, action: record.action };
   if (

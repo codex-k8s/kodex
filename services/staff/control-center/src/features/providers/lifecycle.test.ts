@@ -9,6 +9,10 @@ import { KnownMutationRejection } from "@/shared/api/mutation-rejection";
 import { AppProblem } from "@/shared/api/problem";
 const api = vi.hoisted(() => ({
   loadProviderAccount: vi.fn(),
+  startDeviceAuthorization:
+    vi.fn<
+      (account: ProviderAccount, key?: string) => Promise<ProviderAccount>
+    >(),
   deleteProviderAccountRecord:
     vi.fn<
       (account: ProviderAccount, key?: string) => Promise<ProviderAccount>
@@ -126,6 +130,36 @@ function page(): ProviderAccountBlockerPage {
 }
 describe("provider lifecycle recovery", () => {
   beforeEach(() => vi.resetAllMocks());
+  it("восстанавливает первоначальный device запрос с исходным key/OCC после UNKNOWN", async () => {
+    const data = storage();
+    const initial = {
+      ...account,
+      state: "PENDING_AUTHORIZATION" as const,
+      nextActions: ["CONFIGURE_CREDENTIAL" as const],
+    };
+    api.startDeviceAuthorization.mockRejectedValueOnce(
+      new Error("Lost response"),
+    );
+    await expect(
+      startProviderLifecycle(
+        initial,
+        { action: "START_DEVICE" },
+        data,
+        new AbortController().signal,
+      ),
+    ).rejects.toBeDefined();
+    const saved = readProviderLifecycleAttempt(initial.ref, data);
+    expect(saved?.action).toBe("START_DEVICE");
+    if (!saved) throw new Error("Missing recovery attempt");
+    api.loadProviderAccount.mockResolvedValue({ ...initial, version: 12 });
+    api.startDeviceAuthorization.mockResolvedValue({ ...initial, version: 12 });
+    await retryProviderLifecycle(saved, data, new AbortController().signal);
+    expect(api.startDeviceAuthorization.mock.calls[1]).toEqual([
+      expect.objectContaining({ version: initial.version }),
+      saved.key,
+    ]);
+    expect(readProviderLifecycleAttempt(initial.ref, data)).toBeUndefined();
+  });
   it.each([400, 412, 422] as const)(
     "отмена очереди после первого отказа %s получает новый key/OCC, а UNKNOWN сохраняет прежний",
     async (status) => {

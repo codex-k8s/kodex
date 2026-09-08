@@ -123,6 +123,40 @@ afterEach(() => {
 });
 
 describe("BFF session lifecycle", () => {
+  test("две вкладки делят один refresh и завершаются на исходной absolute границе", async () => {
+    const absolute = Date.now() + 60_000;
+    const initial = metadata({
+      expiresAt: new Date(absolute).toISOString(),
+      absoluteExpiresAt: new Date(absolute).toISOString(),
+    });
+    api.getOwnerSession.mockResolvedValue({ data: initial });
+    api.renewOwnerSession.mockImplementation(() =>
+      Promise.resolve({
+        data: {
+          ...initial,
+          version: 2,
+          serverTime: new Date(Date.now()).toISOString(),
+          renewAfter: new Date(absolute).toISOString(),
+        },
+      }),
+    );
+    const first = useSessionStore();
+    const otherPinia = createPinia();
+    const second = useSessionStore(otherPinia);
+    try {
+      await Promise.all([first.probe(), second.probe()]);
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(api.renewOwnerSession).toHaveBeenCalledOnce();
+      expect(first.phase).toBe("authenticated");
+      expect(second.phase).toBe("authenticated");
+      await vi.advanceTimersByTimeAsync(1);
+      expect(first.phase).toBe("unauthenticated");
+      expect(second.phase).toBe("unauthenticated");
+      expect(api.renewOwnerSession).toHaveBeenCalledOnce();
+    } finally {
+      disposePinia(otherPinia);
+    }
+  });
   test("probe читает metadata, ждёт server renewAfter и останавливается после invalidation", async () => {
     const session = useSessionStore();
     await session.probe();

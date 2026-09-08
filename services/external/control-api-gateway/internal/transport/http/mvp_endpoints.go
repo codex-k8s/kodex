@@ -245,7 +245,7 @@ func (server *Server) StartProviderAccountDeviceAuthorization(w http.ResponseWri
 	}
 	response, err := server.control.Command.StartProviderAccountDeviceAuthorization(r.Context(), &controlplanev1.StartProviderAccountDeviceAuthorizationRequest{Mutation: mutation, AccountRef: ref})
 	if err != nil {
-		writeRPCProblem(w, err)
+		writeProviderDeviceProblem(w, err)
 		return
 	}
 	writeMessage(w, http.StatusAccepted, response, "account", "")
@@ -315,7 +315,7 @@ func (server *Server) ReauthorizeProviderAccountDeviceCode(w http.ResponseWriter
 	}
 	response, err := server.control.Command.ReauthorizeProviderAccountDeviceCode(r.Context(), &controlplanev1.ReauthorizeProviderAccountDeviceCodeRequest{Mutation: mutation, AccountRef: ref})
 	if err != nil {
-		writeRPCProblem(w, err)
+		writeProviderDeviceProblem(w, err)
 		return
 	}
 	if response.GetAccount() == nil || response.GetAccount().GetRef() != ref {

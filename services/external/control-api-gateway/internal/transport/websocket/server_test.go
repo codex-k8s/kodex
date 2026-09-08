@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
@@ -35,7 +37,7 @@ func TestStreamLocalizerUsesBoundedSelectedLocale(t *testing.T) {
 
 func TestRequestedProtocolsRequiresExactBaseAndSingleCSRF(t *testing.T) {
 	request := httptest.NewRequest("GET", "https://owner.example.test/api/v1/session/stream", nil)
-	request.Header.Add("Sec-WebSocket-Protocol", "kodex.session.v1, csrf.token-value")
+	request.Header.Add("Sec-WebSocket-Protocol", "kodex.session.v2, csrf.token-value, ticket."+strings.Repeat("t", 43))
 	selection, ok := requestedProtocols(request, sessionSubprotocol)
 	if !ok || selection.csrf != "token-value" {
 		t.Fatalf("valid protocol selection rejected: ok=%t csrf=%q", ok, selection.csrf)
@@ -45,9 +47,33 @@ func TestRequestedProtocolsRequiresExactBaseAndSingleCSRF(t *testing.T) {
 		t.Fatal("duplicate CSRF subprotocol was accepted")
 	}
 	request = httptest.NewRequest("GET", "https://owner.example.test/api/v1/session/stream", nil)
-	request.Header.Add("Sec-WebSocket-Protocol", "kodex.session.v1, csrf.token-value, legacy.protocol")
+	request.Header.Add("Sec-WebSocket-Protocol", "kodex.session.v2, csrf.token-value, legacy.protocol")
 	if _, ok := requestedProtocols(request, sessionSubprotocol); ok {
 		t.Fatal("unknown WebSocket subprotocol was accepted")
+	}
+}
+
+func TestWebSocketProtocolTransitionHasAbsoluteRetirement(t *testing.T) {
+	now := time.Now().UTC()
+	server := &Server{legacyUntil: now.Add(time.Hour)}
+	request := httptest.NewRequest("GET", "https://owner.example.test/api/v1/session/stream", nil)
+	request.Header.Set("Sec-WebSocket-Protocol", "kodex.session.v1, csrf.token-value")
+	if _, protocol, ok := server.selectProtocols(request, now); !ok || protocol != legacySessionSubprotocol {
+		t.Fatal("legacy transition unavailable")
+	}
+	if _, _, ok := server.selectProtocols(request, server.legacyUntil); ok {
+		t.Fatal("legacy cutoff was extended")
+	}
+	if _, _, ok := (&Server{}).selectProtocols(request, now); ok {
+		t.Fatal("legacy enabled by default")
+	}
+	request.Header.Set("Sec-WebSocket-Protocol", "kodex.session.v2, csrf.token-value")
+	if _, _, ok := server.selectProtocols(request, now); ok {
+		t.Fatal("v2 silently fell back without ticket")
+	}
+	request.Header.Set("Sec-WebSocket-Protocol", "kodex.session.v2, csrf.token-value, ticket."+strings.Repeat("t", 43))
+	if _, protocol, ok := server.selectProtocols(request, server.legacyUntil); !ok || protocol != sessionSubprotocol {
+		t.Fatal("v2 disabled with legacy")
 	}
 }
 

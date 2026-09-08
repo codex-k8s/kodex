@@ -18,7 +18,9 @@ import (
 	"github.com/coder/websocket"
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/eventing/browserstate"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 	httptransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
 	"github.com/nats-io/nats.go"
@@ -27,16 +29,17 @@ import (
 )
 
 const (
-	maximumFrameBytes       = 64 << 10
-	maximumRunSubscriptions = 32
-	maximumOutboundFrames   = 256
-	maximumInboundCommands  = 64
-	writeTimeout            = 5 * time.Second
-	readTimeout             = 10 * time.Second
-	heartbeatInterval       = 15 * time.Second
-	pingInterval            = 30 * time.Second
-	sessionSubprotocol      = "kodex.session.v1"
-	platformStreamRef       = "PLATFORM"
+	maximumFrameBytes        = 64 << 10
+	maximumRunSubscriptions  = 32
+	maximumOutboundFrames    = 256
+	maximumInboundCommands   = 64
+	writeTimeout             = 5 * time.Second
+	readTimeout              = 10 * time.Second
+	heartbeatInterval        = 15 * time.Second
+	pingInterval             = 30 * time.Second
+	sessionSubprotocol       = "kodex.session.v2"
+	legacySessionSubprotocol = "kodex.session.v1"
+	platformStreamRef        = "PLATFORM"
 )
 
 var (
@@ -52,16 +55,18 @@ type queryClient interface {
 }
 
 type Server struct {
-	query   queryClient
-	nats    *nats.Conn
-	origins []string
+	query       queryClient
+	nats        *nats.Conn
+	origins     []string
+	tickets     *boundary.Boundary
+	legacyUntil time.Time
 }
 
-func New(control *controlplaneclient.Client, connection *nats.Conn, origins []string) (*Server, error) {
-	if control == nil || control.Query == nil || connection == nil || !connection.IsConnected() || len(origins) == 0 {
+func New(control *controlplaneclient.Client, connection *nats.Conn, origins []string, tickets *boundary.Boundary, legacyUntil time.Time) (*Server, error) {
+	if control == nil || control.Query == nil || connection == nil || !connection.IsConnected() || len(origins) == 0 || tickets == nil {
 		return nil, errors.New("realtime server configuration is invalid")
 	}
-	return &Server{query: control.Query, nats: connection, origins: origins}, nil
+	return &Server{query: control.Query, nats: connection, origins: origins, tickets: tickets, legacyUntil: legacyUntil}, nil
 }
 
 type busEnvelope struct {
@@ -85,7 +90,7 @@ var streamProblemSpecs = map[string]streamProblemSpec{
 	"BACKPRESSURE_EXCEEDED": {status: http.StatusServiceUnavailable, retryable: true},
 }
 
-type protocolSelection struct{ csrf string }
+type protocolSelection struct{ csrf, ticket string }
 
 type outboundFrame struct {
 	value       generated.SessionStream
@@ -143,24 +148,39 @@ func (server *Server) ServeSessionHTTP(writer http.ResponseWriter, request *http
 		httptransport.WriteLocalProblem(writer, http.StatusUnauthorized, "UNAUTHENTICATED", false)
 		return
 	}
-	protocols, csrfOK := requestedProtocols(request, sessionSubprotocol)
+	protocols, selectedProtocol, csrfOK := server.selectProtocols(request, time.Now())
 	if !csrfOK || !boundary.VerifyCSRFToken(identity, protocols.csrf) {
 		httptransport.WriteLocalProblem(writer, http.StatusForbidden, "CSRF_REJECTED", false)
 		return
+	}
+	if server.tickets == nil {
+		httptransport.WriteLocalProblem(writer, http.StatusServiceUnavailable, "UNAVAILABLE", true)
+		return
+	}
+	if selectedProtocol == sessionSubprotocol {
+		if err := server.tickets.ConsumeWebSocketTicket(request.Context(), protocols.ticket); err != nil {
+			if errors.Is(err, browserstate.ErrUnavailable) || errors.Is(err, browserstate.ErrConflict) || errors.Is(err, session.ErrRenewalPending) {
+				writer.Header().Set("Retry-After", "1")
+				httptransport.WriteLocalProblem(writer, http.StatusServiceUnavailable, "UNAVAILABLE", true)
+			} else {
+				httptransport.WriteLocalProblem(writer, http.StatusForbidden, "CSRF_REJECTED", false)
+			}
+			return
+		}
 	}
 	originPatterns := make([]string, 0, len(server.origins))
 	for _, origin := range server.origins {
 		originPatterns = append(originPatterns, strings.TrimPrefix(origin, "https://"))
 	}
 	connection, err := websocket.Accept(writer, request, &websocket.AcceptOptions{
-		Subprotocols:   []string{sessionSubprotocol},
+		Subprotocols:   []string{selectedProtocol},
 		OriginPatterns: originPatterns,
 	})
 	if err != nil {
 		return
 	}
 	defer connection.CloseNow()
-	if connection.Subprotocol() != sessionSubprotocol {
+	if connection.Subprotocol() != selectedProtocol {
 		return
 	}
 	connection.SetReadLimit(maximumFrameBytes)
@@ -856,10 +876,29 @@ func requestedProtocols(request *http.Request, baseProtocol string) (protocolSel
 				result.csrf = strings.TrimPrefix(value, "csrf.")
 				continue
 			}
+			if strings.HasPrefix(value, "ticket.") && len(value) == 50 {
+				if result.ticket != "" {
+					return protocolSelection{}, false
+				}
+				result.ticket = strings.TrimPrefix(value, "ticket.")
+				continue
+			}
 			return protocolSelection{}, false
 		}
 	}
-	return result, foundBase && result.csrf != ""
+	return result, foundBase && result.csrf != "" && ((baseProtocol == sessionSubprotocol && result.ticket != "") || (baseProtocol == legacySessionSubprotocol && result.ticket == ""))
+}
+
+func (server *Server) selectProtocols(request *http.Request, now time.Time) (protocolSelection, string, bool) {
+	if value, ok := requestedProtocols(request, sessionSubprotocol); ok {
+		return value, sessionSubprotocol, true
+	}
+	if now.Before(server.legacyUntil) {
+		if value, ok := requestedProtocols(request, legacySessionSubprotocol); ok {
+			return value, legacySessionSubprotocol, true
+		}
+	}
+	return protocolSelection{}, "", false
 }
 
 func problemSpec(code string) streamProblemSpec {

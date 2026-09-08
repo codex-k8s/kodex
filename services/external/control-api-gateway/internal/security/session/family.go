@@ -105,7 +105,14 @@ func (families *Families) CreateWithCSRF(ctx context.Context, tokens oidcverifie
 }
 
 func (families *Families) RenewAfter(family Family) time.Time {
-	renew := earlier(family.IdleExpiresAt.Add(-families.keys.ttl/3), family.Principal.ExpiresAt.Add(-refreshAdvance))
+	// Срок, уже упершийся в абсолютную границу, больше не продлевается.
+	renew := family.AbsoluteExpiresAt
+	if family.IdleExpiresAt.Before(family.AbsoluteExpiresAt) {
+		renew = earlier(renew, family.IdleExpiresAt.Add(-families.keys.ttl/3))
+	}
+	if family.Principal.ExpiresAt.Before(family.AbsoluteExpiresAt) {
+		renew = earlier(renew, family.Principal.ExpiresAt.Add(-refreshAdvance))
+	}
 	if renew.Before(families.now()) {
 		return families.now()
 	}
@@ -197,8 +204,12 @@ func (families *Families) Renew(ctx context.Context, id, browserID, csrfHash str
 		_, _ = families.terminate(family)
 		return Family{}, ErrReauthentication
 	}
-	if family.Principal.ExpiresAt.After(now.Add(refreshAdvance)) {
-		family.IdleExpiresAt = earlier(now.Add(families.keys.ttl), family.AbsoluteExpiresAt)
+	if !family.Principal.ExpiresAt.Before(family.AbsoluteExpiresAt) || family.Principal.ExpiresAt.After(now.Add(refreshAdvance)) {
+		expires := earlier(now.Add(families.keys.ttl), family.AbsoluteExpiresAt)
+		if !expires.After(family.IdleExpiresAt) {
+			return family, nil
+		}
+		family.IdleExpiresAt = expires
 		family.Version++
 		return families.write(ctx, family)
 	}

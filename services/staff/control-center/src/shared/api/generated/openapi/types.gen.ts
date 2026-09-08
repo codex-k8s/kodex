@@ -14,6 +14,11 @@ export type OwnerAuthorizationInput = {
     freshAuthentication?: boolean;
 };
 
+export type OwnerSessionTicket = {
+    ticket: string;
+    expiresAt: string;
+};
+
 export type OwnerSessionMetadata = {
     generation: string;
     version: number;
@@ -4095,6 +4100,34 @@ export type RenewOwnerSessionResponses = {
 };
 
 export type RenewOwnerSessionResponse = RenewOwnerSessionResponses[keyof RenewOwnerSessionResponses];
+
+export type CreateOwnerSessionTicketData = {
+    body?: never;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/session/ticket';
+};
+
+export type CreateOwnerSessionTicketErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type CreateOwnerSessionTicketError = CreateOwnerSessionTicketErrors[keyof CreateOwnerSessionTicketErrors];
+
+export type CreateOwnerSessionTicketResponses = {
+    /**
+     * Одноразовый ticket без OIDC credentials; Cache-Control no-store
+     */
+    200: OwnerSessionTicket;
+};
+
+export type CreateOwnerSessionTicketResponse = CreateOwnerSessionTicketResponses[keyof CreateOwnerSessionTicketResponses];
 
 export type BeginOwnerAuthorizationData = {
     body?: OwnerAuthorizationInput;

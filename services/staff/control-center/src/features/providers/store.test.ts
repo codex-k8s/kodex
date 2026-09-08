@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   revokeProviderAccount: vi.fn(),
   setProviderAccountEnabled: vi.fn(),
   startDeviceAuthorization: vi.fn(),
+  pollDeviceAuthorization: vi.fn(),
   verifyDeviceAuthorization: vi.fn(),
 }));
 vi.mock("./api", () => api);
@@ -259,7 +260,7 @@ describe("providers store", () => {
     });
     const authorized = account({ version: 2 });
     api.startDeviceAuthorization.mockResolvedValue(pending);
-    api.verifyDeviceAuthorization.mockResolvedValue(authorized);
+    api.pollDeviceAuthorization.mockResolvedValue(authorized);
     const store = useProvidersStore();
     const configurable = account();
     store.accounts = [configurable];
@@ -268,10 +269,8 @@ describe("providers store", () => {
     expect(store.pollingRefs).toEqual([pending.ref]);
     await vi.advanceTimersByTimeAsync(4_000);
 
-    expect(api.verifyDeviceAuthorization).toHaveBeenCalledWith(
-      pending,
-      expect.any(String),
-    );
+    expect(api.pollDeviceAuthorization).toHaveBeenCalledWith(pending);
+    expect(api.verifyDeviceAuthorization).not.toHaveBeenCalled();
     expect(store.pollingRefs).toEqual([]);
     expect(store.accounts[0]?.state).toBe("AUTHORIZED");
   });
@@ -361,7 +360,7 @@ describe("providers store", () => {
       const store = useProvidersStore();
       store.accounts = [pending];
       api.startDeviceAuthorization.mockReturnValue(response.promise);
-      api.verifyDeviceAuthorization.mockReturnValue(response.promise);
+      api.pollDeviceAuthorization.mockReturnValue(response.promise);
       const result =
         operation === "start"
           ? store.startDevice(pending)
@@ -373,7 +372,7 @@ describe("providers store", () => {
       expect(store.pollingRefs).toEqual([]);
       expect(
         api.startDeviceAuthorization.mock.calls.length +
-          api.verifyDeviceAuthorization.mock.calls.length,
+          api.pollDeviceAuthorization.mock.calls.length,
       ).toBe(1);
     },
   );

@@ -22,6 +22,7 @@ const (
 )
 
 type Config struct {
+	WebSocketLegacyUntil              string        `env:"KODEX_WS_LEGACY_UNTIL"`
 	HTTPListen                        string        `env:"CONTROL_API_GATEWAY_HTTP_LISTEN"`
 	TechnicalListen                   string        `env:"CONTROL_API_GATEWAY_TECHNICAL_LISTEN"`
 	TLSCertificateFile                string        `env:"CONTROL_API_GATEWAY_TLS_CERTIFICATE_FILE"`
@@ -92,6 +93,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if _, err := config.legacyWebSocketDeadline(time.Now().UTC()); err != nil {
+		return err
+	}
 	for _, address := range []string{config.HTTPListen, config.TechnicalListen} {
 		if _, _, err := net.SplitHostPort(address); err != nil {
 			return errors.New("control API listen address is invalid")
@@ -142,3 +146,14 @@ func (config Config) validate() error {
 	return nil
 }
 func (config Config) origins() []string { return strings.Split(config.AllowedOrigins, ",") }
+
+func (config Config) legacyWebSocketDeadline(now time.Time) (time.Time, error) {
+	if config.WebSocketLegacyUntil == "" {
+		return time.Time{}, nil
+	}
+	until, err := time.Parse(time.RFC3339, config.WebSocketLegacyUntil)
+	if err != nil || !strings.HasSuffix(config.WebSocketLegacyUntil, "Z") || until.Format(time.RFC3339) != config.WebSocketLegacyUntil || until.After(now.Add(24*time.Hour)) {
+		return time.Time{}, errors.New("legacy WebSocket cutoff is invalid")
+	}
+	return until, nil
+}

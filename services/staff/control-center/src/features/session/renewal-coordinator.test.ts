@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   sessionRenewalLeaseKey,
@@ -54,6 +54,44 @@ class MemoryChannel implements SessionRevisionChannel {
 }
 
 describe("session renewal coordinator", () => {
+  it("удерживает общий Web Lock до завершения refresh даже после lease timeout", async () => {
+    let held = false;
+    let complete!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+    vi.stubGlobal("navigator", {
+      locks: {
+        request: async (
+          _name: string,
+          _options: unknown,
+          callback: (lock: object | null) => Promise<boolean>,
+        ) => {
+          if (held) return await callback(null);
+          held = true;
+          try {
+            return await callback({});
+          } finally {
+            held = false;
+          }
+        },
+      },
+    });
+    try {
+      const storage = new MemoryStorage();
+      const first = new SessionRenewalCoordinator(storage, "first");
+      const second = new SessionRenewalCoordinator(storage, "second");
+      const operation = vi.fn(() => pending);
+      const one = first.runExclusive(operation);
+      expect(await second.runExclusive(operation)).toBe(false);
+      expect(operation).toHaveBeenCalledOnce();
+      complete();
+      expect(await one).toBe(true);
+      expect(await second.runExclusive(async () => {})).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("передаёт результат с дробной сетевой задержкой и не допускает второй refresh", () => {
     const storage = new MemoryStorage();
     let now = 100;

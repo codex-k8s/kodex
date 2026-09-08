@@ -116,7 +116,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	realtime, err := websockettransport.New(control, bus, config.origins())
+	legacyUntil, err := config.legacyWebSocketDeadline(time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	realtime, err := websockettransport.New(control, bus, config.origins(), security, legacyUntil)
 	if err != nil {
 		return err
 	}

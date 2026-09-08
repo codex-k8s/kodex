@@ -11,6 +11,11 @@ import { csrfToken } from "@/shared/api/mutation";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { usePlatformStore } from "@/features/platform/store";
 import { currentLocale } from "@/shared/locale";
+import {
+  asProblem,
+  notifyAuthoritativeUnauthorized,
+} from "@/shared/api/problem";
+import { requestRealtimeTicket } from "./ticket";
 
 export type StreamState = "connecting" | "live" | "offline" | "recovering";
 
@@ -28,6 +33,7 @@ interface ActiveRun {
 }
 
 interface SessionConnection {
+  ticketController?: AbortController;
   socket?: WebSocket;
   timer?: number;
   requestRef?: string;
@@ -138,6 +144,15 @@ export const useRealtimeStore = defineStore("realtime", () => {
     return session.socket === socket && !session.stopped;
   }
 
+  function activeTicketRequest(controller: AbortController): boolean {
+    return (
+      !controller.signal.aborted &&
+      session.ticketController === controller &&
+      !session.stopped &&
+      hasConsumers()
+    );
+  }
+
   function markOffline(): void {
     session.attempt += 1;
     if (platformWanted) {
@@ -159,12 +174,16 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
   function scheduleReconnect(): void {
     if (session.stopped || !hasConsumers()) return;
+    if (session.attempt >= 6) {
+      session.stopped = true;
+      return;
+    }
     if (session.timer !== undefined) window.clearTimeout(session.timer);
     markOffline();
     const delay = Math.min(10_000, 500 * 2 ** Math.min(session.attempt, 5));
     session.timer = window.setTimeout(() => {
       session.timer = undefined;
-      connect();
+      void connect();
     }, delay);
   }
 
@@ -457,6 +476,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
           problemTitle: envelope.title,
         };
       }
+      if (!envelope.retryable) {
+        session.stopped = true;
+        disconnect("SESSION_TERMINAL");
+        if (envelope.status === 401 || envelope.status === 403)
+          notifyAuthoritativeUnauthorized();
+      }
       return;
     }
     if (envelope.type === "SESSION_READY") {
@@ -506,8 +531,9 @@ export const useRealtimeStore = defineStore("realtime", () => {
     failProtocol(socket, "INVALID_SESSION_ENVELOPE");
   }
 
-  function connect(): void {
+  async function connect(): Promise<void> {
     if (session.stopped || !hasConsumers()) return;
+    if (session.ticketController) return;
     if (
       session.socket &&
       (session.socket.readyState === WebSocket.CONNECTING ||
@@ -526,11 +552,36 @@ export const useRealtimeStore = defineStore("realtime", () => {
     for (const runRef of activeRuns.keys())
       state[runRef] = { state: "connecting", attempt: session.attempt };
 
+    const controller = new AbortController();
+    session.ticketController = controller;
+    let ticket: string;
+    try {
+      ticket = await requestRealtimeTicket(controller.signal);
+      if (!activeTicketRequest(controller)) return;
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const problem = asProblem(error);
+      if (
+        problem.status === 401 ||
+        problem.status === 403 ||
+        !problem.retryable
+      ) {
+        session.stopped = true;
+        markOffline();
+        if (problem.status === 401 || problem.status === 403)
+          notifyAuthoritativeUnauthorized();
+      } else scheduleReconnect();
+      return;
+    } finally {
+      if (session.ticketController === controller)
+        session.ticketController = undefined;
+    }
     let socket: WebSocket;
     try {
       socket = new WebSocket(sessionStreamURL(), [
-        "kodex.session.v1",
+        "kodex.session.v2",
         `csrf.${csrfToken()}`,
+        `ticket.${ticket}`,
       ]);
     } catch {
       scheduleReconnect();
@@ -582,7 +633,9 @@ export const useRealtimeStore = defineStore("realtime", () => {
         return;
       }
       processing = processing
-        .then(() => processEnvelope(socket, value))
+        .then(() => {
+          if (activeSocket(socket)) return processEnvelope(socket, value);
+        })
         .catch(() => {
           if (activeSocket(socket))
             socket.close(clientReconnectCloseCode, "REALTIME_REDUCER_FAILED");
@@ -607,7 +660,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     state[runRef] = { state: "connecting", attempt: session.attempt };
     session.stopped = false;
     if (session.socket?.readyState === WebSocket.OPEN) subscribeRun(runRef);
-    else connect();
+    else void connect();
   }
 
   function closeRun(runRef: string): void {
@@ -630,7 +683,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       state: "connecting",
       attempt: session.attempt,
     });
-    connect();
+    void connect();
   }
 
   function closePlatform(): void {
@@ -649,6 +702,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function disconnect(reason: string): void {
+    session.ticketController?.abort();
+    session.ticketController = undefined;
     if (session.timer !== undefined) window.clearTimeout(session.timer);
     session.timer = undefined;
     session.socket?.close(1000, reason);
@@ -679,13 +734,14 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
   function refreshSession(): void {
     disconnect("SESSION_RENEWED");
-    connect();
+    session.stopped = false;
+    void connect();
   }
 
   function handleOnline(): void {
     if (session.timer !== undefined) window.clearTimeout(session.timer);
     session.timer = undefined;
-    connect();
+    void connect();
   }
 
   window.addEventListener("online", handleOnline);

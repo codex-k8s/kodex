@@ -305,6 +305,31 @@ realtime transport после общей HTTP boundary. Sliding activity фик�
 только полностью проверенная session renewal mutation; reconnect с истёкшей
 API session проходит новый warm SSO flow.
 
+Срок idle, совпавший с immutable absolute expiry, не создаёт новые refresh:
+сервер планирует только действительно продлеваемый idle либо access credential.
+No-op renewal не увеличивает logical session version; lease/storage CAS revision
+не выдаётся за смену полномочий. Межвкладочный Web Lock удерживается до полного
+ответа, а bounded lease и BroadcastChannel передают только безопасные сроки.
+
+`kodex.session.v2` требует новый одноразовый ticket перед каждым Upgrade.
+`POST /api/v1/session/ticket` проверяет актуальную cookie/CSRF/authority;
+отдельный encrypted ledger в durable browserstate не меняет JSON family и её
+version. Ticket связан с family, browser binding, CSRF и logical version,
+живёт не более 30 секунд и access/idle/absolute expiry. Ledger содержит максимум
+16 живых digest tickets; CAS потребляет один до Upgrade во всех replicas.
+Replay, corruption, неизвестный CAS outcome и stale binding не открывают socket.
+Билеты соседних вкладок независимы. Tokens и ticket запрещены в URL, logs и
+browser storage; PWA передаёт ticket только через subprotocol.
+
+Переход со старой PWA допускает `kodex.session.v1` с прежней cookie/CSRF boundary
+только до явно назначенного `KODEX_WS_LEGACY_UNTIL`: default OFF, абсолютный UTC
+cutoff не дальше 24 часов при startup. Истёкший cutoff закрывает новые v1
+handshakes, не останавливая API. Новая PWA использует только v2 без fallback.
+Repo-owned `tools/release/websocket-transition.mjs` меняет только env API через
+UID/resourceVersion CAS, запрещает продление cutoff и повторное включение после
+retirement. Сначала включается ограниченное окно и обновляются все API readers,
+затем PWA, затем выполняется retirement. Общие Secrets и trust не ротируются.
+
 Bootstrap state browser E2E хранит только cookies OAuth2/Keycloak SSO и не
 содержит прикладные API cookies. Каждый тест получает новый browser context,
 проходит warm OIDC flow и создаёт собственную API session. Файл bootstrap

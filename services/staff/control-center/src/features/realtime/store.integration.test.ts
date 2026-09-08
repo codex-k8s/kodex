@@ -14,6 +14,11 @@ vi.mock("@/shared/api/mutation", () => ({
 }));
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 
+const ticketApi = vi.hoisted(() => ({
+  requestRealtimeTicket: vi.fn<() => Promise<string>>(),
+}));
+vi.mock("./ticket", () => ticketApi);
+
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 
@@ -170,8 +175,44 @@ function runSnapshot(
 }
 
 describe("browser-session realtime multiplexer", () => {
+  it("terminal SESSION_PROBLEM останавливает reconnect", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message({
+      type: "SESSION_PROBLEM",
+      status: 401,
+      code: "SESSION_EXPIRED",
+      title: "Session expired",
+      retryable: false,
+    });
+    await flushProcessing();
+    windowEvents.get("online")?.();
+    await flushProcessing();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(scheduled).toHaveLength(0);
+    expect(socket.closeReason).toBe("SESSION_TERMINAL");
+    store.closeAll();
+  });
+  it("поздний ticket не открывает socket после закрытия store", async () => {
+    let complete!: (ticket: string) => void;
+    ticketApi.requestRealtimeTicket.mockReturnValueOnce(
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+    );
+    const store = useRealtimeStore();
+    store.openPlatform();
+    store.closeAll();
+    complete("t".repeat(43));
+    await flushProcessing();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
   beforeEach(() => {
     setActivePinia(createPinia());
+    ticketApi.requestRealtimeTicket.mockResolvedValue("t".repeat(43));
     FakeWebSocket.instances = [];
     scheduled.length = 0;
     windowEvents.clear();
@@ -211,20 +252,22 @@ describe("browser-session realtime multiplexer", () => {
     vi.unstubAllGlobals();
   });
 
-  it("открывает один session socket и возобновляет platform с двумя run", () => {
+  it("открывает один session socket и возобновляет platform с двумя run", async () => {
     const store = useRealtimeStore();
     store.openPlatform();
     store.openRun("run_realtime01");
     store.openRun("run_realtime02");
 
+    await flushProcessing();
     expect(FakeWebSocket.instances).toHaveLength(1);
     const socket = socketAt(0);
     expect(socket.url).toBe(
       "wss://kodex.example/api/v1/session/stream?locale=ru",
     );
     expect(socket.protocols).toEqual([
-      "kodex.session.v1",
+      "kodex.session.v2",
       "csrf.csrf-test-value-with-sufficient-length-000000000000",
+      `ticket.${"t".repeat(43)}`,
     ]);
 
     socket.open();
@@ -240,9 +283,10 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
-  it("подписывает и отписывает run на том же socket", () => {
+  it("подписывает и отписывает run на том же socket", async () => {
     const store = useRealtimeStore();
     store.openPlatform();
+    await flushProcessing();
     const socket = socketAt(0);
     socket.open();
 
@@ -268,6 +312,7 @@ describe("browser-session realtime multiplexer", () => {
   it("не смешивает dynamic subscribe с immutable initial resume", async () => {
     const store = useRealtimeStore();
     store.openRun("run_realtime01");
+    await flushProcessing();
     const socket = socketAt(0);
     socket.open();
     store.openRun("run_realtime02");
@@ -297,6 +342,7 @@ describe("browser-session realtime multiplexer", () => {
     store.openPlatform();
     store.openRun("run_realtime01");
     store.openRun("run_realtime02");
+    await flushProcessing();
     const first = socketAt(0);
     first.open();
 
@@ -316,6 +362,7 @@ describe("browser-session realtime multiplexer", () => {
     first.close(1006, "CONNECTION_LOST");
     expect(scheduled).toHaveLength(1);
     scheduled.shift()?.();
+    await flushProcessing();
     const second = socketAt(1);
     second.open();
     expect(resumeRequest(second)).toMatchObject({
@@ -326,8 +373,11 @@ describe("browser-session realtime multiplexer", () => {
         { runRef: "run_realtime02", afterSequence: 4 },
       ],
     });
+    ticketApi.requestRealtimeTicket.mockResolvedValueOnce("n".repeat(43));
     store.refreshSession();
+    await flushProcessing();
     const renewed = socketAt(2);
+    expect(renewed.protocols).toContain(`ticket.${"n".repeat(43)}`);
     renewed.open();
     expect(resumeRequest(renewed)).toMatchObject({
       type: "SESSION_RESUME",
@@ -345,6 +395,7 @@ describe("browser-session realtime multiplexer", () => {
     store.openPlatform();
     store.openRun("run_realtime01");
     store.openRun("run_realtime02");
+    await flushProcessing();
     const socket = socketAt(0);
     socket.open();
     socket.message(runSnapshot(socket, "run_realtime01"));
@@ -380,6 +431,7 @@ describe("browser-session realtime multiplexer", () => {
   it("не принимает snapshot без непрерывной авторитетной истории", async () => {
     const store = useRealtimeStore();
     store.openRun("run_realtime01");
+    await flushProcessing();
     const socket = socketAt(0);
     socket.open();
 
@@ -404,6 +456,7 @@ describe("browser-session realtime multiplexer", () => {
   it("принимает готовность точного набора потоков и отклоняет подмену", async () => {
     const store = useRealtimeStore();
     store.openRun("run_realtime01");
+    await flushProcessing();
     const socket = socketAt(0);
     socket.open();
     socket.message(runSnapshot(socket, "run_realtime01"));
