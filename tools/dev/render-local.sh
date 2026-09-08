@@ -184,77 +184,17 @@ aws_cli_image=$(jq -er '
 ' "$lock_file") || fail 'AWS CLI image lock is absent'
 [[ "$aws_cli_image" =~ ^docker\.io/amazon/aws-cli@sha256:[a-f0-9]{64}$ ]] ||
   fail 'AWS CLI image lock is invalid'
-air_module=$(jq -er '.tools.air.module' "$lock_file") || fail 'Air module lock is absent'
-air_version=$(jq -er '.tools.air.version' "$lock_file") || fail 'Air version lock is absent'
-[[ "$air_module" == "github.com/air-verse/air" && "$air_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
-  fail 'Air tool lock is invalid'
-# Module data and development tools are primed by the trusted host process and
-# mounted read-only. Only workload-specific build caches remain writable.
-go_module_cache="$cache_root/go-mod-v2"
-go_sumdb_cache="$cache_root/go-sumdb"
+# Общий prime сериализует host download и Air; dirty local source остаётся допустимым.
+# Scoped staging использует отдельный clean-source adapter prime-go-cache.py.
 go_build_cache="$cache_root/go-build-v2"
-go_prime_cache="$go_build_cache/host-prime"
-install -d -m 0755 \
-  "$go_module_cache/cache/download/sumdb/sum.golang.org" \
-  "$go_sumdb_cache/sum.golang.org" \
-  "$cache_root/go-tools"
-install -d -m 0777 "$go_prime_cache"
-install -d -m 0755 "$go_build_cache"
-chmod -R u+rwX \
-  "$go_module_cache" \
-  "$go_sumdb_cache" \
-  "$cache_root/go-tools"
-chmod 0777 "$go_prime_cache"
+go_prime_result=$(python3 "$repository_root/tools/dev/prime-render-go-cache.py" \
+  "$source_root" "$cache_root" "$deployment_profile")
+air_digest=$(jq -er '.airSHA256 | select(test("^[a-f0-9]{64}$"))' <<<"$go_prime_result")
 install -d -m 0777 "$source_root/services/staff/control-center/node_modules"
 chmod 0777 "$source_root/services/staff/control-center/node_modules"
 frontend_cache=$(bash "$source_root/tools/dev/prime-frontend-cache.sh" "$source_root" "$cache_root")
 node_image=$(sed -n 's/^FROM \(docker.io\/library\/node:[^ ]*\) AS build$/\1/p' \
   "$source_root/services/staff/control-center/Dockerfile")
-
-# Local NetworkPolicy intentionally blocks arbitrary Internet access from pods.
-# Prime every module used by hot-reload workloads on the host so migrations and
-# service restarts are deterministic and do not weaken that boundary.
-go_modules=(
-  services/internal/control-plane
-  services/internal/secret-broker
-  services/internal/stt-tts-service
-  services/internal/email-bridge
-  services/internal/internal-rpc-authority
-  services/internal/runtime-controller
-  services/external/control-api-gateway
-  services/external/egress-gateway
-  services/external/integration-gateway
-  services/jobs/automation-scheduler
-  services/jobs/artifact-retention
-  services/jobs/session-archive
-)
-if [[ "$deployment_profile" == web-with-mattermost ]]; then
-  go_modules+=(services/external/interaction-gateway)
-fi
-for module in "${go_modules[@]}"; do
-  [[ -f "$source_root/$module/go.mod" ]] || fail "Go module is absent: $module"
-  GOMODCACHE="$go_module_cache" GOCACHE="$go_prime_cache" GOWORK=off GOTOOLCHAIN=local \
-    go -C "$source_root/$module" mod download || fail "Go module cache prime failed: $module"
-done
-air_binary="$cache_root/go-tools/air"
-air_contract_file="$cache_root/go-tools/air.contract"
-air_contract="$air_module@$air_version|CGO_ENABLED=0|$(go env GOOS)/$(go env GOARCH)"
-current_air_contract=$(cat "$air_contract_file" 2>/dev/null || true)
-if [[ ! -x "$air_binary" || "$current_air_contract" != "$air_contract" ]]; then
-  rm -f -- "$air_binary" "$air_contract_file"
-  CGO_ENABLED=0 GOBIN="$cache_root/go-tools" GOMODCACHE="$go_module_cache" \
-    GOCACHE="$go_prime_cache" GOWORK=off GOTOOLCHAIN=local \
-    go install "$air_module@$air_version" || fail 'Air installation failed'
-  [[ -x "$air_binary" ]] || fail 'Air installation did not produce an executable'
-  printf '%s\n' "$air_contract" >"$air_contract_file"
-fi
-air_digest=$(sha256sum -- "$air_binary" | awk '{print $1}')
-[[ "$air_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'Air executable digest is invalid'
-chmod -R a-w "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools"
-find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type d -exec chmod a+rx {} +
-find "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools" -type f -exec chmod a+r {} +
-# Исполнение доступно каждому non-root UID контейнера независимо от umask сборщика.
-chmod 0555 "$air_binary"
 
 temporary_directory=$(mktemp -d)
 render="$temporary_directory/local.yaml"

@@ -48,6 +48,72 @@ images без hostPath/Air/Vite/SSH; production требует отдельно�
 Критерии выбора сборки и команды ежедневной поставки находятся в
 [руководстве релиза](../../tools/release/README.md#выбор-source-и-image).
 
+### Подготовка Go cache перед ограниченной выкладкой
+
+При изменении Go dependencies root готовит только выбранные hot-reload modules
+из точного чистого source. Команда не запускает Docker, сборку image, render,
+Kubernetes apply, миграции, Air install или frontend preparation. Общий dev
+профиль остаётся hot reload; новый Git SHA не требует image rebuild.
+
+Cache root должен уже существовать и принадлежать оператору. На текущем host
+это `/srv/kodex-dev/state/cache`; private evidence хранится в отдельном каталоге
+0700, каждый JSONL имеет новое имя и права 0600. Root запускает скрипт из точного
+checkout после доставки исходников штатным creator/prepare:
+
+```bash
+python3 tools/dev/prime-go-cache.py plan --profile staging-hot-reload \
+  --source-root "$SOURCE" --revision "$EXACT_SOURCE_SHA" \
+  --cache-root /srv/kodex-dev/state/cache \
+  --module services/external/control-api-gateway \
+  --timeout-seconds 600 --lock-timeout-seconds 60 \
+  --evidence "$NEW_PRIVATE_PLAN_EVIDENCE"
+python3 tools/dev/prime-go-cache.py prime --profile staging-hot-reload \
+  --source-root "$SOURCE" --revision "$EXACT_SOURCE_SHA" \
+  --cache-root /srv/kodex-dev/state/cache \
+  --module services/external/control-api-gateway \
+  --timeout-seconds 600 --lock-timeout-seconds 60 \
+  --evidence "$NEW_PRIVATE_PRIME_EVIDENCE" --confirm PRIME-STAGING-GO-CACHE
+```
+
+`--module` можно повторить для ограниченного списка из закрытого реестра
+`tools/dev/go_cache.py`: 12 основных Go deployables и optional interaction-gateway.
+Runner/RoleImage binaries в этот source-cache workflow не входят. Plan читает
+Git/module metadata и проверяет Go 1.26.6; shared cache не меняется, сеть не нужна.
+Prime повторяет проверки и берёт общий `.go-prime.lock`; lock timeout не запускает
+вторую подготовку. Бюджет рабочих команд до 1800 секунд, ожидания lock — 600 секунд;
+после timeout/сигнала дочерний процесс завершается до закрытия cache permissions.
+Завершающее восстановление permissions выполняется и при ошибке, после прекращения
+рабочих команд; оно не прерывается из-за исчерпания их бюджета.
+
+Go получает `GOWORK=off`, `GOTOOLCHAIN=local`, `GOENV=off` и отдельный HOME;
+private env, host git credentials, netrc, GOFLAGS и пользовательский GOPROXY
+не наследуются. Используются публичные proxy.golang.org и sum.golang.org.
+Из source копируются только точные go.mod/go.sum и локальные replacement
+manifests внутри libs/go. Download/verify выполняются в приватной временной
+копии: исходный checkout никогда не исправляется командой Go. Необходимая правка
+go.mod/go.sum даёт `GO_MANIFEST_REWRITE_REQUIRED` и требует обычного code-first fix.
+Источник, revision, module identities и исходные digests проверяются до/после;
+source drift закрыто прекращает подготовку.
+
+Cache roots `go-mod-v2`, `go-sumdb` после prime доступны non-root Pods на чтение
+и не имеют write bits. Workload-specific build caches остаются отдельными;
+host-prime build cache доступен только оператору. JSONL содержит INTENT до
+подготовки, версии и h1 sums dependencies, source/manifests digests, PASS/FAIL;
+сырые stdout/stderr Go, URL credentials и содержимое module cache не публикуются.
+FAIL сохраняется, следующее действие начинает с его readback; ничего не удалять
+и не снимать lock живого процесса. Lock автоматически освобождается ядром после
+завершения процесса; файл lock оставляется.
+
+`render-local.sh` использует тот же lock/download/verify/seal primitive через
+`prime-render-go-cache.py`. Этот trusted local adapter сохраняет существующий
+dirty-source fingerprint dev renderer и дополнительно готовит locked Air.
+Он не является обходным staging entrypoint. У standalone CLI dirty source
+всегда запрещён. Проверки: `make test-local-go-cache-contract`.
+
+PASS prime означает только подготовленный cache. Затем root выполняет обычные
+scoped plan/apply и проверяет запуск новой replica с read-only cache, actual
+serving version и неизменность соседей. Сам prime Deployments/Pods не меняет.
+
 Только bare-metal bootstrap удалённого контура устанавливает именованный AppArmor profile
 `kodex-provider-runtime`. Он точечно разрешает `userns` только provider-контейнеру,
 чтобы Codex мог создать внутренний bubblewrap sandbox с запретом чтения
