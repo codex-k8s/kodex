@@ -7,6 +7,10 @@ import ProviderAccountsWorkspace from "../../src/features/providers/ProviderAcco
 import RuntimeSecretDraftDialog from "../../src/features/runtime-secrets/RuntimeSecretDraftDialog.vue";
 import type { RuntimeSecret } from "../../src/features/runtime-secrets/model";
 const kind = new URLSearchParams(window.location.search).get("kind");
+const sourceProjectRef =
+  new URLSearchParams(window.location.search).get("project") === "1"
+    ? "project_fixture"
+    : undefined;
 const open = ref(true);
 const initialDraftRef =
   new URLSearchParams(window.location.search).get("draftRef") ?? undefined;
@@ -47,6 +51,11 @@ function saveRefs(draftRef: string, planRef?: string): void {
       secret-ref="secret"
       :revision="7"
       @close="open = false"
+    />
+    <ConfigurationEditor
+      v-else-if="kind === 'source-create'"
+      kind="ROLE_IMAGE"
+      :project-ref="sourceProjectRef"
     />
     <ConfigurationEditor
       v-else-if="kind === 'git'"
