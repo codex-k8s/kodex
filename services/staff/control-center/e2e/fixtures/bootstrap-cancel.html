@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Отмена проверки допуска</title>
+  </head>
+  <body>
+    <button id="start">Начать</button>
+    <button id="synchronize">Обновить bootstrap</button>
+    <button id="stop">Остановить</button>
+    <output id="available">false</output>
+    <script type="module">
+      import { SpeechAvailabilityLease } from "../../src/features/speech/availability";
+      const lease = new SpeechAvailabilityLease({
+        async read(signal) {
+          const response = await fetch("/api/v1/bootstrap", { signal });
+          return (await response.json()).speechTranscription;
+        },
+        changed(value) {
+          document.querySelector("#available").textContent = String(value);
+        },
+      });
+      document.querySelector("#start").onclick = () => lease.start();
+      document.querySelector("#synchronize").onclick = () =>
+        lease.synchronize({
+          available: false,
+          reason: "STT_PERMISSION_DENIED",
+        });
+      document.querySelector("#stop").onclick = () => lease.stop();
+    </script>
+  </body>
+</html>

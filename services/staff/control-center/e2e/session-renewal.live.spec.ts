@@ -1,4 +1,13 @@
-import { test } from "@playwright/test";
+import { test, type Request } from "@playwright/test";
+import {
+  installSessionBootstrapObserver,
+  SessionBootstrapCorrelator,
+  sessionBootstrapIDHeader,
+} from "./session-bootstrap-observer";
+import {
+  SessionRequestDiagnostics,
+  type SessionProofStage,
+} from "./session-request-diagnostics";
 import { createHash } from "node:crypto";
 import { persistSessionRenewalEvidence } from "./session-renewal-evidence";
 import {
@@ -32,8 +41,19 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
   };
   const metadata: ReturnType<typeof sessionTiming>[] = [];
   const pending = new Set<Promise<void>>();
+  const bootstrapObservers: SessionBootstrapCorrelator<Request>[] = [];
+  const failedRequests: Request[] = [];
+  const bootstrapDiagnostics =
+    process.env.KODEX_E2E_BOOTSTRAP_SIGNAL_DIAGNOSTICS;
+  if (bootstrapDiagnostics !== undefined && bootstrapDiagnostics !== "1")
+    throw new Error("Invalid bootstrap signal diagnostic profile");
+  let confirmedBootstrapAborts = 0;
+  let confirmedRequestSequences: number[] = [];
   let protocolReadback: string[][] = [];
-  let stage = "PREFLIGHT";
+  let stage: SessionProofStage = "PREFLIGHT";
+  const requestDiagnostics = new SessionRequestDiagnostics<Request>(
+    environment.baseURL,
+  );
   let passed = false;
   let initial: ReturnType<typeof renewalWindow> | undefined;
   let naturalRenewalAt = 0;
@@ -69,11 +89,35 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
     await context.addInitScript(installProtocolObserver);
     const pages = await Promise.all([context.newPage(), context.newPage()]);
     for (const [index, page] of pages.entries()) {
+      const bootstrapObserver = new SessionBootstrapCorrelator<Request>(
+        `${environment.baseURL}/api/v1/bootstrap`,
+      );
+      bootstrapObservers.push(bootstrapObserver);
+      if (bootstrapDiagnostics === "1")
+        await installSessionBootstrapObserver(
+          page,
+          environment.baseURL,
+          (event) => bootstrapObserver.observe(event),
+        );
       page.on("pageerror", () => counters.pageErrors++);
       page.on("console", (message) => {
         if (message.type() === "error") counters.consoleErrors++;
       });
       page.on("request", (request) => {
+        if (bootstrapDiagnostics === "1")
+          bootstrapObserver.request(
+            request,
+            request.url(),
+            request.method(),
+            request.headers()[sessionBootstrapIDHeader],
+          );
+        requestDiagnostics.start(request, {
+          url: request.url(),
+          method: request.method(),
+          resourceType: request.resourceType(),
+          stage,
+          tab: index,
+        });
         const url = new URL(request.url());
         if (url.origin !== environment.baseURL) return;
         if (url.pathname === "/api/v1/session" && request.method() === "PUT") {
@@ -86,7 +130,16 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
         )
           counters.ticketRequests++;
       });
-      page.on("requestfailed", () => counters.failedRequests++);
+      page.on("requestfailed", (request) => {
+        counters.failedRequests++;
+        failedRequests.push(request);
+        bootstrapObserver.failed(request);
+        requestDiagnostics.failed(
+          request,
+          stage,
+          request.failure()?.errorText ?? "UNKNOWN",
+        );
+      });
       page.on("response", (response) => {
         const url = new URL(response.url());
         if (
@@ -168,6 +221,16 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
         ),
       ),
     );
+    confirmedBootstrapAborts = failedRequests.filter((request) =>
+      bootstrapObservers.some((observer) => observer.cancelled(request)),
+    ).length;
+    confirmedRequestSequences = failedRequests
+      .filter((request) =>
+        bootstrapObservers.some((observer) => observer.cancelled(request)),
+      )
+      .map((request) => requestDiagnostics.sequenceOf(request))
+      .filter((sequence): sequence is number => sequence !== undefined)
+      .slice(0, 32);
     if (
       !tabs.every(resumedAfterRenewal) ||
       counters.refreshRequests !== 1 ||
@@ -177,7 +240,9 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       ) ||
       counters.ticketRequests < 4 ||
       counters.ticketSuccesses !== counters.ticketRequests ||
-      counters.failedRequests ||
+      counters.failedRequests !== confirmedBootstrapAborts ||
+      requestDiagnostics.snapshot().overflow > 0 ||
+      bootstrapObservers.some((observer) => observer.snapshot().overflow > 0) ||
       counters.badResponses ||
       counters.pageErrors ||
       counters.consoleErrors ||
@@ -199,6 +264,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
   } finally {
     const observedTabs = structuredClone(tabs);
     const observedCounters = { ...counters };
+    const observedRequests = requestDiagnostics.snapshot();
     // Закрываем страницы до teardown: автоматический error-context не получает DOM.
     await Promise.all(
       context.pages().map((page) => page.close().catch(() => undefined)),
@@ -218,6 +284,13 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
         pwa: versions.pwa,
       },
       servingManifestSHA256,
+      bootstrapSignalDiagnostics: {
+        enabled: bootstrapDiagnostics === "1",
+        confirmedBootstrapAborts,
+        confirmedRequestSequences,
+        unexplainedFailures: counters.failedRequests - confirmedBootstrapAborts,
+        tabs: bootstrapObservers.map((observer) => observer.snapshot()),
+      },
       naturalRenewalAt: naturalRenewalAt
         ? new Date(naturalRenewalAt).toISOString()
         : undefined,
@@ -227,6 +300,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       versionEvidence:
         "operator-supplied; serving readback is a separate prerequisite",
       counters: observedCounters,
+      requestDiagnostics: observedRequests,
       protocols: protocolReadback,
       tabs: observedTabs,
       absoluteExpiryUnchanged:

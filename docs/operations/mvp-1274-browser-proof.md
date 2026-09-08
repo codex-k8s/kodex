@@ -4,7 +4,7 @@ title: Проверка PWA в Chromium, Firefox и WebKit
 type: verification
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-08
 ---
 
@@ -191,7 +191,6 @@ BrowserContext.grantPermissions; MDN AudioContext.createMediaStreamDestination
 используются. Credentials, настоящее аудио/тексты и персональные данные не
 использовались и не раскрывались.
 
-
 ## Уточнение наблюдателя #1285
 
 Диагностический Chromium Home900 `probe1` на базе `f90742b21649` прошёл,
@@ -230,3 +229,38 @@ Unit negatives/diagnostics: 12/12 PASS; E2E typecheck и scoped ESLint PASS.
 Предыдущий loopback2: 4 PASS/2 FAIL из-за сериализации GET в native cache;
 после явного fixture `no-store` loopback3: 6/6 PASS. Эти промежуточные
 результаты не заменяют неизменный кандидат и сохраняются отдельно.
+
+## Точная отмена при переходе и диагностика #1315–1317
+
+Полный исторический запуск на `9e6db2bedd8f9e005a1d25834b6b20288921eb6a`
+дал 322 PASS / 5 FAIL; новые узкие проверки его не заменяют.
+Диагностика воспроизвела #1315: fixture START конкретного bootstrap fetch пришёл
+до явного `goto`, а событие network Request с тем же ID — после снимка
+`pendingRequests`. Firefox отменил запрос при замене документа, оставив URL
+прежним. Поэтому прежний наблюдатель терял связь отмены с переходом.
+
+Теперь navigation intent фиксирует уже наблюдавшиеся START identities.
+Поздний Request разрешается только через тот же уникальный ID и URL;
+завершённые/упавшие ранее запросы и новые START не входят в снимок. Неизвестный
+browser code, missing/duplicate identity и несовпадение URL по-прежнему FAIL.
+Unit воспроизводит этот порядок и проверяет, что последующий переход не
+скрывает ранее случившийся network failure.
+
+Home и impact сохраняют `synthetic-network-safe.json` через exclusive file
+и `attach(path)`, включая timeline API/document, конкретные fixture fetch ID,
+AbortSignal, navigation intent/frame event и безопасную категорию console.
+Событие frame само по себе не доказывает замену документа и не меняет исход.
+Для local asset fetch отдельно записываются начало, status либо closed reason;
+retry не добавлен. Содержимое headers/body/query и console text не сохраняется.
+Бюджет 4096 записей, overflow сохраняет artifact и приводит к FAIL.
+
+Первое диагностическое окно отдельно осталось FAIL из-за переполнения
+успешными JS/CSS событиями. После их исключения из timeline исходный
+Firefox900 FAIL был воспроизведён; Firefox390 прошёл. WebKit Home1920/768 и
+impact environment390 прошли, но прежние #1316 access-control и #1317 socket
+reset не объяснены этим фактом и остаются открытыми. После исправления #1315
+оба Firefox900/390 прошли. Exact SHA и команды локальных проверок указаны в PR;
+живые browser/provider сценарии этим профилем не доказываются.
+
+Context7 `/microsoft/playwright/v1.61.0`: Request failure/events, route.fetch
+maxRetries (по умолчанию 0), waitForResponse и locator assertions.

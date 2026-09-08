@@ -82,8 +82,18 @@ func MaterializeMailbox(spec entity.EmailMailboxSpecification, binding MailboxBi
 		endpoint := *spec.POP
 		mailbox.Pop = &endpoint
 	}
+	legacyMark := false
 	for index := range mailbox.Policies {
 		mailbox.Policies[index].Folders = slices.Clone(mailbox.Policies[index].Folders)
+		if mailbox.Policies[index].Operation == api.OperationMark {
+			legacyMark = true
+			mailbox.Policies[index].Policy = api.Deny
+		}
+	}
+	// Публичные typed команды содержат 21 операцию. Legacy mark нужен только
+	// формату bridge: материализуем его закрыто, не добавляя capability/grant.
+	if !legacyMark {
+		mailbox.Policies = append(mailbox.Policies, api.OperationPolicy{Operation: api.OperationMark, Policy: api.Deny})
 	}
 	configuration := api.Configuration{Version: "email-bridge/v1", Revision: 1, ManagedBy: "ui", Source: "control-plane", Mailboxes: []api.Mailbox{mailbox}}
 	if api.ValidateConfiguration(configuration) != nil || !mailboxNetworkShape(mailbox) {

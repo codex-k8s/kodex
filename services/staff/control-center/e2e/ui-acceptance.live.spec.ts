@@ -164,9 +164,25 @@ test("широкая UI-приёмка сохраняет независимые
   await context.route("**/*", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    let permissionQuery: unknown;
+    if (
+      request.method() === "POST" &&
+      url.pathname === "/api/v1/administration/access/effective-access/query"
+    ) {
+      try {
+        permissionQuery = request.postDataJSON();
+      } catch {
+        /* Неверный JSON остаётся заблокирован. */
+      }
+    }
     if (
       url.origin === environment.baseURL &&
-      !permittedRequest(request.method(), url.pathname, creatingProject)
+      !permittedRequest(
+        request.method(),
+        url.pathname,
+        creatingProject,
+        permissionQuery,
+      )
     ) {
       counters.blockedWrites++;
       await route.abort("blockedbyclient");
@@ -272,7 +288,22 @@ test("широкая UI-приёмка сохраняет независимые
         counters.networkErrors === before.networkErrors &&
         counters.blockedWrites === before.blockedWrites
       ) {
-        await record(id, ids, "NOT RUN", "FIXTURE_UNAVAILABLE");
+        await record(
+          id,
+          ids,
+          "NOT RUN",
+          "FIXTURE_UNAVAILABLE",
+          error instanceof ReadonlyFixtureMissing
+            ? {
+                fixtureProjectsEmpty: error.stage === "PROJECTS_EMPTY",
+                fixtureProjectDialogEmpty:
+                  error.stage === "PROJECT_DIALOG_EMPTY",
+                fixtureHistoryEmpty: error.stage === "ASSISTANT_HISTORY_EMPTY",
+                fixtureComposerUnavailable:
+                  error.stage === "ASSISTANT_COMPOSER_UNAVAILABLE",
+              }
+            : {},
+        );
         return false;
       }
       await Promise.all(shapeReads);

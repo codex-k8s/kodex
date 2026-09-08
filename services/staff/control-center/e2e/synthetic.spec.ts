@@ -1,3 +1,4 @@
+import { syntheticNetworkJournal } from "./synthetic-network-journal";
 import { expect, type Request } from "@playwright/test";
 import {
   browserHTTPConsoleStatus,
@@ -154,6 +155,14 @@ const integration: IntegrationDefinition = {
   ],
 };
 
+const journals = new WeakMap<
+  import("@playwright/test").Page,
+  ReturnType<typeof syntheticNetworkJournal>
+>();
+test.afterEach(async ({ page }) => {
+  await journals.get(page)?.finish();
+});
+
 for (const { width, height } of [
   { width: 2900, height: 1600 },
   { width: 2560, height: 1440 },
@@ -235,6 +244,8 @@ for (const { width, height } of [
       if (message.type() === "error" || message.type() === "warning")
         failures.push(message.text());
     });
+    const networkJournal = syntheticNetworkJournal(page, testInfo);
+    journals.set(page, networkJournal);
     const pendingRequests = new Map<Request, string>();
     const cancelledRequests = new WeakSet<Request>();
     const failedRequests: Array<{
@@ -243,9 +254,13 @@ for (const { width, height } of [
       code: string;
     }> = [];
     const fetches = new SyntheticFetchCorrelator<Request>();
-    await installSyntheticAbortObserver(page, (event) =>
-      fetches.observe(event),
-    );
+    await installSyntheticAbortObserver(page, (event) => {
+      fetches.observe(event);
+      networkJournal.record(`fetch-${event.phase}`, {
+        identity: event.id,
+        path: new URL(event.url).pathname,
+      });
+    });
     const cancelInspectorRequests = () => {
       for (const request of pendingRequests.keys())
         if (
@@ -260,6 +275,8 @@ for (const { width, height } of [
       // Явный переход сценария отменяет только уже существующее поколение запросов.
       for (const request of pendingRequests.keys())
         cancelledRequests.add(request);
+      networkJournal.record("navigation-intent", { kind: "goto" });
+      fetches.navigationStarted();
       return navigate(...args);
     };
     const reload = page.reload.bind(page);
@@ -267,6 +284,8 @@ for (const { width, height } of [
       // Reload оставляет URL прежним; unload всё равно отменяет текущее поколение.
       for (const request of pendingRequests.keys())
         cancelledRequests.add(request);
+      networkJournal.record("navigation-intent", { kind: "reload" });
+      fetches.navigationStarted();
       return reload(...args);
     };
     page.on("request", (request) => {
@@ -278,7 +297,10 @@ for (const { width, height } of [
           request.headers()[syntheticFetchIDHeader],
         );
     });
-    page.on("requestfinished", (request) => pendingRequests.delete(request));
+    page.on("requestfinished", (request) => {
+      pendingRequests.delete(request);
+      fetches.terminal(request);
+    });
     page.on("response", (response) => {
       if (
         response.status() === 404 &&
@@ -299,6 +321,7 @@ for (const { width, height } of [
       // Binding AbortSignal может прийти после network event. Проверка — в конце,
       // при этом неизвестный исход не становится успешным по истечению времени.
       pendingRequests.delete(request);
+      fetches.terminal(request);
     });
     await context.addCookies([
       {

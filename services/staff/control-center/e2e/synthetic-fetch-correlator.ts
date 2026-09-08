@@ -6,6 +6,8 @@ const identityPattern =
 // Identity приходит из одного fixture fetch и заголовка именно его network request.
 // Совпадение URL/порядка или число одновременно завершившихся запросов не используются.
 export class SyntheticFetchCorrelator<T extends object> {
+  private readonly navigationIdentities = new Set<string>();
+  private readonly terminalRequests = new WeakSet<T>();
   private readonly events = new Map<
     string,
     { url: string; started: boolean; aborted: boolean; invalid: boolean }
@@ -46,6 +48,26 @@ export class SyntheticFetchCorrelator<T extends object> {
     this.identities.set(id, requests);
   }
 
+  terminal(request: T): void {
+    this.terminalRequests.add(request);
+  }
+
+  // START может быть доставлен до goto, а network Request — уже после него.
+  // Фиксируем именно существующие identities; прошлый FAIL и новые START не входят.
+  navigationStarted(): void {
+    for (const [id, event] of this.events) {
+      const requests = this.identities.get(id);
+      if (
+        event.started &&
+        !event.invalid &&
+        ![...(requests ?? [])].some((request) =>
+          this.terminalRequests.has(request),
+        )
+      )
+        this.navigationIdentities.add(id);
+    }
+  }
+
   cancelled(request: T): boolean {
     const selected = this.requests.get(request);
     if (!selected?.id || this.identities.get(selected.id)?.size !== 1)
@@ -53,7 +75,7 @@ export class SyntheticFetchCorrelator<T extends object> {
     const event = this.events.get(selected.id);
     return (
       !!event?.started &&
-      event.aborted &&
+      (event.aborted || this.navigationIdentities.has(selected.id)) &&
       !event.invalid &&
       event.url === selected.url
     );
@@ -62,6 +84,6 @@ export class SyntheticFetchCorrelator<T extends object> {
   describe(request: T): string {
     const selected = this.requests.get(request);
     const event = selected?.id ? this.events.get(selected.id) : undefined;
-    return `identity=${String(!!selected?.id)}; requests=${String(selected?.id ? (this.identities.get(selected.id)?.size ?? 0) : 0)}; started=${String(!!event?.started)}; aborted=${String(!!event?.aborted)}; invalid=${String(!!event?.invalid)}`;
+    return `identity=${String(!!selected?.id)}; requests=${String(selected?.id ? (this.identities.get(selected.id)?.size ?? 0) : 0)}; started=${String(!!event?.started)}; aborted=${String(!!event?.aborted)}; navigation=${String(!!selected?.id && this.navigationIdentities.has(selected.id))}; invalid=${String(!!event?.invalid)}`;
   }
 }

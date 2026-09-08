@@ -36,6 +36,55 @@ const variant: Variant = {
   timestampUTC: "2026-09-08T12:00:00.000Z",
 };
 const directories: string[] = [];
+test("RoleImage permission read пропускает только exact query body, не administration mutations", () => {
+  const path = "/api/v1/administration/access/effective-access/query";
+  const body = {
+    target: { kind: "ORGANIZATION" },
+    permissionKeys: ["image.build", "image.source.view", "image.source.manage"],
+  };
+  expect(permittedRequest("POST", path, false, body)).toBe(true);
+  expect(
+    permittedRequest("POST", path, false, {
+      ...body,
+      target: { kind: "PROJECT", projectRef: "project_synthetic" },
+    }),
+  ).toBe(true);
+  for (const invalid of [
+    undefined,
+    null,
+    [],
+    {},
+    "{}",
+    { ...body, actorRef: "other" },
+    { ...body, permissionKeys: ["image.build"] },
+    {
+      ...body,
+      permissionKeys: ["image.build", "image.build", "image.source.manage"],
+    },
+    {
+      ...body,
+      permissionKeys: [
+        "image.build",
+        "image.source.view",
+        "administration.manage",
+      ],
+    },
+    { ...body, target: { kind: "ORGANIZATION", organizationRef: "other" } },
+    { ...body, target: { kind: "PROJECT", projectRef: "../other" } },
+    { ...body, target: { kind: "ACTOR" } },
+  ])
+    expect(permittedRequest("POST", path, false, invalid)).toBe(false);
+  expect(permittedRequest("PUT", path, false, body)).toBe(false);
+  expect(permittedRequest("POST", path + "/other", false, body)).toBe(false);
+  expect(
+    permittedRequest(
+      "POST",
+      "/api/v1/administration/access/bindings",
+      false,
+      body,
+    ),
+  ).toBe(false);
+});
 async function temporary() {
   const path = await mkdtemp(join(tmpdir(), "k1260-ui-"));
   await chmod(path, 0o700);
