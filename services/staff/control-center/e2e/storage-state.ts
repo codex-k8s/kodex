@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
+  readAuthenticatedState,
+  selectedSessionCookies,
+} from "../../../../tools/dev/owner-session-storage.mjs";
+import {
   constants,
   closeSync,
   fstatSync,
@@ -70,6 +74,23 @@ export function readStorageState(rawPath: string): BrowserStorageState {
   } finally {
     closeSync(descriptor);
   }
+}
+
+// API-only handoff сохраняет оба control-origin transport layers. Bootstrap
+// reader выше по-прежнему отвергает BFF cookies и не меняет свою семантику.
+export function readAPISessionStorageState(
+  rawPath: string,
+  expectedOrigin: string,
+): BrowserStorageState {
+  const state = parseStorageState(
+    readAuthenticatedState(resolve(rawPath)),
+    false,
+  );
+  const cookies = selectedSessionCookies(state, expectedOrigin);
+  if (state.origins.length !== 0 || cookies.length !== state.cookies.length) {
+    throw new Error("E2E API session state contains foreign browser material");
+  }
+  return { cookies: structuredClone(cookies), origins: [] };
 }
 
 export async function writeStorageState(

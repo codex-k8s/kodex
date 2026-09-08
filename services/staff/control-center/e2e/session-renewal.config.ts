@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
-import { loadE2EEnvironment } from "./environment";
+import { loadE2ESessionRenewalEnvironment } from "./environment";
 
-const environment = loadE2EEnvironment();
+const environment = loadE2ESessionRenewalEnvironment();
 const browserName = process.env.KODEX_E2E_BROWSER ?? "chromium";
 if (!["chromium", "firefox", "webkit"].includes(browserName))
   throw new Error("Unsupported session proof browser");

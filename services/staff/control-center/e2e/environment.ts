@@ -1,7 +1,11 @@
 import { lstatSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 
-import { type BrowserStorageState, readStorageState } from "./storage-state";
+import {
+  type BrowserStorageState,
+  readAPISessionStorageState,
+  readStorageState,
+} from "./storage-state";
 
 export type E2EProfile = "web-only" | "mattermost";
 
@@ -182,12 +186,29 @@ function resourcePrefix(raw: string | undefined): string {
 }
 
 export function loadE2EEnvironment(): E2EEnvironment {
+  return loadEnvironment("bootstrap");
+}
+
+export function loadE2ESessionRenewalEnvironment(): E2EEnvironment {
+  return loadEnvironment("api-session");
+}
+
+function loadEnvironment(
+  storageProfile: "bootstrap" | "api-session",
+): E2EEnvironment {
   requireDisposableConfirmation();
   const selectedProfile = profile(process.env.KODEX_E2E_PROFILE);
+  const baseURL = exactHTTPSURL(
+    process.env.KODEX_E2E_BASE_URL ?? "https://kodex.invalid",
+  );
+  const rawStorage = process.env.KODEX_E2E_STORAGE_STATE;
+  if (!checkOnly && storageProfile === "api-session" && !rawStorage) {
+    throw new Error(
+      "KODEX_E2E_STORAGE_STATE is required for a real authenticated E2E run",
+    );
+  }
   return {
-    baseURL: exactHTTPSURL(
-      process.env.KODEX_E2E_BASE_URL ?? "https://kodex.invalid",
-    ),
+    baseURL,
     checkOnly,
     profile: selectedProfile,
     rbacGroup: boundedName(
@@ -196,7 +217,12 @@ export function loadE2EEnvironment(): E2EEnvironment {
     ),
     resourcePrefix: resourcePrefix(process.env.KODEX_E2E_RESOURCE_PREFIX),
     runTimeoutMs: boundedInteger(process.env.KODEX_E2E_RUN_TIMEOUT_MS),
-    storageState: storageState(process.env.KODEX_E2E_STORAGE_STATE),
+    storageState:
+      storageProfile === "bootstrap"
+        ? storageState(rawStorage)
+        : checkOnly
+          ? undefined
+          : readAPISessionStorageState(resolve(rawStorage ?? ""), baseURL),
     mattermost: mattermostEnvironment(selectedProfile),
   };
 }
