@@ -32,6 +32,34 @@ export const fixtureDigest =
 const fixtureSize = 46364;
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const confirmation = "I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION";
+const httpStatusFailure = "STT acceptance HTTP status is invalid";
+const failureCodes = new Map([
+  [httpStatusFailure, "HTTP_STATUS"],
+  ["STT acceptance fixture is invalid", "FIXTURE_INVALID"],
+  ["STT acceptance project is invalid", "PROJECT_INVALID"],
+  ["STT acceptance configuration is not ready", "CONFIGURATION_NOT_READY"],
+  ["STT acceptance user eligibility is unavailable", "ELIGIBILITY_UNAVAILABLE"],
+  ["STT acceptance response policy is invalid", "RESPONSE_POLICY_INVALID"],
+  ["STT acceptance JSON is invalid", "RESPONSE_JSON_INVALID"],
+  ["STT acceptance receipt is invalid", "RECEIPT_INVALID"],
+  ["STT acceptance transcript mismatch", "TRANSCRIPT_MISMATCH"],
+  ["STT acceptance configuration changed", "CONFIGURATION_CHANGED"],
+  ["Owner session acceptance preflight failed; no automatic renewal retry was performed", "SESSION_PREFLIGHT_FAILED"],
+  ["Owner session acceptance request failed; no automatic retry was performed", "REQUEST_TRANSPORT_FAILED"],
+  ["Owner session acceptance cookie readback failed", "SESSION_READBACK_FAILED"],
+]);
+
+class HTTPStatusFailure extends Error {
+  constructor(status) { super(httpStatusFailure); this.status = status; }
+}
+
+// Не сохраняем произвольный message/cause, ответ провайдера или transcript.
+export function safeSTTFailure(error) {
+  const result = { failureCode: failureCodes.get(error instanceof Error ? error.message : "") ?? "UNKNOWN_FAILURE" };
+  if (error instanceof HTTPStatusFailure && Number.isSafeInteger(error.status) && error.status >= 100 && error.status <= 599)
+    result.httpStatus = error.status;
+  return result;
+}
 
 function requireValue(condition, message) {
   if (!condition) throw new Error(message);
@@ -41,9 +69,8 @@ export function matchesRussianFixture(value) {
   return (
     typeof value === "string" &&
     value
-      .replace(/[\p{P}\p{White_Space}]+$/gu, "")
-      .replace(/^\p{White_Space}+/u, "")
-      .replace(/\p{White_Space}+/gu, " ")
+      .replace(/[\p{P}\p{White_Space}]+/gu, " ")
+      .replace(/^ | $/g, "")
       .toLowerCase() === "раз два три четыре пять"
   );
 }
@@ -112,7 +139,7 @@ export async function runSTTHTTPAcceptance({
     });
     if (response.status !== 200) {
       await response.body?.cancel().catch(() => {});
-      throw new Error("STT acceptance HTTP status is invalid");
+      throw new HTTPStatusFailure(response.status);
     }
     const validPolicy =
       response.headers.get("content-type")?.split(";")[0].trim() ===
@@ -125,11 +152,9 @@ export async function runSTTHTTPAcceptance({
       await response.body?.cancel().catch(() => {});
       throw new Error("STT acceptance response policy is invalid");
     }
-    return JSON.parse(
-      (await boundedResponseBody(response, body ? 65536 : 1048576)).toString(
-        "utf8",
-      ),
-    );
+    const bytes = await boundedResponseBody(response, body ? 65536 : 1048576);
+    try { return JSON.parse(bytes.toString("utf8")); }
+    catch { throw new Error("STT acceptance JSON is invalid"); }
   }
   const before = configurationPin(
     await request("/api/v1/system-stt-configuration"),
@@ -298,10 +323,11 @@ async function main() {
     process.stdout.write(
       `STT HTTP acceptance PASS fixture=${fixtureDigest} match=true\n`,
     );
-  } catch {
+  } catch (error) {
     save({
       status: "FAIL",
       stage: attempted ? "PROVIDER_ATTEMPT" : "PREFLIGHT",
+      ...safeSTTFailure(error),
     });
     throw new Error("STT acceptance failed");
   } finally {

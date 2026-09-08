@@ -17,6 +17,7 @@ import {
   matchesRussianFixture,
   readAuthenticatedState,
   runSTTHTTPAcceptance,
+  safeSTTFailure,
   sessionHeaders,
 } from "./stt-http-acceptance.mjs";
 import { boundedResponseBody } from "./runtime-workspace-acceptance.mjs";
@@ -217,17 +218,19 @@ test("session renewal precedes the only billable upload and uses the renewed coo
   }
 });
 
-test("only case, whitespace and terminal punctuation are normalized", () => {
+test("case, whitespace and punctuation preserve the exact five words", () => {
   for (const value of [
     "раз два три четыре пять",
     " РАЗ\nдва  три\tчетыре пять?! ",
     "раз два три четыре пять…",
+    "Раз, два, три, четыре, пять.",
+    "раз,два;три:четыре-пять",
     "\u0085раз\u0085два\u2003три четыре пять ! ? . \n",
   ])
     assert.equal(matchesRussianFixture(value), true);
   for (const value of [
     undefined,
-    "раз, два три четыре пять",
+    "р,аз два три четыре пять",
     "р@аз два три четыре пять",
     "раз два три четыре пять🙂",
     "раз два четыре три пять",
@@ -237,6 +240,29 @@ test("only case, whitespace and terminal punctuation are normalized", () => {
     "\ufeffраз два три четыре пять",
   ])
     assert.equal(matchesRussianFixture(value), false);
+});
+
+test("failure evidence retains only closed codes and numeric HTTP status", async () => {
+  for (const status of [429, 502, 503]) {
+    const f = fixture(({ options }) => options.method === "POST" ? new Response("synthetic private payload", { status }) : undefined);
+    await assert.rejects(runSTTHTTPAcceptance({ origin, storage: storage(), audio, fetchAPI: f.fetchAPI }), (error) => {
+      assert.deepEqual(safeSTTFailure(error), { failureCode: "HTTP_STATUS", httpStatus: status });
+      return true;
+    });
+    assert.equal(f.calls.filter((call) => call.options.method === "POST").length, 1);
+  }
+  assert.deepEqual(safeSTTFailure(new Error("synthetic private payload")), { failureCode: "UNKNOWN_FAILURE" });
+  assert.deepEqual(safeSTTFailure({ message: "synthetic private payload", status: 503 }), { failureCode: "UNKNOWN_FAILURE" });
+  for (const [mutation, expected] of [
+    [(value) => { value.receipt.configRevision++; }, "RECEIPT_INVALID"],
+    [(value) => { value.text = "synthetic private transcript"; }, "TRANSCRIPT_MISMATCH"],
+  ]) {
+    const f = fixture(({ value, options }) => { if (options.method === "POST") mutation(value); });
+    await assert.rejects(runSTTHTTPAcceptance({ origin, storage: storage(), audio, fetchAPI: f.fetchAPI }), (error) => {
+      assert.deepEqual(safeSTTFailure(error), { failureCode: expected });
+      return true;
+    });
+  }
 });
 
 test("origin and exact host cookies reject ambiguous or foreign transport", () => {
