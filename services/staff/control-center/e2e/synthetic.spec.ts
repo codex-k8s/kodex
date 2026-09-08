@@ -1,4 +1,14 @@
-import { expect } from "@playwright/test";
+import { expect, type Request } from "@playwright/test";
+import {
+  browserHTTPConsoleStatus,
+  expectedSyntheticHTTPFailure,
+  isFirefoxScrollAdvisory,
+  isWebKitFontAdvisory,
+  isConfirmedSyntheticCancellation,
+} from "./synthetic-diagnostics";
+import { prepareSyntheticMicrophone } from "./synthetic-microphone";
+import { SyntheticFetchCorrelator } from "./synthetic-fetch-correlator";
+import { installSyntheticAbortObserver } from "./synthetic-abort-observer";
 import { test } from "./fixtures/browser-diagnostics";
 import { installEnvironmentFixture } from "./fixtures/environment";
 import { installProviderFixture } from "./fixtures/providers";
@@ -154,9 +164,20 @@ for (const { width, height } of [
   test(`synthetic: Home и ассистент ${String(width)}px`, async ({
     context,
     page,
+    browserName,
   }, testInfo) => {
     // Общий сценарий последовательно проверяет более двадцати экранов; отдельные ожидания сохраняют прежние лимиты.
-    test.setTimeout(75_000);
+    test.setTimeout(120_000);
+    if (width === 1440 || width === 390)
+      await prepareSyntheticMicrophone(
+        page,
+        context,
+        browserName,
+        "https://kodex.test",
+        testInfo.project.metadata.voiceRecorder === "fixture"
+          ? "fixture"
+          : "native",
+      );
     const failures: string[] = [];
     let snapshotConflictDiagnostics = 0;
     let publicationTimeoutDiagnostics = 0;
@@ -168,53 +189,109 @@ for (const { width, height } of [
     if (width === 1440) await page.clock.install();
     await page.setViewportSize({ width, height });
     page.on("pageerror", (error) => failures.push(error.message));
+    page.on("response", (response) => {
+      const kind = expectedSyntheticHTTPFailure(
+        response.url(),
+        response.status(),
+        expectedInspectorFailure,
+      );
+      if (kind === "snapshot") snapshotConflictDiagnostics++;
+      if (kind === "publication") publicationTimeoutDiagnostics++;
+      if (kind === "inspector") inspectorFailureDiagnostics++;
+    });
     page.on("console", (message) => {
-      // Service Worker намеренно исключён из synthetic-контура; остальные предупреждения являются ошибками проверки.
       if (
         message.text() === "Service Worker registration blocked by Playwright"
       )
         return;
-      // Ожидаемый HTTP отказ проверяет recovery точного synthetic Session cursor.
-      if (
-        message.type() === "error" &&
-        message.text() ===
-          "Failed to load resource: the server responded with a status of 412 (Precondition Failed)" &&
-        message.location().url.includes("/api/v1/runs?") &&
-        message.location().url.includes("resumableSessionsOnly=true") &&
-        message.location().url.includes("pageToken=session-snapshot")
-      ) {
-        snapshotConflictDiagnostics++;
+      if (isFirefoxScrollAdvisory(browserName, message.text())) {
+        testInfo.annotations.push({
+          type: "browser-advisory",
+          description: "FIREFOX_SCROLL_LINKED_POSITIONING",
+        });
         return;
       }
+      if (isWebKitFontAdvisory(browserName, message.text())) {
+        testInfo.annotations.push({
+          type: "browser-advisory",
+          description: "WEBKIT_UNUSED_FONT_PRELOAD; performance NOT RUN",
+        });
+        return;
+      }
+      const status = browserHTTPConsoleStatus(message.text());
       if (
         message.type() === "error" &&
-        message.text() ===
-          "Failed to load resource: the server responded with a status of 504 (Gateway Timeout)" &&
-        /^https:\/\/kodex\.test\/api\/v1\/(prompt-template-configurations\/configuration_synthetic\/revisions\/[^/]+|runtime-environment-drafts\/draft_prepared_environment)\/publication$/.test(
+        status &&
+        expectedSyntheticHTTPFailure(
           message.location().url,
+          status,
+          expectedInspectorFailure,
         )
-      ) {
-        publicationTimeoutDiagnostics++;
+      )
         return;
-      }
-      if (
-        expectedInspectorFailure &&
-        message.type() === "error" &&
-        message.text() ===
-          `Failed to load resource: the server responded with a status of ${String(expectedInspectorFailure)} (${expectedInspectorFailure === 404 ? "Not Found" : "Service Unavailable"})` &&
-        /^https:\/\/kodex\.test\/api\/v1\/runtime-environments\/environment_synthetic\/(readiness|agents)(?:\?|$)/.test(
-          message.location().url,
-        )
-      ) {
-        inspectorFailureDiagnostics++;
-        return;
-      }
       if (message.type() === "error" || message.type() === "warning")
         failures.push(message.text());
     });
+    const pendingRequests = new Map<Request, string>();
+    const cancelledRequests = new WeakSet<Request>();
+    const failedRequests: Array<{
+      request: Request;
+      changedRoute: boolean;
+      code: string;
+    }> = [];
+    const fetches = new SyntheticFetchCorrelator<Request>();
+    await installSyntheticAbortObserver(page, (event) =>
+      fetches.observe(event),
+    );
+    const cancelInspectorRequests = () => {
+      for (const request of pendingRequests.keys())
+        if (
+          /^https:\/\/kodex\.test\/api\/v1\/runtime-environments\/environment_synthetic\/(agents|readiness)$/.test(
+            request.url(),
+          )
+        )
+          cancelledRequests.add(request);
+    };
+    const navigate = page.goto.bind(page);
+    page.goto = (...args: Parameters<typeof navigate>) => {
+      // Явный переход сценария отменяет только уже существующее поколение запросов.
+      for (const request of pendingRequests.keys())
+        cancelledRequests.add(request);
+      return navigate(...args);
+    };
+    const reload = page.reload.bind(page);
+    page.reload = (...args: Parameters<typeof reload>) => {
+      // Reload оставляет URL прежним; unload всё равно отменяет текущее поколение.
+      for (const request of pendingRequests.keys())
+        cancelledRequests.add(request);
+      return reload(...args);
+    };
+    page.on("request", (request) => {
+      pendingRequests.set(request, page.url());
+      if (request.resourceType() === "fetch")
+        fetches.request(request, request.url());
+    });
+    page.on("requestfinished", (request) => pendingRequests.delete(request));
+    page.on("response", (response) => {
+      if (
+        response.status() === 404 &&
+        /^https:\/\/kodex\.test\/api\/v1\/runtime-environments\/environment_synthetic\/(agents|readiness)$/.test(
+          response.url(),
+        )
+      )
+        cancelInspectorRequests();
+    });
     page.on("requestfailed", (request) => {
-      if (request.failure()?.errorText !== "net::ERR_ABORTED")
-        failures.push(`Failed request: ${new URL(request.url()).pathname}`);
+      failedRequests.push({
+        request,
+        changedRoute:
+          pendingRequests.has(request) &&
+          pendingRequests.get(request) !== page.url(),
+        code: request.failure()?.errorText ?? "UNKNOWN",
+      });
+      // Binding AbortSignal может прийти после network event. Проверка — в конце,
+      // при этом неизвестный исход не становится успешным по истечению времени.
+      pendingRequests.delete(request);
     });
     await context.addCookies([
       {
@@ -945,8 +1022,18 @@ for (const { width, height } of [
     await card.getByRole("button", { name: "Подробнее", exact: true }).click();
     await expect(page.getByRole("dialog")).toContainText("GITHUB_REPOSITORY");
     const afterDetails = await card.boundingBox();
-    expect(afterDetails?.width).toBe(beforeDetails?.width);
-    expect(afterDetails?.height).toBe(beforeDetails?.height);
+    if (!beforeDetails || !afterDetails)
+      throw new Error("Missing card geometry");
+    expect(
+      [
+        beforeDetails.width,
+        beforeDetails.height,
+        afterDetails.width,
+        afterDetails.height,
+      ].every(Number.isFinite),
+    ).toBe(true);
+    expect(afterDetails.width).toBeCloseTo(beforeDetails.width, 2);
+    expect(afterDetails.height).toBeCloseTo(beforeDetails.height, 2);
     await page
       .getByRole("dialog")
       .getByRole("button", { name: "Подключить", exact: true })
@@ -955,6 +1042,13 @@ for (const { width, height } of [
       .getByRole("dialog")
       .getByLabel("Организация", { exact: true })
       .fill("synthetic-owner");
+    await expect(
+      page.getByRole("dialog").getByLabel("Организация", { exact: true }),
+    ).toHaveValue("synthetic-owner");
+    await expect(
+      page.getByRole("dialog").getByLabel("Название", { exact: true }),
+    ).toHaveValue("GitHub");
+
     await page
       .getByRole("dialog")
       .getByLabel("Репозиторий", { exact: true })
@@ -1051,6 +1145,7 @@ for (const { width, height } of [
       await page.locator(".environment-name").click();
       await expect(page.locator(".environment-inspector")).toBeVisible();
       await expect.poll(() => fixture.events.includes("readiness")).toBe(true);
+      cancelInspectorRequests();
       await page.locator(".environment-name").click();
       await expect(page.locator(".environment-inspector")).toHaveCount(0);
       await page
@@ -1214,6 +1309,7 @@ for (const { width, height } of [
         await expect(
           inspector.locator(".environment-lifecycle .status-badge"),
         ).toHaveText("Готов");
+        cancelInspectorRequests();
         await selectEnvironment.click();
         await expect(inspector).toHaveCount(0);
         const beforeLists = fixture.events.filter(
@@ -1255,9 +1351,6 @@ for (const { width, height } of [
       let grants = 0;
       let transcriptions = 0;
       let speechClockOffset = 0;
-      await context.grantPermissions(["microphone"], {
-        origin: "https://kodex.test",
-      });
       await page.route("**/api/v1/bootstrap", async (route) => {
         grants += 1;
         await route.fulfill({
@@ -1357,6 +1450,8 @@ for (const { width, height } of [
           exact: true,
         }),
       ).toBeVisible();
+      expect(providers.events).toContain("poll");
+      expect(providers.events).not.toContain("verify");
       await authorization
         .getByRole("button", { name: "Переавторизовать", exact: true })
         .click();
@@ -1368,12 +1463,12 @@ for (const { width, height } of [
         .last()
         .click();
       const requestsBefore = providers.events.filter(
-        (event) => event === "verify",
+        (event) => event === "poll",
       ).length;
       await page.waitForTimeout(4200);
-      expect(
-        providers.events.filter((event) => event === "verify"),
-      ).toHaveLength(requestsBefore);
+      expect(providers.events.filter((event) => event === "poll")).toHaveLength(
+        requestsBefore,
+      );
       await page
         .getByRole("button", { name: "Добавить учётную запись", exact: true })
         .click();
@@ -1504,6 +1599,7 @@ for (const { width, height } of [
             fullPage: false,
           });
         },
+        testInfo,
       );
       await page.screenshot({
         path: testInfo.outputPath(`context-${String(width)}.png`),
@@ -1592,6 +1688,25 @@ for (const { width, height } of [
       width === 390 || width === 2900 ? 1 : 0,
     );
     expect(publicationTimeoutDiagnostics).toBe(2);
+    for (const { request, changedRoute, code } of failedRequests) {
+      const explicitCancellation =
+        cancelledRequests.has(request) || fetches.cancelled(request);
+      if (
+        isConfirmedSyntheticCancellation(
+          browserName,
+          code,
+          changedRoute || explicitCancellation,
+        )
+      )
+        testInfo.annotations.push({
+          type: "request-cancelled",
+          description: `${code}; ${changedRoute ? "route changed" : "explicit navigation/inspector/AbortSignal generation"}`,
+        });
+      else
+        failures.push(
+          `Failed request: ${new URL(request.url()).pathname}; code=${code}; routeChanged=${String(changedRoute)}; cancelled=${String(explicitCancellation)}; type=${request.resourceType()}; method=${request.method()}; ${fetches.describe(request)}`,
+        );
+    }
     expect(failures).toEqual([]);
   });
 }

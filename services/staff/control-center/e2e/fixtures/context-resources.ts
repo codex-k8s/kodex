@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type TestInfo } from "@playwright/test";
 import { installContextBindingFixture } from "./context-bindings";
 import type {
   Artifact,
@@ -16,6 +16,7 @@ export async function checkContextResources(
   projectRef: string,
   environment: RuntimeEnvironmentSet,
   capture: (name: string) => Promise<void>,
+  testInfo: TestInfo,
 ): Promise<void> {
   const checkBinding = await installContextBindingFixture(
     page,
@@ -77,7 +78,14 @@ export async function checkContextResources(
       method === "POST"
     ) {
       expect(request.headers()["x-file-name"]).toBe("SKILL.md");
-      expect(request.postData()).toContain("Synthetic instructions");
+      const body = request.postData();
+      if (body === null && testInfo.project.use.browserName === "webkit")
+        testInfo.annotations.push({
+          type: "upload-body-readback",
+          description:
+            "NOT RUN: WebKit protocol omits File body; wire bytes covered by loopback fixture",
+        });
+      else expect(body).toContain("Synthetic instructions");
       await route.fulfill({
         status: 201,
         json: { ...artifact, scanState: "PENDING" },

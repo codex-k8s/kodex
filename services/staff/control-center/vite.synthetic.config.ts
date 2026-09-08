@@ -3,10 +3,16 @@ import { mergeConfig } from "vite";
 import base from "./vite.config";
 
 export default mergeConfig(base, {
+  preview: {
+    allowedHosts: ["kodex.test"],
+  },
   build: {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        modalPattern: fileURLToPath(
+          new URL("./e2e/fixtures/modal-pattern.html", import.meta.url),
+        ),
         uiProof: fileURLToPath(
           new URL("./e2e/fixtures/ui-proof.html", import.meta.url),
         ),

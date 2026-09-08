@@ -27,7 +27,7 @@ export async function installEmailOidc(
     const callback = `https://kodex.test/auth/callback?code=synthetic-code&state=${state}`;
     await route.fulfill({
       contentType: "text/html",
-      body: `<script>location.replace(${JSON.stringify(callback)})</script>`,
+      body: `<!doctype html><meta charset="utf-8"><script>location.replace(${JSON.stringify(callback)})</script>`,
     });
   });
   await page.route("**/api/v1/session/authorization", async (route) => {

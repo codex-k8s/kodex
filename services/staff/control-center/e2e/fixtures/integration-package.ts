@@ -165,6 +165,30 @@ export async function checkIntegrationPackage(
   await expect(
     form.getByRole("combobox", { name: "Владелец адаптера", exact: true }),
   ).toHaveValue("integration-gateway");
+  const patterns = await form
+    .locator("input[pattern]")
+    .evaluateAll((elements) =>
+      elements.map((element) => {
+        const input = element as HTMLInputElement;
+        const initial = input.value;
+        const pattern = input.pattern;
+        // Для key/hostname/version символ пробела не допускается схемой.
+        new RegExp(pattern, "v");
+        input.value = "invalid value";
+        const rejectsInvalid =
+          !input.checkValidity() && input.validity.patternMismatch;
+        input.value = initial;
+        return {
+          pattern,
+          rejectsInvalid,
+          acceptsOriginal: input.checkValidity(),
+        };
+      }),
+    );
+  expect(patterns.length).toBeGreaterThan(0);
+  expect(
+    patterns.every((result) => result.rejectsInvalid && result.acceptsOriginal),
+  ).toBe(true);
   await form
     .getByRole("textbox", { name: "Описание", exact: true })
     .fill("Synthetic edited description");

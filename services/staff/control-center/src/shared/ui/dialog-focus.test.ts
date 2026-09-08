@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { trappedFocusTarget } from "@/shared/ui/dialog-focus";
+import {
+  initialDialogFocusTarget,
+  trappedFocusTarget,
+} from "@/shared/ui/dialog-focus";
 
 function element(name: string): HTMLElement {
   return { dataset: { name } } as unknown as HTMLElement;
@@ -28,5 +31,28 @@ describe("dialog focus trap", () => {
   it("не перехватывает последовательный переход внутри диалога", () => {
     expect(trappedFocusTarget(elements, middle, false)).toBeUndefined();
     expect(trappedFocusTarget(elements, middle, true)).toBeUndefined();
+  });
+});
+
+describe("отложенный начальный focus диалога", () => {
+  const initial = element("initial");
+  const chosen = element("chosen");
+  const outside = element("outside");
+  function panel(target?: HTMLElement): HTMLElement {
+    return {
+      contains: (item: Element) => item === initial || item === chosen,
+      querySelector: () => target ?? null,
+    } as unknown as HTMLElement;
+  }
+  it("выбирает назначенное поле только пока focus вне панели", () => {
+    expect(initialDialogFocusTarget(panel(initial), outside)).toBe(initial);
+  });
+  it("не крадёт focus, выбранный до отложенного callback", () => {
+    expect(initialDialogFocusTarget(panel(initial), chosen)).toBeUndefined();
+    expect(initialDialogFocusTarget(panel(initial), initial)).toBeUndefined();
+  });
+  it("сохраняет focus панели, если начальное поле не назначено", () => {
+    const container = panel();
+    expect(initialDialogFocusTarget(container, outside)).toBe(container);
   });
 });

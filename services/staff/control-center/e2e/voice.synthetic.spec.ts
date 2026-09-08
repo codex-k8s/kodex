@@ -1,4 +1,14 @@
 import { expect, test, type Locator } from "@playwright/test";
+import { prepareSyntheticMicrophone } from "./synthetic-microphone";
+
+test.beforeEach(async ({ page, context, browserName }, testInfo) => {
+  const mode =
+    testInfo.project.metadata.voiceRecorder === "fixture"
+      ? "fixture"
+      : "native";
+  testInfo.annotations.push({ type: "voice-recorder", description: mode });
+  await prepareSyntheticMicrophone(page, context, browserName, undefined, mode);
+});
 
 async function dictate(section: Locator): Promise<void> {
   await section.locator('.voice-input[data-state="idle"] button').click();
@@ -23,11 +33,7 @@ for (const transition of [
 ] as const) {
   test(`synthetic: voice отменяет поздний ответ при ${transition}`, async ({
     page,
-    context,
   }) => {
-    await context.grantPermissions(["microphone"], {
-      origin: "http://127.0.0.1:43122",
-    });
     await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
     await page.getByLabel("Задержка", { exact: true }).check();
     const field = page.getByTestId("textarea");
@@ -42,6 +48,7 @@ for (const transition of [
       "data-state",
       "transcribing",
     );
+    await expect(page.getByTestId("calls")).toHaveText("1");
     if (transition === "route")
       await page.getByRole("button", { name: "Перейти", exact: true }).click();
     else if (transition === "unmount")
@@ -66,15 +73,11 @@ for (const transition of [
   });
 }
 
-for (const width of [390, 1440]) {
+for (const width of [390, 768, 1280, 1440, 1920, 2560, 2900]) {
   test(`synthetic: voice заменяет выделение и изолирует undo ${String(width)}px`, async ({
     page,
-    context,
   }) => {
     await page.setViewportSize({ width, height: 1080 });
-    await context.grantPermissions(["microphone"], {
-      origin: "http://127.0.0.1:43122",
-    });
     await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
     const textarea = page.getByTestId("textarea").getByRole("textbox");
     await textarea.focus();
@@ -106,11 +109,7 @@ for (const width of [390, 1440]) {
 
 test("synthetic: voice сохраняет scroll длинного textarea", async ({
   page,
-  context,
 }) => {
-  await context.grantPermissions(["microphone"], {
-    origin: "http://127.0.0.1:43122",
-  });
   await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
   const field = page.getByTestId("textarea");
   const textarea = field.getByRole("textbox");
@@ -149,7 +148,6 @@ test("synthetic: unsupported codec показывает безопасную п�
 for (const width of [1440, 390]) {
   test(`synthetic: блокировка managed voice во время записи ${String(width)}px`, async ({
     page,
-    context,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 1080 });
     const errors: string[] = [];
@@ -159,9 +157,6 @@ for (const width of [1440, 390]) {
         errors.push(message.text());
     });
     page.on("requestfailed", (request) => errors.push(request.url()));
-    await context.grantPermissions(["microphone"], {
-      origin: "http://127.0.0.1:43122",
-    });
     await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
     await page
       .getByRole("button", { name: "Показать конфигурацию", exact: true })
@@ -216,7 +211,6 @@ for (const width of [1440, 390]) {
 for (const width of [1440, 390]) {
   test(`synthetic: голосовой ввод, курсор и undo ${String(width)}px`, async ({
     page,
-    context,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 1080 });
     const errors: string[] = [];
@@ -224,9 +218,6 @@ for (const width of [1440, 390]) {
     page.on("console", (message) => {
       if (["warning", "error"].includes(message.type()))
         errors.push(message.text());
-    });
-    await context.grantPermissions(["microphone"], {
-      origin: "http://127.0.0.1:43122",
     });
     await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
     const picker = page.getByTestId("picker");
@@ -379,12 +370,8 @@ for (const width of [1440, 390]) {
 for (const width of [390, 2900]) {
   test(`synthetic: typed STT rate limit без автоматического повтора ${String(width)}px`, async ({
     page,
-    context,
   }, testInfo) => {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1600 });
-    await context.grantPermissions(["microphone"], {
-      origin: "http://127.0.0.1:43122",
-    });
     await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
     await page.getByLabel("Ограничение частоты", { exact: true }).check();
     const field = page.getByTestId("textarea");
@@ -414,11 +401,7 @@ for (const width of [390, 2900]) {
 
 test("synthetic: отмена, ошибка и единственная активная запись", async ({
   page,
-  context,
 }) => {
-  await context.grantPermissions(["microphone"], {
-    origin: "http://127.0.0.1:43122",
-  });
   await page.goto("http://127.0.0.1:43122/e2e/fixtures/voice.html");
   const text = page.getByTestId("textarea");
   const code = page.getByTestId("code");

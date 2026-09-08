@@ -14,16 +14,30 @@ export default defineConfig({
     locale: "ru-RU",
     serviceWorkers: "block",
     trace: "off",
-    launchOptions: {
-      args: [
-        "--use-fake-device-for-media-stream",
-        "--use-fake-ui-for-media-stream",
-      ],
-    },
   },
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        browserName: "chromium",
+        launchOptions: {
+          args: [
+            "--use-fake-device-for-media-stream",
+            "--use-fake-ui-for-media-stream",
+          ],
+        },
+      },
+    },
+    { name: "firefox", use: { browserName: "firefox" } },
+    {
+      name: "webkit",
+      use: { browserName: "webkit" },
+      metadata: { voiceRecorder: "fixture" },
+    },
+  ],
   webServer: {
     command:
-      "npm run preview -- --host 127.0.0.1 --port 43122 --strictPort --outDir dist-synthetic",
+      "npm run preview -- --config vite.synthetic.config.ts --host 127.0.0.1 --port 43122 --strictPort --outDir dist-synthetic",
     url: "http://127.0.0.1:43122",
     reuseExistingServer: false,
     timeout: 30_000,
