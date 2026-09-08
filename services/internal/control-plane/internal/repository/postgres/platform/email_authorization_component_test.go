@@ -9,6 +9,7 @@ import (
 	"time"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -24,25 +25,37 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject",
 			ExternalTenantID: "kodex-installation", CallerWorkload: workload, Operation: operation}, workload)
 	}
+	// Моделируем сохранённую connection предыдущего immutable shipped package
+	// в собственной disposable fixture, не меняя текущий shipped catalog.
+	legacy, ok := integrationpackage.ResolveShippedRevision(repository.integrationDefinitions["email"], "1.4.0", "df52f45643b6e4464cf20901b6c069b88dac671303dc31e04f23b3d1ad4006fd")
+	if !ok {
+		t.Fatal("legacy mailbox package unavailable")
+	}
+	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatalf("resolve legacy fixture principal: %v", err)
+	}
+	currentScope, err := repository.resolveScope(ctx, resolvedOwner)
+	if err != nil {
+		t.Fatalf("resolve legacy fixture scope: %v", err)
+	}
+	if _, err := repository.pool.Exec(ctx, queryIntegrationPackageBindConnection, currentScope.organizationID, connection.Ref, legacy.Metadata.Version, legacy.Digest); err != nil {
+		t.Fatalf("bind legacy fixture: %v", err)
+	}
+	connection, err = readConnection(ctx, repository.pool, currentScope, connection.Ref)
+	if err != nil {
+		t.Fatalf("legacy fixture readback: %v", err)
+	}
 	email := worker("email-bridge", "platform.email.authorization.resolve")
 	gateway := worker("integration-gateway", "platform.runtime.integration-tests.claim")
-	configured, err := service.Execute(ctx, command.Command{Kind: command.ConfigureConnectionCredential, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "email-producer-credential", ExpectedVersion: &connection.Version},
-		Payload: command.ConnectionInput{Ref: connection.Ref, MaterializationRef: "email-producer-credential",
-			CredentialRevision: &entity.IntegrationCredentialRevision{SecretRef: "kodex-system/kodex-integration-credentials#email-test",
-				SecretUID: "60000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}}})
-	if err != nil || configured.Connection == nil {
-		t.Fatalf("configure email credential: %v", err)
-	}
-	connection = *configured.Connection
 	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-test", ExpectedVersion: &connection.Version},
 		Payload:  command.ConnectionInput{Ref: connection.Ref}}); err != nil {
-		t.Fatal(err)
+		t.Fatalf("queue legacy email health: %v", err)
 	}
 	claims, err := service.ClaimIntegrationConnectionTests(ctx, gateway, "email-producer-test", 32)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("claim legacy email health: %v", err)
 	}
 	var health map[string]any
 	for _, claim := range claims {
@@ -50,9 +63,10 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 			health = claim
 		}
 	}
-	if health == nil {
+	if health == nil || health["credential"] != nil {
 		t.Fatal("email health claim missing")
 	}
+	testEmailGatewayClaim(t, health, "health")
 	binding := entity.EmailExecutionBinding{ConnectionTestRef: stringMap(health, "testRef"), LeaseRef: stringMap(health, "leaseRef"),
 		Fence: stringMap(health, "fence"), Generation: health["generation"].(int64), ExpiresAt: health["expiresAt"].(time.Time)}
 	mailbox := config.Mailboxes[0]
@@ -174,6 +188,10 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 		t.Fatalf("claim email effect: %d %v", len(claims), err)
 	}
 	claim := claims[0]
+	if claim["credential"] != nil {
+		t.Fatal("email owner claim unexpectedly contains generic credential")
+	}
+	testEmailGatewayClaim(t, claim, "invocation")
 	binding = entity.EmailExecutionBinding{InvocationRef: stringMap(claim, "invocationRef"), LeaseRef: stringMap(claim, "leaseRef"),
 		Fence: stringMap(claim, "fence"), Generation: claim["generation"].(int64), ExpiresAt: claim["expiresAt"].(time.Time)}
 	encoded, _ := json.Marshal(bounded)

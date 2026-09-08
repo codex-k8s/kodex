@@ -42,7 +42,7 @@ globalThis.fetch=async(url,init={})=>{
 };`, { mode: 0o600 });
   const run = (phase, extra = [], automatic = true) => {
     put('activeState', files.state);
-    const flags = automatic ? phase === 'recover-invalid' ? ['--confirm', 'RECOVER-STAGING-INVALID-MAILBOX'] : mutationPhases.includes(phase) ? ['--confirm', 'CONFIGURE-STAGING-MAILBOX'] : phase === 'health' ? ['--confirm', 'CHECK-STAGING-MAILBOX-HEALTH'] : [] : [];
+    const flags = automatic ? phase === 'recover-health' ? ['--confirm', 'RECOVER-STAGING-TERMINAL-MAILBOX-HEALTH'] : phase === 'recover-invalid' ? ['--confirm', 'RECOVER-STAGING-INVALID-MAILBOX'] : mutationPhases.includes(phase) ? ['--confirm', 'CONFIGURE-STAGING-MAILBOX'] : phase === 'health' ? ['--confirm', 'CHECK-STAGING-MAILBOX-HEALTH'] : [] : [];
     if (phase === 'credentials') flags.push('--credentials', files.credentials);
     if (phase === 'grants') flags.push('--grant-input', files.grant);
     return spawnSync(process.execPath, ['--import', files.loader, join(scripts, 'email-mailbox-acceptance.mjs'), phase, '--origin', origin, '--storage-state', files.storage, '--state', files.state, '--profile', files.profile, '--serving-manifest', files.manifest, '--timeout-ms', '1000', ...flags, ...extra], { encoding: 'utf8', timeout: 8000 });
@@ -122,4 +122,41 @@ test('changed predecessor digest, stale owner revision and unsafe recovery flags
   assert.match(f.run('recover-invalid', bad).stderr, /PREDECESSOR_DIGEST_MISMATCH/);
   f.mode('drift'); assert.match(f.run('recover-invalid', p.args).stderr, /PREDECESSOR_REVISION_CHANGED/);
   assert(!f.calls().some((c) => c.path.endsWith('/saves')));
+});
+
+function healthPredecessor(f) {
+  f.setup(); f.mode('health-failed'); assert.notEqual(f.run('health').status, 0); f.mode('');
+  const previous = f.files.state; const bytes = readFileSync(previous); const owner = JSON.parse(readFileSync(f.files.owner));
+  f.files.state = `${previous}.health-recovery`;
+  return { previous, bytes, args: ['--previous-state', previous, '--previous-sha256', createHash('sha256').update(bytes).digest('hex'), '--terminal-version', String(owner.version), '--terminal-tested-at', owner.lastTestedAt, '--terminal-outcome-sha256', createHash('sha256').update('INTEGRATION_CREDENTIAL_UNAVAILABLE').digest('hex')] };
+}
+test('public CLI health recovery keeps old journal and issues exactly one new TEST after exact terminal', (t) => {
+  const f = fixture(t); const p = healthPredecessor(f); f.pass('recover-health', p.args); f.pass('recover-health', p.args);
+  assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, 2);
+  assert.deepEqual(readFileSync(p.previous), p.bytes); assert.equal(f.events().filter((e) => e.type === 'INTENT').length, 1);
+});
+for (const mode of ['lost-ack', 'rejected', 'expired']) test(`public CLI health recovery ${mode} never replays unknown TEST`, (t) => {
+  const f = fixture(t); const p = healthPredecessor(f); f.mode(mode); assert.notEqual(f.run('recover-health', p.args).status, 0);
+  if (mode !== 'expired') { f.mode(''); assert.notEqual(f.run('recover-health', p.args).status, 0); }
+  assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, mode === 'expired' ? 1 : 2);
+  assert.deepEqual(readFileSync(p.previous), p.bytes);
+});
+test('health recovery rejects changed predecessor, terminal version, timestamp and flags before TEST', (t) => {
+  const f = fixture(t); const p = healthPredecessor(f);
+  for (const [flag,value] of [['--previous-sha256','0'.repeat(64)],['--terminal-version','999'],['--terminal-tested-at','2000-01-01T00:00:00Z'],['--terminal-outcome-sha256','0'.repeat(64)]]) {
+    const args = [...p.args]; args[args.indexOf(flag)+1] = value;
+    f.files.state += 'x'; assert.notEqual(f.run('recover-health', args).status, 0);
+  }
+  assert.notEqual(f.run('health', p.args).status, 0);
+  assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, 1);
+});
+test('health recovery requires actual lastTestOutcome field and refuses prior UNKNOWN', (t) => {
+  const f = fixture(t); const p = healthPredecessor(f);
+  f.mode('summary-field-only');
+  assert.match(f.run('recover-health', p.args).stderr, /HEALTH_TERMINAL_CHANGED/);
+  assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, 1);
+  const changed = Buffer.concat([p.bytes, Buffer.from(`${JSON.stringify({type:'UNKNOWN',code:'SYNTHETIC_UNKNOWN'})}\n`)]);
+  const invalid = `${p.previous}.unknown`; writeFileSync(invalid, changed, {mode:0o600});
+  const args = [...p.args]; args[args.indexOf('--previous-state')+1] = invalid; args[args.indexOf('--previous-sha256')+1] = createHash('sha256').update(changed).digest('hex'); f.files.state += '.unknown';
+  assert.notEqual(f.run('recover-health', args).status, 0); assert.equal(f.calls().filter((c) => c.path.endsWith('/commands')).length, 1); assert.deepEqual(readFileSync(p.previous), p.bytes);
 });

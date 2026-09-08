@@ -4,7 +4,7 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.4.0
+version: 1.5.0
 updated: 2026-09-08
 ---
 
@@ -782,3 +782,129 @@ node tools/dev/email-mailbox-acceptance.mjs readback "${EMAIL_RECOVERY_ARGS[@]}"
 запрещены. HEALTH, grants, Gate/SMTP/IMAP/POP3 эффекты остаются отдельными
 проверками с прежними разрешениями; восстановление configuration не является
 доказательством provider authentication или доставки письма.
+
+## Generic credential и переход package #1329
+
+`email 1.4.1` не содержит generic `credential`: SMTP/IMAP/POP3 credentials
+принадлежат mailbox owner, а gateway обращается к bridge через mTLS и exact
+CP-produced lease/fence. Управление mailbox slots остаётся доступно только
+владельцу подключения вне TESTING/disabled. Generic credential не заменяет
+эти slots и не передаётся в email worker claims, включая старую сохранённую
+credential revision. Она не удаляется и не переписывается.
+
+Новый digest package:
+`19015eb96a6e5e3edfd8abe9cd885adf8fc82582149dce88421c81dab19424a0`.
+Compatible reader сохраняет `email 1.4.0` с точным digest
+`df52f45643b6e4464cf20901b6c069b88dac671303dc31e04f23b3d1ad4006fd`
+и прежние допустимые UI/GIT сужения. Неизвестный SHIPPED digest, изменённый
+credential descriptor, capability/scope/Gate expansion закрыто отклоняются.
+CP email authorization разрешает exact закреплённый package подключения;
+сравнение только с новым глобальным shipped package не заменяет этот read path.
+
+Порядок выпуска:
+
+1. Обновить integration-gateway reader; проверить old/new package локальной
+   оснасткой и actual executable readback. Старый CP продолжает выдавать 1.4.0.
+2. Сначала выполнить отдельную additive migration
+   `20260908000300_email_legacy_package_admission.sql` по CLI ниже. Она
+   сохраняет admission только для точной пары прежнего/нового package с
+   неизменным capability/scope/Gate contract; старые rows не обновляет.
+   Затем отдельно разрешённый CP rollout импортирует 1.4.1 штатным startup
+   `reconcileIntegrationDefinitions`. Это запись нового shipped catalog,
+   которую нужно включить в release plan; существующие connection/grant pins
+   автоматически не меняются. Gateway rollback после новых 1.4.1 claims
+   допускается только на совместимый reader.
+3. При необходимости явного rebind выбранного подключения использовать
+   существующий CFG lifecycle: POST `integration-definition-configurations/copies`
+   с exact shipped key/version/digest и If-Match; validation → publication;
+   GET impact и POST revision `consumer-bindings` с `impactDigest`, выбранными
+   consumers и exact versions. Пока эта отдельная команда не выполнена, старые
+   published pointers/pins сохраняются. Rebind отключает прежние grants штатной
+   owner-транзакцией; они не расширяются вслед за definition автоматически.
+4. Для исправления уже выполненного terminal HEALTH rebind не нужен:
+   совместимый reader обслуживает прежний package и mailbox revision.
+
+`make test-email-managed-claim` собирает gateway test binary, затем запускает
+канонический disposable PostgreSQL harness со своим контейнером и dynamic
+loopback port. Настоящие CP TEST/invocation claims проходят production caster,
+protobuf Marshal/Unmarshal и RequestFromTest/RequestFromInvocation до email
+HTTP adapter. Исходный lease не продлевается; subprocess ограничен 20 секундами.
+Проверка без этого entrypoint не выдаётся за сквозной CP→gateway proof.
+Последняя граница — локальный controlled bridge fixture: это не SMTP/IMAP
+vendor authentication или доставка письма. Реальные CP tenant/permission,
+foreign fence, mailbox, digest, expiry, terminal/replay и Gate проверки остаются
+частью PostgreSQL профиля.
+
+## Явный новый HEALTH после terminal результата
+
+`recover-health` разрешает один новый TEST только после readback предыдущего
+терминального DEGRADED. Это отдельное решение оператора после исправления
+причины; UNKNOWN предыдущей команды этим способом не восстанавливается.
+Оригинальный журнал и profile остаются неизменными. Новый private HEADER
+связывает predecessor SHA, обе serving/source эпохи и digest terminal условия.
+Прежние connection/configuration/publication pins переносятся CHECKPOINT,
+не повторными ACK. Создания подключения, сохранения revision и загрузки
+паролей нет.
+
+```bash
+node tools/dev/email-mailbox-acceptance.mjs recover-health \
+  --origin "$EMAIL_QA_ORIGIN" --storage-state "$EMAIL_QA_SESSION" \
+  --state "$EMAIL_HEALTH_NEW_JOURNAL" --profile "$EMAIL_QA_PROFILE" \
+  --serving-manifest "$EMAIL_QA_MANIFEST" --timeout-ms 1200000 \
+  --previous-state "$EMAIL_HEALTH_PREVIOUS_JOURNAL" \
+  --previous-sha256 "$EMAIL_HEALTH_PREVIOUS_SHA256" \
+  --terminal-version "$EMAIL_HEALTH_TERMINAL_VERSION" \
+  --terminal-tested-at "$EMAIL_HEALTH_TERMINAL_TESTED_AT" \
+  --terminal-outcome-sha256 "$EMAIL_HEALTH_TERMINAL_OUTCOME_SHA256" \
+  --confirm RECOVER-STAGING-TERMINAL-MAILBOX-HEALTH
+```
+
+`terminal-outcome-sha256` — SHA256 decoded UTF-8 `lastTestOutcome`, без JSON
+quotes/newline. Это реальное поле публичного IntegrationConnection; внутренний
+CP `last_test_summary` не является именем HTTP DTO. Перед новым INTENT
+проверяются session, READY прежней publication, exact ref, DEGRADED,
+`current.version == previous TEST ACK version + 1`, exact lastTestedAt и digest
+outcome. Каждый predecessor INTENT должен иметь ровно один ACK; STOP/UNKNOWN,
+другой scope/body/profile, повторный health step или уже healthy запрещены.
+Одна команда POST `/api/v1/integration-connections/{ref}/commands` с action TEST,
+новым durable idempotency key и If-Match; после ACK только bounded GET до
+CONNECTED. При lost ACK/409/expiry/header drift автоматического повторения нет.
+
+
+## Отдельная CP migration без глобального bootstrap
+
+Для disposable hot-reload профиля `tools/release/control-plane-migration.mjs`
+клонирует существующий завершённый `kodex-system/control-plane-migrate`.
+Использует прежние `control-plane-migrator`, Secret reference, exact image,
+read-only filesystem и команду `run-go-command.sh services/internal/control-plane
+./cmd/cli up`. Меняет application source на чистый exact checkout и ограничивает
+новую Job: backoff 0, deadline 300 секунд. Это штатный `up` всех ещё не применённых
+миграций данного source; перед apply оператор сверяет текущую schema version и
+пакет pending migrations, включая указанную additive migration. Никаких DSN в
+CLI/выводе, global up, удаления Job/БД или отката schema нет. Стандартная установка
+использует immutable migration image и существующий migration workload.
+
+```bash
+node tools/release/control-plane-migration.mjs plan \
+  --context "$KODEX_RELEASE_CONTEXT" --source "$CP_MIGRATION_SOURCE" \
+  --revision "$CP_MIGRATION_REVISION" --plan "$CP_MIGRATION_PLAN"
+node tools/release/control-plane-migration.mjs apply \
+  --context "$KODEX_RELEASE_CONTEXT" --plan "$CP_MIGRATION_PLAN" \
+  --evidence "$CP_MIGRATION_EVIDENCE" --confirm APPLY-STAGING-CP-MIGRATION
+node tools/release/control-plane-migration.mjs inspect \
+  --context "$KODEX_RELEASE_CONTEXT" --plan "$CP_MIGRATION_PLAN" \
+  --evidence "$CP_MIGRATION_EVIDENCE"
+```
+
+План и evidence находятся в private directory 0700, файлы 0600. План закрепляет
+cluster UID, Job UID/resourceVersion/spec hash, source revision и SQL digest.
+Apply сначала делает UID/resourceVersion CAS reservation на старой завершённой
+Job; durable intent предшествует reservation и созданию. Имя новой Job фиксировано
+для этой migration: конкурентное создание не приводит ко второй Job. Повтор apply
+после CREATE_INTENT выполняет только readback; UNKNOWN reservation требует
+отдельной диагностики и не разрешает автоматический create. Reservation не
+очищается для обхода этого ограничения. Failed Job и исходные UNKNOWN сохраняются.
+`RUNNING` не означает PASS: нужны Complete, исходный Job UID/pod spec и exact goose
+version 20260908000300. Логи читаются внутри процесса, наружу выходят только закрытые
+статусы/версии/UID. После успешной migration выполняются CP rollout и controlled
+catalog import; обычный source rollout сам migration не запускает.

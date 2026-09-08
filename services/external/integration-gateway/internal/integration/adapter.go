@@ -323,7 +323,7 @@ func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.
 	if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_ROUTE_NOT_OWNED"}
 	}
-	if (definition.Spec.Credential == nil) != (request.Credential == nil) {
+	if definition.RequiresConnectionCredential() != (request.Credential != nil) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
 	return definition, nil

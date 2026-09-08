@@ -21,7 +21,7 @@ const checkpoint = (journal, step, result) => { journal.append({ type: 'CHECKPOI
 const operations = ['HEALTH', 'MAILBOXES', 'LIST', 'SEARCH', 'FETCH', 'DOWNLOAD', 'SEND', 'REPLY', 'REPLY_ALL', 'FORWARD', 'DELETE', 'RECEIPT', 'THREAD', 'ATTACHMENTS', 'MARK_READ', 'MARK_UNREAD', 'MOVE', 'ARCHIVE', 'DRAFT_CREATE', 'DRAFT_UPDATE', 'DRAFT_DELETE'];
 const kinds = { ca: 'CA_CERTIFICATE', username: 'USERNAME', secret: 'AUTH_SECRET' };
 const definition = JSON.parse(readFileSync(new URL('../../contracts/integrations/v1/definitions/email.yaml', import.meta.url)));
-const phases = ['recover-invalid', 'plan', 'inspect', 'connection', 'credentials', 'publish', 'bind', 'readback', 'health', 'grants', 'receipt'];
+const phases = ['recover-health', 'recover-invalid', 'plan', 'inspect', 'connection', 'credentials', 'publish', 'bind', 'readback', 'health', 'grants', 'receipt'];
 const configurationPhases = ['connection', 'credentials', 'publish', 'bind', 'grants'];
 
 export function validateEmailProfile(profile) {
@@ -62,6 +62,10 @@ function mailboxPin(body, connectionRef) {
 export async function emailAcceptance({ phase, profile, credentials, grantInput, recovery, journal, get, request, preflight, invocationRef, projectRef, timeoutMs = 1200000, now = Date.now, sleep = (ms) => new Promise((done) => setTimeout(done, ms)) }) {
   const slots = validateEmailProfile(profile); await preflight();
   check(!journal.events[0]?.predecessorSHA256 || !['connection', 'credentials'].includes(phase), 'RECOVERY_CREATE_FORBIDDEN');
+  if (phase === 'recover-health') {
+    check(recovery?.kind === 'HEALTH' && journal.events[0].predecessorSHA256 === recovery.sha256, 'RECOVERY_PREDECESSOR_REQUIRED');
+    for (const [step, value] of Object.entries(recovery.pins)) if (!saved(journal, step)) checkpoint(journal, step, value);
+  }
   if (phase === 'recover-invalid') return recoverInvalidMailbox({ recovery, profile, journal, get, request });
   if (phase === 'plan') return checkpoint(journal, 'plan', { status: 'PLANNED', protocol: profile.specification.receiveProtocol, credentialSlots: slots.map((s) => s.slot), operations: profile.specification.policies.map((p) => ({ operation: p.operation, policy: p.policy })), providerEffect: 'NOT_RUN' });
   const mutate = mutationDriver(journal, request);
@@ -151,9 +155,13 @@ export async function emailAcceptance({ phase, profile, credentials, grantInput,
   return checkpoint(journal, `receipt-${invocationRef}`, { status: value.outcome === 'EFFECT_CONFIRMED' ? 'PASS' : 'NOT_PASS', receiptRef: ref(value.ref), receiptVersion: positive(value.version), invocationRef, outcome: value.outcome, externalReceiptDigest: digest(value.externalReceiptDigest), semanticInputDigest: digest(value.semanticInputDigest), delivery: 'NOT_PROVEN' });
   }
   check((await publication()).publication.state === 'READY', 'PUBLICATION_NOT_READY');
-  if (phase === 'health') {
+  if (phase === 'health' || phase === 'recover-health') {
     if (!saved(journal, 'health')) {
       const current = await currentConnection();
+      if (phase === 'recover-health') {
+        check(current.state === 'DEGRADED' && current.version === recovery.terminalVersion && current.version === recovery.previousHealth.connectionVersion + 1 && current.lastTestedAt === recovery.terminalTestedAt && typeof current.lastTestOutcome === 'string' && hash(current.lastTestOutcome) === recovery.terminalOutcomeSHA256, 'HEALTH_TERMINAL_CHANGED');
+        checkpoint(journal, 'previous-health-terminal', { ...connectionPin(current), state: current.state, lastTestedAt: current.lastTestedAt, outcomeSHA256: recovery.terminalOutcomeSHA256 });
+      }
       await mutate('health', 'POST', `${path}/commands`, { action: 'TEST' }, 200, current.version, (body) => connectionPin(body, connection.connectionRef));
     }
     const deadline = now() + timeoutMs;
@@ -182,6 +190,25 @@ export async function emailAcceptance({ phase, profile, credentials, grantInput,
     return { status: 'ACKNOWLEDGED', grants: grantInput.capabilities.length, providerEffect: 'NOT_RUN' };
   }
   throw new Error('PHASE_INVALID');
+}
+
+// Новый TEST разрешён только после точного terminal readback прежнего ACK.
+export function emailHealthPredecessor(path, expectedDigest, profileBytes, origin, terminal) {
+  const previous = privateJournal(path, { version: 1, kind: 'EMAIL_MAILBOX_ACCEPTANCE', origin }, { readOnly: true });
+  try {
+    const header = previous.events[0];
+    check(previous.bytesSHA256 === digest(expectedDigest), 'PREDECESSOR_DIGEST_MISMATCH');
+    check(header.profileSHA256 === hash(profileBytes), 'PREDECESSOR_PROFILE_MISMATCH');
+    const intents = previous.events.filter((e) => e.type === 'INTENT');
+    const acks = previous.events.filter((e) => e.type === 'ACK');
+    check(intents.length > 0 && acks.length === intents.length && !previous.events.some((e) => ['UNKNOWN', 'STOP'].includes(e.type)) && intents.every((i) => acks.filter((a) => a.key === i.key && a.step === i.step).length === 1), 'PREDECESSOR_UNKNOWN_FORBIDDEN');
+    const pins = Object.fromEntries(['connection', 'draft', 'publish', 'bind'].map((step) => [step, saved(previous, step)]));
+    const health = saved(previous, 'health'); const intent = intents.find((i) => i.step === 'health');
+    check(Object.values(pins).every(Boolean) && pins.publish.state === 'PUBLISHED' && pins.bind.publication && health && !saved(previous, 'healthy') && intents.filter((i) => i.step === 'health').length === 1, 'PREDECESSOR_HEALTH_REQUIRED');
+    check(intent.method === 'POST' && intent.path === `/api/v1/integration-connections/${enc(pins.connection.connectionRef)}/commands` && intent.bodySHA256 === hash({ action: 'TEST' }) && health.connectionRef === pins.connection.connectionRef, 'PREDECESSOR_COMMAND_CHANGED');
+    check(Number.isFinite(Date.parse(terminal.testedAt)) && Date.parse(terminal.testedAt) >= Date.parse(intent.at), 'TERMINAL_TIMESTAMP_INVALID');
+    return { kind: 'HEALTH', sha256: expectedDigest, sourceSHA: header.sourceSHA, profileSHA256: header.profileSHA256, manifestSHA256: digest(header.servingManifestSHA256), pins, previousHealth: health, terminalVersion: positive(terminal.version), terminalTestedAt: terminal.testedAt, terminalOutcomeSHA256: digest(terminal.outcomeSHA256) };
+  } finally { previous.close(); }
 }
 
 // Узкий перенос только terminal INVALID draft с девятью подтверждёнными командами.
@@ -245,15 +272,17 @@ async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); check(/^--[a-z][a-z0-9-]*$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
   check(phases.includes(phase), 'PHASE_INVALID');
-  check(Object.keys(options).every((k) => ['--origin', '--storage-state', '--state', '--profile', '--previous-state', '--previous-sha256', '--previous-profile', '--credentials', '--grant-input', '--serving-manifest', '--timeout-ms', '--confirm', '--invocation-ref', '--project-ref'].includes(k)), 'ARGUMENT_UNKNOWN');
-  check(options['--confirm'] === (phase === 'recover-invalid' ? 'RECOVER-STAGING-INVALID-MAILBOX' : configurationPhases.includes(phase) ? 'CONFIGURE-STAGING-MAILBOX' : phase === 'health' ? 'CHECK-STAGING-MAILBOX-HEALTH' : undefined), 'CONFIRMATION_INVALID');
+  check(Object.keys(options).every((k) => ['--origin', '--storage-state', '--state', '--profile', '--previous-state', '--previous-sha256', '--previous-profile', '--terminal-version', '--terminal-tested-at', '--terminal-outcome-sha256', '--credentials', '--grant-input', '--serving-manifest', '--timeout-ms', '--confirm', '--invocation-ref', '--project-ref'].includes(k)), 'ARGUMENT_UNKNOWN');
+  check(options['--confirm'] === (phase === 'recover-health' ? 'RECOVER-STAGING-TERMINAL-MAILBOX-HEALTH' : phase === 'recover-invalid' ? 'RECOVER-STAGING-INVALID-MAILBOX' : configurationPhases.includes(phase) ? 'CONFIGURE-STAGING-MAILBOX' : phase === 'health' ? 'CHECK-STAGING-MAILBOX-HEALTH' : undefined), 'CONFIRMATION_INVALID');
   check((phase === 'credentials') === Boolean(options['--credentials']), 'CREDENTIAL_PHASE_REQUIRED');
   check((phase === 'grants') === Boolean(options['--grant-input']), 'GRANT_PHASE_REQUIRED');
   check(phase === 'receipt' ? Boolean(options['--invocation-ref'] && options['--project-ref']) : !options['--invocation-ref'] && !options['--project-ref'], 'RECEIPT_ARGUMENTS_INVALID');
   const origin = exactOrigin(options['--origin'] ?? ''); check(new URL(origin).protocol === 'https:' && !/prod(?:uction)?/i.test(new URL(origin).hostname), 'STAGING_ORIGIN_REQUIRED');
   const recoveryArguments = ['--previous-state', '--previous-sha256', '--previous-profile'];
-  check(phase === 'recover-invalid' ? recoveryArguments.every((key) => options[key]) : recoveryArguments.every((key) => !options[key]), 'RECOVERY_ARGUMENTS_INVALID');
-  const recovery = phase === 'recover-invalid' ? emailRecoveryPredecessor(options['--previous-state'], options['--previous-sha256'], privateInput(options['--previous-profile']), origin) : undefined;
+  check(phase === 'recover-invalid' ? recoveryArguments.every((key) => options[key]) : phase === 'recover-health' ? options['--previous-state'] && options['--previous-sha256'] && !options['--previous-profile'] : recoveryArguments.every((key) => !options[key]), 'RECOVERY_ARGUMENTS_INVALID');
+  const terminalArguments = ['--terminal-version', '--terminal-tested-at', '--terminal-outcome-sha256'];
+  check(phase === 'recover-health' ? terminalArguments.every((key) => options[key]) : terminalArguments.every((key) => !options[key]), 'TERMINAL_ARGUMENTS_INVALID');
+  let recovery = phase === 'recover-invalid' ? emailRecoveryPredecessor(options['--previous-state'], options['--previous-sha256'], privateInput(options['--previous-profile']), origin) : undefined;
   if (recovery) {
     const path = resolve(options['--profile']); check(path !== resolve(options['--previous-profile']) && resolve(options['--state']) !== resolve(options['--previous-state']), 'RECOVERY_PATH_REUSED');
     const bytes = Buffer.from(`${JSON.stringify(recovery.profile)}\n`); const directory = dirname(path);
@@ -262,12 +291,16 @@ async function main() {
     else { const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); } const dirFD = openSync(directory, constants.O_RDONLY); try { fsyncSync(dirFD); } finally { closeSync(dirFD); } }
   }
   const raw = privateInput(options['--profile']); const profile = JSON.parse(raw); validateEmailProfile(profile);
+  if (phase === 'recover-health') {
+    check(resolve(options['--state']) !== resolve(options['--previous-state']), 'RECOVERY_PATH_REUSED');
+    recovery = emailHealthPredecessor(options['--previous-state'], options['--previous-sha256'], raw, origin, { version: Number(options['--terminal-version']), testedAt: options['--terminal-tested-at'], outcomeSHA256: options['--terminal-outcome-sha256'] });
+  }
   const credentials = options['--credentials'] ? JSON.parse(privateInput(options['--credentials'])) : undefined;
   const grantInput = options['--grant-input'] ? JSON.parse(privateInput(options['--grant-input'])) : undefined;
   const sourceSHA = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
   check(execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim() === '', 'CLEAN_CHECKOUT_REQUIRED');
   const timeoutMs = Number(options['--timeout-ms'] ?? 1200000); check(Number.isSafeInteger(timeoutMs) && timeoutMs >= 1000 && timeoutMs <= 1200000, 'TIMEOUT_INVALID');
-  const journal = privateJournal(options['--state'], { version: 1, kind: 'EMAIL_MAILBOX_ACCEPTANCE', origin, sourceSHA, profileSHA256: hash(raw), servingManifestSHA256: hash(privateInput(options['--serving-manifest'])), ...(recovery ? { predecessorSHA256: recovery.sha256, predecessorSourceSHA: recovery.sourceSHA, predecessorProfileSHA256: recovery.profileSHA256, predecessorManifestSHA256: recovery.manifestSHA256 } : {}) });
+  const journal = privateJournal(options['--state'], { version: 1, kind: 'EMAIL_MAILBOX_ACCEPTANCE', origin, sourceSHA, profileSHA256: hash(raw), servingManifestSHA256: hash(privateInput(options['--serving-manifest'])), ...(recovery ? { predecessorSHA256: recovery.sha256, predecessorSourceSHA: recovery.sourceSHA, predecessorProfileSHA256: recovery.profileSHA256, predecessorManifestSHA256: recovery.manifestSHA256, ...(recovery.kind === 'HEALTH' ? { terminalReadbackSHA256: hash({ version: recovery.terminalVersion, testedAt: recovery.terminalTestedAt, outcomeSHA256: recovery.terminalOutcomeSHA256 }) } : {}) } : {}) });
   try {
     const client = createOwnerSessionClient({ origin, storagePath: resolve(options['--storage-state']) }); const deadline = Date.now() + timeoutMs;
     const request = (path, init = {}) => { check(Date.now() < deadline, 'REQUEST_DEADLINE'); return client.request(path, { ...init, signal: AbortSignal.timeout(Math.max(1, Math.min(30000, deadline - Date.now()))) }); };
