@@ -1,6 +1,58 @@
 import { expect, test } from "@playwright/test";
-import { projectForm } from "./ui-readonly-forms";
+import { projectForm, searchAssistantHistory } from "./ui-readonly-forms";
 import { permittedRequest } from "./ui-acceptance-proof";
+
+test("synthetic: поздний initial response и пустой список не заменяют exact query", async ({
+  page,
+}) => {
+  let release!: () => void;
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let exactRequested = false;
+  let finished = false;
+  await page.route("https://kodex.test/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/v1/assistant-conversations") {
+      if (url.searchParams.get("query") === "synthetic-absent") {
+        exactRequested = true;
+        await delayed;
+      }
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+    await route.fulfill({
+      contentType: "text/html",
+      body: `<!doctype html><meta charset="UTF-8"><input type="search"><div id="entries"><button>Fixture</button></div><script>
+      document.querySelector('input').oninput = async (event) => {
+        await fetch('/api/v1/assistant-conversations').then(r => r.json());
+        document.querySelector('#entries').innerHTML = '';
+        await fetch('/api/v1/assistant-conversations?query=' + encodeURIComponent(event.target.value)).then(r => r.json());
+      };
+    </script>`,
+    });
+  });
+  await page.goto("https://kodex.test");
+  const proof = searchAssistantHistory(
+    page,
+    page.getByRole("searchbox"),
+    page.locator("#entries button"),
+    "synthetic-absent",
+  ).then(() => {
+    finished = true;
+  });
+  try {
+    await expect.poll(() => exactRequested).toBe(true);
+    await expect(page.locator("#entries button")).toHaveCount(0);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(finished).toBe(false);
+  } finally {
+    release();
+    await proof;
+    await page.unrouteAll({ behavior: "wait" });
+  }
+  expect(finished).toBe(true);
+});
 
 for (const locale of ["ru", "en"] as const) {
   test(`synthetic: форма ${locale} проверяет native input и закрывается без submit`, async ({
