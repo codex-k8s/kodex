@@ -63,6 +63,18 @@ run_migration() {
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     env -u GOFLAGS GOENV=off GOWORK=off go test -v -count=1 \
       ./internal/repository/postgres/platform -run "$test_pattern"
+  # Та же read-only диагностика, которую release использует на staging.
+  psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \
+    --no-password -X -qAt -v ON_ERROR_STOP=1 \
+    --file "$repository_root/tools/release/worker-grant-readback.sql" | \
+    node --input-type=module -e '
+      let input = "";
+      for await (const chunk of process.stdin) input += chunk;
+      const state = JSON.parse(input);
+      if (!Number.isFinite(Date.parse(state.at)) || !Array.isArray(state.floors) || !Array.isArray(state.instances))
+        throw new Error("Worker grant readback shape is invalid");
+      process.stdout.write("Worker grant read-only query passed\n");
+    '
   if [[ $# -eq 0 && -z "${KODEX_CONTROL_PLANE_TEST_FILTER:-}" ]]; then
     KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
       env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 \
