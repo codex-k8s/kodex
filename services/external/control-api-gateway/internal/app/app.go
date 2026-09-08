@@ -148,7 +148,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	api.AttachRealtime(http.HandlerFunc(realtime.ServeSessionHTTP))
 	readiness := serviceruntime.NewReadiness()
-	public := &http.Server{Addr: config.HTTPListen, Handler: secureHeaders(telemetry.HTTPMiddleware(internalobservability.Route, businessMetrics.ObserveHTTP, api.Handler())), TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestTimeout, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	requests, cancelRequests := servingContext(lifecycle)
+	defer cancelRequests()
+	public := &http.Server{Addr: config.HTTPListen, Handler: secureHeaders(telemetry.HTTPMiddleware(internalobservability.Route, businessMetrics.ObserveHTTP, api.Handler())), TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}, BaseContext: func(net.Listener) context.Context { return requests }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: config.RequestTimeout, WriteTimeout: 0, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	technicalMux := http.NewServeMux()
 	technicalMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	technicalMux.HandleFunc("/livez", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
@@ -166,6 +168,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness.Set(false, "dependencies_starting")
 	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(control, secrets, realtime, revocations, browserState, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
+	// HTTP-запросы уже завершены либо принудительно закрыты по бюджету.
+	// Отмена закрывает также контексты hijacked WebSocket до закрытия клиентов.
+	cancelRequests()
 	security.StopAdmission()
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase, serviceruntime.ShutdownOperation{Name: "public HTTP server", Timeout: config.ShutdownTimeout, Run: public.Shutdown}, serviceruntime.ShutdownOperation{Name: "technical HTTP server", Timeout: config.ShutdownTimeout, Run: technical.Shutdown}, serviceruntime.ShutdownOperation{Name: "gateway workers", Timeout: config.ShutdownTimeout, Run: workers.Wait}, serviceruntime.ShutdownOperation{Name: "tracing", Timeout: config.ShutdownTimeout, Run: telemetry.ShutdownTracing}, serviceruntime.ShutdownOperation{Name: "error reporting", Timeout: config.ShutdownTimeout, Run: telemetry.FlushSentry})
 	return errors.Join(err, shutdownErr)
@@ -228,9 +233,7 @@ func httpWorker(server *http.Server, tlsEnabled bool, config Config) servicerunt
 			}
 			return err
 		case <-ctx.Done():
-			shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), config.ShutdownTimeout)
-			defer cancel()
-			err := server.Shutdown(shutdown)
+			err := shutdownHTTPServer(ctx, server, config.ShutdownTimeout)
 			serveErr := <-done
 			if !errors.Is(serveErr, http.ErrServerClosed) {
 				err = errors.Join(err, serveErr)
@@ -241,6 +244,10 @@ func httpWorker(server *http.Server, tlsEnabled bool, config Config) servicerunt
 }
 func readinessWorker(control *controlplaneclient.Client, secrets *secretbrokerclient.Client, realtime *websockettransport.Server, revocations *sessionrevocation.Store, browserState *browserstate.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
+		defer func() {
+			readiness.Set(false, "shutting_down")
+			metrics.SetReady(false)
+		}()
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {

@@ -26,7 +26,7 @@ spec:
       serviceAccountName: control-api-gateway
       automountServiceAccountToken: false
       enableServiceLinks: false
-      terminationGracePeriodSeconds: 35
+      terminationGracePeriodSeconds: 120
       securityContext:
         runAsNonRoot: true
         seccompProfile: {type: RuntimeDefault}
@@ -93,6 +93,9 @@ spec:
           ports:
             - {name: https, containerPort: 8443, protocol: TCP}
             - {name: metrics, containerPort: 9090, protocol: TCP}
+          lifecycle:
+            preStop:
+              sleep: {seconds: 10}
           startupProbe:
             httpGet: {path: /healthz, port: metrics}
             timeoutSeconds: 2

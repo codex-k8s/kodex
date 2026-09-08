@@ -49,6 +49,9 @@ spec:
               readOnly: true
         - name: internal-rpc-authority-issuer
           image: ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          lifecycle:
+            preStop:
+              sleep: {seconds: 40}
           command:
             - /usr/local/bin/internal-rpc-authority-issuer
           env:
