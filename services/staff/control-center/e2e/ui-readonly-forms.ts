@@ -1,4 +1,5 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { matchesAssistantSearch } from "./ui-readonly-search-proof";
 import {
   assistantDialog,
   cleanupAssistant,
@@ -10,6 +11,21 @@ import {
 } from "./ui-acceptance-browser";
 
 export class ReadonlyFixtureMissing extends Error {}
+export async function searchAssistantHistory(
+  page: Page,
+  search: Locator,
+  entries: Locator,
+  query: string,
+) {
+  const response = await observeActionResponse(
+    page,
+    (value) =>
+      matchesAssistantSearch(value.request().method(), value.url(), query),
+    () => search.fill(query),
+  );
+  checkCondition("HTTP_STATUS", response.status(), 200);
+  await expect(entries).toHaveCount(0);
+}
 export async function projectForm(
   page: Page,
   locale: "ru" | "en",
@@ -156,14 +172,7 @@ export async function assistantDraft(
     if (mobile) await historyToggle.click();
     const search = history.getByRole("searchbox");
     await expect(search).toBeVisible();
-    const response = await observeActionResponse(
-      page,
-      (value) =>
-        new URL(value.url()).pathname === "/api/v1/assistant-conversations" &&
-        value.request().method() === "GET",
-      () => search.fill(`${prefix}-absent`),
-    );
-    checkCondition("HTTP_STATUS", response.status(), 200);
+    await searchAssistantHistory(page, search, entries, `${prefix}-absent`);
     return {
       unsavedCloseCancelled: true,
       populatedHistory: true,
