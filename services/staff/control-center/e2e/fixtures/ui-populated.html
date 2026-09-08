@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка точечных сценариев чтения</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from "vue";
+      import { createPinia } from "pinia";
+      import { createRouter, createWebHistory, RouterView } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import "../../src/app/styles/base.css";
+      import UiPopulatedFixture from "./UiPopulatedFixture.vue";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const router = createRouter({
+        history: createWebHistory(),
+        routes: [
+          {
+            path: "/projects/:projectRef/:pathMatch(.*)*",
+            component: UiPopulatedFixture,
+          },
+          { path: "/:pathMatch(.*)*", component: UiPopulatedFixture },
+        ],
+      });
+      await router.push(location.pathname + location.search);
+      i18n.global.locale.value = "en";
+      createApp(RouterView)
+        .use(createPinia())
+        .use(router)
+        .use(i18n)
+        .mount("#app");
+    </script>
+  </body>
+</html>

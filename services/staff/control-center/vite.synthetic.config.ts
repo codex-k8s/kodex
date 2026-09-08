@@ -10,6 +10,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        uiPopulated: fileURLToPath(
+          new URL("./e2e/fixtures/ui-populated.html", import.meta.url),
+        ),
         bootstrapCancel: fileURLToPath(
           new URL("./e2e/fixtures/bootstrap-cancel.html", import.meta.url),
         ),

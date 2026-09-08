@@ -1,3 +1,5 @@
+import type { ReadNetworkCorrelator } from "./ui-read-network";
+import { populatedVariants } from "./ui-populated-variants";
 import { readonlyFormVariants } from "./ui-readonly-variant-ids";
 import { createHash } from "node:crypto";
 import { lstat, mkdir, open, realpath } from "node:fs/promises";
@@ -96,7 +98,9 @@ export function selectedVariants(
       (value) =>
         !targetedVariants.includes(
           value as (typeof targetedVariants)[number],
-        ) && !readonlyFormVariants.includes(value),
+        ) &&
+        !readonlyFormVariants.includes(value) &&
+        !populatedVariants.includes(value),
     )
   )
     throw new Error("Invalid read-only UI variant selection");
@@ -281,11 +285,13 @@ export async function createJournal(
   rawPath: string,
   versions: Versions,
   browser: string,
+  fixtureManifestSHA256 = "",
 ) {
   if (
     !isAbsolute(rawPath) ||
     rawPath !== resolve(rawPath) ||
-    !["chromium", "firefox", "webkit"].includes(browser)
+    !["chromium", "firefox", "webkit"].includes(browser) ||
+    !/^(?:[a-f0-9]{64})?$/.test(fixtureManifestSHA256)
   )
     throw new Error("Invalid UI evidence configuration");
   const parent = dirname(resolve(rawPath));
@@ -316,12 +322,27 @@ export async function createJournal(
     sourceRole: "harness",
     versions,
     browser,
+    fixtureManifestSHA256,
     timestampUTC: new Date().toISOString(),
   });
   return {
     path,
     variant: async (value: Variant) =>
-      append({ type: "variant", ...safeVariant(value) }),
+      append({
+        type: "variant",
+        browser,
+        fixtureManifestSHA256,
+        ...safeVariant(value),
+      }),
+    network: async (value: ReadNetworkCorrelator<object>) =>
+      append({
+        type: "read-network",
+        timestampUTC: new Date().toISOString(),
+        browser,
+        fixtureManifestSHA256,
+        summary: value.snapshot(),
+        diagnostics: value.safeDiagnostics(),
+      }),
     projectIntent: async (slot: 0 | 1) =>
       append({
         type: "fixture-intent",
