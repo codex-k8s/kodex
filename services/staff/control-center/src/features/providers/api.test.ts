@@ -10,6 +10,7 @@ const sdk = vi.hoisted(() => ({
   listProviderAccounts: vi.fn(),
   listProviderDefinitions: vi.fn(),
   reauthorizeProviderAccountDeviceCode: vi.fn(),
+  refreshProviderAccountAuthorization: vi.fn(),
   revokeProviderAccount: vi.fn(),
   setProviderAccountEnabled: vi.fn(),
   startProviderAccountDeviceAuthorization: vi.fn(),

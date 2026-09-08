@@ -42,6 +42,7 @@ export const providerLifecycleMessages = {
       WARM_RUNTIME: "Рабочая среда системного помощника",
     },
     actions: {
+      START_DEVICE: "Первоначальная авторизация устройства",
       DELETE: "Удаление учётной записи",
       VERIFY: "Проверка авторизации",
       REAUTHORIZE: "Повторная авторизация",
@@ -124,6 +125,7 @@ export const providerLifecycleMessages = {
       WARM_RUNTIME: "System assistant runtime",
     },
     actions: {
+      START_DEVICE: "Initial device authorization",
       DELETE: "Account deletion",
       VERIFY: "Authorization verification",
       REAUTHORIZE: "Reauthorization",

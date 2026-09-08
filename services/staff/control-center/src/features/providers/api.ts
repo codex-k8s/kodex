@@ -7,6 +7,7 @@ import {
   listProviderAccounts,
   listProviderDefinitions,
   reauthorizeProviderAccountDeviceCode,
+  refreshProviderAccountAuthorization,
   revokeProviderAccount as revokeProviderAccountRequest,
   setProviderAccountEnabled as setProviderAccountEnabledRequest,
   startProviderAccountDeviceAuthorization,
@@ -120,6 +121,7 @@ export async function createProviderAccount(
 
 export async function startDeviceAuthorization(
   account: ProviderAccount,
+  key?: string,
 ): Promise<ProviderAccount> {
   return (
     await mutate(
@@ -128,7 +130,24 @@ export async function startDeviceAuthorization(
           path: { providerAccountRef: account.ref },
           headers: versionedHeaders(headers),
           signal: requestSignal(),
-        }),
+        }).then(checkMutationRejection),
+      account.version,
+      key,
+    )
+  ).data;
+}
+
+export async function pollDeviceAuthorization(
+  account: ProviderAccount,
+): Promise<ProviderAccount> {
+  return (
+    await mutate(
+      (headers) =>
+        refreshProviderAccountAuthorization({
+          path: { providerAccountRef: account.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }).then(checkMutationRejection),
       account.version,
     )
   ).data;

@@ -54,6 +54,8 @@ TRANSCRIPTION_RATE_LIMITED:
   other: Провайдер ограничил распознавание речи; запись не отправлена повторно автоматически
 UNAVAILABLE:
   other: Сервис временно недоступен
+PROVIDER_DEVICE_AUTHORIZATION_UNAVAILABLE:
+  other: Авторизация устройства временно недоступна; повторите исходную команду в этой учётной записи
 DEADLINE_EXCEEDED:
   other: Операция выполнялась слишком долго; повторите попытку
 CSRF_REJECTED:

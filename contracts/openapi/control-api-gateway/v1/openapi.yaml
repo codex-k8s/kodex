@@ -79,6 +79,25 @@ paths:
       responses:
         '204': { description: Защищённая browser-сессия завершена }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/session/ticket:
+    post:
+      tags: [Session]
+      operationId: createOwnerSessionTicket
+      description: |
+        Одноразовый WS ticket текущей BFF family после cookie/CSRF проверки.
+        TTL не более 30 секунд и текущих access/idle/absolute сроков.
+        Gateway атомарно потребляет ticket через durable CAS до Upgrade.
+        Повтор выдачи создаёт независимый ticket; максимум 16 живых tickets
+        одной family. Потерянный ответ не разрешает переиспользовать ticket.
+        Ticket передаётся только через ticket.<ticket> subprotocol, не URL/storage.
+      parameters: [{ $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Одноразовый ticket без OIDC credentials; Cache-Control no-store
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OwnerSessionTicket' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/session/authorization:
     post:
       tags: [Session]
@@ -1210,6 +1229,7 @@ paths:
     post:
       tags: [Agents]
       operationId: startProviderAccountDeviceAuthorization
+      description: При временном отказе provider path возвращается 503 PROVIDER_DEVICE_AUTHORIZATION_UNAVAILABLE с correlationId, retryable=true и Retry-After=1; UNKNOWN сохраняет исходные idempotency/OCC.
       parameters: [{ $ref: '#/components/parameters/ProviderAccountRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
       responses:
         '202':
@@ -5086,6 +5106,13 @@ components:
           type: boolean
           default: false
           description: Запросить интерактивный вход; поле не выдаёт operation authority
+    OwnerSessionTicket:
+      type: object
+      additionalProperties: false
+      required: [ticket, expiresAt]
+      properties:
+        ticket: { type: string, minLength: 43, maxLength: 43, pattern: '^[A-Za-z0-9_-]{43}$' }
+        expiresAt: { type: string, format: date-time }
     OwnerSessionMetadata:
       type: object
       additionalProperties: false

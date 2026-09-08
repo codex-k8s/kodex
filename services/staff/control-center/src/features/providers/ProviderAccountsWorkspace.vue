@@ -310,6 +310,11 @@ function recovered(result: ProviderLifecycleResult): void {
   localProblem.value = undefined;
   store.problem = undefined;
   receiveLifecycleAccount(result.account);
+  if (
+    authorizationAccount.value?.ref === result.account.ref &&
+    isPendingDeviceAuthorization(result.account)
+  )
+    store.schedulePoll(result.account.ref);
 }
 
 let verificationController = new AbortController();

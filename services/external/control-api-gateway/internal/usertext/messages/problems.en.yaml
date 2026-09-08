@@ -54,6 +54,8 @@ TRANSCRIPTION_RATE_LIMITED:
   other: The provider limited speech transcription; the recording was not automatically submitted again
 UNAVAILABLE:
   other: The service is temporarily unavailable
+PROVIDER_DEVICE_AUTHORIZATION_UNAVAILABLE:
+  other: Device authorization is temporarily unavailable; retry the original command for this account
 DEADLINE_EXCEEDED:
   other: The operation took too long; try again
 CSRF_REJECTED:

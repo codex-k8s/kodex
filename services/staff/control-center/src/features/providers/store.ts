@@ -11,7 +11,7 @@ import {
   loadProviderDefinitions,
   revokeProviderAccount,
   setProviderAccountEnabled,
-  startDeviceAuthorization,
+  pollDeviceAuthorization,
 } from "./api";
 import {
   accountAllows,
@@ -152,14 +152,17 @@ export const useProvidersStore = defineStore("providers", {
       if (!accountAllows(account, "CONFIGURE_CREDENTIAL")) return account;
       const generation = pollGenerations.get(account.ref) ?? 0;
       const updated = await this.execute(account.ref, () =>
-        reauthorize || account.state === "REAUTHORIZATION_REQUIRED"
-          ? startProviderLifecycle(
-              account,
-              { action: "REAUTHORIZE" },
-              window.sessionStorage,
-              requestSignal(),
-            ).then((result) => result.account)
-          : startDeviceAuthorization(account),
+        startProviderLifecycle(
+          account,
+          {
+            action:
+              reauthorize || account.state === "REAUTHORIZATION_REQUIRED"
+                ? "REAUTHORIZE"
+                : "START_DEVICE",
+          },
+          window.sessionStorage,
+          requestSignal(),
+        ).then((result) => result.account),
       );
       if (
         generation === (pollGenerations.get(account.ref) ?? 0) &&
@@ -177,12 +180,15 @@ export const useProvidersStore = defineStore("providers", {
       }
       const generation = pollGenerations.get(account.ref) ?? 0;
       const updated = await this.execute(account.ref, () =>
-        startProviderLifecycle(
-          account,
-          { action: "VERIFY" },
-          window.sessionStorage,
-          requestSignal(),
-        ).then((result) => result.account),
+        account.authorization?.method === "DEVICE_CODE" &&
+        account.authorization.state === "PENDING"
+          ? pollDeviceAuthorization(account)
+          : startProviderLifecycle(
+              account,
+              { action: "VERIFY" },
+              window.sessionStorage,
+              requestSignal(),
+            ).then((result) => result.account),
       );
       if (generation === (pollGenerations.get(account.ref) ?? 0)) {
         if (isPendingDeviceAuthorization(updated))

@@ -17,7 +17,22 @@ servers:
     security: [{ $ref: "#/components/securitySchemes/OwnerSession" }]
     x-origin-policy: EXACT_HTTPS_ALLOWLIST
     x-channel-subprotocols:
-      sessionStream: [kodex.session.v1, csrf.<csrf-token>]
+      sessionStream: [kodex.session.v2, csrf.<csrf-token>, ticket.<one-time-ticket>]
+    x-legacy-transition:
+      subprotocol: kodex.session.v1
+      authorization: EXISTING_COOKIE_AND_CSRF_BOUNDARY
+      enabledUntil: KODEX_WS_LEGACY_UNTIL
+      default: DISABLED
+      maximumWindowHours: 24
+      clientFallback: FORBIDDEN
+    x-ticket-policy:
+      issue: POST /api/v1/session/ticket
+      owner: CONTROL_API_GATEWAY_BROWSER_FAMILY
+      consume: ATOMIC_DURABLE_CAS_BEFORE_UPGRADE
+      binding: FAMILY_BROWSER_SESSION_VERSION_AND_CSRF
+      maximumLifetimeSeconds: 30
+      maximumLiveTicketsPerFamily: 16
+      bearerInURL: FORBIDDEN
     x-locale-query:
       name: locale
       values: [ru, en]

@@ -132,6 +132,7 @@ export const useSessionStore = defineStore("session", () => {
   let loginCompletionRequest: Promise<LoginCompletion> | undefined;
   let renewalTimer: number | undefined;
   let renewalRequest: Promise<void> | undefined;
+  let coordinatedRenewalRequest: Promise<void> | undefined;
   let renewalController: AbortController | undefined;
   let renewalRetryTimer: number | undefined;
   let renewalFailures = 0;
@@ -660,6 +661,26 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   async function renew(): Promise<void> {
+    if (coordinatedRenewalRequest) return await coordinatedRenewalRequest;
+    const current = generation;
+    const pending = renewalCoordinator
+      .runExclusive(async () => {
+        if (isCurrentSession(current)) await performRenewal();
+      })
+      .then((acquired) => {
+        if (!acquired && isCurrentSession(current) && canRenewSession())
+          scheduleRenewal(1_000);
+      });
+    coordinatedRenewalRequest = pending;
+    try {
+      await pending;
+    } finally {
+      if (coordinatedRenewalRequest === pending)
+        coordinatedRenewalRequest = undefined;
+    }
+  }
+
+  async function performRenewal(): Promise<void> {
     if (!canRenewSession()) return;
     if (renewalRequest) return await renewalRequest;
     if (metadataRequest) await metadataRequest;
@@ -736,7 +757,11 @@ export const useSessionStore = defineStore("session", () => {
 
   function startRenewal(): void {
     if (loggingOut || !timing) return;
-    scheduleRenewal(Math.max(0, timing.renewAt - Date.now()));
+    const delay = Math.max(0, timing.renewAt - Date.now());
+    const jitter =
+      Math.random() *
+      Math.min(1_000, Math.max(0, timing.deadline - Date.now() - delay));
+    scheduleRenewal(delay + jitter);
   }
 
   function scheduleRenewal(delayMs: number): void {
