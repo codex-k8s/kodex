@@ -18,6 +18,9 @@ func TestManagedEmailCredentialAndImmutableCompatibility(t *testing.T) {
 	if !ok || legacy.Digest == current.Digest || legacy.Spec.Credential == nil || legacy.RequiresConnectionCredential() {
 		t.Fatal("legacy exact pins lost")
 	}
+	if !legacy.HasLegacyEmailCredentialDescriptor(current) || current.HasLegacyEmailCredentialDescriptor(current) {
+		t.Fatal("legacy descriptor boundary changed")
+	}
 	if ValidateExecutableRevision(legacy, current) != nil {
 		t.Fatal("legacy reader rejected")
 	}
@@ -27,9 +30,10 @@ func TestManagedEmailCredentialAndImmutableCompatibility(t *testing.T) {
 	for _, origin := range []string{OriginUI, OriginGit} {
 		candidate := legacy
 		candidate.Metadata.Origin = origin
+		candidate.Spec.HealthCheck.TimeoutSeconds--
 		raw, _ := json.Marshal(candidate)
 		candidate, err = Parse(raw)
-		if err != nil || ValidateExecutableRevision(candidate, current) != nil {
+		if err != nil || ValidateExecutableRevision(candidate, current) != nil || !candidate.HasLegacyEmailCredentialDescriptor(current) {
 			t.Fatal("managed legacy revision rejected")
 		}
 		candidate.Spec.Credential.SecretKey = "other"
