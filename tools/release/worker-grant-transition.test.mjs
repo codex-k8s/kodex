@@ -106,6 +106,7 @@ test("overlap requires both durable streams advancing at the unchanged generatio
 test("persisted plan rejects target, reader, cluster and CAS drift before any patch", () => {
   const plan = { ...planWorkerTransition(fixture(), "activate"), version: 1, id: uid,
     context: "staging", clusterUID: uid, namespaceUID: otherUID,
+    writers: [{ uid, agents: [{ imageID: "exact-image", executableSHA256: "exact-hash", containerID: "exact-container", startTicks: "123" }] }],
     readers: { uid, specSHA256: "reader-spec", pods: [{ uid: otherUID, source: { revision: "exact-reader" } }] } };
   requireUnchangedPlan(plan, structuredClone(plan));
   for (const key of ["context", "target", "phase", "uid", "resourceVersion", "beforeSpecSHA256", "afterSpecSHA256", "clusterUID", "namespaceUID", "handoffProofSHA256"]) {
@@ -116,6 +117,11 @@ test("persisted plan rejects target, reader, cluster and CAS drift before any pa
     (p) => { p.readers.pods[0].uid = uid; },
     (p) => { p.readers.pods[0].source.revision = "old-reader"; },
     (p) => { p.readers.specSHA256 = "changed"; },
+    (p) => { delete p.writers; },
+    (p) => { p.writers[0].agents[0].imageID = "changed"; },
+    (p) => { p.writers[0].agents[0].executableSHA256 = "changed"; },
+    (p) => { p.writers[0].agents[0].containerID = "changed"; },
+    (p) => { p.writers[0].agents[0].startTicks = "456"; },
   ]) { const current = structuredClone(plan); mutate(current); assert.throws(() => requireUnchangedPlan(plan, current)); }
 });
 

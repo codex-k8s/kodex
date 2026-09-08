@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint, workerGrantAgents } from "./scoped-release.mjs";
 import { inspectSource } from "./application-source.mjs";
+import { inspectImageWriter, requireImageWriterTarget } from "./image-writer-capability.mjs";
 
 const namespace = "kodex-system";
 const instanceEnv = "PLATFORM_WORKER_GRANT_INSTANCE_ID";
@@ -139,7 +140,9 @@ export function requireUnchangedPlan(saved, current) {
   requireValue(saved.version === 1 && uuid.test(saved.id) &&
     ["context", "target", "phase", "uid", "resourceVersion", "beforeSpecSHA256", "afterSpecSHA256", "clusterUID", "namespaceUID", "handoffProofSHA256"]
       .every((key) => saved[key] === current[key]) &&
-    fingerprint(saved.readers) === fingerprint(current.readers), "PLAN_PRECONDITION_CHANGED");
+    Array.isArray(saved.writers) && Array.isArray(current.writers) &&
+    fingerprint(saved.readers) === fingerprint(current.readers) &&
+    fingerprint(saved.writers) === fingerprint(current.writers), "PLAN_PRECONDITION_CHANGED");
 }
 
 async function main(args) {
@@ -197,9 +200,17 @@ async function main(args) {
   const readerState = readers();
   const database = readDB();
   const pods = podsFor(deployment);
-  for (const pod of pods) for (const agent of workerGrantAgents(pod.spec)) source(pod.spec, agent);
+  const writers = (selectedPods) => selectedPods.map((pod) => ({ uid: pod.metadata.uid,
+    agents: workerGrantAgents(pod.spec).map((agent) => {
+      if ((agent.volumeMounts ?? []).some((mount) => mount.mountPath === "/workspace"))
+        return { name: agent.name, kind: "source", source: source(pod.spec, agent) };
+      requireImageWriterTarget(deployment.metadata.name, agent);
+      return inspectImageWriter(pod, agent);
+    }).sort((a, b) => (a.name ?? a.container).localeCompare(b.name ?? b.container)),
+  })).sort((a, b) => a.uid.localeCompare(b.uid));
+  const writerState = writers(pods);
   const snapshot = { at: new Date().toISOString(), clusterUID, namespaceUID, readers: readerState,
-    target: deployment.metadata.name, uid: deployment.metadata.uid, specSHA256: fingerprint(deployment.spec),
+    target: deployment.metadata.name, writers: writerState, uid: deployment.metadata.uid, specSHA256: fingerprint(deployment.spec),
     pods: pods.map((pod) => ({ uid: pod.metadata.uid, name: pod.metadata.name })), database };
   if (command === "inspect") {
     requireValue(options["--output"] && !options["--confirm"], "INSPECTION_OUTPUT_REQUIRED");
@@ -224,7 +235,7 @@ async function main(args) {
     verifyLeaderHandoff(proof, snapshot);
     handoffProofSHA256 = fingerprint(proof);
   }
-  const identity = { clusterUID, namespaceUID, readers: readerState };
+  const identity = { clusterUID, namespaceUID, readers: readerState, writers: writerState };
   const safePlan = { version: 1, id: saved?.id ?? randomUUID(), at: new Date().toISOString(), context: options["--context"],
     ...identity, ...Object.fromEntries(Object.entries(plan).filter(([key]) => key !== "patch")),
     ...(handoffProofSHA256 ? { handoffProofSHA256 } : {}) };
@@ -268,6 +279,11 @@ async function main(args) {
       requireValue(current.metadata.resourceVersion === plan.resourceVersion, "PLAN_PRECONDITION_CHANGED");
       requireValue(fingerprint(podsFor(current).map((pod) => pod.metadata.uid).sort()) === fingerprint(pods.map((pod) => pod.metadata.uid).sort()), "PODS_CHANGED_DURING_OBSERVATION");
     }
+    // После bounded observation и непосредственно перед единственным PATCH
+    // повторно связываем writer с actual container/process, а не аннотацией.
+    sourceCache.clear();
+    requireValue(fingerprint(writers(podsFor(get("deployment", snapshot.target)))) === fingerprint(writerState),
+      "WRITERS_CHANGED_BEFORE_PATCH");
     const path = join(directory, "patch.json"); writeFileSync(path, JSON.stringify(plan.patch), { mode: 0o600, flag: "wx" });
     record({ status: "PATCH_ATTEMPT" });
     patchAttempted = true;
@@ -280,7 +296,7 @@ async function main(args) {
     record({ status: "WAITING_FOR_POD_DRAIN" });
     const final = await waitForWorkerDrain({ readDeployment: () => get("deployment", snapshot.target), readPods: podsFor,
       uid: plan.uid, specSHA256: plan.afterSpecSHA256 });
-    record({ status: "PASS", pods: final.pods.map((pod) => ({ uid: pod.metadata.uid, name: pod.metadata.name })), database: readDB() });
+    record({ status: "PASS", writers: writers(final.pods), pods: final.pods.map((pod) => ({ uid: pod.metadata.uid, name: pod.metadata.name })), database: readDB() });
     process.stdout.write(`${JSON.stringify({ status: "PASS", id: safePlan.id, target: snapshot.target, phase })}\n`);
   } catch {
     record({ status: !patchAttempted || applied ? "FAIL" : "UNKNOWN", code: "AUTHORITATIVE_READBACK_REQUIRED" }); throw new Error("AUTHORITATIVE_READBACK_REQUIRED");

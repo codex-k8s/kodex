@@ -4,7 +4,7 @@ title: Независимые релизы и переход worker grants
 type: operations
 status: approved
 owner: manager
-version: 1.2.0
+version: 1.3.0
 updated: 2026-09-08
 ---
 
@@ -81,12 +81,45 @@ replay history. Он не предназначен для production. Обычн
 одноразового dev-перехода не изменяет install contract.
 
 Read-only `inspect` проверяет всех CP Pods через владельца Deployment/ReplicaSet,
-готовность завершённого rollout, чистый source mount каждого reader и writer,
+готовность завершённого rollout, чистый source mount каждого reader и source writer,
 наличие совместимого изменения `29652a817cc548282f03747da3ea98717f9e32af`.
 В этом профиле проверка source/Pod не является криптографической аттестацией
 бинаря. Отдельно нужны фактические защищённые RPC и restart recovery.
 Для image-only reader этот инструмент закрыто отказывает: требуется отдельный
 проверенный capability manifest, а не предположение по общему Git SHA.
+
+Исключение #1304 относится только к image writer `platform-worker-grant-agent`
+в `role-image-builder`. Закрытый repo-owned
+`tools/release/role-image-builder-writer-capability.json` фиксирует единственный
+image digest, canonical source revision и Git trees семи модулей, Go build recipe
+и SHA256 executable. Нет CLI для подстановки произвольного manifest или доверия
+аннотации. Reader CP остаётся на прежнем source workflow; image-only CP отклоняется.
+
+SRE запускает существующий CLI на host с root-доступом к CRI и `/proc`.
+`k3s crictl inspect` читается через pipe без вывода raw JSON. Проверяются exact
+Pod UID/name/namespace, container name/ID/imageID, CRI state/restart attempt/PID
+и единственный ожидаемый executable argument. `/proc/PID/exe` проверяется по
+пути и SHA256; start ticks, inode/device и повторный CRI readback защищают от
+замены процесса во время чтения. В evidence попадает только закрытый набор
+identity/digest, без env/cmdline/секретов.
+
+Каждый inspect/plan/apply заново проверяет actual writers. План закрепляет
+capability digest и process identity; apply закрыто отклоняет drift. После
+95s observation непосредственно перед единственным PATCH выполняется повторное
+чтение. После rollout/drain все новые writer Pods снова проверяются перед PASS.
+Чужой target, tag, неизвестный image/hash/command и restart требуют readback и
+нового плана; автоматического fallback или повторного PATCH нет. Схема,
+generation floor, lifecycle и порядок четырёх фаз сохраняются.
+
+Источник canonical binary — `6fe0412154b09d37ec654f1dc394e5ca6de48a20`;
+прикладные исходники authority и шести локальных зависимостей идентичны checked
+main на момент #1304. Локальная Go1.26.6 linux/amd64/GOAMD64=v1 pure-Go сборка
+по manifest recipe дала `39d06542b3dce25b294498e8b428d3969ee6de170e39e0dd9f4d2e0527149570`.
+Root зафиксировал такой же hash actual `/proc/PID/exe` для image из manifest.
+Это доказательство совпадения writer bytes с воспроизводимой сборкой, а не
+новая общая OCI attestation или проверка всех binaries этого image.
+Live activation/две durable streams/outage/rotation остаются NOT RUN для
+исполнителя #1304 и проверяются root после exact-head merge.
 
 `worker-grant-readback.sql` — фиксированное чтение в `READ ONLY` transaction
 с `statement_timeout=10s` через существующий SRE local PostgreSQL entrypoint.
