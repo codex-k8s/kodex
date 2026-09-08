@@ -79,7 +79,7 @@ poll = true
 poll_interval = 500
 stop_on_error = true
 send_interrupt = true
-kill_delay = "2s"
+kill_delay = "90s"
 # Локальные sidecar и service процессы могут стартовать раньше соседней
 # зависимости во время одновременного apply. Air повторяет только запуск уже
 # собранного бинаря; production lifecycle этим профилем не изменяется.

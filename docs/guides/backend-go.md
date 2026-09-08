@@ -239,6 +239,16 @@ deadline. Если операция должна пережить клиентс
 явная задача процесса с собственным lifecycle, а не скрытый
 `context.Background()` внутри handler или goroutine.
 
+HTTP BaseContext не должен отменять уже принятые запросы тем же сигналом,
+который запускает graceful shutdown listeners. Composition root сохраняет
+отмену клиента и deadlines запроса, даёт принятым запросам отдельный bounded
+drain и по его истечении закрывает соединения принудительно. Оставшиеся request
+contexts отменяются до закрытия downstream клиентов. PreStop приложения и
+порядок остановки локального issuer обязаны покрывать распространение
+EndpointSlice и полный request drain; Pod grace и dev supervisor kill timeout
+не могут быть короче соответствующих обязательных этапов. Конкретная матрица
+API и проверка переносимого Kubernetes-профиля приведены в `OPS-DOC-1229`.
+
 Composition root запускает background workers только после успешного создания
 всех обязательных listeners, построения transport servers и завершения
 остального startup. До этой startup barrier worker не выполняет polling,
