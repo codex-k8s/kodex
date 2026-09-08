@@ -6,6 +6,7 @@ import {
   loadRoleDefinitionOptions,
   loadRoleImageDependencies,
   loadRoleImageCreateAccess,
+  loadRoleImageSourceCreateAccess,
   loadRoleImagePage,
   loadRoleImageRevisionPage,
   promoteRoleImageArtifact,
@@ -142,6 +143,74 @@ describe("role image API adapter", () => {
     );
     expect(await loadRoleImageCreateAccess(undefined, signal)).toBe(false);
   });
+
+  it.each([undefined, "project_1"])(
+    "source create не требует build и закрывается без обоих source прав: %s",
+    async (projectRef) => {
+      const target = projectRef
+        ? { kind: "PROJECT", projectRef }
+        : { kind: "ORGANIZATION" };
+      const items = ["image.source.view", "image.source.manage"].map(
+        (permissionKey) => ({
+          permissionKey,
+          decision: "ALLOWED",
+          target,
+          explanation: [],
+        }),
+      );
+      const signal = new AbortController().signal;
+      api.queryEffectiveAccess.mockReturnValueOnce(response({ items }));
+      expect(await loadRoleImageSourceCreateAccess(projectRef, signal)).toBe(
+        true,
+      );
+      expect(api.queryEffectiveAccess).toHaveBeenLastCalledWith({
+        body: {
+          target,
+          permissionKeys: ["image.source.view", "image.source.manage"],
+        },
+        headers: { "X-CSRF-Token": "csrf_synthetic" },
+        signal,
+      });
+      api.queryEffectiveAccess.mockReturnValueOnce(
+        response({
+          items: [
+            ...items,
+            {
+              permissionKey: "image.build",
+              decision: "DENIED",
+              target,
+              explanation: [],
+            },
+          ],
+        }),
+      );
+      expect(await loadRoleImageCreateAccess(projectRef, signal)).toBe(false);
+      for (const index of [0, 1]) {
+        api.queryEffectiveAccess.mockReturnValueOnce(
+          response({
+            items: items.map((item, i) => ({
+              ...item,
+              decision: i === index ? "DENIED" : "ALLOWED",
+            })),
+          }),
+        );
+        expect(await loadRoleImageSourceCreateAccess(projectRef, signal)).toBe(
+          false,
+        );
+      }
+      api.queryEffectiveAccess.mockReturnValueOnce(
+        response({
+          items: items.map((item) => ({
+            ...item,
+            target: { kind: "PROJECT", projectRef: "foreign_project" },
+          })),
+        }),
+      );
+      expect(await loadRoleImageSourceCreateAccess(projectRef, signal)).toBe(
+        false,
+      );
+    },
+  );
 
   it("передаёт project и cursor в настоящий list endpoint", async () => {
     api.listRoleImageRecipes.mockReturnValueOnce(

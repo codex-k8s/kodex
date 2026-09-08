@@ -165,6 +165,7 @@ func TestBootstrapComponent(t *testing.T) {
 		})
 	}
 	assertBootstrapReadback(t, ctx, pool)
+	t.Run("public access query scopes", func(t *testing.T) { testPublicAccessQueryScopes(t, ctx, repository) })
 	t.Run("model catalog is version bound", func(t *testing.T) { testModelCatalogVersion(t, ctx, repository) })
 	t.Run("catalog cards preserve eligible activity and counts", func(t *testing.T) { testCatalogCardProjections(t, ctx, repository) })
 	t.Run("provider usage dimensions and authority", func(t *testing.T) { testProviderUsageProjection(t, ctx, repository) })

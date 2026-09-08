@@ -254,9 +254,11 @@ function roleImagePermissionRead(body: unknown): boolean {
   ];
   if (
     !Array.isArray(value.permissionKeys) ||
-    value.permissionKeys.length !== 3 ||
+    ![2, 3].includes(value.permissionKeys.length) ||
     !value.permissionKeys.every((key) => typeof key === "string") ||
-    [...value.permissionKeys].sort().join(",") !== permissions.join(",")
+    ![permissions.join(","), permissions.slice(1).join(",")].includes(
+      [...value.permissionKeys].sort().join(","),
+    )
   )
     return false;
   if (

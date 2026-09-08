@@ -383,7 +383,7 @@ func (repository *Repository) QueryEffectiveAccess(ctx context.Context, principa
 			return entity.EffectiveAccess{}, err
 		}
 	}
-	resolvedTarget, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, target)
+	resolvedTarget, err := repository.resolveAccessQueryTarget(ctx, tx, current, target)
 	if err != nil {
 		return entity.EffectiveAccess{}, err
 	}
@@ -411,7 +411,10 @@ func (repository *Repository) QueryEffectiveAccess(ctx context.Context, principa
 		if _, known := access.Permission(permissionKey); !known {
 			return entity.EffectiveAccess{}, errs.ErrInvalid
 		}
-		result.Decisions = append(result.Decisions, access.Evaluate(subject.AccessSubject, permissionKey, resolvedTarget.scope, resolvedTarget.ownerSubjectRef, bindings, result.EvaluatedAt))
+		decision := access.Evaluate(subject.AccessSubject, permissionKey, resolvedTarget.scope, resolvedTarget.ownerSubjectRef, bindings, result.EvaluatedAt)
+		// Ответ сохраняет проверенный public scope; внутренний locator нужен только evaluator.
+		decision.Target = target
+		result.Decisions = append(result.Decisions, decision)
 	}
 	return result, tx.Commit(ctx)
 }
@@ -429,7 +432,7 @@ func (repository *Repository) SimulateAccess(ctx context.Context, principal valu
 	if err := repository.requireAccess(ctx, tx, current, "access.manage", organizationTarget(current.organizationRef)); err != nil {
 		return entity.AccessSimulation{}, err
 	}
-	resolvedTarget, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, input.Target)
+	resolvedTarget, err := repository.resolveAccessQueryTarget(ctx, tx, current, input.Target)
 	if err != nil {
 		return entity.AccessSimulation{}, err
 	}
@@ -464,6 +467,7 @@ func (repository *Repository) SimulateAccess(ctx context.Context, principal valu
 		RoleVersion: roleVersion, Scope: input.Binding.Scope, Conditions: input.Binding.Conditions,
 	})
 	simulated := access.Evaluate(subject.AccessSubject, input.PermissionKey, resolvedTarget.scope, resolvedTarget.ownerSubjectRef, bindings, now)
+	currentDecision.Target, simulated.Target = input.Target, input.Target
 	if err := tx.Commit(ctx); err != nil {
 		return entity.AccessSimulation{}, errs.ErrConflict
 	}
@@ -567,6 +571,37 @@ func (repository *Repository) loadAccessBindings(ctx context.Context, tx pgx.Tx,
 		return nil, errs.ErrUnavailable
 	}
 	return result, nil
+}
+
+// Публичный scope сначала разрешается внутри authoritative tenant boundary.
+// Внутренние resource locators по-прежнему обрабатывает отдельный resolver ниже.
+func (repository *Repository) resolveAccessQueryTarget(ctx context.Context, tx pgx.Tx, current scope, requested entity.AccessScope) (resolvedAccessTarget, error) {
+	if err := access.ValidateScope(requested); err != nil {
+		return resolvedAccessTarget{}, errs.ErrInvalid
+	}
+	switch requested.Kind {
+	case "ORGANIZATION":
+		if requested.ResourceRef != "" && requested.ResourceRef != current.organizationRef {
+			return resolvedAccessTarget{}, errs.ErrNotFound
+		}
+		requested = organizationTarget(current.organizationRef)
+	case "PROJECT":
+		requested = entity.AccessScope{Kind: "RESOURCE_INSTANCE", ProjectRef: requested.ProjectRef, ResourceKind: "PROJECT", ResourceRef: requested.ProjectRef}
+	case "RESOURCE_KIND":
+		resolved := resolvedAccessTarget{scope: requested}
+		if requested.ProjectRef != "" {
+			project, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{ResourceKind: "PROJECT", ResourceRef: requested.ProjectRef})
+			if err != nil {
+				return resolvedAccessTarget{}, err
+			}
+			if err := repository.requireAccess(ctx, tx, current, "project.view", project); err != nil {
+				return resolvedAccessTarget{}, errs.ErrNotFound
+			}
+			resolved.projectID = project.projectID
+		}
+		return resolved, nil
+	}
+	return repository.resolveAccessTarget(ctx, tx, current.organizationID, requested)
 }
 
 func (repository *Repository) resolveAccessTarget(ctx context.Context, tx pgx.Tx, organizationID string, requested entity.AccessScope) (resolvedAccessTarget, error) {
