@@ -137,6 +137,14 @@ node tools/release/worker-grant-transition.mjs apply \
 фоновой работы. Не запускать глобальный `up`: старый dev renderer всё ещё
 назначает Recreate и требует отдельного согласования с активированным v2.
 
+После `APPLIED` и штатного rollout инструмент дополнительно ждёт удаления
+прежних terminating Pods до точного healthy inventory (#1297). Это ограниченное
+read-only ожидание до 300 секунд с записью `WAITING_FOR_POD_DRAIN`; повторного
+PATCH нет. UID/spec drift и ошибки транспорта завершают операцию отказом.
+Истечение ожидания сохраняет FAIL и требует authoritative readback: наличие
+применённой strategy или одной Ready replica само по себе не заменяет окончание
+drain. Старые FAIL не переписываются последующим успешным inspect.
+
 Локальные проверки:
 
 ```bash
