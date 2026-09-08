@@ -72,10 +72,16 @@ authority, builder, tools и registry images эта команда не заме
 `agent-runner-image` и exact OCI archive.
 
 ```bash
-tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" \
+tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" --k3s-sudo \
   --state-directory "$RUNNER_STATE" --tool-state-directory "$TOOLS_STATE" \
   --component runner --evidence "$NEW_PUBLICATION_EVIDENCE"
 ```
+
+`--k3s-sudo` предназначен для SRE на disposable k3s host: все Kubernetes
+вызовы, включая current-context и port-forward, идут через
+`sudo -n k3s kubectl --context "$CONTEXT"`. Docker запускается от исходного
+оператора, kubeconfig не копируется. Без флага сохраняется обычный kubectl
+с уже настроенным kubeconfig.
 
 `TOOLS_STATE` содержит ранее подготовленное имя tools image; перед запуском
 оно разрешается в immutable Docker image ID. Runner-профиль не публикует
@@ -83,7 +89,7 @@ control-plane helper, frontend или role-input и не требует ново
 При UNKNOWN сначала выполняется точный readback без import:
 
 ```bash
-tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" \
+tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" --k3s-sudo \
   --state-directory "$RUNNER_STATE" --tool-state-directory "$TOOLS_STATE" \
   --component runner --readback-only --evidence "$NEW_READBACK_EVIDENCE"
 ```

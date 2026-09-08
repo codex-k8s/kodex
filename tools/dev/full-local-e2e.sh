@@ -11,7 +11,7 @@ usage() {
     "Usage: $0 [--check] [--skip-build] --context <exact-context>" \
     '  [--kubeconfig <path>] [--state-directory <path>]' \
     '  [--cluster-marker <root-owned-path>] [--expected-sha <40-hex-commit>]' \
-    '  [--profile web-only|web-with-mattermost]' \
+    '  [--profile web-only|web-with-mattermost] [--component-manifest <private-path>]' \
     '  [--resource-prefix <slug>] [--run-timeout-ms <milliseconds>]' \
     '  [--batch browser|integration|role-image|archive|backup|hot-reload]...' \
     '  [--target <test-make-target>]...' >&2
@@ -25,6 +25,7 @@ resource_prefix="full-local-e2e-$(date -u +%Y%m%d%H%M%S)"
 run_timeout_ms=900000
 cluster_marker=""
 expected_sha=""
+component_manifest=""
 deployment_profile=""
 check_only=false
 skip_build=false
@@ -44,6 +45,7 @@ while (($# > 0)); do
     --run-timeout-ms) run_timeout_ms=${2:-}; shift 2 ;;
     --cluster-marker) cluster_marker=${2:-}; shift 2 ;;
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
+    --component-manifest) component_manifest=${2:-}; shift 2 ;;
     --profile) deployment_profile=${2:-}; shift 2 ;;
     --batch)
       batch=${2:-}
@@ -65,9 +67,13 @@ done
 case "$deployment_profile" in ''|web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
 
 if ((${#batches[@]} == 0)); then
-  for batch in "${canonical_batches[@]}"; do
+  for batch in browser integration role-image archive backup; do
     selected_batches[$batch]=1
   done
+fi
+
+if [[ -n "$component_manifest" ]]; then
+  [[ "$skip_build" == true && -z "${selected_batches[hot-reload]:-}" ]] || fail 'component acceptance requires --skip-build and forbids hot-reload mutation'
 fi
 
 batch_selected() {
@@ -207,6 +213,8 @@ write_summary() {
     --arg context "$context" \
     --arg resource_prefix "$resource_prefix" \
     --arg expected_sha "$expected_sha" \
+    --arg evidence_profile "$([[ -n "$component_manifest" ]] && printf component-revisions || printf bootstrap-render)" \
+    --arg component_manifest_sha "$(if [[ -n "$component_manifest" ]]; then sha256sum -- "$component_manifest" | cut -d' ' -f1; fi)" \
     --arg started_at "$started_at" \
     --arg finished_at "$finished_at" \
     --arg build_mode "$([[ "$skip_build" == true ]] && printf reused || printf rebuilt)" \
@@ -220,6 +228,8 @@ write_summary() {
         status:$status,
         context:$context,
         resourcePrefix:$resource_prefix,
+        evidenceProfile:$evidence_profile,
+        componentManifestSHA256:(if $component_manifest_sha == "" then null else $component_manifest_sha end),
         expectedSHA:(if $expected_sha == "" then null else $expected_sha end),
         startedAt:$started_at,
         finishedAt:$finished_at,
@@ -254,6 +264,7 @@ deployment_arguments=("${e2e_arguments[@]}")
 [[ -z "$deployment_profile" ]] || deployment_arguments+=(--profile "$deployment_profile")
 [[ -z "$cluster_marker" ]] || deployment_arguments+=(--cluster-marker "$cluster_marker")
 [[ -z "$expected_sha" ]] || deployment_arguments+=(--expected-sha "$expected_sha")
+[[ -z "$component_manifest" ]] || deployment_arguments+=(--component-manifest "$component_manifest")
 if [[ "$skip_build" == true ]]; then
   run_phase local-readback "$repository_root/dev.sh" status "${deployment_arguments[@]}"
 else
@@ -330,6 +341,9 @@ for target in "${targets[@]}"; do
   run_phase "additional:$target" make --no-print-directory -C "$repository_root" "$target"
 done
 
+if [[ -n "$component_manifest" ]]; then
+  run_phase final-component-readback "$repository_root/dev.sh" status "${deployment_arguments[@]}"
+fi
 if [[ -n "$expected_sha" ]]; then
   [[ "$(git -C "$repository_root" rev-parse HEAD)" == "$expected_sha" &&
     -z "$(git -C "$repository_root" status --porcelain --untracked-files=all)" ]] ||
