@@ -220,6 +220,7 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 	if err != nil || ready.Publication == nil || ready.Publication.State != "READY" || ready.BoundRevisionRef != view.Revision.Ref {
 		t.Fatalf("authoritative bound READY readback: %v", err)
 	}
+	testMailboxObservationLifecycle(t, ctx, repository, service, owner, ready)
 	if _, err := repository.pool.Exec(ctx, `UPDATE control_plane.integration_connections SET enabled=false,version=version+1 WHERE ref=$1`, connectionRef); err != nil {
 		t.Fatal(err)
 	}

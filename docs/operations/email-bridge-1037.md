@@ -4,7 +4,7 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.5.0
+version: 1.6.0
 updated: 2026-09-08
 ---
 
@@ -960,3 +960,142 @@ configuration/revision/binding в disposable БД, затем реальные �
 доказывает reader-before-writer вариант. Современный `test-email-managed-claim`
 остаётся отдельным профилем без generic credential. Ни один профиль не является
 live SMTP/IMAP/POP3, paid provider, mTLS deployment или полной MVP-приёмкой.
+
+## Служебные версии connection и восстановление mailbox (#1345)
+
+`integration_connections.version` — общий OCC, а не версия SMTP/IMAP
+спецификации. TEST queue/completion и изменение capability grant увеличивают
+OCC, но не меняют mailbox specification, protocol credentials или published
+revision. Исходные `email_mailbox_publications.connection_version` и
+`email_mailbox_publication_bindings.connection_version` остаются immutable.
+Additive миграция `20260908000500_email_mailbox_observation_receipts.sql`
+создаёт отдельный append-only журнал точных переходов `previous→previous+1`.
+
+Единственный owner журнала — CP. `Execute` берёт общий publication advisory
+lock до row locks для трёх typed transitions; тот же owner transaction
+содержит business state, receipt, audit и существующее domain event.
+Receipt создаётся только при равенстве прежнего delivery expected version
+предыдущему OCC и текущем enabled/ACTIVE email connection. Необъяснённый
+drift не усыновляется; terminal публикации и прошлые receipts не меняются.
+Readers `RecoverEmailMailboxPublication`, `CompleteEmailMailboxPublication`
+и `readMailboxBindingEffects` сравнивают текущий OCC с последним receipt либо
+исходной immutable версией, если receipt отсутствует.
+
+Полная карта production SQL writes `integration_connections`:
+
+| Команда / SQL | Mailbox delivery при изменении OCC | Остальная authority |
+| --- | --- | --- |
+| `TestConnection` / `configuration_changeconnection_update_integration_connections_state_last_test_summary_version` | Exact receipt, публикация сохраняется | Новый test/lease/fence и прежний owner guard |
+| `CompleteConnectionTest` / `workers_completeintegrationtest_update_integration_connections_state_masked_credentials_state_last_test_summary` | Exact receipt для success/failure; replay не продвигает повторно | Exact test lease/fence/generation, закрытый результат |
+| `ChangeIntegrationGrant` / `configuration_changeintegrationgrant_update_integration_connections_version` | Exact receipt; mailbox не удаляется | Grant revoke продолжает отзывать capability; mailbox не является grant |
+| `configuration_changeconnection_update` | Старый delivery инвалидируется | Public configuration/desired pins могли измениться; name-only консервативно проходит тот же typed update |
+| `configuration_changeconnection_update_integration_connections_enabled_state_version` | Старый delivery инвалидируется | Настоящий enable/disable |
+| `configuration_changeconnection_activate_credential_revision` | Старый delivery инвалидируется | Новый credential descriptor |
+| `configuration_changeconnection_delete` | Старый delivery инвалидируется | Tombstone/dependencies остаются обязательными |
+| `email_credential_advance_connection` | Старый delivery инвалидируется | Protocol credential upload и явный BIND/UNBIND меняют authority |
+| `email_mailbox_git_connection_touch` | Старый delivery инвалидируется | Новые Git desired pins |
+| `integration_package__bind_connection` | Старый delivery инвалидируется | Новая executable definition/revision |
+| `email_mailbox_connection_apply` | OCC не увеличивается; exact version сохраняется | Только доставка уже назначенного owner snapshot |
+
+За пределами этих 11 production SQL writes новых исключений нет.
+Конфигурация, expiry, credentials, scope и grants проверяются прежними
+правилами; новый журнал не является источником дополнительных permissions.
+
+### Выкладка с коротким окном CP maintenance
+
+Для disposable hot-reload staging разрешено остановить все CP replicas.
+Mailbox publisher (`emailProjectionWorker`/`mailboxDelivery`) находится внутри
+CP application, отдельных потребителей SQL ledger в email-bridge или gateway
+нет. Email-bridge получает прежний wire `email-bridge/v1`; Secret publisher
+получает ранее назначенный документ и не читает CP ledger. Незавершённая
+публикация после рестарта восстанавливается по durable lease/claim; destructive
+cleanup не требуется. API зависит от CP и в этом окне может быть недоступен.
+
+Сначала source доставляется штатным creator, выполняются read-only inventory,
+проверка отсутствия иных CP consumers и pending migrations. Новая миграция
+должна быть единственным неприменённым CP SQL файлом выбранного checkout;
+`up` не ограничивает список файлов автоматически. Обе команды планирования
+ниже read-only. Все JSON/JSONL — private `0600`, каталоги `0700`.
+
+```bash
+node tools/release/control-plane-mailbox-maintenance.mjs plan \
+  --context "$CONTEXT" --source "$SOURCE" --revision "$SHA" --plan "$MAINTENANCE_PLAN"
+node tools/release/control-plane-migration.mjs plan --profile mailbox-observation \
+  --context "$CONTEXT" --source "$SOURCE" --revision "$SHA" --plan "$MIGRATION_PLAN"
+node tools/release/control-plane-mailbox-maintenance.mjs stop \
+  --context "$CONTEXT" --plan "$MAINTENANCE_PLAN" --evidence "$MAINTENANCE_JOURNAL" \
+  --confirm APPLY-STAGING-CP-MAILBOX-MAINTENANCE
+node tools/release/control-plane-mailbox-maintenance.mjs inspect \
+  --context "$CONTEXT" --plan "$MAINTENANCE_PLAN" --evidence "$MAINTENANCE_JOURNAL"
+```
+
+Продолжать только после `stage=stopped,podsGone=true`, включая завершение
+termination старых Pods. Наблюдение ограничить 300 секундами; превышение
+остаётся FAIL и требует readback того же плана, без принудительного удаления.
+
+```bash
+node tools/release/control-plane-migration.mjs apply --profile mailbox-observation \
+  --context "$CONTEXT" --plan "$MIGRATION_PLAN" --evidence "$MIGRATION_JOURNAL" \
+  --confirm APPLY-STAGING-CP-MIGRATION
+node tools/release/control-plane-migration.mjs inspect --profile mailbox-observation \
+  --context "$CONTEXT" --plan "$MIGRATION_PLAN" --evidence "$MIGRATION_JOURNAL"
+node tools/release/control-plane-mailbox-maintenance.mjs replace \
+  --context "$CONTEXT" --plan "$MAINTENANCE_PLAN" --evidence "$MAINTENANCE_JOURNAL" \
+  --confirm APPLY-STAGING-CP-MAILBOX-MAINTENANCE
+node tools/release/control-plane-mailbox-maintenance.mjs resume \
+  --context "$CONTEXT" --plan "$MAINTENANCE_PLAN" --evidence "$MAINTENANCE_JOURNAL" \
+  --migration-plan "$MIGRATION_PLAN" --confirm APPLY-STAGING-CP-MAILBOX-MAINTENANCE
+```
+
+Migration `PASS` требует exact Job/source/spec и фактический goose version
+`20260908000500`; resume повторно проверяет этот receipt. Каждый PATCH имеет
+durable intent, Deployment UID/resourceVersion/spec CAS. `inspect` после
+UNKNOWN различает `before/stopped/replaced/resumed`; повтор уже применённого
+шага делает только readback. UNKNOWN при неизменённом before не допускает
+слепого PATCH: оператор сохраняет журнал и формирует новый ограниченный план
+лишь после доказанного отсутствия эффекта. Нельзя пересоздавать fixed migration
+Job или менять reservation вручную. Source меняется только у CP application;
+sidecar images/source, keys, trust, replicas count после resume сохраняются.
+После resume обязательны фактические readiness/binary/component readbacks.
+
+Это maintenance deployment, не доказательство обновления без перерыва.
+Обычная установка требует additive schema, остановки writers/publisher на
+время замены всех readers либо отдельного согласованного readers-before-writers
+профиля. После появления новых receipts старый CP reader rollback несовместим:
+он прочитает прежний OCC и консервативно удалит mailbox. Нужен совместимый
+исправленный binary; schema/receipts и immutable history не откатываются.
+
+### Forward recovery уже SUPERSEDED и удалённой привязки
+
+После исправления owner читает точный прежний terminal HEALTH: connection
+ref/version, `lastTestedAt`, SHA256 decoded UTF-8 `lastTestOutcome`. Предыдущий
+ACK journal/profile не меняются. В новом linked журнале команда ниже проверяет
+эти pins, прежнюю SUPERSEDED publication, отсутствие binding, PUBLISHED revision
+и доступность обычного BIND. Только после readback записывается intent нового
+forward BIND той же revision с fresh config/connection OCC.
+
+```bash
+node tools/dev/email-mailbox-acceptance.mjs recover-publication \
+  --origin https://control.kodex.works --storage-state "$LIMITED_SESSION" \
+  --profile "$PREVIOUS_PROFILE" --state "$NEW_JOURNAL" \
+  --serving-manifest "$CURRENT_MANIFEST" --previous-state "$PREVIOUS_HEALTH_JOURNAL" \
+  --previous-sha256 "$PREVIOUS_JOURNAL_SHA256" --terminal-version "$TERMINAL_VERSION" \
+  --terminal-tested-at "$TERMINAL_TESTED_AT" --terminal-outcome-sha256 "$OUTCOME_SHA256" \
+  --timeout-ms 1200000 --confirm RECOVER-STAGING-SUPERSEDED-MAILBOX
+```
+
+Новая публикация обязана иметь новый ref и большую revision; configuration,
+mailbox, published revision/digest и credential refs сохраняются. После ACK
+повтор команды только ожидает тот же READY. UNKNOWN BIND не повторяется.
+Создание connection, credential PUT и TEST в этой фазе отсутствуют. Последующий
+`health` — отдельный явный effect gate в новом журнале, только после READY и
+разрешения владельца. Удаление настоящих credentials или disabled connection
+не обходится восстановлением; канонический BIND повторно проверяет eligibility.
+
+Локальные entrypoints: `scripts/tests/control-plane-postgres-test.sh`, CP
+`go test/build`, `node --test tools/dev/email-mailbox-acceptance.test.mjs
+ tools/release/control-plane-migration.test.mjs
+ tools/release/control-plane-mailbox-maintenance.test.mjs`. PG проверяет
+служебные переходы, replay, гонку revoke, immutable SQL boundaries и forward
+binding; Node — настоящий public CLI argv с controlled transport, CAS,
+UNKNOWN/lost ACK и migration readback. Это не live vendor authentication.

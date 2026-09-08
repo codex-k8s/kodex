@@ -94,6 +94,11 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return command.Result{}, fmt.Errorf("read idempotency receipt: %w", errs.ErrUnavailable)
 	}
+	if preservesMailboxSpecification(input.Kind) {
+		if _, err := tx.Exec(ctx, queryEmailMailboxPublicationLock); err != nil {
+			return command.Result{}, errs.ErrUnavailable
+		}
+	}
 	outcome, err := repository.applyCommand(ctx, tx, scope, input)
 	if err != nil {
 		return command.Result{}, err

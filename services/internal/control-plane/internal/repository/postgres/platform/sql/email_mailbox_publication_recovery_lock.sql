@@ -1,6 +1,8 @@
 -- name: email_mailbox_publication_recovery_lock :one
 SELECT publication.state,publication.organization_id::text,organization.ref,publication.connection_id::text,connection.ref,
-    publication.connection_version,connection.version,connection.enabled AND connection.state<>'DELETED',
+    COALESCE((SELECT max(receipt.current_version) FROM control_plane.email_mailbox_observation_receipts receipt
+        WHERE receipt.publication_ref=publication.ref AND receipt.connection_id=connection.id
+          AND receipt.organization_id=connection.organization_id),publication.connection_version),connection.version,connection.enabled AND connection.state<>'DELETED',
     publication.expires_at,publication.created_by::text
 FROM control_plane.email_mailbox_publications publication
 JOIN control_plane.organizations organization ON organization.id=publication.organization_id
