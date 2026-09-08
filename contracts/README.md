@@ -4,8 +4,8 @@ title: Контракты
 type: contract-index
 status: approved
 owner: architect
-version: 1.1.1
-updated: 2026-07-28
+version: 1.1.2
+updated: 2026-09-08
 ---
 
 # Контракты
@@ -25,6 +25,18 @@ updated: 2026-07-28
 
 `registry.yaml` фиксирует пакет, владельца, версию, источник и потребителей.
 Неизвестный пакет и расхождение владельца должны отклоняться закрыто.
+Каждый активный `source` и указанный `generated` должен содержать отслеживаемый
+файл репозитория. Будущие неподготовленные пакеты описываются в связанной задаче,
+а не объявляются существующим интерфейсом. `make test-contract-registry`
+проверяет эти пути; проверка также входит в `make lint-proto`.
+
+`integration-gateway` работает как consumer пакета `control-plane-v1`:
+`IntegrationGatewayOperations` связывает worker с claim/complete RPC Control
+Plane. Его composition root находится в
+`services/external/integration-gateway/internal/app/app.go`; собственный
+прикладной Proto server шлюз не предоставляет. Типизированные определения
+интеграций остаются в `integration-package-v1`, почтовые операции — в
+`email-bridge-api-v1`. Эта карта не утверждает прохождение живых provider effects.
 
 Шлюз не владеет чужим бизнес-состоянием. Событие принадлежит сервису,
 который атомарно изменяет единый источник истины.
