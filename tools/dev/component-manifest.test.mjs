@@ -75,6 +75,10 @@ test('CLI captures and verifies without mutation, refuses overwrite and spec dri
     writeFileSync(join(directory,'kubectl'), `#!${process.execPath}\nconst fs=require('node:fs'); const args=process.argv.slice(2); if(args[0]==='config') process.stdout.write('fixture'); else { if(args[0]!=='--context'||args[1]!=='fixture'||args[2]!=='get')process.exit(9); const resource=args[3]; if(resource==='namespace')process.stdout.write(JSON.stringify({metadata:{uid:args[4],labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'staging'}}})); else process.stdout.write(JSON.stringify({items:JSON.parse(fs.readFileSync(process.env.SNAPSHOT,'utf8'))})); }`,{mode:0o755});
     const manifest=join(directory,'manifest.json'), evidence=join(directory,'evidence.json');
     const execute=(...args)=>spawnSync(process.execPath,['tools/dev/component-manifest.mjs',...args],{env:{...process.env,PATH:`${directory}:${process.env.PATH}`,SNAPSHOT:snapshot},encoding:'utf8'});
+    const inventory=join(directory,'inventory.json');
+    assert.equal(execute('inventory','--context','fixture','--output',inventory).status,0);
+    assert.equal(JSON.parse(readFileSync(inventory,'utf8')).status,'INVENTORIED');
+    assert.notEqual(execute('verify','--context','fixture','--manifest',inventory,'--output',join(directory,'invalid.json')).status,0);
     let result=execute('capture','--context','fixture','--compatibility',matrixPath,'--output',manifest); assert.equal(result.status,0,result.stderr);
     assert.equal(JSON.parse(readFileSync(manifest,'utf8')).status,'CAPTURED');
     result=execute('verify','--context','fixture','--manifest',manifest,'--output',evidence); assert.equal(result.status,0,result.stderr);

@@ -151,7 +151,8 @@ authority/lifecycle, пределы доказательства и запрет
 
 ## Приёмка независимых версий
 
-Issue #1253. `tools/dev/component-manifest.mjs` имеет два read-only режима:
+Issue #1253. `tools/dev/component-manifest.mjs` имеет три read-only режима:
+`inventory` собирает фактические версии без заявления о совместимости,
 `capture` создаёт кандидат manifest, `verify` проверяет заранее зафиксированный
 manifest. Ни один режим не обновляет Kubernetes или источники. Это профиль
 `component-revisions`; старый bootstrap/render profile сохраняется без флага.
@@ -175,6 +176,9 @@ read-only source mount; работа пользовательского пути
 smoke/discovery отдельно. Ready и manifest сами по себе не закрывают QA64,
 контракты провайдеров, runtime Jobs, schema, rotation или внешние эффекты.
 
+Сначала `inventory --context "$CONTEXT" --output "$NEW_INVENTORY"` собирает
+component names, source revisions и imageIDs для заполнения матрицы. Его статус
+`INVENTORIED` не является PASS, такой файл нельзя передать в verify как manifest.
 Перед capture release plan готовит private compatibility JSON:
 
 ```json

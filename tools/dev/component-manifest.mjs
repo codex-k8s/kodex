@@ -117,17 +117,17 @@ export function validateCompatibility(value, components, read = readFileSync) {
 function main(args) {
   deadline = Date.now() + 600000;
   const command = args.shift(), options = {};
-  requireValue(command === 'capture' || command === 'verify', 'INVALID_COMMAND');
+  requireValue(['inventory', 'capture', 'verify'].includes(command), 'INVALID_COMMAND');
   while (args.length) { const key = args.shift(); requireValue(['--context', '--manifest', '--output', '--compatibility'].includes(key) && !options[key] && args.length, 'INVALID_ARGUMENT'); options[key] = args.shift(); }
   requireValue(options['--context'] && !/prod/i.test(options['--context']), 'EXACT_STAGING_CONTEXT_REQUIRED');
-  requireValue(options['--output'] && (command === 'capture' ? options['--compatibility'] : options['--manifest']), 'REQUIRED_ARGUMENT_MISSING');
+  requireValue(options['--output'] && (command === 'inventory' || (command === 'capture' ? options['--compatibility'] : options['--manifest'])), 'REQUIRED_ARGUMENT_MISSING');
   const kubectl = (...args) => run('kubectl', ['--context', options['--context'], ...args]);
   requireValue(run('kubectl', ['config', 'current-context']) === options['--context'], 'CONTEXT_MISMATCH');
   const get = (...args) => JSON.parse(kubectl('get', ...args, '-o', 'json'));
   const namespace = get('namespace', 'kodex-system');
   requireValue(namespace.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' && namespace.metadata.labels?.['kodex.dev/environment'] === 'staging', 'STAGING_NAMESPACE_REQUIRED');
   const expected = command === 'verify' ? JSON.parse(readFileSync(options['--manifest'], 'utf8')) : null;
-  const compatibility = expected?.compatibility ?? JSON.parse(readFileSync(options['--compatibility'], 'utf8'));
+  const compatibility = command === 'inventory' ? null : expected?.compatibility ?? JSON.parse(readFileSync(options['--compatibility'], 'utf8'));
   const resources = get('deployments,statefulsets,daemonsets,replicasets,pods', '-n', 'kodex-system').items;
   const cache = new Map();
   const inspect = path => {
@@ -164,12 +164,12 @@ function main(args) {
     for (const pod of workloadPods(workload, after)) for (const container of hotContainers)
       requireValue(executable(pod, container) === component.images.find(image => image.name === container.name).binarySHA256, 'EXECUTABLE_CHANGED_DURING_READBACK');
   }
-  const actual = { version: 1, profile: 'component-revisions', clusterUID: get('namespace', 'kube-system').metadata.uid, namespace: 'kodex-system', namespaceUID: namespace.metadata.uid, components, compatibility: validateCompatibility(compatibility, components) };
+  const actual = { version: 1, profile: 'component-revisions', clusterUID: get('namespace', 'kube-system').metadata.uid, namespace: 'kodex-system', namespaceUID: namespace.metadata.uid, components, compatibility: command === 'inventory' ? null : validateCompatibility(compatibility, components) };
   if (expected) verifyManifest(expected, actual);
   requireValue(Date.now() < deadline, 'READBACK_BUDGET_EXHAUSTED');
   const pinned = expected ?? actual;
   const identity = Object.fromEntries(['version','profile','clusterUID','namespace','namespaceUID','components','compatibility'].map(key => [key,pinned[key]]));
-  const evidence = { ...actual, status: command === 'capture' ? 'CAPTURED' : 'PASS', timestampUTC: new Date().toISOString(), manifestSHA256: fingerprint(identity), servingEvidence: 'source-mount-and-running-binary-readback' };
+  const evidence = { ...actual, status: command === 'inventory' ? 'INVENTORIED' : command === 'capture' ? 'CAPTURED' : 'PASS', timestampUTC: new Date().toISOString(), manifestSHA256: fingerprint(identity), servingEvidence: 'source-mount-and-running-binary-readback' };
   writeFileSync(options['--output'], `${JSON.stringify(evidence, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
   process.stdout.write(`Component manifest ${evidence.status}: ${evidence.manifestSHA256}\n`);
 }
