@@ -9,17 +9,26 @@ fail() {
 usage() {
   printf '%s\n' \
     'Usage: seed-local-image-supply-chain.sh --context <exact-context>' \
-    '  --state-directory <path> --render <path>' >&2
+    '  --state-directory <path> [--render <path>] [--component all|runner]' \
+    '  [--tool-state-directory <path>] [--readback-only] [--evidence <new-jsonl>]' >&2
 }
 
 context=""
 state_directory=""
 render=""
+component=all
+tool_state_directory=""
+readback_only=false
+evidence=""
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --render) render=${2:-}; shift 2 ;;
+    --component) component=${2:-}; shift 2 ;;
+    --tool-state-directory) tool_state_directory=${2:-}; shift 2 ;;
+    --readback-only) readback_only=true; shift ;;
+    --evidence) evidence=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -29,20 +38,43 @@ done
   fail 'Kubernetes context mismatch'
 [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
   fail 'production context is forbidden'
+# После проверки каждый запрос закреплён за тем же context, даже при смене current-context.
+kubectl() { command kubectl --context "$context" "$@"; }
 [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
   fail 'state directory is invalid'
-[[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
+[[ "$component" == all || "$component" == runner ]] || fail 'component is invalid'
+if [[ "$component" == all ]]; then
+  [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
+  [[ "$readback_only" == false && -z "$evidence" ]] || fail 'runner-only option requires runner component'
+else
+  [[ "$evidence" == /* && ! -e "$evidence" && ! -L "$evidence" ]] || fail 'new evidence path is required'
+fi
+tool_state_directory=${tool_state_directory:-$state_directory}
+[[ "$tool_state_directory" == /* && -d "$tool_state_directory" && ! -L "$tool_state_directory" ]] || fail 'tool state directory is invalid'
 for command_name in docker jq kubectl sha256sum tar yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
 namespace=kodex-system
-tools_tag=$(<"$state_directory/image-supply-chain-tools-docker-tag")
+kubectl -n "$namespace" get deployment kodex-image-registry-promotion -o json | \
+  jq -e '.metadata.namespace == "kodex-system" and
+    .metadata.labels."app.kubernetes.io/part-of" == "kodex" and
+    .metadata.labels."kodex.dev/local-profile" == "hot-reload"' >/dev/null ||
+  fail 'exact disposable promotion registry is required'
+tools_tag=$(<"$tool_state_directory/image-supply-chain-tools-docker-tag")
 [[ "$tools_tag" =~ ^kodex-local/image-admission-tools:[a-f0-9]{64}$ ]] ||
   fail 'local admission tools Docker tag is invalid'
+tools_image=$(docker image inspect --format '{{.Id}}' "$tools_tag")
+[[ "$tools_image" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'local admission tools image ID is invalid'
 runner_reference=$(<"$state_directory/agent-runner-image")
 [[ "$runner_reference" =~ @sha256:[a-f0-9]{64}$ ]] || fail 'local runner reference is invalid'
 runner_digest=${runner_reference#*@}
+source_revision=runner
+role_input_archive=""
+role_input_digest=""
+frontend_reference=""
+frontend_digest=""
+if [[ "$component" == all ]]; then
 role_input_metadata="$state_directory/role-image-input.json"
 role_input_archive=$(jq -er --arg root "$state_directory" '
   select(.version == 1 and (.sourceRevision | test("^[a-f0-9]{40}$")) and
@@ -53,6 +85,7 @@ role_input_archive=$(jq -er --arg root "$state_directory" '
   fail 'role image input archive is absent'
 role_input_digest=$(jq -er '.manifestDigest' "$role_input_metadata")
 source_revision=$(jq -er '.sourceRevision' "$role_input_metadata")
+fi
 
 runner_archive=""
 while IFS= read -r candidate; do
@@ -69,6 +102,7 @@ done < <(find "$state_directory/cache" -maxdepth 1 -type f \
   -name 'agent-runner-*.oci.tar' -print | LC_ALL=C sort)
 [[ -n "$runner_archive" ]] || fail 'exact local runner OCI archive is absent'
 
+if [[ "$component" == all ]]; then
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 frontend_reference=$("$source_root/tools/dev/resolve-local-dockerfile-frontend.sh" \
   --source-root "$source_root" --format reference)
@@ -86,6 +120,7 @@ rendered_role_input=$(yq -N -r '
 expected_role_input="oci://kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/role-image-inputs@$role_input_digest"
 [[ "$rendered_role_input" == "$expected_role_input" ]] ||
   fail 'rendered role image input digest does not match the seed archive'
+fi
 
 kubectl -n "$namespace" rollout status deployment/kodex-image-registry-promotion --timeout=10m >/dev/null ||
   fail 'promotion registry is unavailable'
@@ -95,7 +130,7 @@ cleanup() {
   [[ -z "$port_forward_pid" ]] || kill "$port_forward_pid" >/dev/null 2>&1 || true
   if [[ -d "$temporary_directory/docker" || -d "$temporary_directory/home" ]]; then
     docker run --rm --user 0:0 \
-      -v "$temporary_directory:/work" --entrypoint /bin/sh "$tools_tag" \
+      -v "$temporary_directory:/work" --entrypoint /bin/sh "$tools_image" \
       -ec 'rm -rf /work/docker /work/home' >/dev/null 2>&1 || true
   fi
   rm -rf -- "$temporary_directory"
@@ -131,19 +166,30 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 
-# Root inside the rootless Docker namespace maps to the daemon owner and can
-# write the private temporary directory without granting host root privileges.
+# В отдельном runner-профиле intent фиксируется до первого возможного registry effect.
+# Неопределённый результат разрешается через --readback-only, без повторного import.
+extra_mounts=()
+if [[ "$component" == all ]]; then
+  extra_mounts=(-v "$role_input_archive:/input/role-input.oci.tar:ro")
+else
+  (umask 077; set -C; jq -cn --arg digest "$runner_digest" --arg tools "$tools_image" \
+    --arg mode "$readback_only" '{version:1,status:"INTENT",component:"runner",digest:$digest,toolsImageID:$tools,readbackOnly:($mode=="true"),at:(now|todateiso8601)}' >"$evidence") || fail 'exclusive intent creation failed'
+  sync "$evidence"
+fi
+# Root в rootless Docker отображается на владельца daemon и private temporary directory.
 docker run --rm --network host --user 0:0 \
   --add-host kodex-image-registry-promotion.kodex-system.svc.cluster.local:127.0.0.1 \
   -v "$temporary_directory:/work" \
   -v "$runner_archive:/input/runner.oci.tar:ro" \
-  -v "$role_input_archive:/input/role-input.oci.tar:ro" \
+  "${extra_mounts[@]}" \
+  -e "KODEX_SEED_COMPONENT=$component" \
+  -e "KODEX_SEED_READBACK_ONLY=$readback_only" \
   -e "KODEX_FRONTEND_REFERENCE=$frontend_reference" \
   -e "KODEX_FRONTEND_DIGEST=$frontend_digest" \
   -e "KODEX_RUNNER_DIGEST=$runner_digest" \
   -e "KODEX_SOURCE_REVISION=$source_revision" \
   -e "KODEX_ROLE_INPUT_DIGEST=$role_input_digest" \
-  --entrypoint /bin/sh "$tools_tag" -ec '
+  --entrypoint /bin/sh "$tools_image" -ec '
     umask 077
     export HOME=/work/home
     export DOCKER_CONFIG=/work/docker
@@ -156,7 +202,11 @@ docker run --rm --network host --user 0:0 \
       "{version:1,hosts:{(\$target):{tls:\"enabled\",regcert:\$ca,
         clientCert:\$cert,clientKey:\$key,user:(\$user|gsub(\"[\\r\\n]\";\"\")),
         pass:(\$pass|gsub(\"[\\r\\n]\";\"\"))}}}" >"$REGCTL_CONFIG"
-    regctl image import "$target/kodex/agent-runner:local-base" /input/runner.oci.tar
+    if [ "$KODEX_SEED_READBACK_ONLY" = false ]; then
+      regctl image import "$target/kodex/agent-runner:local-base" /input/runner.oci.tar
+    fi
+    test "$(regctl image digest "$target/kodex/agent-runner@$KODEX_RUNNER_DIGEST")" = "$KODEX_RUNNER_DIGEST"
+    if [ "$KODEX_SEED_COMPONENT" = runner ]; then exit 0; fi
     regctl image import "$target/kodex/control-plane:local-readiness" /input/runner.oci.tar
     regctl image copy "$KODEX_FRONTEND_REFERENCE" "$target/kodex/dockerfile:local-frontend"
     regctl image import "$target/kodex/role-image-inputs:$KODEX_SOURCE_REVISION" \
@@ -169,9 +219,18 @@ docker run --rm --network host --user 0:0 \
       "$KODEX_FRONTEND_DIGEST"
     test "$(regctl image digest "$target/kodex/role-image-inputs:$KODEX_SOURCE_REVISION")" = \
       "$KODEX_ROLE_INPUT_DIGEST"
-  ' ||
-  fail 'promotion registry seed or exact digest readback failed'
+  ' >"$temporary_directory/registry-operation.log" 2>&1 || {
+    if [[ "$component" == runner ]]; then
+      jq -cn '{status:"UNKNOWN",code:"REGISTRY_OPERATION_OR_READBACK_FAILED",at:(now|todateiso8601)}' >>"$evidence"
+      sync "$evidence"
+    fi
+    fail 'promotion registry seed or exact digest readback failed'
+  }
 
 kubectl -n "$namespace" rollout status deployment/kodex-image-registry-pull --timeout=10m >/dev/null ||
   fail 'pull registry did not become ready after seed'
+if [[ "$component" == runner ]]; then
+  jq -cn --arg digest "$runner_digest" '{status:"PASS",digest:$digest,at:(now|todateiso8601)}' >>"$evidence"
+  sync "$evidence"
+fi
 printf 'Kodex local image supply-chain seed completed for source %s\n' "$source_revision"
