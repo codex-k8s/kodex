@@ -284,7 +284,11 @@ check-control-api-gateway-asyncapi-codegen:
 gen-openapi-ts:
 	cd services/staff/control-center && npm exec -- openapi-ts -f openapi-ts.config.mjs
 
-lint-proto: check-proto-toolchain
+.PHONY: test-contract-registry
+test-contract-registry:
+	@timeout 30s node --test scripts/tests/contract-registry-test.mjs
+
+lint-proto: check-proto-toolchain test-contract-registry
 	buf lint
 
 .PHONY: test-secret-broker-drafts
