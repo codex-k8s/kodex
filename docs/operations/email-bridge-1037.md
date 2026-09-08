@@ -4,8 +4,8 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.2.0
-updated: 2026-09-05
+version: 1.3.0
+updated: 2026-09-08
 ---
 
 # Сценарии #1037
@@ -579,3 +579,138 @@ live provider и staging в этом исправлении не запуска�
 Отдельный `make test-email-bridge-install` — PASS: изолированные installation
 secrets, TLS bootstrap, migrations, runtime grants и negative paths. Этот
 результат не подменяется protocol suite выше.
+
+
+## Управляемая API-приёмка #1031 / #1259
+
+`tools/dev/email-mailbox-acceptance.mjs` использует канонический
+`owner-session-client.mjs`: legitimate API-only storageState, cookie/CSRF и
+обычный refresh. Новый login driver не выполняет. Истёкшая сессия останавливает
+фазу до первого бизнес-INTENT. `privateJournal` из RoleImage harness сохраняет
+и fsync-ит INTENT перед HTTP; только проверенный ответ создаёт ACK. В журнале
+есть hash тела и безопасная проекция receipt, нет паролей, PEM, адресов,
+содержимого письма или полного API response. Даже REJECTED не разрешает
+автоматически повторить mutation. UNKNOWN требует owner readback, не нового
+prefix/журнала. Отдельный `inspect` выполняет только GET: ограниченный поиск
+собственного prefix и receipt незавершённой загрузки credential по прежнему
+idempotency key. Он не переписывает ACK и не разрешает повтор.
+
+| Фаза / инициатор | Публичный API → владелец и переход | Evidence / граница |
+| --- | --- | --- |
+| `plan` / owner session | GET session; локальная проверка явных slots/policies | PLANNED, provider NOT_RUN |
+| `connection` / owner с integration permission | POST integration-connections → CP tenant-owned create + idempotency receipt | exact connection ref/version; отсутствуют credentials в create |
+| `credentials` / root с той же ограниченной сессией | PUT connection/email-mailbox/credential → CP owner проверка, If-Match, immutable credential | шесть exact descriptor receipts; новое значение не публикует mailbox |
+| `publish` / owner | POST drafts → validation → publication → CP immutable UI revision | GET exact configuration/revision/digest; PUBLISHED ещё не доставка |
+| `bind` / owner | POST revision/binding → CP с configuration If-Match и expectedConnectionVersion | durable publication ref/revision/digest, обычно PENDING |
+| `readback` / owner | GET configuration → authoritative publication | exact READY; root отдельно проверяет publisher, Deployment pins, все Pods и email-grant callback |
+| `health` / owner TEST | POST connection/commands TEST → CP claim → integration-gateway → email-bridge → SMTP/IMAP либо POP3 | CONNECTED после единственного TEST; это настоящая provider HEALTH, не отправка письма |
+| `grants` / owner | POST connection/grants → CP exact connection version, собственный Agent/project, текущая eligibility | отдельный immutable grant input; существующий runtime fixture не менять |
+| Реальная typed операция / Runtime | MCP ResolveIntegrationInvocation → integration-gateway → bridge → provider → effect/outbox/inbox | Только отдельное разрешение на Run; driver не имеет launch или прямого bridge endpoint |
+| `receipt` / owner | GET integration-invocations/ref/email-effect-receipt → CP authoritative receipt | exact connection/project/mailbox/configuration revision/invocation; UNKNOWN не reconciles/не sends |
+
+Consumer callback и publication не создают почтовый эффект. Состояние читается
+через owner projection; delivery/outbox/inbox и per-Pod accepted callback
+доказываются отдельно. Один READY или email HEALTH не закрывает 21-operation
+матрицу и не доказывает фактическую доставку SMTP. `receipt` с EFFECT_CONFIRMED
+доказывает owner receipt; полученное письмо/содержимое проверяет отдельная
+разрешённая IMAP операция. Для UNKNOWN_OUTCOME выводится NOT_PASS даже при
+успешном HTTP GET. Безопасные поля stdout не содержат текст LastTestOutcome.
+
+### Root-only подготовка входа
+
+Из точного чистого merged checkout root запускает offline helper. Он читает
+только `KODEX_QA_EMAIL_ADDRESS`, `RECIPIENT`,
+`SMTP_{HOST,PORT,TLS_MODE,USERNAME,PASSWORD}`,
+`IMAP_{HOST,PORT,TLS_MODE,USERNAME,PASSWORD}` либо
+`POP3_{HOST,PORT,TLS_MODE,USERNAME,PASSWORD}` и `CA_PEM_PATH` с тем же префиксом.
+Полный `.env` не передаётся QA. Путь CA должен указывать на заранее проверенный
+доверенный публичный CA bundle; синтаксическая проверка helper не доказывает
+trust/hostname провайдера. Bridge требует явный CA descriptor, системного
+fallback нет. Нельзя использовать leaf из непроверенной серверной цепочки.
+
+В новом существующем каталоге mode0700, с env уже безопасно загруженным root:
+
+```bash
+node tools/dev/prepare-email-acceptance-input.mjs \
+  --protocol IMAP --prefix "$EMAIL_QA_PREFIX" \
+  --directory "$EMAIL_QA_PRIVATE" \
+  --confirm PREPARE-STAGING-MAILBOX-INPUT
+```
+
+Helper эксклюзивно создаёт `profile.json` и `credentials.json` с mode0600,
+старые файлы не перезаписывает. Начальный профиль использует только INBOX,
+HEALTH/LIST/SEARCH/FETCH/RECEIPT и для IMAP
+MAILBOXES/DOWNLOAD/THREAD/ATTACHMENTS имеют ALLOW, SEND требует HUMAN_GATE.
+Остальные effects DENY, включая DELETE/REPLY/FORWARD/MARK/MOVE/ARCHIVE/DRAFT.
+Это ограниченный первый пакет. Пустые ARCHIVE_FOLDER/DRAFTS_FOLDER не
+подменяются вымышленными папками. Расширение полного operation scope требует
+отдельной утверждённой forward revision и собственных созданных QA сообщений.
+POP3 запускается позже с отдельными prefix, directory и журналом, `--protocol
+POP3`; это один maildrop INBOX, не IMAP folders или server-side search.
+
+Параметры для каждой фазы (URL/manifest/session назначаются из release evidence):
+
+```bash
+EMAIL_ARGS=(--origin https://control.kodex.works
+  --storage-state "$EMAIL_QA_SESSION"
+  --state "$EMAIL_QA_PRIVATE/acceptance.jsonl"
+  --profile "$EMAIL_QA_PRIVATE/profile.json"
+  --serving-manifest "$EMAIL_QA_MANIFEST" --timeout-ms 1200000)
+node tools/dev/email-mailbox-acceptance.mjs plan "${EMAIL_ARGS[@]}"
+node tools/dev/email-mailbox-acceptance.mjs connection "${EMAIL_ARGS[@]}" \
+  --confirm CONFIGURE-STAGING-MAILBOX
+node tools/dev/email-mailbox-acceptance.mjs credentials "${EMAIL_ARGS[@]}" \
+  --credentials "$EMAIL_QA_PRIVATE/credentials.json" \
+  --confirm CONFIGURE-STAGING-MAILBOX
+node tools/dev/email-mailbox-acceptance.mjs publish "${EMAIL_ARGS[@]}" \
+  --confirm CONFIGURE-STAGING-MAILBOX
+node tools/dev/email-mailbox-acceptance.mjs bind "${EMAIL_ARGS[@]}" \
+  --confirm CONFIGURE-STAGING-MAILBOX
+node tools/dev/email-mailbox-acceptance.mjs readback "${EMAIL_ARGS[@]}"
+```
+
+После каждого ненулевого exit остановиться. Не запускать весь блок без
+проверок результатов. Между bind и readback root обеспечивает штатную managed
+publication: credential projection, точные config/egress digest, Deployment
+pins и accepted consumer callback; global up и ручные patches не используются.
+Driver удерживает неизменные source SHA/profile bytes/manifest bytes в HEADER.
+Новая serving epoch оформляется отдельным companion evidence, старый HEADER
+не выдаётся за актуальную среду. ACK продолжает прежнюю фазу без повторной
+mutation; незавершённый INTENT закрывает дальнейшие mutations.
+
+Только после отдельного GO на настоящую provider HEALTH:
+
+```bash
+node tools/dev/email-mailbox-acceptance.mjs health "${EMAIL_ARGS[@]}" \
+  --confirm CHECK-STAGING-MAILBOX-HEALTH
+```
+
+Позднее root выбирает отдельного собственного email Agent. Файл `grant.json`
+mode0600 содержит `agentRef`, `projectRef`, `capabilities` (точные email keys).
+Первое применение фиксирует digest этого плана; смена получателя в том же
+журнале отклоняется. Настройка agent/provider и Run этой оснасткой не выполняются.
+
+```bash
+node tools/dev/email-mailbox-acceptance.mjs grants "${EMAIL_ARGS[@]}" \
+  --grant-input "$EMAIL_QA_PRIVATE/grant.json" \
+  --confirm CONFIGURE-STAGING-MAILBOX
+node tools/dev/email-mailbox-acceptance.mjs inspect "${EMAIL_ARGS[@]}"
+node tools/dev/email-mailbox-acceptance.mjs receipt "${EMAIL_ARGS[@]}" \
+  --invocation-ref "$EMAIL_QA_INVOCATION_REF" --project-ref "$EMAIL_QA_PROJECT_REF"
+```
+
+`invocationRef` берётся из настоящего разрешённого Runtime/MCP path, не из
+синтетического provider. Gate approve/reject/replay/revoke/restart, остальные
+операции, получение тестового SMTP письма через IMAP, POP3 и каждый negative
+сохраняют отдельные PASS/FAIL/NOT RUN в #1031. Этот driver не обходит Gate,
+не делает reconciliation и не выводит содержимое писем.
+
+### Локальная проверка оснастки
+
+`make test-email-mailbox-acceptance` запускает ограниченные Node tests,
+включая настоящий public argv в чистом disposable Git checkout, private files,
+канонический session client и синтетический owner transport. Контролируются
+все фазы/новые flags, свежие If-Match, fsync INTENT до запроса, lost ACK,
+неизменность profile/grant plan, expiry, publication drift, foreign receipt и
+отсутствие повторных effects. Это проверка harness, не vendor PASS. Node.js v24
+fs/CLI/test docs проверены через Context7.
