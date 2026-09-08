@@ -14,6 +14,14 @@
       import { i18n } from "../../src/app/i18n/index";
       import "../../src/app/styles/base.css";
       import UiProofFixture from "./UiProofFixture.vue";
+      if (
+        new URLSearchParams(location.search).get("fixture") ===
+        "integration-terminal"
+      ) {
+        const { loadRuntimeConfig } =
+          await import("../../src/shared/config/runtime");
+        await loadRuntimeConfig();
+      }
       const router = createRouter({
         history: createMemoryHistory(),
         routes: [{ path: "/:pathMatch(.*)*", component: UiProofFixture }],

@@ -163,7 +163,12 @@ function stopListening(): void {
 
 watch(
   () => props.open,
-  async (open) => {
+  async (open, _previous, onCleanup) => {
+    let current = true;
+    const isCurrent = () => current && props.open && !!panel.value?.isConnected;
+    onCleanup(() => {
+      current = false;
+    });
     if (!open) {
       stopListening();
       restoreFocus();
@@ -176,7 +181,12 @@ watch(
         : null;
     positioned.value = false;
     await nextTick();
+    if (!isCurrent()) return;
     updatePosition();
+    // positioned меняет visibility; браузер может фокусировать input только
+    // после применения этого DOM update. Cleanup закрывает поздний callback.
+    await nextTick();
+    if (!isCurrent()) return;
     startListening();
     if (props.focusOnOpen) {
       const target = panel.value

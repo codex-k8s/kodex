@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import {
   applicability,
+  integrationPageShape,
   conditionFailure,
   UIConditionError,
   selectedVariants,
@@ -207,4 +208,28 @@ test("targeted профиль допускает только восемь read-
   ])
     expect(() => selectedVariants(raw, "0")).toThrow("selection");
   expect(() => selectedVariants(targetedVariants[0], "1")).toThrow("selection");
+});
+
+test("integration shape сохраняет только наличие и тип terminal cursor", () => {
+  const missing = integrationPageShape({
+    items: [{ name: "secret-sentinel" }],
+  });
+  expect(missing).toMatchObject({
+    connectionItemsArray: true,
+    connectionCursorPresent: false,
+    connectionCursorString: false,
+  });
+  expect(integrationPageShape({ items: [], nextPageToken: "" })).toMatchObject({
+    connectionCursorPresent: true,
+    connectionCursorString: true,
+    connectionCursorEmpty: true,
+  });
+  expect(integrationPageShape({ items: [], nextPageToken: 1 })).toMatchObject({
+    connectionCursorString: false,
+  });
+  expect(
+    JSON.stringify(
+      integrationPageShape({ items: [], nextPageToken: "secret-sentinel" }),
+    ),
+  ).not.toContain("secret-sentinel");
 });
