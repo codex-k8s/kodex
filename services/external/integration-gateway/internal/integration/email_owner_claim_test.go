@@ -22,16 +22,17 @@ func TestCPProducedEmailClaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	legacy := os.Getenv("KODEX_EMAIL_LEGACY_CLAIM") == "1"
 	var request Request
 	if kind == "health" {
 		var claim cp.IntegrationConnectionTestClaim
-		if proto.Unmarshal(raw, &claim) != nil || claim.CredentialRevision != nil {
+		if proto.Unmarshal(raw, &claim) != nil || (claim.CredentialRevision != nil) != legacy {
 			t.Fatal("invalid owner health claim")
 		}
 		request = RequestFromTest(&claim)
 	} else if kind == "invocation" {
 		var claim cp.IntegrationInvocationClaim
-		if proto.Unmarshal(raw, &claim) != nil || claim.CredentialRevision != nil {
+		if proto.Unmarshal(raw, &claim) != nil || (claim.CredentialRevision != nil) != legacy {
 			t.Fatal("invalid owner invocation claim")
 		}
 		request = RequestFromInvocation(&claim)
