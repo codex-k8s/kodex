@@ -141,7 +141,7 @@ fixture digest: поздний Chromium PASS не стирает Firefox/WebKit 
 
 ```bash
 npx vitest run e2e
-npx vue-tsc --noEmit
+npm run typecheck
 npm run build:synthetic
 npx playwright test --config e2e/ui-populated.fixture.config.ts
 ```
