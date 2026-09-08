@@ -12,25 +12,33 @@ const response = (n: number) => ({
   text: () => Promise.resolve(revision(n)),
 });
 function fixture(fetch: ReturnType<typeof vi.fn>) {
-  const events = new Map<string, Set<() => void>>();
+  const events = new Map<
+    string,
+    Set<(event?: { isTrusted: boolean }) => void>
+  >();
   const reload = vi.fn();
   const window = {
     location: { origin: "https://kodex.test", reload },
     setTimeout,
     clearTimeout,
-    addEventListener: (name: string, handler: () => void) => {
+    addEventListener: (
+      name: string,
+      handler: (event?: { isTrusted: boolean }) => void,
+    ) => {
       const set = events.get(name) ?? new Set();
       set.add(handler);
       events.set(name, set);
     },
-    removeEventListener: (name: string, handler: () => void) =>
-      events.get(name)?.delete(handler),
+    removeEventListener: (
+      name: string,
+      handler: (event?: { isTrusted: boolean }) => void,
+    ) => events.get(name)?.delete(handler),
   };
   const context = { window, fetch, AbortController, URL, Promise, Symbol };
   const install = () =>
     runInNewContext(remoteReloadClientSource(), context) as unknown;
-  const event = (name: string) =>
-    events.get(name)?.forEach((handler) => handler());
+  const event = (name: string, payload?: { isTrusted: boolean }) =>
+    events.get(name)?.forEach((handler) => handler(payload));
   install();
   return {
     reload,
@@ -139,4 +147,31 @@ test("outage, foreign redirect, malformed body и HTTP failure не меняют
   await vi.advanceTimersByTimeAsync(1000);
   expect(f.reload).toHaveBeenCalledTimes(1);
   f.dispose();
+});
+
+test("beforeunload закрывает provisional load; только trusted interaction восстанавливает отменённый уход", async () => {
+  vi.useFakeTimers();
+  const fetch = vi.fn().mockResolvedValue(response(1));
+  const f = fixture(fetch);
+  await vi.advanceTimersByTimeAsync(1);
+  f.event("beforeunload");
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  f.event("pointerdown", { isTrusted: false });
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  f.event("keydown", { isTrusted: true });
+  f.event("pointerdown", { isTrusted: true });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  f.install();
+  expect(f.events.get("beforeunload")?.size).toBe(1);
+  expect(f.events.get("pointerdown")?.size).toBe(1);
+  expect(f.events.get("keydown")?.size).toBe(1);
+  f.dispose();
+  expect(f.events.get("beforeunload")?.size).toBe(0);
+  expect(f.events.get("pointerdown")?.size).toBe(0);
+  expect(f.events.get("keydown")?.size).toBe(0);
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(vi.getTimerCount()).toBe(0);
 });

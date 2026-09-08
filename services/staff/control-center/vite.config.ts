@@ -126,6 +126,9 @@ export function remoteReloadClientSource(): string {
     disposed = true;
     pause();
     window.removeEventListener("pagehide", pause);
+    window.removeEventListener("beforeunload", pause);
+    window.removeEventListener("pointerdown", resumeAfterInteraction);
+    window.removeEventListener("keydown", resumeAfterInteraction);
     window.removeEventListener("pageshow", resume);
   }
   function schedule() {
@@ -136,6 +139,11 @@ export function remoteReloadClientSource(): string {
     if (!paused || disposed || reloading) return;
     paused = false;
     schedule();
+  }
+  function resumeAfterInteraction(event) {
+    // Отменённый beforeunload не создаёт pageshow. Только настоящее новое
+    // действие пользователя возобновляет poll сохранившегося документа.
+    if (event.isTrusted) resume();
   }
   function pollRevision() {
     if (disposed || paused || reloading || active) return;
@@ -170,6 +178,11 @@ export function remoteReloadClientSource(): string {
     }).then(finish, finish);
   }
   window[key] = { dispose };
+  // pagehide приходит после загрузки нового документа: beforeunload закрывает
+  // окно, в котором WebKit уже запрещает fetch старого документа.
+  window.addEventListener("beforeunload", pause);
+  window.addEventListener("pointerdown", resumeAfterInteraction);
+  window.addEventListener("keydown", resumeAfterInteraction);
   window.addEventListener("pagehide", pause);
   window.addEventListener("pageshow", resume);
   pollRevision();
