@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { admittedArtifact, mutationDriver, privateJournal, runAcceptance } from "./role-image-acceptance.mjs";
+import { admittedArtifact, mutationDriver, privateJournal, projectPredecessor, runAcceptance } from "./role-image-acceptance.mjs";
 
 const h = (value) => createHash("sha256").update(value).digest("hex");
 const digest = "a".repeat(64);
@@ -51,6 +51,62 @@ test("inspect after UNKNOWN only reads owner state and never changes intent", as
   const before = readFileSync(path, "utf8"); journal = privateJournal(path, { version: 1 }, { readOnly: true });
   const output = await runAcceptance({ phase: "inspect", journal, prefix: "fixture-test", request: async (_path, options) => { assert.equal(options.method, undefined); return response({ items: [{ ref: "project", version: 1, name: "fixture-test RoleImage", secret: "hidden" }] }); } });
   assert.equal(output.pendingSteps.length, 1); assert.deepEqual(output.projects, [{ ref: "project", version: 1 }]); assert.equal(readFileSync(path, "utf8"), before); journal.close();
+});
+
+function recoveryFixture(t) {
+  const directory = mkdtempSync(join(tmpdir(), "riqa-recovery-")); chmodSync(directory, 0o700); const path = join(directory, "state.jsonl"); const prefix = "fixture-test";
+  const scope = { origin: "https://fixture.invalid", prefix, runnerDigest: `sha256:${digest}`, servingManifestSHA256: digest };
+  const key = "11111111-1111-4111-8111-111111111111";
+  const body = { name: `${prefix} RoleImage`, purpose: "Приёмка новой базы образа без provider запуска", language: "ru" };
+  const previous = privateJournal(path, { version: 1, ...scope, sourceSHA: "b".repeat(40) });
+  previous.append({ type: "INTENT", step: "project", key, method: "POST", path: "/api/v1/projects", bodySHA256: h(JSON.stringify(body)) });
+  previous.append({ type: "STOP", step: "project", key, outcome: "UNKNOWN" }); previous.close();
+  const oldBytes = readFileSync(path, "utf8"); const previousSHA = h(oldBytes);
+  const predecessor = projectPredecessor(path, previousSHA, scope);
+  const journal = privateJournal(`${path}.new`, { version: 1, ...scope, previousJournalSHA256: previousSHA });
+  t.after(() => { journal.close(); rmSync(directory, { recursive: true, force: true }); });
+  return { path, prefix, scope, key, body, oldBytes, previousSHA, predecessor, journal };
+}
+
+test("preflight failure creates no business intent or request", async (t) => {
+  const journal = privateJournal(fixture(t), { version: 1 }); let requests = 0;
+  await assert.rejects(runAcceptance({ phase: "prepare", journal, prefix: "fixture-test", preflight: async () => { throw new Error("expired"); }, request: async () => { requests++; } }), /expired/);
+  assert.equal(requests, 0); assert.equal(journal.events.length, 1); journal.close();
+});
+
+test("recovery binds old bytes, command body and exact origin/prefix/manifest", (t) => {
+  const f = recoveryFixture(t);
+  assert.equal(f.predecessor.key, f.key);
+  assert.throws(() => projectPredecessor(f.path, "c".repeat(64), f.scope), /DIGEST_MISMATCH/);
+  for (const field of ["prefix", "origin", "servingManifestSHA256", "runnerDigest"]) assert.throws(() => projectPredecessor(f.path, f.previousSHA, { ...f.scope, [field]: "changed" }), /SCOPE_MISMATCH/);
+  const changed = JSON.parse(f.oldBytes.split("\n")[1]); changed.bodySHA256 = "c".repeat(64);
+  const lines = f.oldBytes.trimEnd().split("\n"); lines[1] = JSON.stringify(changed); const raw = `${lines.join("\n")}\n`; writeFileSync(f.path, raw);
+  assert.throws(() => projectPredecessor(f.path, h(raw), f.scope), /NOT_FIRST_PROJECT/);
+});
+
+for (const scenario of ["existing", "expired", "conflict", "lost-ack", "accepted"]) test(`first-project recovery ${scenario} remains bounded and uses the original key`, async (t) => {
+  const f = recoveryFixture(t); const calls = [];
+  const options = { phase: "recover-project", journal: f.journal, predecessor: f.predecessor, prefix: f.prefix, preflight: async () => { if (scenario === "expired") throw new Error("expired"); }, request: async (path, request = {}) => {
+    calls.push({ method: request.method ?? "GET", path, key: request.headers?.["Idempotency-Key"] });
+    if (!request.method) return response({ items: scenario === "existing" ? [{ name: f.body.name, ref: "existing" }] : [] });
+    if (path === "/api/v1/projects") {
+      assert.equal(request.headers["Idempotency-Key"], f.key); assert.deepEqual(JSON.parse(request.body), f.body);
+      if (scenario === "lost-ack") throw new Error("lost response");
+      return response({ ref: "project" }, scenario === "accepted" ? 201 : 409);
+    }
+    return response({}, 409);
+  } };
+  await assert.rejects(runAcceptance(options));
+  const projectPosts = calls.filter((item) => item.method === "POST" && item.path === "/api/v1/projects");
+  assert.equal(projectPosts.length, ["existing", "expired"].includes(scenario) ? 0 : 1);
+  assert.equal(readFileSync(f.path, "utf8"), f.oldBytes);
+  if (["conflict", "lost-ack", "accepted"].includes(scenario)) {
+    const previousCalls = calls.length;
+    await assert.rejects(runAcceptance({ ...options, phase: "prepare" }), /UNRESOLVED_INTENT/);
+    assert.equal(calls.length, previousCalls);
+    assert.equal(f.journal.events.find((item) => item.type === "INTENT").key, f.key);
+    assert.equal(f.journal.events.filter((item) => item.type === "PROJECT_DELIVERY_RECOVERY").length, 1);
+  }
 });
 
 function artifactDetail(generation = 1) {
@@ -103,9 +159,9 @@ test("managed prepare, forward publication and exact historical restore use isol
     throw new Error(`unhandled test route ${method} ${path}`);
   };
   for (const phase of ["prepare", "advance", "restore"]) {
-    const result = await runAcceptance({ phase, journal, request, prefix: "fixture-test", runnerDigest: `sha256:${digest}` });
+    const result = await runAcceptance({ phase, journal, request, preflight: async () => {}, prefix: "fixture-test", runnerDigest: `sha256:${digest}` });
     assert.equal(result.status, "PASS"); assert.equal(result.runtimeJob, "NOT_RUN"); assert.equal(result.revisionRef, `revision${generation}`);
-    const previous = mutations; await runAcceptance({ phase, journal, request, prefix: "fixture-test", runnerDigest: `sha256:${digest}` }); assert.equal(mutations, previous);
+    const previous = mutations; await runAcceptance({ phase, journal, request, preflight: async () => {}, prefix: "fixture-test", runnerDigest: `sha256:${digest}` }); assert.equal(mutations, previous);
   }
   assert.equal(revisions.length, 3); assert.equal(revisions[2].content, revisions[0].content); assert.notEqual(revisions[1].content, revisions[0].content);
   assert.equal(journal.events.filter((item) => item.type === "INTENT" && item.path.endsWith("/publication")).length, 3);

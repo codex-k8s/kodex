@@ -11,12 +11,14 @@ import { boundedResponseBody } from "./runtime-workspace-acceptance.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const confirmation = "APPLY-STAGING-ROLE-IMAGE-FIXTURE";
+const recoveryConfirmation = "RECOVER-SAME-STAGING-PROJECT-INTENT";
 const sha = (value) => createHash("sha256").update(typeof value === "string" || Buffer.isBuffer(value) ? value : JSON.stringify(value)).digest("hex");
 const requireValue = (ok, code) => { if (!ok) throw new Error(code); };
 const ref = (value) => { requireValue(typeof value === "string" && /^[a-zA-Z0-9_-]{1,160}$/.test(value), "REFERENCE_INVALID"); return value; };
 const version = (value) => { requireValue(Number.isSafeInteger(value) && value > 0, "VERSION_INVALID"); return value; };
 const digest = (value) => { requireValue(typeof value === "string" && /^[a-f0-9]{64}$/.test(value), "DIGEST_INVALID"); return value; };
 const encode = encodeURIComponent;
+const projectBody = (prefix) => ({ name: `${prefix} RoleImage`, purpose: "Приёмка новой базы образа без provider запуска", language: "ru" });
 const bindingPin = (item) => ({ ref: ref(item?.ref), version: version(item.version), agentRef: ref(item.agentRef), environmentRef: ref(item.environmentRef), versionRef: ref(item.versionRef), digest: digest(item.digest) });
 const safeState = (value) => ["DRAFT", "VALID", "INVALID", "PUBLISHED", "SUPERSEDED", "DISCARDED", "QUEUED", "MATERIALIZATION", "CONTEXT_VALIDATION", "BASE_PULL", "SOLVING", "INSTALLATION", "TRUSTED_RUNTIME_FINALIZATION", "STAGING_PUSH", "PROVENANCE", "COMPLETED", "FAILED", "CANCELLED", "EXPIRED", "DEAD_LETTER"].includes(value) ? value : "UNKNOWN";
 
@@ -50,12 +52,24 @@ export function privateJournal(path, header, { readOnly = false } = {}) {
       const directory = openSync(dirname(path), constants.O_RDONLY); try { fsyncSync(directory); } finally { closeSync(directory); }
     }
     requireValue(events[0]?.type === "HEADER" && Object.entries(header).every(([key, value]) => JSON.stringify(events[0][key]) === JSON.stringify(value)), "JOURNAL_SCOPE_MISMATCH");
-    return { events, append, close() { closeSync(fd); if (lock !== undefined) { closeSync(lock); unlinkSync(`${path}.lock`); } } };
+    return { events, append, bytesSHA256: sha(raw), close() { closeSync(fd); if (lock !== undefined) { closeSync(lock); unlinkSync(`${path}.lock`); } } };
   } catch (error) {
     if (fd !== undefined) closeSync(fd);
     if (lock !== undefined) { closeSync(lock); unlinkSync(`${path}.lock`); }
     throw error;
   }
+}
+
+// Исключение только для первой owner-idempotent Project create. Не применять
+// к build/provider UNKNOWN: отсутствие ресурса не доказывает отсутствие эффекта.
+export function projectPredecessor(path, expectedSHA256, scope) {
+  const previous = privateJournal(path, { version: 1, ...scope }, { readOnly: true });
+  try {
+    requireValue(previous.bytesSHA256 === digest(expectedSHA256), "PREDECESSOR_DIGEST_MISMATCH");
+    const [header, intent, stop] = previous.events;
+    requireValue(previous.events.length === 3 && /^[a-f0-9]{40}$/.test(header.sourceSHA ?? "") && intent?.type === "INTENT" && intent.step === "project" && intent.method === "POST" && intent.path === "/api/v1/projects" && /^[a-f0-9-]{36}$/.test(intent.key ?? "") && intent.bodySHA256 === sha(projectBody(scope.prefix)) && intent.version === undefined && stop?.type === "STOP" && stop.step === "project" && stop.key === intent.key && stop.outcome === "UNKNOWN" && stop.status === undefined, "PREDECESSOR_NOT_FIRST_PROJECT");
+    return { previousJournalSHA256: expectedSHA256, previousSourceSHA: header.sourceSHA, key: intent.key, bodySHA256: intent.bodySHA256 };
+  } finally { previous.close(); }
 }
 
 // Журнал сохраняет intent до HTTP, но никогда не сохраняет исходник/ответ целиком.
@@ -69,7 +83,9 @@ export function mutationDriver(journal, request) {
       return prior.result;
     }
     requireValue(!journal.events.some((item) => item.type === "INTENT" && !journal.events.some((later) => later.type === "ACK" && later.key === item.key)), "UNRESOLVED_INTENT_READBACK_REQUIRED");
-    const key = randomUUID();
+    const recovery = step === "project" ? journal.events.find((item) => item.type === "PROJECT_DELIVERY_RECOVERY") : undefined;
+    if (recovery) requireValue(method === "POST" && path === "/api/v1/projects" && recovery.bodySHA256 === sha(body), "RECOVERY_COMMAND_CHANGED");
+    const key = recovery?.key ?? randomUUID();
     journal.append({ type: "INTENT", step, key, method, path, bodySHA256: sha(body ?? null), ...(expectedVersion === undefined ? {} : { version: version(expectedVersion) }) });
     let status;
     try {
@@ -112,7 +128,7 @@ export function admittedArtifact(detail, recipeRef, revisionRef, promoted = fals
   return result;
 }
 
-export async function runAcceptance({ phase, journal, request, prefix, runnerDigest, timeoutMs = 1200000, sleep = (ms) => new Promise((done) => setTimeout(done, ms)), now = Date.now }) {
+export async function runAcceptance({ phase, journal, request, preflight, predecessor, prefix, runnerDigest, timeoutMs = 1200000, sleep = (ms) => new Promise((done) => setTimeout(done, ms)), now = Date.now }) {
   const deadline = now() + timeoutMs;
   const mutate = mutationDriver(journal, request);
   const get = async (path) => {
@@ -148,11 +164,20 @@ export async function runAcceptance({ phase, journal, request, prefix, runnerDig
     } else output.projects = (await pages(`/api/v1/projects?query=${encode(prefix)}`)).filter((item) => item.name === `${prefix} RoleImage`).map((item) => ({ ref: ref(item.ref), version: version(item.version) }));
     return output;
   }
-  requireValue(["prepare", "advance", "restore"].includes(phase), "PHASE_INVALID");
+  requireValue(["prepare", "advance", "restore", "recover-project"].includes(phase), "PHASE_INVALID");
+  requireValue(typeof preflight === "function", "SESSION_PREFLIGHT_REQUIRED");
+  await preflight();
+  if (phase === "recover-project") {
+    requireValue(predecessor && journal.events.length === 1 && journal.events[0].previousJournalSHA256 === predecessor.previousJournalSHA256, "FRESH_RECOVERY_JOURNAL_REQUIRED");
+    const matching = (await pages(`/api/v1/projects?query=${encode(prefix)}`)).filter((item) => item.name === projectBody(prefix).name);
+    requireValue(matching.length === 0, "RECOVERY_PROJECT_ALREADY_EXISTS");
+    journal.append({ type: "PROJECT_DELIVERY_RECOVERY", ...predecessor, authoritativeAbsence: true });
+    phase = "prepare";
+  }
   requireValue(!journal.events.some((event) => event.type === "INTENT" && !journal.events.some((ack) => ack.type === "ACK" && ack.key === event.key)), "UNRESOLVED_INTENT_READBACK_REQUIRED");
   if (saved(`${phase}-complete`)) return saved(`${phase}-complete`);
   if (phase !== "prepare") requireValue(saved("prepare-complete") && (phase !== "restore" || saved("advance-complete")), "PREVIOUS_PHASE_REQUIRED");
-  const project = saved("project") ?? await mutate("project", "POST", "/api/v1/projects", { name: `${prefix} RoleImage`, purpose: "Приёмка новой базы образа без provider запуска", language: "ru" }, 201, undefined, (item) => ({ ref: ref(item.ref) }));
+  const project = saved("project") ?? await mutate("project", "POST", "/api/v1/projects", projectBody(prefix), 201, undefined, (item) => ({ ref: ref(item.ref) }));
   const agent = saved("agent") ?? await mutate("agent", "POST", `/api/v1/projects/${project.ref}/agents`, { name: `${prefix} Исполнитель`, purpose: "Приёмка привязки образа", roleDescription: "Проверочный исполнитель", initialInstructions: "Выполняй только явно поставленные задачи." }, 201, undefined, (item) => ({ ref: ref(item.ref), roleDefinitionRef: ref(item.roleDefinitionRef), version: version(item.version) }));
   const catalog = await get("/api/v1/role-environments");
   const standard = catalog.items?.find((item) => item.key === "standard" && item.available === true);
@@ -226,11 +251,11 @@ export async function runAcceptance({ phase, journal, request, prefix, runnerDig
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); requireValue(/^--[a-z-]+$/.test(key ?? "") && args.length && !(key in options), "ARGUMENT_INVALID"); options[key] = args.shift(); }
-  requireValue(Object.keys(options).every((key) => ["--origin", "--storage-state", "--state", "--prefix", "--runner-digest", "--serving-manifest", "--timeout-ms", "--confirm"].includes(key)), "ARGUMENT_UNKNOWN");
-  requireValue(["prepare", "advance", "restore", "inspect"].includes(phase), "PHASE_INVALID");
+  requireValue(Object.keys(options).every((key) => ["--origin", "--storage-state", "--state", "--prefix", "--runner-digest", "--serving-manifest", "--timeout-ms", "--confirm", "--previous-state", "--previous-sha256"].includes(key)), "ARGUMENT_UNKNOWN");
+  requireValue(["prepare", "advance", "restore", "inspect", "recover-project"].includes(phase), "PHASE_INVALID");
   const origin = exactOrigin(options["--origin"] ?? "");
   requireValue(new URL(origin).protocol === "https:" && !/prod(?:uction)?/i.test(new URL(origin).hostname), "STAGING_ORIGIN_REQUIRED");
-  requireValue(phase === "inspect" || options["--confirm"] === confirmation, "CONFIRMATION_REQUIRED");
+  requireValue(phase === "inspect" || options["--confirm"] === (phase === "recover-project" ? recoveryConfirmation : confirmation), "CONFIRMATION_REQUIRED");
   const prefix = options["--prefix"]; const runnerDigest = options["--runner-digest"];
   requireValue(/^[a-z][a-z0-9-]{5,35}$/.test(prefix ?? "") && /^sha256:[a-f0-9]{64}$/.test(runnerDigest ?? ""), "FIXTURE_ARGUMENT_INVALID");
   requireValue(options["--storage-state"] && options["--state"] && options["--serving-manifest"], "PRIVATE_INPUT_REQUIRED");
@@ -240,11 +265,19 @@ async function main() {
   const timeoutMs = Number(options["--timeout-ms"] ?? 1200000); requireValue(Number.isSafeInteger(timeoutMs) && timeoutMs >= 60000 && timeoutMs <= 1800000, "TIMEOUT_INVALID");
   const sourceSHA = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
   requireValue(execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim() === "", "CLEAN_CHECKOUT_REQUIRED");
-  const journal = privateJournal(options["--state"], { version: 1, origin, prefix, runnerDigest, servingManifestSHA256, sourceSHA }, { readOnly: phase === "inspect" });
+  const scope = { origin, prefix, runnerDigest, servingManifestSHA256 };
+  let predecessor;
+  if (phase === "recover-project") {
+    requireValue(options["--previous-state"] && options["--previous-sha256"] && !existsSync(resolve(options["--state"])), "RECOVERY_INPUT_INVALID");
+    predecessor = projectPredecessor(options["--previous-state"], options["--previous-sha256"], scope);
+    execFileSync("git", ["merge-base", "--is-ancestor", predecessor.previousSourceSHA, sourceSHA], { cwd: root, stdio: "pipe" });
+  } else requireValue(!options["--previous-state"] && !options["--previous-sha256"], "RECOVERY_ARGUMENTS_FORBIDDEN");
+  const journal = privateJournal(options["--state"], { version: 1, ...scope, sourceSHA, ...(predecessor ? { previousJournalSHA256: predecessor.previousJournalSHA256, previousSourceSHA: predecessor.previousSourceSHA } : {}) }, { readOnly: phase === "inspect" });
   try {
     const client = createOwnerSessionClient({ origin, storagePath: resolve(options["--storage-state"]) });
     const deadline = Date.now() + timeoutMs;
-    const result = await runAcceptance({ phase, journal, prefix, runnerDigest, timeoutMs, request: (path, options) => client.request(path, { ...options, signal: AbortSignal.timeout(Math.max(1, Math.min(30000, deadline - Date.now()))) }) });
+    const signal = () => AbortSignal.timeout(Math.max(1, Math.min(30000, deadline - Date.now())));
+    const result = await runAcceptance({ phase, journal, prefix, runnerDigest, timeoutMs, predecessor, preflight: async () => { const response = await client.observe("/api/v1/session", { signal: signal() }); requireValue(response.status === 200, "SESSION_PREFLIGHT_FAILED"); await response.body?.cancel(); }, request: (path, options) => client.request(path, { ...options, signal: signal() }) });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } finally { journal.close(); }
 }

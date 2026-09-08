@@ -4,7 +4,7 @@ title: Пользовательская API-приёмка RoleImage и forward 
 type: acceptance-runbook
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-08
 ---
 
@@ -96,6 +96,49 @@ lock не удаляется автоматически; root сначала д�
 процесса. `inspect` открывает существующий journal read-only. Повреждение,
 обрезанный хвост, symlink, доступ группы/других или другая source/origin/manifest
 закрыто отклоняются. Не редактировать журнал для превращения UNKNOWN в PASS.
+
+## Восстановление только первого Project create
+
+Исправление #1269 добавляет shared session preflight до первого business intent.
+При отсутствии app-proxy cookies/истёкшей сессии новые запуски останавливаются
+без project POST и без UNKNOWN business intent. Header журнала может остаться;
+после исправления session обычный `prepare` использует тот же журнал.
+
+Старый вариант мог сохранить UNKNOWN до фактической отправки. Для строго
+первого Project create предусмотрен отдельный `recover-project`:
+
+```bash
+node tools/dev/role-image-acceptance.mjs recover-project \
+  --origin "$QA_ORIGIN" --storage-state "$QA_STORAGE_STATE" \
+  --previous-state "$OLD_PROJECT_JOURNAL" \
+  --previous-sha256 "$EXPECTED_OLD_JOURNAL_SHA256" \
+  --state "$NEW_LINKED_JOURNAL" --prefix "$SAME_FIXTURE_PREFIX" \
+  --runner-digest "$EXPECTED_RUNNER_DIGEST" \
+  --serving-manifest "$QA_SERVING_MANIFEST" --timeout-ms 1200000 \
+  --confirm RECOVER-SAME-STAGING-PROJECT-INTENT
+```
+
+Нужны отдельное явное решение root после диагностики и точный SHA256 старого
+journal. Старый файл остаётся неизменным. Принимается только последовательность
+HEADER → первый project INTENT → UNKNOWN без полученного HTTP status, других
+commands и ACK. Проверяются origin/prefix/runner/manifest, исходный body digest
+и принадлежность старого source истории нового checkout. Новый linked journal
+должен отсутствовать и закрепляет predecessor SHA/source.
+
+После fresh session preflight driver полностью читает owner project catalog
+по прежнему prefix. Наличие matching project закрыто останавливает восстановление.
+Отсутствие записывается как readback, **не как универсальное доказательство
+отсутствия эффекта**. Разрешается только доставка первой Project create с
+**тем же прежним idempotency key и тем же body**. Дедупликация принадлежит
+существующей owner transaction, а не новому prefix. Затем продолжается обычный
+`prepare`. Сбой/409/новый lost ACK снова останавливает работу без повтора.
+
+Это исключение нельзя применять к build, promotion, provider, почте или любому
+другому внешнему UNKNOWN. Их неопределённость сохраняет прежний общий stop.
+При истёкшей сессии recovery не посылает business request. После начала
+recovery существующий linked journal не переинициализируется; читать его
+можно через `inspect` на том же новом exact source. Для продолжения после
+успешных ACK применяется обычный `prepare`, а не второй recovery.
 
 ## Что ещё проверяется отдельно
 
