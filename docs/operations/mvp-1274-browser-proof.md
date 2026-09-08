@@ -147,6 +147,27 @@ annotations; их предупреждения о производительно
   результаты не объявляются проверкой итогового immutable head.
 - observer15: 5 PASS/1 FAIL; binding AbortSignal мог приходить после network event.
 - observer16: 6/6 PASS: Home 900 и File wire/AbortSignal proof в каждом движке.
+- immutable abb83debf / browser18: независимые 267/267 PASS; Home 19 PASS/5 FAIL.
+  Пять FAIL — неподтверждённая отмена PUT draft при явном reload страницы
+  (Chromium 2900/900/768/390, Firefox 390). Все пользовательские assertions
+  сохранения и readback прошли, итоговый diagnostics assert — FAIL.
+- observer19: 6 PASS/3 FAIL; loopback File и abort body после headers прошли
+  во всех движках. observer20: один Chromium Home900 FAIL с уточнённым PUT.
+- observer21: явный reload учитывается как отмена уже существующего поколения,
+  PUT FAIL исчез; Chromium Home900 остаётся FAIL из-за GET `/api/v1/bootstrap`,
+  `net::ERR_ABORTED`, без подтверждённого поколения. Ошибка записана до финального
+  assertion и teardown; момент относительно navigation не доказан.
+  Пользовательские assertions прошли, но отсутствие пользовательского влияния
+  этого запроса не доказано. Остаток сохраняется в #1285, полный Home не PASS.
+
+Отдельная короткая `modal-pattern.synthetic.spec.ts` импортирует настоящий
+ModalDialog и generated canonical schema. Она проверяет начальный и выбранный
+focus, поздний callback, Tab/ShiftTab/Escape/возврат и native checkValidity
+во всех трёх движках, независимо от общего Home observer.
+Observer связывает START/ABORT с уникальным document/fetch ID; поздний abort
+не присваивается следующему запросу того же URL. Неоднозначные поколения
+не принимаются. Listener сохраняется после headers, поскольку body ещё может
+быть отменён. Fetch input/init, Promise/Response и wire bytes не изменяются.
 
 Первоначальный Linux capability readback: secure context и mediaDevices есть
 во всех трёх движках; MediaRecorder есть в Chromium/Firefox. Chromium

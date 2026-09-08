@@ -10,6 +10,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        modalPattern: fileURLToPath(
+          new URL("./e2e/fixtures/modal-pattern.html", import.meta.url),
+        ),
         uiProof: fileURLToPath(
           new URL("./e2e/fixtures/ui-proof.html", import.meta.url),
         ),

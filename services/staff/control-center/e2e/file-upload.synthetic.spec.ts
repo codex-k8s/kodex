@@ -21,6 +21,12 @@ test("synthetic: File upload доставляет точные bytes незав�
       response.end("<!doctype html><title>Synthetic upload</title>");
       return;
     }
+    if (request.method === "GET" && request.url === "/api/v1/slow-body") {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.flushHeaders();
+      response.write("partial");
+      return;
+    }
     if (request.method !== "POST" || request.url !== "/api/v1/upload") {
       response.writeHead(404).end();
       return;
@@ -63,7 +69,9 @@ test("synthetic: File upload доставляет точные bytes незав�
     const aborted: string[] = [];
     await installSyntheticAbortObserver(
       page,
-      (url) => aborted.push(new URL(url).pathname),
+      (event) => {
+        if (event.phase === "abort") aborted.push(new URL(event.url).pathname);
+      },
       origin,
     );
     await page.goto(`${origin}/`);
@@ -98,6 +106,22 @@ test("synthetic: File upload доставляет точные bytes незав�
     });
     expect(cancellation).toBe("AbortError");
     await expect.poll(() => aborted).toEqual(["/api/v1/cancelled"]);
+    const bodyCancellation = await page.evaluate(async () => {
+      const controller = new AbortController();
+      const response = await fetch("/api/v1/slow-body", {
+        signal: controller.signal,
+      });
+      controller.abort();
+      return response
+        .text()
+        .catch((error: unknown) =>
+          error instanceof DOMException ? error.name : "UNKNOWN",
+        );
+    });
+    expect(bodyCancellation).toBe("AbortError");
+    await expect
+      .poll(() => aborted)
+      .toEqual(["/api/v1/cancelled", "/api/v1/slow-body"]);
     expect(receipts).toEqual([expectedReceipt]);
     testInfo.annotations.push({
       type: "upload-wire",

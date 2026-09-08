@@ -7,6 +7,7 @@ import {
   isConfirmedSyntheticCancellation,
 } from "./synthetic-diagnostics";
 import { prepareSyntheticMicrophone } from "./synthetic-microphone";
+import { SyntheticFetchCorrelator } from "./synthetic-fetch-correlator";
 import { installSyntheticAbortObserver } from "./synthetic-abort-observer";
 import { test } from "./fixtures/browser-diagnostics";
 import { installEnvironmentFixture } from "./fixtures/environment";
@@ -238,17 +239,10 @@ for (const { width, height } of [
       changedRoute: boolean;
       code: string;
     }> = [];
-    await installSyntheticAbortObserver(page, (url) => {
-      const matching = [
-        ...pendingRequests.keys(),
-        ...failedRequests.map((failure) => failure.request),
-      ].filter(
-        (request) => request.url() === url && !cancelledRequests.has(request),
-      );
-      // Несколько одновременных запросов одного URL не позволяют доказать identity.
-      if (matching.length === 1 && matching[0])
-        cancelledRequests.add(matching[0]);
-    });
+    const fetches = new SyntheticFetchCorrelator<Request>();
+    await installSyntheticAbortObserver(page, (event) =>
+      fetches.observe(event),
+    );
     const cancelInspectorRequests = () => {
       for (const request of pendingRequests.keys())
         if (
@@ -265,7 +259,18 @@ for (const { width, height } of [
         cancelledRequests.add(request);
       return navigate(...args);
     };
-    page.on("request", (request) => pendingRequests.set(request, page.url()));
+    const reload = page.reload.bind(page);
+    page.reload = (...args: Parameters<typeof reload>) => {
+      // Reload оставляет URL прежним; unload всё равно отменяет текущее поколение.
+      for (const request of pendingRequests.keys())
+        cancelledRequests.add(request);
+      return reload(...args);
+    };
+    page.on("request", (request) => {
+      pendingRequests.set(request, page.url());
+      if (request.resourceType() === "fetch")
+        fetches.request(request, request.url());
+    });
     page.on("requestfinished", (request) => pendingRequests.delete(request));
     page.on("response", (response) => {
       if (
@@ -1684,7 +1689,8 @@ for (const { width, height } of [
     );
     expect(publicationTimeoutDiagnostics).toBe(2);
     for (const { request, changedRoute, code } of failedRequests) {
-      const explicitCancellation = cancelledRequests.has(request);
+      const explicitCancellation =
+        cancelledRequests.has(request) || fetches.cancelled(request);
       if (
         isConfirmedSyntheticCancellation(
           browserName,
@@ -1698,7 +1704,7 @@ for (const { width, height } of [
         });
       else
         failures.push(
-          `Failed request: ${new URL(request.url()).pathname}; code=${code}; routeChanged=${String(changedRoute)}; cancelled=${String(explicitCancellation)}`,
+          `Failed request: ${new URL(request.url()).pathname}; code=${code}; routeChanged=${String(changedRoute)}; cancelled=${String(explicitCancellation)}; type=${request.resourceType()}; method=${request.method()}; ${fetches.describe(request)}`,
         );
     }
     expect(failures).toEqual([]);
