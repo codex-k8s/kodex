@@ -1258,6 +1258,8 @@ const ru = {
       "Возврат публикует новую ревизию и не изменяет старую.",
     revisionHistoryEmpty: "Опубликованных ревизий пока нет.",
     errors: {
+      INVALID_SEARCH_RESULT:
+        "Сервис вернул несовместимый результат поиска. Обновите страницу или обратитесь к администратору.",
       nameRequired: "Укажите название окружения.",
       imageRequired: "Выберите promoted образ для окружения.",
       toolNameRequired: "Укажите название инструмента без пробелов по краям.",
@@ -4386,6 +4388,8 @@ const en = {
       "Rollback publishes a new revision and does not mutate an old revision.",
     revisionHistoryEmpty: "No published revisions yet.",
     errors: {
+      INVALID_SEARCH_RESULT:
+        "The service returned an incompatible search result. Refresh the page or contact your administrator.",
       nameRequired: "Enter an environment name.",
       imageRequired: "Choose a promoted image for the environment.",
       toolNameRequired: "Enter a tool name without surrounding whitespace.",

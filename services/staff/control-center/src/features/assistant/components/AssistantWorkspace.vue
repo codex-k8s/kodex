@@ -59,6 +59,8 @@ import type {
   AttachmentComposerState,
 } from "@/shared/ui/attachment-composer";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import OverlayPanel from "@/shared/ui/OverlayPanel.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -78,6 +80,20 @@ const { t } = useI18n();
 const store = useAssistantStore();
 const open = ref(restoreAssistantWorkspaceOpen());
 const historyOpen = ref(false);
+const contextOpen = ref(false);
+const desktopHistory = ref<HTMLElement>();
+const desktopHistorySentinel = ref<HTMLElement>();
+const mobileHistory = ref<HTMLElement>();
+const mobileHistorySentinel = ref<HTMLElement>();
+const desktopHistoryVisible = ref(false);
+const historyMedia =
+  typeof window === "undefined"
+    ? undefined
+    : window.matchMedia("(min-width: 1001px)");
+function syncHistoryViewport(): void {
+  desktopHistoryVisible.value = historyMedia?.matches ?? false;
+}
+syncHistoryViewport();
 const message = ref("");
 const titleDraft = ref("");
 const titleEditing = ref(false);
@@ -157,6 +173,29 @@ const canStartConversation = computed(
     props.live && !store.loading && !store.busy && canCreateConversation.value,
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
+for (const [root, sentinel, visible] of [
+  [desktopHistory, desktopHistorySentinel, () => desktopHistoryVisible.value],
+  [
+    mobileHistory,
+    mobileHistorySentinel,
+    () => !desktopHistoryVisible.value && historyOpen.value,
+  ],
+] as const) {
+  useCursorInfiniteScroll({
+    root,
+    sentinel,
+    enabled: () =>
+      open.value &&
+      !currentPlan.value &&
+      visible() &&
+      Boolean(store.nextPageToken) &&
+      !store.loading &&
+      !store.loadingMore &&
+      !store.busy &&
+      !store.historyProblem,
+    loadMore: () => store.loadMoreHistory(),
+  });
+}
 
 const contextIdentity = computed(() =>
   assistantContextIdentity(props.context, props.projectRef),
@@ -190,6 +229,7 @@ function close(): void {
   open.value = false;
   persistAssistantWorkspaceOpen(false);
   historyOpen.value = false;
+  contextOpen.value = false;
   openPlanRef.value = undefined;
   store.clearReceipt();
   void nextTick(() => fab.value?.focus());
@@ -343,6 +383,7 @@ function documentPointerDown(event: PointerEvent): void {
 }
 
 watch(contextIdentity, () => {
+  contextOpen.value = false;
   store.setContext(props.context, props.projectRef);
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
@@ -387,11 +428,13 @@ watch(
 );
 
 onMounted(() => {
+  historyMedia?.addEventListener("change", syncHistoryViewport);
   document.addEventListener("pointerdown", documentPointerDown);
   window.addEventListener(openAssistantEvent, handleOpenAssistant);
   if (open.value) void show();
 });
 onBeforeUnmount(() => {
+  historyMedia?.removeEventListener("change", syncHistoryViewport);
   store.cancelReads();
   document.removeEventListener("pointerdown", documentPointerDown);
   window.removeEventListener(openAssistantEvent, handleOpenAssistant);
@@ -472,6 +515,7 @@ onBeforeUnmount(() => {
           </button>
           <section
             v-if="historyOpen"
+            ref="mobileHistory"
             class="assistant-history__menu"
             :aria-label="$t('assistant.history')"
           >
@@ -510,6 +554,11 @@ onBeforeUnmount(() => {
               :problem="store.historyProblem"
               @retry="store.loadMoreHistory"
             />
+            <div
+              ref="mobileHistorySentinel"
+              class="assistant-history-sentinel"
+              aria-hidden="true"
+            />
             <button
               v-if="store.nextPageToken"
               type="button"
@@ -535,6 +584,7 @@ onBeforeUnmount(() => {
 
       <nav
         v-if="!currentPlan"
+        ref="desktopHistory"
         class="assistant-conversation-sidebar"
         :aria-label="$t('assistant.history')"
       >
@@ -569,6 +619,11 @@ onBeforeUnmount(() => {
           v-if="store.historyProblem"
           :problem="store.historyProblem"
           @retry="store.loadMoreHistory"
+        />
+        <div
+          ref="desktopHistorySentinel"
+          class="assistant-history-sentinel"
+          aria-hidden="true"
         />
         <button
           v-if="store.nextPageToken"
@@ -622,10 +677,30 @@ onBeforeUnmount(() => {
             :events="runEvents"
           />
           <div v-else class="assistant-chat-view">
-            <section class="assistant-context-strip">
+            <button
+              type="button"
+              class="assistant-context-strip"
+              :aria-label="$t('assistant.context')"
+              :aria-expanded="contextOpen"
+              @click="contextOpen = true"
+            >
               <span>{{ $t("assistant.context") }}</span>
               <strong>{{ contextTitle }}</strong>
               <small>{{ context.route }}</small>
+            </button>
+            <OverlayPanel
+              v-if="contextOpen"
+              v-model:open="contextOpen"
+              mode="drawer"
+              :ariaLabel="$t('assistant.context')"
+              :close-label="$t('common.close')"
+              teleport-to="#assistant-workspace"
+              @keydown.stop
+            >
+              <template #header
+                ><strong>{{ contextTitle }}</strong></template
+              >
+              <p>{{ context.route }}</p>
               <p v-if="checkedContext" class="assistant-context-details">
                 <span v-if="checkedContextKind">{{
                   $t(`assistant.contextKind.${checkedContextKind}`)
@@ -646,7 +721,7 @@ onBeforeUnmount(() => {
                   $t(`assistant.contextOperation.${operation}`)
                 }}</span>
               </p>
-            </section>
+            </OverlayPanel>
 
             <section
               v-if="store.selectedConversation"
@@ -1053,6 +1128,10 @@ onBeforeUnmount(() => {
   background: var(--surface);
   box-shadow: 0 14px 36px rgb(15 23 42 / 18%);
 }
+.assistant-history-sentinel {
+  min-height: 1px;
+  flex: 0 0 1px;
+}
 .assistant-history__menu header {
   padding: 10px 12px;
   color: var(--muted);
@@ -1122,6 +1201,17 @@ onBeforeUnmount(() => {
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.assistant-context-strip > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .assistant-context-strip > span,
 .assistant-context-strip > small {
@@ -1401,11 +1491,11 @@ onBeforeUnmount(() => {
 }
 @media (min-width: 721px) and (max-width: 900px) {
   .assistant-drawer {
-    width: min(640px, calc(100vw - 24px));
-    max-width: calc(100vw - 24px);
+    width: 92vw;
+    max-width: 92vw;
   }
   .assistant-drawer--plan {
-    width: calc(100vw - 24px);
+    width: 92vw;
   }
   .assistant-new-conversation,
   .assistant-history__toggle {

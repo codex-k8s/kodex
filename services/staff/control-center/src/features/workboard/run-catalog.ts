@@ -17,9 +17,10 @@ export interface RunCatalogScope {
   projectRef?: string;
   query: string;
   filter: RunFilter;
+  states?: Run["state"][];
 }
 
-export const useRunCatalogStore = defineStore("run-catalog", () => {
+export function createRunCatalog() {
   const items = ref<Run[]>([]);
   const ready = ref(false);
   const pageToken = ref<string>();
@@ -33,7 +34,12 @@ export const useRunCatalogStore = defineStore("run-catalog", () => {
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
   function keyFor(scope: RunCatalogScope): string {
-    return JSON.stringify([scope.projectRef, scope.query.trim(), scope.filter]);
+    return JSON.stringify([
+      scope.projectRef,
+      scope.query.trim(),
+      scope.filter,
+      scope.states,
+    ]);
   }
 
   function invalidate(scope: RunCatalogScope): void {
@@ -72,7 +78,7 @@ export const useRunCatalogStore = defineStore("run-catalog", () => {
     controller = active;
     const current = ++generation;
     const cursor = more ? pageToken.value : undefined;
-    const states = runFilterStates(scope.filter);
+    const states = scope.states ?? runFilterStates(scope.filter);
     loading.value = true;
     problem.value = undefined;
     if (!more) {
@@ -132,4 +138,6 @@ export const useRunCatalogStore = defineStore("run-catalog", () => {
     }
   }
   return { items, ready, pageToken, loading, problem, load, reset, invalidate };
-});
+}
+
+export const useRunCatalogStore = defineStore("run-catalog", createRunCatalog);

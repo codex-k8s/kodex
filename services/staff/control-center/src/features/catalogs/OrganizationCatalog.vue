@@ -10,7 +10,10 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import WorkflowCard from "@/features/workflows/catalog/WorkflowCard.vue";
 import AgentCard from "@/features/agents/catalog/AgentCard.vue";
 import { toAgentCatalogItem } from "@/features/agents/catalog/model";
-import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
+import {
+  nearScrollEnd,
+  useCursorInfiniteScroll,
+} from "@/shared/ui/async-entity-picker";
 import {
   loadCatalog,
   catalogInvalidated,
@@ -31,6 +34,14 @@ const pageToken = ref<string>();
 const loading = ref(false);
 const problem = ref<AppProblem>();
 const expandedProject = ref<string>();
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => Boolean(pageToken.value) && !loading.value && !problem.value,
+  loadMore: () => load(true),
+});
 let controller: AbortController | undefined;
 let generation = 0;
 let disposed = false;
@@ -168,7 +179,11 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section class="organization-catalog">
+  <section
+    ref="scrollRoot"
+    class="organization-catalog"
+    @scroll.passive="scroll"
+  >
     <label class="organization-catalog__search"
       ><Search :size="18" /><input
         v-model="query"
@@ -236,6 +251,11 @@ onBeforeUnmount(() => {
         </template>
       </div>
     </section>
+    <div
+      ref="sentinel"
+      class="organization-catalog__sentinel"
+      aria-hidden="true"
+    />
     <button
       v-if="pageToken"
       class="button"
@@ -261,6 +281,12 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 20px;
   min-width: 0;
+  max-height: calc(100dvh - 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.organization-catalog__sentinel {
+  height: 1px;
 }
 .organization-catalog__search {
   display: flex;

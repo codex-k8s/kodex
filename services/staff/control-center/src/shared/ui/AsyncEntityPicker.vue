@@ -54,6 +54,7 @@ const props = withDefaults(
     multiple?: boolean;
     disabled?: boolean;
     debounceMs?: number;
+    contextKey?: string;
     selected?: S;
     selectedOptions?: readonly S[];
     clearable?: boolean;
@@ -204,7 +205,13 @@ const activeDescendant = computed(() => {
   return item ? `${pickerId}-option-${item.id}` : undefined;
 });
 const infiniteScrollEnabled = computed(
-  () => (inline || open.value) && hasMore.value,
+  () =>
+    (inline || open.value) &&
+    !props.disabled &&
+    !initialLoading.value &&
+    !loadingMore.value &&
+    !loadMoreError.value &&
+    hasMore.value,
 );
 const virtualized = computed(() => inline && props.virtualize);
 const virtualRange = computed(() =>
@@ -410,6 +417,24 @@ watch(
     else if (inline) refresh();
   },
 );
+watch(
+  () => [props.contextKey, props.loadPage, props.loadItems] as const,
+  (current, previous) => {
+    const changedContext = current[0] !== previous[0];
+    cancel(true);
+    activeIndex.value = -1;
+    scrollTop.value = 0;
+    if (list.value) list.value.scrollTop = 0;
+    if (changedContext) {
+      selectionNames.value = {};
+      query.value = "";
+      emit("update:modelValue", props.multiple ? [] : null);
+    }
+    if ((inline || open.value) && !props.disabled) refresh();
+    else cancel();
+  },
+  { flush: "sync" },
+);
 </script>
 
 <template>
@@ -604,9 +629,14 @@ watch(
             >
             <span v-else-if="selectedOption" class="async-picker__selection"
               ><strong>{{ selectedOption.title }}</strong
-              ><small v-if="selectedOption.description">{{
-                selectedOption.description
-              }}</small></span
+              ><small
+                v-if="selectedOption.description || selectedOption.meta"
+                >{{
+                  [selectedOption.description, selectedOption.meta]
+                    .filter(Boolean)
+                    .join(" · ")
+                }}</small
+              ></span
             ><span v-else class="async-picker__placeholder">{{
               placeholder ?? triggerLabel
             }}</span

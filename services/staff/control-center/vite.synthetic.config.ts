@@ -7,6 +7,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        uiProof: fileURLToPath(
+          new URL("./e2e/fixtures/ui-proof.html", import.meta.url),
+        ),
         sttActivation: fileURLToPath(
           new URL("./e2e/fixtures/stt-activation.html", import.meta.url),
         ),

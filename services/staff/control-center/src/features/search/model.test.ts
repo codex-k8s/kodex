@@ -52,3 +52,45 @@ describe("global search model", () => {
     );
   });
 });
+
+describe("границы и завершение глобального поиска", () => {
+  afterEach(() => vi.useRealTimers());
+  it("Enter немедленно выполняет trim и снимает отложенный запрос", () => {
+    vi.useFakeTimers();
+    const search = vi.fn();
+    const coordinator = new SearchCoordinator();
+    coordinator.schedule(" first ", search);
+    coordinator.flush(" second ", search);
+    expect(search).toHaveBeenCalledExactlyOnceWith("second");
+    vi.advanceTimersByTime(1000);
+    expect(search).toHaveBeenCalledOnce();
+  });
+  it("очистка, короткий ввод и unmount отменяют ожидающий debounce", () => {
+    vi.useFakeTimers();
+    const search = vi.fn();
+    const coordinator = new SearchCoordinator();
+    for (const value of ["", " ", " x "]) {
+      coordinator.schedule("previous", search);
+      coordinator.schedule(value, search);
+      vi.advanceTimersByTime(1000);
+    }
+    coordinator.schedule("last", search);
+    coordinator.cancel();
+    vi.advanceTimersByTime(1000);
+    expect(search).not.toHaveBeenCalled();
+  });
+  it.each([
+    { kind: "SEARCH_RESULT_KIND_AGENT" },
+    { kind: "FUTURE_KIND" },
+    { projectRef: "" },
+    { projectRef: undefined },
+    { ref: "" },
+  ])("блокирует несовместимый ответ %j до навигации", (invalid) => {
+    expect(() =>
+      canonicalSearchRoute({
+        ...result("AGENT", "agt_employee01"),
+        ...invalid,
+      } as SearchResult),
+    ).toThrow("INVALID_SEARCH_RESULT");
+  });
+});
