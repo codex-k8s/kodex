@@ -1,3 +1,4 @@
+import { readonlyFormVariants } from "./ui-readonly-variant-ids";
 import { createHash } from "node:crypto";
 import { chmod, mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -232,4 +233,16 @@ test("integration shape сохраняет только наличие и тип
       integrationPageShape({ items: [], nextPageToken: "secret-sentinel" }),
     ),
   ).not.toContain("secret-sentinel");
+});
+
+test("forms профиль имеет24 закрытых IDs и не разрешает create при выборе", () => {
+  expect(readonlyFormVariants).toHaveLength(24);
+  expect(new Set(readonlyFormVariants).size).toBe(24);
+  expect(selectedVariants(readonlyFormVariants.join(","), "0")?.size).toBe(24);
+  expect(() => selectedVariants(readonlyFormVariants[0], "1")).toThrow(
+    "selection",
+  );
+  expect(() =>
+    selectedVariants("configuration-create-editor-untrusted-ru-1440", "0"),
+  ).toThrow("selection");
 });

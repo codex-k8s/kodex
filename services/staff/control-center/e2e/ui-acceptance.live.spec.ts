@@ -28,6 +28,13 @@ import {
   type Reason,
 } from "./ui-acceptance-proof";
 
+import {
+  projectForm,
+  projectCollection,
+  configurationCreate,
+  assistantDraft,
+  ReadonlyFixtureMissing,
+} from "./ui-readonly-forms";
 class MissingFixture extends Error {}
 
 const environment = loadE2ESessionRenewalEnvironment();
@@ -257,7 +264,8 @@ test("широкая UI-приёмка сохраняет независимые
       return true;
     } catch (error) {
       if (
-        error instanceof MissingFixture &&
+        (error instanceof MissingFixture ||
+          error instanceof ReadonlyFixtureMissing) &&
         counters.httpErrors === before.httpErrors &&
         counters.pageErrors === before.pageErrors &&
         counters.consoleErrors === before.consoleErrors &&
@@ -425,6 +433,46 @@ test("широкая UI-приёмка сохраняет независимые
             ["MVP-UI-01", "MVP-UI-03", ...ids],
             () => visit(page, path),
           );
+      }
+      for (const formWidth of [1440, 390]) {
+        width = formWidth;
+        await page.setViewportSize({
+          width,
+          height: width === 390 ? 844 : 900,
+        });
+        // Новые действия opt-in через точные IDs; старый широкий BUI не расширяется скрыто.
+        if (selection) {
+          await step(
+            `project-form-cancel-${locale}-${String(width)}`,
+            ["MVP-UI-01", "MVP-UI-10", "MVP-UI-22"],
+            () => projectForm(page, locale, environment.resourcePrefix),
+          );
+          await step(
+            `project-collection-expand-${locale}-${String(width)}`,
+            ["MVP-UI-05", "MVP-UI-10", "MVP-UI-12"],
+            () => projectCollection(page, locale),
+          );
+          for (const kind of [
+            "PROMPT_TEMPLATE",
+            "ROLE_IMAGE",
+            "INTEGRATION_DEFINITION",
+          ] as const) {
+            await step(
+              `configuration-create-editor-${kind.toLowerCase().replaceAll("_", "-")}-${locale}-${String(width)}`,
+              kind === "ROLE_IMAGE"
+                ? ["CFG-01", "CFG-03"]
+                : kind === "INTEGRATION_DEFINITION"
+                  ? ["CFG-02", "CFG-03"]
+                  : ["MVP-UI-15", "MVP-UI-30"],
+              () => configurationCreate(page, kind, locale),
+            );
+          }
+          await step(
+            `assistant-history-draft-${locale}-${String(width)}`,
+            ["MVP-UI-09", "MVP-UI-14"],
+            () => assistantDraft(page, locale, environment.resourcePrefix),
+          );
+        }
       }
       for (const nextWidth of widths) {
         width = nextWidth;
