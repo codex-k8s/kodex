@@ -92,7 +92,7 @@ func (controller *Controller) Check(ctx context.Context) error {
 	if err != nil {
 		return errors.New("read image admission policy")
 	}
-	if _, err := validatePolicy(policy); err != nil {
+	if _, err := validatePolicy(policy, controller.config.PolicyConfigMap); err != nil {
 		return err
 	}
 	if _, err := controller.client.BatchV1().Jobs(controller.config.Namespace).List(ctx, metav1.ListOptions{LabelSelector: orchestratedSelector(), Limit: 1}); err != nil {
@@ -109,7 +109,7 @@ func (controller *Controller) Reconcile(ctx context.Context) error {
 	if err != nil {
 		return errors.New("read image admission owner policy")
 	}
-	revision, err := validatePolicy(policy)
+	revision, err := validatePolicy(policy, controller.config.PolicyConfigMap)
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func (controller *Controller) reconcileAdmissions(ctx context.Context, policy *c
 			}
 		}
 	}
-	if active || len(workspaces) != 0 || now.Sub(controller.lastAdmissionAttempt) < controller.config.RetryInterval {
+	if active || len(workspaces) != 0 || controller.config.PauseNewRuns || now.Sub(controller.lastAdmissionAttempt) < controller.config.RetryInterval {
 		return nil
 	}
 	runID := makeRunID(now, revision)
@@ -231,7 +231,7 @@ func (controller *Controller) reconcilePromotions(ctx context.Context, policy *c
 			return nil
 		}
 	}
-	if now.Sub(controller.lastPromotionAttempt) < controller.config.RetryInterval {
+	if controller.config.PauseNewRuns || now.Sub(controller.lastPromotionAttempt) < controller.config.RetryInterval {
 		return nil
 	}
 	if err := controller.ensurePhase(ctx, policy, makeRunID(now, revision), "promote"); err != nil {
@@ -438,10 +438,13 @@ func validManagedJob(job *batchv1.Job, namespace, phase string) bool {
 	return true
 }
 
-func validatePolicy(policy *corev1.ConfigMap) (string, error) {
-	if policy == nil || policy.Name != policyName || policy.Namespace != "kodex-system" || policy.Immutable == nil || !*policy.Immutable ||
+func validatePolicy(policy *corev1.ConfigMap, expectedName string) (string, error) {
+	if policy == nil || policy.Name != expectedName || !validPolicyName(policy.Name) || policy.Namespace != "kodex-system" || policy.Immutable == nil || !*policy.Immutable ||
 		policy.Labels["kodex.dev/owner-intent"] != "true" {
 		return "", errors.New("image admission owner policy is invalid")
+	}
+	if policy.Name != policyName && !versionedPolicyMatches(policy) {
+		return "", errors.New("image admission policy digest is invalid")
 	}
 	revision := policy.Data["orchestrationRevision"]
 	if !revisionPattern.MatchString(revision) || strings.Trim(revision, "0") == "" {

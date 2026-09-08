@@ -7,19 +7,23 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --source-root <path> --state-directory <path>\n' "$0" >&2
+  printf 'Usage: %s --source-root <path> --state-directory <path> [--component all|image-admission]\n' "$0" >&2
 }
 
 source_root=""
 state_directory=""
+component=all
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
+    --component) component=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+[[ "$component" == all || "$component" == image-admission ]] || fail 'component is invalid'
 
 [[ "$source_root" == /* && -f "$source_root/tools/dev/Dockerfile.local-image-supply-chain" &&
   -f "$source_root/services/jobs/role-image-builder/Dockerfile" &&
@@ -91,6 +95,15 @@ build_target() {
   printf '%s\n' "$exact_reference" >"$state_directory/$name-image"
   chmod 0600 "$state_directory/$name-image"
 }
+
+# Совместимый reader обновляется отдельно от signer/registry и других runtime images.
+if [[ "$component" == image-admission ]]; then
+  build_target image-admission tools/dev/Dockerfile.local-image-supply-chain \
+    image-admission registry.local.kodex/kodex/image-admission \
+    --build-arg "SOURCE_SHA=$source_revision"
+  printf 'Kodex local image admission image is ready for source %s\n' "$source_revision"
+  exit 0
+fi
 
 build_target image-admission-tools tools/dev/Dockerfile.local-image-supply-chain \
   admission-tools registry.local.kodex/kodex/image-admission-tools \
