@@ -167,7 +167,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     showLoading = true,
   ): Promise<void> {
     const current = ++detailGeneration;
-    if (showLoading) loadingDetail.value = true;
+    loadingDetail.value = showLoading;
     problem.value = undefined;
     try {
       const detail = await loadRoleImageDetail(projectRef, recipeRef);
@@ -216,6 +216,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   ): Promise<void> {
     const pageToken = revisionNextPageToken[recipeRef];
     if (!pageToken || loadingDetail.value) return;
+    const current = ++detailGeneration;
     loadingDetail.value = true;
     problem.value = undefined;
     try {
@@ -224,6 +225,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         recipeRef,
         pageToken,
       );
+      if (current !== detailGeneration) return;
       const merged = new Map(
         (revisions[recipeRef] ?? []).map((item) => [item.ref, item]),
       );
@@ -231,9 +233,12 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       revisions[recipeRef] = [...merged.values()];
       revisionNextPageToken[recipeRef] = page.nextPageToken;
     } catch (error) {
-      problem.value = asProblem(error);
+      if (current === detailGeneration) {
+        clearDetail(recipeRef);
+        problem.value = asProblem(error);
+      }
     } finally {
-      loadingDetail.value = false;
+      if (current === detailGeneration) loadingDetail.value = false;
     }
   }
 
@@ -357,6 +362,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     supportingGeneration += 1;
     catalogGeneration += 1;
     detailGeneration += 1;
+    loadingDetail.value = false;
   }
 
   return {
