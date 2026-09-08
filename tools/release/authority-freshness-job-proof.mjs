@@ -8,7 +8,7 @@ import {policyDigest} from './runner-policy-model.mjs';
 const namespace='kodex-system';
 const requireValue=(value,code)=>{if(!value)throw new Error(code);};
 export function validateFutureJobProof(proof,job,policy,capability,namespaceUID) {
- requireValue(proof?.version===1&&proof.namespaceUID===namespaceUID&&proof.revision===capability.revision&&proof.binarySHA256===capability.binaries.issuer&&
+ requireValue(proof?.version===1&&proof.namespaceUID===namespaceUID&&proof.revision===capability.revision&&proof.binarySHA256===capability.imageBinaries.issuer&&
   proof.job===job.metadata.name&&proof.jobUID===job.metadata.uid&&proof.jobSpecSHA256===fingerprint(job.spec)&&
   proof.policySHA256===policy.data.policySHA256&&job.status?.succeeded===1&&
   ['image-admission','image-promotion'].includes(proof.workload)&&proof.workload===(job.metadata.labels?.['kodex.dev/image-admission-phase']==='promote'?'image-promotion':'image-admission')&&job.metadata.annotations?.['kodex.dev/admission-policy-revision']===policy.data.policyRevision,'EXACT_COMPLETED_FUTURE_JOB_PROOF_REQUIRED');
@@ -40,7 +40,7 @@ function main(args) {
  const capability=JSON.parse(readFileSync(options['--capability'],'utf8'));
  const script='count=0; result=; for entry in /proc/[0-9]*/exe; do target=$(readlink "$entry" 2>/dev/null) || continue; if [ "$target" = /usr/local/bin/internal-rpc-authority-issuer ]; then count=$((count+1)); result=$(sha256sum "$entry") || exit 1; fi; done; [ "$count" = 1 ] || exit 1; printf "%s\\n" "$result"';
  const binarySHA256=kube('exec',pod.metadata.name,'-n',namespace,'-c',issuer.name,'--','sh','-c',script).split(/\s/)[0];
- requireValue(binarySHA256===capability.binaries?.issuer,'JOB_ISSUER_BINARY_MISMATCH');
+ requireValue(binarySHA256===capability.imageBinaries?.issuer,'JOB_ISSUER_BINARY_MISMATCH');
  const after=get('pod',pod.metadata.name,'-n',namespace),afterState=after.status.initContainerStatuses?.find(c=>c.name===issuer.name);
  requireValue(after.metadata.uid===pod.metadata.uid&&afterState?.containerID===state.containerID&&afterState.imageID===state.imageID&&fingerprint(after.spec)===fingerprint(pod.spec),'JOB_CHANGED_DURING_PROOF');
  const proof={version:1,namespaceUID:ns.metadata.uid,revision:capability.revision,workload:phase==='promote'?'image-promotion':'image-admission',policySHA256:policy.data.policySHA256,

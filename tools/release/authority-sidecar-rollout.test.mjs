@@ -45,7 +45,7 @@ test('public CLI recovers lost PATCH ACK once; post-activation rollback and CAS 
   const source=join(dir,'source'),bin=join(dir,'bin');mkdirSync(source,{mode:0o755});mkdirSync(bin);
   const git=(...args)=>execFileSync('git',['-C',source,...args],{stdio:'pipe'}).toString().trim();
   git('init','-q');git('remote','add','origin','https://github.com/codex-k8s/kodex.git');writeFileSync(join(source,'fixture'),'synthetic\n',{mode:0o644});git('add','fixture');git('-c','user.name=kodex-agent','-c','user.email=238524843+kodex-agent@users.noreply.github.com','commit','-qm','Оснастка локального CLI');
-  const capability={version:1,protocol:2,revision:git('rev-parse','HEAD'),binaries:{issuer:'b'.repeat(64),verifier:'c'.repeat(64)}};
+  const capability={version:1,protocol:2,revision:git('rev-parse','HEAD'),binaries:{issuer:'b'.repeat(64),verifier:'c'.repeat(64)},imageBinaries:{issuer:'d'.repeat(64),verifier:'e'.repeat(64)},imageVersion:git('rev-parse','HEAD')};
   const capFile=join(dir,'cap.json'),manifest=join(dir,'manifest.json'),planFile=join(dir,'plan.json'),stateFile=join(dir,'state.json');writeFileSync(capFile,JSON.stringify(capability));
   const d=deployment();d.spec.template.spec.initContainers[0].command=['/usr/local/bin/internal-rpc-authority-issuer'];d.spec.template.spec.initContainers[0].args=[];
   const w=watch();w.spec.template.spec.volumes[0].hostPath.path=source;

@@ -113,6 +113,11 @@ node tools/release/authority-freshness-transition.mjs observe \
   --context "$CONTEXT" --k3s-sudo --plan "$PRIVATE/up-plan.json"
 ```
 
+Для immutable authority image сборка использует `--build-arg VERSION="$SHA"`.
+Capability отдельно собирает hot-reload recipe и Dockerfile recipe с
+`-ldflags="-s -w -X main.version=${revision}"`; `binaries` и `imageBinaries`
+не взаимозаменяемы. Actual image hash проверяется только против второго набора.
+
 Новый Job клонирует проверенный completed `internal-rpc-authority-migrate`,
 сохраняет ServiceAccount, TLS/Secret mounts и securityContext. Меняются только
 source и CLI action; backoff0, deadline300s, прежний Job не удаляется. Имя

@@ -74,7 +74,7 @@ async function main(args) {
   const manifest=JSON.parse(readFileSync(options['--manifest'],'utf8'));requireValue(manifest.version===1&&manifest.targets?.length>0&&manifest.targets.length<=2&&new Set(manifest.targets.map(t=>t.name)).size===manifest.targets.length,'BOUNDED_SIDECAR_MANIFEST_REQUIRED');
   const targets=manifest.targets.map(target=>planSidecars(get('deployment',target.name),target));
   const capability=JSON.parse(readFileSync(manifest.capability,'utf8'));
-  requireValue(capability.version===1&&capability.protocol===2&&/^[a-f0-9]{40}$/.test(capability.revision)&&['issuer','verifier'].every(role=>/^[a-f0-9]{64}$/.test(capability.binaries?.[role])),'EXACT_FRESHNESS_CAPABILITY_REQUIRED');
+  requireValue(capability.version===1&&capability.protocol===2&&/^[a-f0-9]{40}$/.test(capability.revision)&&['issuer','verifier'].every(role=>/^[a-f0-9]{64}$/.test(capability.binaries?.[role])&&/^[a-f0-9]{64}$/.test(capability.imageBinaries?.[role]))&&capability.imageVersion===capability.revision,'EXACT_FRESHNESS_CAPABILITY_REQUIRED');
   for(const target of manifest.targets)if(target.profile==='source')requireValue(target.source.revision===capability.revision,'SOURCE_CAPABILITY_MISMATCH');
   const plan={version:1,capability,intent:randomUUID(),context:options['--context'],namespaceUID:ns.metadata.uid,targets};
   writeFileSync(options['--output'],JSON.stringify(plan,null,2)+'\n',{flag:'wx',mode:0o600});process.stdout.write(`Authority sidecar plan: ${fingerprint(plan)}\n`);return;
@@ -92,7 +92,7 @@ async function main(args) {
         const c=[...(pod.spec.containers??[]),...(pod.spec.initContainers??[])].find(c=>c.name===`internal-rpc-authority-${role}`);
         const path=c.command?.includes('/workspace/tools/dev/run-go-hot-reload.sh')?`/tmp/kodex-dev-${c.args[2]}/build/main`:`/usr/local/bin/internal-rpc-authority-${role}`;
         const script='expected=$1; count=0; result=; for entry in /proc/[0-9]*/exe; do target=$(readlink "$entry" 2>/dev/null) || continue; if [ "$target" = "$expected" ] || [ "$target" = "$expected (deleted)" ]; then count=$((count+1)); result=$(sha256sum "$entry") || exit 1; fi; done; [ "$count" = 1 ] || exit 1; printf "%s\\n" "$result"';
-        requireValue(kube('exec',pod.metadata.name,'-n',namespace,'-c',c.name,'--','sh','-c',script,'authority-sidecar',path).split(/\s/)[0]===plan.capability.binaries[role],'AUTHORITY_BINARY_READBACK_MISMATCH');
+        requireValue(kube('exec',pod.metadata.name,'-n',namespace,'-c',c.name,'--','sh','-c',script,'authority-sidecar',path).split(/\s/)[0]===(target.rollback.profile==='image'?plan.capability.imageBinaries:plan.capability.binaries)[role],'AUTHORITY_BINARY_READBACK_MISMATCH');
       }
       const afterResources=JSON.parse(kube('get','deployments,replicasets,pods','-n',namespace,'-o','json')).items;
       const afterDeployment=afterResources.find(item=>item.kind==='Deployment'&&item.metadata.uid===target.uid);

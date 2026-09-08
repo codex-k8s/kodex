@@ -71,7 +71,7 @@ export function authorityConsumers(resources) {
         requireValue(pod.status.phase==='Running' && status?.ready===true && status.state?.running && /^containerd:\/\/[a-f0-9]{64}$/.test(status.containerID??'') && /@sha256:[a-f0-9]{64}$/.test(status.imageID??'') && fingerprint(actual)===fingerprint(container), 'AUTHORITY_CONSUMER_NOT_STABLE');
         const process=hot?`/tmp/kodex-dev-${container.args[2]}/build/main`:`/usr/local/bin/internal-rpc-authority-${role}`;
         requireValue(/^\/(tmp\/kodex-dev-[a-z0-9-]+\/build\/main|usr\/local\/bin\/internal-rpc-authority-(issuer|verifier))$/.test(process),'UNKNOWN_AUTHORITY_PROCESS');
-        result.push({role,workload:workload.metadata.name,workloadUID:workload.metadata.uid,specSHA256:fingerprint(workload.spec),pod:pod.metadata.name,podUID:pod.metadata.uid,
+        result.push({role,profile:hot?'source':'image',workload:workload.metadata.name,workloadUID:workload.metadata.uid,specSHA256:fingerprint(workload.spec),pod:pod.metadata.name,podUID:pod.metadata.uid,
           container:container.name,containerID:status.containerID,imageID:status.imageID,process});
       }
     }
@@ -117,12 +117,12 @@ async function main(args) {
       requireValue(inventory.some(item=>item.kind==='Deployment'&&item.metadata.name===name),'REQUIRED_AUTHORITY_DEPLOYMENT_MISSING');
     const actual=authorityConsumers(inventory);
     const capability=command==='plan'?JSON.parse(readFileSync(options['--capability'],'utf8')):plan.capability;
-    requireValue(capability?.version===1&&capability.protocol===2&&capability.revision===plan.revision&&sha.test(capability.binaries?.issuer)&&sha.test(capability.binaries?.verifier)&&capability.go==='go1.26.6'&&
+    requireValue(capability?.version===1&&capability.protocol===2&&capability.revision===plan.revision&&sha.test(capability.binaries?.issuer)&&sha.test(capability.binaries?.verifier)&&['issuer','verifier'].every(role=>sha.test(capability.imageBinaries?.[role]))&&capability.imageVersion===plan.revision&&capability.go==='go1.26.6'&&
       capability.recipe==='CGO_ENABLED=0 GOWORK=off GOOS=linux GOARCH=amd64 GOAMD64=v1 go build -trimpath -buildvcs=false ./cmd/internal-rpc-authority-{issuer,verifier}','EXACT_AUTHORITY_CAPABILITY_REQUIRED');
     const verifyExecutables=()=>{for(const consumer of actual) {
       const script='expected=$1; count=0; result=; for entry in /proc/[0-9]*/exe; do target=$(readlink "$entry" 2>/dev/null) || continue; if [ "$target" = "$expected" ] || [ "$target" = "$expected (deleted)" ]; then count=$((count+1)); result=$(sha256sum "$entry") || exit 1; fi; done; [ "$count" = 1 ] || exit 1; printf "%s\\n" "$result"';
       const output=kube('-n',namespace,'exec',consumer.pod,'-c',consumer.container,'--','sh','-c',script,'authority-freshness',consumer.process);
-      requireValue(output.split(/\s/)[0]===capability.binaries[consumer.role],'AUTHORITY_EXECUTABLE_INCOMPATIBLE');
+      requireValue(output.split(/\s/)[0]===(consumer.profile==='image'?capability.imageBinaries:capability.binaries)[consumer.role],'AUTHORITY_EXECUTABLE_INCOMPATIBLE');
     }};
     verifyExecutables();
     requireValue(fingerprint(actual)===fingerprint(authorityConsumers(get('deployments,statefulsets,daemonsets,replicasets,pods','-n',namespace).items)),'AUTHORITY_CONSUMER_CHANGED');
