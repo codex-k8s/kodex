@@ -4,13 +4,13 @@ title: Точечная приёмка наполненных интерфейс
 status: approved
 type: operations
 owner: manager
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-08
 ---
 
 # Точечная приёмка наполненных интерфейсов
 
-Refs #1341, #1260, #1031. Профиль дополняет OPS-DOC-1260: отдельный PASS
+Refs #1341, #1347, #1260, #1031. Профиль дополняет OPS-DOC-1260: отдельный PASS
 означает только измеренный вариант. Все обязательные ветки 64 строк сохраняются.
 Live требует отдельного GO и свежей исключительной API session от оператора.
 Текущий прототип остаётся в hot-reload профиле; оснастка не требует пересборки
@@ -120,10 +120,19 @@ npx playwright test --config e2e/ui-acceptance.config.ts --list
 и уже разрешённого exact effective-access/query POST. Body guards сохраняются;
 ни ticket, ни refresh, ни разрешения сервера не меняются. Внутри памяти
 сопоставляются уникальный request identity, метод/адрес, native START,
-AbortSignal AbortError и rejected promise либо точный navigation intent,
-созданный раньше failure для уже начатого pending request. Код отмены сам по
-себе ничего не разрешает. Late abort, timeout, duplicate identity, method
-mismatch и socket reset остаются unexplained failure. Лимит 4096 events/requests;
+AbortSignal AbortError и rejected promise. Альтернативный navigation path
+отдельно связывает точный Playwright Request с известным документом main frame,
+снимком pending requests до goto/reload и новым документом, подтверждённым
+init-script marker и успешным результатом навигации. Шрифты и fetch вне API
+не получают искусственных headers/signals: используется их Request identity.
+Код отмены сам по себе ничего не разрешает. Late abort, timeout, duplicate identity, method
+mismatch и socket reset остаются unexplained failure. Неуспешный/same-document
+переход, чужой frame, запрос нового документа, завершённый старый запрос,
+запоздалое событие за окном операции или overlapping navigation не подтверждают
+отмену. Закрытие страницы имеет отдельный intent и фактически завершённый close.
+Текущий Playwright при page.close может не выдать requestfailed для pending
+resources; оснастка не создаёт такие события и не объявляет их подтверждёнными.
+Лимит 4096 events/requests и 512 документов/навигаций;
 overflow закрывает PASS. Console CORS и HTTP ошибки не исключаются.
 
 Каждый variant record содержит browser, fixtureManifestSHA256, versions,
@@ -131,6 +140,9 @@ requirement IDs, timestamp UTC и закрытые численные/boolean as
 Журнал сохраняет rawFailedRequests отдельно от confirmedCancellations.
 Отдельная bounded запись read-network содержит closed route/method/resourceType,
 request sequence, stage, error enum/hash и признаки native identity/signal/navigation.
+Document coverage, intent, commit, ambiguity и окно failure записываются раздельно.
+`navigationIntentObserved=false` старого94cd не доказывает отсутствия навигации
+для font/non-API Request; прошлые live FAIL остаются неизменными (#1347).
 Ни один сырой адрес, query, header или текст ошибки в эту запись не попадает.
 `ui-evidence-ledger.ts` строит проекцию по browser + requirement + variant +
 fixture digest: поздний Chromium PASS не стирает Firefox/WebKit FAIL.

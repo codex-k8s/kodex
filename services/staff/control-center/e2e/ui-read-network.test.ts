@@ -61,28 +61,14 @@ it("does not accept timeout, late abort, duplicate identity, method mismatch or 
     expect(c.confirmed(r), variant).toBe(false);
   }
 });
-it("navigation snapshots exact pending identities including late request event, never prior failure or future request", () => {
+it("navigation intent without a committed document never proves API cancellation", () => {
   const c = new ReadNetworkCorrelator<object>(),
     r = {};
   c.observe(event("start", 10));
-  c.navigation(20);
   c.request(r, address, "GET", id);
-  c.failed(r, "NS_BINDING_ABORTED", 21);
-  expect(c.confirmed(r)).toBe(true);
-  const before = new ReadNetworkCorrelator<object>(),
-    b = {};
-  before.observe(event("start", 10));
-  before.request(b, address, "GET", id);
-  before.failed(b, "cancelled", 19);
-  before.navigation(20);
-  expect(before.confirmed(b)).toBe(false);
-  const future = new ReadNetworkCorrelator<object>(),
-    f = {};
-  future.navigation(20);
-  future.observe(event("start", 21));
-  future.request(f, address, "GET", id);
-  future.failed(f, "cancelled", 22);
-  expect(future.confirmed(f)).toBe(false);
+  c.navigation("GOTO", 20);
+  c.failed(r, "cancelled", 21);
+  expect(c.confirmed(r)).toBe(false);
 });
 it("bounded overflow closes cancellation acceptance", () => {
   const c = new ReadNetworkCorrelator<object>();

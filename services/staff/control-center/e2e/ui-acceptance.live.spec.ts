@@ -986,7 +986,6 @@ test("широкая UI-приёмка сохраняет независимые
   } finally {
     // Закрываем страницы до reporter/error-context; персональные данные не снимаются.
     network.setStage("COMPLETE");
-    network.navigation();
     const closed = await page.close().then(
       () => true,
       () => false,
