@@ -1,9 +1,40 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, constants, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync } from "node:fs";
+import { dirname } from "node:path";
 
 const frontendDirectory = "services/staff/control-center";
 const frontendMountpoints = ["node_modules", "public/config"];
+
+// Только синхронная подготовка новых публичных исходников. Маска приватных
+// журналов вызывающего процесса восстанавливается и при ошибке.
+function withSourceMask(operation) {
+  const previous = process.umask(0o022);
+  try { return operation(); }
+  finally { process.umask(previous); }
+}
+
+function requireRuntimeAccess(root, entries, frontend) {
+  const directories = new Set();
+  const checkDirectory = (relative) => {
+    if (directories.has(relative)) return;
+    const stat = lstatSync(`${root}${relative ? `/${relative}` : ""}`);
+    requireValue(stat.isDirectory() && (stat.mode & 0o005) === 0o005, "SOURCE_RUNTIME_ACCESS_REQUIRED");
+    directories.add(relative);
+  };
+  checkDirectory("");
+  for (const entry of entries.split("\0").filter(Boolean)) {
+    const match = /^(100644|100755) [a-f0-9]{40} 0\t(.+)$/.exec(entry);
+    requireValue(match, "SOURCE_TRACKED_ENTRY_UNSUPPORTED");
+    const relative = match[2], parts = relative.split("/");
+    requireValue(parts.every((part) => part && part !== "." && part !== ".."), "SOURCE_TRACKED_ENTRY_UNSUPPORTED");
+    if (frontend && !relative.startsWith(`${frontendDirectory}/`)) continue;
+    for (let index = 1; index < parts.length; index++) checkDirectory(parts.slice(0, index).join("/"));
+    const stat = lstatSync(`${root}/${relative}`);
+    const required = match[1] === "100755" ? 0o005 : 0o004;
+    requireValue(stat.isFile() && (stat.mode & required) === required, "SOURCE_RUNTIME_ACCESS_REQUIRED");
+  }
+}
 
 // Dev host работает на Linux. Дескрипторы не дают подменить родителя symlink
 // между проверкой checkout и созданием пустого вложенного mountpoint.
@@ -48,7 +79,7 @@ export function validSource(value) {
 export function inspectSource(path, frontend = false) {
   requireValue(realpathSync(path) === path && lstatSync(path).isDirectory(), "SOURCE_ROOT_INVALID");
   const git = (...args) => execFileSync("git", ["-C", path, ...args], {
-    encoding: "utf8", timeout: 10000, maxBuffer: 1 << 20, stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf8", timeout: 10000, maxBuffer: 8 << 20, stdio: ["ignore", "pipe", "pipe"],
   }).trim();
   requireValue(git("rev-parse", "--show-toplevel") === path &&
     ["https://github.com/codex-k8s/kodex.git", "git@github.com:codex-k8s/kodex.git"].includes(git("remote", "get-url", "origin")) &&
@@ -57,6 +88,7 @@ export function inspectSource(path, frontend = false) {
   "SOURCE_CHECKOUT_NOT_EXACT");
   const revision = git("rev-parse", "HEAD");
   requireValue(/^[a-f0-9]{40}$/.test(revision), "SOURCE_REVISION_INVALID");
+  requireRuntimeAccess(path, git("ls-files", "--stage", "-z"), frontend);
   const result = { revision };
   if (frontend) {
     sourceDirectory(path, frontendDirectory, () => {});
@@ -86,7 +118,7 @@ export function prepareApplicationSource(source) {
     const parts = repositoryRelative.split("/");
     const name = parts.pop();
     sourceDirectory(source.path, parts.join("/"), (descriptor) => {
-      try { mkdirSync(`/proc/self/fd/${descriptor}/${name}`, { mode: 0o755 }); created.push(relative); }
+      try { withSourceMask(() => mkdirSync(`/proc/self/fd/${descriptor}/${name}`, { mode: 0o755 })); created.push(relative); }
       catch (error) { if (error.code !== "EEXIST") throw error; }
       requireValue(mountpointExists(source.path, relative), "SOURCE_MOUNTPOINT_INVALID");
     });
@@ -95,6 +127,21 @@ export function prepareApplicationSource(source) {
   requireValue(after.revision === source.revision && after.mountpointsReady &&
     after.dependenciesSHA256 === before.dependenciesSHA256, "SOURCE_CHANGED_DURING_PREPARATION");
   return { revision: after.revision, created, mountpointsReady: true };
+}
+
+export function createApplicationSource(repository, source) {
+  requireValue(validSource(source) && typeof repository === "string", "INVALID_APPLICATION_SOURCE");
+  inspectSource(repository);
+  requireValue(realpathSync(dirname(source.path)) === dirname(source.path), "SOURCE_PARENT_INVALID");
+  try { lstatSync(source.path); throw new Error("SOURCE_DESTINATION_EXISTS"); }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
+  // Никаких chmod существующих файлов, копирования ignored data или удаления
+  // частичного результата. Неудачная подготовка никогда не вызывает PATCH.
+  withSourceMask(() => execFileSync("git", ["-C", repository, "worktree", "add", "--detach", source.path, source.revision], {
+    encoding: "utf8", timeout: 120000, maxBuffer: 1 << 20, stdio: ["ignore", "pipe", "pipe"],
+  }));
+  requireValue(inspectSource(source.path).revision === source.revision, "SOURCE_REVISION_MISMATCH");
+  return { ...prepareApplicationSource(source), sourceCreated: true };
 }
 
 export function planSourceChange(deployment, afterSpec, containerIndex, source, inspect = inspectSource) {

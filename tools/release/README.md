@@ -44,6 +44,32 @@ Go-приложение получает отдельный read-only `dev-appli
 проверенными дескрипторами Linux dev host. Существующие файлы и каталоги не
 перезаписываются; symlink, чужая revision и изменения tracked files запрещены.
 
+Создавайте новый source штатной командой, а не копированием рабочей среды:
+
+```bash
+node tools/release/create-application-source.mjs \
+  --repository /srv/kodex-dev/workspace-current \
+  --source /srv/kodex-dev/workspace-new --revision <40-hex-commit> \
+  --confirm CREATE-STAGING-SOURCE
+```
+
+Команда создаёт только отсутствующий Git worktree на точной revision, с маской
+022 для новых исходников и mountpoints. Исходная маска приватных журналов
+восстанавливается при успехе и ошибке. Ignored files, env и credentials из
+исходной рабочей копии не копируются; существующие файлы не получают chmod.
+Если подготовка не завершилась, каталог остаётся для диагностики, а не
+удаляется автоматически. Повтор в тот же каталог закрыто отклоняется.
+
+Для этого Linux source-профиля tracked regular files должны быть читаемы,
+tracked executables исполняемы, а каталоги читаемы и проходимы независимо от
+UID/GID контейнера: проверяются соответствующие POSIX other-биты. Нечитаемая
+рабочая копия, symlink или нестандартный tracked entry отвергаются до PATCH с
+безопасным кодом ошибки. Проверка не использует привилегированную способность
+оператора прочитать файл как доказательство runtime-доступа. Иные ACL, LSM или
+нестандартные файловые системы требуют отдельной проверки профиля; права
+исходников не заменяют live startup/readiness. Приватный каталог нельзя
+исправлять массовым chmod: подготовьте новый чистый source.
+
 ```bash
 node tools/release/prepare-application-source.mjs \
   --source /srv/kodex-dev/workspace-new --revision <40-hex-commit> \
@@ -54,6 +80,11 @@ node tools/release/prepare-application-source.mjs \
 `public/config` до PATCH. Неизвестный вложенный mount отклоняется до релиза,
 а не обнаруживается после остановки контейнера. Read-only source и кэш
 зависимостей остаются read-only.
+
+HTTP-монитор `tools/dev/release-http-acceptance.mjs` запрашивает HTML-корень с
+`Accept: text/html`, а JSON API с `Accept: application/json`. Cookie authority,
+refresh и запись каждого реального отказа одинаковы; non-200 не превращается
+в успешный результат ради прохождения проверки. Связанные дефекты: #1229, #1233.
 
 ```bash
 node tools/release/scoped-release.mjs plan \

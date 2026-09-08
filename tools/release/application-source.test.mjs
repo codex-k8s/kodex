@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { inspectSource, planSourceChange, prepareApplicationSource, validSource } from "./application-source.mjs";
+import { createApplicationSource, inspectSource, planSourceChange, prepareApplicationSource, validSource } from "./application-source.mjs";
 
 const oldRoot = "/srv/kodex-dev/old";
 const newRoot = "/srv/kodex-dev/new";
@@ -76,12 +76,13 @@ test("frontend changes only source directory and requires prepared unchanged dep
 
 function checkout() {
   const path = mkdtempSync(join(tmpdir(), "kodex-source-"));
+  chmodSync(path, 0o755);
   const frontend = `${path}/services/staff/control-center`;
   mkdirSync(`${frontend}/public/config`, { recursive: true });
   writeFileSync(`${frontend}/package.json`, "{}\n");
   writeFileSync(`${frontend}/package-lock.json`, "{}\n");
   writeFileSync(`${frontend}/public/config/runtime-config.json`, "{}\n");
-  writeFileSync(`${path}/.gitignore`, "node_modules/\n");
+  writeFileSync(`${path}/.gitignore`, "node_modules/\nprivate-state\n");
   const git = (...args) => execFileSync("git", ["-C", path, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git("init"); git("remote", "add", "origin", "https://github.com/codex-k8s/kodex.git");
   git("add", "."); git("commit", "-m", "fixture");
@@ -123,4 +124,61 @@ test("source preparation never overwrites an existing ignored directory", () => 
     assert.deepEqual(prepareApplicationSource({ path: current.path, revision: current.revision }).created, []);
     assert.equal(readFileSync(`${current.frontend}/node_modules/sentinel`, "utf8"), "unchanged");
   } finally { rmSync(current.path, { recursive: true, force: true }); }
+});
+
+test("runtime access rejects private tracked paths without changing permissions", () => {
+  for (const relative of ["", "/services/staff", "/services/staff/control-center/package-lock.json"]) {
+    const current = checkout();
+    try {
+      const path = current.path + relative;
+      const mode = lstatSync(path).isDirectory() ? 0o700 : 0o600;
+      chmodSync(path, mode);
+      assert.throws(() => inspectSource(current.path, true), /SOURCE_RUNTIME_ACCESS_REQUIRED/);
+      assert.equal(lstatSync(path).mode & 0o777, mode);
+    } finally { rmSync(current.path, { recursive: true, force: true }); }
+  }
+});
+
+test("source creation isolates a private caller mask and never copies ignored data", () => {
+  const current = checkout(), parent = mkdtempSync(join(tmpdir(), "kodex-created-"));
+  const source = { path: `${parent}/source`, revision: current.revision };
+  writeFileSync(`${current.path}/private-state`, "private fixture", { mode: 0o600 });
+  const previous = process.umask(0o077);
+  try {
+    const result = createApplicationSource(current.path, source);
+    assert.equal(result.sourceCreated, true);
+    assert.equal(inspectSource(source.path, true).mountpointsReady, true);
+    assert.equal(lstatSync(source.path).mode & 0o777, 0o755);
+    assert.equal(lstatSync(`${source.path}/services/staff/control-center/package-lock.json`).mode & 0o777, 0o644);
+    assert.equal(lstatSync(`${source.path}/services/staff/control-center/node_modules`).mode & 0o777, 0o755);
+    assert.equal(lstatSync(`${current.path}/private-state`).mode & 0o777, 0o600);
+    assert.equal(readFileSync(`${current.path}/private-state`, "utf8"), "private fixture");
+    assert.equal(existsSync(`${source.path}/private-state`), false);
+    assert.throws(() => createApplicationSource(current.path, source), /SOURCE_DESTINATION_EXISTS/);
+    writeFileSync(`${parent}/private-evidence`, "private fixture");
+    assert.equal(lstatSync(`${parent}/private-evidence`).mode & 0o777, 0o600);
+  } finally {
+    process.umask(previous);
+    current.git("worktree", "remove", "--force", source.path);
+    rmSync(current.path, { recursive: true, force: true });
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("mountpoint creation restores a private mask and preserves executable files", () => {
+  const current = checkout();
+  const runner = `${current.path}/runner.sh`;
+  writeFileSync(runner, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  current.git("add", "runner.sh"); current.git("commit", "-m", "executable fixture");
+  current.revision = current.git("rev-parse", "HEAD");
+  const previous = process.umask(0o077);
+  try {
+    prepareApplicationSource({ path: current.path, revision: current.revision });
+    assert.equal(lstatSync(`${current.frontend}/node_modules`).mode & 0o777, 0o755);
+    assert.equal(lstatSync(runner).mode & 0o777, 0o755);
+    chmodSync(runner, 0o750);
+    assert.throws(() => inspectSource(current.path), /SOURCE_RUNTIME_ACCESS_REQUIRED/);
+    writeFileSync(`${current.path}/private-state`, "private fixture");
+    assert.equal(lstatSync(`${current.path}/private-state`).mode & 0o777, 0o600);
+  } finally { process.umask(previous); rmSync(current.path, { recursive: true, force: true }); }
 });
