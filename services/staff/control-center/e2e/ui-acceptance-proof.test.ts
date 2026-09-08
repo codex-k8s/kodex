@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import {
   applicability,
+  conditionFailure,
+  UIConditionError,
+  selectedVariants,
+  targetedVariants,
   createJournal,
   permittedRequest,
   projectRefs,
@@ -166,4 +170,41 @@ test("journal отклоняет общий и symlink parent до записи"
   await expect(
     createJournal(join(link, "child"), versions, "chromium"),
   ).rejects.toThrow("private");
+});
+
+test("закрытая диагностика сохраняет измерение и не извлекает текст ошибки", () => {
+  const failure = conditionFailure(
+    new UIConditionError("DOCUMENT_OVERFLOW", 560, 1),
+  );
+  expect(failure).toEqual({
+    condition: "DOCUMENT_OVERFLOW",
+    metrics: { measurementAvailable: true, actual: 560, expected: 1 },
+  });
+  const row = safeVariant({ ...variant, status: "FAIL", ...failure });
+  expect(row.condition).toBe("DOCUMENT_OVERFLOW");
+  expect(conditionFailure(new Error("cookie=secret"))).toEqual({
+    condition: "UI_ACTION",
+    metrics: { measurementAvailable: false },
+  });
+  expect(() =>
+    safeVariant({ ...variant, condition: "cookie=secret" as never }),
+  ).toThrow("condition");
+  expect(
+    conditionFailure(new UIConditionError("PAGE_HEADING", undefined, true))
+      .metrics,
+  ).toEqual({ measurementAvailable: false, expected: true });
+});
+test("targeted профиль допускает только восемь read-only variants без fixture writes", () => {
+  expect(selectedVariants(undefined, "1")).toBeUndefined();
+  const selected = selectedVariants(targetedVariants.join(","), "0");
+  expect(selected?.size).toBe(8);
+  expect(selected?.has("fixture-create-project-0")).toBe(false);
+  for (const raw of [
+    "",
+    "fixture-create-project-0",
+    "cookie=secret",
+    "project-picker-keyboard-escape,project-picker-keyboard-escape",
+  ])
+    expect(() => selectedVariants(raw, "0")).toThrow("selection");
+  expect(() => selectedVariants(targetedVariants[0], "1")).toThrow("selection");
 });

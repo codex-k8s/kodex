@@ -4,7 +4,7 @@ title: Карта выполнения полной MVP-приёмки и две
 type: operation-plan
 status: approved
 owner: developer
-version: 1.1.0
+version: 1.1.1
 updated: 2026-09-08
 ---
 
@@ -382,3 +382,40 @@ PASS/FAIL/NOT RUN + UTC + artifact/digest + отдельный bug Issue при 
 кандидате; 64 флажка и обязательные варианты сверяются отдельно от зелёных Pods.
 Release resilience, worker grants, trust rotation/LKG и mixed rollback ведутся
 в #1223 и не закрываются картой браузера.
+
+## Целевой повтор BUI после диагностического отказа (#1300)
+
+`KODEX_E2E_UI_VARIANTS` задаёт непустой список точных IDs через запятую.
+Поддержаны только восемь read-only вариантов:
+`route-integrations-{ru|en}-{1440|390}`,
+`project-picker-keyboard-escape`,
+`assistant-history-shell-{1440|768|390}` (скобки здесь описывают варианты,
+CLI принимает только полностью раскрытые ID). Пример:
+
+```bash
+export KODEX_E2E_UI_CREATE_PROJECTS=0
+export KODEX_E2E_UI_VARIANTS=route-integrations-ru-1440,project-picker-keyboard-escape,assistant-history-shell-390
+npx playwright test --config e2e/ui-acceptance.config.ts
+```
+
+При selection профиль выполняет только выбранные действия и prerequisites:
+initial session/shell, смену ru/en и viewport. Discovery, create и остальные
+действия не вызываются. Неизвестный/повторный/пустой ID и сочетание selection с
+`CREATE_PROJECTS=1` отклоняются до создания журнала и browser действий.
+Обязательны новая отдельно выданная legitimate API-session и новый private
+evidence каталог; это не разрешение повторять прежний UNKNOWN effect.
+
+FAIL сохраняет `condition` из закрытого списка: геометрия, наличие shell/heading,
+маршрут (только boolean совпадения), API readiness, счётчики ошибок, отдельные
+шаги фокуса/открытия/Escape селектора и assistant. `actual`/`expected` содержат
+только число или boolean; `measurementAvailable=false` означает отсутствие
+измерения. Код `DOCUMENT_OVERFLOW` сравнивает actual с максимальным expected,
+`HEADER_HEIGHT` — с нижней исключительной границей; остальные — равенство.
+Неизвестная ошибка получает `UI_ACTION` без извлечения её текста. DOM, URL,
+locator error, cookie, ticket, имена ресурсов и transcript не попадают в журнал.
+
+Assistant ждёт штатного фокуса после загрузки перед Escape. После ошибки
+оснастка закрывает оставшееся окно штатной кнопкой; если очистка не удалась,
+зависимые шаги получают NOT RUN. Ошибка варианта при этом сохраняется.
+Сохранённые старые FAIL не заменяются новым PASS. Полные 64 requirement ID
+по-прежнему не закрываются частичным browser-профилем.
