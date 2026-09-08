@@ -221,3 +221,12 @@ Context7 `/microsoft/playwright/v1.61.0`: проверены Request.headers (lo
 без security headers), requestfailed/failure и порядок network events.
 Предыдущие 267 PASS и Home FAIL остаются привязанными к прежним SHA; новый
 узкий результат публикуется отдельно, без заявления полного browser/live PASS.
+
+Локальный узкий `targeted4` на неизменном
+`06973e98abe21cd46c3ff9c17db75932a83c5d32`: 9/9 PASS — Home900,
+concurrent bootstrap и File wire в Chromium/Firefox/WebKit. JSON SHA256:
+`da92e73b74f06f8d13a0054bd45a57b2dc9a10e0207f2758d7d563df98157c98`.
+Unit negatives/diagnostics: 12/12 PASS; E2E typecheck и scoped ESLint PASS.
+Предыдущий loopback2: 4 PASS/2 FAIL из-за сериализации GET в native cache;
+после явного fixture `no-store` loopback3: 6/6 PASS. Эти промежуточные
+результаты не заменяют неизменный кандидат и сохраняются отдельно.
