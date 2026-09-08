@@ -11,14 +11,12 @@ renderer="$repository_root/tools/dev/render-local.sh"
 hot_reload="$repository_root/tools/dev/run-go-hot-reload.sh"
 go_command="$repository_root/tools/dev/run-go-command.sh"
 
-grep -Fq 'go_module_cache="$cache_root/go-mod-v2"' "$renderer" ||
-  fail 'versioned shared module cache is absent'
-grep -Fq 'go -C "$source_root/$module" mod download' "$renderer" ||
-  fail 'host-side module cache prime is absent'
-grep -Fq 'go install "$air_module@$air_version"' "$renderer" ||
-  fail 'locked Air installation is absent'
-grep -Fq 'chmod -R a-w "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools"' \
-  "$renderer" || fail 'shared Go material is not sealed read-only after host priming'
+grep -Fq 'prime-render-go-cache.py' "$renderer" ||
+  fail 'shared host-side module cache prime is absent'
+grep -Fq 'clean=False, air=True' "$repository_root/tools/dev/prime-render-go-cache.py" ||
+  fail 'local renderer no longer supports dirty source and locked Air'
+timeout 90s python3 -B "$repository_root/scripts/tests/go-cache-prime-test.py" ||
+  fail 'shared Go cache lifecycle regression failed'
 grep -Fq '{"name":"GOMODCACHE","value":"/go/pkg/mod"}' "$renderer" ||
   fail 'workloads do not use the shared module cache'
 grep -Fq '{"name":"dev-go-mod","mountPath":"/go/pkg/mod","readOnly":true}' "$renderer" ||

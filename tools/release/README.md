@@ -56,7 +56,13 @@ infrastructure через этот путь обновлять нельзя.
 Скрипт запускается на доверенном dev host и проверяет оба checkout: точный root,
 origin, commit и чистое дерево без приватного env внутри. Новые Go dependencies
 должны быть заранее подготовлены штатным host prime; иначе новая replica не
-станет Ready, а старая останется доступной.
+сможет воспроизводимо собрать приложение. Для выбранных Go modules применяется
+`python3 tools/dev/prime-go-cache.py plan|prime --profile staging-hot-reload`
+с exact clean source/revision, shared cache root, явными `--module` и отдельным
+private evidence. Полная команда и границы общего lock находятся в
+[runbook](../../docs/runbooks/remote-hot-reload.md#подготовка-go-cache-перед-ограниченной-выкладкой).
+Это не image rebuild и не запуск глобального render/up. Если cache не подготовлен,
+новая replica не станет Ready, а старая останется доступной.
 
 Go-приложение получает отдельный read-only `dev-application-source` mount.
 Существующие mounts issuer/verifier/init остаются на прежнем checkout. Frontend
