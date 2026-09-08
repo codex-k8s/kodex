@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Trash2,
 } from "@lucide/vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 import { useI18n } from "vue-i18n";
 import { ref } from "vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -53,6 +54,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const serverMessage = useServerMessage();
 const expanded = ref(false);
 </script>
 
@@ -185,7 +187,7 @@ const expanded = ref(false);
         >
           <strong>{{ t("integrations.lastTest") }}</strong>
           <span v-if="connection.lastTestOutcome">{{
-            connection.lastTestOutcome
+            serverMessage(connection.lastTestOutcome)
           }}</span>
           <time
             v-if="connection.lastTestedAt"

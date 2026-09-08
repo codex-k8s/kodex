@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/mail"
 	"slices"
 	"strconv"
@@ -38,7 +39,7 @@ func (p *Provider) imap(ctx context.Context, m api.Mailbox) (*imapclient.Client,
 	}
 	if err != nil {
 		closeConn()
-		return nil, nil, errs.Unavailable
+		return nil, nil, healthFailure(api.ProtocolReadinessReasonTLSUnavailable)
 	}
 	cleanup := func() { closeConn(); _ = client.Close() }
 	if m.Imap.AuthMethod == "oauthbearer" {
@@ -48,7 +49,11 @@ func (p *Provider) imap(ctx context.Context, m api.Mailbox) (*imapclient.Client,
 	}
 	if err != nil {
 		cleanup()
-		return nil, nil, errs.Unavailable
+		var protocol *imap.Error
+		if errors.As(err, &protocol) && protocol.Type == imap.StatusResponseTypeNo {
+			return nil, nil, healthFailure(api.ProtocolReadinessReasonAuthRejected)
+		}
+		return nil, nil, responseFailure(err)
 	}
 	return client, cleanup, nil
 }
@@ -56,10 +61,10 @@ func (p *Provider) imap(ctx context.Context, m api.Mailbox) (*imapclient.Client,
 func selectIMAP(c *imapclient.Client, folder string, validity uint32, readOnly bool) (*imap.SelectData, error) {
 	s, err := c.Select(folder, &imap.SelectOptions{ReadOnly: readOnly}).Wait()
 	if err != nil {
-		return nil, errs.Unavailable
+		return nil, responseFailure(err)
 	}
 	if s.UIDValidity == 0 || s.UIDNext == 0 {
-		return nil, errs.Unavailable
+		return nil, healthFailure(api.ProtocolReadinessReasonResponseInvalid)
 	}
 	if validity != 0 && validity != s.UIDValidity {
 		return nil, errs.Conflict

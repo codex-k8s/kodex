@@ -22,7 +22,7 @@ func (d fixedDial) Dial(_, _ string) (net.Conn, error) { return d.conn, nil }
 
 func (p *Provider) pop(ctx context.Context, m api.Mailbox) (*pop3.Conn, func(), error) {
 	if m.Pop == nil || m.Pop.AuthMethod != "password" {
-		return nil, nil, errs.Unsupported
+		return nil, nil, healthFailure(api.ProtocolReadinessReasonConfigurationInvalid)
 	}
 	tlsConfig, u, pw, e := p.material(ctx, *m.Pop)
 	if e != nil {
@@ -39,46 +39,63 @@ func (p *Provider) pop(ctx context.Context, m api.Mailbox) (*pop3.Conn, func(), 
 			return nil, nil, e
 		}
 	}
-	client, e := pop3.New(pop3.Opt{Host: m.Pop.Host, Port: m.Pop.Port, Dialer: fixedDial{c}}).NewConn()
+	observer := &popReplyObserver{Conn: c}
+	client, e := pop3.New(pop3.Opt{Host: m.Pop.Host, Port: m.Pop.Port, Dialer: fixedDial{observer}}).NewConn()
 	if e != nil {
 		cleanup()
-		return nil, nil, errs.Unavailable
+		return nil, nil, responseFailure(e)
 	}
-	if e = client.Auth(u, pw); e != nil {
+	for _, authenticate := range []func() error{func() error { return client.User(u) }, func() error { return client.Pass(pw) }} {
+		observer.rejected = false
+		if e = authenticate(); e != nil {
+			cleanup()
+			if observer.rejected {
+				return nil, nil, healthFailure(api.ProtocolReadinessReasonAuthRejected)
+			}
+			return nil, nil, responseFailure(e)
+		}
+	}
+	if e = client.Noop(); e != nil {
 		cleanup()
-		return nil, nil, errs.Unavailable
+		return nil, nil, responseFailure(e)
 	}
 	return client, cleanup, nil
 }
 func snapshot(c *pop3.Conn, m api.Mailbox) ([]pop3.MessageID, map[int]int, error) {
 	ids, e := c.Uidl(0)
-	if e != nil || len(ids) > m.Limits.ScanMessages {
-		return nil, nil, errs.Unavailable
+	if e != nil {
+		return nil, nil, responseFailure(e)
+	}
+	if len(ids) > m.Limits.ScanMessages {
+		return nil, nil, healthFailure(api.ProtocolReadinessReasonScanLimit)
 	}
 	sizes, e := c.List(0)
-	if e != nil || len(sizes) != len(ids) {
-		return nil, nil, errs.Unavailable
+	if e != nil {
+		return nil, nil, responseFailure(e)
+	}
+	if len(sizes) != len(ids) {
+		return nil, nil, healthFailure(api.ProtocolReadinessReasonResponseInvalid)
 	}
 	byID := map[int]int{}
 	seen := map[string]bool{}
 	seenIDs := map[int]bool{}
 	for _, v := range sizes {
 		if _, duplicate := byID[v.ID]; v.ID < 1 || v.Size < 0 || duplicate {
-			return nil, nil, errs.Unavailable
+			return nil, nil, healthFailure(api.ProtocolReadinessReasonResponseInvalid)
 		}
 		byID[v.ID] = v.Size
 	}
 	for _, v := range ids {
 		if v.ID < 1 || v.UID == "" || len(v.UID) > 70 || seen[v.UID] || seenIDs[v.ID] {
-			return nil, nil, errs.Unavailable
+			return nil, nil, healthFailure(api.ProtocolReadinessReasonResponseInvalid)
 		}
 		for _, character := range v.UID {
 			if character < 0x21 || character > 0x7e {
-				return nil, nil, errs.Unavailable
+				return nil, nil, healthFailure(api.ProtocolReadinessReasonResponseInvalid)
 			}
 		}
 		if _, ok := byID[v.ID]; !ok {
-			return nil, nil, errs.Unavailable
+			return nil, nil, healthFailure(api.ProtocolReadinessReasonResponseInvalid)
 		}
 		seen[v.UID] = true
 		seenIDs[v.ID] = true

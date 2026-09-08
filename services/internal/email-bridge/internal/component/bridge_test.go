@@ -50,6 +50,8 @@ type providerFixture struct {
 	deletes                  int
 	dropSMTP, dropPOP, stall bool
 	rejectUpgrade            atomic.Bool
+	rejectPOPAuth            atomic.Bool
+	rejectSMTPAuth           atomic.Bool
 	insecureAuth             atomic.Int32
 	cert                     tls.Certificate
 	ca                       []byte
@@ -147,6 +149,10 @@ func (f *providerFixture) serveSMTP(c net.Conn) {
 			c = tls.Server(c, &tls.Config{Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12})
 			tp = textproto.NewConn(c)
 		case "AUTH":
+			if f.rejectSMTPAuth.Load() {
+				_ = tp.PrintfLine("535 fixture-private-text")
+				continue
+			}
 			fields := strings.Fields(line)
 			if len(fields) > 1 && fields[1] == "OAUTHBEARER" {
 				if len(fields) != 3 {
@@ -231,6 +237,10 @@ func (f *providerFixture) servePOP(c net.Conn) {
 			c = tls.Server(c, &tls.Config{Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12})
 			tp = textproto.NewConn(c)
 		case "USER", "PASS", "NOOP":
+			if parts[0] == "PASS" && f.rejectPOPAuth.Load() {
+				_ = tp.PrintfLine("-ERR fixture-private-text")
+				continue
+			}
 			if parts[0] != "NOOP" {
 				if _, secured := c.(*tls.Conn); !secured {
 					f.insecureAuth.Add(1)
@@ -306,7 +316,7 @@ type secrets struct {
 
 func (s *secrets) Read(_ context.Context, d api.Descriptor) ([]byte, error) {
 	s.reads.Add(1)
-	if s.revoked.Load() {
+	if s.revoked.Load() || d.Name == "missing" {
 		return nil, errs.Unavailable
 	}
 	if d.Name == "ca" {

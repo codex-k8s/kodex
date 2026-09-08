@@ -349,6 +349,45 @@ func (e ProtocolReadinessSmtp) Valid() bool {
 	}
 }
 
+// Defines values for ProtocolReadinessReason.
+const (
+	ProtocolReadinessReasonAuthRejected          ProtocolReadinessReason = "auth_rejected"
+	ProtocolReadinessReasonConfigurationInvalid  ProtocolReadinessReason = "configuration_invalid"
+	ProtocolReadinessReasonCredentialUnavailable ProtocolReadinessReason = "credential_unavailable"
+	ProtocolReadinessReasonNetworkUnavailable    ProtocolReadinessReason = "network_unavailable"
+	ProtocolReadinessReasonNone                  ProtocolReadinessReason = "none"
+	ProtocolReadinessReasonResponseInvalid       ProtocolReadinessReason = "response_invalid"
+	ProtocolReadinessReasonScanLimit             ProtocolReadinessReason = "scan_limit"
+	ProtocolReadinessReasonTLSUnavailable        ProtocolReadinessReason = "tls_unavailable"
+	ProtocolReadinessReasonUnavailable           ProtocolReadinessReason = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the ProtocolReadinessReason enum.
+func (e ProtocolReadinessReason) Valid() bool {
+	switch e {
+	case ProtocolReadinessReasonAuthRejected:
+		return true
+	case ProtocolReadinessReasonConfigurationInvalid:
+		return true
+	case ProtocolReadinessReasonCredentialUnavailable:
+		return true
+	case ProtocolReadinessReasonNetworkUnavailable:
+		return true
+	case ProtocolReadinessReasonNone:
+		return true
+	case ProtocolReadinessReasonResponseInvalid:
+		return true
+	case ProtocolReadinessReasonScanLimit:
+		return true
+	case ProtocolReadinessReasonTLSUnavailable:
+		return true
+	case ProtocolReadinessReasonUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Attachment defines model for Attachment.
 type Attachment struct {
 	ContentBase64 string `json:"content_base64"`
@@ -616,9 +655,12 @@ type Policy string
 
 // ProtocolReadiness defines model for ProtocolReadiness.
 type ProtocolReadiness struct {
-	Imap ProtocolReadinessImap `json:"imap"`
-	Pop3 ProtocolReadinessPop3 `json:"pop3"`
-	Smtp ProtocolReadinessSmtp `json:"smtp"`
+	Imap       ProtocolReadinessImap    `json:"imap"`
+	ImapReason *ProtocolReadinessReason `json:"imap_reason,omitempty"`
+	Pop3       ProtocolReadinessPop3    `json:"pop3"`
+	Pop3Reason *ProtocolReadinessReason `json:"pop3_reason,omitempty"`
+	Smtp       ProtocolReadinessSmtp    `json:"smtp"`
+	SmtpReason *ProtocolReadinessReason `json:"smtp_reason,omitempty"`
 }
 
 // ProtocolReadinessImap defines model for ProtocolReadiness.Imap.
@@ -629,6 +671,9 @@ type ProtocolReadinessPop3 string
 
 // ProtocolReadinessSmtp defines model for ProtocolReadiness.Smtp.
 type ProtocolReadinessSmtp string
+
+// ProtocolReadinessReason defines model for ProtocolReadinessReason.
+type ProtocolReadinessReason string
 
 // Recipients defines model for Recipients.
 type Recipients = []string

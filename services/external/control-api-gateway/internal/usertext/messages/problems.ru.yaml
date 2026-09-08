@@ -834,3 +834,26 @@ INTERACTION_DELIVERY_GATE_PROMPT:
   other: Подтвердите отправку результата во внешний канал
 INTERACTION_DELIVERY_GATE_TITLE:
   other: Отправка результата во внешний канал
+
+EMAIL_HEALTH_READY:
+  other: "готов"
+EMAIL_HEALTH_NOT_CONFIGURED:
+  other: "не настроен"
+EMAIL_HEALTH_AUTH_REJECTED:
+  other: "доступ отклонён; проверьте авторизацию и разрешение протокола"
+EMAIL_HEALTH_CREDENTIAL_UNAVAILABLE:
+  other: "учётные данные недоступны"
+EMAIL_HEALTH_TLS_UNAVAILABLE:
+  other: "защищённое соединение недоступно; проверьте TLS"
+EMAIL_HEALTH_NETWORK_UNAVAILABLE:
+  other: "сетевое соединение недоступно"
+EMAIL_HEALTH_RESPONSE_INVALID:
+  other: "некорректный ответ сервера"
+EMAIL_HEALTH_SCAN_LIMIT:
+  other: "превышен предел проверки сообщений"
+EMAIL_HEALTH_CONFIGURATION_INVALID:
+  other: "некорректная настройка протокола"
+EMAIL_HEALTH_UNAVAILABLE:
+  other: "протокол недоступен; причина не уточнена"
+EMAIL_HEALTH_NOT_READY:
+  other: "почтовый протокол не готов"

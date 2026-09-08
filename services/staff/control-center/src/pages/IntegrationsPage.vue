@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useServerMessage } from "@/shared/ui/server-message";
 import { PackageOpen, RefreshCw } from "@lucide/vue";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -61,6 +62,7 @@ import {
   parseConnectionYaml,
 } from "@/features/integrations/configuration-yaml";
 
+const serverMessage = useServerMessage();
 const platform = usePlatformStore();
 const connectionSearch = ref("");
 const connectionEntries = ref<IntegrationConnection[]>([]);
@@ -780,7 +782,7 @@ async function command(
     const updated = await platform.changeConnection(connection, action);
     operationSuccess.value =
       action === "TEST"
-        ? `Проверка «${updated.name}» завершена: ${updated.lastTestOutcome ?? updated.state}.`
+        ? `Проверка «${updated.name}» завершена: ${serverMessage(updated.lastTestOutcome ?? updated.state)}.`
         : action === "ENABLE"
           ? `Подключение «${updated.name}» включено.`
           : `Подключение «${updated.name}» отключено.`;
