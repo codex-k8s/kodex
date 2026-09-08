@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, openSync, writeSync, fsyncSync, closeSync } from 'node:fs';
@@ -90,9 +91,7 @@ async function main(args) {
       requireValue(pods.length===deployment.spec.replicas,'ALL_AUTHORITY_PODS_REQUIRED');
       for(const pod of pods)for(const role of target.rollback.roles) {
         const c=[...(pod.spec.containers??[]),...(pod.spec.initContainers??[])].find(c=>c.name===`internal-rpc-authority-${role}`);
-        const path=c.command?.includes('/workspace/tools/dev/run-go-hot-reload.sh')?`/tmp/kodex-dev-${c.args[2]}/build/main`:`/usr/local/bin/internal-rpc-authority-${role}`;
-        const script='expected=$1; count=0; result=; for entry in /proc/[0-9]*/exe; do target=$(readlink "$entry" 2>/dev/null) || continue; if [ "$target" = "$expected" ] || [ "$target" = "$expected (deleted)" ]; then count=$((count+1)); result=$(sha256sum "$entry") || exit 1; fi; done; [ "$count" = 1 ] || exit 1; printf "%s\\n" "$result"';
-        requireValue(kube('exec',pod.metadata.name,'-n',namespace,'-c',c.name,'--','sh','-c',script,'authority-sidecar',path).split(/\s/)[0]===(target.rollback.profile==='image'?plan.capability.imageBinaries:plan.capability.binaries)[role],'AUTHORITY_BINARY_READBACK_MISMATCH');
+        requireValue(readAuthorityExecutable(pod,c,{kube,k3sSudo:options['--k3s-sudo']})===(target.rollback.profile==='image'?plan.capability.imageBinaries:plan.capability.binaries)[role],'AUTHORITY_BINARY_READBACK_MISMATCH');
       }
       const afterResources=JSON.parse(kube('get','deployments,replicasets,pods','-n',namespace,'-o','json')).items;
       const afterDeployment=afterResources.find(item=>item.kind==='Deployment'&&item.metadata.uid===target.uid);
