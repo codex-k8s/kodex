@@ -148,3 +148,111 @@ CP проверяется адресными mTLS RPC обеих реплик; �
 передаваемый как `--handoff-proof` и в plan, и в apply. Точные команды,
 authority/lifecycle, пределы доказательства и запрет повторного сигнала после
 неопределённого ACK приведены в том же runbook.
+
+## Приёмка независимых версий
+
+Issue #1253. `tools/dev/component-manifest.mjs` имеет три read-only режима:
+`inventory` собирает фактические версии без заявления о совместимости,
+`capture` создаёт кандидат manifest, `verify` проверяет заранее зафиксированный
+manifest. Ни один режим не обновляет Kubernetes или источники. Это профиль
+`component-revisions`; старый bootstrap/render profile сохраняется без флага.
+
+Manifest включает cluster UID, namespace UID и полный набор Deployment,
+StatefulSet и DaemonSet в `kodex-system`. Для каждого фиксируются UID, digest
+полной спецификации, exact immutable image references, фактические imageIDs,
+source roots/revisions отдельно для всех `/workspace` mounts и native sidecars.
+Pods выбираются через controller ownerReferences; одноимённые labels у Job не
+участвуют. Проверяются observed generation, число реплик, Ready, завершённые
+init containers, совпадение Pod command/args/env/mounts/volumes и аннотаций с
+шаблоном. У Air читается digest `/proc/PID/exe` единственного работающего
+процесса, включая ещё работающий удалённый inode. Чтение `build/main` не
+подменяет эту проверку. Начальная и конечная Kubernetes snapshots должны
+совпасть. Pod UID и restart counts сохраняются как наблюдение; законная замена
+Pod той же спецификации и binary digest не требует нового manifest.
+
+Это проверка source mount, процесса и Kubernetes metadata, не криптографическая
+аттестация сборки из исходников. Для PWA Vite фиксируются exact imageID и
+read-only source mount; работа пользовательского пути доказывается browser
+smoke/discovery отдельно. Ready и manifest сами по себе не закрывают QA64,
+контракты провайдеров, runtime Jobs, schema, rotation или внешние эффекты.
+
+Сначала `inventory --context "$CONTEXT" --output "$NEW_INVENTORY"` собирает
+component names, source revisions и imageIDs для заполнения матрицы. Его статус
+`INVENTORIED` не является PASS, такой файл нельзя передать в verify как manifest.
+Перед capture release plan готовит private compatibility JSON:
+
+```json
+{
+  "version": 1,
+  "components": [
+    {
+      "component": "Deployment/control-plane",
+      "revisions": {"source": ["<точные source revisions по возрастанию>"], "imageIDs": ["<точные imageIDs по возрастанию>"]},
+      "provides": {"control-plane-rpc": "<64 hex contract digest>"},
+      "requires": []
+    },
+    {
+      "component": "Deployment/control-api-gateway",
+      "revisions": {"source": ["<точные source revisions по возрастанию>"], "imageIDs": ["<точные imageIDs по возрастанию>"]},
+      "provides": {},
+      "requires": [{"component": "Deployment/control-plane", "contract": "control-plane-rpc", "acceptedSHA256": ["<64 hex supported contract digest>"]}]
+    }
+  ],
+  "evidence": [{"path": "/private/approved-compatibility.md", "sha256": "<64 hex file digest>"}]
+}
+```
+
+Пример показывает две записи, а не полный cluster profile: обязательна
+ровно одна запись для **каждого** наблюдаемого workload, включая инфраструктуру.
+`source` содержит sorted unique revisions всех его mounts; `imageIDs` — sorted
+unique фактические IDs всех контейнеров, включая init. У image-only workload
+`source: []`. Матрица содержит все затронутые wire/schema/runtime зависимости
+и доказательства поддерживаемых digest для точных component revisions. Для
+компонента без таких зависимостей допустимы пустые provides/requires с явным
+обоснованием в evidence. Набор не выводится автоматически из Git SHA.
+
+Инструмент сверяет полный набор компонентов, revisions и imageIDs матрицы,
+наличие producer и попадание его contract digest в закрытый consumer список.
+Файлы доказательств читаются и проверяются по SHA256. Содержание технических
+утверждений и полноту графа проверяет автор release plan по каноническим
+контрактам и выполненным проверкам; CLI не называет произвольную декларацию
+новой доказанной совместимостью. После любого изменения версии требуется
+актуализировать матрицу и доказательства, затем создать новый manifest.
+Секреты, payload, provider inputs и персональные данные в эти файлы не входят.
+
+```bash
+node tools/dev/component-manifest.mjs capture --context "$CONTEXT" \
+  --compatibility "$PRIVATE_COMPATIBILITY" --output "$NEW_MANIFEST"
+node tools/dev/component-manifest.mjs verify --context "$CONTEXT" \
+  --manifest "$NEW_MANIFEST" --output "$NEW_EVIDENCE"
+./tools/dev/remote-dev.sh status --env-file "$REMOTE_ENV" \
+  --expected-sha "$HARNESS_SHA" --component-manifest "$NEW_MANIFEST"
+./tools/dev/remote-dev.sh smoke --env-file "$REMOTE_ENV" \
+  --expected-sha "$HARNESS_SHA" --component-manifest "$NEW_MANIFEST"
+./tools/dev/remote-dev.sh acceptance --env-file "$REMOTE_ENV" \
+  --expected-sha "$HARNESS_SHA" --component-manifest "$NEW_MANIFEST" \
+  --resource-prefix "$NEW_PREFIX" --run-timeout-ms 1800000
+```
+
+Общий бюджет readback — 10 минут, отдельного kubectl/git запуска — до 30 секунд
+(у source inspector git — 10 секунд). Timeout закрыто отклоняет проверку.
+Пути output всегда новые: перезапись manifest/evidence запрещена. `capture`
+выдаёт `CAPTURED`, а не `PASS`. Оператор сверяет кандидат с согласованным
+release plan до приёмки; изменившийся UID/spec/source/image/contract не
+исправляется автоматическим recapture. `verify` закрыто отказывает и требует
+диагностики. Возвращаемый `manifestSHA256` относится к закреплённому manifest,
+а не к каждому последующему timestamp наблюдения.
+
+`--expected-sha` в этом профиле закрепляет **оснастку**, а serving versions
+берутся из component manifest. Browser report и visual evidence получают
+`sourceRole: harness` и `servingManifestSHA256`; прежний `sourceSHA` сохраняется
+как совместимое поле SHA оснастки. Full summary содержит `evidenceProfile` и
+SHA256 файла manifest. Поддержанный readback выполняется до и после browser
+и после всех batch, без глобального `up`, пересборки archive/STT образов или
+перехода соседей на общий source. Тест механизма Air/Vite доступен отдельно
+через явный `--batch hot-reload` без component manifest.
+
+Локальная публичная проверка: `make test-full-local-e2e-entrypoint`. Она
+включает Node negative/CLI fixtures и shell entrypoint contract, не обращается
+к staging и не является live acceptance. Актуальная документация Kubernetes
+Deployment/ReplicaSet/Pod readback проверена через Context7 `/kubernetes/website`.

@@ -4,8 +4,8 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.2.2
-updated: 2026-09-07
+version: 1.3.0
+updated: 2026-09-08
 ---
 
 # Удалённый hot-reload контур Kodex
@@ -218,13 +218,25 @@ Vite отслеживают изменения исходников без пе�
 входов и импортируются напрямую в containerd k3s.
 
 `e2e` запускает только browser discovery и остаётся диагностической командой.
-Канонический owner gate использует `acceptance`: он требует чистый exact SHA до
-и после выполнения, сначала проверяет Teleport, затем deployment readback,
-реальный hot reload Go и Vue, browser/API сценарии, synthetic integration,
-сборку и допуск RoleImage, session archive и disposable backup/restore drill,
-после чего повторяет Teleport readback. Для быстрого сбора независимых дефектов
+`acceptance` требует чистый exact SHA оснастки до и после выполнения и
+проверяет browser/API, synthetic integration, сборку и допуск RoleImage,
+session archive и disposable backup/restore drill. Для независимых версий
+передаётся `--component-manifest`; описание capture, совместимости и serving
+readback находится в [руководстве релиза](../../tools/release/README.md#приёмка-независимых-версий).
+SHA оснастки не присваивается работающим соседним приложениям.
+
+По решению владельца от 2026-09-08 Teleport cutover отложен: application
+`status`/`acceptance` по умолчанию не вызывают Teleport. Отдельный
+`--access-profile teleport` добавляет его readback; bootstrap `up` и команда
+`teleport` сохраняют прежнюю настройку. Проверки disposable cluster identity,
+TLS, provider sandbox и служебной готовности остаются обязательными.
+
 `tools/dev/full-local-e2e.sh` принимает повторяемый `--batch` со значениями
-`hot-reload`, `browser`, `integration`, `role-image`, `archive`, `backup`.
+`browser`, `integration`, `role-image`, `archive`, `backup`, `hot-reload`.
+Пять прикладных batch включены по умолчанию. `hot-reload` запускается только
+явным выбором. `--component-manifest` требует `--skip-build` и запрещает
+`--batch hot-reload`: проверка механизма разработки имеет отдельный запуск
+на согласованном disposable source и не меняет исходники соседей при приёмке.
 Профили GitHub и provider API key всегда получают явный итог `PASS`, `FAIL` или
 `NOT RUN`; отсутствие credentials больше не маскируется как выполненная проверка.
 

@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     'Usage: seed-local-image-supply-chain.sh --context <exact-context>' \
     '  --state-directory <path> [--render <path>] [--component all|runner]' \
-    '  [--tool-state-directory <path>] [--readback-only] [--evidence <new-jsonl>]' >&2
+    '  [--tool-state-directory <path>] [--readback-only] [--evidence <new-jsonl>] [--k3s-sudo]' >&2
 }
 
 context=""
@@ -20,6 +20,7 @@ component=all
 tool_state_directory=""
 readback_only=false
 evidence=""
+kubectl_command=(kubectl)
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
@@ -29,17 +30,18 @@ while (($# > 0)); do
     --tool-state-directory) tool_state_directory=${2:-}; shift 2 ;;
     --readback-only) readback_only=true; shift ;;
     --evidence) evidence=${2:-}; shift 2 ;;
+    --k3s-sudo) kubectl_command=(sudo -n k3s kubectl); shift ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
 
-[[ -n "$context" && "$(kubectl config current-context)" == "$context" ]] ||
+[[ -n "$context" && "$("${kubectl_command[@]}" --context "$context" config current-context)" == "$context" ]] ||
   fail 'Kubernetes context mismatch'
 [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
   fail 'production context is forbidden'
-# После проверки каждый запрос закреплён за тем же context, даже при смене current-context.
-kubectl() { command kubectl --context "$context" "$@"; }
+# Каждый вызов, включая port-forward, использует один exact argv-prefix и context.
+# Docker остаётся процессом исходного оператора, без sudo и копий kubeconfig.
 [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
   fail 'state directory is invalid'
 [[ "$component" == all || "$component" == runner ]] || fail 'component is invalid'
@@ -51,12 +53,12 @@ else
 fi
 tool_state_directory=${tool_state_directory:-$state_directory}
 [[ "$tool_state_directory" == /* && -d "$tool_state_directory" && ! -L "$tool_state_directory" ]] || fail 'tool state directory is invalid'
-for command_name in docker jq kubectl sha256sum tar yq; do
+for command_name in docker jq sha256sum tar yq "${kubectl_command[0]}"; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
 namespace=kodex-system
-kubectl -n "$namespace" get deployment kodex-image-registry-promotion -o json | \
+"${kubectl_command[@]}" --context "$context" -n "$namespace" get deployment kodex-image-registry-promotion -o json | \
   jq -e '.metadata.namespace == "kodex-system" and
     .metadata.labels."app.kubernetes.io/part-of" == "kodex" and
     .metadata.labels."kodex.dev/local-profile" == "hot-reload"' >/dev/null ||
@@ -122,7 +124,7 @@ expected_role_input="oci://kodex-image-registry.kodex-system.svc.cluster.local:5
   fail 'rendered role image input digest does not match the seed archive'
 fi
 
-kubectl -n "$namespace" rollout status deployment/kodex-image-registry-promotion --timeout=10m >/dev/null ||
+"${kubectl_command[@]}" --context "$context" -n "$namespace" rollout status deployment/kodex-image-registry-promotion --timeout=10m >/dev/null ||
   fail 'promotion registry is unavailable'
 temporary_directory=$(mktemp -d)
 port_forward_pid=""
@@ -137,7 +139,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-secret=$(kubectl -n "$namespace" get secret/kodex-image-promotion-writer -o json) ||
+secret=$("${kubectl_command[@]}" --context "$context" -n "$namespace" get secret/kodex-image-promotion-writer -o json) ||
   fail 'promotion writer Secret is absent'
 for entry in \
   'registry-client.crt:client.crt' \
@@ -153,7 +155,7 @@ for entry in \
 done
 unset secret
 
-kubectl -n "$namespace" port-forward service/kodex-image-registry-promotion \
+"${kubectl_command[@]}" --context "$context" -n "$namespace" port-forward service/kodex-image-registry-promotion \
   5003:5003 >"$temporary_directory/port-forward.log" 2>&1 &
 port_forward_pid=$!
 for attempt in $(seq 1 60); do
@@ -227,7 +229,7 @@ docker run --rm --network host --user 0:0 \
     fail 'promotion registry seed or exact digest readback failed'
   }
 
-kubectl -n "$namespace" rollout status deployment/kodex-image-registry-pull --timeout=10m >/dev/null ||
+"${kubectl_command[@]}" --context "$context" -n "$namespace" rollout status deployment/kodex-image-registry-pull --timeout=10m >/dev/null ||
   fail 'pull registry did not become ready after seed'
 if [[ "$component" == runner ]]; then
   jq -cn --arg digest "$runner_digest" '{status:"PASS",digest:$digest,at:(now|todateiso8601)}' >>"$evidence"
