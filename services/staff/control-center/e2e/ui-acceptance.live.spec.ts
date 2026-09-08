@@ -1,4 +1,8 @@
 import {
+  ConsoleErrorDiagnostics,
+  installConsoleErrorDiagnostics,
+} from "./console-error-diagnostics";
+import {
   PageErrorDiagnostics,
   installPageErrorDiagnostics,
 } from "./page-error-diagnostics";
@@ -154,6 +158,8 @@ test("широкая UI-приёмка сохраняет независимые
     await validateFixture(context.request, selected);
     return selected;
   };
+  const consoleErrors = new ConsoleErrorDiagnostics(environment.baseURL);
+  installConsoleErrorDiagnostics(page, consoleErrors, 0);
   const pageErrors = new PageErrorDiagnostics(environment.baseURL);
   installPageErrorDiagnostics(page, pageErrors, 0);
   page.on("pageerror", () => counters.pageErrors++);
@@ -278,6 +284,7 @@ test("широкая UI-приёмка сохраняет независимые
       return false;
     }
     diagnosticStep = pageErrors.beginStep();
+    consoleErrors.beginStep();
     connectionShape = {};
     const before = { ...counters };
     const networkBefore = network.snapshot();
@@ -307,6 +314,7 @@ test("широкая UI-приёмка сохраняет независимые
       checkCondition("HTTP_ERRORS", counters.httpErrors - before.httpErrors, 0);
       checkCondition("PAGE_ERRORS", counters.pageErrors - before.pageErrors, 0);
       checkCondition("PAGE_ERRORS", pageErrors.snapshot().overflow, 0);
+      checkCondition("CONSOLE_ERRORS", consoleErrors.snapshot().overflow, 0);
       checkCondition(
         "NETWORK_ERRORS",
         Math.max(0, counters.networkErrors - before.networkErrors),
@@ -418,6 +426,7 @@ test("широкая UI-приёмка сохраняет независимые
       return false;
     } finally {
       pageErrors.endStep();
+      consoleErrors.endStep();
       diagnosticStep = 0;
     }
   };
@@ -999,6 +1008,7 @@ test("широкая UI-приёмка сохраняет независимые
     // Закрываем страницы до reporter/error-context; персональные данные не снимаются.
     network.setStage("COMPLETE");
     pageErrors.setStage("CLEANUP");
+    consoleErrors.setStage("CLEANUP");
     const closed = await page.close().then(
       () => true,
       () => false,
@@ -1025,6 +1035,22 @@ test("широкая UI-приёмка сохраняет независимые
         },
         "PAGE_ERRORS",
       );
+    if (
+      consoleErrors.failed() &&
+      !variants.some((value) => value.status === "FAIL")
+    )
+      await record(
+        "browser-console-errors",
+        ["MVP-UI-03", "MVP-UI-11"],
+        "FAIL",
+        "UI_ASSERTION_FAILED",
+        {
+          consoleErrors: consoleErrors.snapshot().total,
+          consoleErrorOverflow: consoleErrors.snapshot().overflow,
+        },
+        "CONSOLE_ERRORS",
+      );
+    await journal.consoleErrors(consoleErrors);
     await journal.pageErrors(pageErrors);
     await journal.network(network);
     await journal.close(variants);

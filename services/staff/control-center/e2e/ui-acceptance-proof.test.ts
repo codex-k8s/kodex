@@ -1,3 +1,4 @@
+import { ConsoleErrorDiagnostics } from "./console-error-diagnostics";
 import { PageErrorDiagnostics } from "./page-error-diagnostics";
 import { ReadNetworkCorrelator } from "./ui-read-network";
 import { populatedVariants } from "./ui-populated-variants";
@@ -408,4 +409,45 @@ test("journal сохраняет pageerror projection без raw сообщен�
       await readFile(join(parent, "proof/ui-acceptance-safe.sha256"), "utf8")
     ).trim(),
   ).toBe(createHash("sha256").update(body).digest("hex"));
+});
+
+test("console journal сохраняет bounded projection, FAIL и browser key без сырых данных", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "console-journal-"));
+  await chmod(parent, 0o700);
+  const journal = await createJournal(
+    join(parent, "journal"),
+    versions,
+    "webkit",
+  );
+  const consoleErrors = new ConsoleErrorDiagnostics("https://kodex.test");
+  consoleErrors.setStage("CLEANUP");
+  consoleErrors.observe(
+    {
+      message: "private-cookie",
+      location: {
+        url: "https://kodex.test/private?token=secret",
+        line: 3,
+        column: 2,
+      },
+    },
+    0,
+    2,
+  );
+  await journal.consoleErrors(consoleErrors);
+  await journal.close([]);
+  const payload = await readFile(journal.path, "utf8");
+  const event = payload
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .find((row) => row.type === "console-errors");
+  expect(event).toMatchObject({
+    browser: "webkit",
+    total: 1,
+    overflow: 0,
+    events: [{ stage: "CLEANUP", sourceAttribution: "BROWSER_REPORTED" }],
+  });
+  expect(consoleErrors.failed()).toBe(true);
+  expect(payload).not.toMatch(/private|https:|token=secret/);
+  await rm(parent, { recursive: true, force: true });
 });
