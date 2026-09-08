@@ -541,3 +541,27 @@ NOT RUN были вызваны гонкой, и не создаёт недос�
 permission read и блокировку соседней mutation. Точный query search из #1318
 сохраняется. После merge требуется новый ограниченный live readback, остальные
 варианты полного MVP по-прежнему не закрыты.
+
+
+## Безопасная диагностика запроса в session-only профиле (#1327)
+
+Исторический WebKit N на harness9e6/app1303 завершился FAIL READBACK при
+одном failedRequests, несмотря на coordinated refresh и v2/SESSION_READY.
+Исходный artifact не связывал счётчик с конкретным запросом; причину нельзя
+приписывать intentional abort, asset либо продукту без новых данных.
+
+N теперь сохраняет максимум32 failure записей и счётчик overflow. WeakMap
+сопоставляет START и requestfailed одного объекта Playwright Request, без
+нового wire header или изменения fetch. Evidence включает локальный sequence,
+номер вкладки, закрытые route/method/resource категории, stage начала/отказа,
+elapsedMs, closed error enum и SHA256 исходного error. URL/query/headers,
+ticket, DOM, response/body и raw error не сохраняются. Неизвестная категория
+остаётся OTHER/UNKNOWN; отсутствие START явно identityKnown=false. Этот helper
+не подтверждает отмену и не подавляет ни одного failedRequests.
+
+Snapshot фиксируется до закрытия вкладок, чтобы teardown не менял измеренное
+окно. Unit проверяет exact identity, redaction и bounded overflow; synthetic
+browser fixture принудительно разрывает один read и сохраняет его как failure.
+Нужен новый WebKit N live readback после merge. Сохранённый cursor не является
+проверкой доставки новых событий: businessEventDelivery остаётся NOT RUN без
+контролируемого producer и ожидаемого набора событий.

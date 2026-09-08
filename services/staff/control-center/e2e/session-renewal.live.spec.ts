@@ -1,4 +1,8 @@
-import { test } from "@playwright/test";
+import { test, type Request } from "@playwright/test";
+import {
+  SessionRequestDiagnostics,
+  type SessionProofStage,
+} from "./session-request-diagnostics";
 import { createHash } from "node:crypto";
 import { persistSessionRenewalEvidence } from "./session-renewal-evidence";
 import {
@@ -33,7 +37,10 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
   const metadata: ReturnType<typeof sessionTiming>[] = [];
   const pending = new Set<Promise<void>>();
   let protocolReadback: string[][] = [];
-  let stage = "PREFLIGHT";
+  let stage: SessionProofStage = "PREFLIGHT";
+  const requestDiagnostics = new SessionRequestDiagnostics<Request>(
+    environment.baseURL,
+  );
   let passed = false;
   let initial: ReturnType<typeof renewalWindow> | undefined;
   let naturalRenewalAt = 0;
@@ -74,6 +81,13 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
         if (message.type() === "error") counters.consoleErrors++;
       });
       page.on("request", (request) => {
+        requestDiagnostics.start(request, {
+          url: request.url(),
+          method: request.method(),
+          resourceType: request.resourceType(),
+          stage,
+          tab: index,
+        });
         const url = new URL(request.url());
         if (url.origin !== environment.baseURL) return;
         if (url.pathname === "/api/v1/session" && request.method() === "PUT") {
@@ -86,7 +100,14 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
         )
           counters.ticketRequests++;
       });
-      page.on("requestfailed", () => counters.failedRequests++);
+      page.on("requestfailed", (request) => {
+        counters.failedRequests++;
+        requestDiagnostics.failed(
+          request,
+          stage,
+          request.failure()?.errorText ?? "UNKNOWN",
+        );
+      });
       page.on("response", (response) => {
         const url = new URL(response.url());
         if (
@@ -199,6 +220,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
   } finally {
     const observedTabs = structuredClone(tabs);
     const observedCounters = { ...counters };
+    const observedRequests = requestDiagnostics.snapshot();
     // Закрываем страницы до teardown: автоматический error-context не получает DOM.
     await Promise.all(
       context.pages().map((page) => page.close().catch(() => undefined)),
@@ -227,6 +249,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       versionEvidence:
         "operator-supplied; serving readback is a separate prerequisite",
       counters: observedCounters,
+      requestDiagnostics: observedRequests,
       protocols: protocolReadback,
       tabs: observedTabs,
       absoluteExpiryUnchanged:
