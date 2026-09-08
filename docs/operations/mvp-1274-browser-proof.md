@@ -91,8 +91,8 @@ fixture failures не объявляется доказанным живым д�
 
 Подтверждённая отмена запроса требует закрытого browser code и наблюдения
 конкретного поколения: явного перехода сценария, закрытия/404 инспектора либо
-AbortSignal исходного fetch. Наблюдатель передаёт input/init и Promise без
-подмены. Binding может прийти после network event, поэтому незавершённая
+AbortSignal исходного fetch. Наблюдатель сохраняет исходные input, method, body, signal, credentials и
+Promise/Response, добавляя только fixture-заголовок идентичности. Binding может прийти после network event, поэтому незавершённая
 диагностика сохраняется до итоговой проверки; неоднозначные запросы одного URL
 не получают разрешение автоматически. Неизвестный код или отсутствие факта
 отмены остаётся FAIL. Native font-preload/Firefox scroll advisory сохраняются
@@ -167,7 +167,8 @@ focus, поздний callback, Tab/ShiftTab/Escape/возврат и native che
 Observer связывает START/ABORT с уникальным document/fetch ID; поздний abort
 не присваивается следующему запросу того же URL. Неоднозначные поколения
 не принимаются. Listener сохраняется после headers, поскольку body ещё может
-быть отменён. Fetch input/init, Promise/Response и wire bytes не изменяются.
+быть отменён. Fetch method/body/signal/credentials, Promise/Response и wire bytes не изменяются;
+только synthetic transport добавляет `x-kodex-synthetic-fetch-id`.
 
 Первоначальный Linux capability readback: secure context и mediaDevices есть
 во всех трёх движках; MediaRecorder есть в Chromium/Firefox. Chromium
@@ -189,3 +190,43 @@ BrowserContext.grantPermissions; MDN AudioContext.createMediaStreamDestination
 и MediaRecorder с generated stream. Дополнительные скрытые browser flags не
 используются. Credentials, настоящее аудио/тексты и персональные данные не
 использовались и не раскрывались.
+
+
+## Уточнение наблюдателя #1285
+
+Диагностический Chromium Home900 `probe1` на базе `f90742b21649` прошёл,
+поэтому точный navigation/unmount момент исторического GET FAIL не воспроизведён.
+Однако metadata trace доказал дефект сопоставления: из 105 bootstrap fetch
+104 остались без связи с network Request после двух одновременных START одного
+URL. Этот факт не приписывается автоматически каждой прежней ошибке.
+
+Теперь document/fetch ID передаётся также в заголовке конкретного Request.
+Разрешены только закрытый synthetic origin `https://kodex.test` и отдельный
+явно переданный HTTP loopback `127.0.0.1:<port>`, исключительно `/api/v1/`.
+На другой origin или путь заголовок не добавляется; live origin отвергается
+до установки наблюдателя. Production bundle этот helper не импортирует.
+Исходный fetch вызывается один раз; отсутствие identity, дубликат, чужой URL,
+неподтверждённая отмена и неизвестный browser code остаются FAIL.
+
+`network-cancellation.synthetic.spec.ts` выполняет два одновременных настоящих
+GET одного URL через локальный HTTP server: отменяется только один AbortSignal,
+второй ответ получается полностью. Отдельный оборванный socket без abort остаётся
+ошибкой. Fixture использует `cache: no-store`, чтобы native HTTP cache движка
+не сериализовал одинаковые GET до ответа. Проверяются сохранённые headers,
+отсутствие cookies и identity на foreign-origin/вне API; File wire test отдельно
+доказывает POST/method/body и отмену после headers. Unit negatives отклоняют
+missing/foreign/duplicate identity и переставленный порядок событий.
+
+Context7 `/microsoft/playwright/v1.61.0`: проверены Request.headers (lowercase,
+без security headers), requestfailed/failure и порядок network events.
+Предыдущие 267 PASS и Home FAIL остаются привязанными к прежним SHA; новый
+узкий результат публикуется отдельно, без заявления полного browser/live PASS.
+
+Локальный узкий `targeted4` на неизменном
+`06973e98abe21cd46c3ff9c17db75932a83c5d32`: 9/9 PASS — Home900,
+concurrent bootstrap и File wire в Chromium/Firefox/WebKit. JSON SHA256:
+`da92e73b74f06f8d13a0054bd45a57b2dc9a10e0207f2758d7d563df98157c98`.
+Unit negatives/diagnostics: 12/12 PASS; E2E typecheck и scoped ESLint PASS.
+Предыдущий loopback2: 4 PASS/2 FAIL из-за сериализации GET в native cache;
+после явного fixture `no-store` loopback3: 6/6 PASS. Эти промежуточные
+результаты не заменяют неизменный кандидат и сохраняются отдельно.
