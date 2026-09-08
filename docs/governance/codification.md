@@ -111,6 +111,7 @@ updated: 2026-07-28
 | `OPS-DOC-1198` | `docs/operations/mvp-1198-runtime-proof.md` |
 | `OPS-DOC-1229` | `docs/operations/api-release-drain-1229.md` |
 | `OPS-DOC-1242` | `docs/operations/mvp-1242-integrations-proof.md` |
+| `OPS-DOC-1243` | `docs/operations/mvp-1243-voice-proof.md` |
 | `OPS-DOC-1239` | `docs/operations/mvp-1239-lifecycle-proof.md` |
 | `OPS-DOC-1240` | `docs/operations/mvp-1240-ui-proof.md` |
 | `OPS-DOC-1241` | `docs/operations/mvp-1241-auth-proof.md` |

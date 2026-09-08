@@ -41,6 +41,25 @@ onMounted(() => {
 });
 const state = ref<VoiceState>("idle");
 const problem = ref<AppProblem>();
+const problemMessage = computed(() => {
+  const messages: Record<string, string> = {
+    MICROPHONE_PERMISSION_DENIED: "voice.permissionDenied",
+    MICROPHONE_UNAVAILABLE: "voice.microphoneUnavailable",
+    AUDIO_CAPTURE_INTERRUPTED: "voice.interrupted",
+    AUDIO_FORMAT_UNSUPPORTED: "voice.unsupportedFormat",
+    UNSUPPORTED_MEDIA_TYPE: "voice.unsupportedFormat",
+    AUDIO_LIMIT_EXCEEDED: "voice.limitExceeded",
+    PAYLOAD_TOO_LARGE: "voice.limitExceeded",
+    AUDIO_EMPTY: "voice.empty",
+    FORBIDDEN: "voice.forbidden",
+    STT_NOT_CONFIGURED: "voice.notConfigured",
+    STT_CREDENTIAL_UNAVAILABLE: "voice.credentialUnavailable",
+    STT_MODEL_UNAVAILABLE: "voice.modelUnavailable",
+    TRANSCRIPTION_TIMEOUT: "voice.timeout",
+    TRANSCRIPTION_PROVIDER_UNAVAILABLE: "voice.providerUnavailable",
+  };
+  return messages[problem.value?.code ?? ""] ?? "voice.error";
+});
 const visible = computed(
   () =>
     Boolean(context?.available.value) &&
@@ -74,8 +93,12 @@ watch(
 watch(
   () => route?.fullPath,
   () => capture.cancel(),
+  { flush: "sync" },
 );
+const pageHidden = () => capture.cancel();
+onMounted(() => window.addEventListener("pagehide", pageHidden));
 onBeforeUnmount(() => {
+  window.removeEventListener("pagehide", pageHidden);
   observer?.disconnect();
   capture.cancel();
 });
@@ -91,7 +114,7 @@ onBeforeUnmount(() => {
                   seconds: problem.retryAfterSeconds,
                 })
               : $t("voice.rateLimited")
-            : $t("voice.error")
+            : $t(problemMessage)
         }}
       </span>
       <button

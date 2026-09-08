@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { provide, ref } from "vue";
+import { provide, reactive, ref } from "vue";
+import {
+  routeLocationKey,
+  type RouteLocationNormalizedLoaded,
+} from "vue-router";
 import VoiceTextarea from "../../src/shared/ui/VoiceTextarea.vue";
 import CodeEditor from "../../src/shared/ui/CodeEditor.vue";
 import CodeDiff from "../../src/shared/ui/CodeDiff.vue";
@@ -17,6 +21,9 @@ const disabled = ref(false);
 const failing = ref(false);
 const rateLimited = ref(false);
 const delayed = ref(false);
+const textVisible = ref(true);
+const route = reactive({ fullPath: "/voice" });
+provide(routeLocationKey, route as RouteLocationNormalizedLoaded);
 const text = ref("Начало конец");
 const code = ref("Начало конец");
 const sensitive = ref("Тест");
@@ -108,6 +115,10 @@ provide(voiceContextKey, {
       ><input v-model="rateLimited" type="checkbox" />Ограничение частоты</label
     >
     <label><input v-model="delayed" type="checkbox" />Задержка</label>
+    <label
+      ><input v-model="textVisible" type="checkbox" />Показывать поле</label
+    >
+    <button type="button" @click="route.fullPath += '/next'">Перейти</button>
     <output data-testid="calls">{{ calls }}</output>
     <section data-testid="picker">
       <AsyncEntityPicker
@@ -148,7 +159,7 @@ provide(voiceContextKey, {
       }}</output>
       <output data-testid="inline-calls">{{ inlineCalls }}</output>
     </section>
-    <section data-testid="textarea">
+    <section v-if="textVisible" data-testid="textarea">
       <VoiceTextarea v-model="text" aria-label="Обычный текст" rows="6" />
     </section>
     <section data-testid="code">

@@ -15,6 +15,14 @@ export const voiceContextKey: InjectionKey<VoiceContext> =
 
 let cancelActiveCapture: (() => void) | undefined;
 
+export class VoiceCaptureError extends Error {
+  readonly status = 400;
+  constructor(readonly code: string) {
+    super(code);
+    this.name = "VoiceCaptureError";
+  }
+}
+
 export class VoiceCapture {
   private readonly cancelCapture = () => this.cancel();
   private generation = 0;
@@ -54,13 +62,13 @@ export class VoiceCapture {
     try {
       const mediaDevices = navigator.mediaDevices as MediaDevices | undefined;
       if (typeof MediaRecorder === "undefined" || !mediaDevices)
-        throw new Error("Audio capture is unavailable");
+        throw new VoiceCaptureError("MICROPHONE_UNAVAILABLE");
       const mimeType = [
         "audio/webm;codecs=opus",
         "audio/ogg;codecs=opus",
         "audio/mp4",
       ].find((type) => MediaRecorder.isTypeSupported(type));
-      if (!mimeType) throw new Error("Supported audio codec is unavailable");
+      if (!mimeType) throw new VoiceCaptureError("AUDIO_FORMAT_UNSUPPORTED");
       const stream = await mediaDevices.getUserMedia({
         audio: true,
         video: false,
@@ -77,29 +85,41 @@ export class VoiceCapture {
         if (generation !== this.generation) return;
         this.bytes += event.data.size;
         if (this.bytes > (this.options.maxBytes ?? 10 * 1024 * 1024)) {
-          this.fail();
+          this.fail(new VoiceCaptureError("AUDIO_LIMIT_EXCEEDED"));
           return;
         }
         this.chunks.push(event.data);
       };
       recorder.onerror = () => {
-        if (generation === this.generation) this.fail();
+        if (generation === this.generation)
+          this.fail(new VoiceCaptureError("AUDIO_CAPTURE_INTERRUPTED"));
       };
       recorder.onstop = () => {
         void this.finish(generation, recorder.mimeType);
       };
       for (const track of stream.getTracks())
         track.onended = () => {
-          if (this.state === "recording") this.fail();
+          if (generation === this.generation && this.state === "recording")
+            this.fail(new VoiceCaptureError("AUDIO_CAPTURE_INTERRUPTED"));
         };
       recorder.start(250);
       this.setState("recording");
       this.timer = setTimeout(
-        () => this.stop(),
+        () => this.fail(new VoiceCaptureError("AUDIO_LIMIT_EXCEEDED")),
         this.options.maxDurationMs ?? 120_000,
       );
     } catch (error) {
-      if (generation === this.generation) this.fail(error);
+      if (generation === this.generation)
+        this.fail(
+          error instanceof VoiceCaptureError
+            ? error
+            : new VoiceCaptureError(
+                error instanceof DOMException &&
+                  ["NotAllowedError", "SecurityError"].includes(error.name)
+                  ? "MICROPHONE_PERMISSION_DENIED"
+                  : "MICROPHONE_UNAVAILABLE",
+              ),
+        );
     }
   }
 
@@ -109,7 +129,7 @@ export class VoiceCapture {
     try {
       this.recorder?.stop();
     } catch {
-      this.fail();
+      this.fail(new VoiceCaptureError("AUDIO_CAPTURE_INTERRUPTED"));
     } finally {
       this.releaseStream();
     }
@@ -117,6 +137,12 @@ export class VoiceCapture {
 
   private async finish(generation: number, mimeType: string): Promise<void> {
     if (generation !== this.generation) return;
+    // Только явная остановка пользователем разрешает отправить запись.
+    // Browser stop при потере устройства может прийти раньше track.ended.
+    if (this.state !== "transcribing") {
+      this.fail(new VoiceCaptureError("AUDIO_CAPTURE_INTERRUPTED"));
+      return;
+    }
     this.releaseStream();
     const blob = new Blob(this.chunks, { type: mimeType });
     this.chunks = [];
@@ -125,7 +151,11 @@ export class VoiceCapture {
       blob.size > (this.options.maxBytes ?? 10 * 1024 * 1024) ||
       !this.options.available()
     ) {
-      this.fail();
+      this.fail(
+        new VoiceCaptureError(
+          !blob.size ? "AUDIO_EMPTY" : "AUDIO_LIMIT_EXCEEDED",
+        ),
+      );
       return;
     }
     const controller = new AbortController();
