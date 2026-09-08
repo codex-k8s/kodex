@@ -7,6 +7,31 @@
 ConfigMaps, миграции, sidecar images, replicas и strategy не меняются.
 Один target и группа используют одинаковый механизм.
 
+## Выбор source и image
+
+По [решению владельца #1343](https://github.com/codex-k8s/kodex/issues/1343)
+hot reload — основной dev профиль на весь период разработки и последующих
+ручных циклов, включая замечания после первой приёмки MVP. Для монтируемого
+Go/Vue кода по умолчанию используется scoped source workflow ниже. Не требуется
+пересобирать неизменный toolchain image или переводить все dev units на immutable
+images ради нового Git SHA. Смена dev профиля — отдельное решение владельца;
+[общие границы и сохранность данных](../../docs/runbooks/remote-hot-reload.md#профиль-разработки)
+зафиксированы в runbook.
+
+| Что изменилось | Необходимая подготовка и поставка |
+| --- | --- |
+| Только монтируемый application code | Проверенный новый source checkout, scoped plan/apply, actual source/process readback |
+| Go/npm manifests или locks | Штатная подготовка exact dependencies/cache и проверка runtime-доступности; сама по себе не требует Docker build toolchain image |
+| Dockerfile/base, OS packages, toolchain, native dependencies или встроенные assets | Сборка и доставка изменившегося образа с exact digest; незатронутые образы сохраняются |
+| Встроенный runner/runtime/RoleImage binary | Явная image build/admission/promotion/digest цепочка до нового Job/Pod; прежние active attempt pins и immutable inputs сохраняются |
+
+Подготовка кэша не снимает guards быстрого source release. Если manifests/locks
+отличаются, требуется соответствующий dependency/config workflow; нельзя
+обходить отказ CLI или выдавать старый кэш за подготовленный. Source update
+не заменяет доставку встроенного binary, DB migration и config/security переход.
+Обычные переносимые установки сохраняют immutable application image профиль
+без hostPath; это не обязательная смена способа разработки на текущем сервере.
+
 ## Предварительные условия
 
 - Node.js с поддержкой ES modules и `kubectl`; точный Kubernetes context.
@@ -14,16 +39,17 @@ ConfigMaps, миграции, sidecar images, replicas и strategy не меня
   `kodex.dev/environment=staging`, `app.kubernetes.io/part-of=kodex`.
 - `RollingUpdate`, `maxUnavailable: 0`, положительный числовой `maxSurge` и
   доступное текущее число replicas. Для workers уже активирован grant v2.
-- Образ собран, доставлен в registry и допущен существующим admission policy.
+- Для image target образ собран, доставлен в registry и допущен существующим admission policy.
   Скрипт не обходит admission и не публикует неподтвержденные образы.
 - Приложение совместимо с действующими API, событиями и схемой БД.
   Этот инструмент не выводит совместимость из Git SHA.
 
 ## Использование
 
-Приватный JSON manifest версии 1 содержит `targets`: массив объектов `name` и
-`image`, где image имеет вид `repository@sha256:<64 hex>`. Перечень приложений
-закрытый; authority infrastructure через этот путь обновлять нельзя.
+Приватный JSON manifest версии 1 содержит `targets`: массив объектов с `name`
+и выбранным `source` либо `image`. Для image target значение имеет вид
+`repository@sha256:<64 hex>`. Перечень приложений закрытый; authority
+infrastructure через этот путь обновлять нельзя.
 
 В hot-reload профиле вместо `image` или вместе с ним можно задать
 `source: {"path":"/srv/kodex-dev/workspace-new","revision":"<40 hex commit>"}`.
