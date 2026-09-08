@@ -20,12 +20,12 @@ WITH accepted_snapshot AS (
         @attestation_receipt_id,
         clock_timestamp()
     WHERE internal_rpc_authority.runtime_restore_fence_allows_work()
-      AND internal_rpc_authority.validate_snapshot_attestation_receipt(
+      AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
           @attestation_receipt_id,
           @target_workload_id,
           @source_revision,
           @source_digest_sha256
-      )
+      ) IS NOT NULL
       AND (
           (
               NOT EXISTS (

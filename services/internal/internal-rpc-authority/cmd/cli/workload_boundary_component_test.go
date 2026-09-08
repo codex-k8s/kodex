@@ -240,6 +240,7 @@ func testCanonicalBoundaryQueries(t *testing.T, ctx context.Context, issuer, ver
 	snapshot["jti"], snapshot["canonical_digest_sha256"], snapshot["expires_at"] =
 		"10930000-0000-4000-8000-000000000033", strings.Repeat("d", 64), time.Now().Add(time.Minute)
 	var reserved bool
+	snapshot["caller_workload_id"], snapshot["context_signer_generation"] = "control-plane", int64(1)
 	if err := verifier.QueryRow(ctx, read("verifier__accept_context"), snapshot).Scan(&accepted, &reserved); err != nil || !accepted || !reserved {
 		t.Fatal("canonical context acceptance rejected")
 	}

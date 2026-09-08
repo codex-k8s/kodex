@@ -45,12 +45,12 @@ psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 --file \
   cd -- "$repository_root/services/internal/internal-rpc-authority"
   KODEX_AUTHORITY_MIGRATION_TEST_PORT="$port" \
     env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
-    go test -count=1 -timeout=60s ./cmd/cli -run '^TestAuthorityBaselineGooseComponent$'
+    go test -count=1 -timeout=120s ./cmd/cli -run '^TestAuthorityBaselineGooseComponent$'
 )
 
 assertion=$(psql "$authority_admin_dsn" --no-password --tuples-only --no-align <<'SQL'
 SELECT
-  (SELECT count(*) = 14
+  (SELECT count(*) = 22
      FROM pg_catalog.pg_proc AS procedure
      JOIN pg_catalog.pg_namespace AS namespace
        ON namespace.oid = procedure.pronamespace

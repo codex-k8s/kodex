@@ -271,19 +271,21 @@ func prepareAuthorityConcurrencyFixture(
 		RETURNS boolean LANGUAGE sql STABLE AS $$
 			SELECT open FROM internal_rpc_authority.test_restore_fence
 		$$;
-		CREATE FUNCTION internal_rpc_authority.validate_snapshot_attestation_receipt(
+		CREATE FUNCTION internal_rpc_authority.validate_issued_context_binding(uuid,text,text,text,bigint,text,bigint,bigint,bigint)
+        RETURNS boolean LANGUAGE sql AS $$ SELECT true $$;
+        CREATE FUNCTION internal_rpc_authority.snapshot_attestation_freshness_deadline(
 			p_receipt_id uuid,
 			p_workload_id text,
 			p_source_revision bigint,
 			p_source_digest_sha256 text
-		) RETURNS boolean LANGUAGE sql STABLE AS $$
-			SELECT EXISTS (
+		) RETURNS timestamptz LANGUAGE sql VOLATILE AS $$
+			SELECT CASE WHEN EXISTS (
 				SELECT 1 FROM internal_rpc_authority.test_receipts AS receipt
 				WHERE receipt.receipt_id = p_receipt_id
 				  AND receipt.workload_id = p_workload_id
 				  AND receipt.source_revision = p_source_revision
 				  AND receipt.source_digest_sha256 = p_source_digest_sha256
-			)
+			) THEN clock_timestamp() + interval '30 seconds' ELSE NULL END
 		$$;
 		INSERT INTO internal_rpc_authority.test_receipts (
 			receipt_id, workload_id, source_revision, source_digest_sha256

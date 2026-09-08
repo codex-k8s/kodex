@@ -34,17 +34,19 @@ export function requireIdle(state, now = Date.now()) {
 }
 
 // Отдельная configuration-фаза сохраняет старые policy, helper image и published pins.
-export function preparePolicy(policy, parameters, catalog, runnerDigest) {
+export function preparePolicy(policy, parameters, catalog, runnerDigest, authorityIssuerImage) {
   [policy, parameters, catalog].forEach(requireStaging);
   requireValue(policy.kind === "ConfigMap" && policy.immutable === true && policy.metadata.labels["kodex.dev/owner-intent"] === "true" &&
     parameters.kind === "ImageAdmissionPolicyParameters" && parameters.metadata.name === policy.metadata.name &&
     fingerprint(parameters.spec) === fingerprint(policy.data) && policyDigest(policy.data) === policy.data.policySHA256 &&
     (policy.metadata.name === policyBase || policy.metadata.name === `${policyBase}-${policy.data.policySHA256.slice(0, 32)}`), "CURRENT_POLICY_BINDING_INVALID");
   requireValue(catalog.kind === "ConfigMap" && typeof catalog.data?.["catalog.json"] === "string" &&
-    Object.keys(catalog.data).length === 1 && digestPattern.test(runnerDigest) && runnerDigest !== policy.data.trustedRoleBaseDigest, "NEW_RUNNER_AND_EXACT_CATALOG_REQUIRED");
+    Object.keys(catalog.data).length === 1 && digestPattern.test(runnerDigest) && (runnerDigest !== policy.data.trustedRoleBaseDigest || authorityIssuerImage !== undefined), "NEW_RUNNER_AND_EXACT_CATALOG_REQUIRED");
+  const issuerChange = authorityIssuerImage !== undefined;
+  requireValue(!issuerChange || /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/.test(authorityIssuerImage) && authorityIssuerImage !== (policy.data.authorityIssuerImage ?? policy.data.authorityImage), "NEW_EXACT_AUTHORITY_ISSUER_REQUIRED");
   const revision = Number(policy.data.policyRevision);
   requireValue(Number.isSafeInteger(revision) && revision > 0 && revision < Number.MAX_SAFE_INTEGER, "POLICY_REVISION_INVALID");
-  const data = { ...policy.data, policyRevision: String(revision + 1), trustedRoleBaseDigest: runnerDigest };
+  const data = { ...policy.data, policyRevision: String(revision + 1), trustedRoleBaseDigest: runnerDigest, ...(issuerChange ? {authorityIssuerImage} : {}) };
   data.policySHA256 = policyDigest(data);
   const name = `${policyBase}-${data.policySHA256.slice(0, 32)}`;
   const toolsDigest = policyToolsDigest(policy);
@@ -55,8 +57,8 @@ export function preparePolicy(policy, parameters, catalog, runnerDigest) {
   requireValue(bases.length === 1 && bases[0].available === true && bases[0].baseImageReference === data.trustedRoleBaseRepository &&
     bases[0].baseImageDigest === policy.data.trustedRoleBaseDigest, "CATALOG_BASE_BINDING_INVALID");
   bases[0].baseImageDigest = runnerDigest;
-  const catalogData = { "catalog.json": `${JSON.stringify(nextCatalog, null, 2)}\n` };
-  const catalogName = `kodex-role-environments-${fingerprint(catalogData).slice(0, 32)}`;
+  const catalogData = runnerDigest === policy.data.trustedRoleBaseDigest ? {...catalog.data} : { "catalog.json": `${JSON.stringify(nextCatalog, null, 2)}\n` };
+  const catalogName = runnerDigest === policy.data.trustedRoleBaseDigest ? catalog.metadata.name : `kodex-role-environments-${fingerprint(catalogData).slice(0, 32)}`;
   const metadata = (original, nextName) => ({ name: nextName, namespace, labels: { ...original.metadata.labels, "kodex.dev/owner-intent": "true" } });
   return { version: 1, previous: { policyName: policy.metadata.name, policyUID: policy.metadata.uid, policySHA256: policy.data.policySHA256,
     catalogName: catalog.metadata.name, catalogUID: catalog.metadata.uid, catalogSHA256: fingerprint(catalog.data) },
@@ -93,10 +95,11 @@ export function planDeployment(deployment, bundle, phase, readerImage) {
   const policy = bundle.resources[0], catalog = bundle.resources[2];
   if (phase === "reader") {
     requireValue(name === "image-admission-controller" && /^registry\.local\.kodex\/kodex\/image-admission@sha256:[a-f0-9]{64}$/.test(readerImage), "EXACT_READER_IMAGE_REQUIRED");
-    requireValue(app.env.filter((item) => item.name === "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS").length === 0, "READER_TRANSITION_ALREADY_STARTED");
+    const pauses = app.env.filter((item) => item.name === "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS");
+    requireValue(pauses.length === 0 || pauses.length === 1 && pauses[0].value === "false" && !pauses[0].valueFrom, "READER_TRANSITION_ALREADY_STARTED");
     setLiteral(app, "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP", bundle.previous.policyName, bundle.previous.policyName);
     app.image = readerImage;
-    app.env.push({ name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", value: "true" });
+    if (pauses.length) pauses[0].value = "true"; else app.env.push({ name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", value: "true" });
   } else if (phase === "controller" || phase === "resume") {
     requireValue(name === "image-admission-controller" && app.image === readerImage, "COMPATIBLE_READER_REQUIRED");
     setLiteral(app, "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", phase === "resume" ? "false" : "true", "true");

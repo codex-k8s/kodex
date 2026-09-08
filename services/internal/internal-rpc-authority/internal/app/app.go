@@ -32,7 +32,7 @@ import (
 
 const (
 	maxDSNFileBytes                 = 16 << 10
-	snapshotReadbackRefreshInterval = time.Minute
+	snapshotReadbackRefreshInterval = 10 * time.Second
 	logMessageStart                 = "internal-rpc-authority runtime started"
 	logMessageStop                  = "internal-rpc-authority runtime stopped"
 )
@@ -682,9 +682,16 @@ func runSnapshotReload(
 		}
 		activationCancel()
 		if err != nil {
-			authorityApplication.SetAvailable(false)
-			if readiness.Set(conditionSnapshot, false) {
-				logger.Error("authority snapshot activation rejected", "error_class", "snapshot")
+			probeCtx, probeCancel := context.WithTimeout(ctx, config.ReadinessTimeout)
+			retained := retainServedSnapshotAfterReplacementFailure(probeCtx, authorityApplication, err)
+			probeCancel()
+			authorityApplication.SetAvailable(retained)
+			if readiness.Set(conditionSnapshot, retained) {
+				if retained {
+					logger.Warn("replacement readback deferred with bounded served snapshot", "error_class", "readback_attestor")
+				} else {
+					logger.Error("authority snapshot activation rejected", "error_class", "snapshot")
+				}
 			}
 			continue
 		}
@@ -699,6 +706,12 @@ func runSnapshotReload(
 			"signer_generation", loaded.Policy.SignerGeneration,
 		)
 	}
+}
+
+// Непринятый replacement не обновляет исходный receipt. Сохраняется только
+// ещё действующий exact snapshot при временном transport failure attestor.
+func retainServedSnapshotAfterReplacementFailure(ctx context.Context, runtime snapshotMaintenance, err error) bool {
+	return allowsReadbackLastKnownGood(err) && runtime.ServedStateReady(ctx) == nil
 }
 
 func maintainServedSnapshot(

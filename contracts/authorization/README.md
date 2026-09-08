@@ -661,6 +661,13 @@ Unknown, duplicate и `null` fields запрещены на любой глуб�
 обрезаются и не нормализуются после parse. Идентификаторы и digests принимаются
 только в canonical lexical form.
 
+Дополнительно к wire lifetime действует независимый durable freshness budget:
+issuer регистрирует JTI и canonical JWS digest с exact caller/target/source tuple
+и owner-selected исходным readback receipt. Приём требует исходный deadline не
+позже `receipt.accepted_at + 30 seconds`; новый receipt, skew, рестарт и
+continuation его не продлевают. Полный двухфазный переход и матрица —
+[OPS-DOC-1313](../../docs/operations/authority-freshness-1313.md).
+
 ## Signed JWKS и машинная политика snapshot
 
 Snapshot является compact ES256 JWS. Payload schema:

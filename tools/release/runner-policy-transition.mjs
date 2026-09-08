@@ -8,7 +8,7 @@ import { fingerprint } from "./scoped-release.mjs";
 import { namespace, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
 
 const requireValue = (value, code) => { if (!value) throw new Error(code); };
-const phases = ["maintenance", "reader", "resources", "binding", "control-plane", "role-image-builder", "controller", "resume", "open"];
+const phases = ["maintenance", "reader", "schema", "admission", "resources", "binding", "control-plane", "role-image-builder", "controller", "resume", "open"];
 function privateRead(path) {
   const stat = lstatSync(path);
   requireValue(stat.isFile() && (stat.mode & 0o077) === 0 && stat.size < 8 << 20, "PRIVATE_INPUT_REQUIRED");
@@ -39,7 +39,7 @@ function main(args) {
   requireValue(["prepare", "inspect", "plan", "apply"].includes(command), "INVALID_COMMAND");
   while (args.length) {
     const key = args.shift();
-    requireValue(["--context", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
+    requireValue(["--context", "--authority-issuer-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
     options[key] = args.shift();
   }
   const context = options["--context"];
@@ -57,7 +57,7 @@ function main(args) {
     const cp = get("deployment", "control-plane");
     const catalogs = cp.spec.template.spec.volumes.filter((item) => item.name === "role-environments");
     requireValue(catalogs.length === 1, "EXACT_CATALOG_REQUIRED");
-    const bundle = preparePolicy(get("configmap", oldName), get("imageadmissionpolicyparameters", oldName), get("configmap", catalogs[0].configMap.name), options["--runner-digest"]);
+    const bundle = preparePolicy(get("configmap", oldName), get("imageadmissionpolicyparameters", oldName), get("configmap", catalogs[0].configMap.name), options["--runner-digest"], options["--authority-issuer-image"]);
     record(options["--output"], { ...bundle, clusterUID, namespaceUID });
     process.stdout.write(`${JSON.stringify({ status: "PREPARED", policy: bundle.resources[0].metadata.name, digest: bundle.resources[0].data.policySHA256 })}\n`);
     return;
@@ -65,7 +65,7 @@ function main(args) {
   const bundle = privateRead(options["--bundle"]);
   requireValue(bundle.clusterUID === clusterUID && bundle.namespaceUID === namespaceUID, "CLUSTER_IDENTITY_CHANGED");
   const recomputed = preparePolicy(get("configmap", bundle.previous.policyName), get("imageadmissionpolicyparameters", bundle.previous.policyName),
-    get("configmap", bundle.previous.catalogName), bundle.resources[0].data.trustedRoleBaseDigest);
+    get("configmap", bundle.previous.catalogName), bundle.resources[0].data.trustedRoleBaseDigest, bundle.resources[0].data.authorityIssuerImage !== get("configmap", bundle.previous.policyName).data.authorityIssuerImage ? bundle.resources[0].data.authorityIssuerImage : undefined);
   requireValue(fingerprint({ ...recomputed, clusterUID, namespaceUID }) === fingerprint(bundle), "BUNDLE_OR_PREDECESSOR_CHANGED");
   const readDB = () => JSON.parse(kubectl(["exec", "-i", "kodex-postgresql-0", "--", "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"], readFileSync(new URL("./runner-policy-readback.sql", import.meta.url), "utf8")));
   const database = readDB();
@@ -116,7 +116,30 @@ function main(args) {
     operations.push({ type: "patch", kind: gateway.kind, name: gateway.metadata.name, uid: gateway.metadata.uid, field: "spec", afterSHA256: fingerprint(change.spec),
       patch: [{ op: "test", path: "/metadata/uid", value: gateway.metadata.uid }, { op: "test", path: "/metadata/resourceVersion", value: gateway.metadata.resourceVersion },
         { op: "add", path: "/metadata/annotations", value: change.annotations }, { op: "replace", path: "/spec", value: change.spec }] });
+  } else if (phase === "schema" || phase === "admission") {
+    requireValue(bundle.resources[0].data.authorityIssuerImage && env(controller,"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS") === "true" &&
+      controller.spec.template.spec.containers.find(c=>c.name==="image-admission-controller").image === readerImage, "COMPATIBLE_PAUSED_ISSUER_READER_REQUIRED");
+    if (phase === "schema") {
+      const crd=get("customresourcedefinition","imageadmissionpolicyparameters.supplychain.kodex.dev"),spec=structuredClone(crd.spec);
+      const property={type:"string",pattern:"^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$"};
+      requireValue(spec.versions?.length===1 && spec.versions[0].schema?.openAPIV3Schema?.properties?.spec?.properties?.authorityImage,"EXACT_PARAMETERS_SCHEMA_REQUIRED");
+      const fields=spec.versions[0].schema.openAPIV3Schema.properties.spec.properties;
+      requireValue(!fields.authorityIssuerImage || fingerprint(fields.authorityIssuerImage)===fingerprint(property),"ISSUER_SCHEMA_DRIFT");fields.authorityIssuerImage=property;patch(crd,"spec",spec);
+    } else {
+      const admission=get("validatingadmissionpolicy","kodex-image-admission-controller-jobs"),spec=structuredClone(admission.spec);
+      const before="variables.pod.initContainers[1].image == params.spec.authorityImage",after="variables.pod.initContainers[1].image == (has(params.spec.authorityIssuerImage) ? params.spec.authorityIssuerImage : params.spec.authorityImage)";
+      const matches=spec.validations.filter(rule=>rule.expression.includes(before)||rule.expression.includes(after));
+      requireValue(matches.length===1,"EXACT_ISSUER_ADMISSION_RULE_REQUIRED");matches[0].expression=matches[0].expression.replace(before,after);patch(admission,"spec",spec);
+    }
   } else if (phase === "resources") {
+    if (bundle.resources[0].data.authorityIssuerImage) {
+      const crd=get("customresourcedefinition","imageadmissionpolicyparameters.supplychain.kodex.dev");
+      const property=crd.spec.versions?.[0]?.schema?.openAPIV3Schema?.properties?.spec?.properties?.authorityIssuerImage;
+      const admission=get("validatingadmissionpolicy","kodex-image-admission-controller-jobs");
+      requireValue(property?.type==="string" && property.pattern==="^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$" &&
+        admission.spec.validations.filter(rule=>rule.expression.includes("variables.pod.initContainers[1].image == (has(params.spec.authorityIssuerImage) ? params.spec.authorityIssuerImage : params.spec.authorityImage)")).length===1,
+        "ADDITIVE_ISSUER_SCHEMA_AND_ADMISSION_REQUIRED");
+    }
     for (const resource of bundle.resources) {
       const current = JSON.parse(kubectl(["get", resource.kind, resource.metadata.name, "--ignore-not-found", "-o", "json"]) || "null");
       if (current) requireValue(fingerprint(content(current)) === fingerprint(content(resource)) && current.metadata.labels?.["kodex.dev/owner-intent"] === "true", "EXISTING_REVISION_CONFLICT");

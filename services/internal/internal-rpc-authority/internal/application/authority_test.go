@@ -191,3 +191,12 @@ func newActivationAuthority(
 	}
 	return domain
 }
+
+func (*activationStore) Freshness(_ context.Context, state repository.SnapshotState) (repository.SnapshotFreshness, error) {
+	now := time.Now()
+	return repository.SnapshotFreshness{ReceiptID: state.AttestationReceiptID, ObservedAt: now, ValidUntil: now.Add(30 * time.Second)}, nil
+}
+
+func (*activationStore) RegisterIssuedContext(context.Context, repository.SnapshotState, repository.IssuedContextBinding) error {
+	return nil
+}

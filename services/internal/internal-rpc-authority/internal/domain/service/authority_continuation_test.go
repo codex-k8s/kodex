@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -165,14 +166,23 @@ func TestIssueContinuationInheritsVerifiedRootAndReservesChild(t *testing.T) {
 		store.parent.Digest != hex.EncodeToString(parentDigest[:]) || store.child.JTI != childClaims.JTI {
 		t.Fatalf("continuation reservation не связана с parent/child: parent=%+v child=%+v", store.parent, store.child)
 	}
+	if store.binding.JTI != childClaims.JTI || store.binding.ParentJTI != parentJTI || store.binding.ParentDigest != hex.EncodeToString(parentDigest[:]) || store.binding.CallerWorkloadID != "stt-tts-service" || store.binding.TargetWorkloadID != "control-plane" {
+		t.Fatal("durable continuation binding lost parent authority")
+	}
 	if _, err := authority.Verify(t.Context(), childCompact, childMethod, sttSPIFFE, requestDigest); err != nil {
 		t.Fatalf("проверить child context: %v", err)
+	}
+	store.registrationError = errors.New("database response lost")
+	if compact, _, err := authority.IssueContinuation(t.Context(), childOperation, parentCompact, requestID, correlationID, requestDigest); err == nil || compact != "" {
+		t.Fatal("uncertain registration returned a usable context")
 	}
 }
 
 type continuationCaptureStore struct {
-	parent, child repository.Reservation
-	calls         int
+	parent, child     repository.Reservation
+	calls             int
+	binding           repository.IssuedContextBinding
+	registrationError error
 }
 
 func (*continuationCaptureStore) Reserve(context.Context, repository.Reservation) error { return nil }
@@ -192,3 +202,13 @@ func (*continuationCaptureStore) AcceptVerification(context.Context, repository.
 }
 func (*continuationCaptureStore) Ready(context.Context, repository.SnapshotState) error { return nil }
 func (*continuationCaptureStore) Close()                                                {}
+
+func (*continuationCaptureStore) Freshness(_ context.Context, state repository.SnapshotState) (repository.SnapshotFreshness, error) {
+	now := time.Now()
+	return repository.SnapshotFreshness{ReceiptID: state.AttestationReceiptID, ObservedAt: now, ValidUntil: now.Add(30 * time.Second)}, nil
+}
+
+func (store *continuationCaptureStore) RegisterIssuedContext(_ context.Context, _ repository.SnapshotState, binding repository.IssuedContextBinding) error {
+	store.binding = binding
+	return store.registrationError
+}

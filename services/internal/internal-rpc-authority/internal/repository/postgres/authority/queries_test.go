@@ -12,7 +12,7 @@ import (
 func TestSnapshotActivationAllowsFreshReceiptForExactSnapshot(t *testing.T) {
 	query := verifierActivateSnapshotSQL
 	for _, required := range []string{
-		"validate_snapshot_attestation_receipt(",
+		"snapshot_attestation_freshness_deadline(",
 		"current.source_revision = @source_revision",
 		"current.source_digest_sha256 = @source_digest_sha256",
 		"authority_snapshot_watermarks.source_revision <= EXCLUDED.source_revision",
@@ -33,6 +33,7 @@ func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 		AttestationReceiptID: "00000000-0000-4000-8000-000000000001",
 	}
 	args := snapshotArgs("control-plane", state)
+	args["caller_workload_id"], args["context_signer_generation"] = "control-plane", uint64(1)
 	for key, value := range contextReservationArgs(repository.Reservation{}) {
 		args[key] = value
 	}
@@ -45,10 +46,10 @@ func TestContextAcceptanceUsesExactSnapshotReceiptArguments(t *testing.T) {
 		t.Fatalf("context acceptance arguments are not exact: %v", err)
 	}
 	for _, required := range []string{
-		"WITH exact_snapshot AS MATERIALIZED (",
-		"validate_snapshot_attestation_receipt(",
+		"exact_snapshot AS MATERIALIZED (",
+		"snapshot_attestation_freshness_deadline(",
 		"@attestation_receipt_id",
-		"WHERE NOT EXISTS (SELECT 1 FROM exact_snapshot)",
+		"AND NOT EXISTS (SELECT 1 FROM exact_snapshot)",
 		"readback_attestation_receipt_id =\n            EXCLUDED.readback_attestation_receipt_id",
 		"IS DISTINCT FROM EXCLUDED.readback_attestation_receipt_id",
 		"SELECT accepted FROM exact_snapshot",
@@ -206,7 +207,7 @@ func TestSnapshotReadinessUsesExactArgumentsAndSharedWorkloadReceipt(t *testing.
 	}
 	if !strings.Contains(
 		verifierReadinessSQL,
-		"validate_snapshot_attestation_receipt(\n          readback_attestation_receipt_id,",
+		"snapshot_attestation_freshness_deadline(\n          readback_attestation_receipt_id,",
 	) {
 		t.Fatal("snapshot readiness does not validate the current workload receipt")
 	}

@@ -30,14 +30,23 @@ const (
 
 // Reservation задаёт устойчивую одноразовую запись replay protection.
 type Reservation struct {
-	Kind        ReservationKind
-	ScopeID     string
-	OperationID string
-	Issuer      string
-	Revision    uint64
-	JTI         string
-	Digest      string
-	ExpiresAt   time.Time
+	CallerWorkloadID string
+	SignerGeneration uint64
+	Kind             ReservationKind
+	ScopeID          string
+	OperationID      string
+	Issuer           string
+	Revision         uint64
+	JTI              string
+	Digest           string
+	ExpiresAt        time.Time
+}
+
+// IssuedContextBinding связывает JWS с серверным receipt; deadline не задаётся caller.
+type IssuedContextBinding struct {
+	JTI, Digest, CallerWorkloadID, TargetWorkloadID string
+	IssuedAt, ExpiresAt                             time.Time
+	ParentJTI, ParentDigest                         string
 }
 
 // SnapshotState задаёт проверяемый обслуживаемый снимок и его историю.
@@ -60,6 +69,14 @@ type SnapshotAttestationReceipt struct {
 	ExpiresAt time.Time
 }
 
+// SnapshotFreshness содержит только verifier-owned время и identity receipt.
+// ObservedAt назначает PostgreSQL; клиент не переносит сюда свой clock/TTL.
+type SnapshotFreshness struct {
+	ReceiptID  string
+	ValidUntil time.Time
+	ObservedAt time.Time
+}
+
 // RevisionDigest связывает revision с каноническим SHA-256 digest.
 type RevisionDigest struct {
 	Revision     uint64
@@ -69,8 +86,10 @@ type RevisionDigest struct {
 // Store владеет replay reservations и persistent snapshot high-watermark.
 type Store interface {
 	Reserve(ctx context.Context, reservation Reservation) error
+	RegisterIssuedContext(ctx context.Context, state SnapshotState, binding IssuedContextBinding) error
 	ReserveContinuation(ctx context.Context, parent Reservation, child Reservation) error
 	ActivateSnapshot(ctx context.Context, state SnapshotState) error
+	Freshness(ctx context.Context, state SnapshotState) (SnapshotFreshness, error)
 	AcceptVerification(
 		ctx context.Context,
 		state SnapshotState,

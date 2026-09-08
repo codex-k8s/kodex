@@ -8,11 +8,11 @@ SELECT EXISTS (
       AND key_set_revision = @key_set_revision
       AND policy_revision = @policy_revision
       AND signer_generation = @signer_generation
-      AND internal_rpc_authority.validate_snapshot_attestation_receipt(
+      AND internal_rpc_authority.snapshot_attestation_freshness_deadline(
           readback_attestation_receipt_id,
           @target_workload_id,
           @source_revision,
           @source_digest_sha256
-      )
+      ) IS NOT NULL
 )
 AND internal_rpc_authority.runtime_restore_fence_allows_work();

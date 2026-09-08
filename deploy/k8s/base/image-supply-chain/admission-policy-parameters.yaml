@@ -58,6 +58,7 @@ spec:
                 toolsImage: {type: string, minLength: 1}
                 admissionImage: {type: string, minLength: 1}
                 authorityImage: {type: string, minLength: 1}
+                authorityIssuerImage: {type: string, pattern: '^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$'}
                 promotionRepository: {type: string, minLength: 1}
                 promotionEvidenceRepository: {type: string, minLength: 1}
                 evidenceRepository: {type: string, minLength: 1}
