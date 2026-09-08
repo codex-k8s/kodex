@@ -104,6 +104,7 @@ test-integration-hot-reload-container:
 	@./scripts/tests/integration-hot-reload-container-test.sh
 
 test-full-local-e2e-entrypoint:
+	@node --test tools/dev/component-manifest.test.mjs
 	@./scripts/tests/full-local-e2e-entrypoint-test.sh
 	@./scripts/tests/local-profile-selection-test.sh
 	@./scripts/tests/hot-reload-verifier-contract-test.sh

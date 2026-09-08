@@ -139,8 +139,9 @@ grep -Fq 'dev up ' "$command_log" || fail 'full run did not delegate deployment 
 grep -Fq 'dev e2e ' "$command_log" || fail 'full run did not delegate browser E2E to dev.sh e2e'
 [[ $(grep '^dev \(up\|e2e\) ' "$command_log" | grep -c -- '--profile web-with-mattermost') == 2 ]] ||
   fail 'full run did not pass the selected profile to both deployment and browser E2E'
-grep -Fq 'hot-reload --kubeconfig ' "$command_log" ||
-  fail 'full run did not verify Go and Vue hot reload'
+if grep -Fq 'hot-reload --kubeconfig ' "$command_log"; then
+  fail 'default application acceptance mutated hot-reload sources'
+fi
 grep -Fq 'storage-e2e integration-deployed-e2e.sh ' "$command_log" ||
   fail 'full run did not execute deployed integration E2E'
 grep -Fq 'storage-e2e local-role-image-supply-chain-e2e.sh ' "$command_log" ||
@@ -156,9 +157,9 @@ jq -e '
   .version == 1 and .status == "passed" and .context == "fixture-local" and
   .resourcePrefix == "contract-full" and .buildMode == "rebuilt" and
   .browser == {status:"passed",counts:{passed:7}} and
-  .batches == ["hot-reload","browser","integration","role-image","archive","backup"] and
+  .batches == ["browser","integration","role-image","archive","backup"] and
   .additionalTargets == ["test-extra"] and
-  [.phases[].name] == ["local-render-deploy","go-and-vue-hot-reload-readback",
+  [.phases[].name] == ["local-render-deploy",
     "browser-auth-and-full-e2e","deployed-integration-synthetic",
     "role-image-build-admit-promote-runtime-readback",
     "session-archive-write-restore-delete-readback","backup-and-disposable-restore-drill",
@@ -183,6 +184,37 @@ fi
 jq -e '.status == "passed" and .buildMode == "reused"' \
   "$state_directory/e2e/contract-reuse-summary.json" >/dev/null ||
   fail '--skip-build summary is invalid'
+
+# Явный tooling-профиль сохраняется, но никогда не выбирается приложением по умолчанию.
+: >"$command_log"
+"$fixture_root/tools/dev/full-local-e2e.sh" --skip-build \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-hot-reload \
+  --run-timeout-ms 60000 --batch hot-reload >/dev/null
+grep -Fq 'hot-reload --kubeconfig ' "$command_log" || fail 'explicit hot-reload batch was not executed'
+
+component_manifest="$temporary_directory/components.json"
+printf '{}\n' >"$component_manifest"
+: >"$command_log"
+"$fixture_root/tools/dev/full-local-e2e.sh" --skip-build \
+  --kubeconfig "$kubeconfig" --context fixture-local \
+  --state-directory "$state_directory" --resource-prefix contract-components \
+  --run-timeout-ms 60000 --batch browser --component-manifest "$component_manifest" >/dev/null
+[[ $(grep -c -- "--component-manifest $component_manifest" "$command_log") == 3 ]] ||
+  fail 'component manifest was not forwarded to initial, browser and final readback'
+if grep -Eq '^(dev up|hot-reload)' "$command_log"; then fail 'component acceptance mutated source deployment'; fi
+jq -e '.evidenceProfile == "component-revisions" and (.componentManifestSHA256 | test("^[a-f0-9]{64}$"))' \
+  "$state_directory/e2e/contract-components-summary.json" >/dev/null || fail 'component summary identity is absent'
+if "$fixture_root/tools/dev/full-local-e2e.sh" --skip-build \
+  --kubeconfig "$kubeconfig" --context fixture-local --state-directory "$state_directory" \
+  --component-manifest "$component_manifest" --batch hot-reload >/dev/null 2>&1; then
+  fail 'component acceptance allowed hot-reload mutation'
+fi
+if "$fixture_root/tools/dev/full-local-e2e.sh" \
+  --kubeconfig "$kubeconfig" --context fixture-local --state-directory "$state_directory" \
+  --component-manifest "$component_manifest" >/dev/null 2>&1; then
+  fail 'component acceptance allowed a global rebuild'
+fi
 
 : >"$command_log"
 "$fixture_root/tools/dev/full-local-e2e.sh" --skip-build \
