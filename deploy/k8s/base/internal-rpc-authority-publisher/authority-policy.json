@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 76,
+  "policy_revision": 77,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",

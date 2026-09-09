@@ -32,7 +32,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 76 and .policy.authority_abi_version == 2 and
+	.policy_revision == 77 and .policy.authority_abi_version == 2 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.command.role-images.copy" or .operation_id == "platform.command.integration-definitions.copy" or .operation_id == "platform.command.role-images.archive-configuration" or .operation_id == "platform.command.integration-definitions.archive") |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
       .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 4 and

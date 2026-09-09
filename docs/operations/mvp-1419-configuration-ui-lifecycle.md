@@ -4,7 +4,7 @@ title: Приёмка UI lifecycle шаблонов и IntegrationDefinition
 type: operations
 status: approved
 owner: sre
-version: 1.1.0
+version: 1.1.1
 updated: 2026-09-09
 ---
 
@@ -35,6 +35,11 @@ archive собственной копии. Этот вид остается orga
 Restore не меняет published pointer и не перепривязывает consumers. Изменение
 policy и gateway доставляется согласованно с exact readback обслуживаемого
 operation binding; частичное обновление не является готовым rollout.
+Исправленный binding является новой immutable policy publication: канонический
+`policygen` повышает `policy_revision` с 76 до 77, тогда как ABI остаётся 2.
+SHA-256 точных bytes `authority-policy.json` входит в publication input digest,
+а подписанный snapshot связывает полный policy payload с revision 77. Повторное
+использование revision 76 для изменённых bindings запрещено.
 
 ## Безопасные входы
 
