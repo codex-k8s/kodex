@@ -107,12 +107,8 @@ rg -Fq -- "-ec 'rm -rf /work/docker /work/home'" \
 rg -Fq 'serverstransport.traefik.io/staff-control-center' \
   "$source_root/tools/dev/deploy-local.sh" ||
   fail 'local deploy does not remove the obsolete frontend ServersTransport'
-rg -F 'chmod -R a-w "$go_module_cache" "$go_sumdb_cache" "$cache_root/go-tools"' \
-  "$source_root/tools/dev/render-local.sh" >/dev/null ||
-  fail 'host priming does not make shared Go material read-only'
-rg -F 'test ! -w "$readonly_directory"' \
-  "$source_root/tools/dev/run-go-hot-reload.sh" >/dev/null ||
-  fail 'hot-reload bootstrap does not reject a writable shared Go path'
+timeout 120s bash "$source_root/scripts/tests/local-go-cache-contract-test.sh" >/dev/null ||
+  fail 'shared Go cache behavior or writable-mount rejection is invalid'
 configure_calls=$(rg -c --fixed-strings 'tools/deploy/configure-keycloak.sh' "$source_root/dev.sh")
 origin_argument_uses=$(rg -c --fixed-strings '"${keycloak_origin_arguments[@]}"' "$source_root/dev.sh")
 [[ "$configure_calls" == 2 && "$origin_argument_uses" == 2 ]] ||
