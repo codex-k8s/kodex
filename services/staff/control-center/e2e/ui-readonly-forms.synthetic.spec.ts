@@ -4,8 +4,9 @@ import {
   projectCollection,
   searchAssistantHistory,
   ReadonlyFixtureMissing,
+  waitForProjectCollection,
 } from "./ui-readonly-forms";
-import { permittedRequest } from "./ui-acceptance-proof";
+import { UIConditionError, permittedRequest } from "./ui-acceptance-proof";
 
 test("synthetic: exact permission query читается, соседняя mutation блокируется", async ({
   page,
@@ -88,7 +89,7 @@ for (const outcome of ["populated", "empty", "error"] as const) {
       await route.fulfill({
         contentType: "text/html",
         body: `<!doctype html><meta charset="UTF-8"><style>body{margin:0}.topbar{height:58px}</style><div class="app-shell"><div class="topbar"></div><main class="page-frame"><div class="page-header"><h1>Fixture</h1></div><div class="projects-toolbar"><button class="icon-button">Expand</button></div><p role="status">Loading</p><div id="rows"></div></main></div><script>
-      fetch('/api/v1/projects?pageSize=30').then(async response => {const data=await response.json();document.querySelector('[role=status]').remove();if(response.ok && data.items.length)document.querySelector('#rows').innerHTML='<div class="project-list__item">Fixture</div>';});
+      fetch('/api/v1/projects?pageSize=30').then(async response => {const data=await response.json();document.querySelector('[role=status]').remove();if(response.ok)document.querySelector('#rows').innerHTML=data.items.length?'<div class="project-list__item">Fixture</div>':'<p>Create your first Project</p>';});
       document.querySelector('button').onclick=()=>{document.querySelector('#rows').innerHTML='<div role="dialog" aria-label="Projects"><div class="project-list__item">Fixture</div><button aria-label="Close" onclick="this.parentElement.remove()">Close</button></div>'};
       </script>`,
       });
@@ -212,5 +213,127 @@ for (const locale of ["ru", "en"] as const) {
     });
     expect(writes).toBe(0);
     await expect(page.locator("#project-form")).toHaveCount(0);
+  });
+}
+
+for (const locale of ["ru", "en"] as const) {
+  for (const outcome of ["populated", "empty", "error"] as const) {
+    test(`synthetic: расширение ${locale}/${outcome} ждёт terminal UI без повторного действия`, async ({
+      page,
+    }) => {
+      let reads = 0;
+      await page.route("https://kodex.test/**", async (route) => {
+        if (new URL(route.request().url()).pathname === "/api/v1/projects") {
+          reads++;
+          await route.fulfill({ json: { items: [{}] } });
+          return;
+        }
+        await route.fulfill({
+          contentType: "text/html",
+          body: `<!doctype html><meta charset="UTF-8"><style>.topbar{height:58px}</style>
+          <div class="app-shell"><div class="topbar"></div><main class="page-frame">
+          <div class="page-header"><h1>Fixture</h1></div>
+          <div class="projects-toolbar"><button class="icon-button">Expand</button></div>
+          <p role="status">Loading</p><div id="rows"></div></main></div><script>
+          fetch('/api/v1/projects?pageSize=30').then(r=>r.json()).then(()=>{
+            document.querySelector('[role=status]').remove();
+            document.querySelector('#rows').innerHTML='<article class="project-list__item">Fixture</article>';
+          });
+          document.querySelector('button').onclick=()=>{
+            document.querySelector('#rows').innerHTML='<div role="dialog" aria-label="${locale === "ru" ? "Проекты" : "Projects"}"><div id="result"><p role="status">Loading</p></div><button aria-label="${locale === "ru" ? "Закрыть" : "Close"}" onclick="this.parentElement.remove()">Close</button></div>';
+            document.querySelector('.projects-toolbar button').disabled=true;
+          };
+          </script>`,
+        });
+      });
+      let finished = false;
+      const result = projectCollection(page, locale)
+        .then(
+          (value) => ({ value }),
+          (error: unknown) => ({ error }),
+        )
+        .finally(() => {
+          finished = true;
+        });
+      await expect(page.getByRole("dialog").getByRole("status")).toBeVisible();
+      // Старый count сразу давал PROJECT_DIALOG_EMPTY и закрывал диалог.
+      await page.waitForTimeout(150);
+      expect(finished).toBe(false);
+      await page.locator("#result").evaluate(
+        (element, input) => {
+          const node = document.createElement(
+            input.outcome === "populated" ? "article" : "p",
+          );
+          if (input.outcome === "populated")
+            node.className = "project-list__item";
+          if (input.outcome === "error") node.setAttribute("role", "alert");
+          node.textContent =
+            input.outcome === "empty"
+              ? input.locale === "ru"
+                ? "Создайте первый Проект"
+                : "Create your first Project"
+              : "Fixture";
+          element.replaceChildren(node);
+        },
+        { outcome, locale },
+      );
+      const actual = await result;
+      if (outcome === "populated") {
+        expect(actual).toHaveProperty("value.collapsedRows", 1);
+        expect(actual).toHaveProperty("value.expandedRows", 1);
+      } else {
+        expect(actual).toHaveProperty("error");
+        if ("error" in actual) {
+          if (outcome === "empty") {
+            expect(actual.error).toBeInstanceOf(ReadonlyFixtureMissing);
+            expect(actual.error).toHaveProperty(
+              "stage",
+              "PROJECT_DIALOG_EMPTY",
+            );
+          } else {
+            expect(actual.error).toBeInstanceOf(UIConditionError);
+            expect(actual.error).toHaveProperty("condition", "VISIBLE_ALERT");
+          }
+        }
+      }
+      expect(reads).toBe(1);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    });
+  }
+}
+
+for (const state of [
+  "loading",
+  "unmarked-empty",
+  "hidden-rows",
+  "loading-stale-rows",
+  "alert-stale-rows",
+] as const) {
+  test(`synthetic: collection ${state} не становится fixture NOT RUN или ложным PASS`, async ({
+    page,
+  }) => {
+    await page.setContent(`<main>
+      ${state.includes("loading") ? '<p role="status">Loading</p>' : ""}
+      ${state === "alert-stale-rows" ? '<p role="alert">Fixture error</p>' : ""}
+      ${state.includes("rows") ? `<article class="project-list__item" ${state === "hidden-rows" ? "hidden" : ""}>Fixture</article>` : ""}
+      ${state === "loading" ? "<p>Create your first Project</p>" : ""}
+    </main>`);
+    const started = Date.now();
+    const error = await waitForProjectCollection(
+      page.locator("main"),
+      "en",
+      "PROJECT_DIALOG_EMPTY",
+      300,
+    ).then(
+      () => undefined,
+      (value: unknown) => value,
+    );
+    expect(error).toBeInstanceOf(UIConditionError);
+    expect(error).not.toBeInstanceOf(ReadonlyFixtureMissing);
+    expect(error).toHaveProperty(
+      "condition",
+      state === "alert-stale-rows" ? "VISIBLE_ALERT" : "UI_ACTION",
+    );
+    expect(Date.now() - started).toBeLessThan(3000);
   });
 }
