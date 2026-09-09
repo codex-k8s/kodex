@@ -7,7 +7,8 @@ const environment = loadE2EAuthEnvironment();
 export default defineConfig({
   testDir: "./e2e",
   testMatch: /local-smoke\.ts/,
-  outputDir: "./test-results/local-smoke",
+  outputDir:
+    process.env.KODEX_E2E_PRIVATE_OUTPUT_DIR || "./test-results/local-smoke",
   forbidOnly: true,
   workers: 1,
   retries: 0,
