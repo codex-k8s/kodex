@@ -277,3 +277,96 @@ test("synthetic: ticket route.fulfill завершает exact body transport", 
     aborts: 0,
   });
 });
+
+test("synthetic: handled stream abort не создаёт browser console error", async ({
+  page,
+  browserName,
+}) => {
+  const staticRoot = resolve("dist-synthetic");
+  const server = createServer((request, response) => {
+    const address = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (address.pathname === "/stream") {
+      response.writeHead(200, { "Content-Type": "text/plain" });
+      response.write("partial");
+      return;
+    }
+    const relative = address.pathname.replace(/^\/+/, "") || "index.html";
+    const file = resolve(staticRoot, relative);
+    if (!file.startsWith(`${staticRoot}/`)) {
+      response.writeHead(404).end();
+      return;
+    }
+    const contentType: Record<string, string> = {
+      ".css": "text/css",
+      ".html": "text/html; charset=utf-8",
+      ".js": "text/javascript",
+      ".woff2": "font/woff2",
+    };
+    readFile(file, (error, contents) => {
+      if (error) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(200, {
+        "Content-Type":
+          contentType[extname(file)] ?? "application/octet-stream",
+      });
+      response.end(contents);
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as AddressInfo).port;
+  const consoleErrors: Array<{
+    type: string;
+    text: string;
+    source: string;
+    line: number;
+    column: number;
+  }> = [];
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    const location = message.location();
+    consoleErrors.push({
+      type: message.type(),
+      text: message.text(),
+      source: location.url,
+      line: location.lineNumber,
+      column: location.columnNumber,
+    });
+  });
+  try {
+    await page.goto(
+      `http://127.0.0.1:${String(port)}/e2e/fixtures/document-fetch-transport.html`,
+    );
+    await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
+    const run = (transport: "native" | "document") =>
+      page.evaluate(async (selected) => {
+        const target = window as unknown as {
+          runStreamAbortProbe: (value: string) => Promise<string>;
+        };
+        return target.runStreamAbortProbe(selected);
+      }, transport);
+
+    await expect(run("native")).resolves.toBe("AbortError");
+    await page.waitForTimeout(100);
+    expect(consoleErrors).toEqual([]);
+    await expect(run("document")).resolves.toBe("AbortError");
+    await page.waitForTimeout(100);
+    expect(consoleErrors).toHaveLength(browserName === "firefox" ? 1 : 0);
+    if (browserName === "firefox") {
+      const message = consoleErrors[0];
+      if (!message) throw new Error("Missing Firefox stream abort advisory");
+      expect(message).toMatchObject({ type: "error", line: 1 });
+      expect(message.column).toBeGreaterThan(0);
+      expect(message.source).toMatch(
+        /^http:\/\/127\.0\.0\.1:\d+\/assets\/documentFetchTransport-[A-Za-z0-9_-]+\.js$/,
+      );
+      expect(message.text).toBe(
+        `[JavaScript Error: "Failed to read data from the ReadableStream: “AbortError: The operation was aborted. ”." {file: "${message.source}" line: 1}]`,
+      );
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});

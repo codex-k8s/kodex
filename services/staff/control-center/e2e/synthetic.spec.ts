@@ -3,11 +3,13 @@ import { expect, type Request } from "@playwright/test";
 import {
   browserHTTPConsoleStatus,
   expectedSyntheticHTTPFailure,
+  isFirefoxAvailabilityBodyAbortAdvisory,
   isFirefoxBounceTrackerAdvisory,
   isFirefoxScrollAdvisory,
   isWebKitFontAdvisory,
   isCompletedChromiumTicketTerminal,
   isConfirmedSyntheticCancellation,
+  matchesConfirmedFirefoxAvailabilityBodyAborts,
 } from "./synthetic-diagnostics";
 import { prepareSyntheticMicrophone } from "./synthetic-microphone";
 import { SyntheticFetchCorrelator } from "./synthetic-fetch-correlator";
@@ -197,6 +199,7 @@ for (const { width, height } of [
     let publicationTimeoutDiagnostics = 0;
     let inspectorFailureDiagnostics = 0;
     let firefoxBounceTrackerAdvisories = 0;
+    let firefoxAvailabilityBodyAbortAdvisories = 0;
     let expectedInspectorFailure: 404 | 503 | undefined;
     let sessionVersion = 1;
     let sessionRenewals = 0;
@@ -227,6 +230,19 @@ for (const { width, height } of [
         return;
       }
       const location = message.location();
+      if (
+        isFirefoxAvailabilityBodyAbortAdvisory(
+          browserName,
+          message.type(),
+          location.url,
+          location.lineNumber,
+          location.columnNumber,
+          message.text(),
+        )
+      ) {
+        firefoxAvailabilityBodyAbortAdvisories++;
+        return;
+      }
       if (
         isFirefoxBounceTrackerAdvisory(
           browserName,
@@ -270,6 +286,7 @@ for (const { width, height } of [
       changedRoute: boolean;
       code: string;
     }> = [];
+    const bootstrapRequests: Request[] = [];
     const fetches = new SyntheticFetchCorrelator<Request>();
     await installSyntheticAbortObserver(page, (event) => {
       fetches.observe(event);
@@ -310,12 +327,18 @@ for (const { width, height } of [
     };
     page.on("request", (request) => {
       pendingRequests.set(request, page.url());
-      if (request.resourceType() === "fetch")
+      if (request.resourceType() === "fetch") {
         fetches.request(
           request,
           request.url(),
           request.headers()[syntheticFetchIDHeader],
         );
+        if (
+          request.method() === "GET" &&
+          new URL(request.url()).pathname === "/api/v1/bootstrap"
+        )
+          bootstrapRequests.push(request);
+      }
     });
     page.on("requestfinished", (request) => {
       pendingRequests.delete(request);
@@ -447,9 +470,14 @@ for (const { width, height } of [
         return;
       }
       if (url.pathname in responses && route.request().method() === "GET") {
+        const identity =
+          route.request().headers()[syntheticFetchIDHeader] ?? "";
         await route.fulfill({
           json: responses[url.pathname],
-          headers: { ETag: '"1"' },
+          headers: {
+            ETag: '"1"',
+            [syntheticFetchIDHeader]: identity,
+          },
         });
         return;
       }
@@ -1833,6 +1861,27 @@ for (const { width, height } of [
       testInfo.annotations.push({
         type: "browser-advisory",
         description: `FIREFOX_BOUNCE_TRACKER_IDENTITY_INVALID; count=${String(firefoxBounceTrackerAdvisories)}`,
+      });
+    const expectedFirefoxAvailabilityBodyAbortAdvisories =
+      browserName === "firefox"
+        ? bootstrapRequests.filter((request) =>
+            fetches.bodyAbortConfirmed(request),
+          ).length
+        : 0;
+    if (
+      !matchesConfirmedFirefoxAvailabilityBodyAborts(
+        browserName,
+        firefoxAvailabilityBodyAbortAdvisories,
+        expectedFirefoxAvailabilityBodyAbortAdvisories,
+      )
+    )
+      failures.push(
+        `Firefox availability body abort advisory count mismatch: expected=${String(expectedFirefoxAvailabilityBodyAbortAdvisories)} actual=${String(firefoxAvailabilityBodyAbortAdvisories)}`,
+      );
+    if (firefoxAvailabilityBodyAbortAdvisories > 0)
+      testInfo.annotations.push({
+        type: "browser-advisory",
+        description: `FIREFOX_AVAILABILITY_BODY_ABORT; count=${String(firefoxAvailabilityBodyAbortAdvisories)}`,
       });
     expect(failures).toEqual([]);
   });

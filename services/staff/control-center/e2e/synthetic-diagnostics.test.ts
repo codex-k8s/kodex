@@ -3,15 +3,79 @@ import {
   browserHTTPConsoleStatus,
   expectedSyntheticHTTPFailure,
   isFirefoxBounceTrackerAdvisory,
+  isFirefoxAvailabilityBodyAbortAdvisory,
   isFirefoxScrollAdvisory,
   isWebKitFontAdvisory,
   isConfirmedSyntheticCancellation,
+  matchesConfirmedFirefoxAvailabilityBodyAborts,
   isCompletedChromiumTicketTerminal,
 } from "./synthetic-diagnostics";
 import config from "../playwright.synthetic.config";
 import viteConfig from "../vite.synthetic.config";
 
 describe("synthetic browser evidence", () => {
+  it("классифицирует только exact Firefox availability body abort advisory", () => {
+    const source = "https://kodex.test/assets/availability-BwI46JYI.js";
+    const message = `[JavaScript Error: "Failed to read data from the ReadableStream: “AbortError: The operation was aborted. ”." {file: "${source}" line: 1}]`;
+    const exact = (
+      browser = "firefox",
+      type = "error",
+      selectedSource = source,
+      line = 1,
+      column = 2700,
+      text = message,
+    ) =>
+      isFirefoxAvailabilityBodyAbortAdvisory(
+        browser,
+        type,
+        selectedSource,
+        line,
+        column,
+        text,
+      );
+    expect(exact()).toBe(true);
+    expect(exact("chromium")).toBe(false);
+    expect(exact("webkit")).toBe(false);
+    expect(exact("firefox", "warning")).toBe(false);
+    expect(exact("firefox", "pageerror")).toBe(false);
+    expect(exact("firefox", "error", source, 0)).toBe(false);
+    expect(exact("firefox", "error", source, 1, 0)).toBe(false);
+    expect(
+      exact("firefox", "error", source.replace("kodex.test", "other.test")),
+    ).toBe(false);
+    expect(
+      exact("firefox", "error", source.replace("availability", "other")),
+    ).toBe(false);
+    expect(exact("firefox", "error", source, 1, 2700, `${message} extra`)).toBe(
+      false,
+    );
+    expect(
+      exact(
+        "firefox",
+        "error",
+        source,
+        1,
+        2700,
+        message.replace("AbortError", "TypeError"),
+      ),
+    ).toBe(false);
+    expect(matchesConfirmedFirefoxAvailabilityBodyAborts("firefox", 5, 5)).toBe(
+      true,
+    );
+    expect(matchesConfirmedFirefoxAvailabilityBodyAborts("firefox", 4, 5)).toBe(
+      false,
+    );
+    expect(matchesConfirmedFirefoxAvailabilityBodyAborts("firefox", 6, 5)).toBe(
+      false,
+    );
+    expect(
+      matchesConfirmedFirefoxAvailabilityBodyAborts("chromium", 1, 1),
+    ).toBe(false);
+    expect(
+      matchesConfirmedFirefoxAvailabilityBodyAborts("firefox", -1, -1),
+    ).toBe(false);
+  });
+
   it("закрыто классифицирует terminal только после полного Chromium ticket body", () => {
     const exact = (
       browserName = "chromium",

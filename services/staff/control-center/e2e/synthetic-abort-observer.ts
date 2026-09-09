@@ -58,9 +58,17 @@ export async function installSyntheticAbortObserver(
       let sequence = 0;
       let signalSequence = 0;
       const signalGenerations = new WeakMap<AbortSignal, number>();
-      const fetchURLs = new Map<string, string>();
+      const fetchDetails = new Map<
+        string,
+        {
+          url: string;
+          signal: AbortSignal | null | undefined;
+          signalGeneration: number;
+        }
+      >();
       Response.prototype.text = async function () {
         const id = this.headers.get(headerName);
+        const details = id ? fetchDetails.get(id) : undefined;
         let value: string;
         try {
           value = await responseText.call(this);
@@ -76,18 +84,18 @@ export async function installSyntheticAbortObserver(
             await binding({
               phase: "body-error",
               id,
-              url: fetchURLs.get(id) ?? this.url,
-              signalGeneration: 0,
-              signalAborted: false,
+              url: details?.url ?? this.url,
+              signalGeneration: details?.signalGeneration ?? 0,
+              signalAborted: details?.signal?.aborted ?? false,
               reasonClass: error instanceof Error ? error.name : "UNKNOWN",
             });
-            fetchURLs.delete(id);
+            fetchDetails.delete(id);
           }
           throw error;
         }
         if (id) {
-          const url = fetchURLs.get(id) ?? this.url;
-          fetchURLs.delete(id);
+          const url = details?.url ?? this.url;
+          fetchDetails.delete(id);
           const binding = (
             window as unknown as {
               __kodexSyntheticAbortedFetch: (
@@ -99,8 +107,8 @@ export async function installSyntheticAbortObserver(
             phase: "body",
             id,
             url,
-            signalGeneration: 0,
-            signalAborted: false,
+            signalGeneration: details?.signalGeneration ?? 0,
+            signalAborted: details?.signal?.aborted ?? false,
             reasonClass: "NONE",
           });
         }
@@ -158,7 +166,7 @@ export async function installSyntheticAbortObserver(
           }).catch(() => undefined);
         };
         if (observedURL) {
-          fetchURLs.set(id, observedURL);
+          fetchDetails.set(id, { url: observedURL, signal, signalGeneration });
           const headers = new Headers(
             init?.headers ??
               (input instanceof Request ? input.headers : undefined),
@@ -179,7 +187,7 @@ export async function installSyntheticAbortObserver(
             () => emit("headers"),
             () => {
               emit("reject");
-              fetchURLs.delete(id);
+              fetchDetails.delete(id);
             },
           );
           return operation;

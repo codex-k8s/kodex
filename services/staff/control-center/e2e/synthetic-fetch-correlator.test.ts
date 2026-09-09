@@ -180,4 +180,107 @@ describe("synthetic fetch identity", () => {
       }
     },
   );
+  it.each([true, false])(
+    "подтверждает exact body AbortError до/после abort receipt: %s",
+    (bodyErrorFirst) => {
+      const observer = new SyntheticFetchCorrelator();
+      const request = {};
+      observer.request(request, url, one);
+      observer.observe({
+        phase: "start",
+        id: one,
+        url,
+        signalGeneration: 7,
+      });
+      observer.observe({
+        phase: "headers",
+        id: one,
+        url,
+        signalGeneration: 7,
+      });
+      const abort = () =>
+        observer.observe({
+          phase: "abort",
+          id: one,
+          url,
+          signalGeneration: 7,
+          signalAborted: true,
+          reasonClass: "AbortError",
+        });
+      const bodyError = () =>
+        observer.observe({
+          phase: "body-error",
+          id: one,
+          url,
+          signalGeneration: 7,
+          signalAborted: true,
+          reasonClass: "AbortError",
+        });
+      if (bodyErrorFirst) bodyError();
+      abort();
+      if (!bodyErrorFirst) bodyError();
+      expect(observer.bodyAbortConfirmed(request)).toBe(true);
+    },
+  );
+  it.each([
+    "headers",
+    "abort",
+    "body-error",
+    "signal",
+    "reason",
+    "generation",
+    "zero-generation",
+    "duplicate",
+    "concurrent",
+    "body",
+    "reject",
+  ] as const)("отклоняет неполный body abort proof: %s", (missing) => {
+    const observer = new SyntheticFetchCorrelator();
+    const request = {};
+    observer.request(request, url, one);
+    if (missing === "concurrent") observer.request({}, url, one);
+    observer.observe({
+      phase: "start",
+      id: one,
+      url,
+      signalGeneration: missing === "zero-generation" ? 0 : 7,
+    });
+    if (missing === "duplicate")
+      observer.observe({
+        phase: "start",
+        id: one,
+        url,
+        signalGeneration: 7,
+      });
+    if (missing !== "headers")
+      observer.observe({
+        phase: "headers",
+        id: one,
+        url,
+        signalGeneration: missing === "zero-generation" ? 0 : 7,
+      });
+    if (missing !== "abort")
+      observer.observe({
+        phase: "abort",
+        id: one,
+        url,
+        signalGeneration: missing === "zero-generation" ? 0 : 7,
+        signalAborted: true,
+        reasonClass: "AbortError",
+      });
+    if (missing !== "body-error")
+      observer.observe({
+        phase: "body-error",
+        id: one,
+        url,
+        signalGeneration: missing === "generation" ? 8 : 7,
+        signalAborted: missing !== "signal",
+        reasonClass: missing === "reason" ? "TypeError" : "AbortError",
+      });
+    if (missing === "body")
+      observer.observe({ phase: "body", id: one, url, signalGeneration: 7 });
+    if (missing === "reject")
+      observer.observe({ phase: "reject", id: one, url, signalGeneration: 7 });
+    expect(observer.bodyAbortConfirmed(request)).toBe(false);
+  });
 });

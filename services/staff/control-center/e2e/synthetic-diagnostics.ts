@@ -73,6 +73,44 @@ export function isFirefoxBounceTrackerAdvisory(
   );
 }
 
+export function isFirefoxAvailabilityBodyAbortAdvisory(
+  browserName: string,
+  type: string,
+  source: string,
+  line: number,
+  column: number,
+  text: string,
+): boolean {
+  if (
+    browserName !== "firefox" ||
+    type !== "error" ||
+    line !== 1 ||
+    column <= 0 ||
+    !/^https:\/\/kodex\.test\/assets\/availability-[A-Za-z0-9_-]+\.js$/.test(
+      source,
+    )
+  )
+    return false;
+  return (
+    text ===
+    `[JavaScript Error: "Failed to read data from the ReadableStream: “AbortError: The operation was aborted. ”." {file: "${source}" line: 1}]`
+  );
+}
+
+export function matchesConfirmedFirefoxAvailabilityBodyAborts(
+  browserName: string,
+  advisoryCount: number,
+  confirmedRequestCount: number,
+): boolean {
+  return (
+    Number.isSafeInteger(advisoryCount) &&
+    advisoryCount >= 0 &&
+    Number.isSafeInteger(confirmedRequestCount) &&
+    confirmedRequestCount >= 0 &&
+    advisoryCount === (browserName === "firefox" ? confirmedRequestCount : 0)
+  );
+}
+
 export function isWebKitFontAdvisory(
   browserName: string,
   text: string,

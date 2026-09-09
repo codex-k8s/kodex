@@ -140,6 +140,24 @@
         }
         return completed;
       };
+      let streamProbeSequence = 0;
+      window.runStreamAbortProbe = async (transport) => {
+        const probeController = new AbortController();
+        const request = new Request(
+          `/stream?probe=${transport}-${String(++streamProbeSequence)}`,
+          { signal: probeController.signal },
+        );
+        const response = await (transport === "native"
+          ? window.fetch(request)
+          : documentFetch(request));
+        const reading = response.text().then(
+          () => "resolved",
+          (error) => error.name,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        probeController.abort();
+        return reading;
+      };
       document.body.dataset.ready = "true";
     </script>
   </body>
