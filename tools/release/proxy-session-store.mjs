@@ -5,12 +5,15 @@ import {
   closeSync,
   fsyncSync,
   lstatSync,
+  mkdtempSync,
   openSync,
   readFileSync,
+  rmSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint } from "./scoped-release.mjs";
 
@@ -521,17 +524,33 @@ function main(argv) {
     } else {
       record({ status: "INTENT", afterSpecSHA256: operation.afterSpecSHA256 });
       dispatched = true;
-      // stdin не поддержан patch-file: JSON передаётся через приватный fd, не argv.
-      kubectl(
-        [
+      // Host wrapper может закрыть /dev/stdin при повторном sudo. Собственный
+      // private file не раскрывает полный Deployment spec через argv.
+      const patchDirectory = mkdtempSync(join(tmpdir(), "kodex-proxy-patch-"));
+      try {
+        assert(
+          !(lstatSync(patchDirectory).mode & 0o077),
+          "PRIVATE_PATCH_DIRECTORY_REQUIRED",
+        );
+        const patchPath = join(patchDirectory, "patch.json");
+        writeFileSync(patchPath, JSON.stringify(operation.patch), {
+          flag: "wx",
+          mode: 0o600,
+        });
+        assert(
+          !(lstatSync(patchPath).mode & 0o077),
+          "PRIVATE_PATCH_FILE_REQUIRED",
+        );
+        kubectl([
           "patch",
           "deployment",
           proxyName,
           "--type=json",
-          "--patch-file=/dev/stdin",
-        ],
-        JSON.stringify(operation.patch),
-      );
+          `--patch-file=${patchPath}`,
+        ]);
+      } finally {
+        rmSync(patchDirectory, { recursive: true, force: true });
+      }
       const after = get("deployment", proxyName);
       assert(
         after.metadata.uid === operation.uid &&

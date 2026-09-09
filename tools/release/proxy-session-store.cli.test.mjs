@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { resources, proxyImage } from "./proxy-session-store.mjs";
@@ -12,7 +18,7 @@ if(verb==='get'){
  const key=kind.toLowerCase()+':'+name;const obj=state.objects[key];if(!obj){if(args.includes('--ignore-not-found'))process.exit(0);process.exit(1)}
  const output=args[args.indexOf('-o')+1];state.reads.push({kind,name,output});save();if(output==='jsonpath={.metadata}')process.stdout.write(JSON.stringify(obj.metadata));else if(output==='jsonpath={.immutable}')process.stdout.write(String(obj.immutable));else if(output==='json')process.stdout.write(JSON.stringify(obj));else process.exit(2);process.exit(0);
 }
-const input=JSON.parse(fs.readFileSync(0,'utf8'));
+let input;if(verb==='patch'){const option=args.find(x=>x.startsWith('--patch-file='));const patch=option?.slice('--patch-file='.length);if(!patch||patch==='/dev/stdin')process.exit(2);const stat=fs.lstatSync(patch);if(!stat.isFile()||(stat.mode&0o077))process.exit(3);input=JSON.parse(fs.readFileSync(patch,'utf8'));state.patchFile=patch;}else input=JSON.parse(fs.readFileSync(0,'utf8'));
 state.calls.push({verb,kind:verb==='create'?input.kind:kind,name:verb==='create'?input.metadata.name:name});
 if(state.failName===(input.metadata?.name||name)){save();process.exit(1)}
 if(verb==='create'){const key=input.kind.toLowerCase()+':'+input.metadata.name;if(state.objects[key])process.exit(1);input.metadata.uid='00000000-0000-4000-8000-'+String(state.calls.length+20).padStart(12,'0');input.metadata.resourceVersion='1';state.objects[key]=input;save();process.exit(0)}
@@ -205,6 +211,8 @@ test("cutover точного плана изменяет только proxy че
     );
     assert.equal(f.load().calls.length, 1);
     assert.equal(f.load().calls[0].verb, "patch");
+    assert.match(f.load().patchFile, /\/kodex-proxy-patch-[^/]+\/patch\.json$/);
+    assert.equal(existsSync(f.load().patchFile), false);
     const secretReads = f.load().reads.filter(
       (read) =>
         read.kind === "secret" && read.name === "proxy-session-store-auth-v1",
