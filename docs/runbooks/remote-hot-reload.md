@@ -4,7 +4,7 @@ title: Удалённый hot-reload контур Kodex
 type: runbook
 status: approved
 owner: manager
-version: 1.4.1
+version: 1.4.2
 updated: 2026-09-09
 ---
 
@@ -319,10 +319,17 @@ Vite отслеживают изменения исходников без пе�
 входов и импортируются напрямую в containerd k3s.
 
 Dev reload client PWA читает revision отдельным запросом с timeout 3 секунды;
-следующий poll запускается через 1 секунду после завершения прежнего. `pagehide`
+следующий poll запускается через 1 секунду после завершения прежнего. `beforeunload`
+останавливает таймер ещё до загрузки нового HTML: WebKit уже может запрещать
+fetch старого документа в этом промежутке, выдавая access-control diagnostic
+независимо от Promise catch. `pagehide`
 останавливает таймер и отменяет fetch/body, `pageshow` возобновляет один цикл.
 Повторная установка клиента завершает предыдущий экземпляр; поздняя revision
-отменённого запроса не принимается. Только корректная revision от exact endpoint
+отменённого запроса не принимается. После отмены ухода пользователем `pageshow`
+не возникает: следующее настоящее нажатие клавиши/указателя возобновляет один
+poll. Пока пользователь не взаимодействует, оставшийся документ сохраняет
+паузу; программный synthetic event её не снимает. Listener не вызывает
+`preventDefault` и сам не создаёт диалог подтверждения. Только корректная revision от exact endpoint
 может инициировать один reload. При обычном outage/reject клиент продолжает
 ограниченный polling; это не исключение из UI `pageerror` проверок.
 
@@ -332,8 +339,8 @@ Dev reload client PWA читает revision отдельным запросом 
 pagehide/pageshow, native timeout и отсутствие reload loop. Для изменений
 `vite.config.ts` нужно доставить новый source штатным scoped workflow PWA;
 пересборка application image ради SHA не требуется. После доставки отдельно
-проверяется live UI; локальные fixtures не доказывают причину исторического
-исключения `/__kodex_dev_reload.js` из #1358.
+проверяется live UI; локальный regression не заменяет приёмку нового serving
+source и не переписывает исторические FAIL `/__kodex_dev_reload.js` из #1358.
 
 `e2e` запускает только browser discovery и остаётся диагностической командой.
 `acceptance` требует чистый exact SHA оснастки до и после выполнения и
@@ -406,3 +413,14 @@ host-owned Teleport для диагностики. Она требует отд�
 подтверждения disposable-среды и сверяет UID, API endpoint и CA текущего
 кластера с root-owned marker. Отдельная production-установка использует чистый
 хост; решение о ней не является разрешением очищать текущий dev сервер.
+
+
+Дополнительный regression #1358: loopback HTTP fixture задерживает новый HTML
+на1800ms. Старый emitted client даёт WebKit access-control pageerror между
+началом навигации и `pagehide`, с наблюдателем запросов и без него. Новый клиент
+приостанавливается на `beforeunload`; обычные CORS-отказы по-прежнему наблюдаемы.
+Fixtures также проверяют настоящий отменённый beforeunload и возобновление
+одного poll после trusted interaction. Это dev-профиль; обработчик beforeunload
+может ограничивать browser back/forward cache. Production image-профиль не
+получает dev reload script; пересборка application image ради этого исправления
+не требуется. Ни реальные CORS-отказы, ни pageerror reporter не игнорируются.
