@@ -102,6 +102,19 @@ node tools/dev/email-agent-acceptance.mjs capture "${EMAIL_QA_ARGS[@]}"
 node tools/dev/email-agent-acceptance.mjs receipt "${EMAIL_QA_ARGS[@]}"
 ```
 
+Plan читает `GET /api/v1/integration-grant-candidates/capabilities` с exact
+connectionRef/projectRef/recipientKind=AGENT/recipientRef. Schema берётся из
+единственного выбранного `candidate.capability`, а не optional полей grant.
+Проверяются page/item contextDigest, connectionVersion, definitionVersion/digest,
+projectVersion, recipientVersion и currentGrantRef/version. До 10 страниц по 100,
+без duplicate keys/cursors или смены snapshot; target должен быть READY/grantable.
+Candidate schema digest сверяется по bytes, затем проверяется private input.
+Локальный shipped каталог ограничивает поддержанный профиль оснастки, но не
+заменяет live schema/authority. Отсутствие live schema закрыто отклоняется.
+Plan закрепляет projectVersion и candidate context/pins digests; перед Run INTENT
+launch повторяет все GET и сравнивает полный план. Этот read не выдаёт grant и
+не выполняет provider/HEALTH/mail mutation.
+
 Plan проверяет pinned package/schema, primitive input constraints и narrowing;
 семантику mailbox/UID/recipient, capacity и актуальные полномочия окончательно
 проверяет CP/bridge. Plan не резервирует account capacity и не обещает отсутствие

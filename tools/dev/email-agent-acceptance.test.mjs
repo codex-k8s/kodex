@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { emailAgentFixture } from './email-agent-acceptance-fixture.mjs';
+import { emailAgentFixture, emailAgentTransport } from './email-agent-acceptance-fixture.mjs';
 import { emailInputDigest, emailServingManifest, emailAgentReceipt } from './email-agent-acceptance.mjs';
 import {createHash} from 'node:crypto';
 import {privateJournal} from './role-image-acceptance.mjs';
@@ -100,6 +100,50 @@ for (const combined of [false, true]) {
       const result = f.run('plan');
       assert.equal(result.status, 1, result.stdout);
       assert.match(result.stderr, /AGENT_NOT_READY/);
+      assert.equal(f.calls().filter(call => call.method !== 'GET').length, 0);
+      assert.equal(f.events().filter(event => event.type === 'INTENT').length, 0);
+    });
+  }
+}
+
+for (const combined of [false, true]) {
+  test(`${combined ? 'combined' : 'standalone'} plan reads actual grant without schema and pinned capability candidate`, t => {
+    const grant = emailAgentTransport()('/api/v1/integration-connections/int_fixture').grants[0];
+    assert.equal(Object.hasOwn(grant, 'inputSchema'), false);
+    assert.equal(Object.hasOwn(grant, 'inputSchemaSha256'), false);
+    const f = fixture(t, false, combined);
+    const result = f.run('plan');
+    assert.equal(result.status, 0, result.stderr);
+    const plan = f.events().findLast(event => event.step === 'plan').result;
+    assert.equal(plan.projectVersion, 1);
+    assert.equal(plan.candidateContextDigest, 'a'.repeat(64));
+    assert.match(plan.inputSchemaSHA256, /^[a-f0-9]{64}$/);
+    const reads = f.calls().filter(call => call.path.startsWith('/api/v1/integration-grant-candidates/capabilities?'));
+    assert.equal(reads.length, 1);
+    assert.equal(reads[0].method, 'GET');
+    assert.equal(f.calls().filter(call => call.method !== 'GET').length, 0);
+  });
+  test(`${combined ? 'combined' : 'standalone'} candidate pagination keeps snapshot and finds one exact key`, t => {
+    const f = fixture(t, false, combined); f.setMode('candidate-paged');
+    const result = f.run('plan'); assert.equal(result.status, 0, result.stderr);
+    assert.equal(f.calls().filter(call => call.path.startsWith('/api/v1/integration-grant-candidates/capabilities?')).length, 2);
+  });
+  for (const mode of ['grant-disabled', 'grant-duplicate', 'candidate-missing', 'candidate-foreign-key', 'candidate-duplicate', 'candidate-disabled', 'candidate-unknown', 'candidate-grant-ref', 'candidate-grant-version',
+    'candidate-context-connectionRef', 'candidate-context-projectRef', 'candidate-context-recipientKind', 'candidate-context-recipientRef', 'candidate-context-workflowRef',
+    'candidate-pin-connectionVersion', 'candidate-pin-definitionVersion', 'candidate-pin-definitionDigest', 'candidate-pin-projectVersion', 'candidate-pin-recipientVersion',
+    'candidate-context-digest', 'candidate-item-pin', 'candidate-schema-missing', 'candidate-schema-digest', 'candidate-total', 'candidate-page-drift', 'candidate-page-duplicate', 'candidate-cursor']) {
+    test(`${combined ? 'combined' : 'standalone'} candidate ${mode} rejects before intent`, t => {
+      const f = fixture(t, false, combined); f.setMode(mode);
+      const result = f.run('plan'); assert.equal(result.status, 1, result.stdout);
+      assert.match(result.stderr, /CANDIDATE|GRANT/);
+      assert.equal(f.calls().filter(call => call.method !== 'GET').length, 0);
+      assert.equal(f.events().filter(event => event.type === 'INTENT').length, 0);
+    });
+  }
+  for (const mode of ['candidate-pin-recipientVersion', 'candidate-grant-version', 'candidate-schema-digest']) {
+    test(`${combined ? 'combined' : 'standalone'} launch rereads candidate ${mode} before Run intent`, t => {
+      const f = fixture(t, false, combined); assert.equal(f.run('plan').status, 0);
+      f.setMode(mode); assert.equal(f.run('launch', confirmation).status, 1);
       assert.equal(f.calls().filter(call => call.method !== 'GET').length, 0);
       assert.equal(f.events().filter(event => event.type === 'INTENT').length, 0);
     });
