@@ -19,6 +19,7 @@ const workloadBoundaryMigration = "migrations/20260906000100_workload_database_b
 const snapshotWorkloadSignerMigration = "migrations/20260907000100_snapshot_workload_signer_boundary.sql"
 const authorityRotationLifecycleMigration = "migrations/20260909000100_authority_rotation_lifecycle.sql"
 const authorityNormalRotationOperationMigration = "migrations/20260909000200_authority_normal_rotation_operation.sql"
+const authoritySnapshotPredecessorMigration = "migrations/20260909000300_authority_snapshot_predecessor.sql"
 
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	t.Parallel()
@@ -83,6 +84,29 @@ func TestPeerScopedReadbackMigrationUsesCompositeIdempotencyLookup(t *testing.T)
 	}
 }
 
+func TestSnapshotPredecessorMigrationKeepsExactCrossDomainProvenance(t *testing.T) {
+	t.Parallel()
+	content, err := os.ReadFile(authoritySnapshotPredecessorMigration)
+	if err != nil {
+		t.Fatalf("read predecessor migration: %v", err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"history.source_revision = p_source_revision",
+		"history.source_digest_sha256 = p_source_digest_sha256",
+		"intent.registry_source_digest_sha256 = p_registry_digest_sha256",
+		"phase_intent.publication_input_digest_sha256 = history.publication_input_digest_sha256",
+		"operation.publication_input_digest_sha256 = history.publication_input_digest_sha256",
+		"operation.snapshot_digest_sha256 = history.source_digest_sha256",
+		"COALESCE(operation.phase, '')",
+		"pg_has_role(session_user, 'internal_rpc_authority_publisher', 'MEMBER')",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("predecessor migration omits %q", required)
+		}
+	}
+}
+
 func TestSnapshotPromotionUsesExactRequiredReadbackTargets(t *testing.T) {
 	t.Parallel()
 
@@ -120,7 +144,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 6 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration {
+	if len(entries) != 7 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration || entries[6] != authoritySnapshotPredecessorMigration {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)

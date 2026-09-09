@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	publisherrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/publisher"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func testAuthorityNormalRotationOperation(t *testing.T, port uint64) {
@@ -179,10 +181,61 @@ func testAuthorityNormalRotationOperation(t *testing.T, port uint64) {
 		!previousDeadline.Equal(firstPreviousDeadline) {
 		t.Fatal("first retired rotation did not rejoin with immutable deadlines")
 	}
+	poolConfig, err := pgxpool.ParseConfig(fmt.Sprintf(
+		"host=127.0.0.1 port=%d dbname=internal_rpc_authority user=ira_publisher_g4 sslmode=disable",
+		port,
+	))
+	if err != nil {
+		t.Fatal("parse disposable publisher pool")
+	}
+	poolConfig.AfterConnect = func(ctx context.Context, connection *pgx.Conn) error {
+		_, connectErr := connection.Exec(ctx, "SET ROLE internal_rpc_authority_publisher")
+		return connectErr
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatal("connect disposable publisher pool")
+	}
+	t.Cleanup(pool.Close)
+	predecessors, err := publisherrepository.New(pool)
+	if err != nil {
+		t.Fatal("create publisher predecessor repository")
+	}
+	predecessor, found, err := predecessors.LoadSnapshotPredecessor(
+		ctx,
+		uint64(baseRevision+3),
+		firstCompletedDigest,
+		registryDigest,
+	)
+	if err != nil || !found || predecessor.RotationPhase != "RETIRE" ||
+		predecessor.Publication.InputDigestSHA256 != strings.Repeat("d", 64) {
+		var historyRows, intentRows, operationRows int
+		_ = admin.QueryRow(ctx, `SELECT
+			(SELECT count(*) FROM internal_rpc_authority.authority_snapshot_history WHERE source_revision=$1 AND source_digest_sha256=$2),
+			(SELECT count(*) FROM internal_rpc_authority.authority_rotation_intents WHERE source_revision=$1 AND registry_source_digest_sha256=$3),
+			(SELECT count(*) FROM internal_rpc_authority.authority_rotation_operation_publications WHERE source_revision=$1 AND snapshot_digest_sha256=$2 AND registry_digest_sha256=$3)`,
+			baseRevision+3, firstCompletedDigest, registryDigest).Scan(&historyRows, &intentRows, &operationRows)
+		t.Fatalf("load exact historical RETIRE predecessor provenance: error=%v found=%t phase=%q rows=%d/%d/%d", err, found, predecessor.RotationPhase, historyRows, intentRows, operationRows)
+	}
+	boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_rotation_operation_publications
+		SET publication_input_digest_sha256=repeat('a',64) WHERE operation_id=$1 AND phase='RETIRE'`, firstOperationID)
+	if _, found, err := predecessors.LoadSnapshotPredecessor(ctx, uint64(baseRevision+3), firstCompletedDigest, registryDigest); err != nil || found {
+		t.Fatal("foreign publication input provenance was accepted")
+	}
+	boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_rotation_operation_publications
+		SET publication_input_digest_sha256=repeat('d',64) WHERE operation_id=$1 AND phase='RETIRE'`, firstOperationID)
+	for name, hashes := range map[string][2]string{
+		"snapshot": {strings.Repeat("a", 64), registryDigest},
+		"registry": {firstCompletedDigest, strings.Repeat("a", 64)},
+	} {
+		if _, found, err := predecessors.LoadSnapshotPredecessor(ctx, uint64(baseRevision+3), hashes[0], hashes[1]); err != nil || found {
+			t.Fatalf("foreign %s predecessor was accepted", name)
+		}
+	}
 	publisher = rejoinedPublisher
 
-	// Registry revision advances once per operation, while each completed normal
-	// rotation advances the independent snapshot history by three revisions.
+	// Registry revision увеличивается один раз на operation, а каждая завершённая
+	// normal rotation продвигает независимую историю snapshot на три revision.
 	baseRevision += 3
 	baseDigest = firstCompletedDigest
 	registryRevision++

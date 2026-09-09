@@ -226,6 +226,14 @@ type AuthoritySnapshotPublication struct {
 	PublishedAt             time.Time
 }
 
+// AuthoritySnapshotPredecessor связывает immutable snapshot с фактическим
+// registry digest и сохранённой фазой публикации.
+type AuthoritySnapshotPredecessor struct {
+	Publication          AuthoritySnapshotPublication
+	RegistryDigestSHA256 string
+	RotationPhase        string
+}
+
 // AuthorityRotationIntent закрепляет один forward-only переход key set до
 // первой внешней CAS-доставки. Private key material в намерение не входит.
 type AuthorityRotationIntent struct {

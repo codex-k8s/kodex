@@ -23,6 +23,12 @@ type PublisherStore interface {
 		uint64,
 		string,
 	) (model.AuthoritySnapshotPublication, bool, error)
+	LoadSnapshotPredecessor(
+		context.Context,
+		uint64,
+		string,
+		string,
+	) (model.AuthoritySnapshotPredecessor, bool, error)
 	PrepareRotation(
 		context.Context,
 		model.AuthorityRotationIntent,

@@ -92,6 +92,50 @@ func (repository *Repository) LoadSnapshotPublication(
 	return result, true, nil
 }
 
+// LoadSnapshotPredecessor возвращает exact historical publication вместе с
+// сохранённой registry/phase provenance, не реконструируя прежние inputs.
+func (repository *Repository) LoadSnapshotPredecessor(
+	ctx context.Context,
+	sourceRevision uint64,
+	sourceDigest string,
+	registryDigest string,
+) (model.AuthoritySnapshotPredecessor, bool, error) {
+	var result model.AuthoritySnapshotPredecessor
+	err := repository.pool.QueryRow(
+		ctx,
+		loadSnapshotPredecessorSQL,
+		pgx.StrictNamedArgs{
+			"source_revision":        sourceRevision,
+			"source_digest_sha256":   sourceDigest,
+			"registry_digest_sha256": registryDigest,
+		},
+	).Scan(
+		&result.Publication.IntentID,
+		&result.Publication.InputDigestSHA256,
+		&result.Publication.SourceRevision,
+		&result.Publication.SourceDigestSHA256,
+		&result.Publication.KeySetRevision,
+		&result.Publication.PolicyRevision,
+		&result.Publication.SignerGeneration,
+		&result.Publication.PredecessorRevision,
+		&result.Publication.PredecessorDigestSHA256,
+		&result.Publication.SnapshotCompactJWS,
+		&result.Publication.PublishedAt,
+		&result.RegistryDigestSHA256,
+		&result.RotationPhase,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.AuthoritySnapshotPredecessor{}, false, nil
+	}
+	if err != nil {
+		return model.AuthoritySnapshotPredecessor{}, false, fmt.Errorf(
+			"load publisher snapshot predecessor: %w",
+			err,
+		)
+	}
+	return result, true, nil
+}
+
 // PrepareRotation фиксирует intent до первой внешней CAS-доставки.
 func (repository *Repository) PrepareRotation(
 	ctx context.Context,

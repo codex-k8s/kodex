@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.26
+version: 1.4.27
 updated: 2026-09-09
 ---
 
@@ -567,6 +567,14 @@ Publisher:
 после него выдерживается ограниченное overlap-окно. Следующий `CURRENT` обязан
 быть прежним полностью распространённым `NEXT`; пропуск source revision и
 параллельная ротация закрыто отклоняются.
+
+Historical predecessor для следующей key CAS разрешается только по exact
+immutable publication provenance: source revision и snapshot digest связываются
+с сохранёнными publication input digest, registry digest и фактической фазой.
+Пересчитывать прежний input из текущих policy/manifest bytes, подставлять
+предполагаемую фазу или использовать wildcard/latest lookup запрещено. Смена
+policy, manifest и следующая normal rotation после `RETIRED` продолжают один
+forward-only граф через этот авторитетный read path.
 
 Verifier хранит принадлежащие целевой стороне верхнюю принятую ревизию и хэш
 вне эфемерного тома pod. Состояние переживает перезапуск и обновляется

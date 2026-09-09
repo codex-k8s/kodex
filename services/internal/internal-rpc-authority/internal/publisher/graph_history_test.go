@@ -12,8 +12,9 @@ import (
 )
 
 type rotationSecretDelivery struct {
-	material domainrepository.SecretMaterial
-	writes   int
+	material          domainrepository.SecretMaterial
+	writes            int
+	unknownAfterWrite bool
 }
 
 func TestNormalRotationOperationIDMatchesDeliveryGoldenVector(t *testing.T) {
@@ -42,18 +43,37 @@ func (delivery *rotationSecretDelivery) WriteVersionedCAS(_ context.Context, _ s
 		return domainrepository.SecretMaterial{}, fmt.Errorf("fixture CAS mismatch")
 	}
 	delivery.material = domainrepository.SecretMaterial{Version: version + 1, Digest: strings.Repeat("d", 64), Data: data}
+	if delivery.unknownAfterWrite {
+		delivery.unknownAfterWrite = false
+		return domainrepository.SecretMaterial{}, fmt.Errorf("unknown CAS outcome")
+	}
 	return delivery.material, nil
 }
 
 type rotationPublicationStore struct {
 	domainrepository.PublisherStore
 	publication model.AuthoritySnapshotPublication
+	registry    string
+	phase       string
+	reject      bool
 	reads       int
 }
 
 func (store *rotationPublicationStore) LoadSnapshotPublication(_ context.Context, revision uint64, inputDigest string) (model.AuthoritySnapshotPublication, bool, error) {
 	store.reads++
 	return store.publication, store.publication.SourceRevision == revision && store.publication.InputDigestSHA256 == inputDigest, nil
+}
+
+func (store *rotationPublicationStore) LoadSnapshotPredecessor(_ context.Context, revision uint64, snapshotDigest, registryDigest string) (model.AuthoritySnapshotPredecessor, bool, error) {
+	store.reads++
+	value := model.AuthoritySnapshotPredecessor{
+		Publication:          store.publication,
+		RegistryDigestSHA256: store.registry,
+		RotationPhase:        store.phase,
+	}
+	found := !store.reject && store.publication.SourceRevision == revision &&
+		store.publication.SourceDigestSHA256 == snapshotDigest && store.registry == registryDigest
+	return value, found, nil
 }
 
 func TestSnapshotHistoryForBuildKeepsStableBoundaryWindow(t *testing.T) {
@@ -129,7 +149,7 @@ func TestKeyRotationRejectsAValidButUnknownPredecessorDigestBeforeCAS(t *testing
 	}}
 	graph.config.Secrets = delivery
 	graph.config.Store = &rotationPublicationStore{}
-	if _, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, predecessorDigest, []byte("manifest"), []byte("policy"), ""); err == nil {
+	if _, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, predecessorDigest, ""); err == nil {
 		t.Fatal("unknown predecessor digest was accepted")
 	}
 	if delivery.writes != 0 {
@@ -171,11 +191,16 @@ func assertRevisionWindow(
 
 func TestKeyRotationBindsDistinctRegistryAndSnapshotDigestsAndResumesWithoutSecondCAS(t *testing.T) {
 	t.Parallel()
-	manifest, policy := []byte("exact manifest"), []byte("exact policy")
+	oldManifest, oldPolicy := []byte("exact manifest"), []byte("policy revision 76")
+	manifest, policy := oldManifest, []byte("policy revision 77")
 	registryDigest, snapshotDigest := strings.Repeat("a", 64), strings.Repeat("b", 64)
-	oldInput, err := publicationInputDigest(registryDigest, manifest, policy)
+	oldInput, err := publicationInputDigest(registryDigest, oldManifest, oldPolicy)
 	if err != nil {
 		t.Fatal("publication input digest")
+	}
+	newInput, err := publicationInputDigest(registryDigest, manifest, policy)
+	if err != nil || newInput == oldInput {
+		t.Fatal("policy change did not produce a distinct current input")
 	}
 	current, err := internalrpcauth.GenerateES256Key("rotation-g1")
 	if err != nil {
@@ -191,17 +216,17 @@ func TestKeyRotationBindsDistinctRegistryAndSnapshotDigestsAndResumesWithoutSeco
 		t.Fatal("encode keys")
 	}
 	delivery := &rotationSecretDelivery{material: domainrepository.SecretMaterial{Version: 1, Digest: strings.Repeat("d", 64), Data: data}}
-	store := &rotationPublicationStore{publication: model.AuthoritySnapshotPublication{SourceRevision: 1, InputDigestSHA256: oldInput, SourceDigestSHA256: snapshotDigest}}
+	store := &rotationPublicationStore{publication: model.AuthoritySnapshotPublication{SourceRevision: 1, InputDigestSHA256: oldInput, SourceDigestSHA256: snapshotDigest}, registry: registryDigest}
 	graph.config.Secrets, graph.config.Store = delivery, store
 	graph.config.Registry = model.DeliveryTargetRegistry{SourceRevision: 2, SourceDigest: strings.Repeat("c", 64)}
-	rotated, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, snapshotDigest, manifest, policy, "")
+	rotated, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, snapshotDigest, "")
 	if err != nil {
 		t.Fatalf("valid cross-digest rotation: %v", err)
 	}
 	if rotated.current.KeyID != next.KeyID || rotated.previous.KeyID != current.KeyID || delivery.writes != 1 || store.reads != 1 {
 		t.Fatal("rotation lost exact key provenance")
 	}
-	rejoined, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, snapshotDigest, manifest, policy, "")
+	rejoined, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, snapshotDigest, "")
 	if err != nil || rejoined.current.KeyID != rotated.current.KeyID || rejoined.next.KeyID != rotated.next.KeyID || delivery.writes != 1 {
 		t.Fatal("rejoin repeated rotation effect")
 	}
@@ -210,18 +235,55 @@ func TestKeyRotationBindsDistinctRegistryAndSnapshotDigestsAndResumesWithoutSeco
 		mutate func(*rotationPublicationStore)
 	}{
 		{"snapshot", func(s *rotationPublicationStore) { s.publication.SourceDigestSHA256 = strings.Repeat("e", 64) }},
-		{"input", func(s *rotationPublicationStore) { s.publication.InputDigestSHA256 = strings.Repeat("e", 64) }},
+		{"missing", func(s *rotationPublicationStore) { s.reject = true }},
 		{"revision", func(s *rotationPublicationStore) { s.publication.SourceRevision = 3 }},
+		{"registry", func(s *rotationPublicationStore) { s.registry = strings.Repeat("e", 64) }},
+		{"phase", func(s *rotationPublicationStore) { s.phase = "SWITCH" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			copyStore := &rotationPublicationStore{publication: store.publication}
+			copyStore := &rotationPublicationStore{publication: store.publication, registry: store.registry, phase: store.phase}
 			tc.mutate(copyStore)
 			copyDelivery := &rotationSecretDelivery{material: domainrepository.SecretMaterial{Version: 1, Data: data}}
 			graph.config.Secrets, graph.config.Store = copyDelivery, copyStore
-			if _, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, snapshotDigest, manifest, policy, ""); err == nil || copyDelivery.writes != 0 {
+			if _, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, snapshotDigest, ""); err == nil || copyDelivery.writes != 0 {
 				t.Fatal("unbound predecessor reached CAS")
 			}
 		})
+	}
+}
+
+func TestKeyRotationResolvesHistoricalManifestChange(t *testing.T) {
+	t.Parallel()
+	oldManifest, newManifest, policy := []byte("old manifest"), []byte("new manifest"), []byte("exact policy")
+	oldRegistryDigest, snapshotDigest := strings.Repeat("1", 64), strings.Repeat("2", 64)
+	oldInput, err := publicationInputDigest(oldRegistryDigest, oldManifest, policy)
+	if err != nil {
+		t.Fatal("publication input digest")
+	}
+	newInput, err := publicationInputDigest(oldRegistryDigest, newManifest, policy)
+	if err != nil || newInput == oldInput {
+		t.Fatal("manifest change did not produce a distinct current input")
+	}
+	current := mustRotationKey(t, "manifest-g1")
+	next := mustRotationKey(t, "manifest-g2")
+	graph := &Graph{config: GraphConfig{Registry: model.DeliveryTargetRegistry{SourceRevision: 1, SourceDigest: oldRegistryDigest}}}
+	data, err := graph.keySetData(current, next, nil, 1, 2, 0)
+	if err != nil {
+		t.Fatal("encode keys")
+	}
+	delivery := &rotationSecretDelivery{material: domainrepository.SecretMaterial{Version: 1, Data: data}}
+	store := &rotationPublicationStore{
+		publication: model.AuthoritySnapshotPublication{SourceRevision: 1, SourceDigestSHA256: snapshotDigest, InputDigestSHA256: oldInput},
+		registry:    oldRegistryDigest,
+	}
+	graph.config.Secrets, graph.config.Store = delivery, store
+	graph.config.Registry = model.DeliveryTargetRegistry{SourceRevision: 2, SourceDigest: strings.Repeat("3", 64)}
+	rotated, err := graph.ensureKeySet(t.Context(), "secret", "manifest", 1, snapshotDigest, "")
+	if err != nil {
+		t.Fatalf("manifest change rejected historical predecessor: %v", err)
+	}
+	if rotated.current.KeyID != next.KeyID || delivery.writes != 1 {
+		t.Fatal("manifest change did not rotate exact historical keys")
 	}
 }
 
@@ -248,9 +310,10 @@ func TestNormalRotationTransformsKeysAcrossThreeImmutablePublications(t *testing
 
 	previousSnapshotDigest := strings.Repeat("3", 64)
 	store.publication = phasePublication(t, 1, oldRegistryDigest, previousSnapshotDigest, manifest, policy, "")
+	store.registry, store.phase = oldRegistryDigest, ""
 	graph.config.Registry.SourceRevision = 2
 	graph.config.Registry.SourceDigest = rotationRegistryDigest
-	distributed, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, previousSnapshotDigest, manifest, policy, "DISTRIBUTE")
+	distributed, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, previousSnapshotDigest, "DISTRIBUTE")
 	if err != nil {
 		t.Fatalf("distribute: %v", err)
 	}
@@ -260,8 +323,9 @@ func TestNormalRotationTransformsKeysAcrossThreeImmutablePublications(t *testing
 
 	previousSnapshotDigest = strings.Repeat("4", 64)
 	store.publication = phasePublication(t, 2, rotationRegistryDigest, previousSnapshotDigest, manifest, policy, "DISTRIBUTE")
+	store.registry, store.phase = rotationRegistryDigest, "DISTRIBUTE"
 	graph.config.Registry.SourceRevision = 3
-	switched, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 2, previousSnapshotDigest, manifest, policy, "SWITCH")
+	switched, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 2, previousSnapshotDigest, "SWITCH")
 	if err != nil {
 		t.Fatalf("switch: %v", err)
 	}
@@ -271,13 +335,30 @@ func TestNormalRotationTransformsKeysAcrossThreeImmutablePublications(t *testing
 
 	previousSnapshotDigest = strings.Repeat("5", 64)
 	store.publication = phasePublication(t, 3, rotationRegistryDigest, previousSnapshotDigest, manifest, policy, "SWITCH")
+	store.registry, store.phase = rotationRegistryDigest, "SWITCH"
 	graph.config.Registry.SourceRevision = 4
-	retired, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 3, previousSnapshotDigest, manifest, policy, "RETIRE")
+	retired, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 3, previousSnapshotDigest, "RETIRE")
 	if err != nil {
 		t.Fatalf("retire: %v", err)
 	}
 	if retired.current.KeyID != switched.current.KeyID || retired.next.KeyID != switched.next.KeyID || retired.previous != nil {
 		t.Fatal("RETIRE changed CURRENT/NEXT or retained PREVIOUS")
+	}
+
+	store.publication = phasePublication(t, 4, rotationRegistryDigest, strings.Repeat("6", 64), manifest, policy, "RETIRE")
+	store.registry, store.phase = rotationRegistryDigest, "RETIRE"
+	graph.config.Registry = model.DeliveryTargetRegistry{SourceRevision: 5, SourceDigest: strings.Repeat("7", 64)}
+	delivery.unknownAfterWrite = true
+	second, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 4, strings.Repeat("6", 64), "DISTRIBUTE")
+	if err != nil {
+		t.Fatalf("second distribute after retired predecessor: %v", err)
+	}
+	if second.current.KeyID != retired.current.KeyID || second.next.KeyID != retired.next.KeyID || second.previous != nil || delivery.writes != 4 {
+		t.Fatal("second DISTRIBUTE changed keys or failed UNKNOWN recovery")
+	}
+	rejoined, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 4, strings.Repeat("6", 64), "DISTRIBUTE")
+	if err != nil || rejoined.current.KeyID != second.current.KeyID || delivery.writes != 4 {
+		t.Fatal("second DISTRIBUTE restart repeated key CAS")
 	}
 }
 

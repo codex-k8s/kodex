@@ -27,6 +27,9 @@ var loadSnapshotHistorySQL string
 //go:embed sql/publisher__load_snapshot_publication.sql
 var loadSnapshotPublicationSQL string
 
+//go:embed sql/publisher__load_snapshot_predecessor.sql
+var loadSnapshotPredecessorSQL string
+
 //go:embed sql/publisher__prepare_rotation.sql
 var prepareRotationSQL string
 
@@ -63,6 +66,7 @@ func validateQueries() error {
 		"publisher__load_pinned_readback_intent":        loadPinnedReadbackIntentSQL,
 		"publisher__load_snapshot_history":              loadSnapshotHistorySQL,
 		"publisher__load_snapshot_publication":          loadSnapshotPublicationSQL,
+		"publisher__load_snapshot_predecessor":          loadSnapshotPredecessorSQL,
 		"publisher__prepare_rotation":                   prepareRotationSQL,
 		"publisher__load_rotation_operation":            loadRotationOperationSQL,
 		"publisher__load_or_prepare_rotation_operation": loadOrPrepareRotationOperationSQL,

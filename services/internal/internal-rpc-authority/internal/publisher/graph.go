@@ -280,7 +280,7 @@ func (graph *Graph) publishOne(
 				target.TargetID+"-auth",
 				predecessorRevision,
 				predecessorDigest,
-				manifestBundle, policyRaw, graph.rotationPhase,
+				graph.rotationPhase,
 			)
 			if ensureErr != nil {
 				return model.AuthoritySnapshotPublication{}, ensureErr
@@ -302,7 +302,7 @@ func (graph *Graph) publishOne(
 				target.TargetID+"-proof",
 				predecessorRevision,
 				predecessorDigest,
-				manifestBundle, policyRaw, graph.rotationPhase,
+				graph.rotationPhase,
 			)
 			if ensureErr != nil {
 				return model.AuthoritySnapshotPublication{}, ensureErr
@@ -594,7 +594,6 @@ func (graph *Graph) ensureKeySet(
 	prefix string,
 	predecessorRevision uint64,
 	predecessorDigest string,
-	manifestBundle, policyRaw []byte,
 	phase string,
 ) (rotatingKeySet, error) {
 	existing, found, err := graph.config.Secrets.ReadVersioned(ctx, path)
@@ -642,22 +641,22 @@ func (graph *Graph) ensureKeySet(
 		!registryDigestPattern.MatchString(predecessorDigest) {
 		return rotatingKeySet{}, err
 	}
-	// Registry digest и snapshot digest принадлежат разным доменам. Их связь
-	// доказывает immutable publication, а не равенство двух хешей.
-	previousInput, inputErr := publicationInputDigestForPhase(
-		existing.Data["source_digest_sha256"], manifestBundle, policyRaw,
-		previousRotationPhase(phase),
+	// Registry digest, publication input и snapshot digest принадлежат разным
+	// доменам. Их exact historical связь разрешается из immutable publication,
+	// а не реконструируется из новых policy/manifest или предполагаемой фазы.
+	previous, previousFound, previousErr := graph.config.Store.LoadSnapshotPredecessor(
+		ctx,
+		predecessorRevision,
+		predecessorDigest,
+		existing.Data["source_digest_sha256"],
 	)
-	if inputErr != nil {
-		return rotatingKeySet{}, errors.New("digest predecessor authority publication inputs")
-	}
-	previousPublication, previousFound, previousErr := graph.config.Store.LoadSnapshotPublication(
-		ctx, predecessorRevision, previousInput,
-	)
+	previousPublication := previous.Publication
 	if previousErr != nil || !previousFound ||
 		previousPublication.SourceRevision != predecessorRevision ||
-		previousPublication.InputDigestSHA256 != previousInput ||
-		previousPublication.SourceDigestSHA256 != predecessorDigest {
+		previousPublication.SourceDigestSHA256 != predecessorDigest ||
+		!registryDigestPattern.MatchString(previousPublication.InputDigestSHA256) ||
+		previous.RegistryDigestSHA256 != existing.Data["source_digest_sha256"] ||
+		!validHistoricalPredecessorPhase(phase, previous.RotationPhase) {
 		return rotatingKeySet{}, errors.New("authority key predecessor publication rejected")
 	}
 	oldCurrent, parseErr := internalrpcauth.ParsePrivateJWK(
@@ -742,6 +741,19 @@ func (graph *Graph) ensureKeySet(
 	return decodeRotatingKeySet(updated, graph.config.Registry)
 }
 
+func validHistoricalPredecessorPhase(current, historical string) bool {
+	switch current {
+	case "DISTRIBUTE":
+		return historical == "" || historical == "RETIRE"
+	case "SWITCH":
+		return historical == "DISTRIBUTE"
+	case "RETIRE":
+		return historical == "SWITCH"
+	default:
+		return historical == ""
+	}
+}
+
 func publicationInputDigest(registryDigest string, manifestBundle, policyRaw []byte) (string, error) {
 	return publicationInputDigestForPhase(registryDigest, manifestBundle, policyRaw, "")
 }
@@ -758,17 +770,6 @@ func publicationInputDigestForPhase(registryDigest string, manifestBundle, polic
 		RegistryDigest: registryDigest,
 		RotationPhase:  phase,
 	})
-}
-
-func previousRotationPhase(phase string) string {
-	switch phase {
-	case "SWITCH":
-		return "DISTRIBUTE"
-	case "RETIRE":
-		return "SWITCH"
-	default:
-		return ""
-	}
 }
 
 func (graph *Graph) keySetData(

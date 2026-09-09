@@ -59,13 +59,13 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 			t.Fatalf("apply authority migration attempt %d: %v", attempt+1, err)
 		}
 		version, err := goose.GetDBVersionContext(ctx, database)
-		if err != nil || version != 20260909000200 {
+		if err != nil || version != 20260909000300 {
 			t.Fatal("authority migration version readback failed")
 		}
 		var rows, maximumID int64
 		if err := database.QueryRowContext(ctx,
 			"SELECT count(*), max(id) FROM public.goose_db_version",
-		).Scan(&rows, &maximumID); err != nil || rows != 7 {
+		).Scan(&rows, &maximumID); err != nil || rows != 8 {
 			t.Fatal("authority migration history readback failed")
 		}
 		if attempt == 0 {
