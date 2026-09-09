@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {fingerprint} from './scoped-release.mjs';
 import {validateHoldCapability} from './image-admission-hold-capability.mjs';
 import {deletionRequest,executePhase,executeRollbackPhase,inspectHostController,loadDesiredBundle,verifyControllerRuntime} from './image-admission-hold-delivery.mjs';
-import {buildDeliveryPlan,inspectPhase,mutationFor,phaseAfter,phases,rollbackPhases,validateDeliveryPlan} from './image-admission-hold-delivery-model.mjs';
+import {admissionResourceWithAPIDefaults,buildDeliveryPlan,inspectPhase,mutationFor,phaseAfter,phases,rollbackPhases,validateDeliveryPlan} from './image-admission-hold-delivery-model.mjs';
 
 const oldImage=`registry.local.kodex/kodex/image-admission@sha256:${'1'.repeat(64)}`;
 const nextImage=`registry.local.kodex/kodex/image-admission@sha256:${'2'.repeat(64)}`;
@@ -18,16 +18,21 @@ const metadata=(name,namespaced=true)=>({name,...(namespaced?{namespace:'kodex-s
  labels:namespaced?{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'staging','kodex.dev/local-profile':'hot-reload'}:undefined});
 
 function bundle() {
- const predecessor={failurePolicy:'Fail',variables:[{name:'protected',expression:'old'}],validations:[{message:'Image admission Job lifecycle differs from the bounded contract.',expression:'old'}]};
- const jobs={failurePolicy:'Fail',variables:[{name:'protected',expression:'old'},{name:'proofHeld',expression:'held'}],validations:[
-  {message:'Image admission Job lifecycle differs from the bounded contract.',expression:'held lifecycle'},
+ const predecessorSpec={failurePolicy:'Fail',matchConstraints:{resourceRules:[{operations:['CREATE'],resources:['jobs'],scope:'Namespaced'}]},variables:[{name:'protected',expression:'old'}],validations:[{message:'Image admission Job lifecycle differs from the bounded contract.',expression:"object.name == 'a b' &&\n old"}]};
+ const jobsSpec={failurePolicy:'Fail',matchConstraints:{resourceRules:[{operations:['CREATE'],resources:['jobs'],scope:'Namespaced'}]},variables:[{name:'protected',expression:'old'},{name:'proofHeld',expression:'held'}],validations:[
+  {message:'Image admission Job lifecycle differs from the bounded contract.',expression:"object.name == 'a b' &&\n held lifecycle"},
   {message:'Image admission executable proof reservation is invalid.',expression:'reservation'},
  ]};
- return {version:1,revision:'4'.repeat(40),source:'/srv/kodex-dev/source',predecessorJobsPolicySpec:predecessor,jobsPolicySpec:jobs,
-  releasePolicy:{apiVersion:'admissionregistration.k8s.io/v1',kind:'ValidatingAdmissionPolicy',metadata:{name:'kodex-image-admission-proof-release'},
+ const policy=(name,spec)=>({apiVersion:'admissionregistration.k8s.io/v1',kind:'ValidatingAdmissionPolicy',metadata:{name},spec});
+ const predecessorJobsPolicy=policy('kodex-image-admission-controller-jobs',predecessorSpec),jobsPolicy=policy('kodex-image-admission-controller-jobs',jobsSpec);
+ const releasePolicy={apiVersion:'admissionregistration.k8s.io/v1',kind:'ValidatingAdmissionPolicy',metadata:{name:'kodex-image-admission-proof-release'},
    spec:{failurePolicy:'Fail',matchConstraints:{resourceRules:[{operations:['UPDATE'],resources:['jobs']}]},validations:[{expression:'exact release'}]}},
-  releaseBinding:{apiVersion:'admissionregistration.k8s.io/v1',kind:'ValidatingAdmissionPolicyBinding',metadata:{name:'kodex-image-admission-proof-release'},
-   spec:{policyName:'kodex-image-admission-proof-release',validationActions:['Deny'],matchResources:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}}}}},
+  releaseBinding={apiVersion:'admissionregistration.k8s.io/v1',kind:'ValidatingAdmissionPolicyBinding',metadata:{name:'kodex-image-admission-proof-release'},
+   spec:{policyName:'kodex-image-admission-proof-release',validationActions:['Deny'],matchResources:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}}}}};
+ return {version:1,revision:'4'.repeat(40),source:'/srv/kodex-dev/source',predecessorJobsPolicy,
+  predecessorJobsPolicyRendered:{...structuredClone(predecessorJobsPolicy),spec:{...structuredClone(predecessorSpec),validations:[{...predecessorSpec.validations[0],expression:"object.name == 'a b' &&\n\n old"}]}},
+  jobsPolicy,jobsPolicyRendered:structuredClone(jobsPolicy),releasePolicy,releasePolicyRendered:structuredClone(releasePolicy),
+  releaseBinding,releaseBindingRendered:structuredClone(releaseBinding),
   controllerHoldEnvironment:[{name:'IMAGE_ADMISSION_CONTROLLER_HOLD_PROOF_JOBS',value:'false'},
    {name:'IMAGE_ADMISSION_CONTROLLER_PROOF_HOLD_UNTIL',value:'1970-01-01T00:00:00Z'}]};
 }
@@ -48,7 +53,7 @@ function podFor(deployment,imageID=deployment.spec.template.spec.containers[0].i
 
 function snapshot() {
  const desired=bundle(),deployment=controller(),policyName='kodex-image-admission-policy';
- const jobsPolicy={apiVersion:'admissionregistration.k8s.io/v1',kind:'ValidatingAdmissionPolicy',metadata:metadata('kodex-image-admission-controller-jobs',false),spec:structuredClone(desired.predecessorJobsPolicySpec)};
+ const jobsPolicy=admissionResourceWithAPIDefaults({apiVersion:'admissionregistration.k8s.io/v1',kind:'ValidatingAdmissionPolicy',metadata:metadata('kodex-image-admission-controller-jobs',false),spec:structuredClone(desired.predecessorJobsPolicy.spec)});
  const jobsBinding={apiVersion:'admissionregistration.k8s.io/v1',kind:'ValidatingAdmissionPolicyBinding',metadata:metadata('kodex-image-admission-controller-jobs',false),
   spec:{policyName:'kodex-image-admission-controller-jobs',validationActions:['Deny'],paramRef:{name:policyName,namespace:'kodex-system',parameterNotFoundAction:'Deny'}}};
  const parameters={apiVersion:'supplychain.kodex.dev/v1alpha1',kind:'ImageAdmissionPolicyParameters',metadata:metadata(policyName),spec:{policyRevision:'18',policySHA256:'6'.repeat(64)}};
@@ -102,8 +107,31 @@ test('exact source materializes the approved #1381 delta',()=>{
   execFileSync('git',['-C',clone,'checkout','--detach',revisionValue],{stdio:'pipe'});
   const result=loadDesiredBundle(clone,revisionValue);
   assert.equal(result.revision,revisionValue);assert.equal(result.releasePolicy.metadata.name,'kodex-image-admission-proof-release');
-  assert.equal(result.jobsPolicySpec.variables.filter(item=>item.name==='proofHeld').length,1);
+  assert.equal(result.jobsPolicy.spec.variables.filter(item=>item.name==='proofHeld').length,1);
+  const rendered=execFileSync('kubectl',['kustomize',join(clone,'deploy/k8s/overlays/staging/image-supply-chain')],{encoding:'utf8',stdio:'pipe'}),
+   documents=execFileSync('yq',['-o=json','-I=0','.','-'],{input:rendered,encoding:'utf8',stdio:'pipe'}).trim().split('\n').map(JSON.parse),
+   renderedJobs=documents.find(item=>item.kind==='ValidatingAdmissionPolicy'&&item.metadata?.name==='kodex-image-admission-controller-jobs');
+  assert.equal(fingerprint(renderedJobs.spec),fingerprint(result.jobsPolicyRendered.spec));
+  const changed=result.predecessorJobsPolicy.spec.validations.map((item,index)=>
+   item.expression===result.predecessorJobsPolicyRendered.spec.validations[index].expression?null:index).filter(index=>index!==null);
+  assert.deepEqual(changed,[0,4,5,6,7,8,9,10]);
  } finally {rmSync(directory,{recursive:true,force:true});}
+});
+
+test('only exact source, Kustomize and Kubernetes API-defaulted policy forms are accepted',()=>{
+ const fixture=planAndState(),options={context,k3sSudo:true,capability:fixture.plan.capability,intent:'77777777-7777-4777-8777-777777777777'};
+ fixture.state.jobsPolicy.spec=admissionResourceWithAPIDefaults(fixture.desired.predecessorJobsPolicyRendered).spec;
+ assert.equal(buildDeliveryPlan(fixture.state,fixture.desired,options).phaseTargets['policy-jobs'].action,'patch');
+ const rejects=mutate=>{const state=structuredClone(fixture.state);mutate(state);assert.throws(()=>buildDeliveryPlan(state,fixture.desired,options),/EXACT_JOBS_POLICY_PREDECESSOR_REQUIRED/);};
+ rejects(state=>{state.jobsPolicy.spec.validations[0].expression+=' && false';});
+ rejects(state=>{state.jobsPolicy.spec.validations[0].expression=state.jobsPolicy.spec.validations[0].expression.replace("'a b'","'a  b'");});
+ rejects(state=>{state.jobsPolicy.spec.matchConstraints.namespaceSelector={matchLabels:{'kodex.dev/unsafe':'true'}};});
+ rejects(state=>{state.jobsPolicy.spec.failurePolicy='Ignore';});
+ const denied=structuredClone(fixture.state);
+ denied.releasePolicy={...admissionResourceWithAPIDefaults(fixture.desired.releasePolicy),metadata:metadata('kodex-image-admission-proof-release',false)};
+ denied.releaseBinding={...admissionResourceWithAPIDefaults(fixture.desired.releaseBinding),metadata:metadata('kodex-image-admission-proof-release',false)};
+ denied.releaseBinding.spec.validationActions=['Warn'];
+ assert.throws(()=>buildDeliveryPlan(denied,fixture.desired,options),/RELEASE_BINDING_DRIFT/);
 });
 
 test('plan changes only pause, exact reader image and approved hold policies',()=>{
@@ -178,9 +206,9 @@ function fakeRuntime(initial,expectedExecutable=executable) {
   patch:(kind,name,_namespaced,patch)=>{calls.patch++;const next=patch.at(-1).value;if(kind==='Deployment'){
    state.controller.spec=structuredClone(next);state.controller.metadata.resourceVersion=String(Number(state.controller.metadata.resourceVersion)+1);
    state.controller.metadata.generation++;state.controller.status.observedGeneration=state.controller.metadata.generation;state.deployments[0]=state.controller;updatePods();
-  }else {state.jobsPolicy.spec=structuredClone(next);state.jobsPolicy.metadata.resourceVersion=String(Number(state.jobsPolicy.metadata.resourceVersion)+1);}},
+  }else {state.jobsPolicy.spec=admissionResourceWithAPIDefaults({...state.jobsPolicy,spec:structuredClone(next)}).spec;state.jobsPolicy.metadata.resourceVersion=String(Number(state.jobsPolicy.metadata.resourceVersion)+1);}},
   create:resource=>{calls.create++;const created={...structuredClone(resource),metadata:{...resource.metadata,uid:nextUID(),resourceVersion:String(sequence++)}};
-   if(resource.kind==='ValidatingAdmissionPolicy')state.releasePolicy=created;else state.releaseBinding=created;},
+   const defaulted=admissionResourceWithAPIDefaults(created);if(resource.kind==='ValidatingAdmissionPolicy')state.releasePolicy=defaulted;else state.releaseBinding=defaulted;},
   delete:(kind,name,uid,resourceVersion)=>{calls.delete++;deletes.push({kind,name,uid,resourceVersion});if(kind==='ValidatingAdmissionPolicy')state.releasePolicy=null;else state.releaseBinding=null;},
  };
 }
@@ -231,6 +259,9 @@ test('one journal enforces the complete phase order and changes one resource per
   const rows=readFileSync(evidence,'utf8').trim().split('\n').map(JSON.parse);
   assert.deepEqual(rows.filter(row=>row.status==='PASS').map(row=>row.phase),phases);
   assert.equal(rt.state.controller.spec.template.spec.containers[0].env.find(item=>item.name==='IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS').value,'false');
+  assert.equal(rt.state.jobsPolicy.spec.matchConstraints.matchPolicy,'Equivalent');
+  assert.deepEqual(rt.state.releasePolicy.spec.matchConstraints.objectSelector,{});
+  assert.equal(rt.state.releaseBinding.spec.matchResources.matchPolicy,'Equivalent');
  } finally {rmSync(directory,{recursive:true,force:true});}
 });
 
@@ -274,7 +305,7 @@ test('rollback can close an early paused transition without applying policy',asy
 
 test('already exact policy phase records a read-only PASS and performs no mutation',async()=>{
  const directory=mkdtempSync(join(tmpdir(),'hold-delivery-none-')),evidence=join(directory,'evidence.jsonl'),fixture=planAndState();
- fixture.state.jobsPolicy.spec=structuredClone(fixture.desired.jobsPolicySpec);
+ fixture.state.jobsPolicy.spec=admissionResourceWithAPIDefaults(fixture.desired.jobsPolicy).spec;
  const plan=buildDeliveryPlan(fixture.state,fixture.desired,{context,k3sSudo:true,capability:fixture.plan.capability,
   intent:'99999999-9999-4999-8999-999999999999'}),rt=fakeRuntime(fixture.state);
  try {

@@ -119,11 +119,34 @@ function policyIdentity(resource,name,kind) {
  return targetState(resource);
 }
 
+export function admissionResourceWithAPIDefaults(resource) {
+ const result=structuredClone(resource),match=result.kind==='ValidatingAdmissionPolicy'?
+  result.spec?.matchConstraints:result.kind==='ValidatingAdmissionPolicyBinding'?result.spec?.matchResources:null;
+ if(result.kind==='ValidatingAdmissionPolicy'&&result.spec?.failurePolicy===undefined)result.spec.failurePolicy='Fail';
+ if(match) {
+  if(match.matchPolicy===undefined)match.matchPolicy='Equivalent';
+  if(match.namespaceSelector===undefined)match.namespaceSelector={};
+  if(match.objectSelector===undefined)match.objectSelector={};
+  for(const rule of [...(match.resourceRules??[]),...(match.excludeResourceRules??[])])if(rule.scope===undefined)rule.scope='*';
+ }
+ return result;
+}
+
+function admissionSpecs(raw,rendered) {
+ const resources=[raw,rendered,admissionResourceWithAPIDefaults(raw),admissionResourceWithAPIDefaults(rendered)];
+ return [...new Map(resources.map(resource=>[fingerprint(resource.spec),resource.spec])).values()];
+}
+
+function matchesAdmissionSpec(spec,raw,rendered) {
+ const digest=fingerprint(spec);return admissionSpecs(raw,rendered).some(candidate=>fingerprint(candidate)===digest);
+}
+
 function requirePrimaryBoundary(snapshot,bundle) {
  meta(snapshot.jobsPolicy,jobsPolicyName,false);
  requireValue(snapshot.jobsPolicy.apiVersion==='admissionregistration.k8s.io/v1'&&snapshot.jobsPolicy.kind==='ValidatingAdmissionPolicy'&&
   snapshot.jobsPolicy.spec?.failurePolicy==='Fail'&&
-  [fingerprint(bundle.predecessorJobsPolicySpec),fingerprint(bundle.jobsPolicySpec)].includes(fingerprint(snapshot.jobsPolicy.spec)),
+  (matchesAdmissionSpec(snapshot.jobsPolicy.spec,bundle.predecessorJobsPolicy,bundle.predecessorJobsPolicyRendered)||
+   matchesAdmissionSpec(snapshot.jobsPolicy.spec,bundle.jobsPolicy,bundle.jobsPolicyRendered)),
  'EXACT_JOBS_POLICY_PREDECESSOR_REQUIRED');
  meta(snapshot.jobsBinding,jobsPolicyName,false);
  const binding=snapshot.jobsBinding;
@@ -139,8 +162,8 @@ function requirePrimaryBoundary(snapshot,bundle) {
  requireValue(literal(app,'IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP',[binding.spec.paramRef.name],true),'EXACT_CONTROLLER_POLICY_BINDING_REQUIRED');
  const releasePolicy=policyIdentity(snapshot.releasePolicy,releasePolicyName,'ValidatingAdmissionPolicy');
  const releaseBinding=policyIdentity(snapshot.releaseBinding,releasePolicyName,'ValidatingAdmissionPolicyBinding');
- requireValue(!releasePolicy||fingerprint(snapshot.releasePolicy.spec)===fingerprint(bundle.releasePolicy.spec),'RELEASE_POLICY_DRIFT');
- requireValue(!releaseBinding||fingerprint(snapshot.releaseBinding.spec)===fingerprint(bundle.releaseBinding.spec),'RELEASE_BINDING_DRIFT');
+ requireValue(!releasePolicy||matchesAdmissionSpec(snapshot.releasePolicy.spec,bundle.releasePolicy,bundle.releasePolicyRendered),'RELEASE_POLICY_DRIFT');
+ requireValue(!releaseBinding||matchesAdmissionSpec(snapshot.releaseBinding.spec,bundle.releaseBinding,bundle.releaseBindingRendered),'RELEASE_BINDING_DRIFT');
  return {releasePolicy,releaseBinding};
 }
 
@@ -162,16 +185,24 @@ function controllerSpecs(controller,targetImage,bundle) {
 }
 
 export function validateDesiredBundle(bundle) {
- requireValue(exact(bundle,['version','revision','source','predecessorJobsPolicySpec','jobsPolicySpec','releasePolicy','releaseBinding','controllerHoldEnvironment'])&&
+ requireValue(exact(bundle,['version','revision','source','predecessorJobsPolicy','predecessorJobsPolicyRendered','jobsPolicy','jobsPolicyRendered',
+  'releasePolicy','releasePolicyRendered','releaseBinding','releaseBindingRendered','controllerHoldEnvironment'])&&
   bundle.version===1&&/^[a-f0-9]{40}$/.test(bundle.revision)&&typeof bundle.source==='string'&&bundle.source.startsWith('/')&&
-  bundle.jobsPolicySpec?.failurePolicy==='Fail'&&
+  bundle.predecessorJobsPolicy?.kind==='ValidatingAdmissionPolicy'&&bundle.predecessorJobsPolicyRendered?.kind==='ValidatingAdmissionPolicy'&&
+  bundle.jobsPolicy?.kind==='ValidatingAdmissionPolicy'&&bundle.jobsPolicyRendered?.kind==='ValidatingAdmissionPolicy'&&bundle.jobsPolicy.spec?.failurePolicy==='Fail'&&
   bundle.releasePolicy?.apiVersion==='admissionregistration.k8s.io/v1'&&bundle.releasePolicy.kind==='ValidatingAdmissionPolicy'&&
+  bundle.releasePolicyRendered?.kind==='ValidatingAdmissionPolicy'&&
   bundle.releasePolicy.metadata?.name===releasePolicyName&&bundle.releasePolicy.spec?.failurePolicy==='Fail'&&
   bundle.releaseBinding?.apiVersion==='admissionregistration.k8s.io/v1'&&bundle.releaseBinding.kind==='ValidatingAdmissionPolicyBinding'&&
+  bundle.releaseBindingRendered?.kind==='ValidatingAdmissionPolicyBinding'&&
   bundle.releaseBinding.metadata?.name===releasePolicyName&&bundle.releaseBinding.spec?.policyName===releasePolicyName&&
   fingerprint(bundle.releaseBinding.spec.validationActions)===fingerprint(['Deny'])&&
   bundle.controllerHoldEnvironment.length===2,'INVALID_HOLD_DELIVERY_BUNDLE');
- const variables=bundle.jobsPolicySpec.variables??[],validations=bundle.jobsPolicySpec.validations??[];
+ const primary=[bundle.predecessorJobsPolicy,bundle.predecessorJobsPolicyRendered,bundle.jobsPolicy,bundle.jobsPolicyRendered],
+  releases=[bundle.releasePolicy,bundle.releasePolicyRendered,bundle.releaseBinding,bundle.releaseBindingRendered];
+ requireValue(primary.every(resource=>resource.apiVersion==='admissionregistration.k8s.io/v1'&&resource.kind==='ValidatingAdmissionPolicy'&&resource.metadata?.name===jobsPolicyName)&&
+  releases.every(resource=>resource.apiVersion==='admissionregistration.k8s.io/v1'&&resource.metadata?.name===releasePolicyName),'INVALID_HOLD_DELIVERY_BUNDLE');
+ const variables=bundle.jobsPolicy.spec.variables??[],validations=bundle.jobsPolicy.spec.validations??[];
  requireValue(variables.filter(item=>item.name==='proofHeld').length===1&&
   validations.filter(item=>item.message==='Image admission executable proof reservation is invalid.').length===1&&
   fingerprint(bundle.controllerHoldEnvironment)===fingerprint([
@@ -193,23 +224,27 @@ export function buildDeliveryPlan(snapshot,bundle,{context,k3sSudo,capability,in
  const reader=controllerPodState(snapshot);
  const guards={neighbors:deploymentGuards(snapshot.deployments),jobsBinding:targetState(snapshot.jobsBinding),parameters:targetState(snapshot.parameters),
   policyConfig:targetState(snapshot.policyConfig),ownerState:snapshot.ownerState,initialWork:work};
- const primaryAfter=fingerprint(snapshot.jobsPolicy.spec)===fingerprint(bundle.jobsPolicySpec)?snapshot.jobsPolicy.spec:bundle.jobsPolicySpec;
+ const primaryExact=matchesAdmissionSpec(snapshot.jobsPolicy.spec,bundle.jobsPolicy,bundle.jobsPolicyRendered);
+ const primaryAfter=primaryExact?snapshot.jobsPolicy.spec:admissionResourceWithAPIDefaults(bundle.jobsPolicy).spec;
+ const releasePolicyAfter=snapshot.releasePolicy?snapshot.releasePolicy.spec:admissionResourceWithAPIDefaults(bundle.releasePolicy).spec;
+ const releaseBindingAfter=snapshot.releaseBinding?snapshot.releaseBinding.spec:admissionResourceWithAPIDefaults(bundle.releaseBinding).spec;
  const phaseTargets={
   pause:{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.initial,after:specs.pause},
   reader:{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.pause,after:specs.reader},
-  'policy-jobs':{action:fingerprint(snapshot.jobsPolicy.spec)===fingerprint(bundle.jobsPolicySpec)?'none':'patch',kind:'ValidatingAdmissionPolicy',name:jobsPolicyName,namespaced:false,before:snapshot.jobsPolicy.spec,after:primaryAfter},
-  'policy-release':{action:snapshot.releasePolicy?'none':'create',kind:'ValidatingAdmissionPolicy',name:releasePolicyName,namespaced:false,before:null,after:bundle.releasePolicy.spec,
+  'policy-jobs':{action:primaryExact?'none':'patch',kind:'ValidatingAdmissionPolicy',name:jobsPolicyName,namespaced:false,before:snapshot.jobsPolicy.spec,after:primaryAfter,
+   ...(!primaryExact?{request:bundle.jobsPolicy.spec}:{})},
+  'policy-release':{action:snapshot.releasePolicy?'none':'create',kind:'ValidatingAdmissionPolicy',name:releasePolicyName,namespaced:false,before:null,after:releasePolicyAfter,
    ...(!snapshot.releasePolicy?{resource:bundle.releasePolicy}:{})},
-  'binding-release':{action:snapshot.releaseBinding?'none':'create',kind:'ValidatingAdmissionPolicyBinding',name:releasePolicyName,namespaced:false,before:null,after:bundle.releaseBinding.spec,
+  'binding-release':{action:snapshot.releaseBinding?'none':'create',kind:'ValidatingAdmissionPolicyBinding',name:releasePolicyName,namespaced:false,before:null,after:releaseBindingAfter,
    ...(!snapshot.releaseBinding?{resource:bundle.releaseBinding}:{})},
   open:{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.reader,after:specs.open},
  };
  const rollbackTargets={
   'rollback-pause':{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.open,after:specs.reader},
-  'rollback-binding-release':releaseBindingInitialTarget(policies.releaseBinding,bundle.releaseBinding),
-  'rollback-policy-release':releasePolicyInitialTarget(policies.releasePolicy,bundle.releasePolicy),
+  'rollback-binding-release':releaseBindingInitialTarget(policies.releaseBinding,phaseTargets['binding-release']),
+  'rollback-policy-release':releasePolicyInitialTarget(policies.releasePolicy,phaseTargets['policy-release']),
   'rollback-policy-jobs':{action:phaseTargets['policy-jobs'].action==='none'?'none':'patch',kind:'ValidatingAdmissionPolicy',name:jobsPolicyName,
-   namespaced:false,before:bundle.jobsPolicySpec,after:snapshot.jobsPolicy.spec},
+   namespaced:false,before:primaryAfter,after:snapshot.jobsPolicy.spec},
   'rollback-reader':{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.reader,after:specs.pause},
   'rollback-open':{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.pause,after:specs.initial},
  };
@@ -218,18 +253,18 @@ export function buildDeliveryPlan(snapshot,bundle,{context,k3sSudo,capability,in
   controllerInitialResourceVersion:snapshot.controller.metadata.resourceVersion,controllerInitialReader:reader,
   controllerInitialExecutableSHA256:snapshot.controllerExecutableSHA256,jobsPolicyUID:snapshot.jobsPolicy.metadata.uid,
   jobsPolicyInitialResourceVersion:snapshot.jobsPolicy.metadata.resourceVersion,releasePolicyInitial:policies.releasePolicy,
-  releaseBindingInitial:policies.releaseBinding,desired:{jobsPolicySpec:bundle.jobsPolicySpec,releasePolicy:bundle.releasePolicy,releaseBinding:bundle.releaseBinding},
+  releaseBindingInitial:policies.releaseBinding,desired:{jobsPolicySpec:primaryAfter,releasePolicySpec:releasePolicyAfter,releaseBindingSpec:releaseBindingAfter},
   controllerSpecs:specs,guards,phaseTargets,rollbackTargets};
 }
 
-function releasePolicyInitialTarget(initial,desired) {
- return initial?{action:'none',kind:'ValidatingAdmissionPolicy',name:releasePolicyName,namespaced:false,before:desired.spec,after:desired.spec}:
-  {action:'delete',kind:'ValidatingAdmissionPolicy',name:releasePolicyName,namespaced:false,before:desired.spec,after:null};
+function releasePolicyInitialTarget(initial,target) {
+ return initial?{action:'none',kind:'ValidatingAdmissionPolicy',name:releasePolicyName,namespaced:false,before:target.after,after:target.after}:
+  {action:'delete',kind:'ValidatingAdmissionPolicy',name:releasePolicyName,namespaced:false,before:target.after,after:null};
 }
 
-function releaseBindingInitialTarget(initial,desired) {
- return initial?{action:'none',kind:'ValidatingAdmissionPolicyBinding',name:releasePolicyName,namespaced:false,before:desired.spec,after:desired.spec}:
-  {action:'delete',kind:'ValidatingAdmissionPolicyBinding',name:releasePolicyName,namespaced:false,before:desired.spec,after:null};
+function releaseBindingInitialTarget(initial,target) {
+ return initial?{action:'none',kind:'ValidatingAdmissionPolicyBinding',name:releasePolicyName,namespaced:false,before:target.after,after:target.after}:
+  {action:'delete',kind:'ValidatingAdmissionPolicyBinding',name:releasePolicyName,namespaced:false,before:target.after,after:null};
 }
 
 export function validateDeliveryPlan(plan,context,k3sSudo) {
@@ -239,13 +274,13 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
   typeof plan.source==='string'&&plan.source.startsWith('/')&&image.test(plan.targetImage??'')&&sha.test(plan.executableSHA256??'')&&sha.test(plan.controllerInitialExecutableSHA256??'')&&
   uid.test(plan.controllerUID??'')&&/^\d+$/.test(plan.controllerInitialResourceVersion??'')&&uid.test(plan.controllerInitialReader?.uid??'')&&uid.test(plan.jobsPolicyUID??'')&&
   /^\d+$/.test(plan.jobsPolicyInitialResourceVersion??'')&&exact(plan.phaseTargets,phases)&&exact(plan.rollbackTargets,rollbackPhases),'HOLD_DELIVERY_PLAN_INVALID');
- requireValue(plan.source===plan.bundle.source&&plan.revision===plan.bundle.revision&&
+ requireValue(plan.source===plan.bundle.source&&plan.revision===plan.bundle.revision&&exact(plan.desired,['jobsPolicySpec','releasePolicySpec','releaseBindingSpec'])&&
   exact(plan.capability,['version','profile','revision','go','image','executableSHA256','recipe'])&&plan.capability.version===1&&
   plan.capability.profile==='image-admission-hold-delivery'&&plan.capability.revision===plan.revision&&
   plan.capability.go==='go1.26.6'&&plan.capability.image===plan.targetImage&&plan.capability.executableSHA256===plan.executableSHA256&&
-  fingerprint(plan.desired.jobsPolicySpec)===fingerprint(plan.bundle.jobsPolicySpec)&&
-  fingerprint(plan.desired.releasePolicy)===fingerprint(plan.bundle.releasePolicy)&&
-  fingerprint(plan.desired.releaseBinding)===fingerprint(plan.bundle.releaseBinding),'HOLD_DELIVERY_PLAN_INVALID');
+  fingerprint(plan.desired.jobsPolicySpec)===fingerprint(plan.phaseTargets['policy-jobs'].after)&&
+  fingerprint(plan.desired.releasePolicySpec)===fingerprint(plan.phaseTargets['policy-release'].after)&&
+  fingerprint(plan.desired.releaseBindingSpec)===fingerprint(plan.phaseTargets['binding-release'].after),'HOLD_DELIVERY_PLAN_INVALID');
  const specs=plan.controllerSpecs,expectedPause=structuredClone(specs.initial),pauseApp=expectedPause.template?.spec?.containers?.find(item=>item.name===controllerName);
  requireValue(pauseApp,'HOLD_DELIVERY_PLAN_INVALID');
  setLiteral(pauseApp,pauseEnvironment,'true',{allowMissing:true,expected:['false']});
@@ -258,7 +293,9 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
   fingerprint(specs.open)===fingerprint(expectedOpen),'HOLD_DELIVERY_PLAN_INVALID');
  for(const phase of phases) {
   const target=plan.phaseTargets[phase];
-  requireValue(exact(target,target.action==='create'?['action','kind','name','namespaced','before','after','resource']:['action','kind','name','namespaced','before','after'])&&
+  const keys=target.action==='create'?['action','kind','name','namespaced','before','after','resource']:
+   phase==='policy-jobs'&&target.action==='patch'?['action','kind','name','namespaced','before','after','request']:['action','kind','name','namespaced','before','after'];
+  requireValue(exact(target,keys)&&
    ['patch','create','none'].includes(target.action)&&typeof target.name==='string'&&typeof target.namespaced==='boolean'&&
    (target.before===null||sha.test(fingerprint(target.before)))&&sha.test(fingerprint(target.after)),'HOLD_DELIVERY_PLAN_INVALID');
  }
@@ -272,19 +309,25 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
   plan.phaseTargets.reader.action==='patch'&&plan.phaseTargets.reader.kind==='Deployment'&&plan.phaseTargets.reader.name===controllerName&&plan.phaseTargets.reader.namespaced===true&&
   plan.phaseTargets.open.action==='patch'&&plan.phaseTargets.open.kind==='Deployment'&&plan.phaseTargets.open.name===controllerName&&plan.phaseTargets.open.namespaced===true&&
   plan.phaseTargets['policy-jobs'].kind==='ValidatingAdmissionPolicy'&&plan.phaseTargets['policy-jobs'].name===jobsPolicyName&&plan.phaseTargets['policy-jobs'].namespaced===false&&
-  plan.phaseTargets['policy-jobs'].action===(fingerprint(plan.phaseTargets['policy-jobs'].before)===fingerprint(plan.bundle.jobsPolicySpec)?'none':'patch')&&
+  plan.phaseTargets['policy-jobs'].action===(matchesAdmissionSpec(plan.phaseTargets['policy-jobs'].before,plan.bundle.jobsPolicy,plan.bundle.jobsPolicyRendered)?'none':'patch')&&
   plan.phaseTargets['policy-release'].kind==='ValidatingAdmissionPolicy'&&plan.phaseTargets['policy-release'].name===releasePolicyName&&plan.phaseTargets['policy-release'].namespaced===false&&
   plan.phaseTargets['policy-release'].action===(plan.releasePolicyInitial===null?'create':'none')&&
   plan.phaseTargets['binding-release'].kind==='ValidatingAdmissionPolicyBinding'&&plan.phaseTargets['binding-release'].name===releasePolicyName&&plan.phaseTargets['binding-release'].namespaced===false&&
   plan.phaseTargets['binding-release'].action===(plan.releaseBindingInitial===null?'create':'none')&&
   (plan.phaseTargets['policy-release'].action!=='create'||fingerprint(plan.phaseTargets['policy-release'].resource)===fingerprint(plan.bundle.releasePolicy))&&
   (plan.phaseTargets['binding-release'].action!=='create'||fingerprint(plan.phaseTargets['binding-release'].resource)===fingerprint(plan.bundle.releaseBinding))&&
+  (plan.phaseTargets['policy-jobs'].action!=='patch'||fingerprint(plan.phaseTargets['policy-jobs'].request)===fingerprint(plan.bundle.jobsPolicy.spec))&&
   fingerprint(plan.phaseTargets.pause.before)===fingerprint(specs.initial)&&fingerprint(plan.phaseTargets.pause.after)===fingerprint(specs.pause)&&
   fingerprint(plan.phaseTargets.reader.before)===fingerprint(specs.pause)&&fingerprint(plan.phaseTargets.reader.after)===fingerprint(specs.reader)&&
   fingerprint(plan.phaseTargets.open.before)===fingerprint(specs.reader)&&fingerprint(plan.phaseTargets.open.after)===fingerprint(specs.open)&&
-  fingerprint(plan.phaseTargets['policy-jobs'].after)===fingerprint(plan.bundle.jobsPolicySpec)&&
-  fingerprint(plan.phaseTargets['policy-release'].after)===fingerprint(plan.bundle.releasePolicy.spec)&&
-  fingerprint(plan.phaseTargets['binding-release'].after)===fingerprint(plan.bundle.releaseBinding.spec)&&
+  fingerprint(plan.phaseTargets['policy-jobs'].after)===fingerprint(plan.phaseTargets['policy-jobs'].action==='none'?
+   plan.phaseTargets['policy-jobs'].before:admissionResourceWithAPIDefaults(plan.bundle.jobsPolicy).spec)&&
+  (plan.phaseTargets['policy-release'].action==='create'?
+   fingerprint(plan.phaseTargets['policy-release'].after)===fingerprint(admissionResourceWithAPIDefaults(plan.bundle.releasePolicy).spec):
+   matchesAdmissionSpec(plan.phaseTargets['policy-release'].after,plan.bundle.releasePolicy,plan.bundle.releasePolicyRendered))&&
+  (plan.phaseTargets['binding-release'].action==='create'?
+   fingerprint(plan.phaseTargets['binding-release'].after)===fingerprint(admissionResourceWithAPIDefaults(plan.bundle.releaseBinding).spec):
+   matchesAdmissionSpec(plan.phaseTargets['binding-release'].after,plan.bundle.releaseBinding,plan.bundle.releaseBindingRendered))&&
   plan.rollbackTargets['rollback-pause'].action==='patch'&&plan.rollbackTargets['rollback-pause'].kind==='Deployment'&&plan.rollbackTargets['rollback-pause'].name===controllerName&&plan.rollbackTargets['rollback-pause'].namespaced===true&&
   plan.rollbackTargets['rollback-reader'].action==='patch'&&plan.rollbackTargets['rollback-reader'].kind==='Deployment'&&plan.rollbackTargets['rollback-reader'].name===controllerName&&plan.rollbackTargets['rollback-reader'].namespaced===true&&
   plan.rollbackTargets['rollback-open'].action==='patch'&&plan.rollbackTargets['rollback-open'].kind==='Deployment'&&plan.rollbackTargets['rollback-open'].name===controllerName&&plan.rollbackTargets['rollback-open'].namespaced===true&&
@@ -295,7 +338,7 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
   fingerprint(plan.rollbackTargets['rollback-pause'].before)===fingerprint(specs.open)&&fingerprint(plan.rollbackTargets['rollback-pause'].after)===fingerprint(specs.reader)&&
   fingerprint(plan.rollbackTargets['rollback-reader'].before)===fingerprint(specs.reader)&&fingerprint(plan.rollbackTargets['rollback-reader'].after)===fingerprint(specs.pause)&&
   fingerprint(plan.rollbackTargets['rollback-open'].before)===fingerprint(specs.pause)&&fingerprint(plan.rollbackTargets['rollback-open'].after)===fingerprint(specs.initial)&&
-  fingerprint(plan.rollbackTargets['rollback-policy-jobs'].before)===fingerprint(plan.bundle.jobsPolicySpec)&&
+  fingerprint(plan.rollbackTargets['rollback-policy-jobs'].before)===fingerprint(plan.phaseTargets['policy-jobs'].after)&&
   fingerprint(plan.rollbackTargets['rollback-policy-jobs'].after)===fingerprint(plan.phaseTargets['policy-jobs'].before)&&
   (plan.rollbackTargets['rollback-policy-release'].action==='delete')===(plan.releasePolicyInitial===null)&&
   (plan.rollbackTargets['rollback-binding-release'].action==='delete')===(plan.releaseBindingInitial===null),
@@ -395,7 +438,7 @@ export function mutationFor(plan,snapshot,phase) {
    {op:'test',path:'/metadata/uid',value:resource.metadata.uid},
    {op:'test',path:'/metadata/resourceVersion',value:resource.metadata.resourceVersion},
    {op:'test',path:'/spec',value:target.before},
-   {op:'replace',path:'/spec',value:target.after},
+   {op:'replace',path:'/spec',value:target.request??target.after},
   ]};
 }
 

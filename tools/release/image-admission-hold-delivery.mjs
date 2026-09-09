@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import {execFileSync,spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {constants,closeSync,fsyncSync,lstatSync,openSync,readFileSync,readlinkSync,realpathSync,rmSync,writeFileSync,writeSync} from 'node:fs';
+import {constants,closeSync,fsyncSync,lstatSync,mkdtempSync,openSync,readFileSync,readlinkSync,realpathSync,rmSync,writeFileSync,writeSync} from 'node:fs';
 import {join,resolve} from 'node:path';
+import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {request} from 'node:http';
 import {inspectSource} from './application-source.mjs';
@@ -52,25 +53,36 @@ function resource(documents,kind,name) {
  const found=documents.filter(item=>item.kind===kind&&item.metadata?.name===name);
  requireValue(found.length===1,'EXACT_SOURCE_RESOURCE_REQUIRED');return found[0];
 }
+function kustomizedDocuments(raw,kustomize) {
+ const directory=mkdtempSync(join(tmpdir(),'kodex-hold-policy-render-'));
+ try {
+  writeFileSync(join(directory,'policy.yaml'),raw,{mode:0o600,flag:'wx'});
+  writeFileSync(join(directory,'kustomization.yaml'),'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources: [policy.yaml]\n',{mode:0o600,flag:'wx'});
+  return yamlDocuments(kustomize(directory));
+ } finally {rmSync(directory,{recursive:true,force:true});}
+}
 function git(source,...args) {return execFileSync('git',['-C',source,...args],{encoding:'utf8',stdio:'pipe',timeout:30_000,maxBuffer:16<<20}).trim();}
 
-export function loadDesiredBundle(sourcePath,expectedRevision) {
+export function loadDesiredBundle(sourcePath,expectedRevision,kustomize=directory=>execFileSync('kubectl',['kustomize',directory],{encoding:'utf8',stdio:'pipe',timeout:30_000,maxBuffer:16<<20})) {
  const source=realpathSync(sourcePath);
  requireValue(source===sourcePath&&revision.test(expectedRevision)&&inspectSource(source).revision===expectedRevision,'EXACT_CLEAN_SOURCE_REQUIRED');
  git(source,'merge-base','--is-ancestor',implementationCommit,expectedRevision);
  requireValue(git(source,'rev-parse',`${implementationCommit}^`)===implementationParent,'HOLD_IMPLEMENTATION_LINEAGE_CHANGED');
- const currentPolicy=yamlDocuments(readFileSync(join(source,policyPath),'utf8'));
+ const currentPolicyRaw=readFileSync(join(source,policyPath),'utf8'),currentPolicy=yamlDocuments(currentPolicyRaw),currentRendered=kustomizedDocuments(currentPolicyRaw,kustomize);
  const committedPolicy=yamlDocuments(git(source,'show',`${implementationCommit}:${policyPath}`));
- const predecessorPolicy=yamlDocuments(git(source,'show',`${implementationParent}:${policyPath}`));
+ const predecessorPolicyRaw=git(source,'show',`${implementationParent}:${policyPath}`),predecessorPolicy=yamlDocuments(predecessorPolicyRaw),
+  predecessorRendered=kustomizedDocuments(predecessorPolicyRaw,kustomize);
  const currentController=yamlDocuments(readFileSync(join(source,controllerPath),'utf8'));
  const committedController=yamlDocuments(git(source,'show',`${implementationCommit}:${controllerPath}`));
  const currentJobs=resource(currentPolicy,'ValidatingAdmissionPolicy',jobsPolicyName);
  const committedJobs=resource(committedPolicy,'ValidatingAdmissionPolicy',jobsPolicyName);
  const predecessorJobs=resource(predecessorPolicy,'ValidatingAdmissionPolicy',jobsPolicyName);
+ const renderedCurrentJobs=resource(currentRendered,'ValidatingAdmissionPolicy',jobsPolicyName),renderedPredecessorJobs=resource(predecessorRendered,'ValidatingAdmissionPolicy',jobsPolicyName);
  const currentReleasePolicy=resource(currentPolicy,'ValidatingAdmissionPolicy',releasePolicyName);
  const committedReleasePolicy=resource(committedPolicy,'ValidatingAdmissionPolicy',releasePolicyName);
  const currentReleaseBinding=resource(currentPolicy,'ValidatingAdmissionPolicyBinding',releasePolicyName);
  const committedReleaseBinding=resource(committedPolicy,'ValidatingAdmissionPolicyBinding',releasePolicyName);
+ const renderedReleasePolicy=resource(currentRendered,'ValidatingAdmissionPolicy',releasePolicyName),renderedReleaseBinding=resource(currentRendered,'ValidatingAdmissionPolicyBinding',releasePolicyName);
  requireValue(fingerprint(currentJobs.spec)===fingerprint(committedJobs.spec)&&
   fingerprint(currentReleasePolicy)===fingerprint(committedReleasePolicy)&&fingerprint(currentReleaseBinding)===fingerprint(committedReleaseBinding),
  'HOLD_POLICY_SOURCE_CHANGED');
@@ -78,8 +90,9 @@ export function loadDesiredBundle(sourcePath,expectedRevision) {
  const selected=envOf(currentController).filter(item=>['IMAGE_ADMISSION_CONTROLLER_HOLD_PROOF_JOBS','IMAGE_ADMISSION_CONTROLLER_PROOF_HOLD_UNTIL'].includes(item.name));
  const committedSelected=envOf(committedController).filter(item=>selected.some(entry=>entry.name===item.name));
  requireValue(fingerprint(selected)===fingerprint(committedSelected),'HOLD_CONTROLLER_SOURCE_CHANGED');
- const bundle={version:1,revision:expectedRevision,source,predecessorJobsPolicySpec:predecessorJobs.spec,jobsPolicySpec:currentJobs.spec,
-  releasePolicy:currentReleasePolicy,releaseBinding:currentReleaseBinding,controllerHoldEnvironment:selected};
+ const bundle={version:1,revision:expectedRevision,source,predecessorJobsPolicy:predecessorJobs,predecessorJobsPolicyRendered:renderedPredecessorJobs,
+  jobsPolicy:currentJobs,jobsPolicyRendered:renderedCurrentJobs,releasePolicy:currentReleasePolicy,releasePolicyRendered:renderedReleasePolicy,
+  releaseBinding:currentReleaseBinding,releaseBindingRendered:renderedReleaseBinding,controllerHoldEnvironment:selected};
  validateDesiredBundle(bundle);requireValue(inspectSource(source).revision===expectedRevision,'SOURCE_CHANGED_DURING_READBACK');return bundle;
 }
 
@@ -136,7 +149,7 @@ function runtime(context,k3sSudo) {
  const list=(kind,label)=>JSON.parse(invoke(['get',kind,'-n',namespace,...(label?['-l',label]:[]),'-o','json'])).items;
  const readOwnerState=()=>JSON.parse(invoke(['exec','-i','kodex-postgresql-0','-n',namespace,'--','psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','postgres','-d','control_plane'],
   readFileSync(new URL('./runner-policy-readback.sql',import.meta.url),'utf8')));
- return {invoke,get,list,readOwnerState,
+ return {invoke,get,list,readOwnerState,kustomize:directory=>invoke(['kustomize',directory]),
   patch:(kind,name,namespaced,patch)=>{const path=`/tmp/kodex-hold-delivery-${randomUUID()}.json`;try{writeFileSync(path,JSON.stringify(patch),{mode:0o600,flag:'wx'});invoke(['patch',kind.toLowerCase(),name,...(namespaced?['-n',namespace]:[]),'--type=json','--patch-file',path],null,60_000);}finally{rmSync(path,{force:true});}},
   create:resource=>{const path=`/tmp/kodex-hold-delivery-${randomUUID()}.json`;try{writeFileSync(path,JSON.stringify(resource),{mode:0o600,flag:'wx'});invoke(['create','-f',path],null,60_000);}finally{rmSync(path,{force:true});}},
   delete:(kind,name,uid,resourceVersion)=>deleteWithPreconditions(context,k3sSudo,kind,name,uid,resourceVersion),
@@ -343,13 +356,13 @@ async function main(args) {
  if(command==='inspect') {requireValue(options['--output']&&!exists(options['--output'])&&k3sSudo,'INSPECT_INPUT_REQUIRED');privateWrite(options['--output'],inspection(capture(rt,{proof:true})));process.stdout.write(`Image admission hold delivery inspection: ${fingerprint(privateRead(options['--output']))}\n`);return;}
  if(command==='plan') {
   requireValue(options['--source']&&options['--revision']&&options['--capability']&&options['--output']&&!exists(options['--output'])&&k3sSudo,'PLAN_INPUT_REQUIRED');
-  const bundle=loadDesiredBundle(options['--source'],options['--revision']);
+  const bundle=loadDesiredBundle(options['--source'],options['--revision'],rt.kustomize);
   const capability=validateHoldCapability(privateRead(options['--capability']));requireValue(capability.revision===bundle.revision,'CAPABILITY_SOURCE_MISMATCH');
   const plan=buildDeliveryPlan(capture(rt,{proof:true}),bundle,{context,k3sSudo,capability,intent:randomUUID()});
   validateDeliveryPlan(plan,context,k3sSudo);privateWrite(options['--output'],plan);process.stdout.write(`Image admission hold delivery plan: ${fingerprint(plan)}\n`);return;
  }
  const plan=privateRead(options['--plan']);validateDeliveryPlan(plan,context,k3sSudo);
- const currentBundle=loadDesiredBundle(plan.source,plan.revision);
+ const currentBundle=loadDesiredBundle(plan.source,plan.revision,rt.kustomize);
  requireValue(fingerprint(currentBundle)===fingerprint(plan.bundle),'PLAN_SOURCE_CHANGED');
  const rollback=command.startsWith('rollback'),phase=options['--phase'];
  requireValue((rollback?rollbackPhases:phases).includes(phase),rollback?'INVALID_ROLLBACK_PHASE':'INVALID_DELIVERY_PHASE');
