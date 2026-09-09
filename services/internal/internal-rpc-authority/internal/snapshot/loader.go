@@ -661,7 +661,7 @@ func loadIssuerKeys(
 				!sameStringSet(record.Audiences, audiencesByIssuer[keySet.Issuer]) ||
 				!record.NotBefore.Before(record.NotAfter) ||
 				now.Before(record.NotBefore) ||
-				!now.Before(record.NotAfter) {
+				(record.Status != "PREVIOUS" && !now.Before(record.NotAfter)) {
 				return nil, service.VerificationKeyRecord{}, errors.New("snapshot key metadata is invalid")
 			}
 			keys[key.KeyID] = record
@@ -746,7 +746,7 @@ func loadProofTrust(
 				record.Status != "PREVIOUS") ||
 			!record.NotBefore.Before(record.NotAfter) ||
 			now.Before(record.NotBefore) ||
-			!now.Before(record.NotAfter) {
+			(record.Status != "PREVIOUS" && !now.Before(record.NotAfter)) {
 			return nil, errors.New("authority proof key metadata is invalid")
 		}
 		if record.Status == "CURRENT" {

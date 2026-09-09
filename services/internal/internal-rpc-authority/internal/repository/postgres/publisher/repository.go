@@ -101,6 +101,102 @@ func (repository *Repository) PrepareRotation(
 		"prepare publisher authority rotation")
 }
 
+// LoadOrPrepareRotationOperation фиксирует одну составную normal rotation.
+func (repository *Repository) LoadOrPrepareRotationOperation(
+	ctx context.Context,
+	value model.AuthorityRotationOperation,
+) (model.AuthorityRotationOperation, error) {
+	return repository.rotationOperation(ctx, loadOrPrepareRotationOperationSQL, value, "")
+}
+
+// LoadRotationOperation возвращает сохранённую operation без создания нового
+// намерения и без изменения назначенных PostgreSQL дедлайнов.
+func (repository *Repository) LoadRotationOperation(
+	ctx context.Context,
+	operationID string,
+) (model.AuthorityRotationOperation, bool, error) {
+	var result model.AuthorityRotationOperation
+	err := repository.pool.QueryRow(ctx, loadRotationOperationSQL, operationID).Scan(
+		&result.OperationID, &result.RegistryRevision,
+		&result.RegistryDigestSHA256, &result.BaseRevision,
+		&result.BaseDigestSHA256, &result.ExpectedReadbackCount,
+		&result.Status, &result.SwitchNotBefore, &result.PreviousNotAfter,
+		&result.CompletedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.AuthorityRotationOperation{}, false, nil
+	}
+	if err != nil {
+		return model.AuthorityRotationOperation{}, false,
+			fmt.Errorf("load authority rotation operation: %w", err)
+	}
+	return result, true, nil
+}
+
+// PrepareRotationPhase связывает phase intent с operation до внешнего CAS.
+func (repository *Repository) PrepareRotationPhase(
+	ctx context.Context,
+	operation model.AuthorityRotationOperation,
+	phase string,
+	value model.AuthorityRotationIntent,
+) error {
+	var accepted bool
+	err := repository.pool.QueryRow(ctx, prepareRotationPhaseSQL,
+		operation.OperationID, phase, value.IntentID, value.SourceRevision,
+		value.SourceDigestSHA256, value.PredecessorRevision,
+		value.PredecessorDigestSHA256, value.ExpectedReadbackCount,
+		value.PublicationInputDigestSHA256,
+	).Scan(&accepted)
+	if err != nil {
+		return fmt.Errorf("prepare authority rotation phase: %w", err)
+	}
+	if !accepted {
+		return domainrepository.ErrSnapshotRollback
+	}
+	return nil
+}
+
+// AdvanceRotationOperation переводит составную операцию только после exact
+// promoted publication соответствующей фазы.
+func (repository *Repository) AdvanceRotationOperation(
+	ctx context.Context,
+	value model.AuthorityRotationOperation,
+	phase string,
+	publication model.AuthoritySnapshotPublication,
+) (model.AuthorityRotationOperation, error) {
+	return repository.rotationOperation(ctx, advanceRotationOperationSQL, value, phase,
+		publication.IntentID, publication.SourceRevision,
+		publication.SourceDigestSHA256, publication.InputDigestSHA256)
+}
+
+func (repository *Repository) rotationOperation(
+	ctx context.Context,
+	query string,
+	value model.AuthorityRotationOperation,
+	phase string,
+	publication ...any,
+) (model.AuthorityRotationOperation, error) {
+	arguments := []any{value.OperationID, value.RegistryRevision,
+		value.RegistryDigestSHA256, value.BaseRevision, value.BaseDigestSHA256,
+		value.ExpectedReadbackCount}
+	if phase != "" {
+		arguments = append(arguments, phase)
+		arguments = append(arguments, publication...)
+	}
+	var result model.AuthorityRotationOperation
+	err := repository.pool.QueryRow(ctx, query, arguments...).Scan(
+		&result.OperationID, &result.RegistryRevision,
+		&result.RegistryDigestSHA256, &result.BaseRevision,
+		&result.BaseDigestSHA256, &result.ExpectedReadbackCount,
+		&result.Status, &result.SwitchNotBefore, &result.PreviousNotAfter,
+		&result.CompletedAt,
+	)
+	if err != nil {
+		return model.AuthorityRotationOperation{}, fmt.Errorf("load authority rotation operation: %w", err)
+	}
+	return result, nil
+}
+
 // BeginRotationDelivery необратимо закрывает возможность безопасного abort.
 func (repository *Repository) BeginRotationDelivery(
 	ctx context.Context,

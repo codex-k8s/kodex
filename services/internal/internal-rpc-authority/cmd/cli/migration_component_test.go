@@ -59,13 +59,13 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 			t.Fatalf("apply authority migration attempt %d: %v", attempt+1, err)
 		}
 		version, err := goose.GetDBVersionContext(ctx, database)
-		if err != nil || version != 20260909000100 {
+		if err != nil || version != 20260909000200 {
 			t.Fatal("authority migration version readback failed")
 		}
 		var rows, maximumID int64
 		if err := database.QueryRowContext(ctx,
 			"SELECT count(*), max(id) FROM public.goose_db_version",
-		).Scan(&rows, &maximumID); err != nil || rows != 6 {
+		).Scan(&rows, &maximumID); err != nil || rows != 7 {
 			t.Fatal("authority migration history readback failed")
 		}
 		if attempt == 0 {
@@ -75,6 +75,7 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 		}
 	}
 	t.Run("authority rotation lifecycle", func(t *testing.T) { testAuthorityRotationLifecycle(t, port) })
+	t.Run("authority normal rotation operation", func(t *testing.T) { testAuthorityNormalRotationOperation(t, port) })
 	t.Run("workload boundary", func(t *testing.T) {
 		testWorkloadDatabaseBoundary(t, port)
 	})

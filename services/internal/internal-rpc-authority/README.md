@@ -83,7 +83,9 @@ bearer/context либо mTLS всегда дают закрытый отказ.
   exact `backupID`/timeline и подписывает completion только при полном
   совпадении;
 - `internal-rpc-authority-cli up|status` применяет forward-only goose history;
-  `rotation-status` возвращает безопасную metadata последнего intent, а
+  `rotation-status` возвращает безопасную metadata последнего intent либо
+  составной `DISTRIBUTE -> SWITCH -> RETIRE` operation с назначенными БД
+  deadline и тремя раздельными digest domains, а
   `rotation-abort` с явным staging confirmation закрывает только `PREPARED`
   до начала доставки. Legacy `expand|contract|deploy` отсутствуют; повторный
   `up` выполняет идемпотентный readback применённых migrations.

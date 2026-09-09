@@ -44,6 +44,7 @@ type PublisherBuildOptions struct {
 	AuthorityProofKeys         []PublisherKey
 	SourceRegistryDigestSHA256 string
 	Now                        time.Time
+	PreviousKeyNotAfter        *time.Time
 }
 
 // PublisherBuildResult содержит полный подписанный снимок и proof trust.
@@ -131,7 +132,11 @@ func BuildForPublisher(options PublisherBuildOptions) (PublisherBuildResult, err
 	if err != nil {
 		return PublisherBuildResult{}, err
 	}
-	issuers, err := publisherIssuerSets(authorizationKeys, now)
+	issuers, err := publisherIssuerSets(
+		authorizationKeys,
+		now,
+		options.PreviousKeyNotAfter,
+	)
 	if err != nil {
 		return PublisherBuildResult{}, err
 	}
@@ -312,6 +317,7 @@ func VerifyPublisherManifestSigner(
 func publisherIssuerSets(
 	values []PublisherKey,
 	now time.Time,
+	previousKeyNotAfter *time.Time,
 ) ([]issuerKeySet, error) {
 	grouped := make(map[string]*issuerKeySet)
 	order := make([]string, 0)
@@ -337,12 +343,21 @@ func publisherIssuerSets(
 		if grouped[value.Issuer].WorkloadID != value.WorkloadID {
 			return nil, errors.New("authorization issuer workload mutation rejected")
 		}
+		notAfter, err := publisherKeyNotAfter(
+			value.Status,
+			now,
+			previousKeyNotAfter,
+		)
+		if err != nil {
+			return nil, err
+		}
+		notBefore := publisherKeyNotBefore(now, notAfter)
 		grouped[value.Issuer].Keys = append(grouped[value.Issuer].Keys, keyEntry{
 			Status: value.Status, Generation: value.Generation,
 			Purpose:   value.Purpose,
 			Audiences: append([]string(nil), value.Audiences...),
-			NotBefore: now.Add(-time.Minute).Unix(),
-			NotAfter:  now.Add(PublisherSnapshotValidity).Unix(),
+			NotBefore: notBefore.Unix(),
+			NotAfter:  notAfter.Unix(),
 			JWK:       json.RawMessage(publicJWK),
 		})
 	}
@@ -395,14 +410,23 @@ func publisherProofTrust(
 		if err != nil {
 			return nil, errors.New("encode authority proof public key")
 		}
+		notAfter, err := publisherKeyNotAfter(
+			value.Status,
+			now,
+			options.PreviousKeyNotAfter,
+		)
+		if err != nil {
+			return nil, err
+		}
+		notBefore := publisherKeyNotBefore(now, notAfter)
 		documentValue.Keys = append(documentValue.Keys, proofTrustKey{
 			Issuer:     value.Issuer,
 			Generation: value.Generation,
 			Status:     value.Status,
 			Purpose:    value.Purpose,
 			Audiences:  append([]string(nil), value.Audiences...),
-			NotBefore:  now.Add(-time.Minute).Unix(),
-			NotAfter:   now.Add(PublisherSnapshotValidity).Unix(),
+			NotBefore:  notBefore.Unix(),
+			NotAfter:   notAfter.Unix(),
 			JWK:        json.RawMessage(publicJWK),
 		})
 	}
@@ -426,6 +450,30 @@ func publisherProofTrust(
 		return nil, errors.New("read back authority proof trust")
 	}
 	return canonical, nil
+}
+
+func publisherKeyNotAfter(
+	status string,
+	now time.Time,
+	previousKeyNotAfter *time.Time,
+) (time.Time, error) {
+	if status != "PREVIOUS" {
+		return now.Add(PublisherSnapshotValidity), nil
+	}
+	if previousKeyNotAfter == nil || previousKeyNotAfter.IsZero() {
+		// Совместимый reader старой protocol_version=1 публикации. Новый
+		// составной путь всегда передаёт назначенный PostgreSQL deadline.
+		return now.Add(PublisherSnapshotValidity), nil
+	}
+	return previousKeyNotAfter.UTC(), nil
+}
+
+func publisherKeyNotBefore(now, notAfter time.Time) time.Time {
+	notBefore := now.Add(-time.Minute)
+	if !notBefore.Before(notAfter) {
+		return notAfter.Add(-time.Minute)
+	}
+	return notBefore
 }
 
 func publisherHistory(

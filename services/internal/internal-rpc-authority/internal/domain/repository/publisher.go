@@ -27,6 +27,26 @@ type PublisherStore interface {
 		context.Context,
 		model.AuthorityRotationIntent,
 	) error
+	LoadOrPrepareRotationOperation(
+		context.Context,
+		model.AuthorityRotationOperation,
+	) (model.AuthorityRotationOperation, error)
+	LoadRotationOperation(
+		context.Context,
+		string,
+	) (model.AuthorityRotationOperation, bool, error)
+	PrepareRotationPhase(
+		context.Context,
+		model.AuthorityRotationOperation,
+		string,
+		model.AuthorityRotationIntent,
+	) error
+	AdvanceRotationOperation(
+		context.Context,
+		model.AuthorityRotationOperation,
+		string,
+		model.AuthoritySnapshotPublication,
+	) (model.AuthorityRotationOperation, error)
 	BeginRotationDelivery(
 		context.Context,
 		model.AuthorityRotationIntent,

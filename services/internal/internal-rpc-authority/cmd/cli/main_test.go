@@ -18,6 +18,7 @@ const baselineMigration = "migrations/20260823000100_internal_rpc_authority_base
 const workloadBoundaryMigration = "migrations/20260906000100_workload_database_boundary.sql"
 const snapshotWorkloadSignerMigration = "migrations/20260907000100_snapshot_workload_signer_boundary.sql"
 const authorityRotationLifecycleMigration = "migrations/20260909000100_authority_rotation_lifecycle.sql"
+const authorityNormalRotationOperationMigration = "migrations/20260909000200_authority_normal_rotation_operation.sql"
 
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	t.Parallel()
@@ -119,7 +120,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 5 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration {
+	if len(entries) != 6 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)
@@ -128,6 +129,33 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	}
 	if got := fmt.Sprintf("%x", sha256.Sum256(content)); got != "d4c9ed792ae0e157247fd3e1b58d15f7bbff43bf38f202bf72e9201398be4e0a" {
 		t.Fatal("published authority baseline bytes changed")
+	}
+}
+
+func TestAuthorityNormalRotationOperationHasThreeImmutablePhases(t *testing.T) {
+	t.Parallel()
+	content, err := os.ReadFile(authorityNormalRotationOperationMigration)
+	if err != nil {
+		t.Fatal("read authority normal rotation operation migration")
+	}
+	text := string(content)
+	for _, required := range []string{
+		"authority_rotation_operation_phase_intents",
+		"authority_rotation_operation_publications",
+		"'DISTRIBUTE', 'SWITCH', 'RETIRE'",
+		"switch_not_before",
+		"previous_not_after",
+		"pg_advisory_xact_lock(1390, 1428)",
+		"registry_digest_sha256",
+		"publication_input_digest_sha256",
+		"snapshot_digest_sha256",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("normal rotation operation migration is missing %q", required)
+		}
+	}
+	if strings.Contains(text, "DROP TABLE") || strings.Contains(text, "TRUNCATE") {
+		t.Fatal("normal rotation operation migration contains destructive state reset")
 	}
 }
 

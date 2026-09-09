@@ -2,6 +2,9 @@ package snapshot
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -43,11 +46,11 @@ func TestPublisherKeyDocumentsIgnoreRegistryMapOrder(t *testing.T) {
 		publisherTestKey("spiffe://kodex.local/beta", "beta", "AUTHORIZATION_CONTEXT", 2, beta),
 		publisherTestKey("spiffe://kodex.local/alpha", "alpha", "AUTHORIZATION_CONTEXT", 1, alpha),
 	}
-	left, err := publisherIssuerSets(authorization, now)
+	left, err := publisherIssuerSets(authorization, now, nil)
 	if err != nil {
 		t.Fatalf("build first issuer set: %v", err)
 	}
-	right, err := publisherIssuerSets([]PublisherKey{authorization[1], authorization[0]}, now)
+	right, err := publisherIssuerSets([]PublisherKey{authorization[1], authorization[0]}, now, nil)
 	if err != nil {
 		t.Fatalf("build reordered issuer set: %v", err)
 	}
@@ -94,7 +97,7 @@ func TestPublisherKeyValidityAllowsPlannedForwardOnlyRotation(t *testing.T) {
 			1,
 			key,
 		),
-	}, now)
+	}, now, nil)
 	if err != nil {
 		t.Fatalf("build issuer set: %v", err)
 	}
@@ -106,6 +109,125 @@ func TestPublisherKeyValidityAllowsPlannedForwardOnlyRotation(t *testing.T) {
 	}
 	if PublisherSnapshotValidity < 90*24*time.Hour {
 		t.Fatal("snapshot validity leaves no operational rotation window")
+	}
+}
+
+func TestPublisherPreviousKeyUsesAuthoritativeDeadline(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1_786_507_482, 0).UTC()
+	deadline := now.Add(40*time.Second + 371*time.Millisecond)
+	key := mustPublisherTestKey(t, "previous-deadline")
+	value := publisherTestKey(
+		"spiffe://kodex.local/issuer",
+		"issuer",
+		"AUTHORIZATION_CONTEXT",
+		1,
+		key,
+	)
+	value.Status = "PREVIOUS"
+	sets, err := publisherIssuerSets([]PublisherKey{value}, now, &deadline)
+	if err != nil {
+		t.Fatalf("build PREVIOUS issuer set: %v", err)
+	}
+	if got, want := sets[0].Keys[0].NotAfter, deadline.Unix(); got != want {
+		t.Fatalf("PREVIOUS NotAfter = %d, want %d", got, want)
+	}
+	value.Purpose = "AUTHORITY_PROOF"
+	currentProof := publisherTestKey(
+		value.Issuer,
+		value.WorkloadID,
+		"AUTHORITY_PROOF",
+		2,
+		mustPublisherTestKey(t, "current-proof"),
+	)
+	proofRaw, err := publisherProofTrust(PublisherBuildOptions{
+		SourceRevision:      1,
+		AuthorityProofKeys:  []PublisherKey{value, currentProof},
+		PreviousKeyNotAfter: &deadline,
+	}, now, strings.Repeat("0", 64))
+	if err != nil {
+		t.Fatalf("build PREVIOUS proof trust: %v", err)
+	}
+	var proof proofTrustDocument
+	if err := json.Unmarshal(proofRaw, &proof); err != nil {
+		t.Fatalf("decode PREVIOUS proof trust: %v", err)
+	}
+	if got, want := proof.Keys[0].NotAfter, deadline.Unix(); got != want {
+		t.Fatalf("proof PREVIOUS NotAfter = %d, want %d", got, want)
+	}
+}
+
+func TestPublisherPreviousKeyCanBeRetiredAfterDeadline(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1_786_507_482, 0).UTC()
+	deadline := now.Add(-2 * time.Minute)
+	key := mustPublisherTestKey(t, "expired-previous-deadline")
+	value := publisherTestKey(
+		"spiffe://kodex.local/issuer",
+		"issuer",
+		"AUTHORIZATION_CONTEXT",
+		1,
+		key,
+	)
+	value.Status = "PREVIOUS"
+	currentAuthorization := publisherTestKey(
+		value.Issuer,
+		value.WorkloadID,
+		"AUTHORIZATION_CONTEXT",
+		2,
+		mustPublisherTestKey(t, "expired-current-authorization"),
+	)
+	sets, err := publisherIssuerSets([]PublisherKey{value, currentAuthorization}, now, &deadline)
+	if err != nil {
+		t.Fatalf("build expired PREVIOUS issuer set: %v", err)
+	}
+	if got, want := sets[0].Keys[0].NotAfter, deadline.Unix(); got != want {
+		t.Fatalf("expired PREVIOUS NotAfter = %d, want %d", got, want)
+	}
+	if sets[0].Keys[0].NotBefore >= sets[0].Keys[0].NotAfter {
+		t.Fatal("expired PREVIOUS issuer interval is invalid")
+	}
+	loadedIssuers, _, err := loadIssuerKeys(
+		sets,
+		[]operationBinding{{Issuer: value.Issuer, Audience: value.Audiences[0]}},
+		"other-workload",
+		false,
+		now,
+	)
+	if err != nil || len(loadedIssuers) != 2 {
+		t.Fatalf("load issuer set with expired PREVIOUS: keys=%d err=%v", len(loadedIssuers), err)
+	}
+
+	value.Purpose = "AUTHORITY_PROOF"
+	currentProof := publisherTestKey(
+		value.Issuer,
+		value.WorkloadID,
+		"AUTHORITY_PROOF",
+		2,
+		mustPublisherTestKey(t, "expired-current-proof"),
+	)
+	proofRaw, err := publisherProofTrust(PublisherBuildOptions{
+		SourceRevision:      1,
+		AuthorityProofKeys:  []PublisherKey{value, currentProof},
+		PreviousKeyNotAfter: &deadline,
+	}, now, strings.Repeat("0", 64))
+	if err != nil {
+		t.Fatalf("build expired PREVIOUS proof trust: %v", err)
+	}
+	var proof proofTrustDocument
+	if err := json.Unmarshal(proofRaw, &proof); err != nil {
+		t.Fatalf("decode expired PREVIOUS proof trust: %v", err)
+	}
+	if proof.Keys[0].NotBefore >= proof.Keys[0].NotAfter {
+		t.Fatal("expired PREVIOUS proof interval is invalid")
+	}
+	proofPath := filepath.Join(t.TempDir(), "proof-trust.json")
+	if err := os.WriteFile(proofPath, proofRaw, 0o444); err != nil {
+		t.Fatalf("write expired PREVIOUS proof trust: %v", err)
+	}
+	loadedProof, err := loadProofTrust(proofPath, now, 1, strings.Repeat("0", 64))
+	if err != nil || len(loadedProof) != 2 {
+		t.Fatalf("load proof trust with expired PREVIOUS: keys=%d err=%v", len(loadedProof), err)
 	}
 }
 

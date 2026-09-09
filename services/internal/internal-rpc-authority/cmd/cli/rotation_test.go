@@ -36,3 +36,18 @@ func TestRotationAbortArgumentsFailClosed(t *testing.T) {
 		t.Fatal("additional rotation abort argument accepted")
 	}
 }
+
+func TestRotationWatchCommandIsExact(t *testing.T) {
+	arguments := []string{"rotation-watch", "--operation-id", "13900000-0000-4000-8000-000000000002"}
+	action, err := parseCommand(arguments)
+	if err != nil || action != commandRotationWatch {
+		t.Fatal("rotation watch command rejected")
+	}
+	options, err := parseRotationOptions(action, arguments)
+	if err != nil || options.operationID != arguments[2] {
+		t.Fatal("rotation watch operation identity rejected")
+	}
+	if _, err := parseCommand([]string{"rotation-watch", "--force"}); err == nil {
+		t.Fatal("rotation watch accepted additional arguments")
+	}
+}

@@ -30,6 +30,7 @@ const (
 	commandFreshnessWatch    command = "freshness-watch"
 	commandFreshnessActivate command = "freshness-activate"
 	commandRotationStatus    command = "rotation-status"
+	commandRotationWatch     command = "rotation-watch"
 	commandRotationAbort     command = "rotation-abort"
 )
 
@@ -98,7 +99,7 @@ func run(ctx context.Context, arguments []string) error {
 	switch action {
 	case commandFreshnessStatus, commandFreshnessWatch, commandFreshnessActivate:
 		return runFreshness(ctx, database, action, options, os.Stdout)
-	case commandRotationStatus, commandRotationAbort:
+	case commandRotationStatus, commandRotationWatch, commandRotationAbort:
 		return runRotation(ctx, database, action, rotationOptions, os.Stdout)
 	case commandUp:
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
@@ -119,6 +120,9 @@ func parseCommand(arguments []string) (command, error) {
 	if len(arguments) == 9 && arguments[0] == string(commandRotationAbort) {
 		return commandRotationAbort, nil
 	}
+	if len(arguments) == 3 && arguments[0] == string(commandRotationWatch) {
+		return commandRotationWatch, nil
+	}
 	if len(arguments) != 1 {
 		return "", errors.New(cliUsage)
 	}
@@ -130,7 +134,7 @@ func parseCommand(arguments []string) (command, error) {
 	}
 }
 
-const cliUsage = "usage: internal-rpc-authority-cli <up|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS|rotation-status|rotation-abort --intent-id UUID --source-revision NUMBER --source-digest-sha256 SHA256 --confirm ABORT-STAGING-AUTHORITY-ROTATION>"
+const cliUsage = "usage: internal-rpc-authority-cli <up|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS|rotation-status|rotation-watch --operation-id UUID|rotation-abort --intent-id UUID --source-revision NUMBER --source-digest-sha256 SHA256 --confirm ABORT-STAGING-AUTHORITY-ROTATION>"
 
 func migrationStatus(ctx context.Context, database *sql.DB) error {
 	if err := goose.StatusContext(ctx, database, "migrations"); err != nil {

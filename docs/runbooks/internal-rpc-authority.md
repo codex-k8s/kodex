@@ -113,8 +113,10 @@ issuer снова может закрыться до receipt.
   key-delivery Secrets;
 - publisher использует exact `resourceNames` RBAC, `resourceVersion` CAS,
   монотонную generation и readback после записи;
-- publisher до первой CAS фиксирует version2 rotation intent в PostgreSQL и
-  проходит `PREPARED -> DELIVERING -> DELIVERED -> PROMOTED -> RETIRED`;
+- publisher до первой CAS фиксирует version2 phase intent в PostgreSQL, а одна
+  normal rotation проходит `DISTRIBUTING -> SWITCHING -> RETIRING -> RETIRED`
+  через три immutable publications; `PREVIOUS.NotAfter` равен сохранённому
+  PostgreSQL deadline и recovery его не продлевает;
   `ABORTED` доступен только до `DELIVERING`, а следующий switch — после полного
   readback и 40-секундного overlap;
 - issuer/verifier получают только собственные read-only Secret volumes;

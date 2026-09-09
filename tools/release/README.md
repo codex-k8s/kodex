@@ -155,6 +155,9 @@ node tools/release/scoped-release.mjs apply \
 операторский readback `authority-rotation-transition.mjs`. Точный порядок,
 безопасный abort до первой доставки и resume после неизвестного результата
 описаны в [OPS-DOC-1390](../../docs/operations/authority-rotation-1390.md).
+Инструмент материализует repo-owned status Job из exact publisher image, делает
+UID/resourceVersion CAS только registry ConfigMap и перезапускает только
+publisher Deployment. Наличие прежней completed migration Job не требуется.
 - Render и локальные тесты не доказывают live zero-downtime. Групповые,
   повторные и rollback сценарии на staging относятся к #1223.
 
