@@ -60,7 +60,7 @@ test("realtime: retired CONNECTING socket закрывается после open
     expect(consoleErrors).toEqual([]);
     await fixture("/never");
     expect(await page.locator("html").getAttribute("data-opened")).toBeNull();
-    // Timeout path intentionally invokes standards-based fail-connection.
+    // По тайм-ауту намеренно вызывается стандартный отказ соединения.
     // Firefox/WebKit выпускают console.error, Chromium закрывает его без записи;
     // обе ветки измеряются напрямую, а global console filter не добавляется.
     if (browserName === "chromium") expect(consoleErrors).toEqual([]);
