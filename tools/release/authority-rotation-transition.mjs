@@ -73,23 +73,27 @@ function validateRotationTemplate(job){
 
 export function validateRotationPrerequisites(serviceAccount,egressPolicy,ingressPolicy){
 	const labels={'app.kubernetes.io/name':'internal-rpc-authority','app.kubernetes.io/component':'migrator'};
-	const exactLabels=value=>Object.entries(labels).every(([key,expected])=>value?.[key]===expected);
-	const postgresEgress=egressPolicy?.spec?.egress?.find(rule=>rule.to?.length===1&&rule.to[0].podSelector?.matchLabels?.['app.kubernetes.io/name']==='kodex-postgresql');
-	const dnsEgress=egressPolicy?.spec?.egress?.find(rule=>rule.to?.length===1&&rule.to[0].namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name']==='kube-system'&&rule.to[0].podSelector?.matchLabels?.['k8s-app']==='kube-dns');
-	const postgresIngress=ingressPolicy?.spec?.ingress?.[0];
+	const requiredLabels=value=>Object.entries(labels).every(([key,expected])=>value?.[key]===expected);
+	const dns={to:[{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kube-system'}},podSelector:{matchLabels:{'k8s-app':'kube-dns'}}}],ports:[{port:53,protocol:'UDP'},{port:53,protocol:'TCP'}]};
+	const postgres={to:[{podSelector:{matchLabels:{'app.kubernetes.io/name':'kodex-postgresql'}}}],ports:[{port:5432,protocol:'TCP'}]};
+	const egressSpec=normalizeRotationPrerequisiteSpec(egressPolicy),ingressSpec=ingressPolicy?.spec;
+	const egressRuleDigests=Array.isArray(egressSpec?.egress)?egressSpec.egress.map(fingerprint).sort():[];
 	requireValue(serviceAccount?.kind==='ServiceAccount'&&serviceAccount.metadata?.name==='internal-rpc-authority-migrator'&&
-	 serviceAccount.automountServiceAccountToken===false&&exactLabels(serviceAccount.metadata.labels)&&
+	 serviceAccount.automountServiceAccountToken===false&&requiredLabels(serviceAccount.metadata.labels)&&
 	 egressPolicy?.kind==='NetworkPolicy'&&egressPolicy.metadata?.name==='internal-rpc-authority-migrator'&&
-	 exactLabels(egressPolicy.spec?.podSelector?.matchLabels)&&fingerprint(egressPolicy.spec?.policyTypes)===fingerprint(['Ingress','Egress'])&&
-	 egressPolicy.spec?.ingress?.length===0&&egressPolicy.spec?.egress?.length===2&&
-	 fingerprint(postgresEgress?.ports)===fingerprint([{port:5432,protocol:'TCP'}])&&
-	 fingerprint(dnsEgress?.ports)===fingerprint([{port:53,protocol:'UDP'},{port:53,protocol:'TCP'}])&&
+	 fingerprint(egressSpec?.podSelector)===fingerprint({matchLabels:labels})&&fingerprint(egressSpec?.policyTypes)===fingerprint(['Ingress','Egress'])&&
+	 fingerprint(egressSpec?.ingress)===fingerprint([])&&Object.keys(egressSpec??{}).sort().join(',')==='egress,ingress,podSelector,policyTypes'&&
+	 fingerprint(egressRuleDigests)===fingerprint([fingerprint(dns),fingerprint(postgres)].sort())&&
 	 ingressPolicy?.kind==='NetworkPolicy'&&ingressPolicy.metadata?.name==='internal-rpc-authority-postgresql-from-migrator'&&
-	 ingressPolicy.spec?.podSelector?.matchLabels?.['app.kubernetes.io/name']==='kodex-postgresql'&&
-	 ingressPolicy.spec?.ingress?.length===1&&postgresIngress.from?.length===1&&exactLabels(postgresIngress.from[0]?.podSelector?.matchLabels)&&
-	 fingerprint(postgresIngress.ports)===fingerprint([{port:5432,protocol:'TCP'}]),
+	 fingerprint(ingressSpec)===fingerprint({podSelector:{matchLabels:{'app.kubernetes.io/name':'kodex-postgresql'}},policyTypes:['Ingress'],ingress:[{from:[{podSelector:{matchLabels:labels}}],ports:[{port:5432,protocol:'TCP'}]}]}),
 	 'ROTATION_JOB_PREREQUISITES_REJECTED');
 }
+
+export function normalizeRotationPrerequisiteSpec(policy){
+	const spec=structuredClone(policy?.spec);if(policy?.metadata?.name==='internal-rpc-authority-migrator'&&spec&&!Object.hasOwn(spec,'ingress'))spec.ingress=[];return spec;
+}
+
+export function rotationPrerequisiteSpecSHA256(policy){return fingerprint(normalizeRotationPrerequisiteSpec(policy));}
 
 export function createRotationJob(template,plan){
  validateRotationTemplate(template);

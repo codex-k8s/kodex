@@ -4,7 +4,7 @@ title: Точечная поставка source-профиля internal RPC auth
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.1.0
+version: 1.1.1
 updated: 2026-09-09
 ---
 
@@ -44,6 +44,11 @@ Source plan строится из actual результата `tools/dev/render-
 `run-go-command.sh`, source/mod/sumdb/tools mounts, отдельный writable build
 cache, migrator credentials/CA, SA и exact NetworkPolicy. Секретные значения не
 читаются и не записываются в evidence.
+
+Kubernetes readback может опустить пустой `spec.ingress` у migrator
+NetworkPolicy. Plan нормализует только этот отсутствующий deny-ingress список к
+`[]` при сравнении с exact render; `null`, правило, неизвестное поле, selector,
+destination или port закрыто отклоняются.
 
 ```bash
 node tools/release/authority-rotation-source-capability.mjs \

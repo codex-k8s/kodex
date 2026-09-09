@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
-import {canonicalRegistryMatches,classifyRotationStatus,createCanonicalRotationTemplate,createPublisherRestart,createRegistryCAS,createRotationJob,createSourceRotationTemplate,deriveCanonicalRegistryAdvance,deriveRegistryRotationIdentity,deriveRotationOperationID,validateRotationPolicy,validateRotationPrerequisites,validateSourceMigrationPrerequisite,verifyRotationJobReadback} from './authority-rotation-transition.mjs';
+import {canonicalRegistryMatches,classifyRotationStatus,createCanonicalRotationTemplate,createPublisherRestart,createRegistryCAS,createRotationJob,createSourceRotationTemplate,deriveCanonicalRegistryAdvance,deriveRegistryRotationIdentity,deriveRotationOperationID,rotationPrerequisiteSpecSHA256,validateRotationPolicy,validateRotationPrerequisites,validateSourceMigrationPrerequisite,verifyRotationJobReadback} from './authority-rotation-transition.mjs';
 import {authorityGoImage,buildSourceMigrationReceipt,createSourceMigrationJob} from './authority-rotation-source-delivery-model.mjs';
 import {fingerprint} from './scoped-release.mjs';
 
@@ -12,6 +12,33 @@ const image='ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:'+'a'.repeat(
 const source=fileURLToPath(new URL('../..',import.meta.url)).replace(/\/$/,'');
 function template(){return createCanonicalRotationTemplate(source,image);}
 const plan={version:3,intentID:'13900000-0000-4000-8000-000000000002',source:'/srv/kodex-dev/next',revision:'a'.repeat(40),action:'abort',rotation:{intentID:'13900000-0000-4000-8000-000000000003',sourceRevision:2,sourceDigestSHA256:'b'.repeat(64)}};
+
+function prerequisiteFixture(){
+	const labels={'app.kubernetes.io/name':'internal-rpc-authority','app.kubernetes.io/component':'migrator'};
+	const serviceAccount={kind:'ServiceAccount',metadata:{name:'internal-rpc-authority-migrator',labels},automountServiceAccountToken:false};
+	const egressPolicy={kind:'NetworkPolicy',metadata:{name:'internal-rpc-authority-migrator'},spec:{podSelector:{matchLabels:labels},policyTypes:['Ingress','Egress'],ingress:[],egress:[{to:[{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kube-system'}},podSelector:{matchLabels:{'k8s-app':'kube-dns'}}}],ports:[{port:53,protocol:'UDP'},{port:53,protocol:'TCP'}]},{to:[{podSelector:{matchLabels:{'app.kubernetes.io/name':'kodex-postgresql'}}}],ports:[{port:5432,protocol:'TCP'}]}]}};
+	const ingressPolicy={kind:'NetworkPolicy',metadata:{name:'internal-rpc-authority-postgresql-from-migrator'},spec:{podSelector:{matchLabels:{'app.kubernetes.io/name':'kodex-postgresql'}},policyTypes:['Ingress'],ingress:[{from:[{podSelector:{matchLabels:labels}}],ports:[{port:5432,protocol:'TCP'}]}]}};
+	return {serviceAccount,egressPolicy,ingressPolicy};
+}
+
+test('deny-ingress prerequisite normalizes only omitted ingress',()=>{
+	const explicit=prerequisiteFixture(),omitted=structuredClone(explicit);delete omitted.egressPolicy.spec.ingress;
+	validateRotationPrerequisites(explicit.serviceAccount,explicit.egressPolicy,explicit.ingressPolicy);validateRotationPrerequisites(omitted.serviceAccount,omitted.egressPolicy,omitted.ingressPolicy);
+	assert.equal(rotationPrerequisiteSpecSHA256(explicit.egressPolicy),rotationPrerequisiteSpecSHA256(omitted.egressPolicy));
+	const mutations=[
+		value=>value.egressPolicy.spec.ingress=null,
+		value=>value.egressPolicy.spec.ingress={},
+		value=>value.egressPolicy.spec.ingress=[{}],
+		value=>value.egressPolicy.spec.unknown=true,
+		value=>value.egressPolicy.spec.podSelector.matchLabels.unknown='workload',
+		value=>value.egressPolicy.spec.egress[0].to[0].podSelector.matchLabels['k8s-app']='foreign-dns',
+		value=>value.egressPolicy.spec.egress[0].ports[0].port=54,
+		value=>value.egressPolicy.spec.egress[0].unknown=true,
+		value=>value.egressPolicy.spec.egress[0].to.push({podSelector:{}}),
+		value=>value.ingressPolicy.spec.ingress[0].from[0].podSelector.matchLabels.unknown='caller',
+	];
+	for(const mutate of mutations){const changed=structuredClone(omitted);mutate(changed);assert.throws(()=>validateRotationPrerequisites(changed.serviceAccount,changed.egressPolicy,changed.ingressPolicy),/ROTATION_JOB_PREREQUISITES_REJECTED/);}
+});
 
 test('owner operation identity matches publisher derivation across restart and later registry revision',()=>{
 	const digest='c'.repeat(64),operationID=deriveRotationOperationID(8,digest);

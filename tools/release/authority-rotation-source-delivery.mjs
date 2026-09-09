@@ -9,7 +9,7 @@ import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {buildSourceMigrationReceipt,classifyPublisherSourceState,createPublisherRollbackCAS,createPublisherSourceCAS,createSourceMigrationJob,validateRenderedSourceMigration,validateSourceDeliveryPlan,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
 import {publishSourceMigrationIntent,publishSourceMigrationReceipt,readSourceMigrationIntent,readSourceMigrationReceipt,resolveSourceMigrationReceipt} from './authority-source-migration-receipt.mjs';
-import {validateRotationPrerequisites} from './authority-rotation-transition.mjs';
+import {rotationPrerequisiteSpecSHA256,validateRotationPrerequisites} from './authority-rotation-transition.mjs';
 import {workloadPods} from '../dev/component-manifest.mjs';
 
 const namespace='kodex-system',sha=/^[a-f0-9]{64}$/;
@@ -44,8 +44,9 @@ export async function main(args,io={}){
   const findRendered=(kind,name)=>renderedResources.find(item=>item.kind===kind&&item.metadata?.name===name),rendered=findRendered('Job','internal-rpc-authority-migrate');validateRenderedSourceMigration(rendered);
   const renderedSA=findRendered('ServiceAccount','internal-rpc-authority-migrator'),renderedEgress=findRendered('NetworkPolicy','internal-rpc-authority-migrator'),renderedIngress=findRendered('NetworkPolicy','internal-rpc-authority-postgresql-from-migrator');
   validateRotationPrerequisites(renderedSA,renderedEgress,renderedIngress);
-  const liveSA=get('serviceaccount','internal-rpc-authority-migrator');requireValue(fingerprint({labels:renderedSA.metadata.labels,automountServiceAccountToken:renderedSA.automountServiceAccountToken})===fingerprint({labels:liveSA.metadata.labels,automountServiceAccountToken:liveSA.automountServiceAccountToken})&&fingerprint(renderedEgress.spec)===fingerprint(get('networkpolicy','internal-rpc-authority-migrator').spec)&&
-   fingerprint(renderedIngress.spec)===fingerprint(get('networkpolicy','internal-rpc-authority-postgresql-from-migrator').spec),'RENDERED_ROTATION_PREREQUISITES_DRIFT');
+  const liveSA=get('serviceaccount','internal-rpc-authority-migrator'),liveEgress=get('networkpolicy','internal-rpc-authority-migrator'),liveIngress=get('networkpolicy','internal-rpc-authority-postgresql-from-migrator');validateRotationPrerequisites(liveSA,liveEgress,liveIngress);
+  requireValue(fingerprint({labels:renderedSA.metadata.labels,automountServiceAccountToken:renderedSA.automountServiceAccountToken})===fingerprint({labels:liveSA.metadata.labels,automountServiceAccountToken:liveSA.automountServiceAccountToken})&&rotationPrerequisiteSpecSHA256(renderedEgress)===rotationPrerequisiteSpecSHA256(liveEgress)&&
+   rotationPrerequisiteSpecSHA256(renderedIngress)===rotationPrerequisiteSpecSHA256(liveIngress),'RENDERED_ROTATION_PREREQUISITES_DRIFT');
   const old=inspect(publisherState.source),capability=privateJSON(options['--capability']);
   requireValue(capability.version===1&&capability.protocol===1&&capability.revision===source.revision&&capability.go==='go1.26.6'&&sha.test(capability.publisherSHA256)&&Array.isArray(capability.migrations)&&capability.migrations.length>0,'EXACT_SOURCE_CAPABILITY_REQUIRED');
   const currentExecutableSHA256=readPublisherExecutable(publisher,get('replicasets,pods',null).items,kube,options['--k3s-sudo']);
