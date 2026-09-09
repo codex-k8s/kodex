@@ -74,8 +74,8 @@ func TestInvokeReturnsRejectedIntegrationAsTerminalResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invoke rejected integration: %v", err)
 	}
-	values, ok := result.(map[string]any)
-	if !ok || values["ok"] != false || values["error_code"] != "INTEGRATION_REJECTED_BY_OWNER" {
+	values, ok := result.(integrationToolResult)
+	if !ok || values.OK || values.ErrorCode != "INTEGRATION_REJECTED_BY_OWNER" || values.InvocationRef != "inv_rejected1" {
 		t.Fatalf("unexpected rejected integration result: %#v", result)
 	}
 }

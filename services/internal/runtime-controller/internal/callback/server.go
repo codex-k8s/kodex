@@ -1188,9 +1188,65 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	return nil, "", "", false
 }
 
+// Только terminal CP result попадает в owner event; исходный ответ провайдера
+// и аргументы инструмента не входят в безопасную проекцию.
+type integrationToolResult struct {
+	OK                    bool   `json:"ok"`
+	Result                string `json:"result,omitempty"`
+	ErrorCode             string `json:"error_code,omitempty"`
+	OwnerDecisionRequired bool   `json:"owner_decision_required,omitempty"`
+	InvocationRef         string `json:"invocationRef"`
+	state                 string
+	inputSHA256           string
+}
+
+func (r integrationToolResult) MarshalJSON() ([]byte, error) {
+	value := map[string]any{"ok": r.OK, "invocationRef": r.InvocationRef}
+	if r.OK {
+		value["result"] = r.Result
+	} else {
+		value["error_code"] = r.ErrorCode
+	}
+	if r.OwnerDecisionRequired {
+		value["owner_decision_required"] = true
+	}
+	return json.Marshal(value)
+}
+
+func safeInvocationRef(value string) bool {
+	if len(value) < 8 || len(value) > 128 {
+		return false
+	}
+	for _, c := range value {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 func safeToolCallResult(tool string, result any, toolErr error) string {
 	if toolErr != nil {
 		return "TOOL_UNAVAILABLE"
+	}
+	if tool == "invoke_integration" {
+		value, ok := result.(integrationToolResult)
+		rawDigest, digestErr := hex.DecodeString(value.inputSHA256)
+		if !ok || !safeInvocationRef(value.InvocationRef) || digestErr != nil || len(rawDigest) != sha256.Size || hex.EncodeToString(rawDigest) != value.inputSHA256 {
+			return "TOOL_UNAVAILABLE"
+		}
+		switch value.state {
+		case "SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "UNKNOWN_OUTCOME":
+		default:
+			return "TOOL_UNAVAILABLE"
+		}
+		raw, _ := json.Marshal(struct {
+			Version       int    `json:"version"`
+			InvocationRef string `json:"invocationRef"`
+			State         string `json:"state"`
+			InputSHA256   string `json:"inputSHA256"`
+		}{1, value.InvocationRef, value.state, value.inputSHA256})
+		return string(raw)
 	}
 	values, _ := result.(map[string]any)
 	for _, key := range []string{"plan_ref", "conversation_ref", "child_run_ref", "run_ref"} {
@@ -1266,14 +1322,19 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 	if err != nil {
 		return nil, errors.New("integration input is invalid")
 	}
+	inputBytes, marshalErr := json.Marshal(bounded)
+	if marshalErr != nil {
+		return nil, errors.New("integration input digest is invalid")
+	}
+	inputDigest := sha256.Sum256(inputBytes)
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	resolved, err := server.control.Runtime.ResolveIntegrationInvocation(requestContext, &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: connection, CapabilityKey: capability, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))})
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("resolve integration invocation: %w", err)
 	}
-	if resolved.GetInvocationRef() == "" {
-		return nil, errors.New("resolve integration invocation: empty reference")
+	if !safeInvocationRef(resolved.GetInvocationRef()) {
+		return nil, errors.New("resolve integration invocation: invalid reference")
 	}
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
@@ -1286,11 +1347,11 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		}
 		switch state.GetState() {
 		case "SUCCEEDED":
-			return map[string]any{"ok": true, "result": state.GetResultSummary()}, nil
+			return integrationToolResult{OK: true, Result: state.GetResultSummary(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "FAILED", "REJECTED", "CANCELLED":
-			return map[string]any{"ok": false, "error_code": state.GetSafeErrorCode()}, nil
+			return integrationToolResult{ErrorCode: state.GetSafeErrorCode(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "UNKNOWN_OUTCOME":
-			return map[string]any{"ok": false, "error_code": "INTEGRATION_OUTCOME_UNKNOWN", "owner_decision_required": true}, nil
+			return integrationToolResult{ErrorCode: "INTEGRATION_OUTCOME_UNKNOWN", OwnerDecisionRequired: true, InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		}
 		select {
 		case <-ctx.Done():
