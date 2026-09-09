@@ -5,7 +5,7 @@ import { openSync, closeSync, writeSync, fsyncSync, readFileSync, lstatSync } fr
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint } from "./scoped-release.mjs";
-import { namespace, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
+import { namespace, applyIssuerAdmissionTransition, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
 
 const requireValue = (value, code) => { if (!value) throw new Error(code); };
 const phases = ["maintenance", "reader", "schema", "admission", "resources", "binding", "control-plane", "role-image-builder", "controller", "resume", "open"];
@@ -127,10 +127,8 @@ function main(args) {
       const fields=spec.versions[0].schema.openAPIV3Schema.properties.spec.properties;
       requireValue(!fields.authorityIssuerImage || fingerprint(fields.authorityIssuerImage)===fingerprint(property),"ISSUER_SCHEMA_DRIFT");fields.authorityIssuerImage=property;patch(crd,"spec",spec);
     } else {
-      const admission=get("validatingadmissionpolicy","kodex-image-admission-controller-jobs"),spec=structuredClone(admission.spec);
-      const before="variables.pod.initContainers[1].image == params.spec.authorityImage",after="variables.pod.initContainers[1].image == (has(params.spec.authorityIssuerImage) ? params.spec.authorityIssuerImage : params.spec.authorityImage)";
-      const matches=spec.validations.filter(rule=>rule.expression.includes(before)||rule.expression.includes(after));
-      requireValue(matches.length===1,"EXACT_ISSUER_ADMISSION_RULE_REQUIRED");matches[0].expression=matches[0].expression.replace(before,after);patch(admission,"spec",spec);
+      const admission=get("validatingadmissionpolicy","kodex-image-admission-controller-jobs");
+      patch(admission,"spec",applyIssuerAdmissionTransition(admission.spec));
     }
   } else if (phase === "resources") {
     if (bundle.resources[0].data.authorityIssuerImage) {

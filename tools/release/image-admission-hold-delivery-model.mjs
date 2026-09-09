@@ -146,6 +146,7 @@ function requirePrimaryBoundary(snapshot,bundle) {
  requireValue(snapshot.jobsPolicy.apiVersion==='admissionregistration.k8s.io/v1'&&snapshot.jobsPolicy.kind==='ValidatingAdmissionPolicy'&&
   snapshot.jobsPolicy.spec?.failurePolicy==='Fail'&&
   (matchesAdmissionSpec(snapshot.jobsPolicy.spec,bundle.predecessorJobsPolicy,bundle.predecessorJobsPolicyRendered)||
+   (bundle.version===2&&matchesAdmissionSpec(snapshot.jobsPolicy.spec,bundle.predecessorJobsPolicyTransitioned,bundle.predecessorJobsPolicyTransitionedRendered))||
    matchesAdmissionSpec(snapshot.jobsPolicy.spec,bundle.jobsPolicy,bundle.jobsPolicyRendered)),
  'EXACT_JOBS_POLICY_PREDECESSOR_REQUIRED');
  meta(snapshot.jobsBinding,jobsPolicyName,false);
@@ -185,9 +186,9 @@ function controllerSpecs(controller,targetImage,bundle) {
 }
 
 export function validateDesiredBundle(bundle) {
- requireValue(exact(bundle,['version','revision','source','predecessorJobsPolicy','predecessorJobsPolicyRendered','jobsPolicy','jobsPolicyRendered',
+ requireValue(exact(bundle,[...(bundle.version===2?['predecessorJobsPolicyTransitioned','predecessorJobsPolicyTransitionedRendered']:[]),'version','revision','source','predecessorJobsPolicy','predecessorJobsPolicyRendered','jobsPolicy','jobsPolicyRendered',
   'releasePolicy','releasePolicyRendered','releaseBinding','releaseBindingRendered','controllerHoldEnvironment'])&&
-  bundle.version===1&&/^[a-f0-9]{40}$/.test(bundle.revision)&&typeof bundle.source==='string'&&bundle.source.startsWith('/')&&
+  (bundle.version===1||bundle.version===2)&&/^[a-f0-9]{40}$/.test(bundle.revision)&&typeof bundle.source==='string'&&bundle.source.startsWith('/')&&
   bundle.predecessorJobsPolicy?.kind==='ValidatingAdmissionPolicy'&&bundle.predecessorJobsPolicyRendered?.kind==='ValidatingAdmissionPolicy'&&
   bundle.jobsPolicy?.kind==='ValidatingAdmissionPolicy'&&bundle.jobsPolicyRendered?.kind==='ValidatingAdmissionPolicy'&&bundle.jobsPolicy.spec?.failurePolicy==='Fail'&&
   bundle.releasePolicy?.apiVersion==='admissionregistration.k8s.io/v1'&&bundle.releasePolicy.kind==='ValidatingAdmissionPolicy'&&
@@ -198,9 +199,10 @@ export function validateDesiredBundle(bundle) {
   bundle.releaseBinding.metadata?.name===releasePolicyName&&bundle.releaseBinding.spec?.policyName===releasePolicyName&&
   fingerprint(bundle.releaseBinding.spec.validationActions)===fingerprint(['Deny'])&&
   bundle.controllerHoldEnvironment.length===2,'INVALID_HOLD_DELIVERY_BUNDLE');
- const primary=[bundle.predecessorJobsPolicy,bundle.predecessorJobsPolicyRendered,bundle.jobsPolicy,bundle.jobsPolicyRendered],
+ const primary=[bundle.predecessorJobsPolicy,bundle.predecessorJobsPolicyRendered,bundle.jobsPolicy,bundle.jobsPolicyRendered,
+  ...(bundle.version===2?[bundle.predecessorJobsPolicyTransitioned,bundle.predecessorJobsPolicyTransitionedRendered]:[])],
   releases=[bundle.releasePolicy,bundle.releasePolicyRendered,bundle.releaseBinding,bundle.releaseBindingRendered];
- requireValue(primary.every(resource=>resource.apiVersion==='admissionregistration.k8s.io/v1'&&resource.kind==='ValidatingAdmissionPolicy'&&resource.metadata?.name===jobsPolicyName)&&
+ requireValue(primary.every(resource=>resource?.apiVersion==='admissionregistration.k8s.io/v1'&&resource.kind==='ValidatingAdmissionPolicy'&&resource.metadata?.name===jobsPolicyName)&&
   releases.every(resource=>resource.apiVersion==='admissionregistration.k8s.io/v1'&&resource.metadata?.name===releasePolicyName),'INVALID_HOLD_DELIVERY_BUNDLE');
  const variables=bundle.jobsPolicy.spec.variables??[],validations=bundle.jobsPolicy.spec.validations??[];
  requireValue(variables.filter(item=>item.name==='proofHeld').length===1&&
