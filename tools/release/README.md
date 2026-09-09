@@ -169,6 +169,15 @@ node --test tools/release/scoped-release.test.mjs tools/release/application-sour
 
 Переход Recreate/v1 → instance grants/v2 → RollingUpdate выполняет отдельный
 `worker-grant-transition.mjs`: [порядок, ограничения и evidence](../../docs/operations/independent-releases.md#управляемая-активация-disposable-hot-reload).
+
+Его exact active inventory исключает только terminal `Succeeded`/`Failed` Pods
+из всех принадлежащих Deployment ReplicaSet; история не удаляется. Pod старого
+RS с `replicas: 0` остаётся блокирующим, если он Running/Pending/Unknown.
+`deletionTimestamp` сам по себе не исключает Pod: нетерминальный terminating
+predecessor блокирует переход. Неизвестная/отсутствующая phase также не скрывается. Проверки
+Ready, числа активных replicas и Deployment UID/resourceVersion/spec сохраняются.
+Regression #1405 входит в `worker-grant-transition.test.mjs`.
+
 Для единственного image writer `role-image-builder` используется закрытый
 `role-image-builder-writer-capability.json`: exact image + CRI/process readback
 через SRE host root. Новых CLI flags нет; CP reader/source guards сохраняются.
