@@ -85,7 +85,7 @@ export async function upgradePlan(inputs, get) {
   const { configuration: c, revision: r } = await source(get, configRef, f.revisionRef);
   check(c?.ref === configRef && c.kind === 'ROLE_IMAGE' && c.managedBy === 'UI' && c.projectRef === f.projectRef && c.currentRevision?.ref === f.revisionRef && c.version > 0 && r.state === 'PUBLISHED', 'PUBLISHED_PIN_CHANGED');
   const agent = await get(`/api/v1/agents/${enc(f.agentRef)}`);
-  check(agent.ref === f.agentRef && agent.projectRef === f.projectRef && agent.enabled === true && agent.state === 'ACTIVE' && agent.roleDefinitionRef === detail.recipe.roleDefinitionRef, 'AGENT_SCOPE_CHANGED');
+  check(agent.ref === f.agentRef && agent.projectRef === f.projectRef && agent.enabled === true && agent.state === 'READY' && agent.roleDefinitionRef === detail.recipe.roleDefinitionRef, 'AGENT_SCOPE_CHANGED');
   const runtime = await get(`/api/v1/agents/${enc(f.agentRef)}/runtime-configuration`), binding = bindingPin(runtime.environmentBinding);
   check(binding.agentRef === f.agentRef && binding.environmentRef === f.environmentRef && runtime.environment?.ref === f.environmentRef && runtime.environment.currentVersion?.ref === binding.versionRef && runtime.environment.currentVersion.image?.artifactRef === f.artifactRef && runtime.environment.currentVersion.image.reference === f.promotedReference, 'OLD_BINDING_CHANGED');
   const catalogPin = await trustedRunnerCatalog(get, inputs.runnerDigest);

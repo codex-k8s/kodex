@@ -382,3 +382,12 @@ entry digests доказывают неизменность доступной A
 provider и live node pull этим тестом не выполняются. Старые completed journals
 остаются историческими; ранее созданный незавершённый upgrade plan без новых
 catalog pins закрыто откажет, а его HEADER не дописывается и не подменяется.
+
+
+### Каноническое состояние Agent (#1414)
+
+Forward plan допускает только `enabled=true`, `state=READY`, exact Agent ref,
+project и roleDefinition из owner recipe. Состояния `DRAFT`, `RUNNING`,
+`DISABLED`, `ARCHIVED`, отсутствующее/неизвестное состояние и прежняя ошибочная
+строка `ACTIVE` закрыто отклоняются до mutation. Это enum публичного Agent DTO,
+а не состояние RoleImage recipe. Fixture и полный public CLI используют READY.
