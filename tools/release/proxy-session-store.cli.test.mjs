@@ -39,6 +39,12 @@ function fixture(ready = false) {
         r.status = { conditions: [{ type: "Ready", status: "True" }] };
       if (r.kind === "StatefulSet")
         r.status = { readyReplicas: 1, observedGeneration: 1 };
+      if (
+        r.kind === "NetworkPolicy" &&
+        Array.isArray(r.spec.egress) &&
+        r.spec.egress.length === 0
+      )
+        delete r.spec.egress;
       objects[r.kind.toLowerCase() + ":" + r.metadata.name] = r;
     }
     objects["secret:proxy-session-store-auth-v1"] = {

@@ -188,15 +188,27 @@ export function validateStoreDependencies(objects) {
       (r) =>
         r.kind === desired.kind && r.metadata?.name === desired.metadata.name,
     );
+    const expectedState = desired.spec ?? desired.data;
+    let actualState = actual?.spec ?? actual?.data;
+    if (desired.kind === "NetworkPolicy" && actualState) {
+      actualState = structuredClone(actualState);
+      for (const field of ["ingress", "egress"])
+        if (
+          Array.isArray(expectedState[field]) &&
+          expectedState[field].length === 0 &&
+          actualState[field] === undefined
+        )
+          actualState[field] = [];
+    }
     assert(
       actual &&
         actual.metadata.namespace === storeNamespace &&
-        subset(desired.spec ?? desired.data, actual.spec ?? actual.data),
+        subset(expectedState, actualState),
       "DEPENDENCY_PROFILE_DRIFT",
     );
     if (desired.kind === "NetworkPolicy")
       assert(
-        fingerprint(actual.spec) === fingerprint(desired.spec),
+        fingerprint(actualState) === fingerprint(expectedState),
         "DEPENDENCY_NETWORK_POLICY_DRIFT",
       );
     if (desired.kind === "ConfigMap")
@@ -215,7 +227,7 @@ export function validateStoreDependencies(objects) {
       kind: actual.kind,
       name: actual.metadata.name,
       uid: actual.metadata.uid,
-      stateSHA256: fingerprint(actual.spec ?? actual.data),
+      stateSHA256: fingerprint(actualState),
     };
   });
 }
