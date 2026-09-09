@@ -1,3 +1,8 @@
+import {
+  assertOwnerRequest,
+  ownerRequestSignal,
+} from "@/shared/api/owner-lifetime";
+
 export interface PlatformReloadOperation {
   run: () => Promise<void>;
 }
@@ -8,10 +13,12 @@ export async function runBoundedPlatformReload(
 ): Promise<void> {
   if (!Number.isSafeInteger(concurrency) || concurrency < 1)
     throw new Error("Platform reload concurrency is invalid");
+  const scope = ownerRequestSignal();
   let nextIndex = 0;
   let firstError: Error | undefined;
   const worker = async (): Promise<void> => {
     while (nextIndex < operations.length) {
+      assertOwnerRequest(scope);
       const operation = operations[nextIndex];
       nextIndex += 1;
       if (!operation) return;
@@ -28,5 +35,6 @@ export async function runBoundedPlatformReload(
       worker(),
     ),
   );
+  assertOwnerRequest(scope);
   if (firstError !== undefined) throw firstError;
 }

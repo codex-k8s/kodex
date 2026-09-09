@@ -350,6 +350,33 @@ describe("platform store", () => {
     vi.unstubAllGlobals();
   });
 
+  it("новый scope запускает отдельный resync, не ожидая старую отменённую очередь", async () => {
+    vi.useFakeTimers();
+    const { resetOwnerRequests } = await import("@/shared/api/owner-lifetime");
+    const old = deferred<ReturnType<typeof response>>();
+    const fresh = deferred<ReturnType<typeof response>>();
+    listProjectsMock
+      .mockReturnValueOnce(old.promise)
+      .mockReturnValueOnce(fresh.promise);
+    const store = usePlatformStore();
+    const first = store.reloadPlatformState().catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listProjectsMock).toHaveBeenCalledTimes(1);
+    resetOwnerRequests();
+    const second = store.reloadPlatformState().catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(listProjectsMock).toHaveBeenCalledTimes(2);
+    fresh.resolve(response([project("project_fresh")]));
+    await vi.runAllTimersAsync();
+    await second;
+    expect(store.projects.project_fresh).toBeDefined();
+    old.resolve(response([project("project_stale")]));
+    await vi.runAllTimersAsync();
+    await first;
+    expect(store.projects.project_fresh).toBeDefined();
+    expect(store.projects.project_stale).toBeUndefined();
+  });
+
   it("не позволяет старому HTTP response перезаписать новый", async () => {
     const oldResponse = deferred<ReturnType<typeof response>>();
     const newResponse = deferred<ReturnType<typeof response>>();

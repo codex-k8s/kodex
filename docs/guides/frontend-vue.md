@@ -4,8 +4,8 @@ title: PWA на Vue и TypeScript
 type: guide
 status: approved
 owner: developer
-version: 1.2.2
-updated: 2026-09-08
+version: 1.2.3
+updated: 2026-09-09
 ---
 
 # PWA на Vue и TypeScript
@@ -124,6 +124,27 @@ codegen, после чего адаптируется handwritten boundary.
   состояние.
 - Pagination, sorting и filters имеют типизированную model.
 - Cache invalidation задается явно после mutation.
+
+## Завершение документа и исходящих запросов
+
+Owner lifetime запроса включает локальное время жизни документа. `beforeunload`
+закрывает его до provisional navigation, `pagehide` служит дополнительной
+границей. Закрытый scope не запускает следующий retry, следующую операцию
+bounded resync или native fetch после асинхронного interceptor. Проверка
+не должна оставаться только внутри generated SDK: wrapper проверяет signal
+непосредственно перед native fetch. Generated files не правятся вручную.
+
+При отменённом уходе доверенный pointer/keyboard ввод или `pageshow` создаёт
+новый локальный scope. Старые signals остаются закрытыми, old ACK не применяется
+и старый retry не переходит в новый scope. Новое чтение не объединяется с
+незавершённым promise старого resync. Realtime приостанавливает соединение,
+сохраняет subscriptions/cursors и использует штатный ticket/rejoin после
+возобновления; локальная граница не меняет session TTL или полномочия.
+
+Abort после отправленной mutation не доказывает отмены на сервере. Такая
+операция сохраняет прежний idempotency/UNKNOWN recovery contract; автоматический
+повтор mutation на `pageshow` или пользовательский ввод запрещён. Реальные HTTP,
+contract и access-control ошибки вне закрытого scope остаются наблюдаемыми.
 
 ## Владение конфигурацией UI и Git
 
