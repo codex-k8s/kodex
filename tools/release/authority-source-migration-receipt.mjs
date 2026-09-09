@@ -14,8 +14,8 @@ function readPrivate(path,{optional=false,missingCode,validate}) {
  return validate(JSON.parse(readFileSync(absolute,'utf8')));
 }
 
-// Temporary+fsync+hard-link publication makes concurrent first observation a
-// single-winner operation. A loser may accept only the byte-identical record.
+// Временный файл, fsync и атомарная жёсткая ссылка закрепляют одного победителя
+// первого наблюдения. Остальные принимают только ту же сохранённую запись.
 function publishPrivate(path,value,{validate,read,conflictCode}) {
  validate(value);const absolute=resolve(path),parent=dirname(absolute),temporary=`${absolute}.${randomBytes(8).toString('hex')}.tmp`;let fd;
  const owner=process.getuid?.(),parentStat=lstatSync(parent);
