@@ -22,7 +22,7 @@ let input;if(verb==='patch'){const option=args.find(x=>x.startsWith('--patch-fil
 state.calls.push({verb,kind:verb==='create'?input.kind:kind,name:verb==='create'?input.metadata.name:name});
 if(state.failName===(input.metadata?.name||name)){save();process.exit(1)}
 if(verb==='create'){const key=input.kind.toLowerCase()+':'+input.metadata.name;if(state.objects[key])process.exit(1);input.metadata.uid='00000000-0000-4000-8000-'+String(state.calls.length+20).padStart(12,'0');input.metadata.resourceVersion='1';state.objects[key]=input;save();process.exit(0)}
-if(verb==='patch'){const obj=state.objects[kind+':'+name];for(const p of input){const parts=p.path.split('/').slice(1);let target=obj;for(const part of parts.slice(0,-1))target=target[part];const key=parts.at(-1);if(p.op==='test'&&JSON.stringify(target[key])!==JSON.stringify(p.value))process.exit(1);if(p.op==='replace')target[key]=p.value}obj.metadata.resourceVersion=String(Number(obj.metadata.resourceVersion)+1);save();process.exit(0)}process.exit(1);
+if(verb==='patch'){const obj=state.objects[kind+':'+name];for(const p of input){const parts=p.path.split('/').slice(1);let target=obj;for(const part of parts.slice(0,-1))target=target[part];const key=parts.at(-1);if(p.op==='test'&&JSON.stringify(target[key])!==JSON.stringify(p.value))process.exit(1);if(p.op==='replace')target[key]=p.value}const c=obj.spec.template.spec.containers[0];for(const probe of [c.readinessProbe,c.livenessProbe]){probe.httpGet.scheme??='HTTP';probe.successThreshold??=1;}obj.metadata.resourceVersion=String(Number(obj.metadata.resourceVersion)+1);save();process.exit(0)}process.exit(1);
 `;
 function fixture(ready = false) {
   const directory = mkdtempSync(join(tmpdir(), "kodex-proxy-cli-"));
