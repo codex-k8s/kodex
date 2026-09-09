@@ -59,7 +59,11 @@ test("переход сохраняет TTL/image и использует тол
     { key: "ca.crt", path: "ca.crt" },
   ]);
   assert.equal(c.readinessProbe.httpGet.path, "/ready");
+  assert.equal(c.readinessProbe.httpGet.scheme, "HTTP");
+  assert.equal(c.readinessProbe.successThreshold, 1);
   assert.equal(c.livenessProbe.httpGet.path, "/ping");
+  assert.equal(c.livenessProbe.httpGet.scheme, "HTTP");
+  assert.equal(c.livenessProbe.successThreshold, 1);
 });
 for (const [name, change] of [
   ["foreign workload", (d) => (d.metadata.name = "other")],

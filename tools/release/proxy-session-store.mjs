@@ -156,16 +156,18 @@ export function sessionStoreProxySpec(deployment) {
     },
   ];
   container.readinessProbe = {
-    httpGet: { path: "/ready", port: 4180 },
+    httpGet: { path: "/ready", port: 4180, scheme: "HTTP" },
     periodSeconds: 5,
     timeoutSeconds: 3,
     failureThreshold: 2,
+    successThreshold: 1,
   };
   container.livenessProbe = {
-    httpGet: { path: "/ping", port: 4180 },
+    httpGet: { path: "/ping", port: 4180, scheme: "HTTP" },
     periodSeconds: 15,
     timeoutSeconds: 3,
     failureThreshold: 3,
+    successThreshold: 1,
   };
   return result;
 }
