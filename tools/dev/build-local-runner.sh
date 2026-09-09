@@ -24,7 +24,7 @@ done
 [[ "$source_root" == /* && -f "$source_root/services/jobs/agent-runner/Dockerfile" ]] ||
   fail 'source root is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / ]] || fail 'state directory is invalid'
-for command_name in docker jq k3s sha256sum sudo tar; do
+for command_name in docker jq k3s sha256sum sudo tar python3 git; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
@@ -32,20 +32,18 @@ docker buildx version >/dev/null 2>&1 || fail 'docker buildx is required'
 sudo -n true >/dev/null 2>&1 || fail 'passwordless sudo is required for local k3s image import'
 
 builder=kodex-local-dev
-"$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
+verifier="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../release" && pwd)/runner-binary-provenance.py"
+revision=$(git -C "$source_root" rev-parse HEAD)
 
 install -d -m 0700 "$state_directory/cache"
-input_digest=$(
-  tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
-    -C "$source_root" -cf - services/jobs/agent-runner libs/go |
-    sha256sum | awk '{print $1}'
-)
+input_digest=$(python3 -B "$verifier" input --source-root "$source_root" --revision "$revision")
 [[ "$input_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'runner input digest is invalid'
 
 repository=registry.local.kodex/kodex/agent-runner
 tag="$repository:local-$input_digest"
 archive="$state_directory/cache/agent-runner-$input_digest.oci.tar"
 if [[ ! -s "$archive" ]]; then
+  "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
   next_archive="$archive.next"
   rm -f "$next_archive"
   docker buildx build --builder "$builder" \
@@ -67,6 +65,14 @@ manifest_digest=$(tar -xOf "$archive" index.json | jq -er '
 ') || fail 'runner OCI manifest digest is unavailable'
 [[ "$manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'runner OCI manifest digest is invalid'
 exact_reference="$repository@$manifest_digest"
+
+# Проверка одинакова для нового OCI и cache hit; прежний output неизменяем.
+provenance="$state_directory/cache/agent-runner-$input_digest-$revision.provenance.json"
+provenance_phase=verify
+if [[ -e "$provenance" || -L "$provenance" ]]; then provenance_phase=check; fi
+python3 -B "$verifier" "$provenance_phase" --source-root "$source_root" \
+  --revision "$revision" --archive "$archive" --expected-manifest "$manifest_digest" \
+  --expected-input-digest "$input_digest" --repository "$repository" --output "$provenance"
 
 sudo -n k3s ctr -n k8s.io images import \
   --base-name "$repository" "$archive" >/dev/null

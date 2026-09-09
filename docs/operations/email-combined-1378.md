@@ -60,6 +60,10 @@ publication/HEALTH не повторяются. Grant изменяет capabilit
 }
 ```
 
+Для сохранённого local OCI archive поддержан read-only verifier из
+[OPS-RUNNER-1382](runner-binary-provenance-1382.md); он сохраняет source/input,
+manifest/config/layers и hash бинаря без rebuild/Pod access.
+
 Это ожидаемый hash, полученный до Run из trusted base provenance, не результат
 измерения исполняемого Pod. Самосогласование actual Pod как expected запрещено.
 Если build provenance недоступен, preparation блокируется. CLI не извлекает

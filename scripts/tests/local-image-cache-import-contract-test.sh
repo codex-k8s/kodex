@@ -49,4 +49,21 @@ e2e_guard_end_line=$(awk -v start="$e2e_guard_line" \
   "$e2e_guard_line" -lt "$e2e_restore_line" && "$e2e_restore_line" -lt "$e2e_guard_end_line" ]] ||
   fail 'session archive E2E image restore is not guarded by the e2e command'
 
+runner_builder="$root/tools/dev/build-local-runner.sh"
+runner_verify_line=$(grep -n -F 'python3 -B "$verifier" "$provenance_phase"' "$runner_builder" | cut -d: -f1)
+runner_import_line=$(grep -n -F 'images import \' "$runner_builder" | cut -d: -f1)
+[[ "$runner_verify_line" =~ ^[0-9]+$ && "$runner_verify_line" -lt "$runner_import_line" ]] ||
+  fail 'runner import must follow exact OCI provenance verification'
+grep -Fq 'input_digest=$(python3 -B "$verifier" input' "$runner_builder" ||
+  fail 'runner builder must share the verifier input digest algorithm'
+grep -Fq 'then provenance_phase=check; fi' "$runner_builder" ||
+  fail 'runner cache hit must check existing immutable provenance'
+runner_cache_line=$(grep -n -F 'if [[ ! -s "$archive" ]]; then' "$runner_builder" | cut -d: -f1)
+runner_bootstrap_line=$(grep -n -F '"$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"' "$runner_builder" | cut -d: -f1)
+runner_build_line=$(grep -n -F 'docker buildx build --builder' "$runner_builder" | cut -d: -f1)
+runner_cache_end=$(awk -v start="$runner_cache_line" 'NR > start && /^fi$/ { print NR; exit }' "$runner_builder")
+[[ "$runner_cache_line" -lt "$runner_bootstrap_line" && "$runner_bootstrap_line" -lt "$runner_build_line" &&
+   "$runner_build_line" -lt "$runner_cache_end" && "$runner_cache_end" -lt "$runner_verify_line" ]] ||
+  fail 'runner cache hit must not bootstrap or rebuild the unchanged image'
+
 printf 'Local image cache import contract passed.\n'
