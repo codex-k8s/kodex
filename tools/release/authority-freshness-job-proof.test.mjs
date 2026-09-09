@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fingerprint} from './scoped-release.mjs';
 import {policyDigest} from './runner-policy-model.mjs';
-import {validateFuturePolicy,validateFutureJobProof} from './authority-freshness-job-proof.mjs';
+import {validateCapturedFutureJobPod,validateFuturePolicy,validateFutureJobProof} from './authority-freshness-job-proof.mjs';
 const image='registry.invalid/authority@sha256:'+'a'.repeat(64);
 function policy(){const p={metadata:{name:'versioned-policy',labels:{'kodex.dev/owner-intent':'true'}},immutable:true,data:{authorityImage:image.replace('a'.repeat(64),'b'.repeat(64)),authorityIssuerImage:image,policyRevision:'revision'}};p.data.policySHA256=policyDigest(p.data);return p;}
 const binding=()=>({spec:{paramRef:{name:'versioned-policy',namespace:'kodex-system',parameterNotFoundAction:'Deny'},validationActions:['Deny']}});
@@ -11,6 +11,12 @@ test('future policy must bind exact immutable payload, issuer image and deny adm
  for(const mutate of [p=>p.immutable=false,p=>p.data.authorityIssuerImage='registry.invalid/latest',p=>p.data.policyRevision='foreign']){const next=structuredClone(p);mutate(next);assert.throws(()=>validateFuturePolicy(next,parameters,binding()));}
  const b=binding();b.spec.validationActions=['Warn'];assert.throws(()=>validateFuturePolicy(p,parameters,b));
  assert.throws(()=>validateFuturePolicy(p,{spec:{...p.data,authorityIssuerImage:p.data.authorityImage}},binding()));
+});
+test('terminal Pod readback preserves exact executable container identity',()=>{
+ const pod={metadata:{name:'owner-pod',uid:'pod-uid'},spec:{initContainers:[{name:'internal-rpc-authority-issuer'}]},status:{initContainerStatuses:[{name:'internal-rpc-authority-issuer',containerID:'containerd://exact',imageID:image}]}};
+ const proof={pod:pod.metadata.name,podUID:pod.metadata.uid,podSpecSHA256:fingerprint(pod.spec),containerID:'containerd://exact',imageID:image};
+ validateCapturedFutureJobPod(proof,pod);
+ for(const mutate of [p=>p.metadata.uid='foreign',p=>p.spec.initContainers.push({name:'foreign'}),p=>p.status.initContainerStatuses[0].containerID='containerd://foreign',p=>p.status.initContainerStatuses[0].imageID=image+'foreign']){const changed=structuredClone(pod);mutate(changed);assert.throws(()=>validateCapturedFutureJobPod(proof,changed),/CAPTURED_JOB_POD_CHANGED/);}
 });
 test('proof is exact source, executable, image, owner Job and completed effect',()=>{
  const p=policy(),cap={revision:'c'.repeat(40),imageBinaries:{issuer:'d'.repeat(64)}};

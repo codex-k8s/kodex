@@ -61,7 +61,7 @@ test('public immutable sidecar observe and future Job capture never request shel
   const plan={version:1,context:'synthetic',namespaceUID:uid,intent:'fixture',capability,targets:[{name:deployment.metadata.name,uid:'deployment',before:{},after:deployment.spec,rollback:{profile:'image',roles:['issuer']}}]};
   const planFile=join(directory,'plan.json');writeFileSync(planFile,JSON.stringify(plan));
   const policy={metadata:{name:'policy',labels:{'kodex.dev/owner-intent':'true'}},immutable:true,data:{authorityImage:image,authorityIssuerImage:image,policyRevision:'7'}};policy.data.policySHA256=policyDigest(policy.data);
-  const job={kind:'Job',metadata:{name:'mc-admit-'+('e'.repeat(32))+'-admit',uid:'job',labels:{'kodex.dev/image-admission-orchestrated':'true','kodex.dev/image-admission-phase':'admit'},annotations:{'kodex.dev/admission-policy-revision':'7'}},spec:{template:{spec:pod.spec}}};
+  const job={kind:'Job',metadata:{namespace:'kodex-system',name:'mc-admit-'+('e'.repeat(32))+'-admit',uid:'job',labels:{'kodex.dev/image-admission-orchestrated':'true','kodex.dev/image-admission-phase':'admit'},annotations:{'kodex.dev/admission-policy-revision':'7'}},spec:{template:{spec:pod.spec}}};
   const state={pod,deployment,rs,job,policy,proof:{version:1,role:'issuer',pid:1,...proof}};
   const stateFile=join(directory,'state.json'),log=join(directory,'commands.jsonl');writeFileSync(stateFile,JSON.stringify(state));
   writeFileSync(join(directory,'kubectl'),`#!/usr/bin/env node

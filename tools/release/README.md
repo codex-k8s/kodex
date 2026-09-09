@@ -307,3 +307,11 @@ Application-only scoped release не изменяет эти ресурсы. `ru
 импортирует их в локальный k3s image store и проверяет manifest digests.
 Точные аргументы и граница single-host профиля приведены в OPS-DOC-1313;
 это не registry push и не global `up`.
+
+Короткоживущие admission/promotion Jobs наблюдаются до их создания через
+`authority-freshness-job-proof-watcher.mjs`. `plan` закрепляет exact Job name,
+policy и capability; `watch` пишет fsync intent до первого наблюдения и ждёт
+running executable плюс terminal success; `resume` продолжает тот же
+`UNKNOWN` journal без нового Job или proof. Полные команды, исходы и guards
+приведены в OPS-DOC-1313. Одиночный `authority-freshness-job-proof.mjs`
+поддерживается только когда exact Job уже находится в состоянии running.
