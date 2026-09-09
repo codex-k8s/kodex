@@ -22,6 +22,9 @@ export default mergeConfig(base, {
         uiProof: fileURLToPath(
           new URL("./e2e/fixtures/ui-proof.html", import.meta.url),
         ),
+        realtimeRetirement: fileURLToPath(
+          new URL("./e2e/fixtures/realtime-retirement.html", import.meta.url),
+        ),
         sttActivation: fileURLToPath(
           new URL("./e2e/fixtures/stt-activation.html", import.meta.url),
         ),

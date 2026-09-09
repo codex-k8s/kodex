@@ -21,6 +21,7 @@ import {
   notifyAuthoritativeUnauthorized,
 } from "@/shared/api/problem";
 import { requestRealtimeTicket } from "./ticket";
+import { retireWebSocket } from "./socket-lifecycle";
 
 export type StreamState = "connecting" | "live" | "offline" | "recovering";
 
@@ -713,11 +714,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
     session.ticketController = undefined;
     if (session.timer !== undefined) window.clearTimeout(session.timer);
     session.timer = undefined;
-    session.socket?.close(1000, reason);
+    const socket = session.socket;
     session.socket = undefined;
     session.requestRef = undefined;
     session.resumeRunRefs = undefined;
     session.attempt = 0;
+    if (socket) retireWebSocket(socket, reason);
   }
 
   function closeAll(): void {

@@ -97,3 +97,26 @@ test("unknown route/method/resource и overflow остаются огранич�
   });
   expect(JSON.stringify(result)).not.toContain("private-");
 });
+
+test("hot-reload revision имеет закрытую категорию без раскрытия pathname/query", () => {
+  const observer = new SessionRequestDiagnostics("https://kodex.test");
+  const request = {};
+  observer.start(request, {
+    url: "https://kodex.test/__kodex_dev_revision?private-marker",
+    method: "GET",
+    resourceType: "fetch",
+    stage: "READBACK",
+    tab: 0,
+  });
+  observer.failed(request, "READBACK", "NS_BINDING_ABORTED");
+  expect(observer.snapshot().failures[0]).toMatchObject({
+    route: "DEV_REVISION",
+    method: "GET",
+    resourceType: "fetch",
+    code: "FIREFOX_ABORTED",
+  });
+  expect(JSON.stringify(observer.snapshot())).not.toContain("private-marker");
+  expect(JSON.stringify(observer.snapshot())).not.toContain(
+    "__kodex_dev_revision",
+  );
+});

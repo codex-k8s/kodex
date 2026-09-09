@@ -247,7 +247,7 @@ for (const observed of [false, true]) {
         response.flushHeaders();
         const timer = setTimeout(() => {
           response.end("00000000-0000-0000-0000-000000000000:1");
-        }, 0);
+        }, 10_000);
         response.on("close", () => clearTimeout(timer));
       } else if (request.url === "/__kodex_dev_reload.js") {
         response.writeHead(200, { "Content-Type": "application/javascript" });
@@ -279,7 +279,9 @@ for (const observed of [false, true]) {
       .update(expectedMessage.substring(expectedMessage.indexOf(":") + 2))
       .digest("hex");
     installPageErrorDiagnostics(page, errors, 0);
-    if (observed) await installReadNetworkObserver(page, origin);
+    const observer = observed
+      ? await installReadNetworkObserver(page, origin)
+      : undefined;
     try {
       for (let i = 0; i < 3; i++) {
         const before = requests;
@@ -291,6 +293,24 @@ for (const observed of [false, true]) {
           .toBeGreaterThan(before);
       }
       await page.close();
+      if (observer) {
+        const network = observer.safeDiagnostics();
+        expect(network.failures.length).toBeGreaterThan(0);
+        expect(
+          network.failures.every(
+            (failure) =>
+              failure.route === "DEV_REVISION" &&
+              failure.resourceType === "fetch" &&
+              failure.exactCancellation &&
+              ((failure.nativeIdentityKnown &&
+                failure.nativeAbortObserved &&
+                failure.nativeRejected) ||
+                (failure.documentNavigationCommitted &&
+                  failure.documentNavigationWindow)),
+          ),
+        ).toBe(true);
+        expect(observer.snapshot().unexplainedFailures).toBe(0);
+      }
       const safePath = testInfo.outputPath("navigation-safe.json");
       await writeFile(
         safePath,

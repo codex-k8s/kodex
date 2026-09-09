@@ -120,6 +120,7 @@ updated: 2026-07-28
 | `OPS-DOC-1260` | `docs/operations/mvp-1260-execution-map.md` |
 | `OPS-DOC-1262` | `docs/operations/role-image-acceptance.md` |
 | `OPS-DOC-1341` | `docs/operations/mvp-1341-populated-readonly.md` |
+| `OPS-DOC-1419` | `docs/operations/mvp-1419-configuration-ui-lifecycle.md` |
 | `OPS-DOC-1330` | `docs/operations/mvp-1330-access-scope-proof.md` |
 | `OPS-DOC-1274` | `docs/operations/mvp-1274-browser-proof.md` |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |

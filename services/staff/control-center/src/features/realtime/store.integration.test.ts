@@ -48,6 +48,13 @@ class FakeWebSocket {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
   }
 
+  removeEventListener(type: string, listener: SocketListener): void {
+    this.listeners.set(
+      type,
+      (this.listeners.get(type) ?? []).filter((value) => value !== listener),
+    );
+  }
+
   send(value: string): void {
     this.sent.push(value);
   }
@@ -209,6 +216,19 @@ describe("browser-session realtime multiplexer", () => {
     complete("t".repeat(43));
     await flushProcessing();
     expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it("retired CONNECTING socket не отправляет resume и закрывается после open", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    store.closeAll();
+    expect(socket.closeReason).toBeUndefined();
+    socket.open();
+    expect(socket.sent).toEqual([]);
+    expect(socket.closeReason).toBe("STORE_CLOSED");
+    expect(FakeWebSocket.instances).toHaveLength(1);
   });
   beforeEach(() => {
     setActivePinia(createPinia());

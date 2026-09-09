@@ -39,6 +39,7 @@ const errors = new Map([
   ["net::ERR_BLOCKED_BY_CLIENT", "BLOCKED_BY_CLIENT"],
 ]);
 const routes: Record<string, string> = {
+  "/__kodex_dev_revision": "DEV_REVISION",
   "/api/v1/session": "SESSION",
   "/api/v1/session/ticket": "SESSION_TICKET",
   "/api/v1/bootstrap": "BOOTSTRAP",

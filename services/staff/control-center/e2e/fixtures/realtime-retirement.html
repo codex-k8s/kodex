@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Realtime retirement fixture</title>
+  </head>
+  <body>
+    <output id="state">connecting</output>
+    <script type="module">
+      import { retireWebSocket } from "../../src/features/realtime/socket-lifecycle";
+      const value = new URLSearchParams(location.search).get("socket") ?? "";
+      const target = new URL(value);
+      if (target.protocol !== "ws:" || target.hostname !== "127.0.0.1")
+        throw new Error("Local WebSocket fixture required");
+      const output = document.querySelector("#state");
+      const socket = new WebSocket(target);
+      socket.addEventListener("open", () => {
+        document.documentElement.dataset.opened = "true";
+      });
+      socket.addEventListener("message", () => {
+        document.documentElement.dataset.message = "true";
+      });
+      socket.addEventListener("close", () => {
+        output.textContent = "closed";
+      });
+      retireWebSocket(socket, "FIXTURE_RETIRED");
+    </script>
+  </body>
+</html>
