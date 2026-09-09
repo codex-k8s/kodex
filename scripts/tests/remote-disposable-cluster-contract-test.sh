@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 022
 
 fail() {
   printf 'Kodex remote disposable cluster contract test failed: %s\n' "$*" >&2
@@ -210,6 +211,7 @@ fixture_root="$temporary_directory/repository"
 mkdir -p "$fixture_root/tools/dev" "$fixture_root/tools/install" \
   "$fixture_root/infra/teleport"
 cp "$repository_root/tools/dev/remote-dev.sh" "$fixture_root/tools/dev/remote-dev.sh"
+cp "$repository_root/tools/dev/source-git-trust.mjs" "$fixture_root/tools/dev/source-git-trust.mjs"
 cp "$repository_root/tools/install/load-env.sh" "$fixture_root/tools/install/load-env.sh"
 cat >"$fixture_root/tools/install/prepare-host.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -338,6 +340,12 @@ sed '/^KODEX_REMOTE_TELEPORT_/d' "$env_file" >"$application_env"
 chmod 0600 "$application_env"
 : >"$teleport_host_command_log"
 : >"$teleport_route_command_log"
+jq -n --arg root "$fixture_root" --arg revision "$expected_sha" '{
+  version:1,profile:"component-revisions",components:[{sources:[{
+    path:$root,revision:$revision,mountedPath:$root
+  }]}]
+}' >"$temporary_directory/components.json"
+chmod 0600 "$temporary_directory/components.json"
 for application_command in status smoke e2e acceptance; do
   KODEX_TEST_POLICY_NAME=kodex-image-admission-policy-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
     "$fixture_root/tools/dev/remote-dev.sh" "$application_command" --env-file "$application_env" \
@@ -380,8 +388,10 @@ if "$fixture_root/tools/dev/remote-dev.sh" up --env-file "$env_file" \
   --expected-sha "$expected_sha" >/dev/null 2>&1; then
   fail 'initial remote deployment accepted a dirty checkout'
 fi
-"$fixture_root/tools/dev/remote-dev.sh" status --env-file "$env_file" \
-  --expected-sha "$expected_sha" >/dev/null
+if "$fixture_root/tools/dev/remote-dev.sh" status --env-file "$env_file" \
+  --expected-sha "$expected_sha" >/dev/null 2>&1; then
+  fail 'exact source trust accepted a dirty status harness'
+fi
 git -C "$fixture_root" checkout -q -- dev.sh
 
 git -C "$fixture_root" remote set-url origin https://github.com/codex-k8s/kodex-old.git

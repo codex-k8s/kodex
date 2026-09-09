@@ -220,6 +220,26 @@ validate_source_checkout() {
   printf 'Expected source SHA: %s\n' "$expected_sha"
 }
 
+# Ограниченное доверие root-owned source принадлежит только этому процессу и
+# наследуется dev.sh/component-manifest/inspectSource. Git config на диске
+# не меняется; приватный manifest задаёт точные дополнительные checkout.
+case "$command_name" in
+  status|smoke|e2e|acceptance)
+    trust_arguments=(--source "$repository_root" --revision "$expected_sha")
+    if [[ -n "$component_manifest" ]]; then trust_arguments+=(--manifest "$component_manifest"); fi
+    trusted_roots=$(node "$repository_root/tools/dev/source-git-trust.mjs" "${trust_arguments[@]}") ||
+      fail 'source Git trust validation failed'
+    while IFS= read -r git_variable; do unset "$git_variable"; done < <(compgen -v GIT_ || true)
+    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=''
+    while IFS= read -r trusted_root; do
+      export "GIT_CONFIG_KEY_${GIT_CONFIG_COUNT}=safe.directory"
+      export "GIT_CONFIG_VALUE_${GIT_CONFIG_COUNT}=$trusted_root"
+      GIT_CONFIG_COUNT=$((GIT_CONFIG_COUNT + 1))
+    done <<<"$trusted_roots"
+    export GIT_CONFIG_COUNT GIT_OPTIONAL_LOCKS=0
+    ;;
+esac
+
 validate_source_checkout
 
 host_arguments=(
