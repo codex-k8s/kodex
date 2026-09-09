@@ -73,6 +73,18 @@ describe("runtime config", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("не следует opaque OIDC redirect и не повторяет auth boundary", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 0, type: "opaqueredirect" });
+    vi.stubGlobal("fetch", fetchMock);
+    const { loadRuntimeConfig } = await import("./runtime");
+    await expect(loadRuntimeConfig()).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
+  });
+
   it("отклоняет cross-origin OIDC redirect", async () => {
     vi.stubGlobal(
       "fetch",

@@ -3,6 +3,7 @@ import { fileURLToPath, URL } from "node:url";
 import vue from "@vitejs/plugin-vue";
 import type { FileSystemServeOptions, Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+import { sessionProbeRequested } from "./src/shared/api/session-probe";
 
 const developmentPublicHost = process.env.KODEX_DEV_PUBLIC_HOST;
 const developmentApiTarget = process.env.KODEX_DEV_API_TARGET;
@@ -161,8 +162,16 @@ export function remoteReloadClientSource(): string {
     // документа не запускает новый poll и не принимает поздний revision.
     Promise.resolve().then(() => {
       if (!current()) return;
-      return fetch(revisionEndpoint, { cache: "no-store", credentials: "same-origin", signal: controller.signal })
+      return fetch(revisionEndpoint, { cache: "no-store", credentials: "same-origin", redirect: "manual", signal: controller.signal })
         .then(response => {
+          if (current() && (response.type === "opaqueredirect" || response.status === 401 || response.status === 403)) {
+            // Ответ уже получен: отмена завершившегося fetch создаёт лишний
+            // requestfailed в Chromium. Закрываем только следующий poll.
+            paused = true;
+            clearTimer();
+            window.dispatchEvent(new Event(${JSON.stringify(sessionProbeRequested)}));
+            return;
+          }
           if (!current() || !response.ok) return;
           const address = new URL(response.url);
           if (address.origin !== window.location.origin || address.pathname !== revisionEndpoint) return;

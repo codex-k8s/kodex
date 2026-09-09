@@ -136,6 +136,8 @@ recover_interrupted_helm_release() {
     fail "Helm release status is unreadable: $release"
   case "$status" in
     pending-upgrade|pending-rollback)
+      [[ "$release" != oauth2-control-center ]] ||
+        fail 'proxy session backend requires explicit compatible recovery, not Helm history rollback'
       rollback_revision=$(helm history "$release" --namespace "$namespace" --max 20 -o json |
         jq -er '
           [.[] | select(.status == "deployed" or .status == "superseded")] |
@@ -222,6 +224,11 @@ render_oauth_values() {
       sub("__KODEX_SURFACE_TLS_SECRET__"; strenv(SURFACE_TLS_SECRET))
     )
   ' "$script_directory/oauth2-proxy-values.yaml" >"$output"
+  if [[ "$surface" == control-center ]]; then
+    yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' \
+      "$output" "$script_directory/control-center-session-store-values.yaml" >"$output.session"
+    mv "$output.session" "$output"
+  fi
 }
 
 if [[ "$mode" == preflight || "$mode" == reconcile ]]; then
@@ -251,6 +258,11 @@ if [[ "$mode" == apply-monitoring || "$mode" == reconcile ]]; then
 fi
 
 if [[ "$mode" == apply-surfaces || "$mode" == reconcile ]]; then
+  # Приложение не создаёт dependency/credentials и не возвращает cookie store при отказе.
+  kubectl -n kodex-system get statefulset proxy-session-store -o json |
+    jq -e '.spec.replicas == 1 and .status.readyReplicas == 1' >/dev/null ||
+    fail 'owned proxy session store must be ready before management surfaces'
+
   for binding in control-center:kodex-system grafana:observability headlamp:platform-admin; do
     surface=${binding%%:*}; namespace=${binding#*:}
     kubectl -n "$namespace" get secret "oauth2-$surface" >/dev/null 2>&1 || fail "OAuth2 Secret is absent: $surface"
@@ -269,8 +281,14 @@ if [[ "$mode" == apply-surfaces || "$mode" == reconcile ]]; then
     values="$temporary_directory/oauth-$surface.yaml"
     render_oauth_values "$surface" "$host" "$role" "$issuer" "$values"
     recover_interrupted_helm_release "oauth2-$surface" "$namespace"
-    helm upgrade --install "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" \
-      --values "$values" --atomic --wait --timeout 10m
+    if [[ "$surface" == control-center ]]; then
+      # Старый Helm revision может содержать несовместимый cookie-store.
+      helm upgrade --install "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" \
+        --values "$values" --wait --timeout 10m
+    else
+      helm upgrade --install "oauth2-$surface" "$oauth2_chart" --namespace "$namespace" \
+        --values "$values" --atomic --wait --timeout 10m
+    fi
   done
 fi
 

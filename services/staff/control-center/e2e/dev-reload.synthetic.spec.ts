@@ -5,9 +5,109 @@ import {
   PageErrorDiagnostics,
   installPageErrorDiagnostics,
 } from "./page-error-diagnostics";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Request } from "@playwright/test";
 import { remoteReloadClientSource } from "../vite.config";
 import { installReadNetworkObserver } from "./ui-read-network";
+
+test("dev reload: auth redirect не создаёт внешний fetch и останавливает poll", async ({
+  page,
+}) => {
+  let revisions = 0,
+    foreign = 0;
+  const failedRequests: Request[] = [];
+  const redirectedIds: string[] = [];
+  let pageErrors = 0;
+  page.on("requestfailed", (request) => failedRequests.push(request));
+  await page.addInitScript(() => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const id = crypto.randomUUID();
+      const headers = new Headers(init?.headers);
+      headers.set("x-fixture-fetch-id", id);
+      const response = await nativeFetch(input, { ...init, headers });
+      if (init?.redirect === "manual" && response.type === "opaqueredirect")
+        document.documentElement.dataset.fixtureManualRedirect = id;
+      return response;
+    };
+  });
+  page.on("pageerror", () => pageErrors++);
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.type());
+  });
+  const identity = createServer((_request, response) => {
+    foreign++;
+    response.end("Synthetic authorization boundary");
+  });
+  await new Promise<void>((resolve) =>
+    identity.listen(0, "127.0.0.1", resolve),
+  );
+  const identityAddress = identity.address();
+  if (!identityAddress || typeof identityAddress === "string")
+    throw Error("Invalid fixture listener");
+  const server = createServer((request, response) => {
+    if (request.url === "/__kodex_dev_revision") {
+      revisions++;
+      redirectedIds.push(String(request.headers["x-fixture-fetch-id"]));
+      response.writeHead(302, {
+        Location: `http://127.0.0.1:${String(identityAddress.port)}/authorize?state=synthetic`,
+      });
+      response.end();
+    } else if (request.url === "/__kodex_dev_reload.js") {
+      response.writeHead(200, { "Content-Type": "application/javascript" });
+      response.end(remoteReloadClientSource());
+    } else {
+      response.writeHead(200, { "Content-Type": "text/html" });
+      response.end(
+        '<!doctype html><script type="module" src="/__kodex_dev_reload.js"></script>',
+      );
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string")
+    throw Error("Invalid fixture listener");
+  try {
+    await page.goto(`http://127.0.0.1:${String(address.port)}/`);
+    await expect.poll(() => revisions).toBeGreaterThan(0);
+    await page.waitForTimeout(1500);
+    expect(foreign).toBe(0);
+    expect(revisions).toBe(1);
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toBe(0);
+    const nativeID = await page.evaluate(
+      () => document.documentElement.dataset.fixtureManualRedirect,
+    );
+    expect(nativeID).toMatch(/^[a-f0-9-]{36}$/);
+    expect(redirectedIds).toEqual([nativeID]);
+    // Chromium помечает заблокированный native manual redirect как failed,
+    // хотя fetch разрешился opaqueredirect. Любой другой отказ остаётся ошибкой.
+    expect(failedRequests.length).toBeLessThanOrEqual(1);
+    for (const request of failedRequests) {
+      const parent = request.redirectedFrom();
+      expect(parent?.headers()["x-fixture-fetch-id"]).toBe(nativeID);
+      expect(parent?.url()).toBe(
+        `http://127.0.0.1:${String(address.port)}/__kodex_dev_revision`,
+      );
+      expect(request.url()).toBe(
+        `http://127.0.0.1:${String(identityAddress.port)}/authorize?state=synthetic`,
+      );
+      expect(request.method()).toBe("GET");
+      expect(request.resourceType()).toBe("fetch");
+      expect(request.failure()?.errorText).toBe("net::ERR_ABORTED");
+    }
+    await page.close();
+  } finally {
+    await page.close().catch(() => undefined);
+    server.closeAllConnections();
+    identity.closeAllConnections();
+    await Promise.all([
+      new Promise<void>((resolve) => server.close(() => resolve())),
+      new Promise<void>((resolve) => identity.close(() => resolve())),
+    ]);
+  }
+});
+
 for (const observed of [false, true]) {
   test(`dev reload: outage caught with observer=${String(observed)}`, async ({
     page,
@@ -270,7 +370,7 @@ test("dev reload: dismissed beforeunload resumes once after trusted input", asyn
   await page.close();
   expect(errors).toEqual([]);
 });
-test("dev reload: real cross-origin refusal remains observable", async ({
+test("независимый cross-origin отказ остаётся видимым после исправления dev poll", async ({
   page,
   browserName,
 }) => {
@@ -283,18 +383,21 @@ test("dev reload: real cross-origin refusal remains observable", async ({
   if (!foreignAddress || typeof foreignAddress === "string")
     throw new Error("Missing fixture port");
   const server = createServer((request, response) => {
-    if (request.url === "/__kodex_dev_revision") {
+    if (request.url === "/fixture-redirect") {
       response.writeHead(302, {
         Location: `http://127.0.0.1:${String(foreignAddress.port)}/`,
       });
       response.end();
+    } else if (request.url === "/__kodex_dev_revision") {
+      response.writeHead(200, { "Content-Type": "text/plain" });
+      response.end("00000000-0000-0000-0000-000000000000:1");
     } else if (request.url === "/__kodex_dev_reload.js") {
       response.writeHead(200, { "Content-Type": "application/javascript" });
       response.end(remoteReloadClientSource());
     } else {
       response.writeHead(200, { "Content-Type": "text/html" });
       response.end(
-        '<!doctype html><script type="module" src="/__kodex_dev_reload.js"></script>',
+        '<!doctype html><script type="module" src="/__kodex_dev_reload.js"></script><script>void fetch("/fixture-redirect");</script>',
       );
     }
   });

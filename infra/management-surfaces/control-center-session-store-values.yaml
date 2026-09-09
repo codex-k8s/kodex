@@ -1,0 +1,36 @@
+# Владелец зависимости — management-surfaces. Хранилище должно быть Ready до proxy.
+extraArgs:
+  session-store-type: redis
+  redis-connection-url: rediss://proxy-session-store.kodex-system.svc.cluster.local:6379/0
+  redis-username: proxy
+  redis-ca-path: /session-store-ca/ca.crt
+extraEnv:
+  - name: OAUTH2_PROXY_REDIS_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: proxy-session-store-auth-v1
+        key: proxy-password
+extraVolumes:
+  - name: session-store-ca
+    secret:
+      secretName: proxy-session-store-tls
+      defaultMode: 292
+      items:
+        - key: ca.crt
+          path: ca.crt
+extraVolumeMounts:
+  - name: session-store-ca
+    mountPath: /session-store-ca
+    readOnly: true
+readinessProbe:
+  enabled: true
+  path: /ready
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+livenessProbe:
+  enabled: true
+  path: /ping
+  periodSeconds: 15
+  timeoutSeconds: 3
+  failureThreshold: 3

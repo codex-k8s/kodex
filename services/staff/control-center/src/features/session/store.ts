@@ -7,6 +7,7 @@ import { mailboxCredentialRecoveryKey } from "@/features/integrations/email-cred
 import { gitSourceRecoveryKey } from "@/features/managed-configurations/git-source";
 import { clearWriteBackRecovery } from "@/features/managed-configurations/writeback/model";
 import { clearPublicationAttempts } from "@/features/runtime/publication-attempt";
+import { sessionProbeRequested } from "@/shared/api/session-probe";
 
 import {
   consumePendingBrowserIntent,
@@ -164,10 +165,14 @@ export const useSessionStore = defineStore("session", () => {
       void renew();
     } else void refreshMetadata();
   };
+  const handleProbeRequested = (): void => {
+    void refreshMetadata();
+  };
   document.addEventListener("visibilitychange", handleWake);
   window.addEventListener("pageshow", handleWake);
   window.addEventListener("focus", handleWake);
   window.addEventListener("online", handleWake);
+  window.addEventListener(sessionProbeRequested, handleProbeRequested);
   onScopeDispose(() => {
     generation += 1;
     loggingOut = true;
@@ -177,6 +182,7 @@ export const useSessionStore = defineStore("session", () => {
     window.removeEventListener("pageshow", handleWake);
     window.removeEventListener("focus", handleWake);
     window.removeEventListener("online", handleWake);
+    window.removeEventListener(sessionProbeRequested, handleProbeRequested);
   });
   const canLogout = computed(
     () => phase.value === "authenticated" && revision.value > 0,

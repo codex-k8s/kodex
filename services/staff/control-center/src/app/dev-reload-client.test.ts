@@ -19,6 +19,7 @@ function fixture(fetch: ReturnType<typeof vi.fn>) {
   const reload = vi.fn();
   const window = {
     location: { origin: "https://kodex.test", reload },
+    dispatchEvent: vi.fn<(event: Event) => boolean>(() => true),
     setTimeout,
     clearTimeout,
     addEventListener: (
@@ -34,7 +35,15 @@ function fixture(fetch: ReturnType<typeof vi.fn>) {
       handler: (event?: { isTrusted: boolean }) => void,
     ) => events.get(name)?.delete(handler),
   };
-  const context = { window, fetch, AbortController, URL, Promise, Symbol };
+  const context = {
+    window,
+    fetch,
+    AbortController,
+    URL,
+    Promise,
+    Symbol,
+    Event,
+  };
   const install = () =>
     runInNewContext(remoteReloadClientSource(), context) as unknown;
   const event = (name: string, payload?: { isTrusted: boolean }) =>
@@ -42,6 +51,7 @@ function fixture(fetch: ReturnType<typeof vi.fn>) {
   install();
   return {
     reload,
+    dispatchEvent: window.dispatchEvent,
     event,
     install,
     events,
@@ -175,3 +185,36 @@ test("beforeunload закрывает provisional load; только trusted int
   await vi.advanceTimersByTimeAsync(5000);
   expect(vi.getTimerCount()).toBe(0);
 });
+
+test.each([
+  { ok: false, type: "opaqueredirect", status: 0 },
+  { ok: false, type: "basic", status: 401 },
+  { ok: false, type: "basic", status: 403 },
+])(
+  "auth boundary $status останавливает poll и запрашивает только проверку сессии",
+  async (boundary) => {
+    vi.useFakeTimers();
+    const fetch = vi.fn().mockResolvedValue(boundary);
+    const f = fixture(fetch);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({
+      redirect: "manual",
+      credentials: "same-origin",
+    });
+    expect((fetch.mock.calls[0]?.[1] as RequestInit).signal?.aborted).toBe(
+      false,
+    );
+    expect(f.dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(f.dispatchEvent.mock.calls[0]?.[0].type).toBe(
+      "kodex:session-probe-requested",
+    );
+    expect(f.reload).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    f.event("pageshow");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(f.dispatchEvent).toHaveBeenCalledTimes(2);
+    f.dispose();
+  },
+);

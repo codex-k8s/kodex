@@ -147,6 +147,7 @@ export async function loadRuntimeConfig(): Promise<Readonly<RuntimeConfig>> {
       response = await fetch("/config/runtime-config.json", {
         cache: "no-store",
         credentials: "same-origin",
+        redirect: "manual",
         headers: { Accept: "application/json" },
       });
     } catch (error) {
