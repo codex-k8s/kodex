@@ -360,3 +360,7 @@ test-email-managed-claim: check-go-toolchain
 .PHONY: test-email-legacy-claim
 test-email-legacy-claim:
 	./scripts/tests/email-legacy-claim-test.sh
+
+.PHONY: test-email-agent-acceptance
+test-email-agent-acceptance:
+	TMPDIR=/tmp node --test tools/dev/email-agent-acceptance.test.mjs
