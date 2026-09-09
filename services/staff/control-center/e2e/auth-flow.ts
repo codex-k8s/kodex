@@ -6,6 +6,7 @@ import {
 } from "@playwright/test";
 
 import { gotoWithRetry } from "./helpers";
+import { InitialSessionProbeObservation } from "./initial-session-probe";
 
 const authenticationTimeoutMs = 100_000;
 const frontendOIDCRetryTimeoutMs = 7_500;
@@ -34,6 +35,7 @@ export interface AuthenticationResult {
   readonly frontendOIDCAttempts: number;
   readonly identitySubmissions: number;
   readonly ownerSessionStatuses: readonly number[];
+  readonly initialSessionProbe401s: number;
 }
 
 export interface AuthenticationDocumentSnapshot {
@@ -52,6 +54,27 @@ export async function authenticateOwner(
   page: Page,
   credentials: OwnerCredentials | undefined,
   options: AuthenticationOptions,
+): Promise<AuthenticationResult> {
+  const initialProbe = new InitialSessionProbeObservation();
+  const observe = (request: Request): void => initialProbe.observe(request);
+  page.on("request", observe);
+  try {
+    return await authenticateObservedOwner(
+      page,
+      credentials,
+      options,
+      initialProbe,
+    );
+  } finally {
+    page.off("request", observe);
+  }
+}
+
+async function authenticateObservedOwner(
+  page: Page,
+  credentials: OwnerCredentials | undefined,
+  options: AuthenticationOptions,
+  initialProbe: InitialSessionProbeObservation,
 ): Promise<AuthenticationResult> {
   const deadline = Date.now() + authenticationTimeoutMs;
   let identitySubmissions = 0;
@@ -101,6 +124,7 @@ export async function authenticateOwner(
         frontendOIDCAttempts,
         identitySubmissions,
         ownerSessionStatuses,
+        initialSessionProbe401s: initialProbe.observed401s,
       };
     }
 
@@ -130,6 +154,7 @@ export async function authenticateOwner(
           frontendOIDCAttempts,
         },
         ownerSessionStatuses,
+        initialProbe,
       );
       if (
         surface === "frontend-retry" &&
@@ -195,6 +220,7 @@ async function startFrontendOIDCTransition(
   deadline: number,
   progress: AuthProgress,
   ownerSessionStatuses: number[],
+  initialProbe: InitialSessionProbeObservation,
 ): Promise<Exclude<AuthSurface, "pending">> {
   const frontendOrigin = new URL(page.url()).origin;
   let authenticationProgressObserved = false;
@@ -217,12 +243,21 @@ async function startFrontendOIDCTransition(
       ownerSessionStatuses.push(response.status());
     }
     if (response.status() < 400 || !isAuthenticationResponse(response)) return;
+    if (
+      initialProbe.acceptInitial401(
+        response.request(),
+        response.status(),
+        frontendOrigin,
+      )
+    )
+      return;
     failedResponse = `${String(response.status())}:${response.request().method()}:${safeLocation(response.url())}`;
   };
   page.on("framenavigated", recordNavigation);
   page.on("request", recordRequest);
   page.on("response", recordFailedResponse);
   try {
+    initialProbe.startTransition();
     await page
       .getByRole("button", { name: /^(Войти|Повторить)$/ })
       .click({ timeout: remainingTimeout(deadline) });
