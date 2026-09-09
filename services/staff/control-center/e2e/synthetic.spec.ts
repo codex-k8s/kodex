@@ -3,6 +3,7 @@ import { expect, type Request } from "@playwright/test";
 import {
   browserHTTPConsoleStatus,
   expectedSyntheticHTTPFailure,
+  isFirefoxBounceTrackerAdvisory,
   isFirefoxScrollAdvisory,
   isWebKitFontAdvisory,
   isConfirmedSyntheticCancellation,
@@ -194,6 +195,7 @@ for (const { width, height } of [
     let snapshotConflictDiagnostics = 0;
     let publicationTimeoutDiagnostics = 0;
     let inspectorFailureDiagnostics = 0;
+    let firefoxBounceTrackerAdvisories = 0;
     let expectedInspectorFailure: 404 | 503 | undefined;
     let sessionVersion = 1;
     let sessionRenewals = 0;
@@ -221,6 +223,20 @@ for (const { width, height } of [
           type: "browser-advisory",
           description: "FIREFOX_SCROLL_LINKED_POSITIONING",
         });
+        return;
+      }
+      const location = message.location();
+      if (
+        isFirefoxBounceTrackerAdvisory(
+          browserName,
+          message.type(),
+          location.url,
+          location.lineNumber,
+          location.columnNumber,
+          message.text(),
+        )
+      ) {
+        firefoxBounceTrackerAdvisories++;
         return;
       }
       if (isWebKitFontAdvisory(browserName, message.text())) {
@@ -1773,6 +1789,16 @@ for (const { width, height } of [
           `Failed request: ${new URL(request.url()).pathname}; code=${code}; routeChanged=${String(changedRoute)}; cancelled=${String(explicitCancellation)}; type=${request.resourceType()}; method=${request.method()}; ${fetches.describe(request)}`,
         );
     }
+    const expectedBounceTrackerAdvisories = browserName === "firefox" ? 1 : 0;
+    if (firefoxBounceTrackerAdvisories !== expectedBounceTrackerAdvisories)
+      failures.push(
+        `Firefox bounce tracker advisory count mismatch: expected=${String(expectedBounceTrackerAdvisories)} actual=${String(firefoxBounceTrackerAdvisories)}`,
+      );
+    if (firefoxBounceTrackerAdvisories > 0)
+      testInfo.annotations.push({
+        type: "browser-advisory",
+        description: `FIREFOX_BOUNCE_TRACKER_IDENTITY_INVALID; count=${String(firefoxBounceTrackerAdvisories)}`,
+      });
     expect(failures).toEqual([]);
   });
 }

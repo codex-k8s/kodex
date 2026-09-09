@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   browserHTTPConsoleStatus,
   expectedSyntheticHTTPFailure,
+  isFirefoxBounceTrackerAdvisory,
   isFirefoxScrollAdvisory,
   isWebKitFontAdvisory,
   isConfirmedSyntheticCancellation,
@@ -108,5 +109,43 @@ describe("synthetic browser evidence", () => {
     expect(
       isFirefoxScrollAdvisory("firefox", "Unknown application warning"),
     ).toBe(false);
+  });
+  it("классифицирует только точный Firefox bounce tracker advisory", () => {
+    const message =
+      '[JavaScript Warning: "“identity.invalid” has been classified as a bounce tracker. If it does not receive user activation within the next 3,600 seconds it will have its state purged."]';
+    const exact = (
+      browser = "firefox",
+      type = "warning",
+      source = "",
+      line = 0,
+      column = 0,
+      text = message,
+    ) =>
+      isFirefoxBounceTrackerAdvisory(browser, type, source, line, column, text);
+    expect(exact()).toBe(true);
+    expect(exact("chromium")).toBe(false);
+    expect(exact("firefox", "error")).toBe(false);
+    expect(exact("firefox", "pageerror")).toBe(false);
+    expect(exact("firefox", "warning", "https://kodex.test/app.js")).toBe(
+      false,
+    );
+    expect(exact("firefox", "warning", "", 1)).toBe(false);
+    expect(exact("firefox", "warning", "", 0, 1)).toBe(false);
+    expect(exact("firefox", "warning", "", 0, 0, "Application warning")).toBe(
+      false,
+    );
+    expect(
+      exact(
+        "firefox",
+        "warning",
+        "",
+        0,
+        0,
+        message.replace("identity.invalid", "other.invalid"),
+      ),
+    ).toBe(false);
+    expect(exact("firefox", "warning", "", 0, 0, `${message} Changed`)).toBe(
+      false,
+    );
   });
 });

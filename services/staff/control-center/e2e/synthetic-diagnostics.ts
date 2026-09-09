@@ -54,6 +54,25 @@ export function isFirefoxScrollAdvisory(
   );
 }
 
+export function isFirefoxBounceTrackerAdvisory(
+  browserName: string,
+  type: string,
+  source: string,
+  line: number,
+  column: number,
+  text: string,
+): boolean {
+  return (
+    browserName === "firefox" &&
+    type === "warning" &&
+    source === "" &&
+    line === 0 &&
+    column === 0 &&
+    text ===
+      '[JavaScript Warning: "“identity.invalid” has been classified as a bounce tracker. If it does not receive user activation within the next 3,600 seconds it will have its state purged."]'
+  );
+}
+
 export function isWebKitFontAdvisory(
   browserName: string,
   text: string,
