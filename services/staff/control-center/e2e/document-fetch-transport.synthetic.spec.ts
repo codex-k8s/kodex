@@ -3,6 +3,11 @@ import { readFile } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { extname, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import {
+  installSyntheticAbortObserver,
+  syntheticFetchIDHeader,
+  type SyntheticFetchEvent,
+} from "./synthetic-abort-observer";
 
 async function settlesWithin(promise: Promise<void>): Promise<boolean> {
   return Promise.race([
@@ -193,4 +198,82 @@ test("synthetic: documentFetch сохраняет native transport до заве
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+test("synthetic: ticket route.fulfill завершает exact body transport", async ({
+  page,
+}, testInfo) => {
+  const origin = "http://127.0.0.1:43122";
+  const events: SyntheticFetchEvent[] = [];
+  const failures: Array<{ code: string; identity: string }> = [];
+  let fulfillBegun = 0;
+  let fulfillResolved = 0;
+  let fulfillRejected = 0;
+  await installSyntheticAbortObserver(
+    page,
+    (event) => events.push(event),
+    origin,
+  );
+  page.on("requestfailed", (request) => {
+    if (new URL(request.url()).pathname === "/api/v1/session/ticket")
+      failures.push({
+        code: request.failure()?.errorText ?? "UNKNOWN",
+        identity: request.headers()[syntheticFetchIDHeader] ?? "",
+      });
+  });
+  await page.route("**/api/v1/session/ticket", async (route) => {
+    expect(route.request().headers()[syntheticFetchIDHeader]).toBeTruthy();
+    fulfillBegun++;
+    try {
+      await route.fulfill({
+        json: { ticket: "fixture", expiresAt: "fixture" },
+        headers: {
+          "Cache-Control": "no-store",
+          [syntheticFetchIDHeader]:
+            route.request().headers()[syntheticFetchIDHeader] ?? "",
+        },
+      });
+      fulfillResolved++;
+    } catch (error) {
+      fulfillRejected++;
+      throw error;
+    }
+  });
+  await page.goto(`${origin}/e2e/fixtures/document-fetch-transport.html`);
+  await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
+  const completed = await page.evaluate(async () => {
+    const target = window as unknown as {
+      runTicketTransportProbe: (count: number) => Promise<number>;
+    };
+    return target.runTicketTransportProbe(256);
+  });
+  await expect
+    .poll(() => events.filter(({ phase }) => phase === "start").length)
+    .toBe(256);
+  const completedIdentities = new Set(
+    events.filter(({ phase }) => phase === "body").map(({ id }) => id),
+  );
+  const unexplainedFailures = failures.filter(
+    ({ identity }) => !completedIdentities.has(identity),
+  );
+  if (failures.length > 0)
+    testInfo.annotations.push({
+      type: "request-completed-before-browser-terminal",
+      description: `count=${String(failures.length)}`,
+    });
+  expect({
+    completed,
+    unexplainedFailures,
+    fulfillBegun,
+    fulfillResolved,
+    fulfillRejected,
+    aborts: events.filter(({ phase }) => phase === "abort").length,
+  }).toEqual({
+    completed: 256,
+    unexplainedFailures: [],
+    fulfillBegun: 256,
+    fulfillResolved: 256,
+    fulfillRejected: 0,
+    aborts: 0,
+  });
 });

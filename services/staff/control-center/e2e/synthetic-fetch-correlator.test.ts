@@ -124,4 +124,60 @@ describe("synthetic fetch identity", () => {
     observer.observe({ phase: "start", id: one, url });
     expect(observer.cancelled(request)).toBe(true);
   });
+  it.each([true, false])(
+    "принимает exact application body completion до/после request: %s",
+    (bodyFirst) => {
+      const observer = new SyntheticFetchCorrelator();
+      const request = {};
+      observer.observe({ phase: "start", id: one, url });
+      if (bodyFirst) observer.observe({ phase: "body", id: one, url });
+      observer.request(request, url, one);
+      if (!bodyFirst) observer.observe({ phase: "body", id: one, url });
+      expect(observer.bodyCompleted(request)).toBe(true);
+    },
+  );
+  it.each(["headers", "body-error", "reject", "abort"] as const)(
+    "не выдаёт phase=%s за завершённый body",
+    (phase) => {
+      const observer = new SyntheticFetchCorrelator();
+      const request = {};
+      observer.observe({ phase: "start", id: one, url });
+      observer.observe({ phase, id: one, url });
+      observer.request(request, url, one);
+      expect(observer.bodyCompleted(request)).toBe(false);
+    },
+  );
+  it("не принимает body с чужим URL или неоднозначной identity", () => {
+    const foreign = new SyntheticFetchCorrelator();
+    const foreignRequest = {};
+    foreign.observe({ phase: "start", id: one, url });
+    foreign.observe({ phase: "body", id: one, url: `${url}/foreign` });
+    foreign.request(foreignRequest, url, one);
+    expect(foreign.bodyCompleted(foreignRequest)).toBe(false);
+
+    const duplicate = new SyntheticFetchCorrelator();
+    const first = {};
+    const second = {};
+    duplicate.observe({ phase: "start", id: one, url });
+    duplicate.observe({ phase: "body", id: one, url });
+    duplicate.request(first, url, one);
+    duplicate.request(second, url, one);
+    expect(duplicate.bodyCompleted(first)).toBe(false);
+    expect(duplicate.bodyCompleted(second)).toBe(false);
+  });
+  it.each(["body-error", "reject", "abort"] as const)(
+    "не принимает body вместе с phase=%s ни в одном порядке",
+    (phase) => {
+      for (const bodyFirst of [true, false]) {
+        const observer = new SyntheticFetchCorrelator();
+        const request = {};
+        observer.observe({ phase: "start", id: one, url });
+        if (bodyFirst) observer.observe({ phase: "body", id: one, url });
+        observer.observe({ phase, id: one, url });
+        if (!bodyFirst) observer.observe({ phase: "body", id: one, url });
+        observer.request(request, url, one);
+        expect(observer.bodyCompleted(request)).toBe(false);
+      }
+    },
+  );
 });

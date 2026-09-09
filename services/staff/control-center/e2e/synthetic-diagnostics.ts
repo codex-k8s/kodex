@@ -98,3 +98,21 @@ export function isConfirmedSyntheticCancellation(
   };
   return expected[browserName] === code;
 }
+
+export function isCompletedChromiumTicketTerminal(
+  browserName: string,
+  code: string,
+  method: string,
+  resourceType: string,
+  pathname: string,
+  bodyCompleted: boolean,
+): boolean {
+  return (
+    browserName === "chromium" &&
+    code === "net::ERR_ABORTED" &&
+    method === "POST" &&
+    resourceType === "fetch" &&
+    pathname === "/api/v1/session/ticket" &&
+    bodyCompleted
+  );
+}

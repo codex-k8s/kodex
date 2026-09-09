@@ -6,6 +6,7 @@ import {
   isFirefoxBounceTrackerAdvisory,
   isFirefoxScrollAdvisory,
   isWebKitFontAdvisory,
+  isCompletedChromiumTicketTerminal,
   isConfirmedSyntheticCancellation,
 } from "./synthetic-diagnostics";
 import { prepareSyntheticMicrophone } from "./synthetic-microphone";
@@ -275,6 +276,9 @@ for (const { width, height } of [
       networkJournal.record(`fetch-${event.phase}`, {
         identity: event.id,
         path: new URL(event.url).pathname,
+        signalGeneration: event.signalGeneration ?? 0,
+        signalAborted: event.signalAborted ?? false,
+        reasonClass: event.reasonClass ?? "UNKNOWN",
       });
     });
     const cancelInspectorRequests = () => {
@@ -418,13 +422,28 @@ for (const { width, height } of [
         url.pathname === "/api/v1/session/ticket" &&
         route.request().method() === "POST"
       ) {
-        await route.fulfill({
-          json: {
-            ticket: "t".repeat(43),
-            expiresAt: new Date(Date.now() + 30_000).toISOString(),
-          },
-          headers: { "Cache-Control": "no-store" },
-        });
+        const identity =
+          route.request().headers()[syntheticFetchIDHeader] ?? "";
+        networkJournal.record("ticket-fulfill-begin", { identity });
+        try {
+          await route.fulfill({
+            json: {
+              ticket: "t".repeat(43),
+              expiresAt: new Date(Date.now() + 30_000).toISOString(),
+            },
+            headers: {
+              "Cache-Control": "no-store",
+              [syntheticFetchIDHeader]: identity,
+            },
+          });
+          networkJournal.record("ticket-fulfill-resolved", { identity });
+        } catch (error) {
+          networkJournal.record("ticket-fulfill-rejected", {
+            identity,
+            reasonClass: error instanceof Error ? error.name : "UNKNOWN",
+          });
+          throw error;
+        }
         return;
       }
       if (url.pathname in responses && route.request().method() === "GET") {
@@ -1773,6 +1792,22 @@ for (const { width, height } of [
     for (const { request, changedRoute, code } of failedRequests) {
       const explicitCancellation =
         cancelledRequests.has(request) || fetches.cancelled(request);
+      if (
+        isCompletedChromiumTicketTerminal(
+          browserName,
+          code,
+          request.method(),
+          request.resourceType(),
+          new URL(request.url()).pathname,
+          fetches.bodyCompleted(request),
+        )
+      ) {
+        testInfo.annotations.push({
+          type: "request-completed-before-browser-terminal",
+          description: code,
+        });
+        continue;
+      }
       if (
         isConfirmedSyntheticCancellation(
           browserName,

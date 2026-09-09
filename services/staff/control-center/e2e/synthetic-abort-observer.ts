@@ -3,9 +3,12 @@ import type { Page } from "@playwright/test";
 export const syntheticFetchIDHeader = "x-kodex-synthetic-fetch-id";
 
 export interface SyntheticFetchEvent {
-  phase: "start" | "abort";
+  phase: "start" | "abort" | "headers" | "body" | "body-error" | "reject";
   id: string;
   url: string;
+  signalGeneration?: number;
+  signalAborted?: boolean;
+  reasonClass?: string;
 }
 
 // Fixture-only header связывает сигнал с request; method/body/signal/credentials сохраняются.
@@ -31,7 +34,9 @@ export async function installSyntheticAbortObserver(
       if (
         frame !== page.mainFrame() ||
         !event ||
-        !["start", "abort"].includes(event.phase) ||
+        !["start", "abort", "headers", "body", "body-error", "reject"].includes(
+          event.phase,
+        ) ||
         typeof event.id !== "string" ||
         typeof event.url !== "string"
       )
@@ -44,8 +49,63 @@ export async function installSyntheticAbortObserver(
   await page.addInitScript(
     ({ expectedOrigin, headerName }) => {
       const fetch = window.fetch.bind(window);
+      const responseText = Object.getOwnPropertyDescriptor(
+        Response.prototype,
+        "text",
+      )?.value as ((this: Response) => Promise<string>) | undefined;
+      if (!responseText) throw new Error("Response.text fixture unavailable");
       const documentID = crypto.randomUUID();
       let sequence = 0;
+      let signalSequence = 0;
+      const signalGenerations = new WeakMap<AbortSignal, number>();
+      const fetchURLs = new Map<string, string>();
+      Response.prototype.text = async function () {
+        const id = this.headers.get(headerName);
+        let value: string;
+        try {
+          value = await responseText.call(this);
+        } catch (error) {
+          if (id) {
+            const binding = (
+              window as unknown as {
+                __kodexSyntheticAbortedFetch: (
+                  event: SyntheticFetchEvent,
+                ) => Promise<void>;
+              }
+            ).__kodexSyntheticAbortedFetch;
+            await binding({
+              phase: "body-error",
+              id,
+              url: fetchURLs.get(id) ?? this.url,
+              signalGeneration: 0,
+              signalAborted: false,
+              reasonClass: error instanceof Error ? error.name : "UNKNOWN",
+            });
+            fetchURLs.delete(id);
+          }
+          throw error;
+        }
+        if (id) {
+          const url = fetchURLs.get(id) ?? this.url;
+          fetchURLs.delete(id);
+          const binding = (
+            window as unknown as {
+              __kodexSyntheticAbortedFetch: (
+                event: SyntheticFetchEvent,
+              ) => Promise<void>;
+            }
+          ).__kodexSyntheticAbortedFetch;
+          await binding({
+            phase: "body",
+            id,
+            url,
+            signalGeneration: 0,
+            signalAborted: false,
+            reasonClass: "NONE",
+          });
+        }
+        return value;
+      };
       window.fetch = (input, init) => {
         const signal =
           init?.signal === null
@@ -68,7 +128,12 @@ export async function installSyntheticAbortObserver(
             ? address.href
             : undefined;
         const id = `${documentID}:${String(++sequence)}`;
-        const emit = (phase: "start" | "abort") => {
+        const signalGeneration = signal
+          ? (signalGenerations.get(signal) ?? ++signalSequence)
+          : 0;
+        if (signal && !signalGenerations.has(signal))
+          signalGenerations.set(signal, signalGeneration);
+        const emit = (phase: SyntheticFetchEvent["phase"]) => {
           if (!observedURL) return;
           const binding = (
             window as unknown as {
@@ -77,9 +142,23 @@ export async function installSyntheticAbortObserver(
               ) => Promise<void>;
             }
           ).__kodexSyntheticAbortedFetch;
-          void binding({ phase, id, url: observedURL }).catch(() => undefined);
+          const reason: unknown = signal?.reason;
+          void binding({
+            phase,
+            id,
+            url: observedURL,
+            signalGeneration,
+            signalAborted: signal?.aborted ?? false,
+            reasonClass:
+              reason instanceof Error
+                ? reason.name
+                : signal?.aborted
+                  ? "UNKNOWN"
+                  : "NONE",
+          }).catch(() => undefined);
         };
         if (observedURL) {
+          fetchURLs.set(id, observedURL);
           const headers = new Headers(
             init?.headers ??
               (input instanceof Request ? input.headers : undefined),
@@ -95,7 +174,15 @@ export async function installSyntheticAbortObserver(
             signal?.addEventListener("abort", () => emit("abort"), {
               once: true,
             });
-          return fetch(input, { ...init, headers });
+          const operation = fetch(input, { ...init, headers });
+          void operation.then(
+            () => emit("headers"),
+            () => {
+              emit("reject");
+              fetchURLs.delete(id);
+            },
+          );
+          return operation;
         }
         return fetch(input, init);
       };

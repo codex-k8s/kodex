@@ -10,7 +10,15 @@ export class SyntheticFetchCorrelator<T extends object> {
   private readonly terminalRequests = new WeakSet<T>();
   private readonly events = new Map<
     string,
-    { url: string; started: boolean; aborted: boolean; invalid: boolean }
+    {
+      url: string;
+      started: boolean;
+      aborted: boolean;
+      bodyCompleted: boolean;
+      bodyErrored: boolean;
+      rejected: boolean;
+      invalid: boolean;
+    }
   >();
   private readonly requests = new Map<
     T,
@@ -28,12 +36,18 @@ export class SyntheticFetchCorrelator<T extends object> {
       )
         existing.invalid = true;
       if (event.phase === "abort") existing.aborted = true;
-      else existing.started = true;
+      else if (event.phase === "body") existing.bodyCompleted = true;
+      else if (event.phase === "body-error") existing.bodyErrored = true;
+      else if (event.phase === "reject") existing.rejected = true;
+      else if (event.phase === "start") existing.started = true;
     } else {
       this.events.set(event.id, {
         url: event.url,
         started: event.phase === "start",
         aborted: event.phase === "abort",
+        bodyCompleted: event.phase === "body",
+        bodyErrored: event.phase === "body-error",
+        rejected: event.phase === "reject",
         invalid: false,
       });
     }
@@ -76,6 +90,22 @@ export class SyntheticFetchCorrelator<T extends object> {
     return (
       !!event?.started &&
       (event.aborted || this.navigationIdentities.has(selected.id)) &&
+      !event.invalid &&
+      event.url === selected.url
+    );
+  }
+
+  bodyCompleted(request: T): boolean {
+    const selected = this.requests.get(request);
+    if (!selected?.id || this.identities.get(selected.id)?.size !== 1)
+      return false;
+    const event = this.events.get(selected.id);
+    return (
+      !!event?.started &&
+      event.bodyCompleted &&
+      !event.aborted &&
+      !event.bodyErrored &&
+      !event.rejected &&
       !event.invalid &&
       event.url === selected.url
     );

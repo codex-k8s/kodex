@@ -6,11 +6,57 @@ import {
   isFirefoxScrollAdvisory,
   isWebKitFontAdvisory,
   isConfirmedSyntheticCancellation,
+  isCompletedChromiumTicketTerminal,
 } from "./synthetic-diagnostics";
 import config from "../playwright.synthetic.config";
 import viteConfig from "../vite.synthetic.config";
 
 describe("synthetic browser evidence", () => {
+  it("закрыто классифицирует terminal только после полного Chromium ticket body", () => {
+    const exact = (
+      browserName = "chromium",
+      code = "net::ERR_ABORTED",
+      method = "POST",
+      resourceType = "fetch",
+      pathname = "/api/v1/session/ticket",
+      bodyCompleted = true,
+    ) =>
+      isCompletedChromiumTicketTerminal(
+        browserName,
+        code,
+        method,
+        resourceType,
+        pathname,
+        bodyCompleted,
+      );
+
+    expect(exact()).toBe(true);
+    expect(exact("firefox")).toBe(false);
+    expect(exact("webkit")).toBe(false);
+    expect(exact("chromium", "net::ERR_FAILED")).toBe(false);
+    expect(exact("chromium", "net::ERR_ABORTED", "GET")).toBe(false);
+    expect(exact("chromium", "net::ERR_ABORTED", "POST", "xhr")).toBe(false);
+    expect(
+      exact(
+        "chromium",
+        "net::ERR_ABORTED",
+        "POST",
+        "fetch",
+        "/api/v1/session/ticket/other",
+      ),
+    ).toBe(false);
+    expect(
+      exact(
+        "chromium",
+        "net::ERR_ABORTED",
+        "POST",
+        "fetch",
+        "/api/v1/session/ticket",
+        false,
+      ),
+    ).toBe(false);
+  });
+
   it("требует точный browser code и подтверждённую отмену поколения", () => {
     for (const [browser, code] of [
       ["chromium", "net::ERR_ABORTED"],

@@ -129,6 +129,17 @@
       document.querySelector("#suspend").addEventListener("click", () => {
         window.dispatchEvent(new Event("pagehide"));
       });
+      window.runTicketTransportProbe = async (count) => {
+        let completed = 0;
+        for (let index = 0; index < count; index += 1) {
+          const response = await documentFetch(
+            new Request("/api/v1/session/ticket", { method: "POST" }),
+          );
+          await response.text();
+          completed += 1;
+        }
+        return completed;
+      };
       document.body.dataset.ready = "true";
     </script>
   </body>
