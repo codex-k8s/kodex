@@ -283,6 +283,34 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it("уход документа закрывает socket, resume сохраняет platform/run cursors и не дублирует соединение", async () => {
+    const store = useRealtimeStore();
+    const platform = usePlatformStore();
+    hydrateRun(platform, "run_realtime01", 2);
+    store.openPlatform();
+    store.openRun("run_realtime01");
+    await flushProcessing();
+    const old = socketAt(0);
+    old.open();
+    store.platformSequence = 7;
+    windowEvents.get("kodex:document-requests-suspended")?.();
+    expect(old.closeReason).toBe("DOCUMENT_SUSPENDED");
+    expect(store.platformSequence).toBe(7);
+    await flushProcessing();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    windowEvents.get("kodex:document-requests-resumed")?.();
+    windowEvents.get("kodex:document-requests-resumed")?.();
+    await flushProcessing();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    const resumed = socketAt(1);
+    resumed.open();
+    expect(resumeRequest(resumed)).toMatchObject({
+      platformAfterSequence: 7,
+      runs: [{ runRef: "run_realtime01", afterSequence: 2 }],
+    });
+    store.closeAll();
+  });
+
   it("подписывает и отписывает run на том же socket", async () => {
     const store = useRealtimeStore();
     store.openPlatform();

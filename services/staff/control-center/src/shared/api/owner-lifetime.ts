@@ -1,3 +1,5 @@
+import { documentRequestSignal } from "./document-lifetime";
+
 let controller = new AbortController();
 
 export class OwnerContextChangedError extends Error {
@@ -8,7 +10,7 @@ export class OwnerContextChangedError extends Error {
 }
 
 export function ownerRequestSignal(): AbortSignal {
-  return controller.signal;
+  return AbortSignal.any([controller.signal, documentRequestSignal()]);
 }
 
 export function assertOwnerRequest(signal: AbortSignal): void {

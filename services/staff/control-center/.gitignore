@@ -1,6 +1,7 @@
 node_modules/
 dist/
 dist-synthetic/
+dist-document-lifecycle/
 playwright-report/
 test-results/
 .auth/
