@@ -4,8 +4,8 @@ title: Ограниченная свежесть authority и независим
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.1.0
-updated: 2026-09-08
+version: 1.2.0
+updated: 2026-09-09
 ---
 
 # Граница и источники
@@ -190,10 +190,38 @@ Managed policy helper поддерживает тот же явный `--k3s-sud
 или экспорт kubeconfig для этого пути не требуются.
 
 ```sh
-node tools/release/authority-freshness-job-proof.mjs --context "$CONTEXT" \
-  --k3s-sudo --job "$RUNNING_OWNER_JOB" --capability "$PRIVATE/capability.json" \
-  --output "$PRIVATE/job-proof.json"
+node tools/release/authority-freshness-job-proof-watcher.mjs plan \
+  --context "$CONTEXT" --k3s-sudo --job "$EXPECTED_OWNER_JOB" \
+  --capability "$PRIVATE/capability.json" --timeout-seconds 720 \
+  --output "$PRIVATE/job-proof-plan.json"
+node tools/release/authority-freshness-job-proof-watcher.mjs watch \
+  --context "$CONTEXT" --k3s-sudo --plan "$PRIVATE/job-proof-plan.json" \
+  --proof "$PRIVATE/job-proof.json" --evidence "$PRIVATE/job-proof.jsonl"
 ```
+
+Watcher запускается до owner fixture и наблюдает только exact имя
+`mc-admit-<32 hex>-(claim|admit|promote)`. Plan закрепляет namespace UID,
+controller, immutable policy/parameters/binding, capability и ожидаемые phase/
+workload. До первого Kubernetes read watcher `fsync`-сохраняет `INTENT`.
+Фактический `/proc/PID/exe` сохраняется ровно один раз как `CAPTURED`, а `PASS`
+появляется только после terminal `succeeded=1` того же Job UID/spec/imageID.
+
+Если terminal readback потерян, активный Job не завершился в bounded budget
+либо оператор остановил наблюдение, журнал получает `UNKNOWN`. Продолжение
+использует тот же plan, intent, proof и evidence, не создаёт и не повторяет Job:
+
+```sh
+node tools/release/authority-freshness-job-proof-watcher.mjs resume \
+  --context "$CONTEXT" --k3s-sudo --plan "$PRIVATE/job-proof-plan.json" \
+  --proof "$PRIVATE/job-proof.json" --evidence "$PRIVATE/job-proof.jsonl"
+```
+
+Job failure, identity/policy drift и успешное завершение до capture являются
+`FAIL`. Новый prefix не восстанавливает пропущенный executable proof. Старый
+одиночный `authority-freshness-job-proof.mjs` остаётся поддержанным для уже
+наблюдаемого running Job, но не заменяет watcher в запланированном переходе.
+Оба инструмента только читают Kubernetes и не создают, не удаляют и не
+повторяют owner Job. Pod env и Secret не попадают в plan/evidence/proof.
 
 Перед activation `--job-proofs` указывает приватный JSON array двух путей:
 один успешный image-admission Job, один image-promotion Job. Их actual executable
