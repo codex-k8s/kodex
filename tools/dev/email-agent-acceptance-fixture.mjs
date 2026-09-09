@@ -22,7 +22,14 @@ export function emailAgentTransport(mode = '', options = {}) {
     if (method === 'POST' && path === '/api/v1/runs') return { run };
     if (method === 'POST' && path === '/api/v1/projects/prj_fixture/agents') return { ref: f.agentRef, projectRef: f.projectRef, version: 1 };
     if (path === '/api/v1/projects/prj_fixture') return { ref: f.projectRef };
-    if (path === '/api/v1/agents/agt_fixture') return { ref: f.agentRef, projectRef: mode === 'foreign' ? 'prj_other' : f.projectRef, enabled: mode !== 'disabled', system: false, state: 'READY', version: mode === 'stale' ? 2 : 1 };
+    if (path === '/api/v1/agents/agt_fixture') return {
+      ref: mode === 'agent-ref' ? 'agt_other' : f.agentRef,
+      projectRef: mode === 'foreign' ? 'prj_other' : mode === 'missing-project' ? undefined : f.projectRef,
+      enabled: mode === 'missing-enabled' ? undefined : mode === 'invalid-enabled' ? 'true' : mode !== 'disabled',
+      system: mode === 'missing-system' ? undefined : mode === 'invalid-system' ? 'false' : mode === 'system-agent',
+      state: ({ 'agent-running': 'RUNNING', 'agent-draft': 'DRAFT', 'agent-archived': 'ARCHIVED', 'agent-disabled': 'DISABLED', 'agent-unknown': 'UNKNOWN' })[mode] ?? 'READY',
+      version: mode === 'stale' ? 2 : 1,
+    };
     if (path.endsWith('/runtime-configuration')) return { agentVersion: mode === 'stale' ? 2 : 1, configuration: config, publishedOverlay: { ref: 'ovl_fixture', digest: hash }, environmentBinding: { ref:'binding_fixture',digest:hash,agentRef: f.agentRef, environmentRef: 'env_fixture', versionRef: 'envv_fixture', version: 1 }, environment: { ref: 'env_fixture', projectRef: f.projectRef, ready: true, currentVersion: { ref: 'envv_fixture', image: {artifactRef:'imgart_fixture', reference:combined?image:`registry.fixture.invalid/image@sha256:${hash}` } } } };
     if (path.startsWith('/api/v1/model-capabilities?')) return { catalogRevision: `mcat_${hash}`, catalogDigest: mode === 'catalog' ? 'b'.repeat(64) : hash, items: [{ id: f.model, providerDefinitionKey: 'openai-codex', available: true, eligibleProviderAccountRefs: [f.accountRef], reasoningEfforts: ['low'] }] };
     if (path.startsWith('/api/v1/provider-accounts/')) return { ref: f.accountRef, version: 1, ready: true, enabled: true, usage: { allowedToSubmit: mode !== 'account', agentVersion: mode === 'stale' ? 2 : 1, runtimeConfigurationRef: config.ref, runtimeConfigurationDigest: hash } };

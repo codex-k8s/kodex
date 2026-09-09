@@ -427,6 +427,9 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 }
 
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	if descriptor.FullName() == "controlplane.v1.Agent" && field.Kind() == protoreflect.BoolKind {
+		return false, field.JSONName() == "system" || field.JSONName() == "enabled"
+	}
 	if descriptor.FullName() == "controlplane.v1.WorkflowCardSummary" {
 		if field.Kind() == protoreflect.BoolKind {
 			return false, field.JSONName() == "hasHumanGate"
