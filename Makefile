@@ -364,3 +364,7 @@ test-email-legacy-claim:
 .PHONY: test-email-agent-acceptance
 test-email-agent-acceptance:
 	TMPDIR=/tmp node --test tools/dev/email-agent-acceptance.test.mjs
+
+.PHONY: test-email-combined-acceptance
+test-email-combined-acceptance:
+	TMPDIR=/tmp node --test tools/dev/email-agent-acceptance.test.mjs tools/dev/role-image-runtime-proof.test.mjs tools/dev/runtime-workspace-acceptance.test.mjs tools/release/runtime-pod-observe.test.mjs tools/release/authority-executable-readback.test.mjs
