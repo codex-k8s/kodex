@@ -170,6 +170,11 @@ test("dependency readback связывает все exact ownership/spec и до
   const all = ownedDependencies();
   const sts = all.find((x) => x.kind === "StatefulSet");
   sts.spec.revisionHistoryLimit = 10;
+  delete all.find(
+    (x) =>
+      x.kind === "NetworkPolicy" &&
+      x.metadata.name === "proxy-session-store-boundary",
+  ).spec.egress;
   assert.equal(validateStoreDependencies(all).length, resources().length);
 });
 for (const [name, change] of [
@@ -195,6 +200,15 @@ for (const [name, change] of [
       (all.find(
         (x) => x.kind === "NetworkPolicy",
       ).spec.ingress[0].from[0].namespaceSelector = {}),
+  ],
+  [
+    "added egress",
+    (all) =>
+      (all.find(
+        (x) =>
+          x.kind === "NetworkPolicy" &&
+          x.metadata.name === "proxy-session-store-boundary",
+      ).spec.egress = [{}]),
   ],
   [
     "added sidecar",
