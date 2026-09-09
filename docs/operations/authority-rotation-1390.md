@@ -4,7 +4,7 @@ title: Устойчивая ротация ключей internal RPC authority
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.1.0
+version: 1.1.1
 updated: 2026-09-09
 ---
 
@@ -61,15 +61,22 @@ readback не входят.
 # Порядок поставки и активации
 
 1. Запустить additive migrations из точного source. Они не изменяют применённые
-   migration bytes и не активирует новый writer сама.
+   migration bytes и сами не активируют новый writer.
 2. Обновить publisher на совместимый бинарь через штатный authority
    infrastructure workflow. Обычный `scoped-release` приложения эту фазу не
    заменяет. В hot-reload staging пересборка immutable image не нужна, если
    контейнер, toolchain и встроенный binary не менялись; exact source и
    исполняемый процесс всё равно фиксируются.
-3. Repo-owned transition выполняет UID/resourceVersion CAS только exact
+3. Repo-owned transition создаёт случайный `intentID` оператора, а owner
+   operation UUID канонически выводит из exact `source_revision` и SHA-256
+   байтов нового registry тем же алгоритмом, что publisher. CAS разрешён
+   только если registry revision возрастает ровно на единицу; snapshot
+   revision остаётся отдельной последовательностью и за три публикации
+   увеличивается на три. Transition применяет UID/resourceVersion CAS только к
+   exact
    `internal-rpc-authority-publisher-target-registry`, затем CAS неизменённого
-   Deployment с новой operation annotation. Перезапускается только publisher;
+   Deployment с отдельными intent и owner-operation annotations.
+   Перезапускается только publisher;
    другие workloads и application revisions не меняются.
 4. Наблюдать один operation UUID через три публикации и оба 40-секундных окна.
    Следующую registry revision нельзя публиковать раньше `RETIRED`.
@@ -81,10 +88,12 @@ readback не входят.
 завершённой migration Job: repo-owned status Job строится из канонического
 `deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml`,
 использует exact digest уже обслуживаемого publisher image и запускает
-`/usr/local/bin/internal-rpc-authority-cli rotation-watch --operation-id <UUID>`.
+`/usr/local/bin/internal-rpc-authority-cli rotation-watch --operation-id <OWNER_UUID>`.
 Watch остаётся
 активным до `RETIRED` и поэтому один immutable Job наблюдает все три фазы.
-План закрепляет namespace UID,
+Имя Job закреплено за `intentID`, но terminal readback принимается только для
+точного owner UUID; чужой `RETIRED` не завершает watch, включая `resume` после
+неизвестного исхода. План версии 3 закрепляет оба UUID, namespace UID,
 registry/Deployment UID+resourceVersion, source SHA, image digest и команды.
 До записи plan выполняются `auth can-i create jobs`, безопасные metadata-only
 проверки SA/Secret/CA, exact live NetworkPolicy selectors и server-side dry-run

@@ -159,7 +159,7 @@ func runRotation(ctx context.Context, db *sql.DB, action command, options rotati
 			if err := json.NewEncoder(output).Encode(state); err != nil {
 				return errors.New("write authority rotation observation")
 			}
-			if state.OperationID == options.operationID && state.Status == "RETIRED" {
+			if rotationWatchComplete(state, options.operationID) {
 				return nil
 			}
 			select {
@@ -180,4 +180,8 @@ func runRotation(ctx context.Context, db *sql.DB, action command, options rotati
 		return errors.New("write authority rotation readback")
 	}
 	return nil
+}
+
+func rotationWatchComplete(state rotationStatus, operationID string) bool {
+	return state.OperationID == operationID && state.Status == "RETIRED"
 }

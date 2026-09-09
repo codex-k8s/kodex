@@ -51,3 +51,21 @@ func TestRotationWatchCommandIsExact(t *testing.T) {
 		t.Fatal("rotation watch accepted additional arguments")
 	}
 }
+
+func TestRotationWatchRejectsForeignRetiredOperationAcrossRestart(t *testing.T) {
+	expected := "13900000-0000-4000-8000-000000000002"
+	foreign := rotationStatus{OperationID: "13900000-0000-4000-8000-000000000003", Status: "RETIRED"}
+	if rotationWatchComplete(foreign, expected) {
+		t.Fatal("foreign retired operation completed watch")
+	}
+	waiting := rotationStatus{OperationID: expected, Status: "WAITING_RETIRE"}
+	if rotationWatchComplete(waiting, expected) {
+		t.Fatal("non-terminal owner operation completed watch")
+	}
+	retired := rotationStatus{OperationID: expected, Status: "RETIRED"}
+	for restart := 0; restart < 2; restart++ {
+		if !rotationWatchComplete(retired, expected) {
+			t.Fatal("owner operation did not complete watch after restart")
+		}
+	}
+}

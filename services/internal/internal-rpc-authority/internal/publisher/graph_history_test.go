@@ -16,6 +16,17 @@ type rotationSecretDelivery struct {
 	writes   int
 }
 
+func TestNormalRotationOperationIDMatchesDeliveryGoldenVector(t *testing.T) {
+	t.Parallel()
+	graph := &Graph{config: GraphConfig{Registry: model.DeliveryTargetRegistry{
+		SourceRevision: 8,
+		SourceDigest:   strings.Repeat("c", 64),
+	}}}
+	if got, want := graph.rotationOperationID(), "13657d5a-4e35-52fc-b82d-0529ee0914ca"; got != want {
+		t.Fatalf("rotation operation ID = %s, want %s", got, want)
+	}
+}
+
 func (delivery *rotationSecretDelivery) ReadVersioned(context.Context, string) (domainrepository.SecretMaterial, bool, error) {
 	return delivery.material, true, nil
 }

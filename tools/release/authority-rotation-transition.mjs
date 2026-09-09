@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import {execFileSync} from 'node:child_process';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {closeSync, constants, fstatSync, fsyncSync, openSync, readFileSync, writeFileSync, writeSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -13,6 +13,18 @@ const sha=/^[a-f0-9]{64}$/;
 const revision=/^[1-9][0-9]{0,15}$/;
 function requireValue(ok,code){if(!ok)throw new Error(code);}
 const run=(command,args,input)=>execFileSync(command,args,{input,encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:30_000,maxBuffer:16<<20}).trim();
+export function deriveRotationOperationID(sourceRevision,sourceDigestSHA256){
+	requireValue(revision.test(String(sourceRevision))&&Number(sourceRevision)<=9007199254740991&&sha.test(sourceDigestSHA256),'INVALID_ROTATION_REGISTRY_IDENTITY');
+	const digest=createHash('sha256').update(`authority-normal-rotation-v3\0${sourceRevision}\0${sourceDigestSHA256}`).digest();
+	digest[6]=(digest[6]&0x0f)|0x50;digest[8]=(digest[8]&0x3f)|0x80;
+	const value=digest.subarray(0,16).toString('hex');
+	return `${value.slice(0,8)}-${value.slice(8,12)}-${value.slice(12,16)}-${value.slice(16,20)}-${value.slice(20)}`;
+}
+export function deriveRegistryRotationIdentity(raw){
+	const sourceRevision=Number(run('yq',['-r','.source_revision','-'],raw));
+	const sourceDigestSHA256=createHash('sha256').update(raw).digest('hex');
+	return {sourceRevision,sourceDigestSHA256,ownerOperationID:deriveRotationOperationID(sourceRevision,sourceDigestSHA256)};
+}
 function validateRotationTemplate(job){
  const pod=job.spec?.template?.spec,container=pod?.containers?.[0];
  requireValue(job.kind==='Job'&&job.metadata?.namespace===namespace&&pod?.restartPolicy==='Never'&&
@@ -50,21 +62,24 @@ export function validateRotationPrerequisites(serviceAccount,egressPolicy,ingres
 
 export function createRotationJob(template,plan){
  validateRotationTemplate(template);
- requireValue(plan.version===2&&uuid.test(plan.operationID)&&['status','abort','rotate'].includes(plan.action)&&/^[a-f0-9]{40}$/.test(plan.revision)&&
+ requireValue(plan.version===3&&uuid.test(plan.intentID)&&['status','abort','rotate'].includes(plan.action)&&/^[a-f0-9]{40}$/.test(plan.revision)&&
   /^\/srv\/kodex-dev\/[A-Za-z0-9._-]+$/.test(plan.source),'INVALID_ROTATION_PLAN');
+	if(plan.action==='rotate')requireValue(uuid.test(plan.ownerOperationID)&&plan.ownerOperationID!==plan.intentID,'INVALID_ROTATION_OWNER_OPERATION');
  if(plan.action==='abort')requireValue(uuid.test(plan.rotation.intentID)&&revision.test(String(plan.rotation.sourceRevision))&&
   Number(plan.rotation.sourceRevision)<=9007199254740991&&sha.test(plan.rotation.sourceDigestSHA256),'INVALID_ROTATION_ABORT');
  const spec=structuredClone(template.spec);delete spec.selector;delete spec.ttlSecondsAfterFinished;
  spec.backoffLimit=0;spec.activeDeadlineSeconds=300;
  for(const key of ['controller-uid','job-name','batch.kubernetes.io/controller-uid','batch.kubernetes.io/job-name'])delete spec.template.metadata?.labels?.[key];
  const args=[plan.action==='abort'?'rotation-abort':plan.action==='rotate'?'rotation-watch':'rotation-status'];
- if(plan.action==='rotate')args.push('--operation-id',plan.operationID);
+ if(plan.action==='rotate')args.push('--operation-id',plan.ownerOperationID);
  if(plan.action==='abort')args.push('--intent-id',plan.rotation.intentID,'--source-revision',String(plan.rotation.sourceRevision),
   '--source-digest-sha256',plan.rotation.sourceDigestSHA256,'--confirm','ABORT-STAGING-AUTHORITY-ROTATION');
  spec.template.spec.containers[0].args=args;
- return {apiVersion:'batch/v1',kind:'Job',metadata:{name:`authority-rotation-${plan.operationID}`,namespace,
+ const annotations={'kodex.dev/rotation-intent':plan.intentID,'kodex.dev/rotation-plan-sha256':fingerprint(plan)};
+	if(plan.action==='rotate')annotations['kodex.dev/rotation-operation']=plan.ownerOperationID;
+ return {apiVersion:'batch/v1',kind:'Job',metadata:{name:`authority-rotation-${plan.intentID}`,namespace,
   labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'staging'},annotations:{
-   'kodex.dev/rotation-operation':plan.operationID,'kodex.dev/rotation-plan-sha256':fingerprint(plan)}},spec};
+   ...annotations}},spec};
 }
 
 export function createCanonicalRotationTemplate(source,image){
@@ -82,11 +97,15 @@ export function createCanonicalRotationTemplate(source,image){
 export function createRegistryCAS(current,plan){
  requireValue(current?.kind==='ConfigMap'&&current.metadata?.uid===plan.registry.uid&&
   current.metadata?.resourceVersion===plan.registry.resourceVersion&&
-  fingerprint(current.data)===plan.registry.currentDataSHA256,'ROTATION_REGISTRY_CAS_DRIFT');
+  fingerprint(current.data)===plan.registry.currentDataSHA256&&
+	 deriveRegistryRotationIdentity(current.data?.['key-delivery-targets.yaml']).sourceRevision===plan.registry.previousSourceRevision&&
+	 deriveRegistryRotationIdentity(current.data?.['key-delivery-targets.yaml']).sourceDigestSHA256===plan.registry.previousSourceDigestSHA256,
+	 'ROTATION_REGISTRY_CAS_DRIFT');
  const desired=structuredClone(current);delete desired.status;
  for(const key of ['managedFields','creationTimestamp','generation'])delete desired.metadata[key];
  desired.data=structuredClone(plan.registry.desiredData);
- desired.metadata.annotations={...desired.metadata.annotations,'kodex.dev/rotation-operation':plan.operationID,
+ desired.metadata.annotations={...desired.metadata.annotations,'kodex.dev/rotation-intent':plan.intentID,
+  'kodex.dev/rotation-operation':plan.ownerOperationID,
   'kodex.dev/rotation-registry-sha256':plan.registry.desiredDataSHA256};
  return desired;
 }
@@ -98,12 +117,14 @@ export function createPublisherRestart(current,plan){
  const desired=structuredClone(current);delete desired.status;
  for(const key of ['managedFields','creationTimestamp','generation'])delete desired.metadata[key];
  desired.spec.template.metadata.annotations={...desired.spec.template.metadata.annotations,
-  'kodex.dev/authority-rotation-operation':plan.operationID};
+  'kodex.dev/authority-rotation-intent':plan.intentID,
+  'kodex.dev/authority-rotation-operation':plan.ownerOperationID};
  return desired;
 }
 
 export function verifyRotationJobReadback(job,expected){
  requireValue(job.metadata?.namespace===namespace&&job.metadata.name===expected.metadata.name&&
+  job.metadata.annotations?.['kodex.dev/rotation-intent']===expected.metadata.annotations['kodex.dev/rotation-intent']&&
   job.metadata.annotations?.['kodex.dev/rotation-operation']===expected.metadata.annotations['kodex.dev/rotation-operation']&&
   job.metadata.annotations?.['kodex.dev/rotation-plan-sha256']===expected.metadata.annotations['kodex.dev/rotation-plan-sha256'],'ROTATION_JOB_IDENTITY_MISMATCH');
  const actual=structuredClone(job.spec),wanted=structuredClone(expected.spec);delete actual.selector;
@@ -155,7 +176,7 @@ async function main(args){
  let plan;
  if(command==='plan'){
   requireValue(['status','abort','rotate'].includes(options['--action']),'ROTATION_ACTION_REQUIRED');
-  plan={version:2,operationID:randomUUID(),context:options['--context'],namespaceUID:ns.metadata.uid,
+  plan={version:3,intentID:randomUUID(),context:options['--context'],namespaceUID:ns.metadata.uid,
    templateSpecSHA256:fingerprint(template.spec),cliImage:template.spec.template.spec.containers[0].image,
    cliCommand:template.spec.template.spec.containers[0].command,source:options['--source'],revision:options['--revision'],action:options['--action']};
   if(plan.action==='rotate'){
@@ -163,8 +184,14 @@ async function main(args){
    requireValue(options['--registry-file']?.startsWith(`${plan.source}/`)&&/key-delivery-targets\.yaml$/.test(options['--registry-file']),'EXACT_ROTATION_REGISTRY_FILE_REQUIRED');
    const desiredData=structuredClone(liveRegistry.data);desiredData['key-delivery-targets.yaml']=readFileSync(options['--registry-file'],'utf8');
    requireValue(fingerprint(liveRegistry.data)!==fingerprint(desiredData),'ROTATION_REGISTRY_MUST_ADVANCE');
+	   const previousIdentity=deriveRegistryRotationIdentity(liveRegistry.data?.['key-delivery-targets.yaml']);
+	   const identity=deriveRegistryRotationIdentity(desiredData['key-delivery-targets.yaml']);
+	   requireValue(identity.sourceRevision===previousIdentity.sourceRevision+1,'ROTATION_REGISTRY_REVISION_MUST_ADVANCE');
+	   plan.ownerOperationID=identity.ownerOperationID;
 	   plan.registry={uid:liveRegistry.metadata.uid,resourceVersion:liveRegistry.metadata.resourceVersion,
-	    currentDataSHA256:fingerprint(liveRegistry.data),desiredData,desiredDataSHA256:fingerprint(desiredData),sourceFile:options['--registry-file'].slice(plan.source.length+1)};
+	    currentDataSHA256:fingerprint(liveRegistry.data),desiredData,desiredDataSHA256:fingerprint(desiredData),sourceFile:options['--registry-file'].slice(plan.source.length+1),
+	    previousSourceRevision:previousIdentity.sourceRevision,previousSourceDigestSHA256:previousIdentity.sourceDigestSHA256,
+	    sourceRevision:identity.sourceRevision,sourceDigestSHA256:identity.sourceDigestSHA256};
    plan.publisher={uid:livePublisher.metadata.uid,resourceVersion:livePublisher.metadata.resourceVersion,
     specSHA256:fingerprint(livePublisher.spec),image:livePublisher.spec.template.spec.containers.find(container=>container.name==='publisher').image,
     command:['/usr/local/bin/internal-rpc-authority-publisher']};
@@ -178,6 +205,11 @@ async function main(args){
 	if(plan.action==='rotate')requireValue(uuid.test(plan.registry?.uid)&&String(plan.registry.resourceVersion).length>0&&sha.test(plan.registry.currentDataSHA256)&&
 	 sha.test(plan.registry.desiredDataSHA256)&&fingerprint(plan.registry.desiredData)===plan.registry.desiredDataSHA256&&
 	 typeof plan.registry.desiredData?.['key-delivery-targets.yaml']==='string'&&
+	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).sourceRevision===plan.registry.sourceRevision&&
+	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).sourceDigestSHA256===plan.registry.sourceDigestSHA256&&
+	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).ownerOperationID===plan.ownerOperationID&&
+	 revision.test(String(plan.registry.previousSourceRevision))&&sha.test(plan.registry.previousSourceDigestSHA256)&&
+	 plan.registry.sourceRevision===plan.registry.previousSourceRevision+1&&
 	 /^(deploy\/k8s\/base\/internal-rpc-authority-publisher|deploy\/k8s\/profiles\/web-with-mattermost)\/key-delivery-targets\.yaml$/.test(plan.registry.sourceFile)&&
 	 uuid.test(plan.publisher?.uid)&&String(plan.publisher.resourceVersion).length>0&&sha.test(plan.publisher.specSHA256)&&sha.test(plan.publisher.desiredSpecSHA256)&&
 	 plan.publisher.image===plan.cliImage&&fingerprint(plan.publisher.command)===fingerprint(['/usr/local/bin/internal-rpc-authority-publisher']),'ROTATION_PLAN_DRIFT');
@@ -188,7 +220,7 @@ async function main(args){
 	 verifyRotationJobReadback(dryRun,job);
 	 writeFileSync(options['--output'],JSON.stringify(plan,null,2)+'\n',{flag:'wx',mode:0o600});process.stdout.write(`Authority rotation plan: ${fingerprint(plan)}\n`);return;
 	}
- let fd;const evidence=record=>{if(fd===undefined)return;writeSync(fd,JSON.stringify({at:new Date().toISOString(),operationID:plan.operationID,...record})+'\n');fsyncSync(fd);};
+ let fd;const evidence=record=>{if(fd===undefined)return;writeSync(fd,JSON.stringify({at:new Date().toISOString(),intentID:plan.intentID,ownerOperationID:plan.ownerOperationID,...record})+'\n');fsyncSync(fd);};
 	 if(command==='apply'){
   requireValue(options['--confirm']==='APPLY-STAGING-AUTHORITY-ROTATION','STAGING_CONFIRMATION_REQUIRED');
   requireValue(!kube('get','job',job.metadata.name,'-n',namespace,'--ignore-not-found','-o','json'),'EXISTING_OPERATION_REQUIRES_RESUME');
@@ -211,16 +243,19 @@ async function main(args){
     liveRegistry=get('configmap','internal-rpc-authority-publisher-target-registry');
    }
    requireValue(liveRegistry.metadata.uid===plan.registry.uid&&fingerprint(liveRegistry.data)===plan.registry.desiredDataSHA256&&
-    liveRegistry.metadata.annotations?.['kodex.dev/rotation-operation']===plan.operationID,'ROTATION_REGISTRY_READBACK_REJECTED');
+    liveRegistry.metadata.annotations?.['kodex.dev/rotation-intent']===plan.intentID&&
+    liveRegistry.metadata.annotations?.['kodex.dev/rotation-operation']===plan.ownerOperationID,'ROTATION_REGISTRY_READBACK_REJECTED');
    evidence({status:'APPLIED',operation:'REGISTRY_CAS',resourceVersion:liveRegistry.metadata.resourceVersion});
    let livePublisher=get('deployment','internal-rpc-authority-publisher');
-   if(livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']!==plan.operationID){
+   if(livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-intent']!==plan.intentID||
+    livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']!==plan.ownerOperationID){
     const desired=createPublisherRestart(livePublisher,plan);evidence({status:'INTENT',operation:'PUBLISHER_RESTART'});
     try{replace(desired);}
     catch{evidence({status:'UNKNOWN',operation:'PUBLISHER_RESTART'});}
     livePublisher=get('deployment','internal-rpc-authority-publisher');
    }
-   requireValue(livePublisher.metadata.uid===plan.publisher.uid&&livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']===plan.operationID&&
+   requireValue(livePublisher.metadata.uid===plan.publisher.uid&&livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-intent']===plan.intentID&&
+    livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']===plan.ownerOperationID&&
     fingerprint(livePublisher.spec)===plan.publisher.desiredSpecSHA256&&
     livePublisher.spec.template.spec.containers.some(container=>container.name==='publisher'&&container.image===plan.publisher.image&&fingerprint(container.command)===fingerprint(plan.publisher.command)),'ROTATION_PUBLISHER_READBACK_REJECTED');
    evidence({status:'APPLIED',operation:'PUBLISHER_RESTART',resourceVersion:livePublisher.metadata.resourceVersion});
@@ -237,7 +272,7 @@ async function main(args){
   const created=get('job',job.metadata.name);verifyRotationJobReadback(created,job);
   const result=classifyRotationStatus(created,created.status?.succeeded===1?kube('logs',`job/${job.metadata.name}`,'-n',namespace,'-c','migrate'):'');
   if(fd!==undefined)evidence({status:result.phase,jobUID:created.metadata.uid,rotationStatus:result.state?.status});
-  process.stdout.write(JSON.stringify({operationID:plan.operationID,job:job.metadata.name,jobUID:created.metadata.uid,...result})+'\n');
+  process.stdout.write(JSON.stringify({intentID:plan.intentID,ownerOperationID:plan.ownerOperationID,job:job.metadata.name,jobUID:created.metadata.uid,...result})+'\n');
   if(result.phase==='FAILED')process.exitCode=1;
  }finally{if(fd!==undefined)closeSync(fd);}
 }
