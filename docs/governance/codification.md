@@ -162,6 +162,7 @@ updated: 2026-07-28
 | `RUN-MC-023`       | `docs/runbooks/identity-and-management-surfaces.md`         |
 | `RUN-MC-024`       | `docs/runbooks/backup-controller.md`                        |
 | `OPS-DOC-1313` | `docs/operations/authority-freshness-1313.md` |
+| `OPS-DOC-1381` | `docs/operations/image-admission-proof-hold-1381.md` |
 | `OPS-EMAIL-1371` | `docs/operations/email-agent-1371.md` |
 | `OPS-EMAIL-1378` | `docs/operations/email-combined-1378.md` |
 

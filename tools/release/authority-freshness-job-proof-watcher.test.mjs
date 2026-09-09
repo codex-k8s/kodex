@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {chmodSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -7,7 +8,7 @@ import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
 import {policyDigest} from './runner-policy-model.mjs';
-import {boundarySnapshot,classifyJob,jobSemanticIdentity,observeFutureJob,validatePlan} from './authority-freshness-job-proof-watcher.mjs';
+import {boundarySnapshot,classifyJob,jobSemanticIdentity,observeFutureJob,reservationSnapshot,validatePlan} from './authority-freshness-job-proof-watcher.mjs';
 
 const namespaceUID='11111111-1111-4111-8111-111111111111',jobUID='22222222-2222-4222-8222-222222222222';
 const name=`mc-admit-${'a'.repeat(32)}-admit`,image=`registry.invalid/authority@sha256:${'b'.repeat(64)}`;
@@ -51,6 +52,26 @@ test('lost terminal readback is UNKNOWN and resume reuses the same captured proo
 test('completed Job without running proof is a definite missed-window FAIL',async()=>{
  const directory=mkdtempSync(join(tmpdir(),'authority-job-missed-')),p=plan(),clock={value:0};
  try {const result=await observeFutureJob(p,paths(directory,clock),'watch',{maybeJob:()=>job({succeeded:1}),capture:()=>proof(),boundary:()=>p.boundary});assert.deepEqual(result,{status:'FAIL',code:'EXECUTABLE_WINDOW_MISSED'});}
+ finally{rmSync(directory,{recursive:true,force:true});}
+});
+
+test('held reservation pins UID and permits only the exact release transition',()=>{
+ const identity=jobSemanticIdentity(`mc-admit-${'a'.repeat(32)}-claim`),held=job();
+ held.metadata.name=identity.name;held.metadata.resourceVersion='8';held.metadata.labels['kodex.dev/image-admission-phase']='claim';held.metadata.labels['kodex.dev/executable-proof-hold']='true';
+ held.metadata.annotations['kodex.dev/admission-run-id']=`v20260909120000-${'c'.repeat(40)}`;held.metadata.annotations['kodex.dev/executable-proof-attempt']='1';
+ held.metadata.annotations['kodex.dev/executable-proof-reservation']=createHash('sha256').update(held.metadata.annotations['kodex.dev/admission-run-id']+'\0'+identity.operationDigest+'\0claim\0'+'1').digest('hex');held.spec.suspend=true;
+ const reservation=reservationSnapshot(held,identity);assert.equal(classifyJob(held,identity,null,reservation).state,'HELD');
+ const released=structuredClone(held);released.spec.suspend=false;assert.equal(classifyJob(released,identity,null,reservation).state,'RUNNING');
+ released.metadata.uid='wrong';assert.throws(()=>classifyJob(released,identity,null,reservation),/RESERVED_JOB_CHANGED/);
+});
+
+test('watcher starts before release and captures the same reserved Job',async()=>{
+ const directory=mkdtempSync(join(tmpdir(),'authority-held-watch-')),identity=jobSemanticIdentity(`mc-admit-${'a'.repeat(32)}-claim`),held=job(),clock={value:0};
+ held.metadata.name=identity.name;held.metadata.resourceVersion='8';held.metadata.labels['kodex.dev/image-admission-phase']='claim';held.metadata.labels['kodex.dev/executable-proof-hold']='true';
+ held.metadata.annotations['kodex.dev/admission-run-id']=`v20260909120000-${'c'.repeat(40)}`;held.metadata.annotations['kodex.dev/executable-proof-attempt']='1';held.metadata.annotations['kodex.dev/executable-proof-reservation']=createHash('sha256').update(held.metadata.annotations['kodex.dev/admission-run-id']+'\0'+identity.operationDigest+'\0claim\0'+'1').digest('hex');held.spec.suspend=true;
+ const reservation=reservationSnapshot(held,identity),p={...plan(),version:2,boundary:{...boundary(),job:identity},reservation};let reads=0;
+ const released=structuredClone(held);released.spec.suspend=false;const terminal=structuredClone(released);terminal.status={succeeded:1};const captured=proof();captured.job=identity.name;captured.jobSpecSHA256=fingerprint(released.spec);
+ try {const result=await observeFutureJob(p,paths(directory,clock),'watch',{maybeJob:()=>reads++===0?held:reads===2?released:terminal,capture:()=>captured,boundary:()=>p.boundary,validateCaptured:()=>{}});assert.equal(result.status,'PASS');const rows=readFileSync(join(directory,'evidence.jsonl'),'utf8').trim().split('\n').map(JSON.parse);assert.deepEqual(rows.map(row=>row.status),['INTENT','CAPTURED','PASS']);}
  finally{rmSync(directory,{recursive:true,force:true});}
 });
 

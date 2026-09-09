@@ -13,6 +13,8 @@ type admissionControllerConfig struct {
 	Namespace           string        `env:"POD_NAMESPACE"`
 	PolicyConfigMap     string        `env:"IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP"`
 	PauseNewRuns        bool          `env:"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS"`
+	HoldProofJobs       bool          `env:"IMAGE_ADMISSION_CONTROLLER_HOLD_PROOF_JOBS"`
+	ProofHoldUntil      time.Time     `env:"IMAGE_ADMISSION_CONTROLLER_PROOF_HOLD_UNTIL"`
 	RendererPath        string        `env:"IMAGE_ADMISSION_CONTROLLER_RENDERER_PATH"`
 	TechnicalListen     string        `env:"IMAGE_ADMISSION_CONTROLLER_TECHNICAL_LISTEN"`
 	ReconcileInterval   time.Duration `env:"IMAGE_ADMISSION_CONTROLLER_RECONCILE_INTERVAL"`
@@ -44,7 +46,7 @@ func loadAdmissionControllerConfig() (admissionControllerConfig, error) {
 func (config admissionControllerConfig) controllerConfig() admissioncontroller.Config {
 	return admissioncontroller.Config{
 		Environment: config.Environment, Namespace: config.Namespace, PolicyConfigMap: config.PolicyConfigMap,
-		PauseNewRuns: config.PauseNewRuns,
+		PauseNewRuns: config.PauseNewRuns, HoldProofJobs: config.HoldProofJobs, ProofHoldUntil: config.ProofHoldUntil,
 		RendererPath: config.RendererPath, TechnicalListen: config.TechnicalListen,
 		ReconcileInterval: config.ReconcileInterval, RetryInterval: config.RetryInterval,
 		InfrastructureCheck: config.InfrastructureCheck, RequestTimeout: config.RequestTimeout,

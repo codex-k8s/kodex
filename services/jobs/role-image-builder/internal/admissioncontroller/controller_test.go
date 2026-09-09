@@ -67,6 +67,96 @@ func TestControllerMaterializesSequentialAdmissionAndPromotion(t *testing.T) {
 	}
 }
 
+func TestControllerHoldsExactProofJobsAcrossRestart(t *testing.T) {
+	cfg := testConfig()
+	cfg.HoldProofJobs = true
+	client := fake.NewClientset(testPolicy())
+	now := time.Date(2026, 9, 9, 12, 30, 0, 0, time.UTC)
+	cfg.ProofHoldUntil = now.Add(20 * time.Minute)
+	controller, err := New(client, testRenderer{}, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.now = func() time.Time { return now }
+	if err := controller.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, phase := range []string{"claim", "promote"} {
+		jobs, err := client.BatchV1().Jobs(cfg.Namespace).List(context.Background(), metav1.ListOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found *batchv1.Job
+		for index := range jobs.Items {
+			if jobs.Items[index].Labels[phaseLabel] == phase {
+				found = &jobs.Items[index]
+			}
+		}
+		if found == nil || found.Spec.Suspend == nil || !*found.Spec.Suspend ||
+			found.Labels[proofHoldLabel] != "true" || found.Annotations[proofAttempt] != "1" ||
+			found.Annotations[proofReservation] != proofReservationDigest(found.Annotations[runIDAnnotation], found.Labels[idLabel], phase, "1") {
+			t.Fatalf("%s proof reservation is incomplete: %#v", phase, found)
+		}
+	}
+	restarted, err := New(client, testRenderer{}, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted.now = func() time.Time { return now.Add(time.Second) }
+	if err := restarted.Reconcile(context.Background()); err != nil {
+		t.Fatalf("restart rejected durable reservations: %v", err)
+	}
+	jobs, _ := client.BatchV1().Jobs(cfg.Namespace).List(context.Background(), metav1.ListOptions{})
+	if len(jobs.Items) != 2 {
+		t.Fatalf("restart duplicated held jobs: %d", len(jobs.Items))
+	}
+}
+
+func TestControllerRejectsCorruptedProofReservation(t *testing.T) {
+	cfg := testConfig()
+	cfg.HoldProofJobs = true
+	now := time.Date(2026, 9, 9, 12, 30, 0, 0, time.UTC)
+	cfg.ProofHoldUntil = now.Add(20 * time.Minute)
+	client := fake.NewClientset(testPolicy())
+	controller, err := New(client, testRenderer{}, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.now = func() time.Time { return now }
+	if err := controller.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	jobs, _ := client.BatchV1().Jobs(cfg.Namespace).List(context.Background(), metav1.ListOptions{})
+	job := jobs.Items[0].DeepCopy()
+	job.Annotations[proofReservation] = strings.Repeat("0", 64)
+	if _, err := client.BatchV1().Jobs(cfg.Namespace).Update(context.Background(), job, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.Reconcile(context.Background()); err == nil || !strings.Contains(err.Error(), "managed image admission job is invalid") {
+		t.Fatalf("expected corrupted reservation rejection, got %v", err)
+	}
+}
+
+func TestControllerFailsClosedAfterProofHoldDeadline(t *testing.T) {
+	cfg := testConfig()
+	now := time.Date(2026, 9, 9, 12, 30, 0, 0, time.UTC)
+	cfg.HoldProofJobs = true
+	cfg.ProofHoldUntil = now.Add(time.Minute)
+	client := fake.NewClientset(testPolicy())
+	controller, err := New(client, testRenderer{}, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.now = func() time.Time { return now.Add(2 * time.Minute) }
+	if err := controller.Reconcile(context.Background()); err == nil || !strings.Contains(err.Error(), "proof hold deadline") {
+		t.Fatalf("expected expired hold rejection, got %v", err)
+	}
+	jobs, _ := client.BatchV1().Jobs(cfg.Namespace).List(context.Background(), metav1.ListOptions{})
+	if len(jobs.Items) != 0 {
+		t.Fatalf("expired hold created executable jobs: %d", len(jobs.Items))
+	}
+}
+
 func TestControllerDropsFailedWorkspaceAndBacksOff(t *testing.T) {
 	client := fake.NewClientset(testPolicy())
 	controller, err := New(client, testRenderer{}, testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)))

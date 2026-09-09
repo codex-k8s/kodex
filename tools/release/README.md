@@ -308,10 +308,16 @@ Application-only scoped release не изменяет эти ресурсы. `ru
 Точные аргументы и граница single-host профиля приведены в OPS-DOC-1313;
 это не registry push и не global `up`.
 
-Короткоживущие admission/promotion Jobs наблюдаются до их создания через
-`authority-freshness-job-proof-watcher.mjs`. `plan` закрепляет exact Job name,
-policy и capability; `watch` пишет fsync intent до первого наблюдения и ждёт
-running executable плюс terminal success; `resume` продолжает тот же
-`UNKNOWN` journal без нового Job или proof. Полные команды, исходы и guards
-приведены в OPS-DOC-1313. Одиночный `authority-freshness-job-proof.mjs`
+Короткоживущие admission/promotion Jobs наблюдаются через
+`authority-freshness-job-proof-watcher.mjs`. Для RoleImage перехода контроллер
+сначала создаёт server-owned reservation с `spec.suspend=true` по
+[OPS-DOC-1381](../../docs/operations/image-admission-proof-hold-1381.md).
+Watcher plan версии 2 закрепляет exact Job name, UID, held/released spec,
+policy и capability; `watch` пишет fsync intent до снятия hold и ждёт running
+executable плюс terminal success. `image-admission-proof-hold.mjs` включает
+bounded режим, снимает exact hold только при совпавшем watcher `INTENT` и
+поддерживает readback-only `resume` после `UNKNOWN`. Старый plan до создания
+Job остаётся совместимым, но не используется для нового RoleImage proof.
+Полные команды, исходы и guards приведены в OPS-DOC-1313 и OPS-DOC-1381.
+Одиночный `authority-freshness-job-proof.mjs`
 поддерживается только когда exact Job уже находится в состоянии running.

@@ -1593,6 +1593,10 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   any($resources[]; .kind == "ValidatingAdmissionPolicyBinding" and
     .metadata.name == "kodex-image-admission-controller-jobs") and
   any($resources[]; .kind == "ValidatingAdmissionPolicy" and
+    .metadata.name == "kodex-image-admission-proof-release") and
+  any($resources[]; .kind == "ValidatingAdmissionPolicyBinding" and
+    .metadata.name == "kodex-image-admission-proof-release") and
+  any($resources[]; .kind == "ValidatingAdmissionPolicy" and
     .metadata.name == "kodex-image-admission-controller-workspaces") and
   any($resources[]; .kind == "ValidatingAdmissionPolicyBinding" and
     .metadata.name == "kodex-image-admission-controller-workspaces") and

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {execFileSync} from 'node:child_process';
 import {constants,closeSync,fsyncSync,lstatSync,openSync,readFileSync,writeSync} from 'node:fs';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
@@ -39,6 +39,20 @@ export function jobSemanticIdentity(name) {
  const match=jobPattern.exec(name);requireValue(match,'EXACT_STAGING_JOB_REQUIRED');
  return {name,operationDigest:match[1],phase:match[2],workload:match[2]==='promote'?'image-promotion':'image-admission'};
 }
+export function reservationSnapshot(job,identity) {
+ requireValue(job?.metadata?.name===identity.name&&job.metadata.namespace===namespace&&
+  typeof job.metadata.uid==='string'&&job.metadata.uid.length>0&&typeof job.metadata.resourceVersion==='string'&&job.metadata.resourceVersion.length>0&&
+  job.metadata.labels?.['kodex.dev/image-admission-orchestrated']==='true'&&job.metadata.labels?.['kodex.dev/image-admission-phase']===identity.phase&&
+  job.metadata.labels?.['kodex.dev/executable-proof-hold']==='true'&&job.metadata.annotations?.['kodex.dev/executable-proof-attempt']==='1'&&
+  /^[a-f0-9]{64}$/.test(job.metadata.annotations?.['kodex.dev/executable-proof-reservation']??'')&&job.spec?.suspend===true&&!job.metadata.deletionTimestamp,
+ 'HELD_OWNER_JOB_REQUIRED');
+ const runID=job.metadata.annotations?.['kodex.dev/admission-run-id'];
+ const expected=createHash('sha256').update(runID+'\0'+identity.operationDigest+'\0'+identity.phase+'\0'+'1').digest('hex');
+ requireValue(job.metadata.annotations['kodex.dev/executable-proof-reservation']===expected,'RESERVATION_DIGEST_REJECTED');
+ const released=structuredClone(job.spec);released.suspend=false;
+ return {jobUID:job.metadata.uid,resourceVersion:job.metadata.resourceVersion,attempt:1,
+  reservationDigest:expected,heldSpecSHA256:fingerprint(job.spec),releasedSpecSHA256:fingerprint(released)};
+}
 export function boundarySnapshot({namespaceResource,controller,policy,parameters,binding,capability,capabilitySHA256=fingerprint(capability),job}) {
  validateFuturePolicy(policy,parameters,binding);
  requireValue(namespaceResource.metadata.name===namespace&&namespaceResource.metadata.labels?.['kodex.dev/environment']==='staging'&&
@@ -54,19 +68,28 @@ export function boundarySnapshot({namespaceResource,controller,policy,parameters
   capability:{version:capability.version,protocol:capability.protocol,revision:capability.revision,imageBinaries:{issuer:capability.imageBinaries.issuer}},capabilitySHA256,job:jobSemanticIdentity(job)};
 }
 export function validatePlan(plan,current,context,k3sSudo) {
- requireValue(plan?.version===1&&uuid.test(plan.intent)&&plan.context===context&&plan.k3sSudo===k3sSudo&&
+ requireValue((plan?.version===1||plan?.version===2)&&uuid.test(plan.intent)&&plan.context===context&&plan.k3sSudo===k3sSudo&&
   Number.isInteger(plan.timeoutSeconds)&&plan.timeoutSeconds>=30&&plan.timeoutSeconds<=900&&
   Number.isInteger(plan.pollMilliseconds)&&plan.pollMilliseconds>=50&&plan.pollMilliseconds<=1000&&
   fingerprint(plan.boundary)===fingerprint(current),'WATCH_PLAN_DRIFT');
+ if(plan.version===2)requireValue(typeof plan.reservation?.jobUID==='string'&&plan.reservation.jobUID.length>0&&
+  /^[0-9]+$/.test(plan.reservation.resourceVersion??'')&&plan.reservation.attempt===1&&
+  [plan.reservation.reservationDigest,plan.reservation.heldSpecSHA256,plan.reservation.releasedSpecSHA256].every(value=>/^[a-f0-9]{64}$/.test(value??''))&&
+  plan.reservation.heldSpecSHA256!==plan.reservation.releasedSpecSHA256,'WATCH_RESERVATION_INVALID');
 }
-export function classifyJob(job,identity,captured) {
- if(!job)return {state:'WAIT'};
+export function classifyJob(job,identity,captured,reservation) {
+ if(!job){requireValue(!reservation,'RESERVED_JOB_MISSING');return {state:'WAIT'};}
  requireValue(typeof job.metadata?.uid==='string'&&job.metadata.uid.length>0&&job.metadata.namespace===namespace&&job.metadata.name===identity.name&&!job.metadata.deletionTimestamp&&
   job.metadata.labels?.['kodex.dev/image-admission-orchestrated']==='true'&&job.metadata.labels?.['kodex.dev/image-admission-phase']===identity.phase,
  'OWNER_JOB_IDENTITY_REJECTED');
- if(captured)requireValue(job.metadata.uid===captured.jobUID&&fingerprint(job.spec)===captured.jobSpecSHA256,'CAPTURED_JOB_CHANGED');
+ const specSHA256=fingerprint(job.spec);
+ if(reservation)requireValue(job.metadata.uid===reservation.jobUID&&
+  [reservation.heldSpecSHA256,reservation.releasedSpecSHA256].includes(specSHA256)&&
+  job.metadata.annotations?.['kodex.dev/executable-proof-reservation']===reservation.reservationDigest,'RESERVED_JOB_CHANGED');
+ if(captured)requireValue(job.metadata.uid===captured.jobUID&&specSHA256===captured.jobSpecSHA256,'CAPTURED_JOB_CHANGED');
  if(job.status?.failed>0||job.status?.conditions?.some(item=>item.type==='Failed'&&item.status==='True'))return {state:'FAIL',code:'OWNER_JOB_FAILED'};
  if(job.status?.succeeded===1||job.status?.conditions?.some(item=>item.type==='Complete'&&item.status==='True'))return {state:'SUCCEEDED'};
+ if(reservation&&specSHA256===reservation.heldSpecSHA256)return {state:'HELD'};
  return {state:'RUNNING'};
 }
 
@@ -104,10 +127,10 @@ export async function observeFutureJob(plan,paths,mode,rt) {
   try {job=rt.maybeJob(plan.boundary.job.name);} catch {hadReadError=true;await paths.wait(plan.pollMilliseconds);continue;}
   if(job) {
    observed=true;
-   if(!observedIdentity) {observedIdentity={jobUID:job.metadata.uid,jobSpecSHA256:fingerprint(job.spec)};appendJournal(paths.evidence,{at:new Date().toISOString(),intent:plan.intent,status:'JOB_OBSERVED',job:observedIdentity});}
+   if(!observedIdentity&&!plan.reservation) {observedIdentity={jobUID:job.metadata.uid,jobSpecSHA256:fingerprint(job.spec)};appendJournal(paths.evidence,{at:new Date().toISOString(),intent:plan.intent,status:'JOB_OBSERVED',job:observedIdentity});}
   }
   let state;
-  try {state=classifyJob(job,plan.boundary.job,captured??observedIdentity);} catch(error){return finish('FAIL',safeCode(error));}
+  try {state=classifyJob(job,plan.boundary.job,plan.reservation?captured:captured??observedIdentity,plan.reservation);} catch(error){return finish('FAIL',safeCode(error));}
   if(state.state==='FAIL')return finish('FAIL',state.code);
   if(state.state==='SUCCEEDED') {
    if(!captured)return finish('FAIL','EXECUTABLE_WINDOW_MISSED');
@@ -145,7 +168,8 @@ async function main(args) {
  if(command==='plan') {
   requireValue(options['--job']&&options['--capability']&&options['--output']&&!options['--plan']&&!options['--proof']&&!options['--evidence'],'PLAN_INPUT_REQUIRED');
   const capability=privateRead(options['--capability']),timeoutSeconds=Number(options['--timeout-seconds']??720),pollMilliseconds=Number(options['--poll-milliseconds']??250);
-  const plan={version:1,intent:randomUUID(),context,k3sSudo,timeoutSeconds,pollMilliseconds,boundary:rt.boundary(capability,options['--job'])};
+  const identity=jobSemanticIdentity(options['--job']),job=rt.maybeJob(identity.name),reservation=job?reservationSnapshot(job,identity):null;
+  const plan={version:reservation?2:1,intent:randomUUID(),context,k3sSudo,timeoutSeconds,pollMilliseconds,boundary:rt.boundary(capability,options['--job']),...(reservation?{reservation}:{})};
   validatePlan(plan,plan.boundary,context,k3sSudo);privateWrite(options['--output'],plan);process.stdout.write(`Future job watcher plan: ${fingerprint(plan)}\n`);return;
  }
  const plan=privateRead(options['--plan']);validatePlan(plan,plan.boundary,context,k3sSudo);
