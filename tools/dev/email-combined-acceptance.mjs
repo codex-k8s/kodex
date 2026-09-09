@@ -14,6 +14,7 @@ export function loadCombinedProfile(profile,origin,readPrivate,manifest) {
  const fixture=existingFixture(c.fixtureState,c.fixtureSHA256,origin);
  check(fixture.projectRef===profile.projectRef&&fixture.agentRef===profile.agentRef,'COMBINED_FIXTURE_SCOPE_CHANGED');
  const header=JSON.parse(readPrivate(c.fixtureState).toString('utf8').split('\n')[0]);
+ if(header.kind==='ROLE_IMAGE_FORWARD_UPGRADE')check(header.runnerProvenanceSHA256===c.runnerProvenanceSHA256,'UPGRADE_PROVENANCE_CHANGED');
  const bytes=readPrivate(c.runnerProvenance);check(sha(bytes)===c.runnerProvenanceSHA256,'RUNNER_PROVENANCE_CHANGED');const p=JSON.parse(bytes);
  check(p.version===1&&p.kind==='RUNNER_BINARY_PROVENANCE'&&/^[a-f0-9]{40}$/.test(p.sourceRevision??'')&&p.binaryPath==='/usr/local/bin/kodex-agent-runner'&&digest(p.binarySHA256)&&/^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/.test(p.baseImage??'')&&p.baseImage.endsWith(`@${header.runnerDigest}`)&&/^sha256:[a-f0-9]{64}$/.test(header.runnerDigest??''),'RUNNER_PROVENANCE_INVALID');
  check(manifest?.clusterUID&&manifest.namespaceUID,'COMBINED_CLUSTER_REQUIRED');

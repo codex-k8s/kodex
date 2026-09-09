@@ -19,10 +19,10 @@ const version = (value) => { requireValue(Number.isSafeInteger(value) && value >
 const digest = (value) => { requireValue(typeof value === "string" && /^[a-f0-9]{64}$/.test(value), "DIGEST_INVALID"); return value; };
 const encode = encodeURIComponent;
 const projectBody = (prefix) => ({ name: `${prefix} RoleImage`, purpose: "Приёмка новой базы образа без provider запуска", language: "ru" });
-const bindingPin = (item) => ({ ref: ref(item?.ref), version: version(item.version), agentRef: ref(item.agentRef), environmentRef: ref(item.environmentRef), versionRef: ref(item.versionRef), digest: digest(item.digest) });
+export const bindingPin = (item) => ({ ref: ref(item?.ref), version: version(item.version), agentRef: ref(item.agentRef), environmentRef: ref(item.environmentRef), versionRef: ref(item.versionRef), digest: digest(item.digest) });
 const safeState = (value) => ["DRAFT", "VALID", "INVALID", "PUBLISHED", "SUPERSEDED", "DISCARDED", "QUEUED", "MATERIALIZATION", "CONTEXT_VALIDATION", "BASE_PULL", "SOLVING", "INSTALLATION", "TRUSTED_RUNTIME_FINALIZATION", "STAGING_PUSH", "PROVENANCE", "COMPLETED", "FAILED", "CANCELLED", "EXPIRED", "DEAD_LETTER"].includes(value) ? value : "UNKNOWN";
 
-export function privateJournal(path, header, { readOnly = false } = {}) {
+export function privateJournal(path, header, { readOnly = false, createOnly = false } = {}) {
   path = resolve(path);
   requireValue(realpathSync(dirname(path)) === dirname(path) && (lstatSync(dirname(path)).mode & 0o077) === 0, "PRIVATE_DIRECTORY_REQUIRED");
   let lock;
@@ -33,6 +33,7 @@ export function privateJournal(path, header, { readOnly = false } = {}) {
   let fd;
   try {
     const fresh = !existsSync(path);
+    requireValue(!createOnly || fresh, "JOURNAL_ALREADY_EXISTS");
     requireValue(!fresh || !readOnly, "JOURNAL_MISSING");
     fd = openSync(path, (readOnly ? constants.O_RDONLY : constants.O_RDWR | constants.O_APPEND) | constants.O_NOFOLLOW | (fresh ? constants.O_CREAT | constants.O_EXCL : 0), 0o600);
     const info = fstatSync(fd);
@@ -106,7 +107,7 @@ export function mutationDriver(journal, request) {
   };
 }
 
-function managed(value, expectedState) {
+export function managed(value, expectedState) {
   requireValue(value?.configuration?.kind === "ROLE_IMAGE" && value.configuration.managedBy === "UI" && value.revision?.state === expectedState, "MANAGED_STATE_INVALID");
   return { configurationRef: ref(value.configuration.ref), version: version(value.configuration.version), revisionRef: ref(value.revision.ref), revision: version(value.revision.revision), contentSHA256: digest(value.revision.digest), ...(value.revision.parentRevisionRef ? { parentRevisionRef: ref(value.revision.parentRevisionRef) } : {}), ...(value.configuration.currentRevision ? { publishedRevisionRef: ref(value.configuration.currentRevision.ref) } : {}) };
 }

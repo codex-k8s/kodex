@@ -20,13 +20,27 @@ const enc = encodeURIComponent;
 const saved = (journal, step) => journal.events.findLast((event) => event.step === step && ['ACK', 'CHECKPOINT'].includes(event.type))?.result;
 const checkpoint = (journal, step, result) => { journal.append({ type: 'CHECKPOINT', step, result }); return result; };
 
-export function existingFixture(path, expectedDigest, origin) {
+export function existingFixture(path, expectedDigest, origin, depth = 0) {
+  check(depth < 8, 'FIXTURE_CHAIN_TOO_DEEP');
   const journal = privateJournal(path, { version: 1, origin }, { readOnly: true });
   try {
     check(journal.bytesSHA256 === digest(expectedDigest), 'FIXTURE_JOURNAL_CHANGED');
     check(!journal.events.some((event) => event.type === 'INTENT' && !journal.events.some((ack) => ack.type === 'ACK' && ack.key === event.key)), 'FIXTURE_INTENT_UNRESOLVED');
-    const completed = journal.events.findLast((event) => event.type === 'CHECKPOINT' && /^(prepare|advance|restore)-complete$/.test(event.step ?? ''))?.result;
+    const completed = journal.events.findLast((event) => event.type === 'CHECKPOINT' && /^(prepare|advance|restore|upgrade)-complete$/.test(event.step ?? ''))?.result;
     check(completed?.status === 'PASS', 'FIXTURE_NOT_COMPLETE');
+    const header = journal.events[0];
+    if (header.kind === 'ROLE_IMAGE_FORWARD_UPGRADE') {
+      check(journal.events.at(-1)?.step === 'upgrade-complete' && completed === journal.events.at(-1).result, 'UPGRADE_NOT_TERMINAL');
+      const previous = existingFixture(header.previousState, header.previousSHA256, origin, depth + 1);
+      check(sha(previous) === sha(header.pins?.fixture), 'UPGRADE_PREDECESSOR_CHANGED');
+      for (const key of ['projectRef', 'agentRef', 'environmentRef', 'recipeRef']) check(completed[key] === previous[key], 'UPGRADE_SCOPE_CHANGED');
+      check(completed.revisionRef !== previous.revisionRef && completed.artifactRef !== previous.artifactRef && completed.buildRef !== previous.buildRef && completed.manifestDigest !== previous.manifestDigest, 'UPGRADE_NOT_FORWARD');
+      check(completed.runnerDigest === header.runnerDigest && completed.runnerProvenanceSHA256 === header.runnerProvenanceSHA256 && /^sha256:[a-f0-9]{64}$/.test(header.runnerDigest ?? '') && digest(header.runnerProvenanceSHA256), 'UPGRADE_BASE_CHANGED');
+      for (const step of ['upgrade-draft', 'upgrade-validate', 'upgrade-publish', 'upgrade-promote', 'upgrade-impact', 'upgrade-rebind']) check(journal.events.some(e => e.type === 'ACK' && e.step === step), 'UPGRADE_RECEIPT_MISSING');
+      const rebind = saved(journal, 'upgrade-rebind');
+      check(completed.binding?.environmentRef === previous.environmentRef && completed.binding.agentRef === previous.agentRef && completed.binding.versionRef !== header.pins.binding.versionRef && completed.binding.version > header.pins.binding.version && rebind?.planRef === saved(journal, 'upgrade-impact')?.ref, 'UPGRADE_REBIND_MISSING');
+    } else check(!journal.events.some(e => e.step === 'upgrade-complete'), 'UPGRADE_HEADER_MISSING');
+
     for (const key of ['projectRef', 'agentRef', 'environmentRef', 'recipeRef', 'revisionRef', 'artifactRef', 'buildRef']) ref(completed[key]);
     check(/^sha256:[a-f0-9]{64}$/.test(completed.manifestDigest ?? '') && completed.promotedReference?.endsWith(`@${completed.manifestDigest}`), 'FIXTURE_IMAGE_INVALID');
     digest(completed.promotionReceiptSHA256);

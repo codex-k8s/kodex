@@ -379,3 +379,7 @@ test-runner-binary-provenance:
 	@timeout 120s python3 -B tools/release/runner-binary-provenance.test.py
 	@bash -n tools/dev/build-local-runner.sh
 	@./scripts/tests/local-image-cache-import-contract-test.sh
+
+.PHONY: test-role-image-forward-upgrade
+test-role-image-forward-upgrade:
+	TMPDIR=/tmp node --test tools/dev/role-image-forward-upgrade.test.mjs tools/dev/role-image-acceptance.test.mjs tools/dev/role-image-acceptance-cli.test.mjs tools/dev/role-image-runtime-proof.test.mjs tools/dev/email-agent-acceptance.test.mjs
