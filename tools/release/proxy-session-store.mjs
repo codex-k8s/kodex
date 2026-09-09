@@ -391,15 +391,25 @@ function main(argv) {
   } else {
     const store = get("statefulset", storeName),
       dep = get("deployment", proxyName);
-    const secret = JSON.parse(
-      kubectl([
-        "get",
-        "secret",
-        storeSecretName,
-        "-o",
-        'jsonpath={"{\"metadata\":"}{.metadata}{",\"immutable\":"}{.immutable}{"}"}',
-      ]),
-    );
+    const secret = {
+      metadata: JSON.parse(
+        kubectl([
+          "get",
+          "secret",
+          storeSecretName,
+          "-o",
+          "jsonpath={.metadata}",
+        ]),
+      ),
+      immutable:
+        kubectl([
+          "get",
+          "secret",
+          storeSecretName,
+          "-o",
+          "jsonpath={.immutable}",
+        ]).trim() === "true",
+    };
     assert(
       store.status.readyReplicas === 1 &&
         store.spec.replicas === 1 &&

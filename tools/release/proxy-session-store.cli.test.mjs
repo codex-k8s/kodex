@@ -10,7 +10,7 @@ const fake = `#!/usr/bin/env node
 const fs=require('node:fs');const file=process.env.FIXTURE_STATE;const state=JSON.parse(fs.readFileSync(file));const args=process.argv.slice(2);const start=args.findIndex(x=>['get','create','patch'].includes(x));const [verb,kind,name]=args.slice(start);const save=()=>fs.writeFileSync(file,JSON.stringify(state),{mode:0o600});
 if(verb==='get'){
  const key=kind.toLowerCase()+':'+name;const obj=state.objects[key];if(!obj){if(args.includes('--ignore-not-found'))process.exit(0);process.exit(1)}
- const output=args[args.indexOf('-o')+1];if(output==='jsonpath={.metadata}')process.stdout.write(JSON.stringify(obj.metadata));else if(output?.startsWith('jsonpath='))process.stdout.write(JSON.stringify({metadata:obj.metadata,immutable:obj.immutable}));else process.stdout.write(JSON.stringify(obj));process.exit(0);
+ const output=args[args.indexOf('-o')+1];state.reads.push({kind,name,output});save();if(output==='jsonpath={.metadata}')process.stdout.write(JSON.stringify(obj.metadata));else if(output==='jsonpath={.immutable}')process.stdout.write(String(obj.immutable));else if(output==='json')process.stdout.write(JSON.stringify(obj));else process.exit(2);process.exit(0);
 }
 const input=JSON.parse(fs.readFileSync(0,'utf8'));
 state.calls.push({verb,kind:verb==='create'?input.kind:kind,name:verb==='create'?input.metadata.name:name});
@@ -87,7 +87,7 @@ function fixture(ready = false) {
       },
     };
   }
-  writeFileSync(stateFile, JSON.stringify({ objects, calls: [] }), {
+  writeFileSync(stateFile, JSON.stringify({ objects, calls: [], reads: [] }), {
     mode: 0o600,
   });
   writeFileSync(join(directory, "kubectl"), fake, { mode: 0o700 });
@@ -205,6 +205,14 @@ test("cutover точного плана изменяет только proxy че
     );
     assert.equal(f.load().calls.length, 1);
     assert.equal(f.load().calls[0].verb, "patch");
+    const secretReads = f.load().reads.filter(
+      (read) =>
+        read.kind === "secret" && read.name === "proxy-session-store-auth-v1",
+    );
+    assert.deepEqual(
+      [...new Set(secretReads.map((read) => read.output))].sort(),
+      ["jsonpath={.immutable}", "jsonpath={.metadata}"],
+    );
     const terminal = JSON.parse(
       readFileSync(journal, "utf8").trim().split("\n").at(-1),
     );
