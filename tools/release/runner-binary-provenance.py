@@ -315,7 +315,7 @@ def publish(path, value, check_existing=False):
 
 
 def main(argv):
-    parser = argparse.ArgumentParser(description='Verify a preserved OCI runner archive without image execution or extraction.')
+    parser = argparse.ArgumentParser(description='Verify a preserved OCI runner archive without image execution or extraction.', allow_abbrev=False)
     parser.add_argument('phase', choices=('input', 'verify', 'check'))
     parser.add_argument('--source-root', required=True)
     parser.add_argument('--revision', required=True)
@@ -326,7 +326,7 @@ def main(argv):
     parser.add_argument('--output')
     args = parser.parse_args(argv)
     # Не допускаем неоднозначного повторения security-significant flags.
-    flags = [v for v in argv if v.startswith('--')]
+    flags = [v.split('=', 1)[0] for v in argv if v.startswith('--')]
     require(len(flags) == len(set(flags)), 'ARGUMENT_DUPLICATE')
     digest = source_input(args.source_root, args.revision)
     if args.phase == 'input':

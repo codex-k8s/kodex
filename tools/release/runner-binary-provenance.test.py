@@ -357,6 +357,8 @@ class Verifier(unittest.TestCase):
     def test_duplicate_cli_flag(self):
         self.fixture()
         self.assertNotEqual(self.cli(extra=['--revision', self.revision]).returncode, 0)
+        self.assertNotEqual(self.cli(extra=['--revision=' + self.revision]).returncode, 0)
+        self.assertNotEqual(self.cli(extra=['--rev', self.revision]).returncode, 0)
 
 
 if __name__ == '__main__':
