@@ -425,6 +425,7 @@ test("широкая UI-приёмка сохраняет независимые
       );
       return false;
     } finally {
+      await journal.networkCheckpoint(network);
       pageErrors.endStep();
       consoleErrors.endStep();
       diagnosticStep = 0;
@@ -1049,6 +1050,22 @@ test("широкая UI-приёмка сохраняет независимые
           consoleErrorOverflow: consoleErrors.snapshot().overflow,
         },
         "CONSOLE_ERRORS",
+      );
+    const finalNetwork = network.snapshot();
+    if (
+      (finalNetwork.unexplainedFailures > 0 || finalNetwork.overflow > 0) &&
+      !variants.some((value) => value.status === "FAIL")
+    )
+      await record(
+        "browser-network-errors",
+        ["MVP-UI-03", "MVP-UI-11"],
+        "FAIL",
+        "UI_ASSERTION_FAILED",
+        {
+          unexplainedFailures: finalNetwork.unexplainedFailures,
+          networkOverflow: finalNetwork.overflow,
+        },
+        "NETWORK_ERRORS",
       );
     await journal.consoleErrors(consoleErrors);
     await journal.pageErrors(pageErrors);

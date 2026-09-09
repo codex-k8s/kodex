@@ -29,6 +29,7 @@ export class DocumentNavigation<T extends object> {
   private readonly navigations = new Map<number, Navigation>();
   private overflow = 0;
   private order = 0;
+  private navigationSequence = 0;
   document(id: string, at = Date.now()): void {
     if (!documentID.test(id) || this.documents.has(id)) return;
     if (this.documents.size >= 512) {
@@ -77,7 +78,7 @@ export class DocumentNavigation<T extends object> {
     active.forEach((value) => {
       value.ambiguous = true;
     });
-    const id = this.navigations.size + 1;
+    const id = ++this.navigationSequence;
     this.navigations.set(id, {
       action,
       start: at,
@@ -154,6 +155,15 @@ export class DocumentNavigation<T extends object> {
       value.documentNavigationCommitted &&
       value.documentNavigationWindow
     );
+  }
+  retire(request: T): void {
+    this.requests.delete(request);
+    const referenced = new Set(
+      [...this.requests.values()].map((value) => value.intent),
+    );
+    for (const [id, navigation] of this.navigations)
+      if (navigation.end !== undefined && !referenced.has(id))
+        this.navigations.delete(id);
   }
   overflowCount(): number {
     return this.overflow;

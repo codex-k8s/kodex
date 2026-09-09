@@ -115,3 +115,24 @@ it("same-millisecond late failure is rejected by observation order", () => {
   c.terminal(r, 5);
   expect(c.confirmed(r)).toBe(false);
 });
+
+it("terminal request retirement releases document records and preserves pending navigation identities", () => {
+  const c = new DocumentNavigation<object>(),
+    pending = {};
+  c.document(oldDocument, 1);
+  c.request(pending, true, 2);
+  for (let i = 0; i < 5000; i++) {
+    const r = {};
+    c.request(r, true, 2);
+    c.terminal(r, 3);
+    c.retire(r);
+  }
+  const intent = c.begin("GOTO", 4);
+  c.terminal(pending, 5);
+  c.document(newDocument, 6);
+  c.end(intent, true, 7);
+  expect(c.overflowCount()).toBe(0);
+  expect(c.confirmed(pending)).toBe(true);
+  c.retire(pending);
+  expect(c.begin("GOTO", 8)).toBeGreaterThan(intent);
+});

@@ -345,6 +345,14 @@ export async function createJournal(
         summary: value.snapshot(),
         diagnostics: value.safeDiagnostics(),
       }),
+    networkCheckpoint: async (value: ReadNetworkCorrelator<object>) =>
+      append({
+        type: "read-network-checkpoint",
+        timestampUTC: new Date().toISOString(),
+        browser,
+        fixtureManifestSHA256,
+        ...value.checkpoint(),
+      }),
     consoleErrors: async (value: ConsoleErrorDiagnostics) =>
       append({
         type: "console-errors",
