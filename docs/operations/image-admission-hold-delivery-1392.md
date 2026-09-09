@@ -4,7 +4,7 @@ title: Управляемая доставка RoleImage Job hold
 type: operations
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-09
 ---
 
@@ -89,6 +89,20 @@ Source обязан быть чистым checkout `codex-k8s/kodex`, а revisio
 точной реализации #1381. CLI извлекает основной и release VAP из Git source и
 сверяет их byte-equivalent spec с утверждённым commit #1381. Более широкий или
 частично изменённый policy требует нового Issue/плана.
+
+Для predecessor CLI принимает только закрытый набор представлений из точного
+source: прямой разбор YAML и результат штатного `kubectl kustomize`, каждый до
+и после документированных defaults Kubernetes API. К ним относятся
+`matchPolicy: Equivalent`, пустые `namespaceSelector`/`objectSelector` и
+`scope: "*"` для правила без явно заданного scope. Произвольная нормализация
+или удаление whitespace в CEL запрещены: переводы строк внутри литералов и
+любое иное отличие expression остаются drift. Исходный live spec сохраняется
+в `before`, CAS test и rollback без преобразования.
+
+Прямые `PATCH`/`CREATE` этого CLI отправляют exact source resource, а ожидаемый
+readback закрепляют после тех же API defaults. Поэтому основная policy, release
+policy и release binding не застревают после успешной записи из-за полей,
+добавленных API server.
 
 ## Apply, observe и resume
 
@@ -192,4 +206,6 @@ production context этим переходом не поддерживаются
 
 Актуальные правила Kubernetes `ValidatingAdmissionPolicy` PATCH, optimistic
 concurrency `resourceVersion` и Job API проверены через Context7
-`/kubernetes/website`.
+`/kubernetes/website`. Точные defaulting functions в выдаче Context7 не
+нашлись; дополнительно проверен официальный Kubernetes source
+`pkg/apis/admissionregistration/v1/defaults.go`.
