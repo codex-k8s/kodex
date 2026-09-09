@@ -331,6 +331,20 @@ Job остаётся совместимым, но не используется 
 Одиночный `authority-freshness-job-proof.mjs`
 поддерживается только когда exact Job уже находится в состоянии running.
 
+Перед первым включением hold после изменения controller/VAP используется
+отдельный переход [OPS-DOC-1392](../../docs/operations/image-admission-hold-delivery-1392.md).
+`image-admission-hold-capability.mjs` связывает exact clean source, immutable
+`image-admission` manifest и ожидаемый executable SHA-256. Затем
+`image-admission-hold-delivery.mjs` одним immutable plan выполняет bounded
+`pause → reader → policy-jobs → policy-release → binding-release → open`.
+Каждая mutating фаза меняет один resource по UID/resourceVersion/spec CAS;
+фактический reader подтверждается CRI identity и `/proc/PID/exe`. `observe` и
+`resume` только читают authoritative state после неопределённого исхода и не
+повторяют patch. До включения hold обратные фазы возвращают controller/VAP по
+UID/resourceVersion/spec CAS; созданные policy resources удаляются с Kubernetes
+DELETE preconditions. Общий `remote-dev up` для этой security/config фазы
+запрещён.
+
 ## Серверное хранилище browser proxy session
 
 Изменение backend OAuth2-proxy не является application-only release.
