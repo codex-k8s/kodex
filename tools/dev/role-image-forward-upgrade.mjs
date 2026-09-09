@@ -63,6 +63,20 @@ function newContent(previous, baseImage, previousRunnerDigest) {
   environment.dockerfile = environment.dockerfile.replace(/^FROM [^\n]+/, `FROM ${baseImage}`);
   return JSON.stringify(document);
 }
+// Источник runtime repository — только защищённый CP catalog GET. OCI provenance
+// сохраняет исходное имя сборки; одинаковый digest связывает обе projections.
+export async function trustedRunnerCatalog(get, runnerDigest, expected) {
+  check(/^sha256:[a-f0-9]{64}$/.test(runnerDigest ?? ''), 'RUNNER_DIGEST_INVALID');
+  const catalog = await get('/api/v1/role-environments');
+  const standard = catalog.items?.filter(e => e.key === 'standard');
+  check(standard?.length === 1 && standard[0].available === true, 'TRUSTED_CATALOG_UNAVAILABLE');
+  const template = standard[0].dockerfileTemplate;
+  const match = typeof template === 'string' && /^FROM ([a-z0-9][a-z0-9./:_-]*@(sha256:[a-f0-9]{64}))\n$/.exec(template);
+  check(match && match[2] === runnerDigest, 'TRUSTED_BASE_CHANGED');
+  const pin = { trustedBaseImage: match[1], templateSHA256: hash(template), catalogEntrySHA256: hash(standard[0]) };
+  if (expected) check(Object.entries(pin).every(([key, value]) => expected[key] === value), 'TRUSTED_CATALOG_CHANGED');
+  return pin;
+}
 export async function upgradePlan(inputs, get) {
   const f = inputs.fixture, detail = await get(recipePath(f));
   const artifact = admittedArtifact(detail, f.recipeRef, f.revisionRef, true);
@@ -74,16 +88,16 @@ export async function upgradePlan(inputs, get) {
   check(agent.ref === f.agentRef && agent.projectRef === f.projectRef && agent.enabled === true && agent.state === 'ACTIVE' && agent.roleDefinitionRef === detail.recipe.roleDefinitionRef, 'AGENT_SCOPE_CHANGED');
   const runtime = await get(`/api/v1/agents/${enc(f.agentRef)}/runtime-configuration`), binding = bindingPin(runtime.environmentBinding);
   check(binding.agentRef === f.agentRef && binding.environmentRef === f.environmentRef && runtime.environment?.ref === f.environmentRef && runtime.environment.currentVersion?.ref === binding.versionRef && runtime.environment.currentVersion.image?.artifactRef === f.artifactRef && runtime.environment.currentVersion.image.reference === f.promotedReference, 'OLD_BINDING_CHANGED');
-  const catalog = await get('/api/v1/role-environments');
-  const standard = catalog.items?.filter(e => e.key === 'standard' && e.available === true);
-  check(standard?.length === 1 && standard[0].dockerfileTemplate === `FROM ${inputs.baseImage}\n`, 'TRUSTED_BASE_CHANGED');
-  const content = newContent(r.content, inputs.baseImage, inputs.previousRunnerDigest);
+  const catalogPin = await trustedRunnerCatalog(get, inputs.runnerDigest);
+  const content = newContent(r.content, catalogPin.trustedBaseImage, inputs.previousRunnerDigest);
   check(content !== r.content && JSON.parse(content).roleImage.roleDefinitionRef === agent.roleDefinitionRef, 'FORWARD_SOURCE_INVALID');
-  return { fixture: f, configurationRef: configRef, configurationVersion: c.version, revision: r.revision, contentSHA256: r.digest, name: c.name, binding, recipeVersion: detail.recipe.version, recipeGeneration: detail.recipe.generation, nextContentSHA256: hash(content), templateSHA256: hash(standard[0].dockerfileTemplate) };
+  return { fixture: f, configurationRef: configRef, configurationVersion: c.version, revision: r.revision, contentSHA256: r.digest, name: c.name, binding, recipeVersion: detail.recipe.version, recipeGeneration: detail.recipe.generation, nextContentSHA256: hash(content), ...catalogPin };
 }
 // Inspect не превращает отсутствие ответа в ACK и не посылает повторный command.
 export async function inspectUpgrade(journal, get) {
-  const h = journal.events[0], detail = await get(recipePath(h.pins.fixture));
+  const h = journal.events[0];
+  await trustedRunnerCatalog(get, h.runnerDigest, h.pins);
+  const detail = await get(recipePath(h.pins.fixture));
   const history = await get(`/api/v1/managed-configurations/${enc(h.pins.configurationRef)}/revisions?pageSize=50`);
   const runtime = await get(`/api/v1/agents/${enc(h.pins.fixture.agentRef)}/runtime-configuration`);
   return { status: unresolved(journal).length ? 'UNKNOWN_READBACK_REQUIRED' : saved(journal, 'upgrade-complete') ? 'COMPLETED' : 'IN_PROGRESS', unresolved: unresolved(journal).map(e => ({ step: e.step, key: e.key, method: e.method, bodySHA256: e.bodySHA256 })), matchingRevisions: (await pages(get, `/api/v1/managed-configurations/${enc(h.pins.configurationRef)}/revisions`)).filter(r => r.digest === h.pins.nextContentSHA256).map(r => ({ ref: r.ref, revision: r.revision, state: ['DRAFT', 'VALID', 'INVALID', 'PUBLISHED', 'SUPERSEDED', 'DISCARDED'].includes(r.state) ? r.state : 'UNKNOWN', digest: r.digest })), configurationVersion: history.configuration?.version, publishedRevisionRef: history.configuration?.currentRevision?.ref, recipeGeneration: detail.recipe?.generation, builds: detail.builds?.map(b => ({ ref: b.ref, revisionRef: b.configurationRevisionRef, stage: ['COMPLETED', 'FAILED', 'CANCELLED', 'EXPIRED', 'DEAD_LETTER'].includes(b.stage) ? b.stage : 'PENDING' })), artifact: detail.activeArtifact ? { ref: detail.activeArtifact.ref, digest: detail.activeArtifact.manifestDigest } : undefined, binding: bindingPin(runtime.environmentBinding), providerEffect: 'NOT_RUN' };
@@ -92,12 +106,17 @@ export async function applyUpgrade(journal, inputs, get, request, { sleep = ms =
   const h = journal.events[0], pins = h.pins, f = pins.fixture;
   check(hash(inputs.fixture) === hash(f) && inputs.runnerDigest === h.runnerDigest && inputs.runnerProvenanceSHA256 === h.runnerProvenanceSHA256, 'UPGRADE_INPUT_CHANGED');
   check(unresolved(journal).length === 0, 'UNRESOLVED_INTENT_READBACK_REQUIRED');
+  await trustedRunnerCatalog(get, h.runnerDigest, pins);
   if (saved(journal, 'upgrade-complete')) return saved(journal, 'upgrade-complete');
   if (!journal.events.some(e => e.type === 'INTENT')) check(hash(await upgradePlan(inputs, get)) === hash(pins), 'UPGRADE_PLAN_STALE');
   const old = await source(get, pins.configurationRef, f.revisionRef);
   check(old.revision.digest === pins.contentSHA256, 'PREDECESSOR_SOURCE_CHANGED');
-  const content = newContent(old.revision.content, inputs.baseImage, inputs.previousRunnerDigest); check(hash(content) === pins.nextContentSHA256, 'UPGRADE_SOURCE_CHANGED');
-  const mutate = mutationDriver(journal, request);
+  const content = newContent(old.revision.content, pins.trustedBaseImage, inputs.previousRunnerDigest); check(hash(content) === pins.nextContentSHA256, 'UPGRADE_SOURCE_CHANGED');
+  const send = mutationDriver(journal, request);
+  const mutate = async (...args) => {
+    if (!saved(journal, args[0])) await trustedRunnerCatalog(get, h.runnerDigest, pins);
+    return send(...args);
+  };
   const checkpoint = (step, result) => { journal.append({ type: 'CHECKPOINT', step, result }); return result; };
   const draft = await mutate('upgrade-draft', 'POST', '/api/v1/role-image-configurations/drafts', { configurationRef: pins.configurationRef, projectRef: f.projectRef, name: pins.name, contentFormat: 'JSON', content }, 201, pins.configurationVersion, v => managed(v, 'DRAFT'));
   check(draft.configurationRef === pins.configurationRef && draft.revision > pins.revision && draft.parentRevisionRef === f.revisionRef && draft.publishedRevisionRef === f.revisionRef && draft.contentSHA256 === pins.nextContentSHA256, 'FORWARD_REVISION_REQUIRED');
