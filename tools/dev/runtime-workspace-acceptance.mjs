@@ -391,6 +391,7 @@ async function verifyPersistedProof({
     fail("persisted attempt provenance differs");
   return {
     schema: "kodex.workspace-acceptance-evidence.v1",
+    executionBindingDigest: provenance.execution_binding_digest,
     runRef,
     projectRef,
     runtimeRevisionRef: revision.ref,
