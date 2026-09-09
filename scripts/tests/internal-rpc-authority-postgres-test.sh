@@ -50,7 +50,7 @@ psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 --file \
 
 assertion=$(psql "$authority_admin_dsn" --no-password --tuples-only --no-align <<'SQL'
 SELECT
-  (SELECT count(*) = 22
+  (SELECT count(*) = 27
      FROM pg_catalog.pg_proc AS procedure
      JOIN pg_catalog.pg_namespace AS namespace
        ON namespace.oid = procedure.pronamespace
@@ -185,10 +185,11 @@ INSERT INTO internal_rpc_authority.authority_snapshot_history (
   '10000000-0000-4000-8000-000000000010', repeat('2', 64), 2
 );
 INSERT INTO internal_rpc_authority.authority_rotation_intents (
-  intent_id, source_revision, source_digest_sha256, status, created_at, updated_at
+  intent_id, source_revision, source_digest_sha256, registry_source_digest_sha256,
+  status, created_at, updated_at
 ) VALUES (
   '10000000-0000-4000-8000-000000000010', 1, repeat('1', 64),
-  'PREPARED', clock_timestamp(), clock_timestamp()
+  repeat('1', 64), 'PREPARED', clock_timestamp(), clock_timestamp()
 );
 INSERT INTO internal_rpc_authority.authority_snapshot_readbacks (
   readback_id, workload_id, role, workload_generation,

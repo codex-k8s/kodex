@@ -113,6 +113,10 @@ issuer снова может закрыться до receipt.
   key-delivery Secrets;
 - publisher использует exact `resourceNames` RBAC, `resourceVersion` CAS,
   монотонную generation и readback после записи;
+- publisher до первой CAS фиксирует version2 rotation intent в PostgreSQL и
+  проходит `PREPARED -> DELIVERING -> DELIVERED -> PROMOTED -> RETIRED`;
+  `ABORTED` доступен только до `DELIVERING`, а следующий switch — после полного
+  readback и 40-секундного overlap;
 - issuer/verifier получают только собственные read-only Secret volumes;
 - mTLS и signed authorization context обязательны одновременно;
 - PostgreSQL сохраняет publication predecessor/history, readback receipts и
@@ -173,6 +177,10 @@ kubectl -n kodex-system get secret <name> -o json \
 - Pod `stt-tts-service` содержит issuer и verifier sidecars, label
   `kodex.dev/internal-rpc-authority-abi: "2"` и local socket readiness;
 - issuer `CheckReadiness` возвращает ABI 2 до активации STT protected path.
+
+Безопасный status/abort и порядок resume описаны в
+[OPS-DOC-1390](../operations/authority-rotation-1390.md). После UNKNOWN нельзя
+запускать новый publisher intent: сначала прочитать текущий durable статус.
 
 ## Типовые отказы
 

@@ -17,6 +17,7 @@ var publicationFunctionDeclaration string
 const baselineMigration = "migrations/20260823000100_internal_rpc_authority_baseline.sql"
 const workloadBoundaryMigration = "migrations/20260906000100_workload_database_boundary.sql"
 const snapshotWorkloadSignerMigration = "migrations/20260907000100_snapshot_workload_signer_boundary.sql"
+const authorityRotationLifecycleMigration = "migrations/20260909000100_authority_rotation_lifecycle.sql"
 
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	t.Parallel()
@@ -118,7 +119,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 4 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" {
+	if len(entries) != 5 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)
@@ -127,6 +128,36 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	}
 	if got := fmt.Sprintf("%x", sha256.Sum256(content)); got != "d4c9ed792ae0e157247fd3e1b58d15f7bbff43bf38f202bf72e9201398be4e0a" {
 		t.Fatal("published authority baseline bytes changed")
+	}
+}
+
+func TestAuthorityRotationLifecycleMigrationIsForwardOnlyAndBounded(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile(authorityRotationLifecycleMigration)
+	if err != nil {
+		t.Fatal("read authority rotation lifecycle migration")
+	}
+	text := string(content)
+	for _, required := range []string{
+		"publisher_prepare_rotation",
+		"publisher_begin_rotation_delivery",
+		"publisher_mark_rotation_delivered",
+		"publisher_abort_rotation",
+		"protocol_version = 2",
+		"interval '40 seconds'",
+		"predecessor.overlap_until > pg_catalog.clock_timestamp()",
+		"status = 'RETIRED'",
+		"status = 'ABORTED'",
+		"intent.status <> 'DELIVERING'",
+		"intent.status NOT IN ('DELIVERED', 'PROMOTED')",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("authority rotation migration is missing %q", required)
+		}
+	}
+	if strings.Contains(text, "DROP TABLE") || strings.Contains(text, "TRUNCATE") {
+		t.Fatal("authority rotation migration contains destructive state reset")
 	}
 }
 

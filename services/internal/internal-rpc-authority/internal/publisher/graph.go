@@ -142,6 +142,40 @@ func (graph *Graph) Publish(
 	if err != nil {
 		return model.AuthoritySnapshotPublication{}, err
 	}
+	predecessorRevision := uint64(0)
+	predecessorDigest := strings.Repeat("0", 64)
+	if len(historyForBuild) > 0 {
+		last := historyForBuild[len(historyForBuild)-1]
+		predecessorRevision = last.Revision
+		predecessorDigest = last.DigestSHA256
+	}
+	intentID := existing.IntentID
+	if !found {
+		intentID = deterministicUUID(
+			"authority-rotation-v2",
+			strconv.FormatUint(graph.config.Registry.SourceRevision, 10),
+			graph.config.Registry.SourceDigest,
+			inputDigest,
+		)
+		rotation := model.AuthorityRotationIntent{
+			IntentID:                intentID,
+			SourceRevision:          graph.config.Registry.SourceRevision,
+			SourceDigestSHA256:      graph.config.Registry.SourceDigest,
+			PredecessorRevision:     predecessorRevision,
+			PredecessorDigestSHA256: predecessorDigest,
+			ExpectedReadbackCount:   graph.config.Registry.StartupReadbackTargetCount(),
+		}
+		if err := graph.config.Store.PrepareRotation(ctx, rotation); err != nil {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"prepare durable authority key rotation",
+			)
+		}
+		if err := graph.config.Store.BeginRotationDelivery(ctx, rotation); err != nil {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"begin durable authority key delivery",
+			)
+		}
+	}
 	buildNow := now
 	if found {
 		buildNow = existing.PublishedAt
@@ -170,6 +204,8 @@ func (graph *Graph) Publish(
 				ctx,
 				target.AuthPrivateKeySecret,
 				target.TargetID+"-auth",
+				predecessorRevision,
+				predecessorDigest,
 			)
 			if ensureErr != nil {
 				return model.AuthoritySnapshotPublication{}, ensureErr
@@ -189,6 +225,8 @@ func (graph *Graph) Publish(
 				ctx,
 				target.ProofPrivateKeySecret,
 				target.TargetID+"-proof",
+				predecessorRevision,
+				predecessorDigest,
 			)
 			if ensureErr != nil {
 				return model.AuthoritySnapshotPublication{}, ensureErr
@@ -228,20 +266,8 @@ func (graph *Graph) Publish(
 	if err != nil {
 		return model.AuthoritySnapshotPublication{}, err
 	}
-	predecessorRevision := uint64(0)
-	predecessorDigest := strings.Repeat("0", 64)
-	if len(historyForBuild) > 0 {
-		last := historyForBuild[len(historyForBuild)-1]
-		predecessorRevision = last.Revision
-		predecessorDigest = last.DigestSHA256
-	}
 	publication := model.AuthoritySnapshotPublication{
-		IntentID: deterministicUUID(
-			"authority-snapshot",
-			strconv.FormatUint(graph.config.Registry.SourceRevision, 10),
-			graph.config.Registry.SourceDigest,
-			built.SourceDigestSHA256,
-		),
+		IntentID:                intentID,
 		InputDigestSHA256:       inputDigest,
 		SourceRevision:          graph.config.Registry.SourceRevision,
 		SourceDigestSHA256:      built.SourceDigestSHA256,
@@ -351,6 +377,15 @@ func (graph *Graph) Publish(
 			"authority snapshot served readback rejected",
 		)
 	}
+	if err := graph.config.Store.MarkRotationDelivered(ctx, model.AuthorityRotationIntent{
+		IntentID:           persisted.IntentID,
+		SourceRevision:     persisted.SourceRevision,
+		SourceDigestSHA256: persisted.SourceDigestSHA256,
+	}); err != nil {
+		return model.AuthoritySnapshotPublication{}, errors.New(
+			"persist authority key delivery readback",
+		)
+	}
 	return served, nil
 }
 
@@ -447,6 +482,8 @@ func (graph *Graph) ensureKeySet(
 	ctx context.Context,
 	path string,
 	prefix string,
+	predecessorRevision uint64,
+	predecessorDigest string,
 ) (rotatingKeySet, error) {
 	existing, found, err := graph.config.Secrets.ReadVersioned(ctx, path)
 	if err != nil {
@@ -486,7 +523,11 @@ func (graph *Graph) ensureKeySet(
 		64,
 	)
 	if revisionErr != nil ||
-		storedRevision >= graph.config.Registry.SourceRevision {
+		graph.config.Registry.SourceRevision <= 1 ||
+		storedRevision != predecessorRevision ||
+		storedRevision+1 != graph.config.Registry.SourceRevision ||
+		existing.Data["source_digest_sha256"] != predecessorDigest ||
+		!registryDigestPattern.MatchString(predecessorDigest) {
 		return rotatingKeySet{}, err
 	}
 	oldCurrent, parseErr := internalrpcauth.ParsePrivateJWK(

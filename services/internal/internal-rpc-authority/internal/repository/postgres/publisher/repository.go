@@ -92,6 +92,59 @@ func (repository *Repository) LoadSnapshotPublication(
 	return result, true, nil
 }
 
+// PrepareRotation фиксирует intent до первой внешней CAS-доставки.
+func (repository *Repository) PrepareRotation(
+	ctx context.Context,
+	value model.AuthorityRotationIntent,
+) error {
+	return repository.rotationTransition(ctx, prepareRotationSQL, value,
+		"prepare publisher authority rotation")
+}
+
+// BeginRotationDelivery необратимо закрывает возможность безопасного abort.
+func (repository *Repository) BeginRotationDelivery(
+	ctx context.Context,
+	value model.AuthorityRotationIntent,
+) error {
+	return repository.rotationTransition(ctx, beginRotationDeliverySQL, value,
+		"begin publisher authority rotation delivery")
+}
+
+// MarkRotationDelivered отделяет CAS/readback доставки от promotion consumers.
+func (repository *Repository) MarkRotationDelivered(
+	ctx context.Context,
+	value model.AuthorityRotationIntent,
+) error {
+	return repository.rotationTransition(ctx, markRotationDeliveredSQL, value,
+		"mark publisher authority rotation delivered")
+}
+
+func (repository *Repository) rotationTransition(
+	ctx context.Context,
+	query string,
+	value model.AuthorityRotationIntent,
+	operation string,
+) error {
+	arguments := pgx.StrictNamedArgs{
+		"intent_id":            value.IntentID,
+		"source_revision":      value.SourceRevision,
+		"source_digest_sha256": value.SourceDigestSHA256,
+	}
+	if query == prepareRotationSQL {
+		arguments["predecessor_revision"] = value.PredecessorRevision
+		arguments["predecessor_digest_sha256"] = value.PredecessorDigestSHA256
+		arguments["expected_readback_count"] = value.ExpectedReadbackCount
+	}
+	var accepted bool
+	if err := repository.pool.QueryRow(ctx, query, arguments).Scan(&accepted); err != nil {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	if !accepted {
+		return domainrepository.ErrSnapshotRollback
+	}
+	return nil
+}
+
 // AppendSnapshot фиксирует immutable publication intent и payload.
 func (repository *Repository) AppendSnapshot(
 	ctx context.Context,

@@ -23,6 +23,18 @@ type PublisherStore interface {
 		uint64,
 		string,
 	) (model.AuthoritySnapshotPublication, bool, error)
+	PrepareRotation(
+		context.Context,
+		model.AuthorityRotationIntent,
+	) error
+	BeginRotationDelivery(
+		context.Context,
+		model.AuthorityRotationIntent,
+	) error
+	MarkRotationDelivered(
+		context.Context,
+		model.AuthorityRotationIntent,
+	) error
 	AppendSnapshot(
 		context.Context,
 		model.AuthoritySnapshotPublication,

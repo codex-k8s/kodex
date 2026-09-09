@@ -150,6 +150,11 @@ node tools/release/scoped-release.mjs apply \
   окружении используются исполняемые образы приложений с точным digest.
 - Конфигурация, expand/contract migrations, включение grant v2 и security rotation
   выполняются отдельно, не маскируются под обычный application release.
+
+Ротация authority key sets имеет отдельный forward-only lifecycle и
+операторский readback `authority-rotation-transition.mjs`. Точный порядок,
+безопасный abort до первой доставки и resume после неизвестного результата
+описаны в [OPS-DOC-1390](../../docs/operations/authority-rotation-1390.md).
 - Render и локальные тесты не доказывают live zero-downtime. Групповые,
   повторные и rollback сценарии на staging относятся к #1223.
 

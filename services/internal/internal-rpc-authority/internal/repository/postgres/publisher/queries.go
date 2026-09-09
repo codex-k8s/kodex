@@ -27,6 +27,15 @@ var loadSnapshotHistorySQL string
 //go:embed sql/publisher__load_snapshot_publication.sql
 var loadSnapshotPublicationSQL string
 
+//go:embed sql/publisher__prepare_rotation.sql
+var prepareRotationSQL string
+
+//go:embed sql/publisher__begin_rotation_delivery.sql
+var beginRotationDeliverySQL string
+
+//go:embed sql/publisher__mark_rotation_delivered.sql
+var markRotationDeliveredSQL string
+
 //go:embed sql/publisher__append_snapshot.sql
 var appendSnapshotSQL string
 
@@ -42,6 +51,9 @@ func validateQueries() error {
 		"publisher__load_pinned_readback_intent": loadPinnedReadbackIntentSQL,
 		"publisher__load_snapshot_history":       loadSnapshotHistorySQL,
 		"publisher__load_snapshot_publication":   loadSnapshotPublicationSQL,
+		"publisher__prepare_rotation":            prepareRotationSQL,
+		"publisher__begin_rotation_delivery":     beginRotationDeliverySQL,
+		"publisher__mark_rotation_delivered":     markRotationDeliveredSQL,
 		"publisher__append_snapshot":             appendSnapshotSQL,
 		"publisher__promote_snapshot":            promoteSnapshotSQL,
 	} {

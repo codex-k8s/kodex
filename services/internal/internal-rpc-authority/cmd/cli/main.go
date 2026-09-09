@@ -29,6 +29,8 @@ const (
 	commandFreshnessStatus   command = "freshness-status"
 	commandFreshnessWatch    command = "freshness-watch"
 	commandFreshnessActivate command = "freshness-activate"
+	commandRotationStatus    command = "rotation-status"
+	commandRotationAbort     command = "rotation-abort"
 )
 
 func main() {
@@ -50,6 +52,10 @@ func run(ctx context.Context, arguments []string) error {
 		return err
 	}
 	options, err := parseFreshnessOptions(action, arguments)
+	if err != nil {
+		return err
+	}
+	rotationOptions, err := parseRotationOptions(action, arguments)
 	if err != nil {
 		return err
 	}
@@ -92,6 +98,8 @@ func run(ctx context.Context, arguments []string) error {
 	switch action {
 	case commandFreshnessStatus, commandFreshnessWatch, commandFreshnessActivate:
 		return runFreshness(ctx, database, action, options, os.Stdout)
+	case commandRotationStatus, commandRotationAbort:
+		return runRotation(ctx, database, action, rotationOptions, os.Stdout)
 	case commandUp:
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			return fmt.Errorf("apply internal-rpc-authority migrations: %w", err)
@@ -108,16 +116,21 @@ func parseCommand(arguments []string) (command, error) {
 	if len(arguments) == 7 && arguments[0] == string(commandFreshnessActivate) {
 		return commandFreshnessActivate, nil
 	}
+	if len(arguments) == 9 && arguments[0] == string(commandRotationAbort) {
+		return commandRotationAbort, nil
+	}
 	if len(arguments) != 1 {
-		return "", errors.New("usage: internal-rpc-authority-cli <up|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS>")
+		return "", errors.New(cliUsage)
 	}
 	switch command(arguments[0]) {
-	case commandUp, commandStatus, commandFreshnessStatus, commandFreshnessWatch:
+	case commandUp, commandStatus, commandFreshnessStatus, commandFreshnessWatch, commandRotationStatus:
 		return command(arguments[0]), nil
 	default:
-		return "", errors.New("usage: internal-rpc-authority-cli <up|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS>")
+		return "", errors.New(cliUsage)
 	}
 }
+
+const cliUsage = "usage: internal-rpc-authority-cli <up|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS|rotation-status|rotation-abort --intent-id UUID --source-revision NUMBER --source-digest-sha256 SHA256 --confirm ABORT-STAGING-AUTHORITY-ROTATION>"
 
 func migrationStatus(ctx context.Context, database *sql.DB) error {
 	if err := goose.StatusContext(ctx, database, "migrations"); err != nil {

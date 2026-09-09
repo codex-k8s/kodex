@@ -226,6 +226,17 @@ type AuthoritySnapshotPublication struct {
 	PublishedAt             time.Time
 }
 
+// AuthorityRotationIntent закрепляет один forward-only переход key set до
+// первой внешней CAS-доставки. Private key material в намерение не входит.
+type AuthorityRotationIntent struct {
+	IntentID                string
+	SourceRevision          uint64
+	SourceDigestSHA256      string
+	PredecessorRevision     uint64
+	PredecessorDigestSHA256 string
+	ExpectedReadbackCount   int
+}
+
 // AuthoritySnapshotHistory содержит ограниченную forward-only цепочку.
 type AuthoritySnapshotHistory struct {
 	Current []RevisionDigest

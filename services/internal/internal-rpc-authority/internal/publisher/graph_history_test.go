@@ -1,11 +1,34 @@
 package publisher
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	domainrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/repository"
 	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/types"
 )
+
+type rotationSecretDelivery struct {
+	material domainrepository.SecretMaterial
+	writes   int
+}
+
+func (delivery *rotationSecretDelivery) ReadVersioned(context.Context, string) (domainrepository.SecretMaterial, bool, error) {
+	return delivery.material, true, nil
+}
+
+func (delivery *rotationSecretDelivery) CreateVersioned(context.Context, string, map[string]string) (domainrepository.SecretMaterial, error) {
+	delivery.writes++
+	return domainrepository.SecretMaterial{}, nil
+}
+
+func (delivery *rotationSecretDelivery) WriteVersionedCAS(context.Context, string, uint64, map[string]string) (domainrepository.SecretMaterial, error) {
+	delivery.writes++
+	return domainrepository.SecretMaterial{}, nil
+}
 
 func TestSnapshotHistoryForBuildKeepsStableBoundaryWindow(t *testing.T) {
 	t.Parallel()
@@ -49,6 +72,41 @@ func TestSnapshotHistoryForBuildRejectsMissingPersistedRevision(t *testing.T) {
 		true,
 	); err == nil {
 		t.Fatal("missing persisted revision was accepted")
+	}
+}
+
+func TestKeyRotationRejectsAValidButUnknownPredecessorDigestBeforeCAS(t *testing.T) {
+	t.Parallel()
+	current, err := internalrpcauth.GenerateES256Key("rotation-current")
+	if err != nil {
+		t.Fatal("generate current key")
+	}
+	next, err := internalrpcauth.GenerateES256Key("rotation-next")
+	if err != nil {
+		t.Fatal("generate next key")
+	}
+	predecessorDigest := strings.Repeat("a", 64)
+	graph := &Graph{config: GraphConfig{Registry: model.DeliveryTargetRegistry{
+		SourceRevision: 2,
+		SourceDigest:   strings.Repeat("b", 64),
+	}}}
+	data, err := graph.keySetData(current, next, nil, 1, 2, 0)
+	if err != nil {
+		t.Fatal("encode previous key set")
+	}
+	data["source_revision"] = "1"
+	data["source_digest_sha256"] = strings.Repeat("c", 64)
+	delivery := &rotationSecretDelivery{material: domainrepository.SecretMaterial{
+		Version: 1,
+		Digest:  strings.Repeat("d", 64),
+		Data:    data,
+	}}
+	graph.config.Secrets = delivery
+	if _, err := graph.ensureKeySet(t.Context(), "secret", "rotation", 1, predecessorDigest); err == nil {
+		t.Fatal("unknown predecessor digest was accepted")
+	}
+	if delivery.writes != 0 {
+		t.Fatal("unknown predecessor reached external CAS")
 	}
 }
 
