@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Жизненный цикл чтения</title>
+  </head>
+  <body>
+    <button id="arm">Отложить обновление</button>
+    <button id="resume">Продолжить</button>
+    <button id="locale">EN</button>
+    <output id="result">idle</output>
+    <header class="topbar" style="height: 58px; position: static">
+      Fixture
+    </header>
+    <div id="app" class="app-shell"></div>
+    <script type="module">
+      import { createApp } from "vue";
+      import { createPinia, setActivePinia } from "pinia";
+      import { createRouter, createWebHistory } from "vue-router";
+      import ProjectsPage from "../../src/pages/ProjectsPage.vue";
+      import { usePlatformStore } from "../../src/features/platform/store";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import { i18n } from "../../src/app/i18n";
+      import { persistLocale } from "../../src/shared/locale";
+      import { documentRequestSignal } from "../../src/shared/api/document-lifetime";
+      import "../../src/app/styles/base.css";
+      configureApiClient();
+      i18n.global.locale.value = "ru";
+      const pinia = createPinia();
+      setActivePinia(pinia);
+      const router = createRouter({
+        history: createWebHistory(),
+        routes: [{ path: "/:pathMatch(.*)*", component: ProjectsPage }],
+      });
+      const app = createApp(ProjectsPage).use(pinia).use(router).use(i18n);
+      await router.isReady();
+      app.mount("#app");
+      const platform = usePlatformStore();
+      function output(value) {
+        const node = document.querySelector("#result");
+        if (node) node.textContent = value;
+      }
+      function reload() {
+        const scope = documentRequestSignal();
+        output("pending");
+        void platform.reloadPlatformState().then(
+          () => output(scope.aborted ? "cancelled" : "ready"),
+          () => output(scope.aborted ? "cancelled" : "error"),
+        );
+      }
+      document.querySelector("#arm")?.addEventListener("click", () => {
+        setTimeout(reload, 300);
+        output("armed");
+      });
+      document.querySelector("#resume")?.addEventListener("click", reload);
+      document.querySelector("#locale")?.addEventListener("click", () => {
+        persistLocale("en");
+        i18n.global.locale.value = "en";
+        document.documentElement.lang = "en";
+      });
+    </script>
+  </body>
+</html>

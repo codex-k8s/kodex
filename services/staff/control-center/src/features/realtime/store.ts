@@ -1,3 +1,8 @@
+import {
+  documentRequestSignal,
+  documentRequestsSuspended,
+  documentRequestsResumed,
+} from "@/shared/api/document-lifetime";
 import { defineStore } from "pinia";
 import { onScopeDispose, reactive, ref } from "vue";
 
@@ -173,7 +178,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function scheduleReconnect(): void {
-    if (session.stopped || !hasConsumers()) return;
+    if (documentRequestSignal().aborted || session.stopped || !hasConsumers())
+      return;
     if (session.attempt >= 6) {
       session.stopped = true;
       return;
@@ -532,7 +538,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   async function connect(): Promise<void> {
-    if (session.stopped || !hasConsumers()) return;
+    if (documentRequestSignal().aborted || session.stopped || !hasConsumers())
+      return;
     if (session.ticketController) return;
     if (
       session.socket &&
@@ -744,8 +751,22 @@ export const useRealtimeStore = defineStore("realtime", () => {
     void connect();
   }
 
+  function suspendDocument(): void {
+    // Сохраняем subscriptions/cursors для отменённого ухода и BFCache.
+    session.stopped = true;
+    disconnect("DOCUMENT_SUSPENDED");
+  }
+  function resumeDocument(): void {
+    if (!hasConsumers()) return;
+    session.stopped = false;
+    void connect();
+  }
+  window.addEventListener(documentRequestsSuspended, suspendDocument);
+  window.addEventListener(documentRequestsResumed, resumeDocument);
   window.addEventListener("online", handleOnline);
   onScopeDispose(() => {
+    window.removeEventListener(documentRequestsSuspended, suspendDocument);
+    window.removeEventListener(documentRequestsResumed, resumeDocument);
     window.removeEventListener("online", handleOnline);
     closeAll();
   });
