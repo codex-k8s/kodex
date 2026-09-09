@@ -86,12 +86,12 @@ export async function main(args,io={}){
   requireValue(classifyPublisherSourceState(publisher,plan)==='AFTER','SOURCE_ROLLBACK_STATE_REJECTED');const desired=createPublisherRollbackCAS(publisher,plan),fd=openSync(options['--evidence'],'wx',0o600);
   try{writeSync(fd,JSON.stringify({at:new Date().toISOString(),status:'INTENT',operation:'PUBLISHER_SOURCE_ROLLBACK',planSHA256:fingerprint(plan)})+'\n');fsyncSync(fd);try{kubeInput(JSON.stringify(desired),'replace','-f','-');}catch{writeSync(fd,JSON.stringify({at:new Date().toISOString(),status:'UNKNOWN',operation:'PUBLISHER_SOURCE_ROLLBACK'})+'\n');fsyncSync(fd);}}
   finally{closeSync(fd);}publisher=get('deployment','internal-rpc-authority-publisher');requireValue(publisher.metadata.uid===plan.publisher.uid&&fingerprint(publisher.spec)===plan.publisher.beforeSpecSHA256&&validateSourcePublisher(publisher).source===plan.publisher.beforeSource,'SOURCE_PUBLISHER_ROLLBACK_READBACK_REJECTED');
-  kube('rollout','status','deployment/internal-rpc-authority-publisher','--timeout=300s');publisher=get('deployment','internal-rpc-authority-publisher');
+  kube('rollout','status','deployment/internal-rpc-authority-publisher','--timeout=300s','-n',namespace);publisher=get('deployment','internal-rpc-authority-publisher');
   requireValue(readPublisherExecutable(publisher,get('replicasets,pods',null).items,kube,options['--k3s-sudo'])===plan.publisher.beforeExecutableSHA256,'SOURCE_PUBLISHER_ROLLBACK_EXECUTABLE_MISMATCH');process.stdout.write(JSON.stringify({status:'ROLLED_BACK',intentID:plan.intentID})+'\n');return;
  }
  publisher=get('deployment','internal-rpc-authority-publisher');requireValue(classifyPublisherSourceState(publisher,plan)==='AFTER','SOURCE_PUBLISHER_READBACK_REJECTED');const state=validateSourcePublisher(publisher);
  requireValue(publisher.metadata.uid===plan.publisher.uid&&state.source===plan.source&&publisher.spec.template.metadata.annotations?.['kodex.dev/source-delivery-intent']===plan.intentID,'SOURCE_PUBLISHER_READBACK_REJECTED');
- kube('rollout','status','deployment/internal-rpc-authority-publisher','--timeout=300s');publisher=get('deployment','internal-rpc-authority-publisher');
+ kube('rollout','status','deployment/internal-rpc-authority-publisher','--timeout=300s','-n',namespace);publisher=get('deployment','internal-rpc-authority-publisher');
  requireValue(readPublisherExecutable(publisher,get('replicasets,pods',null).items,kube,options['--k3s-sudo'])===plan.capability.publisherSHA256,'SOURCE_PUBLISHER_EXECUTABLE_MISMATCH');
  requireValue(fingerprint(get('configmap','internal-rpc-authority-publisher-target-registry').data)===plan.boundary.registryDataSHA256&&boundary(inventory())===plan.boundary.neighborsSHA256,'SOURCE_DELIVERY_BOUNDARY_CHANGED');
  process.stdout.write(JSON.stringify({status:'PASS',intentID:plan.intentID,publisherUID:publisher.metadata.uid,revision:plan.revision})+'\n');
