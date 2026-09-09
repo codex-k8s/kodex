@@ -4,11 +4,52 @@ title: Авторизация, provider accounts и одноразовые WS ti
 type: operation-evidence
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-09-08
+version: 1.0.1
+updated: 2026-09-09
 ---
 
 # Область и результат
+
+## Начальная session probe и cold smoke (#1377)
+
+`remote-dev.sh smoke` запускает `local-smoke.ts`; он, `auth.setup.ts` и
+`api-session.setup.ts` используют общий `authenticateOwner`. В PWA
+`session.probe()` параллельно читает bootstrap и session. Ранний bootstrap 401
+может показать кнопку входа до получения 401 второго начального запроса.
+Наблюдатель, установленный перед нажатием кнопки, прежде ошибочно относил этот
+запоздалый ответ к новой OIDC-попытке.
+
+Теперь оснастка наблюдает Request до начальной навигации и замораживает набор
+перед первой попыткой frontend OIDC. Только тот же объект Request, GET
+`/api/v1/session` без query/fragment, exact frontend origin, тип fetch/xhr и
+статус 401 классифицируются как начальная probe. Счётчик
+`initialSessionProbe401s` возвращается отдельно. Новый запрос с тем же URL,
+другой origin/path/method, неизвестная идентичность, 403/503 и ошибки callback
+остаются отказом. Повторная frontend-попытка не расширяет исходный набор;
+подписка удаляется в `finally`. Cookie/CSRF, серверный TTL и production-код
+не меняются.
+
+Поддерживаемая локальная проверка без credentials и внешней сети:
+
+```bash
+cd services/staff/control-center
+npx vitest run e2e/auth-flow.test.ts e2e/initial-session-probe.test.ts
+npx playwright test --config e2e/auth-flow.fixture.config.ts
+```
+
+Бюджет browser suite — 180 секунд, retries 0, три движка. Fixtures моделируют
+параллельный начальный probe, один cold credential submit либо warm SSO,
+запоздалый 401 и успешные callback/readback; негативные варианты проверяют
+initial 403/503, новый session 401 и callback 401/503. Это доказательство
+оснастки, а не живого vendor OIDC.
+
+Исторический smoke FAIL из #1377 сохраняется: прежний безопасный лог не
+содержит времени начала/идентичности session request, поэтому совпадение кода
+ошибки с локальным воспроизведением не доказывает его причину задним числом.
+После merge оператор запускает один свежий разрешённый smoke на фактическом
+component manifest. До него live acceptance исправления — NOT RUN.
+
+## Исходная реализация #1241
 
 Issue [#1241](https://github.com/codex-k8s/kodex/issues/1241), общая приёмка
 [#1031](https://github.com/codex-k8s/kodex/issues/1031). База реализации:
