@@ -45,6 +45,11 @@ func assertCatalogCard(t *testing.T, name protoreflect.FullName, value map[strin
 			}
 		}
 	case "controlplane.v1.Agent":
+		for _, key := range []string{"system", "enabled"} {
+			if flag, present := value[key].(bool); !present || flag {
+				t.Fatalf("required Agent false lost: %s", key)
+			}
+		}
 		if empty {
 			if _, exists := value["currentRunRef"]; exists {
 				t.Fatal("empty current run reference was fabricated")

@@ -82,3 +82,26 @@ test('combined lost Run ACK does not retry',t=>{const f=fixture(t,false,true);as
 
 for(const field of ['fixtureState','runnerProvenance'])test(`combined changed ${field} fails before requests`,t=>{const f=fixture(t,false,true);assert.equal(f.run('plan').status,0);const p=JSON.parse(readFileSync(f.profile));const path=p.combined[field];writeFileSync(path,readFileSync(path,'utf8')+'\n');const count=f.calls().length;assert.equal(f.run('launch',confirmation).status,1);assert.equal(f.calls().length,count);});
 test('combined malformed invocation result remains closed',t=>{const f=combinedLaunched(t);f.setMode('malformed-ref');assert.equal(f.run('capture').status,1);assert.equal(f.calls().filter(c=>c.method==='POST').length,1);});
+
+for (const combined of [false, true]) {
+  test(`${combined ? 'combined' : 'standalone'} plan accepts ordinary Agent explicit false in READY and RUNNING`, t => {
+    const f = fixture(t, false, combined);
+    for (const mode of ['', 'agent-running']) {
+      f.setMode(mode);
+      const result = f.run('plan');
+      assert.equal(result.status, 0, result.stderr);
+    }
+    assert.equal(f.calls().filter(call => call.method !== 'GET').length, 0);
+  });
+  for (const mode of ['missing-system', 'invalid-system', 'system-agent', 'agent-ref', 'foreign', 'missing-project', 'disabled', 'missing-enabled', 'invalid-enabled', 'agent-draft', 'agent-archived', 'agent-disabled', 'agent-unknown']) {
+    test(`${combined ? 'combined' : 'standalone'} plan rejects Agent ${mode} before mutation`, t => {
+      const f = fixture(t, false, combined);
+      f.setMode(mode);
+      const result = f.run('plan');
+      assert.equal(result.status, 1, result.stdout);
+      assert.match(result.stderr, /AGENT_NOT_READY/);
+      assert.equal(f.calls().filter(call => call.method !== 'GET').length, 0);
+      assert.equal(f.events().filter(event => event.type === 'INTENT').length, 0);
+    });
+  }
+}
