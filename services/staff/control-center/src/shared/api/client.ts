@@ -7,6 +7,7 @@ import { ownerRequestSignal } from "./owner-lifetime";
 import {
   documentFetch,
   installDocumentRequestLifetime,
+  retainRequestSignalParents,
 } from "./document-lifetime";
 
 const projectReferenceHeader = "X-Kodex-Project-ID";
@@ -32,9 +33,15 @@ export function configureApiClient(): void {
       !match ||
       decodeURIComponent(match[1] ?? "") !== reference
     )
-      return new Request(request, { headers: localizedHeaders });
+      return retainRequestSignalParents(
+        new Request(request, { headers: localizedHeaders }),
+        request,
+      );
     localizedHeaders.set(projectReferenceHeader, reference);
-    return new Request(request, { headers: localizedHeaders });
+    return retainRequestSignalParents(
+      new Request(request, { headers: localizedHeaders }),
+      request,
+    );
   });
   projectInterceptorConfigured = true;
 }

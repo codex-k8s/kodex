@@ -4,6 +4,7 @@ import {
   documentRequestSignal,
   documentRequestsResumed,
   installDocumentRequestLifetime,
+  retainRequestSignalParents,
 } from "./document-lifetime";
 import { ownerRequestSignal, resetOwnerRequests } from "./owner-lifetime";
 import { readWithRetry } from "./read-retry";
@@ -104,30 +105,72 @@ describe("document request lifetime", () => {
     await cancelled;
     expect(next).not.toHaveBeenCalled();
   });
-  it("отменяет активный native request, сохраняет headers/body/method и внешнюю причину отказа", async () => {
-    const native = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok"));
+  it("отменяет активный native request, сохраняет headers/body/method/credentials и внешнюю причину отказа", async () => {
+    const native = vi.fn<typeof fetch>((_input, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Fixture aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
     vi.stubGlobal("fetch", native);
     const request = new Request("https://kodex.example/api/v1/projects", {
       method: "POST",
       headers: { "X-Fixture": "preserved" },
       body: "fixture",
+      credentials: "include",
     });
-    await documentFetch(request);
+    const pending = documentFetch(request);
+    await vi.waitFor(() => expect(native).toHaveBeenCalledOnce());
     const transmitted = native.mock.calls[0]?.[0];
+    const init = native.mock.calls[0]?.[1];
     expect(transmitted).toBeInstanceOf(Request);
     if (!(transmitted instanceof Request))
       throw new Error("Missing fixture request");
     expect(transmitted.method).toBe("POST");
     expect(transmitted.headers.get("X-Fixture")).toBe("preserved");
+    expect(transmitted.credentials).toBe("include");
     expect(await transmitted.text()).toBe("fixture");
+    expect(init?.signal?.aborted).toBe(false);
     target.dispatchEvent(new Event("beforeunload"));
-    expect(transmitted.signal.aborted).toBe(true);
+    expect(init?.signal?.aborted).toBe(true);
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
     target.dispatchEvent(new Event("pageshow"));
     const failure = new TypeError("Network unavailable");
     native.mockRejectedValueOnce(failure);
     await expect(
       documentFetch(new Request("https://kodex.example/api/v1/projects")),
     ).rejects.toBe(failure);
+  });
+  it("передаёт отмену parent signal напрямую в native fetch", async () => {
+    const native = vi.fn<typeof fetch>((_input, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Fixture aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    vi.stubGlobal("fetch", native);
+    const parent = new AbortController();
+    const source = new Request("https://kodex.example/api/v1/projects", {
+      signal: parent.signal,
+    });
+    const pending = documentFetch(
+      retainRequestSignalParents(
+        new Request(source, { headers: { "X-Fixture": "preserved" } }),
+        source,
+      ),
+    );
+    await vi.waitFor(() => expect(native).toHaveBeenCalledOnce());
+    const init = native.mock.calls[0]?.[1];
+    expect(init?.signal?.aborted).toBe(false);
+    parent.abort();
+    expect(init?.signal?.aborted).toBe(true);
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   });
   it("регистрация идемпотентна, cleanup удаляет слушатели", () => {
     expect(installDocumentRequestLifetime(target as Window)).toBe(cleanup);

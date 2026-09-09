@@ -108,23 +108,36 @@ test("synthetic: смена Проекта отменяет pending loadProject 
   let oldRequestStarted = false;
   await page.addInitScript(() => {
     const observedWindow = window as Window & {
-      __projectRequestSignals?: Array<{ path: string; aborted: boolean }>;
+      __projectRequestSignals?: Array<{
+        path: string;
+        source: "input" | "init";
+        aborted: boolean;
+      }>;
     };
     observedWindow.__projectRequestSignals = [];
     const nativeFetch = window.fetch;
     window.fetch = (input, init) => {
       const request = input instanceof Request ? input : undefined;
-      const signal = request?.signal ?? init?.signal;
       const url = new URL(request?.url ?? String(input), window.location.href);
-      const observation = { path: url.pathname, aborted: !!signal?.aborted };
-      observedWindow.__projectRequestSignals?.push(observation);
-      signal?.addEventListener(
-        "abort",
-        () => {
-          observation.aborted = true;
-        },
-        { once: true },
-      );
+      for (const [source, signal] of [
+        ["input", request?.signal],
+        ["init", init?.signal],
+      ] as const) {
+        if (!signal) continue;
+        const observation = {
+          path: url.pathname,
+          source,
+          aborted: signal.aborted,
+        };
+        observedWindow.__projectRequestSignals?.push(observation);
+        signal.addEventListener(
+          "abort",
+          () => {
+            observation.aborted = true;
+          },
+          { once: true },
+        );
+      }
       return nativeFetch(input, init);
     };
   });
@@ -160,6 +173,7 @@ test("synthetic: смена Проекта отменяет pending loadProject 
             window as Window & {
               __projectRequestSignals?: Array<{
                 path: string;
+                source: "input" | "init";
                 aborted: boolean;
               }>;
             }
@@ -168,6 +182,7 @@ test("synthetic: смена Проекта отменяет pending loadProject 
     )
     .toContainEqual({
       path: `/api/v1/projects/${oldProject.ref}`,
+      source: "init",
       aborted: false,
     });
   await chooseProject(page, newProject);
@@ -183,6 +198,7 @@ test("synthetic: смена Проекта отменяет pending loadProject 
             window as Window & {
               __projectRequestSignals?: Array<{
                 path: string;
+                source: "input" | "init";
                 aborted: boolean;
               }>;
             }
@@ -191,6 +207,7 @@ test("synthetic: смена Проекта отменяет pending loadProject 
     )
     .toContainEqual({
       path: `/api/v1/projects/${oldProject.ref}`,
+      source: "init",
       aborted: true,
     });
   await expect(

@@ -3,9 +3,21 @@ export const documentRequestsSuspended = "kodex:document-requests-suspended";
 export const documentRequestsResumed = "kodex:document-requests-resumed";
 let controller = new AbortController();
 let dispose: (() => void) | undefined;
+const retainedRequestSignals = new WeakMap<Request, readonly AbortSignal[]>();
 
 export function documentRequestSignal(): AbortSignal {
   return controller.signal;
+}
+
+export function retainRequestSignalParents(
+  request: Request,
+  source: Request,
+): Request {
+  retainedRequestSignals.set(request, [
+    source.signal,
+    ...(retainedRequestSignals.get(source) ?? []),
+  ]);
+  return request;
 }
 
 export function installDocumentRequestLifetime(
@@ -44,12 +56,45 @@ export function installDocumentRequestLifetime(
   return dispose;
 }
 
+function linkedRequestSignal(signals: readonly AbortSignal[]): {
+  signal: AbortSignal;
+  dispose: () => void;
+} {
+  const linked = new AbortController();
+  const abort = (event: Event) => {
+    const source = event.target;
+    if (source instanceof AbortSignal && !linked.signal.aborted)
+      linked.abort(source.reason);
+  };
+  for (const signal of signals) {
+    if (signal.aborted) {
+      linked.abort(signal.reason);
+      break;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+  }
+  return {
+    signal: linked.signal,
+    dispose: () => {
+      for (const signal of signals) signal.removeEventListener("abort", abort);
+    },
+  };
+}
+
 // Между interceptor и native fetch есть await в generated client. Повторно
 // проверяем scope именно здесь: уже закрытый документ не вызывает native fetch.
 export const documentFetch: typeof fetch = (input, init) => {
   const request = new Request(input, init);
-  const signal = AbortSignal.any([request.signal, documentRequestSignal()]);
+  const linked = linkedRequestSignal([
+    request.signal,
+    ...(input instanceof Request
+      ? (retainedRequestSignals.get(input) ?? [])
+      : []),
+    documentRequestSignal(),
+  ]);
+  const { signal } = linked;
   if (signal.aborted) {
+    linked.dispose();
     const reason: unknown = signal.reason;
     return Promise.reject(
       reason instanceof Error
@@ -57,5 +102,10 @@ export const documentFetch: typeof fetch = (input, init) => {
         : new DOMException("Document request aborted", "AbortError"),
     );
   }
-  return globalThis.fetch(new Request(request, { signal }));
+  try {
+    return globalThis.fetch(request, { signal }).finally(linked.dispose);
+  } catch (error) {
+    linked.dispose();
+    throw error;
+  }
 };
