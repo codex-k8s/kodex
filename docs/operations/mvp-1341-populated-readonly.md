@@ -4,7 +4,7 @@ title: Точечная приёмка наполненных интерфейс
 status: approved
 type: operations
 owner: manager
-version: 1.4.0
+version: 1.5.0
 updated: 2026-09-09
 ---
 
@@ -139,6 +139,36 @@ npx playwright test --config e2e/ui-readonly.fixture.config.ts
 Context7 `/microsoft/playwright/v1.61.0`: проверены `expect.poll`, явный timeout
 и отдельный бюджет locator resolution; наблюдение использует `evaluateAll`,
 не создающий неограниченного ожидания появления locator.
+
+## Запросы уходящего документа (#1370)
+
+Переход шага locale начинается полной навигацией на Home. Первые четыре reads
+`reloadPlatformState` — bootstrap, projects/pageSize100, overview и runs/pageSize100 —
+не должны стартовать из уже уходящего документа. Их promise chain:
+`PLATFORM_RESYNC_REQUIRED → reloadPlatformState → runBoundedPlatformReload →
+query → readWithRetry → unwrap → generated client → native fetch`; reducer
+обрабатывает rejection. WebKit может отдельно сообщить access-control JavaScript
+ошибку при fetch старого документа, даже когда Promise уже обработан.
+
+Handwritten document lifetime закрывает native boundary и очередь до навигации;
+после отменённого ухода создаётся новый scope, а подписки/курсоры WS сохраняются.
+Локальная проверка использует настоящий ProjectsPage, platform store и generated
+SDK с отдельным loopback HTTP backend, без auth/provider эффектов. Mock runtime
+конфигурации действует только в отдельной fixture-сборке; production HTTPS guards
+не меняются.
+
+```bash
+npx vite build --config vite.document-lifecycle.config.ts
+npx playwright test --config e2e/document-lifecycle.fixture.config.ts
+```
+
+Бюджет 180 секунд, три движка, workers=3, retries=0. Проверяются задержанная
+загрузка проектов → expand/close → отложенный resync → полная навигация → locale,
+с observer и без него; отменённый beforeunload и новый read по trusted input;
+настоящие HTTP403, malformed response и CORS denial остаются ошибкой UI.
+Unit дополнительно проверяет queued operations, stale retry/ACK, headers/body,
+однократные listeners и сохранение WS cursors. PASS fixture не заменяет будущую
+live приёмку locale и обоих размеров project collection.
 
 ## Причинность и безопасный журнал
 

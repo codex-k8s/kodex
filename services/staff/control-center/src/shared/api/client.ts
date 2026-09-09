@@ -4,13 +4,20 @@ import { currentLocale } from "@/shared/locale";
 import { selectedProjectRef } from "@/shared/project-context";
 import { ownerRequestSignal } from "./owner-lifetime";
 
+import {
+  documentFetch,
+  installDocumentRequestLifetime,
+} from "./document-lifetime";
+
 const projectReferenceHeader = "X-Kodex-Project-ID";
 let projectInterceptorConfigured = false;
 
 export function configureApiClient(): void {
+  installDocumentRequestLifetime();
   client.setConfig({
     baseUrl: runtimeConfig().apiBaseUrl,
     credentials: "include",
+    fetch: documentFetch,
   });
   if (projectInterceptorConfigured) return;
   client.interceptors.request.use((request) => {

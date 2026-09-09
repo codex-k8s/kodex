@@ -252,6 +252,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const generation = new Map<QueryKey, number>();
   const consumedAuditPageTokens = new Set<string>();
   let platformReloadPromise: Promise<void> | undefined;
+  let platformReloadScope: AbortSignal | undefined;
 
   async function query<T>(
     key: QueryKey,
@@ -1818,7 +1819,9 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   function reloadPlatformState(): Promise<void> {
-    if (platformReloadPromise) return platformReloadPromise;
+    if (platformReloadPromise && !platformReloadScope?.aborted)
+      return platformReloadPromise;
+    platformReloadScope = ownerRequestSignal();
     const reload = async (): Promise<void> => {
       const projectRef = selectedProjectRef();
       const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
@@ -1859,6 +1862,7 @@ export const usePlatformStore = defineStore("platform", () => {
     resetOwnerRequests();
     cancelSearch();
     platformReloadPromise = undefined;
+    platformReloadScope = undefined;
     generation.clear();
     for (const target of [
       runtimes,
