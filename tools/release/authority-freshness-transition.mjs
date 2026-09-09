@@ -69,7 +69,8 @@ export function authorityConsumers(resources) {
       for(const pod of pods) {
         const actual=[...(pod.spec.containers??[]),...(pod.spec.initContainers??[])].find(item=>item.name===container.name);
         const status=[...(pod.status.containerStatuses??[]),...(pod.status.initContainerStatuses??[])].find(item=>item.name===container.name);
-        requireValue(pod.status.phase==='Running' && status?.ready===true && status.state?.running && /^containerd:\/\/[a-f0-9]{64}$/.test(status.containerID??'') && /@sha256:[a-f0-9]{64}$/.test(status.imageID??'') && fingerprint(actual)===fingerprint(container), 'AUTHORITY_CONSUMER_NOT_STABLE');
+        requireValue(pod.status.phase==='Running' && status?.ready===true && status.state?.running && /^containerd:\/\/[a-f0-9]{64}$/.test(status.containerID??'') && /@sha256:[a-f0-9]{64}$/.test(status.imageID??'') &&
+          authorityContainerMaterialized(workload.spec.template.spec,pod.spec,container,actual), 'AUTHORITY_CONSUMER_NOT_STABLE');
         const process=hot?`/tmp/kodex-dev-${container.args[2]}/build/main`:`/usr/local/bin/internal-rpc-authority-${role}`;
         requireValue(/^\/(tmp\/kodex-dev-[a-z0-9-]+\/build\/main|usr\/local\/bin\/internal-rpc-authority-(issuer|verifier))$/.test(process),'UNKNOWN_AUTHORITY_PROCESS');
         result.push({role,profile:hot?'source':'image',workload:workload.metadata.name,workloadUID:workload.metadata.uid,specSHA256:fingerprint(workload.spec),pod:pod.metadata.name,podUID:pod.metadata.uid,
@@ -81,6 +82,37 @@ export function authorityConsumers(resources) {
   for(const workload of resources.filter(item=>item.kind==='Deployment'&&Object.hasOwn(authorityDeploymentRoles,item.metadata.name)))
     for(const role of authorityDeploymentRoles[workload.metadata.name])requireValue(result.some(item=>item.workload===workload.metadata.name&&item.role===role),'REGISTERED_AUTHORITY_CONSUMER_MISSING');
   return result.sort((a,b)=>`${a.pod}/${a.container}`.localeCompare(`${b.pod}/${b.container}`));
+}
+
+function authorityContainerMaterialized(templatePod,actualPod,templateContainer,actualContainer) {
+  if(!actualContainer)return false;
+  const declared=structuredClone(templateContainer),actual=structuredClone(actualContainer);
+  const declaredMounts=declared.volumeMounts??[],actualMounts=actual.volumeMounts??[];
+  delete declared.volumeMounts;delete actual.volumeMounts;
+  if(fingerprint(declared)!==fingerprint(actual))return false;
+  if(!declaredMounts.every(mount=>actualMounts.filter(item=>item.name===mount.name||item.mountPath===mount.mountPath).length===1&&
+    actualMounts.some(item=>item.name===mount.name&&item.mountPath===mount.mountPath&&fingerprint(item)===fingerprint(mount))))return false;
+  const declaredMountKeys=new Set(declaredMounts.map(mount=>`${mount.name}\0${mount.mountPath}`));
+  const extraMounts=actualMounts.filter(mount=>!declaredMountKeys.has(`${mount.name}\0${mount.mountPath}`));
+  const declaredVolumes=templatePod.volumes??[],actualVolumes=actualPod.volumes??[];
+  if(!declaredVolumes.every(volume=>actualVolumes.filter(item=>item.name===volume.name).length===1&&
+    actualVolumes.some(item=>item.name===volume.name&&fingerprint(item)===fingerprint(volume))))return false;
+  const declaredVolumeNames=new Set(declaredVolumes.map(volume=>volume.name));
+  const extraVolumes=actualVolumes.filter(volume=>!declaredVolumeNames.has(volume.name));
+  if(extraMounts.length===0&&extraVolumes.length===0)return true;
+  if(extraMounts.length!==1||extraVolumes.length!==1||templatePod.automountServiceAccountToken===false||actualPod.automountServiceAccountToken===false)return false;
+  const mount=extraMounts[0],volume=extraVolumes[0];
+  if(!/^kube-api-access-[a-z0-9]{5}$/.test(mount.name)||mount.name!==volume.name||fingerprint(mount)!==fingerprint({name:mount.name,mountPath:'/var/run/secrets/kubernetes.io/serviceaccount',readOnly:true}))return false;
+  const projected=volume.projected,sources=projected?.sources;
+  if(fingerprint(Object.keys(volume).sort())!==fingerprint(['name','projected'])||fingerprint(Object.keys(projected??{}).sort())!==fingerprint(['defaultMode','sources'])||
+    projected.defaultMode!==420||!Array.isArray(sources)||sources.length!==3||sources.some(source=>Object.keys(source).length!==1))return false;
+  const token=sources.filter(source=>source.serviceAccountToken).map(source=>source.serviceAccountToken);
+  const rootCA=sources.filter(source=>source.configMap).map(source=>source.configMap);
+  const namespace=sources.filter(source=>source.downwardAPI).map(source=>source.downwardAPI);
+  return token.length===1&&Number.isInteger(token[0].expirationSeconds)&&token[0].expirationSeconds>=600&&token[0].expirationSeconds<=7200&&
+    fingerprint({...token[0],expirationSeconds:0})===fingerprint({expirationSeconds:0,path:'token'})&&
+    fingerprint(rootCA)===fingerprint([{name:'kube-root-ca.crt',items:[{key:'ca.crt',path:'ca.crt'}]}])&&
+    fingerprint(namespace)===fingerprint([{items:[{path:'namespace',fieldRef:{apiVersion:'v1',fieldPath:'metadata.namespace'}}]}]);
 }
 
 export function verifyJobReadback(job, expected) {
