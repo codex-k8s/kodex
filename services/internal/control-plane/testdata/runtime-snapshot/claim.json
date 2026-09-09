@@ -1,0 +1,251 @@
+{
+  "run": {
+    "ref": "run_abcdefgh",
+    "projectRef": "prj_abcdefgh",
+    "sessionRef": "session_abcdefgh",
+    "state": "RUN_STATE_RUNNING"
+  },
+  "node": {
+    "ref": "node_abcdefgh",
+    "runRef": "run_abcdefgh",
+    "agentRef": "agent_abcdefgh",
+    "turnRef": "turn_abcdefgh",
+    "type": "RUN_NODE_TYPE_AGENT_EXECUTION",
+    "state": "RUN_NODE_STATE_RUNNING"
+  },
+  "revision": {
+    "ref": "revision_abcdefgh",
+    "version": "1",
+    "sessionRef": "session_abcdefgh",
+    "turnRef": "turn_abcdefgh",
+    "attempt": 1,
+    "agentRef": "agent_abcdefgh",
+    "instructions": "Complete the server-owned task.",
+    "runtime": {
+      "ref": "builtin-safe-runtime",
+      "revision": "revision-1",
+      "provider": "openai",
+      "model": "codex",
+      "ready": true
+    },
+    "capabilities": [
+      {
+        "key": "platform.artifact.manage",
+        "name": "platform.artifact.manage"
+      },
+      {
+        "key": "email.message.send",
+        "name": "email.message.send"
+      }
+    ],
+    "integrationGrants": [
+      {
+        "ref": "igr_abcdefgh",
+        "connectionRef": "int_abcdefgh",
+        "capabilityKey": "email.message.send",
+        "enabled": true,
+        "definitionKey": "email",
+        "connectionName": "Fixture email",
+        "capabilityName": "Send",
+        "capabilityDescription": "Synthetic email",
+        "risk": "WRITE",
+        "definitionVersion": "1.4.1",
+        "definitionDigest": "9999999999999999999999999999999999999999999999999999999999999999",
+        "operation": "SEND",
+        "inputSchema": "{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"subject\":{\"type\":\"string\"}},\"required\":[\"subject\"]}",
+        "inputSchemaSha256": "7619461ec9bca3429e9410fb44b7996d4bc75b9ab899b6482c353ff055fc9a07"
+      }
+    ],
+    "inputDigest": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "revisionDigest": "d889eda33ab925ed541b389e33ca8ebc1f307e4cff8f50969796dfbc41899c81",
+    "roleDefinitionRef": "roledef_abcdefgh",
+    "roleImageRecipeRef": "imgrec_abcdefgh",
+    "roleImageArtifactRef": "imgart_abcdefgh",
+    "imageReference": "registry.example/kodex/roles@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "imageManifestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "roleRuntimeContractRevision": "1",
+    "roleRuntimeContractSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "providerCredential": {
+      "accountRef": "pacc_abcdefgh",
+      "credentialRevisionRef": "pcr_abcdefgh",
+      "credentialRevision": "1",
+      "secretName": "runtime-provider-openai-default-r1",
+      "secretUid": "10000000-0000-4000-8000-000000000001",
+      "secretResourceVersion": "1",
+      "contentSha256": "004ab004093ba6916de2d7fa718d1e1539157f24f04e747d0346e86e0a87556c"
+    },
+    "runtimeConfigRef": "rconf_abcdefgh",
+    "runtimeConfigVersion": "1",
+    "runtimeConfigDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "providerPolicyRef": "ppol_abcdefgh",
+    "providerPolicyVersion": "1",
+    "providerPolicyDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "configOverlayRef": "cover_abcdefgh",
+    "configOverlayVersion": "1",
+    "configOverlayDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtimeEnvironmentRef": "renv_abcdefgh",
+    "runtimeEnvironmentVersion": "1",
+    "runtimeEnvironmentDigest": "e97f68222faa99f22c111b2abf8f399aacebb6621ea599f7c897bf045d943941",
+    "environmentBindingRef": "aenv_abcdefgh",
+    "environmentBindingVersion": "1",
+    "environmentBindingDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+    "attachmentSetRef": "aset_abcdefgh",
+    "attachmentSetManifestDigest": "dde5b9f7a5c4be364b0863132a4cb2d3174634d5d24adcdd03ed948338f5763e",
+    "inputArtifacts": [
+      {
+        "artifact": {
+          "ref": "artifact_abcdefgh",
+          "version": "1",
+          "fileName": "brief.txt",
+          "mediaType": "text/plain",
+          "sizeBytes": "12",
+          "source": "ARTIFACT_SOURCE_CONTROL_CENTER",
+          "revision": 1,
+          "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "scanState": "ARTIFACT_SCAN_STATE_CLEAN"
+        },
+        "scope": "INPUT",
+        "position": "1",
+        "attachmentSetRef": "aset_abcdefgh",
+        "attachmentPurpose": "RUN_INPUT",
+        "provenance": "CURRENT_TURN"
+      }
+    ],
+    "attachmentContext": "RUN_INPUT",
+    "roleImageRecipeGeneration": "1",
+    "environmentTools": [
+      {
+        "name": "GitHub CLI",
+        "command": "gh",
+        "description": "Работа с GitHub",
+        "usageHint": "Используй gh api"
+      }
+    ],
+    "environmentPolicy": {
+      "resources": {
+        "cpuRequestMilli": "2000",
+        "cpuLimitMilli": "2000",
+        "memoryRequestMib": "4096",
+        "memoryLimitMib": "4096",
+        "ephemeralStorageRequestMib": "1024",
+        "ephemeralStorageLimitMib": "4096"
+      },
+      "network": {
+        "denyByDefault": true,
+        "egress": [
+          {
+            "destination": "RUNTIME_NETWORK_DESTINATION_DNS",
+            "protocol": "RUNTIME_NETWORK_PROTOCOL_TCP",
+            "port": 53
+          },
+          {
+            "destination": "RUNTIME_NETWORK_DESTINATION_DNS",
+            "protocol": "RUNTIME_NETWORK_PROTOCOL_UDP",
+            "port": 53
+          },
+          {
+            "destination": "RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY",
+            "protocol": "RUNTIME_NETWORK_PROTOCOL_TCP",
+            "port": 8080
+          },
+          {
+            "destination": "RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK",
+            "protocol": "RUNTIME_NETWORK_PROTOCOL_TCP",
+            "port": 8444
+          }
+        ]
+      },
+      "kubernetesAccess": {
+        "kind": "RUNTIME_KUBERNETES_ACCESS_KIND_NONE",
+        "namespace": "kodex-runtime"
+      },
+      "resourcesDigest": "5cc6a50ed6896a06cea6acf2149f22c3d37fb52b6ef75f6305375d1bdde483b6",
+      "volumesDigest": "d21f6a8d7834847c8c5e02c88ff36a1114ecbfdf43f0c6668fceff28334b3634",
+      "networkDigest": "5572212990fe694f077ccac5b0b4ae4e4b979f812e061dd2daa8e0a66c46076b",
+      "rbacDigest": "1b72c0704ea77cc1536f61d4e882306f12967fd39425fa6ea8d3f68500461d2e"
+    },
+    "effectiveKubernetesAccess": {
+      "profile": {
+        "kind": "RUNTIME_KUBERNETES_ACCESS_KIND_NONE",
+        "namespace": "kodex-runtime"
+      },
+      "serviceAccountName": "runtime-sa-3810073e04f57fae",
+      "digest": "fb19539fc3e630387418dbbe7d5f47c12ba62359b58b50c98a93cd8aaa29a40e"
+    },
+    "attachmentSets": [
+      {
+        "ref": "aset_abcdefgh",
+        "manifestDigest": "dde5b9f7a5c4be364b0863132a4cb2d3174634d5d24adcdd03ed948338f5763e",
+        "purpose": "RUN_INPUT",
+        "scope": "INPUT",
+        "provenance": "CURRENT_TURN",
+        "turnRef": "turn_abcdefgh"
+      }
+    ],
+    "workspacePolicy": {
+      "revision": "1",
+      "root": "/workspace",
+      "rules": [
+        {
+          "path": "/workspace/input",
+          "access": "RUNTIME_WORKSPACE_ACCESS_READ_ONLY"
+        },
+        {
+          "path": "/workspace/knowledge",
+          "access": "RUNTIME_WORKSPACE_ACCESS_READ_ONLY"
+        },
+        {
+          "path": "/workspace/context",
+          "access": "RUNTIME_WORKSPACE_ACCESS_READ_ONLY"
+        },
+        {
+          "path": "/workspace/.kodex/state/codex-home/auth.json",
+          "access": "RUNTIME_WORKSPACE_ACCESS_READ_ONLY"
+        },
+        {
+          "path": "/workspace",
+          "access": "RUNTIME_WORKSPACE_ACCESS_WRITABLE"
+        }
+      ],
+      "maximumWritableBytes": "1073741824",
+      "maximumFileCount": "10000",
+      "digest": "d3252e9d55d1a05d66fadab336280eeaccc8f91c414c79aedcbe2cdff1b5f791",
+      "denialReasons": [
+        "RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY",
+        "RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED",
+        "RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE",
+        "RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR"
+      ]
+    },
+    "instructionRef": "instruction_abcdefgh",
+    "instructionDigest": "4444444444444444444444444444444444444444444444444444444444444444",
+    "promptTemplateRef": "prompt_abcdefgh",
+    "promptTemplateDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+    "promptMaterializationDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+    "organizationRef": "org_abcdefgh",
+    "effectiveReasoningEffort": "medium",
+    "reasoningMode": "RUNTIME_REASONING_MODE_SUPPORTED",
+    "runRef": "run_abcdefgh",
+    "nodeRef": "node_abcdefgh",
+    "boundedInput": {},
+    "artifacts": [
+      {
+        "ref": "artifact_abcdefgh",
+        "version": "1",
+        "fileName": "brief.txt",
+        "mediaType": "text/plain",
+        "sizeBytes": "12",
+        "source": "ARTIFACT_SOURCE_CONTROL_CENTER",
+        "revision": 1,
+        "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "scanState": "ARTIFACT_SCAN_STATE_CLEAN"
+      }
+    ]
+  },
+  "lease": {
+    "ref": "lease_abcdefgh",
+    "fence": "fence-1",
+    "generation": "1"
+  },
+  "task": "Prepare the result."
+}

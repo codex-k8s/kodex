@@ -3316,6 +3316,7 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 	}
 	rejectedExecution := rejectedExecutionResult.RuntimeItems[0]
 	integrationGrants, ok := rejectedExecution["integrationGrants"].([]map[string]string)
+	testClaimedIntegrationGrantDigestPins(t, rejectedExecution)
 	if !ok || len(integrationGrants) != 2 ||
 		integrationGrants[0]["capabilityKey"] != "synthetic.journal.read" ||
 		integrationGrants[1]["capabilityKey"] != "synthetic.journal.write" {

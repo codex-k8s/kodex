@@ -1289,6 +1289,8 @@ func runtimeRevisionGrants(value any) []runtimecontract.RunnerIntegrationGrant {
 	for _, item := range values {
 		result = append(result, runtimecontract.RunnerIntegrationGrant{Ref: item["ref"], ConnectionRef: item["connectionRef"],
 			DefinitionKey: item["definitionKey"], ConnectionName: item["connectionName"], CapabilityKey: item["capabilityKey"],
+			DefinitionVersion: item["definitionVersion"], DefinitionDigest: item["definitionDigest"],
+			Operation: item["operation"], InputSchema: item["inputSchema"], InputSchemaSHA256: item["inputSchemaSha256"],
 			CapabilityName: item["capabilityName"], CapabilityDescription: item["capabilityDescription"], Risk: item["risk"]})
 	}
 	return result

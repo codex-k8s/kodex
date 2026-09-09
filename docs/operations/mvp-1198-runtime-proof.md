@@ -196,3 +196,64 @@ provider в эту проверку не входят и остаются `NOT R
 provider API нет. Секреты и персональные данные в доказательства не включаются.
 Открытые #1198/#1213/#1216/#1189 нельзя считать неактуальными только по успешным
 локальным fixtures: их остаток deployment/live acceptance сохраняется.
+
+## Полнота integration grant в digest RuntimeRevision (#1394)
+
+CP `runtimeRevisionDigestFromSnapshot` материализует тот же `RunnerInput`,
+который runtime-controller получает через `RuntimeRevisionSnapshot` и
+`BuildTurnInput`. Проекция grant обязана включать `definitionVersion`,
+`definitionDigest`, `operation`, `inputSchema`, `inputSchemaSha256` наряду
+с остальными полями. Потеря этих пяти полей давала неправильный owner digest
+при непустом integration grant; строгий consumer отвергал revision до создания
+runtime Pod и до provider/MCP effect. Исправление сохраняет все поля при
+вычислении исходного digest; проверка consumer не ослабляется.
+
+| Путь / переход | Владелец и полномочия | Pin / результат / потребитель |
+| --- | --- | --- |
+| Пользователь запускает Agent через публичный Run endpoint | CP проверяет actor/project/Agent и текущие grants | Новый immutable RuntimeRevision; старые pins/history не меняются |
+| Runtime-controller вызывает ClaimExecution по защищённому RPC | CP выдаёт server-owned lease/fence/generation и snapshot | Owner digest связывает полный grant, image/environment/provider, input и контекст |
+| CP caster → Proto wire → BuildTurnInput | Controller читает защищённый claim; payload не назначает authority | Exact digest и MCP/execution binding; mismatch закрывает execution через прежний terminal path |
+| Старый failed Run или повтор | Существующий terminal receipt/history остаётся | Никакого автоматического нового Run, продолжения старого provider effect или правки сохранённого digest |
+
+Тесты используют один обезличенный полный набор
+`services/internal/control-plane/testdata/runtime-snapshot/{snapshot,claim}.json`:
+owner map → настоящий CP digest; тот же owner map → настоящий caster → Proto
+marshal/unmarshal → полное равенство claim; этот claim → `BuildTurnInput` с
+зафиксированным expected digest, без локального reseal. Набор содержит
+RoleImage, environment policy/tools, provider binding, workspace/attachment и
+email grant. Изменённые grant/schema/image/environment/provider pins закрыто
+отклоняются. До исправления owner digest regression падает, caster проходит.
+
+Disposable PostgreSQL-сценарий
+`integration read and Human Gate decisions preserve effect cardinality`
+дополнительно проверяет фактический `ClaimExecution`: оба ненулевых grant
+содержат все пять pins, и изменение каждого меняет digest. Это локальное
+доказательство owner pipeline, не подтверждение отправки vendor email.
+
+Узкий PG запуск включает обязательные prerequisites `catalog owner probe` и
+`model catalog is version bound`, а для affinity также
+`runtime configuration publish validates canonical provider accounts`
+(создание secondary account); без них сценарии
+launch/affinity не имеют подготовленного account catalog.
+
+Публичные локальные команды (Go `GOMAXPROCS=4 GOWORK=off TMPDIR=/tmp`, `-p 2`):
+
+```sh
+go -C services/internal/control-plane test -p 2 -count=1 ./...
+go -C services/internal/runtime-controller test -p 2 -count=1 ./...
+./scripts/tests/control-plane-postgres-test.sh '^TestBootstrapComponent$/(catalog_owner_probe|model_catalog_is_version_bound|integration_configuration_and_grants|integration_read_and_Human_Gate_decisions_preserve_effect_cardinality|runtime_configuration_publish_validates_canonical_provider_accounts|session_provider_affinity_survives_policy_mutation_and_fails_closed_on_revoke)$'
+```
+
+Deployment scope: только application CP. Proto/OpenAPI, миграции,
+runtime-controller/runner, grants/sidecars и public DTO не меняются.
+Исправленный CP совместим с существующим строгим runtime-controller; пустые
+integration grants дают прежний digest. Старые уже сохранённые ошибочные
+revisions с непустыми grants не чинятся задним числом. Откат CP возвращает
+известный отказ новых таких запусков; безопасного fallback digest нет.
+После targeted rollout нужен отдельный разрешённый новый Run с новым immutable
+snapshot. Ни локальный PASS, ни исправление mapping не означают live acceptance.
+
+Точный SHA, команды/выходы и оставшиеся NOT RUN фиксируются в PR, связанном с Issue #1394.
+Актуальная документация protobuf-go по `proto.Marshal`/`proto.Unmarshal`,
+`protojson.Unmarshal` и `proto.Equal` проверена через Context7
+`/protocolbuffers/protobuf-go`; wire ABI и генерация не изменены.
