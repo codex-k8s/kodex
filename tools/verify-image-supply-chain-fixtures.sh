@@ -89,6 +89,7 @@ pull_host=registry.nodes.example.test
 kubectl kustomize "$repository_root/deploy/k8s/overlays/staging/image-supply-chain" \
   >"$temporary_directory/supply.yaml"
 for policy_name in kodex-image-admission-controller-jobs \
+  kodex-image-admission-proof-release \
   kodex-image-admission-controller-workspaces; do
   POLICY_NAME="$policy_name" yq -e '
     select(.kind == "ValidatingAdmissionPolicy" and .metadata.name == strenv(POLICY_NAME)) |

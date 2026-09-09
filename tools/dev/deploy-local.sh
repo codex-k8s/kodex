@@ -1051,6 +1051,8 @@ readback_local_image_supply_chain() {
     customresourcedefinition/imageadmissionpolicyparameters.supplychain.kodex.dev \
     validatingadmissionpolicy/kodex-image-admission-controller-jobs \
     validatingadmissionpolicybinding/kodex-image-admission-controller-jobs \
+    validatingadmissionpolicy/kodex-image-admission-proof-release \
+    validatingadmissionpolicybinding/kodex-image-admission-proof-release \
     validatingadmissionpolicy/kodex-image-admission-controller-workspaces \
     validatingadmissionpolicybinding/kodex-image-admission-controller-workspaces; do
     kubectl get "$resource" >/dev/null 2>&1 ||

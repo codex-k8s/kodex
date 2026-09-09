@@ -4,6 +4,8 @@ package admissioncontroller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"regexp"
@@ -24,6 +26,9 @@ const (
 	idLabel           = "kodex.dev/image-admission-id"
 	phaseLabel        = "kodex.dev/image-admission-phase"
 	runIDAnnotation   = "kodex.dev/admission-run-id"
+	proofHoldLabel    = "kodex.dev/executable-proof-hold"
+	proofAttempt      = "kodex.dev/executable-proof-attempt"
+	proofReservation  = "kodex.dev/executable-proof-reservation"
 	policyName        = "kodex-image-admission-policy"
 )
 
@@ -88,6 +93,9 @@ func (controller *Controller) Run(ctx context.Context) error {
 // Check проверяет только прямую Kubernetes infrastructure и immutable local
 // policy projection; соседний control-plane не участвует в Pod readiness.
 func (controller *Controller) Check(ctx context.Context) error {
+	if err := controller.validateProofHold(controller.now().UTC()); err != nil {
+		return err
+	}
 	policy, err := controller.client.CoreV1().ConfigMaps(controller.config.Namespace).Get(ctx, controller.config.PolicyConfigMap, metav1.GetOptions{})
 	if err != nil {
 		return errors.New("read image admission policy")
@@ -105,6 +113,10 @@ func (controller *Controller) Check(ctx context.Context) error {
 }
 
 func (controller *Controller) Reconcile(ctx context.Context) error {
+	now := controller.now().UTC()
+	if err := controller.validateProofHold(now); err != nil {
+		return err
+	}
 	policy, err := controller.client.CoreV1().ConfigMaps(controller.config.Namespace).Get(ctx, controller.config.PolicyConfigMap, metav1.GetOptions{})
 	if err != nil {
 		return errors.New("read image admission owner policy")
@@ -124,7 +136,6 @@ func (controller *Controller) Reconcile(ctx context.Context) error {
 	if err := validateManagedInventory(jobs.Items, workspaces.Items, controller.config.Namespace); err != nil {
 		return err
 	}
-	now := controller.now().UTC()
 	orphanCleanupPending, err := controller.deleteOrphanAdmissionJobs(ctx, jobs.Items, workspaces.Items)
 	if err != nil {
 		return err
@@ -136,6 +147,16 @@ func (controller *Controller) Reconcile(ctx context.Context) error {
 	}
 	if err := controller.reconcilePromotions(ctx, policy, revision, jobs.Items, now); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (controller *Controller) validateProofHold(now time.Time) error {
+	if !controller.config.HoldProofJobs {
+		return nil
+	}
+	if !controller.config.ProofHoldUntil.After(now) || controller.config.ProofHoldUntil.After(now.Add(30*time.Minute)) {
+		return errors.New("image admission proof hold deadline is invalid")
 	}
 	return nil
 }
@@ -248,6 +269,9 @@ func (controller *Controller) ensurePhase(ctx context.Context, policy *corev1.Co
 	}
 	if err := prepareRendered(rendered, controller.config.Namespace, runID, phase); err != nil {
 		return err
+	}
+	if controller.config.HoldProofJobs && (phase == "claim" || phase == "promote") {
+		prepareProofReservation(rendered.Job, runID, phase)
 	}
 	if rendered.PVC != nil {
 		if err := controller.ensureWorkspace(ctx, rendered.PVC); err != nil {
@@ -432,10 +456,37 @@ func validManagedJob(job *batchv1.Job, namespace, phase string) bool {
 		job.Spec.Template.Spec.AutomountServiceAccountToken == nil || *job.Spec.Template.Spec.AutomountServiceAccountToken ||
 		job.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever || len(job.Spec.Template.Spec.Containers) != 1 ||
 		job.Spec.Template.Spec.Containers[0].Name != phase || len(job.Spec.Template.Spec.Containers[0].Command) != 3 ||
-		job.Spec.Template.Spec.Containers[0].Command[2] != phase {
+		job.Spec.Template.Spec.Containers[0].Command[2] != phase || !validProofReservation(job, phase) {
 		return false
 	}
 	return true
+}
+
+func prepareProofReservation(job *batchv1.Job, runID, phase string) {
+	attempt := "1"
+	job.Labels[proofHoldLabel] = "true"
+	job.Annotations[proofAttempt] = attempt
+	job.Annotations[proofReservation] = proofReservationDigest(runID, job.Labels[idLabel], phase, attempt)
+	held := true
+	job.Spec.Suspend = &held
+}
+
+func validProofReservation(job *batchv1.Job, phase string) bool {
+	held := job.Labels[proofHoldLabel]
+	if held == "" {
+		return job.Annotations[proofAttempt] == "" && job.Annotations[proofReservation] == "" &&
+			(job.Spec.Suspend == nil || !*job.Spec.Suspend)
+	}
+	if held != "true" || (phase != "claim" && phase != "promote") || job.Spec.Suspend == nil ||
+		job.Annotations[proofAttempt] != "1" {
+		return false
+	}
+	return job.Annotations[proofReservation] == proofReservationDigest(job.Annotations[runIDAnnotation], job.Labels[idLabel], phase, "1")
+}
+
+func proofReservationDigest(runID, operationID, phase, attempt string) string {
+	digest := sha256.Sum256([]byte(runID + "\x00" + operationID + "\x00" + phase + "\x00" + attempt))
+	return hex.EncodeToString(digest[:])
 }
 
 func validatePolicy(policy *corev1.ConfigMap, expectedName string) (string, error) {

@@ -26,6 +26,11 @@ spec:
       expression: object.metadata.labels['kodex.dev/image-admission-id']
     - name: protected
       expression: variables.phase in ['claim', 'admit', 'promote']
+    - name: proofHeld
+      expression: >-
+        has(object.metadata.labels) &&
+        'kodex.dev/executable-proof-hold' in object.metadata.labels &&
+        object.metadata.labels['kodex.dev/executable-proof-hold'] == 'true'
     - name: localProfile
       expression: >-
         has(params.metadata.labels) &&
@@ -113,9 +118,16 @@ spec:
         (!has(object.spec.parallelism) || object.spec.parallelism == 1) &&
         (!has(object.spec.completions) || object.spec.completions == 1) &&
         (!has(object.spec.manualSelector) || object.spec.manualSelector == false) &&
-        (!has(object.spec.suspend) || object.spec.suspend == false) &&
+        ((!has(object.spec.suspend) || object.spec.suspend == false) ||
+          (object.spec.suspend == true && variables.proofHeld && variables.phase in ['claim', 'promote'])) &&
         !has(object.spec.podFailurePolicy)
       message: Image admission Job lifecycle differs from the bounded contract.
+    - expression: >-
+        !variables.proofHeld ||
+        (has(object.metadata.annotations) &&
+         object.metadata.annotations['kodex.dev/executable-proof-attempt'] == '1' &&
+         object.metadata.annotations['kodex.dev/executable-proof-reservation'].matches('^[a-f0-9]{64}$'))
+      message: Image admission executable proof reservation is invalid.
     - expression: >-
         variables.pod.serviceAccountName == variables.expectedServiceAccount &&
         has(variables.pod.automountServiceAccountToken) &&
@@ -457,6 +469,63 @@ spec:
     name: kodex-image-admission-policy
     namespace: kodex-system
     parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kodex-system
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: kodex-image-admission-proof-release
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        operations: [UPDATE]
+        resources: [jobs]
+        scope: Namespaced
+  matchConditions:
+    - name: exact-held-job
+      expression: >-
+        oldObject.metadata.namespace == 'kodex-system' &&
+        has(oldObject.metadata.labels) &&
+        'kodex.dev/image-admission-orchestrated' in oldObject.metadata.labels &&
+        'kodex.dev/executable-proof-hold' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['kodex.dev/image-admission-orchestrated'] == 'true' &&
+        oldObject.metadata.labels['kodex.dev/executable-proof-hold'] == 'true'
+  validations:
+    - expression: >-
+        object.metadata.uid == oldObject.metadata.uid &&
+        object.metadata.name == oldObject.metadata.name &&
+        object.metadata.labels == oldObject.metadata.labels &&
+        object.metadata.annotations == oldObject.metadata.annotations
+      message: Image admission proof release changed reserved Job identity.
+    - expression: >-
+        oldObject.spec.suspend == true && object.spec.suspend == false &&
+        object.spec.template == oldObject.spec.template &&
+        object.spec.backoffLimit == oldObject.spec.backoffLimit &&
+        object.spec.activeDeadlineSeconds == oldObject.spec.activeDeadlineSeconds &&
+        object.spec.ttlSecondsAfterFinished == oldObject.spec.ttlSecondsAfterFinished &&
+        ((!has(oldObject.spec.parallelism) && !has(object.spec.parallelism)) ||
+          (has(oldObject.spec.parallelism) && has(object.spec.parallelism) && object.spec.parallelism == oldObject.spec.parallelism)) &&
+        ((!has(oldObject.spec.completions) && !has(object.spec.completions)) ||
+          (has(oldObject.spec.completions) && has(object.spec.completions) && object.spec.completions == oldObject.spec.completions)) &&
+        ((!has(oldObject.spec.manualSelector) && !has(object.spec.manualSelector)) ||
+          (has(oldObject.spec.manualSelector) && has(object.spec.manualSelector) && object.spec.manualSelector == oldObject.spec.manualSelector)) &&
+        ((!has(oldObject.spec.podFailurePolicy) && !has(object.spec.podFailurePolicy)) ||
+          (has(oldObject.spec.podFailurePolicy) && has(object.spec.podFailurePolicy) && object.spec.podFailurePolicy == oldObject.spec.podFailurePolicy))
+      message: Image admission proof release may only remove the exact suspend hold.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: kodex-image-admission-proof-release
+spec:
+  policyName: kodex-image-admission-proof-release
+  validationActions: [Deny]
   matchResources:
     namespaceSelector:
       matchLabels:

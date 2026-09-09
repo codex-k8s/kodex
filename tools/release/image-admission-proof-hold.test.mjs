@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {chmodSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {fingerprint} from './scoped-release.mjs';
+import {executeOperation,holdEnvironment,holdUntilEnvironment,planHoldTransition,planJobRelease} from './image-admission-proof-hold.mjs';
+
+function deployment(value='false') {return {apiVersion:'apps/v1',kind:'Deployment',metadata:{namespace:'kodex-system',name:'image-admission-controller',uid:'controller-uid',resourceVersion:'7',generation:2,labels:{'kodex.dev/environment':'staging'}},spec:{replicas:1,strategy:{type:'Recreate'},template:{spec:{containers:[{name:'image-admission-controller',env:[{name:'UNCHANGED',value:'x'},{name:holdEnvironment,value},{name:holdUntilEnvironment,value:'1970-01-01T00:00:00Z'}]}]}}},status:{observedGeneration:2,availableReplicas:1,updatedReplicas:1}};}
+function fixture() {const phase='claim',operationID='a'.repeat(32),name=`mc-admit-${operationID}-${phase}`,runID=`v20260909120000-${'c'.repeat(40)}`,reservationDigest=createHash('sha256').update(runID+'\0'+operationID+'\0'+phase+'\0'+'1').digest('hex');
+ const job={apiVersion:'batch/v1',kind:'Job',metadata:{namespace:'kodex-system',name,uid:'job-uid',resourceVersion:'9',labels:{'kodex.dev/image-admission-orchestrated':'true','kodex.dev/image-admission-phase':phase,'kodex.dev/executable-proof-hold':'true'},annotations:{'kodex.dev/admission-run-id':runID,'kodex.dev/executable-proof-attempt':'1','kodex.dev/executable-proof-reservation':reservationDigest}},spec:{suspend:true,template:{spec:{containers:[{name:phase}]}}},status:{}};
+ const released=structuredClone(job.spec);released.suspend=false;const watcher={version:2,intent:'11111111-1111-4111-8111-111111111111',reservation:{jobUID:job.metadata.uid,resourceVersion:job.metadata.resourceVersion,attempt:1,reservationDigest,heldSpecSHA256:fingerprint(job.spec),releasedSpecSHA256:fingerprint(released)},boundary:{job:{name}}};
+ return {job,watcher,rows:[{status:'INTENT',intent:watcher.intent,planSHA256:fingerprint(watcher)}]};}
+
+test('enable changes only bounded controller hold env and disable rejects active reservation',()=>{const before=deployment(),now=Date.parse('2026-09-09T12:00:00Z'),until='2026-09-09T12:20:00Z',plan=planHoldTransition(before,[],true,until,now);assert.equal(plan.enabled,true);assert.equal(plan.patch.at(-1).value.find(item=>item.name===holdEnvironment).value,'true');assert.equal(plan.patch.at(-1).value.find(item=>item.name===holdUntilEnvironment).value,until);assert.equal(before.spec.template.spec.containers[0].env.find(item=>item.name===holdEnvironment).value,'false');assert.throws(()=>planHoldTransition(before,[],true,'2026-09-09T13:00:00Z',now),/HOLD_DEADLINE_INVALID/);const active=fixture().job;assert.throws(()=>planHoldTransition(deployment('true'),[active],false),/ACTIVE_HELD_JOB_PREVENTS_DISABLE/);active.status.succeeded=1;assert.equal(planHoldTransition(deployment('true'),[active],false).enabled,false);});
+
+test('release is fenced by exact watcher intent, UID, resourceVersion and spec',()=>{const {job,watcher,rows}=fixture(),plan=planJobRelease(job,watcher,rows);assert.deepEqual(plan.patch.slice(0,2).map(item=>item.path),['/metadata/uid','/metadata/resourceVersion']);assert.equal(plan.patch.at(-1).value,false);const wrong=structuredClone(job);wrong.metadata.uid='wrong';assert.throws(()=>planJobRelease(wrong,watcher,rows),/WATCHER_RESERVATION_MISMATCH/);assert.throws(()=>planJobRelease(job,watcher,[]),/ACTIVE_WATCHER_INTENT_REQUIRED/);});
+
+test('fsync intent precedes mutation and resume never repeats an uncertain patch',async()=>{const directory=mkdtempSync(join(tmpdir(),'image-proof-hold-')),evidence=join(directory,'evidence.jsonl'),{job,watcher,rows}=fixture(),target=planJobRelease(job,watcher,rows),plan={version:1,intent:'22222222-2222-4222-8222-222222222222',context:'synthetic',k3sSudo:false,action:'release',target};let current=structuredClone(job),patches=0;
+ try {const rt={readJob:()=>current,patch:()=>{patches++;const intent=JSON.parse(readFileSync(evidence,'utf8').trim().split('\n')[0]);assert.equal(intent.status,'INTENT');},readDeployment:()=>null,rollout:()=>{}};let result=await executeOperation(plan,evidence,'apply',rt);assert.equal(result.status,'UNKNOWN');assert.equal(patches,1);result=await executeOperation(plan,evidence,'resume',rt);assert.equal(result.status,'UNKNOWN');assert.equal(patches,1);current.spec.suspend=false;result=await executeOperation(plan,evidence,'resume',rt);assert.equal(result.status,'PASS');assert.equal(patches,1);}
+ finally{rmSync(directory,{recursive:true,force:true});}
+});

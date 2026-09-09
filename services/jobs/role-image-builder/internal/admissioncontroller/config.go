@@ -14,6 +14,8 @@ type Config struct {
 	Namespace           string
 	PolicyConfigMap     string
 	PauseNewRuns        bool
+	HoldProofJobs       bool
+	ProofHoldUntil      time.Time
 	RendererPath        string
 	TechnicalListen     string
 	ReconcileInterval   time.Duration
@@ -26,7 +28,8 @@ func (config Config) Validate() error {
 	if config.Environment != "staging" && config.Environment != "production" ||
 		config.Namespace != "kodex-system" ||
 		!validPolicyName(config.PolicyConfigMap) ||
-		!filepath.IsAbs(config.RendererPath) || filepath.Clean(config.RendererPath) != config.RendererPath {
+		!filepath.IsAbs(config.RendererPath) || filepath.Clean(config.RendererPath) != config.RendererPath ||
+		config.HoldProofJobs && config.ProofHoldUntil.IsZero() {
 		return errors.New("image admission controller identity is invalid")
 	}
 	if _, _, err := net.SplitHostPort(config.TechnicalListen); err != nil {

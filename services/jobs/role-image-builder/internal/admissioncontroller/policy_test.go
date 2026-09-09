@@ -48,8 +48,8 @@ func TestAdmissionPoliciesContainSyntacticallyValidCEL(t *testing.T) {
 	for _, policy := range policies {
 		compilePolicyExpressions(t, policy)
 	}
-	if len(policies) != 2 {
-		t.Fatalf("expected two controller admission policies, got %d", len(policies))
+	if len(policies) != 3 {
+		t.Fatalf("expected three controller admission policies, got %d", len(policies))
 	}
 }
 
@@ -157,6 +157,64 @@ func TestAdmissionJobPolicyRejectsPrivilegeExpansion(t *testing.T) {
 		}
 	}
 	t.Fatal("job policy is missing")
+}
+
+func TestAdmissionPoliciesAcceptOnlyExactProofHoldAndRelease(t *testing.T) {
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("jq is required to execute the production renderer")
+	}
+	policies, err := readAdmissionPolicies()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := make(map[string]admissionPolicyDocument, len(policies))
+	for _, policy := range policies {
+		byName[policy.Metadata.Name] = policy
+	}
+	ownerPolicy := completeTestPolicy()
+	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := "v20260909120000-" + testOrchestrationRevision
+	rendered, err := renderer.Render(t.Context(), ownerPolicy, "production", runID, "claim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prepareRendered(rendered, "kodex-system", runID, "claim"); err != nil {
+		t.Fatal(err)
+	}
+	prepareProofReservation(rendered.Job, runID, "claim")
+	rendered.Job.UID = "11111111-1111-4111-8111-111111111111"
+	rendered.Job.ResourceVersion = "7"
+	held, err := runtime.DefaultUnstructuredConverter.ToUnstructured(rendered.Job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPolicyAccepts(t, byName["kodex-image-admission-controller-jobs"], held, ownerPolicy)
+	released := rendered.Job.DeepCopy()
+	value := false
+	released.Spec.Suspend = &value
+	releasedObject, err := runtime.DefaultUnstructuredConverter.ToUnstructured(released)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err := evaluateAdmissionPolicyWithOld(byName["kodex-image-admission-proof-release"], releasedObject, held, ownerPolicy)
+	if err != nil || !accepted {
+		t.Fatalf("exact release was rejected: accepted=%v err=%v", accepted, err)
+	}
+	released.Spec.Template.Spec.ServiceAccountName = "cluster-admin"
+	changed, err := runtime.DefaultUnstructuredConverter.ToUnstructured(released)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, err = evaluateAdmissionPolicyWithOld(byName["kodex-image-admission-proof-release"], changed, held, ownerPolicy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted {
+		t.Fatal("release policy accepted a changed Pod template")
+	}
 }
 
 func repositoryRoot() string {
@@ -275,6 +333,10 @@ func assertPolicyRejects(t *testing.T, policy admissionPolicyDocument, object ma
 }
 
 func evaluateAdmissionPolicy(policy admissionPolicyDocument, object map[string]any, ownerPolicy *corev1.ConfigMap) (bool, error) {
+	return evaluateAdmissionPolicyWithOld(policy, object, nil, ownerPolicy)
+}
+
+func evaluateAdmissionPolicyWithOld(policy admissionPolicyDocument, object, oldObject map[string]any, ownerPolicy *corev1.ConfigMap) (bool, error) {
 	environment, err := newPolicyEnvironment()
 	if err != nil {
 		return false, err
@@ -294,7 +356,7 @@ func evaluateAdmissionPolicy(policy admissionPolicyDocument, object map[string]a
 	}
 	variableValues := map[string]any{}
 	activation := map[string]any{
-		"object": object, "oldObject": nil, "params": params,
+		"object": object, "oldObject": oldObject, "params": params,
 		"request": map[string]any{"userInfo": map[string]any{
 			"username": "system:serviceaccount:kodex-system:image-admission-controller",
 		}},
