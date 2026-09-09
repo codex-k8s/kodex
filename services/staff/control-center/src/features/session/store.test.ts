@@ -211,6 +211,44 @@ describe("BFF session lifecycle", () => {
     expect(api.renewOwnerSession).not.toHaveBeenCalled();
     expect(session.phase).toBe("unauthenticated");
   });
+  test("auth hint выполняет один authoritative GET без продления сессии", async () => {
+    const session = useSessionStore();
+    await session.probe();
+    let complete!: (value: unknown) => void;
+    api.getOwnerSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    for (let i = 0; i < 5; i++)
+      window.dispatchEvent(new Event("kodex:session-probe-requested"));
+    expect(api.getOwnerSession).toHaveBeenCalledTimes(2);
+    complete({ data: metadata() });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.phase).toBe("authenticated");
+    expect(api.renewOwnerSession).not.toHaveBeenCalled();
+    session.$dispose();
+    window.dispatchEvent(new Event("kodex:session-probe-requested"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.getOwnerSession).toHaveBeenCalledTimes(2);
+  });
+  test.each(["unauthorized", "forbidden"])(
+    "auth hint %s завершает authoritative boundary без storm",
+    async (kind) => {
+      const session = useSessionStore();
+      await session.probe();
+      api.getOwnerSession.mockRejectedValue({ kind, retryable: false });
+      window.dispatchEvent(new Event("kodex:session-probe-requested"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(session.phase).toBe(
+        kind === "unauthorized" ? "unauthenticated" : "forbidden",
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(api.getOwnerSession).toHaveBeenCalledTimes(2);
+      expect(api.renewOwnerSession).not.toHaveBeenCalled();
+    },
+  );
   test("возврат во вкладку читает generation/version без продления idle", async () => {
     const session = useSessionStore();
     await session.probe();

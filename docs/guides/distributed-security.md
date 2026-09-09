@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.24
-updated: 2026-09-08
+version: 1.4.25
+updated: 2026-09-09
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -1226,3 +1226,19 @@ high-watermarks. Изменение одной константы last-known-goo
 upstream request headers. Проверка включает следующий запрос с реально
 полученным обновлением, потерю обновления, отказ authority и независимые сроки
 proxy/BFF; наличие неистёкшего client cookie не доказывает живую серверную сессию.
+
+## Конкурентное обновление browser proxy session
+
+Несколько proxy-реплик и параллельные browser requests должны согласовывать
+одноразовый provider refresh через общий authoritative session store с
+блокировкой и перечитыванием состояния. Клиентский single-flight между
+вкладками не заменяет эту границу. Cookie-only store без распределённого
+lock несовместим с таким refresh profile; увеличивать reuse или absolute TTL
+ради устранения гонки нельзя. Store имеет своего deploy owner, TLS/auth,
+точную сетевую границу, persistence и closed failure policy. Возврат старого
+backup не должен воскрешать отозванные сессии. Vendor lease/timeout ограничения
+проверяются и явно входят в supported profile (OPS-DOC-1383).
+
+Background fetch не следует auth redirect на чужой origin: redirect hint
+приводит к обычному authoritative session read и bounded re-auth lifecycle,
+а не становится самостоятельно выданным 401 либо основанием для refresh loop.

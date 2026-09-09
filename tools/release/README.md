@@ -321,3 +321,14 @@ Job остаётся совместимым, но не используется 
 Полные команды, исходы и guards приведены в OPS-DOC-1313 и OPS-DOC-1381.
 Одиночный `authority-freshness-job-proof.mjs`
 поддерживается только когда exact Job уже находится в состоянии running.
+
+## Серверное хранилище browser proxy session
+
+Изменение backend OAuth2-proxy не является application-only release.
+`proxy-session-store.mjs` готовит отдельную TLS/ACL/PVC dependency и выполняет
+проверяемый CAS cutover двух control-center proxy replicas с одним штатным
+повторным входом. Фазы install/readiness/maintenance/cutover/login, backup и
+ограничения rollback описаны в
+[OPS-DOC-1383](../../docs/operations/proxy-session-store-1383.md).
+Сроки Keycloak/BFF и reuse не расширяются. Старый backup не восстанавливает
+отозванные сессии; slow-provider lease defect отслеживается отдельно в #1388.
