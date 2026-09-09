@@ -4,11 +4,19 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.25
+version: 1.4.26
 updated: 2026-09-09
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Readback admission policy воспроизводит все разрешённые способы её записи:
+точный source render и ранее применённый repo-owned CAS transition могут иметь
+разное строковое представление одного правила. Checker использует тот же
+ограниченный transition над точным историческим source, что и writer, затем
+сравнивает полный spec. Произвольное удаление whitespace в CEL не доказывает
+эквивалентность. Исходный live spec остаётся неизменным в CAS и rollback;
+добавление новой канонической формы не переписывает сохранённый plan/journal.
 
 Runtime MCP startup проверяет фактический catalog producer по закрытому
 consumer-профилю, включая optional metadata/schema утверждённой версии MCP.

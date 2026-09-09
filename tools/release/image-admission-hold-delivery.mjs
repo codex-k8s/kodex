@@ -10,6 +10,7 @@ import {inspectSource} from './application-source.mjs';
 import {readHostProcess} from './authority-executable-readback.mjs';
 import {validateHoldCapability} from './image-admission-hold-capability.mjs';
 import {fingerprint} from './scoped-release.mjs';
+import {applyIssuerAdmissionTransition} from './runner-policy-model.mjs';
 import {
  buildDeliveryPlan,controllerName,inspectPhase,inspectRollbackPhase,jobsPolicyName,mutationFor,namespace,
  phaseAfter,phases,releasePolicyName,rollbackMutationFor,rollbackPhaseAfter,rollbackPhases,validateDeliveryPlan,validateDesiredBundle,
@@ -17,6 +18,8 @@ import {
 
 const implementationCommit='4454f75072a00e3556de5e0f42bb8bb8dda39870';
 const implementationParent='21cde903491e842aee3e8c3a08408baea67305c3';
+const issuerTransitionCommit='28fc62259f36518f3602da7281c8ac27746aa016';
+const issuerTransitionParent='07312bb7211d89c8f32fa8e17a51723586525c2b';
 const policyPath='deploy/k8s/base/image-supply-chain/image-admission-controller-policy.yaml';
 const controllerPath='deploy/k8s/base/image-supply-chain/image-admission-controller.yaml';
 const sha=/^[a-f0-9]{64}$/;
@@ -63,7 +66,8 @@ function kustomizedDocuments(raw,kustomize) {
 }
 function git(source,...args) {return execFileSync('git',['-C',source,...args],{encoding:'utf8',stdio:'pipe',timeout:30_000,maxBuffer:16<<20}).trim();}
 
-export function loadDesiredBundle(sourcePath,expectedRevision,kustomize=directory=>execFileSync('kubectl',['kustomize',directory],{encoding:'utf8',stdio:'pipe',timeout:30_000,maxBuffer:16<<20})) {
+export function loadDesiredBundle(sourcePath,expectedRevision,kustomize=directory=>execFileSync('kubectl',['kustomize',directory],{encoding:'utf8',stdio:'pipe',timeout:30_000,maxBuffer:16<<20}),bundleVersion=2) {
+ requireValue(bundleVersion===1||bundleVersion===2,'INVALID_HOLD_BUNDLE_VERSION');
  const source=realpathSync(sourcePath);
  requireValue(source===sourcePath&&revision.test(expectedRevision)&&inspectSource(source).revision===expectedRevision,'EXACT_CLEAN_SOURCE_REQUIRED');
  git(source,'merge-base','--is-ancestor',implementationCommit,expectedRevision);
@@ -90,7 +94,18 @@ export function loadDesiredBundle(sourcePath,expectedRevision,kustomize=director
  const selected=envOf(currentController).filter(item=>['IMAGE_ADMISSION_CONTROLLER_HOLD_PROOF_JOBS','IMAGE_ADMISSION_CONTROLLER_PROOF_HOLD_UNTIL'].includes(item.name));
  const committedSelected=envOf(committedController).filter(item=>selected.some(entry=>entry.name===item.name));
  requireValue(fingerprint(selected)===fingerprint(committedSelected),'HOLD_CONTROLLER_SOURCE_CHANGED');
- const bundle={version:1,revision:expectedRevision,source,predecessorJobsPolicy:predecessorJobs,predecessorJobsPolicyRendered:renderedPredecessorJobs,
+ let transitionForms={};
+ if(bundleVersion===2) {
+  git(source,'merge-base','--is-ancestor',issuerTransitionCommit,implementationParent);
+  requireValue(git(source,'rev-parse',`${issuerTransitionCommit}^`)===issuerTransitionParent,'ISSUER_IMPLEMENTATION_LINEAGE_CHANGED');
+  const raw=git(source,'show',`${issuerTransitionParent}:${policyPath}`);
+  const transition=policy=>({...policy,spec:applyIssuerAdmissionTransition(policy.spec)});
+  transitionForms={
+   predecessorJobsPolicyTransitioned:transition(resource(yamlDocuments(raw),'ValidatingAdmissionPolicy',jobsPolicyName)),
+   predecessorJobsPolicyTransitionedRendered:transition(resource(kustomizedDocuments(raw,kustomize),'ValidatingAdmissionPolicy',jobsPolicyName)),
+  };
+ }
+ const bundle={version:bundleVersion,...transitionForms,revision:expectedRevision,source,predecessorJobsPolicy:predecessorJobs,predecessorJobsPolicyRendered:renderedPredecessorJobs,
   jobsPolicy:currentJobs,jobsPolicyRendered:renderedCurrentJobs,releasePolicy:currentReleasePolicy,releasePolicyRendered:renderedReleasePolicy,
   releaseBinding:currentReleaseBinding,releaseBindingRendered:renderedReleaseBinding,controllerHoldEnvironment:selected};
  validateDesiredBundle(bundle);requireValue(inspectSource(source).revision===expectedRevision,'SOURCE_CHANGED_DURING_READBACK');return bundle;
@@ -362,7 +377,7 @@ async function main(args) {
   validateDeliveryPlan(plan,context,k3sSudo);privateWrite(options['--output'],plan);process.stdout.write(`Image admission hold delivery plan: ${fingerprint(plan)}\n`);return;
  }
  const plan=privateRead(options['--plan']);validateDeliveryPlan(plan,context,k3sSudo);
- const currentBundle=loadDesiredBundle(plan.source,plan.revision,rt.kustomize);
+ const currentBundle=loadDesiredBundle(plan.source,plan.revision,rt.kustomize,plan.bundle.version);
  requireValue(fingerprint(currentBundle)===fingerprint(plan.bundle),'PLAN_SOURCE_CHANGED');
  const rollback=command.startsWith('rollback'),phase=options['--phase'];
  requireValue((rollback?rollbackPhases:phases).includes(phase),rollback?'INVALID_ROLLBACK_PHASE':'INVALID_DELIVERY_PHASE');

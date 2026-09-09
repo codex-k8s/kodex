@@ -115,6 +115,31 @@ test('exact source materializes the approved #1381 delta',()=>{
   const changed=result.predecessorJobsPolicy.spec.validations.map((item,index)=>
    item.expression===result.predecessorJobsPolicyRendered.spec.validations[index].expression?null:index).filter(index=>index!==null);
   assert.deepEqual(changed,[0,4,5,6,7,8,9,10]);
+  assert.equal(result.version,2);
+  // Readback #1421 от 2026-09-09: сравнивается весь spec, а не только CEL-фрагмент.
+  const transitioned=admissionResourceWithAPIDefaults(result.predecessorJobsPolicyTransitionedRendered);
+  assert.equal(fingerprint(transitioned.spec),'315bf2fdd46347af9695915052c54f0e0505f66d06d382e23ceb00a5544ac2e5');
+  assert.notEqual(fingerprint(transitioned.spec),fingerprint(admissionResourceWithAPIDefaults(result.predecessorJobsPolicyRendered).spec));
+  const fixture=planAndState();fixture.state.jobsPolicy.spec=structuredClone(transitioned.spec);
+  const options={context,k3sSudo:true,capability:{...fixture.plan.capability,revision:revisionValue},intent:'77777777-7777-4777-8777-777777777777'};
+  const plan=buildDeliveryPlan(fixture.state,result,options);
+  assert.deepEqual(plan.phaseTargets['policy-jobs'].before,transitioned.spec);
+  assert.deepEqual(plan.rollbackTargets['rollback-policy-jobs'].after,transitioned.spec);
+  validateDeliveryPlan(JSON.parse(JSON.stringify(plan)),context,true);
+  for(const mutate of [
+   spec=>{spec.validations[5].expression=spec.validations[5].expression.replace('params.spec.authorityIssuerImage : params.spec.authorityImage','params.spec.authorityImage : params.spec.authorityImage');},
+   spec=>{spec.validations[5].expression=spec.validations[5].expression.replace("'Always'","'Always '");},
+   spec=>{spec.validations[5].expression=spec.validations[5].expression.replace('image == (has','image ==  (has');},
+   spec=>{spec.validations[0].expression+=' && true';},
+  ]) {
+   const state=structuredClone(fixture.state);mutate(state.jobsPolicy.spec);
+   assert.throws(()=>buildDeliveryPlan(state,result,options),/EXACT_JOBS_POLICY_PREDECESSOR_REQUIRED/);
+  }
+  const legacy=loadDesiredBundle(clone,revisionValue,undefined,1);
+  assert.equal(legacy.version,1);assert.equal(Object.hasOwn(legacy,'predecessorJobsPolicyTransitioned'),false);
+  assert.throws(()=>buildDeliveryPlan(fixture.state,legacy,options),/EXACT_JOBS_POLICY_PREDECESSOR_REQUIRED/);
+  fixture.state.jobsPolicy.spec=admissionResourceWithAPIDefaults(legacy.predecessorJobsPolicyRendered).spec;
+  validateDeliveryPlan(buildDeliveryPlan(fixture.state,legacy,options),context,true);
  } finally {rmSync(directory,{recursive:true,force:true});}
 });
 

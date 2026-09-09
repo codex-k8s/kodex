@@ -7,6 +7,17 @@ export const toolsDigestAnnotation = "kodex.dev/admission-tools-sha256";
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 const requireValue = (value, code) => { if (!value) throw new Error(code); };
 
+// Один и тот же exact переход используется при записи policy и проверке её происхождения.
+export function applyIssuerAdmissionTransition(spec) {
+  const result = structuredClone(spec);
+  const before = "variables.pod.initContainers[1].image == params.spec.authorityImage";
+  const after = "variables.pod.initContainers[1].image == (has(params.spec.authorityIssuerImage) ? params.spec.authorityIssuerImage : params.spec.authorityImage)";
+  const matches = result.validations.filter(rule => rule.expression.includes(before) || rule.expression.includes(after));
+  requireValue(matches.length === 1, "EXACT_ISSUER_ADMISSION_RULE_REQUIRED");
+  matches[0].expression = matches[0].expression.replace(before, after);
+  return result;
+}
+
 export function policyToolsDigest(policy) {
   const image = policy?.data?.toolsImage;
   requireValue(typeof image === "string" && /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/.test(image), "EXACT_TOOLS_IMAGE_REQUIRED");

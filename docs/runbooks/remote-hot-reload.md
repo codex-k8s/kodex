@@ -48,6 +48,60 @@ images без hostPath/Air/Vite/SSH; production требует отдельно�
 Критерии выбора сборки и команды ежедневной поставки находятся в
 [руководстве релиза](../../tools/release/README.md#выбор-source-и-image).
 
+### Непривилегированный status/smoke для root-owned source
+
+`remote-dev.sh status|smoke|e2e|acceptance` запускается от штатного оператора,
+даже если `create-application-source.mjs` создал checkout от root. Перед Git
+скрипт проверяет канонические пути, владельца root/текущего оператора и отсутствие
+записи для посторонних у source, предков и всей Git metadata. Group-write
+допускается только для локальной группы с полностью разрешёнными primary и
+supplementary участниками UID root/оператора; неизвестная или удалённая NSS
+группа закрыто отклоняется. Для linked
+worktree проверяются `.git`, обратная ссылка `gitdir` и `commondir`. Системный
+root-owned sticky ancestor вроде `/tmp` допускается только как предок.
+
+`--component-manifest` должен указывать на приватный файл 0600 текущего
+оператора вне source. Только его точные `components[].sources[].path/revision`
+добавляются к checkout оснастки; вложенный `mountedPath` обязан принадлежать
+своему root. Проверяются SHA, origin, чистота и отсутствие приватных env.
+Если исходный manifest принадлежит root:600, штатный оператор предварительно
+создаёт отдельную копию в своём каталоге 0700. Expected digest берётся из
+проверенного release evidence; прежний файл и права не меняются:
+
+```bash
+node tools/dev/prepare-operator-manifest.mjs \
+  --source "$ROOT_OWNED_MANIFEST" --sha256 "$EXPECTED_MANIFEST_SHA256" \
+  --output "$NEW_OPERATOR_PRIVATE_MANIFEST"
+```
+
+Команда требует непривилегированного пользователя, читает через bounded sudo
+только exact regular input и проверяет digest до записи. Затем проверяются все
+`compatibility.evidence` по их SHA. Недоступные root-owned proofs копируются
+wx0600 рядом с новым manifest с неизменными bytes/SHA, их path явно заменяется,
+а manifest identity пересчитывается. Отчёт содержит original/output SHA,
+original/output identity и числа проверенных/скопированных proofs. Доступные
+operator-owned refs остаются прежними. Ошибка проверки любого proof прекращает
+подготовку до первой записи; ошибка записи сохраняет частичные приватные файлы
+для диагностики и не запускает status автоматически.
+Затем status/smoke получает `--component-manifest "$NEW_OPERATOR_PRIVATE_MANIFEST"`.
+
+Последующий `component-manifest verify` по-прежнему проверяет фактические
+cluster/workload/mount/binary/contract identities; это отдельный обязательный
+шлюз, который разрешение Git не заменяет.
+
+Доверие задаётся через `GIT_CONFIG_COUNT` только в процессе и наследуется всеми
+потомками (`dev.sh`, component manifest, `inspectSource`). Первая пустая
+`safe.directory` сбрасывает прежние значения, затем перечисляются только точные
+проверенные root. Старые `GIT_*` overrides удаляются. Глобальный Git config,
+ownership и permissions существующих каталогов не меняются; wildcard запрещён.
+Обычные команды status/smoke и `--expected-sha` остаются прежними. Код перехода
+должен быть доставлен в новый точный checkout оснастки до запуска.
+
+Семантика command-scope `safe.directory` сверена через Context7 `/git/htmldocs`
+и официальную [документацию Git](https://git-scm.com/docs/git-config#Documentation/git-config.txt-safedirectory).
+Локальная проверка полного наследования, linked metadata и отрицательных случаев:
+`node --test tools/dev/source-git-trust.test.mjs tools/dev/component-manifest.test.mjs tools/release/application-source.test.mjs`.
+
 ### Подготовка Go cache перед ограниченной выкладкой
 
 При изменении Go dependencies root готовит только выбранные hot-reload modules

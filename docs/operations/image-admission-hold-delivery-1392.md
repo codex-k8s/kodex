@@ -4,7 +4,7 @@ title: Управляемая доставка RoleImage Job hold
 type: operations
 status: approved
 owner: sre
-version: 1.0.1
+version: 1.0.2
 updated: 2026-09-09
 ---
 
@@ -98,6 +98,22 @@ source: прямой разбор YAML и результат штатного `k
 или удаление whitespace в CEL запрещены: переводы строк внутри литералов и
 любое иное отличие expression остаются drift. Исходный live spec сохраняется
 в `before`, CAS test и rollback без преобразования.
+
+Bundle v2 также явно сохраняет predecessor после штатной фазы `admission`
+из `runner-policy-transition.mjs`. CLI читает policy из точного родителя
+`28fc62259f36518f3602da7281c8ac27746aa016`, выполняет тот же Kustomize render и
+тот же единственный issuer-image transition, что использует записывающий CLI.
+Это отдельная каноническая форма: source YAML переносит conditional на новую
+строку, тогда как ранее выполненный переход записал его в одну строку.
+Сравнивается полный spec; другие изменения whitespace, литералов или правил
+закрыто отклоняются. Уже сохранённые bundles v1 читаются в прежнем формате;
+новый вариант не добавляется задним числом в их immutable plans/journals.
+
+Readback #1421 от `2026-09-09T14:26:22.760Z` имеет полный spec fingerprint
+`315bf2fdd46347af9695915052c54f0e0505f66d06d382e23ceb00a5544ac2e5`.
+Source regression воспроизводит именно этот digest из Git и штатного перехода.
+Это доказательство распознавания predecessor, но не live PASS остальных фаз.
+
 
 Прямые `PATCH`/`CREATE` этого CLI отправляют exact source resource, а ожидаемый
 readback закрепляют после тех же API defaults. Поэтому основная policy, release

@@ -64,6 +64,7 @@ export interface LifecycleConfiguration {
   journalPath: string;
   prefix: string;
   resume: boolean;
+  readOnly?: boolean;
   runTimeoutMs: number;
   syntheticSource: string;
   syntheticSourceSHA256: string;
@@ -144,6 +145,10 @@ export async function loadLifecycleConfiguration(
   const browser = env.KODEX_E2E_BROWSER ?? "chromium";
   if (!["chromium", "firefox", "webkit"].includes(browser))
     throw new Error("Unsupported configuration lifecycle browser");
+  if (
+    ![undefined, "1"].includes(env.KODEX_E2E_CONFIGURATION_LIFECYCLE_READ_ONLY)
+  )
+    throw new Error("Invalid configuration lifecycle read-only profile");
   const prefix =
     env.KODEX_E2E_RESOURCE_PREFIX ?? (checkOnly ? "check-only" : "");
   if (!/^[a-z][a-z0-9-]{3,39}$/.test(prefix))
@@ -180,6 +185,7 @@ export async function loadLifecycleConfiguration(
     journalPath,
     prefix,
     resume: env.KODEX_E2E_CONFIGURATION_LIFECYCLE_RESUME === "1",
+    readOnly: env.KODEX_E2E_CONFIGURATION_LIFECYCLE_READ_ONLY === "1",
     runTimeoutMs: positiveInteger(env.KODEX_E2E_RUN_TIMEOUT_MS),
     syntheticSource: source.toString("utf8"),
     syntheticSourceSHA256: hash(source),
