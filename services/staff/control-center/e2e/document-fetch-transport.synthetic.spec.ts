@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { extname, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -47,7 +47,7 @@ test("synthetic: documentFetch сохраняет native transport до заве
   const unreadClosed = new Promise<void>((resolve) => {
     confirmUnreadClose = resolve;
   });
-  const server = createServer(async (request, response) => {
+  const server = createServer((request, response) => {
     const address = new URL(request.url ?? "/", "http://127.0.0.1");
     if (address.pathname === "/pending") {
       const chunks: Buffer[] = [];
@@ -113,16 +113,17 @@ test("synthetic: documentFetch сохраняет native transport до заве
       ".js": "text/javascript",
       ".woff2": "font/woff2",
     };
-    try {
-      const contents = await readFile(file);
+    readFile(file, (error, contents) => {
+      if (error) {
+        response.writeHead(404).end();
+        return;
+      }
       response.writeHead(200, {
         "Content-Type":
           contentType[extname(file)] ?? "application/octet-stream",
       });
       response.end(contents);
-    } catch {
-      response.writeHead(404).end();
-    }
+    });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;

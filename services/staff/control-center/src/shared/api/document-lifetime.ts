@@ -156,14 +156,6 @@ function responseWithLifetime(
     status: response.status,
     statusText: response.statusText,
   });
-  const consumerMethods = new Set<PropertyKey>([
-    "arrayBuffer",
-    "blob",
-    "bytes",
-    "formData",
-    "json",
-    "text",
-  ]);
   const cancellationError = (error: unknown): unknown => {
     if (!signal.aborted) return error;
     const reason: unknown = signal.reason;
@@ -171,25 +163,34 @@ function responseWithLifetime(
       ? reason
       : new DOMException("Document request aborted", "AbortError");
   };
+  const consume = async <T>(operation: () => Promise<T>): Promise<T> => {
+    try {
+      return await operation();
+    } catch (error) {
+      throw cancellationError(error);
+    }
+  };
+  const propertyValue = (source: object, property: PropertyKey): unknown =>
+    (source as unknown as Record<PropertyKey, unknown>)[property];
   const view = (bodyResponse: Response): Response =>
     new Proxy(response, {
       get(target, property) {
         if (property === "body") return bodyResponse.body;
         if (property === "bodyUsed") return bodyResponse.bodyUsed;
-        if (consumerMethods.has(property)) {
-          const method = Reflect.get(bodyResponse, property, bodyResponse);
-          if (typeof method !== "function") return method;
-          return async (...args: unknown[]) => {
-            try {
-              return await Reflect.apply(method, bodyResponse, args);
-            } catch (error) {
-              throw cancellationError(error);
-            }
-          };
-        }
+        if (property === "arrayBuffer")
+          return () => consume(() => bodyResponse.arrayBuffer());
+        if (property === "blob")
+          return () => consume(() => bodyResponse.blob());
+        if (property === "bytes")
+          return () => consume(() => bodyResponse.bytes());
+        if (property === "formData")
+          return () => consume(() => bodyResponse.formData());
+        if (property === "json")
+          return () => consume(() => bodyResponse.json() as Promise<unknown>);
+        if (property === "text")
+          return () => consume(() => bodyResponse.text());
         if (property === "clone") return () => view(bodyResponse.clone());
-        const value = Reflect.get(target, property, target);
-        return typeof value === "function" ? value.bind(target) : value;
+        return propertyValue(target, property);
       },
     });
   // Reader удерживает сам stream, поэтому cleanup не срабатывает, пока body

@@ -118,7 +118,13 @@ test("synthetic: смена Проекта отменяет pending loadProject 
     const nativeFetch = window.fetch;
     window.fetch = (input, init) => {
       const request = input instanceof Request ? input : undefined;
-      const url = new URL(request?.url ?? String(input), window.location.href);
+      const inputURL =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      const url = new URL(request?.url ?? inputURL, window.location.href);
       for (const [source, signal] of [
         ["input", request?.signal],
         ["init", init?.signal],
