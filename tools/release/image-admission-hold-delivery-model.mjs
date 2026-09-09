@@ -66,7 +66,7 @@ function targetState(resource) {
   uid:resource.metadata.uid,resourceVersion:resource.metadata.resourceVersion,specSHA256:fingerprint(resource.spec??resource.data)};
 }
 
-function controllerPodState(snapshot) {
+export function controllerPodState(snapshot) {
  const app=application(snapshot.controller),pods=snapshot.controllerPods??[];
  requireValue(pods.length===1,'EXACT_CONTROLLER_POD_REQUIRED');
  const pod=pods[0],status=(pod.status?.containerStatuses??[]).filter(item=>item.name===controllerName),

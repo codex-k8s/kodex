@@ -150,7 +150,7 @@ export function inspectHostController(target,io={}) {
  return {version:1,pid,...proof,imageID:target.imageID,containerID:target.containerID};
 }
 
-function readControllerExecutable(pod,container) {
+export function readControllerExecutable(pod,container) {
  const target=controllerTarget(pod,container);
  const output=execFileSync('sudo',['-n',process.execPath,fileURLToPath(import.meta.url),'--host'],{
   input:JSON.stringify(target),encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:30_000,maxBuffer:65536,
@@ -222,7 +222,7 @@ function allControllerPods(controller,resources) {
  return resources.filter(item=>item.kind==='Pod'&&(ownedBy(item,controller.metadata.uid)||replicaUIDs.some(uid=>ownedBy(item,uid))));
 }
 
-function capture(rt,{proof=false}={}) {
+export function captureDeliveryState(rt,{proof=false}={}) {
  const ns=rt.get('namespace',namespace,false),cluster=rt.get('namespace','kube-system',false),controller=rt.get('deployment',controllerName),
   resources=rt.list('deployments,replicasets,pods'),deployments=resources.filter(item=>item.kind==='Deployment'),controllerPods=allControllerPods(controller,resources),
   jobsPolicy=rt.get('validatingadmissionpolicy',jobsPolicyName,false),jobsBinding=rt.get('validatingadmissionpolicybinding',jobsPolicyName,false),
@@ -240,6 +240,7 @@ function capture(rt,{proof=false}={}) {
  }
  return snapshot;
 }
+const capture=captureDeliveryState;
 
 function inspection(snapshot) {
  const target=resource=>resource?{uid:resource.metadata.uid,resourceVersion:resource.metadata.resourceVersion,specSHA256:fingerprint(resource.spec)}:{present:false};

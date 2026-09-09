@@ -98,6 +98,20 @@ function exactOwner(plan,snapshot) {
  const current=owner(snapshot);requireValue(fingerprint(current)===fingerprint(plan.owner),'QUIESCE_OWNER_OR_PINS_CHANGED');
 }
 
+function resourcePin(resource,field='spec') {
+ requireValue(resource&&uid.test(resource.metadata?.uid??'')&&/^\d+$/.test(resource.metadata?.resourceVersion??''),'QUIESCE_OPEN_TARGET_REQUIRED');
+ return {uid:resource.metadata.uid,resourceVersion:resource.metadata.resourceVersion,digest:fingerprint(resource[field])};
+}
+const validResourcePin=value=>exact(value,['uid','resourceVersion','digest'])&&uid.test(value.uid??'')&&/^\d+$/.test(value.resourceVersion??'')&&sha.test(value.digest??'');
+
+function exactOpenTargets(completion,snapshot) {
+ const resources=completion.resources;requireValue(exact(resources,['jobsPolicy','releasePolicy','releaseBinding','jobsBinding','parameters','policyConfig'])&&
+  fingerprint(resourcePin(snapshot.jobsPolicy))===fingerprint(resources.jobsPolicy)&&fingerprint(resourcePin(snapshot.releasePolicy))===fingerprint(resources.releasePolicy)&&
+  fingerprint(resourcePin(snapshot.releaseBinding))===fingerprint(resources.releaseBinding)&&fingerprint(resourcePin(snapshot.jobsBinding))===fingerprint(resources.jobsBinding)&&
+  fingerprint(resourcePin(snapshot.parameters))===fingerprint(resources.parameters)&&fingerprint(resourcePin(snapshot.policyConfig,'data'))===fingerprint(resources.policyConfig)&&
+  snapshot.controllerExecutableSHA256===completion.controllerExecutableSHA256,'QUIESCE_OPEN_TARGET_CHANGED');
+}
+
 function exactControllerPods(snapshot,count) {
  const pods=snapshot.controllerPods??[];requireValue(pods.length===count&&pods.every(pod=>!pod.metadata?.deletionTimestamp),
   count?'EXACT_QUIESCE_CONTROLLER_POD_REQUIRED':'QUIESCE_CONTROLLER_NOT_STOPPED');
@@ -207,11 +221,11 @@ export function quiesceRecoveryMutation(plan,snapshot) {
 
 export function buildQuiesceOpenPlan(snapshot,quiescePlan,receipt,completion,{intent}) {
  validateQuiescePlan(quiescePlan,quiescePlan.context,quiescePlan.k3sSudo);requireValue(receipt?.intent===quiescePlan.intent&&receipt.planSHA256===fingerprint(quiescePlan)&&
-  exact(completion,['deliveryIntent','deliveryPlanSHA256','deliveryEvidenceSHA256','controllerSpecSHA256','jobsPolicySpecSHA256','releasePolicySpecSHA256','releaseBindingSpecSHA256'])&&
-  uid.test(completion.deliveryIntent??'')&&['deliveryPlanSHA256','deliveryEvidenceSHA256','controllerSpecSHA256','jobsPolicySpecSHA256','releasePolicySpecSHA256','releaseBindingSpecSHA256'].every(key=>sha.test(completion[key]??''))&&
-  fingerprint(snapshot.controller?.spec)===completion.controllerSpecSHA256&&fingerprint(snapshot.jobsPolicy?.spec)===completion.jobsPolicySpecSHA256&&
-  fingerprint(snapshot.releasePolicy?.spec)===completion.releasePolicySpecSHA256&&fingerprint(snapshot.releaseBinding?.spec)===completion.releaseBindingSpecSHA256,
+  exact(completion,['deliveryIntent','deliveryPlanSHA256','deliveryEvidenceSHA256','controllerSpecSHA256','controllerExecutableSHA256','controllerReader','resources'])&&
+  uid.test(completion.deliveryIntent??'')&&['deliveryPlanSHA256','deliveryEvidenceSHA256','controllerSpecSHA256','controllerExecutableSHA256'].every(key=>sha.test(completion[key]??''))&&
+  fingerprint(snapshot.controller?.spec)===completion.controllerSpecSHA256,
  'QUIESCE_OPEN_COMPLETION_REQUIRED');
+ exactOpenTargets(completion,snapshot);
  const app=controllerApplication(snapshot.controller);requireValue(pauseValue(app)==='true'&&workState(snapshot).jobs.length===0&&workState(snapshot).pvcs.length===0,
   'QUIESCE_OPEN_PAUSED_EMPTY_REQUIRED');exactOwner(quiescePlan,snapshot);exactControllerPods(snapshot,1);
  const before=structuredClone(snapshot.controller.spec),after=structuredClone(before),afterApp=after.template.spec.containers.find(item=>item.name===controllerName);
@@ -224,8 +238,11 @@ export function buildQuiesceOpenPlan(snapshot,quiescePlan,receipt,completion,{in
 export function validateQuiesceOpenPlan(plan,context,k3sSudo) {
  requireValue(plan?.version===1&&uid.test(plan.intent??'')&&plan.context===context&&plan.k3sSudo===k3sSudo&&uid.test(plan.clusterUID??'')&&uid.test(plan.namespaceUID??'')&&
   uid.test(plan.quiesceIntent??'')&&sha.test(plan.quiescePlanSHA256??'')&&sha.test(plan.receiptSHA256??'')&&uid.test(plan.controllerUID??'')&&
-  /^\d+$/.test(plan.controllerResourceVersion??'')&&exact(plan.completion,['deliveryIntent','deliveryPlanSHA256','deliveryEvidenceSHA256','controllerSpecSHA256','jobsPolicySpecSHA256','releasePolicySpecSHA256','releaseBindingSpecSHA256'])&&
-  uid.test(plan.completion.deliveryIntent??'')&&['deliveryPlanSHA256','deliveryEvidenceSHA256','controllerSpecSHA256','jobsPolicySpecSHA256','releasePolicySpecSHA256','releaseBindingSpecSHA256'].every(key=>sha.test(plan.completion[key]??''))&&
+  /^\d+$/.test(plan.controllerResourceVersion??'')&&exact(plan.completion,['deliveryIntent','deliveryPlanSHA256','deliveryEvidenceSHA256','controllerSpecSHA256','controllerExecutableSHA256','controllerReader','resources'])&&
+  uid.test(plan.completion.deliveryIntent??'')&&['deliveryPlanSHA256','deliveryEvidenceSHA256','controllerSpecSHA256','controllerExecutableSHA256'].every(key=>sha.test(plan.completion[key]??''))&&
+  exact(plan.completion.controllerReader,['name','uid','containerID','imageID','restarts'])&&uid.test(plan.completion.controllerReader.uid??'')&&
+  /^containerd:\/\/[a-f0-9]{64}$/.test(plan.completion.controllerReader.containerID??'')&&Number.isSafeInteger(plan.completion.controllerReader.restarts)&&
+  exact(plan.completion.resources,['jobsPolicy','releasePolicy','releaseBinding','jobsBinding','parameters','policyConfig'])&&Object.values(plan.completion.resources).every(validResourcePin)&&
   plan.before?.replicas===1&&plan.after?.replicas===1,'QUIESCE_OPEN_PLAN_INVALID');
  const expected=structuredClone(plan.before),app=expected.template?.spec?.containers?.find(item=>item.name===controllerName),entry=app?.env?.find(item=>item.name===pauseEnvironment);
  requireValue(entry?.value==='true'&&!entry.valueFrom,'QUIESCE_OPEN_PLAN_INVALID');entry.value='false';
@@ -236,9 +253,10 @@ export function inspectQuiesceOpen(plan,snapshot) {
  validateQuiesceOpenPlan(plan,plan.context,plan.k3sSudo);requireValue(snapshot.clusterUID===plan.clusterUID&&snapshot.namespaceUID===plan.namespaceUID&&
   snapshot.controller?.metadata?.uid===plan.controllerUID,'QUIESCE_OPEN_IDENTITY_CHANGED');
  const digest=fingerprint(snapshot.controller.spec),target=digest===fingerprint(plan.after)?'AFTER':digest===fingerprint(plan.before)?'BEFORE':'DRIFT';
- requireValue(target!=='DRIFT','QUIESCE_OPEN_CONTROLLER_DRIFT');controllerApplication(snapshot.controller);exactControllerPods(snapshot,1);
+ requireValue(target!=='DRIFT','QUIESCE_OPEN_CONTROLLER_DRIFT');controllerApplication(snapshot.controller);exactControllerPods(snapshot,1);exactOpenTargets(plan.completion,snapshot);
  if(target==='BEFORE'){const current=owner(snapshot);requireValue(fingerprint(current)===fingerprint(plan.owner),'QUIESCE_OWNER_OR_PINS_CHANGED');
-  const work=workState(snapshot);requireValue(work.jobs.length===0&&work.pvcs.length===0,'QUIESCE_OPEN_WORK_APPEARED');}
+  const work=workState(snapshot);requireValue(work.jobs.length===0&&work.pvcs.length===0&&fingerprint(plan.completion.controllerReader)===fingerprint(snapshot.controllerReader),
+   'QUIESCE_OPEN_WORK_OR_READER_CHANGED');}
  return {target};
 }
 

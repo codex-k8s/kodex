@@ -207,10 +207,14 @@ node tools/release/image-admission-quiesce.mjs open \
   --confirm OPEN_STAGING_IMAGE_ADMISSION_QUIESCE
 ```
 
-`open-plan` заново сверяет exact reader Deployment и все три policy target с
-завершённым delivery plan. Stale, rollback или foreign paused spec не получают
-право на open. Bounded hold включается только после open отдельным flow ниже.
-При потерянном ACK `open-resume` выполняет только readback и не повторяет PATCH.
+`open-plan` заново сверяет exact reader Deployment, canonical CRI/process proof
+и все policy/binding/parameters targets с завершённым delivery plan. Перед CAS
+и после rollout `open` повторяет тот же process proof и pinned resource
+UID/resourceVersion/digest. Stale, rollback, replacement/restart либо foreign
+paused spec не получают право на open. Новые Jobs допустимы только после
+подтверждённого CAS; executable и policy/security targets при этом не могут
+измениться. Bounded hold включается только после open отдельным flow ниже. При
+потерянном ACK `open-resume` выполняет только readback и не повторяет PATCH.
 
 Если plan показывает, что одна из policy resources уже exact, соответствующая
 фаза имеет `action=none`: команда выполняет только readback и записывает `PASS`

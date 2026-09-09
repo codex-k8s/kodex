@@ -6,7 +6,8 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
 import {buildQuiesceOpenPlan,buildQuiescePlan,classifyNoWorkLog,controllerName,inspectQuiesceOpen,inspectQuiescePhase,inspectQuiesceRecovery,namespace,phases,quiesceMutation,quiesceOpenMutation,quiesceRecoveryMutation,validateQuiesceOpenPlan,validateQuiescePlan,validateQuiesceReceipt} from './image-admission-quiesce-model.mjs';
-import {inspectPhase as inspectDeliveryPhase,jobsPolicyName,phases as deliveryPhases,releasePolicyName,validateDeliveryPlan} from './image-admission-hold-delivery-model.mjs';
+import {controllerPodState,inspectPhase as inspectDeliveryPhase,phases as deliveryPhases,validateDeliveryPlan} from './image-admission-hold-delivery-model.mjs';
+import {captureDeliveryState,readControllerExecutable} from './image-admission-hold-delivery.mjs';
 
 const requireValue=(value,code)=>{if(!value)throw new Error(code);};
 const safeCode=error=>/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'IMAGE_ADMISSION_QUIESCE_FAILED';
@@ -19,10 +20,11 @@ const ownedBy=(resource,ownerUID)=>(resource.metadata?.ownerReferences??[]).some
 function runtime(context,k3sSudo){const invoke=(args,input=null,timeout=30_000)=>execFileSync(k3sSudo?'sudo':'kubectl',k3sSudo?['-n','k3s','kubectl','--context',context,...args]:['--context',context,...args],{input,encoding:'utf8',stdio:[input===null?'ignore':'pipe','pipe','pipe'],timeout,maxBuffer:32<<20}).trim();
  const get=(kind,name,namespaced=true)=>JSON.parse(invoke(['get',kind,name,...(namespaced?['-n',namespace]:[]),'-o','json']));
  const list=(kind,label)=>JSON.parse(invoke(['get',kind,'-n',namespace,...(label?['-l',label]:[]),'-o','json'])).items;
+ const readOwnerState=()=>JSON.parse(invoke(['exec','-i','kodex-postgresql-0','-n',namespace,'--','psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','postgres','-d','control_plane'],readFileSync(new URL('./runner-policy-readback.sql',import.meta.url),'utf8')));
  return {invoke,get,list,patch:patch=>{const path=`/tmp/kodex-image-admission-quiesce-${randomUUID()}.json`;try{writeFileSync(path,JSON.stringify(patch),{mode:0o600,flag:'wx'});invoke(['patch','deployment',controllerName,'-n',namespace,'--type=json','--patch-file',path],null,60_000);}finally{rmSync(path,{force:true});}},
   rollout:()=>invoke(['rollout','status',`deployment/${controllerName}`,'-n',namespace,'--timeout=180s'],null,190_000),
   logs:(name,container)=>invoke(['logs',`job/${name}`,'-n',namespace,'-c',container,'--timestamps=false','--tail=32'],null,30_000),
-  owner:()=>JSON.parse(invoke(['exec','-i','kodex-postgresql-0','-n',namespace,'--','psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','postgres','-d','control_plane'],readFileSync(new URL('./runner-policy-readback.sql',import.meta.url),'utf8')))};}
+  owner:readOwnerState,readOwnerState,controllerExecutable:readControllerExecutable};}
 function capture(rt){const namespaceResource=rt.get('namespace',namespace,false),cluster=rt.get('namespace','kube-system',false),controller=rt.get('deployment',controllerName),resources=rt.list('replicasets,pods'),replicas=resources.filter(item=>item.kind==='ReplicaSet'&&ownedBy(item,controller.metadata.uid)).map(item=>item.metadata.uid),controllerPods=resources.filter(item=>item.kind==='Pod'&&(ownedBy(item,controller.metadata.uid)||replicas.some(uid=>ownedBy(item,uid))));
  const jobs=rt.list('jobs','kodex.dev/image-admission-orchestrated=true').map(job=>{if(job.status?.failed>0||job.status?.conditions?.some(item=>item.type==='Failed'&&item.status==='True'))job.quiesceTerminalClass=classifyNoWorkLog(job.metadata.labels?.['kodex.dev/image-admission-phase'],rt.logs(job.metadata.name,job.metadata.labels?.['kodex.dev/image-admission-phase']));return job;});
  return {clusterUID:cluster.metadata.uid,namespaceUID:namespaceResource.metadata.uid,namespace:namespaceResource,controller,controllerPods,
@@ -30,12 +32,7 @@ function capture(rt){const namespaceResource=rt.get('namespace',namespace,false)
 function captureRecovery(rt){const namespaceResource=rt.get('namespace',namespace,false),cluster=rt.get('namespace','kube-system',false),controller=rt.get('deployment',controllerName),resources=rt.list('replicasets,pods'),replicas=resources.filter(item=>item.kind==='ReplicaSet'&&ownedBy(item,controller.metadata.uid)).map(item=>item.metadata.uid);
  return {clusterUID:cluster.metadata.uid,namespaceUID:namespaceResource.metadata.uid,controller,
   controllerPods:resources.filter(item=>item.kind==='Pod'&&(ownedBy(item,controller.metadata.uid)||replicas.some(uid=>ownedBy(item,uid))))};}
-function captureDelivery(rt){const namespaceResource=rt.get('namespace',namespace,false),cluster=rt.get('namespace','kube-system',false),controller=rt.get('deployment',controllerName),resources=rt.list('deployments,replicasets,pods'),replicas=resources.filter(item=>item.kind==='ReplicaSet'&&ownedBy(item,controller.metadata.uid)).map(item=>item.metadata.uid),jobsBinding=rt.get('validatingadmissionpolicybinding',jobsPolicyName,false),parameterName=jobsBinding.spec?.paramRef?.name;
- requireValue(typeof parameterName==='string','POLICY_PARAMETER_NAME_REQUIRED');return {clusterUID:cluster.metadata.uid,namespaceUID:namespaceResource.metadata.uid,namespace:namespaceResource,controller,
-  controllerPods:resources.filter(item=>item.kind==='Pod'&&(ownedBy(item,controller.metadata.uid)||replicas.some(uid=>ownedBy(item,uid)))),deployments:resources.filter(item=>item.kind==='Deployment'),
-  jobs:rt.list('jobs','kodex.dev/image-admission-orchestrated=true'),pvcs:rt.list('persistentvolumeclaims','kodex.dev/image-admission-orchestrated=true'),ownerState:rt.owner(),
-  jobsPolicy:rt.get('validatingadmissionpolicy',jobsPolicyName,false),jobsBinding,parameters:rt.get('imageadmissionpolicyparameters',parameterName),policyConfig:rt.get('configmap',parameterName),
-  releasePolicy:rt.get('validatingadmissionpolicy',releasePolicyName,false,true),releaseBinding:rt.get('validatingadmissionpolicybinding',releasePolicyName,false,true)};}
+function captureOpen(rt){const snapshot=captureDeliveryState(rt,{proof:true});snapshot.controllerReader=controllerPodState(snapshot);return snapshot;}
 function journal(path,plan){const value=rows(path);requireValue(value.every(row=>row.intent===plan.intent&&row.planSHA256===fingerprint(plan)),'QUIESCE_JOURNAL_IDENTITY_REJECTED');return value;}
 export async function executeQuiescePhase(plan,phase,evidence,mode,rt){let history=journal(evidence,plan),base={at:new Date().toISOString(),intent:plan.intent,planSHA256:fingerprint(plan),phase};
  requireValue(!history.some(row=>row.phase===phase&&row.status==='PASS')&&phases.slice(0,phases.indexOf(phase)).every(previous=>history.some(row=>row.phase===previous&&row.status==='PASS')),'QUIESCE_PHASE_ORDER_REJECTED');
@@ -52,22 +49,24 @@ export async function executeQuiesceRecovery(plan,evidence,mode,rt){const phase=
  let mutation;try{const state=captureRecovery(rt),inspected=inspectQuiesceRecovery(plan,state);if(inspected.target==='AFTER'){append(evidence,{...base,status:'PASS',action:'none'},!exists(evidence));return {status:'PASS'};}mutation=quiesceRecoveryMutation(plan,state);}catch(error){const code=safeCode(error);append(evidence,{...base,status:'FAIL',code},!exists(evidence));return {status:'FAIL',code};}
  append(evidence,{...base,status:'INTENT'},!exists(evidence));try{rt.patch(mutation.patch);}catch{}try{rt.rollout();const result=inspectQuiesceRecovery(plan,captureRecovery(rt));requireValue(result.target==='AFTER','QUIESCE_RECOVERY_OUTCOME_UNCONFIRMED');append(evidence,{...base,status:'PASS'});return {status:'PASS'};}catch(error){const code=safeCode(error);append(evidence,{...base,status:'UNKNOWN',code});return {status:'UNKNOWN',code};}}
 
-function completionEvidence(quiescePlan,receipt,deliveryPlan,deliveryEvidence) {
+const resourcePin=(resource,field='spec')=>({uid:resource.metadata.uid,resourceVersion:resource.metadata.resourceVersion,digest:fingerprint(resource[field])});
+function completionEvidence(quiescePlan,receipt,deliveryPlan,deliveryEvidence,snapshot,deliveryReadback) {
  validateDeliveryPlan(deliveryPlan,quiescePlan.context,quiescePlan.k3sSudo);
  requireValue(deliveryPlan.quiesce?.intent===quiescePlan.intent&&deliveryPlan.quiesce.planSHA256===fingerprint(quiescePlan)&&
   deliveryPlan.quiesce.receiptSHA256===fingerprint(receipt),'QUIESCE_OPEN_DELIVERY_MISMATCH');
  const deliveryRows=rows(deliveryEvidence);requireValue(deliveryRows.length>0&&deliveryRows.every(row=>row.intent===deliveryPlan.intent&&row.planSHA256===fingerprint(deliveryPlan))&&
   deliveryPhases.every(phase=>deliveryRows.some(row=>row.phase===phase&&row.status==='PASS')),'QUIESCE_OPEN_DELIVERY_RECEIPT_REQUIRED');
  return {deliveryIntent:deliveryPlan.intent,deliveryPlanSHA256:fingerprint(deliveryPlan),deliveryEvidenceSHA256:fingerprint(deliveryRows),
-  controllerSpecSHA256:fingerprint(deliveryPlan.controllerSpecs.reader),jobsPolicySpecSHA256:fingerprint(deliveryPlan.desired.jobsPolicySpec),
-  releasePolicySpecSHA256:fingerprint(deliveryPlan.desired.releasePolicySpec),releaseBindingSpecSHA256:fingerprint(deliveryPlan.desired.releaseBindingSpec)};
+  controllerSpecSHA256:fingerprint(deliveryPlan.controllerSpecs.reader),controllerExecutableSHA256:deliveryPlan.executableSHA256,controllerReader:deliveryReadback.reader,
+  resources:{jobsPolicy:resourcePin(snapshot.jobsPolicy),releasePolicy:resourcePin(snapshot.releasePolicy),releaseBinding:resourcePin(snapshot.releaseBinding),
+   jobsBinding:resourcePin(snapshot.jobsBinding),parameters:resourcePin(snapshot.parameters),policyConfig:resourcePin(snapshot.policyConfig,'data')}};
 }
 
-async function openController(plan,evidence,mode,rt) {const phase='open',base={at:new Date().toISOString(),intent:plan.intent,planSHA256:fingerprint(plan),phase};
+export async function openController(plan,evidence,mode,rt) {const phase='open',base={at:new Date().toISOString(),intent:plan.intent,planSHA256:fingerprint(plan),phase};
  if(mode==='resume'){const history=journal(evidence,plan);requireValue(history.some(row=>row.status==='INTENT')&&!history.some(row=>row.status==='PASS'),'QUIESCE_OPEN_RESUME_NOT_REQUIRED');append(evidence,{...base,status:'RESUME'});
-  try{requireValue(inspectQuiesceOpen(plan,capture(rt)).target==='AFTER','QUIESCE_OPEN_OUTCOME_UNCONFIRMED');append(evidence,{...base,status:'PASS'});return {status:'PASS'};}catch(error){const code=safeCode(error);append(evidence,{...base,status:'UNKNOWN',code});return {status:'UNKNOWN',code};}}
- requireValue(!exists(evidence),'NEW_EVIDENCE_REQUIRED');let mutation;try{mutation=quiesceOpenMutation(plan,capture(rt));}catch(error){const code=safeCode(error);append(evidence,{...base,status:'FAIL',code},true);return {status:'FAIL',code};}
- append(evidence,{...base,status:'INTENT'},true);try{rt.patch(mutation.patch);}catch{}try{rt.rollout();requireValue(inspectQuiesceOpen(plan,capture(rt)).target==='AFTER','QUIESCE_OPEN_OUTCOME_UNCONFIRMED');append(evidence,{...base,status:'PASS'});return {status:'PASS'};}catch(error){const code=safeCode(error);append(evidence,{...base,status:'UNKNOWN',code});return {status:'UNKNOWN',code};}}
+  try{requireValue(inspectQuiesceOpen(plan,captureOpen(rt)).target==='AFTER','QUIESCE_OPEN_OUTCOME_UNCONFIRMED');append(evidence,{...base,status:'PASS'});return {status:'PASS'};}catch(error){const code=safeCode(error);append(evidence,{...base,status:'UNKNOWN',code});return {status:'UNKNOWN',code};}}
+ requireValue(!exists(evidence),'NEW_EVIDENCE_REQUIRED');let mutation;try{mutation=quiesceOpenMutation(plan,captureOpen(rt));}catch(error){const code=safeCode(error);append(evidence,{...base,status:'FAIL',code},true);return {status:'FAIL',code};}
+ append(evidence,{...base,status:'INTENT'},true);try{rt.patch(mutation.patch);}catch{}try{rt.rollout();requireValue(inspectQuiesceOpen(plan,captureOpen(rt)).target==='AFTER','QUIESCE_OPEN_OUTCOME_UNCONFIRMED');append(evidence,{...base,status:'PASS'});return {status:'PASS'};}catch(error){const code=safeCode(error);append(evidence,{...base,status:'UNKNOWN',code});return {status:'UNKNOWN',code};}}
 
 async function main(args){const command=args.shift(),options={};requireValue(['inspect','plan','apply','observe','resume','receipt','recover','recover-resume','open-plan','open','open-resume'].includes(command),'INVALID_COMMAND');while(args.length){const key=args.shift();requireValue(['--context','--output','--plan','--evidence','--phase','--confirm','--quiesce-plan','--quiesce-evidence','--delivery-plan','--delivery-evidence','--k3s-sudo'].includes(key)&&!Object.hasOwn(options,key),'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
  const context=options['--context'],k3sSudo=options['--k3s-sudo']===true;requireValue(context&&!/prod/i.test(context)&&k3sSudo,'EXACT_STAGING_CONTEXT_REQUIRED');const rt=runtime(context,k3sSudo);requireValue(rt.invoke(['config','current-context'])===context,'CONTEXT_MISMATCH');
@@ -75,8 +74,9 @@ async function main(args){const command=args.shift(),options={};requireValue(['i
  if(command==='plan'){requireValue(options['--output']&&!exists(options['--output']),'PLAN_INPUT_REQUIRED');const plan=buildQuiescePlan(capture(rt),{context,k3sSudo,intent:randomUUID()});validateQuiescePlan(plan,context,k3sSudo);write(options['--output'],plan);process.stdout.write(`Image admission quiesce plan: ${fingerprint(plan)}\n`);return;}
  if(command==='open-plan'){requireValue(options['--quiesce-plan']&&options['--quiesce-evidence']&&options['--delivery-plan']&&options['--delivery-evidence']&&options['--output']&&!exists(options['--output']),'QUIESCE_OPEN_PLAN_INPUT_REQUIRED');const quiescePlan=read(options['--quiesce-plan']);validateQuiescePlan(quiescePlan,context,k3sSudo);
   const receipt=validateQuiesceReceipt(quiescePlan,journal(options['--quiesce-evidence'],quiescePlan)),deliveryPlan=read(options['--delivery-plan']);
-  const completion=completionEvidence(quiescePlan,receipt,deliveryPlan,options['--delivery-evidence']),deliveryState=captureDelivery(rt);
-  requireValue(inspectDeliveryPhase(deliveryPlan,deliveryState,'open',{requireExecutable:false}).target==='AFTER','QUIESCE_OPEN_DELIVERY_TARGET_REQUIRED');
+  const deliveryState=captureOpen(rt),deliveryReadback=inspectDeliveryPhase(deliveryPlan,deliveryState,'open');
+  requireValue(deliveryReadback.target==='AFTER','QUIESCE_OPEN_DELIVERY_TARGET_REQUIRED');
+  const completion=completionEvidence(quiescePlan,receipt,deliveryPlan,options['--delivery-evidence'],deliveryState,deliveryReadback);
   const plan=buildQuiesceOpenPlan(deliveryState,quiescePlan,receipt,completion,{intent:randomUUID()});
   validateQuiesceOpenPlan(plan,context,k3sSudo);write(options['--output'],plan);process.stdout.write(`Image admission quiesce open plan: ${fingerprint(plan)}\n`);return;}
  if(command==='open'||command==='open-resume'){const plan=read(options['--plan']);validateQuiesceOpenPlan(plan,context,k3sSudo);requireValue(options['--evidence']&&options['--confirm']==='OPEN_STAGING_IMAGE_ADMISSION_QUIESCE','QUIESCE_OPEN_INPUT_REQUIRED');
