@@ -187,3 +187,10 @@ Cleanup synthetic письма — отдельная разрешённая о�
 Exact runtime ENTRYPOINT/CRI профиль сверены с текущими agent-runner Dockerfile
 и runtime-controller workload manager; произвольные container runtime layouts
 не объявляются поддержанными без проверки.
+
+После смены runner base (#1409) `combined.fixtureState` указывает на новый
+терминальный журнал `role-image-forward-upgrade.mjs` из OPS-DOC-1262. Reader
+проверяет linked predecessor, forward pins и полный rebind; provenance SHA
+должна совпасть с новым immutable HEADER. Перенос completed checkpoint или
+переписывание старого CFG HEADER запрещены. Прежние standalone CFG journals
+продолжают читаться без изменения формата.

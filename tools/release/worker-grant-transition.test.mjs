@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planWorkerTransition, requireInstanceWriters, verifyOverlap, requireUnchangedPlan, waitForWorkerDrain } from "./worker-grant-transition.mjs";
+import { planWorkerTransition, requireInstanceWriters, verifyOverlap, requireUnchangedPlan, waitForWorkerDrain, exactActiveWorkerPods } from "./worker-grant-transition.mjs";
 import { fingerprint } from "./scoped-release.mjs";
 
 const uid = "11111111-1111-4111-8111-111111111111";
@@ -161,4 +161,57 @@ test("drain never tolerates identity or spec drift and does not hide transport f
     readPods: () => { throw new Error("KUBERNETES_UNAVAILABLE"); }, uid,
     specSHA256: fingerprint(deployment.spec) }), /KUBERNETES_UNAVAILABLE/);
   assert.equal(reads, 1);
+});
+
+
+function inventoryFixture() {
+  const deployment = fixture();
+  const sets = [
+    { metadata: { uid: "current-rs", ownerReferences: [{ controller: true, uid }] }, spec: { replicas: 1 } },
+    { metadata: { uid: "old-rs", ownerReferences: [{ controller: true, uid }] }, spec: { replicas: 0 } },
+    { metadata: { uid: "foreign-rs", ownerReferences: [{ controller: true, uid: otherUID }] }, spec: { replicas: 1 } },
+  ];
+  const pod = (name, owner, phase = "Running") => ({ metadata: { uid: name, name,
+    ownerReferences: [{ controller: true, uid: owner }] }, status: { phase,
+    conditions: [{ type: "Ready", status: "True" }] } });
+  const current = pod("current", "current-rs");
+  return { deployment, sets, current, pod };
+}
+
+test("exact inventory keeps Running Pod and ignores only terminal old ReplicaSet history", () => {
+  const { deployment, sets, current, pod } = inventoryFixture();
+  const pods = [current, pod("failed-one", "old-rs", "Failed"), pod("failed-two", "old-rs", "Failed"),
+    pod("completed", "old-rs", "Succeeded"), pod("foreign", "foreign-rs")];
+  const original = structuredClone({ deployment, sets, pods });
+  assert.deepEqual(exactActiveWorkerPods(deployment, sets, pods), [current]);
+  assert.deepEqual({ deployment, sets, pods }, original);
+  const plan = planWorkerTransition(deployment, "activate");
+  assert.deepEqual(plan.patch.slice(0, 2), [
+    { op: "test", path: "/metadata/uid", value: uid },
+    { op: "test", path: "/metadata/resourceVersion", value: "12" },
+  ]);
+});
+
+test("old zero-replica RS cannot hide Pending Unknown Running or terminating extra Pods", () => {
+  for (const phase of ["Pending", "Unknown", "Running", undefined, "unrecognized"]) {
+    for (const terminating of [false, true]) {
+      const { deployment, sets, current, pod } = inventoryFixture();
+      const extra = pod("extra", "old-rs", phase);
+      if (phase === undefined) delete extra.status.phase;
+      if (terminating) extra.metadata.deletionTimestamp = "2026-09-09T05:00:00Z";
+      assert.throws(() => exactActiveWorkerPods(deployment, sets, [current, extra]), /ALL_READER_PODS_REQUIRED/);
+    }
+  }
+});
+
+test("the only replica must still be Running Ready and not terminating", () => {
+  for (const mutate of [
+    (p) => { p.status.phase = "Pending"; }, (p) => { p.status.phase = "Unknown"; },
+    (p) => { p.status.conditions[0].status = "False"; }, (p) => { delete p.status; },
+    (p) => { p.metadata.deletionTimestamp = "2026-09-09T05:00:00Z"; },
+    (p) => { p.status.phase = "Failed"; }, (p) => { p.status.phase = "Succeeded"; },
+  ]) {
+    const { deployment, sets, current } = inventoryFixture(); mutate(current);
+    assert.throws(() => exactActiveWorkerPods(deployment, sets, [current]), /ALL_READER_PODS_REQUIRED/);
+  }
 });

@@ -57,22 +57,34 @@ export class ReadNetworkCorrelator<T extends object> {
       terminal?: number;
       failed?: number;
       code?: string;
+      invalidIdentity?: boolean;
     }
   >();
   private readonly ids = new Map<string, Set<T>>();
+  private readonly seen = new WeakSet<T>();
+  private readonly finalized = new WeakMap<T, boolean>();
+  // Watermark нужен после удаления private identity: поздний callback/повтор
+  // прежнего ID не становится новой причиной отмены. Незавершённые ID сохранены.
+  private readonly retired = new Map<string, number>();
+  private observed = 0;
+  private checkpointSequence = 0;
+  private completedFailures = 0;
+  private completedConfirmed = 0;
   private events = 0;
   private overflow = 0;
   observe(event: ReadSignalEvent): void {
-    if (++this.events > 4096) {
-      this.overflow++;
-      return;
-    }
     if (
       !identity.test(event.id) ||
       !Number.isSafeInteger(event.at) ||
       event.at < 1
     )
       return;
+    if (!this.signals.has(event.id) && this.isRetired(event.id)) return;
+    if (!this.signals.has(event.id) && this.signals.size >= 4096) {
+      this.overflow++;
+      return;
+    }
+    this.events++;
     const item = this.signals.get(event.id) ?? {
       address: event.address,
       method: event.method,
@@ -98,7 +110,8 @@ export class ReadNetworkCorrelator<T extends object> {
     resourceType = "other",
     mainFrame = true,
   ): void {
-    if (this.requests.has(request)) return;
+    if (this.seen.has(request)) return;
+    this.seen.add(request);
     if (this.requests.size >= 4096) {
       this.overflow++;
       return;
@@ -115,11 +128,18 @@ export class ReadNetworkCorrelator<T extends object> {
       id,
       address,
       method,
-      sequence: this.requests.size + 1,
+      sequence: ++this.observed,
+      invalidIdentity:
+        id !== undefined && this.isRetired(id) && !this.signals.has(id),
     });
     if (id && identity.test(id)) {
       const requests = this.ids.get(id) ?? new Set<T>();
       requests.add(request);
+      if (requests.size > 1)
+        for (const duplicate of requests) {
+          const item = this.requests.get(duplicate);
+          if (item) item.invalidIdentity = true;
+        }
       this.ids.set(id, requests);
     }
   }
@@ -130,7 +150,7 @@ export class ReadNetworkCorrelator<T extends object> {
   }
   failed(request: T, code: string, at = Date.now()): void {
     const item = this.requests.get(request);
-    if (item) {
+    if (item && item.failed === undefined && item.terminal === undefined) {
       this.documents.terminal(request, at);
       this.diagnostics.failed(request, this.stage, code, at);
       item.failed = at;
@@ -153,9 +173,12 @@ export class ReadNetworkCorrelator<T extends object> {
     this.documents.end(id, complete, at, sameDocument);
   }
   confirmed(request: T): boolean {
+    const finalized = this.finalized.get(request);
+    if (finalized !== undefined) return finalized;
     const item = this.requests.get(request);
     if (
       !item ||
+      item.invalidIdentity ||
       item.failed === undefined ||
       !cancelledCodes.has(item.code ?? "") ||
       this.overflow ||
@@ -202,21 +225,77 @@ export class ReadNetworkCorrelator<T extends object> {
       }),
     };
   }
+  private isRetired(id: string): boolean {
+    if (!identity.test(id)) return false;
+    const [document, sequence] = id.split(":");
+    return Number(sequence) <= (this.retired.get(document ?? "") ?? 0);
+  }
+  private retireIdentity(id: string): void {
+    if (!identity.test(id)) return;
+    const [document, sequence] = id.split(":");
+    if (!document) return;
+    if (!this.retired.has(document) && this.retired.size >= 512) {
+      this.overflow++;
+      return;
+    }
+    this.retired.set(
+      document,
+      Math.max(Number(sequence), this.retired.get(document) ?? 0),
+    );
+  }
+  // Вызывается на границе законченного шага. Безопасный chunk сначала
+  // материализуется целиком; caller обязан сохранить его, ошибка записи — FAIL.
+  // Поздние сигналы не могут пересмотреть уже зафиксированный отрицательный вывод.
+  checkpoint() {
+    const result = {
+      checkpointSequence: ++this.checkpointSequence,
+      summary: this.snapshot(),
+      diagnostics: this.safeDiagnostics(),
+    };
+    for (const [request, item] of this.requests) {
+      if (item.terminal === undefined) continue;
+      if (item.failed !== undefined) {
+        const confirmed = this.confirmed(request);
+        this.finalized.set(request, confirmed);
+        this.completedFailures++;
+        if (confirmed) this.completedConfirmed++;
+      }
+      if (item.id) {
+        this.retireIdentity(item.id);
+        const group = this.ids.get(item.id);
+        group?.delete(request);
+        if (!group?.size) {
+          this.ids.delete(item.id);
+          this.signals.delete(item.id);
+        }
+      }
+      this.requests.delete(request);
+      this.documents.retire(request);
+    }
+    this.diagnostics.checkpoint();
+    return result;
+  }
   snapshot() {
     const failed = [...this.requests.entries()].filter(
       ([, item]) => item.failed !== undefined,
     );
     return {
-      observedRequests: this.requests.size,
-      signalEvents: Math.min(this.events, 4096),
-      overflow: this.overflow + this.documents.overflowCount(),
-      rawFailedRequests: failed.length,
-      confirmedCancellations: failed.filter(([request]) =>
-        this.confirmed(request),
-      ).length,
-      unexplainedFailures: failed.filter(
-        ([request]) => !this.confirmed(request),
-      ).length,
+      observedRequests: this.observed,
+      retainedRequests: this.requests.size,
+      retainedSignals: this.signals.size,
+      signalEvents: this.events,
+      overflow:
+        this.overflow +
+        this.documents.overflowCount() +
+        this.diagnostics.snapshot().overflow,
+      rawFailedRequests: this.completedFailures + failed.length,
+      confirmedCancellations:
+        this.completedConfirmed +
+        failed.filter(([request]) => this.confirmed(request)).length,
+      unexplainedFailures:
+        this.completedFailures -
+        this.completedConfirmed +
+        failed.filter(([request]) => !this.confirmed(request)).length,
     };
   }
 }

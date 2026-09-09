@@ -265,3 +265,87 @@ attempt/turn/image и deadline. Fixtures не выполняют vendor/provider
 CLI preload `--import` и subprocess API сверены через Context7
 `/websites/nodejs_latest-v24_x_api`; локальные fixtures подменяют только transport
 и не обходят production origin/session/CSRF или journal guards.
+
+## Смена runner base существующего fixture (#1409)
+
+`tools/dev/role-image-forward-upgrade.mjs` дополняет прежние три фазы отдельным
+linked journal. Старый CFG journal не переписывается. Новые Project/Agent,
+credentials, provider Run и HEALTH не создаются. Инструмент предназначен только
+UI fixture с одной `FROM repository@sha256` и прежними CFG-комментариями;
+произвольный Dockerfile закрыто отклоняется. Меняется только точная base image,
+прочие поля source сохраняются. Schema/API/permissions не меняются.
+
+Precondition: runner уже собран, OCI проверен через OPS-RUNNER-1382 и опубликован;
+новая trusted base/policy/catalog выбрана через OPS-DOC-1258. Reader/tool/authority
+images не пересобираются из-за одного runner diff. Root передаёт свежий manifest
+и отдельную легитимную API session. Все inputs0600, parent0700, checkout чистый.
+
+Private profile, immutable до plan:
+
+```json
+{
+  "version": 1,
+  "previousState": "/private/completed-cfg.jsonl",
+  "previousSHA256": "<SHA256 неизменных bytes>",
+  "runnerProvenance": "/private/new-runner.provenance.json",
+  "runnerProvenanceSHA256": "<SHA256 новых provenance bytes>"
+}
+```
+
+Предыдущий журнал заканчивается `prepare|advance|restore|upgrade-complete` PASS
+и не имеет unresolved INTENT. SHA, project/Agent/environment/recipe и текущие
+published/artifact/build/promotion pins сверяются. Цепочка допускает не более
+восьми журналов. Source predecessor и новой provenance должны быть предками
+текущего exact checkout. Новая база обязана отличаться от прежней.
+
+```bash
+UPGRADE_ARGS=(--origin https://control.kodex.works
+  --storage-state "$UPGRADE_SESSION" --profile "$UPGRADE_PROFILE"
+  --serving-manifest "$UPGRADE_MANIFEST" --state "$NEW_UPGRADE_JOURNAL"
+  --timeout-ms 1200000)
+node tools/dev/role-image-forward-upgrade.mjs plan "${UPGRADE_ARGS[@]}"
+node tools/dev/role-image-forward-upgrade.mjs apply "${UPGRADE_ARGS[@]}" \
+  --confirm APPLY-STAGING-ROLE-IMAGE-UPGRADE
+node tools/dev/role-image-forward-upgrade.mjs inspect "${UPGRADE_ARGS[@]}"
+```
+
+`plan` выполняет только owner GET и создаёт отсутствующий журнал exclusive;
+HEADER содержит predecessor digest/path, new runner digest/provenance и fresh
+configuration/version/source/recipe/generation/binding pins. Повторный plan в
+этот файл запрещён. `apply` перед первым INTENT повторяет план и требует точное
+совпадение; для последующих фаз сохраняются прежние ACK и owner OCC. Пока
+HEADER записан, но мутаций ещё нет, expired session не разрешает новый scope.
+
+| Переход | Owner command/readback и cardinality |
+| --- | --- |
+| Draft | POST ROLE_IMAGE drafts того же configurationRef, fresh config If-Match; новая revision/parent, прежний published pointer |
+| Validate / publish | Специализированные revision validation/publication. Publication сама создаёт один build; отдельного build POST нет |
+| Build / admission | GET exact recipe/generation/revision; COMPLETED build, ACCEPTED candidate, новые artifact/build/digest и непустые SBOM/provenance/vulnerability evidence |
+| Promotion | Один POST exact candidate/provenance, recipe If-Match; GET exact active artifact/promotion receipt; binding пока старая |
+| Impact / rebind | Один POST impact, все страницы, ≥2 уникальных consumers только своего environment/project; один POST selected bindings; все APPLIED и новая binding/versionRef/exact promoted digest |
+| Terminal | `upgrade-complete` только после полного readback; старые refs/history остаются. Provider/runtime Pod NOT RUN |
+| Lost ACK / UNKNOWN | INTENT fsync до HTTP; apply закрыто блокируется. inspect только GET revisions с exact expected source digest, build/artifact/binding metadata; не сохраняет искусственный ACK, не повторяет POST/key |
+
+Полученный inspect после UNKNOWN не является разрешением продолжить apply.
+Если API не предоставляет однозначного owner receipt, root фиксирует результат
+и согласует отдельное узкое восстановление; отсутствие ресурса не доказывает
+отсутствие build/promotion effect. Новый prefix/journal не обходят эту границу.
+Timeout после известного ACK допускает обычное продолжение apply того же файла:
+мутация с ACK повторно не отправляется, pipeline читается дальше.
+
+`existingFixture`/combined reader принимают только терминальный upgrade с
+неизменным predecessor, всеми шестью ACK, новым artifact/build/revision/digest и
+подтверждённым forward binding. Combined profile должен ссылаться на новый файл
+и ту же provenance SHA, что закреплена в его HEADER. Старые standalone profiles
+сохраняются. После plan/upgrade требуется отдельный GO на один provider/mail Run;
+observer из OPS-EMAIL-1378 измеряет actual Pod imageID и binary SHA из новой базы.
+
+Rollback — новый forward выбор ранее admitted artifact с fresh owner versions;
+старый журнал/policy/schema/generation floor не откатываются. Старая база с
+известным MCP defect не является исправной кандидатной версией.
+
+Локальный entrypoint `make test-role-image-forward-upgrade`: public CLI actual
+argv plan/apply/inspect, authoritative fake transport с формой реального API,
+old/new substitution, foreign/stale/base drift, incomplete/missing rebind,
+lost ACK без повторной publication и совместимость standalone/combined.
+Эти fixtures не являются live scan/provider/node pull доказательством.

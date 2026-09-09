@@ -164,6 +164,11 @@ test-integration-deployed-e2e-check:
 test-integration-deployed-e2e:
 	@./scripts/tests/integration-deployed-e2e.sh
 
+test-runtime-mcp-catalog:
+	@./scripts/tests/runtime-mcp-catalog-test.sh
+
+.PHONY: test-runtime-mcp-catalog
+
 test-agent-runner:
 	@./scripts/tests/agent-runner-test.sh
 
@@ -374,3 +379,7 @@ test-runner-binary-provenance:
 	@timeout 120s python3 -B tools/release/runner-binary-provenance.test.py
 	@bash -n tools/dev/build-local-runner.sh
 	@./scripts/tests/local-image-cache-import-contract-test.sh
+
+.PHONY: test-role-image-forward-upgrade
+test-role-image-forward-upgrade:
+	TMPDIR=/tmp node --test tools/dev/role-image-forward-upgrade.test.mjs tools/dev/role-image-acceptance.test.mjs tools/dev/role-image-acceptance-cli.test.mjs tools/dev/role-image-runtime-proof.test.mjs tools/dev/email-agent-acceptance.test.mjs

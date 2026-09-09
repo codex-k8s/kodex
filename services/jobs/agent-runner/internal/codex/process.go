@@ -321,17 +321,7 @@ func (server *appServer) waitRequiredMCP(ctx context.Context, state *protocolSta
 }
 
 func RequiredMCPToolNames(input model.Input) []string {
-	result := []string{"propose_run_metadata"}
-	if input.SystemAssistant {
-		result = append(result, "get_configuration_catalog", "propose_configuration_plan", "propose_assistant_metadata")
-	}
-	if len(input.DelegationTargets) != 0 {
-		result = append(result, "delegate_agent")
-	}
-	if len(input.IntegrationGrants) != 0 {
-		result = append(result, "invoke_integration")
-	}
-	return result
+	return runtimecontract.RuntimeMCPToolNames(input)
 }
 
 func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error) {

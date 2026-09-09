@@ -37,6 +37,53 @@ test('consumer ownership excludes completed Job and detects replacement/drift',(
  const changed=resources();changed[2].spec.containers=structuredClone(changed[2].spec.containers);changed[2].spec.containers[0].args[1]='./cmd/foreign';assert.throws(()=>authorityConsumers(changed));
  const missing=resources();missing[2].status.containerStatuses[0].ready=false;assert.throws(()=>authorityConsumers(missing));
 });
+function injectServiceAccountProjection(all) {
+ const deployment=all[0],pod=all[2],name='kube-api-access-a1b2c';
+ deployment.spec.template.spec.automountServiceAccountToken=true;
+ deployment.spec.template.spec.volumes=[];
+ pod.spec.automountServiceAccountToken=true;
+ pod.spec.volumes=[{name,projected:{defaultMode:420,sources:[
+  {serviceAccountToken:{expirationSeconds:3607,path:'token'}},
+  {configMap:{name:'kube-root-ca.crt',items:[{key:'ca.crt',path:'ca.crt'}]}},
+  {downwardAPI:{items:[{path:'namespace',fieldRef:{apiVersion:'v1',fieldPath:'metadata.namespace'}}]}},
+ ]}}];
+ pod.spec.containers=structuredClone(pod.spec.containers);
+ for(const container of pod.spec.containers)container.volumeMounts=[{name,mountPath:'/var/run/secrets/kubernetes.io/serviceaccount',readOnly:true}];
+ return all;
+}
+test('consumer accepts only bounded Kubernetes service-account projection',()=>{
+ const healthy=injectServiceAccountProjection(resources());assert.equal(authorityConsumers(healthy).length,2);
+ const mutations=[
+  all=>all[2].spec.containers[0].volumeMounts[0].mountPath='/var/run/foreign',
+  all=>all[2].spec.containers[0].volumeMounts[0].readOnly=false,
+  all=>all[2].spec.containers[0].volumeMounts[0].name='kube-api-access-fffff',
+  all=>all[2].spec.volumes[0].projected.defaultMode=511,
+  all=>all[2].spec.volumes[0].projected.sources[0].serviceAccountToken.expirationSeconds=86400,
+  all=>all[2].spec.volumes[0].projected.sources.push({secret:{name:'foreign'}}),
+  all=>all[2].spec.volumes.push({name:'foreign',emptyDir:{}}),
+  all=>all[2].spec.containers[0].volumeMounts.push({name:'foreign',mountPath:'/foreign'}),
+ ];
+ for(const mutate of mutations){const changed=injectServiceAccountProjection(resources());mutate(changed);assert.throws(()=>authorityConsumers(changed),/AUTHORITY_CONSUMER_NOT_STABLE/);}
+});
+test('consumer keeps immutable container fields and declared mounts exact',()=>{
+ const source=resources();
+ for(const container of source[0].spec.template.spec.containers){
+  container.env=[{name:'SAFE_MODE',value:'true'}];container.securityContext={runAsNonRoot:true};container.volumeMounts=[{name:'declared',mountPath:'/declared',readOnly:true}];
+ }
+ source[0].spec.template.spec.volumes=[{name:'declared',emptyDir:{sizeLimit:'1Mi'}}];
+ source[2].spec=structuredClone(source[0].spec.template.spec);
+ assert.equal(authorityConsumers(source).length,2);
+ for(const mutate of [
+  all=>all[2].spec.containers[0].command=['/bin/false'],
+  all=>all[2].spec.containers[0].env[0].value='false',
+  all=>all[2].spec.containers[0].image='registry.invalid/foreign@sha256:'+'f'.repeat(64),
+  all=>all[2].spec.containers[0].securityContext.runAsNonRoot=false,
+  all=>all[2].spec.containers[0].volumeMounts[0].readOnly=false,
+  all=>all[2].spec.containers[0].volumeMounts.push({name:'declared',mountPath:'/declared'}),
+  all=>all[2].spec.volumes[0].emptyDir.sizeLimit='2Mi',
+  all=>all[2].spec.volumes.push({name:'declared',emptyDir:{}}),
+ ]) {const changed=structuredClone(source);mutate(changed);assert.throws(()=>authorityConsumers(changed),/AUTHORITY_CONSUMER_NOT_STABLE/);}
+});
 test('image verifier included while unchanged worker writer excluded',()=>{
  const all=resources(),c=all[0].spec.template.spec.containers[1];c.command=['/usr/local/bin/internal-rpc-authority-verifier'];c.args=[];
  assert.equal(authorityConsumers(all).find(item=>item.role==='verifier').role,'verifier');

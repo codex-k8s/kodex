@@ -136,6 +136,11 @@ export class SessionRequestDiagnostics<T extends object> {
       failures: structuredClone(this.failures),
     };
   }
+  checkpoint() {
+    const value = this.snapshot();
+    this.failures.length = 0;
+    return value;
+  }
   sequenceOf(request: T): number | undefined {
     return this.requests.get(request)?.requestSequence;
   }

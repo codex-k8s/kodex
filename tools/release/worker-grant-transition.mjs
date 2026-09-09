@@ -31,6 +31,20 @@ function healthy(deployment) {
     t.availableReplicas === s.replicas, "COMPLETED_HEALTHY_ROLLOUT_REQUIRED");
 }
 
+// Terminal Pods остаются историей ReplicaSet, но не являются активными replicas.
+// Не фильтруем deletionTimestamp или replicas старого RS: живой predecessor
+// обязан продолжать блокировать exact inventory до завершения drain.
+export function exactActiveWorkerPods(deployment, replicaSets, allPods) {
+  healthy(deployment);
+  const sets = replicaSets.filter((rs) => rs.metadata.ownerReferences?.some((owner) => owner.controller && owner.uid === deployment.metadata.uid));
+  const ids = new Set(sets.map((rs) => rs.metadata.uid));
+  const pods = allPods.filter((pod) => pod.metadata.ownerReferences?.some((owner) => owner.controller && ids.has(owner.uid)))
+    .filter((pod) => !["Succeeded", "Failed"].includes(pod.status?.phase));
+  requireValue(pods.length === deployment.spec.replicas && pods.every((pod) => !pod.metadata.deletionTimestamp &&
+    pod.status?.phase === "Running" && pod.status.conditions?.some((condition) => condition.type === "Ready" && condition.status === "True")), "ALL_READER_PODS_REQUIRED");
+  return pods;
+}
+
 // Deployment rollout может завершиться до удаления старого terminating Pod.
 // После единственного PATCH ждём только точный readback, не повторяя mutation.
 export async function waitForWorkerDrain({ readDeployment, readPods, uid, specSHA256, timeoutMs = 300_000, pollIntervalMs = 250 }) {
@@ -179,14 +193,9 @@ async function main(args) {
   };
   const podsFor = (deployment) => {
     healthy(deployment);
-    const sets = JSON.parse(kubectl(["get", "replicasets", "-o", "json"])).items
-      .filter((rs) => rs.metadata.ownerReferences?.some((owner) => owner.controller && owner.uid === deployment.metadata.uid));
-    const ids = new Set(sets.map((rs) => rs.metadata.uid));
-    const pods = JSON.parse(kubectl(["get", "pods", "-o", "json"])).items
-      .filter((pod) => pod.metadata.ownerReferences?.some((owner) => owner.controller && ids.has(owner.uid)));
-    requireValue(pods.length === deployment.spec.replicas && pods.every((pod) => !pod.metadata.deletionTimestamp &&
-      pod.status?.phase === "Running" && pod.status.conditions?.some((condition) => condition.type === "Ready" && condition.status === "True")), "ALL_READER_PODS_REQUIRED");
-    return pods;
+    return exactActiveWorkerPods(deployment,
+      JSON.parse(kubectl(["get", "replicasets", "-o", "json"])).items,
+      JSON.parse(kubectl(["get", "pods", "-o", "json"])).items);
   };
   const readers = () => {
     const cp = get("deployment", "control-plane");

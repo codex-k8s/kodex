@@ -22,6 +22,8 @@ done
   env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 ./...
 )
 
+"$repository_root/scripts/tests/runtime-mcp-catalog-test.sh"
+
 schema="$repository_root/contracts/runtime-controller/v7/agent-runner-input.schema.json"
 jq -e '
   .additionalProperties == false and
