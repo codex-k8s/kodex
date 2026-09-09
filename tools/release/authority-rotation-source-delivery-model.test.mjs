@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {authorityGoImage,classifyPublisherSourceState,createPublisherRollbackCAS,createPublisherSourceCAS,createSourceMigrationJob,validateRenderedSourceMigration,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
+import {authorityGoImage,buildSourceMigrationReceipt,classifyPublisherSourceState,createPublisherRollbackCAS,createPublisherSourceCAS,createSourceMigrationJob,validateRenderedSourceMigration,validateSourceMigrationReceipt,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
 import {fingerprint} from './scoped-release.mjs';
 
 const uid='14340000-0000-4000-8000-000000000001';
@@ -22,6 +22,14 @@ test('source migration is cloned from actual render and preserves offline caches
  assert.equal(job.spec.ttlSecondsAfterFinished,undefined);
  const actual=structuredClone(job);actual.metadata.uid=uid;actual.spec.selector={matchLabels:{'batch.kubernetes.io/controller-uid':uid}};actual.spec.template.metadata.labels['batch.kubernetes.io/controller-uid']=uid;
  verifySourceMigrationReadback(actual,job);actual.spec.template.spec.volumes.find(v=>v.name==='dev-go-mod').hostPath.path='/srv/kodex-dev/foreign';assert.throws(()=>verifySourceMigrationReadback(actual,job));
+});
+test('durable receipt pins first Job UID before and after terminal',()=>{
+ const job=createSourceMigrationJob(migration(),plan),a=structuredClone(job);a.metadata.uid=uid;a.spec.selector={matchLabels:{'batch.kubernetes.io/controller-uid':uid}};
+ const receipt=buildSourceMigrationReceipt(a,job,plan);validateSourceMigrationReceipt(receipt,job,plan);verifySourceMigrationReadback(a,job,receipt);
+ const b=structuredClone(a);b.metadata.uid='14340000-0000-4000-8000-000000000099';assert.throws(()=>verifySourceMigrationReadback(b,job,receipt),/SOURCE_MIGRATION_REPLACED/);
+ a.status={succeeded:1};verifySourceMigrationReadback(a,job,receipt);b.status={succeeded:1};assert.throws(()=>verifySourceMigrationReadback(b,job,receipt),/SOURCE_MIGRATION_REPLACED/);
+ const foreignUID={...receipt,jobUID:b.metadata.uid};validateSourceMigrationReceipt(foreignUID,job,plan);assert.throws(()=>verifySourceMigrationReadback(a,job,foreignUID),/SOURCE_MIGRATION_REPLACED/);
+ for(const mutate of [r=>r.planSHA256='f'.repeat(64),r=>r.intentID='foreign',r=>r.jobSpecSHA256='f'.repeat(64)]){const changed=structuredClone(receipt);mutate(changed);assert.throws(()=>validateSourceMigrationReceipt(changed,job,plan),/RECEIPT_REJECTED/);}
 });
 test('publisher source patch is UID, resourceVersion and full-spec CAS',()=>{
  const before=publisher();const delivery={...plan,publisher:{uid,resourceVersion:'7',beforeSpecSHA256:fingerprint(before.spec),beforeSource:'/srv/kodex-dev/workspace-release1226',beforeRevision:'b'.repeat(40),beforeAnnotations:{},beforeAnnotationsPresent:false}};

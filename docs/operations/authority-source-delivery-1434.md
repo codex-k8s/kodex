@@ -4,7 +4,7 @@ title: Точечная поставка source-профиля internal RPC auth
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-09-09
 ---
 
@@ -21,16 +21,22 @@ Source-профиль допускается только для уже уста
 
 | Фаза | Immutable input | Mutation | Readback и recovery |
 | --- | --- | --- | --- |
-| `PLAN` | clean source SHA; namespace UID; полный publisher spec/UID/RV; actual rendered migration Job; registry и соседние Deployment fingerprints; текущий `/proc/PID/exe`; target capability | Нет | Source, process, cache mounts, migrator SA/NetworkPolicy и server-side admission dry-run перечитываются до private plan |
-| `MIGRATION_INTENT` | Plan hash и unique Job name | Fsync `INTENT`, затем `CREATE` только нового additive migration Job | Потерянный ACK даёт `UNKNOWN`; повторный `apply-migration` запрещён, используется только `observe-migration` |
-| `MIGRATION_SUCCEEDED` | Exact Job UID/spec и terminal `Succeeded` | Нет | `Failed`, replacement, spec drift или исчезнувший Job не разрешают publisher update |
-| `PUBLISHER_INTENT` | Успешная migration; неизменные registry/соседи; exact publisher predecessor | Fsync `INTENT`, затем UID/RV/full-spec CAS только `dev-source` hostPath и source annotations | `observe-publisher` принимает только target spec, стабильный owner Pod и target executable digest; потерянный ACK не повторяет mutation |
+| `PLAN` | clean source SHA; namespace UID; полный publisher spec/UID/RV; actual rendered migration Job; registry и соседние Deployment fingerprints; текущий `/proc/PID/exe`; target capability | Нет | Source, process, cache mounts, migrator SA/NetworkPolicy и server-side admission dry-run перечитываются до private plan; dry-run UID не становится live receipt |
+| `MIGRATION_INTENT` | Plan hash и unique Job name; receipt отсутствует | Fsync evidence и immutable private intent marker, затем `CREATE` только нового additive migration Job | Marker запрещает повторный CREATE с другим evidence path даже после исчезновения Job; успешный CREATE response атомарно и с fsync публикует private receipt, а потерянный ACK даёт `UNKNOWN` |
+| `MIGRATION_OBSERVED` | Exact name/spec/intent, durable marker и отсутствующий receipt | Только явный `observe-migration` может атомарно закрепить UID первого live readback после `UNKNOWN` | Конкурентные наблюдатели используют create-once publication: проигравший принимает только byte-identical receipt; foreign/corrupt receipt закрыто отвергается |
+| `MIGRATION_SUCCEEDED` | Receipt связывает plan hash, intent, exact Job UID и semantic spec; тот же UID terminal `Succeeded` | Нет | `Failed`, missing Job, replacement UID до или после terminal, spec drift либо повреждение receipt не разрешают publisher update |
+| `PUBLISHER_INTENT` | Успешная migration и её exact receipt; неизменные registry/соседи; exact publisher predecessor | Fsync `INTENT`, затем UID/RV/full-spec CAS только `dev-source` hostPath и source annotations | `observe-publisher` принимает только тот же migration UID, target publisher spec, стабильный owner Pod и target executable digest |
 | `ROLLBACK` | Текущий spec равен exact planned target, ротация ещё не начиналась | Fsync `INTENT`; publisher-only CAS возвращает прежний source и прежние annotations | Старый executable digest обязан совпасть; migration остаётся forward-only |
 
 Оператор не удаляет Job и не меняет caches, TTL, credentials, trust, sidecars,
 соседние workloads или глобальный профиль. После начала registry rotation
 application rollback запрещён: дальнейшее восстановление следует forward-only
 state machine `OPS-DOC-1390`.
+
+Каталог receipt заранее создаётся private (`0700`, тот же UID процесса), а
+immutable intent marker и receipt остаются regular `0600` файлами и доступны
+тому же operator process при recovery. Удаление marker для повторного CREATE не
+является recovery-путём.
 
 Source plan строится из actual результата `tools/dev/render-local.sh`, а не из
 несуществующей live migration Job. Из render извлекается только
@@ -53,19 +59,30 @@ node tools/release/authority-rotation-source-delivery.mjs plan \
 
 node tools/release/authority-rotation-source-delivery.mjs apply-migration \
   --context "$KODEX_RELEASE_CONTEXT" --plan /private/authority-source-plan.json \
+  --migration-receipt /private/authority-source-migration-receipt.json \
   --evidence /private/authority-source-migration.jsonl \
   --confirm APPLY-STAGING-AUTHORITY-SOURCE-MIGRATION
 
 node tools/release/authority-rotation-source-delivery.mjs observe-migration \
-  --context "$KODEX_RELEASE_CONTEXT" --plan /private/authority-source-plan.json
+  --context "$KODEX_RELEASE_CONTEXT" --plan /private/authority-source-plan.json \
+  --migration-receipt /private/authority-source-migration-receipt.json
 
 node tools/release/authority-rotation-source-delivery.mjs apply-publisher \
   --context "$KODEX_RELEASE_CONTEXT" --plan /private/authority-source-plan.json \
+  --migration-receipt /private/authority-source-migration-receipt.json \
   --evidence /private/authority-source-publisher.jsonl \
   --confirm APPLY-STAGING-AUTHORITY-PUBLISHER-SOURCE
 
 node tools/release/authority-rotation-source-delivery.mjs observe-publisher \
-  --context "$KODEX_RELEASE_CONTEXT" --plan /private/authority-source-plan.json
+  --context "$KODEX_RELEASE_CONTEXT" --plan /private/authority-source-plan.json \
+  --migration-receipt /private/authority-source-migration-receipt.json
+
+# Только до начала ротации и только для exact planned publisher target.
+node tools/release/authority-rotation-source-delivery.mjs rollback \
+  --context "$KODEX_RELEASE_CONTEXT" --plan /private/authority-source-plan.json \
+  --migration-receipt /private/authority-source-migration-receipt.json \
+  --evidence /private/authority-source-rollback.jsonl \
+  --confirm ROLLBACK-STAGING-AUTHORITY-PUBLISHER-SOURCE
 ```
 
 # Совместная публикация registry и policy

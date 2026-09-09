@@ -4,7 +4,7 @@ title: Устойчивая ротация ключей internal RPC authority
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.2.0
+version: 1.2.1
 updated: 2026-09-09
 ---
 
@@ -93,8 +93,9 @@ status Job строится из канонического
 exact digest уже обслуживаемого publisher image и запускает
 `/usr/local/bin/internal-rpc-authority-cli rotation-watch --operation-id <OWNER_UUID>`.
 В staging source profile transition принимает только завершённый exact
-`OPS-DOC-1434` plan, повторно доказывает publisher `/proc/PID/exe` и строит Job
-из закреплённого actual render с `run-go-command.sh` и offline caches.
+`OPS-DOC-1434` plan вместе с его durable migration UID receipt, повторно
+сверяет тот же terminal Job и publisher `/proc/PID/exe`, затем строит Job из
+закреплённого actual render с `run-go-command.sh` и offline caches.
 Watch остаётся
 активным до `RETIRED` и поэтому один immutable Job наблюдает все три фазы.
 Имя Job закреплено за `intentID`, но terminal readback принимается только для
@@ -119,6 +120,7 @@ node tools/release/authority-rotation-transition.mjs plan \
   --source /srv/kodex-dev/<EXACT_SOURCE> --revision <EXACT_SHA> \
   --action rotate \
   --source-delivery-plan /private/authority-source-plan.json \
+  --source-migration-receipt /private/authority-source-migration-receipt.json \
   --output /private/rotation-plan.json
 
 node tools/release/authority-rotation-transition.mjs apply \

@@ -72,12 +72,34 @@ export function createSourceMigrationJob(rendered,plan) {
    'kodex.dev/source-revision':plan.revision}},spec};
 }
 
-export function verifySourceMigrationReadback(actual,expected) {
- requireValue(actual?.metadata?.uid&&actual.metadata.name===expected.metadata.name&&actual.metadata.namespace==='kodex-system'&&
+export function sourceMigrationIdentity(actual,expected,{requireUID=true}={}) {
+ requireValue((!requireUID||uuid.test(actual?.metadata?.uid??''))&&actual?.metadata?.name===expected.metadata.name&&actual.metadata.namespace==='kodex-system'&&
   actual.metadata.annotations?.['kodex.dev/source-delivery-intent']===expected.metadata.annotations['kodex.dev/source-delivery-intent'],'SOURCE_MIGRATION_IDENTITY_CHANGED');
  const got=structuredClone(actual.spec),want=structuredClone(expected.spec);delete got.selector;
  for(const value of [got,want])for(const key of ['controller-uid','job-name','batch.kubernetes.io/controller-uid','batch.kubernetes.io/job-name'])delete value.template.metadata?.labels?.[key];
  requireValue(fingerprint(got)===fingerprint(want),'SOURCE_MIGRATION_SPEC_CHANGED');
+ return {jobName:actual.metadata.name,jobUID:actual.metadata.uid,jobSpecSHA256:fingerprint(want)};
+}
+function expectedMigrationSpecSHA256(expected){const spec=structuredClone(expected.spec);for(const key of ['controller-uid','job-name','batch.kubernetes.io/controller-uid','batch.kubernetes.io/job-name'])delete spec.template.metadata?.labels?.[key];return fingerprint(spec);}
+export function buildSourceMigrationIntent(expected,plan) {
+ return {version:1,kind:'AUTHORITY_SOURCE_MIGRATION_INTENT',planSHA256:fingerprint(plan),intentID:plan.intentID,jobName:expected.metadata.name,jobSpecSHA256:expectedMigrationSpecSHA256(expected)};
+}
+export function validateSourceMigrationIntent(intent,expected,plan) {
+ requireValue(intent?.version===1&&intent.kind==='AUTHORITY_SOURCE_MIGRATION_INTENT'&&intent.planSHA256===fingerprint(plan)&&intent.intentID===plan.intentID&&
+  intent.jobName===expected.metadata.name&&intent.jobSpecSHA256===expectedMigrationSpecSHA256(expected),'SOURCE_MIGRATION_INTENT_REJECTED');return intent;
+}
+export function buildSourceMigrationReceipt(actual,expected,plan) {
+ const identity=sourceMigrationIdentity(actual,expected);
+ return {version:1,kind:'AUTHORITY_SOURCE_MIGRATION_RECEIPT',planSHA256:fingerprint(plan),intentID:plan.intentID,...identity};
+}
+export function validateSourceMigrationReceipt(receipt,expected,plan) {
+ requireValue(receipt?.version===1&&receipt.kind==='AUTHORITY_SOURCE_MIGRATION_RECEIPT'&&receipt.planSHA256===fingerprint(plan)&&receipt.intentID===plan.intentID&&
+  receipt.jobName===expected.metadata.name&&uuid.test(receipt.jobUID??'')&&receipt.jobSpecSHA256===expectedMigrationSpecSHA256(expected),'SOURCE_MIGRATION_RECEIPT_REJECTED');return receipt;
+}
+export function verifySourceMigrationReadback(actual,expected,receipt) {
+ const identity=sourceMigrationIdentity(actual,expected,{requireUID:Boolean(receipt)});
+ if(receipt)requireValue(identity.jobUID===receipt.jobUID&&identity.jobName===receipt.jobName&&identity.jobSpecSHA256===receipt.jobSpecSHA256,'SOURCE_MIGRATION_REPLACED');
+ return identity;
 }
 
 export function createPublisherSourceCAS(deployment,plan,rollback=false) {

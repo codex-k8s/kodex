@@ -7,7 +7,8 @@ import {fileURLToPath} from 'node:url';
 import {inspectSource} from './application-source.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {readAuthorityExecutable} from './authority-executable-readback.mjs';
-import {authorityGoImage,createSourceMigrationJob,validateRenderedSourceMigration,validateSourceDeliveryPlan,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
+import {authorityGoImage,createSourceMigrationJob,validateRenderedSourceMigration,validateSourceDeliveryPlan,validateSourceMigrationReceipt,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
+import {readSourceMigrationReceipt} from './authority-source-migration-receipt.mjs';
 import {workloadPods} from '../dev/component-manifest.mjs';
 
 const namespace='kodex-system';
@@ -128,6 +129,10 @@ export function createSourceRotationTemplate(rendered,source){
  validateRenderedSourceMigration(rendered);const template=structuredClone(rendered);template.metadata.namespace=namespace;
  template.spec.template.spec.volumes.find(volume=>volume.name==='dev-source').hostPath.path=source;validateRotationTemplate(template);return template;
 }
+export function validateSourceMigrationPrerequisite(sourceDelivery,receipt,actual){
+ validateSourceDeliveryPlan(sourceDelivery);const expected=createSourceMigrationJob(sourceDelivery.migration.rendered,sourceDelivery);validateSourceMigrationReceipt(receipt,expected,sourceDelivery);
+ verifySourceMigrationReadback(actual,expected,receipt);requireValue(actual.status?.succeeded===1,'SOURCE_DELIVERY_MIGRATION_NOT_SUCCEEDED');return expected;
+}
 
 export function createRegistryCAS(current,plan){
  requireValue(current?.kind==='ConfigMap'&&current.metadata?.uid===plan.registry.uid&&
@@ -196,7 +201,7 @@ function sourcePublisherExecutable(deployment,get,kube,k3sSudo){
 
 async function main(args){
  const command=args.shift(),options={};requireValue(['plan','apply','observe','resume'].includes(command),'INVALID_COMMAND');
- while(args.length){const key=args.shift();requireValue(['--context','--source','--revision','--action','--registry-file','--source-delivery-plan','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
+ while(args.length){const key=args.shift();requireValue(['--context','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
  requireValue(options['--context']&&!/prod/i.test(options['--context']),'EXACT_STAGING_CONTEXT_REQUIRED');
  const kube=(...argv)=>options['--k3s-sudo']?run('sudo',['-n','k3s','kubectl','--context',options['--context'],...argv]):run('kubectl',['--context',options['--context'],...argv]);
 	const kubeInput=(input,...argv)=>options['--k3s-sudo']?run('sudo',['-n','k3s','kubectl','--context',options['--context'],...argv],input):run('kubectl',['--context',options['--context'],...argv],input);
@@ -213,9 +218,10 @@ async function main(args){
  const livePublisher=get('deployment','internal-rpc-authority-publisher');
  const publisherContainer=livePublisher.spec.template.spec.containers.find(container=>container.name==='publisher');
  const loadedPlan=command==='plan'?null:JSON.parse(readFileSync(options['--plan'],'utf8'));
- const sourceProfile=publisherContainer?.command?.includes('/workspace/tools/dev/run-go-hot-reload.sh');let sourceDelivery;
- if(sourceProfile){const publisherState=validateSourcePublisher(livePublisher);sourceDelivery=command==='plan'?JSON.parse(readFileSync(options['--source-delivery-plan'],'utf8')):loadedPlan.sourceDelivery;validateSourceDeliveryPlan(sourceDelivery);
-  const sourceMigration=createSourceMigrationJob(sourceDelivery.migration.rendered,sourceDelivery),actualMigration=get('job',sourceMigration.metadata.name);verifySourceMigrationReadback(actualMigration,sourceMigration);requireValue(actualMigration.status?.succeeded===1,'SOURCE_DELIVERY_MIGRATION_NOT_SUCCEEDED');
+ const sourceProfile=publisherContainer?.command?.includes('/workspace/tools/dev/run-go-hot-reload.sh');let sourceDelivery,sourceMigrationReceipt;
+ if(sourceProfile){if(command==='plan')requireValue(options['--source-delivery-plan']&&options['--source-migration-receipt'],'SOURCE_DELIVERY_EVIDENCE_REQUIRED');const publisherState=validateSourcePublisher(livePublisher);sourceDelivery=command==='plan'?JSON.parse(readFileSync(options['--source-delivery-plan'],'utf8')):loadedPlan.sourceDelivery;validateSourceDeliveryPlan(sourceDelivery);
+  const sourceMigration=createSourceMigrationJob(sourceDelivery.migration.rendered,sourceDelivery);sourceMigrationReceipt=command==='plan'?readSourceMigrationReceipt(options['--source-migration-receipt'],sourceMigration,sourceDelivery):validateSourceMigrationReceipt(loadedPlan.sourceMigrationReceipt,sourceMigration,sourceDelivery);
+  validateSourceMigrationPrerequisite(sourceDelivery,sourceMigrationReceipt,get('job',sourceMigration.metadata.name));
   const publisherSpecSHA256=fingerprint(livePublisher.spec),allowedPublisherSpec=publisherSpecSHA256===sourceDelivery.publisher.desiredSpecSHA256||
    (command!=='plan'&&loadedPlan.action==='rotate'&&publisherSpecSHA256===loadedPlan.publisher?.desiredSpecSHA256);
   requireValue(publisherState.source===sourceDelivery.source&&allowedPublisherSpec&&
@@ -231,7 +237,7 @@ async function main(args){
   plan={version:3,intentID:randomUUID(),context:options['--context'],namespaceUID:ns.metadata.uid,
    templateSpecSHA256:fingerprint(template.spec),cliImage:template.spec.template.spec.containers[0].image,
    cliCommand:template.spec.template.spec.containers[0].command,source:options['--source'],revision:options['--revision'],action:options['--action'],
-   ...(sourceProfile?{sourceDelivery,sourceDeliveryPlanSHA256:fingerprint(sourceDelivery),publisherExecutableSHA256:sourceDelivery.capability.publisherSHA256}:{})};
+   ...(sourceProfile?{sourceDelivery,sourceDeliveryPlanSHA256:fingerprint(sourceDelivery),sourceMigrationReceipt,sourceMigrationReceiptSHA256:fingerprint(sourceMigrationReceipt),publisherExecutableSHA256:sourceDelivery.capability.publisherSHA256}:{})};
   if(plan.action==='rotate'){
    const liveRegistry=get('configmap','internal-rpc-authority-publisher-target-registry');
    const registryFile=`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`;
@@ -272,7 +278,7 @@ async function main(args){
 	 plan.registry.sourceFile==='deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml'&&
 	 uuid.test(plan.publisher?.uid)&&String(plan.publisher.resourceVersion).length>0&&sha.test(plan.publisher.specSHA256)&&sha.test(plan.publisher.desiredSpecSHA256)&&
 	 plan.publisher.image===plan.cliImage&&fingerprint(plan.publisher.command)===fingerprint(sourceProfile?['/workspace/tools/dev/run-go-hot-reload.sh']:['/usr/local/bin/internal-rpc-authority-publisher'])&&
-  (!sourceProfile||(plan.sourceDeliveryPlanSHA256===fingerprint(sourceDelivery)&&plan.publisherExecutableSHA256===sourceDelivery.capability.publisherSHA256)),'ROTATION_PLAN_DRIFT');
+  (!sourceProfile||(plan.sourceDeliveryPlanSHA256===fingerprint(sourceDelivery)&&plan.sourceMigrationReceiptSHA256===fingerprint(sourceMigrationReceipt)&&plan.publisherExecutableSHA256===sourceDelivery.capability.publisherSHA256)),'ROTATION_PLAN_DRIFT');
  requireValue(inspectSource(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');const job=createRotationJob(template,plan);
 	if(plan.action==='rotate'){
    requireValue(canonicalRegistryMatches(plan.registry.desiredData['key-delivery-targets.yaml'],readFileSync(`${plan.source}/${plan.registry.sourceFile}`,'utf8'))&&
