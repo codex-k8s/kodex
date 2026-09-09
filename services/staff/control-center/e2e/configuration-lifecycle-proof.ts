@@ -20,13 +20,14 @@ export type LifecycleOperation = (typeof lifecycleOperations)[number];
 export type LifecycleOutcome = "PASS" | "REJECTED" | "UNKNOWN";
 
 interface Header {
-  schemaVersion: 1;
+  schemaVersion: 2;
   type: "metadata";
   profile: "CONFIGURATION_UI_LIFECYCLE";
   prefix: string;
   versions: Versions;
   browser: "chromium" | "firefox" | "webkit";
   syntheticSourceSHA256: string;
+  projectRefSHA256: string;
   timestampUTC: string;
 }
 interface Intent {
@@ -63,6 +64,8 @@ export interface LifecycleConfiguration {
   browser: "chromium" | "firefox" | "webkit";
   journalPath: string;
   prefix: string;
+  projectRef: string;
+  projectRefSHA256: string;
   resume: boolean;
   readOnly?: boolean;
   runTimeoutMs: number;
@@ -153,6 +156,11 @@ export async function loadLifecycleConfiguration(
     env.KODEX_E2E_RESOURCE_PREFIX ?? (checkOnly ? "check-only" : "");
   if (!/^[a-z][a-z0-9-]{3,39}$/.test(prefix))
     throw new Error("Invalid configuration lifecycle prefix");
+  const projectRef =
+    env.KODEX_E2E_CONFIGURATION_LIFECYCLE_PROJECT_REF ??
+    (checkOnly ? "project_check_only" : "");
+  if (!/^[a-zA-Z0-9_-]{8,128}$/.test(projectRef))
+    throw new Error("Invalid configuration lifecycle project reference");
   if (
     !checkOnly &&
     env.KODEX_E2E_CONFIGURATION_LIFECYCLE_CONFIRM !==
@@ -184,6 +192,8 @@ export async function loadLifecycleConfiguration(
     browser: browser as LifecycleConfiguration["browser"],
     journalPath,
     prefix,
+    projectRef,
+    projectRefSHA256: hash(projectRef),
     resume: env.KODEX_E2E_CONFIGURATION_LIFECYCLE_RESUME === "1",
     readOnly: env.KODEX_E2E_CONFIGURATION_LIFECYCLE_READ_ONLY === "1",
     runTimeoutMs: positiveInteger(env.KODEX_E2E_RUN_TIMEOUT_MS),
@@ -271,13 +281,14 @@ export async function openLifecycleJournal(
   )
     throw new Error("Configuration lifecycle state parent must be private");
   const header = {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     type: "metadata" as const,
     profile: "CONFIGURATION_UI_LIFECYCLE" as const,
     prefix: configuration.prefix,
     versions: configuration.versions,
     browser: configuration.browser,
     syntheticSourceSHA256: configuration.syntheticSourceSHA256,
+    projectRefSHA256: configuration.projectRefSHA256,
   };
   let entries: Entry[] = [];
   let file;

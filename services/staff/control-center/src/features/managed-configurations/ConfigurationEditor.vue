@@ -203,6 +203,13 @@ const sourceEditable = computed(
         ? configuration.value.sourceEditable === true
         : !props.configurationRef && createSourceAllowed.value)),
 );
+const projectRequired = computed(
+  () =>
+    !props.configurationRef &&
+    !configuration.value &&
+    api.configurationRequiresProject(props.kind) &&
+    !api.configurationProjectScopeValid(props.kind, props.projectRef),
+);
 const dirty = computed(
   () =>
     content.value !== (revision.value?.content ?? "") ||
@@ -239,6 +246,7 @@ const canSave = computed(
     sourceEditable.value &&
     !sourceBusy.value &&
     promptScopeValid.value &&
+    !projectRequired.value &&
     dirty.value &&
     !gitOwned.value &&
     name.value.trim() &&
@@ -1083,6 +1091,9 @@ watch(
       </template>
     </header>
     <p v-if="gitOwned" class="muted">{{ $t("managed.gitOwned") }}</p>
+    <p v-if="projectRequired" id="managed-project-required" role="status">
+      {{ $t("managed.projectRequired") }}
+    </p>
     <p v-if="configuration?.archived" role="status">
       {{ $t("managed.archived") }}
     </p>
@@ -1289,7 +1300,14 @@ watch(
         :disabled="busy || sourceBusy || dirty || restoreAttempted"
         @restore="restoreFromHistory"
       />
-      <button class="button" :disabled="!canSave" @click="save">
+      <button
+        class="button"
+        :disabled="!canSave"
+        :aria-describedby="
+          projectRequired ? 'managed-project-required' : undefined
+        "
+        @click="save"
+      >
         <Save :size="18" />{{ $t("managed.saveDraft") }}
       </button>
       <button

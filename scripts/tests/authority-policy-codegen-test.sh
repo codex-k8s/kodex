@@ -36,6 +36,10 @@ jq -e '
   ([.policy.operation_bindings[] | select(.operation_id == "platform.command.role-images.copy" or .operation_id == "platform.command.integration-definitions.copy" or .operation_id == "platform.command.role-images.archive-configuration" or .operation_id == "platform.command.integration-definitions.archive") |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
       .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"REQUIRED","attempt":"FORBIDDEN","idempotency":"REQUIRED"})] | length) == 4 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.prompt-templates.create-draft" or .operation_id == "platform.command.role-image-revisions.create-draft") |
+    select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == true)] | length) == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.command.integration-definitions.create-draft") |
+    select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false)] | length) == 1 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.query.provider-accounts.blockers.list") |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and
       .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"REQUIRED","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 1 and

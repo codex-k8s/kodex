@@ -586,6 +586,8 @@ const ru = {
     history: "История",
     revision: "Ревизия {revision}",
     saveDraft: "Сохранить черновик",
+    projectRequired:
+      "Выберите проект. Шаблон промпта и конфигурация образа роли создаются только в выбранном проекте.",
     validate: "Проверить",
     publish: "Опубликовать",
     impact: "Влияние ревизии",
@@ -3405,6 +3407,8 @@ const en = {
     history: "History",
     revision: "Revision {revision}",
     saveDraft: "Save draft",
+    projectRequired:
+      "Select a project. Prompt templates and role image configurations can only be created in a selected project.",
     validate: "Validate",
     publish: "Publish",
     impact: "Revision impact",

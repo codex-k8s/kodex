@@ -49,6 +49,21 @@ export async function preparePromptPublication(
 }
 
 export type ConfigurationKind = ManagedConfiguration["kind"];
+export function configurationRequiresProject(kind: ConfigurationKind): boolean {
+  return kind === "PROMPT_TEMPLATE" || kind === "ROLE_IMAGE";
+}
+export function configurationProjectScopeValid(
+  kind: ConfigurationKind,
+  projectRef?: string,
+): boolean {
+  if (!configurationRequiresProject(kind)) return projectRef === undefined;
+  return (
+    projectRef !== undefined &&
+    projectRef.length >= 8 &&
+    projectRef.length <= 128 &&
+    /^[A-Za-z0-9_-]+$/.test(projectRef)
+  );
+}
 export async function listConfigurations(options: {
   kind: ConfigurationKind;
   query: string;
@@ -184,6 +199,8 @@ export async function createDraft(
   body: ManagedConfigurationDraftInput,
   version?: number,
 ) {
+  if (!configurationProjectScopeValid(kind, body.projectRef))
+    throw new Error("Managed configuration project scope is invalid");
   return (
     await mutate(
       (headers) =>

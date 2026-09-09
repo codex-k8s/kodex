@@ -14,6 +14,9 @@ func (server *Server) CreatePromptTemplateDraft(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
+	if !requireManagedDraftProject(w, body, true) {
+		return
+	}
 	scope, ok := promptScopeInput(body.PromptScope)
 	if !ok {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -23,11 +26,9 @@ func (server *Server) CreatePromptTemplateDraft(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	if body.ProjectRef != nil {
-		r, ok = withProjectReference(w, r, *body.ProjectRef)
-		if !ok {
-			return
-		}
+	r, ok = withProjectReference(w, r, *body.ProjectRef)
+	if !ok {
+		return
 	}
 	result, err := server.control.Command.CreatePromptTemplateDraft(r.Context(), &controlplanev1.CreatePromptTemplateDraftRequest{
 		Mutation: mutation, ConfigurationRef: stringValue(body.ConfigurationRef), ProjectRef: stringValue(body.ProjectRef),
@@ -119,15 +120,16 @@ func (server *Server) CreateRoleImageRevisionDraft(w http.ResponseWriter, r *htt
 	if !ok {
 		return
 	}
+	if !requireManagedDraftProject(w, body, true) {
+		return
+	}
 	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body)
 	if !ok {
 		return
 	}
-	if body.ProjectRef != nil {
-		r, ok = withProjectReference(w, r, *body.ProjectRef)
-		if !ok {
-			return
-		}
+	r, ok = withProjectReference(w, r, *body.ProjectRef)
+	if !ok {
+		return
 	}
 	result, err := server.control.Command.CreateRoleImageRevisionDraft(r.Context(), &controlplanev1.CreateRoleImageRevisionDraftRequest{
 		Mutation: mutation, ConfigurationRef: stringValue(body.ConfigurationRef), ProjectRef: stringValue(body.ProjectRef),
@@ -215,15 +217,12 @@ func (server *Server) CreateIntegrationDefinitionDraft(w http.ResponseWriter, r 
 	if !ok {
 		return
 	}
+	if !requireManagedDraftProject(w, body, false) {
+		return
+	}
 	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body)
 	if !ok {
 		return
-	}
-	if body.ProjectRef != nil {
-		r, ok = withProjectReference(w, r, *body.ProjectRef)
-		if !ok {
-			return
-		}
 	}
 	result, err := server.control.Command.CreateIntegrationDefinitionDraft(r.Context(), &controlplanev1.CreateIntegrationDefinitionDraftRequest{
 		Mutation: mutation, ConfigurationRef: stringValue(body.ConfigurationRef), ProjectRef: stringValue(body.ProjectRef),
@@ -295,15 +294,12 @@ func (server *Server) CreateSystemSTTConfigurationDraft(w http.ResponseWriter, r
 	if !ok {
 		return
 	}
+	if !requireManagedDraftProject(w, body, false) {
+		return
+	}
 	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body)
 	if !ok {
 		return
-	}
-	if body.ProjectRef != nil {
-		r, ok = withProjectReference(w, r, *body.ProjectRef)
-		if !ok {
-			return
-		}
 	}
 	result, err := server.control.Command.CreateSystemSTTConfigurationDraft(r.Context(), &controlplanev1.CreateSystemSTTConfigurationDraftRequest{
 		Mutation: mutation, ConfigurationRef: stringValue(body.ConfigurationRef), ProjectRef: stringValue(body.ProjectRef),

@@ -100,6 +100,7 @@ func managedTestRequest(method, path, body string) *http.Request {
 func TestManagedConfigurationRoutesCallExactTypedRPC(t *testing.T) {
 	t.Parallel()
 	draftBody := "{\"configurationRef\":\"mcfg_fixture01\",\"projectRef\":\"prj_fixture01\",\"name\":\"Название\",\"contentFormat\":\"TEXT\",\"content\":\"TYPE_source\"}"
+	organizationDraftBody := "{\"configurationRef\":\"mcfg_fixture01\",\"name\":\"Название\",\"contentFormat\":\"TEXT\",\"content\":\"TYPE_source\"}"
 	rebindBody := "{\"impactDigest\":\"" + strings.Repeat("b", 64) + "\",\"consumers\":[{\"kind\":\"AGENT\",\"ref\":\"agt_fixture01\",\"revisionRef\":\"mrev_fixture00\",\"version\":4}]}"
 	cases := []struct {
 		name, method, path, body, rpc string
@@ -112,11 +113,11 @@ func TestManagedConfigurationRoutesCallExactTypedRPC(t *testing.T) {
 		{"CreateRoleImageRevisionDraft", http.MethodPost, "/api/v1/role-image-configurations/drafts", draftBody, "CreateRoleImageRevisionDraft", http.StatusCreated},
 		{"ValidateRoleImageRevisionDraft", http.MethodPost, "/api/v1/role-image-configurations/mcfg_fixture01/revisions/mrev_fixture01/validation", "", "ValidateRoleImageRevisionDraft", http.StatusOK},
 		{"PublishRoleImageRevisionDraft", http.MethodPost, "/api/v1/role-image-configurations/mcfg_fixture01/revisions/mrev_fixture01/publication", "", "PublishRoleImageRevisionDraft", http.StatusOK},
-		{"CreateIntegrationDefinitionDraft", http.MethodPost, "/api/v1/integration-definition-configurations/drafts", draftBody, "CreateIntegrationDefinitionDraft", http.StatusCreated},
+		{"CreateIntegrationDefinitionDraft", http.MethodPost, "/api/v1/integration-definition-configurations/drafts", organizationDraftBody, "CreateIntegrationDefinitionDraft", http.StatusCreated},
 		{"ValidateIntegrationDefinitionDraft", http.MethodPost, "/api/v1/integration-definition-configurations/mcfg_fixture01/revisions/mrev_fixture01/validation", "", "ValidateIntegrationDefinitionDraft", http.StatusOK},
 		{"PublishIntegrationDefinitionDraft", http.MethodPost, "/api/v1/integration-definition-configurations/mcfg_fixture01/revisions/mrev_fixture01/publication", "", "PublishIntegrationDefinitionDraft", http.StatusOK},
 		{"RebindIntegrationDefinitionConsumers", http.MethodPost, "/api/v1/integration-definition-configurations/mcfg_fixture01/revisions/mrev_fixture01/consumer-bindings", rebindBody, "RebindIntegrationDefinitionConsumers", http.StatusOK},
-		{"CreateSystemSTTConfigurationDraft", http.MethodPost, "/api/v1/system-stt-configurations/drafts", draftBody, "CreateSystemSTTConfigurationDraft", http.StatusCreated},
+		{"CreateSystemSTTConfigurationDraft", http.MethodPost, "/api/v1/system-stt-configurations/drafts", organizationDraftBody, "CreateSystemSTTConfigurationDraft", http.StatusCreated},
 		{"ValidateSystemSTTConfigurationDraft", http.MethodPost, "/api/v1/system-stt-configurations/mcfg_fixture01/revisions/mrev_fixture01/validation", "", "ValidateSystemSTTConfigurationDraft", http.StatusOK},
 		{"PublishSystemSTTConfigurationDraft", http.MethodPost, "/api/v1/system-stt-configurations/mcfg_fixture01/revisions/mrev_fixture01/publication", "", "PublishSystemSTTConfigurationDraft", http.StatusOK},
 		{"RebindSystemSTTConsumers", http.MethodPost, "/api/v1/system-stt-configurations/mcfg_fixture01/revisions/mrev_fixture01/consumer-bindings", rebindBody, "RebindSystemSTTConsumers", http.StatusOK},
@@ -152,7 +153,11 @@ func TestManagedConfigurationRoutesCallExactTypedRPC(t *testing.T) {
 					GetProjectRef() string
 					GetContent() string
 				})
-				if body.GetProjectRef() != "prj_fixture01" || body.GetContent() != "TYPE_source" {
+				wantProject := "prj_fixture01"
+				if tc.rpc == "CreateIntegrationDefinitionDraft" || tc.rpc == "CreateSystemSTTConfigurationDraft" {
+					wantProject = ""
+				}
+				if body.GetProjectRef() != wantProject || body.GetContent() != "TYPE_source" {
 					t.Fatal("draft input changed")
 				}
 			}
@@ -214,6 +219,26 @@ func TestManagedConfigurationRejectsCallerAuthorityAndMissingOCCBeforeRPC(t *tes
 		managedTestHandler(client).ServeHTTP(response, request)
 		if response.Code != http.StatusBadRequest || client.method != "" {
 			t.Fatal("invalid draft reached RPC")
+		}
+	}
+}
+
+func TestManagedConfigurationCreateRejectsInvalidProjectScopeBeforeRPC(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		path, body string
+	}{
+		{"/api/v1/prompt-template-configurations/drafts", `{"name":"x","contentFormat":"TEXT","content":"x"}`},
+		{"/api/v1/role-image-configurations/drafts", `{"name":"x","contentFormat":"JSON","content":"{}"}`},
+		{"/api/v1/integration-definition-configurations/drafts", `{"projectRef":"prj_fixture01","name":"x","contentFormat":"YAML","content":"kind: IntegrationDefinition"}`},
+		{"/api/v1/system-stt-configurations/drafts", `{"projectRef":"prj_fixture01","name":"x","contentFormat":"JSON","content":"{}"}`},
+	}
+	for _, tc := range cases {
+		client := &managedRPCRecorder{}
+		response := httptest.NewRecorder()
+		managedTestHandler(client).ServeHTTP(response, managedTestRequest(http.MethodPost, tc.path, tc.body))
+		if response.Code != http.StatusBadRequest || client.method != "" || !strings.Contains(response.Body.String(), `"code":"INVALID_REQUEST"`) {
+			t.Fatalf("project scope was not rejected locally: path=%s status=%d method=%s body=%s", tc.path, response.Code, client.method, response.Body.String())
 		}
 	}
 }

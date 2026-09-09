@@ -3839,7 +3839,7 @@
           "OIDC_SESSION",
           "DOMAIN_STATE"
         ],
-        "project_required": true,
+        "project_required": false,
         "local_caller": {
           "uid": 10001,
           "primary_gid": 10001,
