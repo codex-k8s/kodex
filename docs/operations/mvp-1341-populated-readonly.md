@@ -4,7 +4,7 @@ title: Точечная приёмка наполненных интерфейс
 status: approved
 type: operations
 owner: manager
-version: 1.3.0
+version: 1.4.0
 updated: 2026-09-09
 ---
 
@@ -112,6 +112,33 @@ KODEX_E2E_CHECK_ONLY=1 KODEX_E2E_UI_CREATE_PROJECTS=0 \
 KODEX_E2E_UI_VARIANTS=fixture-vfs-active \
 npx playwright test --config e2e/ui-acceptance.config.ts --list
 ```
+
+## Завершение загрузки проектов (#1368)
+
+`project-collection-expand-*` наблюдает главный список и открытый диалог до
+явного состояния: видимые строки, локализованное сообщение пустого списка или
+`role=alert`. Сам по себе нулевой DOM count не доказывает отсутствия fixture.
+Ожидание ограничено 15 секундами для каждого списка, повторяет только чтение
+DOM и не запускает повторный GET, открытие диалога, create или retry сервера.
+Видимый loading/status имеет приоритет над оставшимися строками; alert
+немедленно завершает шаг как FAIL. Зависшая загрузка, скрытые строки и отсутствие
+любого terminal маркера дают FAIL по бюджету, а не `FIXTURE_UNAVAILABLE`.
+Только явный пустой список даёт прежний NOT RUN с точным stage.
+
+Публичная локальная проверка использует Chromium, Firefox и WebKit, ru/en,
+задержанный ответ, задержанную отрисовку диалога, empty/error и отрицательные
+состояния. Она проверяет один initial GET и cleanup диалога:
+
+```bash
+npx playwright test --config e2e/ui-readonly.fixture.config.ts
+```
+
+Исторический live NOT RUN #1368 остаётся в исходном журнале. Локальная fixture
+не доказывает, каким именно событием был вызван краткий пустой DOM той попытки,
+и не заменяет разрешённую повторную live проверку на новом harness SHA.
+Context7 `/microsoft/playwright/v1.61.0`: проверены `expect.poll`, явный timeout
+и отдельный бюджет locator resolution; наблюдение использует `evaluateAll`,
+не создающий неограниченного ожидания появления locator.
 
 ## Причинность и безопасный журнал
 

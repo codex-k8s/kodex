@@ -9,6 +9,7 @@ import {
   focused,
   observeActionResponse,
   checkCondition,
+  observeCondition,
 } from "./ui-acceptance-browser";
 
 export class ReadonlyFixtureMissing extends Error {
@@ -80,6 +81,64 @@ export async function projectForm(
     await expect(form).toHaveCount(0);
   }
 }
+// Нулевой count не является пустым terminal state: загрузка/перерисовка
+// наблюдаются без повторного GET, клика, create или извлечения текста данных.
+export async function waitForProjectCollection(
+  root: Locator,
+  locale: "ru" | "en",
+  stage: "PROJECTS_EMPTY" | "PROJECT_DIALOG_EMPTY",
+  timeoutMs = 15_000,
+): Promise<number> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 100 || timeoutMs > 15_000)
+    throw new Error("Invalid project collection observation budget");
+  let snapshot = { state: "PENDING", rows: 0 };
+  await observeCondition("UI_ACTION", () =>
+    expect
+      .poll(
+        async () => {
+          snapshot = await root.evaluateAll(
+            (roots, emptyLabel) => {
+              if (roots.length !== 1) return { state: "PENDING", rows: 0 };
+              const element = roots[0];
+              if (!element) return { state: "PENDING", rows: 0 };
+              const visible = (node: Element) => {
+                const rect = node.getBoundingClientRect();
+                return (
+                  rect.width > 0 &&
+                  rect.height > 0 &&
+                  getComputedStyle(node).visibility !== "hidden"
+                );
+              };
+              if (!visible(element)) return { state: "PENDING", rows: 0 };
+              const has = (selector: string) =>
+                Array.from(element.querySelectorAll(selector)).some(visible);
+              if (has('[role="alert"]')) return { state: "ERROR", rows: 0 };
+              if (has('[role="status"]')) return { state: "PENDING", rows: 0 };
+              const rows = Array.from(
+                element.querySelectorAll(".project-list__item"),
+              ).filter(visible).length;
+              if (rows) return { state: "POPULATED", rows };
+              const empty = Array.from(element.querySelectorAll("p")).some(
+                (node) =>
+                  visible(node) && node.textContent.trim() === emptyLabel,
+              );
+              return { state: empty ? "EMPTY" : "PENDING", rows: 0 };
+            },
+            locale === "ru"
+              ? "Создайте первый Проект"
+              : "Create your first Project",
+          );
+          return snapshot.state !== "PENDING";
+        },
+        { timeout: timeoutMs, intervals: [50, 100, 250] },
+      )
+      .toBe(true),
+  );
+  checkCondition("VISIBLE_ALERT", snapshot.state === "ERROR", false);
+  if (snapshot.state === "EMPTY") throw new ReadonlyFixtureMissing(stage);
+  return snapshot.rows;
+}
+
 export async function projectCollection(page: Page, locale: "ru" | "en") {
   const response = await observeActionResponse(
     page,
@@ -96,11 +155,11 @@ export async function projectCollection(page: Page, locale: "ru" | "en") {
     () => visit(page, "/projects"),
   );
   checkCondition("HTTP_STATUS", response.status(), 200);
-  await expect(page.locator(".page-frame > [role=status]")).toHaveCount(0);
-  await expect(page.locator(".page-frame [role=alert]")).toHaveCount(0);
-  const rows = page.locator(".project-list__item");
-  const count = await rows.count();
-  if (!count) throw new ReadonlyFixtureMissing("PROJECTS_EMPTY");
+  const count = await waitForProjectCollection(
+    page.locator(".page-frame"),
+    locale,
+    "PROJECTS_EMPTY",
+  );
   checkCondition("UI_ACTION", count, 6, count <= 6);
   await page.locator(".projects-toolbar .icon-button").click();
   const dialog = page.getByRole("dialog", {
@@ -109,8 +168,11 @@ export async function projectCollection(page: Page, locale: "ru" | "en") {
   });
   try {
     await expect(dialog).toBeVisible();
-    const populated = await dialog.locator(".project-list__item").count();
-    if (!populated) throw new ReadonlyFixtureMissing("PROJECT_DIALOG_EMPTY");
+    const populated = await waitForProjectCollection(
+      dialog,
+      locale,
+      "PROJECT_DIALOG_EMPTY",
+    );
     return {
       collapsedRows: count,
       expandedRows: populated,
