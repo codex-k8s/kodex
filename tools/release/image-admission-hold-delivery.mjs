@@ -9,6 +9,7 @@ import {request} from 'node:http';
 import {inspectSource} from './application-source.mjs';
 import {readHostProcess} from './authority-executable-readback.mjs';
 import {validateHoldCapability} from './image-admission-hold-capability.mjs';
+import {validateQuiescePlan,validateQuiesceReceipt} from './image-admission-quiesce-model.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {applyIssuerAdmissionTransition} from './runner-policy-model.mjs';
 import {
@@ -32,6 +33,10 @@ const exists=path=>{try{return lstatSync(path).isFile();}catch(error){if(error.c
 function privateRead(path) {
  const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=8<<20,'PRIVATE_FILE_REQUIRED');
  return JSON.parse(readFileSync(path,'utf8'));
+}
+function privateRows(path) {
+ const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=8<<20,'PRIVATE_JOURNAL_REQUIRED');
+ return readFileSync(path,'utf8').trim().split('\n').map(JSON.parse);
 }
 function privateWrite(path,value) {
  const fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL,0o600);
@@ -354,7 +359,7 @@ export async function executeRollbackPhase(plan,phase,evidence,mode,rt) {
 function parse(args) {
  const command=args.shift(),options={};
  requireValue(['inspect','plan','apply','observe','resume','rollback','rollback-observe','rollback-resume'].includes(command),'INVALID_COMMAND');
- while(args.length) {const key=args.shift();requireValue(['--context','--source','--revision','--capability','--phase','--output','--plan','--evidence','--confirm','--k3s-sudo'].includes(key)&&!Object.hasOwn(options,key),'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
+ while(args.length) {const key=args.shift();requireValue(['--context','--source','--revision','--capability','--quiesce-plan','--quiesce-evidence','--phase','--output','--plan','--evidence','--confirm','--k3s-sudo'].includes(key)&&!Object.hasOwn(options,key),'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
  return {command,options};
 }
 
@@ -373,7 +378,15 @@ async function main(args) {
   requireValue(options['--source']&&options['--revision']&&options['--capability']&&options['--output']&&!exists(options['--output'])&&k3sSudo,'PLAN_INPUT_REQUIRED');
   const bundle=loadDesiredBundle(options['--source'],options['--revision'],rt.kustomize);
   const capability=validateHoldCapability(privateRead(options['--capability']));requireValue(capability.revision===bundle.revision,'CAPABILITY_SOURCE_MISMATCH');
-  const plan=buildDeliveryPlan(capture(rt,{proof:true}),bundle,{context,k3sSudo,capability,intent:randomUUID()});
+  let quiesce=null;
+  if(options['--quiesce-plan']||options['--quiesce-evidence']) {
+   requireValue(options['--quiesce-plan']&&options['--quiesce-evidence'],'EXACT_QUIESCE_HANDOFF_REQUIRED');
+   const quiescePlan=privateRead(options['--quiesce-plan']);validateQuiescePlan(quiescePlan,context,k3sSudo);
+   const receipt=validateQuiesceReceipt(quiescePlan,privateRows(options['--quiesce-evidence']));
+   quiesce={version:1,intent:receipt.intent,planSHA256:receipt.planSHA256,receiptSHA256:fingerprint(receipt),
+    initialControllerSpec:quiescePlan.controllerSpecs.initial,pausedControllerSpec:quiescePlan.controllerSpecs.paused};
+  }
+  const plan=buildDeliveryPlan(capture(rt,{proof:true}),bundle,{context,k3sSudo,capability,intent:randomUUID(),quiesce});
   validateDeliveryPlan(plan,context,k3sSudo);privateWrite(options['--output'],plan);process.stdout.write(`Image admission hold delivery plan: ${fingerprint(plan)}\n`);return;
  }
  const plan=privateRead(options['--plan']);validateDeliveryPlan(plan,context,k3sSudo);

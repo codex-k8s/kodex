@@ -342,6 +342,11 @@ Job остаётся совместимым, но не используется 
 `image-admission` manifest и ожидаемый executable SHA-256. Затем
 `image-admission-hold-delivery.mjs` одним immutable plan выполняет bounded
 `pause → reader → policy-jobs → policy-release → binding-release → open`.
+Для циклического controller сначала `image-admission-quiesce.mjs` останавливает
+только controller, доказывает exact Failed/no-work terminal inventory, запускает
+его paused для штатного cleanup и ждёт natural Job TTL. Delivery принимает
+готовый quiesce receipt и оставляет controller paused; отдельный fresh open plan
+проверяет полный delivery evidence и выполняет единственный CAS `pause=false`.
 Каждая mutating фаза меняет один resource по UID/resourceVersion/spec CAS;
 фактический reader подтверждается CRI identity и `/proc/PID/exe`. `observe` и
 `resume` только читают authoritative state после неопределённого исхода и не

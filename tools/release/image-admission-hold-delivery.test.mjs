@@ -290,6 +290,21 @@ test('one journal enforces the complete phase order and changes one resource per
  } finally {rmSync(directory,{recursive:true,force:true});}
 });
 
+test('quiesce handoff keeps exact empty history pinned and defers open to a separate resume',async()=>{
+ const directory=mkdtempSync(join(tmpdir(),'hold-delivery-quiesced-')),evidence=join(directory,'evidence.jsonl'),fixture=planAndState();
+ const initialControllerSpec=structuredClone(fixture.state.controller.spec),pausedControllerSpec=structuredClone(initialControllerSpec),app=pausedControllerSpec.template.spec.containers[0];
+ app.env.push({name:'IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS',value:'true'});setControllerSpec(fixture.state,pausedControllerSpec);
+ const quiesce={version:1,intent:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',planSHA256:'b'.repeat(64),receiptSHA256:'c'.repeat(64),initialControllerSpec,pausedControllerSpec};
+ const plan=buildDeliveryPlan(fixture.state,fixture.desired,{context,k3sSudo:true,capability:fixture.plan.capability,intent:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',quiesce}),rt=fakeRuntime(fixture.state);
+ try {
+  validateDeliveryPlan(plan,context,true);assert.equal(plan.phaseTargets.pause.action,'none');assert.equal(plan.phaseTargets.open.action,'none');
+  for(const phase of phases)assert.equal((await executePhase(plan,phase,evidence,'apply',rt)).status,'PASS');
+  assert.deepEqual(rt.calls,{patch:2,create:2,delete:0,rollout:1});
+  assert.equal(rt.state.controller.spec.template.spec.containers[0].env.find(item=>item.name==='IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS').value,'true');
+  assert.deepEqual(plan.guards.initialWork,{jobs:[],pvcs:[]});
+ } finally {rmSync(directory,{recursive:true,force:true});}
+});
+
 test('exact rollback restores controller and primary VAP with CAS deletes before hold release',async()=>{
  const directory=mkdtempSync(join(tmpdir(),'hold-delivery-rollback-')),forward=join(directory,'forward.jsonl'),rollback=join(directory,'rollback.jsonl'),{state,plan}=planAndState(),rt=fakeRuntime(state);
  try {
