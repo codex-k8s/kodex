@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Отмена native fetch</title>
+  </head>
+  <body>
+    <button id="start" type="button">Начать запрос</button>
+    <button id="cancel" type="button">Отменить запрос</button>
+    <output id="outcome">idle</output>
+    <script type="module">
+      import { documentFetch } from "../../src/shared/api/document-lifetime";
+
+      let controller;
+      document.querySelector("#start").addEventListener("click", async () => {
+        controller = new AbortController();
+        document.querySelector("#outcome").textContent = "pending";
+        try {
+          await documentFetch(
+            new Request("/pending", {
+              method: "POST",
+              headers: { "X-Fixture": "preserved" },
+              body: "fixture-body",
+              credentials: "same-origin",
+              signal: controller.signal,
+            }),
+          );
+          document.querySelector("#outcome").textContent = "resolved";
+        } catch (error) {
+          document.querySelector("#outcome").textContent = error.name;
+        }
+      });
+      document.querySelector("#cancel").addEventListener("click", () => {
+        controller?.abort();
+      });
+    </script>
+  </body>
+</html>

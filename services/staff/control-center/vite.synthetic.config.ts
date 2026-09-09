@@ -40,6 +40,12 @@ export default mergeConfig(base, {
             import.meta.url,
           ),
         ),
+        documentFetchTransport: fileURLToPath(
+          new URL(
+            "./e2e/fixtures/document-fetch-transport.html",
+            import.meta.url,
+          ),
+        ),
         automationPreview: fileURLToPath(
           new URL("./e2e/fixtures/automation-preview.html", import.meta.url),
         ),

@@ -172,6 +172,47 @@ describe("document request lifetime", () => {
     expect(init?.signal?.aborted).toBe(true);
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   });
+  it("снимает linked listeners после success, error и abort без накопления", async () => {
+    const parent = new AbortController();
+    const source = new Request("https://kodex.example/api/v1/projects", {
+      signal: parent.signal,
+    });
+    const retained = Array.from({ length: 3 }, () =>
+      retainRequestSignalParents(new Request(source), source),
+    );
+    const add = vi.spyOn(source.signal, "addEventListener");
+    const remove = vi.spyOn(source.signal, "removeEventListener");
+    const native = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("ok"))
+      .mockRejectedValueOnce(new TypeError("Network unavailable"))
+      .mockImplementationOnce((_input, init) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Fixture aborted", "AbortError")),
+            { once: true },
+          );
+        });
+      });
+    vi.stubGlobal("fetch", native);
+    const next = () => {
+      const request = retained.shift();
+      if (!request) throw new Error("Missing retained fixture request");
+      return request;
+    };
+    await documentFetch(next());
+    await expect(documentFetch(next())).rejects.toBeInstanceOf(TypeError);
+    const pending = documentFetch(next());
+    await vi.waitFor(() => expect(native).toHaveBeenCalledTimes(3));
+    parent.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(add).toHaveBeenCalledTimes(3);
+    for (const [, listener] of add.mock.calls)
+      expect(
+        remove.mock.calls.some(([, removed]) => removed === listener),
+      ).toBe(true);
+  });
   it("регистрация идемпотентна, cleanup удаляет слушатели", () => {
     expect(installDocumentRequestLifetime(target as Window)).toBe(cleanup);
     cleanup();
