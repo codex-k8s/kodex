@@ -1,3 +1,4 @@
+import { SessionBoundaryDiagnostics } from "./session-boundary-diagnostics";
 import {
   ConsoleErrorDiagnostics,
   installConsoleErrorDiagnostics,
@@ -158,6 +159,11 @@ test("широкая UI-приёмка сохраняет независимые
     await validateFixture(context.request, selected);
     return selected;
   };
+  const sessionBoundary = new SessionBoundaryDiagnostics();
+  const finishSessionBoundary = sessionBoundary.install(
+    page,
+    environment.baseURL,
+  );
   const consoleErrors = new ConsoleErrorDiagnostics(environment.baseURL);
   installConsoleErrorDiagnostics(page, consoleErrors, 0);
   const pageErrors = new PageErrorDiagnostics(environment.baseURL);
@@ -441,6 +447,11 @@ test("широкая UI-приёмка сохраняет независимые
           timeout: 15_000,
           failOnStatusCode: false,
         });
+        sessionBoundary.observe(
+          "PREFLIGHT",
+          response.status(),
+          response.status() === 200 ? await response.json() : undefined,
+        );
         expect(response.status()).toBe(200);
         await response.dispose();
         await visit(page, "/");
@@ -1067,6 +1078,17 @@ test("широкая UI-приёмка сохраняет независимые
         },
         "NETWORK_ERRORS",
       );
+    await finishSessionBoundary();
+    if (sessionBoundary.snapshot().overflow > 0)
+      await record(
+        "session-boundary-diagnostic-overflow",
+        ["MVP-UI-11"],
+        "FAIL",
+        "UI_ASSERTION_FAILED",
+        { overflow: sessionBoundary.snapshot().overflow },
+        "API_READINESS",
+      );
+    await journal.sessionBoundary(sessionBoundary);
     await journal.consoleErrors(consoleErrors);
     await journal.pageErrors(pageErrors);
     await journal.network(network);

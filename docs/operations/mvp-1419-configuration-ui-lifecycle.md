@@ -4,7 +4,7 @@ title: Приёмка UI lifecycle шаблонов и IntegrationDefinition
 type: operations
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-09
 ---
 
@@ -52,6 +52,7 @@ prompt, cookies, CSRF, headers, ответы и персональные дан�
 из точного checkout выполнить:
 
 ```bash
+cd services/staff/control-center
 KODEX_E2E_CONFIGURATION_LIFECYCLE_CONFIRM=RUN_CONFIGURATION_UI_LIFECYCLE \
 KODEX_E2E_CONFIGURATION_LIFECYCLE_STATE=/absolute/private/new-state.jsonl \
 KODEX_E2E_SERVING_MANIFEST=/absolute/private/serving-manifest.json \
@@ -62,7 +63,6 @@ KODEX_E2E_SOURCE_REVISION=<40-hex> \
 KODEX_E2E_API_REVISION=<40-hex> \
 KODEX_E2E_PWA_REVISION=<40-hex> \
 KODEX_E2E_SERVING_MANIFEST_SHA256=<64-hex> \
-cd services/staff/control-center
 npx playwright test --config e2e/configuration-lifecycle.config.ts
 ```
 
@@ -70,16 +70,17 @@ npx playwright test --config e2e/configuration-lifecycle.config.ts
 исходе команда не повторяется. Для отдельного readback того же journal:
 
 ```bash
+cd services/staff/control-center
 KODEX_E2E_CONFIGURATION_LIFECYCLE_RESUME=1 \
 <те же exact scope variables> \
-cd services/staff/control-center
 npx playwright test --config e2e/configuration-lifecycle.config.ts
 ```
 
 Resume выполняет только `GET`, сопоставляет точное deterministic имя,
 kind/state/version/published pointer и завершает pending intent как `PASS` либо
-`UNKNOWN`. Для продолжения mutation после подтверждения оператор создаёт новый
-уникальный запуск и prefix; автоматического повтора после `UNKNOWN` нет.
+`UNKNOWN`. Продолжение mutation требует отдельного решения после авторитетного readback.
+Новый prefix не разрешает повтор неизвестного effect; автоматического повтора
+после `UNKNOWN` нет.
 
 ## Исходы
 
@@ -90,3 +91,39 @@ kind/state/version/published pointer и завершает pending intent как
 - `NOT RUN`: live-профиль не запускался на обслуживаемом staging candidate.
 
 Платный или внешний provider effect всегда `NOT RUN` в этом профиле.
+
+## Проверка session boundary и диагностика #1424/#1425
+
+До первого intent выполняются GET session с проверкой authoritative срока и
+GET отсутствия всех трёх собственных deterministic fixtures. Ответ 401
+останавливает запуск до create; сессия и политика не продлеваются оснасткой.
+PWA продолжает обычный coordinated refresh через разрешённый PUT session.
+
+Соседний приватный файл `<journal>.diagnostics.json` содержит только serving
+versions, закрытые session endpoint/status, относительные сроки от serverTime,
+version и безопасные console digests. Cookie, CSRF, actor, generation, ticket,
+исходники, transcript и сырые ошибки туда не попадают. Старые journals не
+перезаписываются, неизвестные console ошибки остаются FAIL. Безопасный session
+trace также сохраняется в обычном readonly UI acceptance.
+
+Перед повтором прежнего отвергнутого `stop1422-cfg` оператор отдельно выполняет
+GET поиска имён `stop1422-cfg-prompt`, `stop1422-cfg-integration` и
+`stop1422-cfg-integration-copy`. Наличие объекта требует readback, не нового
+create. `UNKNOWN` не разрешает новый prefix как способ повторить effect.
+Штатный безопасный режим: с теми же scope variables, старым prefix и НОВЫМ
+journal path задать `KODEX_E2E_CONFIGURATION_LIFECYCLE_READ_ONLY=1`.
+Он выполняет только четыре GET (session и три поиска), сохраняет boolean
+наличия, name digest/version и завершает работу без UI mutation. Старый intent
+journal не изменяется, отсутствие найденного имени само по себе не закрывает
+неизвестный effect.
+
+Для естественного refresh используется существующий
+`e2e/session-renewal.config.ts`: fresh session, настоящий server renewAfter,
+две вкладки и исходная absolute boundary; время не перематывается. Дополнительно
+readonly `ui-acceptance.config.ts` на свежем и естественно состаренном отдельном
+state сохраняет session trace возле console evidence. Оба live результата
+остаются NOT RUN до фактического запуска root.
+
+Context7: `/microsoft/playwright`, документация BrowserContext storageState,
+Route.abort и ConsoleMessage.location проверена 2026-09-09. Она не доказывает
+причину исторических #1416/#1424 или успешную живую приёмку #1425.

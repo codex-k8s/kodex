@@ -1,3 +1,4 @@
+import type { SessionBoundaryDiagnostics } from "./session-boundary-diagnostics";
 import type { ConsoleErrorDiagnostics } from "./console-error-diagnostics";
 import type { PageErrorDiagnostics } from "./page-error-diagnostics";
 import type { ReadNetworkCorrelator } from "./ui-read-network";
@@ -352,6 +353,12 @@ export async function createJournal(
         browser,
         fixtureManifestSHA256,
         ...value.checkpoint(),
+      }),
+    sessionBoundary: async (value: SessionBoundaryDiagnostics) =>
+      append({
+        type: "session-boundary",
+        timestampUTC: new Date().toISOString(),
+        ...value.snapshot(),
       }),
     consoleErrors: async (value: ConsoleErrorDiagnostics) =>
       append({

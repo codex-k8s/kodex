@@ -1,3 +1,13 @@
+import { constants } from "node:fs";
+import { open } from "node:fs/promises";
+import {
+  SessionBoundaryDiagnostics,
+  sessionPreflight,
+} from "./session-boundary-diagnostics";
+import {
+  ConsoleErrorDiagnostics,
+  installConsoleErrorDiagnostics,
+} from "./console-error-diagnostics";
 import { createHash } from "node:crypto";
 
 import {
@@ -167,6 +177,10 @@ async function findConfiguration(
     const body = object(await response.json());
     if (!Array.isArray(body.items))
       throw new Error("Configuration lifecycle catalog mismatch");
+    if (body.nextPageToken !== undefined && body.nextPageToken !== "")
+      throw new Error(
+        "Configuration lifecycle catalog is incomplete; bounded readback is required",
+      );
     const matches = body.items.filter(
       (item) => object(item).name === name && object(item).kind === kind,
     );
@@ -308,7 +322,30 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
   page,
 }) => {
   const journal = await openLifecycleJournal(configuration);
+  let diagnostics: Awaited<ReturnType<typeof open>> | undefined;
+  const fixtureReadbacks: {
+    kind: Kind;
+    nameSHA256: string;
+    present: boolean;
+    version?: number;
+  }[] = [];
+  const sessionBoundary = new SessionBoundaryDiagnostics();
+  const consoleErrors = new ConsoleErrorDiagnostics(configuration.baseURL);
+  installConsoleErrorDiagnostics(page, consoleErrors, 0);
+  const finishSessionBoundary = sessionBoundary.install(
+    page,
+    configuration.baseURL,
+  );
   try {
+    if (!configuration.resume)
+      diagnostics = await open(
+        `${configuration.journalPath}.diagnostics.json`,
+        constants.O_WRONLY |
+          constants.O_CREAT |
+          constants.O_EXCL |
+          constants.O_NOFOLLOW,
+        0o600,
+      );
     if (configuration.resume) {
       const pending = journal.pending();
       expect(pending.length).toBeGreaterThan(0);
@@ -327,7 +364,10 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
     await context.route("**/api/v1/**", async (route) => {
       const request = route.request();
       const path = new URL(request.url()).pathname;
-      const allowed = permittedLifecycleRequest(request.method(), path);
+      const allowed =
+        permittedLifecycleRequest(request.method(), path) &&
+        (!configuration.readOnly ||
+          ["GET", "HEAD", "OPTIONS"].includes(request.method()));
       if (!allowed) {
         blockedMutation = `${request.method()}:${hash(path)}`;
         await route.abort("blockedbyclient");
@@ -336,7 +376,41 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
       await route.continue();
     });
 
+    const preflight = await context.request.get("/api/v1/session", {
+      timeout: 10_000,
+      failOnStatusCode: false,
+    });
+    try {
+      const body: unknown =
+        preflight.status() === 200 ? await preflight.json() : undefined;
+      sessionBoundary.observe("PREFLIGHT", preflight.status(), body);
+      sessionPreflight(preflight.status(), body);
+    } finally {
+      await preflight.dispose();
+    }
+    // Ранее отвергнутый/неизвестный effect проверяется отдельно владельцем. Новый
+    // запуск также не создаёт второй объект при случайном повторении prefix.
+    for (const [kind, name] of [
+      ["PROMPT_TEMPLATE", promptName],
+      ["INTEGRATION_DEFINITION", integrationName],
+      ["INTEGRATION_DEFINITION", copyName],
+    ] as const) {
+      const found = await findConfiguration(context.request, kind, name);
+      fixtureReadbacks.push({
+        kind,
+        nameSHA256: hash(name),
+        present: !!found,
+        ...(found ? { version: found.version } : {}),
+      });
+      if (found && !configuration.readOnly)
+        throw new Error(
+          "Configuration lifecycle fixture already exists; readback is required",
+        );
+    }
+    if (configuration.readOnly) return;
     const promptEditor = await openNew(page, "PROMPT_TEMPLATE");
+    await expect(page.locator(".app-shell")).toBeVisible();
+    expect(consoleErrors.failed()).toBe(false);
     await promptEditor
       .locator(".configuration-editor__fields input")
       .fill(promptName);
@@ -679,7 +753,20 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
       .click();
     await expect(page.locator("html")).toHaveAttribute("lang", "ru");
     expect(blockedMutation).toBe("");
+    expect(consoleErrors.failed()).toBe(false);
+    expect(sessionBoundary.snapshot().overflow).toBe(0);
   } finally {
-    await journal.close();
+    await finishSessionBoundary();
+    try {
+      if (diagnostics) {
+        await diagnostics.writeFile(
+          `${JSON.stringify({ versions: configuration.versions, timestampUTC: new Date().toISOString(), fixtureReadbacks, sessionBoundary: sessionBoundary.snapshot(), consoleErrors: consoleErrors.snapshot() })}\n`,
+        );
+        await diagnostics.sync();
+      }
+    } finally {
+      await diagnostics?.close();
+      await journal.close();
+    }
   }
 });

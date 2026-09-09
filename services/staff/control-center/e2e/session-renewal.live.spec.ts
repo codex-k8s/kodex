@@ -1,3 +1,4 @@
+import { SessionBoundaryDiagnostics } from "./session-boundary-diagnostics";
 import {
   ConsoleErrorDiagnostics,
   installConsoleErrorDiagnostics,
@@ -62,6 +63,8 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
   const requestDiagnostics = new SessionRequestDiagnostics<Request>(
     environment.baseURL,
   );
+  const sessionBoundary = new SessionBoundaryDiagnostics();
+  const finishSessionBoundaries: (() => Promise<void>)[] = [];
   const consoleErrors = new ConsoleErrorDiagnostics(environment.baseURL);
   const pageErrors = new PageErrorDiagnostics(environment.baseURL);
   let passed = false;
@@ -87,12 +90,12 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       failOnStatusCode: false,
       timeout: 15_000,
     });
+    const preflightBody: unknown =
+      response.status() === 200 ? await response.json() : undefined;
+    sessionBoundary.observe("PREFLIGHT", response.status(), preflightBody);
     if (response.status() !== 200)
       throw new Error("Session metadata unavailable");
-    initial = renewalWindow(
-      await response.json(),
-      environment.runTimeoutMs - 30_000,
-    );
+    initial = renewalWindow(preflightBody, environment.runTimeoutMs - 30_000);
     naturalRenewalAt = Date.now() + initial.waitMs;
     await response.dispose();
     // Только наблюдаем выбранный native WebSocket protocol после open. Аргументы,
@@ -100,6 +103,9 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
     await context.addInitScript(installProtocolObserver);
     const pages = await Promise.all([context.newPage(), context.newPage()]);
     for (const [index, page] of pages.entries()) {
+      finishSessionBoundaries.push(
+        sessionBoundary.install(page, environment.baseURL),
+      );
       const bootstrapObserver = new SessionBootstrapCorrelator<Request>(
         `${environment.baseURL}/api/v1/bootstrap`,
       );
@@ -291,7 +297,13 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
     await Promise.all(
       context.pages().map((page) => page.close().catch(() => undefined)),
     );
-    if (pageErrors.failed() || consoleErrors.failed()) passed = false;
+    await Promise.all(finishSessionBoundaries.map((finish) => finish()));
+    if (
+      pageErrors.failed() ||
+      consoleErrors.failed() ||
+      sessionBoundary.snapshot().overflow > 0
+    )
+      passed = false;
     const evidence = {
       schemaVersion: 1,
       requirement: "MVP-UI-11",
@@ -326,6 +338,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       requestDiagnostics: observedRequests,
       pageErrorDiagnostics: pageErrors.snapshot(),
       consoleErrorDiagnostics: consoleErrors.snapshot(),
+      sessionBoundary: sessionBoundary.snapshot(),
       protocols: protocolReadback,
       tabs: observedTabs,
       absoluteExpiryUnchanged:
@@ -348,6 +361,10 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
     };
     await persistSessionRenewalEvidence(testInfo, evidence);
   }
-  if (pageErrors.failed() || consoleErrors.failed())
+  if (
+    pageErrors.failed() ||
+    consoleErrors.failed() ||
+    sessionBoundary.snapshot().overflow > 0
+  )
     throw new Error("Session browser error observation failed");
 });
