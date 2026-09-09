@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"mime"
 	"net"
 	"net/http"
@@ -34,6 +35,8 @@ import (
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 	"golang.org/x/sys/unix"
 )
+
+const mcpStartupFailureMessage = "Runtime MCP startup failed"
 
 const inputPath = "/var/run/config/kodex/runtime/runtime.json"
 
@@ -143,7 +146,13 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return err
 	}
 	defer client.Close()
-	runtime := turnRuntime{prepare: prepareRuntimeTurn, execute: codex.ExecuteViaBroker, checkWorkspace: checkWorkspaceProcess}
+	runtime := turnRuntime{prepare: func(ctx context.Context, input model.Input, client *callback.Client) (preparedTurn, string, error) {
+		prepared, code, err := prepareRuntimeTurn(ctx, input, client)
+		if code == "RUNTIME_MCP_UNAVAILABLE" && err != nil {
+			logMCPStartupFailure(ctx, telemetry.Logger(os.Stderr), err)
+		}
+		return prepared, code, err
+	}, execute: codex.ExecuteViaBroker, checkWorkspace: checkWorkspaceProcess}
 	if mode == "runtime-session" {
 		resultErr = runTurn(lifecycleContext, input, client, func() { state.ready.Store(true) }, runtime)
 		return resultErr
@@ -1024,4 +1033,9 @@ func healthHandler(state *health) http.Handler {
 		writer.WriteHeader(http.StatusNoContent)
 	})
 	return mux
+}
+
+// Только закрытая stage диагностика: публичный terminal code/receipt не меняется.
+func logMCPStartupFailure(ctx context.Context, logger *slog.Logger, err error) {
+	logger.WarnContext(ctx, mcpStartupFailureMessage, "stage", readiness.FailureStage(err))
 }

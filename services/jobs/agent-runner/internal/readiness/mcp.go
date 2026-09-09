@@ -48,7 +48,9 @@ type MCPProxy struct {
 	files      *callback.Client
 }
 
-func StartMCPProxy(ctx context.Context, input model.Input, token string, requiredTools []string) (*MCPProxy, error) {
+func StartMCPProxy(ctx context.Context, input model.Input, token string, requiredTools []string) (_ *MCPProxy, resultErr error) {
+	stage := mcpStageConfiguration
+	defer func() { resultErr = withMCPStage(resultErr, stage) }()
 	if len(requiredTools) == 0 || len(requiredTools) > 256 {
 		return nil, errors.New("required MCP tool catalog is invalid")
 	}
@@ -57,10 +59,12 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		return nil, errors.New("required MCP endpoint is invalid")
 	}
 	upstream.Path = "/v1/executions/" + url.PathEscape(input.LeaseRef) + "/mcp"
+	stage = mcpStageTLSIdentity
 	transport, err := exactMCPTransport(input.CallbackTLS)
 	if err != nil {
 		return nil, err
 	}
+	stage = mcpStageSocket
 	localRaw := make([]byte, 32)
 	if _, err := rand.Read(localRaw); err != nil {
 		transport.CloseIdleConnections()
@@ -79,6 +83,7 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		transport.CloseIdleConnections()
 		return nil, errors.New("protect MCP authority socket")
 	}
+	stage = mcpStageCallbackAuthority
 	fileClient, err := callback.New(input)
 	if err != nil || fileClient.Token() != token {
 		if fileClient != nil {
@@ -242,7 +247,9 @@ func exactMCPTransport(binding model.TLSBinding) (*http.Transport, error) {
 		MaxResponseHeaderBytes: 16 << 10}, nil
 }
 
-func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string, requiredTools []string) error {
+func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string, requiredTools []string) (resultErr error) {
+	stage := mcpStageInitialize
+	defer func() { resultErr = withMCPStage(resultErr, stage) }()
 	initialize := []byte(`{"jsonrpc":"2.0","id":"agent-runner-readiness","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"kodex-agent-runner","version":"1"}}}`)
 	raw, mediaType, statusCode, err := postMCP(ctx, client, endpoint, token, initialize)
 	if err != nil || len(raw) == 0 || statusCode != http.StatusOK || mediaType != "application/json" {
@@ -262,17 +269,20 @@ func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token
 		return errors.New("required MCP initialization failed")
 	}
 
+	stage = mcpStageInitialized
 	initialized := []byte(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
 	raw, _, statusCode, err = postMCP(ctx, client, endpoint, token, initialized)
 	if err != nil || statusCode != http.StatusAccepted || len(raw) != 0 {
 		return errors.New("required MCP initialized notification failed")
 	}
 
+	stage = mcpStageCatalogTransport
 	list := []byte(`{"jsonrpc":"2.0","id":"agent-runner-tools","method":"tools/list","params":{}}`)
 	raw, mediaType, statusCode, err = postMCP(ctx, client, endpoint, token, list)
 	if err != nil || len(raw) == 0 || statusCode != http.StatusOK || mediaType != "application/json" {
 		return errors.New("required MCP tool catalog is unavailable")
 	}
+	stage = mcpStageCatalogSchema
 	var catalog struct {
 		JSONRPC string `json:"jsonrpc"`
 		ID      string `json:"id"`
@@ -293,16 +303,17 @@ func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token
 	seen := make(map[string]struct{}, len(catalog.Result.Tools))
 	for _, rawTool := range catalog.Result.Tools {
 		var tool struct {
-			Name        string          `json:"name"`
-			Description string          `json:"description"`
-			InputSchema json.RawMessage `json:"inputSchema"`
+			Name         string          `json:"name"`
+			Description  string          `json:"description"`
+			InputSchema  json.RawMessage `json:"inputSchema"`
+			OutputSchema json.RawMessage `json:"outputSchema,omitempty"`
 		}
 		toolDecoder := json.NewDecoder(bytes.NewReader(rawTool))
 		toolDecoder.DisallowUnknownFields()
 		if toolDecoder.Decode(&tool) != nil || toolDecoder.Decode(&struct{}{}) != io.EOF ||
 			strings.TrimSpace(tool.Name) != tool.Name || tool.Name == "" || len(tool.Name) > 128 ||
 			strings.TrimSpace(tool.Description) == "" || len(tool.Description) > 2000 ||
-			len(tool.InputSchema) == 0 || tool.InputSchema[0] != '{' {
+			len(tool.InputSchema) == 0 || tool.InputSchema[0] != '{' || !validMCPOutputSchema(tool.OutputSchema) {
 			return errors.New("required MCP tool catalog is invalid")
 		}
 		if _, exists := seen[tool.Name]; exists {
@@ -311,6 +322,7 @@ func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token
 		seen[tool.Name] = struct{}{}
 		actual = append(actual, tool.Name)
 	}
+	stage = mcpStageCatalogBinding
 	slices.Sort(want)
 	slices.Sort(actual)
 	if !slices.Equal(actual, want) {
@@ -345,4 +357,18 @@ func postMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token 
 		mediaType = parsed
 	}
 	return raw, mediaType, response.StatusCode, nil
+}
+
+// outputSchema — optional JSON Schema объекта из MCP 2025-06-18. Поля самой
+// JSON Schema открыты для keywords, но descriptor сохраняет закрытый decoder.
+func validMCPOutputSchema(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	var schema map[string]json.RawMessage
+	if len(raw) > maximumMCPBodyBytes || json.Unmarshal(raw, &schema) != nil || schema == nil {
+		return false
+	}
+	var kind string
+	return json.Unmarshal(schema["type"], &kind) == nil && kind == "object"
 }

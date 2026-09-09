@@ -29,8 +29,7 @@ var (
 )
 
 func runtimeFilesAvailable(input runtimecontract.RunnerInput) bool {
-	return input.Mode == runtimecontract.RunnerModeTurn && input.ProjectRef != "" && input.LeaseRef != "" &&
-		input.LeaseFence != "" && input.LeaseGeneration > 0 && input.FileCatalog != nil && input.FileCatalog.Validate() == nil
+	return runtimecontract.RuntimeFileToolsAvailable(input)
 }
 
 func runtimeFilePurpose(input runtimecontract.RunnerInput, purpose string) (cp.RuntimeFilePurpose, bool) {

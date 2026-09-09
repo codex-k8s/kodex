@@ -276,3 +276,43 @@ Supply chain: `docs/domains/images-supply-chain.md`.
 Pod ABI, включая запрет создания файла в исходно writable корне emptyDir.
 `make test-workspace-parent-container` проверяет настоящий non-root init,
 повтор защиты и чтение/запрет записи для UID 10001 и 10002.
+
+### Совместимость MCP-каталога (#1404, #1406)
+
+Runner принимает optional `outputSchema` из MCP 2025-06-18 как JSON Schema
+объекта; отсутствие поля совместимо со старым descriptor. Неизвестные поля
+самого descriptor, невалидная schema, лишние/пропущенные/повторные tool names
+закрыто отклоняются. `DisallowUnknownFields`, mTLS, exact grants и digests
+сохраняются. Это исправляет конфликт с обязательным `propose_run_metadata`,
+у которого runtime-controller уже публикует `outputSchema`.
+
+`runtimecontract.RuntimeMCPToolNames` задаёт ожидаемый набор для readiness,
+Codex status. Существующий tool approval guard не меняется. Четыре VFS tools появляются только при
+`RuntimeFileToolsAvailable`: turn + project + lease/fence/generation + валидный
+FileCatalog. Runtime-controller использует тот же предикат публикации VFS.
+Отсутствующий/невалидный catalog не расширяет набор инструментов.
+
+`make test-runtime-mcp-catalog` запускает два ограниченных Go-теста: настоящий
+controller `serveMCP(tools/list)` сохраняет синтетический wire response в
+одноразовом private каталоге, затем настоящий runner проверяет его через
+initialize/initialized/tools-list. Варианты: обычный Agent, system assistant,
+VFS, email+VFS, делегирование. Тест включён в `make test-agent-runner`; отдельные
+Go suites без fixture env явно пропускают только этот cross-module профиль.
+Loopback fixture не доказывает live mTLS/provider/email effect.
+
+Startup пишет один safe JSON log `Runtime MCP startup failed` с закрытым stage:
+CONFIGURATION, TLS_IDENTITY, LOCAL_SOCKET, CALLBACK_AUTHORITY, INITIALIZE,
+INITIALIZED_NOTIFICATION, CATALOG_TRANSPORT, CATALOG_SCHEMA, CATALOG_BINDING
+либо UNKNOWN. Поля URL, token, provider error, prompt/input и catalog contents
+не логируются. INITIALIZE/CATALOG_TRANSPORT обозначают фазу, а не доказанную
+причину сетевого отказа. Public terminal `RUNTIME_MCP_UNAVAILABLE`, completion
+receipt, retry/UNKNOWN и provider execution boundary не меняются.
+
+Поставка требует нового trusted agent-runner base с provenance, затем новой
+forward RoleImage revision/build/scan/admission/promotion и отдельного rebind
+environment. CP или runtime-controller source rollout не заменяет binary в
+старом pinned image. Старый controller совместим с исправленным reader;
+старые image/revisions/pins сохраняются. Откат на старый runner возвращает
+известный startup failure; fallback/удаление schemas у producer не применяется.
+Новый live Run и внешний эффект требуют отдельного owner GO. Выполнение
+общих tests/build/rollout фиксируется отдельно; наличие тестов не означает PASS.

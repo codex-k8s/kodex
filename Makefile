@@ -164,6 +164,11 @@ test-integration-deployed-e2e-check:
 test-integration-deployed-e2e:
 	@./scripts/tests/integration-deployed-e2e.sh
 
+test-runtime-mcp-catalog:
+	@./scripts/tests/runtime-mcp-catalog-test.sh
+
+.PHONY: test-runtime-mcp-catalog
+
 test-agent-runner:
 	@./scripts/tests/agent-runner-test.sh
 

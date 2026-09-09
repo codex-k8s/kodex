@@ -10,6 +10,14 @@ updated: 2026-09-09
 
 # Безопасность распределенных сервисов и служебного состояния
 
+Runtime MCP startup проверяет фактический catalog producer по закрытому
+consumer-профилю, включая optional metadata/schema утверждённой версии MCP.
+Сокращённая тестовая копия tool descriptor не доказывает совместимость.
+VFS tools включаются только при том же valid execution/catalog предикате,
+который использует producer; наличие metadata не назначает file authority.
+Ошибка startup сохраняет fail-closed terminal и диагностируется закрытой
+stage без текста ответа, endpoints, credential или пользовательского input.
+
 Публичная policy материализуется в runtime-формат без расширения полномочий.
 Если совместимый старый формат требует операцию, отсутствующую в публичном
 каталоге (Email legacy `mark`), владелец добавляет только DENY. Публичная
