@@ -72,11 +72,19 @@ export function inspectHostAuthority(target,io={}) {
 export function readAuthorityExecutable(pod,container,{kube,k3sSudo=false,run=execFileSync}) {
  const hot=container.command?.includes('/workspace/tools/dev/run-go-hot-reload.sh');
  if(hot) {
-  requireValue(container.args?.[0]==='services/internal/internal-rpc-authority'&&/^internal-rpc-authority-(issuer|verifier)$/.test(container.name)&&
-   container.args[1]===`./cmd/${container.name}`&&/^[a-z0-9-]+$/.test(container.args[2]??''),'EXACT_AUTHORITY_SOURCE_COMMAND_REQUIRED');
+  const roleCommand=/^internal-rpc-authority-(issuer|verifier)$/.test(container.name)&&container.args?.[1]===`./cmd/${container.name}`;
+  const publisherCommand=container.name==='publisher'&&container.args?.[1]==='./cmd/internal-rpc-authority-publisher'&&container.args?.[2]==='publisher';
+  requireValue(container.args?.[0]==='services/internal/internal-rpc-authority'&&(roleCommand||publisherCommand)&&
+   /^[a-z0-9-]+$/.test(container.args[2]??''),'EXACT_AUTHORITY_SOURCE_COMMAND_REQUIRED');
+  const declared=[...(pod.spec?.containers??[]),...(pod.spec?.initContainers??[])].filter(value=>value.name===container.name),status=[...(pod.status?.containerStatuses??[]),...(pod.status?.initContainerStatuses??[])].filter(value=>value.name===container.name);
+  requireValue(pod.metadata?.namespace==='kodex-system'&&uuid.test(pod.metadata.uid??'')&&!pod.metadata.deletionTimestamp&&pod.status?.phase==='Running'&&declared.length===1&&fingerprint(declared[0])===fingerprint(container)&&
+   status.length===1&&status[0].ready&&status[0].state?.running&&Number.isSafeInteger(status[0].restartCount)&&/^containerd:\/\/[a-f0-9]{64}$/.test(status[0].containerID??''),'EXACT_AUTHORITY_SOURCE_POD_REQUIRED');
+  const target={podUID:pod.metadata.uid,podSpecSHA256:fingerprint(pod.spec),containerID:status[0].containerID,restartCount:status[0].restartCount};
   const script='expected=$1; count=0; result=; for entry in /proc/[0-9]*/exe; do target=$(readlink "$entry" 2>/dev/null) || continue; if [ "$target" = "$expected" ] || [ "$target" = "$expected (deleted)" ]; then count=$((count+1)); result=$(sha256sum "$entry") || exit 1; fi; done; [ "$count" = 1 ] || exit 1; printf "%s\\n" "$result"';
   const digest=kube('exec',pod.metadata.name,'-n','kodex-system','-c',container.name,'--','sh','-c',script,'authority-source',`/tmp/kodex-dev-${container.args[2]}/build/main`).split(/\s/)[0];
-  requireValue(sha.test(digest),'AUTHORITY_SOURCE_PROOF_INVALID');return digest;
+  requireValue(sha.test(digest),'AUTHORITY_SOURCE_PROOF_INVALID');
+  const after=JSON.parse(kube('get','pod',pod.metadata.name,'-n','kodex-system','-o','json')),afterContainer=[...(after.spec?.containers??[]),...(after.spec?.initContainers??[])].find(value=>value.name===container.name),afterStatus=[...(after.status?.containerStatuses??[]),...(after.status?.initContainerStatuses??[])].find(value=>value.name===container.name);
+  requireValue(after.metadata?.uid===target.podUID&&fingerprint(after.spec)===target.podSpecSHA256&&fingerprint(afterContainer)===fingerprint(container)&&afterStatus?.containerID===target.containerID&&afterStatus.restartCount===target.restartCount&&afterStatus.ready&&afterStatus.state?.running,'AUTHORITY_SOURCE_POD_CHANGED');return digest;
  }
  const target=authorityImageTarget(pod,container);
  const proof=JSON.parse(k3sSudo?run('sudo',['-n',process.execPath,fileURLToPath(import.meta.url),'--host'],

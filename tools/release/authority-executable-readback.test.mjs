@@ -37,6 +37,17 @@ test('immutable standard path invokes native executable once, never shell; chang
  assert.throws(()=>readAuthorityExecutable(pod,container,{kube:(...args)=>args[0]==='exec'?JSON.stringify({version:1,role:'issuer',pid:1,...proof}):JSON.stringify(changed)}),/POD_CHANGED/);
  for(const invalid of [{},{version:1,role:'verifier',pid:1,...proof},{version:1,role:'issuer',pid:1,...proof,binarySHA256:'file-image-digest'}])assert.throws(()=>readAuthorityExecutable(pod,container,{kube:()=>JSON.stringify(invalid)}),/PROOF_INVALID/);
 });
+test('source publisher uses the canonical hot-reload process and rejects a foreign package',()=>{
+ const container={name:'publisher',image,command:['/workspace/tools/dev/run-go-hot-reload.sh'],args:['services/internal/internal-rpc-authority','./cmd/internal-rpc-authority-publisher','publisher']};
+ const pod={metadata:{name:'publisher-pod',namespace:'kodex-system',uid},spec:{containers:[container]},status:{phase:'Running',containerStatuses:[{name:'publisher',ready:true,state:{running:{}},restartCount:0,containerID:'containerd://'+'e'.repeat(64)}]}};let calls=[];
+ const kube=(...args)=>{calls.push(args);return args[0]==='exec'?`${'d'.repeat(64)}  /proc/731/exe`:JSON.stringify(pod);};
+ assert.equal(readAuthorityExecutable(pod,container,{kube}),'d'.repeat(64));
+ assert.equal(calls[0].at(-1),'/tmp/kodex-dev-publisher/build/main');
+ const replaced=structuredClone(pod);replaced.metadata.uid='14340000-0000-4000-8000-000000000099';assert.throws(()=>readAuthorityExecutable(pod,container,{kube:(...args)=>args[0]==='exec'?`${'d'.repeat(64)} x`:JSON.stringify(replaced)}),/SOURCE_POD_CHANGED/);
+ const restarted=structuredClone(pod);restarted.status.containerStatuses[0].restartCount=1;assert.throws(()=>readAuthorityExecutable(pod,container,{kube:(...args)=>args[0]==='exec'?`${'d'.repeat(64)} x`:JSON.stringify(restarted)}),/SOURCE_POD_CHANGED/);
+ const foreign=structuredClone(container);foreign.args[1]='./cmd/cli';
+ assert.throws(()=>readAuthorityExecutable(pod,foreign,{kube}),/EXACT_AUTHORITY_SOURCE_COMMAND_REQUIRED/);
+});
 test('k3s host path uses bounded stdin projection, never passes Pod env or invokes container shell',()=>{
  const {pod,container}=fixture();container.env=[{name:'SYNTHETIC_SECRET',value:'MUST_NOT_ESCAPE'}];let runs=0;
  const digest=readAuthorityExecutable(pod,container,{k3sSudo:true,kube:(...args)=>{assert.equal(args[0],'get');return JSON.stringify(pod);},run:(command,args,options)=>{

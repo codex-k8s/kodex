@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {fileURLToPath} from 'node:url';
-import {classifyRotationStatus,createCanonicalRotationTemplate,createPublisherRestart,createRegistryCAS,createRotationJob,deriveRegistryRotationIdentity,deriveRotationOperationID,validateRotationPrerequisites,verifyRotationJobReadback} from './authority-rotation-transition.mjs';
+import {canonicalRegistryMatches,classifyRotationStatus,createCanonicalRotationTemplate,createPublisherRestart,createRegistryCAS,createRotationJob,createSourceRotationTemplate,deriveCanonicalRegistryAdvance,deriveRegistryRotationIdentity,deriveRotationOperationID,validateRotationPolicy,validateRotationPrerequisites,verifyRotationJobReadback} from './authority-rotation-transition.mjs';
+import {authorityGoImage} from './authority-rotation-source-delivery-model.mjs';
 import {fingerprint} from './scoped-release.mjs';
 
 const image='ghcr.io/codex-k8s/kodex/internal-rpc-authority@sha256:'+'a'.repeat(64);
@@ -31,6 +34,13 @@ test('rotation job pins a safe pre-delivery abort',()=>{
  const job=createRotationJob(template(),plan);assert.deepEqual(job.spec.template.spec.containers[0].args,['rotation-abort','--intent-id',plan.rotation.intentID,'--source-revision','2','--source-digest-sha256',plan.rotation.sourceDigestSHA256,'--confirm','ABORT-STAGING-AUTHORITY-ROTATION']);
  const actual=structuredClone(job);actual.metadata.uid='13900000-0000-4000-8000-000000000004';actual.spec.selector={matchLabels:{controller:'generated'}};verifyRotationJobReadback(actual,job);
 });
+test('source rotation job uses exact offline Go wrapper and target source',()=>{
+ const cache=name=>({name,hostPath:{path:`/srv/kodex-dev/cache/${name}`,type:'Directory'}}),mount=(name,mountPath,readOnly)=>({name,mountPath,readOnly});
+ const env=Object.entries({INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE:'/var/run/secrets/kodex/internal-rpc-authority/postgres/dsn',INTERNAL_RPC_AUTHORITY_POSTGRES_TLS_SERVER_NAME:'internal-rpc-authority-postgresql-rw.kodex-system.svc.cluster.local',GOMODCACHE:'/go/pkg/mod',GOCACHE:'/go/build-cache/cache',GOWORK:'off',GOTOOLCHAIN:'local',GOTMPDIR:'/go/build-cache/tmp',HOME:'/go/build-cache/home'}).map(([name,value])=>({name,value}));
+ const rendered={kind:'Job',metadata:{name:'internal-rpc-authority-migrate',namespace:'kodex-system'},spec:{template:{metadata:{labels:{'app.kubernetes.io/name':'internal-rpc-authority','app.kubernetes.io/component':'migrator'}},spec:{restartPolicy:'Never',serviceAccountName:'internal-rpc-authority-migrator',automountServiceAccountToken:false,containers:[{name:'migrate',image:authorityGoImage,workingDir:'/workspace/services/internal/internal-rpc-authority',command:['/workspace/tools/dev/run-go-command.sh'],args:['services/internal/internal-rpc-authority','./cmd/cli','up'],env,volumeMounts:[mount('dev-source','/workspace',true),mount('dev-go-mod','/go/pkg/mod',true),mount('dev-go-sumdb','/go/pkg/sumdb',true),mount('dev-go-tools','/go/tools',true),mount('dev-build-migrate','/go/build-cache',false),mount('tmp','/tmp',false),mount('postgresql-credentials','/var/run/secrets/kodex/internal-rpc-authority/postgres',true),mount('postgresql-ca','/var/run/config/kodex/internal-rpc-authority/postgresql',true)]}],volumes:[{name:'dev-source',hostPath:{path:'/srv/kodex-dev/old',type:'Directory'}},cache('dev-go-mod'),cache('dev-go-sumdb'),cache('dev-go-tools'),cache('dev-build-migrate'),{name:'tmp',emptyDir:{}},{name:'postgresql-credentials',secret:{secretName:'internal-rpc-authority-postgres-migration'}},{name:'postgresql-ca',configMap:{name:'internal-rpc-authority-postgresql-ca'}}]}}}};
+ const rotate={...plan,action:'rotate',ownerOperationID:'14340000-0000-5000-8000-000000000009'};const job=createRotationJob(createSourceRotationTemplate(rendered,plan.source),rotate);
+ assert.deepEqual(job.spec.template.spec.containers[0].args,['services/internal/internal-rpc-authority','./cmd/cli','rotation-watch','--operation-id',rotate.ownerOperationID]);assert.equal(job.spec.template.spec.volumes.find(v=>v.name==='dev-source').hostPath.path,plan.source);
+});
 
 test('rotation job reuses exact rendered migrator authority and network paths',()=>{
 	const rendered=execFileSync('kubectl',['kustomize',`${source}/deploy/k8s/profiles/web-with-mattermost`],{encoding:'utf8',maxBuffer:16<<20});
@@ -45,9 +55,11 @@ test('rotation job reuses exact rendered migrator authority and network paths',(
 
 test('rotation CAS changes only registry and publisher pod template',()=>{
  const currentRegistry='version: 1\nsource_revision: 7\ntargets: []\n',nextRegistry='version: 1\nsource_revision: 8\ntargets: []\n';
+	const nextPolicy=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`,'utf8');
+	const previousPolicy=JSON.parse(nextPolicy);previousPolicy.policy_revision=76;previousPolicy.policy.operation_bindings.find(value=>value.operation_id==='platform.command.integration-definitions.create-draft').project_required=true;const currentPolicy=JSON.stringify(previousPolicy);
 	const previousIdentity=deriveRegistryRotationIdentity(currentRegistry),identity=deriveRegistryRotationIdentity(nextRegistry);
-	const rotate={...plan,action:'rotate',ownerOperationID:identity.ownerOperationID,registry:{uid:'13900000-0000-4000-8000-000000000010',resourceVersion:'10',currentDataSHA256:'',desiredData:{'key-delivery-targets.yaml':nextRegistry},desiredDataSHA256:'',previousSourceRevision:previousIdentity.sourceRevision,previousSourceDigestSHA256:previousIdentity.sourceDigestSHA256,sourceRevision:identity.sourceRevision,sourceDigestSHA256:identity.sourceDigestSHA256},publisher:{uid:'13900000-0000-4000-8000-000000000011',resourceVersion:'11',specSHA256:'',image,command:['/usr/local/bin/internal-rpc-authority-publisher']}};
- const registry={apiVersion:'v1',kind:'ConfigMap',metadata:{uid:rotate.registry.uid,resourceVersion:'10'},data:{'key-delivery-targets.yaml':currentRegistry}};
+	const rotate={...plan,action:'rotate',ownerOperationID:identity.ownerOperationID,registry:{uid:'13900000-0000-4000-8000-000000000010',resourceVersion:'10',currentDataSHA256:'',desiredData:{'key-delivery-targets.yaml':nextRegistry,'authority-policy.json':nextPolicy},desiredDataSHA256:'',previousSourceRevision:previousIdentity.sourceRevision,previousSourceDigestSHA256:previousIdentity.sourceDigestSHA256,sourceRevision:identity.sourceRevision,sourceDigestSHA256:identity.sourceDigestSHA256,previousPolicyRevision:76,previousPolicySHA256:createHash('sha256').update(currentPolicy).digest('hex'),policySHA256:'763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504'},publisher:{uid:'13900000-0000-4000-8000-000000000011',resourceVersion:'11',specSHA256:'',image,command:['/usr/local/bin/internal-rpc-authority-publisher']}};
+ const registry={apiVersion:'v1',kind:'ConfigMap',metadata:{uid:rotate.registry.uid,resourceVersion:'10'},data:{'key-delivery-targets.yaml':currentRegistry,'authority-policy.json':currentPolicy}};
  rotate.registry.currentDataSHA256=fingerprint(registry.data);rotate.registry.desiredDataSHA256=fingerprint(rotate.registry.desiredData);
  const updatedRegistry=createRegistryCAS(registry,rotate);assert.equal(updatedRegistry.data['key-delivery-targets.yaml'],nextRegistry);assert.equal(updatedRegistry.metadata.resourceVersion,'10');
 	assert.throws(()=>createRegistryCAS({...registry,data:{'key-delivery-targets.yaml':nextRegistry}},rotate),/ROTATION_REGISTRY_CAS_DRIFT/);
@@ -60,6 +72,13 @@ test('rotation CAS changes only registry and publisher pod template',()=>{
  rotate.publisher.specSHA256=fingerprint(deployment.spec);const restarted=createPublisherRestart(deployment,rotate);rotate.publisher.desiredSpecSHA256=fingerprint(restarted.spec);
  assert.equal(restarted.spec.template.metadata.annotations['kodex.dev/authority-rotation-intent'],rotate.intentID);
  assert.equal(restarted.spec.template.metadata.annotations['kodex.dev/authority-rotation-operation'],rotate.ownerOperationID);assert.deepEqual(restarted.spec.template.spec.containers,deployment.spec.template.spec.containers);
+});
+
+test('canonical registry advances live revision with exactly base web-only targets and policy 77',()=>{
+ const canonical=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8'),live=canonical.replace('source_revision: 7','source_revision: 18');
+ const next=deriveCanonicalRegistryAdvance(live,canonical);assert.equal(next.identity.sourceRevision,19);assert.equal(canonicalRegistryMatches(next.raw,canonical),true);assert.equal(next.raw.includes('interaction-gateway'),false);
+ const policy=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`,'utf8');assert.deepEqual(validateRotationPolicy(policy),{revision:77,sha256:'763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504'});
+ const binding=JSON.parse(policy).policy.operation_bindings.filter(value=>value.operation_id==='platform.command.integration-definitions.create-draft');assert.equal(binding.length,1);assert.equal(binding[0].project_required,false);
 });
 
 test('rotation readback is closed and contains no payload',()=>{

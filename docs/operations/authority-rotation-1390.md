@@ -4,7 +4,7 @@ title: Устойчивая ротация ключей internal RPC authority
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.1.1
+version: 1.2.0
 updated: 2026-09-09
 ---
 
@@ -73,8 +73,10 @@ readback не входят.
    только если registry revision возрастает ровно на единицу; snapshot
    revision остаётся отдельной последовательностью и за три публикации
    увеличивается на три. Transition применяет UID/resourceVersion CAS только к
-   exact
-   `internal-rpc-authority-publisher-target-registry`, затем CAS неизменённого
+   exact `internal-rpc-authority-publisher-target-registry`. Один атомарный
+   ConfigMap CAS заменяет canonical base registry следующей revision и
+   source-owned `authority-policy.json`; policy и registry не публикуются
+   раздельно. Затем выполняется CAS неизменённого
    Deployment с отдельными intent и owner-operation annotations.
    Перезапускается только publisher;
    другие workloads и application revisions не меняются.
@@ -85,10 +87,14 @@ readback не входят.
 
 Инструмент `tools/release/authority-rotation-transition.mjs` принимает только
 точный staging context и новый private plan. Он не зависит от существования
-завершённой migration Job: repo-owned status Job строится из канонического
-`deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml`,
-использует exact digest уже обслуживаемого publisher image и запускает
+завершённой live migration Job. В immutable installation profile repo-owned
+status Job строится из канонического
+`deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml`, использует
+exact digest уже обслуживаемого publisher image и запускает
 `/usr/local/bin/internal-rpc-authority-cli rotation-watch --operation-id <OWNER_UUID>`.
+В staging source profile transition принимает только завершённый exact
+`OPS-DOC-1434` plan, повторно доказывает publisher `/proc/PID/exe` и строит Job
+из закреплённого actual render с `run-go-command.sh` и offline caches.
 Watch остаётся
 активным до `RETIRED` и поэтому один immutable Job наблюдает все три фазы.
 Имя Job закреплено за `intentID`, но terminal readback принимается только для
@@ -112,7 +118,7 @@ node tools/release/authority-rotation-transition.mjs plan \
   --context "$KODEX_RELEASE_CONTEXT" \
   --source /srv/kodex-dev/<EXACT_SOURCE> --revision <EXACT_SHA> \
   --action rotate \
-  --registry-file /srv/kodex-dev/<EXACT_SOURCE>/deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml \
+  --source-delivery-plan /private/authority-source-plan.json \
   --output /private/rotation-plan.json
 
 node tools/release/authority-rotation-transition.mjs apply \
