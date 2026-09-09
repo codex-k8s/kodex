@@ -70,6 +70,59 @@ export function emailServingManifest(m) {
   return digest(m.manifestSHA256);
 }
 
+// Candidate — авторитетный read схемы pinned definition; grant сам схемы не требует.
+export async function emailGrantSchema(profile, project, agent, connection, grant, get) {
+  const context = { connectionRef: connection.ref, projectRef: project.ref, recipientKind: 'AGENT', recipientRef: agent.ref };
+  const contextKeys = [...Object.keys(context), 'capabilityKey', 'workflowRef', 'stepKey'];
+  const expectedPins = { connectionVersion: version(connection.version), definitionVersion: connection.definitionVersion,
+    definitionDigest: digest(connection.definitionDigest), projectVersion: version(project.version), recipientVersion: version(agent.version) };
+  check(typeof expectedPins.definitionVersion === 'string' && expectedPins.definitionVersion.length > 0, 'CANDIDATE_PINS_INVALID');
+  const checkPins = (pins, contextDigest) => {
+    check(pins && pins.contextDigest === contextDigest && Object.entries(expectedPins).every(([key, value]) => pins[key] === value)
+      && !pins.workflowRevisionRef, 'CANDIDATE_PINS_CHANGED');
+  };
+  const reasons = ['READY', 'CONNECTION_UNAVAILABLE', 'RECIPIENT_UNAVAILABLE', 'PACKAGE_UNAVAILABLE', 'GRANT_UNAVAILABLE', 'WORKFLOW_EXCLUDED'];
+  const seen = new Set(); const cursors = new Set(); let cursor; let snapshot; let total; let selected;
+  for (let count = 0; ; count++) {
+    check(count < 10, 'CANDIDATE_PAGE_BUDGET_EXCEEDED');
+    const query = new URLSearchParams({ ...context, pageSize: '100', ...(cursor ? { pageToken: cursor } : {}) });
+    const page = await get(`/api/v1/integration-grant-candidates/capabilities?${query}`);
+    check(page?.context && Object.keys(page.context).every(key => contextKeys.includes(key))
+      && contextKeys.every(key => (page.context[key] ?? '') === (context[key] ?? '')), 'CANDIDATE_CONTEXT_CHANGED');
+    check(Array.isArray(page.items) && page.items.length <= 100 && Number.isSafeInteger(page.total) && page.total >= page.items.length, 'CANDIDATE_PAGE_INVALID');
+    const contextDigest = digest(page.contextDigest);
+    checkPins(page.pins, contextDigest);
+    if (snapshot === undefined) { snapshot = contextDigest; total = page.total; }
+    check(snapshot === contextDigest && total === page.total, 'CANDIDATE_SNAPSHOT_CHANGED');
+    for (const item of page.items) {
+      checkPins(item?.pins, contextDigest);
+      const capability = item?.capability;
+      check(typeof capability?.key === 'string' && /^[a-z][a-z0-9_.-]{0,99}$/.test(capability.key)
+        && !seen.has(capability.key), 'CANDIDATE_KEY_INVALID');
+      seen.add(capability.key);
+      check(reasons.includes(item.reason) && item.grantable === (item.reason === 'READY'), 'CANDIDATE_READINESS_INVALID');
+      if (capability.key === profile.capabilityKey) {
+        check(item.grantable === true && item.reason === 'READY', 'CANDIDATE_NOT_READY');
+        check(item.currentGrantRef === grant.ref && item.currentGrantVersion === version(grant.version), 'CANDIDATE_GRANT_CHANGED');
+        check(typeof capability.inputSchema === 'string' && Buffer.byteLength(capability.inputSchema) >= 2
+          && Buffer.byteLength(capability.inputSchema) <= 262144
+          && sha(capability.inputSchema) === digest(capability.inputSchemaSha256), 'GRANT_SCHEMA_CHANGED');
+        selected = { inputSchema: capability.inputSchema, inputSchemaSHA256: capability.inputSchemaSha256,
+          contextDigest, pinsSHA256: fingerprint(page.pins) };
+      }
+    }
+    check(seen.size <= total, 'CANDIDATE_TOTAL_CHANGED');
+    const next = page.nextPageToken;
+    check(next === undefined || typeof next === 'string' && next.length <= 2048, 'CANDIDATE_CURSOR_INVALID');
+    if (!next) break;
+    check(page.items.length > 0 && !cursors.has(next), 'CANDIDATE_CURSOR_REPEATED');
+    cursors.add(next); cursor = next;
+  }
+  check(seen.size === total && selected, 'EXACT_CANDIDATE_REQUIRED');
+  emailGrantInput(profile.input, selected.inputSchema);
+  return selected;
+}
+
 export async function emailAgentPlan(profile, agentRef, get, combined) {
   emailOperationProfile(profile);
   const project = await get(`/api/v1/projects/${enc(profile.projectRef)}`);
@@ -89,10 +142,9 @@ export async function emailAgentPlan(profile, agentRef, get, combined) {
   check(account.ref === profile.accountRef && account.enabled === true && account.ready === true && account.usage?.allowedToSubmit === true && account.usage.agentVersion === agent.version && account.usage.runtimeConfigurationRef === c.ref && account.usage.runtimeConfigurationDigest === c.digest, 'ACCOUNT_NOT_READY');
   const connection = await get(`/api/v1/integration-connections/${enc(profile.connectionRef)}`);
   check(connection.ref === profile.connectionRef && connection.definitionKey === 'email' && connection.state === 'CONNECTED', 'CONNECTION_NOT_READY');
-  const grants = connection.grants?.filter((g) => g.enabled && g.agentRef === agentRef && g.capabilityKey === profile.capabilityKey);
+  const grants = connection.grants?.filter((g) => g.enabled === true && g.agentRef === agentRef && !g.workflowRef && g.capabilityKey === profile.capabilityKey);
   check(grants?.length === 1, 'EXACT_GRANT_REQUIRED'); const grant = grants[0];
-  check(sha(grant.inputSchema) === grant.inputSchemaSha256, 'GRANT_SCHEMA_CHANGED');
-  emailGrantInput(profile.input, grant.inputSchema);
+  const grantSchema = await emailGrantSchema(profile, project, agent, connection, grant, get);
   const mailbox = await get(`/api/v1/integration-connections/${enc(profile.connectionRef)}/email-mailbox/configuration?configurationRef=${enc(profile.configurationRef)}&revisionRef=${enc(profile.mailboxRevisionRef)}`);
   check(mailbox.connectionRef === profile.connectionRef && mailbox.connectionVersion === connection.version && mailbox.configuration?.ref === profile.configurationRef && mailbox.revision?.ref === profile.mailboxRevisionRef && mailbox.revision.state === 'PUBLISHED' && mailbox.boundRevisionRef === profile.mailboxRevisionRef && mailbox.publication?.state === 'READY' && mailbox.publication.configurationRevisionRef === profile.mailboxRevisionRef, 'MAILBOX_PIN_INVALID');
   let cursor; let capabilityDigest; let found; let count = 0; const seen = new Set();
@@ -106,7 +158,7 @@ export async function emailAgentPlan(profile, agentRef, get, combined) {
   check(found?.effective === true && found.connectionVersion === connection.version && found.grantRef === grant.ref && found.grantVersion === grant.version && found.definitionDigest === connection.definitionDigest, 'GRANT_NOT_EFFECTIVE');
   const runtimeCombined = combined ? await combinedPlan(profile, combined.context, combined.nonce, get) : undefined;
   if(runtimeCombined)check(runtimeCombined.runtime.agentVersion===agent.version&&runtimeCombined.runtime.configurationRef===c.ref&&runtimeCombined.runtime.configurationVersion===c.version&&runtimeCombined.runtime.configurationDigest===c.digest&&runtimeCombined.runtime.bindingRef===b.ref&&runtimeCombined.runtime.bindingVersion===b.version&&runtimeCombined.runtime.bindingDigest===b.digest,'COMBINED_PLAN_DRIFT');
-  return { ...(runtimeCombined ? {combined:runtimeCombined} : {}), status: 'READY', projectRef: profile.projectRef, agentRef, agentVersion: version(agent.version), configurationRef: ref(c.ref), configurationVersion: version(c.version), configurationDigest: digest(c.digest), environmentBindingSHA256: sha(b), environmentVersionRef: ref(b.versionRef), environmentImageSHA256: sha(environment.currentVersion.image), overlaySHA256: sha(runtime.publishedOverlay), accountRef: account.ref, accountVersion: version(account.version), accountPolicySHA256: sha(c.providerPolicy), accountPolicyRef: ref(c.providerPolicy.ref), accountPolicyVersion: version(c.providerPolicy.version), accountPolicyDigest: digest(c.providerPolicy.digest), catalogRevision: candidate.catalogRevision, catalogDigest: digest(candidate.catalogDigest), model: profile.model, defaultReasoningEffort: profile.defaultReasoningEffort, capabilityDigest, connectionRef: connection.ref, connectionVersion: version(connection.version), definitionVersion: connection.definitionVersion, definitionDigest: digest(connection.definitionDigest), capabilityKey: profile.capabilityKey, grantRef: ref(grant.ref), grantVersion: version(grant.version), inputSchemaSHA256: digest(grant.inputSchemaSha256), mailboxRef: ref(mailbox.mailboxRef), mailboxConfigurationRevision: version(mailbox.publication.revision), mailboxRevisionDigest: digest(mailbox.revision.digest), publicationRef: ref(mailbox.publication.ref), publicationDigest: digest(mailbox.publication.digest), inputSHA256: emailInputDigest(profile.input), providerEffect: 'NOT_RUN' };
+  return { ...(runtimeCombined ? {combined:runtimeCombined} : {}), status: 'READY', projectRef: profile.projectRef, agentRef, agentVersion: version(agent.version), configurationRef: ref(c.ref), configurationVersion: version(c.version), configurationDigest: digest(c.digest), environmentBindingSHA256: sha(b), environmentVersionRef: ref(b.versionRef), environmentImageSHA256: sha(environment.currentVersion.image), overlaySHA256: sha(runtime.publishedOverlay), accountRef: account.ref, accountVersion: version(account.version), accountPolicySHA256: sha(c.providerPolicy), accountPolicyRef: ref(c.providerPolicy.ref), accountPolicyVersion: version(c.providerPolicy.version), accountPolicyDigest: digest(c.providerPolicy.digest), catalogRevision: candidate.catalogRevision, catalogDigest: digest(candidate.catalogDigest), model: profile.model, defaultReasoningEffort: profile.defaultReasoningEffort, capabilityDigest, connectionRef: connection.ref, connectionVersion: version(connection.version), definitionVersion: connection.definitionVersion, definitionDigest: digest(connection.definitionDigest), capabilityKey: profile.capabilityKey, grantRef: ref(grant.ref), grantVersion: version(grant.version), inputSchemaSHA256: grantSchema.inputSchemaSHA256, projectVersion: version(project.version), candidateContextDigest: grantSchema.contextDigest, candidatePinsSHA256: grantSchema.pinsSHA256, mailboxRef: ref(mailbox.mailboxRef), mailboxConfigurationRevision: version(mailbox.publication.revision), mailboxRevisionDigest: digest(mailbox.revision.digest), publicationRef: ref(mailbox.publication.ref), publicationDigest: digest(mailbox.publication.digest), inputSHA256: emailInputDigest(profile.input), providerEffect: 'NOT_RUN' };
 }
 
 export function emailAgentTask(profile, plan) {

@@ -13,7 +13,7 @@ export function emailAgentTransport(mode = '', options = {}) {
   const artifacts=[['mvp-workspace-proof.json',proof],['mvp-workspace-result.txt',Buffer.from(`mvp-workspace:${nonce}:replacement\n`)],['workspace-write-result.json',provenance]];
   const inputSchema = mode === 'narrowed' ? schema.replace('\"type\":\"string\"', '\"type\":\"string\",\"maxLength\":1') : schema;
   const config = { ref: 'rcfg_fixture', version: 1, agentRef: f.agentRef, digest: hash, model: f.model, providerPolicy: { mode: 'FIXED', ref: 'policy_fixture', version: 1, digest: hash, accountCandidates: [{ accountRef: f.accountRef, providerDefinitionKey: 'openai-codex', defaultReasoningEffort: 'low', catalogRevision: `mcat_${hash}`, catalogDigest: hash }] } };
-  const grant = { ref: 'grant_fixture', version: 1, agentRef: f.agentRef, capabilityKey: f.capabilityKey, enabled: true, inputSchema, inputSchemaSha256: createHash('sha256').update(inputSchema).digest('hex') };
+  const grant = { ref: 'grant_fixture', version: 1, agentRef: f.agentRef, capabilityKey: f.capabilityKey, enabled: mode !== 'grant-disabled' };
   const terminal = ['FAILED', 'REJECTED', 'CANCELLED', 'UNKNOWN_OUTCOME'].includes(mode) ? mode : 'SUCCEEDED';
   const run = { ref: 'run_fixture', projectRef: f.projectRef, sessionRef: 'ses_fixture', attempt: mode === 'attempt' ? 2 : 1, target: { ref: f.agentRef, type: 'AGENT' }, state: mode === 'gate' ? 'WAITING_HUMAN' : mode === 'pending' ? 'RUNNING' : 'SUCCEEDED', artifactRefs: combined ? artifacts.map((_,i)=>`artifact_${i}`) : [], lastEventSequence: ['gate', 'pending'].includes(mode) ? 0 : (mode === 'multiple' ? 2 : 1)+(combined?1:0), gateRefs: ['gate_fixture'] };
   return (path, method = 'GET') => {
@@ -21,7 +21,7 @@ export function emailAgentTransport(mode = '', options = {}) {
     if(combined && path.startsWith('/api/v1/artifacts/artifact_')) {const index=Number(path.split('artifact_')[1].split('/')[0]);const [fileName,bytes]=artifacts[index];if(path.endsWith('/content'))return bytes; return {ref:`artifact_${index}`,fileName,runRef:run.ref,projectRef:f.projectRef,sessionRef:run.sessionRef,source:'AGENT_RESULT',lifecycleState:'ACTIVE',attempt:1,scanState:mode==='partial-workspace'?'FAILED':'CLEAN',sizeBytes:bytes.length,digest:`sha256:${createHash('sha256').update(bytes).digest('hex')}`};}
     if (method === 'POST' && path === '/api/v1/runs') return { run };
     if (method === 'POST' && path === '/api/v1/projects/prj_fixture/agents') return { ref: f.agentRef, projectRef: f.projectRef, version: 1 };
-    if (path === '/api/v1/projects/prj_fixture') return { ref: f.projectRef };
+    if (path === '/api/v1/projects/prj_fixture') return { ref: f.projectRef, version: 1 };
     if (path === '/api/v1/agents/agt_fixture') return {
       ref: mode === 'agent-ref' ? 'agt_other' : f.agentRef,
       projectRef: mode === 'foreign' ? 'prj_other' : mode === 'missing-project' ? undefined : f.projectRef,
@@ -33,7 +33,41 @@ export function emailAgentTransport(mode = '', options = {}) {
     if (path.endsWith('/runtime-configuration')) return { agentVersion: mode === 'stale' ? 2 : 1, configuration: config, publishedOverlay: { ref: 'ovl_fixture', digest: hash }, environmentBinding: { ref:'binding_fixture',digest:hash,agentRef: f.agentRef, environmentRef: 'env_fixture', versionRef: 'envv_fixture', version: 1 }, environment: { ref: 'env_fixture', projectRef: f.projectRef, ready: true, currentVersion: { ref: 'envv_fixture', image: {artifactRef:'imgart_fixture', reference:combined?image:`registry.fixture.invalid/image@sha256:${hash}` } } } };
     if (path.startsWith('/api/v1/model-capabilities?')) return { catalogRevision: `mcat_${hash}`, catalogDigest: mode === 'catalog' ? 'b'.repeat(64) : hash, items: [{ id: f.model, providerDefinitionKey: 'openai-codex', available: true, eligibleProviderAccountRefs: [f.accountRef], reasoningEfforts: ['low'] }] };
     if (path.startsWith('/api/v1/provider-accounts/')) return { ref: f.accountRef, version: 1, ready: true, enabled: true, usage: { allowedToSubmit: mode !== 'account', agentVersion: mode === 'stale' ? 2 : 1, runtimeConfigurationRef: config.ref, runtimeConfigurationDigest: hash } };
-    if (path === '/api/v1/integration-connections/int_fixture') return { ref: f.connectionRef, version: 1, definitionKey: 'email', definitionVersion: '1.4.1', definitionDigest: hash, state: 'CONNECTED', grants: mode === 'missing-grant' ? [] : [grant] };
+    if (path === '/api/v1/integration-connections/int_fixture') return { ref: f.connectionRef, version: 1, definitionKey: 'email', definitionVersion: '1.4.1', definitionDigest: hash, state: 'CONNECTED', grants: mode === 'missing-grant' ? [] : mode === 'grant-duplicate' ? [grant, { ...grant, ref: 'grant_second' }] : [grant] };
+    if (path.startsWith('/api/v1/integration-grant-candidates/capabilities?')) {
+      const query = new URLSearchParams(path.split('?')[1]);
+      if (query.get('connectionRef') !== f.connectionRef || query.get('projectRef') !== f.projectRef || query.get('recipientKind') !== 'AGENT' || query.get('recipientRef') !== f.agentRef || query.get('pageSize') !== '100') throw new Error('FIXTURE_CANDIDATE_QUERY_INVALID');
+      const context = { connectionRef: f.connectionRef, projectRef: f.projectRef, recipientKind: 'AGENT', recipientRef: f.agentRef };
+      const pins = { contextDigest: hash, connectionVersion: 1, definitionVersion: '1.4.1', definitionDigest: hash, projectVersion: 1, recipientVersion: mode === 'stale' ? 2 : 1 };
+      const capability = { key: f.capabilityKey, inputSchema, inputSchemaSha256: createHash('sha256').update(inputSchema).digest('hex') };
+      const item = { capability, grantable: true, reason: 'READY', currentGrantRef: grant.ref, currentGrantVersion: grant.version, pins: { ...pins } };
+      const page = { context, pins, contextDigest: hash, total: 1, items: [item] };
+      if (mode.startsWith('candidate-context-')) context[mode.slice('candidate-context-'.length)] = 'foreign';
+      if (mode.startsWith('candidate-pin-')) { const key = mode.slice('candidate-pin-'.length); pins[key] = typeof pins[key] === 'number' ? 2 : 'changed'; }
+      if (mode === 'candidate-item-pin') item.pins.recipientVersion++;
+      if (mode === 'candidate-duplicate') { page.items.push(item); page.total++; }
+      if (mode === 'candidate-foreign-key') capability.key = 'email.mailbox.list';
+      if (mode === 'candidate-missing') { page.items = []; page.total = 0; }
+      if (mode === 'candidate-grant-ref') item.currentGrantRef = 'grant_other';
+      if (mode === 'candidate-grant-version') item.currentGrantVersion++;
+      if (mode === 'candidate-disabled') { item.grantable = false; item.reason = 'GRANT_UNAVAILABLE'; }
+      if (mode === 'candidate-unknown') item.reason = 'UNKNOWN';
+      if (mode === 'candidate-schema-missing') delete capability.inputSchema;
+      if (mode === 'candidate-schema-digest') capability.inputSchemaSha256 = 'b'.repeat(64);
+      if (mode === 'candidate-context-digest') page.contextDigest = 'b'.repeat(64);
+      if (mode === 'candidate-total') page.total++;
+      if (mode === 'candidate-paged' || mode === 'candidate-page-drift' || mode === 'candidate-page-duplicate' || mode === 'candidate-cursor') {
+        page.total = 2;
+        if (!query.get('pageToken')) {
+          page.items = [{ ...item, capability: { ...capability, key: 'email.mailbox.list' } }]; page.nextPageToken = 'cursor_fixture';
+          if (mode === 'candidate-page-duplicate') page.items = [item];
+        } else {
+          if (mode === 'candidate-page-drift') { page.contextDigest = 'b'.repeat(64); page.pins.contextDigest = page.contextDigest; item.pins.contextDigest = page.contextDigest; }
+          if (mode === 'candidate-cursor') page.nextPageToken = 'cursor_fixture';
+        }
+      }
+      return page;
+    }
     if (path.includes('/email-mailbox/configuration?')) return { connectionRef: f.connectionRef, connectionVersion: 1, mailboxRef: 'mail_fixture', configuration: { ref: f.configurationRef }, revision: { ref: f.mailboxRevisionRef, state: 'PUBLISHED', digest: hash }, boundRevisionRef: f.mailboxRevisionRef, publication: { ref: 'pub_fixture', state: mode === 'publication' ? 'SUPERSEDED' : 'READY', configurationRevisionRef: f.mailboxRevisionRef, revision: 3, digest: hash } };
     if (path.includes('/effective-capabilities?')) return { agentRef: f.agentRef, projectRef: f.projectRef, agentVersion: mode === 'stale' ? 2 : 1, runtimeConfigurationRef: config.ref, runtimeConfigurationVersion: 1, environmentVersionRef: 'envv_fixture', runtimeReady: true, digest: hash, items: [...(combined?[{key:'platform.artifact.manage',effective:mode!=='no-artifact'}]:[]),{ key: f.capabilityKey, connectionRef: f.connectionRef, connectionVersion: 1, grantRef: grant.ref, grantVersion: 1, effective: mode !== 'ineffective', definitionDigest: hash }] };
     if (path === '/api/v1/runs/run_fixture') return run;
