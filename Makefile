@@ -368,3 +368,9 @@ test-email-agent-acceptance:
 .PHONY: test-email-combined-acceptance
 test-email-combined-acceptance:
 	TMPDIR=/tmp node --test tools/dev/email-agent-acceptance.test.mjs tools/dev/role-image-runtime-proof.test.mjs tools/dev/runtime-workspace-acceptance.test.mjs tools/release/runtime-pod-observe.test.mjs tools/release/authority-executable-readback.test.mjs
+
+.PHONY: test-runner-binary-provenance
+test-runner-binary-provenance:
+	@timeout 120s python3 -B tools/release/runner-binary-provenance.test.py
+	@bash -n tools/dev/build-local-runner.sh
+	@./scripts/tests/local-image-cache-import-contract-test.sh

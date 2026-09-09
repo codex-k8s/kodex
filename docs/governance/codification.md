@@ -164,5 +164,6 @@ updated: 2026-07-28
 | `OPS-DOC-1313` | `docs/operations/authority-freshness-1313.md` |
 | `OPS-EMAIL-1371` | `docs/operations/email-agent-1371.md` |
 | `OPS-EMAIL-1378` | `docs/operations/email-combined-1378.md` |
+| `OPS-RUNNER-1382` | `docs/operations/runner-binary-provenance-1382.md` |
 
 При добавлении управляемого документа реестр обновляется в том же PR.
