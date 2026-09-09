@@ -593,6 +593,7 @@ for (const { width, height } of [
       ref: "configuration_synthetic",
       version: 1,
       kind: "PROMPT_TEMPLATE",
+      projectRef: projects[0]?.ref,
       name: "Шаблон",
       managedBy: "UI",
       archived: false,
@@ -676,8 +677,10 @@ for (const { width, height } of [
           name: string;
           content: string;
           configurationRef?: string;
+          projectRef?: string;
         };
         expect(body.configurationRef).toBeUndefined();
+        expect(body.projectRef).toBe(projects[0]?.ref);
         expect(body.content).toBe("Проверить документы");
         configuration = { ...configuration, name: body.name };
         revision = { ...revision, content: body.content };
@@ -784,14 +787,47 @@ for (const { width, height } of [
       await route.fallback();
     });
     await page.goto("/configurations/PROMPT_TEMPLATE/new");
+    const savePromptDraft = page.getByRole("button", {
+      name: "Сохранить черновик",
+      exact: true,
+    });
+    await expect(savePromptDraft).toBeDisabled();
+    await expect(savePromptDraft).toHaveAttribute(
+      "aria-describedby",
+      "managed-project-required",
+    );
+    await expect(
+      page.getByText(
+        "Выберите проект. Шаблон промпта и конфигурация образа роли создаются только в выбранном проекте.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page
+      .locator("#main-content")
+      .getByRole("button", { name: "Проект", exact: true })
+      .click();
+    await page
+      .getByRole("option")
+      .filter({ hasText: projects[0]?.name ?? "" })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/configurations/PROMPT_TEMPLATE/new\\?projectRef=${String(projects[0]?.ref)}$`,
+      ),
+    );
     await page.getByLabel("Название", { exact: true }).fill("Шаблон");
     await page
       .getByRole("textbox", { name: "Содержимое", exact: true })
       .fill("Проверить документы");
+    await expect(savePromptDraft).toBeEnabled();
     await page
       .getByRole("button", { name: "Сохранить черновик", exact: true })
       .click();
-    await expect(page).toHaveURL(/configuration_synthetic$/);
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/configurations/PROMPT_TEMPLATE/configuration_synthetic\\?projectRef=${String(projects[0]?.ref)}$`,
+      ),
+    );
     await page
       .getByRole("textbox", { name: "Содержимое", exact: true })
       .fill("");
