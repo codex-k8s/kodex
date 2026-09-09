@@ -397,10 +397,13 @@ export async function installReadNetworkObserver(
           (method === "POST" &&
             address.pathname ===
               "/api/v1/administration/access/effective-access/query");
+        const diagnosticPath =
+          address.pathname.startsWith("/api/v1/") ||
+          address.pathname === "/__kodex_dev_revision";
         if (
           location.origin !== origin ||
           address.origin !== origin ||
-          !address.pathname.startsWith("/api/v1/") ||
+          !diagnosticPath ||
           !read
         )
           return original(input, init);
