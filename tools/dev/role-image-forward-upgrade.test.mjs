@@ -196,3 +196,31 @@ finally:f.tearDown()
   assert.equal(result.status, 'PASS'); assert.equal(result.runnerDigest, inputs.runnerDigest); assert.deepEqual(readFileSync(f.provenance), bytes); assert.deepEqual(readFileSync(f.previous), f.bytes);
   assert.equal(JSON.parse(f.transport.state.revisions.at(-1).content).roleImage.environment.dockerfile, `FROM ${selected}@${inputs.runnerDigest}\n`);
 });
+
+for (const state of ['DRAFT', 'RUNNING', 'DISABLED', 'ARCHIVED', 'ACTIVE', 'UNKNOWN', '', undefined, null]) test(`Agent ${String(state)} rejected before mutation`, async t => {
+  const f = local(t), get = async path => {
+    const result = await f.transport.get(path);
+    if (path === '/api/v1/agents/agent') result.state = state;
+    return result;
+  };
+  await assert.rejects(upgradePlan(f.inputs, get), /AGENT_SCOPE_CHANGED/);
+  assert.equal(f.transport.state.calls.length, 0); assert.equal(existsSync(f.state), false);
+});
+for (const patch of [{ enabled: false }, { enabled: undefined }, { ref: 'foreign' }, { projectRef: 'foreign' }, { roleDefinitionRef: 'foreign' }, { roleDefinitionRef: undefined }]) test(`READY Agent rejects changed ${Object.keys(patch)[0]}`, async t => {
+  const f = local(t), get = async path => {
+    const result = await f.transport.get(path);
+    if (path === '/api/v1/agents/agent') Object.assign(result, patch);
+    return result;
+  };
+  await assert.rejects(upgradePlan(f.inputs, get), /AGENT_SCOPE_CHANGED/);
+  assert.equal(f.transport.state.calls.length, 0); assert.equal(existsSync(f.state), false);
+});
+test('Agent READY fixture belongs to exact public Agent DTO enum', async t => {
+  const f = local(t), agent = await f.transport.get('/api/v1/agents/agent');
+  const contract = readFileSync(new URL('../../contracts/openapi/control-api-gateway/v1/openapi.yaml', import.meta.url), 'utf8');
+  const dto = contract.slice(contract.indexOf('\n    Agent:\n'), contract.indexOf('\n    AgentPage:\n'));
+  const states = /state: \{ type: string, enum: \[([^\]]+)\]/.exec(dto)?.[1].split(',').map(s => s.trim());
+  assert.deepEqual(states, ['DRAFT', 'READY', 'RUNNING', 'DISABLED', 'ARCHIVED']);
+  assert.equal(agent.state, 'READY'); assert.ok(states.includes(agent.state));
+  assert.equal((await upgradePlan(f.inputs, f.transport.get)).fixture.agentRef, agent.ref);
+});
