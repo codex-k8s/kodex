@@ -7,14 +7,14 @@ import { join } from 'node:path';
 import { privateJournal } from './role-image-acceptance.mjs';
 import { existingFixture } from './role-image-runtime-proof.mjs';
 import { loadCombinedProfile } from './email-combined-acceptance.mjs';
-import { upgradeInputs, upgradePlan, applyUpgrade, inspectUpgrade } from './role-image-forward-upgrade.mjs';
-import { sha, a, b, origin, fixture, initialState, upgradeTransportFixture } from './role-image-forward-upgrade-fixture.mjs';
+import { upgradeInputs, upgradePlan, applyUpgrade, inspectUpgrade, trustedRunnerCatalog } from './role-image-forward-upgrade.mjs';
+import { sha, a, b, origin, fixture, initialState, upgradeTransportFixture, localRepository, trustedRepository } from './role-image-forward-upgrade-fixture.mjs';
 function local(t, sourceSHA = '1'.repeat(40), directory) {
   directory ??= mkdtempSync(join(tmpdir(), 'riu-')); t.after(() => rmSync(directory, { recursive: true, force: true }));
   const previous = join(directory, 'previous.jsonl'), provenance = join(directory, 'provenance.json'), state = join(directory, 'upgrade.jsonl');
   const j = privateJournal(previous, { version: 1, origin, sourceSHA, runnerDigest: `sha256:${a}` }); j.append({ type: 'CHECKPOINT', step: 'restore-complete', result: { status: 'PASS', ...fixture } }); j.close();
   const bytes = readFileSync(previous);
-  writeFileSync(provenance, JSON.stringify({ version: 1, kind: 'RUNNER_BINARY_PROVENANCE', sourceRevision: sourceSHA, baseImage: `registry.fixture.invalid/runner@sha256:${b}`, binaryPath: '/usr/local/bin/kodex-agent-runner', binarySHA256: b }), { mode: 0o600 });
+  writeFileSync(provenance, JSON.stringify({ version: 1, kind: 'RUNNER_BINARY_PROVENANCE', sourceRevision: sourceSHA, baseImage: `${localRepository}@sha256:${b}`, binaryPath: '/usr/local/bin/kodex-agent-runner', binarySHA256: b }), { mode: 0o600 });
   const profile = { version: 1, previousState: previous, previousSHA256: sha(bytes), runnerProvenance: provenance, runnerProvenanceSHA256: sha(readFileSync(provenance)) };
   const inputs = upgradeInputs(profile, origin), transport = upgradeTransportFixture();
   return { directory, previous, provenance, state, bytes, profile, inputs, transport, async journal() {
@@ -27,6 +27,9 @@ test('полный forward pipeline сохраняет predecessor и выдаё
   const f = local(t), j = await f.journal();
   const result = await applyUpgrade(j, f.inputs, f.transport.get, f.transport.request); j.close();
   assert.equal(result.status, 'PASS'); assert.equal(result.manifestDigest, `sha256:${b}`); assert.equal(result.binding.version, 2);
+  assert.equal(j.events[0].pins.trustedBaseImage, `${trustedRepository}@sha256:${b}`);
+  assert.equal(JSON.parse(f.transport.state.revisions.at(-1).content).roleImage.environment.dockerfile, `FROM ${trustedRepository}@sha256:${b}\n`);
+  assert.equal(JSON.parse(readFileSync(f.provenance)).baseImage, `${localRepository}@sha256:${b}`);
   assert.deepEqual(readFileSync(f.previous), f.bytes);
   assert.equal(f.transport.state.calls.length, 6); assert.equal(new Set(f.transport.state.calls.map(c => c.key)).size, 6);
   assert.equal(f.transport.state.calls.some(c => /runs|credentials|agents$/.test(c.path)), false);
@@ -63,7 +66,7 @@ for (const mode of ['predecessor-bytes', 'unresolved', 'nonterminal', 'provenanc
   if (mode === 'predecessor-bytes') p.previousSHA256 = b;
   if (mode === 'unresolved' || mode === 'nonterminal') { const j = privateJournal(f.previous, { version: 1, origin }); j.append(mode === 'unresolved' ? { type: 'INTENT', key: 'pending', step: 'next' } : { type: 'CHECKPOINT', step: 'other', result: {} }); j.close(); p.previousSHA256 = sha(readFileSync(f.previous)); }
   if (mode === 'provenance-bytes') p.runnerProvenanceSHA256 = a;
-  if (mode === 'same-base') { const value = JSON.parse(readFileSync(f.provenance)); value.baseImage = `registry.fixture.invalid/runner@sha256:${a}`; writeFileSync(f.provenance, JSON.stringify(value)); p.runnerProvenanceSHA256 = sha(readFileSync(f.provenance)); }
+  if (mode === 'same-base') { const value = JSON.parse(readFileSync(f.provenance)); value.baseImage = `${localRepository}@sha256:${a}`; writeFileSync(f.provenance, JSON.stringify(value)); p.runnerProvenanceSHA256 = sha(readFileSync(f.provenance)); }
   assert.throws(() => upgradeInputs(p, origin));
 });
 for (const mode of ['missing-rebind-ack', 'wrong-header', 'changed-predecessor', 'wrong-new-provenance']) test(`completed chain rejects ${mode}`, async t => {
@@ -117,4 +120,79 @@ for (const mode of ['expired', 'base-drift', 'foreign']) test(`public CLI ${mode
 });
 for (const args of [['--unknown', 'x'], ['--timeout-ms', '2000'], ['--confirm', 'wrong']]) test('public CLI closed argument validation', t => {
   const f = cli(t); assert.equal(f.run('plan', args).status, 1); assert.equal(existsSync(f.state), false);
+});
+
+for (const mode of ['tag-only', 'digest-mismatch', 'credentials-in-reference', 'duplicate-standard', 'unavailable', 'missing']) test(`trusted catalog rejects ${mode}`, async () => {
+  let items = [{ key: 'standard', available: true, dockerfileTemplate: `FROM ${trustedRepository}@sha256:${b}\n` }];
+  if (mode === 'tag-only') items[0].dockerfileTemplate = `FROM ${trustedRepository}:latest\n`;
+  if (mode === 'digest-mismatch') items[0].dockerfileTemplate = `FROM ${trustedRepository}@sha256:${a}\n`;
+  if (mode === 'credentials-in-reference') items[0].dockerfileTemplate = `FROM user:password@${trustedRepository}@sha256:${b}\n`;
+  if (mode === 'duplicate-standard') items.push({ ...items[0], available: false });
+  if (mode === 'unavailable') items[0].available = false;
+  if (mode === 'missing') items = [];
+  await assert.rejects(trustedRunnerCatalog(async () => ({ items }), `sha256:${b}`));
+});
+for (const mode of ['repository', 'digest', 'metadata']) test(`plan pins close stale catalog ${mode} in apply/inspect`, async t => {
+  const f = local(t), j = await f.journal(), baseGet = f.transport.get;
+  const get = async path => {
+    const value = await baseGet(path);
+    if (path === '/api/v1/role-environments') {
+      if (mode === 'repository') value.items[0].dockerfileTemplate = `FROM changed.fixture.invalid/runner@sha256:${b}\n`;
+      if (mode === 'digest') value.items[0].dockerfileTemplate = `FROM ${trustedRepository}@sha256:${a}\n`;
+      if (mode === 'metadata') value.items[0].nameMessageKey = 'catalog.changed';
+    }
+    return value;
+  };
+  await assert.rejects(applyUpgrade(j, f.inputs, get, f.transport.request), /TRUSTED_BASE_CHANGED|TRUSTED_CATALOG_CHANGED/);
+  await assert.rejects(inspectUpgrade(j, get), /TRUSTED_BASE_CHANGED|TRUSTED_CATALOG_CHANGED/);
+  assert.equal(j.events.some(e => e.type === 'INTENT'), false); assert.equal(f.transport.state.calls.length, 0); j.close();
+});
+test('catalog drift after publish ACK blocks promotion and preserves the only build', async t => {
+  const f = local(t), j = await f.journal();
+  const request = async (path, options) => {
+    const response = await f.transport.request(path, options);
+    if (path.endsWith('/publication')) f.transport.state.catalogRepository = 'changed.fixture.invalid/runner';
+    return response;
+  };
+  await assert.rejects(applyUpgrade(j, f.inputs, f.transport.get, request), /TRUSTED_CATALOG_CHANGED/);
+  assert.equal(f.transport.state.calls.filter(c => c.path.endsWith('/publication')).length, 1);
+  assert.equal(f.transport.state.calls.some(c => c.path.endsWith('/promotions')), false);
+  assert.equal(j.events.some(e => e.step === 'upgrade-publish' && e.type === 'ACK'), true); j.close();
+});
+test('caller cannot provide an unselected trusted repository in profile', t => {
+  const f = local(t);
+  assert.throws(() => upgradeInputs({ ...f.profile, trustedBaseImage: `arbitrary.fixture.invalid/runner@sha256:${b}` }, origin), /UPGRADE_PROFILE_INVALID/);
+});
+test('real OCI verifier producer → local build repository → canonical policy catalog → forward consumer', async t => {
+  const f = local(t);
+  const builder = readFileSync(new URL('./build-local-runner.sh', import.meta.url), 'utf8');
+  const repository = /^repository=(.+)$/m.exec(builder)?.[1]; assert.equal(repository, localRepository);
+  const policy = readFileSync(new URL('../../deploy/k8s/base/image-supply-chain/admission-policy.yaml', import.meta.url), 'utf8');
+  const selected = /^  trustedRoleBaseRepository: (.+)$/m.exec(policy)?.[1]; assert.equal(selected, trustedRepository);
+  // Настоящий public verifier, synthetic OCI/source из его штатной оснастки.
+  // Docker/image entrypoint/registry не запускаются; provenance не изготовляется вручную.
+  const producer = execFileSync('python3', ['-B', '-c', `
+import importlib.util,json,subprocess,sys
+spec=importlib.util.spec_from_file_location('fixture',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+f=m.Verifier();f.setUp()
+try:
+ repo=sys.argv[2]
+ def change(kind,value):
+  if kind=='index':value['manifests'][0]['annotations']['io.containerd.image.name']=repo+':local-'+f.input_digest
+ f.fixture(change=change)
+ r=subprocess.run([sys.executable,'-B',str(m.CLI),'verify','--source-root',str(f.source),'--revision',f.revision,'--archive',str(f.archive),'--expected-manifest',f.expected,'--expected-input-digest',f.input_digest,'--repository',repo,'--output',str(f.output)],capture_output=True,text=True,timeout=20)
+ if r.returncode:raise RuntimeError(r.stderr)
+ print(f.output.read_text())
+finally:f.tearDown()
+`, new URL('../release/runner-binary-provenance.test.py', import.meta.url).pathname, repository], { encoding: 'utf8', timeout: 30000 });
+  writeFileSync(f.provenance, producer);
+  const bytes = readFileSync(f.provenance), p = JSON.parse(bytes);
+  const profile = { ...f.profile, runnerProvenanceSHA256: sha(bytes) }, inputs = upgradeInputs(profile, origin);
+  f.transport.state.catalogDigest = p.baseImage.split('@sha256:')[1];
+  const pins = await upgradePlan(inputs, f.transport.get);
+  assert.equal(pins.trustedBaseImage, `${selected}@${inputs.runnerDigest}`); assert.notEqual(pins.trustedBaseImage, p.baseImage);
+  const j = privateJournal(f.state, { version: 1, kind: 'ROLE_IMAGE_FORWARD_UPGRADE', origin, sourceSHA: '1'.repeat(40), previousState: f.previous, previousSHA256: f.profile.previousSHA256, runnerDigest: inputs.runnerDigest, runnerProvenanceSHA256: inputs.runnerProvenanceSHA256, pins });
+  const result = await applyUpgrade(j, inputs, f.transport.get, f.transport.request); j.close();
+  assert.equal(result.status, 'PASS'); assert.equal(result.runnerDigest, inputs.runnerDigest); assert.deepEqual(readFileSync(f.provenance), bytes); assert.deepEqual(readFileSync(f.previous), f.bytes);
+  assert.equal(JSON.parse(f.transport.state.revisions.at(-1).content).roleImage.environment.dockerfile, `FROM ${selected}@${inputs.runnerDigest}\n`);
 });

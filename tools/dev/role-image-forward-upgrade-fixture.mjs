@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 export const sha = v => createHash('sha256').update(typeof v === 'string' || Buffer.isBuffer(v) ? v : JSON.stringify(v)).digest('hex');
+export const localRepository = 'registry.local.kodex/kodex/agent-runner';
+export const trustedRepository = 'kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner';
 export const a = 'a'.repeat(64), b = 'b'.repeat(64), origin = 'https://fixture.invalid';
 export const fixture = { projectRef: 'project', agentRef: 'agent', environmentRef: 'environment', recipeRef: 'recipe', revisionRef: 'revision1', artifactRef: 'artifact1', buildRef: 'build1', manifestDigest: `sha256:${a}`, promotedReference: `pull.fixture.invalid/roles@sha256:${a}`, promotionReceiptSHA256: a };
 export function initialState() {
-  const content = JSON.stringify({ name: 'Образ fixture', roleImage: { roleDefinitionRef: 'role', environment: { environmentKey: 'standard', packageKeys: [], toolKeys: [], dockerfile: `FROM registry.fixture.invalid/runner@sha256:${a}\n` } } });
+  const content = JSON.stringify({ name: 'Образ fixture', roleImage: { roleDefinitionRef: 'role', environment: { environmentKey: 'standard', packageKeys: [], toolKeys: [], dockerfile: `FROM ${trustedRepository}@sha256:${a}\n` } } });
   return { generation: 1, configVersion: 1, published: 'revision1', promoted: true, bound: 1, mode: '', calls: [], revisions: [{ ref: 'revision1', revision: 1, content, digest: sha(content), sourceAvailable: true, state: 'PUBLISHED' }] };
 }
 export function upgradeTransportFixture(state = initialState()) {
@@ -11,7 +13,7 @@ export function upgradeTransportFixture(state = initialState()) {
   const artifact = n => ({ ref: `artifact${n}`, recipeRef: 'recipe', recipeGeneration: n, manifestDigest: `sha256:${n === 1 ? a : b}`, provenanceSha256: b, sbomSha256: b, vulnerabilityEvidenceSha256: b, admissionVerdict: 'ACCEPTED', promotedReference: `pull.fixture.invalid/roles@sha256:${n === 1 ? a : b}`, promotionReceiptSha256: n === 1 ? a : b, promotedAt: '2026-09-09T00:00:00Z' });
   const get = async path => {
     const u = new URL(path, origin);
-    if (u.pathname === '/api/v1/role-environments') return { items: [{ key: 'standard', available: true, dockerfileTemplate: `FROM registry.fixture.invalid/runner@sha256:${state.mode === 'base-drift' ? a : b}\n` }] };
+    if (u.pathname === '/api/v1/role-environments') return { items: [{ key: 'standard', available: true, dockerfileTemplate: `FROM ${state.catalogRepository ?? trustedRepository}@sha256:${state.mode === 'base-drift' ? a : (state.catalogDigest ?? b)}\n` }] };
     if (u.pathname === '/api/v1/agents/agent') return { ref: 'agent', projectRef: state.mode === 'foreign' ? 'foreign' : 'project', roleDefinitionRef: 'role', enabled: true, state: 'ACTIVE' };
     if (u.pathname.endsWith('/runtime-configuration')) return { environment: { ref: 'environment', currentVersion: { ref: `envv${state.bound}`, image: { reference: artifact(state.bound).promotedReference, artifactRef: `artifact${state.bound}` } } }, environmentBinding: { ref: 'binding', version: state.bound, agentRef: 'agent', environmentRef: 'environment', versionRef: `envv${state.bound}`, digest: state.bound === 1 ? a : b } };
     if (u.pathname === '/api/v1/managed-configurations/configuration/revisions') return { configuration: config(), items: state.revisions };

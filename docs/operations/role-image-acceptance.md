@@ -349,3 +349,36 @@ argv plan/apply/inspect, authoritative fake transport с формой реаль
 old/new substitution, foreign/stale/base drift, incomplete/missing rebind,
 lost ACK без повторной publication и совместимость standalone/combined.
 Эти fixtures не являются live scan/provider/node pull доказательством.
+
+### OCI repository и trusted runtime repository (#1412)
+
+`RUNNER_BINARY_PROVENANCE.baseImage` сохраняет исходную identity локального
+OCI build, например `registry.local.kodex/kodex/agent-runner@sha256:…`.
+Публикация того же manifest в выбранный trusted registry не переписывает эти
+provenance bytes. Runtime `FROM` берётся только из защищённого текущего
+`GET /api/v1/role-environments`: единственная доступная запись `standard`,
+строго одна digest-pinned FROM-строка и digest, равный новой provenance.
+Caller не может передать repository в profile или сделать tag fallback.
+
+HEADER plan дополнительно закрепляет `trustedBaseImage`, `templateSHA256` и
+`catalogEntrySHA256`. Новый source меняет FROM на эту точную trusted reference,
+сохраняя остальные поля. `apply` и `inspect` заново сравнивают catalog с pins;
+перед каждым ещё не отправленным command выполняется та же проверка. Drift
+repository/digest/availability/metadata, duplicate standard или неизвестная
+форма template закрывают путь. После publication ACK такой drift не создаёт
+вторую сборку или promotion — сохраняется уже выполненная часть журнала.
+
+Public DTO не выдаёт policy revision/SHA; инструмент не выдумывает их и не
+объявляет чтение catalog полным live policy readback. Root предварительно
+фиксирует выбранную policy/catalog и registry publication через OPS-DOC-1258.
+CP остаётся владельцем base eligibility, build pins и admission. Template и
+entry digests доказывают неизменность доступной API projection между командами;
+изменение иных policy полей требует отдельной проверки владельца policy.
+
+Локальный producer→consumer regression вызывает настоящий public OCI verifier
+на synthetic source/archive, получает неизменённую provenance с repository
+из `build-local-runner.sh`, сопоставляет selected repository с canonical policy
+и проходит plan→draft→publication→promotion→rebind. Docker, registry, настоящий
+provider и live node pull этим тестом не выполняются. Старые completed journals
+остаются историческими; ранее созданный незавершённый upgrade plan без новых
+catalog pins закрыто откажет, а его HEADER не дописывается и не подменяется.
