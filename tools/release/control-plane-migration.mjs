@@ -46,6 +46,26 @@ function writePrivate(path, value) {
   path = resolve(path); ensure(realpathSync(dirname(path)) === dirname(path) && (lstatSync(dirname(path)).mode & 0o077) === 0, 'PRIVATE_DIRECTORY_REQUIRED');
   writeFileSync(path, `${JSON.stringify(value)}\n`, { flag: 'wx', mode: 0o600 });
 }
+function renderedBase(path) {
+  path = resolve(path); const stat = lstatSync(path);
+  ensure(realpathSync(path) === path && realpathSync(dirname(path)) === dirname(path) &&
+    stat.isFile() && stat.nlink === 1 && (stat.mode & 0o077) === 0 && stat.size < (8 << 20),
+  'PRIVATE_RENDER_INVALID');
+  let raw;
+  try {
+    raw = execFileSync('yq', ['-o=json',
+      'select(.kind == "Job" and .metadata.name == "control-plane-migrate")', path],
+    { encoding:'utf8', timeout:10000, maxBuffer:4<<20, stdio:['ignore','pipe','pipe'] });
+  } catch { throw new Error('PRIVATE_RENDER_INVALID'); }
+  try { return JSON.parse(raw); } catch { throw new Error('PRIVATE_RENDER_INVALID'); }
+}
+function renderedPlanBase(job, anchor) {
+  const before = structuredClone(job);
+  before.metadata.uid = anchor.metadata.uid;
+  before.metadata.resourceVersion = anchor.metadata.resourceVersion;
+  before.status = { succeeded:1, conditions:[{type:'Complete',status:'True'}] };
+  return before;
+}
 export function migrationReadback(job, plan, logs) {
   const { version: migrationVersion, annotation } = profileFor(plan.profile);
   ensure(job?.metadata?.name === plan.job.metadata.name && job.metadata.namespace === namespace && job.metadata.annotations?.[annotation] === fingerprint(plan) && job.metadata.uid, 'MIGRATION_JOB_SCOPE_MISMATCH');
@@ -59,26 +79,46 @@ export function migrationReadback(job, plan, logs) {
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); ensure(/^--[a-z-]+$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
-  ensure(['plan','apply','inspect'].includes(phase) && Object.keys(options).every((k) => ['--context','--source','--revision','--profile','--plan','--evidence','--confirm'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
+  ensure(['plan','apply','inspect'].includes(phase) && Object.keys(options).every((k) => ['--context','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
   const profile = options['--profile'] ?? 'legacy'; const { version: migrationVersion, annotation, file } = profileFor(profile);
   const migrationPath = `services/internal/control-plane/cmd/cli/migrations/${file}`;
   const context = options['--context']; ensure(/^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? '') && !/prod(?:uction)?/i.test(context), 'STAGING_CONTEXT_REQUIRED');
-  ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && options['--evidence'] && options['--confirm'] === (phase === 'apply' ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
+  ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (phase === 'apply' ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
   const kube = (argv, input) => { try { return execFileSync('kubectl', ['--context',context,'--request-timeout=30s',...argv], { input, encoding:'utf8', timeout:35000, maxBuffer:4<<20, stdio:['pipe','pipe','pipe'] }); } catch { throw new Error('KUBERNETES_OPERATION_UNKNOWN'); } };
   const get = (kind,name) => JSON.parse(kube(['-n',namespace,'get',kind,name,'-o','json']));
+  const optional = (kind,name) => { const raw = kube(['-n',namespace,'get',kind,name,'--ignore-not-found=true','-o','json']); return raw.trim() ? JSON.parse(raw) : undefined; };
   const clusterUID = JSON.parse(kube(['get','namespace','kube-system','-o','json'])).metadata.uid;
   const base = () => get('job','control-plane-migrate');
   if (phase === 'plan') {
-    const plan = planControlPlaneMigration(base(), { path: options['--source'], revision: options['--revision'] }, inspectSource, randomUUID(), profile);
+    const liveBase = optional('job','control-plane-migrate');
+    let before = liveBase, anchor;
+    if (!before) {
+      ensure(options['--base-render'], 'MIGRATION_BASE_RENDER_REQUIRED');
+      anchor = get('deployment','control-plane');
+      before = renderedPlanBase(renderedBase(options['--base-render']), anchor);
+    }
+    const plan = planControlPlaneMigration(before, { path: options['--source'], revision: options['--revision'] }, inspectSource, randomUUID(), profile);
+    if (anchor) {
+      plan.anchor = { kind:'Deployment', name:'control-plane', uid:anchor.metadata.uid,
+        resourceVersion:anchor.metadata.resourceVersion, specSHA256:fingerprint(anchor.spec) };
+      plan.baseRenderPath = resolve(options['--base-render']);
+      plan.baseRenderSHA256 = fingerprint(renderedBase(plan.baseRenderPath));
+    }
     plan.clusterUID = clusterUID; plan.context = context; plan.migrationFileSHA256 = fileDigest(`${plan.source.path}/${migrationPath}`);
     writePrivate(options['--plan'],plan); process.stdout.write(`${JSON.stringify({ status:'PLANNED', jobName:plan.job.metadata.name, sourceRevision:plan.source.revision, planSHA256:fingerprint(plan) })}\n`); return;
   }
   const plan = privateJSON(options['--plan']); ensure(plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.clusterUID === clusterUID && plan.context === context && plan.migrationVersion === migrationVersion && (plan.profile ?? 'legacy') === profile, 'PLAN_SCOPE_MISMATCH');
+  ensure(!plan.anchor || (plan.anchor.kind === 'Deployment' && plan.anchor.name === 'control-plane' &&
+    typeof plan.anchor.uid === 'string' && plan.anchor.uid &&
+    typeof plan.anchor.resourceVersion === 'string' && plan.anchor.resourceVersion &&
+    /^[a-f0-9]{64}$/.test(plan.anchor.specSHA256 ?? '') &&
+    typeof plan.baseRenderPath === 'string' && /^[a-f0-9]{64}$/.test(plan.baseRenderSHA256 ?? '')),
+  'PLAN_SCOPE_MISMATCH');
   const journal = privateJournal(options['--evidence'], { version:1, kind:'CONTROL_PLANE_MIGRATION', planSHA256:fingerprint(plan) });
   try {
     const attempts = journal.events.filter((e) => e.type === 'CREATE_INTENT');
     const reservations = journal.events.filter((e) => e.type === 'RESERVE_INTENT');
-    const optionalJob = () => { const raw = kube(['-n',namespace,'get','job',plan.job.metadata.name,'--ignore-not-found=true','-o','json']); return raw.trim() ? JSON.parse(raw) : undefined; };
+    const optionalJob = () => optional('job',plan.job.metadata.name);
     const inspectReservation = (actual) => {
       ensure(actual.metadata.uid === plan.beforeUID && fingerprint(actual.spec) === plan.beforeSpecSHA256, 'MIGRATION_RESERVATION_SCOPE_CHANGED');
       const marker = actual.metadata.annotations?.[annotation];
@@ -89,6 +129,7 @@ async function main() {
       journal.append({type:'RESERVATION_READBACK',...result}); return result;
     };
     if (phase === 'inspect' && attempts.length === 0) {
+      if (plan.anchor) { process.stdout.write(`${JSON.stringify({status:'CREATE_NOT_ATTEMPTED',jobName:plan.job.metadata.name})}\n`); return; }
       ensure(reservations.length === 1, 'MIGRATION_RESERVATION_INTENT_REQUIRED');
       process.stdout.write(`${JSON.stringify(inspectReservation(base()))}\n`); return;
     }
@@ -98,17 +139,25 @@ async function main() {
         const pods = JSON.parse(kube(['-n',namespace,'get','pods','-l','app.kubernetes.io/name=control-plane','-o','json'])).items;
         ensure(cp.spec.replicas === 0 && pods.every((p) => ['Succeeded','Failed'].includes(p.status?.phase)), 'CP_MAINTENANCE_REQUIRED');
       }
-      const actual = base(); const rebuilt = planControlPlaneMigration(actual,plan.source,inspectSource,plan.id,profile);
-      ensure(actual.metadata.uid === plan.beforeUID && fingerprint(actual.spec) === plan.beforeSpecSHA256 && fingerprint(rebuilt.job) === fingerprint(plan.job) && fileDigest(`${plan.source.path}/${migrationPath}`) === plan.migrationFileSHA256, 'MIGRATION_PLAN_DRIFT');
+      const actual = plan.anchor ? get('deployment',plan.anchor.name) : base();
+      const before = plan.anchor ? renderedPlanBase(renderedBase(plan.baseRenderPath),actual) : actual;
+      const rebuilt = planControlPlaneMigration(before,plan.source,inspectSource,plan.id,profile);
+      ensure(actual.metadata.uid === (plan.anchor?.uid ?? plan.beforeUID) &&
+        (!plan.anchor || actual.metadata.resourceVersion === plan.anchor.resourceVersion) &&
+        fingerprint(actual.spec) === (plan.anchor?.specSHA256 ?? plan.beforeSpecSHA256) &&
+        (!plan.anchor || fingerprint(renderedBase(plan.baseRenderPath)) === plan.baseRenderSHA256) &&
+        fingerprint(rebuilt.job) === fingerprint(plan.job) &&
+        fileDigest(`${plan.source.path}/${migrationPath}`) === plan.migrationFileSHA256, 'MIGRATION_PLAN_DRIFT');
       if (reservations.length) {
         ensure(reservations.length === 1 && inspectReservation(actual).status === 'RESERVED_NOT_CREATED', 'MIGRATION_RESERVATION_NOT_RESUMABLE');
-      } else {
+      } else if (!plan.anchor) {
         ensure(actual.metadata.resourceVersion === plan.beforeResourceVersion && !actual.metadata.annotations?.[annotation], 'MIGRATION_PLAN_DRIFT');
         ensure(!optionalJob(), 'MIGRATION_JOB_ALREADY_EXISTS');
       }
+      if (plan.anchor) ensure(!optional('job','control-plane-migrate') && !optionalJob(), 'MIGRATION_JOB_ALREADY_EXISTS');
       const jobs = JSON.parse(kube(['-n',namespace,'get','jobs','-l','app.kubernetes.io/name=control-plane,app.kubernetes.io/component=migration','-o','json'])).items;
       ensure(jobs.every((j) => j.status?.conditions?.some((c) => ['Complete','Failed'].includes(c.type) && c.status === 'True')), 'MIGRATION_ALREADY_RUNNING');
-      if (!reservations.length) {
+      if (!reservations.length && !plan.anchor) {
         const patch = [ {op:'test',path:'/metadata/uid',value:plan.beforeUID}, {op:'test',path:'/metadata/resourceVersion',value:plan.beforeResourceVersion}, {op:'add',path:'/metadata/annotations',value:{...(actual.metadata.annotations ?? {}),[annotation]:fingerprint(plan)}} ];
         journal.append({type:'RESERVE_INTENT', beforeUID:plan.beforeUID, beforeResourceVersion:plan.beforeResourceVersion});
         try { const reserved = JSON.parse(kube(['-n',namespace,'patch','job','control-plane-migrate','--type=json','-p',JSON.stringify(patch),'-o','json'])); ensure(reserved.metadata.annotations?.[annotation] === fingerprint(plan), 'MIGRATION_RESERVATION_UNCONFIRMED'); journal.append({type:'RESERVE_ACK',resourceVersion:reserved.metadata.resourceVersion}); } catch(error) { journal.append({type:'UNKNOWN',code:error.message}); throw error; }
