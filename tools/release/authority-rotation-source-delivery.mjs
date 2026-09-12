@@ -39,7 +39,7 @@ export async function main(args,io={}){
  let plan=command==='plan'?null:privateJSON(options['--plan']);
  if(command==='plan'){
   requireValue(options['--source']&&options['--revision']&&options['--render']&&options['--capability']&&options['--output'],'PLAN_INPUT_REQUIRED');
-  const source=inspect(options['--source']);requireValue(source.revision===options['--revision'],'EXACT_CLEAN_SOURCE_REQUIRED');
+  const source={...inspect(options['--source']),path:options['--source']};requireValue(source.revision===options['--revision'],'EXACT_CLEAN_SOURCE_REQUIRED');
   const renderedResources=JSON.parse(runCommand('yq',['eval-all','-o=json','[.]',options['--render']]));
   const findRendered=(kind,name)=>renderedResources.find(item=>item.kind===kind&&item.metadata?.name===name),rendered=findRendered('Job','internal-rpc-authority-migrate');validateRenderedSourceMigration(rendered);
   const renderedSA=findRendered('ServiceAccount','internal-rpc-authority-migrator'),renderedEgress=findRendered('NetworkPolicy','internal-rpc-authority-migrator'),renderedIngress=findRendered('NetworkPolicy','internal-rpc-authority-postgresql-from-migrator');
