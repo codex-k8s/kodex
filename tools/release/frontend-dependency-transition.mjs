@@ -159,11 +159,33 @@ export function verifyFrontendCache(source, cachePath, image, execute = run) {
     )?.[1] === image,
     "FRONTEND_IMAGE_CHANGE_REQUIRES_SEPARATE_DELIVERY",
   );
+  let security;
+  try {
+    security = JSON.parse(
+      execute("docker", ["info", "--format", "{{json .SecurityOptions}}"]),
+    );
+  } catch {
+    throw new Error("FRONTEND_DOCKER_SECURITY_INVALID");
+  }
+  requireValue(
+    Array.isArray(security) &&
+      security.every((value) => typeof value === "string"),
+    "FRONTEND_DOCKER_SECURITY_INVALID",
+  );
+  // Prime публикует parent0500 владельца cache. Не расширяем его права и
+  // capabilities: rootless container0 отображается в того же host operator.
+  const containerUser = security.some(
+    (value) => value === "name=rootless" || value === "rootless",
+  )
+    ? "0:0"
+    : `${process.getuid()}:${process.getgid()}`;
   const actual = execute("docker", [
     "run",
     "--pull=never",
     "--rm",
     "--read-only",
+    "--user",
+    containerUser,
     "--network",
     "none",
     "--cap-drop",
@@ -192,6 +214,8 @@ export function verifyFrontendCache(source, cachePath, image, execute = run) {
     "--pull=never",
     "--rm",
     "--read-only",
+    "--user",
+    containerUser,
     "--network",
     "none",
     "--cap-drop",

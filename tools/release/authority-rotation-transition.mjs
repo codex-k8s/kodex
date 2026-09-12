@@ -76,7 +76,7 @@ export function validateRotationPrerequisites(serviceAccount,egressPolicy,ingres
 	const requiredLabels=value=>Object.entries(labels).every(([key,expected])=>value?.[key]===expected);
 	const dns={to:[{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kube-system'}},podSelector:{matchLabels:{'k8s-app':'kube-dns'}}}],ports:[{port:53,protocol:'UDP'},{port:53,protocol:'TCP'}]};
 	const postgres={to:[{podSelector:{matchLabels:{'app.kubernetes.io/name':'kodex-postgresql'}}}],ports:[{port:5432,protocol:'TCP'}]};
-	const egressSpec=normalizeRotationPrerequisiteSpec(egressPolicy),ingressSpec=ingressPolicy?.spec;
+	const egressSpec=normalizeRotationPrerequisiteSpec(egressPolicy),ingressSpec=normalizeRotationPrerequisiteSpec(ingressPolicy);
 	const egressRuleDigests=Array.isArray(egressSpec?.egress)?egressSpec.egress.map(fingerprint).sort():[];
 	requireValue(serviceAccount?.kind==='ServiceAccount'&&serviceAccount.metadata?.name==='internal-rpc-authority-migrator'&&
 	 serviceAccount.automountServiceAccountToken===false&&requiredLabels(serviceAccount.metadata.labels)&&
@@ -90,7 +90,12 @@ export function validateRotationPrerequisites(serviceAccount,egressPolicy,ingres
 }
 
 export function normalizeRotationPrerequisiteSpec(policy){
-	const spec=structuredClone(policy?.spec);if(policy?.metadata?.name==='internal-rpc-authority-migrator'&&spec&&!Object.hasOwn(spec,'ingress'))spec.ingress=[];return spec;
+	const spec=structuredClone(policy?.spec);if(policy?.metadata?.name==='internal-rpc-authority-migrator'&&spec&&!Object.hasOwn(spec,'ingress'))spec.ingress=[];
+ // Renderer записывает пустой egress даже для ingress-only policy; API его
+ // опускает. Непустое/null поле и изменение policyTypes не нормализуются.
+ if(policy?.kind==='NetworkPolicy'&&policy.metadata?.name==='internal-rpc-authority-postgresql-from-migrator'&&
+  fingerprint(spec?.policyTypes)===fingerprint(['Ingress'])&&Array.isArray(spec?.egress)&&spec.egress.length===0)delete spec.egress;
+ return spec;
 }
 
 export function rotationPrerequisiteSpecSHA256(policy){return fingerprint(normalizeRotationPrerequisiteSpec(policy));}

@@ -4,8 +4,8 @@ title: Точечная поставка source-профиля internal RPC auth
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.1.1
-updated: 2026-09-09
+version: 1.1.2
+updated: 2026-09-12
 ---
 
 # Граница
@@ -49,6 +49,10 @@ Kubernetes readback может опустить пустой `spec.ingress` у m
 NetworkPolicy. Plan нормализует только этот отсутствующий deny-ingress список к
 `[]` при сравнении с exact render; `null`, правило, неизвестное поле, selector,
 destination или port закрыто отклоняются.
+Для exact ingress-only `internal-rpc-authority-postgresql-from-migrator`
+renderer добавляет пустой `egress: []`, который API также опускает. Только это
+пустое поле при неизменном `policyTypes: [Ingress]` нормализуется к отсутствию.
+Непустой egress, `null`, иной policyTypes и неизвестные поля остаются отказом.
 
 ```bash
 node tools/release/authority-rotation-source-capability.mjs \

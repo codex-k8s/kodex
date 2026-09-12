@@ -530,26 +530,46 @@ test("cache verification связывает manifests, readonly receipt и exact
     const calls = [],
       execute = (command, args) => {
         calls.push([command, args]);
+        if (args[0] === "info") return '["name=seccomp,profile=builtin"]';
         return args.at(-1) === "/identity.sh" ? identity : "";
       };
     assert.equal(
       verifyFrontendCache(source, cache, image, execute).identity,
       identity,
     );
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 3);
     assert.ok(
-      calls.every(
-        ([command, args]) =>
-          command === "docker" &&
-          args.includes("--pull=never") &&
-          args.includes("none") &&
-          args.includes("--read-only"),
-      ),
+      calls
+        .slice(1)
+        .every(
+          ([command, args]) =>
+            command === "docker" &&
+            args.includes("--pull=never") &&
+            args[args.indexOf("--user") + 1] ===
+              `${process.getuid()}:${process.getgid()}` &&
+            args.includes("none") &&
+            args.includes("--read-only"),
+        ),
     );
     assert.throws(
-      () => verifyFrontendCache(source, cache, image, () => "wrong"),
+      () =>
+        verifyFrontendCache(source, cache, image, (_command, args) =>
+          args[0] === "info" ? "[]" : "wrong",
+        ),
       /FRONTEND_CACHE_RUNTIME_MISMATCH/,
     );
+    for (const raw of ['["name=rootless"]', '["rootless"]']) {
+      verifyFrontendCache(source, cache, image, (_command, args) => {
+        if (args[0] === "info") return raw;
+        assert.equal(args[args.indexOf("--user") + 1], "0:0");
+        return args.at(-1) === "/identity.sh" ? identity : "";
+      });
+    }
+    for (const raw of ["invalid", "null", "{}", "[false]"])
+      assert.throws(
+        () => verifyFrontendCache(source, cache, image, () => raw),
+        /FRONTEND_DOCKER_SECURITY_INVALID/,
+      );
     chmodSync(`${cache}/../package.json`, 0o644);
     writeFileSync(`${cache}/../package.json`, '{"different":true}');
     chmodSync(`${cache}/../package.json`, 0o444);
