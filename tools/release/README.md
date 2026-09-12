@@ -152,6 +152,12 @@ node tools/release/scoped-release.mjs apply \
   runtime identity и проверка профиля; модель scoped patch переносима без SSH.
 - Source rollout предназначен только для hot-reload dev host. В стандартном
   окружении используются исполняемые образы приложений с точным digest.
+- После отдельной публикации нового trusted runner команда
+  `default-runner-transition.mjs` согласованно переключает exact default image
+  у `runtime-controller` и `control-plane`. `plan` закрепляет UID,
+  resourceVersion и digest спецификаций, `apply` меняет только два literal env,
+  а `inspect` читает частичный исход без повторного PATCH. Старый warm Pod
+  заменяет штатная reconciliation при следующей RuntimeRevision.
 - Конфигурация, expand/contract migrations, включение grant v2 и security rotation
   выполняются отдельно, не маскируются под обычный application release.
 
