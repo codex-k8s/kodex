@@ -372,3 +372,53 @@ DELETE preconditions. Общий `remote-dev up` для этой security/config
 [OPS-DOC-1383](../../docs/operations/proxy-session-store-1383.md).
 Сроки Keycloak/BFF и reuse не расширяются. Старый backup не восстанавливает
 отозванные сессии; slow-provider lease defect отслеживается отдельно в #1388.
+
+
+## Проекция OIDC policy приложения CP: восстановление #1476
+
+`control-plane-policy-projection.mjs` исправляет конкретный случай: publisher
+сохранил policy revision77 с тремя `__KODEX_OIDC_ISSUER__`, и новая реплика CP
+не проходит проверку credential binding. Инструмент не меняет registry,
+подписанные snapshots, keys, policy revision, floors или историю ротации.
+Он создаёт immutable ConfigMap с отрендеренным input приложения CP и меняет
+только его policy path/mount. Значения issuer/audience берутся из текущей
+конфигурации CP; разрешения, методы и остальные поля policy сохраняются.
+Это environment projection исходного документа, не новая authority publication.
+
+Допускается незавершённая замена CP, если все требуемые старые реплики available,
+RollingUpdate имеет maxUnavailable0 и положительный maxSurge. Это отдельный
+ремонт известного дефекта; guards обычного scoped release не изменяются.
+Plan закрепляет namespace/deployment/registry/config identity и fingerprints.
+Apply создаёт только новую projection ConfigMap и выполняет CAS patch CP.
+Неопределённый результат сначала проверяется через observe; повторный apply
+без authoritative readback запрещён. Существующие ConfigMaps не удаляются.
+
+Запуск из exact clean checkout, новым приватным plan path:
+
+```sh
+node tools/release/control-plane-policy-projection.mjs plan \
+  --context default --k3s-sudo --output /private/new-projection-plan.json
+node tools/release/control-plane-policy-projection.mjs apply \
+  --context default --k3s-sudo --plan /private/new-projection-plan.json \
+  --confirm APPLY-STAGING-CP-POLICY-PROJECTION
+node tools/release/control-plane-policy-projection.mjs observe \
+  --context default --k3s-sudo --plan /private/new-projection-plan.json
+```
+
+`--k3s-sudo` использует выданный staging доступ sudo -n k3s kubectl. Без него
+используется kubectl с явно выбранным context. APPLIED доказывает только
+совпадение spec/config; rollout, protected RPC, OIDC и пользовательский run
+проверяются отдельно. Возврат к старому пути вновь активирует известный
+неотрендеренный документ; поэтому при неуспехе сохраняются старые доступные
+реплики и выполняется адресное исправление, а не слепой rollback policy/keys.
+
+Остаток #1476: устранить публикацию template в будущем rotation flow и определить
+жизненный цикл удаления/замены проекции при следующей policy. Не закрывать Issue
+по одному исправлению startup. Независимый контур #1470 остаётся отдельной работой.
+
+Локальные проверки:
+
+```sh
+node --test tools/release/authority-policy-environment.test.mjs \
+  tools/release/control-plane-policy-projection.test.mjs
+```
