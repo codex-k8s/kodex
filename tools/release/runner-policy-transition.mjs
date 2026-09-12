@@ -40,7 +40,7 @@ function main(args) {
   while (args.length) {
     const key = args.shift();
     if (key === "--k3s-sudo") { requireValue(!options[key], "INVALID_ARGUMENTS"); options[key] = true; continue; }
-    requireValue(["--context", "--authority-issuer-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
+    requireValue(["--context", "--authority-issuer-image", "--node-readback-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
     options[key] = args.shift();
   }
   const context = options["--context"];
@@ -58,7 +58,8 @@ function main(args) {
     const cp = get("deployment", "control-plane");
     const catalogs = cp.spec.template.spec.volumes.filter((item) => item.name === "role-environments");
     requireValue(catalogs.length === 1, "EXACT_CATALOG_REQUIRED");
-    const bundle = preparePolicy(get("configmap", oldName), get("imageadmissionpolicyparameters", oldName), get("configmap", catalogs[0].configMap.name), options["--runner-digest"], options["--authority-issuer-image"]);
+    const bundle = preparePolicy(get("configmap", oldName), get("imageadmissionpolicyparameters", oldName), get("configmap", catalogs[0].configMap.name),
+      options["--runner-digest"], options["--authority-issuer-image"], options["--node-readback-image"]);
     record(options["--output"], { ...bundle, clusterUID, namespaceUID });
     process.stdout.write(`${JSON.stringify({ status: "PREPARED", policy: bundle.resources[0].metadata.name, digest: bundle.resources[0].data.policySHA256 })}\n`);
     return;
@@ -66,7 +67,9 @@ function main(args) {
   const bundle = privateRead(options["--bundle"]);
   requireValue(bundle.clusterUID === clusterUID && bundle.namespaceUID === namespaceUID, "CLUSTER_IDENTITY_CHANGED");
   const recomputed = preparePolicy(get("configmap", bundle.previous.policyName), get("imageadmissionpolicyparameters", bundle.previous.policyName),
-    get("configmap", bundle.previous.catalogName), bundle.resources[0].data.trustedRoleBaseDigest, bundle.resources[0].data.authorityIssuerImage !== get("configmap", bundle.previous.policyName).data.authorityIssuerImage ? bundle.resources[0].data.authorityIssuerImage : undefined);
+    get("configmap", bundle.previous.catalogName), bundle.resources[0].data.trustedRoleBaseDigest,
+    bundle.resources[0].data.authorityIssuerImage !== get("configmap", bundle.previous.policyName).data.authorityIssuerImage ? bundle.resources[0].data.authorityIssuerImage : undefined,
+    bundle.resources[0].data.nodeReadbackImage !== get("configmap", bundle.previous.policyName).data.nodeReadbackImage ? bundle.resources[0].data.nodeReadbackImage : undefined);
   requireValue(fingerprint({ ...recomputed, clusterUID, namespaceUID }) === fingerprint(bundle), "BUNDLE_OR_PREDECESSOR_CHANGED");
   const readDB = () => JSON.parse(kubectl(["exec", "-i", "kodex-postgresql-0", "--", "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"], readFileSync(new URL("./runner-policy-readback.sql", import.meta.url), "utf8")));
   const database = readDB();

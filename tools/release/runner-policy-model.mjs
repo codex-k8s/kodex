@@ -45,19 +45,25 @@ export function requireIdle(state, now = Date.now()) {
 }
 
 // Отдельная configuration-фаза сохраняет старые policy, helper image и published pins.
-export function preparePolicy(policy, parameters, catalog, runnerDigest, authorityIssuerImage) {
+export function preparePolicy(policy, parameters, catalog, runnerDigest, authorityIssuerImage, nodeReadbackImage) {
   [policy, parameters, catalog].forEach(requireStaging);
   requireValue(policy.kind === "ConfigMap" && policy.immutable === true && policy.metadata.labels["kodex.dev/owner-intent"] === "true" &&
     parameters.kind === "ImageAdmissionPolicyParameters" && parameters.metadata.name === policy.metadata.name &&
     fingerprint(parameters.spec) === fingerprint(policy.data) && policyDigest(policy.data) === policy.data.policySHA256 &&
     (policy.metadata.name === policyBase || policy.metadata.name === `${policyBase}-${policy.data.policySHA256.slice(0, 32)}`), "CURRENT_POLICY_BINDING_INVALID");
   requireValue(catalog.kind === "ConfigMap" && typeof catalog.data?.["catalog.json"] === "string" &&
-    Object.keys(catalog.data).length === 1 && digestPattern.test(runnerDigest) && (runnerDigest !== policy.data.trustedRoleBaseDigest || authorityIssuerImage !== undefined), "NEW_RUNNER_AND_EXACT_CATALOG_REQUIRED");
+    Object.keys(catalog.data).length === 1 && digestPattern.test(runnerDigest) &&
+    (runnerDigest !== policy.data.trustedRoleBaseDigest || authorityIssuerImage !== undefined || nodeReadbackImage !== undefined), "NEW_RUNNER_AND_EXACT_CATALOG_REQUIRED");
   const issuerChange = authorityIssuerImage !== undefined;
   requireValue(!issuerChange || /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/.test(authorityIssuerImage) && authorityIssuerImage !== (policy.data.authorityIssuerImage ?? policy.data.authorityImage), "NEW_EXACT_AUTHORITY_ISSUER_REQUIRED");
+  const nodeReadbackChange = nodeReadbackImage !== undefined;
+  requireValue(!nodeReadbackChange || /^[a-z0-9][a-z0-9./:_-]*\/agent-runner@sha256:[a-f0-9]{64}$/.test(nodeReadbackImage) &&
+    nodeReadbackImage.endsWith(`@${runnerDigest}`) && nodeReadbackImage !== policy.data.nodeReadbackImage,
+  "NEW_EXACT_NODE_READBACK_IMAGE_REQUIRED");
   const revision = Number(policy.data.policyRevision);
   requireValue(Number.isSafeInteger(revision) && revision > 0 && revision < Number.MAX_SAFE_INTEGER, "POLICY_REVISION_INVALID");
-  const data = { ...policy.data, policyRevision: String(revision + 1), trustedRoleBaseDigest: runnerDigest, ...(issuerChange ? {authorityIssuerImage} : {}) };
+  const data = { ...policy.data, policyRevision: String(revision + 1), trustedRoleBaseDigest: runnerDigest,
+    ...(issuerChange ? {authorityIssuerImage} : {}), ...(nodeReadbackChange ? {nodeReadbackImage} : {}) };
   data.policySHA256 = policyDigest(data);
   const name = `${policyBase}-${data.policySHA256.slice(0, 32)}`;
   const toolsDigest = policyToolsDigest(policy);

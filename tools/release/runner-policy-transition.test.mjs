@@ -67,6 +67,16 @@ test("new immutable policy preserves helper, contract, other catalog entries and
   assert.equal(catalog.environments[0].baseImageDigest, newDigest); assert.equal(bundle.resources[2].immutable, true);
 });
 
+test("published runner can become the exact node readback image in a new policy revision", () => {
+  const f = fixtures(), image = `pull.kodex.test/kodex/agent-runner@${newDigest}`;
+  const bundle = preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined, image);
+  assert.equal(bundle.resources[0].data.nodeReadbackImage, image);
+  assert.equal(bundle.resources[0].data.trustedRoleBaseDigest, newDigest);
+  assert.deepEqual(bundle.resources[1].spec, bundle.resources[0].data);
+  assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined,
+    `pull.kodex.test/kodex/agent-runner@${oldDigest}`), /NODE_READBACK/);
+});
+
 test("policy corruption, unexpected owner, same base and parameter drift fail closed", () => {
   for (const mutate of [
     (f) => { f.policy.immutable = false; }, (f) => { f.policy.metadata.namespace = "foreign"; },
