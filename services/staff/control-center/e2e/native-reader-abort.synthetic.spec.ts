@@ -11,8 +11,9 @@ test("synthetic: native reader abort учитывается без text и бе�
 }) => {
   let serverRequestID: string | undefined;
   const server = createServer((request, response) => {
-    if (request.url === "/api/v1/bootstrap") {
-      serverRequestID = String(request.headers[syntheticFetchIDHeader]);
+    if (["/api/v1/bootstrap", "/control"].includes(request.url ?? "")) {
+      if (request.url === "/api/v1/bootstrap")
+        serverRequestID = String(request.headers[syntheticFetchIDHeader]);
       response.writeHead(200, {
         "Content-Type": "text/plain",
       });
@@ -36,26 +37,41 @@ test("synthetic: native reader abort учитывается без text и бе�
     );
     await page.goto(origin);
     const result = await page.evaluate(async () => {
-      const controller = new AbortController();
-      const response = await fetch("/api/v1/bootstrap", {
-        signal: controller.signal,
-      });
-      const body = response.body;
-      if (!body) throw new Error("Fixture body unavailable");
-      const reader = body.getReader();
-      const first = await reader.read();
-      const pending = reader.read();
-      controller.abort();
-      const nativeAbort = await pending.then(
-        () => false,
-        (error: unknown) =>
-          error instanceof DOMException && error.name === "AbortError",
-      );
-      // Последующий text сохраняет native ошибку locked body, не дублирует событие.
-      const lockedText = await response.text().then(
-        () => false,
-        (error: unknown) => error instanceof TypeError,
-      );
+      const readAndAbort = async (path: string) => {
+        const controller = new AbortController();
+        const response = await fetch(path, {
+          signal: controller.signal,
+        });
+        const body = response.body;
+        if (!body) throw new Error("Fixture body unavailable");
+        const reader = body.getReader();
+        const first = await reader.read();
+        const pending = reader.read();
+        controller.abort();
+        const nativeAbort = await pending.then(
+          () => false,
+          (error: unknown) =>
+            error instanceof DOMException && error.name === "AbortError",
+        );
+        // Браузеры выбирают разные native ошибки для уже отменённого locked body.
+        const lockedText = await response.text().then(
+          () => null,
+          (error: unknown) =>
+            error instanceof Error
+              ? {
+                  name: error.name,
+                  tag: Object.prototype.toString.call(error),
+                }
+              : null,
+        );
+        return {
+          firstByte: first.value?.length === 1,
+          nativeAbort,
+          lockedText,
+        };
+      };
+      const observed = await readAndAbort("/api/v1/bootstrap");
+      const control = await readAndAbort("/control");
       const foreign = new Error("Unrelated stream failure");
       const other = new ReadableStream({
         start(stream) {
@@ -70,18 +86,16 @@ test("synthetic: native reader abort учитывается без text и бе�
           (error: unknown) => error === foreign,
         );
       return {
-        firstByte: first.value?.length === 1,
-        nativeAbort,
-        lockedText,
+        observed,
+        control,
         foreignPreserved,
       };
     });
-    expect(result).toEqual({
-      firstByte: true,
-      nativeAbort: true,
-      lockedText: true,
-      foreignPreserved: true,
-    });
+    expect(result.foreignPreserved).toBe(true);
+    expect(result.observed.firstByte).toBe(true);
+    expect(result.observed.nativeAbort).toBe(true);
+    expect(result.observed.lockedText).not.toBeNull();
+    expect(result.observed).toEqual(result.control);
     const start = events.find((event) => event.phase === "start");
     if (!start) throw new Error("Fixture start event unavailable");
     expect(start.id).toBe(serverRequestID);

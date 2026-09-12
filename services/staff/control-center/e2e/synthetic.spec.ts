@@ -1,4 +1,5 @@
 import { syntheticNetworkJournal } from "./synthetic-network-journal";
+import { observeSyntheticAssetCancellation } from "./synthetic-asset-cancellation";
 import { expect, type Request } from "@playwright/test";
 import {
   browserHTTPConsoleStatus,
@@ -285,6 +286,7 @@ for (const { width, height } of [
         failures.push(message.text());
     });
     const networkJournal = syntheticNetworkJournal(page, testInfo);
+    const assets = await observeSyntheticAssetCancellation(page, browserName);
     journals.set(page, networkJournal);
     const pendingRequests = new Map<Request, string>();
     const cancelledRequests = new WeakSet<Request>();
@@ -294,6 +296,7 @@ for (const { width, height } of [
       code: string;
     }> = [];
     const bootstrapRequests: Request[] = [];
+    const inspectorRequests: Request[] = [];
     const fetches = new SyntheticFetchCorrelator<Request>();
     await installSyntheticAbortObserver(page, (event) => {
       fetches.observe(event);
@@ -345,6 +348,13 @@ for (const { width, height } of [
           new URL(request.url()).pathname === "/api/v1/bootstrap"
         )
           bootstrapRequests.push(request);
+        if (
+          request.method() === "GET" &&
+          /^https:\/\/kodex\.test\/api\/v1\/runtime-environments\/environment_synthetic\/(agents|readiness)$/.test(
+            request.url(),
+          )
+        )
+          inspectorRequests.push(request);
       }
     });
     page.on("requestfinished", (request) => {
@@ -1843,7 +1853,9 @@ for (const { width, height } of [
     expect(publicationTimeoutDiagnostics).toBe(2);
     for (const { request, changedRoute, code } of failedRequests) {
       const explicitCancellation =
-        cancelledRequests.has(request) || fetches.cancelled(request);
+        cancelledRequests.has(request) ||
+        fetches.cancelled(request) ||
+        assets.confirmed(request);
       if (
         isCompletedChromiumTicketTerminal(
           browserName,
@@ -1892,9 +1904,12 @@ for (const { width, height } of [
       });
     const expectedFirefoxAvailabilityBodyAbortAdvisories =
       browserName === "firefox"
-        ? bootstrapRequests.filter((request) =>
-            fetches.bodyAbortConfirmed(request),
-          ).length
+        ? [
+            ...bootstrapRequests,
+            ...inspectorRequests.filter((request) =>
+              cancelledRequests.has(request),
+            ),
+          ].filter((request) => fetches.bodyAbortConfirmed(request)).length
         : 0;
     if (
       !matchesConfirmedFirefoxAvailabilityBodyAborts(
