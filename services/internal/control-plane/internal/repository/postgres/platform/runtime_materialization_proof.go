@@ -30,24 +30,16 @@ func (repository *Repository) resolveRuntimeMaterializationProof(ctx context.Con
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	var authority platformrepo.ProofAuthority
-	var systemActorID string
-	var systemUpdatedAt time.Time
-	err := repository.pool.QueryRow(ctx, queryResolveSystemWorkloadIdentity).Scan(
-		&systemActorID, &authority.OrganizationID, &systemUpdatedAt, &authority.OrganizationVersion)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return platformrepo.ProofAuthority{}, errs.ErrForbidden
-	}
-	if err != nil {
-		return platformrepo.ProofAuthority{}, errs.ErrUnavailable
-	}
 	var execution platformrepo.RuntimeExecutionProof
 	var actorKind string
 	var actorUpdatedAt time.Time
-	err = repository.pool.QueryRow(ctx, runtimeMaterializationResolveProofSQL, pgx.StrictNamedArgs{
-		"organization_id": authority.OrganizationID, "operation": input.Operation,
+	err := repository.pool.QueryRow(ctx, runtimeMaterializationResolveProofSQL, pgx.StrictNamedArgs{
+		"operation":      input.Operation,
 		"request_digest": input.RequestDigestSHA256, "project_ref": input.ProjectRef,
 		"system_assistant": assistant,
-	}).Scan(&authority.ActorID, &actorKind, &actorUpdatedAt, &authority.ProjectID, &authority.ProjectVersion,
+	}).Scan(&authority.ActorID, &actorKind, &actorUpdatedAt,
+		&authority.OrganizationID, &authority.OrganizationVersion,
+		&authority.ProjectID, &authority.ProjectVersion,
 		&execution.RevisionID, &execution.Generation, &execution.RevisionDigest, &execution.ExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden

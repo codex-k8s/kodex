@@ -46,12 +46,13 @@ func testClaimedRuntimeMaterializationProof(t *testing.T, ctx context.Context, r
 	if err != nil || proof.RuntimeExecution == nil {
 		t.Fatalf("live execution materialization authority unavailable: %v", err)
 	}
-	var expectedActor, expectedProject, expectedRevision string
+	var expectedActor, expectedOrganization, expectedProject, expectedRevision string
 	if err := repository.pool.QueryRow(ctx, runtimeMaterializationExpectedAuthoritySQL, execution.LeaseRef).
-		Scan(&expectedActor, &expectedProject, &expectedRevision); err != nil {
+		Scan(&expectedActor, &expectedOrganization, &expectedProject, &expectedRevision); err != nil {
 		t.Fatalf("resolve synthetic owner authority: %v", err)
 	}
-	if proof.ActorID != expectedActor || proof.ProjectID != expectedProject ||
+	if proof.ActorID != expectedActor || proof.OrganizationID != expectedOrganization ||
+		proof.ProjectID != expectedProject ||
 		proof.RuntimeExecution.RevisionID != expectedRevision ||
 		proof.RuntimeExecution.Generation != uint64(execution.Generation) ||
 		proof.RuntimeExecution.RevisionDigest != execution.RuntimeRevisionDigest {
