@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint } from "./scoped-release.mjs";
 import { inspectSource } from "./application-source.mjs";
@@ -55,6 +56,17 @@ export function projectionMatches(actual,expected){
   return actual?.kind==="ConfigMap"&&actual.metadata?.name===expected.metadata.name&&actual.metadata.namespace===namespace&&actual.immutable===true&&fingerprint(actual.data)===fingerprint(expected.data)&&actual.metadata.labels?.["kodex.dev/policy-projection-issue"]==="1476";
 }
 
+export function withPrivatePatchFile(patch,apply){
+  const directory=mkdtempSync(join(tmpdir(),"kodex-cp-policy-patch-"));
+  const path=join(directory,"patch.json");
+  try{
+    writeFileSync(path,JSON.stringify(patch),{flag:"wx",mode:0o600});
+    return apply(path);
+  } finally {
+    rmSync(directory,{recursive:true,force:true});
+  }
+}
+
 function main(){
   const [command,...args]=process.argv.slice(2),options={};
   for(let i=0;i<args.length;i++){const key=args[i];requireValue(["--context","--output","--plan","--confirm","--k3s-sudo"].includes(key)&&options[key]===undefined,"INVALID_ARGUMENTS");options[key]=key==="--k3s-sudo"?true:args[++i];}
@@ -96,7 +108,7 @@ function main(){
   if(existing.trim()) requireValue(projectionMatches(JSON.parse(existing),plan.projection),"POLICY_PROJECTION_CONFIGMAP_CONFLICT");
   else kube(["create","-f","-"],JSON.stringify(plan.projection));
   requireValue(projectionMatches(get("configmap",plan.projection.metadata.name),plan.projection),"POLICY_PROJECTION_CONFIGMAP_READBACK_FAILED");
-  kube(["-n",namespace,"patch","deployment","control-plane","--type=json","--patch-file=/dev/stdin","-o","name"],JSON.stringify(projectionPatch(deployment,plan)));
+  withPrivatePatchFile(projectionPatch(deployment,plan),path=>kube(["-n",namespace,"patch","deployment","control-plane","--type=json","--patch-file",path,"-o","name"]));
   const current=get("deployment","control-plane");
   requireValue(current.metadata.uid===plan.deploymentUID&&fingerprint(current.spec)===plan.afterSpecSHA256,"POLICY_PROJECTION_OUTCOME_UNKNOWN");
   process.stdout.write(JSON.stringify({status:"APPLIED",target:"control-plane",policySHA256:plan.renderedPolicySHA256})+"\n");
