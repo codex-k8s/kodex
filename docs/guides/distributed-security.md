@@ -808,6 +808,14 @@ snapshot получает новый origin. Legacy lookup ограничен н
 
 ## Ротация, пропуск обновлений и однонаправленное восстановление
 
+При переносе legacy metadata snapshot digest, registry digest и hash входа
+публикации не взаимозаменяемы. Недостающую историческую связь разрешается
+добавить отдельной owner-owned записью только после сверки полного preimage
+с immutable publication input hash. Caller-supplied digest, новый текущий
+policy или догадка по revision такую связь не доказывают. Исправление не
+переписывает published history, ключи и revocation/replay boundaries.
+
+
 Ротация является протоколом, а не заменой файла. Он обязан закрывать:
 
 - независимую смену ключа авторизации и сертификата подписанта;

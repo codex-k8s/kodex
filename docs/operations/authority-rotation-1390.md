@@ -4,7 +4,7 @@ title: Устойчивая ротация ключей internal RPC authority
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.2.2
+version: 1.3.0
 updated: 2026-09-09
 ---
 
@@ -173,3 +173,49 @@ Go unit/build проверяют publisher и CLI; Node unit проверяет 
 readback и закрытые статусы. Live activation, restart под нагрузкой и emergency
 revoke остаются отдельными staging-сценариями #1223/#1322 и не считаются PASS
 по локальным тестам.
+
+
+# Восстановление legacy provenance (#1465)
+
+Legacy writer сохранял snapshot digest в intent.source_digest_sha256. Migration
+20260909000100 перенесла его в registry_source_digest_sha256, хотя это другая
+область хеширования. Forward migration20260912000100 добавляет отдельную
+owner-owned таблицу доказательств. Published history, прежние intents, keys,
+revocation и replay boundaries не изменяются.
+
+| Этап | Authority и проверка | Effect / повтор |
+| --- | --- | --- |
+| Подготовка | Root получает прежние raw policy/trust bundle и registry digest из точного сохранённого release evidence | Canonical JSON preimage должен совпасть с immutable publication_input_digest_sha256; несовпадение блокирует repair |
+| Plan | Exact staging namespace, source, прежний completed migration UID, текущие registry и publisher spec соответствуют незавершённому rotation plan | Server dry-run Job без mutation |
+| Apply | Migrator service account, прежние exact TLS/DSN mounts, bounded Job; fsync intent перед CREATE | Immutable proof ConfigMap и один Job с UID receipt, только additive migrations и repair function |
+| Repair | PostgreSQL проверяет session_user migrator, protocol1, exact revision/snapshot и SHA256 полного preimage | Одна append-only provenance row; точный повтор идемпотентен, конфликт закрыт |
+| Observe | Exact ConfigMap/Job spec, proof digest и сохранённые UID; неизвестный первый ACK разрешается authoritative readback | Чужой/replaced Job отвергается; новые ключи и новый rotation intent не создаются |
+| Продолжение | Existing publisher использует подтверждённую historical registry binding | Resume того же normal rotation operation, обычный forward-only protocol |
+
+Preimage — точные байты JCS объекта с тремя строковыми полями
+manifest_bundle, policy, registry_digest_sha256. Proof file — canonical JSON
+с sourceRevision, snapshotDigestSHA256, inputPreimage; private0600. Содержимое
+не публикуется. Подписанный bundle и policy не являются секретными ключами,
+но proof хранится только в закрытой операторской среде и immutable ConfigMap
+migrator. Receipt хранит лишь digest, revision, UUID и время, не preimage.
+
+Repo-owned инструмент tools/release/authority-legacy-provenance-repair.mjs:
+
+```bash
+node tools/release/authority-legacy-provenance-repair.mjs plan \
+  --context default --source /srv/kodex-dev/<EXACT_NEW_SOURCE> --revision <SHA> \
+  --rotation-plan /private/rotation-plan.json --source-plan /private/source-plan.json \
+  --migration-receipt /private/migration-receipt.json --proof /private/proof.json \
+  --output /private/repair-plan.json
+node tools/release/authority-legacy-provenance-repair.mjs apply \
+  --context default --plan /private/repair-plan.json --evidence /private/repair.jsonl \
+  --confirm REPAIR-STAGING-LEGACY-PROVENANCE
+node tools/release/authority-legacy-provenance-repair.mjs observe \
+  --context default --plan /private/repair-plan.json --evidence /private/repair.jsonl
+```
+
+Не повторять apply после UNKNOWN и не менять registry/keys для обхода отказа.
+Если authoritative readback не находит созданный Job, требуется отдельное
+расследование durable intent; инструмент не создаёт новый Job автоматически.
+Первый legacy upgrade требует доказать эту связь до заявления готовности
+ротации. Наличие PostgreSQL migration само по себе её не доказывает.
