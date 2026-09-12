@@ -338,7 +338,7 @@ async function main(args){
     livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']===plan.ownerOperationID&&
     fingerprint(livePublisher.spec)===plan.publisher.desiredSpecSHA256&&
     livePublisher.spec.template.spec.containers.some(container=>container.name==='publisher'&&container.image===plan.publisher.image&&fingerprint(container.command)===fingerprint(plan.publisher.command)),'ROTATION_PUBLISHER_READBACK_REJECTED');
-   if(sourceProfile){kube('rollout','status','deployment/internal-rpc-authority-publisher','--timeout=300s');livePublisher=get('deployment','internal-rpc-authority-publisher');
+   if(sourceProfile){kube('rollout','status','deployment/internal-rpc-authority-publisher','--timeout=300s','-n',namespace);livePublisher=get('deployment','internal-rpc-authority-publisher');
     requireValue(sourcePublisherExecutable(livePublisher,get,kube,options['--k3s-sudo'])===plan.publisherExecutableSHA256,'ROTATION_SOURCE_PUBLISHER_EXECUTABLE_MISMATCH');}
    liveRegistry=get('configmap','internal-rpc-authority-publisher-target-registry');requireValue(liveRegistry.metadata.uid===plan.registry.uid&&fingerprint(liveRegistry.data)===plan.registry.desiredDataSHA256&&
     validateRotationPolicy(liveRegistry.data?.['authority-policy.json']).sha256===plan.registry.policySHA256,'ROTATION_REGISTRY_POST_RESTART_DRIFT');
