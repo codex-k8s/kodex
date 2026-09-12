@@ -39,6 +39,10 @@ export function planRuntimeRoleBinding(controller, runtimeController, policy, bi
       { op: "replace", path: "/spec", value: after }] };
 }
 
+export function sameRuntimeRoleBindingPlan(saved, current, context) {
+  requireValue(fingerprint({ ...current, id: saved.id, context }) === fingerprint(saved), "PLAN_PRECONDITION_CHANGED");
+}
+
 function privateJSON(path) {
   const stat = lstatSync(path);
   requireValue(stat.isFile() && stat.nlink === 1 && (stat.mode & 0o077) === 0 && stat.size < 8 << 20, "PRIVATE_INPUT_REQUIRED");
@@ -72,7 +76,8 @@ function main(args) {
   }
   requireValue(options["--plan"] && options["--evidence"] && options["--confirm"] === "APPLY-STAGING-RUNTIME-BINDING", "APPLY_ARGUMENTS_INVALID");
   const saved = privateJSON(options["--plan"]);
-  requireValue(saved.context === context && fingerprint({ ...current, id: saved.id }) === fingerprint(saved), "PLAN_PRECONDITION_CHANGED");
+  requireValue(saved.context === context, "PLAN_PRECONDITION_CHANGED");
+  sameRuntimeRoleBindingPlan(saved, current, context);
   const fd = openSync(options["--evidence"], "wx", 0o600);
   try {
     writeSync(fd, `${JSON.stringify({ at: new Date().toISOString(), id: saved.id, status: "INTENT", policyName: saved.policyName })}\n`); fsyncSync(fd);
