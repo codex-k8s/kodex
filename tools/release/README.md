@@ -165,6 +165,29 @@ publisher Deployment. Наличие прежней completed migration Job не
 - Render и локальные тесты не доказывают live zero-downtime. Групповые,
   повторные и rollback сценарии на staging относятся к #1223.
 
+## Миграции Control Plane в hot-reload
+
+`control-plane-migration.mjs` создаёт отдельный exact-version Job и сохраняет
+приватный журнал intent/readback. Если базовый `control-plane-migrate` уже
+удалён штатным TTL, read-only plan получает `--base-render` с приватным
+`render.yaml` текущего контура. Инструмент извлекает только migration Job,
+закрепляет UID, resourceVersion и spec digest живого Deployment
+`control-plane`, повторно проверяет render/source/migration digest перед
+созданием и не повторяет Job после неизвестного ответа.
+
+```bash
+node tools/release/control-plane-migration.mjs plan \
+  --context staging --profile materialization-global \
+  --base-render /private/render.yaml \
+  --source /srv/kodex-dev/exact-source --revision <exact-sha> \
+  --plan /private/cp-migration-plan.json
+node tools/release/control-plane-migration.mjs apply \
+  --context staging --profile materialization-global \
+  --plan /private/cp-migration-plan.json \
+  --evidence /private/cp-migration-evidence.jsonl \
+  --confirm APPLY-STAGING-CP-MIGRATION
+```
+
 ## Локальная проверка механизма
 
 ```bash
