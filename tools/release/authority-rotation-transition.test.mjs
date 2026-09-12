@@ -130,3 +130,22 @@ test('rotation readback is closed and contains no payload',()=>{
  assert.equal(classifyRotationStatus({status:{succeeded:1}},JSON.stringify(operation)).state.operationStatus,'WAITING_SWITCH');
  assert.throws(()=>classifyRotationStatus({status:{succeeded:1}},JSON.stringify({...operation,switchNotBefore:undefined})),/ROTATION_OPERATION_DEADLINE_REJECTED/);
 });
+
+
+test('rotation defaults are pinned before hash and foreign readback remains rejected',()=>{
+ const job=createRotationJob(template(),{...plan,action:'status'}),pod=job.spec.template.spec;
+ assert.equal(job.spec.parallelism,1);assert.equal(job.spec.completions,1);
+ assert.equal(job.spec.podReplacementPolicy,'TerminatingOrFailed');
+ assert.equal(pod.serviceAccount,pod.serviceAccountName);
+ assert.equal(pod.schedulerName,'default-scheduler');
+ for(const container of [...pod.containers,...(pod.initContainers??[])]){
+  assert.equal(container.imagePullPolicy,'IfNotPresent');assert.equal(container.terminationMessagePolicy,'File');
+ }
+ verifyRotationJobReadback(structuredClone(job),job);
+ for(const mutate of [value=>value.spec.parallelism=2,value=>value.spec.template.spec.containers[0].imagePullPolicy='Always',value=>value.spec.template.spec.initContainers[0].terminationMessagePath='/foreign',value=>value.spec.unknown=true]){
+  const changed=structuredClone(job);mutate(changed);assert.throws(()=>verifyRotationJobReadback(changed,job),/ROTATION_JOB_SPEC_DRIFT/);
+ }
+ const configured=template();configured.spec.parallelism=2;configured.spec.template.spec.dnsPolicy='Default';
+ const explicit=createRotationJob(configured,{...plan,action:'status'});
+ assert.equal(explicit.spec.parallelism,2);assert.equal(explicit.spec.template.spec.dnsPolicy,'Default');
+});

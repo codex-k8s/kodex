@@ -4,7 +4,7 @@ title: Устойчивая ротация ключей internal RPC authority
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.2.1
+version: 1.2.2
 updated: 2026-09-09
 ---
 
@@ -102,6 +102,9 @@ Watch остаётся
 точного owner UUID; чужой `RETIRED` не завершает watch, включая `resume` после
 неизвестного исхода. План версии 3 закрепляет оба UUID, namespace UID,
 registry/Deployment UID+resourceVersion, source SHA, image digest и команды.
+Оба Job builder (миграция и наблюдение ротации) используют общий набор
+явных Kubernetes defaults до вычисления hash/intent. Заданные template values
+сохраняются, посторонний spec drift по-прежнему закрыто отклоняется.
 До записи plan выполняются `auth can-i create jobs`, безопасные metadata-only
 проверки SA/Secret/CA, exact live NetworkPolicy selectors и server-side dry-run
 создания итогового Job через admission.

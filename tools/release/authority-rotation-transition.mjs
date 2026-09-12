@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {materializeAuthorityJobDefaults} from './authority-job-defaults.mjs';
 import {execFileSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
 import {closeSync, constants, fstatSync, fsyncSync, openSync, readFileSync, writeFileSync, writeSync} from 'node:fs';
@@ -109,6 +110,7 @@ export function createRotationJob(template,plan){
   Number(plan.rotation.sourceRevision)<=9007199254740991&&sha.test(plan.rotation.sourceDigestSHA256),'INVALID_ROTATION_ABORT');
  const spec=structuredClone(template.spec);delete spec.selector;delete spec.ttlSecondsAfterFinished;
  spec.backoffLimit=0;spec.activeDeadlineSeconds=300;
+ materializeAuthorityJobDefaults(spec);
  for(const key of ['controller-uid','job-name','batch.kubernetes.io/controller-uid','batch.kubernetes.io/job-name'])delete spec.template.metadata?.labels?.[key];
  const sourceProfile=spec.template.spec.containers[0].command?.[0]==='/workspace/tools/dev/run-go-command.sh';
  const args=[...(sourceProfile?['services/internal/internal-rpc-authority','./cmd/cli']:[]),plan.action==='abort'?'rotation-abort':plan.action==='rotate'?'rotation-watch':'rotation-status'];
