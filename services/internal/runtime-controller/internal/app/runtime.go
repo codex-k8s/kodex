@@ -243,8 +243,11 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 				})
 			}
 			if projectionErr != nil {
-				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "dependency",
-					"error", boundedRPCFailure(turnMaterializationFailure, projectionErr))
+				attributes := []any{"error_class", "dependency", "error", boundedRPCFailure(turnMaterializationFailure, projectionErr)}
+				if requestDigest, digestErr := credentialprojection.MaterializationRequestDigest(input); digestErr == nil {
+					attributes = append(attributes, "request_digest_sha256", requestDigest)
+				}
+				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", attributes...)
 				<-runtime.capacity
 				runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
 				continue
