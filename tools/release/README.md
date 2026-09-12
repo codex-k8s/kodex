@@ -164,6 +164,10 @@ node tools/release/scoped-release.mjs apply \
   overlap.
 - Конфигурация, expand/contract migrations, включение grant v2 и security rotation
   выполняются отдельно, не маскируются под обычный application release.
+- После смены immutable runner policy инструмент
+  `runtime-role-policy-binding.mjs` связывает admission runtime Pods с той же
+  активной policy и exact `nodeReadbackImage`. Plan/apply сохраняют `Deny` и
+  проверяют UID/resourceVersion; UNKNOWN требует readback.
 
 Ротация authority key sets имеет отдельный forward-only lifecycle и
 операторский readback `authority-rotation-transition.mjs`. Точный порядок,
