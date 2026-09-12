@@ -25,12 +25,12 @@ func readLegacyRepairProof(args []string) (legacyRepairProof, error) {
 	if len(args) != 5 || args[1] != "--proof-file" || args[3] != "--confirm" || args[4] != "REPAIR-STAGING-LEGACY-PROVENANCE" {
 		return proof, errors.New("legacy provenance arguments rejected")
 	}
-	raw, err := securefile.Read(args[2], 768<<10)
+	raw, err := securefile.Read(args[2], 1<<20)
 	if err != nil {
 		return proof, errors.New("legacy provenance proof unavailable")
 	}
 	defer clear(raw)
-	if internalrpcauth.DecodeCanonicalJSON(raw, &proof) != nil || proof.SourceRevision < 1 || proof.SourceRevision > 9007199254740991 || !rotationDigestPattern.MatchString(proof.SnapshotDigest) || len(proof.InputPreimage) == 0 || len(proof.InputPreimage) > 524288 {
+	if internalrpcauth.DecodeCanonicalJSON(raw, &proof) != nil || proof.SourceRevision < 1 || proof.SourceRevision > 9007199254740991 || !rotationDigestPattern.MatchString(proof.SnapshotDigest) || len(proof.InputPreimage) == 0 || len(proof.InputPreimage) > 1048576 {
 		return legacyRepairProof{}, errors.New("legacy provenance proof rejected")
 	}
 	return proof, nil

@@ -4,7 +4,7 @@ title: Устойчивая ротация ключей internal RPC authority
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.3.0
+version: 1.3.1
 updated: 2026-09-09
 ---
 
@@ -194,7 +194,9 @@ revocation и replay boundaries не изменяются.
 
 Preimage — точные байты JCS объекта с тремя строковыми полями
 manifest_bundle, policy, registry_digest_sha256. Proof file — canonical JSON
-с sourceRevision, snapshotDigestSHA256, inputPreimage; private0600. Содержимое
+с sourceRevision, snapshotDigestSHA256, inputPreimage; private0600.
+Предел preimage и всего envelope —1MiB; размер окончательного ConfigMap data
+проверяется до CREATE. Forward migration20260912000200 согласует SQL budget. Содержимое
 не публикуется. Подписанный bundle и policy не являются секретными ключами,
 но proof хранится только в закрытой операторской среде и immutable ConfigMap
 migrator. Receipt хранит лишь digest, revision, UUID и время, не preimage.
