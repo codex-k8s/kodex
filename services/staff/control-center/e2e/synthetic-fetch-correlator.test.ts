@@ -124,4 +124,163 @@ describe("synthetic fetch identity", () => {
     observer.observe({ phase: "start", id: one, url });
     expect(observer.cancelled(request)).toBe(true);
   });
+  it.each([true, false])(
+    "принимает exact application body completion до/после request: %s",
+    (bodyFirst) => {
+      const observer = new SyntheticFetchCorrelator();
+      const request = {};
+      observer.observe({ phase: "start", id: one, url });
+      if (bodyFirst) observer.observe({ phase: "body", id: one, url });
+      observer.request(request, url, one);
+      if (!bodyFirst) observer.observe({ phase: "body", id: one, url });
+      expect(observer.bodyCompleted(request)).toBe(true);
+    },
+  );
+  it.each(["headers", "body-error", "reject", "abort"] as const)(
+    "не выдаёт phase=%s за завершённый body",
+    (phase) => {
+      const observer = new SyntheticFetchCorrelator();
+      const request = {};
+      observer.observe({ phase: "start", id: one, url });
+      observer.observe({ phase, id: one, url });
+      observer.request(request, url, one);
+      expect(observer.bodyCompleted(request)).toBe(false);
+    },
+  );
+  it("не принимает body с чужим URL или неоднозначной identity", () => {
+    const foreign = new SyntheticFetchCorrelator();
+    const foreignRequest = {};
+    foreign.observe({ phase: "start", id: one, url });
+    foreign.observe({ phase: "body", id: one, url: `${url}/foreign` });
+    foreign.request(foreignRequest, url, one);
+    expect(foreign.bodyCompleted(foreignRequest)).toBe(false);
+
+    const duplicate = new SyntheticFetchCorrelator();
+    const first = {};
+    const second = {};
+    duplicate.observe({ phase: "start", id: one, url });
+    duplicate.observe({ phase: "body", id: one, url });
+    duplicate.request(first, url, one);
+    duplicate.request(second, url, one);
+    expect(duplicate.bodyCompleted(first)).toBe(false);
+    expect(duplicate.bodyCompleted(second)).toBe(false);
+  });
+  it.each(["body-error", "reject", "abort"] as const)(
+    "не принимает body вместе с phase=%s ни в одном порядке",
+    (phase) => {
+      for (const bodyFirst of [true, false]) {
+        const observer = new SyntheticFetchCorrelator();
+        const request = {};
+        observer.observe({ phase: "start", id: one, url });
+        if (bodyFirst) observer.observe({ phase: "body", id: one, url });
+        observer.observe({ phase, id: one, url });
+        if (!bodyFirst) observer.observe({ phase: "body", id: one, url });
+        observer.request(request, url, one);
+        expect(observer.bodyCompleted(request)).toBe(false);
+      }
+    },
+  );
+  it.each([true, false])(
+    "подтверждает exact body AbortError до/после abort receipt: %s",
+    (bodyErrorFirst) => {
+      const observer = new SyntheticFetchCorrelator();
+      const request = {};
+      observer.request(request, url, one);
+      observer.observe({
+        phase: "start",
+        id: one,
+        url,
+        signalGeneration: 7,
+      });
+      observer.observe({
+        phase: "headers",
+        id: one,
+        url,
+        signalGeneration: 7,
+      });
+      const abort = () =>
+        observer.observe({
+          phase: "abort",
+          id: one,
+          url,
+          signalGeneration: 7,
+          signalAborted: true,
+          reasonClass: "AbortError",
+        });
+      const bodyError = () =>
+        observer.observe({
+          phase: "body-error",
+          id: one,
+          url,
+          signalGeneration: 7,
+          signalAborted: true,
+          reasonClass: "AbortError",
+        });
+      if (bodyErrorFirst) bodyError();
+      abort();
+      if (!bodyErrorFirst) bodyError();
+      expect(observer.bodyAbortConfirmed(request)).toBe(true);
+    },
+  );
+  it.each([
+    "headers",
+    "abort",
+    "body-error",
+    "signal",
+    "reason",
+    "generation",
+    "zero-generation",
+    "duplicate",
+    "concurrent",
+    "body",
+    "reject",
+  ] as const)("отклоняет неполный body abort proof: %s", (missing) => {
+    const observer = new SyntheticFetchCorrelator();
+    const request = {};
+    observer.request(request, url, one);
+    if (missing === "concurrent") observer.request({}, url, one);
+    observer.observe({
+      phase: "start",
+      id: one,
+      url,
+      signalGeneration: missing === "zero-generation" ? 0 : 7,
+    });
+    if (missing === "duplicate")
+      observer.observe({
+        phase: "start",
+        id: one,
+        url,
+        signalGeneration: 7,
+      });
+    if (missing !== "headers")
+      observer.observe({
+        phase: "headers",
+        id: one,
+        url,
+        signalGeneration: missing === "zero-generation" ? 0 : 7,
+      });
+    if (missing !== "abort")
+      observer.observe({
+        phase: "abort",
+        id: one,
+        url,
+        signalGeneration: missing === "zero-generation" ? 0 : 7,
+        signalAborted: true,
+        reasonClass: "AbortError",
+      });
+    if (missing !== "body-error")
+      observer.observe({
+        phase: "body-error",
+        id: one,
+        url,
+        signalGeneration: missing === "generation" ? 8 : 7,
+        signalAborted: missing !== "signal",
+        reasonClass: missing === "reason" ? "TypeError" : "AbortError",
+      });
+    if (missing === "body")
+      observer.observe({ phase: "body", id: one, url, signalGeneration: 7 });
+    if (missing === "reject")
+      observer.observe({ phase: "reject", id: one, url, signalGeneration: 7 });
+    expect(observer.bodyAbortConfirmed(request)).toBe(false);
+  });
 });

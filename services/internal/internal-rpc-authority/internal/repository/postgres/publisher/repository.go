@@ -92,6 +92,199 @@ func (repository *Repository) LoadSnapshotPublication(
 	return result, true, nil
 }
 
+// LoadSnapshotPredecessor возвращает exact historical publication вместе с
+// сохранённой registry/phase provenance, не реконструируя прежние inputs.
+func (repository *Repository) LoadSnapshotPredecessor(
+	ctx context.Context,
+	sourceRevision uint64,
+	sourceDigest string,
+	registryDigest string,
+) (model.AuthoritySnapshotPredecessor, bool, error) {
+	var result model.AuthoritySnapshotPredecessor
+	err := repository.pool.QueryRow(
+		ctx,
+		loadSnapshotPredecessorSQL,
+		pgx.StrictNamedArgs{
+			"source_revision":        sourceRevision,
+			"source_digest_sha256":   sourceDigest,
+			"registry_digest_sha256": registryDigest,
+		},
+	).Scan(
+		&result.Publication.IntentID,
+		&result.Publication.InputDigestSHA256,
+		&result.Publication.SourceRevision,
+		&result.Publication.SourceDigestSHA256,
+		&result.Publication.KeySetRevision,
+		&result.Publication.PolicyRevision,
+		&result.Publication.SignerGeneration,
+		&result.Publication.PredecessorRevision,
+		&result.Publication.PredecessorDigestSHA256,
+		&result.Publication.SnapshotCompactJWS,
+		&result.Publication.PublishedAt,
+		&result.RegistryDigestSHA256,
+		&result.RotationPhase,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.AuthoritySnapshotPredecessor{}, false, nil
+	}
+	if err != nil {
+		return model.AuthoritySnapshotPredecessor{}, false, fmt.Errorf(
+			"load publisher snapshot predecessor: %w",
+			err,
+		)
+	}
+	return result, true, nil
+}
+
+// PrepareRotation фиксирует intent до первой внешней CAS-доставки.
+func (repository *Repository) PrepareRotation(
+	ctx context.Context,
+	value model.AuthorityRotationIntent,
+) error {
+	return repository.rotationTransition(ctx, prepareRotationSQL, value,
+		"prepare publisher authority rotation")
+}
+
+// LoadOrPrepareRotationOperation фиксирует одну составную normal rotation.
+func (repository *Repository) LoadOrPrepareRotationOperation(
+	ctx context.Context,
+	value model.AuthorityRotationOperation,
+) (model.AuthorityRotationOperation, error) {
+	return repository.rotationOperation(ctx, loadOrPrepareRotationOperationSQL, value, "")
+}
+
+// LoadRotationOperation возвращает сохранённую operation без создания нового
+// намерения и без изменения назначенных PostgreSQL дедлайнов.
+func (repository *Repository) LoadRotationOperation(
+	ctx context.Context,
+	operationID string,
+) (model.AuthorityRotationOperation, bool, error) {
+	var result model.AuthorityRotationOperation
+	err := repository.pool.QueryRow(ctx, loadRotationOperationSQL, operationID).Scan(
+		&result.OperationID, &result.RegistryRevision,
+		&result.RegistryDigestSHA256, &result.BaseRevision,
+		&result.BaseDigestSHA256, &result.ExpectedReadbackCount,
+		&result.Status, &result.SwitchNotBefore, &result.PreviousNotAfter,
+		&result.CompletedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.AuthorityRotationOperation{}, false, nil
+	}
+	if err != nil {
+		return model.AuthorityRotationOperation{}, false,
+			fmt.Errorf("load authority rotation operation: %w", err)
+	}
+	return result, true, nil
+}
+
+// PrepareRotationPhase связывает phase intent с operation до внешнего CAS.
+func (repository *Repository) PrepareRotationPhase(
+	ctx context.Context,
+	operation model.AuthorityRotationOperation,
+	phase string,
+	value model.AuthorityRotationIntent,
+) error {
+	var accepted bool
+	err := repository.pool.QueryRow(ctx, prepareRotationPhaseSQL,
+		operation.OperationID, phase, value.IntentID, value.SourceRevision,
+		value.SourceDigestSHA256, value.PredecessorRevision,
+		value.PredecessorDigestSHA256, value.ExpectedReadbackCount,
+		value.PublicationInputDigestSHA256,
+	).Scan(&accepted)
+	if err != nil {
+		return fmt.Errorf("prepare authority rotation phase: %w", err)
+	}
+	if !accepted {
+		return domainrepository.ErrSnapshotRollback
+	}
+	return nil
+}
+
+// AdvanceRotationOperation переводит составную операцию только после exact
+// promoted publication соответствующей фазы.
+func (repository *Repository) AdvanceRotationOperation(
+	ctx context.Context,
+	value model.AuthorityRotationOperation,
+	phase string,
+	publication model.AuthoritySnapshotPublication,
+) (model.AuthorityRotationOperation, error) {
+	return repository.rotationOperation(ctx, advanceRotationOperationSQL, value, phase,
+		publication.IntentID, publication.SourceRevision,
+		publication.SourceDigestSHA256, publication.InputDigestSHA256)
+}
+
+func (repository *Repository) rotationOperation(
+	ctx context.Context,
+	query string,
+	value model.AuthorityRotationOperation,
+	phase string,
+	publication ...any,
+) (model.AuthorityRotationOperation, error) {
+	arguments := []any{value.OperationID, value.RegistryRevision,
+		value.RegistryDigestSHA256, value.BaseRevision, value.BaseDigestSHA256,
+		value.ExpectedReadbackCount}
+	if phase != "" {
+		arguments = append(arguments, phase)
+		arguments = append(arguments, publication...)
+	}
+	var result model.AuthorityRotationOperation
+	err := repository.pool.QueryRow(ctx, query, arguments...).Scan(
+		&result.OperationID, &result.RegistryRevision,
+		&result.RegistryDigestSHA256, &result.BaseRevision,
+		&result.BaseDigestSHA256, &result.ExpectedReadbackCount,
+		&result.Status, &result.SwitchNotBefore, &result.PreviousNotAfter,
+		&result.CompletedAt,
+	)
+	if err != nil {
+		return model.AuthorityRotationOperation{}, fmt.Errorf("load authority rotation operation: %w", err)
+	}
+	return result, nil
+}
+
+// BeginRotationDelivery необратимо закрывает возможность безопасного abort.
+func (repository *Repository) BeginRotationDelivery(
+	ctx context.Context,
+	value model.AuthorityRotationIntent,
+) error {
+	return repository.rotationTransition(ctx, beginRotationDeliverySQL, value,
+		"begin publisher authority rotation delivery")
+}
+
+// MarkRotationDelivered отделяет CAS/readback доставки от promotion consumers.
+func (repository *Repository) MarkRotationDelivered(
+	ctx context.Context,
+	value model.AuthorityRotationIntent,
+) error {
+	return repository.rotationTransition(ctx, markRotationDeliveredSQL, value,
+		"mark publisher authority rotation delivered")
+}
+
+func (repository *Repository) rotationTransition(
+	ctx context.Context,
+	query string,
+	value model.AuthorityRotationIntent,
+	operation string,
+) error {
+	arguments := pgx.StrictNamedArgs{
+		"intent_id":            value.IntentID,
+		"source_revision":      value.SourceRevision,
+		"source_digest_sha256": value.SourceDigestSHA256,
+	}
+	if query == prepareRotationSQL {
+		arguments["predecessor_revision"] = value.PredecessorRevision
+		arguments["predecessor_digest_sha256"] = value.PredecessorDigestSHA256
+		arguments["expected_readback_count"] = value.ExpectedReadbackCount
+	}
+	var accepted bool
+	if err := repository.pool.QueryRow(ctx, query, arguments).Scan(&accepted); err != nil {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	if !accepted {
+		return domainrepository.ErrSnapshotRollback
+	}
+	return nil
+}
+
 // AppendSnapshot фиксирует immutable publication intent и payload.
 func (repository *Repository) AppendSnapshot(
 	ctx context.Context,

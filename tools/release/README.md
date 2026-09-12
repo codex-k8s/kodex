@@ -69,6 +69,10 @@ Go-приложение получает отдельный read-only `dev-appli
 меняет только собственный source directory, не runner, runtime image или общий
 кэш зависимостей. Изменение package.json/package-lock.json требует отдельной
 подготовки runtime/cache и этим быстрым source-путём закрыто отклоняется.
+После `prime-frontend-cache.sh` используется отдельный
+[`frontend-dependency-transition.mjs`](../../docs/operations/frontend-dependency-delivery-1450.md):
+source/cache CAS, immutable intent, readback и новый rollback plan. Обычный
+source guard не ослабляется; Node image и соседние workloads не меняются.
 
 Перед первым source release PWA новая чистая рабочая копия проходит отдельную
 подготовку вложенных mountpoints. Команда не устанавливает зависимости и не
@@ -150,6 +154,14 @@ node tools/release/scoped-release.mjs apply \
   окружении используются исполняемые образы приложений с точным digest.
 - Конфигурация, expand/contract migrations, включение grant v2 и security rotation
   выполняются отдельно, не маскируются под обычный application release.
+
+Ротация authority key sets имеет отдельный forward-only lifecycle и
+операторский readback `authority-rotation-transition.mjs`. Точный порядок,
+безопасный abort до первой доставки и resume после неизвестного результата
+описаны в [OPS-DOC-1390](../../docs/operations/authority-rotation-1390.md).
+Инструмент материализует repo-owned status Job из exact publisher image, делает
+UID/resourceVersion CAS только registry ConfigMap и перезапускает только
+publisher Deployment. Наличие прежней completed migration Job не требуется.
 - Render и локальные тесты не доказывают live zero-downtime. Групповые,
   повторные и rollback сценарии на staging относятся к #1223.
 
@@ -337,6 +349,11 @@ Job остаётся совместимым, но не используется 
 `image-admission` manifest и ожидаемый executable SHA-256. Затем
 `image-admission-hold-delivery.mjs` одним immutable plan выполняет bounded
 `pause → reader → policy-jobs → policy-release → binding-release → open`.
+Для циклического controller сначала `image-admission-quiesce.mjs` останавливает
+только controller, доказывает exact Failed/no-work terminal inventory, запускает
+его paused для штатного cleanup и ждёт natural Job TTL. Delivery принимает
+готовый quiesce receipt и оставляет controller paused; отдельный fresh open plan
+проверяет полный delivery evidence и выполняет единственный CAS `pause=false`.
 Каждая mutating фаза меняет один resource по UID/resourceVersion/spec CAS;
 фактический reader подтверждается CRI identity и `/proc/PID/exe`. `observe` и
 `resume` только читают authoritative state после неопределённого исхода и не

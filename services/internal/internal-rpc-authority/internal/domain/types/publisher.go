@@ -226,6 +226,42 @@ type AuthoritySnapshotPublication struct {
 	PublishedAt             time.Time
 }
 
+// AuthoritySnapshotPredecessor связывает immutable snapshot с фактическим
+// registry digest и сохранённой фазой публикации.
+type AuthoritySnapshotPredecessor struct {
+	Publication          AuthoritySnapshotPublication
+	RegistryDigestSHA256 string
+	RotationPhase        string
+}
+
+// AuthorityRotationIntent закрепляет один forward-only переход key set до
+// первой внешней CAS-доставки. Private key material в намерение не входит.
+type AuthorityRotationIntent struct {
+	IntentID                     string
+	SourceRevision               uint64
+	SourceDigestSHA256           string
+	PredecessorRevision          uint64
+	PredecessorDigestSHA256      string
+	ExpectedReadbackCount        int
+	PublicationInputDigestSHA256 string
+}
+
+// AuthorityRotationOperation связывает три неизменяемые публикации одной
+// нормальной ротации. Дедлайны назначает PostgreSQL и повторный запуск их не
+// продлевает.
+type AuthorityRotationOperation struct {
+	OperationID           string
+	RegistryRevision      uint64
+	RegistryDigestSHA256  string
+	BaseRevision          uint64
+	BaseDigestSHA256      string
+	ExpectedReadbackCount int
+	Status                string
+	SwitchNotBefore       *time.Time
+	PreviousNotAfter      *time.Time
+	CompletedAt           *time.Time
+}
+
 // AuthoritySnapshotHistory содержит ограниченную forward-only цепочку.
 type AuthoritySnapshotHistory struct {
 	Current []RevisionDigest

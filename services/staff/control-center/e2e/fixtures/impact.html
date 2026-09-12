@@ -18,10 +18,12 @@
       import { i18n } from "../../src/app/i18n/index";
       import { loadRuntimeConfig } from "../../src/shared/config/runtime";
       import { configureApiClient } from "../../src/shared/api/client";
+      import { resetOwnerRequests } from "../../src/shared/api/owner-lifetime";
       import "../../src/app/styles/base.css";
       import ImpactFixture from "./ImpactFixture.vue";
       await loadRuntimeConfig();
       configureApiClient();
+      document.addEventListener("fixture-owner-reset", resetOwnerRequests);
       const router = createRouter({
         history: createMemoryHistory(),
         routes: [{ path: "/", component: ImpactFixture }],

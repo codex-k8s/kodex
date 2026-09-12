@@ -20,7 +20,7 @@ const props = withDefaults(
   }>(),
   { ready: true },
 );
-const emit = defineEmits<{ total: [value: number | undefined] }>();
+const emit = defineEmits<{ total: [value: number | undefined]; settled: [] }>();
 const platform = usePlatformStore();
 const items = ref<HomeResultItem[]>([]);
 const total = ref<number>();
@@ -106,7 +106,10 @@ async function load(more = false) {
     if (current === generation && !active.signal.aborted)
       problem.value = asProblem(error);
   } finally {
-    if (current === generation) loading.value = false;
+    if (current === generation) {
+      loading.value = false;
+      emit("settled");
+    }
   }
 }
 function refresh() {

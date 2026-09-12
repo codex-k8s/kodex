@@ -9,7 +9,10 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
-import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
+import {
+  ownerInvalidationSignal,
+  ownerRequestSignal,
+} from "@/shared/api/owner-lifetime";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -92,6 +95,7 @@ watch(
     editing.value = current.pending?.action === "PREPARE";
     approved.value = false;
     adopted.value = false;
+    const invalidation = ownerInvalidationSignal();
     const revoked = () => {
       current.revoke();
       editing.value = false;
@@ -99,8 +103,8 @@ watch(
       emit("busy", false);
       clearTimeout(timer);
     };
-    owner.addEventListener("abort", revoked, { once: true });
-    stopOwner = () => owner.removeEventListener("abort", revoked);
+    invalidation.addEventListener("abort", revoked, { once: true });
+    stopOwner = () => invalidation.removeEventListener("abort", revoked);
     if (
       ["ROLE_IMAGE", "INTEGRATION_DEFINITION"].includes(
         props.configuration.kind,

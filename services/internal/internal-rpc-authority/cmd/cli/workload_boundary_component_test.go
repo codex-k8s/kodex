@@ -271,10 +271,28 @@ func seedBoundaryAttestations(t *testing.T, ctx context.Context, admin *pgx.Conn
 		boundaryExec(t, ctx, admin, `UPDATE internal_rpc_authority.authority_snapshot_history
 			SET snapshot_compact_jws = $1 WHERE source_revision = $2`, boundarySnapshotJWS(t, "", revision), revision)
 	}
-	boundaryExec(t, ctx, admin, `INSERT INTO internal_rpc_authority.authority_rotation_intents
-		(intent_id, source_revision, source_digest_sha256, status, created_at, updated_at)
-		VALUES ('10930000-0000-4000-8000-000000000010', 1093001, repeat('a', 64), 'PROMOTED', clock_timestamp(), clock_timestamp()),
-		('10930000-0000-4000-8000-000000000011', 1093002, repeat('b', 64), 'PROMOTED', clock_timestamp(), clock_timestamp())`)
+	var lifecycleMigrationApplied bool
+	if err := admin.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = 'internal_rpc_authority'
+		  AND table_name = 'authority_rotation_intents'
+		  AND column_name = 'protocol_version')`).Scan(&lifecycleMigrationApplied); err != nil {
+		t.Fatal("read authority rotation schema")
+	}
+	if lifecycleMigrationApplied {
+		boundaryExec(t, ctx, admin, `INSERT INTO internal_rpc_authority.authority_rotation_intents
+			(intent_id, source_revision, source_digest_sha256, registry_source_digest_sha256,
+			 status, delivery_started_at, delivered_at, promoted_at, overlap_until, created_at, updated_at)
+			VALUES ('10930000-0000-4000-8000-000000000010', 1093001, repeat('a', 64), repeat('a', 64),
+			 'PROMOTED', clock_timestamp(), clock_timestamp(), clock_timestamp(), clock_timestamp()+interval '40 seconds', clock_timestamp(), clock_timestamp()),
+			('10930000-0000-4000-8000-000000000011', 1093002, repeat('b', 64), repeat('b', 64),
+			 'PROMOTED', clock_timestamp(), clock_timestamp(), clock_timestamp(), clock_timestamp()+interval '40 seconds', clock_timestamp(), clock_timestamp())`)
+	} else {
+		boundaryExec(t, ctx, admin, `INSERT INTO internal_rpc_authority.authority_rotation_intents
+			(intent_id, source_revision, source_digest_sha256, status, created_at, updated_at)
+			VALUES ('10930000-0000-4000-8000-000000000010', 1093001, repeat('a', 64), 'PROMOTED', clock_timestamp(), clock_timestamp()),
+			('10930000-0000-4000-8000-000000000011', 1093002, repeat('b', 64), 'PROMOTED', clock_timestamp(), clock_timestamp())`)
+	}
 	for index, item := range []struct {
 		workload, role, digest string
 		revision               int64

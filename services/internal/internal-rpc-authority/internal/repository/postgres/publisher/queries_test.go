@@ -32,3 +32,17 @@ func TestLoadSnapshotHistoryIncludesCurrentRevisionForRestart(t *testing.T) {
 		t.Fatal("snapshot history query must retain current revision plus 32 predecessors")
 	}
 }
+
+func TestLoadSnapshotPredecessorUsesPersistedCrossDomainProvenance(t *testing.T) {
+	t.Parallel()
+	for _, required := range []string{
+		"publisher_load_snapshot_predecessor",
+		"@source_revision",
+		"@source_digest_sha256",
+		"@registry_digest_sha256",
+	} {
+		if !strings.Contains(loadSnapshotPredecessorSQL, required) {
+			t.Fatalf("snapshot predecessor query omits %s", required)
+		}
+	}
+}

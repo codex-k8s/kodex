@@ -574,7 +574,9 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     exit 0
   fi
   frontend_directory="$repository_root/services/staff/control-center"
-  install -d -m 0700 "$state_directory/e2e"
+  umask 077
+  smoke_output_directory=$(bash "$repository_root/tools/dev/prepare-smoke-output.sh" \
+    --repository-root "$repository_root" --state-directory "$state_directory")
   if [[ ! -x "$frontend_directory/node_modules/.bin/playwright" ]]; then
     npm --prefix "$frontend_directory" ci
   fi
@@ -589,6 +591,7 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     KODEX_E2E_OWNER_USERNAME="$KODEX_LOCAL_OWNER_USERNAME" \
     KODEX_E2E_OWNER_PASSWORD="$KODEX_LOCAL_OWNER_PASSWORD" \
     KODEX_E2E_STORAGE_STATE="$state_directory/e2e/owner.json" \
+    KODEX_E2E_PRIVATE_OUTPUT_DIR="$smoke_output_directory" \
     KODEX_E2E_RBAC_GROUP=kodex-e2e-restricted \
     KODEX_E2E_CONFIRM_DISPOSABLE=I_UNDERSTAND_THIS_MUTATES_A_DISPOSABLE_INSTALLATION \
     NODE_EXTRA_CA_CERTS="$node_extra_ca_file" \

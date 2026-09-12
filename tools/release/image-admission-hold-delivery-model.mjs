@@ -66,7 +66,7 @@ function targetState(resource) {
   uid:resource.metadata.uid,resourceVersion:resource.metadata.resourceVersion,specSHA256:fingerprint(resource.spec??resource.data)};
 }
 
-function controllerPodState(snapshot) {
+export function controllerPodState(snapshot) {
  const app=application(snapshot.controller),pods=snapshot.controllerPods??[];
  requireValue(pods.length===1,'EXACT_CONTROLLER_POD_REQUIRED');
  const pod=pods[0],status=(pod.status?.containerStatuses??[]).filter(item=>item.name===controllerName),
@@ -168,21 +168,21 @@ function requirePrimaryBoundary(snapshot,bundle) {
  return {releasePolicy,releaseBinding};
 }
 
-function controllerSpecs(controller,targetImage,bundle) {
+function controllerSpecs(controller,targetImage,bundle,quiesce=null) {
  const current=application(controller);
  requireValue(image.test(targetImage),'EXACT_CONTROLLER_IMAGE_REQUIRED');
- literal(current,pauseEnvironment,['false'],false);
+ literal(current,pauseEnvironment,[quiesce?'true':'false'],Boolean(quiesce));
  literal(current,holdEnvironment,['false'],false);
  literal(current,holdUntilEnvironment,[holdUntilDisabled],false);
- const pause=structuredClone(controller.spec),pauseApp=pause.template.spec.containers.find(item=>item.name===controllerName);
- setLiteral(pauseApp,pauseEnvironment,'true',{allowMissing:true,expected:['false']});
+ const initial=quiesce?structuredClone(quiesce.initialControllerSpec):controller.spec,pause=structuredClone(controller.spec),pauseApp=pause.template.spec.containers.find(item=>item.name===controllerName);
+ if(!quiesce)setLiteral(pauseApp,pauseEnvironment,'true',{allowMissing:true,expected:['false']});
  const reader=structuredClone(pause),readerApp=reader.template.spec.containers.find(item=>item.name===controllerName);
  readerApp.image=targetImage;
  for(const entry of bundle.controllerHoldEnvironment)setLiteral(readerApp,entry.name,entry.value,{allowMissing:true,expected:[entry.value]});
  const open=structuredClone(reader),openApp=open.template.spec.containers.find(item=>item.name===controllerName);
- setLiteral(openApp,pauseEnvironment,'false',{expected:['true']});
- requireValue(new Set([fingerprint(controller.spec),fingerprint(pause),fingerprint(reader),fingerprint(open)]).size>=3,'CONTROLLER_TRANSITION_UNCHANGED');
- return {initial:controller.spec,pause,reader,open};
+ if(!quiesce)setLiteral(openApp,pauseEnvironment,'false',{expected:['true']});
+ requireValue(new Set([fingerprint(initial),fingerprint(pause),fingerprint(reader),fingerprint(open)]).size>=(quiesce?3:3),'CONTROLLER_TRANSITION_UNCHANGED');
+ return {initial,pause,reader,open};
 }
 
 export function validateDesiredBundle(bundle) {
@@ -213,7 +213,7 @@ export function validateDesiredBundle(bundle) {
  return bundle;
 }
 
-export function buildDeliveryPlan(snapshot,bundle,{context,k3sSudo,capability,intent}) {
+export function buildDeliveryPlan(snapshot,bundle,{context,k3sSudo,capability,intent,quiesce=null}) {
  validateDesiredBundle(bundle);
  const targetImage=capability?.image,executableSHA256=capability?.executableSHA256;
  requireValue(typeof context==='string'&&context.length>0&&!/prod/i.test(context)&&typeof k3sSudo==='boolean'&&
@@ -222,7 +222,10 @@ export function buildDeliveryPlan(snapshot,bundle,{context,k3sSudo,capability,in
   image.test(targetImage)&&sha.test(executableSHA256)&&sha.test(snapshot.controllerExecutableSHA256??'')&&uid.test(intent),'INVALID_HOLD_DELIVERY_INPUT');
  requireValue(snapshot.clusterUID&&snapshot.namespaceUID&&snapshot.namespace?.metadata?.labels?.['app.kubernetes.io/part-of']==='kodex'&&
   snapshot.namespace.metadata.labels?.['kodex.dev/environment']==='staging','EXACT_STAGING_NAMESPACE_REQUIRED');
- const policies=requirePrimaryBoundary(snapshot,bundle),specs=controllerSpecs(snapshot.controller,targetImage,bundle),work=initialWork(workState(snapshot));
+ if(quiesce)requireValue(exact(quiesce,['version','intent','planSHA256','receiptSHA256','initialControllerSpec','pausedControllerSpec'])&&quiesce.version===1&&uid.test(quiesce.intent??'')&&
+  sha.test(quiesce.planSHA256??'')&&sha.test(quiesce.receiptSHA256??'')&&fingerprint(snapshot.controller.spec)===fingerprint(quiesce.pausedControllerSpec)&&
+  workState(snapshot).jobs.length===0&&workState(snapshot).pvcs.length===0,'EXACT_QUIESCE_HANDOFF_REQUIRED');
+ const policies=requirePrimaryBoundary(snapshot,bundle),specs=controllerSpecs(snapshot.controller,targetImage,bundle,quiesce),work=initialWork(workState(snapshot));
  const reader=controllerPodState(snapshot);
  const guards={neighbors:deploymentGuards(snapshot.deployments),jobsBinding:targetState(snapshot.jobsBinding),parameters:targetState(snapshot.parameters),
   policyConfig:targetState(snapshot.policyConfig),ownerState:snapshot.ownerState,initialWork:work};
@@ -231,7 +234,7 @@ export function buildDeliveryPlan(snapshot,bundle,{context,k3sSudo,capability,in
  const releasePolicyAfter=snapshot.releasePolicy?snapshot.releasePolicy.spec:admissionResourceWithAPIDefaults(bundle.releasePolicy).spec;
  const releaseBindingAfter=snapshot.releaseBinding?snapshot.releaseBinding.spec:admissionResourceWithAPIDefaults(bundle.releaseBinding).spec;
  const phaseTargets={
-  pause:{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.initial,after:specs.pause},
+  pause:{action:quiesce?'none':'patch',kind:'Deployment',name:controllerName,namespaced:true,before:quiesce?specs.pause:specs.initial,after:specs.pause},
   reader:{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.pause,after:specs.reader},
   'policy-jobs':{action:primaryExact?'none':'patch',kind:'ValidatingAdmissionPolicy',name:jobsPolicyName,namespaced:false,before:snapshot.jobsPolicy.spec,after:primaryAfter,
    ...(!primaryExact?{request:bundle.jobsPolicy.spec}:{})},
@@ -239,18 +242,18 @@ export function buildDeliveryPlan(snapshot,bundle,{context,k3sSudo,capability,in
    ...(!snapshot.releasePolicy?{resource:bundle.releasePolicy}:{})},
   'binding-release':{action:snapshot.releaseBinding?'none':'create',kind:'ValidatingAdmissionPolicyBinding',name:releasePolicyName,namespaced:false,before:null,after:releaseBindingAfter,
    ...(!snapshot.releaseBinding?{resource:bundle.releaseBinding}:{})},
-  open:{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.reader,after:specs.open},
+  open:{action:quiesce?'none':'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.reader,after:specs.open},
  };
  const rollbackTargets={
-  'rollback-pause':{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.open,after:specs.reader},
+  'rollback-pause':{action:quiesce?'none':'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.open,after:specs.reader},
   'rollback-binding-release':releaseBindingInitialTarget(policies.releaseBinding,phaseTargets['binding-release']),
   'rollback-policy-release':releasePolicyInitialTarget(policies.releasePolicy,phaseTargets['policy-release']),
   'rollback-policy-jobs':{action:phaseTargets['policy-jobs'].action==='none'?'none':'patch',kind:'ValidatingAdmissionPolicy',name:jobsPolicyName,
    namespaced:false,before:primaryAfter,after:snapshot.jobsPolicy.spec},
   'rollback-reader':{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.reader,after:specs.pause},
-  'rollback-open':{action:'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.pause,after:specs.initial},
+  'rollback-open':{action:quiesce?'none':'patch',kind:'Deployment',name:controllerName,namespaced:true,before:specs.pause,after:quiesce?specs.pause:specs.initial},
  };
- return {version:1,intent,context,k3sSudo,clusterUID:snapshot.clusterUID,namespaceUID:snapshot.namespaceUID,
+ return {version:1,intent,context,k3sSudo,clusterUID:snapshot.clusterUID,namespaceUID:snapshot.namespaceUID,quiesce,
   source:bundle.source,revision:bundle.revision,bundle,capability,targetImage,executableSHA256,controllerUID:snapshot.controller.metadata.uid,
   controllerInitialResourceVersion:snapshot.controller.metadata.resourceVersion,controllerInitialReader:reader,
   controllerInitialExecutableSHA256:snapshot.controllerExecutableSHA256,jobsPolicyUID:snapshot.jobsPolicy.metadata.uid,
@@ -283,14 +286,18 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
   fingerprint(plan.desired.jobsPolicySpec)===fingerprint(plan.phaseTargets['policy-jobs'].after)&&
   fingerprint(plan.desired.releasePolicySpec)===fingerprint(plan.phaseTargets['policy-release'].after)&&
   fingerprint(plan.desired.releaseBindingSpec)===fingerprint(plan.phaseTargets['binding-release'].after),'HOLD_DELIVERY_PLAN_INVALID');
- const specs=plan.controllerSpecs,expectedPause=structuredClone(specs.initial),pauseApp=expectedPause.template?.spec?.containers?.find(item=>item.name===controllerName);
+ const quiesced=plan.quiesce!==null&&plan.quiesce!==undefined;
+ requireValue(!quiesced||exact(plan.quiesce,['version','intent','planSHA256','receiptSHA256','initialControllerSpec','pausedControllerSpec'])&&plan.quiesce.version===1&&uid.test(plan.quiesce.intent??'')&&
+  sha.test(plan.quiesce.planSHA256??'')&&sha.test(plan.quiesce.receiptSHA256??'')&&fingerprint(plan.quiesce.initialControllerSpec)===fingerprint(plan.controllerSpecs.initial)&&
+  fingerprint(plan.quiesce.pausedControllerSpec)===fingerprint(plan.controllerSpecs.pause),'HOLD_DELIVERY_PLAN_INVALID');
+ const specs=plan.controllerSpecs,expectedPause=structuredClone(quiesced?specs.pause:specs.initial),pauseApp=expectedPause.template?.spec?.containers?.find(item=>item.name===controllerName);
  requireValue(pauseApp,'HOLD_DELIVERY_PLAN_INVALID');
- setLiteral(pauseApp,pauseEnvironment,'true',{allowMissing:true,expected:['false']});
+ if(!quiesced)setLiteral(pauseApp,pauseEnvironment,'true',{allowMissing:true,expected:['false']});
  const expectedReader=structuredClone(expectedPause),readerApp=expectedReader.template.spec.containers.find(item=>item.name===controllerName);
  readerApp.image=plan.targetImage;
  for(const entry of plan.bundle.controllerHoldEnvironment)setLiteral(readerApp,entry.name,entry.value,{allowMissing:true,expected:[entry.value]});
  const expectedOpen=structuredClone(expectedReader),openApp=expectedOpen.template.spec.containers.find(item=>item.name===controllerName);
- setLiteral(openApp,pauseEnvironment,'false',{expected:['true']});
+ if(!quiesced)setLiteral(openApp,pauseEnvironment,'false',{expected:['true']});
  requireValue(fingerprint(specs.pause)===fingerprint(expectedPause)&&fingerprint(specs.reader)===fingerprint(expectedReader)&&
   fingerprint(specs.open)===fingerprint(expectedOpen),'HOLD_DELIVERY_PLAN_INVALID');
  for(const phase of phases) {
@@ -307,9 +314,9 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
    typeof target.name==='string'&&typeof target.namespaced==='boolean'&&
    (target.before===null||sha.test(fingerprint(target.before)))&&(target.after===null||sha.test(fingerprint(target.after))),'HOLD_DELIVERY_PLAN_INVALID');
  }
- requireValue(plan.phaseTargets.pause.action==='patch'&&plan.phaseTargets.pause.kind==='Deployment'&&plan.phaseTargets.pause.name===controllerName&&plan.phaseTargets.pause.namespaced===true&&
+ requireValue(plan.phaseTargets.pause.action===(quiesced?'none':'patch')&&plan.phaseTargets.pause.kind==='Deployment'&&plan.phaseTargets.pause.name===controllerName&&plan.phaseTargets.pause.namespaced===true&&
   plan.phaseTargets.reader.action==='patch'&&plan.phaseTargets.reader.kind==='Deployment'&&plan.phaseTargets.reader.name===controllerName&&plan.phaseTargets.reader.namespaced===true&&
-  plan.phaseTargets.open.action==='patch'&&plan.phaseTargets.open.kind==='Deployment'&&plan.phaseTargets.open.name===controllerName&&plan.phaseTargets.open.namespaced===true&&
+  plan.phaseTargets.open.action===(quiesced?'none':'patch')&&plan.phaseTargets.open.kind==='Deployment'&&plan.phaseTargets.open.name===controllerName&&plan.phaseTargets.open.namespaced===true&&
   plan.phaseTargets['policy-jobs'].kind==='ValidatingAdmissionPolicy'&&plan.phaseTargets['policy-jobs'].name===jobsPolicyName&&plan.phaseTargets['policy-jobs'].namespaced===false&&
   plan.phaseTargets['policy-jobs'].action===(matchesAdmissionSpec(plan.phaseTargets['policy-jobs'].before,plan.bundle.jobsPolicy,plan.bundle.jobsPolicyRendered)?'none':'patch')&&
   plan.phaseTargets['policy-release'].kind==='ValidatingAdmissionPolicy'&&plan.phaseTargets['policy-release'].name===releasePolicyName&&plan.phaseTargets['policy-release'].namespaced===false&&
@@ -319,7 +326,7 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
   (plan.phaseTargets['policy-release'].action!=='create'||fingerprint(plan.phaseTargets['policy-release'].resource)===fingerprint(plan.bundle.releasePolicy))&&
   (plan.phaseTargets['binding-release'].action!=='create'||fingerprint(plan.phaseTargets['binding-release'].resource)===fingerprint(plan.bundle.releaseBinding))&&
   (plan.phaseTargets['policy-jobs'].action!=='patch'||fingerprint(plan.phaseTargets['policy-jobs'].request)===fingerprint(plan.bundle.jobsPolicy.spec))&&
-  fingerprint(plan.phaseTargets.pause.before)===fingerprint(specs.initial)&&fingerprint(plan.phaseTargets.pause.after)===fingerprint(specs.pause)&&
+  fingerprint(plan.phaseTargets.pause.before)===fingerprint(quiesced?specs.pause:specs.initial)&&fingerprint(plan.phaseTargets.pause.after)===fingerprint(specs.pause)&&
   fingerprint(plan.phaseTargets.reader.before)===fingerprint(specs.pause)&&fingerprint(plan.phaseTargets.reader.after)===fingerprint(specs.reader)&&
   fingerprint(plan.phaseTargets.open.before)===fingerprint(specs.reader)&&fingerprint(plan.phaseTargets.open.after)===fingerprint(specs.open)&&
   fingerprint(plan.phaseTargets['policy-jobs'].after)===fingerprint(plan.phaseTargets['policy-jobs'].action==='none'?
@@ -330,16 +337,16 @@ export function validateDeliveryPlan(plan,context,k3sSudo) {
   (plan.phaseTargets['binding-release'].action==='create'?
    fingerprint(plan.phaseTargets['binding-release'].after)===fingerprint(admissionResourceWithAPIDefaults(plan.bundle.releaseBinding).spec):
    matchesAdmissionSpec(plan.phaseTargets['binding-release'].after,plan.bundle.releaseBinding,plan.bundle.releaseBindingRendered))&&
-  plan.rollbackTargets['rollback-pause'].action==='patch'&&plan.rollbackTargets['rollback-pause'].kind==='Deployment'&&plan.rollbackTargets['rollback-pause'].name===controllerName&&plan.rollbackTargets['rollback-pause'].namespaced===true&&
+  plan.rollbackTargets['rollback-pause'].action===(quiesced?'none':'patch')&&plan.rollbackTargets['rollback-pause'].kind==='Deployment'&&plan.rollbackTargets['rollback-pause'].name===controllerName&&plan.rollbackTargets['rollback-pause'].namespaced===true&&
   plan.rollbackTargets['rollback-reader'].action==='patch'&&plan.rollbackTargets['rollback-reader'].kind==='Deployment'&&plan.rollbackTargets['rollback-reader'].name===controllerName&&plan.rollbackTargets['rollback-reader'].namespaced===true&&
-  plan.rollbackTargets['rollback-open'].action==='patch'&&plan.rollbackTargets['rollback-open'].kind==='Deployment'&&plan.rollbackTargets['rollback-open'].name===controllerName&&plan.rollbackTargets['rollback-open'].namespaced===true&&
+  plan.rollbackTargets['rollback-open'].action===(quiesced?'none':'patch')&&plan.rollbackTargets['rollback-open'].kind==='Deployment'&&plan.rollbackTargets['rollback-open'].name===controllerName&&plan.rollbackTargets['rollback-open'].namespaced===true&&
   plan.rollbackTargets['rollback-policy-jobs'].kind==='ValidatingAdmissionPolicy'&&plan.rollbackTargets['rollback-policy-jobs'].name===jobsPolicyName&&plan.rollbackTargets['rollback-policy-jobs'].namespaced===false&&
   plan.rollbackTargets['rollback-policy-jobs'].action===(plan.phaseTargets['policy-jobs'].action==='none'?'none':'patch')&&
   plan.rollbackTargets['rollback-policy-release'].kind==='ValidatingAdmissionPolicy'&&plan.rollbackTargets['rollback-policy-release'].name===releasePolicyName&&plan.rollbackTargets['rollback-policy-release'].namespaced===false&&
   plan.rollbackTargets['rollback-binding-release'].kind==='ValidatingAdmissionPolicyBinding'&&plan.rollbackTargets['rollback-binding-release'].name===releasePolicyName&&plan.rollbackTargets['rollback-binding-release'].namespaced===false&&
   fingerprint(plan.rollbackTargets['rollback-pause'].before)===fingerprint(specs.open)&&fingerprint(plan.rollbackTargets['rollback-pause'].after)===fingerprint(specs.reader)&&
   fingerprint(plan.rollbackTargets['rollback-reader'].before)===fingerprint(specs.reader)&&fingerprint(plan.rollbackTargets['rollback-reader'].after)===fingerprint(specs.pause)&&
-  fingerprint(plan.rollbackTargets['rollback-open'].before)===fingerprint(specs.pause)&&fingerprint(plan.rollbackTargets['rollback-open'].after)===fingerprint(specs.initial)&&
+  fingerprint(plan.rollbackTargets['rollback-open'].before)===fingerprint(specs.pause)&&fingerprint(plan.rollbackTargets['rollback-open'].after)===fingerprint(quiesced?specs.pause:specs.initial)&&
   fingerprint(plan.rollbackTargets['rollback-policy-jobs'].before)===fingerprint(plan.phaseTargets['policy-jobs'].after)&&
   fingerprint(plan.rollbackTargets['rollback-policy-jobs'].after)===fingerprint(plan.phaseTargets['policy-jobs'].before)&&
   (plan.rollbackTargets['rollback-policy-release'].action==='delete')===(plan.releasePolicyInitial===null)&&
@@ -477,9 +484,9 @@ export function inspectRollbackPhase(plan,snapshot,phase,{requireExecutable=true
  else resource=snapshot.controller;
  const controllerState=Object.entries(plan.controllerSpecs).find(([,spec])=>fingerprint(spec)===fingerprint(snapshot.controller.spec))?.[0]??'DRIFT';
  let state;
- if(phase==='rollback-pause')state=controllerState==='open'?'BEFORE':['reader','pause','initial'].includes(controllerState)?'AFTER':'DRIFT';
+ if(phase==='rollback-pause')state=plan.quiesce&&controllerState==='reader'?'AFTER':controllerState==='open'?'BEFORE':['reader','pause','initial'].includes(controllerState)?'AFTER':'DRIFT';
  else if(phase==='rollback-reader')state=controllerState==='reader'?'BEFORE':['pause','initial'].includes(controllerState)?'AFTER':'DRIFT';
- else if(phase==='rollback-open')state=controllerState==='pause'?'BEFORE':controllerState==='initial'?'AFTER':'DRIFT';
+ else if(phase==='rollback-open')state=plan.quiesce&&controllerState==='pause'?'AFTER':controllerState==='pause'?'BEFORE':controllerState==='initial'?'AFTER':'DRIFT';
  else state=resourceState(resource,target,phase==='rollback-policy-jobs'?plan.jobsPolicyUID:
   phase==='rollback-policy-release'?plan.releasePolicyInitial?.uid:plan.releaseBindingInitial?.uid);
  requireValue(state!=='DRIFT','ROLLBACK_CONTROLLER_ORDER_REJECTED');

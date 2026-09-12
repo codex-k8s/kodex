@@ -109,6 +109,7 @@ test-integration-hot-reload-container:
 	@./scripts/tests/integration-hot-reload-container-test.sh
 
 test-full-local-e2e-entrypoint:
+	bash scripts/tests/smoke-private-output-contract-test.sh
 	@node --test tools/dev/component-manifest.test.mjs tools/dev/source-git-trust.test.mjs tools/dev/prepare-operator-manifest.test.mjs tools/dev/runner-seed-cli.test.mjs
 	@./scripts/tests/full-local-e2e-entrypoint-test.sh
 	@./scripts/tests/local-profile-selection-test.sh

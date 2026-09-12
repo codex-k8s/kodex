@@ -2,7 +2,10 @@
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import ConfigurationCatalog from "@/features/managed-configurations/ConfigurationCatalog.vue";
-import type { ConfigurationKind } from "@/features/managed-configurations/api";
+import {
+  configurationRequiresProject,
+  type ConfigurationKind,
+} from "@/features/managed-configurations/api";
 import ProjectPicker from "@/features/projects/ProjectPicker.vue";
 import { loadProject } from "@/features/projects/api";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
@@ -19,8 +22,13 @@ const kinds: readonly ConfigurationKind[] = [
   "SYSTEM_STT",
 ];
 const kind = computed(() => kinds.find((kind) => kind === route.params.kind));
+const projectScoped = computed(
+  () => !!kind.value && configurationRequiresProject(kind.value),
+);
 const projectRef = computed(() =>
-  typeof route.query.projectRef === "string" ? route.query.projectRef : "",
+  projectScoped.value && typeof route.query.projectRef === "string"
+    ? route.query.projectRef
+    : "",
 );
 const project = ref<Project>();
 const problem = ref<AppProblem>();
@@ -48,7 +56,10 @@ function changeProject(value: string): void {
 <template>
   <PageFrame :title="kind ? $t(`managed.kinds.${kind}`) : $t('managed.title')">
     <template #actions
-      ><ProjectPicker :project="project" @select="changeProject"
+      ><ProjectPicker
+        v-if="projectScoped"
+        :project="project"
+        @select="changeProject"
     /></template>
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <ConfigurationCatalog

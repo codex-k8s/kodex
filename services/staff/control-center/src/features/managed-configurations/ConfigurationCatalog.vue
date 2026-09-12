@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { Expand, Plus, Search } from "@lucide/vue";
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { ManagedConfigurationSummary } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
-import { listConfigurations, type ConfigurationKind } from "./api";
+import {
+  configurationProjectScopeValid,
+  configurationRequiresProject,
+  listConfigurations,
+  type ConfigurationKind,
+} from "./api";
 const props = defineProps<{
   kind: ConfigurationKind;
   projectRef?: string;
@@ -21,6 +26,11 @@ const loading = ref(false);
 const expansionOpen = ref(false);
 const problem = ref<AppProblem>();
 const cursors = new Set<string>();
+const projectRequired = computed(
+  () =>
+    configurationRequiresProject(props.kind) &&
+    !configurationProjectScopeValid(props.kind, props.projectRef),
+);
 let generation = 0;
 let controller: AbortController | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -111,6 +121,7 @@ function scroll(event: Event): void {
           :aria-label="$t('common.search')"
       /></label>
       <RouterLink
+        v-if="!projectRequired"
         class="button button--primary"
         :to="{
           name: 'configuration',
@@ -119,6 +130,14 @@ function scroll(event: Event): void {
         }"
         ><Plus :size="18" />{{ $t("common.create") }}</RouterLink
       >
+      <button
+        v-else
+        class="button button--primary"
+        disabled
+        aria-describedby="managed-catalog-project-required"
+      >
+        <Plus :size="18" />{{ $t("common.create") }}
+      </button>
       <button
         v-if="!props.expanded && (total > 6 || nextPageToken)"
         class="icon-button"
@@ -129,6 +148,13 @@ function scroll(event: Event): void {
         <Expand :size="18" />
       </button>
     </header>
+    <p
+      v-if="projectRequired"
+      id="managed-catalog-project-required"
+      role="status"
+    >
+      {{ $t("managed.projectRequired") }}
+    </p>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading && !items.length" role="status">
       {{ $t("common.loading") }}

@@ -38,6 +38,18 @@ func requireManagedDraftMutation(w http.ResponseWriter, key, etag string, body g
 	return requireMutation(w, key, etag)
 }
 
+func requireManagedDraftProject(w http.ResponseWriter, body generated.ManagedConfigurationDraftInput, required bool) bool {
+	reference := stringValue(body.ProjectRef)
+	valid := body.ProjectRef == nil
+	if required {
+		valid = body.ProjectRef != nil && strings.TrimSpace(reference) == reference && reference != ""
+	}
+	if !valid {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+	}
+	return valid
+}
+
 func managedConsumerInput(w http.ResponseWriter, input generated.ManagedConfigurationRebindInput) ([]*controlplanev1.ManagedConfigurationConsumer, bool) {
 	if !validManagedDigest(input.ImpactDigest) || len(input.Consumers) == 0 || len(input.Consumers) > 128 {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)

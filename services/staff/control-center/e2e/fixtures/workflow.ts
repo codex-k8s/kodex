@@ -21,6 +21,8 @@ export async function checkWorkflowEditor(
   speechBootstrap?: BootstrapState,
   captureUnpublished?: () => Promise<void>,
 ) {
+  let pausePublishedCapabilities = false;
+  let releasePublishedCapabilities: (() => void) | undefined;
   let releaseSave: (() => void) | undefined;
   const saveBarrier = speechBootstrap
     ? new Promise<void>((resolve) => {
@@ -204,9 +206,13 @@ export async function checkWorkflowEditor(
   );
   await page.route(
     `**/api/v1/agents/${agent.ref}/effective-capabilities*`,
-    (route) => {
+    async (route) => {
       const url = new URL(route.request().url());
       const published = url.searchParams.has("workflowRef");
+      if (pausePublishedCapabilities && !published)
+        await new Promise<void>((resolve) => {
+          releasePublishedCapabilities = resolve;
+        });
       if (published) {
         expect(url.searchParams.get("workflowRef")).toBe(workflow.ref);
         expect(url.searchParams.get("stepKey")).toBe(workflow.steps[0]?.ref);
@@ -387,14 +393,39 @@ export async function checkWorkflowEditor(
     draft: undefined,
     draftRevisionRef: undefined,
   };
+  pausePublishedCapabilities = true;
   await page.goto(`/projects/${projectRef}/workflows/${workflow.ref}`);
   await page.locator(".step-advanced > summary").first().click();
-  await page
-    .getByRole("button", {
-      name: "Возможности опубликованного этапа",
-      exact: true,
-    })
-    .click();
+  await expect.poll(() => Boolean(releasePublishedCapabilities)).toBe(true);
+  const publishedInspector = page.getByRole("button", {
+    name: "Возможности опубликованного этапа",
+    exact: true,
+  });
+  await publishedInspector.scrollIntoViewIfNeeded();
+  const before = await publishedInspector.boundingBox();
+  if (!before) throw new Error("Published inspector has no bounds");
+  const pointer = {
+    x: before.x + before.width / 2,
+    y: before.y + before.height / 2,
+  };
+  await page.mouse.move(pointer.x, pointer.y);
+  await page.mouse.down();
+  try {
+    pausePublishedCapabilities = false;
+    releasePublishedCapabilities?.();
+    await expect(
+      page.locator(".effective-capabilities__rows > label"),
+    ).toHaveCount(2);
+    const after = await publishedInspector.boundingBox();
+    const hit = await publishedInspector.evaluate(
+      (button, point) =>
+        button.contains(document.elementFromPoint(point.x, point.y)),
+      pointer,
+    );
+    expect(hit, JSON.stringify({ before, after })).toBe(true);
+  } finally {
+    await page.mouse.up();
+  }
   await expect(
     page.getByText("Требуется этапом", { exact: true }),
   ).toBeVisible();

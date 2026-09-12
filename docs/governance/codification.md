@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.3
-updated: 2026-09-07
+version: 2.2.4
+updated: 2026-09-09
 ---
 
 # Кодификация документов и задач
@@ -165,7 +165,10 @@ updated: 2026-07-28
 | `RUN-MC-024`       | `docs/runbooks/backup-controller.md`                        |
 | `OPS-DOC-1313` | `docs/operations/authority-freshness-1313.md` |
 | `OPS-DOC-1381` | `docs/operations/image-admission-proof-hold-1381.md` |
+| `OPS-DOC-1390` | `docs/operations/authority-rotation-1390.md` |
 | `OPS-DOC-1392` | `docs/operations/image-admission-hold-delivery-1392.md` |
+| `OPS-DOC-1434` | `docs/operations/authority-source-delivery-1434.md` |
+| `OPS-DOC-1450` | `docs/operations/frontend-dependency-delivery-1450.md` |
 | `OPS-EMAIL-1371` | `docs/operations/email-agent-1371.md` |
 | `OPS-EMAIL-1378` | `docs/operations/email-combined-1378.md` |
 | `OPS-RUNNER-1382` | `docs/operations/runner-binary-provenance-1382.md` |

@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.26
+version: 1.4.27
 updated: 2026-09-09
 ---
 
@@ -558,6 +558,23 @@ Publisher:
 - после записи выполняет точное криптографическое контрольное чтение;
 - не начинает использовать новый ключ до подтвержденной публикации и
   завершения окна распространения.
+
+Перед первой внешней CAS publisher фиксирует durable rotation intent.
+Нормальный граф `PREPARED -> DELIVERING -> DELIVERED -> PROMOTED -> RETIRED`
+однонаправленный; `ABORTED` разрешён только из `PREPARED`. После начала
+доставки crash, неизвестный ответ и пропущенный reader требуют продолжения того
+же UUID, а не нового намерения. `PROMOTED` требует точный полный набор readback,
+после него выдерживается ограниченное overlap-окно. Следующий `CURRENT` обязан
+быть прежним полностью распространённым `NEXT`; пропуск source revision и
+параллельная ротация закрыто отклоняются.
+
+Historical predecessor для следующей key CAS разрешается только по exact
+immutable publication provenance: source revision и snapshot digest связываются
+с сохранёнными publication input digest, registry digest и фактической фазой.
+Пересчитывать прежний input из текущих policy/manifest bytes, подставлять
+предполагаемую фазу или использовать wildcard/latest lookup запрещено. Смена
+policy, manifest и следующая normal rotation после `RETIRED` продолжают один
+forward-only граф через этот авторитетный read path.
 
 Verifier хранит принадлежащие целевой стороне верхнюю принятую ревизию и хэш
 вне эфемерного тома pod. Состояние переживает перезапуск и обновляется

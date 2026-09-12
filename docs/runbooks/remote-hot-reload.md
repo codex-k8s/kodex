@@ -432,6 +432,14 @@ Browser discovery сохраняет скриншоты `1920x1080` и `1440x900
 размер, SHA-256 и source SHA, но не абсолютный путь и не содержимое изображения.
 Успешный browser gate требует шесть уникальных visual evidence на том же SHA.
 
+Browser smoke entrypoint создаёт уникальный `e2e/smoke.*/artifacts` в state directory вне application
+source. Каталог `e2e` должен принадлежать оператору и иметь права `0700`;
+небезопасный существующий каталог отклоняется без изменения прав. Новый запуск
+не очищает evidence прежней попытки. `KODEX_E2E_PRIVATE_OUTPUT_DIR` передаётся
+в конфигурацию Playwright, а `umask 077` сохраняет закрытые права файлов.
+Для прямого `dev.sh smoke` задайте `--state-directory` вне checkout;
+локальный source-каталог `.kodex-dev` для этого сценария не допускается.
+
 Перед первым browser smoke entrypoint устанавливает системные зависимости и
 только Chromium через зафиксированный в `package-lock.json` локальный
 Playwright. Браузер хранится в cache пользователя, после установки entrypoint

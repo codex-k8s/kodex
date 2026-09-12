@@ -34,8 +34,10 @@ type GraphConfig struct {
 
 // Graph публикует auth/proof/manifest/snapshot как единую intent-цепочку.
 type Graph struct {
-	config GraphConfig
-	now    func() time.Time
+	config            GraphConfig
+	now               func() time.Time
+	rotationPhase     string
+	rotationOperation model.AuthorityRotationOperation
 }
 
 type rotatingKeySet struct {
@@ -74,6 +76,79 @@ func NewGraph(config GraphConfig) (*Graph, error) {
 func (graph *Graph) Publish(
 	ctx context.Context,
 ) (model.AuthoritySnapshotPublication, error) {
+	history, err := graph.config.Store.LoadSnapshotHistory(ctx)
+	if err != nil {
+		return model.AuthoritySnapshotPublication{}, errors.New("load durable authority snapshot history")
+	}
+	if len(history.Current) == 0 {
+		return graph.publishOne(ctx)
+	}
+	operationID := graph.rotationOperationID()
+	operation, found, err := graph.config.Store.LoadRotationOperation(ctx, operationID)
+	if err != nil {
+		return model.AuthoritySnapshotPublication{}, errors.New("load durable authority rotation operation")
+	}
+	latest := history.Current[len(history.Current)-1]
+	if !found && latest.Revision == graph.config.Registry.SourceRevision {
+		return graph.publishOne(ctx)
+	}
+	if !found {
+		operation = model.AuthorityRotationOperation{
+			OperationID:          operationID,
+			RegistryRevision:     graph.config.Registry.SourceRevision,
+			RegistryDigestSHA256: graph.config.Registry.SourceDigest,
+			BaseRevision:         latest.Revision, BaseDigestSHA256: latest.DigestSHA256,
+			ExpectedReadbackCount: graph.config.Registry.StartupReadbackTargetCount(),
+		}
+	}
+	operation, err = graph.config.Store.LoadOrPrepareRotationOperation(ctx, operation)
+	if err != nil {
+		return model.AuthoritySnapshotPublication{}, errors.New("load durable authority rotation operation")
+	}
+	phase, offset := "", uint64(0)
+	switch operation.Status {
+	case "DISTRIBUTING":
+		phase, offset = "DISTRIBUTE", 1
+	case "WAITING_SWITCH":
+		phase, offset = "DISTRIBUTE", 1
+	case "SWITCHING":
+		phase, offset = "SWITCH", 2
+	case "WAITING_RETIRE":
+		phase, offset = "SWITCH", 2
+	case "RETIRING", "RETIRED":
+		phase, offset = "RETIRE", 3
+	default:
+		return model.AuthoritySnapshotPublication{}, errors.New("authority rotation operation status rejected")
+	}
+	phaseGraph := *graph
+	phaseGraph.rotationPhase = phase
+	phaseGraph.rotationOperation = operation
+	phaseGraph.config.Registry.SourceRevision = operation.BaseRevision + offset
+	if operation.Status == "WAITING_SWITCH" || operation.Status == "WAITING_RETIRE" || operation.Status == "RETIRED" {
+		manifestBundle, readErr := readGraphFile(graph.config.ManifestTrustBundleJWSFile, 1<<20)
+		if readErr != nil {
+			return model.AuthoritySnapshotPublication{}, errors.New("read independently signed manifest trust bundle")
+		}
+		policyRaw, readErr := readGraphFile(graph.config.PolicyFile, 1<<20)
+		if readErr != nil {
+			return model.AuthoritySnapshotPublication{}, errors.New("read authority graph policy")
+		}
+		inputDigest, digestErr := publicationInputDigestForPhase(graph.config.Registry.SourceDigest, manifestBundle, policyRaw, phase)
+		if digestErr != nil {
+			return model.AuthoritySnapshotPublication{}, errors.New("digest authority graph publication inputs")
+		}
+		publication, found, loadErr := graph.config.Store.LoadSnapshotPublication(ctx, operation.BaseRevision+offset, inputDigest)
+		if loadErr != nil || !found {
+			return model.AuthoritySnapshotPublication{}, errors.New("load durable rotation phase publication")
+		}
+		return publication, nil
+	}
+	return phaseGraph.publishOne(ctx)
+}
+
+func (graph *Graph) publishOne(
+	ctx context.Context,
+) (model.AuthoritySnapshotPublication, error) {
 	if err := graph.ensureWritable(ctx); err != nil {
 		return model.AuthoritySnapshotPublication{}, err
 	}
@@ -109,15 +184,7 @@ func (graph *Graph) Publish(
 			"load durable authority snapshot history",
 		)
 	}
-	inputDigest, err := internalrpcauth.CanonicalJSONSHA256(struct {
-		ManifestBundle string `json:"manifest_bundle"`
-		Policy         string `json:"policy"`
-		RegistryDigest string `json:"registry_digest_sha256"`
-	}{
-		ManifestBundle: string(manifestBundle),
-		Policy:         string(policyRaw),
-		RegistryDigest: graph.config.Registry.SourceDigest,
-	})
+	inputDigest, err := publicationInputDigestForPhase(graph.config.Registry.SourceDigest, manifestBundle, policyRaw, graph.rotationPhase)
 	if err != nil {
 		return model.AuthoritySnapshotPublication{}, errors.New(
 			"digest authority graph publication inputs",
@@ -141,6 +208,47 @@ func (graph *Graph) Publish(
 	)
 	if err != nil {
 		return model.AuthoritySnapshotPublication{}, err
+	}
+	predecessorRevision := uint64(0)
+	predecessorDigest := strings.Repeat("0", 64)
+	if len(historyForBuild) > 0 {
+		last := historyForBuild[len(historyForBuild)-1]
+		predecessorRevision = last.Revision
+		predecessorDigest = last.DigestSHA256
+	}
+	intentID := existing.IntentID
+	if !found {
+		intentID = deterministicUUID(
+			"authority-rotation-v2",
+			strconv.FormatUint(graph.config.Registry.SourceRevision, 10),
+			graph.config.Registry.SourceDigest,
+			inputDigest,
+		)
+		rotation := model.AuthorityRotationIntent{
+			IntentID:                     intentID,
+			SourceRevision:               graph.config.Registry.SourceRevision,
+			SourceDigestSHA256:           graph.config.Registry.SourceDigest,
+			PredecessorRevision:          predecessorRevision,
+			PredecessorDigestSHA256:      predecessorDigest,
+			ExpectedReadbackCount:        graph.config.Registry.StartupReadbackTargetCount(),
+			PublicationInputDigestSHA256: inputDigest,
+		}
+		var prepareErr error
+		if graph.rotationPhase == "" {
+			prepareErr = graph.config.Store.PrepareRotation(ctx, rotation)
+		} else {
+			prepareErr = graph.config.Store.PrepareRotationPhase(ctx, graph.rotationOperation, graph.rotationPhase, rotation)
+		}
+		if prepareErr != nil {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"prepare durable authority key rotation",
+			)
+		}
+		if err := graph.config.Store.BeginRotationDelivery(ctx, rotation); err != nil {
+			return model.AuthoritySnapshotPublication{}, errors.New(
+				"begin durable authority key delivery",
+			)
+		}
 	}
 	buildNow := now
 	if found {
@@ -170,6 +278,9 @@ func (graph *Graph) Publish(
 				ctx,
 				target.AuthPrivateKeySecret,
 				target.TargetID+"-auth",
+				predecessorRevision,
+				predecessorDigest,
+				graph.rotationPhase,
 			)
 			if ensureErr != nil {
 				return model.AuthoritySnapshotPublication{}, ensureErr
@@ -189,6 +300,9 @@ func (graph *Graph) Publish(
 				ctx,
 				target.ProofPrivateKeySecret,
 				target.TargetID+"-proof",
+				predecessorRevision,
+				predecessorDigest,
+				graph.rotationPhase,
 			)
 			if ensureErr != nil {
 				return model.AuthoritySnapshotPublication{}, ensureErr
@@ -224,24 +338,13 @@ func (graph *Graph) Publish(
 		AuthorityProofKeys:         proofKeys,
 		SourceRegistryDigestSHA256: graph.config.Registry.SourceDigest,
 		Now:                        buildNow,
+		PreviousKeyNotAfter:        graph.rotationOperation.PreviousNotAfter,
 	})
 	if err != nil {
 		return model.AuthoritySnapshotPublication{}, err
 	}
-	predecessorRevision := uint64(0)
-	predecessorDigest := strings.Repeat("0", 64)
-	if len(historyForBuild) > 0 {
-		last := historyForBuild[len(historyForBuild)-1]
-		predecessorRevision = last.Revision
-		predecessorDigest = last.DigestSHA256
-	}
 	publication := model.AuthoritySnapshotPublication{
-		IntentID: deterministicUUID(
-			"authority-snapshot",
-			strconv.FormatUint(graph.config.Registry.SourceRevision, 10),
-			graph.config.Registry.SourceDigest,
-			built.SourceDigestSHA256,
-		),
+		IntentID:                intentID,
 		InputDigestSHA256:       inputDigest,
 		SourceRevision:          graph.config.Registry.SourceRevision,
 		SourceDigestSHA256:      built.SourceDigestSHA256,
@@ -351,6 +454,15 @@ func (graph *Graph) Publish(
 			"authority snapshot served readback rejected",
 		)
 	}
+	if err := graph.config.Store.MarkRotationDelivered(ctx, model.AuthorityRotationIntent{
+		IntentID:           persisted.IntentID,
+		SourceRevision:     persisted.SourceRevision,
+		SourceDigestSHA256: persisted.SourceDigestSHA256,
+	}); err != nil {
+		return model.AuthoritySnapshotPublication{}, errors.New(
+			"persist authority key delivery readback",
+		)
+	}
 	return served, nil
 }
 
@@ -412,10 +524,43 @@ func (graph *Graph) Ready(
 	); err != nil {
 		return err
 	}
-	return graph.deliveryReady(ctx)
+	if err := graph.deliveryReady(ctx, expected.SourceRevision); err != nil {
+		return err
+	}
+	operation, found, err := graph.config.Store.LoadRotationOperation(ctx, graph.rotationOperationID())
+	if err != nil {
+		return errors.New("load durable authority rotation operation")
+	}
+	if !found {
+		return nil
+	}
+	phase := ""
+	switch expected.SourceRevision {
+	case operation.BaseRevision + 1:
+		phase = "DISTRIBUTE"
+	case operation.BaseRevision + 2:
+		phase = "SWITCH"
+	case operation.BaseRevision + 3:
+		phase = "RETIRE"
+	}
+	if phase != "" {
+		_, err = graph.config.Store.AdvanceRotationOperation(ctx, operation, phase, expected)
+		if err != nil {
+			return errors.New("advance durable authority rotation operation")
+		}
+	}
+	return nil
 }
 
-func (graph *Graph) deliveryReady(ctx context.Context) error {
+func (graph *Graph) rotationOperationID() string {
+	return deterministicUUID(
+		"authority-normal-rotation-v3",
+		strconv.FormatUint(graph.config.Registry.SourceRevision, 10),
+		graph.config.Registry.SourceDigest,
+	)
+}
+
+func (graph *Graph) deliveryReady(ctx context.Context, sourceRevision uint64) error {
 	for _, target := range graph.config.Registry.Targets {
 		for _, path := range []string{
 			target.AuthPrivateKeySecret,
@@ -434,7 +579,7 @@ func (graph *Graph) deliveryReady(ctx context.Context) error {
 				return errors.New("authority graph delivery backend readback rejected")
 			}
 			if (path == target.ManifestTrustSecret || path == target.ProofTrustSecret) &&
-				(material.Data["source_revision"] != strconv.FormatUint(graph.config.Registry.SourceRevision, 10) ||
+				(material.Data["source_revision"] != strconv.FormatUint(sourceRevision, 10) ||
 					material.Data["source_digest_sha256"] != graph.config.Registry.SourceDigest) {
 				return errors.New("authority graph delivery source binding rejected")
 			}
@@ -447,6 +592,9 @@ func (graph *Graph) ensureKeySet(
 	ctx context.Context,
 	path string,
 	prefix string,
+	predecessorRevision uint64,
+	predecessorDigest string,
+	phase string,
 ) (rotatingKeySet, error) {
 	existing, found, err := graph.config.Secrets.ReadVersioned(ctx, path)
 	if err != nil {
@@ -486,8 +634,30 @@ func (graph *Graph) ensureKeySet(
 		64,
 	)
 	if revisionErr != nil ||
-		storedRevision >= graph.config.Registry.SourceRevision {
+		graph.config.Registry.SourceRevision <= 1 ||
+		storedRevision != predecessorRevision ||
+		storedRevision+1 != graph.config.Registry.SourceRevision ||
+		!registryDigestPattern.MatchString(existing.Data["source_digest_sha256"]) ||
+		!registryDigestPattern.MatchString(predecessorDigest) {
 		return rotatingKeySet{}, err
+	}
+	// Registry digest, publication input и snapshot digest принадлежат разным
+	// доменам. Их exact historical связь разрешается из immutable publication,
+	// а не реконструируется из новых policy/manifest или предполагаемой фазы.
+	previous, previousFound, previousErr := graph.config.Store.LoadSnapshotPredecessor(
+		ctx,
+		predecessorRevision,
+		predecessorDigest,
+		existing.Data["source_digest_sha256"],
+	)
+	previousPublication := previous.Publication
+	if previousErr != nil || !previousFound ||
+		previousPublication.SourceRevision != predecessorRevision ||
+		previousPublication.SourceDigestSHA256 != predecessorDigest ||
+		!registryDigestPattern.MatchString(previousPublication.InputDigestSHA256) ||
+		previous.RegistryDigestSHA256 != existing.Data["source_digest_sha256"] ||
+		!validHistoricalPredecessorPhase(phase, previous.RotationPhase) {
+		return rotatingKeySet{}, errors.New("authority key predecessor publication rejected")
 	}
 	oldCurrent, parseErr := internalrpcauth.ParsePrivateJWK(
 		[]byte(existing.Data["current_private_jwk"]),
@@ -508,6 +678,34 @@ func (graph *Graph) ensureKeySet(
 	)
 	if parseErr != nil || oldNextGeneration < 2 {
 		return rotatingKeySet{}, errors.New("parse previous NEXT generation")
+	}
+	if phase == "DISTRIBUTE" {
+		data, dataErr := graph.keySetData(oldCurrent, oldNext, nil, oldNextGeneration-1, oldNextGeneration, 0)
+		if dataErr != nil {
+			return rotatingKeySet{}, dataErr
+		}
+		updated, writeErr := graph.config.Secrets.WriteVersionedCAS(ctx, path, existing.Version, data)
+		if writeErr != nil {
+			updated, found, writeErr = graph.config.Secrets.ReadVersioned(ctx, path)
+			if writeErr != nil || !found || !sameExactMaterial(updated.Data, data) {
+				return rotatingKeySet{}, errors.New("recover authority signing key candidate delivery")
+			}
+		}
+		return decodeRotatingKeySet(updated, graph.config.Registry)
+	}
+	if phase == "RETIRE" {
+		data, dataErr := graph.keySetData(oldCurrent, oldNext, nil, oldNextGeneration-1, oldNextGeneration, 0)
+		if dataErr != nil {
+			return rotatingKeySet{}, dataErr
+		}
+		updated, writeErr := graph.config.Secrets.WriteVersionedCAS(ctx, path, existing.Version, data)
+		if writeErr != nil {
+			updated, found, writeErr = graph.config.Secrets.ReadVersioned(ctx, path)
+			if writeErr != nil || !found || !sameExactMaterial(updated.Data, data) {
+				return rotatingKeySet{}, errors.New("recover PREVIOUS authority key retirement")
+			}
+		}
+		return decodeRotatingKeySet(updated, graph.config.Registry)
 	}
 	next, keyErr := internalrpcauth.GenerateES256Key(
 		prefix + "-g" + strconv.FormatUint(oldNextGeneration+1, 10),
@@ -541,6 +739,37 @@ func (graph *Graph) ensureKeySet(
 		}
 	}
 	return decodeRotatingKeySet(updated, graph.config.Registry)
+}
+
+func validHistoricalPredecessorPhase(current, historical string) bool {
+	switch current {
+	case "DISTRIBUTE":
+		return historical == "" || historical == "RETIRE"
+	case "SWITCH":
+		return historical == "DISTRIBUTE"
+	case "RETIRE":
+		return historical == "SWITCH"
+	default:
+		return historical == ""
+	}
+}
+
+func publicationInputDigest(registryDigest string, manifestBundle, policyRaw []byte) (string, error) {
+	return publicationInputDigestForPhase(registryDigest, manifestBundle, policyRaw, "")
+}
+
+func publicationInputDigestForPhase(registryDigest string, manifestBundle, policyRaw []byte, phase string) (string, error) {
+	return internalrpcauth.CanonicalJSONSHA256(struct {
+		ManifestBundle string `json:"manifest_bundle"`
+		Policy         string `json:"policy"`
+		RegistryDigest string `json:"registry_digest_sha256"`
+		RotationPhase  string `json:"rotation_phase,omitempty"`
+	}{
+		ManifestBundle: string(manifestBundle),
+		Policy:         string(policyRaw),
+		RegistryDigest: registryDigest,
+		RotationPhase:  phase,
+	})
 }
 
 func (graph *Graph) keySetData(

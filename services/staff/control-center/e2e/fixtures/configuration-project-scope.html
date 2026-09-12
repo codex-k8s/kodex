@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проектная область конфигурации</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from "vue";
+      import { createRouter, createWebHistory, RouterView } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import ConfigurationPage from "../../src/pages/ConfigurationPage.vue";
+      import "../../src/app/styles/base.css";
+
+      await loadRuntimeConfig();
+      configureApiClient();
+      const router = createRouter({
+        history: createWebHistory(),
+        routes: [
+          {
+            path: "/configurations/:kind/:configurationRef",
+            name: "configuration",
+            component: ConfigurationPage,
+          },
+        ],
+      });
+      createApp({ render: () => h(RouterView) })
+        .use(i18n)
+        .use(router)
+        .mount("#app");
+    </script>
+  </body>
+</html>

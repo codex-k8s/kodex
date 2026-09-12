@@ -17,6 +17,9 @@ var publicationFunctionDeclaration string
 const baselineMigration = "migrations/20260823000100_internal_rpc_authority_baseline.sql"
 const workloadBoundaryMigration = "migrations/20260906000100_workload_database_boundary.sql"
 const snapshotWorkloadSignerMigration = "migrations/20260907000100_snapshot_workload_signer_boundary.sql"
+const authorityRotationLifecycleMigration = "migrations/20260909000100_authority_rotation_lifecycle.sql"
+const authorityNormalRotationOperationMigration = "migrations/20260909000200_authority_normal_rotation_operation.sql"
+const authoritySnapshotPredecessorMigration = "migrations/20260909000300_authority_snapshot_predecessor.sql"
 
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
 	t.Parallel()
@@ -81,6 +84,29 @@ func TestPeerScopedReadbackMigrationUsesCompositeIdempotencyLookup(t *testing.T)
 	}
 }
 
+func TestSnapshotPredecessorMigrationKeepsExactCrossDomainProvenance(t *testing.T) {
+	t.Parallel()
+	content, err := os.ReadFile(authoritySnapshotPredecessorMigration)
+	if err != nil {
+		t.Fatalf("read predecessor migration: %v", err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"history.source_revision = p_source_revision",
+		"history.source_digest_sha256 = p_source_digest_sha256",
+		"intent.registry_source_digest_sha256 = p_registry_digest_sha256",
+		"phase_intent.publication_input_digest_sha256 = history.publication_input_digest_sha256",
+		"operation.publication_input_digest_sha256 = history.publication_input_digest_sha256",
+		"operation.snapshot_digest_sha256 = history.source_digest_sha256",
+		"COALESCE(operation.phase, '')",
+		"pg_has_role(session_user, 'internal_rpc_authority_publisher', 'MEMBER')",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("predecessor migration omits %q", required)
+		}
+	}
+}
+
 func TestSnapshotPromotionUsesExactRequiredReadbackTargets(t *testing.T) {
 	t.Parallel()
 
@@ -118,7 +144,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 4 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" {
+	if len(entries) != 7 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration || entries[6] != authoritySnapshotPredecessorMigration {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)
@@ -127,6 +153,63 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	}
 	if got := fmt.Sprintf("%x", sha256.Sum256(content)); got != "d4c9ed792ae0e157247fd3e1b58d15f7bbff43bf38f202bf72e9201398be4e0a" {
 		t.Fatal("published authority baseline bytes changed")
+	}
+}
+
+func TestAuthorityNormalRotationOperationHasThreeImmutablePhases(t *testing.T) {
+	t.Parallel()
+	content, err := os.ReadFile(authorityNormalRotationOperationMigration)
+	if err != nil {
+		t.Fatal("read authority normal rotation operation migration")
+	}
+	text := string(content)
+	for _, required := range []string{
+		"authority_rotation_operation_phase_intents",
+		"authority_rotation_operation_publications",
+		"'DISTRIBUTE', 'SWITCH', 'RETIRE'",
+		"switch_not_before",
+		"previous_not_after",
+		"pg_advisory_xact_lock(1390, 1428)",
+		"registry_digest_sha256",
+		"publication_input_digest_sha256",
+		"snapshot_digest_sha256",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("normal rotation operation migration is missing %q", required)
+		}
+	}
+	if strings.Contains(text, "DROP TABLE") || strings.Contains(text, "TRUNCATE") {
+		t.Fatal("normal rotation operation migration contains destructive state reset")
+	}
+}
+
+func TestAuthorityRotationLifecycleMigrationIsForwardOnlyAndBounded(t *testing.T) {
+	t.Parallel()
+
+	content, err := os.ReadFile(authorityRotationLifecycleMigration)
+	if err != nil {
+		t.Fatal("read authority rotation lifecycle migration")
+	}
+	text := string(content)
+	for _, required := range []string{
+		"publisher_prepare_rotation",
+		"publisher_begin_rotation_delivery",
+		"publisher_mark_rotation_delivered",
+		"publisher_abort_rotation",
+		"protocol_version = 2",
+		"interval '40 seconds'",
+		"predecessor.overlap_until > pg_catalog.clock_timestamp()",
+		"status = 'RETIRED'",
+		"status = 'ABORTED'",
+		"intent.status <> 'DELIVERING'",
+		"intent.status NOT IN ('DELIVERED', 'PROMOTED')",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("authority rotation migration is missing %q", required)
+		}
+	}
+	if strings.Contains(text, "DROP TABLE") || strings.Contains(text, "TRUNCATE") {
+		t.Fatal("authority rotation migration contains destructive state reset")
 	}
 }
 

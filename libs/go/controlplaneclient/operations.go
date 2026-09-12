@@ -521,7 +521,6 @@ func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 		"platform.command.runtime-environments.create":          {},
 		"platform.command.prompt-templates.create-draft":        {},
 		"platform.command.role-image-revisions.create-draft":    {},
-		"platform.command.integration-definitions.create-draft": {},
 		"platform.command.runtime-secrets.create":               {},
 		"platform.command.role-images.promote":                  {},
 		"platform.role-images.recipes.list":                     {},

@@ -54,6 +54,74 @@ export function isFirefoxScrollAdvisory(
   );
 }
 
+export function isFirefoxBounceTrackerAdvisory(
+  browserName: string,
+  type: string,
+  source: string,
+  line: number,
+  column: number,
+  text: string,
+): boolean {
+  return (
+    browserName === "firefox" &&
+    type === "warning" &&
+    source === "" &&
+    line === 0 &&
+    column === 0 &&
+    text ===
+      '[JavaScript Warning: "“identity.invalid” has been classified as a bounce tracker. If it does not receive user activation within the next 3,600 seconds it will have its state purged."]'
+  );
+}
+
+export function isFirefoxAvailabilityBodyAbortAdvisory(
+  browserName: string,
+  type: string,
+  source: string,
+  line: number,
+  column: number,
+  text: string,
+): boolean {
+  if (
+    browserName !== "firefox" ||
+    type !== "error" ||
+    line !== 1 ||
+    column <= 0 ||
+    // Firefox атрибутирует внутреннюю ошибку чтения body текущему application
+    // chunk, поэтому проверяем exact origin/asset, а не имя модуля availability.
+    !/^https:\/\/kodex\.test\/assets\/[A-Za-z0-9_-]+\.js$/.test(source)
+  )
+    return false;
+  return (
+    text ===
+    `[JavaScript Error: "Failed to read data from the ReadableStream: “AbortError: The operation was aborted. ”." {file: "${source}" line: 1}]`
+  );
+}
+
+export function validFirefoxBounceTrackerAdvisoryCount(
+  browserName: string,
+  count: number,
+): boolean {
+  return (
+    Number.isSafeInteger(count) &&
+    count >= 0 &&
+    count <= (browserName === "firefox" ? 1 : 0)
+  );
+}
+
+export function matchesConfirmedFirefoxAvailabilityBodyAborts(
+  browserName: string,
+  advisoryCount: number,
+  confirmedRequestCount: number,
+): boolean {
+  return (
+    Number.isSafeInteger(advisoryCount) &&
+    advisoryCount >= 0 &&
+    Number.isSafeInteger(confirmedRequestCount) &&
+    confirmedRequestCount >= 0 &&
+    advisoryCount === (browserName === "firefox" ? confirmedRequestCount : 0)
+  );
+}
+
 export function isWebKitFontAdvisory(
   browserName: string,
   text: string,
@@ -78,4 +146,22 @@ export function isConfirmedSyntheticCancellation(
     webkit: "Load request cancelled",
   };
   return expected[browserName] === code;
+}
+
+export function isCompletedChromiumTicketTerminal(
+  browserName: string,
+  code: string,
+  method: string,
+  resourceType: string,
+  pathname: string,
+  bodyCompleted: boolean,
+): boolean {
+  return (
+    browserName === "chromium" &&
+    code === "net::ERR_ABORTED" &&
+    method === "POST" &&
+    resourceType === "fetch" &&
+    pathname === "/api/v1/session/ticket" &&
+    bodyCompleted
+  );
 }

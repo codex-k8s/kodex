@@ -3,9 +3,12 @@ import type { Page } from "@playwright/test";
 export const syntheticFetchIDHeader = "x-kodex-synthetic-fetch-id";
 
 export interface SyntheticFetchEvent {
-  phase: "start" | "abort";
+  phase: "start" | "abort" | "headers" | "body" | "body-error" | "reject";
   id: string;
   url: string;
+  signalGeneration?: number;
+  signalAborted?: boolean;
+  reasonClass?: string;
 }
 
 // Fixture-only header связывает сигнал с request; method/body/signal/credentials сохраняются.
@@ -31,7 +34,9 @@ export async function installSyntheticAbortObserver(
       if (
         frame !== page.mainFrame() ||
         !event ||
-        !["start", "abort"].includes(event.phase) ||
+        !["start", "abort", "headers", "body", "body-error", "reject"].includes(
+          event.phase,
+        ) ||
         typeof event.id !== "string" ||
         typeof event.url !== "string"
       )
@@ -44,8 +49,76 @@ export async function installSyntheticAbortObserver(
   await page.addInitScript(
     ({ expectedOrigin, headerName }) => {
       const fetch = window.fetch.bind(window);
+      const responseText = Object.getOwnPropertyDescriptor(
+        Response.prototype,
+        "text",
+      )?.value as ((this: Response) => Promise<string>) | undefined;
+      if (!responseText) throw new Error("Response.text fixture unavailable");
       const documentID = crypto.randomUUID();
       let sequence = 0;
+      let signalSequence = 0;
+      const signalGenerations = new WeakMap<AbortSignal, number>();
+      const fetchDetails = new Map<
+        string,
+        {
+          url: string;
+          signal: AbortSignal | null | undefined;
+          signalGeneration: number;
+        }
+      >();
+      const bodyErrors = new Set<string>();
+      const reportBodyError = async (id: string, error: unknown) => {
+        const details = fetchDetails.get(id);
+        if (!details || bodyErrors.has(id)) return;
+        bodyErrors.add(id);
+        const binding = (
+          window as unknown as {
+            __kodexSyntheticAbortedFetch: (
+              event: SyntheticFetchEvent,
+            ) => Promise<void>;
+          }
+        ).__kodexSyntheticAbortedFetch;
+        await binding({
+          phase: "body-error",
+          id,
+          url: details.url,
+          signalGeneration: details.signalGeneration,
+          signalAborted: details.signal?.aborted ?? false,
+          reasonClass: error instanceof Error ? error.name : "UNKNOWN",
+        });
+        fetchDetails.delete(id);
+      };
+      Response.prototype.text = async function () {
+        const id = this.headers.get(headerName);
+        const details = id ? fetchDetails.get(id) : undefined;
+        let value: string;
+        try {
+          value = await responseText.call(this);
+        } catch (error) {
+          if (id) await reportBodyError(id, error);
+          throw error;
+        }
+        if (id) {
+          const url = details?.url ?? this.url;
+          fetchDetails.delete(id);
+          const binding = (
+            window as unknown as {
+              __kodexSyntheticAbortedFetch: (
+                event: SyntheticFetchEvent,
+              ) => Promise<void>;
+            }
+          ).__kodexSyntheticAbortedFetch;
+          await binding({
+            phase: "body",
+            id,
+            url,
+            signalGeneration: details?.signalGeneration ?? 0,
+            signalAborted: details?.signal?.aborted ?? false,
+            reasonClass: "NONE",
+          });
+        }
+        return value;
+      };
       window.fetch = (input, init) => {
         const signal =
           init?.signal === null
@@ -68,7 +141,12 @@ export async function installSyntheticAbortObserver(
             ? address.href
             : undefined;
         const id = `${documentID}:${String(++sequence)}`;
-        const emit = (phase: "start" | "abort") => {
+        const signalGeneration = signal
+          ? (signalGenerations.get(signal) ?? ++signalSequence)
+          : 0;
+        if (signal && !signalGenerations.has(signal))
+          signalGenerations.set(signal, signalGeneration);
+        const emit = (phase: SyntheticFetchEvent["phase"]) => {
           if (!observedURL) return;
           const binding = (
             window as unknown as {
@@ -77,9 +155,23 @@ export async function installSyntheticAbortObserver(
               ) => Promise<void>;
             }
           ).__kodexSyntheticAbortedFetch;
-          void binding({ phase, id, url: observedURL }).catch(() => undefined);
+          const reason: unknown = signal?.reason;
+          void binding({
+            phase,
+            id,
+            url: observedURL,
+            signalGeneration,
+            signalAborted: signal?.aborted ?? false,
+            reasonClass:
+              reason instanceof Error
+                ? reason.name
+                : signal?.aborted
+                  ? "UNKNOWN"
+                  : "NONE",
+          }).catch(() => undefined);
         };
         if (observedURL) {
+          fetchDetails.set(id, { url: observedURL, signal, signalGeneration });
           const headers = new Headers(
             init?.headers ??
               (input instanceof Request ? input.headers : undefined),
@@ -95,7 +187,55 @@ export async function installSyntheticAbortObserver(
             signal?.addEventListener("abort", () => emit("abort"), {
               once: true,
             });
-          return fetch(input, { ...init, headers });
+          const operation = fetch(input, { ...init, headers });
+          void operation.then(
+            (response) => {
+              // Настоящий wrapper читает native reader ещё до Response.text.
+              // Наблюдаем только body этого exact fixture request, чужие streams не меняем.
+              const body = response.body;
+              if (body) {
+                const getReader = Reflect.get(
+                  body,
+                  "getReader",
+                ) as ReadableStream["getReader"];
+                Object.defineProperty(body, "getReader", {
+                  configurable: true,
+                  value(this: ReadableStream, ...args: unknown[]) {
+                    const reader = Reflect.apply(getReader, this, args) as
+                      | ReadableStreamDefaultReader
+                      | ReadableStreamBYOBReader;
+                    if (reader instanceof ReadableStreamDefaultReader) {
+                      const read = Reflect.get(reader, "read");
+                      Object.defineProperty(reader, "read", {
+                        configurable: true,
+                        value(
+                          this: ReadableStreamDefaultReader,
+                          ...readArgs: unknown[]
+                        ) {
+                          const result = Reflect.apply(
+                            read,
+                            this,
+                            readArgs,
+                          ) as Promise<ReadableStreamReadResult<unknown>>;
+                          return result.catch(async (error: unknown) => {
+                            await reportBodyError(id, error);
+                            throw error;
+                          });
+                        },
+                      });
+                    }
+                    return reader;
+                  },
+                });
+              }
+              emit("headers");
+            },
+            () => {
+              emit("reject");
+              fetchDetails.delete(id);
+            },
+          );
+          return operation;
         }
         return fetch(input, init);
       };

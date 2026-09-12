@@ -1,0 +1,71 @@
+package main
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestRotationAbortArgumentsFailClosed(t *testing.T) {
+	digest := strings.Repeat("a", 64)
+	valid := []string{"rotation-abort", "--intent-id", "13900000-0000-4000-8000-000000000001", "--source-revision", "2", "--source-digest-sha256", digest, "--confirm", "ABORT-STAGING-AUTHORITY-ROTATION"}
+	action, err := parseCommand(valid)
+	if err != nil || action != commandRotationAbort {
+		t.Fatal("rotation abort command rejected")
+	}
+	if _, err := parseRotationOptions(action, valid); err != nil {
+		t.Fatal("rotation abort identity rejected")
+	}
+	for _, tc := range []struct {
+		index int
+		value string
+	}{
+		{1, "--force"}, {2, "00000000-0000-0000-0000-000000000000"},
+		{4, "02"}, {4, "0"}, {6, strings.Repeat("A", 64)},
+		{8, "ABORT-PRODUCTION-AUTHORITY-ROTATION"},
+	} {
+		args := append([]string(nil), valid...)
+		args[tc.index] = tc.value
+		if _, err := parseRotationOptions(action, args); err == nil {
+			t.Fatalf("invalid rotation abort accepted: argument %d", tc.index)
+		}
+	}
+	if _, err := parseCommand(valid[:8]); err == nil {
+		t.Fatal("incomplete rotation abort accepted")
+	}
+	if _, err := parseCommand(append(valid, "--force")); err == nil {
+		t.Fatal("additional rotation abort argument accepted")
+	}
+}
+
+func TestRotationWatchCommandIsExact(t *testing.T) {
+	arguments := []string{"rotation-watch", "--operation-id", "13900000-0000-4000-8000-000000000002"}
+	action, err := parseCommand(arguments)
+	if err != nil || action != commandRotationWatch {
+		t.Fatal("rotation watch command rejected")
+	}
+	options, err := parseRotationOptions(action, arguments)
+	if err != nil || options.operationID != arguments[2] {
+		t.Fatal("rotation watch operation identity rejected")
+	}
+	if _, err := parseCommand([]string{"rotation-watch", "--force"}); err == nil {
+		t.Fatal("rotation watch accepted additional arguments")
+	}
+}
+
+func TestRotationWatchRejectsForeignRetiredOperationAcrossRestart(t *testing.T) {
+	expected := "13900000-0000-4000-8000-000000000002"
+	foreign := rotationStatus{OperationID: "13900000-0000-4000-8000-000000000003", Status: "RETIRED"}
+	if rotationWatchComplete(foreign, expected) {
+		t.Fatal("foreign retired operation completed watch")
+	}
+	waiting := rotationStatus{OperationID: expected, Status: "WAITING_RETIRE"}
+	if rotationWatchComplete(waiting, expected) {
+		t.Fatal("non-terminal owner operation completed watch")
+	}
+	retired := rotationStatus{OperationID: expected, Status: "RETIRED"}
+	for restart := 0; restart < 2; restart++ {
+		if !rotationWatchComplete(retired, expected) {
+			t.Fatal("owner operation did not complete watch after restart")
+		}
+	}
+}

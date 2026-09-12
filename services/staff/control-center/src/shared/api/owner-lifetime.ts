@@ -13,6 +13,11 @@ export function ownerRequestSignal(): AbortSignal {
   return AbortSignal.any([controller.signal, documentRequestSignal()]);
 }
 
+// Только смена владельца: закрытие документа не отзывает durable recovery.
+export function ownerInvalidationSignal(): AbortSignal {
+  return controller.signal;
+}
+
 export function assertOwnerRequest(signal: AbortSignal): void {
   if (signal.aborted) throw new OwnerContextChangedError();
 }

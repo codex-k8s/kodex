@@ -60,3 +60,23 @@ func TestContextHTTPMethodsHaveExactAuthorityProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestManagedConfigurationCreateAuthorityProjectScope(t *testing.T) {
+	required := authorityProjectRequiredOperations()
+	for _, operation := range []string{
+		"platform.command.prompt-templates.create-draft",
+		"platform.command.role-image-revisions.create-draft",
+	} {
+		if _, ok := required[operation]; !ok {
+			t.Fatalf("project-scoped create operation %s is not protected", operation)
+		}
+	}
+	for _, operation := range []string{
+		"platform.command.integration-definitions.create-draft",
+		"platform.command.system-stt.create-draft",
+	} {
+		if _, ok := required[operation]; ok {
+			t.Fatalf("organization-scoped create operation %s requires a caller project", operation)
+		}
+	}
+}

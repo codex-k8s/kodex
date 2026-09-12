@@ -4,8 +4,13 @@ import {
   documentRequestSignal,
   documentRequestsResumed,
   installDocumentRequestLifetime,
+  retainRequestSignalParents,
 } from "./document-lifetime";
-import { ownerRequestSignal, resetOwnerRequests } from "./owner-lifetime";
+import {
+  ownerInvalidationSignal,
+  ownerRequestSignal,
+  resetOwnerRequests,
+} from "./owner-lifetime";
 import { readWithRetry } from "./read-retry";
 import { createClient } from "./generated/openapi/client/client.gen";
 import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
@@ -23,6 +28,20 @@ afterEach(() => {
 });
 
 describe("document request lifetime", () => {
+  it("закрытие документа отменяет запросы, но только смена владельца отзывает recovery", () => {
+    const owner = ownerInvalidationSignal();
+    const request = ownerRequestSignal();
+    const revoke = vi.fn();
+    owner.addEventListener("abort", revoke, { once: true });
+    target.dispatchEvent(new Event("pagehide"));
+    expect(request.aborted).toBe(true);
+    expect(owner.aborted).toBe(false);
+    expect(revoke).not.toHaveBeenCalled();
+    resetOwnerRequests();
+    expect(owner.aborted).toBe(true);
+    expect(revoke).toHaveBeenCalledOnce();
+    expect(ownerInvalidationSignal().aborted).toBe(false);
+  });
   it("закрывает старый owner signal, не разрешает fetch после interceptor и не меняет владельца при resume", async () => {
     const native = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok"));
     vi.stubGlobal("fetch", native);
@@ -104,30 +123,113 @@ describe("document request lifetime", () => {
     await cancelled;
     expect(next).not.toHaveBeenCalled();
   });
-  it("отменяет активный native request, сохраняет headers/body/method и внешнюю причину отказа", async () => {
-    const native = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok"));
+  it("отменяет активный native request, сохраняет headers/body/method/credentials и внешнюю причину отказа", async () => {
+    const native = vi.fn<typeof fetch>((_input, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Fixture aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
     vi.stubGlobal("fetch", native);
     const request = new Request("https://kodex.example/api/v1/projects", {
       method: "POST",
       headers: { "X-Fixture": "preserved" },
       body: "fixture",
+      credentials: "include",
     });
-    await documentFetch(request);
+    const pending = documentFetch(request);
+    await vi.waitFor(() => expect(native).toHaveBeenCalledOnce());
     const transmitted = native.mock.calls[0]?.[0];
+    const init = native.mock.calls[0]?.[1];
     expect(transmitted).toBeInstanceOf(Request);
     if (!(transmitted instanceof Request))
       throw new Error("Missing fixture request");
     expect(transmitted.method).toBe("POST");
     expect(transmitted.headers.get("X-Fixture")).toBe("preserved");
+    expect(transmitted.credentials).toBe("include");
     expect(await transmitted.text()).toBe("fixture");
+    expect(init?.signal?.aborted).toBe(false);
     target.dispatchEvent(new Event("beforeunload"));
-    expect(transmitted.signal.aborted).toBe(true);
+    expect(init?.signal?.aborted).toBe(true);
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
     target.dispatchEvent(new Event("pageshow"));
     const failure = new TypeError("Network unavailable");
     native.mockRejectedValueOnce(failure);
     await expect(
       documentFetch(new Request("https://kodex.example/api/v1/projects")),
     ).rejects.toBe(failure);
+  });
+  it("передаёт отмену parent signal напрямую в native fetch", async () => {
+    const native = vi.fn<typeof fetch>((_input, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Fixture aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    vi.stubGlobal("fetch", native);
+    const parent = new AbortController();
+    const source = new Request("https://kodex.example/api/v1/projects", {
+      signal: parent.signal,
+    });
+    const pending = documentFetch(
+      retainRequestSignalParents(
+        new Request(source, { headers: { "X-Fixture": "preserved" } }),
+        source,
+      ),
+    );
+    await vi.waitFor(() => expect(native).toHaveBeenCalledOnce());
+    const init = native.mock.calls[0]?.[1];
+    expect(init?.signal?.aborted).toBe(false);
+    parent.abort();
+    expect(init?.signal?.aborted).toBe(true);
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+  it("снимает linked listeners после success, error и abort без накопления", async () => {
+    const parent = new AbortController();
+    const source = new Request("https://kodex.example/api/v1/projects", {
+      signal: parent.signal,
+    });
+    const retained = Array.from({ length: 3 }, () =>
+      retainRequestSignalParents(new Request(source), source),
+    );
+    const add = vi.spyOn(source.signal, "addEventListener");
+    const remove = vi.spyOn(source.signal, "removeEventListener");
+    const native = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("ok"))
+      .mockRejectedValueOnce(new TypeError("Network unavailable"))
+      .mockImplementationOnce((_input, init) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Fixture aborted", "AbortError")),
+            { once: true },
+          );
+        });
+      });
+    vi.stubGlobal("fetch", native);
+    const next = () => {
+      const request = retained.shift();
+      if (!request) throw new Error("Missing retained fixture request");
+      return request;
+    };
+    await documentFetch(next());
+    await expect(documentFetch(next())).rejects.toBeInstanceOf(TypeError);
+    const pending = documentFetch(next());
+    await vi.waitFor(() => expect(native).toHaveBeenCalledTimes(3));
+    parent.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(add).toHaveBeenCalledTimes(3);
+    for (const [, listener] of add.mock.calls)
+      expect(
+        remove.mock.calls.some(([, removed]) => removed === listener),
+      ).toBe(true);
   });
   it("регистрация идемпотентна, cleanup удаляет слушатели", () => {
     expect(installDocumentRequestLifetime(target as Window)).toBe(cleanup);

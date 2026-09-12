@@ -46,6 +46,18 @@ const projectCursor = ref<string>();
 const projectLoading = ref(false);
 const projectProblem = ref<AppProblem>();
 const projectsExpanded = ref(false);
+// Итог первого чтения определяет расположение панелей. До него кнопка
+// разворачивания не принимает жест, который завершился бы уже на другом месте.
+const initialCatalogs = ref({
+  gates: false,
+  failed: false,
+  runs: false,
+  sessions: false,
+  artifacts: false,
+});
+const initialLayoutReady = computed(() =>
+  Object.values(initialCatalogs.value).every(Boolean),
+);
 const projectCursors = new Set<string>();
 let projectController: AbortController | undefined;
 let projectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -314,7 +326,9 @@ onBeforeUnmount(() => {
       :refreshing="refreshing"
       @retry-gates="refreshOverview"
       @retry-runs="refreshRuns"
-      ><template #gates><HomeGateCatalog /></template>
+      ><template #gates
+        ><HomeGateCatalog @settled="initialCatalogs.gates = true"
+      /></template>
       <template #failed
         ><HomeResultCatalog
           v-show="failedCatalogTotal !== 0"
@@ -322,6 +336,7 @@ onBeforeUnmount(() => {
           fixed-filter="FAILED"
           :ready="runsSettled"
           @total="failedCatalogTotal = $event"
+          @settled="initialCatalogs.failed = true"
       /></template>
     </HomeAttentionCenter>
 
@@ -336,6 +351,7 @@ onBeforeUnmount(() => {
           class="home-running-section"
           :ready="runsSettled"
           @total="runCatalogTotal = $event"
+          @settled="initialCatalogs.runs = true"
         />
 
         <HomeResultCatalog
@@ -344,6 +360,7 @@ onBeforeUnmount(() => {
           class="home-session-section"
           :ready="runsSettled"
           @total="sessionCatalogTotal = $event"
+          @settled="initialCatalogs.sessions = true"
         />
       </div>
 
@@ -366,6 +383,7 @@ onBeforeUnmount(() => {
               class="icon-button"
               :title="$t('catalog.expand')"
               :aria-label="$t('catalog.expand')"
+              :disabled="!initialLayoutReady"
               @click="projectsExpanded = true"
             >
               <Maximize2 :size="16" />
@@ -389,6 +407,7 @@ onBeforeUnmount(() => {
           v-show="showResults"
           kind="ARTIFACT"
           @total="artifactCatalogTotal = $event"
+          @settled="initialCatalogs.artifacts = true"
         />
       </aside>
     </div>

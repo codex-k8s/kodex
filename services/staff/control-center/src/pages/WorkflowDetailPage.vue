@@ -576,18 +576,6 @@ onBeforeUnmount(() => {
                   </fieldset>
                   <fieldset class="choice-field field--wide">
                     <legend>{{ $t("workflows.requiredCapabilities") }}</legend>
-                    <EffectiveCapabilityCatalog
-                      v-if="step.agentRef"
-                      :agent-ref="step.agentRef"
-                      :project-ref="projectRef"
-                      mode="REQUIREMENTS"
-                      :selected-keys="step.requiredCapabilityKeys"
-                      :can-manage="Boolean(canEdit)"
-                      :busy="busy"
-                      @toggle="
-                        (key, enabled) => toggleCapability(step, key, enabled)
-                      "
-                    />
                     <div v-if="publishedStep(step.position)?.agentRef">
                       <button
                         type="button"
@@ -614,6 +602,18 @@ onBeforeUnmount(() => {
                         mode="READ"
                       />
                     </div>
+                    <EffectiveCapabilityCatalog
+                      v-if="step.agentRef"
+                      :agent-ref="step.agentRef"
+                      :project-ref="projectRef"
+                      mode="REQUIREMENTS"
+                      :selected-keys="step.requiredCapabilityKeys"
+                      :can-manage="Boolean(canEdit)"
+                      :busy="busy"
+                      @toggle="
+                        (key, enabled) => toggleCapability(step, key, enabled)
+                      "
+                    />
                   </fieldset>
                 </div>
               </details>

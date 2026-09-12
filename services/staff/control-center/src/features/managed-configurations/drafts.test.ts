@@ -36,7 +36,12 @@ vi.mock("@/shared/api/mutation", async () => {
       ),
   };
 });
-import { changeDraft } from "./api";
+import {
+  changeDraft,
+  configurationProjectScopeValid,
+  configurationRequiresProject,
+  createDraft,
+} from "./api";
 import { canChangeDraft } from "./model";
 const configuration: ManagedConfiguration = {
   ref: "configuration_synthetic",
@@ -157,4 +162,79 @@ describe("Immutable managed drafts", () => {
     }
     expect(client.post).not.toHaveBeenCalled();
   });
+});
+
+describe("Project scope managed drafts", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ["PROMPT_TEMPLATE", "prj_fixture01"],
+    ["ROLE_IMAGE", "prj_fixture01"],
+    ["INTEGRATION_DEFINITION", undefined],
+    ["SYSTEM_STT", undefined],
+  ] as const)(
+    "отправляет %s только в штатной project boundary",
+    async (kind, projectRef) => {
+      const result: ManagedConfigurationResult = {
+        configuration: {
+          ...configuration,
+          kind,
+          version: 9,
+          ...(projectRef ? { projectRef } : {}),
+        },
+        revision: { ...revision, ref: "revision_new", state: "DRAFT" },
+      };
+      client.post.mockResolvedValue(response(result));
+      await expect(
+        createDraft(kind, {
+          ...(projectRef ? { projectRef } : {}),
+          name: "Synthetic",
+          contentFormat: kind === "PROMPT_TEMPLATE" ? "TEXT" : "JSON",
+          content: kind === "PROMPT_TEMPLATE" ? "Synthetic" : "{}",
+        }),
+      ).resolves.toEqual(result);
+      expect(client.post).toHaveBeenCalledOnce();
+      if (projectRef)
+        expect(client.post.mock.calls[0]?.[0].body).toMatchObject({
+          projectRef,
+        });
+      else
+        expect(client.post.mock.calls[0]?.[0].body).not.toHaveProperty(
+          "projectRef",
+        );
+    },
+  );
+
+  it("разделяет project-scoped и organization-scoped виды", () => {
+    expect(configurationRequiresProject("PROMPT_TEMPLATE")).toBe(true);
+    expect(configurationRequiresProject("ROLE_IMAGE")).toBe(true);
+    expect(configurationRequiresProject("INTEGRATION_DEFINITION")).toBe(false);
+    expect(configurationRequiresProject("SYSTEM_STT")).toBe(false);
+    expect(
+      configurationProjectScopeValid("PROMPT_TEMPLATE", "project_fixture"),
+    ).toBe(true);
+    expect(configurationProjectScopeValid("ROLE_IMAGE", " bad ")).toBe(false);
+    expect(configurationProjectScopeValid("INTEGRATION_DEFINITION")).toBe(true);
+  });
+
+  it.each([
+    ["PROMPT_TEMPLATE", undefined],
+    ["ROLE_IMAGE", undefined],
+    ["PROMPT_TEMPLATE", " bad "],
+    ["INTEGRATION_DEFINITION", "project_fixture"],
+    ["SYSTEM_STT", "project_fixture"],
+  ] as const)(
+    "не отправляет %s с недопустимой project boundary",
+    async (kind, projectRef) => {
+      await expect(
+        createDraft(kind, {
+          ...(projectRef ? { projectRef } : {}),
+          name: "Synthetic",
+          contentFormat: kind === "PROMPT_TEMPLATE" ? "TEXT" : "JSON",
+          content: kind === "PROMPT_TEMPLATE" ? "Synthetic" : "{}",
+        }),
+      ).rejects.toThrow("project scope");
+      expect(client.post).not.toHaveBeenCalled();
+    },
+  );
 });

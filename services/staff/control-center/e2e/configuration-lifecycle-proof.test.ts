@@ -39,6 +39,10 @@ async function fixture() {
       browser: "chromium" as const,
       journalPath: join(directory, "state.jsonl"),
       prefix: "fixture-lifecycle",
+      projectRef: "project_fixture",
+      projectRefSHA256: createHash("sha256")
+        .update("project_fixture")
+        .digest("hex"),
       resume: false,
       runTimeoutMs: 60000,
       syntheticSource: "synthetic",
@@ -194,6 +198,7 @@ test("live-конфигурация связывает exact private manifest и
       KODEX_E2E_BASE_URL: "https://kodex.test",
       KODEX_E2E_BROWSER: "webkit",
       KODEX_E2E_RESOURCE_PREFIX: "fixture-live",
+      KODEX_E2E_CONFIGURATION_LIFECYCLE_PROJECT_REF: "project_fixture",
       KODEX_E2E_RUN_TIMEOUT_MS: "60000",
       KODEX_E2E_CONFIGURATION_LIFECYCLE_CONFIRM:
         "RUN_CONFIGURATION_UI_LIFECYCLE",
@@ -213,6 +218,7 @@ test("live-конфигурация связывает exact private manifest и
       {
         KODEX_E2E_BASE_URL: "https://kodex.test",
         KODEX_E2E_RESOURCE_PREFIX: "fixture-live",
+        KODEX_E2E_CONFIGURATION_LIFECYCLE_PROJECT_REF: "project_fixture",
         KODEX_E2E_CONFIGURATION_LIFECYCLE_CONFIRM:
           "RUN_CONFIGURATION_UI_LIFECYCLE",
         KODEX_E2E_CONFIGURATION_LIFECYCLE_STATE: join(

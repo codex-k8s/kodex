@@ -138,7 +138,7 @@ func TestPromptScopeIsPassedOnlyToPromptLifecycle(t *testing.T) {
 	revision.PromptScope = scope
 	client := &catalogRPCRecorder{response: &cp.CreatePromptTemplateDraftResponse{Configuration: configuration, Revision: revision}}
 	handler := generated.Handler(&Server{control: &controlplaneclient.Client{Command: cp.NewPlatformCommandServiceClient(client)}})
-	body := `{"name":"Template","contentFormat":"TEXT","content":"text","promptScope":{"targetKind":"AGENT","targetRef":"agent_fixture01","templateKind":"CONTINUATION"}}`
+	body := `{"projectRef":"prj_fixture01","name":"Template","contentFormat":"TEXT","content":"text","promptScope":{"targetKind":"AGENT","targetRef":"agent_fixture01","templateKind":"CONTINUATION"}}`
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, managedTestRequest("POST", "/api/v1/prompt-template-configurations/drafts", body))
 	request, ok := client.request.(*cp.CreatePromptTemplateDraftRequest)

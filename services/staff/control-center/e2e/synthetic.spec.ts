@@ -1,11 +1,17 @@
 import { syntheticNetworkJournal } from "./synthetic-network-journal";
+import { observeSyntheticAssetCancellation } from "./synthetic-asset-cancellation";
 import { expect, type Request } from "@playwright/test";
 import {
   browserHTTPConsoleStatus,
   expectedSyntheticHTTPFailure,
+  isFirefoxAvailabilityBodyAbortAdvisory,
+  isFirefoxBounceTrackerAdvisory,
   isFirefoxScrollAdvisory,
   isWebKitFontAdvisory,
+  isCompletedChromiumTicketTerminal,
   isConfirmedSyntheticCancellation,
+  matchesConfirmedFirefoxAvailabilityBodyAborts,
+  validFirefoxBounceTrackerAdvisoryCount,
 } from "./synthetic-diagnostics";
 import { prepareSyntheticMicrophone } from "./synthetic-microphone";
 import { SyntheticFetchCorrelator } from "./synthetic-fetch-correlator";
@@ -159,6 +165,8 @@ const journals = new WeakMap<
   import("@playwright/test").Page,
   ReturnType<typeof syntheticNetworkJournal>
 >();
+// Каждый вариант имеет собственные context, fixtures и каталог доказательств.
+test.describe.configure({ mode: "parallel" });
 test.afterEach(async ({ page }) => {
   await journals.get(page)?.finish();
 });
@@ -194,10 +202,16 @@ for (const { width, height } of [
     let snapshotConflictDiagnostics = 0;
     let publicationTimeoutDiagnostics = 0;
     let inspectorFailureDiagnostics = 0;
+    let firefoxBounceTrackerAdvisories = 0;
+    let firefoxAvailabilityBodyAbortAdvisories = 0;
     let expectedInspectorFailure: 404 | 503 | undefined;
     let sessionVersion = 1;
     let sessionRenewals = 0;
     let sessionResumes = 0;
+    let releaseInitialHomeCatalogs!: () => void;
+    const initialHomeCatalogs = new Promise<void>((resolve) => {
+      releaseInitialHomeCatalogs = resolve;
+    });
     if (width === 1440) await page.clock.install();
     await page.setViewportSize({ width, height });
     page.on("pageerror", (error) => failures.push(error.message));
@@ -223,6 +237,33 @@ for (const { width, height } of [
         });
         return;
       }
+      const location = message.location();
+      if (
+        isFirefoxAvailabilityBodyAbortAdvisory(
+          browserName,
+          message.type(),
+          location.url,
+          location.lineNumber,
+          location.columnNumber,
+          message.text(),
+        )
+      ) {
+        firefoxAvailabilityBodyAbortAdvisories++;
+        return;
+      }
+      if (
+        isFirefoxBounceTrackerAdvisory(
+          browserName,
+          message.type(),
+          location.url,
+          location.lineNumber,
+          location.columnNumber,
+          message.text(),
+        )
+      ) {
+        firefoxBounceTrackerAdvisories++;
+        return;
+      }
       if (isWebKitFontAdvisory(browserName, message.text())) {
         testInfo.annotations.push({
           type: "browser-advisory",
@@ -245,6 +286,7 @@ for (const { width, height } of [
         failures.push(message.text());
     });
     const networkJournal = syntheticNetworkJournal(page, testInfo);
+    const assets = await observeSyntheticAssetCancellation(page, browserName);
     journals.set(page, networkJournal);
     const pendingRequests = new Map<Request, string>();
     const cancelledRequests = new WeakSet<Request>();
@@ -253,12 +295,17 @@ for (const { width, height } of [
       changedRoute: boolean;
       code: string;
     }> = [];
+    const bootstrapRequests: Request[] = [];
+    const inspectorRequests: Request[] = [];
     const fetches = new SyntheticFetchCorrelator<Request>();
     await installSyntheticAbortObserver(page, (event) => {
       fetches.observe(event);
       networkJournal.record(`fetch-${event.phase}`, {
         identity: event.id,
         path: new URL(event.url).pathname,
+        signalGeneration: event.signalGeneration ?? 0,
+        signalAborted: event.signalAborted ?? false,
+        reasonClass: event.reasonClass ?? "UNKNOWN",
       });
     });
     const cancelInspectorRequests = () => {
@@ -290,12 +337,25 @@ for (const { width, height } of [
     };
     page.on("request", (request) => {
       pendingRequests.set(request, page.url());
-      if (request.resourceType() === "fetch")
+      if (request.resourceType() === "fetch") {
         fetches.request(
           request,
           request.url(),
           request.headers()[syntheticFetchIDHeader],
         );
+        if (
+          request.method() === "GET" &&
+          new URL(request.url()).pathname === "/api/v1/bootstrap"
+        )
+          bootstrapRequests.push(request);
+        if (
+          request.method() === "GET" &&
+          /^https:\/\/kodex\.test\/api\/v1\/runtime-environments\/environment_synthetic\/(agents|readiness)$/.test(
+            request.url(),
+          )
+        )
+          inspectorRequests.push(request);
+      }
     });
     page.on("requestfinished", (request) => {
       pendingRequests.delete(request);
@@ -335,6 +395,12 @@ for (const { width, height } of [
     ]);
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
+      if (
+        url.pathname === "/api/v1/runs" &&
+        (url.searchParams.has("states") ||
+          url.searchParams.get("resumableSessionsOnly") === "true")
+      )
+        await initialHomeCatalogs;
       if (url.origin !== "https://kodex.test") {
         failures.push(`Unexpected origin: ${url.origin}`);
         await route.abort();
@@ -402,19 +468,39 @@ for (const { width, height } of [
         url.pathname === "/api/v1/session/ticket" &&
         route.request().method() === "POST"
       ) {
-        await route.fulfill({
-          json: {
-            ticket: "t".repeat(43),
-            expiresAt: new Date(Date.now() + 30_000).toISOString(),
-          },
-          headers: { "Cache-Control": "no-store" },
-        });
+        const identity =
+          route.request().headers()[syntheticFetchIDHeader] ?? "";
+        networkJournal.record("ticket-fulfill-begin", { identity });
+        try {
+          await route.fulfill({
+            json: {
+              ticket: "t".repeat(43),
+              expiresAt: new Date(Date.now() + 30_000).toISOString(),
+            },
+            headers: {
+              "Cache-Control": "no-store",
+              [syntheticFetchIDHeader]: identity,
+            },
+          });
+          networkJournal.record("ticket-fulfill-resolved", { identity });
+        } catch (error) {
+          networkJournal.record("ticket-fulfill-rejected", {
+            identity,
+            reasonClass: error instanceof Error ? error.name : "UNKNOWN",
+          });
+          throw error;
+        }
         return;
       }
       if (url.pathname in responses && route.request().method() === "GET") {
+        const identity =
+          route.request().headers()[syntheticFetchIDHeader] ?? "";
         await route.fulfill({
           json: responses[url.pathname],
-          headers: { ETag: '"1"' },
+          headers: {
+            ETag: '"1"',
+            [syntheticFetchIDHeader]: identity,
+          },
         });
         return;
       }
@@ -537,6 +623,17 @@ for (const { width, height } of [
     await expect(
       page.getByText(projects[0]?.name ?? "", { exact: true }).first(),
     ).toBeVisible();
+    // Ждём именно карточки секции Проектов: глобальный текст первого проекта
+    // может появиться раньше готовности самой интерактивной секции.
+    await expect(
+      page.locator(".home-project-section .home-project"),
+    ).toHaveCount(6);
+    const expandProjects = page
+      .locator(".home-project-section")
+      .getByRole("button", { name: "Развернуть список проекта", exact: true });
+    await expect(expandProjects).toBeDisabled();
+    releaseInitialHomeCatalogs();
+    await expect(expandProjects).toBeEnabled();
     await expect
       .poll(() =>
         page.evaluate(
@@ -593,6 +690,7 @@ for (const { width, height } of [
       ref: "configuration_synthetic",
       version: 1,
       kind: "PROMPT_TEMPLATE",
+      projectRef: projects[0]?.ref,
       name: "Шаблон",
       managedBy: "UI",
       archived: false,
@@ -676,8 +774,10 @@ for (const { width, height } of [
           name: string;
           content: string;
           configurationRef?: string;
+          projectRef?: string;
         };
         expect(body.configurationRef).toBeUndefined();
+        expect(body.projectRef).toBe(projects[0]?.ref);
         expect(body.content).toBe("Проверить документы");
         configuration = { ...configuration, name: body.name };
         revision = { ...revision, content: body.content };
@@ -784,14 +884,47 @@ for (const { width, height } of [
       await route.fallback();
     });
     await page.goto("/configurations/PROMPT_TEMPLATE/new");
+    const savePromptDraft = page.getByRole("button", {
+      name: "Сохранить черновик",
+      exact: true,
+    });
+    await expect(savePromptDraft).toBeDisabled();
+    await expect(savePromptDraft).toHaveAttribute(
+      "aria-describedby",
+      "managed-project-required",
+    );
+    await expect(
+      page.getByText(
+        "Выберите проект. Шаблон промпта и конфигурация образа роли создаются только в выбранном проекте.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page
+      .locator("#main-content")
+      .getByRole("button", { name: "Проект", exact: true })
+      .click();
+    await page
+      .getByRole("option")
+      .filter({ hasText: projects[0]?.name ?? "" })
+      .click();
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/configurations/PROMPT_TEMPLATE/new\\?projectRef=${String(projects[0]?.ref)}$`,
+      ),
+    );
     await page.getByLabel("Название", { exact: true }).fill("Шаблон");
     await page
       .getByRole("textbox", { name: "Содержимое", exact: true })
       .fill("Проверить документы");
+    await expect(savePromptDraft).toBeEnabled();
     await page
       .getByRole("button", { name: "Сохранить черновик", exact: true })
       .click();
-    await expect(page).toHaveURL(/configuration_synthetic$/);
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/configurations/PROMPT_TEMPLATE/configuration_synthetic\\?projectRef=${String(projects[0]?.ref)}$`,
+      ),
+    );
     await page
       .getByRole("textbox", { name: "Содержимое", exact: true })
       .fill("");
@@ -1720,7 +1853,25 @@ for (const { width, height } of [
     expect(publicationTimeoutDiagnostics).toBe(2);
     for (const { request, changedRoute, code } of failedRequests) {
       const explicitCancellation =
-        cancelledRequests.has(request) || fetches.cancelled(request);
+        cancelledRequests.has(request) ||
+        fetches.cancelled(request) ||
+        assets.confirmed(request);
+      if (
+        isCompletedChromiumTicketTerminal(
+          browserName,
+          code,
+          request.method(),
+          request.resourceType(),
+          new URL(request.url()).pathname,
+          fetches.bodyCompleted(request),
+        )
+      ) {
+        testInfo.annotations.push({
+          type: "request-completed-before-browser-terminal",
+          description: code,
+        });
+        continue;
+      }
       if (
         isConfirmedSyntheticCancellation(
           browserName,
@@ -1737,6 +1888,44 @@ for (const { width, height } of [
           `Failed request: ${new URL(request.url()).pathname}; code=${code}; routeChanged=${String(changedRoute)}; cancelled=${String(explicitCancellation)}; type=${request.resourceType()}; method=${request.method()}; ${fetches.describe(request)}`,
         );
     }
+    if (
+      !validFirefoxBounceTrackerAdvisoryCount(
+        browserName,
+        firefoxBounceTrackerAdvisories,
+      )
+    )
+      failures.push(
+        `Firefox bounce tracker advisory count rejected: actual=${String(firefoxBounceTrackerAdvisories)}`,
+      );
+    if (firefoxBounceTrackerAdvisories > 0)
+      testInfo.annotations.push({
+        type: "browser-advisory",
+        description: `FIREFOX_BOUNCE_TRACKER_IDENTITY_INVALID; count=${String(firefoxBounceTrackerAdvisories)}`,
+      });
+    const expectedFirefoxAvailabilityBodyAbortAdvisories =
+      browserName === "firefox"
+        ? [
+            ...bootstrapRequests,
+            ...inspectorRequests.filter((request) =>
+              cancelledRequests.has(request),
+            ),
+          ].filter((request) => fetches.bodyAbortConfirmed(request)).length
+        : 0;
+    if (
+      !matchesConfirmedFirefoxAvailabilityBodyAborts(
+        browserName,
+        firefoxAvailabilityBodyAbortAdvisories,
+        expectedFirefoxAvailabilityBodyAbortAdvisories,
+      )
+    )
+      failures.push(
+        `Firefox availability body abort advisory count mismatch: expected=${String(expectedFirefoxAvailabilityBodyAbortAdvisories)} actual=${String(firefoxAvailabilityBodyAbortAdvisories)}`,
+      );
+    if (firefoxAvailabilityBodyAbortAdvisories > 0)
+      testInfo.annotations.push({
+        type: "browser-advisory",
+        description: `FIREFOX_AVAILABILITY_BODY_ABORT; count=${String(firefoxAvailabilityBodyAbortAdvisories)}`,
+      });
     expect(failures).toEqual([]);
   });
 }

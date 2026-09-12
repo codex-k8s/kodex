@@ -82,10 +82,13 @@ bearer/context либо mTLS всегда дают закрытый отказ.
   source `Cluster`; PITR executor независимо повторяет readback, указывает
   exact `backupID`/timeline и подписывает completion только при полном
   совпадении;
-- `internal-rpc-authority-cli up|status` применяет единственную fresh baseline
-  goose без штатного отката. Legacy `expand|contract|deploy`, backfill и
-  compatibility path отсутствуют; повторный `up` выполняет идемпотентный
-  readback уже применённой baseline.
+- `internal-rpc-authority-cli up|status` применяет forward-only goose history;
+  `rotation-status` возвращает безопасную metadata последнего intent либо
+  составной `DISTRIBUTE -> SWITCH -> RETIRE` operation с назначенными БД
+  deadline и тремя раздельными digest domains, а
+  `rotation-abort` с явным staging confirmation закрывает только `PREPARED`
+  до начала доставки. Legacy `expand|contract|deploy` отсутствуют; повторный
+  `up` выполняет идемпотентный readback применённых migrations.
 
 Issuer и verifier загружают подписанный канонический снимок через независимый
 корень доверия манифеста. Обновление сначала проходит полную криптографическую

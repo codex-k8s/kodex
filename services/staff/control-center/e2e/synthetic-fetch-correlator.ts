@@ -10,7 +10,22 @@ export class SyntheticFetchCorrelator<T extends object> {
   private readonly terminalRequests = new WeakSet<T>();
   private readonly events = new Map<
     string,
-    { url: string; started: boolean; aborted: boolean; invalid: boolean }
+    {
+      url: string;
+      started: boolean;
+      headersReceived: boolean;
+      aborted: boolean;
+      bodyCompleted: boolean;
+      bodyErrored: boolean;
+      rejected: boolean;
+      startGeneration: number;
+      headersGeneration: number;
+      abortGeneration: number;
+      bodyErrorGeneration: number;
+      bodyErrorSignalAborted: boolean;
+      bodyErrorReasonClass: string;
+      invalid: boolean;
+    }
   >();
   private readonly requests = new Map<
     T,
@@ -27,13 +42,46 @@ export class SyntheticFetchCorrelator<T extends object> {
         (existing.started && event.phase === "start")
       )
         existing.invalid = true;
-      if (event.phase === "abort") existing.aborted = true;
-      else existing.started = true;
+      if (event.phase === "abort") {
+        existing.aborted = true;
+        existing.abortGeneration = event.signalGeneration ?? 0;
+      } else if (event.phase === "headers") {
+        existing.headersReceived = true;
+        existing.headersGeneration = event.signalGeneration ?? 0;
+      } else if (event.phase === "body") existing.bodyCompleted = true;
+      else if (event.phase === "body-error") {
+        existing.bodyErrored = true;
+        existing.bodyErrorGeneration = event.signalGeneration ?? 0;
+        existing.bodyErrorSignalAborted = event.signalAborted === true;
+        existing.bodyErrorReasonClass = event.reasonClass ?? "UNKNOWN";
+      } else if (event.phase === "reject") existing.rejected = true;
+      else {
+        existing.started = true;
+        existing.startGeneration = event.signalGeneration ?? 0;
+      }
     } else {
       this.events.set(event.id, {
         url: event.url,
         started: event.phase === "start",
+        headersReceived: event.phase === "headers",
         aborted: event.phase === "abort",
+        bodyCompleted: event.phase === "body",
+        bodyErrored: event.phase === "body-error",
+        rejected: event.phase === "reject",
+        startGeneration:
+          event.phase === "start" ? (event.signalGeneration ?? 0) : 0,
+        headersGeneration:
+          event.phase === "headers" ? (event.signalGeneration ?? 0) : 0,
+        abortGeneration:
+          event.phase === "abort" ? (event.signalGeneration ?? 0) : 0,
+        bodyErrorGeneration:
+          event.phase === "body-error" ? (event.signalGeneration ?? 0) : 0,
+        bodyErrorSignalAborted:
+          event.phase === "body-error" && event.signalAborted === true,
+        bodyErrorReasonClass:
+          event.phase === "body-error"
+            ? (event.reasonClass ?? "UNKNOWN")
+            : "NONE",
         invalid: false,
       });
     }
@@ -76,6 +124,45 @@ export class SyntheticFetchCorrelator<T extends object> {
     return (
       !!event?.started &&
       (event.aborted || this.navigationIdentities.has(selected.id)) &&
+      !event.invalid &&
+      event.url === selected.url
+    );
+  }
+
+  bodyCompleted(request: T): boolean {
+    const selected = this.requests.get(request);
+    if (!selected?.id || this.identities.get(selected.id)?.size !== 1)
+      return false;
+    const event = this.events.get(selected.id);
+    return (
+      !!event?.started &&
+      event.bodyCompleted &&
+      !event.aborted &&
+      !event.bodyErrored &&
+      !event.rejected &&
+      !event.invalid &&
+      event.url === selected.url
+    );
+  }
+
+  bodyAbortConfirmed(request: T): boolean {
+    const selected = this.requests.get(request);
+    if (!selected?.id || this.identities.get(selected.id)?.size !== 1)
+      return false;
+    const event = this.events.get(selected.id);
+    return (
+      !!event?.started &&
+      event.headersReceived &&
+      event.aborted &&
+      event.bodyErrored &&
+      event.bodyErrorSignalAborted &&
+      event.bodyErrorReasonClass === "AbortError" &&
+      event.startGeneration > 0 &&
+      event.headersGeneration === event.startGeneration &&
+      event.abortGeneration === event.startGeneration &&
+      event.bodyErrorGeneration === event.startGeneration &&
+      !event.bodyCompleted &&
+      !event.rejected &&
       !event.invalid &&
       event.url === selected.url
     );

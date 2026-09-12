@@ -4,7 +4,7 @@ title: Управляемая доставка RoleImage Job hold
 type: operations
 status: approved
 owner: sre
-version: 1.0.2
+version: 1.1.0
 updated: 2026-09-09
 ---
 
@@ -16,8 +16,10 @@ updated: 2026-09-09
 generations, опубликованные RoleImage revisions/pins или пользовательские
 приложения.
 
-Переход использует один immutable plan и один fsync journal. Каждая mutating
-фаза меняет ровно один Kubernetes resource. Это позволяет после потерянного ACK
+Перед delivery выполняется отдельный quiesce protocol с собственными immutable
+plan и fsync journal. После его receipt delivery использует новый plan и новый
+journal. Каждая mutating фаза меняет ровно один Kubernetes resource. Это
+позволяет после потерянного ACK
 прочитать фактическое состояние exact target и не повторять `PATCH` или
 `CREATE`. Следующая фаза допускается только после `PASS` предыдущей.
 
@@ -25,22 +27,22 @@ generations, опубликованные RoleImage revisions/pins или пол
 
 | Фаза | Предусловие | Единственное изменение | Readback |
 | --- | --- | --- | --- |
-| `pause` | один Ready controller Pod; hold выключен; нет terminating admission work | literal `IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS=true` | owner idle, существующие admission Jobs terminal, рабочих PVC нет |
+| `pause` | quiesce receipt; один Ready paused controller Pod; admission inventory пуст | нет, readback | exact paused spec и пустая pinned history |
 | `reader` | pause, owner counters zero | exact immutable `image-admission` image и два выключенных hold env | imageID, CRI identity и SHA-256 фактического `/proc/PID/exe` |
 | `policy-jobs` | reader proof | exact spec основной VAP из реализации #1381 | прежние правила и `failurePolicy: Fail` сохранены, новый reservation contract совпал |
 | `policy-release` | основной VAP загружен | создать отсутствующую exact VAP release | допускается только `suspend=true -> false` без изменения Job identity/spec |
 | `binding-release` | release VAP загружена | создать отсутствующий exact binding | `validationActions: [Deny]`, namespace selector `kodex-system` |
-| `open` | все policy readbacks и reader proof | literal pause=false | один Ready controller Pod, прежний hold=false |
+| `open` | все policy readbacks и reader proof | нет, readback | controller остаётся paused до отдельного open plan |
 
 На каждой фазе закреплены cluster/namespace UID, target UID/resourceVersion,
 before/after spec SHA-256, основной binding, текущие
 `ImageAdmissionPolicyParameters` и immutable ConfigMap, все соседние Deployment
 UID/spec digest, owner counters и digest опубликованных pins. Terminating
 controller Pod не считается завершённым rollout. Plan закрепляет exact
-Job UID/spec и PVC UID/spec. Во время `pause` существующая Job может перейти
-только в terminal, а рабочий PVC — исчезнуть после cleanup. Terminating work,
-новая/заменённая Job, удаление Job history либо новый/изменённый PVC закрыто
-отклоняются.
+Job UID/spec и PVC UID/spec. Delivery plan после quiesce закрепляет пустой exact
+Job/PVC inventory. Удаление history внутри этого plan, новая/заменённая Job
+либо новый/изменённый PVC закрыто отклоняются. Строгий history guard не
+ослабляется.
 
 Новые VAP создаются только по отсутствующему exact имени; API create является
 name-CAS. Если имя уже существует, допустим только byte-equivalent spec из
@@ -68,6 +70,53 @@ revision, immutable image manifest, Go version, recipe и executable SHA-256.
 оператор сравнивает этот digest с фактически запущенным `/proc/PID/exe`,
 привязанным к CRI container ID, Pod UID и imageID.
 
+## Quiesce и штатный drain
+
+Quiesce не останавливает и не изменяет gateway. Владелец координирует отсутствие
+новых build/admission/promotion запусков. Перед каждой фазой CLI заново читает
+owner counters и digest опубликованных pins; любое отличие от plan прекращает
+переход и требует recovery старого controller.
+
+```sh
+node tools/release/image-admission-quiesce.mjs plan \
+  --context "$CONTEXT" --k3s-sudo \
+  --output "$PRIVATE/image-admission-quiesce-plan.json"
+
+for PHASE in stop terminal cleanup-reader cleanup ttl-zero; do
+  node tools/release/image-admission-quiesce.mjs apply \
+    --context "$CONTEXT" --k3s-sudo \
+    --plan "$PRIVATE/image-admission-quiesce-plan.json" --phase "$PHASE" \
+    --evidence "$PRIVATE/image-admission-quiesce-evidence.jsonl" \
+    --confirm APPLY_STAGING_IMAGE_ADMISSION_QUIESCE
+done
+
+node tools/release/image-admission-quiesce.mjs receipt \
+  --context "$CONTEXT" --k3s-sudo \
+  --plan "$PRIVATE/image-admission-quiesce-plan.json" \
+  --evidence "$PRIVATE/image-admission-quiesce-evidence.jsonl" \
+  --output "$PRIVATE/image-admission-quiesce-receipt.json"
+```
+
+`stop` CAS-изменением ставит только replicas controller в `0`. `terminal`
+ничего не меняет и принимает Failed Job лишь после закрытого log classifier:
+точные bounded diagnostics для attempt `1,12,...,120` имеют только
+`class=no-work`, а финальная строка сообщает отсутствие owner admission либо
+promotion work. Raw logs в journal не сохраняются. `Succeeded`, иной/неполный
+classifier либо исчезновение Job до fsync-наблюдения exact UID/spec,
+terminal time, outcome и `NO_WORK` дают `UNKNOWN`, а не PASS.
+
+`cleanup-reader` запускает тот же старый controller с literal
+`PAUSE_NEW_RUNS=true`. Только он штатно удаляет terminal non-promotion Jobs и
+PVC. `cleanup` ждёт этот readback; операторские DELETE запрещены. `ttl-zero`
+ждёт natural `ttlSecondsAfterFinished=3600` для ранее fsync-наблюдённых exact
+terminal promotion Jobs. Новая/replaced/spec-drift Job не считается TTL
+cleanup. Исчезновение без прежнего terminal proof остаётся `UNKNOWN`.
+
+Общий бюджет plan — 4800 секунд: Job `activeDeadlineSeconds=720`, штатный
+rollout/cleanup и natural TTL с ограниченным запасом. Время само по себе не
+разрешает пропустить доказательство. `WAIT` повторяется той же read-only фазой;
+после `UNKNOWN` mutating фазы используется только `resume` того же intent.
+
 ## Inspect и plan
 
 Команды выполняются на disposable k3s host из exact source. `PRIVATE` имеет
@@ -82,6 +131,8 @@ node tools/release/image-admission-hold-delivery.mjs plan \
   --context "$CONTEXT" --k3s-sudo \
   --source "$SOURCE" --revision "$REVISION" \
   --capability "$PRIVATE/image-admission-hold-capability.json" \
+  --quiesce-plan "$PRIVATE/image-admission-quiesce-plan.json" \
+  --quiesce-evidence "$PRIVATE/image-admission-quiesce-evidence.jsonl" \
   --output "$PRIVATE/hold-delivery-plan.json"
 ```
 
@@ -135,6 +186,36 @@ for PHASE in pause reader policy-jobs policy-release binding-release open; do
 done
 ```
 
+Здесь `pause` и `open` являются read-only `action=none`: delivery не получает
+право открыть controller. После полного delivery journal создаётся отдельный
+fresh open plan; он повторно проверяет paused empty inventory и owner/pins,
+затем меняет только literal pause `true -> false` по UID/resourceVersion/spec
+CAS:
+
+```sh
+node tools/release/image-admission-quiesce.mjs open-plan \
+  --context "$CONTEXT" --k3s-sudo \
+  --quiesce-plan "$PRIVATE/image-admission-quiesce-plan.json" \
+  --quiesce-evidence "$PRIVATE/image-admission-quiesce-evidence.jsonl" \
+  --delivery-plan "$PRIVATE/hold-delivery-plan.json" \
+  --delivery-evidence "$PRIVATE/hold-delivery-evidence.jsonl" \
+  --output "$PRIVATE/image-admission-quiesce-open-plan.json"
+node tools/release/image-admission-quiesce.mjs open \
+  --context "$CONTEXT" --k3s-sudo \
+  --plan "$PRIVATE/image-admission-quiesce-open-plan.json" \
+  --evidence "$PRIVATE/image-admission-quiesce-open-evidence.jsonl" \
+  --confirm OPEN_STAGING_IMAGE_ADMISSION_QUIESCE
+```
+
+`open-plan` заново сверяет exact reader Deployment, canonical CRI/process proof
+и все policy/binding/parameters targets с завершённым delivery plan. Перед CAS
+и после rollout `open` повторяет тот же process proof и pinned resource
+UID/resourceVersion/digest. Stale, rollback, replacement/restart либо foreign
+paused spec не получают право на open. Новые Jobs допустимы только после
+подтверждённого CAS; executable и policy/security targets при этом не могут
+измениться. Bounded hold включается только после open отдельным flow ниже. При
+потерянном ACK `open-resume` выполняет только readback и не повторяет PATCH.
+
 Если plan показывает, что одна из policy resources уже exact, соответствующая
 фаза имеет `action=none`: команда выполняет только readback и записывает `PASS`
 без `INTENT`. Это сохраняет полную последовательность одного journal. До каждой
@@ -167,7 +248,7 @@ readback. Drift, replacement и неполная policy остаются `FAIL/U
 
 ## Hold, watcher и release
 
-После `open` применяется неизменённый flow `OPS-DOC-1381`:
+После отдельного quiesce `open` применяется неизменённый flow `OPS-DOC-1381`:
 
 1. `image-admission-proof-hold.mjs plan/apply --action enable` с deadline не
    более 30 минут.
@@ -183,6 +264,25 @@ readback. Drift, replacement и неполная policy остаются `FAIL/U
    перепривязываются автоматически.
 
 ## Ошибки и rollback
+
+До начала delivery либо после его полного rollback quiesce recovery возвращает
+точный исходный spec старого controller из состояний stopped/paused. Он доступен
+и после deadline либо owner drift, чтобы controller штатно обработал появившуюся
+работу:
+
+```sh
+node tools/release/image-admission-quiesce.mjs recover \
+  --context "$CONTEXT" --k3s-sudo \
+  --plan "$PRIVATE/image-admission-quiesce-plan.json" \
+  --evidence "$PRIVATE/image-admission-quiesce-evidence.jsonl" \
+  --confirm RECOVER_STAGING_IMAGE_ADMISSION_QUIESCE
+```
+
+После неопределённого recovery разрешён только `recover-resume`. Paused/stopped
+controller нельзя оставлять без активного operator handle: при прекращении
+работы выполняются delivery rollback (если delivery уже начат), затем recovery.
+Если rollback сам `UNKNOWN`, сначала закрывается его readback; открывать новый
+intent или делать ручной patch запрещено.
 
 До включения bounded hold полный возврат выполняется тем же immutable plan и
 отдельным rollback journal в обратном порядке:

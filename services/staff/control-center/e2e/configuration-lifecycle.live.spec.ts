@@ -48,6 +48,7 @@ interface Configuration {
   version: number;
   managedBy: "UI" | "GIT" | "SHIPPED";
   archived: boolean;
+  projectRef?: string;
   currentRevision?: Revision;
 }
 interface History {
@@ -92,7 +93,10 @@ function parsedConfiguration(
     !Number.isSafeInteger(item.version) ||
     Number(item.version) < 1 ||
     item.managedBy !== "UI" ||
-    typeof item.archived !== "boolean"
+    typeof item.archived !== "boolean" ||
+    (item.projectRef !== undefined &&
+      (typeof item.projectRef !== "string" ||
+        !/^[a-zA-Z0-9_-]{8,128}$/.test(item.projectRef)))
   )
     throw new Error("Configuration lifecycle identity mismatch");
   return {
@@ -102,6 +106,9 @@ function parsedConfiguration(
     version: Number(item.version),
     managedBy: "UI",
     archived: item.archived,
+    ...(typeof item.projectRef === "string"
+      ? { projectRef: item.projectRef }
+      : {}),
     ...(current ? { currentRevision: current } : {}),
   };
 }
@@ -130,6 +137,7 @@ function parsedRevision(value: unknown): Revision {
 async function history(
   request: APIRequestContext,
   configurationRef: string,
+  expectedProjectRef?: string,
 ): Promise<History> {
   const response = await request.get(
     `/api/v1/managed-configurations/${encodeURIComponent(configurationRef)}/revisions?pageSize=30`,
@@ -149,8 +157,15 @@ async function history(
       typeof name !== "string"
     )
       throw new Error("Configuration lifecycle history scope mismatch");
+    const configuration = parsedConfiguration(
+      rawConfiguration,
+      kind as Kind,
+      name,
+    );
+    if (configuration.projectRef !== expectedProjectRef)
+      throw new Error("Configuration lifecycle project scope mismatch");
     return {
-      configuration: parsedConfiguration(rawConfiguration, kind as Kind, name),
+      configuration,
       items: body.items.map(parsedRevision),
     };
   } finally {
@@ -162,8 +177,10 @@ async function findConfiguration(
   request: APIRequestContext,
   kind: Kind,
   name: string,
+  projectRef?: string,
 ): Promise<Configuration | undefined> {
   const query = new URLSearchParams({ kind, query: name, pageSize: "30" });
+  if (projectRef) query.set("projectRef", projectRef);
   const response = await request.get(
     `/api/v1/managed-configurations?${query.toString()}`,
     {
@@ -186,7 +203,12 @@ async function findConfiguration(
     );
     if (matches.length > 1)
       throw new Error("Duplicate configuration lifecycle fixture");
-    return matches[0] ? parsedConfiguration(matches[0], kind, name) : undefined;
+    const result = matches[0]
+      ? parsedConfiguration(matches[0], kind, name)
+      : undefined;
+    if (result && result.projectRef !== projectRef)
+      throw new Error("Configuration lifecycle project scope mismatch");
+    return result;
   } finally {
     await response.dispose();
   }
@@ -281,13 +303,44 @@ async function sourceEditor(page: Page) {
   return editor;
 }
 
-async function openNew(page: Page, kind: Kind) {
-  await page.goto(`/configurations/${kind}/new`, {
+async function openNew(page: Page, kind: Kind, projectRef?: string) {
+  const query = projectRef
+    ? `?${new URLSearchParams({ projectRef }).toString()}`
+    : "";
+  await page.goto(`/configurations/${kind}/new${query}`, {
     waitUntil: "domcontentloaded",
   });
   const editor = page.locator(".configuration-editor");
   await expect(editor).toBeVisible();
   return editor;
+}
+
+async function projectPreflight(request: APIRequestContext) {
+  const response = await request.get(
+    `/api/v1/projects/${encodeURIComponent(configuration.projectRef)}`,
+    { failOnStatusCode: false, timeout: 10_000 },
+  );
+  try {
+    const body: unknown =
+      response.status() === 200 ? await response.json() : undefined;
+    const item = object(body);
+    if (
+      response.status() !== 200 ||
+      item.ref !== configuration.projectRef ||
+      !Number.isSafeInteger(item.version) ||
+      Number(item.version) < 1 ||
+      item.lifecycle !== "ACTIVE"
+    )
+      throw new Error("Configuration lifecycle project preflight failed");
+    return {
+      refSHA256: configuration.projectRefSHA256,
+      status: response.status(),
+      version: Number(item.version),
+      lifecycle: "ACTIVE" as const,
+    };
+  } finally {
+    await response.dispose();
+  }
 }
 
 async function reconcile(
@@ -302,9 +355,10 @@ async function reconcile(
         ? promptName
         : integrationName;
   const kind: Kind = prompt ? "PROMPT_TEMPLATE" : "INTEGRATION_DEFINITION";
-  const found = await findConfiguration(request, kind, name);
+  const projectRef = prompt ? configuration.projectRef : undefined;
+  const found = await findConfiguration(request, kind, name, projectRef);
   if (!found) return;
-  const value = await history(request, found.ref);
+  const value = await history(request, found.ref, projectRef);
   const states = new Set(value.items.map((item) => item.state));
   const proven =
     operation.endsWith("CREATE") ||
@@ -329,6 +383,9 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
     present: boolean;
     version?: number;
   }[] = [];
+  let projectEligibility:
+    | Awaited<ReturnType<typeof projectPreflight>>
+    | undefined;
   const sessionBoundary = new SessionBoundaryDiagnostics();
   const consoleErrors = new ConsoleErrorDiagnostics(configuration.baseURL);
   installConsoleErrorDiagnostics(page, consoleErrors, 0);
@@ -388,6 +445,7 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
     } finally {
       await preflight.dispose();
     }
+    projectEligibility = await projectPreflight(context.request);
     // Ранее отвергнутый/неизвестный effect проверяется отдельно владельцем. Новый
     // запуск также не создаёт второй объект при случайном повторении prefix.
     for (const [kind, name] of [
@@ -395,7 +453,12 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
       ["INTEGRATION_DEFINITION", integrationName],
       ["INTEGRATION_DEFINITION", copyName],
     ] as const) {
-      const found = await findConfiguration(context.request, kind, name);
+      const found = await findConfiguration(
+        context.request,
+        kind,
+        name,
+        kind === "PROMPT_TEMPLATE" ? configuration.projectRef : undefined,
+      );
       fixtureReadbacks.push({
         kind,
         nameSHA256: hash(name),
@@ -408,7 +471,11 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
         );
     }
     if (configuration.readOnly) return;
-    const promptEditor = await openNew(page, "PROMPT_TEMPLATE");
+    const promptEditor = await openNew(
+      page,
+      "PROMPT_TEMPLATE",
+      configuration.projectRef,
+    );
     await expect(page.locator(".app-shell")).toBeVisible();
     expect(consoleErrors.failed()).toBe(false);
     await promptEditor
@@ -430,15 +497,19 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
           context.request,
           "PROMPT_TEMPLATE",
           promptName,
+          configuration.projectRef,
         );
         if (!item) throw new Error("Prompt create readback is missing");
-        return identity(await history(context.request, item.ref));
+        return identity(
+          await history(context.request, item.ref, configuration.projectRef),
+        );
       },
     );
     const prompt = await findConfiguration(
       context.request,
       "PROMPT_TEMPLATE",
       promptName,
+      configuration.projectRef,
     );
     if (!prompt) throw new Error("Prompt fixture is missing");
     await mutation(
@@ -453,7 +524,10 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
         promptEditor
           .getByRole("button", { name: "Проверить", exact: true })
           .click(),
-      async () => identity(await history(context.request, prompt.ref)),
+      async () =>
+        identity(
+          await history(context.request, prompt.ref, configuration.projectRef),
+        ),
     );
     const promptPublishSequence = await journal.intent(
       "PROMPT_PUBLISH",
@@ -504,7 +578,11 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
         );
         throw new Error("Prompt publication was not accepted");
       }
-      const promptHistory = await history(context.request, prompt.ref);
+      const promptHistory = await history(
+        context.request,
+        prompt.ref,
+        configuration.projectRef,
+      );
       if (!promptHistory.configuration.currentRevision)
         throw new Error("Prompt publication readback is missing");
       await journal.stop(
@@ -760,7 +838,7 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
     try {
       if (diagnostics) {
         await diagnostics.writeFile(
-          `${JSON.stringify({ versions: configuration.versions, timestampUTC: new Date().toISOString(), fixtureReadbacks, sessionBoundary: sessionBoundary.snapshot(), consoleErrors: consoleErrors.snapshot() })}\n`,
+          `${JSON.stringify({ versions: configuration.versions, timestampUTC: new Date().toISOString(), projectEligibility, fixtureReadbacks, sessionBoundary: sessionBoundary.snapshot(), consoleErrors: consoleErrors.snapshot() })}\n`,
         );
         await diagnostics.sync();
       }

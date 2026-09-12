@@ -34,6 +34,18 @@ export default mergeConfig(base, {
         resourceSelection: fileURLToPath(
           new URL("./e2e/fixtures/resource-selection.html", import.meta.url),
         ),
+        configurationProjectScope: fileURLToPath(
+          new URL(
+            "./e2e/fixtures/configuration-project-scope.html",
+            import.meta.url,
+          ),
+        ),
+        documentFetchTransport: fileURLToPath(
+          new URL(
+            "./e2e/fixtures/document-fetch-transport.html",
+            import.meta.url,
+          ),
+        ),
         automationPreview: fileURLToPath(
           new URL("./e2e/fixtures/automation-preview.html", import.meta.url),
         ),

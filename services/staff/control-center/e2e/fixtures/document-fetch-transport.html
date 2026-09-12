@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Отмена native fetch</title>
+  </head>
+  <body>
+    <button id="start" type="button">Начать запрос</button>
+    <button id="cancel" type="button">Отменить запрос</button>
+    <output id="outcome">idle</output>
+    <button id="start-body" type="button">Начать чтение body</button>
+    <button id="cancel-body" type="button">Отменить чтение body</button>
+    <output id="body-outcome">idle</output>
+    <button id="success" type="button">Прочитать полный ответ</button>
+    <output id="success-outcome">idle</output>
+    <button id="cancel-stream" type="button">Отменить response body</button>
+    <output id="cancel-stream-outcome">idle</output>
+    <button id="unread" type="button">Получить непрочитанный ответ</button>
+    <button id="suspend" type="button">Приостановить документ</button>
+    <output id="unread-outcome">idle</output>
+    <script type="module">
+      import {
+        documentFetch,
+        installDocumentRequestLifetime,
+      } from "../../src/shared/api/document-lifetime";
+
+      installDocumentRequestLifetime();
+
+      let controller;
+      document.querySelector("#start").addEventListener("click", async () => {
+        controller = new AbortController();
+        document.querySelector("#outcome").textContent = "pending";
+        try {
+          await documentFetch(
+            new Request("/pending", {
+              method: "POST",
+              headers: { "X-Fixture": "preserved" },
+              body: "fixture-body",
+              credentials: "same-origin",
+              signal: controller.signal,
+            }),
+          );
+          document.querySelector("#outcome").textContent = "resolved";
+        } catch (error) {
+          document.querySelector("#outcome").textContent = error.name;
+        }
+      });
+      document.querySelector("#cancel").addEventListener("click", () => {
+        controller?.abort();
+      });
+      let bodyController;
+      document
+        .querySelector("#start-body")
+        .addEventListener("click", async () => {
+          bodyController = new AbortController();
+          document.querySelector("#body-outcome").textContent = "headers";
+          try {
+            const response = await documentFetch(
+              new Request("/stream", {
+                credentials: "same-origin",
+                signal: bodyController.signal,
+              }),
+            );
+            document.querySelector("#body-outcome").textContent = "reading";
+            await response.text();
+            document.querySelector("#body-outcome").textContent = "resolved";
+          } catch (error) {
+            document.querySelector("#body-outcome").textContent = error.name;
+          }
+        });
+      document.querySelector("#cancel-body").addEventListener("click", () => {
+        bodyController?.abort();
+      });
+      document.querySelector("#success").addEventListener("click", async () => {
+        const response = await documentFetch(new Request("/success"));
+        const metadata = {
+          status: response.status,
+          url: new URL(response.url).pathname,
+          redirected: response.redirected,
+          type: response.type,
+          header: response.headers.get("X-Fixture"),
+          before: response.bodyUsed,
+        };
+        const clone = response.clone();
+        const cloneMetadata = {
+          status: clone.status,
+          url: new URL(clone.url).pathname,
+          redirected: clone.redirected,
+          type: clone.type,
+          before: clone.bodyUsed,
+        };
+        const [text, cloneText] = await Promise.all([
+          response.text(),
+          clone.text(),
+        ]);
+        let repeatName = "resolved";
+        try {
+          await response.text();
+        } catch (error) {
+          repeatName = error.name;
+        }
+        document.querySelector("#success-outcome").textContent = JSON.stringify(
+          {
+            ...metadata,
+            after: response.bodyUsed,
+            text,
+            clone: {
+              ...cloneMetadata,
+              after: clone.bodyUsed,
+              text: cloneText,
+            },
+            repeatName,
+          },
+        );
+      });
+      document
+        .querySelector("#cancel-stream")
+        .addEventListener("click", async () => {
+          const response = await documentFetch(new Request("/cancel-stream"));
+          await response.body.cancel("fixture cancellation");
+          document.querySelector("#cancel-stream-outcome").textContent =
+            "cancelled";
+        });
+      let unreadResponse;
+      document.querySelector("#unread").addEventListener("click", async () => {
+        unreadResponse = await documentFetch(new Request("/unread"));
+        document.querySelector("#unread-outcome").textContent = "headers";
+      });
+      document.querySelector("#suspend").addEventListener("click", () => {
+        window.dispatchEvent(new Event("pagehide"));
+      });
+      window.runTicketTransportProbe = async (count) => {
+        let completed = 0;
+        for (let index = 0; index < count; index += 1) {
+          const response = await documentFetch(
+            new Request("/api/v1/session/ticket", { method: "POST" }),
+          );
+          await response.text();
+          completed += 1;
+        }
+        return completed;
+      };
+      let streamProbeSequence = 0;
+      window.runStreamAbortProbe = async (transport) => {
+        const probeController = new AbortController();
+        const request = new Request(
+          `/stream?probe=${transport}-${String(++streamProbeSequence)}`,
+          { signal: probeController.signal },
+        );
+        const response = await (transport === "native"
+          ? window.fetch(request)
+          : documentFetch(request));
+        const reading = response.text().then(
+          () => "resolved",
+          (error) => error.name,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        probeController.abort();
+        return reading;
+      };
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>
