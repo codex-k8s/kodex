@@ -27,6 +27,7 @@ const (
 	warmReconcileRPCFailure       = "reconcile system assistant warm runtime"
 	warmReportRPCFailure          = "report system assistant warm runtime"
 	warmDesiredRevisionMissing    = "system assistant warm runtime desired revision is missing"
+	turnMaterializationFailure    = "runtime turn materialization"
 )
 
 var defaultFailureCompletionRetryDelays = [...]time.Duration{
@@ -121,7 +122,7 @@ func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 	defer cancel()
 	response, err := runtime.control.ReconcileWarmRuntime(request, &controlplanev1.ReconcileWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID})
 	if err != nil {
-		return warmRPCFailure(warmReconcileRPCFailure, err)
+		return boundedRPCFailure(warmReconcileRPCFailure, err)
 	}
 	if response.GetDesiredRevision() == nil {
 		return errors.New(warmDesiredRevisionMissing)
@@ -168,13 +169,13 @@ func (runtime *runtime) reportWarm(ctx context.Context, revision string, state c
 	defer cancel()
 	_, err := runtime.control.ReportWarmRuntime(request, &controlplanev1.ReportWarmRuntimeRequest{WorkloadInstance: runtime.config.PodUID, RuntimeRevision: revision, State: state, SafeErrorCode: code})
 	if err != nil {
-		return warmRPCFailure(warmReportRPCFailure, err)
+		return boundedRPCFailure(warmReportRPCFailure, err)
 	}
 	return nil
 }
 
 // В logger передаются только закрытые классы, без исходной цепочки ошибок.
-func warmRPCFailure(operation string, cause error) error {
+func boundedRPCFailure(operation string, cause error) error {
 	code := status.Code(cause)
 	if code < codes.Canceled || code > codes.Unauthenticated {
 		code = codes.Unknown
@@ -242,7 +243,8 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 				})
 			}
 			if projectionErr != nil {
-				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "dependency")
+				runtime.logger.WarnContext(ctx, "runtime turn materialization failed", "error_class", "dependency",
+					"error", boundedRPCFailure(turnMaterializationFailure, projectionErr))
 				<-runtime.capacity
 				runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
 				continue

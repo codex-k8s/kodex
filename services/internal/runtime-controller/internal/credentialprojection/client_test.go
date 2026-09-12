@@ -1,15 +1,26 @@
 package credentialprojection
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+func TestMaterializePreservesTrustedFailureClassification(t *testing.T) {
+	sentinel := status.Error(codes.Unauthenticated, "closed upstream classification")
+	err := materializationRPCError("materialize credentials", sentinel)
+	if status.Code(errors.Unwrap(err)) != codes.Unauthenticated {
+		t.Fatal("materialization failure classification was discarded")
+	}
+}
 
 func TestProjectionDescriptorBindsExactExecution(t *testing.T) {
 	input := projectionTestInput()
