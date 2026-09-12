@@ -18,10 +18,31 @@ export const authorityDeploymentRoles={
 };
 function requireValue(ok,code){if(!ok)throw new Error(code);}
 export function planSidecars(deployment,target,inspect=inspectSource) {
+ return buildSidecarPlan(deployment,target,inspect,true);
+}
+// Восстановление разрешает только проверенные readers конкретного инцидента.
+// Оно не продлевает PREVIOUS и не предоставляет обычному rollout обход health.
+export const readerRecoveryRevision='e11a306ce4184becace76502346c9f89459495f1';
+export const readerRecoveryImage='registry.local.kodex/kodex/internal-rpc-authority@sha256:d645561e5ae7cc223bbb0bf1f523eb8bf4c245a249ba3a5807e609867a4185f9';
+export const readerRecoveryBinaries={issuer:'021e248d27858a5ac53eee9343cca444606ced2cc199cb5aed33e4f40fa44491',verifier:'8b9f50a492e74a5a666bc7e69a6b7ff0e57ee9cbf9900b44ae1e331f8fecd65a'};
+export const readerRecoveryImageBinaries={issuer:'921e7241fbec18ea0df69f5bde25b17de676215840347538d2ec0726dd41fa1e',verifier:'1513167edec7fd468e57d1d8fbdd667ff336ad8e698e5ce7e02707fa60472610'};
+export function validateReaderRecovery(rotation,publisher,registry,capability) {
+ requireValue(rotation?.version===3&&rotation.action==='rotate'&&rotation.intentID==='ac1954d0-24c6-49bf-adb1-621b8ec8f548'&&rotation.ownerOperationID==='ae8d8192-e49b-57d7-8844-6639850359db'&&
+  publisher?.metadata?.namespace===namespace&&publisher.metadata.name==='internal-rpc-authority-publisher'&&publisher.metadata.uid===rotation.publisher?.uid&&fingerprint(publisher.spec)===rotation.publisher.desiredSpecSHA256&&
+  registry?.metadata?.namespace===namespace&&registry.metadata.name==='internal-rpc-authority-publisher-target-registry'&&registry.metadata.uid===rotation.registry?.uid&&fingerprint(registry.data)===rotation.registry.desiredDataSHA256,'READER_RECOVERY_ROTATION_BOUNDARY_CHANGED');
+ requireValue(capability?.version===1&&capability.protocol===2&&capability.revision===readerRecoveryRevision&&capability.imageVersion===readerRecoveryRevision&&
+  fingerprint(capability.binaries)===fingerprint(readerRecoveryBinaries)&&fingerprint(capability.imageBinaries)===fingerprint(readerRecoveryImageBinaries),'READER_RECOVERY_CAPABILITY_REJECTED');
+}
+export function planRecoverySidecars(deployment,target,rotation,publisher,registry,capability,inspect=inspectSource) {
+ validateReaderRecovery(rotation,publisher,registry,capability);
+ requireValue(target.profile==='source'?target.source?.revision===readerRecoveryRevision:target.profile==='image'&&target.image===readerRecoveryImage,'READER_RECOVERY_TARGET_REJECTED');
+ return {...buildSidecarPlan(deployment,target,inspect,false),recoveryOnly:true};
+}
+function buildSidecarPlan(deployment,target,inspect,healthy) {
  const {metadata:m,spec:s,status:t}=deployment;
  requireValue(deployment.kind==='Deployment'&&m.namespace===namespace&&Object.hasOwn(authorityDeploymentRoles,m.name)&&m.name===target.name&&
   m.labels?.['app.kubernetes.io/part-of']==='kodex'&&!m.deletionTimestamp&&s.replicas>0&&!s.paused&&t?.observedGeneration>=m.generation&&
-  ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k=>t[k]===s.replicas),'EXACT_HEALTHY_AUTHORITY_WORKLOAD_REQUIRED');
+  (!healthy||['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k=>t[k]===s.replicas)),'EXACT_HEALTHY_AUTHORITY_WORKLOAD_REQUIRED');
  requireValue(['source','image'].includes(target.profile)&&target.roles?.length>0&&new Set(target.roles).size===target.roles.length&&
   target.roles.every(role=>authorityDeploymentRoles[m.name].includes(role)),'CLOSED_AUTHORITY_ROLES_REQUIRED');
  const next=structuredClone(s),rollback={name:m.name,profile:target.profile,roles:target.roles,previous:[]};
@@ -48,6 +69,7 @@ export function planSidecars(deployment,target,inspect=inspectSource) {
  return {name:m.name,uid:m.uid,resourceVersion:m.resourceVersion,before:s,after:next,rollback};
 }
 export function rollbackSidecars(current,saved) {
+ requireValue(!saved.recoveryOnly,'READER_RECOVERY_FORWARD_ONLY');
  requireValue(current.metadata.uid===saved.uid&&fingerprint(current.spec)===fingerprint(saved.after),'AUTHORITY_ROLLBACK_DRIFT');
  return [{op:'test',path:'/metadata/uid',value:saved.uid},{op:'test',path:'/metadata/resourceVersion',value:current.metadata.resourceVersion},{op:'test',path:'/spec',value:saved.after},{op:'replace',path:'/spec',value:saved.before}];
 }
