@@ -66,10 +66,23 @@ function renderedPlanBase(job, anchor) {
   before.status = { succeeded:1, conditions:[{type:'Complete',status:'True'}] };
   return before;
 }
+function normalizedMigrationPodSpec(value) {
+  const pod = structuredClone(value);
+  for (const container of [...(pod?.initContainers ?? []), ...(pod?.containers ?? [])]) {
+    if (container.terminationMessagePath === '/dev/termination-log') delete container.terminationMessagePath;
+    if (container.terminationMessagePolicy === 'File') delete container.terminationMessagePolicy;
+    if (container.imagePullPolicy === 'IfNotPresent') delete container.imagePullPolicy;
+  }
+  if (pod?.dnsPolicy === 'ClusterFirst') delete pod.dnsPolicy;
+  if (pod?.schedulerName === 'default-scheduler') delete pod.schedulerName;
+  if (pod?.terminationGracePeriodSeconds === 30) delete pod.terminationGracePeriodSeconds;
+  if (pod?.serviceAccount === pod?.serviceAccountName) delete pod.serviceAccount;
+  return pod;
+}
 export function migrationReadback(job, plan, logs) {
   const { version: migrationVersion, annotation } = profileFor(plan.profile);
   ensure(job?.metadata?.name === plan.job.metadata.name && job.metadata.namespace === namespace && job.metadata.annotations?.[annotation] === fingerprint(plan) && job.metadata.uid, 'MIGRATION_JOB_SCOPE_MISMATCH');
-  ensure(fingerprint(job.spec?.template?.spec) === fingerprint(plan.job.spec.template.spec), 'MIGRATION_JOB_SPEC_CHANGED');
+  ensure(fingerprint(normalizedMigrationPodSpec(job.spec?.template?.spec)) === fingerprint(normalizedMigrationPodSpec(plan.job.spec.template.spec)), 'MIGRATION_JOB_SPEC_CHANGED');
   const completed = job.status?.conditions?.some((c) => c.type === 'Complete' && c.status === 'True');
   const failed = job.status?.conditions?.some((c) => c.type === 'Failed' && c.status === 'True');
   ensure(!(completed && failed), 'MIGRATION_STATUS_INVALID');

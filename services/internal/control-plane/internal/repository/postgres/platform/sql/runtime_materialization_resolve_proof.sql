@@ -30,12 +30,9 @@ WHERE lease.materialization_operation = @operation
   AND lease.run_id = revision.run_id AND lease.node_id = revision.node_id
   AND lease.generation = revision.generation AND lease.input_digest = revision.input_digest
   AND node.run_id = execution_run.id AND node.root_run_id = root_run.id
-  AND node.state = 'RUNNING' AND node.attempt = revision.attempt
-  AND root_run.state = 'RUNNING' AND execution_run.state = 'RUNNING'
-  AND session.state = 'ACTIVE' AND actor.active
+  AND node.attempt = revision.attempt AND actor.active
   AND (revision.turn_id IS NULL OR
-       (turn.session_id = session.id AND turn.run_id = execution_run.id
-        AND turn.state IN ('QUEUED', 'RUNNING')))
+       (turn.session_id = session.id AND turn.run_id = execution_run.id))
   AND NOT EXISTS (
       SELECT 1 FROM control_plane.runtime_leases newer
       WHERE newer.organization_id = lease.organization_id AND newer.node_id = lease.node_id

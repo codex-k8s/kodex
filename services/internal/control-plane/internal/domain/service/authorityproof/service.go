@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -21,10 +22,11 @@ import (
 )
 
 const (
-	workerGrantType    = "kodex-application-grant+jws"
-	maximumFileSize    = 1 << 20
-	workerGrantTTL     = 4 * time.Minute
-	controlPlaneSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	workerGrantType                         = "kodex-application-grant+jws"
+	maximumFileSize                         = 1 << 20
+	workerGrantTTL                          = 4 * time.Minute
+	controlPlaneSPIFFE                      = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	runtimeMaterializationDiagnosticMessage = "runtime materialization authority failed"
 )
 
 type AuthorityOwner interface {
@@ -371,6 +373,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	} else {
 		grant, err := service.verifyWorkerGrant(credential, producer)
 		if err != nil {
+			logRuntimeMaterializationFailure(ctx, input, "grant_verify")
 			return ResolveResult{}, err
 		}
 		if err := service.owner.AcceptWorkerGrant(ctx, platformrepo.WorkerGrantInput{
@@ -379,6 +382,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 			CredentialGeneration: grant.CredentialGeneration,
 			IssuedAt:             time.Unix(grant.IssuedAt, 0), ExpiresAt: time.Unix(grant.ExpiresAt, 0),
 		}); err != nil {
+			logRuntimeMaterializationFailure(ctx, input, "grant_accept")
 			return ResolveResult{}, fmt.Errorf("accept worker grant: %w", err)
 		}
 		principal.ExternalActorID, principal.ExternalTenantID = "kodex-system-subject", "kodex-installation"
@@ -387,6 +391,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	}
 	resolved, err := service.owner.ResolveProofAuthority(ctx, principal)
 	if err != nil {
+		logRuntimeMaterializationFailure(ctx, input, "owner_resolve")
 		return ResolveResult{}, fmt.Errorf("resolve proof authority: %w", err)
 	}
 	if actorReference == "" {
@@ -397,6 +402,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	if runtimeMaterializationProofRequired(input.OperationID) || resolved.RuntimeExecution != nil {
 		actor, actorKind, err = runtimeExecutionActor(resolved, producer.CallerWorkloadID, input.OperationID)
 		if err != nil {
+			logRuntimeMaterializationFailure(ctx, input, "execution_actor")
 			return ResolveResult{}, err
 		}
 	}
@@ -411,6 +417,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	}
 	revision, err := service.owner.NextAuthorityProofRevision(ctx)
 	if err != nil {
+		logRuntimeMaterializationFailure(ctx, input, "proof_revision")
 		return ResolveResult{}, fmt.Errorf("advance authority proof revision: %w", err)
 	}
 	now := service.now().UTC().Truncate(time.Second)
@@ -418,6 +425,7 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	if resolved.RuntimeExecution != nil {
 		expiresAt, err = runtimeExecutionProofExpiry(now, expiresAt, resolved.RuntimeExecution.ExpiresAt, workerGrantExpiresAt)
 		if err != nil {
+			logRuntimeMaterializationFailure(ctx, input, "expiry")
 			return ResolveResult{}, err
 		}
 	}
@@ -436,10 +444,22 @@ func (service *Service) Resolve(ctx context.Context, input ResolveInput) (Resolv
 	}
 	compact, err := internalrpcauth.SignCanonicalJSON(claims, service.signer, internalrpcauth.ProtectedHeaderExpectation{Type: internalrpcauth.AuthorityProofProtectedType, KeyID: service.signer.KeyID})
 	if err != nil {
+		logRuntimeMaterializationFailure(ctx, input, "sign")
 		return ResolveResult{}, errors.New("sign authority proof")
 	}
 	proofDigest := sha256.Sum256([]byte(compact))
 	return ResolveResult{CompactJWS: compact, DigestSHA256: hex.EncodeToString(proofDigest[:]), ExpiresAt: expiresAt, ProofRevision: revision, PolicyRevision: service.policy.PolicyRevision, SignerGeneration: service.signerGeneration}, nil
+}
+
+func logRuntimeMaterializationFailure(ctx context.Context, input ResolveInput, stage string) {
+	if !runtimeMaterializationProofRequired(input.OperationID) {
+		return
+	}
+	attributes := []any{"operation", input.OperationID, "stage", stage}
+	if validDigest(input.RequestDigestSHA256) {
+		attributes = append(attributes, "request_digest_sha256", input.RequestDigestSHA256)
+	}
+	slog.WarnContext(ctx, runtimeMaterializationDiagnosticMessage, attributes...)
 }
 
 func (service *Service) verifyWorkerGrant(compact string, producer proofProducer) (workerGrantClaims, error) {
