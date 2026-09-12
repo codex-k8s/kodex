@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { planPolicyProjection,projectionPatch,projectionMatches } from "./control-plane-policy-projection.mjs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { planPolicyProjection,projectionPatch,projectionMatches,withPrivatePatchFile } from "./control-plane-policy-projection.mjs";
 import { fingerprint } from "./scoped-release.mjs";
 
 function fixture(){
@@ -38,4 +38,18 @@ test("existing config map content cannot be silently replaced",()=>{
   const f=fixture(),plan=planPolicyProjection(f.deployment,f.registry,f.configMaps);
   const foreign=structuredClone(plan.projection);foreign.data['policy.json']='changed';
   assert.equal(projectionMatches(foreign,plan.projection),false);
+});
+test("kubectl patch uses a private regular file and always removes it",()=>{
+  const patch=[{op:"test",path:"/metadata/uid",value:"fixture"}];
+  let successfulPath;
+  assert.equal(withPrivatePatchFile(patch,path=>{
+    successfulPath=path;
+    assert.equal(statSync(path).mode&0o777,0o600);
+    assert.deepEqual(JSON.parse(readFileSync(path,"utf8")),patch);
+    return "applied";
+  }),"applied");
+  assert.equal(existsSync(successfulPath),false);
+  let failedPath;
+  assert.throws(()=>withPrivatePatchFile(patch,path=>{failedPath=path;throw new Error("fixture failure");}),/fixture failure/);
+  assert.equal(existsSync(failedPath),false);
 });
