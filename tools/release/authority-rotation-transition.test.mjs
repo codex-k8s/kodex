@@ -40,6 +40,17 @@ test('deny-ingress prerequisite normalizes only omitted ingress',()=>{
 	for(const mutate of mutations){const changed=structuredClone(omitted);mutate(changed);assert.throws(()=>validateRotationPrerequisites(changed.serviceAccount,changed.egressPolicy,changed.ingressPolicy),/ROTATION_JOB_PREREQUISITES_REJECTED/);}
 });
 
+test('rendered ingress-only prerequisite accepts only empty egress omitted by API',()=>{
+ const live=prerequisiteFixture(),rendered=structuredClone(live);rendered.ingressPolicy.spec.egress=[];
+ validateRotationPrerequisites(rendered.serviceAccount,rendered.egressPolicy,rendered.ingressPolicy);
+ assert.equal(rotationPrerequisiteSpecSHA256(live.ingressPolicy),rotationPrerequisiteSpecSHA256(rendered.ingressPolicy));
+ assert.deepEqual(rendered.ingressPolicy.spec.egress,[]);
+ for(const mutate of [value=>value.spec.egress=null,value=>value.spec.egress={},value=>value.spec.egress=[{}],value=>value.spec.policyTypes.push('Egress'),value=>value.spec.unknown=true,value=>value.spec.ingress[0].ports[0].port=5433]){
+  const changed=structuredClone(rendered.ingressPolicy);mutate(changed);
+  assert.throws(()=>validateRotationPrerequisites(rendered.serviceAccount,rendered.egressPolicy,changed),/ROTATION_JOB_PREREQUISITES_REJECTED/);
+ }
+});
+
 test('owner operation identity matches publisher derivation across restart and later registry revision',()=>{
 	const digest='c'.repeat(64),operationID=deriveRotationOperationID(8,digest);
 	assert.equal(operationID,'13657d5a-4e35-52fc-b82d-0529ee0914ca');

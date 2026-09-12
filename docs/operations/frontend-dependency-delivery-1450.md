@@ -4,7 +4,7 @@ title: Отдельная поставка frontend source и подготовл
 type: operations
 status: approved
 owner: sre
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-12
 ---
 
@@ -27,7 +27,7 @@ cache root текущего host. Команды запускает один д�
 проверенного checkout. Не передавать frontend production/test credentials.
 
 ```sh
-./tools/dev/prime-frontend-cache.sh "$SOURCE" "$CACHE_ROOT"
+bash tools/dev/prime-frontend-cache.sh "$SOURCE" "$CACHE_ROOT"
 ```
 
 Команда возвращает путь `frontend-v1/<identity>/node_modules`. Она использует
@@ -39,6 +39,9 @@ cache root текущего host. Команды запускает один д�
 receipt, текущий image и runtime identity через краткоживущий Docker container
 с readonly mounts, `--network none` и `--pull=never`. План не скачивает image и
 не устанавливает packages. Секретные host env/npmrc в контейнер не передаются.
+Оба probe запускаются с тем же UID/GID, что prime: host operator для rootful
+Docker и container `0:0` для rootless. Readonly parent `0500` не изменяется;
+неизвестный формат Docker SecurityOptions закрыто отклоняется.
 
 # Lifecycle
 
