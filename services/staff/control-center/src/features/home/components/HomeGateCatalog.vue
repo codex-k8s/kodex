@@ -9,6 +9,7 @@ import HomeGateRows from "./HomeGateRows.vue";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
 const catalog = useGateCatalog();
 const platform = usePlatformStore();
+const emit = defineEmits<{ settled: [] }>();
 const expanded = ref(false);
 const query = ref("");
 const projectRef = ref("");
@@ -32,7 +33,7 @@ watch(projectRef, () => {
   clearTimeout(timer);
   void load();
 });
-onMounted(() => void load());
+onMounted(() => void load().finally(() => emit("settled")));
 watch(
   () =>
     platform.gateList

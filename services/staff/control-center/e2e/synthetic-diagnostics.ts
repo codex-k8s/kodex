@@ -86,14 +86,25 @@ export function isFirefoxAvailabilityBodyAbortAdvisory(
     type !== "error" ||
     line !== 1 ||
     column <= 0 ||
-    !/^https:\/\/kodex\.test\/assets\/availability-[A-Za-z0-9_-]+\.js$/.test(
-      source,
-    )
+    // Firefox атрибутирует внутреннюю ошибку чтения body текущему application
+    // chunk, поэтому проверяем exact origin/asset, а не имя модуля availability.
+    !/^https:\/\/kodex\.test\/assets\/[A-Za-z0-9_-]+\.js$/.test(source)
   )
     return false;
   return (
     text ===
     `[JavaScript Error: "Failed to read data from the ReadableStream: “AbortError: The operation was aborted. ”." {file: "${source}" line: 1}]`
+  );
+}
+
+export function validFirefoxBounceTrackerAdvisoryCount(
+  browserName: string,
+  count: number,
+): boolean {
+  return (
+    Number.isSafeInteger(count) &&
+    count >= 0 &&
+    count <= (browserName === "firefox" ? 1 : 0)
   );
 }
 

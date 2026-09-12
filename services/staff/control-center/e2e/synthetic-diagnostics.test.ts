@@ -9,11 +9,22 @@ import {
   isConfirmedSyntheticCancellation,
   matchesConfirmedFirefoxAvailabilityBodyAborts,
   isCompletedChromiumTicketTerminal,
+  validFirefoxBounceTrackerAdvisoryCount,
 } from "./synthetic-diagnostics";
 import config from "../playwright.synthetic.config";
 import viteConfig from "../vite.synthetic.config";
 
 describe("synthetic browser evidence", () => {
+  it("отсутствие advisory допустимо, неизвестный браузер и превышение бюджета закрыты", () => {
+    expect(validFirefoxBounceTrackerAdvisoryCount("firefox", 0)).toBe(true);
+    expect(validFirefoxBounceTrackerAdvisoryCount("firefox", 1)).toBe(true);
+    expect(validFirefoxBounceTrackerAdvisoryCount("chromium", 0)).toBe(true);
+    for (const count of [-1, 0.5, 2, NaN, Infinity])
+      expect(validFirefoxBounceTrackerAdvisoryCount("firefox", count)).toBe(
+        false,
+      );
+    expect(validFirefoxBounceTrackerAdvisoryCount("webkit", 1)).toBe(false);
+  });
   it("классифицирует только exact Firefox availability body abort advisory", () => {
     const source = "https://kodex.test/assets/availability-BwI46JYI.js";
     const message = `[JavaScript Error: "Failed to read data from the ReadableStream: “AbortError: The operation was aborted. ”." {file: "${source}" line: 1}]`;
@@ -44,7 +55,10 @@ describe("synthetic browser evidence", () => {
       exact("firefox", "error", source.replace("kodex.test", "other.test")),
     ).toBe(false);
     expect(
-      exact("firefox", "error", source.replace("availability", "other")),
+      exact("firefox", "error", "https://kodex.test/api/v1/bootstrap"),
+    ).toBe(false);
+    expect(
+      exact("firefox", "error", source.replace("/assets/", "/scripts/")),
     ).toBe(false);
     expect(exact("firefox", "error", source, 1, 2700, `${message} extra`)).toBe(
       false,

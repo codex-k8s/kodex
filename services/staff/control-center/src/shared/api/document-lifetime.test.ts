@@ -6,7 +6,11 @@ import {
   installDocumentRequestLifetime,
   retainRequestSignalParents,
 } from "./document-lifetime";
-import { ownerRequestSignal, resetOwnerRequests } from "./owner-lifetime";
+import {
+  ownerInvalidationSignal,
+  ownerRequestSignal,
+  resetOwnerRequests,
+} from "./owner-lifetime";
 import { readWithRetry } from "./read-retry";
 import { createClient } from "./generated/openapi/client/client.gen";
 import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
@@ -24,6 +28,20 @@ afterEach(() => {
 });
 
 describe("document request lifetime", () => {
+  it("закрытие документа отменяет запросы, но только смена владельца отзывает recovery", () => {
+    const owner = ownerInvalidationSignal();
+    const request = ownerRequestSignal();
+    const revoke = vi.fn();
+    owner.addEventListener("abort", revoke, { once: true });
+    target.dispatchEvent(new Event("pagehide"));
+    expect(request.aborted).toBe(true);
+    expect(owner.aborted).toBe(false);
+    expect(revoke).not.toHaveBeenCalled();
+    resetOwnerRequests();
+    expect(owner.aborted).toBe(true);
+    expect(revoke).toHaveBeenCalledOnce();
+    expect(ownerInvalidationSignal().aborted).toBe(false);
+  });
   it("закрывает старый owner signal, не разрешает fetch после interceptor и не меняет владельца при resume", async () => {
     const native = vi.fn<typeof fetch>().mockResolvedValue(new Response("ok"));
     vi.stubGlobal("fetch", native);

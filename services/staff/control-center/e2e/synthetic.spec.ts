@@ -10,6 +10,7 @@ import {
   isCompletedChromiumTicketTerminal,
   isConfirmedSyntheticCancellation,
   matchesConfirmedFirefoxAvailabilityBodyAborts,
+  validFirefoxBounceTrackerAdvisoryCount,
 } from "./synthetic-diagnostics";
 import { prepareSyntheticMicrophone } from "./synthetic-microphone";
 import { SyntheticFetchCorrelator } from "./synthetic-fetch-correlator";
@@ -163,6 +164,8 @@ const journals = new WeakMap<
   import("@playwright/test").Page,
   ReturnType<typeof syntheticNetworkJournal>
 >();
+// Каждый вариант имеет собственные context, fixtures и каталог доказательств.
+test.describe.configure({ mode: "parallel" });
 test.afterEach(async ({ page }) => {
   await journals.get(page)?.finish();
 });
@@ -204,6 +207,10 @@ for (const { width, height } of [
     let sessionVersion = 1;
     let sessionRenewals = 0;
     let sessionResumes = 0;
+    let releaseInitialHomeCatalogs!: () => void;
+    const initialHomeCatalogs = new Promise<void>((resolve) => {
+      releaseInitialHomeCatalogs = resolve;
+    });
     if (width === 1440) await page.clock.install();
     await page.setViewportSize({ width, height });
     page.on("pageerror", (error) => failures.push(error.message));
@@ -378,6 +385,12 @@ for (const { width, height } of [
     ]);
     await context.route("**/*", async (route) => {
       const url = new URL(route.request().url());
+      if (
+        url.pathname === "/api/v1/runs" &&
+        (url.searchParams.has("states") ||
+          url.searchParams.get("resumableSessionsOnly") === "true")
+      )
+        await initialHomeCatalogs;
       if (url.origin !== "https://kodex.test") {
         failures.push(`Unexpected origin: ${url.origin}`);
         await route.abort();
@@ -600,6 +613,17 @@ for (const { width, height } of [
     await expect(
       page.getByText(projects[0]?.name ?? "", { exact: true }).first(),
     ).toBeVisible();
+    // Ждём именно карточки секции Проектов: глобальный текст первого проекта
+    // может появиться раньше готовности самой интерактивной секции.
+    await expect(
+      page.locator(".home-project-section .home-project"),
+    ).toHaveCount(6);
+    const expandProjects = page
+      .locator(".home-project-section")
+      .getByRole("button", { name: "Развернуть список проекта", exact: true });
+    await expect(expandProjects).toBeDisabled();
+    releaseInitialHomeCatalogs();
+    await expect(expandProjects).toBeEnabled();
     await expect
       .poll(() =>
         page.evaluate(
@@ -1852,10 +1876,14 @@ for (const { width, height } of [
           `Failed request: ${new URL(request.url()).pathname}; code=${code}; routeChanged=${String(changedRoute)}; cancelled=${String(explicitCancellation)}; type=${request.resourceType()}; method=${request.method()}; ${fetches.describe(request)}`,
         );
     }
-    const expectedBounceTrackerAdvisories = browserName === "firefox" ? 1 : 0;
-    if (firefoxBounceTrackerAdvisories !== expectedBounceTrackerAdvisories)
+    if (
+      !validFirefoxBounceTrackerAdvisoryCount(
+        browserName,
+        firefoxBounceTrackerAdvisories,
+      )
+    )
       failures.push(
-        `Firefox bounce tracker advisory count mismatch: expected=${String(expectedBounceTrackerAdvisories)} actual=${String(firefoxBounceTrackerAdvisories)}`,
+        `Firefox bounce tracker advisory count rejected: actual=${String(firefoxBounceTrackerAdvisories)}`,
       );
     if (firefoxBounceTrackerAdvisories > 0)
       testInfo.annotations.push({

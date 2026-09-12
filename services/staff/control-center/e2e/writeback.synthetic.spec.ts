@@ -337,6 +337,52 @@ for (const width of [390, 2900]) {
   });
 }
 
+test("synthetic: pagehide сохраняет UNKNOWN intent, отзыв владельца очищает его", async ({
+  page,
+}) => {
+  const fixture = await install(page, true);
+  await page.goto("/e2e/fixtures/impact.html?kind=git");
+  const panel = page.getByRole("region", {
+    name: "Изменение через Git",
+    exact: true,
+  });
+  await panel
+    .getByRole("button", { name: "Предлагаемый документ", exact: true })
+    .click();
+  await panel
+    .getByRole("textbox", { name: "Предлагаемый документ", exact: true })
+    .fill(proposedContent);
+  await panel
+    .getByRole("button", { name: "Подготовить план", exact: true })
+    .click();
+  await expect(panel).toContainText("Результат запроса неизвестен");
+  const before = await page.evaluate(() =>
+    sessionStorage.getItem("kodex.writeback.intent.configuration"),
+  );
+  expect(before).not.toBeNull();
+  await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("kodex.writeback.intent.configuration"),
+    ),
+  ).toBe(before);
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("fixture-owner-reset")),
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        sessionStorage.getItem("kodex.writeback.intent.configuration"),
+      ),
+    )
+    .toBeNull();
+  await expect(
+    panel.getByRole("textbox", { name: "Предлагаемый документ", exact: true }),
+  ).toHaveCount(0);
+  expect(fixture.writes).toHaveLength(1);
+  expect(fixture.failures).toEqual([]);
+});
+
 test("synthetic: неизвестный Prepare переживает reload, history adoption не является approval", async ({
   page,
 }) => {
