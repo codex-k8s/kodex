@@ -4,7 +4,7 @@ title: Точечная поставка source-профиля internal RPC auth
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.1.2
+version: 1.1.3
 updated: 2026-09-12
 ---
 
@@ -53,6 +53,12 @@ destination или port закрыто отклоняются.
 renderer добавляет пустой `egress: []`, который API также опускает. Только это
 пустое поле при неизменном `policyTypes: [Ingress]` нормализуется к отсутствию.
 Непустой egress, `null`, иной policyTypes и неизвестные поля остаются отказом.
+
+Source migration Job до plan/intent получает явные стандартные Job/Pod и
+container defaults, включая init containers. Они входят в exact spec hash.
+Явные значения render не переписываются; readback не удаляет произвольные поля
+и не принимает admission mutations за обычные defaults. После изменения
+версии Kubernetes новый неизвестный default требует отдельной совместимости.
 
 ```bash
 node tools/release/authority-rotation-source-capability.mjs \

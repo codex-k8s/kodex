@@ -23,6 +23,26 @@ test('source migration is cloned from actual render and preserves offline caches
  const actual=structuredClone(job);actual.metadata.uid=uid;actual.spec.selector={matchLabels:{'batch.kubernetes.io/controller-uid':uid}};actual.spec.template.metadata.labels['batch.kubernetes.io/controller-uid']=uid;
  verifySourceMigrationReadback(actual,job);actual.spec.template.spec.volumes.find(v=>v.name==='dev-go-mod').hostPath.path='/srv/kodex-dev/foreign';assert.throws(()=>verifySourceMigrationReadback(actual,job));
 });
+test('migration defaults materialized before intent keep strict app/init readback',()=>{
+ const rendered=migration();rendered.spec.template.spec.initContainers=[{name:'prepare',image:authorityGoImage,command:['true']}];
+ const job=createSourceMigrationJob(rendered,plan),pod=job.spec.template.spec;
+ assert.equal(job.spec.completions,1);assert.equal(job.spec.parallelism,1);assert.equal(job.spec.completionMode,'NonIndexed');
+ assert.equal(job.spec.manualSelector,false);assert.equal(job.spec.suspend,false);assert.equal(job.spec.podReplacementPolicy,'TerminatingOrFailed');
+ assert.equal(pod.serviceAccount,pod.serviceAccountName);assert.equal(pod.dnsPolicy,'ClusterFirst');assert.equal(pod.schedulerName,'default-scheduler');assert.equal(pod.terminationGracePeriodSeconds,30);
+ for(const container of [...pod.containers,...pod.initContainers]){
+  assert.equal(container.imagePullPolicy,'IfNotPresent');assert.equal(container.terminationMessagePath,'/dev/termination-log');assert.equal(container.terminationMessagePolicy,'File');
+ }
+ assert.equal(rendered.spec.parallelism,undefined);
+ const actual=structuredClone(job);actual.metadata.uid=uid;verifySourceMigrationReadback(actual,job);
+ for(const mutate of [s=>s.parallelism=2,s=>s.podReplacementPolicy='Failed',s=>s.template.spec.terminationGracePeriodSeconds=60,
+  s=>s.template.spec.containers[0].terminationMessagePolicy='FallbackToLogsOnError',s=>s.template.spec.initContainers[0].command=['foreign'],s=>s.template.spec.unknown=true]){
+  const changed=structuredClone(actual);mutate(changed.spec);assert.throws(()=>verifySourceMigrationReadback(changed,job),/SOURCE_MIGRATION_SPEC_CHANGED/);
+ }
+ rendered.spec.parallelism=2;rendered.spec.template.spec.terminationGracePeriodSeconds=45;rendered.spec.template.spec.containers[0].imagePullPolicy='Always';
+ const explicit=createSourceMigrationJob(rendered,plan);assert.equal(explicit.spec.parallelism,2);assert.equal(explicit.spec.completions,undefined);assert.equal(explicit.spec.template.spec.terminationGracePeriodSeconds,45);assert.equal(explicit.spec.template.spec.containers[0].imagePullPolicy,'Always');
+ rendered.spec.template.spec.initContainers[0].image='unversioned:latest';assert.throws(()=>createSourceMigrationJob(rendered,plan),/SOURCE_MIGRATION_DEFAULT_IMAGE_UNPINNED/);
+});
+
 test('durable receipt pins first Job UID before and after terminal',()=>{
  const job=createSourceMigrationJob(migration(),plan),a=structuredClone(job);a.metadata.uid=uid;a.spec.selector={matchLabels:{'batch.kubernetes.io/controller-uid':uid}};
  const receipt=buildSourceMigrationReceipt(a,job,plan);validateSourceMigrationReceipt(receipt,job,plan);verifySourceMigrationReadback(a,job,receipt);
