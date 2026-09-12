@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -94,7 +95,7 @@ func (client *Client) Materialize(ctx context.Context, input runtimecontract.Run
 	if input.SystemAssistant && input.ProjectRef == "" {
 		response, err := client.api.MaterializeSystemAssistantCredentials(ctx, &secretbrokerv1.MaterializeSystemAssistantCredentialsRequest{Execution: materializeRequest(input)})
 		if err != nil {
-			return Projection{}, errors.New("materialize assistant credential projection")
+			return Projection{}, materializationRPCError("materialize assistant credential projection", err)
 		}
 		return projectionFromDescriptor(input, response.GetProjection())
 	}
@@ -104,9 +105,13 @@ func (client *Client) Materialize(ctx context.Context, input runtimecontract.Run
 	}
 	response, err := client.api.MaterializeRuntimeCredentials(projectContext, materializeRequest(input))
 	if err != nil {
-		return Projection{}, errors.New("materialize runtime credential projection")
+		return Projection{}, materializationRPCError("materialize runtime credential projection", err)
 	}
 	return projectionFromDescriptor(input, response.GetProjection())
+}
+
+func materializationRPCError(operation string, cause error) error {
+	return fmt.Errorf("%s: %w", operation, cause)
 }
 
 func materializeRequest(input runtimecontract.RunnerInput) *secretbrokerv1.MaterializeRuntimeCredentialsRequest {
