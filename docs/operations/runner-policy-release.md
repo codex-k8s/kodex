@@ -47,9 +47,10 @@ promotions, активных runs и claimed runtime leases. SQL выполня�
 он не доказывает конкурентную смену policy под build-нагрузкой.
 
 `nodeReadbackImage`, runtime contract revision/digest, signer/trust,
-credential generation и прежний runtime-controller default сохраняются.
-Иначе старые bootstrap pins перестали бы проходить существующий exact image
-rule. Новая пользовательская сборка получает обычный promoted `roles@digest`;
+credential generation и прежний runtime-controller default по умолчанию
+сохраняются. После отдельной подтверждённой публикации runner можно передать
+его exact pull reference через `--node-readback-image`; его digest обязан
+совпадать с новым trusted runner digest. Новая пользовательская сборка получает обычный promoted `roles@digest`;
 этот путь уже поддерживается runtime-controller. Существующие окружения и
 attempts не перепривязываются автоматически. Default новых проектов можно
 менять отдельной конфигурационной поставкой только после фактической
@@ -100,7 +101,9 @@ Bundle готовится read-only по фактически выбранной
 
 ```bash
 node tools/release/runner-policy-transition.mjs prepare --context "$CONTEXT" \
-  --runner-digest "$RUNNER_DIGEST" --output "$NEW_PRIVATE_BUNDLE"
+  --runner-digest "$RUNNER_DIGEST" \
+  --node-readback-image "$PUBLISHED_RUNNER_REFERENCE" \
+  --output "$NEW_PRIVATE_BUNDLE"
 ```
 
 Bundle/plan/evidence хранятся вне source с правами 0600 в private directory.

@@ -67,6 +67,13 @@ export function planDefaultRunner(deployments, nextReference, operationID = rand
   return { version:1, kind:"DEFAULT_RUNNER_TRANSITION", id:operationID, nextReference, operations };
 }
 
+export function requirePublishedNodeReadback(policy, nextReference) {
+  requireValue(policy?.apiVersion === "v1" && policy.kind === "ConfigMap" && policy.metadata?.namespace === namespace &&
+    policy.immutable === true && policy.metadata.labels?.["app.kubernetes.io/part-of"] === "kodex" &&
+    policy.metadata.labels?.["kodex.dev/owner-intent"] === "true" && policy.data?.nodeReadbackImage === nextReference,
+  "RUNNER_NODE_READBACK_NOT_PUBLISHED");
+}
+
 function privateJSON(path) { const stat=lstatSync(path);requireValue(stat.isFile()&&stat.nlink===1&&(stat.mode&0o077)===0&&stat.size<8<<20,"PRIVATE_INPUT_REQUIRED");return JSON.parse(readFileSync(path,"utf8")); }
 
 function main(args) {
@@ -75,13 +82,19 @@ function main(args) {
   const context=options["--context"];requireValue(/^[A-Za-z0-9_.:@/-]{1,160}$/.test(context??"")&&!/prod/i.test(context),"STAGING_CONTEXT_REQUIRED");
   const kube=(argv,input)=>execFileSync("kubectl",["--context",context,"--request-timeout=30s",...argv],{input,encoding:"utf8",timeout:335000,maxBuffer:8<<20,stdio:[input?"pipe":"ignore","pipe","pipe"]});
   const get=(name)=>JSON.parse(kube(["-n",namespace,"get","deployment",name,"-o","json"]));
+  const admissionController=get("image-admission-controller"), admissionApp=admissionController.spec.template.spec.containers.filter((item)=>item.name==="image-admission-controller");
+  const policyEntries=admissionApp[0]?.env?.filter((item)=>item.name==="IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP")??[];
+  requireValue(admissionApp.length===1&&policyEntries.length===1&&typeof policyEntries[0].value==="string"&&!policyEntries[0].valueFrom,"ACTIVE_RUNNER_POLICY_REQUIRED");
+  const activePolicy=JSON.parse(kube(["-n",namespace,"get","configmap",policyEntries[0].value,"-o","json"]));
   const clusterUID=JSON.parse(kube(["get","namespace","kube-system","-o","json"])).metadata.uid, deployments=()=>[get("control-plane"),get("runtime-controller")];
   if(command==="plan"){
     requireValue(options["--runner-reference"]&&options["--output"]&&Object.keys(options).length===3,"PLAN_ARGUMENTS_INVALID");
+    requirePublishedNodeReadback(activePolicy,options["--runner-reference"]);
     const plan={...planDefaultRunner(deployments(),options["--runner-reference"]),context,clusterUID};writeFileSync(options["--output"],`${JSON.stringify(plan)}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"PLANNED",id:plan.id,targets:plan.operations.length})}\n`);return;
   }
   requireValue(options["--plan"]&&options["--evidence"]&&(command!=="apply"||options["--confirm"]==="APPLY-STAGING-DEFAULT-RUNNER"),"OPERATION_ARGUMENTS_INVALID");
   const saved=privateJSON(options["--plan"]);requireValue(saved.context===context&&saved.clusterUID===clusterUID,"PLAN_SCOPE_CHANGED");
+  requirePublishedNodeReadback(activePolicy,saved.nextReference);
   if(command==="inspect"){
     requireValue(!options["--confirm"]&&Object.keys(options).length===3,"INSPECT_ARGUMENTS_INVALID");
     const states=deployments().map((deployment)=>{const expected=saved.operations.find((item)=>item.name===deployment.metadata.name),current=literal(application(deployment),expected.key).value;return{name:expected.name,status:current===expected.afterReference?"NEW":current===expected.beforeReference?"OLD":"DRIFT"};});
