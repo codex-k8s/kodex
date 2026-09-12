@@ -69,6 +69,10 @@ Go-приложение получает отдельный read-only `dev-appli
 меняет только собственный source directory, не runner, runtime image или общий
 кэш зависимостей. Изменение package.json/package-lock.json требует отдельной
 подготовки runtime/cache и этим быстрым source-путём закрыто отклоняется.
+После `prime-frontend-cache.sh` используется отдельный
+[`frontend-dependency-transition.mjs`](../../docs/operations/frontend-dependency-delivery-1450.md):
+source/cache CAS, immutable intent, readback и новый rollback plan. Обычный
+source guard не ослабляется; Node image и соседние workloads не меняются.
 
 Перед первым source release PWA новая чистая рабочая копия проходит отдельную
 подготовку вложенных mountpoints. Команда не устанавливает зависимости и не

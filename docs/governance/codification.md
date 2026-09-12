@@ -168,6 +168,7 @@ updated: 2026-07-28
 | `OPS-DOC-1390` | `docs/operations/authority-rotation-1390.md` |
 | `OPS-DOC-1392` | `docs/operations/image-admission-hold-delivery-1392.md` |
 | `OPS-DOC-1434` | `docs/operations/authority-source-delivery-1434.md` |
+| `OPS-DOC-1450` | `docs/operations/frontend-dependency-delivery-1450.md` |
 | `OPS-EMAIL-1371` | `docs/operations/email-agent-1371.md` |
 | `OPS-EMAIL-1378` | `docs/operations/email-combined-1378.md` |
 | `OPS-RUNNER-1382` | `docs/operations/runner-binary-provenance-1382.md` |

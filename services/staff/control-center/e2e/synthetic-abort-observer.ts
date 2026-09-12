@@ -66,6 +66,28 @@ export async function installSyntheticAbortObserver(
           signalGeneration: number;
         }
       >();
+      const bodyErrors = new Set<string>();
+      const reportBodyError = async (id: string, error: unknown) => {
+        const details = fetchDetails.get(id);
+        if (!details || bodyErrors.has(id)) return;
+        bodyErrors.add(id);
+        const binding = (
+          window as unknown as {
+            __kodexSyntheticAbortedFetch: (
+              event: SyntheticFetchEvent,
+            ) => Promise<void>;
+          }
+        ).__kodexSyntheticAbortedFetch;
+        await binding({
+          phase: "body-error",
+          id,
+          url: details.url,
+          signalGeneration: details.signalGeneration,
+          signalAborted: details.signal?.aborted ?? false,
+          reasonClass: error instanceof Error ? error.name : "UNKNOWN",
+        });
+        fetchDetails.delete(id);
+      };
       Response.prototype.text = async function () {
         const id = this.headers.get(headerName);
         const details = id ? fetchDetails.get(id) : undefined;
@@ -73,24 +95,7 @@ export async function installSyntheticAbortObserver(
         try {
           value = await responseText.call(this);
         } catch (error) {
-          if (id) {
-            const binding = (
-              window as unknown as {
-                __kodexSyntheticAbortedFetch: (
-                  event: SyntheticFetchEvent,
-                ) => Promise<void>;
-              }
-            ).__kodexSyntheticAbortedFetch;
-            await binding({
-              phase: "body-error",
-              id,
-              url: details?.url ?? this.url,
-              signalGeneration: details?.signalGeneration ?? 0,
-              signalAborted: details?.signal?.aborted ?? false,
-              reasonClass: error instanceof Error ? error.name : "UNKNOWN",
-            });
-            fetchDetails.delete(id);
-          }
+          if (id) await reportBodyError(id, error);
           throw error;
         }
         if (id) {
@@ -184,7 +189,47 @@ export async function installSyntheticAbortObserver(
             });
           const operation = fetch(input, { ...init, headers });
           void operation.then(
-            () => emit("headers"),
+            (response) => {
+              // Настоящий wrapper читает native reader ещё до Response.text.
+              // Наблюдаем только body этого exact fixture request, чужие streams не меняем.
+              const body = response.body;
+              if (body) {
+                const getReader = Reflect.get(
+                  body,
+                  "getReader",
+                ) as ReadableStream["getReader"];
+                Object.defineProperty(body, "getReader", {
+                  configurable: true,
+                  value(this: ReadableStream, ...args: unknown[]) {
+                    const reader = Reflect.apply(getReader, this, args) as
+                      | ReadableStreamDefaultReader
+                      | ReadableStreamBYOBReader;
+                    if (reader instanceof ReadableStreamDefaultReader) {
+                      const read = Reflect.get(reader, "read");
+                      Object.defineProperty(reader, "read", {
+                        configurable: true,
+                        value(
+                          this: ReadableStreamDefaultReader,
+                          ...readArgs: unknown[]
+                        ) {
+                          const result = Reflect.apply(
+                            read,
+                            this,
+                            readArgs,
+                          ) as Promise<ReadableStreamReadResult<unknown>>;
+                          return result.catch(async (error: unknown) => {
+                            await reportBodyError(id, error);
+                            throw error;
+                          });
+                        },
+                      });
+                    }
+                    return reader;
+                  },
+                });
+              }
+              emit("headers");
+            },
             () => {
               emit("reject");
               fetchDetails.delete(id);
