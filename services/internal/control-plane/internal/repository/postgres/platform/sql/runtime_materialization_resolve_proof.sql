@@ -1,8 +1,11 @@
 -- name: runtime_materialization_resolve_proof :one
 SELECT actor.id::text, actor.kind, actor.updated_at,
+       organization.id::text, organization.version,
        COALESCE(project.id::text, ''), COALESCE(project.version, 0),
        revision.id::text, revision.generation, revision.revision_digest, lease.expires_at
 FROM control_plane.runtime_leases lease
+JOIN control_plane.organizations organization
+  ON organization.id = lease.organization_id
 JOIN control_plane.runtime_revisions revision
   ON revision.id = lease.runtime_revision_id AND revision.organization_id = lease.organization_id
 JOIN control_plane.runs root_run
@@ -21,8 +24,7 @@ JOIN control_plane.agents agent
   ON agent.id = revision.agent_id AND agent.organization_id = lease.organization_id
 LEFT JOIN control_plane.projects project
   ON project.id = revision.project_id AND project.organization_id = lease.organization_id
-WHERE lease.organization_id = @organization_id::uuid
-  AND lease.materialization_operation = @operation
+WHERE lease.materialization_operation = @operation
   AND lease.materialization_request_digest = @request_digest
   AND lease.state = 'CLAIMED' AND lease.expires_at > clock_timestamp()
   AND lease.run_id = revision.run_id AND lease.node_id = revision.node_id
