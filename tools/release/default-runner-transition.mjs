@@ -9,6 +9,7 @@ import { fingerprint } from "./scoped-release.mjs";
 
 const namespace = "kodex-system";
 const annotation = "kodex.dev/default-runner-transition";
+const stabilizedAnnotation = "kodex.dev/default-runner-transition-stabilized";
 const referencePattern = /^pull\.kodex\.works\/kodex\/agent-runner@sha256:[a-f0-9]{64}$/;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const requireValue = (condition, code) => { if (!condition) throw new Error(code); };
@@ -51,9 +52,16 @@ export function planDefaultRunner(deployments, nextReference, operationID = rand
     const after = structuredClone(deployment.spec), nextContainer = after.template.spec.containers.find((item) => item.name === name);
     literal(nextContainer, key).value = nextReference;
     after.template.metadata.annotations = { ...(after.template.metadata.annotations ?? {}), [annotation]: operationID };
+    let stabilizedAfter, stabilizedAfterSpecSHA256;
+    if (name === "control-plane") {
+      stabilizedAfter = structuredClone(after);
+      stabilizedAfter.template.metadata.annotations[stabilizedAnnotation] = operationID;
+      stabilizedAfterSpecSHA256 = fingerprint(stabilizedAfter);
+    }
     return { name, key, uid: deployment.metadata.uid, resourceVersion: deployment.metadata.resourceVersion,
       beforeReference: current, afterReference: nextReference, beforeSpecSHA256: fingerprint(deployment.spec), afterSpecSHA256: fingerprint(after), changed: current !== nextReference,
-      patch: [{op:"test",path:"/metadata/uid",value:deployment.metadata.uid},{op:"test",path:"/metadata/resourceVersion",value:deployment.metadata.resourceVersion},{op:"replace",path:"/spec",value:after}] };
+      patch: [{op:"test",path:"/metadata/uid",value:deployment.metadata.uid},{op:"test",path:"/metadata/resourceVersion",value:deployment.metadata.resourceVersion},{op:"replace",path:"/spec",value:after}],
+      ...(stabilizedAfter ? { stabilizedAfter, stabilizedAfterSpecSHA256 } : {}) };
   });
   requireValue(operations[0].beforeReference === operations[1].beforeReference && operations.some((item) => item.changed), "DEFAULT_RUNNER_PREDECESSOR_MISMATCH");
   return { version:1, kind:"DEFAULT_RUNNER_TRANSITION", id:operationID, nextReference, operations };
@@ -81,7 +89,7 @@ function main(args) {
   }
   requireValue(Object.keys(options).length===4,"APPLY_ARGUMENTS_INVALID");const current=planDefaultRunner(deployments(),saved.nextReference,saved.id);requireValue(fingerprint(current.operations)===fingerprint(saved.operations),"PLAN_PRECONDITION_CHANGED");
   const fd=openSync(options["--evidence"],"wx",0o600),journal=(value)=>{writeSync(fd,`${JSON.stringify({at:new Date().toISOString(),id:saved.id,...value})}\n`);fsyncSync(fd);};
-  try{for(const operation of saved.operations){journal({status:"INTENT",target:operation.name});kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(operation.patch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);const after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.afterSpecSHA256,"TARGET_READBACK_MISMATCH");journal({status:"APPLIED",target:operation.name});}journal({status:"PASS",nextReference:saved.nextReference});process.stdout.write(`${JSON.stringify({status:"PASS",id:saved.id})}\n`);}catch{journal({status:"UNKNOWN",code:"DEFAULT_RUNNER_TRANSITION_FAILED"});throw new Error("DEFAULT_RUNNER_TRANSITION_FAILED");}finally{closeSync(fd);}
+  try{for(const operation of saved.operations){journal({status:"INTENT",target:operation.name});kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(operation.patch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);let after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.afterSpecSHA256,"TARGET_READBACK_MISMATCH");journal({status:"APPLIED",target:operation.name});if(operation.name==="control-plane"){journal({status:"STABILIZATION_INTENT",target:operation.name});const stabilizationPatch=[{op:"test",path:"/metadata/uid",value:operation.uid},{op:"test",path:"/metadata/resourceVersion",value:after.metadata.resourceVersion},{op:"replace",path:"/spec",value:operation.stabilizedAfter}];kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(stabilizationPatch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.stabilizedAfterSpecSHA256,"STABILIZATION_READBACK_MISMATCH");journal({status:"STABILIZED",target:operation.name});}}journal({status:"PASS",nextReference:saved.nextReference});process.stdout.write(`${JSON.stringify({status:"PASS",id:saved.id})}\n`);}catch{journal({status:"UNKNOWN",code:"DEFAULT_RUNNER_TRANSITION_FAILED"});throw new Error("DEFAULT_RUNNER_TRANSITION_FAILED");}finally{closeSync(fd);}
 }
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){try{main(process.argv.slice(2));}catch(error){process.stderr.write(`${/^[A-Z_]+$/.test(error.message)?error.message:"DEFAULT_RUNNER_TRANSITION_FAILED"}\n`);process.exitCode=1;}}

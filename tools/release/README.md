@@ -157,7 +157,11 @@ node tools/release/scoped-release.mjs apply \
   у `runtime-controller` и `control-plane`. `plan` закрепляет UID,
   resourceVersion и digest спецификаций, `apply` меняет только два literal env,
   а `inspect` читает частичный исход без повторного PATCH. Старый warm Pod
-  заменяет штатная reconciliation при следующей RuntimeRevision.
+  заменяет штатная reconciliation при следующей RuntimeRevision. После первого
+  rolling update `control-plane` инструмент выполняет второй закреплённый
+  проход. Он запускается уже без реплик с прежним default image и не позволяет
+  старому bootstrap вернуть системное runtime environment назад во время
+  overlap.
 - Конфигурация, expand/contract migrations, включение grant v2 и security rotation
   выполняются отдельно, не маскируются под обычный application release.
 
