@@ -104,10 +104,7 @@ async function startNewKodexConversation(
   page: Page,
   dialog: Locator,
 ): Promise<void> {
-  const createButton = dialog.getByRole("button", {
-    name: "Новый диалог",
-    exact: true,
-  });
+  const createButton = dialog.locator("button.assistant-new-conversation");
   await expect(createButton).toBeEnabled();
   const [created] = await Promise.all([
     page.waitForResponse(
