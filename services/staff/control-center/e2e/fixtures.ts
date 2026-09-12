@@ -107,7 +107,7 @@ export const test = base.extend<{
       const authentication = await authenticateOwner(page, undefined, {
         mode: "warm",
       });
-      expect(authentication.ownerSessionStatuses).toEqual([204]);
+      expect(authentication.ownerSessionStatuses).toEqual([200]);
       await use(true);
     },
     { auto: true },
