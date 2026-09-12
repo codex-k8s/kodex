@@ -16,10 +16,16 @@ const hash=value=>createHash('sha256').update(value).digest('hex');
 const privateJSON=path=>{const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o777)===0o600,'PRIVATE_INPUT_REQUIRED');return JSON.parse(readFileSync(path,'utf8'));};
 const canonical=value=>JSON.stringify(value,Object.keys(value).sort());
 
+export function validateProofBudget(proof){
+ requireValue(typeof proof?.inputPreimage==='string'&&Buffer.byteLength(proof.inputPreimage)<=1048576,'PROOF_REJECTED');
+ requireValue(Buffer.byteLength(canonical(proof))<=1048576,'PROOF_ENVELOPE_TOO_LARGE');
+}
+
 export function repairResources(delivery,rotation,source,revision,proof){
+ validateProofBudget(proof);
  validateSourceDeliveryPlan(delivery);
  requireValue(rotation.version===3&&rotation.action==='rotate'&&rotation.sourceDeliveryPlanSHA256===fingerprint(delivery),'EXACT_ROTATION_REQUIRED');
- requireValue(Number.isSafeInteger(proof.sourceRevision)&&proof.sourceRevision===rotation.registry.previousSourceRevision&&/^[a-f0-9]{64}$/.test(proof.snapshotDigestSHA256)&&typeof proof.inputPreimage==='string'&&Buffer.byteLength(proof.inputPreimage)<=524288,'PROOF_REJECTED');
+ requireValue(Number.isSafeInteger(proof.sourceRevision)&&proof.sourceRevision===rotation.registry.previousSourceRevision&&/^[a-f0-9]{64}$/.test(proof.snapshotDigestSHA256),'PROOF_REJECTED');
  const input=JSON.parse(proof.inputPreimage);
  requireValue(Object.keys(proof).sort().join()==='inputPreimage,snapshotDigestSHA256,sourceRevision'&&Object.keys(input).sort().join()==='manifest_bundle,policy,registry_digest_sha256'&&typeof input.manifest_bundle==='string'&&typeof input.policy==='string'&&input.registry_digest_sha256===rotation.registry.previousSourceDigestSHA256&&hash(input.policy)===rotation.registry.previousPolicySHA256,'PROOF_ROTATION_BINDING_REJECTED');
  const job=createSourceMigrationJob(delivery.migration.rendered,{...delivery,source,revision});

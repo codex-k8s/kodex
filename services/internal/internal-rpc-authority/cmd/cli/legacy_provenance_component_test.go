@@ -9,7 +9,7 @@ import (
 
 func legacyPreimage(t *testing.T) string {
 	t.Helper()
-	raw, err := internalrpcauth.CanonicalJSON(map[string]string{"manifest_bundle": "fixture-public-bundle", "policy": "fixture-policy", "registry_digest_sha256": strings.Repeat("d", 64)})
+	raw, err := internalrpcauth.CanonicalJSON(map[string]string{"manifest_bundle": "fixture-public-bundle", "policy": "fixture-policy" + strings.Repeat("p", 700000), "registry_digest_sha256": strings.Repeat("d", 64)})
 	if err != nil {
 		t.Fatal("encode legacy preimage")
 	}

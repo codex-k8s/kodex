@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {verifyRepairJob} from './authority-legacy-provenance-repair.mjs';
+import {verifyRepairJob,validateProofBudget} from './authority-legacy-provenance-repair.mjs';
 
 test('repair readback preserves proof binding, exact spec and excludes only controller labels',()=>{
  const expected={metadata:{name:'authority-legacy-repair-fixture',namespace:'kodex-system',annotations:{'kodex.dev/legacy-repair-proof':'a'.repeat(64)}},spec:{template:{metadata:{labels:{app:'migrator'}},spec:{containers:[{name:'migrate',image:'registry/cli@sha256:'+'b'.repeat(64),args:['legacy-provenance-repair'],volumeMounts:[{name:'proof',readOnly:true}]}]}}}};
@@ -9,4 +9,12 @@ test('repair readback preserves proof binding, exact spec and excludes only cont
  for(const mutate of [v=>v.metadata.annotations['kodex.dev/legacy-repair-proof']='c'.repeat(64),v=>v.spec.template.spec.containers[0].args=['up'],v=>v.spec.template.spec.containers[0].volumeMounts[0].readOnly=false,v=>v.spec.template.spec.unknown=true,v=>v.metadata.namespace='foreign']){
   const changed=structuredClone(actual);mutate(changed);assert.throws(()=>verifyRepairJob(changed,expected));
  }
+});
+
+
+test('large policy proof fits explicit envelope budget while escaping and oversize stay bounded',()=>{
+ const proof={sourceRevision:18,snapshotDigestSHA256:'a'.repeat(64),inputPreimage:'p'.repeat(771000)};
+ validateProofBudget(proof);
+ assert.throws(()=>validateProofBudget({...proof,inputPreimage:'p'.repeat(1048577)}),/PROOF_REJECTED/);
+ assert.throws(()=>validateProofBudget({...proof,inputPreimage:'"'.repeat(600000)}),/PROOF_ENVELOPE_TOO_LARGE/);
 });

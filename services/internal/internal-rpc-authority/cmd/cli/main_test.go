@@ -144,7 +144,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 8 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration || entries[6] != authoritySnapshotPredecessorMigration || entries[7] != "migrations/20260912000100_authority_legacy_registry_provenance.sql" {
+	if len(entries) != 9 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration || entries[6] != authoritySnapshotPredecessorMigration || entries[7] != "migrations/20260912000100_authority_legacy_registry_provenance.sql" || entries[8] != "migrations/20260912000200_authority_legacy_proof_budget.sql" {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)
