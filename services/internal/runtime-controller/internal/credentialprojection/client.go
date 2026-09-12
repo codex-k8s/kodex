@@ -4,8 +4,10 @@ package credentialprojection
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -18,6 +20,7 @@ import (
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -121,6 +124,22 @@ func materializeRequest(input runtimecontract.RunnerInput) *secretbrokerv1.Mater
 		RuntimeRevisionDigest: input.RuntimeRevisionDigest, SessionRef: input.SessionRef, TurnRef: input.TurnRef,
 		Attempt: input.Attempt, InputDigest: input.InputDigest,
 	}
+}
+
+// MaterializationRequestDigest возвращает безопасный digest exact protobuf,
+// который interceptor передаёт proof resolver. Содержимое запроса не логируется.
+func MaterializationRequestDigest(input runtimecontract.RunnerInput) (string, error) {
+	execution := materializeRequest(input)
+	var request proto.Message = execution
+	if input.SystemAssistant && input.ProjectRef == "" {
+		request = &secretbrokerv1.MaterializeSystemAssistantCredentialsRequest{Execution: execution}
+	}
+	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(request)
+	if err != nil {
+		return "", errors.New("encode materialization request digest")
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), nil
 }
 
 func projectionFromDescriptor(input runtimecontract.RunnerInput, descriptor *secretbrokerv1.RuntimeCredentialProjectionDescriptor) (Projection, error) {

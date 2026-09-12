@@ -46,6 +46,20 @@ func TestMaterializeRequestCarriesOnlyExactExecutionLocator(t *testing.T) {
 	}
 }
 
+func TestMaterializationRequestDigestDistinguishesAssistantEnvelope(t *testing.T) {
+	input := projectionTestInput()
+	projectDigest, err := MaterializationRequestDigest(input)
+	if err != nil || len(projectDigest) != 64 {
+		t.Fatalf("project digest = %q, err = %v", projectDigest, err)
+	}
+	input.SystemAssistant = true
+	input.ProjectRef = ""
+	assistantDigest, err := MaterializationRequestDigest(input)
+	if err != nil || len(assistantDigest) != 64 || assistantDigest == projectDigest {
+		t.Fatalf("assistant digest = %q, err = %v", assistantDigest, err)
+	}
+}
+
 func TestProjectionDescriptorRejectsEveryCrossExecutionBinding(t *testing.T) {
 	input := projectionTestInput()
 	tests := map[string]func(*secretbrokerv1.RuntimeCredentialProjectionDescriptor){
