@@ -54,18 +54,19 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 		t.Fatal("apply published workload boundary")
 	}
 	testSnapshotGenerationUpgradeRejection(t, port)
+	seedLegacyRegistryProvenance(t, port)
 	for attempt := range 2 {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			t.Fatalf("apply authority migration attempt %d: %v", attempt+1, err)
 		}
 		version, err := goose.GetDBVersionContext(ctx, database)
-		if err != nil || version != 20260909000300 {
+		if err != nil || version != 20260912000100 {
 			t.Fatal("authority migration version readback failed")
 		}
 		var rows, maximumID int64
 		if err := database.QueryRowContext(ctx,
 			"SELECT count(*), max(id) FROM public.goose_db_version",
-		).Scan(&rows, &maximumID); err != nil || rows != 8 {
+		).Scan(&rows, &maximumID); err != nil || rows != 9 {
 			t.Fatal("authority migration history readback failed")
 		}
 		if attempt == 0 {
@@ -76,6 +77,7 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 	}
 	t.Run("authority rotation lifecycle", func(t *testing.T) { testAuthorityRotationLifecycle(t, port) })
 	t.Run("authority normal rotation operation", func(t *testing.T) { testAuthorityNormalRotationOperation(t, port) })
+	t.Run("legacy registry provenance", func(t *testing.T) { testLegacyRegistryProvenance(t, port) })
 	t.Run("workload boundary", func(t *testing.T) {
 		testWorkloadDatabaseBoundary(t, port)
 	})
