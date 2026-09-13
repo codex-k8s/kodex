@@ -1,8 +1,10 @@
-import { loadE2EEnvironment } from "./environment";
+import { authenticateOwner } from "./auth-flow";
+import { loadE2EAuthEnvironment, loadE2EEnvironment } from "./environment";
 import { expect, test } from "./fixtures";
 import { gotoWithRetry, routeRef } from "./helpers";
 
 const environment = loadE2EEnvironment();
+const authentication = loadE2EAuthEnvironment();
 const projectName = `${environment.resourcePrefix} — отдел продаж`;
 
 async function expectNoHorizontalOverflow(
@@ -19,6 +21,14 @@ async function expectNoHorizontalOverflow(
 test("mobile shell, помощник и граф доступны без горизонтального переполнения", async ({
   page,
 }) => {
+  await authenticateOwner(
+    page,
+    {
+      username: authentication.ownerUsername,
+      password: authentication.ownerPassword,
+    },
+    { mode: "local" },
+  );
   await gotoWithRetry(page, "/projects");
 
   const project = page.getByRole("link", { name: new RegExp(projectName) });
