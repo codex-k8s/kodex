@@ -34,6 +34,11 @@ export function samePlan(saved, current) {
     fingerprint(saved.guards) === fingerprint(current.guards), "PLAN_PRECONDITION_CHANGED");
 }
 
+export function requireDrainedInventory(phase, activeJobs, workspaces) {
+  if (["maintenance", "reader", "open"].includes(phase)) return;
+  requireValue(activeJobs === 0 && workspaces === 0, "PAUSED_COMPATIBLE_IDLE_READER_REQUIRED");
+}
+
 function main(args) {
   const command = args.shift(), options = {};
   requireValue(["prepare", "inspect", "plan", "apply"].includes(command), "INVALID_COMMAND");
@@ -100,13 +105,11 @@ function main(args) {
     const maintenance = JSON.parse(gateway.metadata.annotations?.["kodex.dev/runner-policy-maintenance"] ?? "null");
     requireValue(gateway.spec.replicas === 0 && (gateway.status?.replicas ?? 0) === 0 && maintenance?.bundleSHA256 === fingerprint(bundle), "APPLICATION_MAINTENANCE_REQUIRED");
   }
-  if (phase === "reader") {
-    requireValue(activeJobs.length === 0 && pvcs.length === 0, "QUIESCED_ADMISSION_INVENTORY_REQUIRED");
-  }
   if (!["maintenance", "reader", "open"].includes(phase)) {
+    requireDrainedInventory(phase, activeJobs.length, pvcs.length);
     requireValue(env(controller, "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS") === "true" &&
-      controller.spec.template.spec.containers.find((item) => item.name === controller.metadata.name)?.image === readerImage &&
-      activeJobs.length === 0 && pvcs.length === 0, "PAUSED_COMPATIBLE_IDLE_READER_REQUIRED");
+      controller.spec.template.spec.containers.find((item) => item.name === controller.metadata.name)?.image === readerImage,
+    "PAUSED_COMPATIBLE_IDLE_READER_REQUIRED");
   }
   const operations = [];
   const patch = (resource, field, next) => {

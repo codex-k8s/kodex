@@ -4,8 +4,8 @@ title: Ограниченная выкладка runner и admission policy
 type: runbook
 status: approved
 owner: manager
-version: 1.0.0
-updated: 2026-09-08
+version: 1.0.1
+updated: 2026-09-13
 ---
 
 # Ограниченная выкладка runner и admission policy
@@ -123,9 +123,12 @@ node tools/release/runner-policy-transition.mjs apply --context "$CONTEXT" \
   --confirm APPLY-STAGING-RUNNER-POLICY
 ```
 
-После `reader` обычный controller завершает прежние циклы; готовность следующей
-фазы проверяется новым планом. Timeout наблюдателя не означает завершение
-команды: продолжить тот же handle. CAS drift не исправляется force.
+`reader` сначала включает `PAUSE_NEW_RUNS` и поэтому допускает уже начатые
+bounded Jobs и их workspace. Они продолжают работу до terminal outcome, а
+следующая фаза `resources` закрыто требует нулевые active Jobs и PVC. Это
+устраняет недостижимое ожидание пустого окна между циклическими claim Jobs.
+Timeout наблюдателя не означает завершение команды: продолжить тот же handle.
+CAS drift не исправляется force.
 
 ```bash
 node tools/release/runner-policy-transition.mjs inspect --context "$CONTEXT" \
