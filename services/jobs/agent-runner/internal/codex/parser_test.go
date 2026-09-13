@@ -182,8 +182,8 @@ func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 		"multiAgentMode":"explicitRequestOnly","reasoningEffort":null,
 		"runtimeWorkspaceRoots":["/workspace"],"sandbox":{"type":"readOnly"},"serviceTier":null,
 		"thread":{"canAcceptDirectInput":true,"cliVersion":"0.153.4","createdAt":1,"cwd":"/workspace","ephemeral":false,
-		"extra":null,"historyMode":"save-all","id":"` + testThreadID + `","modelProvider":"openai",
-		"preview":"","projectId":null,"section":"default","sectionEnteredAt":null,
+		"extra":null,"historyMode":"save-all","id":"` + testThreadID + `","model":"codex","modelProvider":"openai",
+		"preview":"","projectId":null,"reasoningEffort":"high","section":"default","sectionEnteredAt":null,
 		"sessionId":"` + testThreadID + `","source":"startup",
 		"status":{"type":"idle"},"turns":[],"updatedAt":1}}`)
 	if err := state.bindThread(response, "codex", "/workspace", "never"); err != nil {

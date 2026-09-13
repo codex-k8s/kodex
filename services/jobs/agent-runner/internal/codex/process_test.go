@@ -316,12 +316,12 @@ func TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess(t *t
 
 func TestProviderStageErrorKeepsClassificationAndHidesDiagnostic(t *testing.T) {
 	secret := errors.New("provider response with secret diagnostic")
-	err := atProviderStage(providerStageTurnStart, secret)
+	err := atProviderStage(providerStageThreadCall, secret)
 	if !errors.Is(err, secret) {
 		t.Fatal("wrapped failure lost its original classification")
 	}
-	if got := providerStageOf(err); got != providerStageTurnStart {
-		t.Fatalf("providerStageOf() = %q, want %q", got, providerStageTurnStart)
+	if got := providerStageOf(err); got != providerStageThreadCall {
+		t.Fatalf("providerStageOf() = %q, want %q", got, providerStageThreadCall)
 	}
 	if strings.Contains(err.Error(), "secret") || err.Error() != "Codex provider execution stage failed" {
 		t.Fatalf("provider stage error exposed diagnostic: %q", err.Error())
