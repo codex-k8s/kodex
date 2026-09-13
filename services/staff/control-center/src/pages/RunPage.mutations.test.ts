@@ -35,6 +35,9 @@ async function page() {
   });
   await router.push("/runs/run_one");
   const send = vi.spyOn(platform, "continueSession").mockResolvedValue(run);
+  const loadRun = vi.spyOn(platform, "loadRun").mockResolvedValue();
+  vi.spyOn(platform, "loadGates").mockResolvedValue();
+  vi.spyOn(platform, "loadArtifacts").mockResolvedValue();
   const state = (await captureSetupState(RunPage, (app) => {
     app.use(pinia);
     app.use(router);
@@ -59,9 +62,18 @@ async function page() {
       { finalize(): Promise<string>; clear(): void }
     >;
     decide(gate: OwnerGate, decision: "APPROVE"): Promise<void>;
+    openActivity(nodeRef?: string): void;
   };
-  return { state, router, send, platform };
+  return { state, router, send, loadRun, platform };
 }
+
+it("обновляет авторитетные nextActions при открытии хода работы", async () => {
+  const { state, loadRun } = await page();
+
+  state.openActivity();
+
+  await vi.waitFor(() => expect(loadRun).toHaveBeenCalledWith("run_one"));
+});
 
 it("фиксирует текст до ожидания вложений и отклоняет повторный submit", async () => {
   const { state, send } = await page();

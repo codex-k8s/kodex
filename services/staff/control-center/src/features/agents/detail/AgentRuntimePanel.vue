@@ -693,6 +693,7 @@ onBeforeUnmount(reset);
               :title="$t('providerUsage.selection')"
               role="status"
               :aria-label="$t('providerUsage.selection')"
+              :data-state="providerAccountEligibility"
             >
               {{
                 providerAccountEligibility === "CONNECTING"

@@ -293,6 +293,24 @@ describe("BFF session lifecycle", () => {
     expect(values.has("kodex.configuration.git-source-attempts")).toBe(false);
     expect(session.connectionIdentity).toBe("");
   });
+  test("считает logout завершённым при уже закрытой browser Session", async () => {
+    const session = useSessionStore();
+    await session.probe();
+    api.deleteOwnerSession.mockImplementationOnce(() => {
+      session.invalidate();
+      return Promise.reject(
+        Object.assign(new Error("OWNER_CONTEXT_CHANGED"), {
+          code: "OWNER_CONTEXT_CHANGED",
+          kind: "unknown",
+          retryable: false,
+        }),
+      );
+    });
+
+    await expect(session.logout()).resolves.toBeUndefined();
+    expect(session.phase).toBe("unauthenticated");
+    expect(session.connectionIdentity).toBe("");
+  });
   test("объединяет redirect и передаёт браузеру только authorization URL", async () => {
     let complete!: (value: { data: { authorizationUrl: string } }) => void;
     api.beginOwnerAuthorization.mockReturnValueOnce(

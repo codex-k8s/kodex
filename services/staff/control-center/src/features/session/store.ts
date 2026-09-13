@@ -658,9 +658,18 @@ export const useSessionStore = defineStore("session", () => {
       );
       setUnauthenticated();
     } catch (error) {
+      const normalized = asProblem(error);
+      if (
+        phase.value === "unauthenticated" ||
+        normalized.kind === "unauthorized" ||
+        normalized.code === "OWNER_CONTEXT_CHANGED"
+      ) {
+        setUnauthenticated();
+        return;
+      }
       loggingOut = false;
       if (phase.value === "authenticated") startRenewal();
-      throw error;
+      throw normalized;
     } finally {
       loggingOut = false;
     }
