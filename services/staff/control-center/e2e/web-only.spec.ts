@@ -920,7 +920,7 @@ test.describe("web-only fresh installation", () => {
       return body.publishedInstructions?.content ?? "";
     }, coordinatorRef);
     expect(originalInstructions).not.toBe("");
-    const updatedInstructions = `${originalInstructions}\nВторая опубликованная версия для проверки контролируемого отката.`;
+    const updatedInstructions = `${originalInstructions}\nВторая опубликованная версия ${environment.resourcePrefix} для проверки контролируемого отката.`;
     const instructionsEditor = instructionsPanel.getByRole("textbox", {
       name: "Инструкции",
       exact: true,

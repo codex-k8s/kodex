@@ -854,6 +854,7 @@ func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 	if err := json.Unmarshal(draft, item.Draft); err != nil || !validWorkflowVersion(*item.Draft) {
 		return entity.Workflow{}, errs.ErrUnavailable
 	}
+	normalizeWorkflowDraftIdentity(item.Ref, item.Draft)
 	if len(published) > 0 {
 		item.Published = &entity.WorkflowVersion{}
 		if err := json.Unmarshal(published, item.Published); err != nil || !validWorkflowVersion(*item.Published) || publishedRef == "" {

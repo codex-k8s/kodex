@@ -2,6 +2,7 @@ package rpcprincipal
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/serviceidentity"

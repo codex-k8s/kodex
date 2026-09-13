@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -193,18 +194,50 @@ func (repository *Repository) selectProviderAccountForAgent(ctx context.Context,
 	if err := tx.QueryRow(ctx, queryRuntimeCatalogLockAgent, organizationID, agentRef).Scan(&lockedAgentID); err != nil {
 		return "", errs.ErrConflict
 	}
-	var accountID, accountRef, configRef, configDigest, policyRef, policyDigest string
-	var configVersion, policyVersion int64
-	err := tx.QueryRow(ctx, queryRuntimeConfigurationSelectProviderAccount, organizationID, agentRef).Scan(
-		&accountID, &accountRef, &configRef, &configVersion, &configDigest, &policyRef, &policyVersion, &policyDigest)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", errs.ErrConflict
-	}
-	if err != nil || accountRef == "" || configRef == "" || configVersion < 1 || len(configDigest) != 64 ||
-		policyRef == "" || policyVersion < 1 || len(policyDigest) != 64 {
+	rows, err := tx.Query(ctx, queryRuntimeConfigurationSelectProviderAccount, organizationID, agentRef)
+	if err != nil {
 		return "", errs.ErrUnavailable
 	}
-	return accountID, nil
+	type selection struct {
+		accountID, accountRef, configRef, configDigest, policyRef, policyDigest, provider, model string
+		configVersion, policyVersion                                                             int64
+	}
+	selections := []selection{}
+	for rows.Next() {
+		var item selection
+		if rows.Scan(&item.accountID, &item.accountRef, &item.configRef, &item.configVersion, &item.configDigest,
+			&item.policyRef, &item.policyVersion, &item.policyDigest, &item.provider, &item.model) != nil ||
+			item.accountRef == "" || item.configRef == "" || item.configVersion < 1 || len(item.configDigest) != 64 ||
+			item.policyRef == "" || item.policyVersion < 1 || len(item.policyDigest) != 64 {
+			rows.Close()
+			return "", errs.ErrUnavailable
+		}
+		selections = append(selections, item)
+	}
+	rows.Close()
+	if rows.Err() != nil {
+		return "", errs.ErrUnavailable
+	}
+	for _, item := range selections {
+		catalog, catalogErr := readModelCatalogTx(ctx, tx, scope{organizationID: organizationID}, item.provider, item.accountRef)
+		if catalogErr != nil {
+			return "", catalogErr
+		}
+		for _, capability := range catalog.Models {
+			if capability.ID == item.model && capability.Available && slices.Contains(capability.EligibleProviderAccountRefs, item.accountRef) {
+				return item.accountID, nil
+			}
+		}
+	}
+	// Сохраняем прежний выбор authorized account, когда свежего доступного
+	// каталога нет ни у одного кандидата. Последующая сборка RuntimeRevision
+	// всё равно закрыто отклонит непроверенный model snapshot; это позволяет
+	// reauthorization завершиться до следующего catalog probe и не даёт
+	// нездоровому первому кандидату вытеснить доступный следующий.
+	if len(selections) > 0 {
+		return selections[0].accountID, nil
+	}
+	return "", errs.ErrConflict
 }
 
 func (repository *Repository) changeRuntimeConfiguration(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

@@ -1189,6 +1189,7 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 				return commandOutcome{}, errs.ErrInvalid
 			}
 		}
+		normalizeWorkflowDraftIdentity(ref, &draft)
 		var item entity.Workflow
 		raw := asJSON(draft)
 		err := tx.QueryRow(ctx, queryCommandsChangeworkflowInsertWorkflowsRefProjectIdPurpose, ref, scope.organizationID, projectID, payload.Name, payload.Purpose, payload.CoordinatorAgentRef, raw, scope.actorID).Scan(&item.Ref, &item.Name, &item.Purpose, &item.State, &item.Version, &item.CreatedAt, &item.UpdatedAt)
@@ -1214,7 +1215,11 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 	}
 	switch input.Kind {
 	case command.UpdateWorkflow:
-		if payload.Draft == nil || !validWorkflowVersion(*payload.Draft) {
+		if payload.Draft == nil {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		normalizeWorkflowDraftIdentity(payload.Ref, payload.Draft)
+		if !validWorkflowVersion(*payload.Draft) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		tag, err := tx.Exec(ctx, queryCommandsChangeworkflowUpdateWorkflowsDraftSpecStateVersion, workflowID, payload.Draft.Name, payload.Draft.Purpose, payload.Draft.CoordinatorAgentRef, asJSON(payload.Draft))
@@ -1329,6 +1334,22 @@ func validWorkflowVersion(version entity.WorkflowVersion) bool {
 		totalInstructions += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
 	}
 	return totalInstructions <= 64<<10
+}
+
+// Draft identity назначает server. Старые записи использовали literal
+// "draft"; детерминированное значение сохраняет стабильный readback без
+// изменения опубликованных immutable revisions.
+func normalizeWorkflowDraftIdentity(workflowRef string, version *entity.WorkflowVersion) {
+	if version == nil {
+		return
+	}
+	if !strings.HasPrefix(version.Ref, "wfv_") || len(version.Ref) < 12 || len(version.Ref) > 96 {
+		digest := sha256.Sum256([]byte("workflow-draft\x00" + workflowRef))
+		version.Ref = "wfv_" + hex.EncodeToString(digest[:12])
+	}
+	if version.VersionNumber < 1 {
+		version.VersionNumber = 1
+	}
 }
 
 func validWorkflowInputFields(fields []entity.WorkflowInputField) bool {

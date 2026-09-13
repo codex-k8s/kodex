@@ -311,6 +311,7 @@ func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Mess
 
 func messageMap(message proto.Message) (map[string]any, error) {
 	if err := validateRuntimeCatalogMessage(message.ProtoReflect(), 0); err != nil {
+		slog.Warn("upstream response validation failed", "error_class", "runtime_catalog", "safe_reason", err.Error())
 		return nil, err
 	}
 	raw, err := (protojson.MarshalOptions{UseProtoNames: false}).Marshal(message)

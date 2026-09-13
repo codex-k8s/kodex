@@ -4,11 +4,14 @@ import (
 	"context"
 	"testing"
 
+	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+type serviceIdentityClientStream struct{ grpc.ClientStream }
 
 func TestServiceIdentityForwardsExplicitContextOnceWithoutLegacy(t *testing.T) {
 	const method = "/example.v1.Service/Read"
@@ -43,6 +46,47 @@ func TestServiceIdentityRejectsMissingProjectBeforeInvoke(t *testing.T) {
 	})
 	if status.Code(err) != codes.InvalidArgument || called {
 		t.Fatal("missing project reached transport")
+	}
+}
+
+func TestServiceIdentityAllowsExactArtifactUploadStream(t *testing.T) {
+	method := cp.PlatformCommandService_UploadArtifact_FullMethodName
+	ctx, err := WithApplicationGrant(t.Context(), "synthetic-user-credential")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err = WithProjectReference(ctx, "prj_abcdefghijk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	stream, err := serviceIdentityStream(operationSet{method: "platform.command.artifacts.upload"}, map[string]struct{}{"platform.command.artifacts.upload": {}})(
+		ctx, &grpc.StreamDesc{ClientStreams: true}, nil, method,
+		func(ctx context.Context, _ *grpc.StreamDesc, _ *grpc.ClientConn, _ string, _ ...grpc.CallOption) (grpc.ClientStream, error) {
+			calls++
+			md, _ := metadata.FromOutgoingContext(ctx)
+			if md.Get("x-kodex-rpc-profile")[0] != "service-v1" || md.Get("x-kodex-project-ref")[0] != "prj_abcdefghijk" || md.Get("authorization")[0] != "Bearer synthetic-user-credential" {
+				t.Fatal("artifact upload stream metadata is incomplete")
+			}
+			return serviceIdentityClientStream{}, nil
+		},
+	)
+	if err != nil || stream == nil || calls != 1 {
+		t.Fatalf("artifact upload stream rejected: calls=%d err=%v", calls, err)
+	}
+}
+
+func TestServiceIdentityRejectsUnknownClientStream(t *testing.T) {
+	called := false
+	_, err := serviceIdentityStream(operationSet{"/example.v1.Service/Upload": "unknown.upload"}, nil)(
+		t.Context(), &grpc.StreamDesc{ClientStreams: true}, nil, "/example.v1.Service/Upload",
+		func(context.Context, *grpc.StreamDesc, *grpc.ClientConn, string, ...grpc.CallOption) (grpc.ClientStream, error) {
+			called = true
+			return serviceIdentityClientStream{}, nil
+		},
+	)
+	if status.Code(err) != codes.PermissionDenied || called {
+		t.Fatal("unknown client stream reached transport")
 	}
 }
 
