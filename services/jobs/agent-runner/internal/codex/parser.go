@@ -223,8 +223,8 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 
 func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expectedWorkspace, expectedApproval string) error {
 	fields, err := decodeObject(raw, schema([]string{"approvalPolicy", "approvalsReviewer", "cwd", "model", "modelProvider", "sandbox", "thread"},
-		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "cwd", "initialTurnsPage", "instructionSources",
-		"model", "modelProvider", "multiAgentMode", "reasoningEffort", "runtimeWorkspaceRoots", "sandbox", "serviceTier", "thread"))
+		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "cwd", "initialTurnsPage", "instructionSources", "itemsBackwardsCursor",
+		"model", "modelProvider", "multiAgentMode", "reasoningEffort", "runtimeWorkspaceRoots", "sandbox", "serviceTier", "thread", "turnsBackwardsCursor"))
 	if err != nil {
 		return errors.New("Codex app-server thread response is invalid")
 	}

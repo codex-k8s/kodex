@@ -192,9 +192,11 @@ func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 	response := raw(`{
 		"activePermissionProfile":{"id":"kodex-runtime"},
 		"approvalPolicy":"never","approvalsReviewer":"user","cwd":"/workspace",
-		"instructionSources":[],"model":"codex","modelProvider":"openai",
+		"initialTurnsPage":null,"instructionSources":[],"itemsBackwardsCursor":null,
+		"model":"codex","modelProvider":"openai",
 		"multiAgentMode":"explicitRequestOnly","reasoningEffort":null,
 		"runtimeWorkspaceRoots":["/workspace"],"sandbox":{"type":"readOnly"},"serviceTier":null,
+		"turnsBackwardsCursor":null,
 		"thread":{"canAcceptDirectInput":true,"cliVersion":"0.153.4","createdAt":1,"cwd":"/workspace","ephemeral":false,
 		"extra":null,"historyMode":"save-all","id":"` + testThreadID + `","model":"codex","modelProvider":"openai",
 		"preview":"","projectId":null,"reasoningEffort":"high","section":"default","sectionEnteredAt":null,
