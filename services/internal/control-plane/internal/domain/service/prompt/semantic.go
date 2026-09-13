@@ -111,11 +111,20 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 		allowed := Catalog()
 		delete(allowed, "step.purpose")
 		delete(allowed, "step.expected_result")
-		for key, text := range map[string]string{"step.purpose": snapshot.StagePurposeTemplate, "step.expected_result": snapshot.StageExpectedResultTemplate} {
-			if len(Validate(text, allowed)) != 0 {
+		for _, field := range []struct{ key, text string }{
+			{"step.purpose", snapshot.StagePurposeTemplate},
+			{"step.expected_result", snapshot.StageExpectedResultTemplate},
+		} {
+			// Purpose и expected result независимы и optional в Workflow contract.
+			// Отсутствующее поле сохраняет канонический пустой slot и не является
+			// попыткой опубликовать пустой пользовательский шаблон.
+			if field.text == "" {
+				continue
+			}
+			if len(Validate(field.text, allowed)) != 0 {
 				return invalid("PROMPT_STAGE_TEMPLATE_INVALID", "Workflow stage template is invalid")
 			}
-			parsed, err := parseTemplate(text)
+			parsed, err := parseTemplate(field.text)
 			if err != nil {
 				return invalid("PROMPT_STAGE_TEMPLATE_INVALID", "Workflow stage template is invalid")
 			}
@@ -127,7 +136,7 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 			if err != nil {
 				return invalid("PROMPT_STAGE_TEMPLATE_INVALID", "Workflow stage template is invalid")
 			}
-			setNestedTemplateValue(data, key, value)
+			setNestedTemplateValue(data, field.key, value)
 		}
 	}
 	effective := Intersection(snapshot.UserCapabilities, Union(snapshot.AgentCapabilities, snapshot.ConnectionCapabilities), snapshot.WorkflowCapabilities, snapshot.HumanGateCapabilities)

@@ -1,8 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { loadE2EEnvironment } from "./e2e/environment";
+import {
+  discoveryChromiumLaunchOptions,
+  loadE2EEnvironment,
+} from "./e2e/environment";
 
 const environment = loadE2EEnvironment();
+const launchOptions = discoveryChromiumLaunchOptions(environment.baseURL);
 const projects =
   environment.profile === "mattermost"
     ? [
@@ -48,6 +52,7 @@ export default defineConfig({
     // user input or integration metadata. The supported suite never records them.
     trace: "off",
     video: "off",
+    launchOptions,
   },
   projects,
 });

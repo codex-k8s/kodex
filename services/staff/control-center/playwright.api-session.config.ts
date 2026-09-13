@@ -1,8 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { loadE2EAPISessionEnvironment } from "./e2e/environment";
+import {
+  discoveryChromiumLaunchOptions,
+  loadE2EAPISessionEnvironment,
+} from "./e2e/environment";
 
 const environment = loadE2EAPISessionEnvironment();
+const launchOptions = discoveryChromiumLaunchOptions(environment.baseURL);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -21,5 +25,6 @@ export default defineConfig({
     storageState: environment.inputStorageState,
     trace: "off",
     video: "off",
+    launchOptions,
   },
 });

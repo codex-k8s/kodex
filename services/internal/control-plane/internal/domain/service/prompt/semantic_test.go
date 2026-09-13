@@ -94,6 +94,25 @@ func TestWorkflowUserTemplateKeepsBaseAndExecutedSlotOrder(t *testing.T) {
 	}
 }
 
+func TestWorkflowStageAllowsIndependentOptionalTemplates(t *testing.T) {
+	for _, variant := range []struct {
+		name, purpose, expected string
+	}{
+		{"without expected result", "Analyze {{ .task }}", ""},
+		{"without purpose", "", "Return {{ .task }}"},
+	} {
+		t.Run(variant.name, func(t *testing.T) {
+			snapshot := semanticFixture()
+			snapshot.StagePurposeTemplate = variant.purpose
+			snapshot.StageExpectedResultTemplate = variant.expected
+			result, err := Materialize("Agent", snapshot)
+			if err != nil || !result.Complete {
+				t.Fatalf("optional stage template rejected: %v %+v", err, result.Diagnostics)
+			}
+		})
+	}
+}
+
 func semanticFixture() Snapshot {
 	return Snapshot{ServiceTemplateRevision: ServiceTemplateRevision, Locale: "en", TargetKind: TargetWorkflowStage,
 		TargetRef: "step_example", TemplateRef: "ins_example", TemplateDigest: strings.Repeat("a", 64),
