@@ -311,15 +311,40 @@ describe("BFF session lifecycle", () => {
     expect(session.phase).toBe("unauthenticated");
     expect(session.connectionIdentity).toBe("");
   });
-  test("переводит неизвестный исход logout в один bounded reauth без unhandled rejection", async () => {
+  test("повторяет неизвестный logout с тем же ключом и завершает локальную Session", async () => {
     const session = useSessionStore();
     await session.probe();
-    api.deleteOwnerSession.mockRejectedValueOnce(
-      new TypeError("Failed to fetch"),
-    );
+    api.deleteOwnerSession
+      .mockRejectedValueOnce({
+        kind: "unavailable",
+        code: "UNKNOWN",
+        retryable: true,
+      })
+      .mockResolvedValueOnce({ data: undefined });
 
     await expect(session.logout()).resolves.toBeUndefined();
 
+    expect(api.deleteOwnerSession).toHaveBeenCalledTimes(2);
+    for (const call of api.deleteOwnerSession.mock.calls)
+      expect(call[0]).toMatchObject({
+        headers: {
+          "Idempotency-Key": "00000000-0000-4000-8000-000000000000",
+        },
+      });
+    expect(session.phase).toBe("unauthenticated");
+  });
+  test("показывает bounded reauth после двух неизвестных исходов logout", async () => {
+    const session = useSessionStore();
+    await session.probe();
+    api.deleteOwnerSession.mockRejectedValue({
+      kind: "unavailable",
+      code: "UNKNOWN",
+      retryable: true,
+    });
+
+    await expect(session.logout()).resolves.toBeUndefined();
+
+    expect(api.deleteOwnerSession).toHaveBeenCalledTimes(2);
     expect(session.phase).toBe("error");
     expect(session.problem).toBeDefined();
   });

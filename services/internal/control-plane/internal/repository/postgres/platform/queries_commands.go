@@ -205,6 +205,10 @@ var (
 	queryCommandsAddsessionturnInsertRunEdgesRefRootRunIdTargetNodeId string
 	//go:embed sql/commands_changerun_select_runs_organization_id_ref.sql
 	queryCommandsChangerunSelectRunsOrganizationIdRef string
+	//go:embed sql/commands_changerun_select_root_run_id.sql
+	queryCommandsChangerunSelectRootRunID string
+	//go:embed sql/commands_changerun_lock_run_nodes.sql
+	queryCommandsChangerunLockRunNodes string
 	//go:embed sql/commands_changerun_update_runs_state_safe_error_code_safe_error_message.sql
 	queryCommandsChangerunUpdateRunsStateSafeErrorCodeSafeErrorMessage string
 	//go:embed sql/commands_changerun_update_run_nodes_state_next_actions_finished_at.sql

@@ -646,30 +646,38 @@ export const useSessionStore = defineStore("session", () => {
     const pendingRenewal = cancelRenewal();
     try {
       await pendingRenewal;
-      await unwrap(
-        deleteOwnerSession({
-          headers: {
-            "Idempotency-Key": idempotencyKey(),
-            "X-CSRF-Token": csrfToken(),
-            "If-Match": etag(revision.value),
-          },
-          signal: requestSignal(),
-        }),
-      );
-      setUnauthenticated();
-    } catch (error) {
-      const normalized = asProblem(error);
-      if (
-        phase.value === "unauthenticated" ||
-        normalized.kind === "unauthorized" ||
-        normalized.code === "OWNER_CONTEXT_CHANGED"
-      ) {
-        setUnauthenticated();
-        return;
+      const key = idempotencyKey();
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          await unwrap(
+            deleteOwnerSession({
+              headers: {
+                "Idempotency-Key": key,
+                "X-CSRF-Token": csrfToken(),
+                "If-Match": etag(revision.value),
+              },
+              signal: requestSignal(),
+            }),
+          );
+          setUnauthenticated();
+          return;
+        } catch (error) {
+          const normalized = asProblem(error);
+          if (
+            phase.value === "unauthenticated" ||
+            normalized.kind === "unauthorized" ||
+            normalized.code === "OWNER_CONTEXT_CHANGED"
+          ) {
+            setUnauthenticated();
+            return;
+          }
+          if (attempt === 0 && normalized.retryable) continue;
+          problem.value = normalized;
+          phase.value =
+            normalized.kind === "forbidden" ? "forbidden" : "error";
+          return;
+        }
       }
-      loggingOut = false;
-      problem.value = normalized;
-      phase.value = normalized.kind === "forbidden" ? "forbidden" : "error";
     } finally {
       loggingOut = false;
     }
