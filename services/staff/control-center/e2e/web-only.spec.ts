@@ -1409,7 +1409,7 @@ test.describe("web-only fresh installation", () => {
     let expectedRuntimeOverlay = overlayState.publishedContent;
     if (overlayState.publishedContent.trimEnd() !== runtimeOverlay) {
       if (overlayState.draftContent !== runtimeOverlay) {
-        await replaceCodeEditorContent(overlayEditor, runtimeOverlay);
+        await replaceCodeEditorContent(page, overlayEditor, runtimeOverlay);
         const draftCreation = page.waitForResponse(
           (response) =>
             response.request().method() === "POST" &&
@@ -1866,7 +1866,6 @@ test.describe("web-only fresh installation", () => {
     page,
   }) => {
     requireRefs("projectRef", "analystRef");
-    await ensureAuthorizedProviderAffinity(page, analystRef, 1);
     const schedulesResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "GET" &&
@@ -2208,10 +2207,12 @@ test.describe("web-only fresh installation", () => {
       searched.status(),
       `Exact artifact search failed with HTTP ${String(searched.status())}`,
     ).toBe(200);
-    const searchReadback = (await searched.json()) as {
+    const searchedURL = new URL(searched.url());
+    const searchReadback = await readJsonWithNetworkRetry<{
       items?: Array<{ fileName: string; ref: string }>;
-    };
-    expect(searchReadback.items).toEqual(
+    }>(page, `${searchedURL.pathname}${searchedURL.search}`);
+    expect(searchReadback.status).toBe(200);
+    expect(searchReadback.body.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           fileName: uploadedFileName,
@@ -2382,10 +2383,6 @@ test.describe("web-only fresh installation", () => {
       persistRefs();
       await publishAgent(page);
     }
-
-    await ensureAuthorizedProviderAffinity(page, coordinatorRef, 0);
-    await ensureAuthorizedProviderAffinity(page, analystRef, 1);
-    await ensureAuthorizedProviderAffinity(page, writerRef, 0);
 
     await ensureAgentCapability(
       page,
@@ -3857,6 +3854,11 @@ async function ensureAuthorizedProviderAffinity(
   eligibleIndex = 0,
 ): Promise<void> {
   expect([0, 1]).toContain(eligibleIndex);
+  const runtime = await readJsonWithNetworkRetry<AgentRuntimeConfigurationView>(
+    page,
+    `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
+  );
+  expect(runtime.status).toBe(200);
   const retained =
     eligibleIndex === 0
       ? coordinatorProviderAccountRef
@@ -3887,24 +3889,45 @@ async function ensureAuthorizedProviderAffinity(
       `provider account catalog readback failed: ${String(response.status)}`,
     );
   }
-  const preflight = (() => {
+  const preflight = await (async () => {
     const body = response.body;
-    const eligible = body.items
+    const authorized = body.items
       .filter(
         (item) => item.state === "AUTHORIZED" && item.enabled && item.ready,
       )
       .toSorted((left, right) => left.ref.localeCompare(right.ref));
+    const eligible: string[] = [];
+    for (const account of authorized) {
+      const query = new URLSearchParams({
+        providerAccountRef: account.ref,
+        query: runtime.body.configuration.model,
+        pageSize: "100",
+      });
+      const catalog = await readJsonWithNetworkRetry<ModelCapabilityPage>(
+        page,
+        `/api/v1/model-capabilities?${query}`,
+      );
+      if (
+        catalog.status === 200 &&
+        catalog.body.catalogStatus?.state === "READY" &&
+        Date.parse(catalog.body.catalogStatus.expiresAt ?? "") > Date.now() &&
+        catalog.body.items.some(
+          (model) =>
+            model.id === runtime.body.configuration.model &&
+            model.available &&
+            model.eligibleProviderAccountRefs.includes(account.ref),
+        )
+      ) {
+        eligible.push(account.ref);
+      }
+    }
     const states = body.items.reduce<Record<string, number>>((result, item) => {
       const key = `${item.state}:${item.enabled ? "enabled" : "disabled"}:${item.ready ? "ready" : "not-ready"}`;
       result[key] = (result[key] ?? 0) + 1;
       return result;
     }, {});
     return {
-      accountRef: selectDiscoveryProviderAccount(
-        eligible.map((item) => item.ref),
-        retained,
-        other,
-      ),
+      accountRef: selectDiscoveryProviderAccount(eligible, retained, other),
       eligibleCount: eligible.length,
       status: response.status,
       summary: Object.entries(states)
@@ -4076,22 +4099,13 @@ function supportedRuntimeOverlay(schema: ConfigOverlaySchema): string {
 }
 
 async function replaceCodeEditorContent(
+  page: Page,
   editor: Locator,
   content: string,
 ): Promise<void> {
   await editor.focus();
   await editor.press("ControlOrMeta+A");
-  await editor.evaluate((element, value) => {
-    const clipboard = new DataTransfer();
-    clipboard.setData("text/plain", value);
-    element.dispatchEvent(
-      new ClipboardEvent("paste", {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: clipboard,
-      }),
-    );
-  }, content);
+  await page.keyboard.insertText(content);
   await expect
     .poll(() =>
       editor.evaluate((element) =>

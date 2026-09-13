@@ -2,7 +2,6 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import type {
   Agent,
   InstructionCommand,
-  InstructionPublicationResult,
   RevisionImpactPlan,
 } from "../src/shared/api/generated/openapi/types.gen";
 
@@ -345,17 +344,17 @@ export async function publishAgent(page: Page): Promise<void> {
       `"${String(plan.sourceVersion)}"`,
     );
     expect(response.request().headers()["idempotency-key"]).toBeTruthy();
-    const receipt = (await response.json()) as InstructionPublicationResult;
-    expect(receipt.plan.ref).toBe(plan.ref);
-    expect(receipt.plan.state).toBe("APPLIED");
-    expect(receipt.plan.publishedRevisionRef).toBe(plan.draftRef);
-    expect(receipt.agent.ref).toBe(agentRef);
-    expect(receipt.agent.version).toBe(plan.sourceVersion + 1);
-    // Минимальный receipt не является полной проекцией Agent.
+    // Chrome может освободить тело уже завершённого mutation response после
+    // перерисовки. Авторитетный readback доказывает применённый exact draft.
     await expect
       .poll(async () => (await readAgent()).instructionBinding?.revisionRef)
       .toBe(plan.draftRef);
-    expect((await readAgent()).instructionBinding?.effective).toBe(true);
+    const published = await readAgent();
+    expect(published.version).toBe(plan.sourceVersion + 1);
+    expect(published.instructionBinding).toMatchObject({
+      effective: true,
+      revisionRef: plan.draftRef,
+    });
     const impactDialog = page.getByRole("dialog", {
       name: "План публикации",
       exact: true,
