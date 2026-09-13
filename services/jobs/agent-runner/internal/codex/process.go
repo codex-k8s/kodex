@@ -49,6 +49,11 @@ type providerExecutionStage string
 const (
 	providerStageSelection      providerExecutionStage = "SELECTION"
 	providerStageContext        providerExecutionStage = "CONTEXT"
+	providerStageBrokerRequest  providerExecutionStage = "BROKER_REQUEST"
+	providerStageAuthRead       providerExecutionStage = "AUTH_READ"
+	providerStageMCPBinding     providerExecutionStage = "MCP_BINDING"
+	providerStageMCPBridge      providerExecutionStage = "MCP_BRIDGE"
+	providerStageHomePrepare    providerExecutionStage = "HOME_PREPARE"
 	providerStageAccountPin     providerExecutionStage = "ACCOUNT_PIN"
 	providerStageArchiveRestore providerExecutionStage = "ARCHIVE_RESTORE"
 	providerStageProcessStart   providerExecutionStage = "PROCESS_START"

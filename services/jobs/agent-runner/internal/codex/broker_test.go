@@ -1,10 +1,13 @@
 package codex
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -152,6 +155,29 @@ func TestProviderBrokerFailurePreservesSafeClass(t *testing.T) {
 				t.Fatal("providerBrokerError() returned nil")
 			}
 		})
+	}
+}
+
+func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
+	var response bytes.Buffer
+	var diagnostic bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&diagnostic)
+	t.Cleanup(func() { log.SetOutput(previous) })
+
+	secret := errors.New("sensitive-provider-detail")
+	if err := writeProviderBrokerFailureAtStage(&response, providerStageHomePrepare, secret); err != nil {
+		t.Fatalf("writeProviderBrokerFailureAtStage() error = %v", err)
+	}
+	if strings.Contains(diagnostic.String(), secret.Error()) || strings.Contains(response.String(), secret.Error()) {
+		t.Fatal("provider failure exposed the original error")
+	}
+	if !strings.Contains(diagnostic.String(), "HOME_PREPARE") {
+		t.Fatalf("safe diagnostic = %q", diagnostic.String())
+	}
+	var envelope brokerResponse
+	if err := json.Unmarshal(response.Bytes(), &envelope); err != nil || envelope.OK || envelope.Failure != providerBrokerFailureProvider {
+		t.Fatalf("broker response = %#v, error = %v", envelope, err)
 	}
 }
 
