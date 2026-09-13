@@ -113,7 +113,8 @@ export function planDeployment(deployment, bundle, phase, readerImage) {
   if (phase === "reader") {
     requireValue(name === "image-admission-controller" && /^registry\.local\.kodex\/kodex\/image-admission@sha256:[a-f0-9]{64}$/.test(readerImage), "EXACT_READER_IMAGE_REQUIRED");
     const pauses = app.env.filter((item) => item.name === "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS");
-    requireValue(pauses.length === 0 || pauses.length === 1 && pauses[0].value === "false" && !pauses[0].valueFrom, "READER_TRANSITION_ALREADY_STARTED");
+    requireValue(pauses.length === 0 || pauses.length === 1 && ["false", "true"].includes(pauses[0].value) && !pauses[0].valueFrom,
+      "READER_TRANSITION_STATE_REJECTED");
     setLiteral(app, "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP", bundle.previous.policyName, bundle.previous.policyName);
     app.image = readerImage;
     if (pauses.length) pauses[0].value = "true"; else app.env.push({ name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", value: "true" });

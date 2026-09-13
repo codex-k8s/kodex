@@ -106,11 +106,27 @@ test("reader pause and policy switch cannot silently resume old binary or old co
   const bundle = prepared(), d = deployment("image-admission-controller");
   assert.throws(() => planDeployment(d, bundle, "controller", readerImage));
   d.spec = planDeployment(d, bundle, "reader", readerImage).next;
-  assert.throws(() => planDeployment(d, bundle, "reader", readerImage));
+  const repeated = planDeployment(d, bundle, "reader", readerImage);
+  assert.deepEqual(repeated.next, d.spec);
   assert.throws(() => planDeployment(d, bundle, "resume", readerImage));
   d.spec = planDeployment(d, bundle, "controller", readerImage).next;
   d.spec = planDeployment(d, bundle, "resume", readerImage).next;
   assert.equal(d.spec.template.spec.containers[0].env.find((entry) => entry.name === "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS").value, "false");
+});
+
+test("reader принимает точный paused handoff после quiesce и закрыто отклоняет неоднозначный флаг", () => {
+  const bundle = prepared(), paused = deployment("image-admission-controller");
+  paused.spec.template.spec.containers[0].env.push({ name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", value: "true" });
+  const change = planDeployment(paused, bundle, "reader", readerImage);
+  assert.equal(change.next.template.spec.containers[0].env.find((entry) => entry.name === "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS").value, "true");
+  assert.equal(change.next.template.spec.containers[0].image, readerImage);
+
+  const valueFrom = structuredClone(paused);
+  valueFrom.spec.template.spec.containers[0].env[0] = { name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", valueFrom: { fieldRef: { fieldPath: "metadata.name" } } };
+  assert.throws(() => planDeployment(valueFrom, bundle, "reader", readerImage), /READER_TRANSITION_STATE_REJECTED/);
+  const duplicate = structuredClone(paused);
+  duplicate.spec.template.spec.containers[0].env.push({ name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", value: "true" });
+  assert.throws(() => planDeployment(duplicate, bundle, "reader", readerImage), /READER_TRANSITION_STATE_REJECTED/);
 });
 
 test("binding preserves Deny and adds only exact revision read names, including partial readback", () => {
