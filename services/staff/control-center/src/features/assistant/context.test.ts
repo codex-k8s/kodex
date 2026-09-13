@@ -3,6 +3,7 @@ import type { RouteLocationNormalizedLoaded } from "vue-router";
 
 import {
   assistantContextIdentity,
+  assistantContextTitle,
   conversationMatchesContext,
   resolveAssistantContext,
   readableContextOperations,
@@ -48,6 +49,20 @@ const sources = {
     } as Run,
   },
 };
+
+it("показывает поздно загруженное имя текущей сущности", () => {
+  const current = {
+    route: "/projects/prj-1/agents/agt-1",
+    entityKind: "AGENT",
+    entityRef: "agt-1",
+    entityName: "Координатор продаж",
+    allowedOperations: [],
+  };
+
+  expect(assistantContextTitle(current, { ...current, entityName: "" })).toBe(
+    "Координатор продаж",
+  );
+});
 
 describe("assistant route context", () => {
   it("показывает только объявленные владельцем операции и не придумывает unknown", () => {
