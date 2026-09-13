@@ -24,7 +24,8 @@ updated: 2026-09-04
 3. `MaterializeScheduleOccurrence` сверяет exact occurrence/lease/fence,
    semantic idempotency key и актуальность target, после чего одной
    owner-транзакцией создаёт Run с source `SCHEDULE`.
-4. `FailScheduleOccurrence` закрывает попытку; retryable ошибка создаёт
+4. `FailScheduleOccurrence` закрывает попытку; временная недоступность,
+   конфликт конкурентного состояния и исчерпание временной ёмкости создают
    `RETRY_WAIT`, исчерпание трёх попыток либо постоянная ошибка - `DEAD_LETTER`.
 5. Исполнение, Human Gate, artifacts, cancel и terminal lifecycle дальше
    принадлежат `control-plane` и обычному runtime-контуру. Scheduler их не
@@ -119,6 +120,10 @@ generated файлы вручную не изменяются. Cron API свер
 Недоступность `control-plane` не делает Pod неготовым: рабочий цикл получает
 typed `Unavailable`, один раз пишет переход в degraded и продолжает bounded
 polling; восстановление также логируется один раз.
+Безопасная диагностика degraded-перехода сохраняет только закрытый gRPC code.
+`Aborted` и `ResourceExhausted` повторяются через тот же occurrence lifecycle и
+stable attempt key; `PermissionDenied`, `InvalidArgument` и
+`FailedPrecondition` остаются terminal и не обходят owner policy.
 
 Deployment находится в `deploy/k8s/base/automation-scheduler`. Job не требует
 Mattermost, GitHub, Kubernetes API либо внешних credentials. Runbook:

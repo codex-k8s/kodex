@@ -109,7 +109,9 @@ func TestSchedulerFailureAndInvalidSnapshot(t *testing.T) {
 		code      codes.Code
 		retryable bool
 	}{
-		{"transient", codes.Unavailable, true}, {"denied", codes.PermissionDenied, false}, {"conflict", codes.Aborted, false},
+		{"unavailable", codes.Unavailable, true}, {"conflict", codes.Aborted, true},
+		{"capacity", codes.ResourceExhausted, true}, {"denied", codes.PermissionDenied, false},
+		{"invalid", codes.InvalidArgument, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			stub := &schedulerStub{claims: []*pb.ScheduleClaim{scheduleClaimFixture(1)}, materializeError: status.Error(test.code, "synthetic error")}
