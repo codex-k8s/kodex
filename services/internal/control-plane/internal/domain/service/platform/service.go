@@ -71,6 +71,12 @@ func (service *Service) ResolveProofAuthority(ctx context.Context, input reposit
 	return service.repository.ResolveProofAuthority(ctx, input)
 }
 
+// ResolveServiceCredentialGeneration читает прежний durable floor владельца;
+// обычный RPC и замена Pod не создают и не повышают поколение.
+func (service *Service) ResolveServiceCredentialGeneration(ctx context.Context, workload string) (uint64, error) {
+	return service.repository.ResolveServiceCredentialGeneration(ctx, workload)
+}
+
 func (service *Service) AcceptWorkerGrant(ctx context.Context, input repository.WorkerGrantInput) error {
 	return service.repository.AcceptWorkerGrant(ctx, input)
 }

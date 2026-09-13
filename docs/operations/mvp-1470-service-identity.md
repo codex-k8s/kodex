@@ -4,8 +4,8 @@ title: Независимость служебной идентичности и
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
-updated: 2026-09-12
+version: 1.1.0
+updated: 2026-09-13
 ---
 
 # Решение владельца и этап восстановления
@@ -23,10 +23,32 @@ Broker и два к STT. 297 bindings имеют caller control-api-gateway. Ч�
 нужно связать с проверкой actor, владельцем данных и task lifecycle; отсутствие
 Pod grant не разрешает подставить сертификат вместо пользовательских прав.
 
-После MVP отдельно учитываются адресная изоляция/отзыв реплики (#1471) и
-Firefox/WebKit (#1472). Ограниченный срок credentials и базовый emergency
-revoke не отложены. Разработка продолжается через hot reload, одним агентом,
-пакетами; каждый новый дефект получает bug Issue до следующего пакета.
+После MVP отдельно учитываются адресная изоляция/отзыв реплики (#1471),
+bounded emergency revoke стабильного сертификата (#1527) и Firefox/WebKit
+(#1472). Отделение startup обычного клиента от optional proof dependencies
+ведётся в #1528. Ускоренный staging-профиль до #1527 ограничивает допуск
+точным сроком
+проверенного сертификата; срочный отзыв выполняется ротацией trust material.
+Пользовательский, task/attempt, Human Gate и предметный revoke этим решением не
+ослабляются. Разработка продолжается через hot reload, одним агентом, пакетами;
+каждый новый дефект получает bug Issue до следующего пакета.
+
+## Совместимый переход обычных RPC
+
+Control Plane сначала начинает одновременно читать прежний подписанный профиль
+и явный `service-v1`. Новый reader проверяет mTLS peer, canonical SPIFFE ID,
+точную пару caller + full method из встроенной target-owned policy и срок
+сертификата. Для browser-запроса он затем проверяет OIDC credential и разрешает
+actor/org/project у владельца состояния. Для служебного запроса он разрешает
+system actor и поколение workload у владельца состояния. Runtime
+materialization и STT delegation не понижаются до обычного service actor.
+
+После readback Control Plane клиенты переводятся независимо. Ошибка `service-v1`
+не повторяется через legacy. Прежний proof resolver и локальный issuer временно
+сохраняются только для task delegation и отдельных защищённых materializer
+вызовов; их startup dependency переносится в #1528. Откат отдельного клиента к
+legacy допустим, пока dual reader работает;
+откат Control Plane после перевода клиентов требует сначала вернуть клиентов.
 
 ## Восстановление существующего инцидента #1469
 

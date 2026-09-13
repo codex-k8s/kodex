@@ -485,7 +485,13 @@ func (service *Service) verifyWorkerGrant(compact string, producer proofProducer
 }
 
 func (service *Service) RefreshOIDC(ctx context.Context) error { return service.oidc.Refresh(ctx) }
-func (service *Service) Close()                                { service.oidc.Close() }
+
+// VerifyToken позволяет переходному reader использовать тот же OIDC cache без
+// выпуска proof. После завершения перехода cache отделяется от legacy signer.
+func (service *Service) VerifyToken(ctx context.Context, token string) (oidcverifier.Principal, error) {
+	return service.oidc.VerifyToken(ctx, token)
+}
+func (service *Service) Close() { service.oidc.Close() }
 func (service *Service) Ready(ctx context.Context) (Readiness, error) {
 	if err := service.owner.Ready(ctx); err != nil {
 		return Readiness{}, err

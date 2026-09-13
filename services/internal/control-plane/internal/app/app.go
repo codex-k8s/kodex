@@ -223,6 +223,11 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return err
 	}
 	verifiedUnary := authorityclient.VerifierUnaryServerInterceptor(authority.Verifier())
+	verifiedStream := authorityclient.VerifierStreamServerInterceptor(authority.Verifier(), controlplanev1.RuntimeWorkService_StreamExecutionArtifact_FullMethodName)
+	verifiedUnary, verifiedStream, err = serviceIdentityReader(service, proofService, verifiedUnary, verifiedStream)
+	if err != nil {
+		return fmt.Errorf("construct service identity reader: %w", err)
+	}
 	grpcServer := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(tlsConfig)),
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
@@ -237,7 +242,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 			grpcserver.StreamErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
 				slog.Error("unexpected gRPC stream failure", "method", method, "code", code.String())
 			})),
-			authorityclient.VerifierStreamServerInterceptor(authority.Verifier(), controlplanev1.RuntimeWorkService_StreamExecutionArtifact_FullMethodName),
+			verifiedStream,
 			grpcserver.RejectMalformedStream,
 		),
 	)

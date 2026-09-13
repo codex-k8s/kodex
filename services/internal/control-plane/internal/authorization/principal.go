@@ -16,6 +16,14 @@ const (
 )
 
 func Principal(ctx context.Context, fullMethod string) (value.Principal, error) {
+	if resolved, ok := ctx.Value(resolvedPrincipalKey{}).(resolvedPrincipal); ok {
+		if resolved.method != fullMethod || resolved.principal.Validate() != nil {
+			return value.Principal{}, errors.New("resolved authorization identity is invalid")
+		}
+		principal := resolved.principal
+		principal.CredentialAMR = append([]string(nil), principal.CredentialAMR...)
+		return principal, nil
+	}
 	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
 	if !ok || verified.GetContractVersion() != 1 ||
 		verified.GetAudience() != expectedAudience ||

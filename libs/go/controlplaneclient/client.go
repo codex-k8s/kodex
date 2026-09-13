@@ -57,6 +57,7 @@ func validOpaqueReference(reference, prefix string) bool {
 }
 
 type Config struct {
+	ServiceIdentity                                                            bool
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
 	ResolverTarget, ResolverTLSServerName, ResolverCAFile                      string
 	ApplicationGrantFile                                                       string
@@ -68,6 +69,7 @@ type Config struct {
 }
 
 type Client struct {
+	serviceIdentity         bool
 	Query                   controlplanev1.PlatformQueryServiceClient
 	Command                 controlplanev1.PlatformCommandServiceClient
 	Assistant               controlplanev1.SystemAssistantServiceClient
@@ -97,6 +99,9 @@ func (operations operationSet) OperationID(fullMethod string) (string, bool) {
 }
 
 func Dial(ctx context.Context, config Config) (*Client, error) {
+	if config.ServiceIdentity {
+		return DialServiceIdentity(ctx, config)
+	}
 	if config.ResolverTarget == "" {
 		config.ResolverTarget = config.Target
 	}
@@ -155,6 +160,11 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 		_ = raw.Close()
 		return nil, errors.New("create protected control-plane connection")
 	}
+	client.bindServices(protected)
+	return client, nil
+}
+
+func (client *Client) bindServices(protected *grpc.ClientConn) {
 	client.protected = protected
 	client.Query = controlplanev1.NewPlatformQueryServiceClient(protected)
 	client.Command = controlplanev1.NewPlatformCommandServiceClient(protected)
@@ -169,7 +179,6 @@ func Dial(ctx context.Context, config Config) (*Client, error) {
 	client.RoleImages = controlplanev1.NewRoleImageServiceClient(protected)
 	client.Access = controlplanev1.NewAccessServiceClient(protected)
 	client.ProviderCredentials = controlplanev1.NewProviderCredentialMaterializerServiceClient(protected)
-	return client, nil
 }
 
 func validateOperations(source map[string]string) (operationSet, error) {
@@ -218,11 +227,13 @@ func (client *Client) AuthorityProof(ctx context.Context, operationID, fullMetho
 }
 
 func (client *Client) Check(ctx context.Context) error {
-	if err := client.CheckLocalAuthority(ctx); err != nil {
-		return err
-	}
-	if _, err := client.resolver.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorityProofResolverServiceCheckReadinessRequest{}); err != nil {
-		return errors.New("control-plane proof resolver is not ready")
+	if !client.serviceIdentity {
+		if err := client.CheckLocalAuthority(ctx); err != nil {
+			return err
+		}
+		if _, err := client.resolver.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorityProofResolverServiceCheckReadinessRequest{}); err != nil {
+			return errors.New("control-plane proof resolver is not ready")
+		}
 	}
 	response, err := client.Query.GetBootstrapState(ctx, &controlplanev1.GetBootstrapStateRequest{})
 	if err != nil || response.GetState() == nil {
@@ -255,6 +266,9 @@ func (client *Client) CheckProviderCredentialMaterializer(ctx context.Context) e
 // допустим для локальной readiness; соседний control-plane проверяется
 // отдельной диагностикой и на рабочем запросе.
 func (client *Client) CheckLocalAuthority(ctx context.Context) error {
+	if client.serviceIdentity {
+		return nil
+	}
 	ready, err := client.issuer.Issuer().CheckReadiness(ctx, &internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessRequest{})
 	if err != nil || !ready.GetReady() {
 		return errors.New("local authority issuer is not ready")

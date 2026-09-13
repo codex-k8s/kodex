@@ -14,11 +14,35 @@ import (
 )
 
 var (
+	//go:embed sql/service_credential_generation.sql
+	queryServiceCredentialGeneration string
 	//go:embed sql/proof_worker_grant_accept_generation.sql
 	queryWorkerGrantAcceptGeneration string
 	//go:embed sql/proof_worker_grant_accept_instance.sql
 	queryWorkerGrantAcceptInstance string
 )
+
+// ResolveServiceCredentialGeneration не принимает поколение от caller и не
+// меняет историю grants. Срок допуска проверяется по сертификату; bounded
+// emergency revoke ускоренного MVP-профиля вынесен в #1527.
+// сохранённое поколение используется для прежних domain lease fences.
+func (repository *Repository) ResolveServiceCredentialGeneration(ctx context.Context, workload string) (uint64, error) {
+	if workload == "" {
+		return 0, errs.ErrForbidden
+	}
+	var generation uint64
+	err := repository.pool.QueryRow(ctx, queryServiceCredentialGeneration, workload).Scan(&generation)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, errs.ErrForbidden
+	}
+	if err != nil {
+		return 0, errs.ErrUnavailable
+	}
+	if generation == 0 || generation > 9007199254740991 {
+		return 0, errs.ErrForbidden
+	}
+	return generation, nil
+}
 
 func (repository *Repository) acceptWorkerGrantInstance(ctx context.Context, input platformrepo.WorkerGrantInput) error {
 	instance, err := uuid.Parse(input.InstanceID)

@@ -252,6 +252,7 @@ type Repository interface {
 	ListInteractionIdentities(context.Context, value.Principal, string, query.Page) ([]entity.InteractionIdentity, string, error)
 	Bootstrap(context.Context) error
 	ResolveProofAuthority(context.Context, ProofPrincipalInput) (ProofAuthority, error)
+	ResolveServiceCredentialGeneration(context.Context, string) (uint64, error)
 	AcceptWorkerGrant(context.Context, WorkerGrantInput) error
 	NextAuthorityProofRevision(context.Context) (uint64, error)
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
