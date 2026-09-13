@@ -668,8 +668,8 @@ export const useSessionStore = defineStore("session", () => {
         return;
       }
       loggingOut = false;
-      if (phase.value === "authenticated") startRenewal();
-      throw normalized;
+      problem.value = normalized;
+      phase.value = normalized.kind === "forbidden" ? "forbidden" : "error";
     } finally {
       loggingOut = false;
     }
