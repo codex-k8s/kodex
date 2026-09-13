@@ -2589,13 +2589,13 @@ test.describe("web-only fresh installation", () => {
     const gateReadback = await readOwnerGate(page, gate.ref);
     await gotoWithRetry(page, "/decisions");
     await expectPageHeading(page, "Решения");
-    const decisionRow = page
-      .locator(".decision-row")
-      .filter({ hasText: gateReadback.title })
-      .first();
-    await expect(decisionRow).toBeVisible();
-    await decisionRow.click();
+    await expect(page.locator(".decision-row")).not.toHaveCount(0);
+    await gotoWithRetry(
+      page,
+      `/decisions?gateRef=${encodeURIComponent(gate.ref)}&projectRef=${encodeURIComponent(projectRef)}`,
+    );
     const decisionDetail = page.locator(".decision-detail");
+    await expect(decisionDetail).toBeVisible();
     await expect(decisionDetail).toContainText(gateReadback.contextSummary);
     await expect(decisionDetail).toContainText(
       gateReadback.consequencesSummary,

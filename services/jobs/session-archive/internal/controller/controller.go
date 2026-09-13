@@ -340,7 +340,10 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 		{Name: "object-storage", MountPath: "/var/run/secrets/kodex/session-archive/object-storage", ReadOnly: true}, {Name: "tmp", MountPath: "/tmp"}}
 	if task.Kind == "SNAPSHOT" || task.Kind == "RESTORE" {
 		volumes = append(volumes, corev1.Volume{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: task.PVCName}}})
-		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/workspace"})
+		// source_relative_path задан относительно runtime workspace, где PVC
+		// смонтирован именно в .kodex/state. Worker обязан сохранять ту же
+		// геометрию путей для snapshot и restore.
+		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/workspace/.kodex/state"})
 	}
 	container := corev1.Container{Name: "worker", Image: controller.config.WorkerImage, Args: []string{"worker"},
 		Env: []corev1.EnvVar{{Name: "DEPLOYMENT_ENVIRONMENT", Value: controller.config.Environment},

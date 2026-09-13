@@ -80,6 +80,16 @@ func TestCastRuntimeRevisionCarriesExactEnvironmentImageAndTools(t *testing.T) {
 	}
 }
 
+func TestCastRuntimeRevisionCarriesProviderSessionForContinuation(t *testing.T) {
+	t.Parallel()
+
+	const sessionID = "00000000-0000-4000-8000-000000000003"
+	revision := castRuntimeRevision(map[string]any{"codexSessionID": sessionID})
+	if revision.GetCodexSessionId() != sessionID {
+		t.Fatalf("provider session binding потерян: %q", revision.GetCodexSessionId())
+	}
+}
+
 func TestCastClaimPreservesAuthoritativeProjectBinding(t *testing.T) {
 	t.Parallel()
 

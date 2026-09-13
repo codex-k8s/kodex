@@ -162,6 +162,10 @@ func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T)
 	if job.Annotations[sourcePVCUIDAnnotation] != "pvc-uid" {
 		t.Fatalf("worker job lost the exact source PVC binding: %#v", job.Annotations)
 	}
+	sessionMount := pod.Containers[0].VolumeMounts[len(pod.Containers[0].VolumeMounts)-1]
+	if sessionMount.Name != "session" || sessionMount.MountPath != "/workspace/.kodex/state" {
+		t.Fatalf("worker session PVC mount не совпадает с runtime workspace: %#v", sessionMount)
+	}
 }
 
 func TestNewRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
