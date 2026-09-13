@@ -19,8 +19,13 @@ function literal(deployment, containerName, key) {
 }
 
 export function planRuntimeRoleBinding(controller, runtimeController, policy, binding, operationID = randomUUID()) {
-  const policyName = literal(controller, "image-admission-controller", "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP");
   const runner = literal(runtimeController, "runtime-controller", "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE");
+  return planRuntimeRoleBindingForRunner(controller, runner, policy, binding, operationID);
+}
+
+export function planRuntimeRoleBindingForRunner(controller, runner, policy, binding, operationID = randomUUID()) {
+  const policyName = literal(controller, "image-admission-controller", "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP");
+  requireValue(/^pull\.kodex\.works\/kodex\/agent-runner@sha256:[a-f0-9]{64}$/.test(runner), "EXACT_RUNNER_REFERENCE_REQUIRED");
   requireValue(policy?.apiVersion === "v1" && policy.kind === "ConfigMap" && policy.metadata?.name === policyName &&
     policy.metadata.namespace === namespace && policy.immutable === true && policy.data?.nodeReadbackImage === runner,
   "ACTIVE_POLICY_AND_RUNNER_MISMATCH");
@@ -66,10 +71,12 @@ function main(args) {
   const get = (kind, name) => JSON.parse(kubectl(["-n", namespace, "get", kind, name, "-o", "json"]));
   const controller = get("deployment", "image-admission-controller"), runtimeController = get("deployment", "runtime-controller");
   const policyName = literal(controller, "image-admission-controller", "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP");
-  const current = planRuntimeRoleBinding(controller, runtimeController, get("configmap", policyName),
+  const targetRunner = options["--runner-reference"] ?? literal(runtimeController, "runtime-controller", "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE");
+  const current = planRuntimeRoleBindingForRunner(controller, targetRunner, get("configmap", policyName),
     get("validatingadmissionpolicybinding", "runtime-role-pod-exact-secret-projection"));
   if (command === "plan") {
-    requireValue(options["--output"] && !options["--confirm"] && current.changed, "PLAN_ARGUMENTS_INVALID");
+    requireValue(options["--output"] && !options["--confirm"] && current.changed &&
+      Object.keys(options).every((key) => ["--context", "--output", "--runner-reference", "--k3s-sudo"].includes(key)), "PLAN_ARGUMENTS_INVALID");
     writeFileSync(options["--output"], `${JSON.stringify({ ...current, context })}\n`, { flag: "wx", mode: 0o600 });
     process.stdout.write(`${JSON.stringify({ status: "PLANNED", id: current.id, policyName: current.policyName })}\n`);
     return;
