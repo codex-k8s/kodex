@@ -100,6 +100,9 @@ function main(args) {
     const maintenance = JSON.parse(gateway.metadata.annotations?.["kodex.dev/runner-policy-maintenance"] ?? "null");
     requireValue(gateway.spec.replicas === 0 && (gateway.status?.replicas ?? 0) === 0 && maintenance?.bundleSHA256 === fingerprint(bundle), "APPLICATION_MAINTENANCE_REQUIRED");
   }
+  if (phase === "reader") {
+    requireValue(activeJobs.length === 0 && pvcs.length === 0, "QUIESCED_ADMISSION_INVENTORY_REQUIRED");
+  }
   if (!["maintenance", "reader", "open"].includes(phase)) {
     requireValue(env(controller, "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS") === "true" &&
       controller.spec.template.spec.containers.find((item) => item.name === controller.metadata.name)?.image === readerImage &&
