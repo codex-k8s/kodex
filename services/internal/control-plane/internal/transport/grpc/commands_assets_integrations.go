@@ -174,15 +174,17 @@ type artifactUploadServer interface {
 }
 
 func (server *Server) uploadArtifact(stream artifactUploadServer, fullMethod string, projectRequired bool) error {
-	p, err := principal(stream.Context(), fullMethod)
-	if err != nil {
-		return err
-	}
 	upload, err := receiveArtifactUpload(stream)
 	if err != nil {
 		return err
 	}
 	defer upload.close()
+	// В service-v1 principal client-stream связывается с первым metadata
+	// сообщением. До первого Recv контекст намеренно ещё не содержит actor.
+	p, err := principal(stream.Context(), fullMethod)
+	if err != nil {
+		return err
+	}
 	metadata := upload.metadata
 	if err := validateArtifactUploadScope(metadata, projectRequired); err != nil {
 		return err

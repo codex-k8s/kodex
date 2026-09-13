@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+const runtimeCandidateEligibilityDiagnosticMessage = "runtime candidate eligibility rejected"
+
 //go:embed sql/runtime_claim__fail_graph.sql
 var queryRuntimeClaimFailGraph string
 
@@ -67,6 +69,25 @@ func runtimeCandidateEligibilityFailure(err error) bool {
 		return false
 	}
 	return errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrVersionMismatch) || errors.Is(err, errs.ErrNotFound) || errors.Is(err, errs.ErrForbidden) || errors.Is(err, errs.ErrCapabilityRequired) || errors.Is(err, errs.ErrInvalid)
+}
+
+func runtimeEligibilityErrorClass(err error) string {
+	for _, candidate := range []struct {
+		err   error
+		class string
+	}{
+		{errs.ErrConflict, "CONFLICT"},
+		{errs.ErrVersionMismatch, "VERSION_MISMATCH"},
+		{errs.ErrNotFound, "NOT_FOUND"},
+		{errs.ErrForbidden, "FORBIDDEN"},
+		{errs.ErrCapabilityRequired, "CAPABILITY_REQUIRED"},
+		{errs.ErrInvalid, "INVALID"},
+	} {
+		if errors.Is(err, candidate.err) {
+			return candidate.class
+		}
+	}
+	return "UNKNOWN"
 }
 
 // Отказ кандидата закрывает весь принадлежащий владельцу граф. Независимые
