@@ -1005,10 +1005,11 @@ test.describe("web-only fresh installation", () => {
       const body = (await response.json()) as { version: number };
       return body.version;
     }, coordinatorRef);
-    expect(
-      rollbackResponse.status(),
-      `${await rollbackResponse.text()} request=${rollbackResponse.request().headers()["if-match"] ?? "missing"} authoritative=${String(authoritativeAgentVersion)}`,
-    ).toBe(200);
+    const rollbackDiagnostic =
+      rollbackResponse.status() === 200
+        ? undefined
+        : `${await rollbackResponse.text()} request=${rollbackResponse.request().headers()["if-match"] ?? "missing"} authoritative=${String(authoritativeAgentVersion)}`;
+    expect(rollbackResponse.status(), rollbackDiagnostic).toBe(200);
 
     await expect(history.locator("li")).toHaveCount(initialVersionCount + 2);
     await expect(history.locator("li").first()).toContainText("Текущая");
@@ -1408,7 +1409,7 @@ test.describe("web-only fresh installation", () => {
     let expectedRuntimeOverlay = overlayState.publishedContent;
     if (overlayState.publishedContent.trimEnd() !== runtimeOverlay) {
       if (overlayState.draftContent !== runtimeOverlay) {
-        await overlayEditor.fill(runtimeOverlay);
+        await replaceCodeEditorContent(overlayEditor, runtimeOverlay);
         const draftCreation = page.waitForResponse(
           (response) =>
             response.request().method() === "POST" &&
@@ -1865,6 +1866,7 @@ test.describe("web-only fresh installation", () => {
     page,
   }) => {
     requireRefs("projectRef", "analystRef");
+    await ensureAuthorizedProviderAffinity(page, analystRef, 1);
     const schedulesResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "GET" &&
@@ -2242,7 +2244,7 @@ test.describe("web-only fresh installation", () => {
       }),
     ).toBeDisabled();
     await expect(page.locator("#main-content")).toContainText(
-      "Сначала выдайте всем выбранным ИИ-сотрудникам возможность «Файлы»",
+      "Не всем исполнителям предоставлена возможность «Файлы»",
     );
 
     const idempotencyKeys = await page.evaluate(() => ({
@@ -2380,6 +2382,10 @@ test.describe("web-only fresh installation", () => {
       persistRefs();
       await publishAgent(page);
     }
+
+    await ensureAuthorizedProviderAffinity(page, coordinatorRef, 0);
+    await ensureAuthorizedProviderAffinity(page, analystRef, 1);
+    await ensureAuthorizedProviderAffinity(page, writerRef, 0);
 
     await ensureAgentCapability(
       page,
@@ -3761,9 +3767,25 @@ test.describe("web-only fresh installation", () => {
     });
     await expect(logoutButton).toBeVisible();
     await logoutButton.click();
-    await expect(
-      page.getByRole("button", { name: "Войти", exact: true }),
-    ).toBeVisible();
+    const signInButton = page.getByRole("button", {
+      name: "Войти",
+      exact: true,
+    });
+    const retryAuthentication = page.getByRole("button", {
+      name: "Повторить",
+      exact: true,
+    });
+    await expect
+      .poll(
+        async () =>
+          (await signInButton.isVisible()) ||
+          (await retryAuthentication.isVisible()),
+      )
+      .toBe(true);
+    if (await retryAuthentication.isVisible()) {
+      await retryAuthentication.click();
+      await expect(signInButton).toBeVisible();
+    }
     expect(
       await page.evaluate(async () =>
         fetch("/api/v1/projects").then((response) => response.status),
@@ -4051,6 +4073,32 @@ function supportedRuntimeOverlay(schema: ConfigOverlaySchema): string {
     else lines.push(`${key} = ${value}`);
   }
   return lines.join("\n");
+}
+
+async function replaceCodeEditorContent(
+  editor: Locator,
+  content: string,
+): Promise<void> {
+  await editor.focus();
+  await editor.press("ControlOrMeta+A");
+  await editor.evaluate((element, value) => {
+    const clipboard = new DataTransfer();
+    clipboard.setData("text/plain", value);
+    element.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: clipboard,
+      }),
+    );
+  }, content);
+  await expect
+    .poll(() =>
+      editor.evaluate((element) =>
+        (element as HTMLElement).innerText.replace(/\r\n?/g, "\n"),
+      ),
+    )
+    .toBe(content);
 }
 
 async function resolveArtifactRef(
