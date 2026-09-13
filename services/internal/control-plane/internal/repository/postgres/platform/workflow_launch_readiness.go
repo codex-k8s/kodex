@@ -31,6 +31,7 @@ func (r *Repository) projectWorkflowLaunchReadiness(ctx context.Context, runner 
 	rows, err := runner.Query(ctx, queryWorkflowLaunchReadiness, pgx.StrictNamedArgs{
 		"organization_id": s.organizationID, "actor_id": s.actorID, "authority_project": s.authorityProjectID,
 		"workflow_refs": refs, "contract_revision": r.roleImages.RoleRuntimeContractRevision, "contract_digest": r.roleImages.RoleRuntimeContractSHA256,
+		"default_image_digest": r.roleImages.DefaultImageDigest,
 	})
 	if err != nil {
 		return errs.ErrUnavailable

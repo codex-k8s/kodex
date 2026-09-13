@@ -1560,6 +1560,7 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 		"agent_refs":                     targetAgentRefs,
 		"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
 		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
+		"default_role_image_digest":      repository.roleImages.DefaultImageDigest,
 	}).Scan(&runtimeContractReady); err != nil {
 		return commandOutcome{}, fmt.Errorf("validate run runtime contract: %w", errs.ErrUnavailable)
 	}
