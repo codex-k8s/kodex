@@ -395,6 +395,7 @@ defineExpose<AttachmentComposerHandle>({ clear, finalize });
         :key="item.key"
         class="attachment-composer__item"
         :class="`attachment-composer__item--${item.state.toLowerCase()}`"
+        :data-artifact-ref="item.artifactRef || undefined"
       >
         <File :size="17" aria-hidden="true" />
         <span class="attachment-composer__copy">

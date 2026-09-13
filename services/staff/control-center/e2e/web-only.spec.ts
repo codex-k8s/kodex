@@ -307,8 +307,6 @@ interface ExercisedAttachment {
   readonly ref: string;
 }
 
-const capturedArtifactUploadBodies = new WeakMap<Response, Promise<unknown>>();
-
 async function exerciseAttachmentComposer(
   page: Page,
   composer: Locator,
@@ -442,11 +440,9 @@ async function exerciseAttachmentComposer(
     .locator(".attachment-composer__item")
     .filter({ hasText: finalName });
   await expect(finalItem.locator(".attachment-composer__ready")).toBeVisible();
-  const artifact = (await capturedArtifactUploadBodies.get(response)) as {
-    ref?: string;
-  };
-  expect(artifact.ref).toMatch(/^art_[A-Za-z0-9_-]+$/);
-  return { fileName: finalName, marker, ref: artifact.ref ?? "" };
+  const artifactRef = await finalItem.getAttribute("data-artifact-ref");
+  expect(artifactRef).toMatch(/^art_[A-Za-z0-9_-]+$/);
+  return { fileName: finalName, marker, ref: artifactRef ?? "" };
 }
 
 function waitForArtifactUpload(
@@ -512,8 +508,6 @@ function waitForArtifactUploadOutcome(
     };
     const onResponse = (response: Response): void => {
       if (!matches(response.request())) return;
-      if (response.status() === 201)
-        capturedArtifactUploadBodies.set(response, response.json());
       cleanup();
       resolve(response);
     };
@@ -1415,7 +1409,6 @@ test.describe("web-only fresh installation", () => {
     if (overlayState.publishedContent.trimEnd() !== runtimeOverlay) {
       if (overlayState.draftContent !== runtimeOverlay) {
         await overlayEditor.fill(runtimeOverlay);
-        expectedRuntimeOverlay = await overlayEditor.inputValue();
         const draftCreation = page.waitForResponse(
           (response) =>
             response.request().method() === "POST" &&
@@ -1427,6 +1420,8 @@ test.describe("web-only fresh installation", () => {
           .click();
         expect((await draftCreation).status()).toBe(201);
         overlayState = await readOverlayState();
+        expect(overlayState.draftContent).toBe(runtimeOverlay);
+        expectedRuntimeOverlay = runtimeOverlay;
       } else expectedRuntimeOverlay = overlayState.draftContent;
       if (overlayState.draftState !== "VALID") {
         const validation = page.waitForResponse(
@@ -2190,7 +2185,7 @@ test.describe("web-only fresh installation", () => {
       return (
         response.request().method() === "GET" &&
         url.pathname === `/api/v1/projects/${projectRef}/artifacts` &&
-        url.searchParams.get("sourceKind") === "CONTROL_CENTER" &&
+        url.searchParams.getAll("sourceKinds").includes("CONTROL_CENTER") &&
         url.searchParams.get("query") === differentQuery
       );
     });
@@ -2201,7 +2196,7 @@ test.describe("web-only fresh installation", () => {
       return (
         response.request().method() === "GET" &&
         url.pathname === `/api/v1/projects/${projectRef}/artifacts` &&
-        url.searchParams.get("sourceKind") === "CONTROL_CENTER" &&
+        url.searchParams.getAll("sourceKinds").includes("CONTROL_CENTER") &&
         url.searchParams.get("query") === uploadedFileName
       );
     });

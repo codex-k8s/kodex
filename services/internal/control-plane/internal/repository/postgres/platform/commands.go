@@ -2223,6 +2223,31 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	if !ok || payload.RunRef == "" || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	// Runtime claim сначала блокирует run_nodes, а затем через FK каталога
+	// обращается к runs. Cancel обязан соблюдать тот же порядок, иначе
+	// одновременный capture runtime file catalog образует deadlock.
+	if input.Kind == command.CancelRun {
+		var rootRunID string
+		if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRootRunID, scope.organizationID, payload.RunRef).Scan(&rootRunID); err != nil {
+			return commandOutcome{}, errs.ErrNotFound
+		}
+		rows, err := tx.Query(ctx, queryCommandsChangerunLockRunNodes, rootRunID)
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		for rows.Next() {
+			var ignored string
+			if err := rows.Scan(&ignored); err != nil {
+				rows.Close()
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		rows.Close()
+	}
 	var runID, rootRunID, projectID, projectRef, state string
 	var version int64
 	var attempt int32

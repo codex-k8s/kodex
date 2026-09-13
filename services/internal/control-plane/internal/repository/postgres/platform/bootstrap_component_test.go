@@ -263,6 +263,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("idempotency occ and concurrent run creation", func(t *testing.T) {
 		testIdempotencyOCCAndConcurrentRuns(t, ctx, repository)
 	})
+	t.Run("run cancellation follows runtime node lock order", func(t *testing.T) {
+		testRunCancellationLockOrder(t, ctx, repository, pool)
+	})
 	t.Run("schedule readback hydrates current revision and continuation session", func(t *testing.T) {
 		testScheduleContractReadback(t, ctx, repository)
 	})
