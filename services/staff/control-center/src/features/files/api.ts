@@ -252,12 +252,17 @@ export async function loadArtifactImpact(
   signal?: AbortSignal,
 ): Promise<ArtifactImpact> {
   const impact = (
-    await unwrap(
-      getArtifactImpact({
-        path: { artifactRef: artifact.ref },
-        query: { action },
-        signal: requestSignal(signal),
-      }),
+    await readWithRetry(
+      () =>
+        unwrap(
+          getArtifactImpact({
+            path: { artifactRef: artifact.ref },
+            query: { action },
+            signal: requestSignal(signal),
+          }),
+        ),
+      undefined,
+      signal,
     )
   ).data;
   if (

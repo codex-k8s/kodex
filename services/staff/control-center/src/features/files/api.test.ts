@@ -428,6 +428,47 @@ describe("loadArtifactPage", () => {
 });
 
 describe("loadArtifactImpact", () => {
+  it("повторяет временно недоступный безопасный impact-read", async () => {
+    vi.useFakeTimers();
+    const current = artifact("artifact_retry");
+    const expected = impact(current, "DELETE");
+    getArtifactImpactMock
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue({
+        data: expected,
+        response: new Response(null, { status: 200 }),
+      });
+
+    const result = loadArtifactImpact(current, "DELETE");
+    await vi.runAllTimersAsync();
+
+    await expect(result).resolves.toEqual(expected);
+    expect(getArtifactImpactMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("прерывает bounded retry impact-read вместе со scope", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    getArtifactImpactMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const result = loadArtifactImpact(
+      artifact("artifact_abort"),
+      "DELETE",
+      controller.signal,
+    );
+    const rejection = expect(result).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    await vi.runAllTimersAsync();
+
+    await rejection;
+    expect(getArtifactImpactMock).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
   it("принимает только preflight точной версии artifact", async () => {
     getArtifactImpactMock.mockResolvedValue({
       data: {
