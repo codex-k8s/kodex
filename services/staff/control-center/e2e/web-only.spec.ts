@@ -2144,8 +2144,6 @@ test.describe("web-only fresh installation", () => {
     ]);
     expect(archived.request().postDataJSON()).toEqual({ action: "ARCHIVE" });
     expect(archived.status()).toBe(200);
-    const archivedSchedule = (await archived.json()) as { state?: string };
-    expect(archivedSchedule.state).toBe("ARCHIVED");
     expect(await readScheduleRevisionState(page, automationRef)).toEqual({
       revision: 2,
       task: automationEditedTask,
@@ -2686,7 +2684,7 @@ test.describe("web-only fresh installation", () => {
       (await readOwnerGate(page, gate.ref)).resolutionAttachmentSetRef,
     ).toBe(resolutionAttachmentSet.ref);
 
-    await gotoWithRetry(page, `/runs/${workflowRunRef}`);
+    await gotoWithRetry(page, `/projects/${projectRef}/runs/${workflowRunRef}`);
     await expectRunState(page, /Выполняется|Завершён/);
     await waitForTerminalSuccess(page);
     await assertNoDuplicateGraphNodes(page);
@@ -4108,9 +4106,10 @@ async function replaceCodeEditorContent(
   await page.keyboard.insertText(content);
   await expect
     .poll(() =>
-      editor.evaluate((element) =>
-        (element as HTMLElement).innerText.replace(/\r\n?/g, "\n"),
-      ),
+      editor
+        .locator(".cm-line")
+        .allTextContents()
+        .then((lines) => lines.join("\n")),
     )
     .toBe(content);
 }

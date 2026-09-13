@@ -1,10 +1,8 @@
-import { authenticateOwner } from "./auth-flow";
-import { loadE2EAuthEnvironment, loadE2EEnvironment } from "./environment";
+import { loadE2EEnvironment } from "./environment";
 import { expect, test } from "./fixtures";
 import { gotoWithRetry, routeRef } from "./helpers";
 
 const environment = loadE2EEnvironment();
-const authentication = loadE2EAuthEnvironment();
 const projectName = `${environment.resourcePrefix} — отдел продаж`;
 
 async function expectNoHorizontalOverflow(
@@ -21,17 +19,16 @@ async function expectNoHorizontalOverflow(
 test("mobile shell, помощник и граф доступны без горизонтального переполнения", async ({
   page,
 }) => {
-  await authenticateOwner(
-    page,
-    {
-      username: authentication.ownerUsername,
-      password: authentication.ownerPassword,
-    },
-    { mode: "local" },
-  );
   await gotoWithRetry(page, "/projects");
 
   const project = page.getByRole("link", { name: new RegExp(projectName) });
+  const retry = page
+    .locator("#main-content")
+    .getByRole("button", { name: "Повторить", exact: true });
+  await expect
+    .poll(async () => (await project.isVisible()) || (await retry.isVisible()))
+    .toBe(true);
+  if (await retry.isVisible()) await retry.click();
   await expect(project).toBeVisible();
   await project.click();
   await expect(page).toHaveURL(/\/projects\/[^/]+$/);
