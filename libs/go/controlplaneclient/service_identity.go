@@ -28,19 +28,9 @@ func DialServiceIdentity(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	projects := make(map[string]struct{}, len(config.ProjectRequiredOperations))
-	for operation := range config.ProjectRequiredOperations {
-		found := false
-		for _, registered := range operations {
-			if operation == registered {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, errors.New("service project operation is not registered")
-		}
-		projects[operation] = struct{}{}
+	projects, err := serviceProjectOperations(operations, config.ProofOperations, config.ProjectRequiredOperations)
+	if err != nil {
+		return nil, err
 	}
 	legacyConfig := config
 	legacyConfig.ServiceIdentity = false
@@ -70,6 +60,27 @@ func DialServiceIdentity(ctx context.Context, config Config) (*Client, error) {
 	client.serviceIdentity = true
 	client.bindServices(connection)
 	return client, nil
+}
+
+func serviceProjectOperations(operations operationSet, proofOperations map[string]string, required map[string]struct{}) (map[string]struct{}, error) {
+	projects := make(map[string]struct{}, len(required))
+	for operation := range required {
+		found := false
+		for _, registered := range operations {
+			if operation == registered {
+				found = true
+				break
+			}
+		}
+		if !found {
+			_, found = proofOperations[operation]
+		}
+		if !found {
+			return nil, errors.New("service project operation is not registered")
+		}
+		projects[operation] = struct{}{}
+	}
+	return projects, nil
 }
 
 func serviceIdentityStream(operations operationSet, projects map[string]struct{}) grpc.StreamClientInterceptor {
