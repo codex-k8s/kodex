@@ -66,6 +66,27 @@ test("unsafe profiles, old grants and incomplete rollouts are rejected", () => {
   }
 });
 
+test("readiness recovery accepts only one stable unready replica and keeps normal release guard", () => {
+  const current = fixture();
+  current.spec.replicas = 1;
+  current.status = { observedGeneration: 1, replicas: 1, updatedReplicas: 1, readyReplicas: 0, availableReplicas: 0 };
+  assert.throws(() => planTarget(current, target, releaseID), /AVAILABLE_REPLICAS_REQUIRED/);
+  const recovered = planTarget(current, target, releaseID, undefined, "recovery");
+  assert.equal(recovered.name, target.name);
+  for (const mutate of [
+    (deployment) => { deployment.status.readyReplicas = 1; deployment.status.availableReplicas = 1; },
+    (deployment) => { deployment.status.updatedReplicas = 0; },
+    (deployment) => { deployment.status.replicas = 2; },
+    (deployment) => { deployment.spec.replicas = 2; },
+  ]) {
+    const invalid = structuredClone(current); mutate(invalid);
+    assert.throws(() => planTarget(invalid, target, releaseID, undefined, "recovery"), /UNREADY_SINGLE_REPLICA_REQUIRED/);
+  }
+  assert.throws(() => planTarget(current,
+    { ...target, rollbackOf: releaseID, expectedImage: image("a") }, releaseID, undefined, "recovery"),
+  /UNREADY_SINGLE_REPLICA_REQUIRED/);
+});
+
 test("image-only rollback accepts stuck rollout but requires exact release", () => {
   const current = fixture();
   current.spec.template.spec.containers[0].image = image("b");

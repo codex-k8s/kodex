@@ -146,6 +146,26 @@ node tools/release/scoped-release.mjs apply \
 Откатывается только приложение; sidecar, revocation и replay state остаются
 действующими. После timeout/crash сначала нужен readback фактического состояния.
 
+Если единственная replica приложения уже не Ready, обычный `plan` сохраняет
+zero-downtime guard и закрыто отказывает. Для такого incident используется
+отдельный одиночный `recovery-plan`/`recovery-apply` с точной публичной ссылкой
+на GitHub Issue. Он принимает только стабильный Deployment из одной unready
+replica, сохраняет те же UID/resourceVersion/spec и application-only проверки.
+Новую surge replica создаёт обычный RollingUpdate; инструмент не удаляет старый
+Pod и не меняет sidecars, security/config или соседние workloads.
+
+```bash
+node tools/release/scoped-release.mjs recovery-plan \
+  --context staging --incident https://github.com/codex-k8s/kodex/issues/1234 \
+  --manifest /private/one-unready-application.json \
+  --output /private/application-recovery-plan.json
+node tools/release/scoped-release.mjs recovery-apply \
+  --context staging --incident https://github.com/codex-k8s/kodex/issues/1234 \
+  --plan /private/application-recovery-plan.json \
+  --evidence /private/application-recovery.jsonl --parallelism 1 \
+  --timeout-seconds 300 --confirm APPLY-STAGING-APPLICATION-RECOVERY
+```
+
 ## Границы текущей реализации
 
 - Production здесь намеренно запрещён. Для него требуется отдельное решение,

@@ -71,9 +71,10 @@ export function validateManifest(value) {
 }
 
 // Только приложение. Полный pod template, Secrets и общие ConfigMaps не применяются.
-export function planTarget(deployment, target, releaseID, sourceInspector) {
+export function planTarget(deployment, target, releaseID, sourceInspector, mode = "release") {
   validateManifest({ version: 1, targets: [target] });
   requireValue(uuid.test(releaseID), "INVALID_RELEASE_ID");
+  requireValue(mode === "release" || mode === "recovery", "INVALID_RELEASE_MODE");
   const metadata = deployment?.metadata;
   const spec = deployment?.spec;
   const pod = spec?.template;
@@ -88,11 +89,17 @@ export function planTarget(deployment, target, releaseID, sourceInspector) {
     spec.strategy?.type === "RollingUpdate" && spec.strategy.rollingUpdate?.maxUnavailable === 0 &&
     Number.isSafeInteger(spec.strategy.rollingUpdate.maxSurge) && spec.strategy.rollingUpdate.maxSurge > 0,
   "SAFE_ROLLING_STRATEGY_REQUIRED");
-  requireValue(status?.observedGeneration >= metadata.generation &&
-    status.availableReplicas >= spec.replicas, "AVAILABLE_REPLICAS_REQUIRED");
-  if (!target.rollbackOf)
-    requireValue(status.updatedReplicas === spec.replicas && status.replicas === spec.replicas,
-      "PREVIOUS_ROLLOUT_INCOMPLETE");
+  requireValue(status?.observedGeneration >= metadata.generation, "OBSERVED_DEPLOYMENT_REQUIRED");
+  if (mode === "recovery") {
+    requireValue(!target.rollbackOf && spec.replicas === 1 && status.replicas === 1 && status.updatedReplicas === 1 &&
+      (status.availableReplicas ?? 0) < 1 && (status.readyReplicas ?? 0) < 1,
+    "UNREADY_SINGLE_REPLICA_REQUIRED");
+  } else {
+    requireValue(status.availableReplicas >= spec.replicas, "AVAILABLE_REPLICAS_REQUIRED");
+    if (!target.rollbackOf)
+      requireValue(status.updatedReplicas === spec.replicas && status.replicas === spec.replicas,
+        "PREVIOUS_ROLLOUT_INCOMPLETE");
+  }
   const containers = pod?.spec?.containers;
   const application = pod?.metadata?.annotations?.["kubectl.kubernetes.io/default-container"] ?? target.name;
   requireValue(application === target.name && Array.isArray(containers), "APPLICATION_CONTAINER_AMBIGUOUS");
@@ -162,11 +169,11 @@ async function main(args) {
   const options = {};
   while (args.length) {
     const key = args.shift();
-    requireValue(["--context", "--manifest", "--plan", "--output", "--evidence", "--parallelism", "--timeout-seconds", "--confirm"].includes(key) &&
+    requireValue(["--context", "--manifest", "--plan", "--output", "--evidence", "--parallelism", "--timeout-seconds", "--confirm", "--incident"].includes(key) &&
       !Object.hasOwn(options, key) && args.length > 0, "INVALID_ARGUMENTS");
     options[key] = args.shift();
   }
-  requireValue(["plan", "apply"].includes(command), "INVALID_COMMAND");
+  requireValue(["plan", "apply", "recovery-plan", "recovery-apply"].includes(command), "INVALID_COMMAND");
   const context = options["--context"];
   requireValue(typeof context === "string" && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context) &&
     !/prod(?:uction)?/i.test(context), "EXACT_STAGING_CONTEXT_REQUIRED");
@@ -180,23 +187,30 @@ async function main(args) {
   const get = async (kind, name, namespace = "kodex-system") => JSON.parse(await kubectl(["-n", namespace, "get", kind, name, "-o", "json"]));
   const identity = (await get("namespace", "kube-system")).metadata.uid;
   requireValue(uuid.test(identity), "INVALID_CLUSTER_IDENTITY");
-  if (command === "plan") {
+  const recovery = command.startsWith("recovery-");
+  const incident = options["--incident"];
+  if (recovery) requireValue(/^https:\/\/github\.com\/codex-k8s\/kodex\/issues\/[1-9][0-9]*$/.test(incident ?? ""), "EXACT_INCIDENT_REQUIRED");
+  else requireValue(incident === undefined, "UNEXPECTED_INCIDENT");
+  if (command === "plan" || command === "recovery-plan") {
     requireValue(options["--manifest"] && options["--output"] && !options["--plan"] && !options["--confirm"], "INVALID_PLAN_ARGUMENTS");
     const manifest = validateManifest(JSON.parse(await readFile(options["--manifest"], "utf8")));
+    if (recovery) requireValue(manifest.targets.length === 1, "SINGLE_RECOVERY_TARGET_REQUIRED");
     const releaseID = randomUUID();
     const targets = [];
     for (const target of manifest.targets) {
       const deployment = await get("deployment", target.name);
-      const planned = planTarget(deployment, target, releaseID);
+      const planned = planTarget(deployment, target, releaseID, undefined, recovery ? "recovery" : "release");
       // Не сохраняем env, annotations или security references в плане и журнале.
       const { patch: _patch, ...safe } = planned;
       targets.push({ ...safe, requested: target });
     }
-    await createPrivate(options["--output"], { version: 1, releaseID, context, clusterUID: identity, targets });
+    await createPrivate(options["--output"], { version: 1, releaseID, context, clusterUID: identity,
+      ...(recovery ? { kind: "APPLICATION_READINESS_RECOVERY", incident } : {}), targets });
     process.stdout.write(`Release plan ready: targets=${targets.length} release=${releaseID}\n`);
     return;
   }
-  requireValue(options["--plan"] && options["--evidence"] && options["--confirm"] === "APPLY-STAGING-APPLICATIONS", "STAGING_CONFIRMATION_REQUIRED");
+  const expectedConfirmation = recovery ? "APPLY-STAGING-APPLICATION-RECOVERY" : "APPLY-STAGING-APPLICATIONS";
+  requireValue(options["--plan"] && options["--evidence"] && options["--confirm"] === expectedConfirmation, "STAGING_CONFIRMATION_REQUIRED");
   const parallelism = Number(options["--parallelism"] ?? 2);
   const seconds = Number(options["--timeout-seconds"] ?? 300);
   requireValue(Number.isSafeInteger(seconds) && seconds >= 30 && seconds <= 1800 &&
@@ -204,6 +218,8 @@ async function main(args) {
   const plan = JSON.parse(await readFile(options["--plan"], "utf8"));
   requireValue(plan.version === 1 && plan.context === context && plan.clusterUID === identity && uuid.test(plan.releaseID) &&
     Array.isArray(plan.targets), "RELEASE_PLAN_IDENTITY_MISMATCH");
+  requireValue(recovery ? plan.kind === "APPLICATION_READINESS_RECOVERY" && plan.incident === incident && plan.targets.length === 1 :
+    plan.kind === undefined, "RELEASE_PLAN_MODE_MISMATCH");
   validateManifest({ version: 1, targets: plan.targets.map((item) => item.requested) });
   // O_EXCL + fsync до первого PATCH: повтор после неизвестного исхода требует readback.
   await createPrivate(options["--evidence"], { version: 1, releaseID: plan.releaseID, status: "IN_PROGRESS" });
@@ -216,7 +232,7 @@ async function main(args) {
         const current = await get("deployment", item.name);
         requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === item.beforeSpecSHA256,
           "DEPLOYMENT_CHANGED_AFTER_PLAN");
-        const prepared = planTarget(current, item.requested, plan.releaseID);
+        const prepared = planTarget(current, item.requested, plan.releaseID, undefined, recovery ? "recovery" : "release");
         requireValue(prepared.afterSpecSHA256 === item.afterSpecSHA256, "PLAN_CONTENT_MISMATCH");
         await record({ name: item.name, status: "PATCH_ATTEMPT", beforeImage: prepared.beforeImage, image: prepared.image,
           rollback: prepared.rollback });
