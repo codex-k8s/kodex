@@ -469,6 +469,9 @@ function openNodeDetails(node: RunNode): void {
 function openActivity(nodeRef?: string): void {
   activityNodeRef.value = nodeRef;
   activityOpen.value = true;
+  // Terminal WS delta может прийти раньше авторитетного Run readback с
+  // вычисленными nextActions. Drawer всегда освежает eligibility продолжения.
+  void refreshScheduler.request(runRef.value);
 }
 function closeActivity(): void {
   activityOpen.value = false;

@@ -1303,7 +1303,7 @@ test.describe("web-only fresh installation", () => {
     const accountSelector = runtimePanel.locator(".provider-selector");
     const accountStatus = runtimePanel
       .locator(".runtime-panel__account-capability")
-      .locator(".status-badge")
+      .getByRole("status", { name: "Выбор учётной записи" })
       .first();
     await expect(accountStatus).not.toHaveAttribute(
       "data-state",
@@ -2175,6 +2175,8 @@ test.describe("web-only fresh installation", () => {
 
     await gotoWithRetry(page, `/projects/${projectRef}/files`);
     await expectPageHeading(page, "Файлы и знания");
+    const search = page.getByRole("searchbox", { name: "Найти файл" });
+    await search.clear();
     const searchResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return (
@@ -2184,9 +2186,7 @@ test.describe("web-only fresh installation", () => {
         url.searchParams.get("query") === uploadedFileName
       );
     });
-    await page
-      .getByRole("searchbox", { name: "Найти файл" })
-      .fill(uploadedFileName);
+    await search.fill(uploadedFileName);
     const searched = await searchResponse;
     expect(
       searched.status(),
@@ -4256,7 +4256,7 @@ async function operateArtifactLifecycle(
     .click();
   const mutation = await response;
   expect(mutation.status(), await httpFailureDiagnostic(mutation)).toBe(200);
-  return (await mutation.json()) as ArtifactReadback;
+  return await readArtifact(page, artifactRef);
 }
 
 async function readArtifact(
