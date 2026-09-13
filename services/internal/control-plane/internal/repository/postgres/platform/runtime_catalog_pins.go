@@ -65,6 +65,11 @@ func validRuntimeCatalogPin(candidate entity.ProviderAccountCandidate) bool {
 	return true
 }
 
+func legacyUnpinnedRuntimeCatalogCandidate(candidate entity.ProviderAccountCandidate) bool {
+	return candidate.AccountRef != "" && candidate.Weight > 0 && candidate.CatalogDigest == "" &&
+		candidate.CatalogRevision == "" && candidate.ProviderDefinitionKey == "" && candidate.DefaultReasoningEffort == ""
+}
+
 // validateRuntimeCatalogCandidates читает тот же snapshot, что публичный
 // каталог, в caller owner-транзакции. Account locks закрывают TOCTOU с revoke.
 func validateRuntimeCatalogCandidates(ctx context.Context, tx pgx.Tx, current scope, provider, model, overlay string, candidates []entity.ProviderAccountCandidate, input bool) ([]entity.ProviderAccountCandidate, []string, error) {
@@ -80,7 +85,8 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 	efforts := []string{}
 	for index := range result {
 		candidate := &result[index]
-		if !validRuntimeCatalogPin(*candidate) || candidate.ProviderDefinitionKey != provider || input && candidate.DefaultReasoningEffort != "" {
+		legacyUnpinned := !input && legacyUnpinnedRuntimeCatalogCandidate(*candidate)
+		if !legacyUnpinned && (!validRuntimeCatalogPin(*candidate) || candidate.ProviderDefinitionKey != provider) || input && candidate.DefaultReasoningEffort != "" {
 			return nil, nil, errs.ErrInvalid
 		}
 		var ref string
@@ -100,6 +106,10 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 		if err != nil {
 			return nil, nil, err
 		}
+		if legacyUnpinned {
+			candidate.ProviderDefinitionKey = provider
+			candidate.CatalogRevision, candidate.CatalogDigest = catalog.Revision, catalog.Digest
+		}
 		if catalog.Revision != candidate.CatalogRevision || catalog.Digest != candidate.CatalogDigest {
 			return nil, nil, errs.ErrVersionMismatch
 		}
@@ -111,6 +121,9 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 			validDefault := len(capability.ReasoningEfforts) == 0 && capability.DefaultReasoningEffort == "" || slices.Contains(capability.ReasoningEfforts, capability.DefaultReasoningEffort)
 			if !capability.Available || !slices.Contains(capability.EligibleProviderAccountRefs, candidate.AccountRef) || !validDefault {
 				return nil, nil, errs.ErrConflict
+			}
+			if legacyUnpinned {
+				candidate.DefaultReasoningEffort = capability.DefaultReasoningEffort
 			}
 			if !input && candidate.DefaultReasoningEffort != capability.DefaultReasoningEffort {
 				return nil, nil, errs.ErrConflict
@@ -152,19 +165,11 @@ func readRuntimeCatalogConfiguration(ctx context.Context, tx pgx.Tx, organizatio
 // Пользовательская публикация обязана передать ожидаемый snapshot отдельно.
 func captureRuntimeCatalogPins(ctx context.Context, tx pgx.Tx, current scope, provider, model string, candidates []entity.ProviderAccountCandidate) ([]entity.ProviderAccountCandidate, error) {
 	if candidates == nil {
-		catalog, err := readModelCatalogTx(ctx, tx, current, provider, "")
+		accounts, err := bootstrapUnpinnedCatalogCandidates(ctx, tx, current.organizationID, provider)
 		if err != nil {
 			return nil, err
 		}
-		for _, capability := range catalog.Models {
-			if capability.ID != model || !capability.Available {
-				continue
-			}
-			for _, ref := range capability.EligibleProviderAccountRefs {
-				candidates = append(candidates, entity.ProviderAccountCandidate{AccountRef: ref, Weight: 1})
-			}
-			break
-		}
+		candidates = accounts
 	}
 	if len(candidates) == 0 || len(candidates) > 128 {
 		return nil, errs.ErrConflict

@@ -16,6 +16,18 @@ func TestValidWorkflowVersionAcceptsBoundedExecutionGraph(t *testing.T) {
 	}
 }
 
+func TestNormalizeWorkflowDraftIdentityReplacesLegacyLiteralDeterministically(t *testing.T) {
+	t.Parallel()
+
+	left := entity.WorkflowVersion{Ref: "draft"}
+	right := entity.WorkflowVersion{}
+	normalizeWorkflowDraftIdentity("wfl_fixture01", &left)
+	normalizeWorkflowDraftIdentity("wfl_fixture01", &right)
+	if left.Ref != right.Ref || !strings.HasPrefix(left.Ref, "wfv_") || len(left.Ref) < 12 || left.VersionNumber != 1 || right.VersionNumber != 1 {
+		t.Fatalf("server-owned draft identity is unstable: left=%q right=%q", left.Ref, right.Ref)
+	}
+}
+
 func TestValidBoundedRunInputRejectsOversizedPayload(t *testing.T) {
 	t.Parallel()
 

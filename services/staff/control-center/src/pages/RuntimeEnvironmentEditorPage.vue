@@ -943,6 +943,9 @@ async function publish(selected: string[]): Promise<void> {
     reauthRestored.value = false;
     sync(saved);
     await runtime.loadEnvironmentVersions(ref);
+    await router.replace(
+      `/projects/${encodeURIComponent(projectRef.value)}/environments/${encodeURIComponent(ref)}`,
+    );
   } catch (error) {
     if (disposed) return;
     const normalized = asProblem(error);

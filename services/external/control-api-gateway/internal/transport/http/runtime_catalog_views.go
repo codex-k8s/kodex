@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -16,6 +17,10 @@ import (
 
 var errRuntimeCatalogView = errors.New("runtime catalog response is invalid")
 var runtimeEffortPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+
+func invalidRuntimeCatalogView(reason string) error {
+	return fmt.Errorf("%w: %s", errRuntimeCatalogView, reason)
+}
 
 // Порядок полей соответствует canonical JSON schema owner, включая пустые значения.
 type canonicalOverlayField struct {
@@ -98,67 +103,67 @@ func validOverlayDiagnostic(diagnostic *cp.ConfigOverlayDiagnostic) bool {
 
 func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) error {
 	if depth > 64 {
-		return errRuntimeCatalogView
+		return invalidRuntimeCatalogView("maximum_depth")
 	}
 	switch item := message.Interface().(type) {
 	case *cp.Project:
 		if !validProjectCard(item) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("project")
 		}
 	case *cp.Agent:
 		if item == nil || item.CurrentRunRef != "" && !fileTargetRef(item.CurrentRunRef) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("agent")
 		}
 	case *cp.WorkflowCardSummary:
 		if !validWorkflowCardSummary(item) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("workflow_card")
 		}
 	case *cp.ListArtifactsResponse:
 		if !validCountedCatalogPage(item.GetTotal(), len(item.GetArtifacts()), item.GetPage()) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("artifact_page")
 		}
 		for _, artifact := range item.GetArtifacts() {
 			if artifact == nil {
-				return errRuntimeCatalogView
+				return invalidRuntimeCatalogView("artifact")
 			}
 		}
 	case *cp.ListRunsResponse:
 		if !validCountedCatalogPage(item.GetTotal(), len(item.GetRuns()), item.GetPage()) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("run_page")
 		}
 		for _, run := range item.GetRuns() {
 			if run == nil {
-				return errRuntimeCatalogView
+				return invalidRuntimeCatalogView("run")
 			}
 		}
 	case *cp.AgentRuntimeConfigurationView:
 		if !validOverlaySchema(item.OverlaySchema) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("overlay_schema")
 		}
 	case *cp.ProviderAccountCandidate:
 		unpinned := item.CatalogRevision == "" && item.CatalogDigest == "" && item.ProviderDefinitionKey == ""
 		if !unpinned && (!modelCatalogDigest.MatchString(item.CatalogDigest) || item.CatalogRevision != "mcat_"+item.CatalogDigest || !modelProviderKey.MatchString(item.ProviderDefinitionKey)) || item.DefaultReasoningEffort != "" && (!runtimeEffortPattern.MatchString(item.DefaultReasoningEffort) || unpinned) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("provider_account_candidate")
 		}
 	case *cp.ProviderAccountUsage:
 		if !validProviderUsage(item) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("provider_account_usage")
 		}
 	case *cp.ProviderAccount:
 		if item.Usage != nil && item.Usage.AccountVersion != item.Version || !validProviderAccountLifecycle(item) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("provider_account")
 		}
 	case *cp.Workflow:
 		if !validWorkflowLaunchReadiness(item) || !validWorkflowCardSummary(item.GetCardSummary()) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("workflow")
 		}
 	case *cp.ConfigOverlayVersion:
 		if len(item.Diagnostics) > 16 || (item.SchemaRevision != "" || item.SchemaDigest != "") && (!modelCatalogDigest.MatchString(item.SchemaDigest) || item.SchemaRevision != "cos_"+item.SchemaDigest) {
-			return errRuntimeCatalogView
+			return invalidRuntimeCatalogView("config_overlay")
 		}
 		for _, diagnostic := range item.Diagnostics {
 			if !validOverlayDiagnostic(diagnostic) {
-				return errRuntimeCatalogView
+				return invalidRuntimeCatalogView("config_overlay_diagnostic")
 			}
 		}
 	}

@@ -22,17 +22,59 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type streamOwnerFixture struct{ digest string }
+type streamOwnerFixture struct {
+	digest, project string
+	user            bool
+}
 
 func (owner *streamOwnerFixture) ResolveProofAuthority(_ context.Context, input platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
 	owner.digest = input.RequestDigestSHA256
+	owner.project = input.ProjectRef
 	return platformrepo.ProofAuthority{ActorID: "resolved-actor", OrganizationID: "resolved-org"}, nil
 }
 func (*streamOwnerFixture) ResolveServiceCredentialGeneration(context.Context, string) (uint64, error) {
 	return 7, nil
 }
-func (*streamOwnerFixture) VerifyToken(context.Context, string) (oidcverifier.Principal, error) {
-	return oidcverifier.Principal{}, errors.New("unexpected user verification")
+func (owner *streamOwnerFixture) VerifyToken(context.Context, string) (oidcverifier.Principal, error) {
+	if !owner.user {
+		return oidcverifier.Principal{}, errors.New("unexpected user verification")
+	}
+	return oidcverifier.Principal{Subject: "external-user", OrganizationID: "external-org", SessionRevision: 9}, nil
+}
+
+func TestServiceStreamBindsArtifactMetadataAndAcceptsBodyChunks(t *testing.T) {
+	const caller = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+	const target = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	method := cp.PlatformCommandService_UploadArtifact_FullMethodName
+	auth, err := serviceidentity.New(target, []serviceidentity.Binding{{CallerSPIFFEID: caller, FullMethod: method, OperationID: "artifact.upload", Permission: "artifact.upload", ActorMode: serviceidentity.UserActor, ProjectRequired: true}}, &streamRevocations{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &streamOwnerFixture{user: true}
+	resolver, err := rpcprincipal.New(owner, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri, _ := url.Parse(caller)
+	cert := &x509.Certificate{Raw: []byte("synthetic user certificate"), URIs: []*url.URL{uri}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Minute), ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}
+	ctx := peer.NewContext(t.Context(), &peer.Peer{AuthInfo: credentials.TLSInfo{State: tls.ConnectionState{HandshakeComplete: true, PeerCertificates: []*x509.Certificate{cert}, VerifiedChains: [][]*x509.Certificate{{cert}}}}})
+	ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("x-kodex-rpc-profile", "service-v1", "x-kodex-project-ref", "prj_abcdefghijk", "authorization", "Bearer user-credential"))
+	transport := &streamTransportFixture{ctx: ctx}
+	err = ServiceIdentityStream(auth, resolver)(nil, transport, &grpc.StreamServerInfo{FullMethod: method, IsClientStream: true}, func(_ any, stream grpc.ServerStream) error {
+		if err := stream.RecvMsg(&cp.UploadArtifactRequest{Part: &cp.UploadArtifactRequest_Metadata{Metadata: &cp.UploadArtifactMetadata{ProjectRef: "prj_abcdefghijk", FileName: "fixture.txt", SizeBytes: 1}}}); err != nil {
+			return err
+		}
+		if _, err := Principal(stream.Context(), method); err != nil || owner.project != "prj_abcdefghijk" || len(owner.digest) != 64 {
+			t.Fatal("upload metadata principal missing")
+		}
+		if err := stream.RecvMsg(&cp.UploadArtifactRequest{Part: &cp.UploadArtifactRequest_Chunk{Chunk: []byte("x")}}); err != nil {
+			return err
+		}
+		return stream.SendMsg(&cp.UploadArtifactResponse{})
+	})
+	if err != nil || transport.sent != 1 {
+		t.Fatalf("artifact upload stream failed: sent=%d err=%v", transport.sent, err)
+	}
 }
 
 type streamRevocations struct{ revoked bool }
