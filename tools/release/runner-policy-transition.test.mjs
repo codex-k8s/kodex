@@ -38,7 +38,8 @@ function fixtures() {
     ] }) } };
   return { policy, parameters, catalog };
 }
-function prepared() { const f = fixtures(); return preparePolicy(f.policy, f.parameters, f.catalog, newDigest); }
+function prepared() { const f = fixtures(); return preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined,
+  `pull.kodex.works/kodex/agent-runner@${newDigest}`); }
 function deployment(name) {
   const f = fixtures();
   const env = name === "control-plane" ? [
@@ -55,26 +56,31 @@ function deployment(name) {
 }
 
 test("new immutable policy preserves helper, contract, other catalog entries and predecessor", () => {
-  const f = fixtures(), before = structuredClone(f), bundle = preparePolicy(f.policy, f.parameters, f.catalog, newDigest);
+  const f = fixtures(), before = structuredClone(f), nextImage = `pull.kodex.works/kodex/agent-runner@${newDigest}`;
+  const bundle = preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined, nextImage);
   assert.deepEqual(f, before);
   assert.equal(bundle.resources[0].data.policyRevision, "5");
   assert.equal(bundle.resources[0].metadata.name, `${policyBase}-${bundle.resources[0].data.policySHA256.slice(0, 32)}`);
   assert.equal(policyDigest(bundle.resources[0].data), bundle.resources[0].data.policySHA256);
   assert.deepEqual(bundle.resources[1].spec, bundle.resources[0].data);
-  for (const key of ["nodeReadbackImage", "roleRuntimeContractRevision", "roleRuntimeContractSHA256", "orchestrationRevision"]) assert.equal(bundle.resources[0].data[key], f.policy.data[key]);
+  assert.equal(bundle.resources[0].data.nodeReadbackImage, nextImage);
+  for (const key of ["roleRuntimeContractRevision", "roleRuntimeContractSHA256", "orchestrationRevision"]) assert.equal(bundle.resources[0].data[key], f.policy.data[key]);
   const catalog = JSON.parse(bundle.resources[2].data["catalog.json"]), old = JSON.parse(f.catalog.data["catalog.json"]);
   assert.deepEqual(catalog.context, old.context); assert.deepEqual(catalog.environments[1], old.environments[1]);
   assert.equal(catalog.environments[0].baseImageDigest, newDigest); assert.equal(bundle.resources[2].immutable, true);
 });
 
 test("published runner can become the exact node readback image in a new policy revision", () => {
-  const f = fixtures(), image = `pull.kodex.test/kodex/agent-runner@${newDigest}`;
+  const f = fixtures(), image = `pull.kodex.works/kodex/agent-runner@${newDigest}`;
   const bundle = preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined, image);
   assert.equal(bundle.resources[0].data.nodeReadbackImage, image);
   assert.equal(bundle.resources[0].data.trustedRoleBaseDigest, newDigest);
   assert.deepEqual(bundle.resources[1].spec, bundle.resources[0].data);
   assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined,
-    `pull.kodex.test/kodex/agent-runner@${oldDigest}`), /NODE_READBACK/);
+    `pull.kodex.works/kodex/agent-runner@${oldDigest}`), /NODE_READBACK/);
+  assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, newDigest), /NODE_READBACK/);
+  assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined,
+    `registry.local.kodex/kodex/agent-runner@${newDigest}`), /NODE_READBACK/);
 });
 
 test("policy corruption, unexpected owner, same base and parameter drift fail closed", () => {
@@ -83,7 +89,8 @@ test("policy corruption, unexpected owner, same base and parameter drift fail cl
     (f) => { f.policy.metadata.labels["kodex.dev/owner-intent"] = "false"; },
     (f) => { f.parameters.spec.policyRevision = "7"; }, (f) => { f.policy.data.trustedRoleBaseDigest = newDigest; },
     (f) => { f.catalog.data["extra"] = "unexpected"; },
-  ]) { const f = fixtures(); mutate(f); assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, newDigest)); }
+  ]) { const f = fixtures(); mutate(f); assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined,
+    `pull.kodex.works/kodex/agent-runner@${newDigest}`)); }
   const f = fixtures(); assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, oldDigest));
   assert.throws(() => policyDigest({ foreign: "non-ascii: Я" }));
 });
@@ -228,7 +235,8 @@ const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(
     const environment = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_STATE: statePath, FIXTURE_CALLS: callsPath };
     const run = (args) => execFileSync(process.execPath, [cli, ...args, ...(issuerOnly?["--k3s-sudo"]:[])], { env: environment, stdio: "pipe" });
     const bundle = join(directory, "bundle.json");
-    run(["prepare", "--context", "default", "--runner-digest", issuerOnly?oldDigest:newDigest, ...(issuerOnly?["--authority-issuer-image",`registry.example.test/kodex/authority@sha256:${"c".repeat(64)}`]:[]), "--output", bundle]);
+    run(["prepare", "--context", "default", "--runner-digest", issuerOnly?oldDigest:newDigest,
+      ...(issuerOnly?["--authority-issuer-image",`registry.example.test/kodex/authority@sha256:${"c".repeat(64)}`]:["--node-readback-image",`pull.kodex.works/kodex/agent-runner@${newDigest}`]), "--output", bundle]);
     const common = ["--context", "default", "--bundle", bundle, "--reader-image", readerImage];
     const phases = ["maintenance", "reader", ...(issuerOnly?["schema","admission"]:[]), "resources", "binding", "control-plane", "role-image-builder", "controller", "resume", "open"];
     for (const phase of phases) {
@@ -265,7 +273,8 @@ test("prepared policy reaches all real renderer phases and missing metadata repr
   const missing = structuredClone(policy); delete missing.metadata.annotations;
   assert.notEqual(render(missing, "claim").status, 0);
   const bad = fixtures(); bad.policy.metadata.annotations["kodex.dev/admission-tools-sha256"] = oldDigest;
-  assert.throws(() => preparePolicy(bad.policy, bad.parameters, bad.catalog, newDigest), /ANNOTATION/);
+  assert.throws(() => preparePolicy(bad.policy, bad.parameters, bad.catalog, newDigest, undefined,
+    `pull.kodex.works/kodex/agent-runner@${newDigest}`), /ANNOTATION/);
 });
 
 test("metadata repair public CLI preserves payload, checks CAS, and retains UNKNOWN", () => {

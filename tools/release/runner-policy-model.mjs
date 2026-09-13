@@ -54,10 +54,12 @@ export function preparePolicy(policy, parameters, catalog, runnerDigest, authori
   requireValue(catalog.kind === "ConfigMap" && typeof catalog.data?.["catalog.json"] === "string" &&
     Object.keys(catalog.data).length === 1 && digestPattern.test(runnerDigest) &&
     (runnerDigest !== policy.data.trustedRoleBaseDigest || authorityIssuerImage !== undefined || nodeReadbackImage !== undefined), "NEW_RUNNER_AND_EXACT_CATALOG_REQUIRED");
+  const runnerChange = runnerDigest !== policy.data.trustedRoleBaseDigest;
+  requireValue(!runnerChange || nodeReadbackImage !== undefined, "NEW_RUNNER_NODE_READBACK_IMAGE_REQUIRED");
   const issuerChange = authorityIssuerImage !== undefined;
   requireValue(!issuerChange || /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/.test(authorityIssuerImage) && authorityIssuerImage !== (policy.data.authorityIssuerImage ?? policy.data.authorityImage), "NEW_EXACT_AUTHORITY_ISSUER_REQUIRED");
   const nodeReadbackChange = nodeReadbackImage !== undefined;
-  requireValue(!nodeReadbackChange || /^[a-z0-9][a-z0-9./:_-]*\/agent-runner@sha256:[a-f0-9]{64}$/.test(nodeReadbackImage) &&
+  requireValue(!nodeReadbackChange || /^pull\.kodex\.works\/kodex\/agent-runner@sha256:[a-f0-9]{64}$/.test(nodeReadbackImage) &&
     nodeReadbackImage.endsWith(`@${runnerDigest}`) && nodeReadbackImage !== policy.data.nodeReadbackImage,
   "NEW_EXACT_NODE_READBACK_IMAGE_REQUIRED");
   const revision = Number(policy.data.policyRevision);
