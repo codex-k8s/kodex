@@ -314,6 +314,23 @@ func TestExecuteLocalRejectsUnknownSelectionBeforeProcessOrCredentialAccess(t *t
 	}
 }
 
+func TestProviderStageErrorKeepsClassificationAndHidesDiagnostic(t *testing.T) {
+	secret := errors.New("provider response with secret diagnostic")
+	err := atProviderStage(providerStageTurnStart, secret)
+	if !errors.Is(err, secret) {
+		t.Fatal("wrapped failure lost its original classification")
+	}
+	if got := providerStageOf(err); got != providerStageTurnStart {
+		t.Fatalf("providerStageOf() = %q, want %q", got, providerStageTurnStart)
+	}
+	if strings.Contains(err.Error(), "secret") || err.Error() != "Codex provider execution stage failed" {
+		t.Fatalf("provider stage error exposed diagnostic: %q", err.Error())
+	}
+	if got := providerStageOf(errors.New("unclassified")); got != providerStageUnknown {
+		t.Fatalf("unclassified providerStageOf() = %q, want %q", got, providerStageUnknown)
+	}
+}
+
 func TestProtocolErrorReportsOnlyMethodAndCode(t *testing.T) {
 	t.Parallel()
 	err := protocolError("turn/start", json.RawMessage(`{"code":-32602,"message":"secret diagnostic"}`))
