@@ -48,6 +48,14 @@ export function sameRuntimeRoleBindingPlan(saved, current, context) {
   requireValue(fingerprint({ ...current, id: saved.id, context }) === fingerprint(saved), "PLAN_PRECONDITION_CHANGED");
 }
 
+export function runtimeRoleRunner(command, options, runtimeController, saved) {
+  if (command === "apply") {
+    requireValue(saved && typeof saved.runner === "string" && !options["--runner-reference"], "APPLY_ARGUMENTS_INVALID");
+    return saved.runner;
+  }
+  return options["--runner-reference"] ?? literal(runtimeController, "runtime-controller", "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE");
+}
+
 function privateJSON(path) {
   const stat = lstatSync(path);
   requireValue(stat.isFile() && stat.nlink === 1 && (stat.mode & 0o077) === 0 && stat.size < 8 << 20, "PRIVATE_INPUT_REQUIRED");
@@ -71,19 +79,23 @@ function main(args) {
   const get = (kind, name) => JSON.parse(kubectl(["-n", namespace, "get", kind, name, "-o", "json"]));
   const controller = get("deployment", "image-admission-controller"), runtimeController = get("deployment", "runtime-controller");
   const policyName = literal(controller, "image-admission-controller", "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP");
-  const targetRunner = options["--runner-reference"] ?? literal(runtimeController, "runtime-controller", "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE");
-  const current = planRuntimeRoleBindingForRunner(controller, targetRunner, get("configmap", policyName),
-    get("validatingadmissionpolicybinding", "runtime-role-pod-exact-secret-projection"));
   if (command === "plan") {
+    const targetRunner = runtimeRoleRunner(command, options, runtimeController);
+    const current = planRuntimeRoleBindingForRunner(controller, targetRunner, get("configmap", policyName),
+      get("validatingadmissionpolicybinding", "runtime-role-pod-exact-secret-projection"));
     requireValue(options["--output"] && !options["--confirm"] && current.changed &&
       Object.keys(options).every((key) => ["--context", "--output", "--runner-reference", "--k3s-sudo"].includes(key)), "PLAN_ARGUMENTS_INVALID");
     writeFileSync(options["--output"], `${JSON.stringify({ ...current, context })}\n`, { flag: "wx", mode: 0o600 });
     process.stdout.write(`${JSON.stringify({ status: "PLANNED", id: current.id, policyName: current.policyName })}\n`);
     return;
   }
-  requireValue(options["--plan"] && options["--evidence"] && options["--confirm"] === "APPLY-STAGING-RUNTIME-BINDING", "APPLY_ARGUMENTS_INVALID");
+  requireValue(options["--plan"] && options["--evidence"] && options["--confirm"] === "APPLY-STAGING-RUNTIME-BINDING" &&
+    !options["--runner-reference"] && Object.keys(options).every((key) =>
+      ["--context", "--plan", "--evidence", "--confirm", "--k3s-sudo"].includes(key)), "APPLY_ARGUMENTS_INVALID");
   const saved = privateJSON(options["--plan"]);
   requireValue(saved.context === context, "PLAN_PRECONDITION_CHANGED");
+  const current = planRuntimeRoleBindingForRunner(controller, runtimeRoleRunner(command, options, runtimeController, saved), get("configmap", policyName),
+    get("validatingadmissionpolicybinding", "runtime-role-pod-exact-secret-projection"));
   sameRuntimeRoleBindingPlan(saved, current, context);
   const fd = openSync(options["--evidence"], "wx", 0o600);
   try {

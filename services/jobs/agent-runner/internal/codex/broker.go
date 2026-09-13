@@ -283,7 +283,7 @@ func ServeProviderBroker(ctx context.Context) error {
 			return errors.New("accept isolated Codex provider request")
 		}
 		if err := serveBrokerRequest(ctx, connection); err != nil {
-			log.Printf("Codex provider request failed: %v", err)
+			log.Printf("Codex provider request failed at safe stage: %s", providerStageOf(err))
 			_ = connection.Close()
 			continue
 		}
@@ -311,61 +311,61 @@ func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) e
 func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	unixConnection, ok := connection.(*net.UnixConn)
 	if !ok {
-		return errors.New("provider broker transport is invalid")
+		return atProviderStage(providerStageBrokerRequest, errors.New("provider broker transport is invalid"))
 	}
 	raw, err := unixConnection.SyscallConn()
 	if err != nil {
-		return errors.New("inspect provider broker peer")
+		return atProviderStage(providerStageBrokerRequest, errors.New("inspect provider broker peer"))
 	}
 	var credential *unix.Ucred
 	var controlErr error
 	if err := raw.Control(func(fd uintptr) {
 		credential, controlErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
 	}); err != nil || controlErr != nil || credential == nil || credential.Uid != 10001 {
-		return errors.New("provider broker peer is unauthorized")
+		return atProviderStage(providerStageBrokerRequest, errors.New("provider broker peer is unauthorized"))
 	}
 	decoder := json.NewDecoder(bufio.NewReaderSize(&boundedReader{reader: connection, remaining: maximumBrokerBytes}, 64<<10))
 	decoder.DisallowUnknownFields()
 	var request brokerRequest
 	if decoder.Decode(&request) != nil || !decodeEOF(decoder) || request.Input.Validate() != nil ||
 		len(request.Prompt) == 0 || len(request.Prompt) > 1<<20 {
-		return errors.New("provider broker request is invalid")
+		return atProviderStage(providerStageBrokerRequest, errors.New("provider broker request is invalid"))
 	}
 	if err := ValidateRuntimeProfile(request.Input); err != nil {
-		return writeProviderBrokerFailure(connection, err)
+		return writeProviderBrokerFailureAtStage(connection, providerStageSelection, err)
 	}
 	snapshot, err := request.Input.RequiredContextSnapshot(time.Now())
 	if err != nil || verifyProviderContext(request.Input, snapshot) != nil {
-		return writeProviderBrokerFailure(connection, ErrRuntimeProfile)
+		return writeProviderBrokerFailureAtStage(connection, providerStageContext, ErrRuntimeProfile)
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
 	defer cancelContext()
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
-		return writeProviderBrokerFailure(connection, err)
+		return writeProviderBrokerFailureAtStage(connection, providerStageAuthRead, err)
 	}
 	defer clear(auth)
 	expectedDigest, err := pinnedProviderDigest(request.Input)
 	if err != nil {
-		return err
+		return writeProviderBrokerFailureAtStage(connection, providerStageAccountPin, err)
 	}
 	digest := sha256.Sum256(auth)
 	if hex.EncodeToString(digest[:]) != expectedDigest {
-		return errors.New("provider broker account pin mismatch")
+		return writeProviderBrokerFailureAtStage(connection, providerStageAccountPin, errors.New("provider broker account pin mismatch"))
 	}
 	if request.MCPSocket != "/run/kodex/provider/mcp-authority.sock" || len(request.MCPProxyToken) != 64 {
-		return errors.New("provider broker MCP binding is invalid")
+		return writeProviderBrokerFailureAtStage(connection, providerStageMCPBinding, errors.New("provider broker MCP binding is invalid"))
 	}
 	if _, err := hex.DecodeString(request.MCPProxyToken); err != nil {
-		return errors.New("provider broker MCP capability is invalid")
+		return writeProviderBrokerFailureAtStage(connection, providerStageMCPBinding, errors.New("provider broker MCP capability is invalid"))
 	}
 	bridge, err := startProviderMCPBridge(ctx, request.MCPSocket, request.MCPProxyToken, request.Input)
 	if err != nil {
-		return writeProviderBrokerFailure(connection, err)
+		return writeProviderBrokerFailureAtStage(connection, providerStageMCPBridge, err)
 	}
 	defer bridge.Close()
 	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
-		return writeProviderBrokerFailure(connection, err)
+		return writeProviderBrokerFailureAtStage(connection, providerStageHomePrepare, err)
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, executeLocal, credentialrelay.Commit)
 	if err != nil {
@@ -380,6 +380,11 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 
 func writeProviderBrokerFailure(connection io.Writer, err error) error {
 	return writeProviderBrokerResultFailure(connection, Result{}, err)
+}
+
+func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecutionStage, err error) error {
+	log.Printf("Codex provider request failed at safe stage: %s", stage)
+	return writeProviderBrokerFailure(connection, err)
 }
 
 // Ошибка не подтверждает итог или credential effect. Измеренный расход и

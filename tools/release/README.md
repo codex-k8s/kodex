@@ -174,7 +174,9 @@ node tools/release/scoped-release.mjs recovery-apply \
   окружении используются исполняемые образы приложений с точным digest.
 - После отдельной публикации нового trusted runner сначала
   `runtime-role-policy-binding.mjs plan --runner-reference <exact-ref>`
-  заранее связывает runtime admission с новой активной policy. Затем команда
+  заранее связывает runtime admission с новой активной policy. `apply` читает
+  закреплённый runner из приватного plan и не требует повторять reference.
+  Затем команда
   `default-runner-transition.mjs` согласованно переключает exact default image
   у `runtime-controller` и `control-plane`. `plan` закрепляет UID,
   resourceVersion и digest спецификаций, `apply` меняет только два literal env,
