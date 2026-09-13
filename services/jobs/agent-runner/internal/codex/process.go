@@ -957,6 +957,7 @@ var suppressedNotificationMethods = []string{
 	"item/plan/delta", "command/exec/outputDelta", "process/outputDelta", "process/exited",
 	"item/commandExecution/outputDelta", "item/commandExecution/terminalInteraction", "item/fileChange/outputDelta",
 	"item/fileChange/patchUpdated", "serverRequest/resolved", "item/mcpToolCall/progress", "account/rateLimits/updated",
+	"rawResponseItem/completed", "rawResponse/completed",
 	"app/list/updated", "remoteControl/status/changed", "externalAgentConfig/import/progress",
 	"externalAgentConfig/import/completed", "fs/changed", "item/reasoning/summaryTextDelta",
 	"item/reasoning/summaryPartAdded", "item/reasoning/textDelta", "thread/compacted", "model/rerouted",
