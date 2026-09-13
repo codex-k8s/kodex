@@ -69,4 +69,23 @@ describe("readWithRetry", () => {
     await rejection;
     expect(request).toHaveBeenCalledTimes(3);
   });
+
+  it("прерывает ожидание следующего чтения вместе с owner scope", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const request = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const result = readWithRetry(request, [0, 1_500], controller.signal);
+    const rejection = expect(result).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    await vi.runAllTimersAsync();
+
+    await rejection;
+    expect(request).toHaveBeenCalledOnce();
+  });
 });

@@ -157,6 +157,31 @@ class FakeXMLHttpRequest {
 }
 
 describe("loadArtifactPage", () => {
+  it("повторяет временно недоступное безопасное чтение страницы", async () => {
+    vi.useFakeTimers();
+    const expected = artifact("artifact_recovered");
+    listArtifactsMock
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValue({
+        data: { items: [expected], total: 1 },
+        response: new Response(null, { status: 200 }),
+      });
+
+    const result = loadArtifactPage(
+      "project_sales",
+      { query: "", signal: new AbortController().signal },
+      { allSources: true },
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(result).resolves.toMatchObject({
+      items: [{ artifact: expected }],
+      total: 1,
+    });
+    expect(listArtifactsMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it("загружает нефильтрованную корзину одним серверным cursor-запросом", async () => {
     const deleted = artifact("artifact_deleted", {
       lifecycleState: "DELETED",

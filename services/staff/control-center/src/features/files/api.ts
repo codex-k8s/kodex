@@ -13,6 +13,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, unwrap, type AppProblem } from "@/shared/api/problem";
+import { readWithRetry } from "@/shared/api/read-retry";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { currentLocale } from "@/shared/locale";
 import type {
@@ -195,20 +196,25 @@ export async function loadArtifactPage(
     : [...new Set(filters.sourceKinds)];
   if (sourceKinds?.length === 0)
     return { items: [], total: 0, nextCursor: null };
-  const result = await unwrap(
-    listArtifacts({
-      path: { projectRef },
-      query: {
-        lifecycleState: filters.lifecycleState ?? "ACTIVE",
-        pageSize: artifactPageSize,
-        ...(sourceKinds ? { sourceKinds } : {}),
-        ...(filters.type ? { type: filters.type } : {}),
-        ...(filters.scanState ? { scanState: filters.scanState } : {}),
-        ...(query ? { query } : {}),
-        ...(request.cursor ? { pageToken: request.cursor } : {}),
-      },
-      signal: requestSignal(request.signal),
-    }),
+  const result = await readWithRetry(
+    () =>
+      unwrap(
+        listArtifacts({
+          path: { projectRef },
+          query: {
+            lifecycleState: filters.lifecycleState ?? "ACTIVE",
+            pageSize: artifactPageSize,
+            ...(sourceKinds ? { sourceKinds } : {}),
+            ...(filters.type ? { type: filters.type } : {}),
+            ...(filters.scanState ? { scanState: filters.scanState } : {}),
+            ...(query ? { query } : {}),
+            ...(request.cursor ? { pageToken: request.cursor } : {}),
+          },
+          signal: requestSignal(request.signal),
+        }),
+      ),
+    undefined,
+    request.signal,
   );
   request.signal.throwIfAborted();
   if (
