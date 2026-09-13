@@ -60,6 +60,9 @@ run_migration() {
   run_migration up
   run_migration status >/dev/null
   run_migration up
+  retention_reference_count=$(psql "$runtime_dsn" --no-password -X -qAt -v ON_ERROR_STOP=1 \
+    -c "SELECT control_plane.skill_artifact_reference_count('00000000-0000-4000-8000-000000000001'::uuid,'art_component',1,'sha256:' || repeat('0',64))")
+  [[ "$retention_reference_count" == "0" ]] || fail 'artifact retention trigger dependency is unavailable'
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -v -count=1 \
       ./internal/repository/postgres/platform -run "$test_pattern"
