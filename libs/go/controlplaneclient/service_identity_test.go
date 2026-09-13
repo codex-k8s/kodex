@@ -52,3 +52,28 @@ func TestServiceIdentityOrdinaryReadinessDoesNotRequireLegacyIssuer(t *testing.T
 		t.Fatalf("ordinary service readiness depends on legacy issuer: %v", err)
 	}
 }
+
+func TestServiceProjectOperationsAcceptsRegisteredProofOperation(t *testing.T) {
+	projects, err := serviceProjectOperations(
+		operationSet{"/controlplane.v1.Runtime/Claim": "runtime.claim"},
+		map[string]string{"runtime.credentials.materialize": "/secretbroker.v1.Runtime/Materialize"},
+		map[string]struct{}{"runtime.credentials.materialize": {}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := projects["runtime.credentials.materialize"]; !ok {
+		t.Fatal("registered proof operation is missing")
+	}
+}
+
+func TestServiceProjectOperationsRejectsUnknownOperation(t *testing.T) {
+	_, err := serviceProjectOperations(
+		operationSet{"/controlplane.v1.Runtime/Claim": "runtime.claim"},
+		map[string]string{"runtime.credentials.materialize": "/secretbroker.v1.Runtime/Materialize"},
+		map[string]struct{}{"runtime.credentials.unknown": {}},
+	)
+	if err == nil || err.Error() != "service project operation is not registered" {
+		t.Fatalf("unknown operation must be rejected: %v", err)
+	}
+}
