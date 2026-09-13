@@ -26,6 +26,7 @@ import type {
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { readWithRetry } from "@/shared/api/read-retry";
 
 export type AccessLoadKey =
   | "permissions"
@@ -123,7 +124,7 @@ export const useAccessStore = defineStore("access", () => {
     loading[key] = true;
     problems[key] = undefined;
     try {
-      const value = await request();
+      const value = await readWithRetry(request);
       if (sequence[key] === current) apply(value);
     } catch (error) {
       if (sequence[key] === current) problems[key] = asProblem(error);

@@ -311,6 +311,18 @@ describe("BFF session lifecycle", () => {
     expect(session.phase).toBe("unauthenticated");
     expect(session.connectionIdentity).toBe("");
   });
+  test("переводит неизвестный исход logout в один bounded reauth без unhandled rejection", async () => {
+    const session = useSessionStore();
+    await session.probe();
+    api.deleteOwnerSession.mockRejectedValueOnce(
+      new TypeError("Failed to fetch"),
+    );
+
+    await expect(session.logout()).resolves.toBeUndefined();
+
+    expect(session.phase).toBe("error");
+    expect(session.problem).toBeDefined();
+  });
   test("объединяет redirect и передаёт браузеру только authorization URL", async () => {
     let complete!: (value: { data: { authorizationUrl: string } }) => void;
     api.beginOwnerAuthorization.mockReturnValueOnce(

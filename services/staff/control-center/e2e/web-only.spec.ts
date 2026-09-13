@@ -307,6 +307,8 @@ interface ExercisedAttachment {
   readonly ref: string;
 }
 
+const capturedArtifactUploadBodies = new WeakMap<Response, Promise<unknown>>();
+
 async function exerciseAttachmentComposer(
   page: Page,
   composer: Locator,
@@ -436,12 +438,14 @@ async function exerciseAttachmentComposer(
   const responseStatus = response.status();
   if (responseStatus !== 201)
     throw new Error(await httpFailureDiagnostic(response));
-  const artifact = (await response.json()) as { ref?: string };
-  expect(artifact.ref).toMatch(/^art_[A-Za-z0-9_-]+$/);
   const finalItem = composer
     .locator(".attachment-composer__item")
     .filter({ hasText: finalName });
   await expect(finalItem.locator(".attachment-composer__ready")).toBeVisible();
+  const artifact = (await capturedArtifactUploadBodies.get(response)) as {
+    ref?: string;
+  };
+  expect(artifact.ref).toMatch(/^art_[A-Za-z0-9_-]+$/);
   return { fileName: finalName, marker, ref: artifact.ref ?? "" };
 }
 
@@ -508,6 +512,8 @@ function waitForArtifactUploadOutcome(
     };
     const onResponse = (response: Response): void => {
       if (!matches(response.request())) return;
+      if (response.status() === 201)
+        capturedArtifactUploadBodies.set(response, response.json());
       cleanup();
       resolve(response);
     };
@@ -1405,9 +1411,11 @@ test.describe("web-only fresh installation", () => {
       };
     };
     let overlayState = await readOverlayState();
+    let expectedRuntimeOverlay = overlayState.publishedContent;
     if (overlayState.publishedContent.trimEnd() !== runtimeOverlay) {
       if (overlayState.draftContent !== runtimeOverlay) {
         await overlayEditor.fill(runtimeOverlay);
+        expectedRuntimeOverlay = await overlayEditor.inputValue();
         const draftCreation = page.waitForResponse(
           (response) =>
             response.request().method() === "POST" &&
@@ -1419,7 +1427,7 @@ test.describe("web-only fresh installation", () => {
           .click();
         expect((await draftCreation).status()).toBe(201);
         overlayState = await readOverlayState();
-      }
+      } else expectedRuntimeOverlay = overlayState.draftContent;
       if (overlayState.draftState !== "VALID") {
         const validation = page.waitForResponse(
           (response) =>
@@ -1448,7 +1456,7 @@ test.describe("web-only fresh installation", () => {
     const effectiveConfig = runtimePanel.getByRole("textbox", {
       name: "Итоговый effective config",
     });
-    const effortLine = runtimeOverlay
+    const effortLine = expectedRuntimeOverlay
       .split("\n")
       .find((line) => line.startsWith("model_reasoning_effort ="));
     if (effortLine) await expect(effectiveConfig).toContainText(effortLine);
@@ -1538,7 +1546,7 @@ test.describe("web-only fresh installation", () => {
     expect(readback.environment.currentVersion.revision).toBeGreaterThan(0);
     expect(readback.publishedOverlay.state).toBe("PUBLISHED");
     expect(readback.publishedOverlay.content.trimEnd()).toBe(
-      runtimeOverlay.trimEnd(),
+      expectedRuntimeOverlay.trimEnd(),
     );
     if (effortLine) expect(readback.safeEffectiveConfig).toContain(effortLine);
     else
@@ -2176,7 +2184,18 @@ test.describe("web-only fresh installation", () => {
     await gotoWithRetry(page, `/projects/${projectRef}/files`);
     await expectPageHeading(page, "Файлы и знания");
     const search = page.getByRole("searchbox", { name: "Найти файл" });
-    await search.clear();
+    const differentQuery = `${uploadedFileName}-missing`;
+    const differentSearchResponse = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === "GET" &&
+        url.pathname === `/api/v1/projects/${projectRef}/artifacts` &&
+        url.searchParams.get("sourceKind") === "CONTROL_CENTER" &&
+        url.searchParams.get("query") === differentQuery
+      );
+    });
+    await search.fill(differentQuery);
+    expect((await differentSearchResponse).status()).toBe(200);
     const searchResponse = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return (

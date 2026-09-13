@@ -10,6 +10,7 @@ const fetchPlatformMemberships = vi.hoisted(() => vi.fn());
 const fetchProjectMemberships = vi.hoisted(() => vi.fn());
 const fetchAccessRoles = vi.hoisted(() => vi.fn());
 const fetchAccessRoleVersions = vi.hoisted(() => vi.fn());
+const fetchPermissionRegistry = vi.hoisted(() => vi.fn());
 const addAccessRole = vi.hoisted(() => vi.fn());
 const addAccessBinding = vi.hoisted(() => vi.fn());
 
@@ -21,6 +22,7 @@ vi.mock("@/features/access/api", async (importOriginal) => ({
   fetchProjectMemberships,
   fetchAccessRoles,
   fetchAccessRoleVersions,
+  fetchPermissionRegistry,
   addAccessRole,
   addAccessBinding,
 }));
@@ -104,8 +106,35 @@ describe("access store", () => {
     fetchProjectMemberships.mockReset();
     fetchAccessRoles.mockReset();
     fetchAccessRoleVersions.mockReset();
+    fetchPermissionRegistry.mockReset();
     addAccessRole.mockReset();
     addAccessBinding.mockReset();
+  });
+
+  it("повторяет временно недоступное чтение реестра полномочий", async () => {
+    const registry = {
+      items: [
+        {
+          key: "agent.read",
+          nameKey: "access.permissionsRegistry.agent.read.name",
+          descriptionKey: "access.permissionsRegistry.agent.read.description",
+          risk: "READ",
+          allowedScopes: ["RESOURCE_INSTANCE"],
+          resourceKinds: ["AGENT"],
+          ownerConditionSupported: false,
+        },
+      ],
+    };
+    fetchPermissionRegistry
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(registry);
+    const store = useAccessStore();
+
+    await store.loadPermissions();
+
+    expect(fetchPermissionRegistry).toHaveBeenCalledTimes(2);
+    expect(store.permissions).toEqual(registry.items);
+    expect(store.problems.permissions).toBeUndefined();
   });
 
   it("не позволяет старому поиску участников заменить новый", async () => {
