@@ -44,6 +44,53 @@ var (
 	errAppServerStreamDeadline     = errors.New("Codex app-server stream shutdown deadline exceeded")
 )
 
+type providerExecutionStage string
+
+const (
+	providerStageSelection      providerExecutionStage = "SELECTION"
+	providerStageContext        providerExecutionStage = "CONTEXT"
+	providerStageAccountPin     providerExecutionStage = "ACCOUNT_PIN"
+	providerStageArchiveRestore providerExecutionStage = "ARCHIVE_RESTORE"
+	providerStageProcessStart   providerExecutionStage = "PROCESS_START"
+	providerStageInitialize     providerExecutionStage = "INITIALIZE"
+	providerStageSkills         providerExecutionStage = "SKILLS"
+	providerStageAccountRead    providerExecutionStage = "ACCOUNT_READ"
+	providerStageThreadStart    providerExecutionStage = "THREAD_START"
+	providerStageMCPReadiness   providerExecutionStage = "MCP_READINESS"
+	providerStageUsageBaseline  providerExecutionStage = "USAGE_BASELINE"
+	providerStageTurnParameters providerExecutionStage = "TURN_PARAMETERS"
+	providerStageTurnStart      providerExecutionStage = "TURN_START"
+	providerStageTerminalWait   providerExecutionStage = "TERMINAL_WAIT"
+	providerStageThreadRead     providerExecutionStage = "THREAD_READ"
+	providerStageProcessStop    providerExecutionStage = "PROCESS_STOP"
+	providerStageTerminalResult providerExecutionStage = "TERMINAL_RESULT"
+	providerStageArchiveCapture providerExecutionStage = "ARCHIVE_CAPTURE"
+	providerStageUnknown        providerExecutionStage = "UNKNOWN"
+)
+
+type providerStageError struct {
+	stage providerExecutionStage
+	err   error
+}
+
+func (failure *providerStageError) Error() string { return "Codex provider execution stage failed" }
+func (failure *providerStageError) Unwrap() error { return failure.err }
+
+func atProviderStage(stage providerExecutionStage, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &providerStageError{stage: stage, err: err}
+}
+
+func providerStageOf(err error) providerExecutionStage {
+	var failure *providerStageError
+	if errors.As(err, &failure) {
+		return failure.stage
+	}
+	return providerStageUnknown
+}
+
 type streamEvent struct {
 	message wireMessage
 	err     error
@@ -71,26 +118,26 @@ type appServer struct {
 
 func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string) (result Result, resultErr error) {
 	if err := validateRuntimeSelection(input); err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageSelection, err)
 	}
 	snapshot, err := input.RequiredContextSnapshot(time.Now())
 	if err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageContext, err)
 	}
 	if err := verifyProviderContext(input, snapshot); err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageContext, err)
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
 	defer cancelContext()
 	if err := verifyAccountPin(input); err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageAccountPin, err)
 	}
 	if err := verifyRestoreArchive(input); err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageArchiveRestore, err)
 	}
 	server, err := startAppServer(input, mcpProxyToken)
 	if err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageProcessStart, err)
 	}
 	state := newProtocolState(input.CodexSessionID)
 	defer func() {
@@ -106,20 +153,20 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	}
 	raw, err := server.call(ctx, state, "initialize", initialize)
 	if err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageInitialize, server.abort(ctx, state, err))
 	}
 	if err := state.initialize(raw, input.CodexHome); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageInitialize, server.abort(ctx, state, err))
 	}
 	if err := server.notifyInitialized(); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageInitialize, server.abort(ctx, state, err))
 	}
 	if err := server.configureContextSkills(ctx, state, input, snapshot); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageSkills, server.abort(ctx, state, err))
 	}
 	raw, err = server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false})
 	if err := classifyAccountReadResponse(raw, err); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageAccountRead, server.abort(ctx, state, err))
 	}
 	threadParams := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": input.WorkspaceRoot,
 		"model": input.Model}
@@ -133,48 +180,48 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	}
 	raw, err = server.call(ctx, state, method, threadParams)
 	if err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageThreadStart, server.abort(ctx, state, err))
 	}
 	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageThreadStart, server.abort(ctx, state, err))
 	}
 	if err := server.waitRequiredMCP(ctx, state, RequiredMCPToolNames(input)); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageMCPReadiness, server.abort(ctx, state, err))
 	}
 	if err := state.captureUsageBaseline(); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageUsageBaseline, server.abort(ctx, state, err))
 	}
 	turnParams, err := turnStartParams(input, state.threadID, prompt)
 	if err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageTurnParameters, server.abort(ctx, state, err))
 	}
 	raw, err = server.call(ctx, state, "turn/start", turnParams)
 	if err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageTurnStart, server.abort(ctx, state, err))
 	}
 	if err := state.bindTurn(raw); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageTurnStart, server.abort(ctx, state, err))
 	}
 	if err := server.waitTerminal(ctx, state); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageTerminalWait, server.abort(ctx, state, err))
 	}
 	raw, err = server.call(ctx, state, "thread/read", map[string]any{"threadId": state.threadID, "includeTurns": false})
 	if err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageThreadRead, server.abort(ctx, state, err))
 	}
 	if err := state.bindThreadRead(raw); err != nil {
-		return Result{}, server.abort(ctx, state, err)
+		return Result{}, atProviderStage(providerStageThreadRead, server.abort(ctx, state, err))
 	}
 	if err := server.stop(state); err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageProcessStop, err)
 	}
 	result, err = state.terminalResult()
 	if err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageTerminalResult, err)
 	}
 	archivePath, relativePath, digest, sizeBytes, err := captureRollout(input, state.threadPath)
 	if err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageArchiveCapture, err)
 	}
 	result.ArchivePath = archivePath
 	result.ArchiveRelativePath = relativePath

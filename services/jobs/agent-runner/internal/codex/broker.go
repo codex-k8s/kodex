@@ -369,6 +369,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, executeLocal, credentialrelay.Commit)
 	if err != nil {
+		log.Printf("Codex provider request failed at safe stage: %s", providerStageOf(err))
 		return writeProviderBrokerResultFailure(connection, result, err)
 	}
 	if result.Outcome != "SUCCEEDED" {
