@@ -66,7 +66,10 @@ WITH policy AS (
            @environment_rbac_digest, @environment_digest, @created_by::uuid
     FROM environment
     JOIN current_environment_version ON true
-    WHERE (environment.current_version_id IS NULL OR current_environment_version.role_image_artifact_id IS NULL)
+    WHERE (
+        (@project_id = '' AND (environment.current_version_id IS NULL OR current_environment_version.role_image_artifact_id IS NULL))
+        OR (@project_id <> '' AND current_environment_version.role_image_artifact_id IS DISTINCT FROM NULLIF(@environment_image_artifact_id, '')::uuid)
+      )
       AND (@project_id = '' OR NULLIF(@environment_image_artifact_id, '') IS NOT NULL)
     RETURNING id, environment_set_id
 ), binding AS (
@@ -93,7 +96,8 @@ WITH policy AS (
 )
 SELECT updated_agent.id::text,
        environment.id::text,
-       COALESCE(inserted_environment_version.id, environment.current_version_id)::text
+       COALESCE(inserted_environment_version.id, environment.current_version_id)::text,
+       COALESCE(environment.current_version_id::text, '')
 FROM updated_agent
 JOIN environment ON true
 LEFT JOIN inserted_environment_version

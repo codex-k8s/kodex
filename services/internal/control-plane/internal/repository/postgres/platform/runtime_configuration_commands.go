@@ -45,7 +45,7 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	environmentRef, _ := newRef("renv")
 	environmentVersionRef, _ := newRef("renvv")
 	bindingRef, _ := newRef("aenv")
-	var updatedAgentID, runtimeEnvironmentID, runtimeEnvironmentVersionID string
+	var updatedAgentID, runtimeEnvironmentID, runtimeEnvironmentVersionID, currentRuntimeEnvironmentVersionID string
 	candidates, err := captureRuntimeCatalogPins(ctx, tx, scope{organizationID: organizationID}, runtime.Provider, runtime.Model, nil)
 	if errors.Is(err, errs.ErrConflict) {
 		candidates, err = bootstrapUnpinnedCatalogCandidates(ctx, tx, organizationID, runtime.Provider)
@@ -71,14 +71,17 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 		"environment_network_policy": asJSON(policy.Network), "environment_kubernetes_access_profile": asJSON(policy.KubernetesAccess),
 		"environment_resources_digest": policy.ResourcesDigest, "environment_volumes_digest": policy.VolumesDigest,
 		"environment_network_digest": policy.NetworkDigest, "environment_rbac_digest": policy.RBACDigest,
-	}).Scan(&updatedAgentID, &runtimeEnvironmentID, &runtimeEnvironmentVersionID)
+	}).Scan(&updatedAgentID, &runtimeEnvironmentID, &runtimeEnvironmentVersionID, &currentRuntimeEnvironmentVersionID)
 	if err != nil {
 		return fmt.Errorf("bootstrap agent runtime configuration: %w", err)
 	}
 	if updatedAgentID != agentID {
 		return errors.New("bootstrap agent runtime configuration did not update the agent")
 	}
-	activation, err := tx.Exec(ctx, queryRuntimeConfigurationActivateEnvironment, runtimeEnvironmentID, runtimeEnvironmentVersionID)
+	activation, err := tx.Exec(ctx, queryRuntimeConfigurationAdvanceBootstrapEnvironment, pgx.StrictNamedArgs{
+		"environment_id": runtimeEnvironmentID, "current_version_id": currentRuntimeEnvironmentVersionID,
+		"next_version_id": runtimeEnvironmentVersionID,
+	})
 	if err != nil || activation.RowsAffected() != 1 {
 		return errors.New("activate bootstrap runtime environment version")
 	}
@@ -100,6 +103,8 @@ func (repository *Repository) ensureBootstrapRuntimeEnvironmentImage(
 	image, err := scanBootstrapRuntimeEnvironmentImage(tx.QueryRow(ctx,
 		queryRuntimeConfigurationResolveBootstrapImage, pgx.StrictNamedArgs{
 			"organization_id": organizationID, "project_id": projectID,
+			"default_image_reference": repository.roleImages.DefaultImageReference,
+			"default_image_digest":    repository.roleImages.DefaultImageDigest,
 		}))
 	if err == nil {
 		return image.id, image.image, emptyTools, nil
