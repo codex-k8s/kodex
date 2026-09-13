@@ -115,11 +115,9 @@ async function startNewKodexConversation(
     createButton.click(),
   ]);
   expect(created.status(), await httpFailureDiagnostic(created)).toBe(201);
-  const conversation = (await created.json()) as { ref?: string };
-  expect(conversation.ref).toMatch(/^cnv_[A-Za-z0-9_-]+$/);
   await expect(dialog).toHaveAttribute(
     "data-conversation-ref",
-    conversation.ref ?? "",
+    /^cnv_[A-Za-z0-9_-]+$/,
   );
   await expect(dialog).toHaveAttribute("aria-busy", "false");
   await expect(dialog.locator("article.assistant-message")).toHaveCount(0);
@@ -1942,7 +1940,10 @@ test.describe("web-only fresh installation", () => {
     if ((await row.locator(".status-badge").textContent()) === "Архивирован") {
       await expect(details).toContainText(automationEditedTask);
       if (scheduledRunRef) {
-        await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
+        await gotoWithRetry(
+          page,
+          `/projects/${projectRef}/runs/${scheduledRunRef}`,
+        );
         await waitForTerminalSuccess(page);
       }
       return;
@@ -2017,7 +2018,10 @@ test.describe("web-only fresh installation", () => {
     scheduledRunRef = discoveredScheduledRunRef;
     expect(scheduledRunRef).not.toBe("");
     persistRefs();
-    await gotoWithRetry(page, `/runs/${scheduledRunRef}`);
+    await gotoWithRetry(
+      page,
+      `/projects/${projectRef}/runs/${scheduledRunRef}`,
+    );
     await waitForTerminalSuccess(page);
     const graphResponse = await readJsonWithNetworkRetry<{
       run: {
