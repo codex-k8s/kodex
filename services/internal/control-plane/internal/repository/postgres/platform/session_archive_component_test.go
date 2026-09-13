@@ -159,11 +159,12 @@ func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *
 	if lifecycle != "DELETED" || storageState != "LIVE" {
 		t.Fatalf("unexpected final session archive lifecycle: archive=%s storage=%s", lifecycle, storageState)
 	}
-	testMissingSessionPVCTerminatesSnapshotLifecycle(t, ctx, service, pool, claimPrincipal, failPrincipal, launched.Run.SessionRef)
+	testFailedSessionSnapshotTerminatesLifecycle(t, ctx, service, pool, claimPrincipal, failPrincipal, launched.Run.SessionRef, "SESSION_ARCHIVE_PVC_MISSING")
+	testFailedSessionSnapshotTerminatesLifecycle(t, ctx, service, pool, claimPrincipal, failPrincipal, launched.Run.SessionRef, "SESSION_ARCHIVE_WORKER_FAILED")
 }
 
-func testMissingSessionPVCTerminatesSnapshotLifecycle(t *testing.T, ctx context.Context, service *platformservice.Service,
-	pool *pgxpool.Pool, claimPrincipal, failPrincipal value.Principal, sessionRef string,
+func testFailedSessionSnapshotTerminatesLifecycle(t *testing.T, ctx context.Context, service *platformservice.Service,
+	pool *pgxpool.Pool, claimPrincipal, failPrincipal value.Principal, sessionRef, failureCode string,
 ) {
 	t.Helper()
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.session_storage
@@ -187,10 +188,10 @@ func testMissingSessionPVCTerminatesSnapshotLifecycle(t *testing.T, ctx context.
 			t.Fatalf("missing PVC retry changed task identity: got=%s want=%s", stringMap(snapshot, "taskRef"), taskRef)
 		}
 		result, err := service.Execute(ctx, command.Command{Kind: command.FailSessionArchiveTask, Principal: failPrincipal,
-			Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("session-archive-missing-pvc-%d", attempt)},
+			Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("session-archive-failure-%s-%d", failureCode, attempt)},
 			Payload: func() command.SessionArchiveTaskInput {
 				payload := claimedSessionArchivePayload(snapshot)
-				payload.SafeErrorCode = "SESSION_ARCHIVE_PVC_MISSING"
+				payload.SafeErrorCode = failureCode
 				return payload
 			}(),
 		})
@@ -218,7 +219,7 @@ func testMissingSessionPVCTerminatesSnapshotLifecycle(t *testing.T, ctx context.
 		WHERE task.ref = $1`, taskRef).Scan(&taskState, &safeErrorCode, &storageState); err != nil {
 		t.Fatalf("read missing PVC terminal lifecycle: %v", err)
 	}
-	if taskState != "DEAD_LETTER" || safeErrorCode != "SESSION_ARCHIVE_PVC_MISSING" || storageState != "ERROR" {
+	if taskState != "DEAD_LETTER" || safeErrorCode != failureCode || storageState != "ERROR" {
 		t.Fatalf("missing PVC terminal lifecycle: task=%s error=%s storage=%s", taskState, safeErrorCode, storageState)
 	}
 	if _, err := pool.Exec(ctx, querySessionArchiveMaterializeTasks, pgx.StrictNamedArgs{
