@@ -74,6 +74,18 @@ export function assistantContextIdentity(
   ].join(":");
 }
 
+export function assistantContextTitle(
+  routeContext: AssistantContextDescriptor,
+  conversationContext?: AssistantContextDescriptor,
+): string {
+  return (
+    routeContext.entityName ||
+    conversationContext?.entityName ||
+    routeContext.route ||
+    "Kodex"
+  );
+}
+
 function routeParameter(
   route: RouteLocationNormalizedLoaded,
   name: string,

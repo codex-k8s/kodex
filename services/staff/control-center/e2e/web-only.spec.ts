@@ -696,6 +696,10 @@ test.describe("web-only fresh installation", () => {
       `/api/v1/projects/${projectRef}/artifacts`,
       "kodex-project",
     );
+    page.once("dialog", async (confirmation) => {
+      expect(confirmation.type()).toBe("confirm");
+      await confirmation.accept();
+    });
     await dialog.getByRole("button", { name: "Закрыть" }).click();
     await expect(dialog).toHaveCount(0);
   });

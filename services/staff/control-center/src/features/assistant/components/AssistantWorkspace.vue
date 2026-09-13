@@ -27,6 +27,7 @@ import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEd
 import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
 import {
   assistantContextIdentity,
+  assistantContextTitle,
   conversationMatchesContext,
   readableContextOperations,
   readableContextKind,
@@ -124,8 +125,8 @@ const checkedContext = computed(() => {
     ? conversation.context
     : undefined;
 });
-const contextTitle = computed(
-  () => checkedContext.value?.entityName || props.context.route || "Kodex",
+const contextTitle = computed(() =>
+  assistantContextTitle(props.context, checkedContext.value),
 );
 const checkedOperations = computed(() =>
   checkedContext.value
