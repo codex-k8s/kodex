@@ -129,7 +129,8 @@ func runScheduleLoop(control *controlplaneclient.Client, readiness *servicerunti
 			ownedMetrics.Cycle(err != nil)
 			if err != nil && !degraded {
 				degraded = true
-				logger.WarnContext(ctx, "schedule materialization degraded", "error_class", "control_plane")
+				logger.WarnContext(ctx, "schedule materialization degraded",
+					"error_class", "control_plane", "grpc_code", status.Code(err).String())
 			} else if err == nil && degraded {
 				degraded = false
 				logger.InfoContext(ctx, "schedule materialization restored")
@@ -266,7 +267,8 @@ func failScheduleOccurrence(ctx context.Context, control scheduleRuntimeClient, 
 
 func retryableRPCError(err error) bool {
 	switch status.Code(err) {
-	case codes.Canceled, codes.DeadlineExceeded, codes.Internal, codes.Unknown, codes.Unavailable:
+	case codes.Aborted, codes.Canceled, codes.DeadlineExceeded, codes.Internal,
+		codes.ResourceExhausted, codes.Unknown, codes.Unavailable:
 		return true
 	default:
 		return false
