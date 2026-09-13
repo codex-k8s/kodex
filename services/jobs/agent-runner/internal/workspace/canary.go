@@ -276,6 +276,15 @@ func writableUsageContext(ctx context.Context, root string, policy runtimecontra
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
 			return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
 		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
+		}
+		// Session state находится на отдельном PVC с собственной ёмкостью и
+		// содержит provider-owned каталоги. Они намеренно могут быть недоступны
+		// UID основного runner и не относятся к квоте ephemeral workspace.
+		if relative == ".kodex/state" && entry.IsDir() {
+			return filepath.SkipDir
+		}
 		canonical := policy.Root
 		if relative != "." {
 			canonical += "/" + filepath.ToSlash(relative)
@@ -286,9 +295,6 @@ func writableUsageContext(ctx context.Context, root string, policy runtimecontra
 		}
 		if access == runtimecontract.RuntimeWorkspaceReadOnly && entry.IsDir() {
 			return filepath.SkipDir
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return &Denial{Reason: runtimecontract.RuntimeWorkspacePathOutsideWorkspace}
 		}
 		entries++
 		if entries > policy.MaximumFileCount {

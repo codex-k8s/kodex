@@ -74,6 +74,15 @@ export function requirePublishedNodeReadback(policy, nextReference) {
   "RUNNER_NODE_READBACK_NOT_PUBLISHED");
 }
 
+export function requireRuntimeBinding(policy, binding, nextReference) {
+  requireValue(policy?.data?.nodeReadbackImage === nextReference &&
+    binding?.apiVersion === "admissionregistration.k8s.io/v1" && binding.kind === "ValidatingAdmissionPolicyBinding" &&
+    binding.metadata?.name === "runtime-role-pod-exact-secret-projection" &&
+    binding.spec?.policyName === binding.metadata.name && binding.spec?.paramRef?.namespace === namespace &&
+    binding.spec?.paramRef?.name === policy.metadata?.name && binding.spec?.paramRef?.parameterNotFoundAction === "Deny" &&
+    fingerprint(binding.spec?.validationActions) === fingerprint(["Deny"]), "RUNTIME_BINDING_NOT_TRANSITIONED");
+}
+
 function privateJSON(path) { const stat=lstatSync(path);requireValue(stat.isFile()&&stat.nlink===1&&(stat.mode&0o077)===0&&stat.size<8<<20,"PRIVATE_INPUT_REQUIRED");return JSON.parse(readFileSync(path,"utf8")); }
 
 function main(args) {
@@ -86,15 +95,18 @@ function main(args) {
   const policyEntries=admissionApp[0]?.env?.filter((item)=>item.name==="IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP")??[];
   requireValue(admissionApp.length===1&&policyEntries.length===1&&typeof policyEntries[0].value==="string"&&!policyEntries[0].valueFrom,"ACTIVE_RUNNER_POLICY_REQUIRED");
   const activePolicy=JSON.parse(kube(["-n",namespace,"get","configmap",policyEntries[0].value,"-o","json"]));
+  const runtimeBinding=JSON.parse(kube(["get","validatingadmissionpolicybinding","runtime-role-pod-exact-secret-projection","-o","json"]));
   const clusterUID=JSON.parse(kube(["get","namespace","kube-system","-o","json"])).metadata.uid, deployments=()=>[get("control-plane"),get("runtime-controller")];
   if(command==="plan"){
     requireValue(options["--runner-reference"]&&options["--output"]&&Object.keys(options).length===3,"PLAN_ARGUMENTS_INVALID");
     requirePublishedNodeReadback(activePolicy,options["--runner-reference"]);
+    requireRuntimeBinding(activePolicy,runtimeBinding,options["--runner-reference"]);
     const plan={...planDefaultRunner(deployments(),options["--runner-reference"]),context,clusterUID};writeFileSync(options["--output"],`${JSON.stringify(plan)}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"PLANNED",id:plan.id,targets:plan.operations.length})}\n`);return;
   }
   requireValue(options["--plan"]&&options["--evidence"]&&(command!=="apply"||options["--confirm"]==="APPLY-STAGING-DEFAULT-RUNNER"),"OPERATION_ARGUMENTS_INVALID");
   const saved=privateJSON(options["--plan"]);requireValue(saved.context===context&&saved.clusterUID===clusterUID,"PLAN_SCOPE_CHANGED");
   requirePublishedNodeReadback(activePolicy,saved.nextReference);
+  requireRuntimeBinding(activePolicy,runtimeBinding,saved.nextReference);
   if(command==="inspect"){
     requireValue(!options["--confirm"]&&Object.keys(options).length===3,"INSPECT_ARGUMENTS_INVALID");
     const states=deployments().map((deployment)=>{const expected=saved.operations.find((item)=>item.name===deployment.metadata.name),current=literal(application(deployment),expected.key).value;return{name:expected.name,status:current===expected.afterReference?"NEW":current===expected.beforeReference?"OLD":"DRIFT"};});

@@ -66,6 +66,34 @@ func TestCanaryDoesNotCountImmutableContextAgainstWritableQuota(t *testing.T) {
 	}
 }
 
+func TestCanaryDoesNotTraverseSeparateSessionVolumeForWorkspaceQuota(t *testing.T) {
+	root := t.TempDir()
+	private := filepath.Join(root, ".kodex/state/codex-home/private")
+	for _, path := range []string{".kodex/outbox", "input", "knowledge", ".kodex/state/codex-home/private"} {
+		if err := os.MkdirAll(filepath.Join(root, path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	file, err := os.Create(filepath.Join(private, "provider-state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(runtimecontract.RuntimeWorkspaceWritableBytes + 1); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(private, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(private, 0o700) })
+	if err := RunCanary(t.Context(), root, testPolicy()); err != nil {
+		t.Fatalf("separate session volume blocked workspace readiness: %v", err)
+	}
+}
+
 func testPolicy() runtimecontract.RuntimeWorkspacePolicy {
 	return runtimecontract.RuntimeWorkspacePolicyV1()
 }

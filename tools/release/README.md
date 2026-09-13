@@ -172,7 +172,9 @@ node tools/release/scoped-release.mjs recovery-apply \
   runtime identity и проверка профиля; модель scoped patch переносима без SSH.
 - Source rollout предназначен только для hot-reload dev host. В стандартном
   окружении используются исполняемые образы приложений с точным digest.
-- После отдельной публикации нового trusted runner команда
+- После отдельной публикации нового trusted runner сначала
+  `runtime-role-policy-binding.mjs plan --runner-reference <exact-ref>`
+  заранее связывает runtime admission с новой активной policy. Затем команда
   `default-runner-transition.mjs` согласованно переключает exact default image
   у `runtime-controller` и `control-plane`. `plan` закрепляет UID,
   resourceVersion и digest спецификаций, `apply` меняет только два literal env,
@@ -181,7 +183,8 @@ node tools/release/scoped-release.mjs recovery-apply \
   rolling update `control-plane` инструмент выполняет второй закреплённый
   проход. Он запускается уже без реплик с прежним default image и не позволяет
   старому bootstrap вернуть системное runtime environment назад во время
-  overlap.
+  overlap. План закрыто отклоняется, пока binding не указывает на policy с тем
+  же exact `nodeReadbackImage`.
 - Конфигурация, expand/contract migrations, включение grant v2 и security rotation
   выполняются отдельно, не маскируются под обычный application release.
 - После смены immutable runner policy инструмент
