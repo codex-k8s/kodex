@@ -4090,7 +4090,7 @@ function supportedRuntimeOverlay(schema: ConfigOverlaySchema): string {
       value = JSON.stringify(selected);
     }
     if (key === "history.persistence")
-      lines.push("", "[history]", `persistence = ${value}`);
+      lines.push("", "[history]", `  persistence = ${value}`);
     else lines.push(`${key} = ${value}`);
   }
   return lines.join("\n");

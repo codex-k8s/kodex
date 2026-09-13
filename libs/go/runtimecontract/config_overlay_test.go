@@ -11,6 +11,10 @@ func TestConfigOverlayStrictAllowlist(t *testing.T) {
 	if err != nil || canonical == "" || len(digest) != 64 {
 		t.Fatalf("CanonicalConfigOverlay() = %q, %q, %v", canonical, digest, err)
 	}
+	expectedCanonical := "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\nallow_login_shell = false\n\n[history]\n  persistence = \"none\"\n"
+	if canonical != expectedCanonical {
+		t.Fatalf("CanonicalConfigOverlay() content = %q, want %q", canonical, expectedCanonical)
+	}
 	for _, effort := range []string{"none", "max"} {
 		if _, err := ParseConfigOverlay("model_reasoning_effort = \"" + effort + "\"\n"); err != nil {
 			t.Fatalf("canonical reasoning effort %q rejected: %v", effort, err)
