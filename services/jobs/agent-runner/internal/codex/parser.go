@@ -265,8 +265,8 @@ func parseThread(raw json.RawMessage) (string, string, error) {
 	fields, err := decodeObject(raw, schema([]string{"cliVersion", "createdAt", "cwd", "ephemeral", "id", "modelProvider",
 		"preview", "sessionId", "source", "status", "turns", "updatedAt"}, "agentNickname", "agentRole", "canAcceptDirectInput",
 		"cliVersion", "createdAt", "cwd", "ephemeral", "extra", "forkedFromId", "gitInfo", "historyMode", "id", "modelProvider",
-		"name", "parentThreadId", "path", "preview", "projectId", "recencyAt", "section", "sectionEnteredAt", "sessionId",
-		"source", "status", "threadSource", "turns", "updatedAt"))
+		"model", "name", "parentThreadId", "path", "preview", "projectId", "reasoningEffort", "recencyAt", "section",
+		"sectionEnteredAt", "sessionId", "source", "status", "threadSource", "turns", "updatedAt"))
 	if err != nil {
 		return "", "", err
 	}
@@ -276,6 +276,13 @@ func parseThread(raw json.RawMessage) (string, string, error) {
 	if idErr != nil || sessionErr != nil || strictDecode(fields["ephemeral"], &ephemeral) != nil || ephemeral ||
 		uuid.Validate(id) != nil || uuid.Validate(sessionID) != nil {
 		return "", "", errors.New("Codex app-server thread is invalid")
+	}
+	for _, name := range []string{"model", "reasoningEffort"} {
+		if value, present := fields[name]; present && !bytes.Equal(value, []byte("null")) {
+			if _, err := decodeBoundedString(value, 128); err != nil {
+				return "", "", errors.New("Codex app-server thread selection is invalid")
+			}
+		}
 	}
 	path := ""
 	if rawPath, present := fields["path"]; present && !bytes.Equal(rawPath, []byte("null")) {

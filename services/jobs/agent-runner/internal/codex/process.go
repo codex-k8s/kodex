@@ -60,7 +60,8 @@ const (
 	providerStageInitialize     providerExecutionStage = "INITIALIZE"
 	providerStageSkills         providerExecutionStage = "SKILLS"
 	providerStageAccountRead    providerExecutionStage = "ACCOUNT_READ"
-	providerStageThreadStart    providerExecutionStage = "THREAD_START"
+	providerStageThreadCall     providerExecutionStage = "THREAD_CALL"
+	providerStageThreadBind     providerExecutionStage = "THREAD_BIND"
 	providerStageMCPReadiness   providerExecutionStage = "MCP_READINESS"
 	providerStageUsageBaseline  providerExecutionStage = "USAGE_BASELINE"
 	providerStageTurnParameters providerExecutionStage = "TURN_PARAMETERS"
@@ -185,10 +186,10 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	}
 	raw, err = server.call(ctx, state, method, threadParams)
 	if err != nil {
-		return Result{}, atProviderStage(providerStageThreadStart, server.abort(ctx, state, err))
+		return Result{}, atProviderStage(providerStageThreadCall, server.abort(ctx, state, err))
 	}
 	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
-		return Result{}, atProviderStage(providerStageThreadStart, server.abort(ctx, state, err))
+		return Result{}, atProviderStage(providerStageThreadBind, server.abort(ctx, state, err))
 	}
 	if err := server.waitRequiredMCP(ctx, state, RequiredMCPToolNames(input)); err != nil {
 		return Result{}, atProviderStage(providerStageMCPReadiness, server.abort(ctx, state, err))
