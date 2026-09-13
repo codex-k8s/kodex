@@ -13,6 +13,7 @@ const profiles = {
   legacy: { version: '20260908000300', file: '20260908000300_email_legacy_package_admission.sql', annotation: 'kodex.dev/cp-migration-plan' },
   'mailbox-observation': { version: '20260908000500', file: '20260908000500_email_mailbox_observation_receipts.sql', annotation: 'kodex.dev/cp-mailbox-migration-plan' },
   'materialization-global': { version: '20260913000100', file: '20260913000100_runtime_materialization_global_identity.sql', annotation: 'kodex.dev/cp-materialization-migration-plan' },
+  'default-runner-readiness': { version: '20260913000200', file: '20260913000200_issue_1548_default_runner_readiness.sql', annotation: 'kodex.dev/cp-default-runner-readiness-migration-plan' },
 };
 const profileFor = (name = 'legacy') => { ensure(Object.hasOwn(profiles,name),'MIGRATION_PROFILE_INVALID'); return profiles[name]; };
 const fileDigest = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
