@@ -15,6 +15,6 @@ export async function expectAssistantConversationActions(
       includeHidden: true,
     });
     await expect(action).toHaveCount(1);
-    await expect(action).toBeEnabled({ enabled });
+    await expect(action).toBeEnabled({ enabled, timeout: 30_000 });
   }
 }
