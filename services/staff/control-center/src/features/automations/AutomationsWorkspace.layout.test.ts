@@ -65,6 +65,6 @@ describe("AutomationsWorkspace lifecycle contract", () => {
 
   it("показывает task из точной текущей revision", () => {
     expect(source).toContain('"currentRevision" in value');
-    expect(source).toContain("value.currentRevision.input.task");
+    expect(source).toContain("value.currentRevision.automationText");
   });
 });

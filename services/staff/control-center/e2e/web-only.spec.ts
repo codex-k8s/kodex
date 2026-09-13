@@ -433,7 +433,9 @@ async function exerciseAttachmentComposer(
         buffer: Buffer.from(`${marker}\n`, "utf8"),
       }),
   );
-  expect(response.status(), await httpFailureDiagnostic(response)).toBe(201);
+  const responseStatus = response.status();
+  if (responseStatus !== 201)
+    throw new Error(await httpFailureDiagnostic(response));
   const artifact = (await response.json()) as { ref?: string };
   expect(artifact.ref).toMatch(/^art_[A-Za-z0-9_-]+$/);
   const finalItem = composer
@@ -469,7 +471,7 @@ async function uploadArtifactWithNetworkRetry(
     .locator(".attachment-composer__item")
     .filter({ hasText: fileName });
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const requestPromise = waitForArtifactUploadRequest(
+    const responsePromise = waitForArtifactUploadOutcome(
       page,
       uploadPath,
       fileName,
@@ -484,23 +486,38 @@ async function uploadArtifactWithNetworkRetry(
         })
         .click();
     }
-    const response = await (await requestPromise).response();
+    const response = await responsePromise;
     if (response) return response;
   }
   throw new Error(`Artifact upload retry budget exhausted: ${fileName}`);
 }
 
-function waitForArtifactUploadRequest(
+function waitForArtifactUploadOutcome(
   page: Page,
   uploadPath: string,
   fileName: string,
-): Promise<Request> {
-  return page.waitForRequest((request) => {
-    return (
-      request.method() === "POST" &&
-      new URL(request.url()).pathname === uploadPath &&
-      request.headers()["x-file-name"] === fileName
-    );
+): Promise<Response | undefined> {
+  const matches = (request: Request): boolean =>
+    request.method() === "POST" &&
+    new URL(request.url()).pathname === uploadPath &&
+    request.headers()["x-file-name"] === fileName;
+  return new Promise((resolve) => {
+    const cleanup = (): void => {
+      page.off("response", onResponse);
+      page.off("requestfailed", onFailure);
+    };
+    const onResponse = (response: Response): void => {
+      if (!matches(response.request())) return;
+      cleanup();
+      resolve(response);
+    };
+    const onFailure = (request: Request): void => {
+      if (!matches(request)) return;
+      cleanup();
+      resolve(undefined);
+    };
+    page.on("response", onResponse);
+    page.on("requestfailed", onFailure);
   });
 }
 
@@ -1266,7 +1283,8 @@ test.describe("web-only fresh installation", () => {
       name: "Выберите провайдера",
     });
     const modelPicker = runtimePanel.getByRole("button", {
-      name: "Выберите модель",
+      name: "Модель",
+      exact: true,
     });
     const runtimeProfilePicker = runtimePanel.getByRole("button", {
       name: "Выберите runtime-профиль",

@@ -139,3 +139,36 @@ func TestServiceStreamBindsInitialRequestAndRevokesBeforeNextChunk(t *testing.T)
 		t.Fatal("unexpected stream result")
 	}
 }
+
+func TestServiceStreamBindsDownloadArtifactUser(t *testing.T) {
+	const caller = "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway"
+	const target = "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	method := cp.PlatformCommandService_DownloadArtifact_FullMethodName
+	auth, err := serviceidentity.New(target, []serviceidentity.Binding{{CallerSPIFFEID: caller, FullMethod: method, OperationID: "artifact.download", Permission: "artifact.download", ActorMode: serviceidentity.UserActor}}, &streamRevocations{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &streamOwnerFixture{user: true}
+	resolver, err := rpcprincipal.New(owner, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri, _ := url.Parse(caller)
+	cert := &x509.Certificate{Raw: []byte("synthetic user certificate"), URIs: []*url.URL{uri}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Minute), ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}
+	ctx := peer.NewContext(t.Context(), &peer.Peer{AuthInfo: credentials.TLSInfo{State: tls.ConnectionState{HandshakeComplete: true, PeerCertificates: []*x509.Certificate{cert}, VerifiedChains: [][]*x509.Certificate{{cert}}}}})
+	ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("x-kodex-rpc-profile", "service-v1", "authorization", "Bearer user-credential"))
+	transport := &streamTransportFixture{ctx: ctx}
+	err = ServiceIdentityStream(auth, resolver)(nil, transport, &grpc.StreamServerInfo{FullMethod: method, IsServerStream: true}, func(_ any, stream grpc.ServerStream) error {
+		if err := stream.RecvMsg(&cp.DownloadArtifactRequest{ArtifactRef: "art_abcdefghijk", Purpose: cp.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_DOWNLOAD}); err != nil {
+			return err
+		}
+		principal, err := Principal(stream.Context(), method)
+		if err != nil || principal.ActorID != "resolved-actor" || len(owner.digest) != 64 {
+			t.Fatal("download principal missing")
+		}
+		return stream.SendMsg(&cp.DownloadArtifactResponse{})
+	})
+	if err != nil || transport.sent != 1 {
+		t.Fatalf("artifact download stream failed: sent=%d err=%v", transport.sent, err)
+	}
+}

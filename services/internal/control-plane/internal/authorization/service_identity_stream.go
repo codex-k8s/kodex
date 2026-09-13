@@ -19,7 +19,9 @@ func ServiceIdentityStream(authorizer *serviceidentity.Authorizer, resolver *rpc
 		if authorizer == nil || resolver == nil {
 			return status.Error(codes.Unavailable, "service stream authorization unavailable")
 		}
-		serverStream := info.FullMethod == cp.RuntimeWorkService_StreamExecutionArtifact_FullMethodName && !info.IsClientStream && info.IsServerStream
+		runtimeServerStream := info.FullMethod == cp.RuntimeWorkService_StreamExecutionArtifact_FullMethodName && !info.IsClientStream && info.IsServerStream
+		userServerStream := info.FullMethod == cp.PlatformCommandService_DownloadArtifact_FullMethodName && !info.IsClientStream && info.IsServerStream
+		serverStream := runtimeServerStream || userServerStream
 		clientStream := (info.FullMethod == cp.PlatformCommandService_UploadArtifact_FullMethodName || info.FullMethod == cp.PlatformCommandService_UploadOrganizationArtifact_FullMethodName) && info.IsClientStream && !info.IsServerStream
 		if !serverStream && !clientStream {
 			return status.Error(codes.PermissionDenied, "service stream method rejected")
@@ -28,7 +30,8 @@ func ServiceIdentityStream(authorizer *serviceidentity.Authorizer, resolver *rpc
 		if err != nil {
 			return err
 		}
-		if serverStream && admission.ActorMode != serviceidentity.ServiceActor || clientStream && admission.ActorMode != serviceidentity.UserActor {
+		if runtimeServerStream && admission.ActorMode != serviceidentity.ServiceActor ||
+			(userServerStream || clientStream) && admission.ActorMode != serviceidentity.UserActor {
 			return status.Error(codes.PermissionDenied, "service stream actor rejected")
 		}
 		return handler(server, &servicePrincipalStream{ServerStream: stream, ctx: stream.Context(), method: info.FullMethod, authorizer: authorizer, resolve: ServiceIdentityUnary(authorizer, resolver), singleRequest: serverStream})

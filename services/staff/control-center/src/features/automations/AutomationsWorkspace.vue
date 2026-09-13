@@ -403,8 +403,8 @@ function formatDate(value: string): string {
 function task(value: Schedule | ScheduleRevision): string {
   const item =
     "currentRevision" in value
-      ? value.currentRevision.input.task
-      : value.input.task;
+      ? value.currentRevision.automationText
+      : value.automationText;
   return typeof item === "string" ? item : t("common.noData");
 }
 
