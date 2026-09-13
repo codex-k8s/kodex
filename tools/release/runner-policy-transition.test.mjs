@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { fingerprint } from "./scoped-release.mjs";
 import { policyBase, policyDigest, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
 import { planToolsMetadata } from "./policy-tools-metadata.mjs";
-import { samePlan } from "./runner-policy-transition.mjs";
+import { requireDrainedInventory, samePlan } from "./runner-policy-transition.mjs";
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -177,6 +177,13 @@ test("saved plan cannot survive another resourceVersion, operation, cluster or p
   for (const mutate of [(p) => { p.clusterUID = "other"; }, (p) => { p.operations[0].resourceVersion = "8"; }, (p) => { p.guards.promotedPinsSHA256 = "c".repeat(64); }]) {
     const changed = structuredClone(plan); mutate(changed); assert.throws(() => samePlan(plan, changed));
   }
+});
+
+test("reader сначала закрывает новые циклы, а resources ждёт полного drain", () => {
+  assert.doesNotThrow(() => requireDrainedInventory("reader", 2, 1));
+  assert.throws(() => requireDrainedInventory("resources", 1, 0), /PAUSED_COMPATIBLE_IDLE_READER_REQUIRED/);
+  assert.throws(() => requireDrainedInventory("resources", 0, 1), /PAUSED_COMPATIBLE_IDLE_READER_REQUIRED/);
+  assert.doesNotThrow(() => requireDrainedInventory("resources", 0, 0));
 });
 
 for (const issuerOnly of [false,true]) test("public CLI ordered maintenance, exact predecessors and UNKNOWN: "+(issuerOnly?"issuer":"runner"), () => {
