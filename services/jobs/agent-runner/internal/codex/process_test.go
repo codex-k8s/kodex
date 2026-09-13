@@ -409,6 +409,15 @@ func TestTokenUsageNotificationRemainsEnabled(t *testing.T) {
 	}
 }
 
+func TestRawProviderResponseNotificationsRemainSuppressed(t *testing.T) {
+	t.Parallel()
+	for _, required := range []string{"rawResponseItem/completed", "rawResponse/completed"} {
+		if !slices.Contains(suppressedNotificationMethods, required) {
+			t.Fatalf("sensitive provider notification %q is not suppressed", required)
+		}
+	}
+}
+
 func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
 	input := model.Input{SystemAssistant: true}
 	input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{})

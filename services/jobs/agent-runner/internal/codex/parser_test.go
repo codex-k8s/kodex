@@ -24,7 +24,7 @@ func TestProtocolAcceptsStructuredSuccess(t *testing.T) {
 		"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[],"status":"inProgress"}}`)); err != nil {
 		t.Fatalf("turn start rejected: %v", err)
 	}
-	item := `{"id":"message-1","text":"готово","phase":"final_answer","type":"agentMessage"}`
+	item := `{"id":"message-1","text":"готово","phase":"final_answer","questions":null,"type":"agentMessage"}`
 	if err := state.notification("item/completed", raw(`{"completedAtMs":1,"item":`+item+`,"threadId":"`+
 		testThreadID+`","turnId":"`+testTurnID+`"}`)); err != nil {
 		t.Fatalf("item completion rejected: %v", err)
@@ -35,6 +35,20 @@ func TestProtocolAcceptsStructuredSuccess(t *testing.T) {
 	}
 	if state.result.Outcome != "SUCCEEDED" || state.result.FinalMessage != "готово" {
 		t.Fatalf("unexpected result: %#v", state.result)
+	}
+}
+
+func TestCurrentRawResponseNotificationsAreAcceptedWithoutReadingPayload(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	state.turnID = testTurnID
+	for method, payload := range map[string]string{
+		"rawResponseItem/completed": `{"item":{"type":"message","content":[{"type":"output_text","text":"sensitive"}]},"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `"}`,
+		"rawResponse/completed":     `{"responseId":"response-1","threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","usage":null,"usageMetadata":null}`,
+	} {
+		if err := state.notification(method, raw(payload)); err != nil {
+			t.Fatalf("current %s notification rejected: %v", method, err)
+		}
 	}
 }
 

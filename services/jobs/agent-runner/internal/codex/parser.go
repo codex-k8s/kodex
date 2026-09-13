@@ -1471,6 +1471,7 @@ var serverNotificationMethods = stringSet(
 	"command/exec/outputDelta", "process/outputDelta", "process/exited", "item/commandExecution/outputDelta",
 	"item/commandExecution/terminalInteraction", "item/fileChange/outputDelta", "item/fileChange/patchUpdated",
 	"serverRequest/resolved", "item/mcpToolCall/progress", "mcpServer/oauthLogin/completed",
+	"rawResponseItem/completed", "rawResponse/completed",
 	"mcpServer/startupStatus/updated", "account/updated", "account/rateLimits/updated", "app/list/updated",
 	"remoteControl/status/changed", "externalAgentConfig/import/progress", "externalAgentConfig/import/completed",
 	"fs/changed", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded", "item/reasoning/textDelta",
@@ -1500,7 +1501,7 @@ var itemFieldUniverse = []string{
 	"action", "agentPath", "agentThreadId", "agentsStates", "aggregatedOutput", "appContext", "arguments", "changes", "clientId",
 	"command", "commandActions", "content", "contentItems", "cwd", "delivery", "durationMs", "error", "exitCode", "failure", "fragments", "id",
 	"kind", "memoryCitation", "model", "mcpAppResourceUri", "namespace", "path", "phase", "pluginId", "processId",
-	"prompt", "query", "readOnlyHint", "reasoningEffort", "receiverThreadIds", "result", "results", "review", "revisedPrompt", "savedPath", "scriptPath", "server",
+	"output", "prompt", "query", "questions", "readOnlyHint", "reasoningEffort", "receiverThreadIds", "result", "results", "review", "revisedPrompt", "savedPath", "scriptPath", "server",
 	"senderThreadId", "source", "status", "success", "summary", "text", "tool", "transparentBackground", "type",
 }
 
@@ -1539,6 +1540,8 @@ var notificationSchemas = map[string]objectSchema{
 	"item/fileChange/patchUpdated":              schema([]string{"changes", "itemId", "threadId", "turnId"}, "changes", "itemId", "threadId", "turnId"),
 	"serverRequest/resolved":                    schema([]string{"requestId", "threadId"}, "requestId", "threadId"),
 	"item/mcpToolCall/progress":                 schema([]string{"itemId", "message", "threadId", "turnId"}, "itemId", "message", "threadId", "turnId"),
+	"rawResponseItem/completed":                 schema([]string{"item", "threadId", "turnId"}, "item", "threadId", "turnId"),
+	"rawResponse/completed":                     schema([]string{"responseId", "threadId", "turnId", "usage", "usageMetadata"}, "responseId", "threadId", "turnId", "usage", "usageMetadata"),
 	"mcpServer/oauthLogin/completed":            schema([]string{"name", "success"}, "error", "name", "success", "threadId"),
 	"mcpServer/startupStatus/updated":           schema([]string{"name", "status"}, "error", "failureReason", "name", "status", "threadId"),
 	"account/updated":                           schema(nil, "authMode", "planType"),
@@ -1578,7 +1581,7 @@ var notificationSchemas = map[string]objectSchema{
 var threadItemSchemas = map[string]objectSchema{
 	"userMessage":         schema([]string{"content", "id", "type"}, "clientId", "content", "id", "type"),
 	"hookPrompt":          schema([]string{"fragments", "id", "type"}, "fragments", "id", "type"),
-	"agentMessage":        schema([]string{"id", "text", "type"}, "delivery", "id", "memoryCitation", "phase", "text", "type"),
+	"agentMessage":        schema([]string{"id", "text", "type"}, "delivery", "id", "memoryCitation", "phase", "questions", "text", "type"),
 	"plan":                schema([]string{"id", "text", "type"}, "id", "text", "type"),
 	"reasoning":           schema([]string{"id", "type"}, "content", "id", "summary", "type"),
 	"commandExecution":    schema([]string{"command", "commandActions", "cwd", "id", "status", "type"}, "aggregatedOutput", "command", "commandActions", "cwd", "durationMs", "exitCode", "id", "pluginId", "processId", "scriptPath", "source", "status", "type"),
