@@ -453,6 +453,14 @@ func semanticValues(snapshot Snapshot, data map[string]any, effective []string) 
 		scope, _ := data[name].(map[string]any)
 		files[name] = map[string]any{"files": scope["files"], "files_count": scope["files_count"], "files_dir": scope["files_dir"], "manifest_path": scope["manifest_path"]}
 	}
+	resultInstruction := "Place every file requested as a user-visible result directly in this directory. Use the requested file name. Keep scratch files outside this directory."
+	if snapshot.Locale == "ru" {
+		resultInstruction = "Помещай каждый запрошенный пользователем файл результата прямо в этот каталог. Используй запрошенное имя файла. Черновые файлы храни вне этого каталога."
+	}
+	files["result"] = map[string]any{
+		"directory":   "/workspace/.kodex/outbox",
+		"instruction": resultInstruction,
+	}
 	values := map[SemanticSlot]string{
 		SlotWorkflow: encode(map[string]any{"ref": workflow["ref"], "name": workflow["name"], "purpose": workflow["purpose"]}), SlotStage: snapshot.WorkflowStage,
 		SlotPurpose: snapshot.Variables["task"], SlotExpectedResult: snapshot.Variables["step.expected_result"],

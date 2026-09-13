@@ -85,7 +85,8 @@ func serviceProjectOperations(operations operationSet, proofOperations map[strin
 
 func serviceIdentityStream(operations operationSet, projects map[string]struct{}) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, conn *grpc.ClientConn, method string, next grpc.Streamer, options ...grpc.CallOption) (grpc.ClientStream, error) {
-		serverStream := method == cp.RuntimeWorkService_StreamExecutionArtifact_FullMethodName && desc != nil && !desc.ClientStreams && desc.ServerStreams
+		serverStream := (method == cp.RuntimeWorkService_StreamExecutionArtifact_FullMethodName ||
+			method == cp.PlatformCommandService_DownloadArtifact_FullMethodName) && desc != nil && !desc.ClientStreams && desc.ServerStreams
 		clientStream := (method == cp.PlatformCommandService_UploadArtifact_FullMethodName || method == cp.PlatformCommandService_UploadOrganizationArtifact_FullMethodName) && desc != nil && desc.ClientStreams && !desc.ServerStreams
 		if !serverStream && !clientStream {
 			return nil, status.Error(codes.PermissionDenied, "service stream method rejected")

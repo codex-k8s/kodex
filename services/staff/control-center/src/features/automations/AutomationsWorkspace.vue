@@ -401,7 +401,10 @@ function formatDate(value: string): string {
 }
 
 function task(value: Schedule | ScheduleRevision): string {
-  const item = value.input.task;
+  const item =
+    "currentRevision" in value
+      ? value.currentRevision.input.task
+      : value.input.task;
   return typeof item === "string" ? item : t("common.noData");
 }
 

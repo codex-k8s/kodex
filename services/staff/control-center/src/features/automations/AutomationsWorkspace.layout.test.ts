@@ -62,4 +62,9 @@ describe("AutomationsWorkspace lifecycle contract", () => {
     expect(source).toContain("runCommand(selectedSchedule.ref, 'ENABLE')");
     expect(source).not.toContain("runCommand(selectedSchedule, 'PAUSE')");
   });
+
+  it("показывает task из точной текущей revision", () => {
+    expect(source).toContain('"currentRevision" in value');
+    expect(source).toContain("value.currentRevision.input.task");
+  });
 });
