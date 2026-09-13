@@ -969,11 +969,13 @@ onBeforeUnmount(() => {
 }
 .assistant-drawer {
   position: fixed;
-  inset: 4dvh 4vw;
+  top: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  width: 92vw;
-  max-width: 92vw;
-  height: 92dvh;
+  width: clamp(520px, 38vw, 640px);
+  max-width: calc(100vw - 32px);
+  height: 100dvh;
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
@@ -982,7 +984,10 @@ onBeforeUnmount(() => {
   outline: 0;
 }
 .assistant-drawer--plan {
+  inset: 4dvh 4vw;
   width: 92vw;
+  max-width: 92vw;
+  height: 92dvh;
 }
 .assistant-conversation-sidebar {
   display: none;

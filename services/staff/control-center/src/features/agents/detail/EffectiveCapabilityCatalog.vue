@@ -6,6 +6,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 import {
   canChangePlatformCapability,
   effectiveCapabilityIdentity,
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   toggle: [key: string, enabled: boolean, agentVersion: number];
   refresh: [];
 }>();
+const serverMessage = useServerMessage();
 const items = ref<AgentEffectiveCapability[]>([]);
 const page = ref<AgentEffectiveCapabilityPage>();
 const query = ref("");
@@ -183,8 +185,8 @@ onBeforeUnmount(() => {
           @change="toggle(item)"
         />
         <span>
-          <strong>{{ item.name }}</strong>
-          <small>{{ item.description }}</small>
+          <strong>{{ serverMessage(item.name) }}</strong>
+          <small>{{ serverMessage(item.description) }}</small>
           <small v-if="item.connectionRef"
             >{{ $t("capabilityAuthority.connection") }}:
             {{ item.connectionRef }} · {{ item.grantRef }}</small

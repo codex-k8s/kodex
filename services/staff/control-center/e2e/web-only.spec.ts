@@ -114,7 +114,7 @@ async function startNewKodexConversation(
     ),
     createButton.click(),
   ]);
-  expect(created.status(), await created.text()).toBe(201);
+  expect(created.status(), await httpFailureDiagnostic(created)).toBe(201);
   const conversation = (await created.json()) as { ref?: string };
   expect(conversation.ref).toMatch(/^cnv_[A-Za-z0-9_-]+$/);
   await expect(dialog).toHaveAttribute(
@@ -371,7 +371,10 @@ async function exerciseAttachmentComposer(
           })
           .click(),
     );
-    expect(retriedUpload.status(), await retriedUpload.text()).toBe(201);
+    expect(
+      retriedUpload.status(),
+      await httpFailureDiagnostic(retriedUpload),
+    ).toBe(201);
     await expect(
       failedItem.locator(".attachment-composer__ready"),
     ).toBeVisible();
@@ -430,7 +433,7 @@ async function exerciseAttachmentComposer(
         buffer: Buffer.from(`${marker}\n`, "utf8"),
       }),
   );
-  expect(response.status(), await response.text()).toBe(201);
+  expect(response.status(), await httpFailureDiagnostic(response)).toBe(201);
   const artifact = (await response.json()) as { ref?: string };
   expect(artifact.ref).toMatch(/^art_[A-Za-z0-9_-]+$/);
   const finalItem = composer
@@ -677,6 +680,10 @@ test.describe("web-only fresh installation", () => {
       "/api/v1/artifacts",
       "kodex-global",
     );
+    page.once("dialog", async (confirmation) => {
+      expect(confirmation.type()).toBe("confirm");
+      await confirmation.accept();
+    });
     await dialog.getByRole("button", { name: "Закрыть" }).click();
     await expect(dialog).toHaveCount(0);
 
@@ -786,7 +793,10 @@ test.describe("web-only fresh installation", () => {
         page.waitForEvent("download"),
         artifact.getByRole("button", { name: "Скачать" }).click(),
       ]);
-      expect(artifactContent.status(), await artifactContent.text()).toBe(200);
+      expect(
+        artifactContent.status(),
+        await httpFailureDiagnostic(artifactContent),
+      ).toBe(200);
       download = browserDownload;
     } catch (error) {
       const visibleProblem = await page
@@ -1115,7 +1125,7 @@ test.describe("web-only fresh installation", () => {
       await page
         .getByLabel("Описание")
         .fill("Несекретное окружение для проверки следующей RuntimeRevision.");
-      await page.getByRole("button", { name: "Образ и инструменты" }).click();
+      await page.getByRole("tab", { name: "Образ и инструменты" }).click();
       await page
         .getByRole("button", {
           name: "Exact image revision и digest",
@@ -1558,7 +1568,9 @@ test.describe("web-only fresh installation", () => {
       });
       await binding.check();
       const response = await bindingResponse;
-      expect(response.status(), await response.text()).toBe(200);
+      expect(response.status(), await httpFailureDiagnostic(response)).toBe(
+        200,
+      );
     }
     await expect(binding).toBeChecked();
 
@@ -2557,7 +2569,7 @@ test.describe("web-only fresh installation", () => {
       .getByRole("button", { name: "Одобрить", exact: true })
       .click();
     const resolved = await resolutionResponse;
-    expect(resolved.status(), await resolved.text()).toBe(200);
+    expect(resolved.status(), await httpFailureDiagnostic(resolved)).toBe(200);
     const resolutionAttachmentSet = await readRequestAttachmentSet(
       page,
       resolved,
@@ -4075,7 +4087,7 @@ async function uploadFilesWorkspaceArtifact(
   }
   if (!upload) throw new Error("artifact upload completed without a response");
   expect(upload.request().headers()["x-file-name"]).toBe(fileName);
-  expect(upload.status(), await upload.text()).toBe(201);
+  expect(upload.status(), await httpFailureDiagnostic(upload)).toBe(201);
   return (await upload.json()) as ArtifactReadback;
 }
 
@@ -4115,7 +4127,7 @@ async function waitForFilesWorkspaceArtifact(
     );
     await retryButton.click();
     const response = await retryResponse;
-    expect(response.status(), await response.text()).toBe(200);
+    expect(response.status(), await httpFailureDiagnostic(response)).toBe(200);
   }
   await expect(details).toBeVisible();
 }
@@ -4154,7 +4166,10 @@ async function operateArtifactLifecycle(
     .click();
   if (impact) {
     const impactResponse = await impact;
-    expect(impactResponse.status(), await impactResponse.text()).toBe(200);
+    expect(
+      impactResponse.status(),
+      await httpFailureDiagnostic(impactResponse),
+    ).toBe(200);
   }
   const dialog = page.getByRole("dialog", { name: dialogTitle });
   await expect(dialog).toBeVisible();
@@ -4167,7 +4182,7 @@ async function operateArtifactLifecycle(
     .getByRole("button", { name: confirmationLabel, exact: true })
     .click();
   const mutation = await response;
-  expect(mutation.status(), await mutation.text()).toBe(200);
+  expect(mutation.status(), await httpFailureDiagnostic(mutation)).toBe(200);
   return (await mutation.json()) as ArtifactReadback;
 }
 
@@ -4625,4 +4640,16 @@ async function mutationFailureDiagnostic(
     `if-match=${request.headers()["if-match"] ?? "missing"}`,
     `authoritative-version=${String(authoritativeVersion)}`,
   ].join("; ");
+}
+
+async function httpFailureDiagnostic(response: Response): Promise<string> {
+  const request = response.request();
+  const base = `${request.method()} ${new URL(response.url()).pathname} returned HTTP ${String(response.status())}`;
+  if (response.ok()) return base;
+  try {
+    const problem = (await response.json()) as { code?: unknown };
+    return `${base}; code=${typeof problem.code === "string" ? problem.code : "none"}`;
+  } catch {
+    return `${base}; response body unavailable`;
+  }
 }

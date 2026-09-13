@@ -29,12 +29,13 @@ describe("AssistantWorkspace layout", () => {
     expect(headerMarkup).toContain(":aria-label=\"$t('common.close')\"");
   });
 
-  it("открывает desktop modal с отдельной колонкой истории", () => {
-    expect(styles).toMatch(/width:\s*92vw/);
-    expect(styles).toMatch(/height:\s*92dvh/);
+  it("открывает desktop drawer справа с отдельной колонкой истории", () => {
+    expect(styles).toMatch(
+      /\.assistant-drawer\s*\{[\s\S]*?right:\s*0[\s\S]*?width:\s*clamp\(520px, 38vw, 640px\)[\s\S]*?height:\s*100dvh/,
+    );
     expect(template).toContain("'assistant-drawer--plan': currentPlan");
     expect(styles).toMatch(
-      /\.assistant-drawer--plan\s*\{[\s\S]*?width:\s*92vw/,
+      /\.assistant-drawer--plan\s*\{[\s\S]*?inset:\s*4dvh 4vw[\s\S]*?width:\s*92vw[\s\S]*?height:\s*92dvh/,
     );
   });
 
