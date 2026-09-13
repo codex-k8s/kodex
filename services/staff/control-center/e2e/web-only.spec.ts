@@ -4653,7 +4653,7 @@ async function readScheduleRevisionState(
         `Schedule readback failed with HTTP ${String(response.status)}`,
       );
     const schedule = (await response.json()) as {
-      currentRevision?: { input?: { task?: unknown }; revision?: unknown };
+      currentRevision?: { automationText?: unknown; revision?: unknown };
     };
     return {
       revision:
@@ -4661,8 +4661,8 @@ async function readScheduleRevisionState(
           ? schedule.currentRevision.revision
           : 0,
       task:
-        typeof schedule.currentRevision?.input?.task === "string"
-          ? schedule.currentRevision.input.task
+        typeof schedule.currentRevision?.automationText === "string"
+          ? schedule.currentRevision.automationText
           : "",
     };
   }, scheduleRef);

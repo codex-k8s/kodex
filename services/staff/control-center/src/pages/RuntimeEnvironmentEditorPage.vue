@@ -935,6 +935,9 @@ async function publish(selected: string[]): Promise<void> {
     serverDraft.value = published;
     const ref = published.publishedEnvironmentRef;
     if (!ref) throw new Error("Published environment reference is missing");
+    await router.replace(
+      `/projects/${encodeURIComponent(projectRef.value)}/environments/${encodeURIComponent(ref)}`,
+    );
     await runtime.loadEnvironment(ref);
     if (draftController.signal.aborted) return;
     const saved = runtime.environments[ref];
@@ -943,9 +946,6 @@ async function publish(selected: string[]): Promise<void> {
     reauthRestored.value = false;
     sync(saved);
     await runtime.loadEnvironmentVersions(ref);
-    await router.replace(
-      `/projects/${encodeURIComponent(projectRef.value)}/environments/${encodeURIComponent(ref)}`,
-    );
   } catch (error) {
     if (disposed) return;
     const normalized = asProblem(error);

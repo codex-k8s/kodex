@@ -27,3 +27,22 @@ func TestRuntimeCandidateEligibilityDoesNotHideInfrastructureFailure(t *testing.
 		}
 	}
 }
+
+func TestRuntimeEligibilityErrorClassIsBounded(t *testing.T) {
+	for _, test := range []struct {
+		err  error
+		want string
+	}{
+		{fmt.Errorf("wrapped: %w", errs.ErrConflict), "CONFLICT"},
+		{errs.ErrVersionMismatch, "VERSION_MISMATCH"},
+		{errs.ErrNotFound, "NOT_FOUND"},
+		{errs.ErrForbidden, "FORBIDDEN"},
+		{errs.ErrCapabilityRequired, "CAPABILITY_REQUIRED"},
+		{errs.ErrInvalid, "INVALID"},
+		{errors.New("private diagnostic"), "UNKNOWN"},
+	} {
+		if got := runtimeEligibilityErrorClass(test.err); got != test.want {
+			t.Fatalf("error class = %q, want %q", got, test.want)
+		}
+	}
+}

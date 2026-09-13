@@ -21,6 +21,11 @@ func TestTemplateVariableCatalogContainsOnlyMaterializedNamespaces(t *testing.T)
 	if !slices.IsSorted(names) {
 		t.Fatalf("template variable catalog is not cursor-safe: %v", names)
 	}
+	for index := 1; index < len(names); index++ {
+		if names[index] == names[index-1] {
+			t.Fatalf("template variable catalog contains duplicate %q", names[index])
+		}
+	}
 	for _, forbidden := range []string{"runtime.config.ref"} {
 		if slices.Contains(names, forbidden) {
 			t.Fatalf("unmaterialized variable %q is advertised", forbidden)

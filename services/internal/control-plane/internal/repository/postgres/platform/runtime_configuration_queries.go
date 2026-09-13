@@ -300,8 +300,6 @@ func templateVariableCatalog() []entity.TemplateVariable {
 		{"step.key", "Ключ выбранного этапа", "WORKFLOW"}, {"step.name", "Имя выбранного этапа", "WORKFLOW"},
 		{"step.purpose", "Материализованное назначение этапа", "WORKFLOW"}, {"step.expected_result", "Материализованный ожидаемый результат этапа", "WORKFLOW"},
 		{"integrations.summary", "Сводка точных доступных integration grants", "RUNTIME"},
-		{"runtime.environment.ref", "Ссылка выбранной immutable версии окружения", "RUNTIME"},
-		{"runtime.environment.image.reference", "Ссылка образа выбранного окружения", "RUNTIME"}, {"runtime.environment.image.digest", "Digest образа выбранного окружения", "RUNTIME"},
 	} {
 		items = append(items, entity.TemplateVariable{Name: item.name, Type: "string", Description: item.description, Example: "{{ ." + item.name + " }}", Source: item.source})
 	}

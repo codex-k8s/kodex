@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -462,11 +463,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		eligibilityStage := "provider_profile"
 		_, candidateErr := func(tx pgx.Tx) (commandOutcome, error) {
 			runtimeProvider, err := runtimeExecutionProvider(candidate.provider)
 			if err != nil {
 				return commandOutcome{}, err
 			}
+			eligibilityStage = "runtime_catalog"
 			configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, candidate.agentRef, candidate.runtimeConfigID)
 			if err != nil {
 				return commandOutcome{}, err
@@ -474,6 +477,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if configuration.Model != candidate.model {
 				return commandOutcome{}, errs.ErrConflict
 			}
+			eligibilityStage = "session_catalog"
 			verifiedCandidate, retainedPolicy, err := checkedSessionModelCatalog(ctx, tx, scope.organizationID, candidate.sessionID, candidate.providerAccountRef, configuration, candidate.configOverlay)
 			if err != nil {
 				return commandOutcome{}, err
@@ -542,6 +546,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			leaseRef, _ := newRef("lea")
 			podName := runtimecontract.RuntimeTurnPodName(leaseRef)
 			serviceAccountName := runtimecontract.RuntimeServiceAccountName(leaseRef)
+			eligibilityStage = "execution_input"
 			var inputMap map[string]any
 			_ = jsonUnmarshal(rawInput, &inputMap)
 			var scheduleTemplate *schedulePromptTemplate
@@ -573,6 +578,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			_ = jsonUnmarshal(rawAttachmentSets, &attachmentSets)
 			var sessionContext []map[string]string
 			_ = jsonUnmarshal(rawSessionContext, &sessionContext)
+			eligibilityStage = "runtime_environment"
 			var environmentValues []runtimecontract.RuntimeEnvironmentValue
 			var secretProjections []runtimecontract.RuntimeSecretProjection
 			if err := decodeStoredRuntimeEnvironment(candidate.rawEnvironmentValues, candidate.rawSecretProjections, &environmentValues, &secretProjections); err != nil {
@@ -618,6 +624,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err != nil || verifiedEnvironmentDigest != runtimeEnvironmentDigest {
 				return commandOutcome{}, errs.ErrConflict
 			}
+			eligibilityStage = "assistant_context"
 			var rawAssistantContext []byte
 			if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectAssistantContext, scope.organizationID, sessionID).Scan(&rawAssistantContext); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
@@ -643,6 +650,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			}
 			initiatorCapabilityScope := scope
 			initiatorCapabilityScope.actorRef = candidate.initiatorRef
+			eligibilityStage = "continuation"
 			if err := repository.checkClaimContinuationPinTx(ctx, tx, scope, nodeRef); err != nil {
 				return commandOutcome{}, err
 			}
@@ -653,6 +661,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err := repository.authorizePromptArtifactsTx(ctx, tx, initiatorCapabilityScope, projectRef, artifactRefs); err != nil {
 				return commandOutcome{}, err
 			}
+			eligibilityStage = "prompt_authority"
 			userCapabilities, permittedIntegrationGrants, err := repository.agentCapabilityAuthority(ctx, tx, initiatorCapabilityScope, projectRef, agentRef, capabilities)
 			if err != nil {
 				return commandOutcome{}, err
@@ -712,6 +721,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				WorkflowStage:         workflowStage, Automation: automation,
 				SessionContinuation: continuation,
 			}
+			eligibilityStage = "prompt_context"
 			if err := repository.hydrateRuntimePromptContext(ctx, tx, scope, nodeRef, &promptSnapshot); err != nil {
 				return commandOutcome{}, err
 			}
@@ -736,6 +746,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 					return commandOutcome{}, err
 				}
 			}
+			eligibilityStage = "prompt_materialization"
 			materializedPrompt, err := promptservice.Materialize(instructions, promptservice.FromSnapshot(promptSnapshot))
 			if err != nil || !materializedPrompt.Complete {
 				return commandOutcome{}, errs.ErrConflict
@@ -832,6 +843,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if len(assistantContext) != 0 {
 				snapshot["assistantContext"] = assistantContext
 			}
+			eligibilityStage = "runtime_context"
 			contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, runRef, projectRef, agentRef)
 			if err != nil {
 				return commandOutcome{}, err
@@ -845,6 +857,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 					return commandOutcome{}, fmt.Errorf("prepare continuation notice: %w", err)
 				}
 			}
+			eligibilityStage = "file_catalog"
 			if err := captureRuntimeFileCatalog(ctx, tx, scope, snapshot, contextSnapshot); err != nil {
 				return commandOutcome{}, err
 			}
@@ -857,6 +870,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err != nil || len(rawSnapshot) > runtimecontract.MaximumRunnerInputBytes {
 				return commandOutcome{}, errs.ErrConflict
 			}
+			eligibilityStage = "runtime_revision"
 			var runtimeRevisionID string
 			if err := tx.QueryRow(ctx, queryRuntimeClaimExecutionInsertRuntimeRevision,
 				revisionRef, scope.organizationID, projectID, rootRunID, runID, nodeID,
@@ -925,6 +939,8 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if !runtimeCandidateEligibilityFailure(candidateErr) {
 			return commandOutcome{}, candidateErr
 		}
+		slog.WarnContext(ctx, runtimeCandidateEligibilityDiagnosticMessage, "safe_stage", eligibilityStage,
+			"error_class", runtimeEligibilityErrorClass(candidateErr), "run_ref", candidate.runRef, "node_ref", candidate.nodeRef)
 		if err := repository.failRuntimeCandidateGraph(ctx, tx, scope, input, candidate); err != nil {
 			return commandOutcome{}, err
 		}
