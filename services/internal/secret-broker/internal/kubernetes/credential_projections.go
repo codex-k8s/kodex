@@ -92,7 +92,7 @@ type CredentialProjection struct {
 }
 
 func (store *Store) MaterializeRuntimeCredentialProjection(ctx context.Context, manifest CredentialProjectionManifest) (CredentialProjection, error) {
-	if err := validateCredentialProjectionManifest(manifest, store.namespace); err != nil {
+	if err := validateActiveCredentialProjectionManifest(manifest, store.namespace); err != nil {
 		return CredentialProjection{}, err
 	}
 	providerDescriptor := ProviderCredentialDescriptor{SecretName: manifest.ProviderCredential.SecretName,
@@ -223,7 +223,7 @@ func validateCredentialProjectionManifest(value CredentialProjectionManifest, na
 		value.WorkloadInstance == "" || value.LeaseRef == "" || value.Generation < 1 || value.Attempt < 1 ||
 		value.RuntimeRevisionRef == "" || value.SessionRef == "" || value.TurnRef == "" || !validProjectionDigest(value.RuntimeRevisionDigest) ||
 		!validProjectionDigest(value.InputDigest) || value.ExpiresAt.IsZero() || value.ProviderCredential.AccountRef == "" ||
-		!value.ExpiresAt.After(time.Now()) || value.ExpiresAt.After(value.Authority.ExpiresAt) || value.ProviderCredential.CredentialRevisionRef == "" ||
+		value.ExpiresAt.After(value.Authority.ExpiresAt) || value.ProviderCredential.CredentialRevisionRef == "" ||
 		value.ProviderCredential.SecretName == "" || value.ProviderCredential.SecretUID == "" || value.ProviderCredential.SecretResourceVersion == "" ||
 		value.ProviderCredential.CredentialRevision < 1 || !validProjectionDigest(value.ProviderCredential.ContentSHA256) ||
 		len(value.RuntimeSecrets) > 64 {
@@ -240,6 +240,13 @@ func validateCredentialProjectionManifest(value CredentialProjectionManifest, na
 			return ErrCredentialProjectionInvalid
 		}
 		seen[item.Name] = struct{}{}
+	}
+	return nil
+}
+
+func validateActiveCredentialProjectionManifest(value CredentialProjectionManifest, namespace string) error {
+	if err := validateCredentialProjectionManifest(value, namespace); err != nil || !value.ExpiresAt.After(time.Now()) {
+		return ErrCredentialProjectionInvalid
 	}
 	return nil
 }

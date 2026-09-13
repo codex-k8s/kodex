@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"testing"
@@ -88,6 +89,37 @@ func TestRuntimeCredentialProjectionRejectsChangedExactBinding(t *testing.T) {
 	changed.ProviderCredential.SecretResourceVersion = "stale-version"
 	if _, err := store.MaterializeRuntimeCredentialProjection(context.Background(), changed); !errors.Is(err, ErrProviderCredentialConflict) {
 		t.Fatalf("stale provider credential binding must fail closed, got %v", err)
+	}
+}
+
+func TestRuntimeCredentialProjectionListsExpiredRevisionForCleanup(t *testing.T) {
+	t.Parallel()
+	store, client := newCredentialProjectionTestStore(t)
+	manifest := projectionManifest(
+		ProviderCredentialDescriptor{SecretName: "provider-expired", SecretUID: "provider-expired-uid", SecretResourceVersion: "41", ContentSHA256: stringsOfHex('d')},
+		Materialization{Namespace: projectionNamespace, Name: "runtime-expired", SecretRef: "sec_expired", Key: "TOKEN", Revision: 1, UID: "runtime-expired-uid", ResourceVersion: "42", ContentSHA256: stringsOfHex('e')},
+	)
+	manifest.ExpiresAt = time.Now().UTC().Add(-time.Minute)
+	manifest.Authority.ExpiresAt = time.Now().UTC().Add(-30 * time.Second)
+	manifestJSON, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := map[string][]byte{providerProjectionKey: []byte(`{"OPENAI_API_KEY":"expired-synthetic-key","auth_mode":"apikey"}`), "CRM_TOKEN": []byte("expired-synthetic-runtime-secret")}
+	immutable := true
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "runtime-credentials-expired", Namespace: projectionNamespace,
+		Labels:      map[string]string{credentialProjectionLabel: "true", providerManagedByLabel: providerSecretBrokerManager, providerPartOfLabel: "kodex"},
+		Annotations: map[string]string{credentialProjectionAnnotation: string(manifestJSON), credentialProjectionDigest: projectionDataDigest(data)}},
+		Immutable: &immutable, Type: corev1.SecretTypeOpaque, Data: data}
+	if _, err := client.CoreV1().Secrets(projectionNamespace).Create(context.Background(), secret, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := store.ListRuntimeCredentialProjections(context.Background())
+	if err != nil || len(listed) != 1 || !listed[0].Manifest.ExpiresAt.Equal(manifest.ExpiresAt) {
+		t.Fatalf("expired projection must remain readable for exact cleanup: listed=%#v err=%v", listed, err)
+	}
+	if _, err := store.MaterializeRuntimeCredentialProjection(context.Background(), manifest); !errors.Is(err, ErrCredentialProjectionInvalid) {
+		t.Fatalf("new expired projection must be rejected, got %v", err)
 	}
 }
 
