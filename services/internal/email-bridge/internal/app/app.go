@@ -74,7 +74,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 		return errors.New("metrics unavailable")
 	}
 	stage = stageAuthority
-	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
+	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{ServiceIdentity: true, Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
 	if e != nil {
 		return e
 	}

@@ -356,6 +356,12 @@ export async function publishAgent(page: Page): Promise<void> {
       .poll(async () => (await readAgent()).instructionBinding?.revisionRef)
       .toBe(plan.draftRef);
     expect((await readAgent()).instructionBinding?.effective).toBe(true);
+    const impactDialog = page.getByRole("dialog", {
+      name: "План публикации",
+      exact: true,
+    });
+    await impactDialog.getByRole("button", { name: "Закрыть" }).click();
+    await expect(impactDialog).toHaveCount(0);
   }
   await expect(
     page.locator(".panel").filter({ hasText: "Инструкции" }),

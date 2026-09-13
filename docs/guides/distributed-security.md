@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.27
-updated: 2026-09-09
+version: 1.4.28
+updated: 2026-09-13
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -20,6 +20,12 @@ Human Gates, replay, revoke и secret/file scope остаются обязате
 использует отдельный forward-only plan с exact incident/registry/source/binary
 binding и CAS; обычный healthy guard не является запретом на такое
 восстановление и не ослабляется для остальных релизов.
+
+Ускоренный staging-профиль до #1527 использует срок проверенного сертификата
+как границу обычного service RPC. Emergency revoke отдельного сертификата в
+этом профиле требует ротации trust material. Это не применяется к user session,
+task/attempt grant, Human Gate, secret scope, replay или предметному revoke:
+они остаются авторитетными проверками каждого соответствующего сценария.
 
 Readback admission policy воспроизводит все разрешённые способы её записи:
 точный source render и ранее применённый repo-owned CAS transition могут иметь

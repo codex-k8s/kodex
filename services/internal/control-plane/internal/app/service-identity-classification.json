@@ -1,0 +1,1886 @@
+{
+  "version": 1,
+  "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+  "operations": [
+    {
+      "operation_id": "platform.access.bindings.change",
+      "source_binding_sha256": "9da08ab51d79609fce3312a1be1b4ad8812548e95bc9f1d49dbbecb39c730999",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.bindings.create",
+      "source_binding_sha256": "1e4ac995d2f6b6ae4de52447fc9dbd47af575e3d63af94a4000369f5279c262d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.bindings.list",
+      "source_binding_sha256": "e88dc3d3c8e1d379eceaa12501a96269d58e4564be55d107d5cc8691e285c52d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.bindings.revoke",
+      "source_binding_sha256": "ecbec0631a46d531b362fb966b66c4ddbba676388bfb634b53bc6f7d391bbcdc",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.effective.explain",
+      "source_binding_sha256": "58b9fcd946abb14f54c5894fd624e2f0e027a3f0026a5f45955a5d92479e1496",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.effective.query",
+      "source_binding_sha256": "c36000aa7f2b7cc069b59c278163400a1c332319656c7e7eb43f3a0177ef35b5",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.effective.simulate",
+      "source_binding_sha256": "e533c75b21695a200d45c624436859c1c37cc6cd1808eb8d76ec769a9f336689",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.oidc-groups.list",
+      "source_binding_sha256": "2bec0929818a03304d7c52d5347d49ee1b903f4270d5db781d057c617013d5ba",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.permissions.list",
+      "source_binding_sha256": "1ac1f0c2202f52697321c1c0b9cfe0c0e681f2744766d4e849467c3d4fbaa8a5",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.role-versions.create",
+      "source_binding_sha256": "d0eb106b6bfc2abc8942da467338b4d712d24e9de27424b3004657fd27996a77",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.role-versions.list",
+      "source_binding_sha256": "78981692474ce77c4c917d4f1cb736f85a7201dfa95d7964207800dcf92986e4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.roles.archive",
+      "source_binding_sha256": "c06cead76820fad8090dbaccbc4a62dd723ae12ace0d18cb291e1a466e03818b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.roles.create",
+      "source_binding_sha256": "027649cada82c289132246dd06ce04d7a4ca26574155087a27d53ff3ba0c8682",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.roles.list",
+      "source_binding_sha256": "83007ed242dd6064079a9bd474b24b2948d6f6f3cd70c79fba7ac04beaa02823",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.access.subjects.list",
+      "source_binding_sha256": "3e184bf234d718e8a55cead341ed8ffb523c043eeb3e2c0938140d0936881d6e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.conversations.archive",
+      "source_binding_sha256": "1411793688212354c2cb7f541c3d07319b34aa285467995001084b46a68917ea",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.conversations.create",
+      "source_binding_sha256": "83f11fd4de2c455867fab87bf42826b188b079f25a52a6105c873d0c0242a9f6",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.conversations.list",
+      "source_binding_sha256": "f9ef21f1fe725b26f905fb08630dbb7509410848e105e3d8e65d232c604690b6",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.conversations.title.update",
+      "source_binding_sha256": "886a44397c76550d7eab019ca5175ddd3283038c804cff03a7f19d4f2a1efec2",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.get",
+      "source_binding_sha256": "f5eda526a696cfac9049dc4406d5244b9c9c37996753fc28d9f90c008bbc7f2a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.owner-instructions.update",
+      "source_binding_sha256": "f9690b0ea7780e6508d49cc77207f20a20a2f28fd124cf45d5a4cb5656b3e4fd",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.plans.apply",
+      "source_binding_sha256": "e6002398bc9ac64e46532a4604bc013fb1315217ed95a4fde28d91bcad1e1e8f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.plans.draft.update",
+      "source_binding_sha256": "87abf581fa74d16803bedefd49207e1a1cb628291e37a019e480d59d6aea98c2",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.plans.reject",
+      "source_binding_sha256": "23ae4e52d8e591540869b49956d8b6627f1272435f06a136f9b998220f5e3e01",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.plans.validate",
+      "source_binding_sha256": "6b07b1f447206ec8e3db615d147b6b45b174335e7c93e6945fcb5b5f339519c7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.recover",
+      "source_binding_sha256": "349786c5e16ce69402019f088b21e54dd3827993ea5ed86fef4a3c5bb1e5d538",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.assistant.turns.add",
+      "source_binding_sha256": "46c7801c3f79b4d8069956d37c70fb89f0411786460bc174d1a5dea6dfdb9686",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agent-capabilities.change",
+      "source_binding_sha256": "325f46489f249ea68bbb4415402138c76197c19609212c52e5c527397aa82531",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agent-grants.change",
+      "source_binding_sha256": "54e62cbcf41dbf95049f88eba842e2e8276dd817942c4661ffd6df7e49c87b86",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agent-memory-records.bind",
+      "source_binding_sha256": "900420d3b43afc50b2f138dd36561b1c414ec38e4312db3b3b25069c36e7e02b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agent-memory-records.unbind",
+      "source_binding_sha256": "480115fe0ba8a507480f6447d0aba594a2d723ff85be676106668a52bdf680e9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agent-runtime-configuration.publish",
+      "source_binding_sha256": "e677a43049ffd69acc4b959b504c2b5615a16c63aaaeb519d627ff065b26659c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agent-runtime-environment.bind",
+      "source_binding_sha256": "ed162d4e190f2f52e8efed0e946ac51d52031df88d7d5cec1bf79fc1ae69b32f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agent-skill-bundles.bind",
+      "source_binding_sha256": "e206b845dc68a98bf9acab833b2e7bfc449a2ad17272d91360977e91a6c7c3f8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agent-skill-bundles.unbind",
+      "source_binding_sha256": "5d0bce1f52ca43618fb6d7a09ef7f07c40b27ed832ac424743b962e69b8f11fa",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agents.archive",
+      "source_binding_sha256": "c5facb689cf233087b14da730104d47db8af87410d6b59334c1f629cb12a270f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agents.avatar.remove",
+      "source_binding_sha256": "ebf6f6f2b01d7b67e0d6809b377a3c10f7b4e9f442cc3710c67dca5d5273a6ef",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agents.avatar.set",
+      "source_binding_sha256": "8e4d3226a089be7bd3b6c380f5795c92c03b3f70ac1eab8c022e1a83205e88aa",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agents.avatar.upload",
+      "source_binding_sha256": "20ff37264e6490ec587402a42cd89bc7e982b9d58156326094b29443c237ae34",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agents.create",
+      "source_binding_sha256": "3d4f2cd2399ebc3d645544dcbf82049c4e9bb56066fb0ae047c8aca00c1db1e4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agents.enable",
+      "source_binding_sha256": "abe9fd02676626aa967f19634b4d01a762e1a5e1989bdcd033a291c31cc03c36",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.agents.update",
+      "source_binding_sha256": "b627e4a6690644b3249b8ce13fc11be0ab991dc73f307b1336a2c562cda83830",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.artifact-bindings.change",
+      "source_binding_sha256": "fa1653448ddcb62fe66851e9f5450686a529ec0d612101adf14b9a4e2d43f6f7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.artifacts.delete",
+      "source_binding_sha256": "5a25e6492e5666ebfa148b766dc6a8d57d25cb04ea05596b3a5c88b91f960608",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.artifacts.download",
+      "source_binding_sha256": "26662ec49d6df7b6f17938946ad4d7cc6045f5feb54bc05557a88d6e15487914",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.artifacts.purge",
+      "source_binding_sha256": "26f01c229cc38ef07bf93161d3977fc8826f621ff2b442b9be243481b39eac58",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.artifacts.restore",
+      "source_binding_sha256": "a12a62f2b18f3c8170838b4d94a0d1e116ba76be70edab2ea71f698c8f9459d8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.artifacts.upload",
+      "source_binding_sha256": "88102c22d8972e32a1b28b8a450f1210c5e8e1f377f6da92009d65c18df193f2",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.attachment-sets.add-items",
+      "source_binding_sha256": "4d214d3f878cb7b9abdbd65d457289e52ea6551748bf019420ce1d588ef58ba6",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.attachment-sets.create-draft",
+      "source_binding_sha256": "4cd0e0c839232cd06c7e1c64ecc7374889fa06ad9cdc8c8bbb64f95ad09274dc",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.attachment-sets.finalize",
+      "source_binding_sha256": "de5c51e5e3159b98069407389df1b98acb8a59c41e2034cc9288b74546c262ae",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.attachment-sets.remove-items",
+      "source_binding_sha256": "92ca254f9dbab4536017f964affe9ea1ec763355908fc889c1a9b185294d9821",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.config-overlays.create-draft",
+      "source_binding_sha256": "7b7461d0983ac6033f3c9c826ad48c50fe62e2a6aa58523bf09ed7c46da98142",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.config-overlays.publish",
+      "source_binding_sha256": "a31c84ea3fc45cde04eb26a3bd9d42b123eefeecd9b8d5ac22690af69d268c7e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.config-overlays.rollback",
+      "source_binding_sha256": "fb783022abf2f1757dc4d4fbee217aac3b619f3ff6c937bfbc1938827ba77121",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.config-overlays.validate",
+      "source_binding_sha256": "0e47dba81a0abec8e5ce4a65846b8e70365cdc1b006de83753c1d20535b95bcd",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.configuration-writebacks.approve",
+      "source_binding_sha256": "da84d243c4dfa741870a246f3ebe1781b87f1fe3d23a51128f83af8c767fd104",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.configuration-writebacks.cancel",
+      "source_binding_sha256": "5f47c4b122fe3267e041eb957bc38ac5eadb76a8bb1d4cbb464924743708589f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.configuration-writebacks.reject",
+      "source_binding_sha256": "1812f614dc8c2f223f71454ddcd501e6d6cae6a7f401d07f3857ca1c1868b5b9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-effects.reconcile",
+      "source_binding_sha256": "8dc5517da20b0cf6161fad23f9919d00328514781959038f307e65339799c125",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-mailbox.configurations.bind",
+      "source_binding_sha256": "a3059cba5adb52273250307f3beff600eaf9ec3eef3beb9b16794935d25df077",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-mailbox.configurations.unbind",
+      "source_binding_sha256": "5af5dca0bfdad366c54cb4620a3a68daa43719e9263112d754c888f710e4ff72",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-mailbox.configure-credential",
+      "source_binding_sha256": "b7cc897dcc6644c3cd9358faf1a4e908c0b0d72331748d1d8c7538e5c38dca91",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-mailbox.drafts.create",
+      "source_binding_sha256": "4b2adebb5327f924e532d45e346b19669dd69e17e89cfd237bcaf6a74d3073d5",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-mailbox.drafts.discard",
+      "source_binding_sha256": "d446ee3fd1bd40e243926c8ee81cd1245ea8d26dfda21d4d4e25681a2f045331",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-mailbox.drafts.publish",
+      "source_binding_sha256": "348dd52496e81e4d96f0b4eb0089d9428bbb16ba7cb5e538922a546fb223e45a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-mailbox.drafts.save",
+      "source_binding_sha256": "96d0d60fbbc1842b39730728fc515904ce73f6d3e859488b9eda3d8cec422787",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.email-mailbox.drafts.validate",
+      "source_binding_sha256": "246d99299917d573e94ddb7baf031ba0d0b5decd3f1680cc58e38e9121cb80f5",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.environment-draft-impact.prepare",
+      "source_binding_sha256": "09f2dee38f368b10358119c6999e6b47bbd118386019423b47ee13f82cdd02b3",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.instructions-impact.prepare",
+      "source_binding_sha256": "6bb8526c2c0e03d72849a7212922d48bb87bec19b166a8d7cbe7088495b7f3ee",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.instructions.create-draft",
+      "source_binding_sha256": "17cc10df3b7dc7457172e071a345683a368c3d1c453666888a4954cbe85000cf",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.instructions.publish",
+      "source_binding_sha256": "cc169feff64b57b097f3b5cc2225c646204c02a6ebe2c34edb538ae350b7e547",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.instructions.rollback",
+      "source_binding_sha256": "675047b0346f25b51e6d20e0856f6ccddde81db3d79f37acf99588370ed74e51",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.instructions.validate",
+      "source_binding_sha256": "e1b3ccc603b924d9c828fba74379ece91cdb3e90a027fa89970f849c05e8e8f4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definition-sources.configure",
+      "source_binding_sha256": "b8a8b1a07beb256e41db7f96193befe70e06894dd975992d2b366f22b23fc4e0",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definition-sources.refresh",
+      "source_binding_sha256": "7f963ec72cfd41e9f92b45de5600cf41c1312d63a4faa76877e4e8452dbd2c72",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definition-writebacks.prepare",
+      "source_binding_sha256": "17142bfe0332a13a4f75faed8710bb7f18b04e74ae4d81ec5ea85013d6cc2638",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definitions.archive",
+      "source_binding_sha256": "0374fa9f2a20a0dcc9d2f502d38c04b276acbaab1dec68b9c525bbc2ce69abea",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definitions.copy",
+      "source_binding_sha256": "8154f0732e93b33851e50316f414cb53fe761d5bf2562ad798a7db675905d4a3",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definitions.create-draft",
+      "source_binding_sha256": "802dd3b3fc732568308130e21f2b872391db1a4ca0cc2fc65186343e0290730f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definitions.discard-draft",
+      "source_binding_sha256": "6f29ccd457e56bb4b397a1f3d8be798a56be172ed3e4d9ed0a362cf47c01df8a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definitions.publish",
+      "source_binding_sha256": "71331b9872bda3dfb92d0209c22590fada9458d63939c3690d0ff88b10061275",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definitions.rebind",
+      "source_binding_sha256": "472cd2f7f5913eb2bde27362ccb7ffe253598981a4138e9a95692135f806394e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definitions.save-draft",
+      "source_binding_sha256": "c63ce4de5ded06e39ec83a930005b4aaac04b6268c63b18333effa631109e329",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-definitions.validate",
+      "source_binding_sha256": "bb7a3e956e27e6cbb31664d7b77d70eecb74bf33192c20ea5d6f90cd5071a4c0",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integration-grants.change",
+      "source_binding_sha256": "e8c8612144907e63d5657347b3089c2f72ad924d77afe784415572e3b83b95aa",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integrations.configure-credential",
+      "source_binding_sha256": "d193b32fd97b2d2dad34f80ffd14574e4973c7e8589911c2ca2c78def5c1a4ee",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integrations.create",
+      "source_binding_sha256": "1f800f0bf91f5c67af8ee392227596d958acfc45a3f83e84ff3bfaf00641569a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integrations.delete",
+      "source_binding_sha256": "9c3dc1bc23d5e97ee99b72927dd9f43ae5a226a2d6f646cd3a150bad3c656c8e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integrations.enable",
+      "source_binding_sha256": "d39425c03196419487efd8be5f857ee5ac465f0f2e0f62706ef9f387688213eb",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integrations.test",
+      "source_binding_sha256": "aeaa29a5460eba3c73080db06f6d09544b42f8ce5cad1ea8c1cc32d5041c8828",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.integrations.update",
+      "source_binding_sha256": "cf2d79bf865f3ed9a415f675111b103e49fa7f6ffe94d70ba7af1ee61390db32",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.interaction-identities.bind",
+      "source_binding_sha256": "ceca036bf8df2e23a826e375295165056a7e407c6e5ae038d424400860752020",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.interaction-identities.revoke",
+      "source_binding_sha256": "238b365e46a54cd6be73f3b79a6cedfbb19b0eb602f8151ddf323d4fe0f004ac",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.managed-configurations.copy",
+      "source_binding_sha256": "51d0bcedde623b51b1659da63cf8705c51b210f6ed7bde83c6e82f9350a35291",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.managed-configurations.detach",
+      "source_binding_sha256": "1e384a33f7eefb03ab1aaa42378123977840231ecf908cd90239ca1fffa3456c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.memberships.add",
+      "source_binding_sha256": "9786d28a4d90ec491a1faf8c861aae81acd177d6bad981f005d1ebee3df299b5",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.memberships.change",
+      "source_binding_sha256": "4d5eb0a42849f3f4371812276850b759a3a888f26d8a4f97cf7fad6a641c38e7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.memberships.remove",
+      "source_binding_sha256": "4afb93f890c349af4ceaf77dbbdbabd6ffc5869ce4e16a40fe47e32c03294d3a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.memory-records.archive",
+      "source_binding_sha256": "6a75b09e634da59f564806705d3a461ee729063d2bf00f078ddfa14e7a306bbe",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.memory-records.create",
+      "source_binding_sha256": "8121f6df4ee3309c07ce2df93c654f04bfe28e9527789a24424fd12c2545c9ea",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.memory-records.purge",
+      "source_binding_sha256": "c7730bce2174f6f20d25ba81bfaeabb0606f07df1495f1732227463ce25fe354",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.memory-records.restore",
+      "source_binding_sha256": "ec45bf2bbcf6e82a06808efa1fb663a469c7382b93a12ccc669aa889a2ccab60",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.memory-records.revise",
+      "source_binding_sha256": "361d1334dbf0d00a59d0084ed0905ef795ca9969f76af96952aea17832ce661e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.onboarding.complete",
+      "source_binding_sha256": "3a5691f2cfcb97430103f1d2489814d7cd33fd484ea21268ec68cbc46d76961c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.organization-artifacts.upload",
+      "source_binding_sha256": "5df4e2889e1c4553a7426ef38bda3143cf0acc927aefd77f495b770978527bd4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.organization-attachment-sets.create",
+      "source_binding_sha256": "2753e7b8b4956991291b5ac40baeaa3b0ef552b8f1b0c47b94ca1c46f66fedee",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.organization-memberships.add",
+      "source_binding_sha256": "c53b24e81ce2448b9590ef5a750a9f7dae1e0c285becca025ec5a76cd4a1d671",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.organization-memberships.change",
+      "source_binding_sha256": "689194c9ed3a9eee6f7861ecb93e3e9b4895908d9c68db171e17e017d3752b43",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.organization-memberships.remove",
+      "source_binding_sha256": "a4f26f27fa7cae9c152e7f2f99b87b35d64ae03ba55f7b422f7467e579cbf87c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.owner-gates.resolve",
+      "source_binding_sha256": "d27963b4949bb787dd982701d15f6ebdf26e96f5e591652515acf7b9ad39e98e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.projects.create",
+      "source_binding_sha256": "c82ec709911ba6fe972069af480143e670f37f8bc106a370add6d2f7d94deb47",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.projects.update",
+      "source_binding_sha256": "fd9008cb75696d1b4dc4c1e760f2c6dbf9eaa265bb0db5daaf69fa5d18ddd32f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.prompt-template-impact.prepare",
+      "source_binding_sha256": "e230f4862e4488b65980212ac689862e4bfc231ff5ce79e94165516a52ad639b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.prompt-templates.create-draft",
+      "source_binding_sha256": "618d2adfd0038a82936f000c9c9bacc7aec3c6591d7325a8bfa3921aaa705d09",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.prompt-templates.discard-draft",
+      "source_binding_sha256": "c9b1f607b9f9efad6a71af4c61e6ea8da61b95ba99c40be37258a171f0099a12",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.prompt-templates.publish",
+      "source_binding_sha256": "4fb10620d162603e0d2fbaeb2abb49376229fafb6c4998b016d0479e4248679b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.prompt-templates.rebind",
+      "source_binding_sha256": "c8119112974c8415e1f995f51ef94c65c44fccc496ac7310d15f1b311c6fe9c1",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.prompt-templates.save-draft",
+      "source_binding_sha256": "e408dfd5a1e6476cb359f78b01695a99df1d0eebdcc6fe601515e7ed92810f60",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.prompt-templates.validate",
+      "source_binding_sha256": "4c0228f428ad6e522ab176d6ac93dc60707c54bb186d0fac9355d390761e87fc",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.api-key-authorize",
+      "source_binding_sha256": "a37a706921dd7fb20b473522012745874bec5051e93eba6d4a2704ce21049950",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.authorization.refresh",
+      "source_binding_sha256": "7936212ee6a9c775c1753c310411a0986427b9b16d81a397cbc3473ca295016d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.create",
+      "source_binding_sha256": "f53a96b2e1f0a6df689d5788743b0d6415f33bbecb6afa5f5f0c8e2b6eed00d4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.delete",
+      "source_binding_sha256": "12e5319dba8c3de9e27abe40375056823b137111d8467cb0bb5b533728fb1aec",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.device-authorize",
+      "source_binding_sha256": "5cf9e4955dc85126772e04b7d0b8b681485bbf15c5c2ed303a243bb449ded9cd",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.device-reauthorize",
+      "source_binding_sha256": "cbf06cee0ceca5d322d7075d2d7e987e77558beff26e3d05949bce8fc76ab09e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.device-verify",
+      "source_binding_sha256": "a96016c6e263143fe4219202160d0b21b7779099f0009418a3e8c9c6b3a82b6c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.enable",
+      "source_binding_sha256": "5a3c35690cf96c58c78fe3e3274a06a1d81db050a182b31bdeb8903e25b9352a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.queued-work.cancel",
+      "source_binding_sha256": "bc2f3f43051083f2f0277cd12113832466060d2a6acfb3b99b70eb2578ee0ad4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.provider-accounts.revoke",
+      "source_binding_sha256": "4b3c499a0e4ffa6636e8f59439367315d06a12195a8036045819aad4311632fe",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-impact-plans.prepare",
+      "source_binding_sha256": "d3e4067cdbe633ff41f5aecad38cf23db79e387b5f932757ec9fd7ae0af8a84a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-revisions.create-draft",
+      "source_binding_sha256": "463a126f1006c279dc742944a167a24123c0e2f2e36ab25cb52e9a0611296f3c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-revisions.discard-draft",
+      "source_binding_sha256": "5b5816d88714bd7ea72a4e7639d12adccaba703c1d64336dd51d30331d93f716",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-revisions.publish",
+      "source_binding_sha256": "1446f7249cd3e645dcd3e1c625a4a53ea25d10d506eee5ab3d7eb3d70fb123c4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-revisions.rebind",
+      "source_binding_sha256": "09d9f8861dac4e4e275fd244d602e526520bc1c41157edf5f6ef9d26412b16ba",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-revisions.save-draft",
+      "source_binding_sha256": "27da7aed835b769ccafa2f9dab6eb35d4146e03ebf27554153dc2727138986c3",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-revisions.validate",
+      "source_binding_sha256": "594c379764c06edbeeef7bc036ae2203a475b912ded48a93e06f2630d8b7a8e8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-sources.configure",
+      "source_binding_sha256": "ba3710185107333a0c9a09f6a9ce91a807d6dc2b5faa5f41254f4e5767b86a82",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-sources.refresh",
+      "source_binding_sha256": "133b81af188bf13361b5506ddb52981eec36e38ee3693b0bb0b9e2b9bfd2f9d6",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-image-writebacks.prepare",
+      "source_binding_sha256": "a80b264eda930d44fc10e9e80099708517250bcf4ebc12017301fdbea6befbc8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-images.archive-configuration",
+      "source_binding_sha256": "fb5b4f9342efcd13c6074844981fb68efbc66f3b60a9f857204ca9d2078816e2",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-images.copy",
+      "source_binding_sha256": "689eba6409a4af4e5c0d966a4c848d40285030b1d8e192778b9dca8c26ed2ae9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.role-images.promote",
+      "source_binding_sha256": "e9d1dc4e3490feaf8275f5231e963f9a868ca40b78221db7ea62ed6863e6124a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runs.cancel",
+      "source_binding_sha256": "cf9884fb5fdbb0fd4668bef873b11726b2d6a896e5a306b103adf76a9958543f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runs.launch",
+      "source_binding_sha256": "753a84f515f7f0213926c89616ffe8551b91e64f739925d23873e6d993b034bd",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runs.retry",
+      "source_binding_sha256": "b5156fc6780d9a6f8b42f2bfb232c8c7780e90265bf56cc78cae5b6eb5fe2262",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environment-drafts.create",
+      "source_binding_sha256": "52306c3d92a9e3e50e04f0b7221b94efa59566cf259a80ab0138b97d198d5269",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environment-drafts.discard",
+      "source_binding_sha256": "86c2a596ee495cd5d5e4c0fbd9a37036032388aef50aaf92ed1b71f86acf071d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environment-drafts.publish",
+      "source_binding_sha256": "955257c9fa0fbe7d27bba32ecd8cbfe3f199fd605990032450dbec55c7878e54",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environment-drafts.save",
+      "source_binding_sha256": "6a132186f07c0c1d05d8bc56c224f7111322bc439f1c611c3037002e85d10e1e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environment-drafts.validate",
+      "source_binding_sha256": "10a3ce2158d40190270c9d81b585351805ab778385447ce816375da5472f0d66",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environments.create",
+      "source_binding_sha256": "b9dc5fbea3896b28ec608c9b39bf13b85c689719624f008a14a1d2da83440604",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environments.delete",
+      "source_binding_sha256": "f4932364d7c1e4193e410173bfe677953502501aff5500a5aa72cac4128339ca",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environments.enable",
+      "source_binding_sha256": "301fbacd88b62a66c62d0876bb614b7849053d2c0fdef1cbac3090d65d236e24",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environments.publish",
+      "source_binding_sha256": "4dc80c39440f0c2b594bdddead6ea08fef398e1246b15ac03ba5a34d861e22a6",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environments.rebind",
+      "source_binding_sha256": "216df1d4281666ee7d6d3e9ddeae60ad153a605073b464f25879b115d87ae4be",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-environments.rollback",
+      "source_binding_sha256": "0cb7b910d221bd63c2914e8ccee2c3b0862bbd7e6949814256173ca53a1f0ccf",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secret-drafts.discard",
+      "source_binding_sha256": "33e4d760af111cc372f8f6edbf322272b67c1838b53e276f7a97a6f34e025c61",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secret-drafts.impact.prepare",
+      "source_binding_sha256": "e30201c7442ff71f7774d2fb829d507d18d4ed5f666f9bc99cde9ee708bbd052",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secret-drafts.publish",
+      "source_binding_sha256": "cf2d0279ab359c323eae664df53d23bc2c246914cfe320f74affc029eadd882b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secret-drafts.save",
+      "source_binding_sha256": "0c0aa9ca826b86485df61ec7a308d5aa72d4e32d6297feb508542cb35db18c51",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secret-drafts.validate",
+      "source_binding_sha256": "0bfae72ef2817cb4d3257ef2e22bbb0c21e5b23a01dc14775d42fef829417574",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secrets.create",
+      "source_binding_sha256": "f72f8cf8e84831cbd8b28046ab5ef4269ea5a89d8e2a12172f98d3ae20524b00",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secrets.rebind",
+      "source_binding_sha256": "850c95b2967abac5c419a4ebc6ddfbc0cd384a141809fd252715f07aab2e6104",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secrets.reveal",
+      "source_binding_sha256": "ecf23cdda502c44f6884dd73e59518756b5a46036f76aeb5452afbfecfaf3ab0",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secrets.revoke",
+      "source_binding_sha256": "3916636560230343e4f8362da69bc11ad1ce7d58508a19f1204f50a29d05cf7d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.runtime-secrets.rotate",
+      "source_binding_sha256": "1a521835fecb073d7317f3831fe7feac558530ff8d480fdee9dfeb8a6b22ee6b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.schedules.archive",
+      "source_binding_sha256": "ddf18d03dba49fc69d52e78ed652aac3f1d81c84804ef6a88ad6f102a5e2ac16",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.schedules.create",
+      "source_binding_sha256": "75d7118e8e5369855de20de43dc27d387535706e00fa898207a5791eec82a66f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.schedules.delete",
+      "source_binding_sha256": "176fa5305dae94fe8eba609de0f27d4a858d1ab2b8b23fdf619c5b8151e0b766",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.schedules.enable",
+      "source_binding_sha256": "9c92191d292a53b0e4535b175a837bddc72eba9d44260579a6f8f5cd5c9c713c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.schedules.update",
+      "source_binding_sha256": "00c02d158de1704e6bacf792b52a42b5fc55928a0862a5641868d328a7497702",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.sessions.add-turn",
+      "source_binding_sha256": "4f36072fb42c18f72d8059d849af1025843f46f53c1923969a4b54171e6f4cbb",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundle-drafts.create",
+      "source_binding_sha256": "59a99869920c2671b46a74515f3ec86729e8b84593f5f684854c5f640dfc16b7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundle-drafts.discard",
+      "source_binding_sha256": "62ac730ec21f13791464ac3eb90dc3db73e6f53e2d36e15e3aa4f76f92252495",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundle-drafts.publish",
+      "source_binding_sha256": "65b59afa8a31f4a01d52f688f605b0a87537ac98e9498f5d28403504a6dce614",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundle-drafts.review",
+      "source_binding_sha256": "692ee07e8bb8f459f6bae1bc6aea45bd1b55e66bb84a376f8ceba0cbddda1eba",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundle-drafts.save",
+      "source_binding_sha256": "1456bb9f07c161e273882efc89dbfa6a1fb6b8ff7fac84bf2764f520be34d0ee",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundle-drafts.validate",
+      "source_binding_sha256": "8e54ef1fddf498dc383586dbdce056d7a674c751df6aa62c2d61eec448b6ac1d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundles.archive",
+      "source_binding_sha256": "8cee1af99c5cb036e025a7271ee5f397e387805289f7e4a772deadddc01cc1fd",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundles.purge",
+      "source_binding_sha256": "33a06578c3b25419641ea7ac4d29d6c52e359a9b4da1385ad60c921957a379f4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.skill-bundles.restore",
+      "source_binding_sha256": "099aa810fc620657a7a1fcd44b8aab5390fc18d137ac3d19a25d3e07b9463513",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.system-stt.create-draft",
+      "source_binding_sha256": "677e5c5b57f4efe739f91ebdb81ec2be151134db7f3fae57a6b1e010b6f4dbbc",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.system-stt.discard-draft",
+      "source_binding_sha256": "6515ba31e4153cc378b9f1c06def0781c265c5d2677260a838bd8050ad66015a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.system-stt.publish",
+      "source_binding_sha256": "e5b9320dbd208048a4561203382093efce9b36843c8f9233180e9106e8eb7cc1",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.system-stt.rebind",
+      "source_binding_sha256": "ccd1118821479a1d6f141b84203e4806c2a392271f54b557e7f80f1da1469c81",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.system-stt.save-draft",
+      "source_binding_sha256": "c56bcbe5b0caba042840e60ae17727e45c04b32263e9d1bd393f69225f23979d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.system-stt.validate",
+      "source_binding_sha256": "524fb2b4b809c656892dfa1290fe523ea2cd614e91098e0ad371f3ff162041d3",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.workflows.archive",
+      "source_binding_sha256": "d1b75c587877c054b152791c22391114daec4ef1dc09849ffb03ef2365a8c9dc",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.workflows.create",
+      "source_binding_sha256": "acf16272702f545e7b3490272475c782addb8681c100b322f4845c762734bf16",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.workflows.publish",
+      "source_binding_sha256": "7c70026a79341b5438de92d0d1ac71505a9967ec16d8a702e23d518b8c470fec",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.workflows.update-draft",
+      "source_binding_sha256": "82dbb9dc814cb0449ef40510d4fe7935e909a25cc61a6892da4e52c5373a52e9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.workflows.validate",
+      "source_binding_sha256": "e76ae4bead16f977963812a5e7cf042bfa6a724670c40c4ff475ecefbb136633",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.configuration-sources.work.claim",
+      "source_binding_sha256": "efdd299a7b9a4c05b991ec7c619f6fb633746e15f4b40fa327a931876e03986e",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.configuration-sources.work.complete",
+      "source_binding_sha256": "bcf56a22b1e9b1d54fa60dcd6eccd7411b9bea701ff1b6130975823866f376e7",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.configuration-sources.work.fail",
+      "source_binding_sha256": "4a67eec9bdd5be28119d028c1d21ece9f4d3a47fdc9ceaf576579d4d9a4a89f4",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.configuration-sources.work.renew",
+      "source_binding_sha256": "10ef33a59e35d06ee168d6407ec086382fe722a9ad893aaae09ea69f1a575523",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.configuration-writebacks.work.begin",
+      "source_binding_sha256": "4a36a0b00f7a90e144343036c4ad8340a29e677be7351a58f3eb6ec69b85694e",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.configuration-writebacks.work.claim",
+      "source_binding_sha256": "65ba4863071008f08320cfea4131bcb35e8ece86ae552249f123fd89a0c626d9",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.configuration-writebacks.work.complete",
+      "source_binding_sha256": "fc78777254acc0ddf61c6f1fe4c3a0ee6f136b5674381b422c1540742ffdb866",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.configuration-writebacks.work.fail",
+      "source_binding_sha256": "45ec1e8cb732161e4127381502bf2046538c41dde033db95398f52030544f901",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.configuration-writebacks.work.renew",
+      "source_binding_sha256": "904e7b9c9068ac4c87b30a949790661b36e198849d3dc1e66de154bc60705c53",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.credential-projections.readiness.check",
+      "source_binding_sha256": "b94568681c6c69e21f11472f03b3e2b23fb2672ffb63773e2c60753ecd554ab2",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.credential-projections.runtime.resolve",
+      "source_binding_sha256": "9a7724b6fc88bf38e690a4a609f34644568f47d9972ec4f1a9edd55609d7b0b8",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.credential-projections.runtime.validate",
+      "source_binding_sha256": "740c3c109cdefc9519a8380a6781e7d53731be20d4d289fa6d4c0412a4a46096",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.credential-projections.stt.resolve",
+      "source_binding_sha256": "474ba851015dce618cf98a5a12f47aff167b1bc5d433d9b67ba121edf3b6b8a9",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.email.authorization.resolve",
+      "source_binding_sha256": "c4716ff473128680cba69307df8a46acb9817f5ff82e12601a64bda54e9ecb1d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.email.configuration.report",
+      "source_binding_sha256": "cf201853937c55a8d6f4057ffa3bfbd3a05d35c9f386f1ee94bd3daefb450125",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.email.effect-receipts.report",
+      "source_binding_sha256": "bb88e52f1da0de5d693712b9ab901a77036204a257f1df32708e1ef256f788ab",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.email.reconciliation.resolve",
+      "source_binding_sha256": "6e0bd603548d9352f3e163c7833dc613b6521096a2dd2b4e122b6a64aa43d840",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.connection-tests.claim",
+      "source_binding_sha256": "f11aebaa1a7c5c56e288cf08710c06e80eae066afda799046eb1b75ea80326ce",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.connection-tests.complete",
+      "source_binding_sha256": "00961dfa03c570f1275e131985e2e333710a7f3c55ba95e2328e1fa6cdb445ba",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.deliveries.claim",
+      "source_binding_sha256": "c59fbea0d1d298a59232510e179eb8ff0a54d69c2aa3c7c79a87be6da623b761",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.deliveries.complete",
+      "source_binding_sha256": "dc15fa5b379e78016d13d952be1e6a6ec2189b99b56d6f8560bdfe1881670f59",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.invocations.claim",
+      "source_binding_sha256": "391cd066f26b08f4add2d9b755e798be7431a08d0637828bef327f4041afa4c1",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.invocations.complete",
+      "source_binding_sha256": "88961df4dc57e693e53230a3587ed844241800adee1a2bcb90dc80973411115b",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.messages.accept",
+      "source_binding_sha256": "1702b85d36dd07815c5d7b8f1a26e08b7003327345ce1e7e58f1f09014ff37f2",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.sources.list",
+      "source_binding_sha256": "9f7cb6594fe6b0b38f28d836f1ae6c2d375fbc0b2bfce66561e5ea0c05cf2f23",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.query.administration.get",
+      "source_binding_sha256": "52a8817b11ae5d7a00581afa64f796a941e6e5c550cbd944c1a80f45b3f990ac",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.agent-effective-capabilities.get",
+      "source_binding_sha256": "9a65a8bb7d92465869d42001de6e68363b7b057989918506282242015b04fe16",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.agent-instruction-versions.list",
+      "source_binding_sha256": "6b6efc787282d1bc0da559bcb4449ff332cd6a0e3c6273e2fd581725c7fd35c9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.agent-runtime-configuration-versions.list",
+      "source_binding_sha256": "73b9c053b4533403b18dac624f2c1c91c5164bcf3089f48fe69a4a5f6cfb5928",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.agent-runtime-configuration.get",
+      "source_binding_sha256": "02c58a22d775500b72e4179d8235bbc26bdafecaf3dc432817229a36a77ca51b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.agents.get",
+      "source_binding_sha256": "846bf70067e3d4c8074934385be69eacc240781834da924d808e3c85d7828bad",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.agents.list",
+      "source_binding_sha256": "617a6dd2e7658c5bb039afc6220254df7d58a9143c1a313c0a7b636733148e3d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.artifact-binding-targets.list",
+      "source_binding_sha256": "7e4cac6d80224e12eee9c81b7bae275b1f6cc45dc9f76fc896ee9d8a88e9f071",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.artifacts.get",
+      "source_binding_sha256": "e0c7cc94c18f5ca9c302bcc3f40381fad4f973e00b356fdd22650a959551c79c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.artifacts.impact.get",
+      "source_binding_sha256": "992b1fa0e12e3347e13823a36f97a3ab3655732179f0a9f18b5b7a25757f7385",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.artifacts.list",
+      "source_binding_sha256": "d0879706428bd0154c7f2564f76d813b965e96427a8eb86fea780920fb7970e9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.attachment-sets.get",
+      "source_binding_sha256": "171e62ef6db4c93245d9636d818fd992b49e5dfbc0a9a16be6767dad0e2b10d8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.audit.list",
+      "source_binding_sha256": "b86a7d1697113fe86bd8b5695eaa49f4eec5db1e4840992d9b33607af7d40c4f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.bootstrap.get",
+      "source_binding_sha256": "90499fdf1675cf0f03bb33798a734a8d9b9a9e19ea032aede5531430db8000ff",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.capabilities.list",
+      "source_binding_sha256": "e4026e98ccc69f1fb8c14322fa4915af43ffdad0042695bbabbf57c403f6ab60",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.config-overlays.revisions.get",
+      "source_binding_sha256": "88ffbbc2bcc8a6f426f479483028f3af0bcc8af33ec9c0340d86d15ca2b4d3ce",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.config-overlays.revisions.list",
+      "source_binding_sha256": "e0a7f91ab72ce6447a27222afc5959d2e459c0fc06e1a0d6f14c3bb814e2f798",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.configuration-writebacks.get",
+      "source_binding_sha256": "2800022f9efb2f23e9601daf7e20f34e49240d5b04a19c06b871fde5a51c6c14",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.configuration-writebacks.list",
+      "source_binding_sha256": "e01ba01b98361a3284e7dd539a6c2eb48551e0faaf96ae7c04b39e1dd051b968",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.email-effect-receipts.get",
+      "source_binding_sha256": "4040a84f2d234c8c2e841414854af662d6aa49c47294c866611e0c24ac3174e8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.email-mailbox.configurations.get",
+      "source_binding_sha256": "e7d2a3325809acf5f346188a13afd4f3279f71bdf051192db99fc8025534274e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.email-mailbox.configurations.list",
+      "source_binding_sha256": "6ef767169c1c4b39e6de8b4190aa9ffd74aaaed133bcb78c61d7cb20437ffe49",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.email-mailbox.configurations.preview",
+      "source_binding_sha256": "b675b6d737f093a54f105b8c86329b3877248570df47659c47aa2e81f106cf92",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.email-mailbox.credential-receipts.get",
+      "source_binding_sha256": "b70e61265026aa54f10766ec734e7748fe86285d4fd0d1b468069e2fb18b7efd",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.email-mailbox.credentials.list",
+      "source_binding_sha256": "a9ab4376d3e4a1bbf6c5852737ee7abeb9a089a50e3dcd374d02582e5c4d897b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.event-cursor.get",
+      "source_binding_sha256": "8c9d1a97388b30c859530b950dda88de56fe76f68c93667886a854b58adbb1a4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.integration-connections.get",
+      "source_binding_sha256": "2350e72b68737f2aa58368fcf9a4f24d3fc0c677d2ce367f0047bc291d874e3b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.integration-connections.list",
+      "source_binding_sha256": "80fc6bf85cdcbd5652f9604773b9f675efdba38cb7953ea5c39b985896c0d583",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.integration-definitions.list",
+      "source_binding_sha256": "b907c34a035a5f756a38b4956528b7a947c9a0ab4a907a0fa7ee12c732917f84",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.integration-grant-candidates.capabilities.list",
+      "source_binding_sha256": "62c4d88135f1a2f0c26f7b4e4765d80c739d3942ac7652d3458dfa5e37d9c3b8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.integration-grant-candidates.connections.list",
+      "source_binding_sha256": "5df14e14d54472c30a6f2105378fb692c01d58d8ccec2f9f77cb03a43173743c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.integration-grant-candidates.projects.list",
+      "source_binding_sha256": "f88dae3a642a993622635d87417ca38eee931e88aaa49690b3443aba405f06a8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.integration-grant-candidates.recipients.list",
+      "source_binding_sha256": "432ccc917dc05e22a309bef8546301ddfb82c931ac9084f158b2686a4294ce98",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.interaction-identities.list",
+      "source_binding_sha256": "d3a314b94ae096272dcec99ed93901a163c21b016096038dfcabe3b19912fbce",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.managed-configurations.history.list",
+      "source_binding_sha256": "4c99336726b05ce09f02d5bf52aba02138edeb45c88165c807272880c7ec5e83",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.managed-configurations.impact.get",
+      "source_binding_sha256": "8aabd90d4b2bcad4eac1a8bbaacbd0b3c06167ae5bc7db3587f4ff0fbbfd476a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.managed-configurations.list",
+      "source_binding_sha256": "2197256368e9d924fe6971afcba8dc4b82a8d51ca138946a71420100c050f32f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.membership-candidates.list",
+      "source_binding_sha256": "2e03f3aefe68d9805f13915d777816c7633ca001f96d6c8b70f44c5cf2101798",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.memberships.list",
+      "source_binding_sha256": "554b23231643a149ee2c16c3a8e79afa83b0c54d46a9f0fb47faeafa872c1b78",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.memory-record-revisions.list",
+      "source_binding_sha256": "3ba19942d5a7df09368a0ef093352607866f68e4e77e0257a27af57956c52de9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.memory-records.get",
+      "source_binding_sha256": "dbdb8715f1b1365a81af20fd8558e88c0c56e818a7ebd0a883fcc03d40a7a1fa",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.memory-records.list",
+      "source_binding_sha256": "e4cdf755a5b4f28a3bb484b23f77c144641c95ec25aef839131cc7efe16f2985",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.models.list",
+      "source_binding_sha256": "c8d23918bb576248ab159803fedd38ec913392cd72e93c854ef98e9684148a09",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.organization-membership-candidates.list",
+      "source_binding_sha256": "445f9240e1b15c6fc8a0165275177708109f3888c0c27fa0f58b08d4d783139a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.organization-memberships.list",
+      "source_binding_sha256": "3f658c170b72ffc260d2face21aac394fce22f5d7619036f422d07dc3e0b0233",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.overview.get",
+      "source_binding_sha256": "76f4d2907ab40ceb396ab83b32447457b9e9c2da08330418ee4feb7d04758c0b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.owner-gates.get",
+      "source_binding_sha256": "2c930d343b448c3514cff708b40eb6beb4b14b3ddc4b06b6de8b8d8bbd13f316",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.owner-gates.list",
+      "source_binding_sha256": "743adb26524b4d26dc70e9fd9876a1dbabcc3196bfc6ad179694787740ed348c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.projects.get",
+      "source_binding_sha256": "b66d1b1940f3cd2fbeb2a28d8fb36fbf22265d2c008ec0e0599e5355290f0d66",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.projects.list",
+      "source_binding_sha256": "28789fc00ff4cf0ffc2d1afeff17d1c3ae1693828660b93e696fd45a82293939",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.prompt-templates.preview",
+      "source_binding_sha256": "ecd49a7522358cd8726fa20c0dee897e429ef6fa6ea1b4a6d4d495e9dec2110c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.prompt-templates.validate",
+      "source_binding_sha256": "e76f43594e526f735d48c9059fcd5170e10d0bee9ec92a79aabcc1861d958374",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.provider-accounts.blockers.list",
+      "source_binding_sha256": "2c7608d1f377d0e201e84a2d953bf89b69ad045546e5ae7762be18a41084f017",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.provider-accounts.get",
+      "source_binding_sha256": "398ad46f5f4f51780d330fc20415d255216019ea80a0221e284c59ab68839a77",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.provider-accounts.list",
+      "source_binding_sha256": "d2042fd2cfe9daa4b4161ac738c37b30500664f3e6b0f0de53d45a2bbfd20864",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.provider-definitions.list",
+      "source_binding_sha256": "0f751fc8f2e2b624174b2e486f57cf2251afb580f9fa2655623637c0251c31ed",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.revision-impact-plans.get",
+      "source_binding_sha256": "7592f41834bc3c77fbb780c83b8f2946651c21ec12abc42f75c46bbf6acdf337",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.role-image-impact-plans.get",
+      "source_binding_sha256": "ea1aa5d34ab1e03feedd00e686a97c6b34eaebd7654b2a66bb6c0fd46150526f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.role-image-revisions.list",
+      "source_binding_sha256": "ce2f954a983c736b6affea74500a8222a3da6c1ef7daedbe22d4739bdaa736e7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.run-attachment-eligibility.get",
+      "source_binding_sha256": "19397bcd1fe9d3acb3dfbb17fbfa6dd61dcd40fc16ea6c60af17e8e5fdb30737",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.run-events.list",
+      "source_binding_sha256": "1f0a8f36d4454f9de6d99c81cb5ffd9473dddd9b05cf8baa32f43c9c46c84210",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.run-graph.get",
+      "source_binding_sha256": "7ecf4c695d07ea351fccdc1dfd7f22237966ed0c9c73994c316582d53dc42751",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runs.get",
+      "source_binding_sha256": "db0c93397d26a48a40427d208364193d4e38675ea05b78f66cb1930fb22bfa79",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runs.list",
+      "source_binding_sha256": "8e28806f78c96fa1698b7acf3cfa7f756a96f44c85002d82d702b9788444ab23",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-environment-drafts.get",
+      "source_binding_sha256": "544e59a2ca6d1fbd14af79634e3b61ff3d6e14422aabb70cdad44f3ef10f4d49",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-environment-versions.list",
+      "source_binding_sha256": "b45256234475cb7ad2868f1a70336ed6660487b1b9b1acb47cbaf81d546474e4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-environments.agents.list",
+      "source_binding_sha256": "05161b47ae9085d484003ff034299467d01ca24321edef59718a15f4b7d5842c",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-environments.get",
+      "source_binding_sha256": "afb78d517f05b14b1dccc74f142e229da4ae2d69ac56898456f656cddc64dddc",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-environments.impact",
+      "source_binding_sha256": "3a46a1af8245f6453d819a4b6789d7ce374e3282c27e028ac608bd279fad4540",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-environments.list",
+      "source_binding_sha256": "995ebc1cbbfdec30e1b3c7805ec0c2aa572877d42d39c90fd016050be61cdd05",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-environments.readiness.get",
+      "source_binding_sha256": "453179f4c5898de8b6721c927c92af5bbfe93a0361a54c5e6f2e6f23518c9752",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-revisions.diff",
+      "source_binding_sha256": "2d6789c4040c355c8c571815fe8786c7a485434131c814b725ad1a99a7b98bef",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-secret-drafts.get",
+      "source_binding_sha256": "5f47bb5301f2078f795ebeeec2fd52ca87eaaf52527500c2173bed4951a1d1e1",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-secret-drafts.impact.get",
+      "source_binding_sha256": "8d289369c446f08c58d6d04d7aeb2770eb1209225952f1ae9200322eaeb17917",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-secrets.get",
+      "source_binding_sha256": "6a155de5d5f7bbab20add9198623aa3413427407f776b517f5396a5b624febb9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-secrets.impact",
+      "source_binding_sha256": "a137cc13133a6af0e658128969624b128ac3c73e539b4ba58b11b0afba2fc7d5",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtime-secrets.list",
+      "source_binding_sha256": "06f1a0a1c91cedfb22892eb66d0a74f024ee6b63185780ed35cd42f5e945250a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.runtimes.list",
+      "source_binding_sha256": "8fd9641fe09fee55008f02a73f8f981718e53a688245a60180e02c1e50676342",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.schedule-revisions.list",
+      "source_binding_sha256": "656896650e2dd0f9e0b2abe70d35669257ad91fc3448629020e0af29d5bc36a2",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.schedule-runs.list",
+      "source_binding_sha256": "d58b1523134735dbccf92155dd24f30255c2eff79b8ac4112603803b463e5fae",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.schedules.get",
+      "source_binding_sha256": "20be70461bc7950a8134a3ce55c6ed2d59223fe47cdf40a00b552317b6522be1",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.schedules.list",
+      "source_binding_sha256": "69b23d7f4ecb762d285f14a32e42d257d1045ec12951d880851e05c48cbfaaa9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.schedules.preview",
+      "source_binding_sha256": "9d11c9fcafa06f6024ff21a817b9bee94a789915f0334e720841771dbdbb2edf",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.search",
+      "source_binding_sha256": "b1e7738498023c0e386f9bdf7e0d65c3a93a785fe5132b350bda79c4899dc9a2",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.skill-bundle-revisions.list",
+      "source_binding_sha256": "6fe8aa5908bc9ee6d1c55dc4d9fb88f50411d3aa3d5d7e3ce0e14495d63236f0",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.skill-bundles.get",
+      "source_binding_sha256": "1690aba87baf020cb6f2ec63d56271ffc1822f2eec63e9e0f352397d67cb37dd",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.skill-bundles.list",
+      "source_binding_sha256": "94b33a21137c7dbc8bf4474bf0fc964d11e3b5bc6bd87a6e489c1c0d7ca617bd",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.system-stt.get",
+      "source_binding_sha256": "3d89118adfbf486c373f15d91a9a288a042d9ebe004ab0aef49a05f7394a77c7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.template-variables.list",
+      "source_binding_sha256": "fa938ddc1dff4de4a06a6905f969e33bd4c8b17edecdfeacdc6d4aff81eb03f0",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.vfs.list",
+      "source_binding_sha256": "948e293fab2d14539f7be3afe57703185102227f30da15308c8806a4ac132145",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.vfs.search",
+      "source_binding_sha256": "82b382d9cb3fe883857a263366f5cbea89eb0dc5b6348f751df1d4de1b1d9f81",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.workflows.get",
+      "source_binding_sha256": "f9f6b399cdf9fcbc8e8db2755484b8a7e7b62f0ef52639ceb8450a3c3e7698d4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.workflows.list",
+      "source_binding_sha256": "3e0dbd72e1e306b72b84ce4fe4887ea65605e7313260a00187482da3fd868834",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.role-images.admission.claim",
+      "source_binding_sha256": "745b15d46b1033e5884879b0c37b0d450f516178de698aff977c1ef928bacbe6",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.admission.record",
+      "source_binding_sha256": "79b9141fcad5e748a239504f730ed7ceb5bcbf27c086b679e7420757acf00bb2",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.builds.claim",
+      "source_binding_sha256": "919c27a7df6fd8297a05efea2c06b439f9992475f65b25f5543498860682cf66",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.builds.complete",
+      "source_binding_sha256": "0ce5a021af0f77aefd6febfac0080c737108eb02c34c553533f80577ec653cb9",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.builds.fail",
+      "source_binding_sha256": "c5e04d567b2955f502f5eacbeecff8b68b7234bfc207c7921c9dd07e730b332f",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.builds.progress",
+      "source_binding_sha256": "7f9090e5315eb67c35f78d400ad395779ec947322d75f96c6703b57ac2f2e639",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.builds.renew",
+      "source_binding_sha256": "5d046e0412c4cc551636267c6771ee1fe66eda66d8e91fb436daab7eb266adf7",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.environments.list",
+      "source_binding_sha256": "4552fef154ddf453fb1cd8166acc972529e4731d46da7cadd6d68fcecd983b58",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.role-images.promotion.authorize",
+      "source_binding_sha256": "9a1b82b5809dc067ddddc4a549267fcfa7e8df8361241c4ee71f63805517ca0d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.promotion.claim",
+      "source_binding_sha256": "b61304a606eb00830e9c53a65ab58bacdd5f105abf4e0f57de1d754c753c26d9",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.promotion.complete",
+      "source_binding_sha256": "0f6d298ced9876fa21dcc7df6e422b49c35b13bef161dc08a652f2df5c8d1219",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.role-images.recipes.get",
+      "source_binding_sha256": "6a733bab89861c9ce1f08d8c1f9756320fe30946ad514ca4f036e2f415a9f92e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.role-images.recipes.list",
+      "source_binding_sha256": "a810b380aa65e504b51ea8436bbafaf27c20fe18d3c7c31cea1ecac15aeca1ad",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.role-images.recipes.manage",
+      "source_binding_sha256": "6dd39539b8eb583aa8e598b3ca0a27bb1101ca252adb5cd97dc5249dd417f342",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.runtime-secret-drafts.cleanup.complete",
+      "source_binding_sha256": "308baa048ad7017905b738a5cd07dfbd4237103bc6f39f529f3acb8eebc6142a",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secret-drafts.materialization.recover",
+      "source_binding_sha256": "cb438fde7a3f53ed5adefd1ce5e5c6e2fc47db6b5c6df693b94f885fd0bb17f6",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secret-drafts.operations.complete",
+      "source_binding_sha256": "7cc7dc5527f3b15152f833c2435a22339733b35276a87a7cba98023bd16dbb98",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secret-drafts.operations.consume",
+      "source_binding_sha256": "a37aeb6ce534c6fd178113fb8deb63de0a1d24babd7646af1304a3d1b9d7ad60",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secret-drafts.operations.fail",
+      "source_binding_sha256": "e13e1a2bad732fdc6ed3e38d358ff4f6764956a025f4fd139fa5fe9eacf6fa91",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secret-drafts.operations.recover",
+      "source_binding_sha256": "1ab094a728fd2ac59953d99b7e30c1371f462048e1cf13524d0d09fdde154bdc",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secret-drafts.readiness.check",
+      "source_binding_sha256": "c3025596ef2396b31694a3ef364d16bc9ad0748ffe67f012077747fb6419af40",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secrets.materialization.recover",
+      "source_binding_sha256": "2631b6bf6159b9f04b8f16ca5a7fd63112bd9aa4ad5b226d45410f9bcc1dba78",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secrets.operations.complete",
+      "source_binding_sha256": "2b1e0783459b572a160aff555793e188ea108970c84a367e84098506d2cbd0c1",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secrets.operations.consume",
+      "source_binding_sha256": "2ff20f851fca89ab8997761049eaa39d8b1f66efc2b5e78eed318f12fa3b93d6",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secrets.operations.fail",
+      "source_binding_sha256": "d45ddba3d704b7c5976d17aef6fe87a37aa777aab0f6c13444a8ba261edba6d7",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secrets.operations.recover",
+      "source_binding_sha256": "308c0810ac82261d40c6db5402e750513b374dd3747e3a9aeeed840f2d6c651a",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime-secrets.readiness.check",
+      "source_binding_sha256": "dd8faee9c243fc5ea982511865af4452905b569d3ffdf3a79e5eb6eaa64f8ba9",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.assistant.metadata.propose",
+      "source_binding_sha256": "9fcfef3d39eb755292b290fe3fb76be100894c7c1261644110c6feba44cdc387",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.assistant.plan.propose",
+      "source_binding_sha256": "beb118aa9c5b8008cd0dadb282433c0761b4bf0e28eb1937a89dae101a85f0ef",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.artifact.read",
+      "source_binding_sha256": "f2d0e89dad25d6aa35085707d94a6b4380b35ba88305e18f2b0c663740f1620e",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.artifact.stream",
+      "source_binding_sha256": "9a4a8c0be35ec37b64c073071718087490426bc0f162259cf32520097bb1960e",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.claim",
+      "source_binding_sha256": "75f835beda31ed5a46a8dd6aee7faca16235c4a0e10a968c84c44d0ee3e4418b",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.complete",
+      "source_binding_sha256": "7f8dbcc90521a01a39f765aab4a157e163fea995de348d5f8e000b926354d62a",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.delegate",
+      "source_binding_sha256": "3b4d014ffb2522b1d46e7f4bc9ac87cf4e84767a67f57d8db9534a1958e3f071",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.progress",
+      "source_binding_sha256": "c6a917c28c5d74b787fbadb6c16fa38c88fd98de52a7be8e3bb937e46a9cf36c",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.execution.renew",
+      "source_binding_sha256": "92fe8974190fb91b8dda89abb805a877e9baaa3ba4934d1d8aabe6bbb7494d82",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.files.manifest",
+      "source_binding_sha256": "66bd54080cc95d6eff8cf72882c80d3ebf0e533a663c9ec15f8dc93f3f77fc6d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.files.metadata",
+      "source_binding_sha256": "f07a66d9f5a7688ab893945bc7914f1358b8c073a11d04d95de549072de4201c",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.files.preview",
+      "source_binding_sha256": "0c13602856648ca1352eacf80c770bfadffe76ba7c3ecc549b3afe4bfedcba9b",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.files.search",
+      "source_binding_sha256": "cf1f7af267ad59e729e2dde84ee5da6eb2131e8750c7e910e1372d82ac603456",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.integration-definition.get",
+      "source_binding_sha256": "2ab30cb533e00d0ccc586187505c64c6ee96a77aab6410b42947cb9708413fbf",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.integration-tests.claim",
+      "source_binding_sha256": "621f56f03f5783bf19f4303e042e1ece850c31b3cf898e7fba5f024479454130",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.integration-tests.complete",
+      "source_binding_sha256": "990da6f8744de95ed0c8e19c5264caac660741dab89e8995dd8aaa16ff2dda0c",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.integration.get",
+      "source_binding_sha256": "5249bffe7605599da39d7cd61b5486064e9f5cef801d1a071bef49be4f1d5031",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.integration.resolve",
+      "source_binding_sha256": "a1d8adb37c8f13b5a0f587a53b8ed323c450b25203c4334771274c3ea7eeb2f5",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.integrations.claim",
+      "source_binding_sha256": "ac42cf6bd89ed0b858fcce8d2c003a9633a4b4e051f949bc08a9455084a8c93d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.integrations.complete",
+      "source_binding_sha256": "b2ef223f5e15df4e622c42f04fa5b7f1cac68e93690a9cfd6e9d1062c2f6a1b8",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.provider-credential.refresh.commit",
+      "source_binding_sha256": "8ae6928e6ea4e128448a2c9ead86d608dde9375d5a0d79bca474a108b7567fa9",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.role-image-configuration.get",
+      "source_binding_sha256": "b7f1b99fbacc89feae3b47f0f965d257422066e0b458d09e9f3effd68e0776d1",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.run.metadata.propose",
+      "source_binding_sha256": "fce9e5a4de4ec088e5f040666532361542e05412d7c912870ea7d164d1e3f2bb",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.schedules.claim",
+      "source_binding_sha256": "fa9c56781c542d5783fc73e5a152c97ef18b4c66f414597bf6456ede2245df64",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.schedules.fail",
+      "source_binding_sha256": "a00bcad9f3c65a42a87a9281a3a85a1fbe5004e999dff7a3f208b3749d68f3bc",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.schedules.materialize",
+      "source_binding_sha256": "51f2a0e97c3fbec5132c9c3dea9a9a2169f6ad6308b40b85f7765687cffaa7e0",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.schedules.renew",
+      "source_binding_sha256": "71e6954fa510828b4b7254d263ca6883c83e3e6eadd65cb4232e043c1fc0f480",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.tool-call.record",
+      "source_binding_sha256": "3806893426486d47a4395267197e56783e6ee6d923cb4c726eff87a285080a7e",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.warm.reconcile",
+      "source_binding_sha256": "92f1b36b134d77d8448f3649212b74471efa90bd8251d714520aabb0afa84522",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.warm.report",
+      "source_binding_sha256": "360ce8ae316211d8d1a4bef36195cdcef84bb7dd107d58b4dafb94900b9d086f",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.session-archive.object-delete.complete",
+      "source_binding_sha256": "2b99e6ccc6f645712e410c2103aff6b764e7ba465ea27de244f7f91c742a02c1",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.session-archive.pvc-delete.complete",
+      "source_binding_sha256": "22ba21154d215e736a9d49bef1612c3f5372a632a0d7ddf453538999c8f2df2a",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.session-archive.restore.complete",
+      "source_binding_sha256": "83bc9625f511ab532f1494ecb7ef0ae269c369617563a3102bf544166a214dc2",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.session-archive.snapshot.complete",
+      "source_binding_sha256": "f3c59add24b6c70176a7ec8f6d41b3da6ceb94c734f9a32a1bf12b232505c60f",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.session-archive.tasks.claim",
+      "source_binding_sha256": "56d281fc6736e26b35ca939113bb6d8b091d966c5aeaac19580660769e64fad6",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.session-archive.tasks.fail",
+      "source_binding_sha256": "377b29ac3532003ee7bdc3fddbc7255faccd23b2d17734b8d9bb5e2204907512",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.session-archive.tasks.renew",
+      "source_binding_sha256": "c3e7f54bab884d4e8e84b41fb9a8f041d2dac32378f40217946c143889769c7a",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.stt.policy.resolve",
+      "source_binding_sha256": "fdfda133c8ec2d90f6ff201980bfab849b24beed04bf8eeda11e51963a9c3300",
+      "actor_mode": "PRESERVE_DELEGATION"
+    }
+  ]
+}

@@ -64,6 +64,13 @@ func TestWorkerGrantInstancesComponent(t *testing.T) {
 	accept(grant(uuid.NewString(), 101, 0), false)
 	accept(legacy, false)
 	accept(grant("", 102, 0), true)
+	serviceGeneration, err := repository.ResolveServiceCredentialGeneration(ctx, "image-promotion")
+	if err != nil || serviceGeneration != 102 {
+		t.Fatalf("service credential generation = %d, %v", serviceGeneration, err)
+	}
+	if _, err = repository.ResolveServiceCredentialGeneration(ctx, "unknown-workload"); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("unknown service credential generation = %v", err)
+	}
 	// Новый repository не теряет устойчивый instance watermark.
 	repository = &Repository{pool: pool}
 	accept(current, true)

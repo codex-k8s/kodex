@@ -1146,20 +1146,71 @@ test.describe("web-only fresh installation", () => {
       await page.getByRole("button", { name: "Добавить переменную" }).click();
       await page.getByLabel("Имя переменной").fill("E2E_MODE");
       await page.getByLabel("Несекретное значение").fill("redesign");
-      const creation = page.waitForResponse(
+      const draftCreation = page.waitForResponse(
         (response) =>
           response.request().method() === "POST" &&
           new URL(response.url()).pathname ===
-            `/api/v1/projects/${projectRef}/runtime-environments`,
+            `/api/v1/projects/${projectRef}/runtime-environment-drafts`,
       );
-      await page.getByRole("button", { name: "Создать", exact: true }).click();
-      const creationResponse = await creation;
-      expect(creationResponse.status()).toBe(201);
-      const createdEnvironment = (await creationResponse.json()) as {
+      await page
+        .getByRole("button", { name: "Сохранить черновик", exact: true })
+        .click();
+      const draftResponse = await draftCreation;
+      expect(draftResponse.status()).toBe(201);
+      const createdDraft = (await draftResponse.json()) as {
         ref?: string;
       };
-      expect(createdEnvironment.ref).toMatch(/^renv_[A-Za-z0-9_-]+$/);
-      runtimeEnvironmentRef = createdEnvironment.ref ?? "";
+      expect(createdDraft.ref).toMatch(/^renvd_[A-Za-z0-9_-]+$/);
+      const draftRef = createdDraft.ref ?? "";
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get("draftRef") === draftRef,
+      );
+      const validation = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            `/api/v1/runtime-environment-drafts/${draftRef}/validation`,
+      );
+      await page
+        .getByRole("button", { name: "Проверить", exact: true })
+        .click();
+      expect((await validation).status()).toBe(200);
+      const impactPreparation = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            `/api/v1/runtime-environment-drafts/${draftRef}/impact-plans`,
+      );
+      await page
+        .getByRole("button", { name: "Опубликовать", exact: true })
+        .click();
+      expect((await impactPreparation).status()).toBe(201);
+      const impactDialog = page.getByRole("dialog", {
+        name: "План публикации",
+        exact: true,
+      });
+      const publication = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname ===
+            `/api/v1/runtime-environment-drafts/${draftRef}/publication`,
+      );
+      await impactDialog
+        .getByRole("button", {
+          name: "Опубликовать и обновить выбранных: 0",
+          exact: true,
+        })
+        .click();
+      const publicationResponse = await publication;
+      expect(publicationResponse.status()).toBe(200);
+      const createdEnvironment = (await publicationResponse.json()) as {
+        environment?: { ref?: string };
+      };
+      expect(createdEnvironment.environment?.ref).toMatch(
+        /^renv_[A-Za-z0-9_-]+$/,
+      );
+      runtimeEnvironmentRef = createdEnvironment.environment?.ref ?? "";
+      await impactDialog.getByRole("button", { name: "Закрыть" }).click();
       await expect(page).toHaveURL(
         (url) =>
           url.pathname ===

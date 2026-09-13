@@ -85,7 +85,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 			projectionProjects[operation] = struct{}{}
 		}
 	}
-	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
+	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
