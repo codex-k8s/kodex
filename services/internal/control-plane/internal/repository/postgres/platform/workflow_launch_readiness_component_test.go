@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -75,10 +76,26 @@ func testWorkflowLaunchReadiness(t *testing.T, ctx context.Context, r *Repositor
 	if err := probe.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}
+	originalRoleImages := r.roleImages
+	changedRoleImages := originalRoleImages
+	changedRoleImages.DefaultImageReference = "registry.invalid/kodex/agent-runner@sha256:" + strings.Repeat("f", 64)
+	if err := r.ConfigureRoleImages(changedRoleImages); err != nil {
+		t.Fatalf("configure changed default runner: %v", err)
+	}
+	copy := *workflow
+	if err := r.projectWorkflowLaunchReadiness(ctx, tx, current, []*entity.Workflow{&copy}); err != nil || copy.LaunchReadiness.AllowedToSubmit || copy.LaunchReadiness.Reason != "DEPENDENCY_UNAVAILABLE" {
+		t.Fatalf("default runner readiness: %+v %v", copy.LaunchReadiness, err)
+	}
+	if _, err := r.launchRun(ctx, tx, current, command.Command{Kind: command.LaunchRun, Payload: command.LaunchRunInput{ProjectRef: workflow.ProjectRef, Target: entity.RunTarget{Type: "WORKFLOW", Ref: workflow.Ref}, Task: "No effect", Input: map[string]any{"record": "fixture"}}}); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("default runner launch parity: %v", err)
+	}
+	if err := r.ConfigureRoleImages(originalRoleImages); err != nil {
+		t.Fatalf("restore default runner configuration: %v", err)
+	}
 	if tag, err := tx.Exec(ctx, queryWorkflowReadinessDisableAgent, current.organizationID, workflow.CoordinatorAgentRef); err != nil || tag.RowsAffected() != 1 {
 		t.Fatalf("disable dependency fixture: %v", err)
 	}
-	copy := *workflow
+	copy = *workflow
 	if err := r.projectWorkflowLaunchReadiness(ctx, tx, current, []*entity.Workflow{&copy}); err != nil || copy.LaunchReadiness.AllowedToSubmit || copy.LaunchReadiness.Reason != "DEPENDENCY_UNAVAILABLE" {
 		t.Fatalf("dependency readiness: %+v %v", copy.LaunchReadiness, err)
 	}

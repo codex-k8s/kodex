@@ -186,6 +186,7 @@ func (repository *Repository) attachmentRuntimeContractReady(ctx context.Context
 		"organization_id": organizationID, "project_id": projectID, "agent_refs": refs,
 		"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
 		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
+		"default_role_image_digest":      repository.roleImages.DefaultImageDigest,
 	}).Scan(&ready); err != nil {
 		return false, errs.ErrUnavailable
 	}

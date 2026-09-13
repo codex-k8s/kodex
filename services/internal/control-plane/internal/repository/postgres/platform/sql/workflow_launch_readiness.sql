@@ -17,7 +17,7 @@ SELECT w.ref,w.version,COALESCE(w.revision_ref,''),COALESCE(w.published_spec->>'
       w.id,w.project_id,w.created_by,jsonb_build_object('PROJECT',w.project_id::text),transaction_timestamp()) THEN 'PERMISSION_REQUIRED'
  WHEN w.state<>'PUBLISHED' OR w.revision_ref IS NULL THEN 'UNPUBLISHED'
  WHEN NOT control_plane.agent_runtime_contract_ready(w.organization_id,w.project_id,w.agent_refs,
-      @contract_revision,@contract_digest) THEN 'DEPENDENCY_UNAVAILABLE'
+      @contract_revision,@contract_digest,@default_image_digest) THEN 'DEPENDENCY_UNAVAILABLE'
  ELSE 'READY' END,
  COALESCE((SELECT jsonb_agg(jsonb_build_object('agentVersion',a.version,'binding',to_jsonb(binding),
       'environment',to_jsonb(environment),'artifact',to_jsonb(artifact)) ORDER BY a.ref)
