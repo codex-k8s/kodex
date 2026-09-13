@@ -20,5 +20,6 @@ WHERE environment.organization_id = @organization_id::uuid
   AND recipe.state = 'ACTIVE'
   AND artifact.admission_state = 'ACCEPTED'
   AND artifact.promotion_state = 'PROMOTED'
-  AND artifact.promoted_reference <> ''
+  AND artifact.promoted_reference = @default_image_reference
+  AND artifact.manifest_digest = @default_image_digest
 LIMIT 1

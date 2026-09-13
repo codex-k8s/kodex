@@ -65,6 +65,8 @@ var (
 	queryRuntimeConfigurationActivateSystemImage string
 	//go:embed sql/runtime_configuration__activate_environment.sql
 	queryRuntimeConfigurationActivateEnvironment string
+	//go:embed sql/runtime_configuration__advance_bootstrap_environment.sql
+	queryRuntimeConfigurationAdvanceBootstrapEnvironment string
 	//go:embed sql/runtime_configuration__select_provider_account.sql
 	queryRuntimeConfigurationSelectProviderAccount string
 )

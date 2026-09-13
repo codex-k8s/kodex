@@ -320,6 +320,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("stale role runtime contract rejects launch before durable state", func(t *testing.T) {
 		testStaleRoleRuntimeContractRejectsLaunch(t, ctx, repository, pool)
 	})
+	t.Run("new agent advances bootstrap runner without rebinding existing agent", func(t *testing.T) {
+		testBootstrapRunnerAdvancesForNewAgent(t, ctx, repository)
+	})
 	t.Run("runtime configuration publish validates canonical provider accounts", func(t *testing.T) {
 		testRuntimeConfigurationPublish(t, ctx, repository)
 	})
