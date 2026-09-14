@@ -140,27 +140,31 @@ async function main(args) {
     record({ status: "SIGNAL_INTENT", podUID: leader.uid, expectedLeaderUID: expected });
     const observeProcess = () => describeApplicationProcess(kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c",
       'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; found=""; for status in /proc/[0-9]*/status; do name=$(sed -n "s/^Name:[[:space:]]*//p" "$status"); parent=$(sed -n "s/^PPid:[[:space:]]*//p" "$status"); if [ "$name" = main ] && [ "$parent" = 1 ]; then test -z "$found"; found=${status%/status}; fi; done; test -n "$found"; pid=${found##*/}; start=$(awk "{print \\$22}" "$found/stat"); executable=$(readlink "$found/exe"); printf "%s %s %s\\n" "$pid" "$start" "$executable"', "kodex-handoff", leader.uid]));
-    const crash = (process, attempt) => {
-      record({ status: "CRASH_INTENT", podUID: leader.uid, attempt, processStartTicks: process.startTicks });
-      const signal = 'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; pid=$2; start=$3; [ "$(readlink /proc/$pid/exe)" = "$4" ]; [ "$(awk "{print \\$22}" /proc/$pid/stat)" = "$start" ]; kill -KILL "$pid"';
+    const signal = (process, action) => {
+      record({ status: `${action}_INTENT`, podUID: leader.uid, processStartTicks: process.startTicks });
+      const command = 'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; pid=$2; start=$3; [ "$(readlink /proc/$pid/exe)" = "$4" ]; [ "$(awk "{print \\$22}" /proc/$pid/stat)" = "$start" ]; kill -$5 "$pid"';
       try {
-        kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c", signal,
-          "kodex-handoff", leader.uid, String(process.pid), String(process.startTicks), process.executable]);
+        kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c", command,
+          "kodex-handoff", leader.uid, String(process.pid), String(process.startTicks), process.executable, action === "PAUSE" ? "STOP" : "CONT"]);
       } catch {
-        record({ status: "CRASH_ACK_UNCERTAIN", podUID: leader.uid, attempt, processStartTicks: process.startTicks });
-        throw new Error("HANDOFF_CRASH_ACK_UNCERTAIN");
+        record({ status: `${action}_ACK_UNCERTAIN`, podUID: leader.uid, processStartTicks: process.startTicks });
+        throw new Error(`HANDOFF_${action}_ACK_UNCERTAIN`);
       }
-      record({ status: "CRASH_ACK", podUID: leader.uid, attempt, processStartTicks: process.startTicks });
+      record({ status: `${action}_ACK`, podUID: leader.uid, processStartTicks: process.startTicks });
     };
     const deadline = Date.now() + 240_000;
-    let lastStart = 0;
-    let attempts = 0;
-    while (Date.now() < deadline) {
-      const deployment = get("deployment", target);
-      requireValue(deployment.metadata.uid === initial.uid && fingerprint(deployment.spec) === initial.specSHA256, "DEPLOYMENT_CHANGED");
-      const pods = JSON.parse(kubectl(["get", "pods", "-l", "app.kubernetes.io/name=runtime-controller", "-o", "json"])).items;
-      requireValue(pods.length === 2 && pods.every((pod) => initial.pods.some((item) => item.uid === pod.metadata.uid)), "POD_CHANGED");
-      if (get("lease", "runtime-controller-leader").spec.holderIdentity === expected) {
+    const process = observeProcess();
+    signal(process, "PAUSE");
+    let paused = true;
+    try {
+      while (Date.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 1000));
+        const deployment = get("deployment", target);
+        requireValue(deployment.metadata.uid === initial.uid && fingerprint(deployment.spec) === initial.specSHA256, "DEPLOYMENT_CHANGED");
+        const pods = JSON.parse(kubectl(["get", "pods", "-l", "app.kubernetes.io/name=runtime-controller", "-o", "json"])).items;
+        requireValue(pods.length === 2 && pods.every((pod) => initial.pods.some((item) => item.uid === pod.metadata.uid)), "POD_CHANGED");
+        if (get("lease", "runtime-controller-leader").spec.holderIdentity !== expected) continue;
+        signal(process, "RESUME"); paused = false;
         for (;;) {
           requireValue(Date.now() < deadline, "HANDOFF_READBACK_TIMEOUT");
           await new Promise((done) => setTimeout(done, 1000));
@@ -169,7 +173,8 @@ async function main(args) {
             requireValue(fingerprint(bindings(initial)) === fingerprint(bindings(state)) && state.leaderUID === expected, "HANDOFF_BINDING_CHANGED");
             const detail = state.podDetails.find((pod) => pod.uid === leader.uid);
             const prior = initial.podDetails.find((pod) => pod.uid === leader.uid);
-            requireValue(detail.restartCount <= prior.restartCount + 1 && detail.applicationProcess.startTicks !== prior.applicationProcess.startTicks, "UNEXPECTED_APPLICATION_RESTART");
+            if (detail.applicationProcess.startTicks === prior.applicationProcess.startTicks) continue;
+            requireValue(detail.restartCount <= prior.restartCount + 1, "UNEXPECTED_APPLICATION_RESTART");
             if (state.database.instances.some((row) => row.workload === target && row.instance === expected && Date.parse(row.updatedAt) > Date.parse(initial.at))) {
               record({ status: "HANDOFF_CONFIRMED", snapshot: state }); return state;
             }
@@ -178,14 +183,8 @@ async function main(args) {
           }
         }
       }
-      let process;
-      try { process = observeProcess(); }
-      catch { await new Promise((done) => setTimeout(done, 250)); continue; }
-      if (process.startTicks !== lastStart) {
-        requireValue(++attempts <= 30, "HANDOFF_CRASH_BUDGET_EXCEEDED");
-        crash(process, attempts); lastStart = process.startTicks;
-      }
-      await new Promise((done) => setTimeout(done, 500));
+    } finally {
+      if (paused) { try { signal(process, "RESUME"); } catch { record({ status: "RESUME_READBACK_REQUIRED", podUID: leader.uid, processStartTicks: process.startTicks }); } }
     }
     throw new Error("HANDOFF_READBACK_TIMEOUT");
   };
