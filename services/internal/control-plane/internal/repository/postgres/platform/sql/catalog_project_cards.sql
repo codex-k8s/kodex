@@ -9,9 +9,9 @@ WITH requested AS MATERIALIZED (
     FROM control_plane.catalog_access_targets target
     JOIN requested p ON p.organization_id=target.organization_id AND p.id=target.project_id
     WHERE target.kind IN ('AGENT','WORKFLOW','RUN')
-      AND control_plane.catalog_resource_visible(target.organization_id,@actor_id::uuid,
+      AND (@role IN ('OWNER','ADMINISTRATOR') OR control_plane.catalog_resource_visible(target.organization_id,@actor_id::uuid,
           CASE target.kind WHEN 'AGENT' THEN 'agent.view' WHEN 'WORKFLOW' THEN 'workflow.view' ELSE 'run.view' END,
-          target.kind,target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp())
+          target.kind,target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp()))
 ), visible_runs AS MATERIALIZED (
     SELECT r.* FROM control_plane.runs r JOIN visible target ON target.kind='RUN' AND target.id=r.id
     WHERE r.id=r.root_run_id
@@ -21,8 +21,8 @@ WITH requested AS MATERIALIZED (
     JOIN visible target ON target.organization_id=g.organization_id AND target.kind=g.target_kind AND target.ref=g.target_ref
     JOIN control_plane.integration_connections c ON c.id=g.connection_id AND c.organization_id=g.organization_id
     WHERE c.lifecycle_state='ACTIVE'
-      AND control_plane.catalog_resource_visible(c.organization_id,@actor_id::uuid,'integration.view',
-          'INTEGRATION',c.id,NULL,c.created_by,'{}'::jsonb,statement_timestamp())
+      AND (@role IN ('OWNER','ADMINISTRATOR') OR control_plane.catalog_resource_visible(c.organization_id,@actor_id::uuid,'integration.view',
+          'INTEGRATION',c.id,NULL,c.created_by,'{}'::jsonb,statement_timestamp()))
 ), activity AS (
     SELECT r.project_id,r.updated_at AS at FROM visible_runs r
     UNION ALL

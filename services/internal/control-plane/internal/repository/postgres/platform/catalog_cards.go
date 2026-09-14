@@ -19,7 +19,7 @@ var queryCatalogAgentCards string
 var queryCatalogWorkflowCards string
 
 func cardArgs(current scope, refs []string) pgx.StrictNamedArgs {
-	return pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project": current.authorityProjectID, "refs": refs}
+	return pgx.StrictNamedArgs{"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project": current.authorityProjectID, "role": current.role, "refs": refs}
 }
 
 // Каталог, single read и command readback используют один batch projection.
