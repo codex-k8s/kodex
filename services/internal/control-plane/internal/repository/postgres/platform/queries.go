@@ -958,7 +958,7 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 			return projectArtifactResults(ctx, tx, scope, &command.Result{Run: item})
 		}, func(ctx context.Context, tx pgx.Tx) (int64, error) {
 			var total int64
-			err := tx.QueryRow(ctx, queryCatalogRunsCount, scope.organizationID, filter.ProjectRef, scope.actorID, filter.Query, filter.States, scope.authorityProjectID).Scan(&total)
+			err := tx.QueryRow(ctx, queryCatalogRunsCount, scope.organizationID, filter.ProjectRef, scope.role, scope.actorID, filter.Query, filter.States, scope.authorityProjectID).Scan(&total)
 			if err != nil {
 				return 0, errs.ErrUnavailable
 			}
