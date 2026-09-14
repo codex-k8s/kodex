@@ -212,6 +212,8 @@ mkdir -p "$fixture_root/tools/dev" "$fixture_root/tools/install" \
   "$fixture_root/infra/teleport"
 cp "$repository_root/tools/dev/remote-dev.sh" "$fixture_root/tools/dev/remote-dev.sh"
 cp "$repository_root/tools/dev/source-git-trust.mjs" "$fixture_root/tools/dev/source-git-trust.mjs"
+cp "$repository_root/tools/dev/stale-playwright-processes.mjs" \
+  "$fixture_root/tools/dev/stale-playwright-processes.mjs"
 cp "$repository_root/tools/install/load-env.sh" "$fixture_root/tools/install/load-env.sh"
 cat >"$fixture_root/tools/install/prepare-host.sh" <<'EOF'
 #!/usr/bin/env bash

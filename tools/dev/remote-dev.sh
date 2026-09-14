@@ -436,10 +436,28 @@ readback_provider_sandbox() {
   ' >/dev/null || fail 'warm provider runtime sandbox readback failed'
 }
 
+cleanup_stale_playwright_processes() {
+  local cleanup_directory suffix plan evidence tool
+  tool="$repository_root/tools/dev/stale-playwright-processes.mjs"
+  [[ -f "$tool" && ! -L "$tool" ]] || fail 'stale Playwright cleanup tool is absent or unsafe'
+  cleanup_directory="$state_directory/e2e/process-cleanup"
+  install -d -m 0700 "$cleanup_directory"
+  suffix="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  plan="$cleanup_directory/$suffix-plan.json"
+  evidence="$cleanup_directory/$suffix-evidence.json"
+  node "$tool" plan --output "$plan"
+  node "$tool" apply --plan "$plan" --evidence "$evidence" \
+    --confirm CLEAN_STALE_PLAYWRIGHT
+}
+
 if [[ "$command_name" == teleport ]]; then
   apply_teleport
   exit 0
 fi
+
+case "$command_name" in
+  smoke|e2e|acceptance) cleanup_stale_playwright_processes ;;
+esac
 
 case "$command_name" in
   up)
