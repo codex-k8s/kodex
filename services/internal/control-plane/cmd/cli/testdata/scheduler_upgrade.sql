@@ -12,6 +12,9 @@ INSERT INTO control_plane.role_definitions(ref,organization_id,name,role_type)
 VALUES ('rol_upgrade','10000000-0000-4000-8000-000000000001','Upgrade role','developer');
 INSERT INTO control_plane.runtime_profiles(stable_key,name,provider,model,runtime_revision,resource_limits)
 VALUES ('upgrade-fixture','Upgrade runtime','openai','synthetic','fixture','{}') ON CONFLICT DO NOTHING;
+INSERT INTO control_plane.runtime_profiles(stable_key,name,provider,model,runtime_revision,resource_limits,version)
+VALUES ('builtin-safe-runtime','i18n:DEFAULT_RUNTIME_NAME','openai-codex','gpt-5.6-sol','runtime-v1','{}',7)
+ON CONFLICT DO NOTHING;
 INSERT INTO control_plane.agents(ref, organization_id, project_id, role_definition_id, name, runtime_key, state, version)
 SELECT 'agt_upgrade','10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000003',
     (SELECT id FROM control_plane.role_definitions WHERE ref='rol_upgrade'), 'Upgrade agent',

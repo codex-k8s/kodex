@@ -22,6 +22,7 @@ import { exactOrigin } from "./owner-session-storage.mjs";
 import {
   selectWorkspaceProviderAccount,
   workspaceModelQuery,
+  workspaceProviderAccountCandidates,
   workspaceProviderAccountRef,
 } from "./runtime-provider-catalog.mjs";
 
@@ -447,26 +448,46 @@ async function launch() {
     `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`,
     { expectedStatus: 200 },
   );
-  const modelQuery = workspaceModelQuery(
-    runtime.configuration.model,
-    requestedAccountRef,
-  );
-  const models = await request(
+  const accounts = await request(
     "GET",
-    `/api/v1/model-capabilities?${modelQuery}`,
+    "/api/v1/provider-accounts?definitionKey=openai-codex&pageSize=100",
     { expectedStatus: 200 },
   );
-  const accountRef = selectWorkspaceProviderAccount(
-    models.items,
-    runtime.configuration.model,
+  const candidates = workspaceProviderAccountCandidates(
+    accounts.items,
     requestedAccountRef,
   );
-  modelQuery.set("providerAccountRef", accountRef);
-  const accountModels = await request(
-    "GET",
-    `/api/v1/model-capabilities?${modelQuery}`,
-    { expectedStatus: 200 },
-  );
+  let accountRef = "";
+  let accountModels;
+  for (const candidate of candidates) {
+    const candidateModels = await request(
+      "GET",
+      `/api/v1/model-capabilities?${workspaceModelQuery(runtime.configuration.model, candidate)}`,
+      { expectedStatus: 200 },
+    );
+    const expiresAt = Date.parse(
+      candidateModels.catalogStatus?.expiresAt ?? "",
+    );
+    if (
+      candidateModels.catalogStatus?.state !== "READY" ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= Date.now()
+    )
+      continue;
+    try {
+      accountRef = selectWorkspaceProviderAccount(
+        candidateModels.items,
+        runtime.configuration.model,
+        candidate,
+      );
+      accountModels = candidateModels;
+      break;
+    } catch {
+      // Следующий account проверяется по своему точному каталогу.
+    }
+  }
+  if (!accountRef || !accountModels)
+    fail("exact account model catalog is unavailable");
   const selectedModel = accountModels.items?.find(
     (model) =>
       model.id === runtime.configuration.model &&

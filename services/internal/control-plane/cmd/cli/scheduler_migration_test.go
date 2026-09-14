@@ -68,4 +68,30 @@ func TestScheduleProtocolUpgrade(t *testing.T) {
 	if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 		t.Fatal(err)
 	}
+	readback, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readback.Rollback()
+	if _, err := readback.ExecContext(ctx, "SET LOCAL ROLE control_plane_owner"); err != nil {
+		t.Fatal(err)
+	}
+	var defaultModel, unrelatedModel string
+	var defaultVersion int64
+	if err := readback.QueryRowContext(ctx,
+		"SELECT model, version FROM control_plane.runtime_profiles WHERE stable_key='builtin-safe-runtime'",
+	).Scan(&defaultModel, &defaultVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := readback.QueryRowContext(ctx,
+		"SELECT model FROM control_plane.runtime_profiles WHERE stable_key='upgrade-fixture'",
+	).Scan(&unrelatedModel); err != nil {
+		t.Fatal(err)
+	}
+	if defaultModel != "gpt-5.4" || defaultVersion != 8 || unrelatedModel != "synthetic" {
+		t.Fatalf("runtime profile upgrade invariants: default=%q version=%d unrelated=%q", defaultModel, defaultVersion, unrelatedModel)
+	}
+	if err := readback.Commit(); err != nil {
+		t.Fatal(err)
+	}
 }

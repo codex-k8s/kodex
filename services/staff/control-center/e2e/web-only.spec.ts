@@ -1156,14 +1156,13 @@ test.describe("web-only fresh installation", () => {
         .click();
       const draftResponse = await draftCreation;
       expect(draftResponse.status()).toBe(201);
-      const createdDraft = (await draftResponse.json()) as {
-        ref?: string;
-      };
-      expect(createdDraft.ref).toMatch(/^renvd_[A-Za-z0-9_-]+$/);
-      const draftRef = createdDraft.ref ?? "";
-      await expect(page).toHaveURL(
-        (url) => url.searchParams.get("draftRef") === draftRef,
+      // UI уже применил успешный ответ и закрепил server-owned ref в route.
+      // Повторно читать body через CDP нельзя: Chromium может освободить его
+      // после того, как generated client завершил обработку ответа.
+      await expect(page).toHaveURL((url) =>
+        /^renvd_[A-Za-z0-9_-]+$/.test(url.searchParams.get("draftRef") ?? ""),
       );
+      const draftRef = new URL(page.url()).searchParams.get("draftRef") ?? "";
       const validation = page.waitForResponse(
         (response) =>
           response.request().method() === "POST" &&
