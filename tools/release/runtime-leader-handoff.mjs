@@ -44,6 +44,12 @@ export function describePodProcesses(actual) {
       .sort((a, b) => a.name.localeCompare(b.name)) };
 }
 
+export function describeApplicationProcess(raw) {
+  const match = /^(\d+) (\d+) (\/[^\s]+)\n?$/.exec(raw);
+  requireValue(match && Number(match[1]) > 1 && Number(match[2]) > 0 && match[3].endsWith("/main"), "APPLICATION_PROCESS_INVALID");
+  return { pid: Number(match[1]), startTicks: Number(match[2]), executable: match[3] };
+}
+
 export function verifyLeaderHandoff(proof, current, now = Date.now()) {
   requireValue(proof.version === 1 && proof.profile === "RUNTIME_LEADER_HANDOFF" && proof.status === "PASS" &&
     uuid.test(proof.id) && /^[a-f0-9]{40}$/.test(proof.toolSourceSHA), "HANDOFF_PROOF_REQUIRED");
@@ -69,10 +75,16 @@ export function verifyLeaderHandoff(proof, current, now = Date.now()) {
     const a = before.podDetails.find((pod) => pod.uid === uid);
     const b = middle.podDetails.find((pod) => pod.uid === uid);
     const c = after.podDetails.find((pod) => pod.uid === uid);
-    requireValue(a && b && c && b.restartCount === a.restartCount + (uid === before.leaderUID ? 1 : 0) &&
-      c.restartCount === a.restartCount + 1 &&
+    requireValue(a && b && c && b.restartCount >= a.restartCount &&
+      b.restartCount <= a.restartCount + (uid === before.leaderUID ? 1 : 0) &&
+      c.restartCount >= b.restartCount && c.restartCount <= b.restartCount + (uid === middle.leaderUID ? 1 : 0) &&
       fingerprint(a.others) === fingerprint(b.others) && fingerprint(a.others) === fingerprint(c.others) &&
       a.imageID === b.imageID && a.imageID === c.imageID, "EXACT_APPLICATION_RESTARTS_REQUIRED");
+    requireValue(a.applicationProcess?.executable === b.applicationProcess?.executable &&
+      a.applicationProcess?.executable === c.applicationProcess?.executable &&
+      (uid === before.leaderUID ? b.applicationProcess.startTicks !== a.applicationProcess.startTicks : b.applicationProcess.startTicks === a.applicationProcess.startTicks) &&
+      (uid === middle.leaderUID ? c.applicationProcess.startTicks !== b.applicationProcess.startTicks : c.applicationProcess.startTicks === b.applicationProcess.startTicks),
+    "EXACT_APPLICATION_PROCESS_RESTART_REQUIRED");
   }
   requireValue(rows(after, before.leaderUID).revision > rows(middle, before.leaderUID).revision &&
     Date.parse(rows(middle, middle.leaderUID).updatedAt) > start &&
@@ -115,7 +127,9 @@ async function main(args) {
     state.podDetails = state.pods.map((pod) => {
       const actual = get("pod", pod.name);
       requireValue(actual.metadata.uid === pod.uid, "POD_CHANGED");
-      return describePodProcesses(actual);
+      const process = kubectl(["exec", pod.name, "--container", target, "--", "sh", "-c",
+        'set -eu; found=""; for status in /proc/[0-9]*/status; do name=$(sed -n "s/^Name:[[:space:]]*//p" "$status"); parent=$(sed -n "s/^PPid:[[:space:]]*//p" "$status"); if [ "$name" = main ] && [ "$parent" = 1 ]; then test -z "$found"; found=${status%/status}; fi; done; test -n "$found"; pid=${found##*/}; start=$(awk "{print \\$22}" "$found/stat"); executable=$(readlink "$found/exe"); printf "%s %s %s\\n" "$pid" "$start" "$executable"']);
+      return { ...describePodProcesses(actual), applicationProcess: describeApplicationProcess(process) };
     });
     verifyIdleSnapshot(state); return state;
   };
@@ -124,30 +138,46 @@ async function main(args) {
     const unchanged = inspect();
     requireValue(fingerprint(bindings(initial)) === fingerprint(bindings(unchanged)) && unchanged.leaderUID === initial.leaderUID, "HANDOFF_PRECONDITION_CHANGED");
     record({ status: "SIGNAL_INTENT", podUID: leader.uid, expectedLeaderUID: expected });
-    // Только штатный supervisor процесса. Файлы, lease, grant и environment не меняются.
-    // Downward API внутри exec защищает от пересоздания Pod с тем же именем.
-    const signal = '[ "$POD_UID" = "$1" ] && [ "$(readlink /proc/1/exe)" = "/go/tools/air" ] && kill -TERM 1';
-    try { kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c", signal, "kodex-handoff", leader.uid]); }
-    catch { record({ status: "SIGNAL_ACK_UNCERTAIN", podUID: leader.uid }); }
+    // В dev-профиле PID 1 — Air. Его короткая остановка не даёт прежнему Pod
+    // немедленно перезапустить приложение и снова забрать Lease. Lease, grants,
+    // environment и Pod не меняются; finally всегда возобновляет supervisor.
+    const stop = 'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; child=""; for status in /proc/[0-9]*/status; do name=$(sed -n "s/^Name:[[:space:]]*//p" "$status"); parent=$(sed -n "s/^PPid:[[:space:]]*//p" "$status"); if [ "$name" = main ] && [ "$parent" = 1 ]; then test -z "$child"; child=${status%/status}; fi; done; test -n "$child"; kill -STOP 1; kill -TERM "${child##*/}"';
+    const resume = () => kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c",
+      '[ "$POD_UID" = "$1" ] && [ "$(readlink /proc/1/exe)" = "/go/tools/air" ] && kill -CONT 1', "kodex-handoff", leader.uid]);
+    let paused = false;
+    try {
+      kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c", stop, "kodex-handoff", leader.uid]);
+      paused = true;
+    } catch { record({ status: "SIGNAL_ACK_UNCERTAIN", podUID: leader.uid }); }
     const deadline = Date.now() + 240_000;
-    while (Date.now() < deadline) {
-      await new Promise((done) => setTimeout(done, 5000));
-      try {
-        const state = inspect();
-        requireValue(fingerprint(bindings(initial)) === fingerprint(bindings(state)), "HANDOFF_BINDING_CHANGED");
-        const detail = state.podDetails.find((pod) => pod.uid === leader.uid);
-        const prior = initial.podDetails.find((pod) => pod.uid === leader.uid);
-        requireValue(detail.restartCount <= prior.restartCount + 1, "UNEXPECTED_APPLICATION_RESTART");
-        if (state.leaderUID === expected && detail.restartCount === prior.restartCount + 1 &&
-          state.database.instances.some((row) => row.workload === target && row.instance === expected &&
-            Date.parse(row.updatedAt) > Date.parse(initial.at))) {
-          record({ status: "HANDOFF_CONFIRMED", snapshot: state }); return state;
+    try {
+      while (Date.now() < deadline) {
+        await new Promise((done) => setTimeout(done, 1000));
+        const deployment = get("deployment", target);
+        requireValue(deployment.metadata.uid === initial.uid && fingerprint(deployment.spec) === initial.specSHA256, "DEPLOYMENT_CHANGED");
+        const pods = JSON.parse(kubectl(["get", "pods", "-l", "app.kubernetes.io/name=runtime-controller", "-o", "json"])).items;
+        requireValue(pods.length === 2 && pods.every((pod) => initial.pods.some((item) => item.uid === pod.metadata.uid)), "POD_CHANGED");
+        if (get("lease", "runtime-controller-leader").spec.holderIdentity !== expected) continue;
+        if (paused) { resume(); paused = false; record({ status: "SUPERVISOR_RESUMED", podUID: leader.uid }); }
+        for (;;) {
+          requireValue(Date.now() < deadline, "HANDOFF_READBACK_TIMEOUT");
+          await new Promise((done) => setTimeout(done, 1000));
+          try {
+            const state = inspect();
+            requireValue(fingerprint(bindings(initial)) === fingerprint(bindings(state)) && state.leaderUID === expected, "HANDOFF_BINDING_CHANGED");
+            const detail = state.podDetails.find((pod) => pod.uid === leader.uid);
+            const prior = initial.podDetails.find((pod) => pod.uid === leader.uid);
+            requireValue(detail.restartCount <= prior.restartCount + 1 && detail.applicationProcess.startTicks !== prior.applicationProcess.startTicks, "UNEXPECTED_APPLICATION_RESTART");
+            if (state.database.instances.some((row) => row.workload === target && row.instance === expected && Date.parse(row.updatedAt) > Date.parse(initial.at))) {
+              record({ status: "HANDOFF_CONFIRMED", snapshot: state }); return state;
+            }
+          } catch (error) {
+            if (/^(HANDOFF_BINDING_CHANGED|POD_CHANGED|DEPLOYMENT_CHANGED|UNEXPECTED_APPLICATION_RESTART)$/.test(error.message)) throw error;
+          }
         }
-      } catch (error) {
-        // Неизменность scope и отсутствие новой работы не являются retryable.
-        if (/^[A-Z_]+$/.test(error.message)) throw error;
-        // Восстановление после ожидаемой недоступности; повторного сигнала нет.
       }
+    } finally {
+      if (paused) { try { resume(); record({ status: "SUPERVISOR_RESUMED_AFTER_FAILURE", podUID: leader.uid }); } catch { record({ status: "SUPERVISOR_RESUME_UNCERTAIN", podUID: leader.uid }); } }
     }
     throw new Error("HANDOFF_READBACK_TIMEOUT");
   };
