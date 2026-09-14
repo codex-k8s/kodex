@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { boundedBatch, fingerprint, planTarget, validateManifest } from "./scoped-release.mjs";
+import { boundedBatch, fingerprint, kubectlInvocation, planTarget, validateManifest } from "./scoped-release.mjs";
 
 const image = (hex) => `registry.example/kodex/email-bridge@sha256:${hex.repeat(64)}`;
 const releaseID = "11111111-1111-4111-8111-111111111111";
@@ -157,6 +157,19 @@ test("independent batch contains failure and limits concurrent work", async () =
 test("spec fingerprint is stable across object key ordering, not array order", () => {
   assert.equal(fingerprint({ b: 2, a: 1 }), fingerprint({ a: 1, b: 2 }));
   assert.notEqual(fingerprint([1, 2]), fingerprint([2, 1]));
+});
+
+test("k3s sudo profile keeps exact context and non-interactive privilege boundary", () => {
+  const plain = kubectlInvocation("default", ["-n", "kodex-system", "get", "deployment"]);
+  assert.deepEqual(plain, {
+    file: "kubectl",
+    arguments: ["--context", "default", "--request-timeout=30s", "-n", "kodex-system", "get", "deployment"],
+  });
+  const sudo = kubectlInvocation("default", ["-n", "kodex-system", "get", "deployment"], true);
+  assert.deepEqual(sudo, {
+    file: "sudo",
+    arguments: ["-n", "k3s", "kubectl", "--context", "default", "--request-timeout=30s", "-n", "kodex-system", "get", "deployment"],
+  });
 });
 
 test("source-only release and rollback preserve the security source and bind exact revision", () => {
