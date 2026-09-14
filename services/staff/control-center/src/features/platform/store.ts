@@ -632,7 +632,10 @@ export const usePlatformStore = defineStore("platform", () => {
         (
           await unwrap(
             listRuns({
-              query: { ...(projectRef ? { projectRef } : {}), pageSize: 100 },
+              // Сводные экраны не потребляют cursor/total этой выборки. Большая
+              // страница только удлиняет repeatable-read authorization snapshot
+              // на накопленном стенде и может исчерпать его серверный budget.
+              query: { ...(projectRef ? { projectRef } : {}), pageSize: 30 },
               signal: requestSignal(),
             }),
           )

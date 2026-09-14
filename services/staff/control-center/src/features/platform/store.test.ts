@@ -455,6 +455,12 @@ describe("platform store", () => {
     const original = store.runs.run_consistent01;
     await store.loadRuns("project_owner");
 
+    expect(listRunsMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        query: { projectRef: "project_owner", pageSize: 30 },
+      }),
+    );
     expect(store.runs.run_consistent01).toBe(original);
     expect(store.runs.run_consistent01?.version).toBe(2);
     expect(store.runs.run_consistent01?.state).toBe("WAITING_HUMAN");
