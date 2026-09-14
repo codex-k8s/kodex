@@ -101,6 +101,8 @@ type continuationValidationCache struct {
 	catalogs map[string]error
 }
 
+const maximumResumableSessionCandidates = 10_000
+
 // Total и страница выдаются только после полного прохода одного снимка.
 // Ограничение времени закрыто отклоняет запрос без частичного результата.
 func (repository *Repository) listResumableSessions(ctx context.Context, current scope, filter query.Filter) ([]entity.Run, int64, string, error) {
@@ -139,59 +141,49 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 	}
 	fingerprint := sha256.New()
 	var total int64
-	after := ""
-	for {
-		rows, err := tx.Query(ctx, queryResumableSessionCandidates, pgx.StrictNamedArgs{
-			"organization_id": current.organizationID, "actor_id": current.actorID,
-			"project_ref": filter.ProjectRef, "authority_project_id": current.authorityProjectID,
-			"query": filter.Query, "after_ref": after, "limit": int32(100),
-			"target_type": filter.TargetType, "target_ref": filter.TargetRef,
-			"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
-			"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
-			"default_role_image_digest":      repository.roleImages.DefaultImageDigest,
-		})
-		if err != nil {
+	rows, err := tx.Query(ctx, queryResumableSessionCandidates, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "actor_id": current.actorID,
+		"project_ref": filter.ProjectRef, "authority_project_id": current.authorityProjectID,
+		"query": filter.Query, "after_ref": "", "limit": int32(maximumResumableSessionCandidates + 1),
+		"target_type": filter.TargetType, "target_ref": filter.TargetRef,
+		"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
+		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
+		"default_role_image_digest":      repository.roleImages.DefaultImageDigest,
+	})
+	if err != nil {
+		return nil, 0, "", errs.ErrUnavailable
+	}
+	batch := make([]resumableSessionCandidate, 0, 512)
+	for rows.Next() {
+		var item resumableSessionCandidate
+		var accountCandidates, bindingModels []byte
+		if rows.Scan(&item.RunRef, &item.Version, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef,
+			&item.TargetType, &item.TargetRef, &item.AccountRef, &item.TargetSpec, &item.AgentRefs,
+			&item.Configuration.Provider, &item.Configuration.Model, &accountCandidates, &item.Overlay,
+			&item.Binding.CatalogRevision, &item.Binding.CatalogDigest, &bindingModels, &item.Binding.Provider,
+			&item.Binding.PolicyID, &item.Binding.PolicyRef, &item.Binding.PolicyVersion, &item.Binding.PolicyDigest) != nil ||
+			decodeStrict(accountCandidates, &item.Configuration.ProviderPolicy.AccountCandidates) != nil ||
+			decodeStrict(bindingModels, &item.Binding.Models) != nil {
+			rows.Close()
 			return nil, 0, "", errs.ErrUnavailable
 		}
-		batch := make([]resumableSessionCandidate, 0, 100)
-		for rows.Next() {
-			var item resumableSessionCandidate
-			var accountCandidates, bindingModels []byte
-			if rows.Scan(&item.RunRef, &item.Version, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef,
-				&item.TargetType, &item.TargetRef, &item.AccountRef, &item.TargetSpec, &item.AgentRefs,
-				&item.Configuration.Provider, &item.Configuration.Model, &accountCandidates, &item.Overlay,
-				&item.Binding.CatalogRevision, &item.Binding.CatalogDigest, &bindingModels, &item.Binding.Provider,
-				&item.Binding.PolicyID, &item.Binding.PolicyRef, &item.Binding.PolicyVersion, &item.Binding.PolicyDigest) != nil ||
-				decodeStrict(accountCandidates, &item.Configuration.ProviderPolicy.AccountCandidates) != nil ||
-				decodeStrict(bindingModels, &item.Binding.Models) != nil {
-				rows.Close()
-				return nil, 0, "", errs.ErrUnavailable
+		batch = append(batch, item)
+	}
+	rows.Close()
+	if rows.Err() != nil || len(batch) > maximumResumableSessionCandidates {
+		return nil, 0, "", errs.ErrUnavailable
+	}
+	for _, item := range batch {
+		if err := repository.validatePreparedContinuationSnapshot(ctx, tx, current, item, &validationCache); err != nil {
+			if continuationIneligible(err) {
+				continue
 			}
-			batch = append(batch, item)
+			return nil, 0, "", err
 		}
-		rows.Close()
-		if rows.Err() != nil {
-			return nil, 0, "", errs.ErrUnavailable
-		}
-		for _, item := range batch {
-			after = item.RunRef
-			if err := repository.validatePreparedContinuationSnapshot(ctx, tx, current, item, &validationCache); err != nil {
-				if continuationIneligible(err) {
-					continue
-				}
-				return nil, 0, "", err
-			}
-			total++
-			if total > 1<<53-1 {
-				return nil, 0, "", errs.ErrUnavailable
-			}
-			_, _ = fmt.Fprintf(fingerprint, "%s:%d\n", item.RunRef, item.Version)
-			if item.RunRef > cursor.Ref && len(selected) <= int(limit) {
-				selected = append(selected, item)
-			}
-		}
-		if len(batch) < 100 {
-			break
+		total++
+		_, _ = fmt.Fprintf(fingerprint, "%s:%d\n", item.RunRef, item.Version)
+		if item.RunRef > cursor.Ref && len(selected) <= int(limit) {
+			selected = append(selected, item)
 		}
 	}
 	snapshot := base64.RawURLEncoding.EncodeToString(fingerprint.Sum(nil))
