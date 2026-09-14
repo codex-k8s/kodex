@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { fingerprint } from "./scoped-release.mjs";
 import { policyBase, policyDigest, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
 import { planToolsMetadata } from "./policy-tools-metadata.mjs";
-import { requireDrainedInventory, samePlan } from "./runner-policy-transition.mjs";
+import { planReaderRecovery, requireCompatibleReaderBeforeMaintenance, requireDrainedInventory, samePlan } from "./runner-policy-transition.mjs";
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -50,7 +50,7 @@ function deployment(name) {
       valueFrom: { fieldRef: { fieldPath: `metadata.annotations['kodex.dev/trusted-role-base-${suffix.toLowerCase()}']` } } })) : [];
   return { apiVersion: "apps/v1", kind: "Deployment", metadata: metadata(name), spec: { replicas: 1, strategy: { type: "Recreate" }, template: {
     metadata: { annotations: { "kodex.dev/trusted-role-base-repository": f.policy.data.trustedRoleBaseRepository, "kodex.dev/trusted-role-base-digest": oldDigest } },
-    spec: { containers: [{ name, image: "old-exact-image", env }], initContainers: [{ name: "native-grant-agent", image: "old-security-image" }],
+    spec: { containers: [{ name, image: name === "image-admission-controller" ? readerImage : "old-exact-image", env }], initContainers: [{ name: "native-grant-agent", image: "old-security-image" }],
       volumes: [{ name: "role-environments", configMap: { name: "kodex-role-environments" } }, { name: "private", secret: { secretName: "unchanged" } }] },
   } }, status: { observedGeneration: 2, replicas: 1, updatedReplicas: 1, readyReplicas: 1, availableReplicas: 1 } };
 }
@@ -184,6 +184,31 @@ test("reader сначала закрывает новые циклы, а resourc
   assert.throws(() => requireDrainedInventory("resources", 1, 0), /PAUSED_COMPATIBLE_IDLE_READER_REQUIRED/);
   assert.throws(() => requireDrainedInventory("resources", 0, 1), /PAUSED_COMPATIBLE_IDLE_READER_REQUIRED/);
   assert.doesNotThrow(() => requireDrainedInventory("resources", 0, 0));
+});
+
+test("maintenance принимает только уже Ready reader, а UNKNOWN имеет точный CAS recovery", () => {
+  const current = deployment("image-admission-controller");
+  current.spec.template.spec.containers[0].image = readerImage;
+  requireCompatibleReaderBeforeMaintenance(current, readerImage);
+  assert.throws(() => requireCompatibleReaderBeforeMaintenance(current, `registry.local.kodex/kodex/image-admission@sha256:${"4".repeat(64)}`),
+    /CURRENT_READY_READER_IMAGE_REQUIRED/);
+  const unavailable = structuredClone(current); unavailable.status.availableReplicas = 0;
+  assert.throws(() => requireCompatibleReaderBeforeMaintenance(unavailable, readerImage), /CURRENT_READY_READER_IMAGE_REQUIRED/);
+
+  current.spec.template.spec.containers[0].env.push({ name: "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS", value: "true" });
+  current.status.availableReplicas = 0;
+  const failed = { version: 1, id: "attempt-1", context: "default", clusterUID: "cluster", namespaceUID: "namespace",
+    phase: "reader", bundleSHA256: "a".repeat(64), readerImage, operations: [{ type: "patch", kind: "Deployment",
+      name: "image-admission-controller", field: "spec", uid: current.metadata.uid, afterSHA256: fingerprint(current.spec) }] };
+  const evidence = [{ id: failed.id, phase: "reader", status: "INTENT", name: "image-admission-controller" },
+    { id: failed.id, phase: "reader", status: "UNKNOWN" }];
+  const recoveryImage = `registry.local.kodex/kodex/image-admission@sha256:${"5".repeat(64)}`;
+  const recovery = planReaderRecovery(current, failed, evidence, recoveryImage, "https://github.com/codex-k8s/kodex/issues/1648");
+  assert.equal(recovery.before.template.spec.containers[0].image, readerImage);
+  assert.equal(recovery.after.template.spec.containers[0].image, recoveryImage);
+  assert.equal(recovery.after.template.spec.containers[0].env.find((entry) => entry.name === "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS").value, "true");
+  assert.throws(() => planReaderRecovery(current, failed, evidence.slice(0, 1), recoveryImage,
+    "https://github.com/codex-k8s/kodex/issues/1648"), /READER_RECOVERY_UNKNOWN_REQUIRED/);
 });
 
 for (const issuerOnly of [false,true]) test("public CLI ordered maintenance, exact predecessors and UNKNOWN: "+(issuerOnly?"issuer":"runner"), () => {
