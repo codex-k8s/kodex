@@ -38,6 +38,7 @@ if (
   !new Set([
     "prepare",
     "launch",
+    "retry-workspace",
     "capture-runtime",
     "verify-workspace",
     "launch-quota",
@@ -539,6 +540,47 @@ async function launch() {
     runRef,
     activeRunRef: runRef,
     workspaceNonce: nonce,
+    workspaceAttempts: 1,
+    launchedAt: new Date().toISOString(),
+  });
+}
+
+async function retryWorkspace() {
+  privateRegularFile(statePath, 1 << 20);
+  const state = JSON.parse(readFileSync(statePath, "utf8"));
+  if (
+    state.version !== 1 ||
+    state.status !== "runtime-observed" ||
+    (state.workspaceAttempts ?? 1) !== 1 ||
+    !state.runRef
+  )
+    fail("retryable workspace state is absent");
+  const nonce = randomBytes(16).toString("hex");
+  const workspace = await request("POST", "/api/v1/runs", {
+    body: {
+      projectRef: state.projectRef,
+      targetRef: state.agentRef,
+      targetType: "AGENT",
+      title: `${prefix} promoted runtime bounded retry`,
+      task: workspaceAcceptanceTask(nonce),
+    },
+    expectedStatus: 201,
+  });
+  const runRef = boundedString(workspace.run?.ref, "run ref");
+  const {
+    runtimeBinding: _binding,
+    runtimePod: _pod,
+    workspaceNonce: _nonce,
+    ...previous
+  } = state;
+  writeState({
+    ...previous,
+    status: "workspace-retry-launched",
+    previousWorkspaceRunRef: state.runRef,
+    runRef,
+    activeRunRef: runRef,
+    workspaceNonce: nonce,
+    workspaceAttempts: 2,
     launchedAt: new Date().toISOString(),
   });
 }
@@ -548,7 +590,9 @@ async function captureRuntime() {
   const state = JSON.parse(readFileSync(statePath, "utf8"));
   if (
     state.version !== 1 ||
-    !["launched", "quota-launched"].includes(state.status)
+    !["launched", "workspace-retry-launched", "quota-launched"].includes(
+      state.status,
+    )
   )
     fail("launched runtime state is absent");
   const runRef = boundedString(state.activeRunRef, "active run ref");
@@ -735,6 +779,7 @@ async function verifyQuota() {
 try {
   if (phase === "prepare") await prepare();
   else if (phase === "launch") await launch();
+  else if (phase === "retry-workspace") await retryWorkspace();
   else if (phase === "capture-runtime") await captureRuntime();
   else if (phase === "launch-quota") await launchQuota();
   else if (phase === "verify-quota") await verifyQuota();

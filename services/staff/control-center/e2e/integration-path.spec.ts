@@ -304,6 +304,10 @@ test.describe("deployed local integration path", () => {
       last_replay_effect_key: "",
     });
     expect(final.last_effect_key).not.toBe("");
+    connection = await readAPI<Connection>(
+      page,
+      `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}`,
+    );
     connection = await updateConnection(page, connection, {
       name: `${environment.resourcePrefix} — synthetic updated`,
       publicConfiguration: { journal },
