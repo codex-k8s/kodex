@@ -138,27 +138,29 @@ async function main(args) {
     const unchanged = inspect();
     requireValue(fingerprint(bindings(initial)) === fingerprint(bindings(unchanged)) && unchanged.leaderUID === initial.leaderUID, "HANDOFF_PRECONDITION_CHANGED");
     record({ status: "SIGNAL_INTENT", podUID: leader.uid, expectedLeaderUID: expected });
-    // В dev-профиле PID 1 — Air. Его короткая остановка не даёт прежнему Pod
-    // немедленно перезапустить приложение и снова забрать Lease. Lease, grants,
-    // environment и Pod не меняются; finally всегда возобновляет supervisor.
-    const stop = 'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; child=""; for status in /proc/[0-9]*/status; do name=$(sed -n "s/^Name:[[:space:]]*//p" "$status"); parent=$(sed -n "s/^PPid:[[:space:]]*//p" "$status"); if [ "$name" = main ] && [ "$parent" = 1 ]; then test -z "$child"; child=${status%/status}; fi; done; test -n "$child"; kill -STOP 1; kill -KILL "${child##*/}"';
-    const resume = () => kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c",
-      '[ "$POD_UID" = "$1" ] && [ "$(readlink /proc/1/exe)" = "/go/tools/air" ] && kill -CONT 1', "kodex-handoff", leader.uid]);
-    let paused = false;
-    try {
-      kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c", stop, "kodex-handoff", leader.uid]);
-      paused = true;
-    } catch { record({ status: "SIGNAL_ACK_UNCERTAIN", podUID: leader.uid }); }
+    const observeProcess = () => describeApplicationProcess(kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c",
+      'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; found=""; for status in /proc/[0-9]*/status; do name=$(sed -n "s/^Name:[[:space:]]*//p" "$status"); parent=$(sed -n "s/^PPid:[[:space:]]*//p" "$status"); if [ "$name" = main ] && [ "$parent" = 1 ]; then test -z "$found"; found=${status%/status}; fi; done; test -n "$found"; pid=${found##*/}; start=$(awk "{print \\$22}" "$found/stat"); executable=$(readlink "$found/exe"); printf "%s %s %s\\n" "$pid" "$start" "$executable"', "kodex-handoff", leader.uid]));
+    const crash = (process, attempt) => {
+      record({ status: "CRASH_INTENT", podUID: leader.uid, attempt, processStartTicks: process.startTicks });
+      const signal = 'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; pid=$2; start=$3; [ "$(readlink /proc/$pid/exe)" = "$4" ]; [ "$(awk "{print \\$22}" /proc/$pid/stat)" = "$start" ]; kill -KILL "$pid"';
+      try {
+        kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c", signal,
+          "kodex-handoff", leader.uid, String(process.pid), String(process.startTicks), process.executable]);
+      } catch {
+        record({ status: "CRASH_ACK_UNCERTAIN", podUID: leader.uid, attempt, processStartTicks: process.startTicks });
+        throw new Error("HANDOFF_CRASH_ACK_UNCERTAIN");
+      }
+      record({ status: "CRASH_ACK", podUID: leader.uid, attempt, processStartTicks: process.startTicks });
+    };
     const deadline = Date.now() + 240_000;
-    try {
-      while (Date.now() < deadline) {
-        await new Promise((done) => setTimeout(done, 1000));
-        const deployment = get("deployment", target);
-        requireValue(deployment.metadata.uid === initial.uid && fingerprint(deployment.spec) === initial.specSHA256, "DEPLOYMENT_CHANGED");
-        const pods = JSON.parse(kubectl(["get", "pods", "-l", "app.kubernetes.io/name=runtime-controller", "-o", "json"])).items;
-        requireValue(pods.length === 2 && pods.every((pod) => initial.pods.some((item) => item.uid === pod.metadata.uid)), "POD_CHANGED");
-        if (get("lease", "runtime-controller-leader").spec.holderIdentity !== expected) continue;
-        if (paused) { resume(); paused = false; record({ status: "SUPERVISOR_RESUMED", podUID: leader.uid }); }
+    let lastStart = 0;
+    let attempts = 0;
+    while (Date.now() < deadline) {
+      const deployment = get("deployment", target);
+      requireValue(deployment.metadata.uid === initial.uid && fingerprint(deployment.spec) === initial.specSHA256, "DEPLOYMENT_CHANGED");
+      const pods = JSON.parse(kubectl(["get", "pods", "-l", "app.kubernetes.io/name=runtime-controller", "-o", "json"])).items;
+      requireValue(pods.length === 2 && pods.every((pod) => initial.pods.some((item) => item.uid === pod.metadata.uid)), "POD_CHANGED");
+      if (get("lease", "runtime-controller-leader").spec.holderIdentity === expected) {
         for (;;) {
           requireValue(Date.now() < deadline, "HANDOFF_READBACK_TIMEOUT");
           await new Promise((done) => setTimeout(done, 1000));
@@ -176,8 +178,14 @@ async function main(args) {
           }
         }
       }
-    } finally {
-      if (paused) { try { resume(); record({ status: "SUPERVISOR_RESUMED_AFTER_FAILURE", podUID: leader.uid }); } catch { record({ status: "SUPERVISOR_RESUME_UNCERTAIN", podUID: leader.uid }); } }
+      let process;
+      try { process = observeProcess(); }
+      catch { await new Promise((done) => setTimeout(done, 250)); continue; }
+      if (process.startTicks !== lastStart) {
+        requireValue(++attempts <= 30, "HANDOFF_CRASH_BUDGET_EXCEEDED");
+        crash(process, attempts); lastStart = process.startTicks;
+      }
+      await new Promise((done) => setTimeout(done, 500));
     }
     throw new Error("HANDOFF_READBACK_TIMEOUT");
   };
