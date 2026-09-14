@@ -34,6 +34,17 @@ export function fingerprint(value) {
   return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
 }
 
+export function kubectlInvocation(context, arguments_, k3sSudo = false) {
+  requireValue(
+    typeof context === "string" && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context),
+    "EXACT_STAGING_CONTEXT_REQUIRED",
+  );
+  const command = ["--context", context, "--request-timeout=30s", ...arguments_];
+  return k3sSudo
+    ? { file: "sudo", arguments: ["-n", "k3s", "kubectl", ...command] }
+    : { file: "kubectl", arguments: command };
+}
+
 // Native sidecar имеет те же полномочия writer, что обычный контейнер.
 export function workerGrantAgents(podSpec) {
   return [...(podSpec.containers ?? []), ...(podSpec.initContainers ?? [])].filter((item) =>
@@ -169,9 +180,13 @@ async function main(args) {
   const options = {};
   while (args.length) {
     const key = args.shift();
-    requireValue(["--context", "--manifest", "--plan", "--output", "--evidence", "--parallelism", "--timeout-seconds", "--confirm", "--incident"].includes(key) &&
-      !Object.hasOwn(options, key) && args.length > 0, "INVALID_ARGUMENTS");
-    options[key] = args.shift();
+    requireValue(["--context", "--manifest", "--plan", "--output", "--evidence", "--parallelism", "--timeout-seconds", "--confirm", "--incident", "--k3s-sudo"].includes(key) &&
+      !Object.hasOwn(options, key), "INVALID_ARGUMENTS");
+    if (key === "--k3s-sudo") options[key] = true;
+    else {
+      requireValue(args.length > 0, "INVALID_ARGUMENTS");
+      options[key] = args.shift();
+    }
   }
   requireValue(["plan", "apply", "recovery-plan", "recovery-apply"].includes(command), "INVALID_COMMAND");
   const context = options["--context"];
@@ -179,7 +194,8 @@ async function main(args) {
     !/prod(?:uction)?/i.test(context), "EXACT_STAGING_CONTEXT_REQUIRED");
   const kubectl = async (arguments_, timeout = 35000) => {
     try {
-      const { stdout } = await execute("kubectl", ["--context", context, "--request-timeout=30s", ...arguments_],
+      const invocation = kubectlInvocation(context, arguments_, options["--k3s-sudo"] === true);
+      const { stdout } = await execute(invocation.file, invocation.arguments,
         { timeout, maxBuffer: 4 << 20, encoding: "utf8" });
       return stdout;
     } catch { throw new Error("KUBERNETES_OPERATION_FAILED"); }
@@ -204,7 +220,8 @@ async function main(args) {
       const { patch: _patch, ...safe } = planned;
       targets.push({ ...safe, requested: target });
     }
-    await createPrivate(options["--output"], { version: 1, releaseID, context, clusterUID: identity,
+    await createPrivate(options["--output"], { version: 1, releaseID, context,
+      accessProfile: options["--k3s-sudo"] === true ? "k3s-sudo" : "kubectl", clusterUID: identity,
       ...(recovery ? { kind: "APPLICATION_READINESS_RECOVERY", incident } : {}), targets });
     process.stdout.write(`Release plan ready: targets=${targets.length} release=${releaseID}\n`);
     return;
@@ -216,7 +233,9 @@ async function main(args) {
   requireValue(Number.isSafeInteger(seconds) && seconds >= 30 && seconds <= 1800 &&
     Number.isSafeInteger(parallelism) && parallelism >= 1 && parallelism <= 8, "INVALID_RELEASE_BUDGET");
   const plan = JSON.parse(await readFile(options["--plan"], "utf8"));
-  requireValue(plan.version === 1 && plan.context === context && plan.clusterUID === identity && uuid.test(plan.releaseID) &&
+  requireValue(plan.version === 1 && plan.context === context &&
+    plan.accessProfile === (options["--k3s-sudo"] === true ? "k3s-sudo" : "kubectl") &&
+    plan.clusterUID === identity && uuid.test(plan.releaseID) &&
     Array.isArray(plan.targets), "RELEASE_PLAN_IDENTITY_MISMATCH");
   requireValue(recovery ? plan.kind === "APPLICATION_READINESS_RECOVERY" && plan.incident === incident && plan.targets.length === 1 :
     plan.kind === undefined, "RELEASE_PLAN_MODE_MISMATCH");

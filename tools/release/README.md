@@ -132,6 +132,10 @@ node tools/release/scoped-release.mjs apply \
   --timeout-seconds 300 --confirm APPLY-STAGING-APPLICATIONS
 ```
 
+На dev host, где оператору выдан только passwordless k3s CLI, к обеим фазам
+добавляется `--k3s-sudo`. Plan закрепляет `accessProfile=k3s-sudo`; apply без
+того же флага закрыто отклоняется и не меняет Deployment.
+
 План закрепляет cluster UID, Deployment UID и digest полного текущего spec,
 не сохраняя сам spec или значения env. PATCH повторно проверяет resourceVersion.
 Конкурирующее изменение не перетирается. План и журнал создаются исключительно
