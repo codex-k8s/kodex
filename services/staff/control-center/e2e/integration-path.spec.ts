@@ -293,7 +293,9 @@ test.describe("deployed local integration path", () => {
       .toBe(1);
     await restartIntegrationGateway();
     await waitForTerminalRun(page, approvedRun.ref, "SUCCEEDED");
-    await expectIntegrationToolCall(page, approvedRun.ref, "FAILED");
+    // После замены worker авторитетный effect-key readback восстанавливает
+    // известный результат без повторного внешнего действия.
+    await expectIntegrationToolCall(page, approvedRun.ref, "SUCCEEDED");
     const final = await readSyntheticDiagnostic(readbackURL, journal);
     expect(final).toMatchObject({
       count: 1,

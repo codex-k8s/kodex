@@ -18,6 +18,23 @@ export function workspaceModelQuery(model, accountRef = "") {
   return query;
 }
 
+export function workspaceProviderAccountCandidates(items, accountRef = "") {
+  accountRef = workspaceProviderAccountRef(accountRef);
+  const eligible = (Array.isArray(items) ? items : [])
+    .filter(
+      (item) =>
+        item?.state === "AUTHORIZED" &&
+        item.enabled === true &&
+        item.ready === true &&
+        accountPattern.test(item.ref ?? ""),
+    )
+    .map((item) => item.ref)
+    .filter((ref, index, refs) => refs.indexOf(ref) === index)
+    .sort();
+  if (accountRef) return eligible.includes(accountRef) ? [accountRef] : [];
+  return eligible;
+}
+
 export function selectWorkspaceProviderAccount(items, model, accountRef = "") {
   accountRef = workspaceProviderAccountRef(accountRef);
   const selected = items?.find(

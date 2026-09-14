@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   selectWorkspaceProviderAccount,
   workspaceModelQuery,
+  workspaceProviderAccountCandidates,
   workspaceProviderAccountRef,
 } from "./runtime-provider-catalog.mjs";
 
@@ -24,6 +25,37 @@ test("точная account задаётся до чтения model catalog бе
 test("без явной account сохраняется выбор из общего каталога", () => {
   assert.equal(workspaceModelQuery(model).has("providerAccountRef"), false);
   assert.equal(selectWorkspaceProviderAccount([item], model), "pacc_another");
+});
+
+test("кандидаты для account-specific каталога имеют устойчивый порядок", () => {
+  const candidates = workspaceProviderAccountCandidates([
+    { ref: account, state: "AUTHORIZED", enabled: true, ready: true },
+    {
+      ref: "pacc_disabled",
+      state: "AUTHORIZED",
+      enabled: false,
+      ready: true,
+    },
+    {
+      ref: "pacc_another",
+      state: "AUTHORIZED",
+      enabled: true,
+      ready: true,
+    },
+    { ref: account, state: "AUTHORIZED", enabled: true, ready: true },
+  ]);
+  assert.deepEqual(candidates, ["pacc_another", account]);
+  assert.deepEqual(
+    workspaceProviderAccountCandidates(
+      [{ ref: account, state: "AUTHORIZED", enabled: true, ready: true }],
+      account,
+    ),
+    [account],
+  );
+  assert.deepEqual(
+    workspaceProviderAccountCandidates([], "pacc_unavailable"),
+    [],
+  );
 });
 
 test("недоступная account не подменяется другой eligible account", () => {
