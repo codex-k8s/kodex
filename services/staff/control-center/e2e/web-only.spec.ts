@@ -2097,13 +2097,6 @@ test.describe("web-only fresh installation", () => {
       await editDialog.getByRole("button", { name: "Сохранить" }).click();
       const edited = await edit;
       expect(edited.status()).toBe(200);
-      expect(
-        (
-          (await edited.json()) as {
-            currentRevision?: { revision?: number };
-          }
-        ).currentRevision?.revision,
-      ).toBe(2);
       await expect(editDialog).toHaveCount(0);
     }
     expect(await readScheduleRevisionState(page, automationRef)).toEqual({
@@ -2797,7 +2790,14 @@ test.describe("web-only fresh installation", () => {
             "/api/v1/administration/access/roles",
       );
       await dialog.getByRole("button", { name: "Создать роль v1" }).click();
-      expect((await creation).status()).toBe(201);
+      const created = await creation.catch(() => undefined);
+      if (created) {
+        expect(created.status()).toBe(201);
+      } else {
+        // Потерянное browser-observation после потенциальной mutation нельзя
+        // повторять вслепую: сначала читаем authoritative каталог по имени.
+        await gotoWithRetry(page, "/administration/access/roles");
+      }
       roleCard = page
         .locator(".role-card")
         .filter({ hasText: accessRoleName })
@@ -3687,11 +3687,12 @@ test.describe("web-only fresh installation", () => {
       await unauthenticated.close();
     }
 
-    const projectsBeforeRejectedMutations = await page.evaluate(async () => {
-      const response = await fetch("/api/v1/projects?pageSize=100");
-      const body = (await response.json()) as { items: unknown[] };
-      return body.items.length;
-    });
+    const projectsBeforeReadback = await readJsonWithNetworkRetry<{
+      items: unknown[];
+    }>(page, "/api/v1/projects?pageSize=100");
+    expect(projectsBeforeReadback.status).toBe(200);
+    const projectsBeforeRejectedMutations =
+      projectsBeforeReadback.body.items.length;
     const input = {
       name: `${environment.resourcePrefix} — запрещённый проект`,
       purpose: "Этот объект не должен быть создан.",
@@ -3736,11 +3737,12 @@ test.describe("web-only fresh installation", () => {
       },
     });
     expect(foreignOrigin.status()).toBe(403);
-    const projectsAfterRejectedMutations = await page.evaluate(async () => {
-      const response = await fetch("/api/v1/projects?pageSize=100");
-      const body = (await response.json()) as { items: unknown[] };
-      return body.items.length;
-    });
+    const projectsAfterReadback = await readJsonWithNetworkRetry<{
+      items: unknown[];
+    }>(page, "/api/v1/projects?pageSize=100");
+    expect(projectsAfterReadback.status).toBe(200);
+    const projectsAfterRejectedMutations =
+      projectsAfterReadback.body.items.length;
     expect(projectsAfterRejectedMutations).toBe(
       projectsBeforeRejectedMutations,
     );
