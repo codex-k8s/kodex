@@ -231,6 +231,10 @@ node tools/release/control-plane-migration.mjs apply \
   --confirm APPLY-STAGING-CP-MIGRATION
 ```
 
+Для forward-only обновления server-owned default runtime profile используется
+профиль `runtime-profile-default`; он не останавливает работающие реплики
+Control Plane и не изменяет существующие Agent runtime revisions.
+
 ## Локальная проверка механизма
 
 ```bash
