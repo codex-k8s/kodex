@@ -74,11 +74,20 @@ export function validSource(value) {
     /^[a-f0-9]{40}$/.test(value.revision ?? "");
 }
 
+export function sourceGitArguments(path, ...args) {
+  requireValue(/^\/[A-Za-z0-9_./-]{1,400}$/.test(path) &&
+    !path.endsWith("/") && !path.split("/").some((part) => part === "." || part === ".."),
+  "SOURCE_PATH_INVALID");
+  return ["-c", `safe.directory=${path}`, "-C", path, ...args];
+}
+
 // Выполняется на доверенном dev host, где Kubernetes монтирует этот checkout.
 // Код sidecar и общая конфигурация из нового checkout не применяются.
 export function inspectSource(path, frontend = false) {
   requireValue(realpathSync(path) === path && lstatSync(path).isDirectory(), "SOURCE_ROOT_INVALID");
-  const git = (...args) => execFileSync("git", ["-C", path, ...args], {
+  // Доверие ограничено уже проверенным exact path и одним дочерним процессом:
+  // прежний checkout может принадлежать root, но global Git config не меняется.
+  const git = (...args) => execFileSync("git", sourceGitArguments(path, ...args), {
     encoding: "utf8", timeout: 10000, maxBuffer: 8 << 20, stdio: ["ignore", "pipe", "pipe"],
   }).trim();
   requireValue(git("rev-parse", "--show-toplevel") === path &&
