@@ -116,11 +116,13 @@ function snapshotProcesses() {
 
 function isPlaywrightBrowser(item, home) {
   const cacheRoot = `${home}/.cache/ms-playwright/`;
+  const commandLine = item.argv.join(" ");
   return (
     item.executable.startsWith(cacheRoot) &&
     basename(item.executable) === "chrome-headless-shell" &&
-    item.argv.some((argument) =>
-      /^--user-data-dir=\/tmp\/playwright_chromiumdev_profile-[A-Za-z0-9_-]+$/.test(argument),
+    !/[\r\n]/.test(commandLine) &&
+    /(?:^|\s)--user-data-dir=\/tmp\/playwright_chromiumdev_profile-[A-Za-z0-9_-]+(?=$|\s)/.test(
+      commandLine,
     )
   );
 }
