@@ -15,6 +15,7 @@ const profiles = {
   'materialization-global': { version: '20260913000100', file: '20260913000100_runtime_materialization_global_identity.sql', annotation: 'kodex.dev/cp-materialization-migration-plan' },
   'default-runner-readiness': { version: '20260913000200', file: '20260913000200_issue_1548_default_runner_readiness.sql', annotation: 'kodex.dev/cp-default-runner-readiness-migration-plan' },
   'artifact-retention-trigger': { version: '20260913000300', file: '20260913000300_issue_1556_artifact_retention_trigger.sql', annotation: 'kodex.dev/cp-artifact-retention-trigger-migration-plan' },
+  'runtime-profile-default': { version: '20260914000100', file: '20260914000100_issue_1625_runtime_profile_default.sql', annotation: 'kodex.dev/cp-runtime-profile-default-migration-plan' },
 };
 const profileFor = (name = 'legacy') => { ensure(Object.hasOwn(profiles,name),'MIGRATION_PROFILE_INVALID'); return profiles[name]; };
 const fileDigest = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
