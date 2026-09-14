@@ -25,6 +25,7 @@ import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
+import { presentRuntimeText } from "@/features/runs/runtime-text";
 import {
   indexRunSessionOwnership,
   projectRunSessionGraph,
@@ -73,31 +74,8 @@ const graph = computed(
 const streamState = computed(
   () => realtime.state[graph.value?.runRef ?? runRef.value],
 );
-const opaqueRefPattern =
-  /`?(?:agt|art|bld|cap|cnv|con|edg|evt|gat|inc|int|job|mbr|msg|nod|pln|prj|rev|rol|rti|run|sch|ses|trn|usr|wfl)_[A-Za-z0-9_-]{8,}`?/g;
-const technicalTokenPattern = /`?\b[A-Z][A-Z\d]*(?:_[A-Z\d]+)+\b`?/g;
-
 function safeRuntimeText(value?: string): string | undefined {
-  const source = value?.trim();
-  if (!source) return undefined;
-  if (source.startsWith("{") || source.startsWith("[")) {
-    try {
-      JSON.parse(source);
-      return undefined;
-    } catch {
-      // Пользовательское предложение может начинаться со скобки.
-    }
-  }
-  const visible = serverMessage(source)
-    .replace(/`?i18n:[A-Z\d_]+`?/g, "")
-    .replace(opaqueRefPattern, "")
-    .replace(technicalTokenPattern, "")
-    .replace(/\s+([,.;:!?])/g, "$1")
-    .replace(/([,.;:])\s*([,.;:])/g, "$1")
-    .replace(/^\s*[-–—:;,]+\s*|\s*[-–—:;,]+\s*$/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-  return /[\p{L}\p{N}]/u.test(visible) ? visible : undefined;
+  return presentRuntimeText(value, serverMessage);
 }
 
 const runSubtitle = computed(
@@ -190,8 +168,14 @@ const eventList = computed<PresentedRunEvent[]>(() =>
     .sort((a, b) => a.sequence - b.sequence)
     .map((event) => ({
       ...event,
-      displaySummary: safeRuntimeText(event.summary) ?? eventFallback(event),
-      displayProgress: safeRuntimeText(event.progress),
+      displaySummary:
+        presentRuntimeText(event.summary, serverMessage, event.messageKind) ??
+        eventFallback(event),
+      displayProgress: presentRuntimeText(
+        event.progress,
+        serverMessage,
+        event.messageKind,
+      ),
     })),
 );
 const gateList = computed(() =>
