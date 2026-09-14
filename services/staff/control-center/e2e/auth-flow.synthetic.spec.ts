@@ -14,6 +14,13 @@ const cases = [
     initial: 401,
     expected: 200,
   },
+  {
+    name: "stale identity provider document at frontend root",
+    mode: "local",
+    initial: 401,
+    expected: 200,
+    staleIdentityRoot: true,
+  },
   { name: "initial 403", mode: "local", initial: 403, expected: 403 },
   { name: "initial 503", mode: "local", initial: 503, expected: 503 },
   {
@@ -48,6 +55,7 @@ for (const scenario of cases) {
     let sessionRequests = 0;
     let callbackRequests = 0;
     let identitySubmissions = 0;
+    let staleIdentityRootResponses = 0;
     let authorizationRequests = 0;
     const pageErrors: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(error.name));
@@ -91,13 +99,29 @@ for (const scenario of cases) {
         });
         return;
       }
-      if (url.pathname === "/identity-submit") identitySubmissions++;
+      if (url.pathname === "/identity-submit") {
+        identitySubmissions++;
+        if ("staleIdentityRoot" in scenario) {
+          staleIdentityRootResponses = 1;
+          await route.fulfill({
+            contentType: "text/html",
+            body: '<!doctype html><meta charset="utf-8"><script>history.replaceState(null, "", "/")</script><form><input name="username"><input name="password" type="password"><button type="submit">Submit</button></form>',
+          });
+          return;
+        }
+      }
       if (url.pathname === "/" && scenario.mode === "local") {
-        await route.fulfill({
-          contentType: "text/html",
-          body: '<!doctype html><meta charset="utf-8"><form action="/identity-submit" method="post"><input name="username"><input name="password" type="password"><button type="submit">Submit</button></form>',
-        });
-        return;
+        if (
+          !("staleIdentityRoot" in scenario) ||
+          identitySubmissions === 0 ||
+          staleIdentityRootResponses++ === 0
+        ) {
+          await route.fulfill({
+            contentType: "text/html",
+            body: '<!doctype html><meta charset="utf-8"><form action="/identity-submit" method="post"><input name="username"><input name="password" type="password"><button type="submit">Submit</button></form>',
+          });
+          return;
+        }
       }
       await route.fulfill({
         contentType: "text/html",

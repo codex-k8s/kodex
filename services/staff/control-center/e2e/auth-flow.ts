@@ -13,6 +13,7 @@ const frontendOIDCRetryTimeoutMs = 7_500;
 const maxFrontendOIDCAttempts = 2;
 const surfacePollIntervalMs = 250;
 const maxTransitions = 5;
+const identityProviderRootRecoveryDelayMs = 3_000;
 
 type AuthSurface =
   | "authenticated-ui"
@@ -81,6 +82,11 @@ async function authenticateObservedOwner(
   let frontendOIDCAttempts = 0;
   const ownerSessionStatuses: number[] = [];
 
+  const initialNavigation = page.waitForRequest(
+    (request) =>
+      request.isNavigationRequest() && request.frame() === page.mainFrame(),
+    { timeout: remainingTimeout(deadline) },
+  );
   await gotoWithRetry(
     page,
     "/",
@@ -90,11 +96,18 @@ async function authenticateObservedOwner(
     },
     { appShell: false },
   );
+  const frontendOrigin = new URL((await initialNavigation).url()).origin;
 
-  let surface = await waitForAuthSurface(page, deadline, undefined, {
-    identitySubmissions,
-    frontendOIDCAttempts,
-  });
+  let surface = await waitForAuthSurface(
+    page,
+    deadline,
+    frontendOrigin,
+    undefined,
+    {
+      identitySubmissions,
+      frontendOIDCAttempts,
+    },
+  );
   for (let transition = 0; transition < maxTransitions; transition += 1) {
     if (surface === "application-failure") {
       throw authenticationError(
@@ -201,10 +214,16 @@ async function authenticateObservedOwner(
 
     await submitIdentityProvider(page, credentials, deadline);
     identitySubmissions += 1;
-    surface = await waitForAuthSurface(page, deadline, "identity-provider", {
-      identitySubmissions,
-      frontendOIDCAttempts,
-    });
+    surface = await waitForAuthSurface(
+      page,
+      deadline,
+      frontendOrigin,
+      "identity-provider",
+      {
+        identitySubmissions,
+        frontendOIDCAttempts,
+      },
+    );
   }
 
   throw authenticationError(
@@ -358,6 +377,7 @@ async function waitForAuthenticationNavigation(
 async function waitForAuthSurface(
   page: Page,
   deadline: number,
+  frontendOrigin: string,
   previous?: Exclude<AuthSurface, "pending">,
   progress: AuthProgress = {
     identitySubmissions: 0,
@@ -365,10 +385,32 @@ async function waitForAuthSurface(
   },
 ): Promise<Exclude<AuthSurface, "pending">> {
   const initialDeadline = Date.now() + 5_000;
+  const identityProviderRecoveryDeadline =
+    Date.now() + identityProviderRootRecoveryDelayMs;
   let retriedBlankInitialDocument = false;
+  let retriedIdentityProviderRoot = false;
   while (Date.now() < deadline) {
     const surface = await detectAuthSurface(page);
     if (surface !== "pending" && surface !== previous) return surface;
+    if (
+      previous === "identity-provider" &&
+      surface === "identity-provider" &&
+      !retriedIdentityProviderRoot &&
+      Date.now() >= identityProviderRecoveryDeadline &&
+      isFrontendRoot(page.url(), frontendOrigin)
+    ) {
+      retriedIdentityProviderRoot = true;
+      await gotoWithRetry(
+        page,
+        "/",
+        {
+          timeout: remainingTimeout(deadline),
+          waitUntil: "domcontentloaded",
+        },
+        { appShell: false },
+      );
+      continue;
+    }
     if (
       previous === undefined &&
       !retriedBlankInitialDocument &&
@@ -394,6 +436,15 @@ async function waitForAuthSurface(
     progress.identitySubmissions,
     progress.frontendOIDCAttempts,
   );
+}
+
+function isFrontendRoot(raw: string, frontendOrigin: string): boolean {
+  try {
+    const location = new URL(raw);
+    return location.origin === frontendOrigin && location.pathname === "/";
+  } catch {
+    return false;
+  }
 }
 
 async function hasBlankApplicationDocument(
