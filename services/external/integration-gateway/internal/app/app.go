@@ -192,7 +192,13 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 			return processed, errors.New("integration lease budget is insufficient")
 		}
 		operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
-		result, operationErr := adapter.Execute(operation, integration.RequestFromInvocation(claim))
+		var result integration.Result
+		var operationErr error
+		if claim.GetWorkMode() == controlplanev1.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_RECOVER_READ_ONLY {
+			result, operationErr = adapter.Recover(operation, integration.RequestFromInvocation(claim))
+		} else {
+			result, operationErr = adapter.Execute(operation, integration.RequestFromInvocation(claim))
+		}
 		cancel()
 		metrics.Operation(false, operationErr == nil, integration.IsUnknownOutcome(operationErr))
 		if err := completeInvocation(ctx, control, claim, result, operationErr); err != nil {

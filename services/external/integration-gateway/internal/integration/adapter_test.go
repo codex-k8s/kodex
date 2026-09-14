@@ -47,7 +47,13 @@ func TestSyntheticHTTPJournalWriteIsIdempotentAndReadable(t *testing.T) {
 	t.Parallel()
 	fixture := integrationfixture.NewHandler(integrationfixture.NewStore())
 	fixture.SetReady(true)
-	server := httptest.NewServer(fixture)
+	writeCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodPost {
+			writeCalls++
+		}
+		fixture.ServeHTTP(writer, request)
+	}))
 	defer server.Close()
 
 	adapter := testAdapter(t)
@@ -64,6 +70,10 @@ func TestSyntheticHTTPJournalWriteIsIdempotentAndReadable(t *testing.T) {
 	}
 	if first.Summary != second.Summary || first.Receipt != second.Receipt {
 		t.Fatalf("duplicate synthetic effect was not deduplicated: %#v %#v", first, second)
+	}
+	recovered, err := adapter.Recover(t.Context(), write)
+	if err != nil || recovered.Summary != first.Summary || recovered.Receipt != first.Receipt || writeCalls != 2 {
+		t.Fatalf("read-only recovery changed effect: recovered=%#v err=%v writeCalls=%d", recovered, err, writeCalls)
 	}
 	read := invocationRequest(t, adapter.definitions["synthetic"], "synthetic.journal.read", map[string]any{}, nil)
 	result, err := adapter.Execute(t.Context(), read)
