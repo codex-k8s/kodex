@@ -153,7 +153,7 @@ func loadConfig() (Config, error) {
 		NATSReplicas:                    3,
 		NATSMaxBytes:                    32 << 30,
 		DefaultRuntimeProvider:          "openai-codex",
-		DefaultRuntimeModel:             "gpt-5.6-sol",
+		DefaultRuntimeModel:             "gpt-5.4",
 		IntegrationCredentialNamespace:  "kodex-system",
 		IntegrationCredentialSecretName: "kodex-integration-credentials",
 		RuntimeSecretNamespace:          "kodex-runtime",

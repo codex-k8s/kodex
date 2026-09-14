@@ -10,6 +10,7 @@ import { InitialSessionProbeObservation } from "./initial-session-probe";
 
 const authenticationTimeoutMs = 100_000;
 const frontendOIDCRetryTimeoutMs = 7_500;
+const frontendOIDCProgressIdleTimeoutMs = 20_000;
 const maxFrontendOIDCAttempts = 2;
 const surfacePollIntervalMs = 250;
 const maxTransitions = 5;
@@ -242,20 +243,21 @@ async function startFrontendOIDCTransition(
   initialProbe: InitialSessionProbeObservation,
 ): Promise<Exclude<AuthSurface, "pending">> {
   const frontendOrigin = new URL(page.url()).origin;
-  let authenticationProgressObserved = false;
+  let lastAuthenticationProgressAt: number | undefined;
+  let lastProgressLocation = "";
   let failedResponse: string | undefined;
+  const recordProgress = (): void => {
+    lastAuthenticationProgressAt = Date.now();
+  };
   const recordNavigation = (frame: Frame): void => {
     if (frame.parentFrame() !== null) return;
-    authenticationProgressObserved ||= isOIDCProgressLocation(
-      frame.url(),
-      frontendOrigin,
-    );
+    if (isOIDCProgressLocation(frame.url(), frontendOrigin)) {
+      lastProgressLocation = frame.url();
+      recordProgress();
+    }
   };
   const recordRequest = (request: Request): void => {
-    authenticationProgressObserved ||= isOIDCProgressRequest(
-      request,
-      frontendOrigin,
-    );
+    if (isOIDCProgressRequest(request, frontendOrigin)) recordProgress();
   };
   const recordFailedResponse = (response: Response): void => {
     if (isOwnerSessionCreationResponse(response, frontendOrigin)) {
@@ -317,13 +319,19 @@ async function startFrontendOIDCTransition(
         );
         return recovered === "frontend-sign-in" ? "frontend-retry" : recovered;
       }
-      authenticationProgressObserved ||= isOIDCProgressLocation(
-        page.url(),
-        frontendOrigin,
+      const currentLocation = page.url();
+      if (
+        currentLocation !== lastProgressLocation &&
+        isOIDCProgressLocation(currentLocation, frontendOrigin)
+      ) {
+        lastProgressLocation = currentLocation;
+        recordProgress();
+      }
+      const activeDeadline = frontendOIDCActiveDeadline(
+        deadline,
+        retryDeadline,
+        lastAuthenticationProgressAt,
       );
-      const activeDeadline = authenticationProgressObserved
-        ? deadline
-        : retryDeadline;
       if (Date.now() >= activeDeadline) break;
       await page.waitForTimeout(
         Math.min(surfacePollIntervalMs, remainingTimeout(activeDeadline)),
@@ -337,6 +345,25 @@ async function startFrontendOIDCTransition(
         progress.frontendOIDCAttempts,
       );
     }
+    if (lastAuthenticationProgressAt !== undefined) {
+      await gotoWithRetry(
+        page,
+        "/",
+        {
+          timeout: remainingTimeout(deadline),
+          waitUntil: "domcontentloaded",
+        },
+        { appShell: false },
+      );
+      const recovered = await waitForAuthSurface(
+        page,
+        deadline,
+        frontendOrigin,
+        undefined,
+        progress,
+      );
+      return recovered === "frontend-sign-in" ? "frontend-retry" : recovered;
+    }
     if (surface === "frontend-sign-in") {
       throw authenticationError(
         page,
@@ -347,9 +374,7 @@ async function startFrontendOIDCTransition(
     }
     throw authenticationError(
       page,
-      authenticationProgressObserved
-        ? "the frontend OIDC transition remained pending before the authentication deadline"
-        : "the frontend OIDC transition remained pending before the retry deadline",
+      "the frontend OIDC transition remained pending before the retry deadline",
       progress.identitySubmissions,
       progress.frontendOIDCAttempts,
     );
@@ -358,6 +383,19 @@ async function startFrontendOIDCTransition(
     page.off("request", recordRequest);
     page.off("response", recordFailedResponse);
   }
+}
+
+export function frontendOIDCActiveDeadline(
+  overallDeadline: number,
+  retryDeadline: number,
+  lastProgressAt: number | undefined,
+): number {
+  return Math.min(
+    overallDeadline,
+    lastProgressAt === undefined
+      ? retryDeadline
+      : lastProgressAt + frontendOIDCProgressIdleTimeoutMs,
+  );
 }
 
 async function waitForVisibleImages(

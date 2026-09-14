@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  frontendOIDCActiveDeadline,
   isBrowserNavigationFailure,
   isRecoverableBlankFrontendDocument,
 } from "./auth-flow";
@@ -8,6 +9,12 @@ import {
 const frontendOrigin = "https://control.kodex.example";
 
 describe("восстановление документа E2E-авторизации", () => {
+  test("ограничивает зависший OIDC прогресс отдельным idle timeout", () => {
+    expect(frontendOIDCActiveDeadline(200_000, 17_500, undefined)).toBe(17_500);
+    expect(frontendOIDCActiveDeadline(200_000, 17_500, 10_000)).toBe(30_000);
+    expect(frontendOIDCActiveDeadline(25_000, 17_500, 10_000)).toBe(25_000);
+  });
+
   test("распознаёт внутренний документ ошибки Chromium для ограниченного OIDC retry", () => {
     expect(isBrowserNavigationFailure("chrome-error://chromewebdata/")).toBe(
       true,
