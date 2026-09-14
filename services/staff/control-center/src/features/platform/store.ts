@@ -319,15 +319,11 @@ export const usePlatformStore = defineStore("platform", () => {
     upsert(target, values);
   }
 
-  function reconcileRuns(values: Run[], projectRef?: string): void {
-    const currentRefs = new Set(values.map((value) => value.ref));
-    for (const [ref, value] of Object.entries(runs)) {
-      if (
-        (!projectRef || value.projectRef === projectRef) &&
-        !currentRefs.has(ref)
-      )
-        Reflect.deleteProperty(runs, ref);
-    }
+  function reconcileRuns(values: Run[]): void {
+    // loadRuns читает только короткую сводную страницу. Отсутствие Run в ней
+    // не является авторитетным доказательством удаления: подробная страница и
+    // realtime могут держать более старый или не попавший в первые строки Run.
+    // Коллекцией RunsPage владеет отдельное хранилище с курсорами.
     for (const value of values) {
       const current = runs[value.ref];
       if (current && current.version <= value.version)
@@ -641,7 +637,7 @@ export const usePlatformStore = defineStore("platform", () => {
           )
         ).data.items,
       (values) => {
-        reconcileRuns(values, projectRef);
+        reconcileRuns(values);
       },
     );
   }

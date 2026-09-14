@@ -466,6 +466,22 @@ describe("platform store", () => {
     expect(store.runs.run_consistent01?.state).toBe("WAITING_HUMAN");
   });
 
+  it("не удаляет подробно загруженный Run из-за короткой сводной страницы", async () => {
+    const detail = run(3);
+    const summary = { ...run(1), ref: "run_summary01" };
+    listRunsMock.mockResolvedValue({
+      data: { items: [summary], total: 8, nextPageToken: "next-page" },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+    store.runs[detail.ref] = detail;
+
+    await store.loadRuns("project_owner");
+
+    expect(store.runs[detail.ref]).toEqual(detail);
+    expect(store.runs[summary.ref]).toEqual(summary);
+  });
+
   it("передаёт поиск аудита авторитетному owner API", async () => {
     listAuditEventsMock.mockResolvedValue({
       data: { items: [], nextPageToken: "" },

@@ -1,10 +1,23 @@
 import { describe, expect, test } from "vitest";
 
-import { isRecoverableBlankFrontendDocument } from "./auth-flow";
+import {
+  isBrowserNavigationFailure,
+  isRecoverableBlankFrontendDocument,
+} from "./auth-flow";
 
 const frontendOrigin = "https://control.kodex.example";
 
 describe("восстановление документа E2E-авторизации", () => {
+  test("распознаёт внутренний документ ошибки Chromium для ограниченного OIDC retry", () => {
+    expect(isBrowserNavigationFailure("chrome-error://chromewebdata/")).toBe(
+      true,
+    );
+    expect(isBrowserNavigationFailure("https://control.example.test/")).toBe(
+      false,
+    );
+    expect(isBrowserNavigationFailure("not-a-url")).toBe(false);
+  });
+
   test("восстанавливает пустой корневой документ без #app", () => {
     expect(
       isRecoverableBlankFrontendDocument(
