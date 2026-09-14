@@ -20,7 +20,10 @@ const ticketApi = vi.hoisted(() => ({
 vi.mock("./ticket", () => ticketApi);
 
 import { usePlatformStore } from "@/features/platform/store";
-import { useRealtimeStore } from "@/features/realtime/store";
+import {
+  useRealtimeStore,
+  webSocketHandshakeTimeoutMs,
+} from "@/features/realtime/store";
 
 type SocketListener = (event: { data?: string }) => void;
 
@@ -80,12 +83,22 @@ class FakeWebSocket {
   }
 }
 
-const scheduled: Array<() => void> = [];
+const scheduled = new Map<number, { callback: () => void; delay: number }>();
+let nextTimerID = 0;
 const windowEvents = new Map<string, () => void>();
 const authoritativeRunSequences = new Map<string, number>();
 
 async function flushProcessing(): Promise<void> {
   for (let index = 0; index < 50; index += 1) await Promise.resolve();
+}
+
+function runScheduled(delay?: number): void {
+  const entry = [...scheduled.entries()].find(
+    ([, timer]) => delay === undefined || timer.delay === delay,
+  );
+  if (!entry) throw new Error("Expected scheduled callback is absent");
+  scheduled.delete(entry[0]);
+  entry[1].callback();
 }
 
 function sent(socket: FakeWebSocket, index: number): Record<string, unknown> {
@@ -199,7 +212,7 @@ describe("browser-session realtime multiplexer", () => {
     windowEvents.get("online")?.();
     await flushProcessing();
     expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(scheduled).toHaveLength(0);
+    expect(scheduled.size).toBe(0);
     expect(socket.closeReason).toBe("SESSION_TERMINAL");
     store.closeAll();
   });
@@ -234,7 +247,8 @@ describe("browser-session realtime multiplexer", () => {
     setActivePinia(createPinia());
     ticketApi.requestRealtimeTicket.mockResolvedValue("t".repeat(43));
     FakeWebSocket.instances = [];
-    scheduled.length = 0;
+    scheduled.clear();
+    nextTimerID = 0;
     windowEvents.clear();
     authoritativeRunSequences.clear();
     const platform = usePlatformStore();
@@ -254,11 +268,12 @@ describe("browser-session realtime multiplexer", () => {
         .mockReturnValue("00000000-0000-4000-8000-000000000004"),
     });
     vi.stubGlobal("window", {
-      setTimeout: (callback: () => void) => {
-        scheduled.push(callback);
-        return scheduled.length;
+      setTimeout: (callback: () => void, delay = 0) => {
+        nextTimerID += 1;
+        scheduled.set(nextTimerID, { callback, delay });
+        return nextTimerID;
       },
-      clearTimeout: vi.fn(),
+      clearTimeout: (timer: number) => scheduled.delete(timer),
       addEventListener: (type: string, listener: () => void) => {
         windowEvents.set(type, listener);
       },
@@ -408,8 +423,8 @@ describe("browser-session realtime multiplexer", () => {
     await flushProcessing();
 
     first.close(1006, "CONNECTION_LOST");
-    expect(scheduled).toHaveLength(1);
-    scheduled.shift()?.();
+    expect(scheduled.size).toBe(1);
+    runScheduled();
     await flushProcessing();
     const second = socketAt(1);
     second.open();
@@ -464,9 +479,9 @@ describe("browser-session realtime multiplexer", () => {
       attempt: 1,
     });
     expect(store.state.run_realtime02?.state).not.toBe("offline");
-    expect(scheduled).toHaveLength(1);
+    expect(scheduled.size).toBe(1);
 
-    scheduled.shift()?.();
+    runScheduled();
     expect(sent(socket, 1)).toMatchObject({
       type: "SUBSCRIBE_RUN",
       runRef: "run_realtime01",
@@ -497,7 +512,27 @@ describe("browser-session realtime multiplexer", () => {
       state: "recovering",
       attempt: 1,
     });
-    expect(scheduled).toHaveLength(1);
+    expect(scheduled.size).toBe(1);
+    store.closeAll();
+  });
+
+  it("ограничивает зависший handshake и открывает новый socket", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const first = socketAt(0);
+
+    expect(scheduled.size).toBe(1);
+    runScheduled(webSocketHandshakeTimeoutMs);
+    expect(store.platformState).toMatchObject({ state: "offline", attempt: 1 });
+    runScheduled(1_000);
+    await flushProcessing();
+
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    const second = socketAt(1);
+    second.open();
+    expect(second.sent).toHaveLength(1);
+    expect(first.sent).toHaveLength(0);
     store.closeAll();
   });
 
