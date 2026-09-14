@@ -1,16 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { verifyLeaderHandoff, describePodProcesses } from "./runtime-leader-handoff.mjs";
+import { verifyLeaderHandoff, describePodProcesses, describeApplicationProcess } from "./runtime-leader-handoff.mjs";
 
 const a = "11111111-1111-4111-8111-111111111111", b = "22222222-2222-4222-8222-222222222222";
 const start = Date.parse("2026-09-08T10:00:00Z");
 const at = (seconds) => new Date(start + seconds * 1000).toISOString();
 function fixture() {
-  const state = (seconds, leaderUID, restarts) => ({
+  const state = (seconds, leaderUID, restarts, processStarts) => ({
     at: at(seconds), clusterUID: a, namespaceUID: b, uid: a, target: "runtime-controller",
     specSHA256: "a".repeat(64), readers: { pods: [{ uid: a, revision: "a".repeat(40) }] },
     pods: [a, b].map((uid) => ({ uid, name: uid })), leaderUID, activeJobs: 0,
     podDetails: [a, b].map((uid, i) => ({ uid, restartCount: restarts[i], imageID: "sha256:app",
+      applicationProcess: { pid: 100 + i + seconds, startTicks: processStarts[i], executable: "/tmp/main" },
       others: [{ name: "native-grant-agent", restartCount: 0, imageID: "sha256:agent" }] })),
     database: { activeRuntimeRuns: 0, claimedRuntimeLeases: 0,
       floors: [{ workload: "runtime-controller", generation: 7 }],
@@ -18,7 +19,8 @@ function fixture() {
         revision: 100 + seconds, expiresAt: at(seconds + 240), updatedAt: at(seconds - 1) })) },
   });
   const proof = { version: 1, id: a, profile: "RUNTIME_LEADER_HANDOFF", status: "PASS", toolSourceSHA: "a".repeat(40),
-    before: state(0, a, [0, 0]), middle: state(60, b, [1, 0]), after: state(120, a, [1, 1]) };
+    before: state(0, a, [0, 0], [1000, 1001]), middle: state(60, b, [1, 0], [1060, 1001]),
+    after: state(120, a, [1, 1], [1060, 1120]) };
   // Standby не обязан иметь durable row до первого фактического RPC.
   proof.before.database.instances.pop();
   return proof;
@@ -72,4 +74,11 @@ test("native sidecars remain part of protected process metadata", () => {
   assert.deepEqual(describePodProcesses(pod).others, [{ name: "grant", restartCount: 3, imageID: "agent" }]);
   pod.status.containerStatuses[0].ready = false;
   assert.throws(() => describePodProcesses(pod));
+});
+
+test("application process accepts only one bounded main process description", () => {
+  assert.deepEqual(describeApplicationProcess("127 4567 /tmp/main\n"), { pid: 127, startTicks: 4567, executable: "/tmp/main" });
+  for (const value of ["", "1 2 /tmp/main\n", "2 0 /tmp/main\n", "2 3 /tmp/worker\n", "2 3 /tmp/main extra\n"]) {
+    assert.throws(() => describeApplicationProcess(value));
+  }
 });

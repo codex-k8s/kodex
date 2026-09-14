@@ -206,15 +206,18 @@ Runtime-controller вызывает рабочие RPC только как leade
 ожидание двух advancing rows не проверяет standby. Для #1254 отдельный
 `runtime-leader-handoff.mjs` допускает только idle профиль: нет активных runs,
 claimed leases и незавершённых Jobs. Он фиксирует lease holder, Deployment,
-два Pod UID, application и native sidecar restart counts и generation floor.
-Перед каждым сигналом повторяется preflight; свежая работа закрыто блокирует
-продолжение. Штатный SIGTERM получает PID1 Air только текущего leader с
-проверкой Downward API UID и пути бинаря. Kubernetes восстанавливает тот же
-application container; grant agents, leases и файлы вручную не изменяются.
+два Pod UID, точный start time application process, application и native
+sidecar restart counts и generation floor. Перед каждым сигналом повторяется
+preflight; свежая работа закрыто блокирует продолжение. В hot-reload профиле
+инструмент коротко останавливает PID1 Air текущего leader, завершает его
+единственный дочерний `main`, ждёт переход Lease и сразу возобновляет Air.
+`finally` выполняет тот же resume при любом отказе. Downward API UID и пути
+обоих бинарей проверяются до сигнала. Тот же Pod запускает новый application
+process; grant agents, Lease, environment и файлы вручную не изменяются.
 
 | Переход | Авторитетный результат | Ошибка / отсутствие события |
 | --- | --- | --- |
-| A→B | Обычный drain/release Kubernetes Lease; B выполняет защищённый RPC и регистрирует собственный durable instance | Потеря exec ACK не повторяет сигнал; readback того же Pod до 240s |
+| A→B | Завершение leader process освобождает Kubernetes Lease; B выполняет защищённый RPC, затем Air возобновляется и запускает новый process в том же A Pod | Потеря exec ACK не повторяет stop; `finally` отдельно возобновляет supervisor, authoritative readback ограничен 240s |
 | B→A | A вновь становится leader, его revision продвигается после второго handoff | Новая работа, замена Pod/reader, sidecar restart или floor drift закрыто останавливают proof |
 | Proof→rolling | PASS моложе 300s, тот же cluster/Deployment/spec/Pods/processes и A leader; hash proof закреплён в plan | Новый activity/lease, stale proof или CAS drift не разрешают PATCH |
 
