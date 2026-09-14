@@ -984,6 +984,51 @@ describe("platform store", () => {
     expect(call?.headers["If-Match"]).toBe(`"${String(original.version)}"`);
   });
 
+  it("повторяет привязку файла после обрыва сети с тем же mutation key", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const original = artifact("art_retry_binding", "project_owner");
+    const result = {
+      ...original,
+      version: original.version + 1,
+      agentBindings: ["agent_ready"],
+    };
+    changeArtifactBindingMock
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({
+        data: result,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    const changing = store.changeArtifactAgentBinding(
+      original,
+      "agent_ready",
+      true,
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(changing).resolves.toEqual(result);
+    expect(changeArtifactBindingMock).toHaveBeenCalledTimes(2);
+    const firstCall = changeArtifactBindingMock.mock.calls[0]?.[0];
+    const secondCall = changeArtifactBindingMock.mock.calls[1]?.[0];
+    expect(firstCall?.path).toEqual({ artifactRef: original.ref });
+    expect(secondCall?.body).toEqual({
+      agentRef: "agent_ready",
+      enabled: true,
+    });
+    expect(secondCall?.headers["Idempotency-Key"]).toBe(
+      firstCall?.headers["Idempotency-Key"],
+    );
+    expect(secondCall?.headers["If-Match"]).toBe(
+      firstCall?.headers["If-Match"],
+    );
+    expect(store.artifacts[original.ref]).toEqual(result);
+  });
+
   it("читает avatar artifact и перемещает его в общую корзину с OCC", async () => {
     vi.stubGlobal("document", {
       cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,

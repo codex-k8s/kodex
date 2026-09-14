@@ -849,7 +849,7 @@ export const usePlatformStore = defineStore("platform", () => {
     agentRef: string,
     enabled: boolean,
   ): Promise<Artifact> {
-    const result = await mutate(
+    const result = await mutateWithRetry(
       (headers) =>
         changeArtifactBinding({
           path: { artifactRef: artifact.ref },
