@@ -79,7 +79,10 @@ WITH requested AS (
     SELECT count(*) AS revision_count,
            COALESCE(bool_and(
                revision.instruction_ref = :'instruction_ref'
-               AND revision.instruction_digest = instruction.digest
+               AND revision.safe_snapshot->>'instructionRef' = revision.instruction_ref
+               AND revision.safe_snapshot->>'instructionDigest' = revision.instruction_digest
+               AND revision.safe_snapshot->>'promptTemplateRef' = instruction.ref
+               AND revision.safe_snapshot->>'promptTemplateDigest' = instruction.digest
                AND instruction.ref = :'instruction_ref'
                AND instruction.state = 'PUBLISHED'
            ), false) AS valid

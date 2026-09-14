@@ -1911,6 +1911,24 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	if stringMap(lease, "effectiveReasoningEffort") != "high" || stringMap(lease, "reasoningMode") != "SUPPORTED" {
 		t.Fatal("materialization lost server-owned model effort")
 	}
+	resolvedInstructionsDigest := sha256.Sum256([]byte(stringMap(lease, "instructions")))
+	var persistedInstructionDigest, sourceInstructionDigest string
+	if err := pool.QueryRow(ctx, `
+		SELECT revision.instruction_digest, instruction.digest
+		FROM control_plane.runtime_revisions revision
+		JOIN control_plane.instruction_versions instruction
+		  ON instruction.ref = revision.instruction_ref
+		WHERE revision.ref = $1
+	`, stringMap(lease, "runtimeRevisionRef")).Scan(
+		&persistedInstructionDigest, &sourceInstructionDigest,
+	); err != nil {
+		t.Fatalf("read runtime instruction provenance: %v", err)
+	}
+	if resolved := hex.EncodeToString(resolvedInstructionsDigest[:]); stringMap(lease, "instructionDigest") != resolved ||
+		persistedInstructionDigest != resolved ||
+		stringMap(lease, "promptTemplateDigest") != sourceInstructionDigest {
+		t.Fatal("runtime instruction source or materialization digest diverged")
+	}
 	testClaimedRuntimeMaterializationProof(t, ctx, repository, lease, "runtime-provider-affinity", true)
 	workspacePolicy, ok := lease["workspacePolicy"].(entity.RuntimeWorkspacePolicy)
 	if !ok || !reflect.DeepEqual(workspacePolicy, runtimeWorkspacePolicy()) {
