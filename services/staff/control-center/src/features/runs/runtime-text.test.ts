@@ -22,7 +22,13 @@ describe("presentRuntimeText", () => {
   ] as const)("сохраняет полезный текст %s", (messageKind) => {
     expect(
       presentRuntimeText("KODEX_CONTINUATION_RESULT_OK", identity, messageKind),
-    ).toBe("KODEX_CONTINUATION_RESULT_OK");
+    ).toBe("`KODEX_CONTINUATION_RESULT_OK`");
+  });
+
+  it("не оборачивает повторно уже размеченный машинный токен", () => {
+    expect(
+      presentRuntimeText("`KODEX_RESULT_OK`", identity, "FINAL_MESSAGE"),
+    ).toBe("`KODEX_RESULT_OK`");
   });
 
   it("не показывает внутреннюю ссылку внутри ответа агента", () => {

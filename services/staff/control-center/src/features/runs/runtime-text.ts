@@ -29,7 +29,13 @@ export function presentRuntimeText(
   let visible = serverMessage(source)
     .replace(/`?i18n:[A-Z\d_]+`?/g, "")
     .replace(opaqueRefPattern, "");
-  if (!conversational) visible = visible.replace(technicalTokenPattern, "");
+  if (conversational) {
+    visible = visible.replace(technicalTokenPattern, (token) =>
+      token.startsWith("`") && token.endsWith("`") ? token : `\`${token}\``,
+    );
+  } else {
+    visible = visible.replace(technicalTokenPattern, "");
+  }
   visible = visible
     .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/([,.;:])\s*([,.;:])/g, "$1")
