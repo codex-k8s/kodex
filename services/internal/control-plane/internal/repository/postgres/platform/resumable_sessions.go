@@ -79,6 +79,11 @@ type resumableSessionCandidate struct {
 	RunRef, SessionID, SessionRef, ProjectID, ProjectRef string
 	TargetType, TargetRef, AccountRef                    string
 	Version                                              int64
+	TargetSpec                                           []byte
+	AgentRefs                                            []string
+	Configuration                                        entity.AgentRuntimeConfiguration
+	Overlay                                              string
+	Binding                                              sessionCatalogBinding
 }
 
 type resumableSessionCursor struct {
@@ -141,6 +146,9 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 			"project_ref": filter.ProjectRef, "authority_project_id": current.authorityProjectID,
 			"query": filter.Query, "after_ref": after, "limit": int32(100),
 			"target_type": filter.TargetType, "target_ref": filter.TargetRef,
+			"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
+			"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
+			"default_role_image_digest":      repository.roleImages.DefaultImageDigest,
 		})
 		if err != nil {
 			return nil, 0, "", errs.ErrUnavailable
@@ -148,7 +156,14 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 		batch := make([]resumableSessionCandidate, 0, 100)
 		for rows.Next() {
 			var item resumableSessionCandidate
-			if rows.Scan(&item.RunRef, &item.Version, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef, &item.TargetType, &item.TargetRef, &item.AccountRef) != nil {
+			var accountCandidates, bindingModels []byte
+			if rows.Scan(&item.RunRef, &item.Version, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef,
+				&item.TargetType, &item.TargetRef, &item.AccountRef, &item.TargetSpec, &item.AgentRefs,
+				&item.Configuration.Provider, &item.Configuration.Model, &accountCandidates, &item.Overlay,
+				&item.Binding.CatalogRevision, &item.Binding.CatalogDigest, &bindingModels, &item.Binding.Provider,
+				&item.Binding.PolicyID, &item.Binding.PolicyRef, &item.Binding.PolicyVersion, &item.Binding.PolicyDigest) != nil ||
+				decodeStrict(accountCandidates, &item.Configuration.ProviderPolicy.AccountCandidates) != nil ||
+				decodeStrict(bindingModels, &item.Binding.Models) != nil {
 				rows.Close()
 				return nil, 0, "", errs.ErrUnavailable
 			}
@@ -160,7 +175,7 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 		}
 		for _, item := range batch {
 			after = item.RunRef
-			if err := repository.validateContinuationSnapshotCached(ctx, tx, current, item, &validationCache); err != nil {
+			if err := repository.validatePreparedContinuationSnapshot(ctx, tx, current, item, &validationCache); err != nil {
 				if continuationIneligible(err) {
 					continue
 				}
@@ -205,6 +220,21 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 		return nil, 0, "", errs.ErrUnavailable
 	}
 	return items, total, next, nil
+}
+
+func (repository *Repository) validatePreparedContinuationSnapshot(ctx context.Context, tx pgx.Tx, current scope, candidate resumableSessionCandidate, cache *continuationValidationCache) error {
+	if candidate.TargetType == "WORKFLOW" {
+		var version entity.WorkflowVersion
+		if json.Unmarshal(candidate.TargetSpec, &version) != nil || !validWorkflowVersion(version) ||
+			version.CoordinatorAgentRef == "" || !validWorkflowRunInput(version.Inputs, nil) {
+			return errs.ErrConflict
+		}
+	}
+	selected, _, err := resolveSessionModelCatalogCandidate(candidate.AccountRef, candidate.Configuration, candidate.Binding)
+	if err != nil {
+		return err
+	}
+	return repository.validateContinuationCatalogCandidate(ctx, tx, current, candidate.Configuration, candidate.Overlay, selected, cache)
 }
 
 // Каталог использует те же проверки текущего target, runtime и model catalog,
@@ -297,6 +327,10 @@ func (repository *Repository) validateContinuationSessionCatalog(ctx context.Con
 	if err != nil {
 		return err
 	}
+	return repository.validateContinuationCatalogCandidate(ctx, tx, current, configuration, overlay, selected, cache)
+}
+
+func (repository *Repository) validateContinuationCatalogCandidate(ctx context.Context, tx pgx.Tx, current scope, configuration entity.AgentRuntimeConfiguration, overlay string, selected entity.ProviderAccountCandidate, cache *continuationValidationCache) error {
 	rawKey, _ := json.Marshal(struct {
 		Provider  string
 		Model     string
@@ -309,7 +343,7 @@ func (repository *Repository) validateContinuationSessionCatalog(ctx context.Con
 			return cached
 		}
 	}
-	_, _, err = validateRuntimeCatalogCandidatesSnapshot(ctx, tx, scope{organizationID: current.organizationID}, configuration.Provider, configuration.Model, overlay, []entity.ProviderAccountCandidate{selected}, false, false)
+	_, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, scope{organizationID: current.organizationID}, configuration.Provider, configuration.Model, overlay, []entity.ProviderAccountCandidate{selected}, false, false)
 	if cache != nil {
 		cache.catalogs[catalogKey] = err
 	}
