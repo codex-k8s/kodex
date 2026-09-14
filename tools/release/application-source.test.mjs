@@ -4,13 +4,21 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createApplicationSource, inspectSource, planSourceChange, prepareApplicationSource, validSource } from "./application-source.mjs";
+import { createApplicationSource, inspectSource, planSourceChange, prepareApplicationSource, sourceGitArguments, validSource } from "./application-source.mjs";
 
 const oldRoot = "/srv/kodex-dev/old";
 const newRoot = "/srv/kodex-dev/new";
 const oldSHA = "a".repeat(40), newSHA = "b".repeat(40);
 const source = { path: newRoot, revision: newSHA };
 const inspect = (path) => ({ revision: path === oldRoot ? oldSHA : newSHA, dependenciesSHA256: "d".repeat(64), mountpointsReady: true });
+
+test("git trust is scoped to one exact source path", () => {
+  assert.deepEqual(sourceGitArguments("/srv/kodex-dev/root-owned", "status", "--porcelain"), [
+    "-c", "safe.directory=/srv/kodex-dev/root-owned", "-C", "/srv/kodex-dev/root-owned", "status", "--porcelain",
+  ]);
+  assert.throws(() => sourceGitArguments("/srv/kodex-dev/../private", "status"), /SOURCE_PATH_INVALID/);
+  assert.throws(() => sourceGitArguments("relative", "status"), /SOURCE_PATH_INVALID/);
+});
 function fixture() {
   return { metadata: { name: "control-api-gateway", labels: { "kodex.dev/local-profile": "hot-reload" } },
     spec: { template: { spec: { containers: [
