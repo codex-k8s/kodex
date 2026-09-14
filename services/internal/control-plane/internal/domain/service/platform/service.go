@@ -691,14 +691,23 @@ func (service *Service) ListRuns(ctx context.Context, p value.Principal, filter 
 	if err != nil {
 		return nil, 0, "", err
 	}
-	return service.repository.ListRuns(ctx, p, filter)
+	items, total, next, err := service.repository.ListRuns(ctx, p, filter)
+	return items, total, next, preserveRequestContext(ctx, err)
 }
 func (service *Service) GetRun(ctx context.Context, p value.Principal, ref string) (entity.Run, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return entity.Run{}, err
 	}
-	return service.repository.GetRun(ctx, p, ref)
+	item, err := service.repository.GetRun(ctx, p, ref)
+	return item, preserveRequestContext(ctx, err)
+}
+
+func preserveRequestContext(ctx context.Context, err error) error {
+	if err != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
 }
 func (service *Service) GetRunGraph(ctx context.Context, p value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
 	p, err := service.principal(ctx, p)

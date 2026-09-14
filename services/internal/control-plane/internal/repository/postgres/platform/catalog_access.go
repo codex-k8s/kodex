@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const catalogQueryTimeout = 10 * time.Second
+const catalogQueryTimeout = 5 * time.Second
 
 // Проверка каждой строки и чтение страницы используют один снимок полномочий.
 func authorizedCatalog[T any](ctx context.Context, repository *Repository, current scope, kind string, filter query.Filter,

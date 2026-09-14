@@ -65,6 +65,19 @@ func TestReadyDoesNotDependOnProviderCredentialMaterializer(t *testing.T) {
 	}
 }
 
+func TestPreserveRequestContext(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := preserveRequestContext(ctx, errs.ErrUnavailable); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled request error = %v", err)
+	}
+	if err := preserveRequestContext(t.Context(), errs.ErrUnavailable); !errors.Is(err, errs.ErrUnavailable) {
+		t.Fatalf("active request error = %v", err)
+	}
+}
+
 func TestReadyReturnsOwnedRepositoryFailure(t *testing.T) {
 	t.Parallel()
 

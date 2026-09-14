@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"context"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -23,6 +24,26 @@ func TestTransportErrorDistinguishesMissingCapabilityFromConcurrentConflict(t *t
 	}
 
 	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if actual := status.Code(transportError(test.err)); actual != test.code {
+				t.Fatalf("transport code = %s, want %s", actual, test.code)
+			}
+		})
+	}
+}
+
+func TestTransportErrorPreservesRequestCancellation(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name string
+		err  error
+		code codes.Code
+	}{
+		{name: "canceled", err: context.Canceled, code: codes.Canceled},
+		{name: "deadline", err: context.DeadlineExceeded, code: codes.DeadlineExceeded},
+	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			if actual := status.Code(transportError(test.err)); actual != test.code {
