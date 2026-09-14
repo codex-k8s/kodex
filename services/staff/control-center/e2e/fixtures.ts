@@ -15,8 +15,9 @@ export const test = base.extend<{
   freshOwnerSession: boolean;
 }>({
   browserDiagnostics: [
-    async ({ context, page }, use) => {
+    async ({ context, page }, use, testInfo) => {
       const failures = new Set<string>();
+      const pendingRetryableFailures = new Map<string, string>();
       const monitoredPages = new WeakSet<Page>();
       const expectedNetworkInterruptions = new WeakMap<Page, number>();
 
@@ -59,10 +60,20 @@ export const test = base.extend<{
           }
         });
         target.on("response", (response) => {
-          if (response.status() >= 500) {
-            failures.add(
-              `response:${String(response.status())}:${boundedToken(response.request().method())}:${safeURL(response.url())}`,
-            );
+          const request = response.request();
+          const observation = observeHTTPResponse(
+            pendingRetryableFailures,
+            response.status(),
+            request.method(),
+            response.url(),
+            request.headers()["idempotency-key"],
+          );
+          if (observation.failure) failures.add(observation.failure);
+          if (observation.recovered) {
+            testInfo.annotations.push({
+              type: "bounded-http-recovery",
+              description: observation.recovered,
+            });
           }
         });
       };
@@ -90,6 +101,9 @@ export const test = base.extend<{
       });
 
       context.off("page", monitorPage);
+      for (const failure of pendingRetryableFailures.values()) {
+        failures.add(failure);
+      }
       if (failures.size > 0) {
         throw new Error(
           [
@@ -124,6 +138,39 @@ function safeURL(raw: string): string {
   } catch {
     return "invalid-url";
   }
+}
+
+export function observeHTTPResponse(
+  pending: Map<string, string>,
+  status: number,
+  method: string,
+  url: string,
+  idempotencyKey?: string,
+): { failure?: string; recovered?: string } {
+  const safeMethod = boundedToken(method);
+  const location = safeURL(url);
+  const failure = `response:${String(status)}:${safeMethod}:${location}`;
+  const retryIdentity = mutationRetryIdentity(method, location, idempotencyKey);
+  if (status >= 500) {
+    if (retryIdentity) pending.set(retryIdentity, failure);
+    return retryIdentity ? {} : { failure };
+  }
+  if (status < 200 || status >= 300 || !retryIdentity) return {};
+  const recovered = pending.get(retryIdentity);
+  if (!recovered) return {};
+  pending.delete(retryIdentity);
+  return { recovered };
+}
+
+function mutationRetryIdentity(
+  method: string,
+  location: string,
+  idempotencyKey?: string,
+) {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return undefined;
+  const key = idempotencyKey ?? "";
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(key)) return undefined;
+  return `${method}:${location}:${key}`;
 }
 
 function boundedToken(value: string): string {
