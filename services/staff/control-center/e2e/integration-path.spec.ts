@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { open } from "node:fs/promises";
 import { isAbsolute } from "node:path";
@@ -1221,39 +1222,65 @@ async function mutateAPI<T>(
     expectedStatus: number;
   },
 ): Promise<T> {
-  const result = await page.evaluate(async (input) => {
-    const prefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
-    const csrf = document.cookie
-      .split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(prefix))
-      ?.slice(prefix.length);
-    if (!csrf) return { status: 0, code: "CSRF_UNAVAILABLE", body: undefined };
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "Idempotency-Key": input.idempotencyKey ?? crypto.randomUUID(),
-      "X-CSRF-Token": decodeURIComponent(csrf),
-    };
-    if (input.version !== undefined)
-      headers["If-Match"] = `"${String(input.version)}"`;
-    const response = await fetch(input.path, {
-      method: input.method,
-      headers,
-      body: input.body === undefined ? undefined : JSON.stringify(input.body),
-    });
-    if (!response.ok) {
-      let code = "UNKNOWN";
+  const input = {
+    ...request,
+    idempotencyKey: request.idempotencyKey ?? randomUUID(),
+  };
+  let result: { status: number; code: string; body: unknown } | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    result = await page.evaluate(async (input) => {
+      const prefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+      const csrf = document.cookie
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(prefix))
+        ?.slice(prefix.length);
+      if (!csrf)
+        return { status: 0, code: "CSRF_UNAVAILABLE", body: undefined };
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Idempotency-Key": input.idempotencyKey,
+        "X-CSRF-Token": decodeURIComponent(csrf),
+      };
+      if (input.version !== undefined)
+        headers["If-Match"] = `"${String(input.version)}"`;
+      let response: Response;
       try {
-        code = ((await response.json()) as { code?: string }).code ?? code;
-      } catch {
-        // Do not surface response bodies from a credential mutation.
+        response = await fetch(input.path, {
+          method: input.method,
+          headers,
+          body:
+            input.body === undefined ? undefined : JSON.stringify(input.body),
+        });
+      } catch (error) {
+        return {
+          status: 0,
+          code:
+            error instanceof TypeError ? "FETCH_INTERRUPTED" : "FETCH_FAILED",
+          body: undefined,
+        };
       }
-      return { status: response.status, code, body: undefined };
-    }
-    const body = (await response.json()) as unknown;
-    return { status: response.status, code: "", body };
-  }, request);
+      if (!response.ok) {
+        let code = "UNKNOWN";
+        try {
+          code = ((await response.json()) as { code?: string }).code ?? code;
+        } catch {
+          // Do not surface response bodies from a credential mutation.
+        }
+        return { status: response.status, code, body: undefined };
+      }
+      const body = (await response.json()) as unknown;
+      return { status: response.status, code: "", body };
+    }, input);
+    if (
+      !["FETCH_INTERRUPTED", "FETCH_FAILED"].includes(result.code) ||
+      attempt === 1
+    )
+      break;
+    await page.waitForTimeout(250);
+  }
+  if (!result) throw new Error("API mutation did not run");
   if (result.status !== request.expectedStatus || result.body === undefined) {
     throw new APIMutationFailure(result.status, result.code);
   }

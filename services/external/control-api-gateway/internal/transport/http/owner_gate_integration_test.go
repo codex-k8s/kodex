@@ -50,7 +50,7 @@ func integrationGateFixture() *cp.OwnerGate {
 			{Decision: cp.OwnerGateDecision_OWNER_GATE_DECISION_APPROVE, SafeSummary: "TYPE_preserve", ExecutesExternalEffect: true},
 			{Decision: cp.OwnerGateDecision_OWNER_GATE_DECISION_REJECT},
 		},
-		IntegrationIntent: &cp.IntegrationIntent{ConnectionRef: "icn_fixture01", ConnectionName: "TYPE_connection", DefinitionKey: "github", CapabilityKey: "github.issue.create", Operation: "create", EffectKey: strings.Repeat("a", 64),
+		IntegrationIntent: &cp.IntegrationIntent{ConnectionRef: "icn_fixture01", ConnectionName: "TYPE_connection", DefinitionKey: "github", CapabilityKey: "github.issue.create", Operation: "create", EffectKey: "eff_" + strings.Repeat("a", 32),
 			ResourceScope: &cp.IntegrationResourceScope{Kind: cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_REPOSITORY, Values: map[string]string{"repository": "TYPE_repository", "owner": "i18n:literal"}, Digest: strings.Repeat("b", 64)}, EffectPreview: preview},
 	}
 }
@@ -128,6 +128,7 @@ func TestOwnerGateIntegrationRejectsMalformedProjectionOnEveryPath(t *testing.T)
 		"missing kind":        func(g *cp.OwnerGate) { g.IntegrationIntent.ResourceScope.Kind = 0 },
 		"bad scope digest":    func(g *cp.OwnerGate) { g.IntegrationIntent.ResourceScope.Digest = "invalid" },
 		"bad effect key":      func(g *cp.OwnerGate) { g.IntegrationIntent.EffectKey = "invalid" },
+		"bare effect digest":  func(g *cp.OwnerGate) { g.IntegrationIntent.EffectKey = strings.Repeat("a", 64) },
 		"missing preview":     func(g *cp.OwnerGate) { g.IntegrationIntent.EffectPreview = nil },
 		"missing connection":  func(g *cp.OwnerGate) { g.IntegrationIntent.ConnectionRef = "" },
 		"unknown decision":    func(g *cp.OwnerGate) { g.DecisionConsequences[0].Decision = cp.OwnerGateDecision(999) },

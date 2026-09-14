@@ -2,10 +2,13 @@ package httptransport
 
 import (
 	"errors"
+	"regexp"
 	"unicode/utf8"
 )
 
 var errOwnerGateShape = errors.New("owner gate integration projection is invalid")
+
+var integrationEffectKeyPattern = regexp.MustCompile(`^eff_[a-f0-9]{32}$`)
 
 func validateOwnerGateProjection(gate map[string]any) error {
 	ref, _ := gate["ref"].(string)
@@ -60,7 +63,7 @@ func validateOwnerGateProjection(gate map[string]any) error {
 	}
 	ref, _ = intent["connectionRef"].(string)
 	effectKey, _ := intent["effectKey"].(string)
-	if !fileTargetRef(ref) || !validManagedDigest(effectKey) || !gateText(intent["connectionName"], 0, 160) ||
+	if !fileTargetRef(ref) || !integrationEffectKeyPattern.MatchString(effectKey) || !gateText(intent["connectionName"], 0, 160) ||
 		!gateText(intent["definitionKey"], 1, 100) || !gateText(intent["capabilityKey"], 1, 100) || !gateText(intent["operation"], 1, 120) {
 		return errOwnerGateShape
 	}
