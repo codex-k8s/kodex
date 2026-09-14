@@ -151,7 +151,7 @@ func TestModelCatalogProcessIsolatedCredentialAndCleanup(t *testing.T) {
 			if err := os.Chmod(root, 0o700); err != nil {
 				t.Fatal(err)
 			}
-			process, err := NewAppServerProcess(binary, root)
+			process, err := NewAppServerProcess(binary, root, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,6 +179,30 @@ func TestModelCatalogProcessIsolatedCredentialAndCleanup(t *testing.T) {
 				t.Fatal("catalog credential directory was retained")
 			}
 		})
+	}
+}
+
+func TestStagingModelCatalogAcceptsValidatedProtocolWithoutOptionalCache(t *testing.T) {
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	process, err := NewAppServerProcess(binary, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"synthetic-catalog-token","account_id":"fixture-cache-missing"}}`)
+	result, err := process.ObserveModelCatalog(t.Context(), auth, CatalogMethodDeviceCode)
+	if err != nil || result.Failure != CatalogFailureNone || result.Source != CatalogRemoteCodex || len(result.Models) != 1 || result.Models[0].ID != "fixture-reasoning" {
+		t.Fatalf("validated protocol catalog was rejected: result=%#v err=%v", result, err)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("protocol catalog retained private state")
 	}
 }
 
@@ -297,7 +321,7 @@ func TestModelCatalogProcessRefusesRefreshAndJoinsDeadline(t *testing.T) {
 			if err := os.Chmod(root, 0o700); err != nil {
 				t.Fatal(err)
 			}
-			process, err := NewAppServerProcess(binary, root)
+			process, err := NewAppServerProcess(binary, root, false)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -71,9 +71,11 @@ READ повторяется только на bounded network/`429`/`502`/`503`/
 
 Потеря ответа, повреждённый успешный ответ или истечение mutation lease
 сохраняют `UNKNOWN_OUTCOME` в PostgreSQL. Такой invocation никогда не возвращается
-в `READY`; новый worker не повторяет внешний эффект. GitHub create/comment,
-Synthetic и email пытаются сверить эффект только через чтение. Если сверка не
-подтверждена, MCP возвращает `INTEGRATION_OUTCOME_UNKNOWN` и
+в `READY`; новый worker не повторяет внешний эффект. Acceptance после потери
+worker проверяет durable `UNKNOWN_OUTCOME`, сохранённый intent и отсутствие
+повторного provider effect. GitHub create/comment, Synthetic и email сверяют
+эффект только через чтение. Если сверка не подтверждена, MCP возвращает
+`INTEGRATION_OUTCOME_UNKNOWN` и
 `owner_decision_required=true`. Этот исход не является успехом или отсутствием
 эффекта. Контракт bridge находится в `contracts/openapi/email-bridge/v1`;
 его POP/SMTP реализация принадлежит #1037.

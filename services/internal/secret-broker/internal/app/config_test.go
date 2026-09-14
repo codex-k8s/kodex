@@ -3,6 +3,7 @@ package app
 import "testing"
 
 func TestConfigSeparatesRuntimeNamespaceFromPodIdentity(t *testing.T) {
+	t.Setenv("DEPLOYMENT_ENVIRONMENT", "staging")
 	t.Setenv("POD_NAMESPACE", "kodex-system")
 	t.Setenv("POD_UID", "8d47ed4c-1d6e-4b57-9e69-7e620d9422d8")
 	t.Setenv("SECRET_BROKER_RUNTIME_NAMESPACE", "kodex-runtime")
@@ -16,6 +17,7 @@ func TestConfigSeparatesRuntimeNamespaceFromPodIdentity(t *testing.T) {
 }
 
 func TestConfigRejectsMissingPodUIDAndForeignRuntimeNamespace(t *testing.T) {
+	t.Setenv("DEPLOYMENT_ENVIRONMENT", "staging")
 	t.Setenv("POD_UID", "")
 	t.Setenv("SECRET_BROKER_RUNTIME_NAMESPACE", "kodex-runtime")
 	if _, err := loadConfig(); err == nil {

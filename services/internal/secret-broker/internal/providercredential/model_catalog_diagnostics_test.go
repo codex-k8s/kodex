@@ -25,7 +25,7 @@ func TestCatalogDiagnosticProcessStagesAndCleanup(t *testing.T) {
 			if err := os.Chmod(root, 0o700); err != nil {
 				t.Fatal(err)
 			}
-			process, err := NewAppServerProcess(binary, root)
+			process, err := NewAppServerProcess(binary, root, false)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -16,12 +16,8 @@ import type {
   RuntimeSelection,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutateWithRetry, type MutationHeaders } from "@/shared/api/mutation";
-import { asProblem, unwrap } from "@/shared/api/problem";
-
-const readRetryDelaysMs = [0, 200, 600] as const;
-const runtimeConfigurationReadRetryDelaysMs = [
-  0, 200, 600, 1_500, 3_000,
-] as const;
+import { unwrap } from "@/shared/api/problem";
+import { readWithRetry } from "@/shared/api/read-retry";
 
 function versionHeaders(headers: MutationHeaders): {
   "If-Match": string;
@@ -51,7 +47,7 @@ export async function loadAgentRuntime(
           }),
         )
       ).data,
-    runtimeConfigurationReadRetryDelaysMs,
+    undefined,
     signal,
   );
 }
@@ -63,7 +59,7 @@ export async function loadRuntimeCatalog(
     async () =>
       (await unwrap(listRuntimeSelections({ signal: requestSignal(signal) })))
         .data.items,
-    readRetryDelaysMs,
+    undefined,
     signal,
   );
 }
@@ -168,40 +164,4 @@ export async function searchRuntimeEnvironments(
         )
       ).data,
   );
-}
-
-async function readWithRetry<T>(
-  request: () => Promise<T>,
-  retryDelaysMs: readonly number[] = readRetryDelaysMs,
-  signal?: AbortSignal,
-): Promise<T> {
-  let lastProblem = asProblem(new Error("Runtime read did not start"));
-  for (const delayMs of retryDelaysMs) {
-    signal?.throwIfAborted();
-    if (delayMs > 0) {
-      await new Promise<void>((resolve, reject) => {
-        const timer = globalThis.setTimeout(() => {
-          signal?.removeEventListener("abort", abort);
-          resolve();
-        }, delayMs);
-        function abort(): void {
-          globalThis.clearTimeout(timer);
-          signal?.removeEventListener("abort", abort);
-          reject(new DOMException("Runtime read aborted", "AbortError"));
-        }
-        signal?.addEventListener("abort", abort, { once: true });
-      });
-    }
-    signal?.throwIfAborted();
-    try {
-      return await request();
-    } catch (error) {
-      signal?.throwIfAborted();
-      lastProblem = asProblem(error);
-      if (!lastProblem.retryable || delayMs === retryDelaysMs.at(-1)) {
-        throw lastProblem;
-      }
-    }
-  }
-  throw lastProblem;
 }

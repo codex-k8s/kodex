@@ -97,9 +97,11 @@ func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJS
 	if err != nil {
 		return catalogFailure(ctx, err)
 	}
-	models, err = readRemoteCodexCatalog(home, started, models)
-	if err != nil {
-		return catalogFailure(ctx, err)
+	if !process.allowProtocolCatalogFallback {
+		models, err = readRemoteCodexCatalog(home, started, models)
+		if err != nil {
+			return catalogFailure(ctx, err)
+		}
 	}
 	if ctx.Err() != nil {
 		return ModelCatalog{}, ctx.Err()

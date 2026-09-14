@@ -22,6 +22,7 @@ const (
 )
 
 type Config struct {
+	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	RuntimeNamespace            string        `env:"SECRET_BROKER_RUNTIME_NAMESPACE"`
 	DraftNamespace              string        `env:"SECRET_BROKER_DRAFT_NAMESPACE"`
 	DraftKeyringFile            string        `env:"SECRET_BROKER_DRAFT_KEYRING_FILE"`
@@ -86,7 +87,8 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
-	if config.RuntimeNamespace != "kodex-runtime" || config.DraftNamespace != "kodex-secret-drafts" ||
+	if (config.Environment != "staging" && config.Environment != "production") ||
+		config.RuntimeNamespace != "kodex-runtime" || config.DraftNamespace != "kodex-secret-drafts" ||
 		config.DraftKeyGuardName != "secret-broker-draft-key-guard" || config.ClaimantID == "" || len(config.ClaimantID) > 128 ||
 		config.ControlPlaneTarget != defaultControlPlaneTarget ||
 		config.ControlPlaneTLSServerName != defaultControlPlaneTLSServerName ||

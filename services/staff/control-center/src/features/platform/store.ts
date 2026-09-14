@@ -1502,7 +1502,7 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function launch(input: RunInput): Promise<Run> {
-    const result = await mutate((headers) =>
+    const result = await mutateWithRetry((headers) =>
       createRun({
         body: input,
         headers: mutationHeaders(headers),

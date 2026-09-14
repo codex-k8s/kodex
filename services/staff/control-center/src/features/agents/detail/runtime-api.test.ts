@@ -225,7 +225,7 @@ describe("agent detail runtime api", () => {
     expect(mocks.createConfigOverlayDraft).toHaveBeenCalledOnce();
   });
 
-  it("использует расширенный bounded retry для runtime-конфигурации", async () => {
+  it("использует общий bounded retry для runtime-конфигурации", async () => {
     vi.useFakeTimers();
     const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const transient = Object.assign(new Error("Failed to fetch"), {
@@ -237,18 +237,19 @@ describe("agent detail runtime api", () => {
       .mockRejectedValueOnce(transient)
       .mockRejectedValueOnce(transient)
       .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(transient)
       .mockResolvedValueOnce({ data: authoritative });
 
     const result = loadAgentRuntime("agent_sales");
     await vi.runAllTimersAsync();
     await expect(result).resolves.toBe(authoritative);
-    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledTimes(5);
+    expect(mocks.getAgentRuntimeConfiguration).toHaveBeenCalledTimes(6);
     expect(timeoutSpy.mock.calls.map((call) => call[1])).toEqual([
-      200, 600, 1_500, 3_000,
+      200, 600, 1_500, 3_000, 5_000,
     ]);
   });
 
-  it("не расширяет короткий retry для runtime-каталога", async () => {
+  it("использует общий bounded retry для runtime-каталога", async () => {
     vi.useFakeTimers();
     const transient = Object.assign(new Error("Failed to fetch"), {
       retryable: true,
@@ -259,6 +260,6 @@ describe("agent detail runtime api", () => {
     const rejected = expect(result).rejects.toBe(transient);
     await vi.runAllTimersAsync();
     await rejected;
-    expect(mocks.listRuntimeSelections).toHaveBeenCalledTimes(3);
+    expect(mocks.listRuntimeSelections).toHaveBeenCalledTimes(6);
   });
 });

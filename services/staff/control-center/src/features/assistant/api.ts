@@ -22,9 +22,8 @@ import type {
   ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, mutateWithRetry } from "@/shared/api/mutation";
-import { asProblem, unwrap } from "@/shared/api/problem";
-
-const readRetryDelaysMs = [0, 200, 600] as const;
+import { unwrap } from "@/shared/api/problem";
+import { readWithRetry } from "@/shared/api/read-retry";
 
 export async function readAssistant(
   signal?: AbortSignal,
@@ -33,6 +32,7 @@ export async function readAssistant(
     async () =>
       (await unwrap(getSystemAssistant({ signal: requestSignal(signal) })))
         .data,
+    undefined,
     signal,
   );
 }
@@ -59,6 +59,7 @@ export async function readConversations(
           }),
         )
       ).data,
+    undefined,
     signal,
   );
 }
@@ -149,31 +150,6 @@ export async function appendTurn(
       }),
     )
   ).data;
-}
-
-async function readWithRetry<T>(
-  request: () => Promise<T>,
-  signal?: AbortSignal,
-): Promise<T> {
-  let lastProblem = asProblem(new Error("Assistant read did not start"));
-  for (const delayMs of readRetryDelaysMs) {
-    signal?.throwIfAborted();
-    if (delayMs > 0) {
-      await new Promise<void>((resolve) =>
-        globalThis.setTimeout(resolve, delayMs),
-      );
-    }
-    try {
-      signal?.throwIfAborted();
-      return await request();
-    } catch (error) {
-      lastProblem = asProblem(error);
-      if (!lastProblem.retryable || delayMs === readRetryDelaysMs.at(-1)) {
-        throw lastProblem;
-      }
-    }
-  }
-  throw lastProblem;
 }
 
 export async function savePlanDraft(
