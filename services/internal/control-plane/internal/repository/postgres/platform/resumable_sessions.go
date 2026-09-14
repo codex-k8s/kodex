@@ -85,6 +85,17 @@ type resumableSessionCursor struct {
 	Scope, Ref, Snapshot string
 }
 
+type continuationTargetSnapshot struct {
+	configuration entity.AgentRuntimeConfiguration
+	overlay       string
+	err           error
+}
+
+type continuationValidationCache struct {
+	targets  map[string]continuationTargetSnapshot
+	catalogs map[string]error
+}
+
 // Total и страница выдаются только после полного прохода одного снимка.
 // Ограничение времени закрыто отклоняет запрос без частичного результата.
 func (repository *Repository) listResumableSessions(ctx context.Context, current scope, filter query.Filter) ([]entity.Run, int64, string, error) {
@@ -117,6 +128,10 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 	}
 	limit := boundedPage(filter.Page)
 	selected := make([]resumableSessionCandidate, 0, limit+1)
+	validationCache := continuationValidationCache{
+		targets:  make(map[string]continuationTargetSnapshot),
+		catalogs: make(map[string]error),
+	}
 	fingerprint := sha256.New()
 	var total int64
 	after := ""
@@ -145,7 +160,7 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 		}
 		for _, item := range batch {
 			after = item.RunRef
-			if err := repository.validateContinuationSnapshot(ctx, tx, current, item); err != nil {
+			if err := repository.validateContinuationSnapshotCached(ctx, tx, current, item, &validationCache); err != nil {
 				if continuationIneligible(err) {
 					continue
 				}
@@ -195,18 +210,44 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 // Каталог использует те же проверки текущего target, runtime и model catalog,
 // что запуск. Он не захватывает command locks в read-only снимке.
 func (repository *Repository) validateContinuationSnapshot(ctx context.Context, tx pgx.Tx, current scope, candidate resumableSessionCandidate) error {
+	return repository.validateContinuationSnapshotCached(ctx, tx, current, candidate, nil)
+}
+
+func (repository *Repository) validateContinuationSnapshotCached(ctx context.Context, tx pgx.Tx, current scope, candidate resumableSessionCandidate, cache *continuationValidationCache) error {
+	targetKey := candidate.ProjectID + "\x00" + candidate.TargetType + "\x00" + candidate.TargetRef
+	if cache != nil {
+		if snapshot, ok := cache.targets[targetKey]; ok {
+			return repository.validateContinuationWithTargetSnapshot(ctx, tx, current, candidate, snapshot, cache)
+		}
+	}
+	snapshot := repository.readContinuationTargetSnapshot(ctx, tx, current, candidate)
+	if cache != nil {
+		cache.targets[targetKey] = snapshot
+	}
+	return repository.validateContinuationWithTargetSnapshot(ctx, tx, current, candidate, snapshot, cache)
+}
+
+func (repository *Repository) validateContinuationWithTargetSnapshot(ctx context.Context, tx pgx.Tx, current scope, candidate resumableSessionCandidate, snapshot continuationTargetSnapshot, cache *continuationValidationCache) error {
+	if snapshot.err != nil {
+		return snapshot.err
+	}
+	return repository.validateContinuationSessionCatalog(ctx, tx, current, candidate, snapshot.configuration, snapshot.overlay, cache)
+}
+
+func (repository *Repository) readContinuationTargetSnapshot(ctx context.Context, tx pgx.Tx, current scope, candidate resumableSessionCandidate) continuationTargetSnapshot {
+	failure := func(err error) continuationTargetSnapshot { return continuationTargetSnapshot{err: err} }
 	launch := command.Command{Kind: command.LaunchRun, Payload: command.LaunchRunInput{
 		ProjectRef: candidate.ProjectRef, Target: entity.RunTarget{Type: candidate.TargetType, Ref: candidate.TargetRef},
 	}}
 	if err := repository.authorizeCommand(ctx, tx, current, launch); err != nil {
-		return err
+		return failure(err)
 	}
 	var agentRefs []string
 	switch candidate.TargetType {
 	case "AGENT":
 		var name string
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef, current.organizationID, candidate.ProjectID, candidate.TargetRef).Scan(&name); err != nil {
-			return continuationReadError(err)
+			return failure(continuationReadError(err))
 		}
 		agentRefs = []string{candidate.TargetRef}
 	case "WORKFLOW":
@@ -215,18 +256,18 @@ func (repository *Repository) validateContinuationSnapshot(ctx context.Context, 
 		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef, pgx.StrictNamedArgs{
 			"organization_id": current.organizationID, "project_id": candidate.ProjectID, "workflow_ref": candidate.TargetRef,
 		}).Scan(&name, &versionID, &versionRef, &raw, &digest, &coordinatorRef, &coordinatorName); err != nil {
-			return continuationReadError(err)
+			return failure(continuationReadError(err))
 		}
 		var version entity.WorkflowVersion
 		if json.Unmarshal(raw, &version) != nil || !validWorkflowVersion(version) || version.CoordinatorAgentRef != coordinatorRef || !validWorkflowRunInput(version.Inputs, nil) {
-			return errs.ErrConflict
+			return failure(errs.ErrConflict)
 		}
 		agentRefs = append(agentRefs, coordinatorRef)
 		for _, step := range version.Steps {
 			agentRefs = append(agentRefs, step.AgentRef)
 		}
 	default:
-		return errs.ErrConflict
+		return failure(errs.ErrConflict)
 	}
 	var ready bool
 	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateAgentRuntimeContract, pgx.StrictNamedArgs{
@@ -235,16 +276,43 @@ func (repository *Repository) validateContinuationSnapshot(ctx context.Context, 
 		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
 		"default_role_image_digest":      repository.roleImages.DefaultImageDigest,
 	}).Scan(&ready); err != nil {
-		return errs.ErrUnavailable
+		return failure(errs.ErrUnavailable)
 	}
 	if !ready {
-		return errs.ErrConflict
+		return failure(errs.ErrConflict)
 	}
 	configuration, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, current.organizationID, agentRefs[0], "")
 	if err != nil {
+		return failure(err)
+	}
+	return continuationTargetSnapshot{configuration: configuration, overlay: overlay}
+}
+
+func (repository *Repository) validateContinuationSessionCatalog(ctx context.Context, tx pgx.Tx, current scope, candidate resumableSessionCandidate, configuration entity.AgentRuntimeConfiguration, overlay string, cache *continuationValidationCache) error {
+	binding, err := readSessionModelCatalog(ctx, tx, current.organizationID, candidate.SessionID, candidate.AccountRef)
+	if err != nil {
 		return err
 	}
-	_, _, err = checkedSessionModelCatalogSnapshot(ctx, tx, current.organizationID, candidate.SessionID, candidate.AccountRef, configuration, overlay, false)
+	selected, _, err := resolveSessionModelCatalogCandidate(candidate.AccountRef, configuration, binding)
+	if err != nil {
+		return err
+	}
+	rawKey, _ := json.Marshal(struct {
+		Provider  string
+		Model     string
+		Overlay   string
+		Candidate entity.ProviderAccountCandidate
+	}{configuration.Provider, configuration.Model, overlay, selected})
+	catalogKey := string(rawKey)
+	if cache != nil {
+		if cached, ok := cache.catalogs[catalogKey]; ok {
+			return cached
+		}
+	}
+	_, _, err = validateRuntimeCatalogCandidatesSnapshot(ctx, tx, scope{organizationID: current.organizationID}, configuration.Provider, configuration.Model, overlay, []entity.ProviderAccountCandidate{selected}, false, false)
+	if cache != nil {
+		cache.catalogs[catalogKey] = err
+	}
 	return err
 }
 

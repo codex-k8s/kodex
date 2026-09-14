@@ -93,6 +93,18 @@ func checkedSessionModelCatalogSnapshot(ctx context.Context, tx pgx.Tx, organiza
 	if err != nil {
 		return entity.ProviderAccountCandidate{}, nil, err
 	}
+	selected, retained, err := resolveSessionModelCatalogCandidate(accountRef, configuration, binding)
+	if err != nil {
+		return entity.ProviderAccountCandidate{}, nil, err
+	}
+	verified, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, scope{organizationID: organizationID}, configuration.Provider, configuration.Model, overlay, []entity.ProviderAccountCandidate{selected}, false, lock)
+	if err != nil {
+		return entity.ProviderAccountCandidate{}, nil, err
+	}
+	return verified[0], retained, nil
+}
+
+func resolveSessionModelCatalogCandidate(accountRef string, configuration entity.AgentRuntimeConfiguration, binding sessionCatalogBinding) (entity.ProviderAccountCandidate, *sessionCatalogBinding, error) {
 	selected := []entity.ProviderAccountCandidate{}
 	var retained *sessionCatalogBinding
 	for _, candidate := range configuration.ProviderPolicy.AccountCandidates {
@@ -112,11 +124,7 @@ func checkedSessionModelCatalogSnapshot(ctx context.Context, tx pgx.Tx, organiza
 	if len(selected) != 1 {
 		return entity.ProviderAccountCandidate{}, nil, errs.ErrConflict
 	}
-	verified, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, scope{organizationID: organizationID}, configuration.Provider, configuration.Model, overlay, selected, false, lock)
-	if err != nil {
-		return entity.ProviderAccountCandidate{}, nil, err
-	}
-	return verified[0], retained, nil
+	return selected[0], retained, nil
 }
 
 func validateSessionRuntimeCatalog(ctx context.Context, tx pgx.Tx, organizationID, sessionID, agentRef string) error {
