@@ -451,10 +451,11 @@ async function waitForAuthSurface(
     if (surface !== "pending" && surface !== previous) return surface;
     if (
       previous === "identity-provider" &&
-      surface === "identity-provider" &&
       !retriedIdentityProviderRoot &&
       Date.now() >= identityProviderRecoveryDeadline &&
-      isFrontendRoot(page.url(), frontendOrigin)
+      isFrontendRoot(page.url(), frontendOrigin) &&
+      (surface === "identity-provider" ||
+        (await hasBlankApplicationDocument(page, frontendOrigin)))
     ) {
       retriedIdentityProviderRoot = true;
       await gotoWithRetry(
