@@ -15,6 +15,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -4946,7 +4947,8 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if err != nil || gatedRoot.State != "WAITING_HUMAN" || len(gatedRoot.GateRefs) != 1 {
 		t.Fatalf("gated child completion did not block the root run: run=%#v err=%v", gatedRoot, err)
 	}
-	regularChild := completeClaimedExecution(t, ctx, service, worker, regularChildLease, "delegation-child-regular", false)
+	longChildSummary := strings.Repeat("Р", 2001)
+	regularChild := completeClaimedExecutionWithSummary(t, ctx, service, worker, regularChildLease, "delegation-child-regular", false, longChildSummary)
 	if regularChild.Run == nil || regularChild.Run.Usage != turnUsageFixture() {
 		t.Fatalf("regular child completion usage = %#v", regularChild.Run)
 	}
@@ -4979,13 +4981,14 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("continuation became claimable before owner approval: claims=%#v err=%v", blockedClaim.RuntimeItems, err)
 	}
 	for index, item := range []struct {
-		lease map[string]any
-		key   string
+		lease         map[string]any
+		key           string
+		resultSummary string
 	}{
-		{lease: gatedChildLease, key: "delegation-child-gated"},
-		{lease: regularChildLease, key: "delegation-child-regular"},
+		{lease: gatedChildLease, key: "delegation-child-gated", resultSummary: "Customer response prepared"},
+		{lease: regularChildLease, key: "delegation-child-regular", resultSummary: longChildSummary},
 	} {
-		replayed := completeClaimedExecution(t, ctx, service, worker, item.lease, item.key, false)
+		replayed := completeClaimedExecutionWithSummary(t, ctx, service, worker, item.lease, item.key, false, item.resultSummary)
 		if replayed.Run == nil || replayed.Graph == nil || replayed.Run.Usage != turnUsageFixture() {
 			t.Fatalf("replay child completion %d lost authoritative result: %#v", index+1, replayed)
 		}
@@ -5012,6 +5015,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("continuation lost the authoritative session context: %#v", continuationLease["sessionContext"])
 	}
 	callbackTurns := 0
+	longCallbackTurns := 0
 	for _, message := range callbackContext {
 		if message["role"] != "USER" && message["role"] != "ASSISTANT" {
 			t.Fatalf("continuation exposed a non-canonical session role: %#v", callbackContext)
@@ -5019,9 +5023,12 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		if message["content"] == "Customer response prepared" {
 			callbackTurns++
 		}
+		if message["content"] == longChildSummary {
+			longCallbackTurns++
+		}
 	}
-	if callbackTurns != 2 {
-		t.Fatalf("expected two exactly-once callback turns, got %d in %#v", callbackTurns, callbackContext)
+	if callbackTurns != 1 || longCallbackTurns != 1 {
+		t.Fatalf("expected two exactly-once callback turns including a long result, got normal=%d long=%d", callbackTurns, longCallbackTurns)
 	}
 	if targets, _ := continuationLease["delegationTargets"].([]map[string]string); len(targets) != 0 {
 		t.Fatalf("completed workflow steps remained delegatable: %#v", targets)
@@ -5056,6 +5063,9 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("list delegation events: %v", err)
 	}
 	for _, event := range events {
+		if utf8.RuneCountInString(event.Summary) > 2000 {
+			t.Fatalf("event %s exceeded the safe summary database limit", event.Ref)
+		}
 		if event.Delta.Run == nil || event.RunState != event.Delta.Run.State {
 			t.Fatalf("event %s run state %q differs from authoritative delta %#v", event.Ref, event.RunState, event.Delta.Run)
 		}
@@ -6198,6 +6208,10 @@ func claimAndCompleteRun(t *testing.T, ctx context.Context, service *platformser
 }
 
 func completeClaimedExecution(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, key string, artifact bool) command.Result {
+	return completeClaimedExecutionWithSummary(t, ctx, service, worker, lease, key, artifact, "Customer response prepared")
+}
+
+func completeClaimedExecutionWithSummary(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, key string, artifact bool, resultSummary string) command.Result {
 	t.Helper()
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: key + "-progress"}, Payload: command.LeaseInput{
@@ -6215,7 +6229,7 @@ func completeClaimedExecution(t *testing.T, ctx context.Context, service *platfo
 	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: key + "-complete"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
-			Success: true, ResultSummary: "Customer response prepared", Artifacts: artifacts,
+			Success: true, ResultSummary: resultSummary, Artifacts: artifacts,
 			Usage: turnUsageFixture(),
 		}})
 	if err != nil {
