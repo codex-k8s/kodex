@@ -792,7 +792,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				"providerSecretUID":                providerSecretUID,
 				"providerSecretResourceVersion":    providerSecretResourceVersion,
 				"providerCredentialSHA256":         providerCredentialSHA256,
-				"instructionDigest":                instructionDigest, "instructions": instructions,
+				"instructionDigest":                resolvedInstructionsDigestHex, "instructions": instructions,
 				"promptTemplateRef":             materializedPrompt.TemplateRef,
 				"promptTemplateDigest":          materializedPrompt.TemplateDigest,
 				"promptMaterializationDigest":   materializedPrompt.Digest,
