@@ -15,9 +15,13 @@ describe("AppShell navigation", () => {
     expect(source).not.toContain("openAssistantWorkspace");
   });
 
-  it("использует одну realtime-индикацию без route reload", () => {
+  it("запускает одну realtime-индикацию до независимых каталожных readback", () => {
     expect(source).toContain("<RealtimeStatus");
     expect(source).toContain("realtime.openPlatform()");
+    expect(source.indexOf("realtime.openPlatform()")).toBeLessThan(
+      source.indexOf("platform.loadProjects()"),
+    );
+    expect(source).not.toContain("]).finally(() => {");
     expect(source).not.toContain("offline-banner");
     expect(source).not.toContain("location.reload");
   });

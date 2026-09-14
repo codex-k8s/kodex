@@ -84,7 +84,6 @@ const preloadFailed = ref(
 );
 const searchRoot = ref<HTMLElement>();
 const realtimeStarted = ref(false);
-let disposed = false;
 const searchCoordinator = new SearchCoordinator();
 
 const projectRef = computed(() => routeProjectRef(route.params));
@@ -415,19 +414,18 @@ onMounted(() => {
   window.addEventListener("online", setOnline);
   window.addEventListener("offline", setOnline);
   window.addEventListener("kodex:preload-error", markPreloadFailed);
+  // Realtime не зависит от каталожных readback. Запускаем handshake сразу:
+  // накопленный staging или временно медленный каталог не должен оставлять
+  // уже отрисованную страницу в состоянии CONNECTING до HTTP timeout.
+  realtimeStarted.value = true;
+  realtime.openPlatform();
   void Promise.all([
     platform.loadProjects(),
     platform.loadGates(),
     platform.loadBootstrap(),
-  ]).finally(() => {
-    if (!disposed) {
-      realtimeStarted.value = true;
-      realtime.openPlatform();
-    }
-  });
+  ]);
 });
 onBeforeUnmount(() => {
-  disposed = true;
   platform.cancelSearch();
   searchCoordinator.cancel();
   window.removeEventListener("online", setOnline);
