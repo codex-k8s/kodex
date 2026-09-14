@@ -107,6 +107,12 @@ node tools/release/runner-policy-transition.mjs prepare --context "$CONTEXT" \
 ```
 
 Bundle/plan/evidence хранятся вне source с правами 0600 в private directory.
+Для runner-only перехода `--reader-image` обязан совпадать с exact image уже
+готового `image-admission-controller`. Смена reader image выполняется отдельной
+проверенной поставкой: один лишь корректный digest не доказывает поддержку
+фактически выбранного versioned policy name. Эта проверка выполняется до
+`maintenance`, поэтому несовместимый reader не останавливает API.
+
 Имена файлов новые; старые FAIL/UNKNOWN не перезаписываются. Последовательность:
 `maintenance`, `reader`, `resources`, `binding`, `control-plane`,
 `role-image-builder`, `controller`, `resume`, `open`.
@@ -129,6 +135,26 @@ bounded Jobs и их workspace. Они продолжают работу до te
 устраняет недостижимое ожидание пустого окна между циклическими claim Jobs.
 Timeout наблюдателя не означает завершение команды: продолжить тот же handle.
 CAS drift не исправляется force.
+
+Если reader Deployment уже был заменён и journal завершился `UNKNOWN`, его
+восстанавливает отдельный incident-linked CAS path. Plan принимает только
+точный failed plan, последний `UNKNOWN`, текущий неготовый spec и ранее
+доказанный immutable reader image. Apply сверяет UID/resourceVersion/полный
+spec, меняет только application image, ждёт Ready и сохраняет pause. После
+readback переход планируется заново с восстановленным reader image:
+
+```bash
+node tools/release/runner-policy-transition.mjs recovery-plan \
+  --context "$CONTEXT" --failed-plan "$FAILED_READER_PLAN" \
+  --failed-evidence "$FAILED_READER_EVIDENCE" \
+  --reader-image "$LAST_READY_READER_IMAGE" --incident "$BUG_URL" \
+  --output "$NEW_RECOVERY_PLAN"
+node tools/release/runner-policy-transition.mjs recovery-apply \
+  --context "$CONTEXT" --plan "$NEW_RECOVERY_PLAN" \
+  --reader-image "$LAST_READY_READER_IMAGE" --incident "$BUG_URL" \
+  --evidence "$NEW_RECOVERY_EVIDENCE" \
+  --confirm RECOVER-STAGING-RUNNER-POLICY-READER
+```
 
 ```bash
 node tools/release/runner-policy-transition.mjs inspect --context "$CONTEXT" \

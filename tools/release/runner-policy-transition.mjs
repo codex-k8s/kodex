@@ -14,6 +14,11 @@ function privateRead(path) {
   requireValue(stat.isFile() && (stat.mode & 0o077) === 0 && stat.size < 8 << 20, "PRIVATE_INPUT_REQUIRED");
   return JSON.parse(readFileSync(path, "utf8"));
 }
+function privateRows(path) {
+  const stat = lstatSync(path);
+  requireValue(stat.isFile() && (stat.mode & 0o077) === 0 && stat.size > 0 && stat.size < 8 << 20, "PRIVATE_INPUT_REQUIRED");
+  return readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+}
 function record(path, value) {
   const fd = openSync(path, "wx", 0o600);
   try { writeSync(fd, `${JSON.stringify(value)}\n`); fsyncSync(fd); } finally { closeSync(fd); }
@@ -39,13 +44,45 @@ export function requireDrainedInventory(phase, activeJobs, workspaces) {
   requireValue(activeJobs === 0 && workspaces === 0, "PAUSED_COMPATIBLE_IDLE_READER_REQUIRED");
 }
 
+export function requireCompatibleReaderBeforeMaintenance(controller, readerImage) {
+  const applications = controller?.spec?.template?.spec?.containers?.filter((item) => item.name === "image-admission-controller") ?? [];
+  requireValue(applications.length === 1 && applications[0].image === readerImage &&
+    controller.status?.observedGeneration >= controller.metadata?.generation &&
+    ["replicas", "updatedReplicas", "readyReplicas", "availableReplicas"].every((key) => controller.status?.[key] === controller.spec?.replicas),
+  "CURRENT_READY_READER_IMAGE_REQUIRED");
+}
+
+export function planReaderRecovery(controller, failedPlan, evidence, recoveryImage, incident) {
+  requireValue(/^https:\/\/github\.com\/codex-k8s\/kodex\/issues\/[1-9][0-9]*$/.test(incident ?? "") &&
+    /^registry\.local\.kodex\/kodex\/image-admission@sha256:[a-f0-9]{64}$/.test(recoveryImage ?? "") &&
+    failedPlan?.version === 1 && failedPlan.phase === "reader" && Array.isArray(failedPlan.operations) && failedPlan.operations.length === 1,
+  "READER_RECOVERY_INPUT_REJECTED");
+  const operation = failedPlan.operations[0], last = evidence.at(-1);
+  requireValue(operation.type === "patch" && operation.kind === "Deployment" && operation.name === "image-admission-controller" &&
+    operation.field === "spec" && operation.uid === controller.metadata?.uid && fingerprint(controller.spec) === operation.afterSHA256 &&
+    evidence.some((row) => row.id === failedPlan.id && row.phase === "reader" && row.status === "INTENT" && row.name === operation.name) &&
+    last?.id === failedPlan.id && last.phase === "reader" && last.status === "UNKNOWN",
+  "READER_RECOVERY_UNKNOWN_REQUIRED");
+  const before = structuredClone(controller.spec), after = structuredClone(before);
+  const applications = after.template?.spec?.containers?.filter((item) => item.name === "image-admission-controller") ?? [];
+  requireValue(applications.length === 1 && applications[0].image === failedPlan.readerImage &&
+    env(controller, "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS") === "true" &&
+    (controller.status?.availableReplicas ?? 0) < controller.spec.replicas,
+  "READER_RECOVERY_STATE_REJECTED");
+  applications[0].image = recoveryImage;
+  return { version: 1, kind: "RUNNER_POLICY_READER_RECOVERY", incident, context: failedPlan.context,
+    clusterUID: failedPlan.clusterUID, namespaceUID: failedPlan.namespaceUID, failedPlanID: failedPlan.id,
+    bundleSHA256: failedPlan.bundleSHA256, readerImage: recoveryImage, uid: controller.metadata.uid,
+    resourceVersion: controller.metadata.resourceVersion, before, after };
+}
+
 function main(args) {
   const command = args.shift(), options = {};
-  requireValue(["prepare", "inspect", "plan", "apply"].includes(command), "INVALID_COMMAND");
+  requireValue(["prepare", "inspect", "plan", "apply", "recovery-plan", "recovery-apply"].includes(command), "INVALID_COMMAND");
   while (args.length) {
     const key = args.shift();
     if (key === "--k3s-sudo") { requireValue(!options[key], "INVALID_ARGUMENTS"); options[key] = true; continue; }
-    requireValue(["--context", "--authority-issuer-image", "--node-readback-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
+    requireValue(["--context", "--authority-issuer-image", "--node-readback-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm", "--failed-plan", "--failed-evidence", "--incident"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
     options[key] = args.shift();
   }
   const context = options["--context"];
@@ -57,6 +94,41 @@ function main(args) {
   const namespaceUID = get("namespace", namespace).metadata.uid;
   const controller = get("deployment", "image-admission-controller");
   const readerImage = options["--reader-image"];
+  if (command === "recovery-plan") {
+    requireValue(options["--output"] && !options["--confirm"], "READ_ONLY_RECOVERY_PLAN_REQUIRED");
+    const plan = planReaderRecovery(controller, privateRead(options["--failed-plan"]), privateRows(options["--failed-evidence"]), readerImage, options["--incident"]);
+    record(options["--output"], plan);
+    process.stdout.write(`${JSON.stringify({ status: "PLANNED", kind: plan.kind })}\n`);
+    return;
+  }
+  if (command === "recovery-apply") {
+    requireValue(options["--confirm"] === "RECOVER-STAGING-RUNNER-POLICY-READER" && options["--evidence"], "RECOVERY_CONFIRMATION_REQUIRED");
+    const saved = privateRead(options["--plan"]);
+    requireValue(saved.kind === "RUNNER_POLICY_READER_RECOVERY" && saved.context === context && saved.clusterUID === clusterUID &&
+      saved.namespaceUID === namespaceUID && saved.incident === options["--incident"] && saved.readerImage === readerImage &&
+      saved.uid === controller.metadata.uid && saved.resourceVersion === controller.metadata.resourceVersion &&
+      fingerprint(saved.before) === fingerprint(controller.spec), "READER_RECOVERY_PLAN_DRIFT");
+    const fd = openSync(options["--evidence"], "wx", 0o600);
+    const journal = (entry) => { writeSync(fd, `${JSON.stringify({ at: new Date().toISOString(), failedPlanID: saved.failedPlanID, ...entry })}\n`); fsyncSync(fd); };
+    try {
+      journal({ status: "INTENT", name: "image-admission-controller", incident: saved.incident });
+      kubectl(["patch", "Deployment", "image-admission-controller", "--type=json", "-p", JSON.stringify([
+        { op: "test", path: "/metadata/uid", value: saved.uid }, { op: "test", path: "/metadata/resourceVersion", value: saved.resourceVersion },
+        { op: "test", path: "/spec", value: saved.before }, { op: "replace", path: "/spec", value: saved.after },
+      ])]);
+      const readback = get("deployment", "image-admission-controller");
+      requireValue(readback.metadata.uid === saved.uid && fingerprint(readback.spec) === fingerprint(saved.after), "READER_RECOVERY_PATCH_UNCONFIRMED");
+      kubectl(["rollout", "status", "deployment/image-admission-controller", "--timeout=300s"]);
+      const ready = get("deployment", "image-admission-controller");
+      requireCompatibleReaderBeforeMaintenance(ready, readerImage);
+      journal({ status: "PASS", name: "image-admission-controller" });
+      process.stdout.write(`${JSON.stringify({ status: "PASS", kind: saved.kind })}\n`);
+    } catch (error) {
+      journal({ status: "UNKNOWN", code: "READER_RECOVERY_FAILED" });
+      throw error;
+    } finally { closeSync(fd); }
+    return;
+  }
   if (command === "prepare") {
     requireValue(!options["--confirm"] && options["--output"], "READ_ONLY_PREPARATION_REQUIRED");
     const oldName = env(controller, "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP");
@@ -101,6 +173,7 @@ function main(args) {
   }
   requireValue(phases.includes(phase), "INVALID_PHASE");
   requireIdle(database);
+  if (phase === "maintenance") requireCompatibleReaderBeforeMaintenance(controller, readerImage);
   if (phase !== "maintenance") {
     const maintenance = JSON.parse(gateway.metadata.annotations?.["kodex.dev/runner-policy-maintenance"] ?? "null");
     requireValue(gateway.spec.replicas === 0 && (gateway.status?.replicas ?? 0) === 0 && maintenance?.bundleSHA256 === fingerprint(bundle), "APPLICATION_MAINTENANCE_REQUIRED");
