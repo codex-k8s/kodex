@@ -274,7 +274,7 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	var result Result
 	switch definition.Spec.Adapter {
 	case "SYNTHETIC_HTTP":
-		result, err = adapter.executeSynthetic(ctx, request, configuration, canonicalInput)
+		result, err = adapter.executeSynthetic(ctx, request, configuration, canonicalInput, false)
 	case "GITHUB":
 		result, err = adapter.executeGitHub(ctx, request, capability, configuration, canonicalInput)
 	case "GITLAB":
@@ -290,6 +290,26 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
+	return validateExecutionResult(capability, request, result, err)
+}
+
+// Recover выполняет только доказуемое чтение ранее возможного эффекта.
+// Неподдержанный provider остаётся UNKNOWN и не получает повторный mutation.
+func (adapter *Adapter) Recover(ctx context.Context, request Request) (Result, error) {
+	definition, capability, canonicalInput, configuration, err := adapter.validateInvocation(request)
+	if err != nil {
+		return Result{}, err
+	}
+	if definition.Spec.Adapter != "SYNTHETIC_HTTP" || request.Operation != "synthetic.journal.write" {
+		return Result{}, &UnknownOutcomeError{}
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
+	defer cancel()
+	result, err := adapter.executeSynthetic(ctx, request, configuration, canonicalInput, true)
+	return validateExecutionResult(capability, request, result, err)
+}
+
+func validateExecutionResult(capability integrationpackage.Capability, request Request, result Result, err error) (Result, error) {
 	if err != nil {
 		var safe *SafeError
 		if capability.Risk != "READ" && errors.As(err, &safe) &&
@@ -404,12 +424,16 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	return definition, capability, canonicalInput, configuration, nil
 }
 
-func (adapter *Adapter) executeSynthetic(ctx context.Context, request Request, configuration map[string]string, canonicalInput []byte) (Result, error) {
+func (adapter *Adapter) executeSynthetic(ctx context.Context, request Request, configuration map[string]string, canonicalInput []byte, recoverOnly bool) (Result, error) {
 	journal := configuration["journal"]
 	path := "/v1/journals/" + url.PathEscape(journal)
 	method, effectKey, body := http.MethodGet, "", []byte(nil)
 	if request.Operation == "synthetic.journal.write" {
-		method, path, effectKey, body = http.MethodPost, path+"/entries", request.EffectKey, canonicalInput
+		if recoverOnly {
+			effectKey = request.EffectKey
+		} else {
+			method, path, effectKey, body = http.MethodPost, path+"/entries", request.EffectKey, canonicalInput
+		}
 	}
 	response, err := adapter.callSynthetic(ctx, method, path, effectKey, body)
 	if IsUnknownOutcome(err) && request.Operation == "synthetic.journal.write" {

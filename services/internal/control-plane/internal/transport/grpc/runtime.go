@@ -684,6 +684,7 @@ func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.Integra
 			Digest: mapString(item, "resourceScopeDigest"),
 		},
 		EffectKey: mapString(item, "effectKey"), InputDigest: mapString(item, "inputDigest"),
+		WorkMode: controlplanev1.IntegrationInvocationWorkMode(controlplanev1.IntegrationInvocationWorkMode_value["INTEGRATION_INVOCATION_WORK_MODE_"+mapString(item, "workMode")]),
 	}
 	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
 	if credential, ok := item["credential"].(entity.IntegrationCredentialRevision); ok {

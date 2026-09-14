@@ -1,5 +1,5 @@
 -- name: workers_claimintegrationinvocations_select_integration_invocations_organization_id_state :many
-SELECT i.id::text,i.ref,i.generation,c.ref,c.definition_key,c.public_configuration,i.capability_key,i.bounded_input,
+SELECT i.id::text,i.ref,i.generation,i.state,c.ref,c.definition_key,c.public_configuration,i.capability_key,i.bounded_input,
 	i.definition_version,i.definition_digest,i.operation,i.risk,i.approval_policy,i.resource_kind,i.resource_scope,
 	i.resource_scope_digest,i.effect_key,i.input_digest,
 	COALESCE(cr.ref,''),COALESCE(cr.revision,0),COALESCE(cr.secret_ref,''),COALESCE(cr.secret_uid::text,''),
@@ -14,7 +14,11 @@ JOIN control_plane.runs root ON root.id=r.root_run_id
 JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
 WHERE i.organization_id=$1::uuid
-  AND i.state='READY'
+  AND (i.state='READY' OR (
+    i.state='UNKNOWN_OUTCOME'
+    AND c.definition_key='synthetic'
+    AND i.operation='synthetic.journal.write'
+  ))
   AND i.operation NOT IN ('mattermost.inbound','mattermost.gate_decisions')
   AND c.enabled AND c.state='CONNECTED'
   AND d.enabled AND d.adapter_owner=$3 AND d.execution_route=$4 AND d.adapter_readiness='READY'

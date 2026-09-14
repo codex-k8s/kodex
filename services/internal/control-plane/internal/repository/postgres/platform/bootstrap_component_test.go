@@ -3609,15 +3609,30 @@ func testIntegrationEffectLifecycle(t *testing.T, ctx context.Context, repositor
 		if err != nil {
 			t.Fatal(err)
 		}
-		for attempt := 0; attempt < 2; attempt++ {
-			claims, err = service.ClaimIntegrationInvocations(ctx, gateway, "replacement-worker", 1)
-			if err != nil || len(claims) != 0 {
-				t.Fatalf("unknown outcome was reclaimed: %d, %v", len(claims), err)
-			}
+		claims, err = service.ClaimIntegrationInvocations(ctx, gateway, "replacement-worker", 1)
+		if err != nil || len(claims) != 1 || stringMap(claims[0], "workMode") != "RECOVER_READ_ONLY" {
+			t.Fatalf("unknown synthetic outcome was not claimed for read-only recovery: %#v, %v", claims, err)
+		}
+		recovery := claims[0]
+		recoverySummary := `{"journal":"effect-main","effect_key":"` + stringMap(recovery, "effectKey") + `","sequence":2,"value":"` + key + `","count":2}`
+		recoveryDigest := sha256.Sum256([]byte(recoverySummary))
+		_, err = service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway,
+			Mutation: value.Mutation{IdempotencyKey: key + "-recover"}, Payload: command.IntegrationInvocationInput{
+				InvocationRef: stringMap(recovery, "invocationRef"), LeaseRef: stringMap(recovery, "leaseRef"), Fence: stringMap(recovery, "fence"),
+				Generation: recovery["generation"].(int64), Success: true, ResultSummary: recoverySummary,
+				EffectKey: stringMap(recovery, "effectKey"), InputDigest: stringMap(recovery, "inputDigest"),
+				ProviderEffectRef: "synthetic-journal:effect-main:2", ResponseDigest: hex.EncodeToString(recoveryDigest[:]),
+			}})
+		if err != nil {
+			t.Fatalf("complete read-only recovery: %v", err)
+		}
+		claims, err = service.ClaimIntegrationInvocations(ctx, gateway, "replacement-worker", 1)
+		if err != nil || len(claims) != 0 {
+			t.Fatalf("recovered outcome was reclaimed: %d, %v", len(claims), err)
 		}
 		readback, err := service.GetIntegrationInvocation(ctx, runtimeWorker, stringMap(unknown, "invocationRef"))
-		if err != nil || stringMap(readback, "state") != "UNKNOWN_OUTCOME" || stringMap(readback, "effectReceiptRef") != "" {
-			t.Fatalf("unknown durable readback: %#v %v", readback, err)
+		if err != nil || stringMap(readback, "state") != "SUCCEEDED" || stringMap(readback, "effectReceiptRef") == "" {
+			t.Fatalf("recovered durable readback: %#v %v", readback, err)
 		}
 	}
 	_, err = service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{

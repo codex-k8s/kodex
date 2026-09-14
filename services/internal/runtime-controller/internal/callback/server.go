@@ -1327,11 +1327,24 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		return nil, errors.New("integration input digest is invalid")
 	}
 	inputDigest := sha256.Sum256(inputBytes)
-	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
-	resolved, err := server.control.Runtime.ResolveIntegrationInvocation(requestContext, &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: connection, CapabilityKey: capability, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))})
-	cancel()
+	resolveRequest := &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: connection, CapabilityKey: capability, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))}
+	var resolved *controlplanev1.ResolveIntegrationInvocationResponse
+	for attempt := 0; attempt < 2; attempt++ {
+		requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
+		resolved, err = server.control.Runtime.ResolveIntegrationInvocation(requestContext, resolveRequest)
+		cancel()
+		if err == nil || attempt == 1 || status.Code(err) != codes.Unavailable && status.Code(err) != codes.DeadlineExceeded {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			attempt = 1
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 	if err != nil {
-		return nil, fmt.Errorf("resolve integration invocation: %w", err)
+		return nil, status.Error(status.Code(err), "resolve integration invocation")
 	}
 	if !safeInvocationRef(resolved.GetInvocationRef()) {
 		return nil, errors.New("resolve integration invocation: invalid reference")
@@ -1343,7 +1356,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		state, readErr := server.control.Runtime.GetIntegrationInvocation(readContext, &controlplanev1.GetIntegrationInvocationRequest{InvocationRef: resolved.GetInvocationRef()})
 		readCancel()
 		if readErr != nil {
-			return nil, fmt.Errorf("read integration invocation: %w", readErr)
+			return nil, status.Error(status.Code(readErr), "read integration invocation")
 		}
 		switch state.GetState() {
 		case "SUCCEEDED":

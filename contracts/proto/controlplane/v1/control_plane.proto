@@ -3731,6 +3731,11 @@ message ResolveIntegrationInvocationResponse {
   IntegrationRisk risk = 6;
   IntegrationResourceScope resource_scope = 7;
 }
+enum IntegrationInvocationWorkMode {
+  INTEGRATION_INVOCATION_WORK_MODE_UNSPECIFIED = 0;
+  INTEGRATION_INVOCATION_WORK_MODE_EXECUTE = 1;
+  INTEGRATION_INVOCATION_WORK_MODE_RECOVER_READ_ONLY = 2;
+}
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
   string definition_key = 2;
@@ -3750,6 +3755,7 @@ message IntegrationInvocationClaim {
   string effect_key = 16;
   string input_digest = 17;
   bytes definition_package = 18;
+  IntegrationInvocationWorkMode work_mode = 19;
 }
 message ClaimIntegrationInvocationsRequest {
   string workload_instance = 1;

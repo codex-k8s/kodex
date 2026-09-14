@@ -16,6 +16,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type integrationResultClient struct {
@@ -24,15 +26,37 @@ type integrationResultClient struct {
 	resolves          []*controlplanev1.ResolveIntegrationInvocationRequest
 	reads             []string
 	projection        *controlplanev1.RecordRunToolCallRequest
+	resolveErrors     []error
 }
 
 func (c *integrationResultClient) ResolveIntegrationInvocation(_ context.Context, r *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
 	c.resolves = append(c.resolves, r)
+	if len(c.resolveErrors) > 0 {
+		err := c.resolveErrors[0]
+		c.resolveErrors = c.resolveErrors[1:]
+		return nil, err
+	}
 	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: c.invocation}, nil
 }
 func (c *integrationResultClient) GetIntegrationInvocation(_ context.Context, r *controlplanev1.GetIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.GetIntegrationInvocationResponse, error) {
 	c.reads = append(c.reads, r.InvocationRef)
 	return &controlplanev1.GetIntegrationInvocationResponse{State: c.state, ResultSummary: "private provider result", SafeErrorCode: "INTEGRATION_REJECTED_BY_OWNER"}, nil
+}
+
+func TestIntegrationResolveRetriesSameIntentOnce(t *testing.T) {
+	client := &integrationResultClient{
+		state: "SUCCEEDED", invocation: "inv_fixture",
+		resolveErrors: []error{status.Error(codes.Unavailable, "temporary")},
+	}
+	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+	grant := integrationGrantFixture()
+	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
+	if _, err := server.invoke(t.Context(), input, integrationArguments(grant, "x"), json.RawMessage(`"call"`)); err != nil {
+		t.Fatal(err)
+	}
+	if len(client.resolves) != 2 || client.resolves[0].IdempotencyKey != client.resolves[1].IdempotencyKey {
+		t.Fatalf("resolve retry changed intent: %#v", client.resolves)
+	}
 }
 func (c *integrationResultClient) RecordRunToolCall(_ context.Context, r *controlplanev1.RecordRunToolCallRequest, _ ...grpc.CallOption) (*controlplanev1.RecordRunToolCallResponse, error) {
 	c.projection = r

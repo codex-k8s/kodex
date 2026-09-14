@@ -1216,7 +1216,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		return nil, errs.ErrUnavailable
 	}
 	type candidate struct {
-		id, ref, connectionRef, definitionKey, capabilityKey                 string
+		id, ref, state, connectionRef, definitionKey, capabilityKey          string
 		initiatorRef                                                         string
 		definitionVersion, definitionDigest, operation, risk, approvalPolicy string
 		resourceKind, resourceScopeDigest, effectKey, inputDigest            string
@@ -1229,7 +1229,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 	for rows.Next() {
 		var item candidate
 		if err := rows.Scan(
-			&item.id, &item.ref, &item.generation, &item.connectionRef, &item.definitionKey,
+			&item.id, &item.ref, &item.generation, &item.state, &item.connectionRef, &item.definitionKey,
 			&item.configuration, &item.capabilityKey, &item.boundedInput, &item.definitionVersion,
 			&item.definitionDigest, &item.operation, &item.risk, &item.approvalPolicy,
 			&item.resourceKind, &item.resourceScope, &item.resourceScopeDigest, &item.effectKey,
@@ -1262,7 +1262,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		digest := sha256.Sum256([]byte(fence))
 		generation := item.generation + 1
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
-		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt, principal.CallerWorkload)
+		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt, principal.CallerWorkload, item.state)
 		if err != nil || tag.RowsAffected() != 1 {
 			return nil, errs.ErrConflict
 		}
@@ -1271,6 +1271,10 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		_ = json.Unmarshal(item.configuration, &configuration)
 		_ = json.Unmarshal(item.boundedInput, &bounded)
 		_ = json.Unmarshal(item.resourceScope, &resourceScope)
+		workMode := "EXECUTE"
+		if item.state == "UNKNOWN_OUTCOME" {
+			workMode = "RECOVER_READ_ONLY"
+		}
 		claim := map[string]any{
 			"invocationRef": item.ref, "connectionRef": item.connectionRef, "definitionKey": item.definitionKey,
 			"definitionPackage": asJSON(definition),
@@ -1279,6 +1283,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			"operation": item.operation, "risk": item.risk, "approvalPolicy": item.approvalPolicy,
 			"resourceKind": item.resourceKind, "resourceScope": resourceScope,
 			"resourceScopeDigest": item.resourceScopeDigest, "effectKey": item.effectKey, "inputDigest": item.inputDigest,
+			"workMode": workMode,
 			"leaseRef": leaseRef, "fence": fence, "generation": generation, "expiresAt": expiresAt,
 		}
 		if definition.RequiresConnectionCredential() && item.credential.Ref != "" && item.credentialCreatedAt != nil {
