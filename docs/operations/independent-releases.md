@@ -209,18 +209,20 @@ claimed leases и незавершённых Jobs. Он фиксирует lease
 два Pod UID, точный start time application process, application и native
 sidecar restart counts и generation floor. Перед каждым сигналом повторяется
 preflight; свежая работа закрыто блокирует продолжение. В hot-reload профиле
-инструмент коротко останавливает PID1 Air текущего leader, немедленно завершает
-его единственный дочерний `main` через `SIGKILL`, ждёт переход Lease и сразу
-возобновляет Air. Такой crash разрешён только после полного idle preflight:
-graceful `SIGTERM` имеет 210–230-секундный drain и не оставляет Lease времени
-истечь внутри ограниченного proof.
-`finally` выполняет тот же resume при любом отказе. Downward API UID и пути
-обоих бинарей проверяются до сигнала. Тот же Pod запускает новый application
-process; grant agents, Lease, environment и файлы вручную не изменяются.
+инструмент адресно завершает единственный дочерний `main` прежнего holder через
+`SIGKILL`, пока standby не получит Lease. Каждый новый process имеет отдельные
+start time, fsync intent и подтверждённый signal ACK; неопределённый ACK
+останавливает proof без повтора, общий бюджет — не более 30 processes. Такой
+crash разрешён только после полного idle preflight: graceful `SIGTERM` имеет
+210–230-секундный drain и не оставляет Lease времени истечь внутри proof, а
+namespace PID 1 не обязан принимать `SIGSTOP`. Downward API UID и пути обоих
+бинарей проверяются для каждого process. Air остаётся работающим и после
+перехода запускает новый application process в том же Pod; grant agents, Lease,
+environment и файлы вручную не изменяются.
 
 | Переход | Авторитетный результат | Ошибка / отсутствие события |
 | --- | --- | --- |
-| A→B | Завершение leader process освобождает Kubernetes Lease; B выполняет защищённый RPC, затем Air возобновляется и запускает новый process в том же A Pod | Потеря exec ACK не повторяет stop; `finally` отдельно возобновляет supervisor, authoritative readback ограничен 240s |
+| A→B | B получает Lease после ограниченной серии подтверждённых crashes exact processes A; Air запускает новый process в том же A Pod, а B выполняет защищённый RPC | Неопределённый ACK немедленно останавливает proof; до 30 новых exact process intents, общий readback ограничен 240s |
 | B→A | A вновь становится leader, его revision продвигается после второго handoff | Новая работа, замена Pod/reader, sidecar restart или floor drift закрыто останавливают proof |
 | Proof→rolling | PASS моложе 300s, тот же cluster/Deployment/spec/Pods/processes и A leader; hash proof закреплён в plan | Новый activity/lease, stale proof или CAS drift не разрешают PATCH |
 
