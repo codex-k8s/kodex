@@ -1813,10 +1813,16 @@ func (repository *Repository) insertAgentNode(ctx context.Context, tx pgx.Tx, sc
 
 func truncate(value string, maximum int) string {
 	runes := []rune(strings.TrimSpace(value))
+	if maximum <= 0 {
+		return ""
+	}
 	if len(runes) <= maximum {
 		return string(runes)
 	}
-	return string(runes[:maximum]) + "…"
+	if maximum == 1 {
+		return "…"
+	}
+	return string(runes[:maximum-1]) + "…"
 }
 
 func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string) error {
