@@ -29,7 +29,7 @@ WHERE ar.organization_id=@organization_id::uuid
     ))
   )
   AND (@authority_project = '' OR ar.project_id = NULLIF(@authority_project,'')::uuid)
-  AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
+  AND (@role IN ('OWNER','ADMINISTRATOR') OR EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
       WHERE target.organization_id=ar.organization_id AND target.kind='ARTIFACT' AND target.id=ar.id
         AND control_plane.catalog_resource_visible(ar.organization_id, @actor_id::uuid, 'artifact.view', target.kind,
-            target.id, target.project_id, target.owner_id, target.related_ids, transaction_timestamp()))
+            target.id, target.project_id, target.owner_id, target.related_ids, transaction_timestamp())))

@@ -21,6 +21,22 @@ const run = (command, args) => {
 const digest = value => createHash('sha256').update(value).digest('hex');
 const owner = (object, uid) => (object.metadata?.ownerReferences ?? []).some(ref => ref.uid === uid && ref.controller === true);
 
+export function sourceRoot(path) {
+  let candidate = lstatSync(path).isDirectory() ? realpathSync(path) : dirname(realpathSync(path));
+  for (;;) {
+    try {
+      const marker = lstatSync(`${candidate}/.git`);
+      requireValue(!marker.isSymbolicLink() && (marker.isFile() || marker.isDirectory()), 'SOURCE_GIT_MARKER_INVALID');
+      return candidate;
+    } catch (error) {
+      if (error?.message === 'SOURCE_GIT_MARKER_INVALID' || error?.code !== 'ENOENT') throw error;
+    }
+    const parent = dirname(candidate);
+    requireValue(parent !== candidate, 'SOURCE_ROOT_NOT_FOUND');
+    candidate = parent;
+  }
+}
+
 export function workloadPods(workload, resources) {
   const replicas = resources.filter(item => item.kind === 'ReplicaSet' && owner(item, workload.metadata.uid));
   return resources.filter(item => item.kind === 'Pod' && !item.metadata.deletionTimestamp && item.status?.phase !== 'Succeeded' && item.status?.phase !== 'Failed' &&
@@ -132,8 +148,7 @@ function main(args) {
   const cache = new Map();
   const inspect = path => {
     requireValue(realpathSync(path) === path, 'SOURCE_SYMLINK_FORBIDDEN');
-    const directory = lstatSync(path).isDirectory() ? path : dirname(path);
-    const root = run('git', ['-C', directory, 'rev-parse', '--show-toplevel']);
+    const root = sourceRoot(path);
     if (!cache.has(root)) cache.set(root, { path: root, ...inspectSource(root) });
     return { ...cache.get(root), mountedPath: path };
   };

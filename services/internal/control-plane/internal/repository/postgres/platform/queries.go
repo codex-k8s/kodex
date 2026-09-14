@@ -1591,6 +1591,7 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 			err := tx.QueryRow(ctx, queryCatalogArtifactsCount, pgx.StrictNamedArgs{
 				"authority_project": scope.authorityProjectID, "organization_id": scope.organizationID,
 				"project_ref": filter.ProjectRef, "run_ref": filter.ResourceRef, "actor_id": scope.actorID,
+				"role": scope.role,
 				"query": filter.Query, "lifecycle_state": lifecycleState, "artifact_type": artifactType,
 				"scan_state": scanState, "source_kind": sourceKind, "source_kinds": sourceKinds,
 			}).Scan(&total)

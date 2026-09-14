@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { projectWorkload, workloadPods, verifyManifest, validateCompatibility } from './component-manifest.mjs';
+import { projectWorkload, sourceRoot, workloadPods, verifyManifest, validateCompatibility } from './component-manifest.mjs';
 const hash = 'a'.repeat(64), image = `registry.example/app@sha256:${hash}`;
 function fixture() {
   const container = { name: 'app', image };
@@ -61,7 +61,7 @@ test('old Pod application arguments are rejected', () => {
   assert.throws(()=>projectWorkload(f.workload,[f.rs,f.pod]),/POD_CONTAINER_SPEC_MISMATCH/);
 });
 
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -92,6 +92,14 @@ test('CLI captures and verifies without mutation, refuses overwrite and spec dri
 });
 
 test('compatibility facts cannot be reused for another component revision', () => { const value=compatibility(); value.components[0].revisions.source=['b'.repeat(40)]; assert.throws(()=>validateCompatibility(value,observed().components,()=>Buffer.from('proof')),/COMPATIBILITY_REVISION_MISMATCH/); });
+test('source root is resolved without invoking Git before the exact checkout is trusted', () => {
+  const directory=mkdtempSync(join(tmpdir(),'kodex-source-root-'));
+  try {
+    writeFileSync(join(directory,'.git'),'gitdir: /private/exact-worktree\n');
+    const nested=join(directory,'services','internal','app'); mkdirSync(nested,{recursive:true});
+    assert.equal(sourceRoot(nested),directory);
+  } finally { rmSync(directory,{recursive:true,force:true}); }
+});
 test('application and authority may use distinct exact source revisions', () => {
   const f=fixture(); const app=f.workload.spec.template.spec.containers[0];
   app.volumeMounts=[{name:'app-source',mountPath:'/workspace',readOnly:true}];
