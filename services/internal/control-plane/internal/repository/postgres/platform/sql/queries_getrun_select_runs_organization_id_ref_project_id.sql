@@ -24,5 +24,9 @@ LEFT JOIN control_plane.agents sa ON r.target_type='SYSTEM_ASSISTANT' AND sa.sys
 LEFT JOIN control_plane.attachment_sets input_attachment_set ON input_attachment_set.id=r.input_attachment_set_id
 WHERE r.organization_id=$1::uuid
   AND r.ref=$2
-  AND EXISTS (SELECT 1 FROM control_plane.assistant_context_projection(
-      $1::uuid,$3::uuid,NULLIF($4,'')::uuid,'RUN',r.ref,transaction_timestamp()));
+  AND (p.id IS NULL OR p.lifecycle='ACTIVE')
+  AND ($4='' OR r.project_id IS NULL OR r.project_id=NULLIF($4,'')::uuid)
+  AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
+      WHERE target.organization_id=r.organization_id AND target.kind='RUN' AND target.id=r.id
+        AND control_plane.catalog_resource_visible(r.organization_id,$3::uuid,'run.view',target.kind,
+            target.id,target.project_id,target.owner_id,target.related_ids,transaction_timestamp()));

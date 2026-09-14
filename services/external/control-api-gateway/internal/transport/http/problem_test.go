@@ -93,7 +93,7 @@ func TestWriteRPCProblemDistinguishesLocalAuthorityTransientFromAuthRejection(t 
 		},
 		{
 			name: "untrusted bare canceled", err: status.Error(codes.Canceled, "request canceled"),
-			wantStatus: http.StatusInternalServerError, wantCode: "INTERNAL", wantRetryable: false,
+			wantStatus: http.StatusRequestTimeout, wantCode: "REQUEST_CANCELED", wantRetryable: false,
 		},
 	}
 	for _, test := range tests {

@@ -207,6 +207,10 @@ func transportError(err error) error {
 	switch {
 	case err == nil:
 		return nil
+	case errors.Is(err, context.Canceled):
+		return status.Error(codes.Canceled, "request was canceled")
+	case errors.Is(err, context.DeadlineExceeded):
+		return status.Error(codes.DeadlineExceeded, "request deadline exceeded")
 	case errors.Is(err, errs.ErrInvalid):
 		return status.Error(codes.InvalidArgument, "request is invalid")
 	case errors.Is(err, errs.ErrUnauthorized):

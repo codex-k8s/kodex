@@ -46,6 +46,8 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		var localAuthorityFailure *authorityclient.LocalAuthorityError
 		if errors.As(err, &localAuthorityFailure) {
 			statusCode, name, retryable = http.StatusServiceUnavailable, "UNAVAILABLE", true
+		} else {
+			statusCode, name = http.StatusRequestTimeout, "REQUEST_CANCELED"
 		}
 	case codes.Unavailable:
 		statusCode, name, retryable = http.StatusServiceUnavailable, "UNAVAILABLE", true
