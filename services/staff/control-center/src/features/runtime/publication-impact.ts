@@ -6,6 +6,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/problem";
+import { readWithRetry } from "@/shared/api/read-retry";
 
 const positive = (value: number) => Number.isSafeInteger(value) && value > 0;
 export function publicationPlanIdentity(plan: RevisionImpactPlan): string {
@@ -113,13 +114,18 @@ export async function readPublicationImpact(
   pageToken?: string,
 ): Promise<RevisionImpactPage> {
   const page = (
-    await unwrap(
-      getRevisionImpactPlan({
-        path: { planRef: plan.ref },
-        query: { query: query.trim(), pageSize: 40, pageToken },
-        signal: requestSignal(signal),
-        cache: "no-store",
-      }),
+    await readWithRetry(
+      () =>
+        unwrap(
+          getRevisionImpactPlan({
+            path: { planRef: plan.ref },
+            query: { query: query.trim(), pageSize: 40, pageToken },
+            signal: requestSignal(signal),
+            cache: "no-store",
+          }),
+        ),
+      undefined,
+      signal,
     )
   ).data;
   return checkedPublicationPage(page, plan, pageToken);
@@ -130,13 +136,18 @@ export async function restorePublicationImpact(
   signal: AbortSignal,
 ): Promise<RevisionImpactPage> {
   const page = (
-    await unwrap(
-      getRevisionImpactPlan({
-        path: { planRef },
-        query: { pageSize: 40 },
-        signal: requestSignal(signal),
-        cache: "no-store",
-      }),
+    await readWithRetry(
+      () =>
+        unwrap(
+          getRevisionImpactPlan({
+            path: { planRef },
+            query: { pageSize: 40 },
+            signal: requestSignal(signal),
+            cache: "no-store",
+          }),
+        ),
+      undefined,
+      signal,
     )
   ).data;
   if (page.plan.ref !== planRef)

@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
   RevisionImpactPlan,
   RevisionImpactPage,
@@ -6,7 +6,19 @@ import type {
 import {
   checkedPublicationPage,
   publicationSelection,
+  readPublicationImpact,
 } from "./publication-impact";
+
+const getRevisionImpactPlanMock = vi.hoisted(() => vi.fn());
+vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
+  getRevisionImpactPlan: getRevisionImpactPlanMock,
+}));
+vi.mock("@/shared/api/client", () => ({
+  requestSignal: (signal: AbortSignal) => signal,
+}));
+
+beforeEach(() => getRevisionImpactPlanMock.mockReset());
+afterEach(() => vi.useRealTimers());
 
 const plan: RevisionImpactPlan = {
   ref: "plan",
@@ -120,4 +132,29 @@ it("не отправляет duplicate, expired или terminal selection", () 
   expect(() =>
     publicationSelection({ ...plan, state: "EXPIRED" }, []),
   ).toThrow();
+});
+
+it("повторяет безопасное чтение точного impact plan после временного отказа", async () => {
+  vi.useFakeTimers();
+  getRevisionImpactPlanMock
+    .mockResolvedValueOnce({
+      error: { status: 503, code: "IMPACT_UNAVAILABLE", retryable: true },
+      response: new Response(null, { status: 503 }),
+    })
+    .mockResolvedValueOnce({
+      data: page,
+      response: new Response(null, { status: 200 }),
+    });
+  const request = readPublicationImpact(plan, new AbortController().signal);
+
+  await vi.runAllTimersAsync();
+
+  await expect(request).resolves.toEqual(page);
+  expect(getRevisionImpactPlanMock).toHaveBeenCalledTimes(2);
+  expect(getRevisionImpactPlanMock).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      path: { planRef: plan.ref },
+      query: { query: "", pageSize: 40, pageToken: undefined },
+    }),
+  );
 });

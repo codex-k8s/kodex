@@ -136,6 +136,7 @@ import {
   csrfToken,
   etag,
   mutate,
+  mutateWithRetry,
   type MutationHeaders,
 } from "@/shared/api/mutation";
 import {
@@ -258,6 +259,7 @@ export const usePlatformStore = defineStore("platform", () => {
     key: QueryKey,
     request: () => Promise<T>,
     apply: (value: T) => void,
+    retryDelaysMs?: readonly number[],
   ): Promise<void> {
     const ownerScope = ownerRequestSignal();
     const current = (generation.get(key) ?? 0) + 1;
@@ -265,7 +267,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loading[key] = true;
     Reflect.deleteProperty(problems, key);
     try {
-      const value = await readWithRetry(request);
+      const value = await readWithRetry(request, retryDelaysMs);
       if (ownerScope.aborted || generation.get(key) !== current) return;
       apply(value);
     } catch (error) {
@@ -442,6 +444,7 @@ export const usePlatformStore = defineStore("platform", () => {
         replace(projects, value.items);
         projectCollectionActions.value = value.nextActions;
       },
+      [0, 200, 600, 1_500, 3_000, 5_000],
     );
   }
 
@@ -1513,7 +1516,7 @@ export const usePlatformStore = defineStore("platform", () => {
   }
 
   async function changeRun(run: Run, body: RunCommand): Promise<Run> {
-    const result = await mutate(
+    const result = await mutateWithRetry(
       (headers) =>
         commandRun({
           path: { runRef: run.ref },

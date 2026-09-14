@@ -23,6 +23,9 @@ const listAuditEventsMock = vi.hoisted(() => vi.fn());
 const getRunGraphMock = vi.hoisted(() => vi.fn());
 const listRunEventsMock = vi.hoisted(() => vi.fn());
 const listRunsMock = vi.hoisted(() => vi.fn());
+const commandRunMock = vi.hoisted(() =>
+  vi.fn<typeof import("@/shared/api/generated/openapi/sdk.gen").commandRun>(),
+);
 const listAgentInstructionVersionsMock = vi.hoisted(() => vi.fn());
 const downloadArtifactMock = vi.hoisted(() => vi.fn());
 const changeArtifactBindingMock = vi.hoisted(() =>
@@ -79,6 +82,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   getRunGraph: getRunGraphMock,
   listRunEvents: listRunEventsMock,
   listRuns: listRunsMock,
+  commandRun: commandRunMock,
   listAgentInstructionVersions: listAgentInstructionVersionsMock,
   downloadArtifact: downloadArtifactMock,
   changeArtifactBinding: changeArtifactBindingMock,
@@ -327,6 +331,7 @@ describe("platform store", () => {
     getRunGraphMock.mockReset();
     listRunEventsMock.mockReset();
     listRunsMock.mockReset();
+    commandRunMock.mockReset();
     listAgentInstructionVersionsMock.mockReset();
     downloadArtifactMock.mockReset();
     changeArtifactBindingMock.mockReset();
@@ -719,6 +724,18 @@ describe("platform store", () => {
       .mockResolvedValueOnce({
         error: { status: 0, code: "UNKNOWN", retryable: true },
       })
+      .mockResolvedValueOnce({
+        error: { status: 503, code: "UNAVAILABLE", retryable: true },
+      })
+      .mockResolvedValueOnce({
+        error: { status: 503, code: "UNAVAILABLE", retryable: true },
+      })
+      .mockResolvedValueOnce({
+        error: { status: 503, code: "UNAVAILABLE", retryable: true },
+      })
+      .mockResolvedValueOnce({
+        error: { status: 503, code: "UNAVAILABLE", retryable: true },
+      })
       .mockResolvedValueOnce(response([project("project_recovered")]));
     const store = usePlatformStore();
 
@@ -726,12 +743,73 @@ describe("platform store", () => {
     await vi.runAllTimersAsync();
     await loading;
 
-    expect(listProjectsMock).toHaveBeenCalledTimes(2);
+    expect(listProjectsMock).toHaveBeenCalledTimes(6);
     expect(store.projectList.map((item) => item.ref)).toEqual([
       "project_recovered",
     ]);
     expect(store.problems.projects).toBeUndefined();
     expect(store.loading.projects).toBe(false);
+  });
+
+  it("повторяет idempotent retry Run с одним mutation key", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const current = {
+      ...run(2),
+      state: "CANCELLED" as const,
+      nextActions: ["RETRY" as const],
+    };
+    const retried = {
+      ...run(3),
+      ref: "run_retry000001",
+      rootRunRef: current.rootRunRef,
+      sessionRef: "session_retry000001",
+      state: "QUEUED" as const,
+      attempt: 2,
+      retryOfRunRef: current.ref,
+      nextActions: ["CANCEL" as const],
+    };
+    const graph = {
+      runRef: retried.ref,
+      revision: retried.graphRevision,
+      sequence: retried.lastEventSequence,
+      nodes: [],
+      edges: [],
+    };
+    commandRunMock
+      .mockResolvedValueOnce({
+        data: undefined,
+        error: {
+          type: "about:blank",
+          title: "Run is temporarily unavailable",
+          status: 503,
+          code: "RUN_UNAVAILABLE",
+          correlationId: "correlation_retry_run",
+          retryable: true,
+        },
+        response: new Response(null, { status: 503 }),
+      })
+      .mockResolvedValueOnce({
+        data: { run: retried, graph },
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    const changing = store.changeRun(current, { action: "RETRY" });
+    await vi.runAllTimersAsync();
+
+    await expect(changing).resolves.toEqual(retried);
+    expect(commandRunMock).toHaveBeenCalledTimes(2);
+    const firstHeaders = commandRunMock.mock.calls[0]?.[0]?.headers;
+    const secondHeaders = commandRunMock.mock.calls[1]?.[0]?.headers;
+    expect(secondHeaders?.["Idempotency-Key"]).toBe(
+      firstHeaders?.["Idempotency-Key"],
+    );
+    expect(store.runs[retried.ref]).toEqual(retried);
+    expect(store.graphs[retried.ref]).toEqual(graph);
   });
 
   it("повторяет безопасное чтение artifact после временного сетевого сбоя", async () => {
