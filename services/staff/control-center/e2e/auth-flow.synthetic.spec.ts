@@ -21,6 +21,13 @@ const cases = [
     expected: 200,
     staleIdentityRoot: true,
   },
+  {
+    name: "blank document at frontend root after identity submission",
+    mode: "local",
+    initial: 401,
+    expected: 200,
+    blankIdentityRoot: true,
+  },
   { name: "initial 403", mode: "local", initial: 403, expected: 403 },
   { name: "initial 503", mode: "local", initial: 503, expected: 503 },
   {
@@ -56,6 +63,7 @@ for (const scenario of cases) {
     let callbackRequests = 0;
     let identitySubmissions = 0;
     let staleIdentityRootResponses = 0;
+    let blankIdentityRootResponses = 0;
     let authorizationRequests = 0;
     const pageErrors: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(error.name));
@@ -101,6 +109,14 @@ for (const scenario of cases) {
       }
       if (url.pathname === "/identity-submit") {
         identitySubmissions++;
+        if ("blankIdentityRoot" in scenario) {
+          blankIdentityRootResponses = 1;
+          await route.fulfill({
+            contentType: "text/html",
+            body: '<!doctype html><meta charset="utf-8"><script>history.replaceState(null, "", "/")</script>',
+          });
+          return;
+        }
         if ("staleIdentityRoot" in scenario) {
           staleIdentityRootResponses = 1;
           await route.fulfill({
@@ -112,9 +128,13 @@ for (const scenario of cases) {
       }
       if (url.pathname === "/" && scenario.mode === "local") {
         if (
-          !("staleIdentityRoot" in scenario) ||
+          (!("staleIdentityRoot" in scenario) &&
+            !("blankIdentityRoot" in scenario)) ||
           identitySubmissions === 0 ||
-          staleIdentityRootResponses++ === 0
+          ("staleIdentityRoot" in scenario &&
+            staleIdentityRootResponses++ === 0) ||
+          ("blankIdentityRoot" in scenario &&
+            blankIdentityRootResponses++ === 0)
         ) {
           await route.fulfill({
             contentType: "text/html",
