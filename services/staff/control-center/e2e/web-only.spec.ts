@@ -2652,11 +2652,13 @@ test.describe("web-only fresh installation", () => {
     expect(
       resolutionAttachmentSet.items.map((item) => item.artifactRef),
     ).toEqual([evidence.ref]);
-    const resolvedGate = (await resolved.json()) as {
-      gate?: { resolutionAttachmentSetRef?: string; state?: string };
-    };
-    expect(resolvedGate.gate?.state).toBe("APPROVED");
-    expect(resolvedGate.gate?.resolutionAttachmentSetRef).toBe(
+    const resolvedGate = await readJsonWithNetworkRetry<{
+      resolutionAttachmentSetRef?: string;
+      state?: string;
+    }>(page, `/api/v1/owner-gates/${encodeURIComponent(gate.ref)}`);
+    expect(resolvedGate.status).toBe(200);
+    expect(resolvedGate.body.state).toBe("APPROVED");
+    expect(resolvedGate.body.resolutionAttachmentSetRef).toBe(
       resolutionAttachmentSet.ref,
     );
 
