@@ -141,7 +141,7 @@ async function main(args) {
     // В dev-профиле PID 1 — Air. Его короткая остановка не даёт прежнему Pod
     // немедленно перезапустить приложение и снова забрать Lease. Lease, grants,
     // environment и Pod не меняются; finally всегда возобновляет supervisor.
-    const stop = 'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; child=""; for status in /proc/[0-9]*/status; do name=$(sed -n "s/^Name:[[:space:]]*//p" "$status"); parent=$(sed -n "s/^PPid:[[:space:]]*//p" "$status"); if [ "$name" = main ] && [ "$parent" = 1 ]; then test -z "$child"; child=${status%/status}; fi; done; test -n "$child"; kill -STOP 1; kill -TERM "${child##*/}"';
+    const stop = 'set -eu; [ "$POD_UID" = "$1" ]; [ "$(readlink /proc/1/exe)" = "/go/tools/air" ]; child=""; for status in /proc/[0-9]*/status; do name=$(sed -n "s/^Name:[[:space:]]*//p" "$status"); parent=$(sed -n "s/^PPid:[[:space:]]*//p" "$status"); if [ "$name" = main ] && [ "$parent" = 1 ]; then test -z "$child"; child=${status%/status}; fi; done; test -n "$child"; kill -STOP 1; kill -KILL "${child##*/}"';
     const resume = () => kubectl(["exec", leader.name, "--container", target, "--", "sh", "-c",
       '[ "$POD_UID" = "$1" ] && [ "$(readlink /proc/1/exe)" = "/go/tools/air" ] && kill -CONT 1', "kodex-handoff", leader.uid]);
     let paused = false;

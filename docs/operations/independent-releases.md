@@ -209,8 +209,11 @@ claimed leases и незавершённых Jobs. Он фиксирует lease
 два Pod UID, точный start time application process, application и native
 sidecar restart counts и generation floor. Перед каждым сигналом повторяется
 preflight; свежая работа закрыто блокирует продолжение. В hot-reload профиле
-инструмент коротко останавливает PID1 Air текущего leader, завершает его
-единственный дочерний `main`, ждёт переход Lease и сразу возобновляет Air.
+инструмент коротко останавливает PID1 Air текущего leader, немедленно завершает
+его единственный дочерний `main` через `SIGKILL`, ждёт переход Lease и сразу
+возобновляет Air. Такой crash разрешён только после полного idle preflight:
+graceful `SIGTERM` имеет 210–230-секундный drain и не оставляет Lease времени
+истечь внутри ограниченного proof.
 `finally` выполняет тот же resume при любом отказе. Downward API UID и пути
 обоих бинарей проверяются до сигнала. Тот же Pod запускает новый application
 process; grant agents, Lease, environment и файлы вручную не изменяются.
