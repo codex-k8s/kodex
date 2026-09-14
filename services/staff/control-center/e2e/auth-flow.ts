@@ -298,6 +298,25 @@ async function startFrontendOIDCTransition(
       if (surface !== "pending" && surface !== "frontend-sign-in") {
         return surface;
       }
+      if (isBrowserNavigationFailure(page.url())) {
+        await gotoWithRetry(
+          page,
+          "/",
+          {
+            timeout: remainingTimeout(deadline),
+            waitUntil: "domcontentloaded",
+          },
+          { appShell: false },
+        );
+        const recovered = await waitForAuthSurface(
+          page,
+          deadline,
+          frontendOrigin,
+          undefined,
+          progress,
+        );
+        return recovered === "frontend-sign-in" ? "frontend-retry" : recovered;
+      }
       authenticationProgressObserved ||= isOIDCProgressLocation(
         page.url(),
         frontendOrigin,
@@ -648,5 +667,13 @@ function safeLocation(raw: string): string {
     return `${parsed.origin}${parsed.pathname}`.slice(0, 512);
   } catch {
     return "invalid-url";
+  }
+}
+
+export function isBrowserNavigationFailure(raw: string): boolean {
+  try {
+    return new URL(raw).protocol === "chrome-error:";
+  } catch {
+    return false;
   }
 }
