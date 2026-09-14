@@ -635,7 +635,7 @@ export const usePlatformStore = defineStore("platform", () => {
               // Сводные экраны не потребляют cursor/total этой выборки. Большая
               // страница только удлиняет repeatable-read authorization snapshot
               // на накопленном стенде и может исчерпать его серверный budget.
-              query: { ...(projectRef ? { projectRef } : {}), pageSize: 30 },
+              query: { ...(projectRef ? { projectRef } : {}), pageSize: 6 },
               signal: requestSignal(),
             }),
           )

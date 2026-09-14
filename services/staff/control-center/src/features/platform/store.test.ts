@@ -458,7 +458,7 @@ describe("platform store", () => {
     expect(listRunsMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        query: { projectRef: "project_owner", pageSize: 30 },
+        query: { projectRef: "project_owner", pageSize: 6 },
       }),
     );
     expect(store.runs.run_consistent01).toBe(original);
