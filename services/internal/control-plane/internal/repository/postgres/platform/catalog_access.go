@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const catalogQueryTimeout = 10 * time.Second
+
 // Проверка каждой строки и чтение страницы используют один снимок полномочий.
 func authorizedCatalog[T any](ctx context.Context, repository *Repository, current scope, kind string, filter query.Filter,
 	fetch func(context.Context, pgx.Tx, string, int32) ([]T, error),
@@ -40,7 +42,7 @@ func authorizedCatalogWithTotal[T any](ctx context.Context, repository *Reposito
 	decorate func(pgx.Tx, *T, func(string) bool) error,
 	count func(context.Context, pgx.Tx) (int64, error),
 ) ([]T, int64, string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, catalogQueryTimeout)
 	defer cancel()
 	if len([]rune(filter.Query)) > 200 || !utf8.ValidString(filter.Query) || strings.ContainsRune(filter.Query, '\x00') {
 		return nil, 0, "", errs.ErrInvalid
