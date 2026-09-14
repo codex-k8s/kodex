@@ -1,5 +1,5 @@
 -- name: resumable_sessions__candidates :many
-WITH latest AS (
+WITH latest AS MATERIALIZED (
     SELECT DISTINCT ON (session.id)
            run.ref, run.version, run.created_at, session.organization_id,
            session.id AS session_id, session.ref AS session_ref,
@@ -25,9 +25,9 @@ WITH latest AS (
             AND control_plane.catalog_resource_visible(run.organization_id, @actor_id::uuid, 'run.view',
                 target.kind, target.id, target.project_id, target.owner_id, target.related_ids, transaction_timestamp()))
     ORDER BY session.id, run.created_at DESC, run.ref DESC
-), target_keys AS (
+), target_keys AS MATERIALIZED (
     SELECT DISTINCT organization_id, project_id, target_type, target_ref FROM latest
-), targets AS (
+), targets AS MATERIALIZED (
     SELECT key.organization_id, key.project_id, key.target_type, key.target_ref,
            CASE WHEN key.target_type = 'WORKFLOW' THEN workflow_version.spec ELSE NULL END AS target_spec,
 	       CASE WHEN key.target_type = 'AGENT' THEN ARRAY[key.target_ref]
@@ -71,7 +71,7 @@ WITH latest AS (
           CASE key.target_type WHEN 'AGENT' THEN 'agent.launch' ELSE 'workflow.launch' END,
           access_target.kind, access_target.id, access_target.project_id, access_target.owner_id,
           access_target.related_ids, transaction_timestamp())
-), ready_targets AS (
+), ready_targets AS MATERIALIZED (
     SELECT target.*
     FROM targets target
     WHERE control_plane.agent_runtime_contract_ready(target.organization_id, target.project_id, target.agent_refs,
