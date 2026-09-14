@@ -5066,6 +5066,73 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 			t.Fatalf("event %s exposes node state %q without node delta", event.Ref, event.NodeState)
 		}
 	}
+
+	failedLaunch, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-launch"}, Payload: command.LaunchRunInput{
+			ProjectRef: project.Project.Ref, Title: "Fail one parallel stage", Task: "Verify terminal sibling behavior.",
+			Target: entity.RunTarget{Type: "WORKFLOW", Ref: publishedWorkflow.Workflow.Ref}, Input: map[string]any{"campaign": "Failure"},
+		}})
+	if err != nil || failedLaunch.Run == nil {
+		t.Fatalf("launch failed-sibling delegation: run=%#v err=%v", failedLaunch.Run, err)
+	}
+	failedCoordinator, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-coordinator-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+	if err != nil || len(failedCoordinator.RuntimeItems) != 1 {
+		t.Fatalf("claim failed-sibling coordinator: claims=%#v err=%v", failedCoordinator.RuntimeItems, err)
+	}
+	failedCoordinatorLease := failedCoordinator.RuntimeItems[0]
+	for _, item := range delegations {
+		if _, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: "failed-sibling-" + item.key}, Payload: command.DelegateInput{
+				LeaseRef: stringMap(failedCoordinatorLease, "leaseRef"), Fence: stringMap(failedCoordinatorLease, "fence"),
+				Generation: failedCoordinatorLease["generation"].(int64), TargetAgentRef: item.agent.Ref,
+				WorkflowStepKey: stepByAgent[item.agent.Ref], Task: "Complete the assigned failure-boundary probe.",
+			}}); err != nil {
+			t.Fatalf("delegate failed-sibling %s: %v", item.key, err)
+		}
+	}
+	failedChildren, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-children-claim"}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 2}})
+	if err != nil || len(failedChildren.RuntimeItems) != 2 {
+		t.Fatalf("claim failed-sibling children: claims=%#v err=%v", failedChildren.RuntimeItems, err)
+	}
+	var failedRegularLease, lateGatedLease map[string]any
+	for _, child := range failedChildren.RuntimeItems {
+		switch stringMap(child, "agentRef") {
+		case firstChild.Ref:
+			failedRegularLease = child
+		case secondChild.Ref:
+			lateGatedLease = child
+		}
+	}
+	if failedRegularLease == nil || lateGatedLease == nil {
+		t.Fatalf("failed-sibling child bindings differ: %#v", failedChildren.RuntimeItems)
+	}
+	completeClaimedExecution(t, ctx, service, worker, failedCoordinatorLease, "delegation-failed-sibling-coordinator", false)
+	failedChild, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-child-complete"}, Payload: command.CompleteExecutionInput{
+			LeaseRef: stringMap(failedRegularLease, "leaseRef"), Fence: stringMap(failedRegularLease, "fence"),
+			Generation: failedRegularLease["generation"].(int64), Success: false, SafeErrorCode: "RUNTIME_UNAVAILABLE",
+			ResultSummary: "i18n:RUNTIME_UNAVAILABLE", Usage: turnUsageFixture(),
+		}})
+	if err != nil || failedChild.Run == nil || failedChild.Run.State != "FAILED" {
+		t.Fatalf("fail parallel child: run=%#v err=%v", failedChild.Run, err)
+	}
+	lateGated := completeClaimedExecution(t, ctx, service, worker, lateGatedLease, "delegation-late-gated-child", false)
+	failedRoot, err := service.GetRun(ctx, owner, failedLaunch.Run.Ref)
+	if err != nil || failedRoot.State != "FAILED" || len(failedRoot.GateRefs) != 0 || lateGated.Graph == nil || graphNodeState(lateGated.Graph.Nodes, "ROOT_PROCESS") != "FAILED" {
+		t.Fatalf("late gated completion changed terminal root: root=%#v graph=%#v err=%v", failedRoot, lateGated.Graph, err)
+	}
+	for _, node := range lateGated.Graph.Nodes {
+		if node.Type == "HUMAN_GATE" {
+			t.Fatalf("late gated completion opened owner gate after terminal sibling: %#v", node)
+		}
+	}
+	for _, edge := range lateGated.Graph.Edges {
+		if edge.Type == "CONTINUES" {
+			t.Fatalf("late gated completion scheduled continuation after terminal sibling: %#v", edge)
+		}
+	}
 }
 
 func graphNodeState(nodes []entity.RunNode, nodeType string) string {

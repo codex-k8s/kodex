@@ -1446,10 +1446,11 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	var lockedRootID string
-	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionLockRootRun, lease["rootRunID"]).Scan(&lockedRootID); err != nil || lockedRootID != stringMap(lease, "rootRunID") {
+	var lockedRootID, lockedRootState string
+	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionLockRootRun, lease["rootRunID"]).Scan(&lockedRootID, &lockedRootState); err != nil || lockedRootID != stringMap(lease, "rootRunID") {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	rootAlreadyTerminal := contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, lockedRootState)
 	if !payload.Success && payload.SafeErrorCode == "PROVIDER_AUTH_REJECTED" {
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionMarkProviderReauthorizationRequired, pgx.StrictNamedArgs{
 			"organization_id":     scope.organizationID,
@@ -1466,6 +1467,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	nodeState, runState := "SUCCEEDED", "RUNNING"
 	if !payload.Success {
 		nodeState, runState = "FAILED", "FAILED"
+	}
+	if rootAlreadyTerminal {
+		runState = lockedRootState
 	}
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRuntimeLeasesStateUpdatedAt, lease["leaseID"]); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -1587,7 +1591,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	}
-	if payload.Success && humanGateAfter {
+	if payload.Success && humanGateAfter && !rootAlreadyTerminal {
 		gateNodeRef, _ := newRef("nod")
 		var gateNodeID string
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertRunNodesRefRootRunIdParentNodeId, gateNodeRef, scope.organizationID, lease["rootRunID"], lease["runID"], lease["nodeID"]).Scan(&gateNodeID); err != nil {
@@ -1621,20 +1625,23 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 	}
 	terminalRootNodeRef := ""
-	if !payload.Success {
+	rootBecameTerminal := false
+	if !payload.Success && !rootAlreadyTerminal {
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionFailRootRun, lease["rootRunID"], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		rootBecameTerminal = true
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], "FAILED").Scan(&terminalRootNodeRef); err != nil && !directRootWithoutProcessNode(err, lease) {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-	} else if !humanGateAfter {
+	} else if payload.Success && !humanGateAfter && !rootAlreadyTerminal {
 		var active int
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunNodesRootRunIdType, lease["rootRunID"]).Scan(&active); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if active == 0 {
 			runState = "SUCCEEDED"
+			rootBecameTerminal = true
 			if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunsStateResultSummaryFinishedAt, lease["rootRunID"], truncate(payload.ResultSummary, 4000)); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
@@ -1643,7 +1650,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			}
 		}
 	}
-	if runState == "SUCCEEDED" || runState == "FAILED" {
+	if rootBecameTerminal {
 		var scheduleID string
 		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateScheduleOccurrencesStateLeaseRefFenceDigest, lease["rootRunID"], map[bool]string{true: "COMPLETED", false: "FAILED"}[runState == "SUCCEEDED"]).Scan(&scheduleID)
 		if err == nil {

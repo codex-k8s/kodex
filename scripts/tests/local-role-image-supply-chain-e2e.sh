@@ -176,7 +176,16 @@ jq --arg pod_name "$pod_name" --arg pod_uid "$pod_uid" \
   "$state" >"$temporary_state"
 chmod 0600 "$temporary_state"
 mv -- "$temporary_state" "$state"
-env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" verify-workspace
+if ! env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" verify-workspace; then
+  observe_runtime_pod retry-workspace
+  temporary_state=$(mktemp "$state.XXXXXX")
+  jq --arg pod_name "$pod_name" --arg pod_uid "$pod_uid" \
+    '.status="runtime-observed" | .runtimePod={name:$pod_name,uid:$pod_uid}' \
+    "$state" >"$temporary_state"
+  chmod 0600 "$temporary_state"
+  mv -- "$temporary_state" "$state"
+  env "${common_environment[@]}" node "$repository_root/tools/dev/local-role-image-supply-chain-e2e.mjs" verify-workspace
+fi
 
 # Canary запускается только в exact Pod второго Run; он возвращает закрытый код,
 # не читает и не выводит пользовательские файлы. Удаление fixture остаётся
