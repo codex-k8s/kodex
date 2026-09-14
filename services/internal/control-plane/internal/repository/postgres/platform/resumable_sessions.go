@@ -106,7 +106,7 @@ const maximumResumableSessionCandidates = 10_000
 // Total и страница выдаются только после полного прохода одного снимка.
 // Ограничение времени закрыто отклоняет запрос без частичного результата.
 func (repository *Repository) listResumableSessions(ctx context.Context, current scope, filter query.Filter) ([]entity.Run, int64, string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if len(filter.States) != 0 || len([]rune(filter.Query)) > 200 || !utf8.ValidString(filter.Query) || strings.ContainsRune(filter.Query, '\x00') {
 		return nil, 0, "", errs.ErrInvalid
