@@ -11,21 +11,34 @@ interface OrganizationUploadOptions {
   signal?: AbortSignal;
 }
 
+interface AttachmentMutationOptions {
+  headers: Record<string, string>;
+}
+
 const createProjectDraftMock = vi.hoisted(() => vi.fn());
 const createOrganizationDraftMock = vi.hoisted(() => vi.fn());
 const uploadProjectArtifactMock = vi.hoisted(() => vi.fn());
 const uploadOrganizationArtifactMock = vi.hoisted(() =>
   vi.fn<(options: OrganizationUploadOptions) => Promise<{ data: Artifact }>>(),
 );
+const mutationMock = vi.hoisted(() => vi.fn());
+const retryingMutationMock = vi.hoisted(() => vi.fn());
+const addItemsMock = vi.hoisted(() =>
+  vi.fn<
+    (options: AttachmentMutationOptions) => Promise<{ data: AttachmentSet }>
+  >(),
+);
+const removeItemsMock = vi.hoisted(() => vi.fn());
+const finalizeDraftMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
-  addAttachmentSetItems: vi.fn(),
+  addAttachmentSetItems: addItemsMock,
   createAttachmentSetDraft: createProjectDraftMock,
   createOrganizationAttachmentSetDraft: createOrganizationDraftMock,
-  finalizeAttachmentSet: vi.fn(),
+  finalizeAttachmentSet: finalizeDraftMock,
   getArtifact: vi.fn(),
   getAttachmentSet: vi.fn(),
-  removeAttachmentSetItems: vi.fn(),
+  removeAttachmentSetItems: removeItemsMock,
   uploadArtifact: uploadProjectArtifactMock,
   uploadOrganizationArtifact: uploadOrganizationArtifactMock,
 }));
@@ -33,20 +46,28 @@ vi.mock("@/shared/api/client", () => ({
   requestSignal: (signal?: AbortSignal) => signal,
 }));
 vi.mock("@/shared/api/mutation", () => ({
-  mutate: async (
-    request: (headers: Record<string, string>) => Promise<{ data: unknown }>,
-    _version?: number,
-    idempotencyKey = "idem_test",
-  ) =>
-    request({
-      "Idempotency-Key": idempotencyKey,
-      "X-CSRF-Token": "csrf_test",
-    }),
+  mutate: mutationMock,
+  mutateWithRetry: retryingMutationMock,
 }));
+
+async function invokeMutation(
+  request: (headers: Record<string, string>) => Promise<{ data: unknown }>,
+  _version?: number,
+  idempotencyKey = "idem_test",
+): Promise<{ data: unknown }> {
+  return request({
+    "Idempotency-Key": idempotencyKey,
+    "X-CSRF-Token": "csrf_test",
+    "If-Match": '"1"',
+  });
+}
 
 import {
   AttachmentTerminalScanError,
+  addAttachmentItems,
   createAttachmentDraft,
+  finalizeAttachmentDraft,
+  removeAttachmentItems,
   uploadCleanAttachmentArtifact,
   waitForCleanAttachmentArtifact,
 } from "@/shared/api/attachment-sets";
@@ -93,6 +114,11 @@ describe("AttachmentSet endpoint routing", () => {
     createOrganizationDraftMock.mockReset();
     uploadProjectArtifactMock.mockReset();
     uploadOrganizationArtifactMock.mockReset();
+    mutationMock.mockReset().mockImplementation(invokeMutation);
+    retryingMutationMock.mockReset().mockImplementation(invokeMutation);
+    addItemsMock.mockReset();
+    removeItemsMock.mockReset();
+    finalizeDraftMock.mockReset();
   });
 
   it("создаёт organization draft только для глобального assistant", async () => {
@@ -129,6 +155,8 @@ describe("AttachmentSet endpoint routing", () => {
       "AttachmentSet purpose requires a Project context",
     );
     expect(createOrganizationDraftMock).not.toHaveBeenCalled();
+    expect(retryingMutationMock).toHaveBeenCalledTimes(1);
+    expect(mutationMock).not.toHaveBeenCalled();
   });
 
   it("загружает файл глобального assistant через organization endpoint", async () => {
@@ -153,11 +181,34 @@ describe("AttachmentSet endpoint routing", () => {
     expect(uploadOptions?.headers["Idempotency-Key"]).toBe("stable-upload-key");
     expect(uploadOptions?.headers["X-File-Name"]).toBe("context.txt");
     expect(uploadProjectArtifactMock).not.toHaveBeenCalled();
+    expect(mutationMock).toHaveBeenCalledTimes(1);
+    expect(retryingMutationMock).not.toHaveBeenCalled();
     expect(onProgress).toHaveBeenCalledWith({
       loadedBytes: 7,
       totalBytes: 7,
     });
     expect(onScanning).not.toHaveBeenCalled();
+  });
+
+  it("выполняет create/add/remove/finalize через bounded retry primitive", async () => {
+    const draft = attachmentSet("RUN_INPUT");
+    createProjectDraftMock.mockResolvedValue({ data: draft });
+    addItemsMock.mockResolvedValue({ data: { ...draft, version: 2 } });
+    removeItemsMock.mockResolvedValue({ data: { ...draft, version: 2 } });
+    finalizeDraftMock.mockResolvedValue({
+      data: { ...draft, version: 2, state: "FINALIZED" },
+    });
+
+    await createAttachmentDraft("project_1", "RUN_INPUT");
+    await addAttachmentItems(draft, ["artifact_1"], 0);
+    await removeAttachmentItems(draft, ["artifact_1"]);
+    await finalizeAttachmentDraft(draft);
+
+    expect(retryingMutationMock).toHaveBeenCalledTimes(4);
+    expect(mutationMock).not.toHaveBeenCalled();
+    const addOptions = addItemsMock.mock.calls[0]?.[0];
+    expect(addOptions?.headers["Idempotency-Key"]).toBe("idem_test");
+    expect(addOptions?.headers["If-Match"]).toBe('"1"');
   });
 
   it.each(["FAILED", "QUARANTINED"] as const)(

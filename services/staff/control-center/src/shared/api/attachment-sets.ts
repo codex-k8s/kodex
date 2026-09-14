@@ -15,7 +15,7 @@ import type {
   AttachmentSet,
   AttachmentSetPurpose,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate } from "@/shared/api/mutation";
+import { mutate, mutateWithRetry } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 
 const attachmentMutationBatchSize = 100;
@@ -154,7 +154,7 @@ export async function createAttachmentDraft(
 ): Promise<AttachmentSet> {
   assertAttachmentScope(projectRef, purpose);
   return (
-    await mutate((headers) =>
+    await mutateWithRetry((headers) =>
       projectRef
         ? createAttachmentSetDraft({
             path: { projectRef },
@@ -214,7 +214,7 @@ export async function addAttachmentItems(
   signal?: AbortSignal,
 ): Promise<AttachmentSet> {
   return (
-    await mutate(
+    await mutateWithRetry(
       (headers) =>
         addAttachmentSetItems({
           path: { attachmentSetRef: draft.ref },
@@ -237,7 +237,7 @@ export async function removeAttachmentItems(
   signal?: AbortSignal,
 ): Promise<AttachmentSet> {
   return (
-    await mutate(
+    await mutateWithRetry(
       (headers) =>
         removeAttachmentSetItems({
           path: { attachmentSetRef: draft.ref },
@@ -259,7 +259,7 @@ export async function finalizeAttachmentDraft(
   signal?: AbortSignal,
 ): Promise<AttachmentSet> {
   return (
-    await mutate(
+    await mutateWithRetry(
       (headers) =>
         finalizeAttachmentSet({
           path: { attachmentSetRef: draft.ref },
