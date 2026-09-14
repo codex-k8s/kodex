@@ -60,7 +60,8 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	var config runtimeConfig
 	metadata, err := toml.Decode(string(raw), &config)
 	profile := config.Permissions[config.DefaultPermissions]
-	if !metadata.IsDefined("features", "memories") || !metadata.IsDefined("memories", "generate_memories") ||
+	if !metadata.IsDefined("features", "code_mode_host") || config.Features.CodeModeHost ||
+		!metadata.IsDefined("features", "memories") || !metadata.IsDefined("memories", "generate_memories") ||
 		!metadata.IsDefined("memories", "use_memories") || config.Features.Memories || config.Memories.GenerateMemories || config.Memories.UseMemories {
 		t.Fatal("provider local memory is not explicitly disabled")
 	}

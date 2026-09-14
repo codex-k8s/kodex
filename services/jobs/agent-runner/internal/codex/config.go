@@ -62,8 +62,9 @@ type runtimeConfig struct {
 }
 
 type runtimeFeatures struct {
-	CodeMode runtimeCodeModeConfig `toml:"code_mode"`
-	Memories bool                  `toml:"memories"`
+	CodeModeHost bool                  `toml:"code_mode_host"`
+	CodeMode     runtimeCodeModeConfig `toml:"code_mode"`
+	Memories     bool                  `toml:"memories"`
 }
 
 // Память поступает только из Kodex-owned records; локальная генерация Codex
@@ -159,7 +160,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		Personality: overlay.Personality, AllowLoginShell: &allowLoginShell, ApprovalPolicy: input.CodexApprovalPolicy,
 		DefaultPermissions: permissionProfileName, CLIAuthCredentialStore: "file",
 		History: historyConfig{Persistence: historyPersistence},
-		Features: runtimeFeatures{CodeMode: runtimeCodeModeConfig{
+		Features: runtimeFeatures{CodeModeHost: false, CodeMode: runtimeCodeModeConfig{
 			DirectOnlyToolNamespaces: []string{"mcp__kodex"},
 		}},
 		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
@@ -184,6 +185,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		!decoded.MCPServers["kodex"].Required ||
 		decoded.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		decoded.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
+		!metadata.IsDefined("features", "code_mode_host") || decoded.Features.CodeModeHost ||
 		!slices.Equal(decoded.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) ||
 		decoded.DefaultPermissions != permissionProfileName || decoded.Permissions[permissionProfileName].Extends != permissionBase ||
 		decoded.ShellEnvironmentPolicy.Inherit != "all" || !slices.Equal(decoded.ShellEnvironmentPolicy.IncludeOnly, includeOnly) ||
