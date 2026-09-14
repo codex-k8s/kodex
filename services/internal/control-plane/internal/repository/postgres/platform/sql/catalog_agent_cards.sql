@@ -12,8 +12,8 @@ WITH requested AS MATERIALIZED (
     WHERE r.organization_id=@organization_id::uuid
       AND r.state IN ('QUEUED','RUNNING','WAITING_HUMAN','CANCELLING')
       AND (@authority_project='' OR r.project_id=NULLIF(@authority_project,'')::uuid)
-      AND control_plane.catalog_resource_visible(target.organization_id,@actor_id::uuid,'run.view',
-          target.kind,target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp())
+      AND (@role IN ('OWNER','ADMINISTRATOR') OR control_plane.catalog_resource_visible(target.organization_id,@actor_id::uuid,'run.view',
+          target.kind,target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp()))
 )
 SELECT requested.ref,COALESCE(activity.ref,'')
 FROM requested

@@ -12,8 +12,8 @@ WITH requested AS MATERIALIZED (
     JOIN control_plane.catalog_access_targets target ON target.kind='RUN' AND target.id=r.id
       AND target.organization_id=r.organization_id
     WHERE r.id=r.root_run_id
-      AND control_plane.catalog_resource_visible(target.organization_id,@actor_id::uuid,'run.view',
-          target.kind,target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp())
+      AND (@role IN ('OWNER','ADMINISTRATOR') OR control_plane.catalog_resource_visible(target.organization_id,@actor_id::uuid,'run.view',
+          target.kind,target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp()))
 )
 SELECT w.ref,
        (SELECT count(*)::integer FROM jsonb_array_elements(COALESCE(NULLIF(w.spec->'Steps','null'::jsonb),'[]'::jsonb))) AS stage_count,
@@ -23,7 +23,7 @@ SELECT w.ref,
               UNION SELECT w.spec->>'CoordinatorAgentRef') participant
         JOIN control_plane.catalog_access_targets a ON a.organization_id=w.organization_id
           AND a.kind='AGENT' AND a.ref=participant.ref
-        WHERE control_plane.catalog_resource_visible(a.organization_id,@actor_id::uuid,'agent.view',
+        WHERE @role IN ('OWNER','ADMINISTRATOR') OR control_plane.catalog_resource_visible(a.organization_id,@actor_id::uuid,'agent.view',
           a.kind,a.id,a.project_id,a.owner_id,a.related_ids,statement_timestamp())) AS unique_agent_count,
        (SELECT count(DISTINCT step->>'ParallelGroup')::integer
         FROM jsonb_array_elements(COALESCE(NULLIF(w.spec->'Steps','null'::jsonb),'[]'::jsonb)) step
