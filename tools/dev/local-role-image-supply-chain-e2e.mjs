@@ -611,13 +611,14 @@ async function captureRuntime() {
     if (run.state !== "QUEUED") {
       if (!["RUNNING", "SUCCEEDED", "FAILED"].includes(run.state))
         fail("active runtime state is unexpected");
-      const revision = (
-        await request(
-          "GET",
-          `/api/v1/runs/${encodeURIComponent(runRef)}/runtime-revision-diff`,
-          { expectedStatus: 200 },
-        )
-      ).current;
+      const diff = await readRuntimeRevisionDiff(runRef);
+      if (diff === undefined) {
+        if (Date.now() >= phaseDeadline)
+          fail("runtime revision deadline exceeded");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        continue;
+      }
+      const revision = diff.current;
       if (
         !revision ||
         revision.runRef !== runRef ||
@@ -650,6 +651,32 @@ async function captureRuntime() {
     if (Date.now() >= phaseDeadline) fail("runtime binding deadline exceeded");
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
+}
+
+async function readRuntimeRevisionDiff(runRef) {
+  const path = `/api/v1/runs/${encodeURIComponent(runRef)}/runtime-revision-diff`;
+  const response = await ownerSession.request(path, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    redirect: "error",
+    signal: requestSignal(),
+  });
+  const text = (await boundedResponseBody(response, 2 << 20)).toString("utf8");
+  let value = {};
+  if (text) {
+    try {
+      value = JSON.parse(text);
+    } catch {
+      fail(`non-JSON API response with status ${String(response.status)}: ${path}`);
+    }
+  }
+  if (response.status === 200) return value;
+  if (response.status === 404 && value.code === "NOT_FOUND") return undefined;
+  const code =
+    typeof value.code === "string" && /^[A-Z0-9_]{1,80}$/.test(value.code)
+      ? value.code
+      : "UNKNOWN";
+  fail(`GET ${path} returned ${String(response.status)} (${code})`);
 }
 
 async function launchQuota() {

@@ -304,11 +304,7 @@ test.describe("deployed local integration path", () => {
       last_replay_effect_key: "",
     });
     expect(final.last_effect_key).not.toBe("");
-    connection = await readAPI<Connection>(
-      page,
-      `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}`,
-    );
-    connection = await updateConnection(page, connection, {
+    connection = await updateConnectionAfterRecovery(page, connection.ref, {
       name: `${environment.resourcePrefix} — synthetic updated`,
       publicConfiguration: { journal },
     });
@@ -856,6 +852,35 @@ async function updateConnection(
     version: connection.version,
     expectedStatus: 200,
   });
+}
+
+async function updateConnectionAfterRecovery(
+  page: Page,
+  connectionRef: string,
+  input: {
+    name: string;
+    publicConfiguration: Record<string, string>;
+  },
+): Promise<Connection> {
+  const path = `/api/v1/integration-connections/${encodeURIComponent(connectionRef)}`;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const connection = await readAPI<Connection>(page, path);
+    try {
+      return await updateConnection(page, connection, input);
+    } catch (error) {
+      if (
+        !(error instanceof APIMutationFailure) ||
+        error.status !== 412 ||
+        attempt === 2
+      ) {
+        throw error;
+      }
+      // Recovery worker и read projection сходятся независимо. Повторяем
+      // только не совершившийся OCC update после нового авторитетного GET.
+      await page.waitForTimeout(250 * (attempt + 1));
+    }
+  }
+  throw new Error("Integration connection recovery readback did not converge");
 }
 
 async function deleteConnection(

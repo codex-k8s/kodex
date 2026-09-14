@@ -1452,6 +1452,21 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 }
 
 func terminalContainerDiagnostic(pod *corev1.Pod) string {
+	for _, status := range pod.Status.InitContainerStatuses {
+		if status.State.Terminated == nil {
+			continue
+		}
+		switch status.Name {
+		case "workspace-prepare":
+			if status.State.Terminated.ExitCode != 0 {
+				return "WORKSPACE_PREPARE_EXITED_NONZERO"
+			}
+		case "workspace-init":
+			if status.State.Terminated.ExitCode != 0 {
+				return "WORKSPACE_INIT_EXITED_NONZERO"
+			}
+		}
+	}
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.State.Terminated == nil {
 			continue
