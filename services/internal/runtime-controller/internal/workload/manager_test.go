@@ -834,11 +834,32 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name       string
+		phase      corev1.PodPhase
+		init       []corev1.ContainerStatus
 		statuses   []corev1.ContainerStatus
 		conditions []corev1.PodCondition
 		want       string
 		wantDiag   string
 	}{
+		{
+			name:  "workspace preparation failed",
+			phase: corev1.PodFailed,
+			init: []corev1.ContainerStatus{
+				{Name: "workspace-prepare", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}}},
+			},
+			want:     "FAILED",
+			wantDiag: "WORKSPACE_PREPARE_EXITED_NONZERO",
+		},
+		{
+			name:  "workspace initialization failed",
+			phase: corev1.PodFailed,
+			init: []corev1.ContainerStatus{
+				{Name: "workspace-prepare", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}}},
+				{Name: "workspace-init", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 2}}},
+			},
+			want:     "FAILED",
+			wantDiag: "WORKSPACE_INIT_EXITED_NONZERO",
+		},
 		{
 			name: "role terminated while provider is running",
 			statuses: []corev1.ContainerStatus{
@@ -887,7 +908,11 @@ func TestTurnPodStateClassifiesColdRuntimeContainers(t *testing.T) {
 			}
 			credentials := testCredentialProjection(input)
 			pod := manager.runtimePod(input, binding, &credentials, ticketName(input.LeaseRef), turnPodName(input.LeaseRef), "turn")
-			pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, ContainerStatuses: test.statuses, Conditions: test.conditions}
+			phase := test.phase
+			if phase == "" {
+				phase = corev1.PodRunning
+			}
+			pod.Status = corev1.PodStatus{Phase: phase, InitContainerStatuses: test.init, ContainerStatuses: test.statuses, Conditions: test.conditions}
 			if _, err := client.CoreV1().Pods("kodex-runtime").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 				t.Fatalf("Create(cold runtime Pod) error = %v", err)
 			}
