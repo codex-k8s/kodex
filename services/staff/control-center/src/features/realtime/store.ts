@@ -41,6 +41,7 @@ interface ActiveRun {
 interface SessionConnection {
   ticketController?: AbortController;
   socket?: WebSocket;
+  handshakeTimer?: number;
   timer?: number;
   requestRef?: string;
   resumeRunRefs?: Set<string>;
@@ -68,6 +69,7 @@ const platformKinds = new Set<PlatformKind>([
 
 const platformStreamRef = "PLATFORM";
 const clientReconnectCloseCode = 4000;
+export const webSocketHandshakeTimeoutMs = 10_000;
 
 export type PlatformSequenceOutcome =
   | "applied"
@@ -157,6 +159,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
       !session.stopped &&
       hasConsumers()
     );
+  }
+
+  function clearHandshakeTimer(): void {
+    if (session.handshakeTimer !== undefined)
+      window.clearTimeout(session.handshakeTimer);
+    session.handshakeTimer = undefined;
   }
 
   function markOffline(): void {
@@ -599,6 +607,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     let processing = Promise.resolve();
     socket.addEventListener("open", () => {
       if (!activeSocket(socket)) return;
+      clearHandshakeTimer();
       const sessionRequestRef = requestRef();
       session.requestRef = sessionRequestRef;
       const runs = [...activeRuns.keys()].sort().map((runRef) => {
@@ -651,6 +660,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     });
     socket.addEventListener("close", () => {
       if (session.socket !== socket) return;
+      clearHandshakeTimer();
       session.socket = undefined;
       session.requestRef = undefined;
       session.resumeRunRefs = undefined;
@@ -659,6 +669,14 @@ export const useRealtimeStore = defineStore("realtime", () => {
     socket.addEventListener("error", () => {
       if (activeSocket(socket)) socket.close();
     });
+    session.handshakeTimer = window.setTimeout(() => {
+      session.handshakeTimer = undefined;
+      if (!activeSocket(socket) || socket.readyState !== WebSocket.CONNECTING)
+        return;
+      session.socket = undefined;
+      retireWebSocket(socket, "HANDSHAKE_TIMEOUT");
+      scheduleReconnect();
+    }, webSocketHandshakeTimeoutMs);
   }
 
   function openRun(runRef: string): void {
@@ -714,6 +732,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     session.ticketController = undefined;
     if (session.timer !== undefined) window.clearTimeout(session.timer);
     session.timer = undefined;
+    clearHandshakeTimer();
     const socket = session.socket;
     session.socket = undefined;
     session.requestRef = undefined;

@@ -2825,23 +2825,42 @@ test.describe("web-only fresh installation", () => {
           otherAgentRef,
           projectRef,
         }) => {
-          const [rolesResponse, groupsResponse] = await Promise.all([
-            fetch(
-              "/api/v1/administration/access/roles?pageSize=100&includeArchived=false",
-            ),
-            fetch("/api/v1/administration/access/oidc-groups?pageSize=100"),
-          ]);
-          if (!rolesResponse.ok || !groupsResponse.ok)
-            throw new Error("RBAC catalog readback failed");
-          const roles = (await rolesResponse.json()) as {
-            items: Array<{
-              ref: string;
-              currentVersion: { ref: string; name: string };
-            }>;
-          };
-          const role = roles.items.find(
-            (item) => item.currentVersion.name === expectedRoleName,
+          const groupsResponse = await fetch(
+            "/api/v1/administration/access/oidc-groups?pageSize=100",
           );
+          if (!groupsResponse.ok)
+            throw new Error("RBAC catalog readback failed");
+          type Role = {
+            ref: string;
+            currentVersion: { ref: string; name: string };
+          };
+          let role: Role | undefined;
+          let pageToken = "";
+          const seenTokens = new Set<string>();
+          for (let pageNumber = 0; pageNumber < 20; pageNumber += 1) {
+            const query = new URLSearchParams({
+              pageSize: "100",
+              includeArchived: "false",
+            });
+            if (pageToken) query.set("pageToken", pageToken);
+            const rolesResponse = await fetch(
+              `/api/v1/administration/access/roles?${query.toString()}`,
+            );
+            if (!rolesResponse.ok)
+              throw new Error("RBAC role catalog readback failed");
+            const roles = (await rolesResponse.json()) as {
+              items: Role[];
+              nextPageToken?: string;
+            };
+            role = roles.items.find(
+              (item) => item.currentVersion.name === expectedRoleName,
+            );
+            if (role || !roles.nextPageToken) break;
+            if (seenTokens.has(roles.nextPageToken))
+              throw new Error("RBAC role catalog cursor did not advance");
+            seenTokens.add(roles.nextPageToken);
+            pageToken = roles.nextPageToken;
+          }
           if (!role) throw new Error("E2E access role is absent");
           const groups = (await groupsResponse.json()) as {
             items: Array<{
