@@ -9,6 +9,7 @@ import type {
   Project,
   ProjectPage,
   Run,
+  RunInput,
   RunPage,
   RunEvent,
   RunWorkspace,
@@ -25,6 +26,9 @@ const listRunEventsMock = vi.hoisted(() => vi.fn());
 const listRunsMock = vi.hoisted(() => vi.fn());
 const commandRunMock = vi.hoisted(() =>
   vi.fn<typeof import("@/shared/api/generated/openapi/sdk.gen").commandRun>(),
+);
+const createRunMock = vi.hoisted(() =>
+  vi.fn<typeof import("@/shared/api/generated/openapi/sdk.gen").createRun>(),
 );
 const listAgentInstructionVersionsMock = vi.hoisted(() => vi.fn());
 const downloadArtifactMock = vi.hoisted(() => vi.fn());
@@ -83,6 +87,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   listRunEvents: listRunEventsMock,
   listRuns: listRunsMock,
   commandRun: commandRunMock,
+  createRun: createRunMock,
   listAgentInstructionVersions: listAgentInstructionVersionsMock,
   downloadArtifact: downloadArtifactMock,
   changeArtifactBinding: changeArtifactBindingMock,
@@ -332,6 +337,7 @@ describe("platform store", () => {
     listRunEventsMock.mockReset();
     listRunsMock.mockReset();
     commandRunMock.mockReset();
+    createRunMock.mockReset();
     listAgentInstructionVersionsMock.mockReset();
     downloadArtifactMock.mockReset();
     changeArtifactBindingMock.mockReset();
@@ -832,6 +838,47 @@ describe("platform store", () => {
     );
     expect(store.runs[retried.ref]).toEqual(retried);
     expect(store.graphs[retried.ref]).toEqual(graph);
+  });
+
+  it("повторяет создание Run после обрыва ответа с тем же mutation key", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("document", {
+      cookie: `__Host-kodex-csrf=${"a".repeat(43)}`,
+    });
+    const created = { ...run(1), state: "QUEUED" as const };
+    const graph = {
+      runRef: created.ref,
+      revision: created.graphRevision,
+      sequence: created.lastEventSequence,
+      nodes: [],
+      edges: [],
+    };
+    createRunMock
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce({
+        data: { run: created, graph },
+        error: undefined,
+        response: new Response(null, { status: 201 }),
+      });
+    const input: RunInput = {
+      projectRef: created.projectRef,
+      targetRef: created.target.ref,
+      targetType: "AGENT",
+      task: "Подготовь отчёт",
+    };
+    const store = usePlatformStore();
+
+    const launching = store.launch(input);
+    await vi.runAllTimersAsync();
+
+    await expect(launching).resolves.toEqual(created);
+    expect(createRunMock).toHaveBeenCalledTimes(2);
+    expect(createRunMock.mock.calls[0]?.[0]?.body).toEqual(input);
+    expect(createRunMock.mock.calls[1]?.[0]?.headers["Idempotency-Key"]).toBe(
+      createRunMock.mock.calls[0]?.[0]?.headers["Idempotency-Key"],
+    );
+    expect(store.runs[created.ref]).toEqual(created);
+    expect(store.graphs[created.ref]).toEqual(graph);
   });
 
   it("повторяет безопасное чтение artifact после временного сетевого сбоя", async () => {

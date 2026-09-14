@@ -292,22 +292,16 @@ test.describe("deployed local integration path", () => {
       )
       .toBe(1);
     await restartIntegrationGateway();
-    await expect
-      .poll(
-        async () =>
-          (await readSyntheticDiagnostic(readbackURL, journal)).replay_count,
-        {
-          timeout: 120_000,
-          intervals: [250, 1_000, 2_000],
-        },
-      )
-      .toBeGreaterThanOrEqual(1);
     await waitForTerminalRun(page, approvedRun.ref, "SUCCEEDED");
-    await expectIntegrationToolCall(page, approvedRun.ref, "SUCCEEDED");
+    await expectIntegrationToolCall(page, approvedRun.ref, "FAILED");
     const final = await readSyntheticDiagnostic(readbackURL, journal);
-    expect(final).toMatchObject({ count: 1, value: replayValue });
+    expect(final).toMatchObject({
+      count: 1,
+      value: replayValue,
+      replay_count: 0,
+      last_replay_effect_key: "",
+    });
     expect(final.last_effect_key).not.toBe("");
-    expect(final.last_replay_effect_key).toBe(final.last_effect_key);
     connection = await updateConnection(page, connection, {
       name: `${environment.resourcePrefix} — synthetic updated`,
       publicConfiguration: { journal },

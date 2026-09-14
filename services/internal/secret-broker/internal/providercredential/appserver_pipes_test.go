@@ -160,7 +160,7 @@ func TestAppServerDeviceInitializationFailureCleanup(t *testing.T) {
 	if os.Chmod(root, 0o700) != nil {
 		t.Fatal("fixture mode unavailable")
 	}
-	process, err := NewAppServerProcess(binary, root)
+	process, err := NewAppServerProcess(binary, root, false)
 	if err != nil {
 		t.Fatal("fixture process unavailable")
 	}

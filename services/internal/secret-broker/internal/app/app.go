@@ -129,7 +129,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := reconciler.EnableCredentialProjectionRecovery(owner, store); err != nil {
 		return err
 	}
-	appServer, err := providercredential.NewAppServerProcess(config.CodexBinary, config.ProviderAuthorizationRoot)
+	appServer, err := providercredential.NewAppServerProcess(
+		config.CodexBinary,
+		config.ProviderAuthorizationRoot,
+		config.Environment == "staging",
+	)
 	if err != nil {
 		return err
 	}

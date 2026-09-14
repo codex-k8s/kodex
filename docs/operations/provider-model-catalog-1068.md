@@ -4,8 +4,8 @@ title: Наблюдение каталога моделей через Secret Br
 type: operations
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-09-06
+version: 1.2.0
+updated: 2026-09-14
 ---
 
 # Граница поставки
@@ -26,7 +26,7 @@ Issue #1068 / PR #1069 содержит Secret Broker consumer для MVP-UI-17/
 | Подтверждённый пустой список | Та же полная проверка и свежий ответ provider | Возвращает пустое пересечение без встроенного fallback | CP определяет пустую доступность; старый список не сохраняется как свежий |
 | Provider 401/403, запрос OAuth refresh | Не разрешает обновление credential | Прекращает наблюдение, не передаёт refresh token и не повторяет авторизованный запрос с новым token | `AUTHORIZATION_REJECTED`, без models/source; CP определяет дальнейший reauth |
 | Ошибка связи | Ограниченный deadline без redirect/direct fallback | Не выдаёт частичный результат | `UNAVAILABLE`; CP сохраняет отказ, retry только через новую owner attempt |
-| Непроверенный источник | Missing/stale/malformed cache, дубликаты, лишние страницы, несовпадение capabilities | Закрыто отклоняет snapshot | `UNVERIFIED_SOURCE`; CP не подменяет его успешной свежестью |
+| Непроверенный источник | Production: missing/stale/malformed cache; все профили: неверный login/schema, дубликаты, лишние страницы или недопустимые capabilities | Закрыто отклоняет snapshot | `UNVERIFIED_SOURCE`; CP не подменяет его успешной свежестью |
 | Cancel/expiry/shutdown | Минимум caller deadline, proof expiry, task expiry и 15 секунд | Kill process group, join reader/process, удаление временного каталога; возврат без models | Context error; CP завершает/повторяет задачу по собственному lifecycle |
 | Lost response | Наблюдение не изменяет credential и не публикует catalog само | Не делает hidden retry | CP authoritative task/observation read определяет исход; новое чтение требует разрешённой claim |
 
@@ -77,13 +77,21 @@ models/default/efforts в свой catalog digest и immutable runtime overlay.
 DEVICE_CODE путь не копирует `auth.json`: после `initialize` передаёт только
 `chatgptAuthTokens` access token/account ID через stdin. Managed refresh token
 никогда не попадает в этот процесс. Любой server request закрыто отклоняется.
-Для успешного результата требуется созданный в новом private home
+В production для успешного результата требуется созданный в новом private home
 `models_cache.json` с `fetched_at` текущего вызова и `client_version=0.153.4`.
 Pinned Codex записывает его после успешного remote fetch; ошибка может оставить
 встроенные модели в `model/list`, поэтому одного JSON-RPC успеха недостаточно.
 Берутся только IDs/default/efforts из свежего remote snapshot, с точным
 сравнением capabilities. Prompt metadata, transcript и прочий сырой ответ не
 копируются. Symlink, hardlink, FIFO и чужой UID отклоняются до чтения cache.
+
+В disposable staging до завершения MVP отсутствие недокументированного cache
+не блокирует каталог, если exact-version App Server успешно принял привязанные
+к account access token и account ID, а полный paginated `model/list` прошёл
+закрытые schema/identity/cursor/capabilities проверки в том же изолированном
+процессе. Ошибка login или RPC не использует этот fallback. Production path и
+его cache checks остаются без изменений; независимая attestation staging
+catalog вынесена в отдельную post-MVP задачу.
 
 Модели без reasoning имеют пустые efforts/default; строки `none` как
 допустимое усилие и отсутствие reasoning различаются. Список возможностей

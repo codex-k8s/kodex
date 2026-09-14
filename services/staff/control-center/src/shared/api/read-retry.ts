@@ -1,7 +1,7 @@
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { assertOwnerRequest, ownerRequestSignal } from "./owner-lifetime";
 
-const readRetryDelaysMs = [0, 200, 600, 1_500] as const;
+const readRetryDelaysMs = [0, 200, 600, 1_500, 3_000, 5_000] as const;
 
 export async function readWithRetry<T>(
   request: () => Promise<T>,

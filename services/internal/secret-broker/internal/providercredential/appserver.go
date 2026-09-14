@@ -39,19 +39,24 @@ type AppServer interface {
 }
 
 type AppServerProcess struct {
-	binary      string
-	root        string
-	catalogHTTP modelCatalogHTTPClient
+	binary                       string
+	root                         string
+	allowProtocolCatalogFallback bool
+	catalogHTTP                  modelCatalogHTTPClient
 }
 
-func NewAppServerProcess(binary, root string) (*AppServerProcess, error) {
+func NewAppServerProcess(binary, root string, allowProtocolCatalogFallback bool) (*AppServerProcess, error) {
 	if !filepath.IsAbs(binary) || !filepath.IsAbs(root) || filepath.Clean(binary) != binary || filepath.Clean(root) != root {
 		return nil, errors.New("Codex app-server configuration is invalid")
 	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, errors.New("create Codex app-server state root")
 	}
-	return &AppServerProcess{binary: binary, root: root, catalogHTTP: newModelCatalogHTTPClient()}, nil
+	return &AppServerProcess{
+		binary: binary, root: root,
+		allowProtocolCatalogFallback: allowProtocolCatalogFallback,
+		catalogHTTP:                  newModelCatalogHTTPClient(),
+	}, nil
 }
 
 func (process *AppServerProcess) Check(ctx context.Context) error {
