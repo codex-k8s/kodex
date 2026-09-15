@@ -64,6 +64,36 @@ test("диагностика связывает exact Request и не сохра
     expect(serialized).not.toContain(forbidden);
   expect(result.failures[0]?.startedStage).toBe("NATURAL_RENEWAL");
   expect(result.failures[0]?.failedStage).toBe("READBACK");
+  expect(result.failures.every((value) => !value.recoveredByExactSuccess)).toBe(
+    true,
+  );
+});
+
+test("отмена GET считается восстановленной только после exact успешного successor", () => {
+  const observer = new SessionRequestDiagnostics("https://kodex.test");
+  const failed = {},
+    successor = {},
+    anotherQuery = {};
+  const input = {
+    url: "https://kodex.test/api/v1/projects?pageToken=private-marker",
+    method: "GET",
+    resourceType: "fetch",
+    stage: "NATURAL_RENEWAL" as const,
+    tab: 1,
+  };
+  observer.start(failed, input, 100);
+  observer.failed(failed, "NATURAL_RENEWAL", "net::ERR_ABORTED", 200);
+  observer.start(
+    anotherQuery,
+    { ...input, url: "https://kodex.test/api/v1/projects?pageToken=other" },
+    210,
+  );
+  observer.succeeded(anotherQuery, 200, 220);
+  expect(observer.snapshot().failures[0]?.recoveredByExactSuccess).toBe(false);
+  observer.start(successor, input, 230);
+  observer.succeeded(successor, 200, 250);
+  expect(observer.snapshot().failures[0]?.recoveredByExactSuccess).toBe(true);
+  expect(JSON.stringify(observer.snapshot())).not.toContain("private-marker");
 });
 
 test("unknown route/method/resource и overflow остаются ограниченными facts без ignore", () => {

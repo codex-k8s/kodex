@@ -19,7 +19,7 @@ func TestHealthProtocolDiagnostics(t *testing.T) {
 		name   string
 		reason api.ProtocolReadinessReason
 	}{
-		{"ready", api.ProtocolReadinessReasonNone}, {"auth", api.ProtocolReadinessReasonAuthRejected}, {"tls", api.ProtocolReadinessReasonTLSUnavailable}, {"credential", api.ProtocolReadinessReasonCredentialUnavailable}, {"configuration", api.ProtocolReadinessReasonConfigurationInvalid}, {"network", api.ProtocolReadinessReasonNetworkUnavailable}, {"uidl", api.ProtocolReadinessReasonResponseInvalid}, {"list", api.ProtocolReadinessReasonResponseInvalid}, {"limit", api.ProtocolReadinessReasonScanLimit},
+		{"ready", api.ProtocolReadinessReasonNone}, {"auth", api.ProtocolReadinessReasonAuthRejected}, {"tls", api.ProtocolReadinessReasonTLSUnavailable}, {"credential", api.ProtocolReadinessReasonCredentialUnavailable}, {"configuration", api.ProtocolReadinessReasonConfigurationInvalid}, {"network", api.ProtocolReadinessReasonNetworkUnavailable},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -37,12 +37,6 @@ func TestHealthProtocolDiagnostics(t *testing.T) {
 				m.Pop.Ca.Name = "bad-ca"
 			case "credential":
 				m.Pop.Username.Name = "missing"
-			case "uidl":
-				f.uidlLines = "bad uidl fixture-private-text\r\n"
-			case "list":
-				f.listLines = "1 -2\r\n2 3\r\n"
-			case "limit":
-				m.Limits.ScanMessages = 1
 			}
 			result := execute(t, s, api.Command{Operation: api.OperationHealth, MailboxId: "mailbox"})
 			if result.ProtocolReadiness.Smtp != "ready" || *result.ProtocolReadiness.Pop3Reason != tc.reason {
@@ -58,6 +52,18 @@ func TestHealthProtocolDiagnostics(t *testing.T) {
 				t.Fatal("health performed message effect")
 			}
 		})
+	}
+}
+
+func TestPOPHealthDoesNotEnumerateMaildrop(t *testing.T) {
+	f := newFixture(t, "implicit")
+	f.uidlLines = "bad uidl fixture-private-text\r\n"
+	f.listLines = "1 -2\r\n2 3\r\n"
+	s, _, _ := service(t, f, "implicit", nil)
+	s.Config.Mailboxes[0].Limits.ScanMessages = 1
+	result := execute(t, s, api.Command{Operation: api.OperationHealth, MailboxId: "mailbox"})
+	if result.Status != "ready" || result.ProtocolReadiness.Pop3 != "ready" || f.retrievals.Load() != 0 {
+		t.Fatal("health enumerated or read the POP3 maildrop")
 	}
 }
 
