@@ -29,9 +29,9 @@ describe("AssistantWorkspace layout", () => {
     expect(headerMarkup).toContain(":aria-label=\"$t('common.close')\"");
   });
 
-  it("открывает desktop drawer справа с отдельной колонкой истории", () => {
+  it("открывает большую desktop модалку с отдельной колонкой истории", () => {
     expect(styles).toMatch(
-      /\.assistant-drawer\s*\{[\s\S]*?right:\s*0[\s\S]*?width:\s*clamp\(520px, 38vw, 640px\)[\s\S]*?height:\s*100dvh/,
+      /\.assistant-drawer\s*\{[\s\S]*?inset:\s*4dvh 4vw[\s\S]*?width:\s*92vw[\s\S]*?height:\s*92dvh/,
     );
     expect(template).toContain("'assistant-drawer--plan': currentPlan");
     expect(styles).toMatch(

@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.28
-updated: 2026-09-13
+version: 1.4.29
+updated: 2026-09-15
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -1251,6 +1251,15 @@ Parent binding служит только проверочным контекст
 `IssueContinuation` перед подписью требуют совпадения issuer и caller SPIFFE с
 собственной signing identity. Загрузка parent не разрешает подписывать вызовы
 за соседний сервис. Verifier сохраняет собственную target boundary.
+
+Locator исходного запроса сохраняет срок родительского контекста. Проверенный
+continuation может иметь более короткий срок из-за operation TTL или свежести
+metadata; точное равенство этих сроков не требуется. Consumer отклоняет
+просроченный или превышающий родительский срок continuation и сохраняет точное
+связывание actor/tenant/project/provenance. Credential projection ограничивается
+проверенным дочерним сроком, а не сроком из locator. Соседние policy и credential
+continuation могут истекать в разное время: внешний вызов и availability
+ограничиваются минимумом обоих сроков, срока родителя и transport deadline.
 
 Проверки должны включать выбор bindings из фактической машинной policy, выпуск
 подписанного continuation и запрет чужого issuer. Fixture с вручную собранными

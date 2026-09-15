@@ -7,6 +7,7 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -41,14 +42,41 @@ func TestDelegatedAuthorityLocatorRequiresExactVerifiedBinding(t *testing.T) {
 		func(value *sttv1.DelegatedAuthorityLocator) { value.SourceRevision++ },
 		func(value *sttv1.DelegatedAuthorityLocator) { value.Actor.Reference = "different-reference" },
 		func(value *sttv1.DelegatedAuthorityLocator) {
-			value.ExpiresAt = timestamppb.New(value.ExpiresAt.AsTime().Add(time.Second))
+			value.ExpiresAt = timestamppb.New(value.ExpiresAt.AsTime().Add(-time.Second))
 		},
 	}
 	for _, mutate := range mutations {
-		_, candidate := projectionAuthorityFixtures()
+		candidate := proto.Clone(locator).(*sttv1.DelegatedAuthorityLocator)
 		mutate(candidate)
 		if sameDelegatedAuthorityLocator(candidate, verified) {
 			t.Fatalf("changed delegated locator was accepted: %#v", candidate)
+		}
+	}
+}
+
+func TestDelegatedAuthorityLocatorAcceptsBoundedContinuation(t *testing.T) {
+	t.Parallel()
+	for _, projectScoped := range []bool{false, true} {
+		verified, locator := projectionAuthorityFixtures()
+		if !projectScoped {
+			verified.Authority.Project = nil
+			locator.ProjectId, locator.Project = "", nil
+		}
+		parentExpiry := locator.ExpiresAt.AsTime()
+		verified.ExpiresAt = timestamppb.New(parentExpiry.Add(-20 * time.Second))
+		if !sameDelegatedAuthorityLocator(locator, verified) {
+			t.Fatal("shortened continuation was rejected")
+		}
+		for _, expiry := range []*timestamppb.Timestamp{
+			nil,
+			{Seconds: 253402300800},
+			timestamppb.New(time.Now().Add(-time.Second)),
+			timestamppb.New(parentExpiry.Add(time.Nanosecond)),
+		} {
+			verified.ExpiresAt = expiry
+			if sameDelegatedAuthorityLocator(locator, verified) {
+				t.Fatal("invalid or extended continuation was accepted")
+			}
 		}
 	}
 }
