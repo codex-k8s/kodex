@@ -12,6 +12,7 @@ for (const protocol of ['IMAP', 'POP3']) test(`root input ${protocol}: six exact
   assert.equal(result.profile.specification.replyTo, result.profile.specification.sender); assert.equal(Object.keys(result.credentials).length, 6); assert.equal(result.profile.specification.policies.length, 21); assert.deepEqual(result.profile.specification.allowedFolders, ['INBOX']);
   assert(!JSON.stringify(result.profile).includes('fixture-sensitive')); assert.equal(result.profile.specification.policies.find((p) => p.operation === 'SEND').policy, 'HUMAN_GATE');
   assert.equal(result.profile.specification.policies.find((p) => p.operation === 'DELETE').policy, 'DENY');
+  assert.equal(result.profile.specification.limits.scanMessages, protocol === 'POP3' ? 1000 : 20);
 });
 test('empty credential, wrong TLS port, non-CA data and unrecognized protocol fail before output', () => {
   for (const change of [{ KODEX_QA_EMAIL_IMAP_PASSWORD: '' }, { KODEX_QA_EMAIL_SMTP_TLS_MODE: 'plaintext' }, { KODEX_QA_EMAIL_SMTP_PORT: '25' }, { KODEX_QA_EMAIL_IMAP_PASSWORD: 'line\nbreak' }]) assert.throws(() => prepareEmailInput({ ...makeEnv(), ...change }, 'IMAP', 'mvp1031-fixture', () => rootCertificates[0]));

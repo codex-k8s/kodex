@@ -13,13 +13,17 @@ WITH admitted AS MATERIALIZED (
       ON recipient.organization_id=@organization_id::uuid AND recipient.kind=admission.recipient_kind
      AND recipient.ref=admission.recipient_ref AND recipient.project_id=project.id
     WHERE (@purpose='GRANT' OR admission.reason='READY')
-      AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
-          'integration.view','INTEGRATION',connection.id,NULL,connection.created_by,'{}'::jsonb,transaction_timestamp())
-      AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
-          'project.view','PROJECT',project.id,project.id,project.created_by,'{}'::jsonb,transaction_timestamp())
-      AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
+      -- Уже выбранные exact ref прошли resolveAccessTarget + requireAccess в
+      -- той же repeatable-read транзакции. На каждом этапе вычисляем только
+      -- eligibility самого перечисляемого ресурса, а не повторяем проверки
+      -- всех родителей для каждой строки admission.
+      AND (@stage<>'CONNECTION' OR control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
+          'integration.view','INTEGRATION',connection.id,NULL,connection.created_by,'{}'::jsonb,transaction_timestamp()))
+      AND (@stage<>'PROJECT' OR control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
+          'project.view','PROJECT',project.id,project.id,project.created_by,'{}'::jsonb,transaction_timestamp()))
+      AND (@stage<>'RECIPIENT' OR control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
           CASE recipient.kind WHEN 'AGENT' THEN 'agent.view' ELSE 'workflow.view' END,
-          recipient.kind,recipient.id,recipient.project_id,recipient.owner_id,recipient.related_ids,transaction_timestamp())
+          recipient.kind,recipient.id,recipient.project_id,recipient.owner_id,recipient.related_ids,transaction_timestamp()))
 ), projected AS (
     SELECT CASE @stage WHEN 'CONNECTION' THEN connection_ref
                       WHEN 'PROJECT' THEN project_ref

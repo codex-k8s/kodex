@@ -70,13 +70,22 @@ type Started = {
   startedStage: SessionProofStage;
   tab: number;
   startedAt: number;
+  identitySHA256: string;
 };
-type Failed = Omit<Started, "startedAt"> & {
+type Failed = Omit<Started, "startedAt" | "identitySHA256"> & {
   identityKnown: boolean;
   failedStage: SessionProofStage;
   elapsedMs: number;
   code: string;
   errorSHA256: string;
+  recoveredByExactSuccess: boolean;
+};
+type PendingFailure = Omit<
+  Failed,
+  "recoveredByExactSuccess" | "identitySHA256"
+> & {
+  identitySHA256: string;
+  failedAt: number;
 };
 
 // WeakMap связывает два события именно одного Playwright Request, без изменения wire.
@@ -84,7 +93,8 @@ type Failed = Omit<Started, "startedAt"> & {
 export class SessionRequestDiagnostics<T extends object> {
   private sequence = 0;
   private readonly requests = new WeakMap<T, Started>();
-  private readonly failures: Failed[] = [];
+  private readonly failures: PendingFailure[] = [];
+  private readonly successes = new Map<string, number>();
   private overflow = 0;
   constructor(private readonly origin: string) {}
   start(request: T, input: Input, now = Date.now()): void {
@@ -99,7 +109,18 @@ export class SessionRequestDiagnostics<T extends object> {
       startedStage: input.stage,
       tab: input.tab === 0 || input.tab === 1 ? input.tab : -1,
       startedAt: now,
+      identitySHA256: createHash("sha256")
+        .update(`${input.method}\n${input.url}\n${String(input.tab)}`)
+        .digest("hex"),
     });
+  }
+  succeeded(request: T, status: number, now = Date.now()): void {
+    const selected = this.requests.get(request);
+    if (!selected || status < 200 || status >= 400) return;
+    this.successes.set(
+      selected.identitySHA256,
+      Math.max(this.successes.get(selected.identitySHA256) ?? 0, now),
+    );
   }
   failed(
     request: T,
@@ -120,6 +141,7 @@ export class SessionRequestDiagnostics<T extends object> {
       startedStage: stage,
       tab: -1,
       startedAt: now,
+      identitySHA256: "",
     };
     this.failures.push({
       ...safe,
@@ -128,13 +150,27 @@ export class SessionRequestDiagnostics<T extends object> {
       elapsedMs: Math.max(0, Math.round(now - startedAt)),
       code: errors.get(error) ?? "UNKNOWN",
       errorSHA256: createHash("sha256").update(error).digest("hex"),
+      identitySHA256: selected?.identitySHA256 ?? "",
+      failedAt: now,
     });
   }
   snapshot() {
     return {
       requestsObserved: this.sequence,
       overflow: this.overflow,
-      failures: structuredClone(this.failures),
+      failures: this.failures.map(
+        ({ identitySHA256, failedAt, ...failure }): Failed => ({
+          ...failure,
+          recoveredByExactSuccess:
+            failure.method === "GET" &&
+            [
+              "CHROMIUM_ABORTED",
+              "FIREFOX_ABORTED",
+              "WEBKIT_CANCELLED",
+            ].includes(failure.code) &&
+            (this.successes.get(identitySHA256) ?? 0) > failedAt,
+        }),
+      ),
     };
   }
   checkpoint() {

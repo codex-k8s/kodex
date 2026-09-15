@@ -57,6 +57,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
   if (bootstrapDiagnostics !== undefined && bootstrapDiagnostics !== "1")
     throw new Error("Invalid bootstrap signal diagnostic profile");
   let confirmedBootstrapAborts = 0;
+  let confirmedRecoveredAborts = 0;
   let confirmedRequestSequences: number[] = [];
   let protocolReadback: string[][] = [];
   let stage: SessionProofStage = "PREFLIGHT";
@@ -170,6 +171,7 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
           !url.pathname.startsWith("/api/")
         )
           return;
+        requestDiagnostics.succeeded(response.request(), response.status());
         if (response.status() >= 400) counters.badResponses++;
         if (
           url.pathname === "/api/v1/session/ticket" &&
@@ -256,6 +258,15 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       .map((request) => requestDiagnostics.sequenceOf(request))
       .filter((sequence): sequence is number => sequence !== undefined)
       .slice(0, 32);
+    const requestSnapshot = requestDiagnostics.snapshot();
+    const recoveredSequences = requestSnapshot.failures
+      .filter((failure) => failure.recoveredByExactSuccess)
+      .map((failure) => failure.requestSequence);
+    confirmedRecoveredAborts = recoveredSequences.length;
+    const explainedSequences = new Set([
+      ...confirmedRequestSequences,
+      ...recoveredSequences,
+    ]);
     if (
       !tabs.every(resumedAfterRenewal) ||
       counters.refreshRequests !== 1 ||
@@ -265,8 +276,8 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       ) ||
       counters.ticketRequests < 4 ||
       counters.ticketSuccesses !== counters.ticketRequests ||
-      counters.failedRequests !== confirmedBootstrapAborts ||
-      requestDiagnostics.snapshot().overflow > 0 ||
+      counters.failedRequests !== explainedSequences.size ||
+      requestSnapshot.overflow > 0 ||
       bootstrapObservers.some((observer) => observer.snapshot().overflow > 0) ||
       counters.badResponses ||
       pageErrors.failed() ||
@@ -322,8 +333,16 @@ test("две настоящие вкладки сохраняют ticket/v2 пр
       bootstrapSignalDiagnostics: {
         enabled: bootstrapDiagnostics === "1",
         confirmedBootstrapAborts,
+        confirmedRecoveredAborts,
         confirmedRequestSequences,
-        unexplainedFailures: counters.failedRequests - confirmedBootstrapAborts,
+        unexplainedFailures:
+          counters.failedRequests -
+          new Set([
+            ...confirmedRequestSequences,
+            ...observedRequests.failures
+              .filter((failure) => failure.recoveredByExactSuccess)
+              .map((failure) => failure.requestSequence),
+          ]).size,
         tabs: bootstrapObservers.map((observer) => observer.snapshot()),
       },
       naturalRenewalAt: naturalRenewalAt

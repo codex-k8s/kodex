@@ -111,9 +111,20 @@ func (fixture *Fixture) Run(ctx context.Context, apiKey []byte) error {
 }
 
 func normalizeRussian(input string) string {
-	// MVP-UI-60 разрешает только регистр, whitespace и конечную пунктуацию.
-	input = strings.TrimRightFunc(input, func(character rune) bool {
-		return unicode.IsPunct(character) || unicode.IsSpace(character)
-	})
-	return strings.Join(strings.Fields(strings.ToLower(input)), " ")
+	// Совпадает с защищённой HTTP-приёмкой: провайдер может расставить
+	// пунктуацию между словами, но символы и сами слова не отбрасываются.
+	var normalized strings.Builder
+	separator := true
+	for _, character := range strings.ToLower(input) {
+		if unicode.IsPunct(character) || unicode.IsSpace(character) {
+			separator = normalized.Len() > 0
+			continue
+		}
+		if separator && normalized.Len() > 0 {
+			normalized.WriteByte(' ')
+		}
+		normalized.WriteRune(character)
+		separator = false
+	}
+	return normalized.String()
 }

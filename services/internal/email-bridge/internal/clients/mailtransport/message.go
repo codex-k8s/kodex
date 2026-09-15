@@ -93,9 +93,10 @@ func (p *Provider) Probe(ctx context.Context, m api.Mailbox) api.Result {
 	}
 	if m.Pop != nil {
 		report.Pop3 = api.ProtocolReadinessPop3NotReady
-		c, done, err := p.pop(ctx, m)
+		_, done, err := p.pop(ctx, m)
 		if err == nil {
-			_, _, err = snapshot(c, m)
+			// pop уже подтвердил transport, authentication и NOOP. HEALTH не
+			// перечисляет maildrop: scanMessages относится к LIST/SEARCH.
 			done()
 		}
 		report.Pop3Reason = healthReason(err)
