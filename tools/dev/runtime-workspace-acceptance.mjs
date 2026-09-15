@@ -149,13 +149,15 @@ export function workspaceProbeSource(nonce) {
 
 export function workspaceAcceptanceTask(nonce) {
   return (
-    "Выполни этот точный JavaScript через Node.js shell tool в текущем workspace. " +
+    "Выполни через shell tool ровно одну приведённую ниже команду без изменений. " +
     "Это synthetic acceptance: создание, чтение, атомарная замена и удаление своего файла; " +
     "отдельно ожидаемые отказы записи в защищённые пути. Не читай секреты или содержимое контекста. " +
-    "Не подменяй выполнение описанием и не исправляй проверки при отказе. " +
-    "Запусти как ES module. После успешного выполнения оставь оба созданных файла в .kodex/outbox " +
-    "и ответь одной короткой фразой.\n```javascript\n" +
+    "Не подменяй выполнение описанием, не меняй команду и не исправляй проверки при отказе. " +
+    "После успешного выполнения оставь оба созданных файла в .kodex/outbox " +
+    "и ответь одной короткой фразой.\n```sh\n" +
+    "node --input-type=module <<'KODEX_MVP_WORKSPACE_PROBE'\n" +
     workspaceProbeSource(nonce) +
+    "KODEX_MVP_WORKSPACE_PROBE\n" +
     "```"
   );
 }

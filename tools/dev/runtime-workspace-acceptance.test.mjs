@@ -17,12 +17,23 @@ import {
   boundedResponseBody,
   verifyWorkspaceAcceptance,
   verifyWorkspaceQuota,
+  workspaceAcceptanceTask,
   workspaceProbeSource,
   workspaceQuotaProbeSource,
 } from "./runtime-workspace-acceptance.mjs";
 
 const nonce = "a".repeat(32);
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+
+test("workspace task pins the exact ES module shell command", () => {
+  const task = workspaceAcceptanceTask(nonce);
+  assert.match(
+    task,
+    /node --input-type=module <<'KODEX_MVP_WORKSPACE_PROBE'/,
+  );
+  assert.match(task, /KODEX_MVP_WORKSPACE_PROBE\n```$/);
+  assert.match(task, /runWorkspaceProbe/);
+});
 
 function fixture() {
   const checks = Object.fromEntries(
