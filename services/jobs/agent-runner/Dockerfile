@@ -61,10 +61,15 @@ RUN set -eu; \
 
 COPY --from=local-codex-cli --chmod=0555 /out/codex /usr/local/bin/codex
 COPY --from=local-codex-cli --chmod=0555 /out/codex-code-mode-host /usr/local/bin/codex-code-mode-host
+# CODEX_SHELL должен уметь исполнять JavaScript, который платформа передаёт
+# агенту для штатной проверки workspace. Native Codex binaries не включают
+# отдельный Node.js runtime.
+COPY --from=local-codex-cli --chmod=0555 /usr/local/bin/node /usr/local/bin/node
 COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /usr/local/bin/kodex-init
 COPY --chmod=0555 --from=runner-build /out/kodex-protected/kodex-agent-runner /usr/local/bin/kodex-agent-runner
 
-RUN codex --version >/dev/null \
+RUN node --version >/dev/null \
+	&& codex --version >/dev/null \
 	&& codex-code-mode-host --help >/dev/null
 
 ENV HOME=/home/kodex \
