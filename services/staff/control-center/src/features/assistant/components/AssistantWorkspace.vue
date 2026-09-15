@@ -530,6 +530,7 @@ onBeforeUnmount(() => {
             <button
               v-for="conversation in store.sortedConversations"
               :key="conversation.ref"
+              :data-conversation-ref="conversation.ref"
               type="button"
               :class="{
                 selected: conversation.ref === store.selectedRef,
@@ -606,6 +607,7 @@ onBeforeUnmount(() => {
         <button
           v-for="conversation in store.sortedConversations"
           :key="conversation.ref"
+          :data-conversation-ref="conversation.ref"
           class="assistant-conversation-entry"
           :class="{ selected: conversation.ref === store.selectedRef }"
           type="button"

@@ -48,6 +48,10 @@ count=$(<"${KODEX_TEST_BRIDGE_COUNT_FILE:?}")
 count=$((count + 1))
 printf '%s\n' "$count" >"$KODEX_TEST_BRIDGE_COUNT_FILE"
 stat -Lc '%a' /proc/self/fd/2 >>"${KODEX_TEST_STDERR_MODE_FILE:?}"
+if [[ ${KODEX_TEST_BRIDGE_MODE:-} == no-work ]]; then
+  printf 'rpc error: code = NotFound desc = no admission work\n' >&2
+  exit 1
+fi
 if (( count > KODEX_TEST_BRIDGE_FAILURES )); then
   exit 0
 fi
@@ -81,6 +85,24 @@ CLAIM_RETRY_DIAGNOSTIC_INTERVAL=6
 printf '0\n' >"$bridge_count_file"
 : >"$stderr_mode_file"
 : >"$sleep_log"
+export KODEX_TEST_BRIDGE_MODE=no-work
+export KODEX_TEST_BRIDGE_FAILURES=14
+if (claim_admission) 2>"$temporary_directory/no-work.stderr"; then
+  fail 'empty admission cycle became successful work'
+fi
+[[ $(<"$bridge_count_file") == 1 ]] || fail 'no-work admission retried'
+[[ ! -s $sleep_log ]] || fail 'no-work admission slept before terminal outcome'
+[[ $(grep -Fc "$CLAIM_RETRY_DIAGNOSTIC_PREFIX" "$temporary_directory/no-work.stderr") == 1 ]] ||
+  fail 'no-work admission diagnostic count drifted'
+grep -Fq 'operation=claim attempt=1/14 class=no-work' "$temporary_directory/no-work.stderr" ||
+  fail 'no-work admission was not classified immediately'
+grep -Fq 'owner admission work is unavailable' "$temporary_directory/no-work.stderr" ||
+  fail 'no-work admission did not fail closed'
+unset KODEX_TEST_BRIDGE_MODE
+
+printf '0\n' >"$bridge_count_file"
+: >"$stderr_mode_file"
+: >"$sleep_log"
 export KODEX_TEST_BRIDGE_FAILURES=13
 claim_admission 2>"$temporary_directory/admission.stderr" || fail 'admission did not recover'
 [[ $(<"$bridge_count_file") == 14 ]] || fail 'admission retry count drifted'
@@ -108,7 +130,7 @@ grep -Fq 'owner promotion work is unavailable' "$temporary_directory/promotion.s
   fail 'promotion timeout did not fail closed'
 
 if grep -R -Fq 'raw-secret-must-not-leak' \
-  "$temporary_directory/admission.stderr" "$temporary_directory/promotion.stderr"; then
+  "$temporary_directory/no-work.stderr" "$temporary_directory/admission.stderr" "$temporary_directory/promotion.stderr"; then
   fail 'raw bridge stderr reached operator diagnostics'
 fi
 if grep -vxq '600' "$stderr_mode_file"; then

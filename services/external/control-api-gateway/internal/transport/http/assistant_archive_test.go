@@ -12,6 +12,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type assistantSearchRecorder struct {
+	*httptest.ResponseRecorder
+	defaultTitle string
+}
+
+func (recorder *assistantSearchRecorder) Localize(messageID string) string {
+	if messageID == "NEW_ASSISTANT_CONVERSATION" {
+		return recorder.defaultTitle
+	}
+	return messageID
+}
+
 func TestAssistantHistorySearchAndState(t *testing.T) {
 	for _, state := range []string{"ACTIVE", "CLOSED", "ARCHIVED"} {
 		value := cp.AssistantConversationState(cp.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+state])
@@ -26,6 +38,28 @@ func TestAssistantHistorySearchAndState(t *testing.T) {
 		if r.Query != query || r.State != value || !strings.Contains(w.Body.String(), `"state":"`+state+`"`) {
 			t.Fatal("history state/search mapping lost")
 		}
+	}
+	for _, test := range []struct {
+		name, title, query string
+	}{
+		{name: "russian", title: "Новый диалог", query: "новый"},
+		{name: "english", title: "New conversation", query: "CONVERS"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			client := &catalogRPCRecorder{response: &cp.ListAssistantConversationsResponse{}}
+			writer := &assistantSearchRecorder{ResponseRecorder: httptest.NewRecorder(), defaultTitle: test.title}
+			assistantCatalogHandler(client).ServeHTTP(writer, httptest.NewRequest(http.MethodGet, "/api/v1/assistant-conversations?query="+url.QueryEscape(test.query), nil))
+			request := client.request.(*cp.ListAssistantConversationsRequest)
+			if writer.Code != http.StatusOK || request.Query != test.query || !request.MatchLocalizedDefaultTitle {
+				t.Fatal("localized default assistant title search was not preserved")
+			}
+		})
+	}
+	client := &catalogRPCRecorder{response: &cp.ListAssistantConversationsResponse{}}
+	writer := &assistantSearchRecorder{ResponseRecorder: httptest.NewRecorder(), defaultTitle: "New conversation"}
+	assistantCatalogHandler(client).ServeHTTP(writer, httptest.NewRequest(http.MethodGet, "/api/v1/assistant-conversations?query=unrelated", nil))
+	if client.request.(*cp.ListAssistantConversationsRequest).MatchLocalizedDefaultTitle {
+		t.Fatal("unrelated assistant search expanded to the default title")
 	}
 	for _, query := range []string{"state=UNKNOWN", "state=UNSPECIFIED", "state=", "query=" + url.QueryEscape(strings.Repeat("я", 201)), "query=a%00b", "query=%FF"} {
 		client := &catalogRPCRecorder{}

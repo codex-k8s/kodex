@@ -44,7 +44,7 @@ func (server *Server) ListAssistantConversations(ctx context.Context, request *c
 	if state == "UNSPECIFIED" {
 		state = "ACTIVE"
 	}
-	items, next, err := server.service.ListAssistantConversations(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), State: state, Page: page(request.GetPage())})
+	items, next, err := server.service.ListAssistantConversations(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), State: state, MatchAssistantLocalizedDefaultTitle: request.GetMatchLocalizedDefaultTitle(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}

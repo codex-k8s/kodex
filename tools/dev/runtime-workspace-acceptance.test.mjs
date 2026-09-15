@@ -113,7 +113,7 @@ function fixture() {
           tool: "CODEX_SHELL",
           state: "SUCCEEDED",
           safeParameters: {
-            source: "AGENT",
+            source: "UNIFIED_EXEC_STARTUP",
             cwd_scope: "WORKSPACE",
             exit_code: "ZERO",
           },
@@ -157,6 +157,12 @@ function fixture() {
 
 test("Сопоставляет настоящий результат, owner metadata, tool event и runtime attempt", async () => {
   const data = fixture();
+  const contentPaths = [];
+  const getContent = data.parameters.getContent;
+  data.parameters.getContent = async (path, maximumBytes) => {
+    contentPaths.push(path);
+    return getContent(path, maximumBytes);
+  };
   const evidence = await verifyWorkspaceAcceptance(data.parameters);
   assert.equal(evidence.attempt, 2);
   assert.equal(evidence.checks.nativeAgentShell, "PASS");
@@ -164,6 +170,8 @@ test("Сопоставляет настоящий результат, owner meta
   assert.equal(evidence.artifacts.length, 3);
   assert.equal(evidence.quota, "NOT RUN");
   assert.ok(!JSON.stringify(evidence).includes(nonce));
+  assert.equal(contentPaths.length, 3);
+  assert.ok(contentPaths.every((path) => path.endsWith("/content?purpose=DOWNLOAD")));
 });
 
 function quotaFixture() {
