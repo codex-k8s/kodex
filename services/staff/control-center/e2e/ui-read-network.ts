@@ -215,7 +215,7 @@ export class ReadNetworkCorrelator<T extends object> {
       .failures.find((value) => value.requestSequence === item.sequence);
     return (
       failure?.code === "NETWORK_CHANGED" &&
-      failure.recoveredByExactSuccess === true
+      failure.recoveredByExactSuccess
     );
   }
   safeDiagnostics() {
