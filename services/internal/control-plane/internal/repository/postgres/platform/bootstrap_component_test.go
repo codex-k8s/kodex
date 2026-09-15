@@ -542,6 +542,28 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || rootTotal != 1 || len(rootNodes) != 1 || rootNodes[0].EntityRef != projectResult.Project.Ref {
 		t.Fatalf("list VFS project root: nodes=%#v total=%d err=%v", rootNodes, rootTotal, err)
 	}
+	globalRoot, globalRootTotal, _, err := service.ListVFSNodes(ctx, owner, query.Filter{
+		ResourceRef: "/projects", Page: query.Page{Size: 100},
+	})
+	if err != nil || globalRootTotal < 1 || len(globalRoot) < 1 {
+		t.Fatalf("list global VFS project root: nodes=%#v total=%d err=%v", globalRoot, globalRootTotal, err)
+	}
+	foundProject := false
+	for _, node := range globalRoot {
+		if node.Kind != "PROJECT" {
+			t.Fatalf("global VFS root returned a descendant: node=%#v", node)
+		}
+		foundProject = foundProject || node.EntityRef == projectResult.Project.Ref
+	}
+	if !foundProject {
+		t.Fatalf("global VFS root lost project %q: nodes=%#v", projectResult.Project.Ref, globalRoot)
+	}
+	missingNodes, missingTotal, _, err := service.ListVFSNodes(ctx, owner, query.Filter{
+		ResourceRef: "/projects/not-existing-safe-ref", Page: query.Page{Size: 20},
+	})
+	if err != nil || missingTotal != 0 || len(missingNodes) != 0 {
+		t.Fatalf("list missing VFS project: nodes=%#v total=%d err=%v", missingNodes, missingTotal, err)
+	}
 	agentNodes, agentTotal, _, err := service.ListVFSNodes(ctx, owner, query.Filter{
 		ProjectRef:  projectResult.Project.Ref,
 		ResourceRef: "/projects/" + projectResult.Project.Ref + "/agents", Page: query.Page{Size: 20},

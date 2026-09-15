@@ -5,6 +5,11 @@ WITH projects AS (
     WHERE project.organization_id = @organization_id::uuid
       AND project.lifecycle <> 'ARCHIVED'
       AND (@project_ref = '' OR project.ref = @project_ref)
+      AND (
+          @mode = 'SEARCH' AND (@path = '' OR @path = '/projects')
+          OR @path = '/projects'
+          OR project.ref = split_part(@path, '/', 3)
+      )
 ), context_bindings AS (
     SELECT binding.ref,agent.ref AS agent_ref,project.ref AS project_ref,bundle.ref AS entity_ref,
            revision.name,'SKILL'::text AS kind,'skills'::text AS folder,revision.digest,0::bigint AS size_bytes,binding.updated_at
@@ -236,9 +241,15 @@ WITH projects AS (
       AND artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
       AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid, 'agent.view', 'AGENT',
           agent.id, agent.project_id, agent.created_by, jsonb_build_object('PROJECT', agent.project_id::text), @evaluated_at, false)
+), scoped_nodes AS MATERIALIZED (
+    -- Корень организации не должен материализовать все Runs, artifacts и
+    -- context revisions до применения path. Литеральный kind позволяет
+    -- PostgreSQL удалить неприменимые UNION branches ещё в плане запроса.
+    SELECT * FROM nodes
+    WHERE @mode <> 'TREE' OR @path <> '/projects' OR kind = 'PROJECT'
 ), visible AS MATERIALIZED (
     SELECT filtered.*
-    FROM nodes filtered JOIN control_plane.catalog_access_targets target
+    FROM scoped_nodes filtered JOIN control_plane.catalog_access_targets target
       ON target.organization_id = @organization_id::uuid AND target.kind = filtered.access_kind AND target.ref = filtered.access_ref
     WHERE (@authority_project = '' OR target.project_id = NULLIF(@authority_project, '')::uuid)
       AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid,
