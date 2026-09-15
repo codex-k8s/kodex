@@ -129,6 +129,15 @@
       document.querySelector("#suspend").addEventListener("click", () => {
         window.dispatchEvent(new Event("pagehide"));
       });
+      window.runCompleteJSONProbe = async () => {
+        const response = await documentFetch(new Request("/complete-list"));
+        const value = await response.json();
+        return {
+          status: response.status,
+          count: value.items.length,
+          bodyUsed: response.bodyUsed,
+        };
+      };
       window.runTicketTransportProbe = async (count) => {
         let completed = 0;
         for (let index = 0; index < count; index += 1) {

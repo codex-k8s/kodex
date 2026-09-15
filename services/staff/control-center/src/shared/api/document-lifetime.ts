@@ -101,11 +101,11 @@ function responseWithLifetime(
   cancelTransport: (reason?: unknown) => void,
   disposeSignals: () => void,
 ): Response {
-  if (!response.body) {
+  const nativeBody = response.body;
+  if (!nativeBody) {
     disposeSignals();
     return response;
   }
-  const reader = response.body.getReader();
   const finalizerToken = {};
   let finished = false;
   const finish = () => {
@@ -114,48 +114,57 @@ function responseWithLifetime(
     disposeSignals();
     responseFinalizer.unregister(finalizerToken);
   };
-  const body = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const result = await reader.read();
-        if (result.done) {
+  let consumer = response;
+  let streamWrapped = false;
+  const streamBody = () => {
+    if (streamWrapped || consumer.bodyUsed || consumer.body?.locked)
+      return consumer.body;
+    streamWrapped = true;
+    const reader = nativeBody.getReader();
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          const result = await reader.read();
+          if (result.done) {
+            finish();
+            controller.close();
+            return;
+          }
+          controller.enqueue(result.value);
+        } catch (error) {
           finish();
-          controller.close();
-          return;
+          const reason: unknown = signal.reason;
+          controller.error(
+            signal.aborted
+              ? reason instanceof Error
+                ? reason
+                : new DOMException("Document request aborted", "AbortError")
+              : error,
+          );
         }
-        controller.enqueue(result.value);
-      } catch (error) {
-        finish();
-        const reason: unknown = signal.reason;
-        controller.error(
-          signal.aborted
-            ? reason instanceof Error
-              ? reason
-              : new DOMException("Document request aborted", "AbortError")
-            : error,
+      },
+      async cancel(reason) {
+        cancelTransport(
+          reason instanceof Error
+            ? reason
+            : new DOMException("Response body cancelled", "AbortError"),
         );
-      }
-    },
-    async cancel(reason) {
-      cancelTransport(
-        reason instanceof Error
-          ? reason
-          : new DOMException("Response body cancelled", "AbortError"),
-      );
-      try {
-        await reader.cancel(reason);
-      } catch (error) {
-        if (!signal.aborted) throw error;
-      } finally {
-        finish();
-      }
-    },
-  });
-  const consumer = new Response(body, {
-    headers: response.headers,
-    status: response.status,
-    statusText: response.statusText,
-  });
+        try {
+          await reader.cancel(reason);
+        } catch (error) {
+          if (!signal.aborted) throw error;
+        } finally {
+          finish();
+        }
+      },
+    });
+    consumer = new Response(body, {
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
+    });
+    return consumer.body;
+  };
   const cancellationError = (error: unknown): unknown => {
     if (!signal.aborted) return error;
     const reason: unknown = signal.reason;
@@ -164,39 +173,48 @@ function responseWithLifetime(
       : new DOMException("Document request aborted", "AbortError");
   };
   const consume = async <T>(operation: () => Promise<T>): Promise<T> => {
+    // Ошибка повторного чтения не завершает ещё активного потребителя.
+    const ownsConsumption = !consumer.bodyUsed && !consumer.body?.locked;
     try {
       return await operation();
     } catch (error) {
       throw cancellationError(error);
+    } finally {
+      if (ownsConsumption && consumer.bodyUsed) finish();
     }
   };
   const propertyValue = (source: object, property: PropertyKey): unknown =>
     (source as unknown as Record<PropertyKey, unknown>)[property];
-  const view = (bodyResponse: Response): Response =>
+  const view = (): Response =>
     new Proxy(response, {
       get(target, property) {
-        if (property === "body") return bodyResponse.body;
-        if (property === "bodyUsed") return bodyResponse.bodyUsed;
+        if (property === "body") return streamBody();
+        if (property === "bodyUsed") return consumer.bodyUsed;
         if (property === "arrayBuffer")
-          return () => consume(() => bodyResponse.arrayBuffer());
-        if (property === "blob")
-          return () => consume(() => bodyResponse.blob());
-        if (property === "bytes")
-          return () => consume(() => bodyResponse.bytes());
+          return () => consume(() => consumer.arrayBuffer());
+        if (property === "blob") return () => consume(() => consumer.blob());
+        if (property === "bytes") return () => consume(() => consumer.bytes());
         if (property === "formData")
-          return () => consume(() => bodyResponse.formData());
+          return () => consume(() => consumer.formData());
         if (property === "json")
-          return () => consume(() => bodyResponse.json() as Promise<unknown>);
-        if (property === "text")
-          return () => consume(() => bodyResponse.text());
-        if (property === "clone") return () => view(bodyResponse.clone());
+          return () => consume(() => consumer.json() as Promise<unknown>);
+        if (property === "text") return () => consume(() => consumer.text());
+        if (property === "clone")
+          return () =>
+            responseWithLifetime(
+              consumer.clone(),
+              signal,
+              cancelTransport,
+              finish,
+            );
         return propertyValue(target, property);
       },
     });
-  // Reader удерживает сам stream, поэтому cleanup не срабатывает, пока body
-  // читается даже если вызывающий больше не хранит объект Response.
-  responseFinalizer.register(body, finish, finalizerToken);
-  return view(consumer);
+  // Обычные json/text/bytes сохраняют нативный путь чтения. Stream pump
+  // создаётся только при явном доступе к body; непрочитанный ответ по-прежнему
+  // удерживает linked signal до отмены или освобождения самого потока.
+  responseFinalizer.register(nativeBody, finish, finalizerToken);
+  return view();
 }
 
 // Между interceptor и native fetch есть await в generated client. Повторно

@@ -20,6 +20,18 @@ test("synthetic: documentFetch сохраняет native transport до заве
   page,
 }) => {
   const staticRoot = resolve("dist-synthetic");
+  const successfulPaths = new Set(["/success", "/complete-list"]);
+  const failures: string[] = [];
+  const completed: string[] = [];
+  page.on("requestfailed", (request) => {
+    if (successfulPaths.has(new URL(request.url()).pathname))
+      failures.push(request.failure()?.errorText ?? "UNKNOWN");
+  });
+  page.on("requestfinished", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (successfulPaths.has(path)) completed.push(path);
+  });
+
   let receive!: (value: {
     method?: string;
     header?: string;
@@ -88,6 +100,15 @@ test("synthetic: documentFetch сохраняет native transport до заве
       });
       response.write("success-");
       setTimeout(() => response.end("body"), 10);
+      return;
+    }
+    if (address.pathname === "/complete-list") {
+      const payload = JSON.stringify({
+        items: Array.from({ length: 300 }, () => "fixture".repeat(64)),
+      });
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.write(payload.slice(0, 50000));
+      setTimeout(() => response.end(payload.slice(50000)), 10);
       return;
     }
     if (address.pathname === "/cancel-stream") {
@@ -183,6 +204,21 @@ test("synthetic: documentFetch сохраняет native transport до заве
         repeatName: "TypeError",
       }),
     );
+    await expect(
+      page.evaluate(() =>
+        (
+          window as unknown as {
+            runCompleteJSONProbe(): Promise<{
+              status: number;
+              count: number;
+              bodyUsed: boolean;
+            }>;
+          }
+        ).runCompleteJSONProbe(),
+      ),
+    ).resolves.toEqual({ status: 200, count: 300, bodyUsed: true });
+    await expect.poll(() => completed.length).toBe(2);
+    expect(failures).toEqual([]);
     await page.getByRole("button", { name: "Отменить response body" }).click();
     await expect(page.locator("#cancel-stream-outcome")).toHaveText(
       "cancelled",

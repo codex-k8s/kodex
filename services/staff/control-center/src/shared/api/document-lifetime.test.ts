@@ -231,6 +231,32 @@ describe("document request lifetime", () => {
         remove.mock.calls.some(([, removed]) => removed === listener),
       ).toBe(true);
   });
+  it("нативный JSON не блокирует body reader до чтения и освобождает listeners после полного ответа", async () => {
+    const response = new Response('{"count":6}', {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!response.body) throw new Error("Missing fixture body");
+    const reader = vi.spyOn(response.body, "getReader");
+    const json = vi.spyOn(response, "json");
+    const parent = new AbortController();
+    const source = new Request("https://kodex.example/api/v1/projects", {
+      signal: parent.signal,
+    });
+    const remove = vi.spyOn(source.signal, "removeEventListener");
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(response));
+    const result = await documentFetch(
+      retainRequestSignalParents(new Request(source), source),
+    );
+    expect(response.body.locked).toBe(false);
+    expect(remove).not.toHaveBeenCalled();
+    expect(reader).not.toHaveBeenCalled();
+    await expect(result.json()).resolves.toEqual({ count: 6 });
+    expect(json).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalled();
+    expect(result.bodyUsed).toBe(true);
+    await expect(result.json()).rejects.toBeInstanceOf(TypeError);
+  });
+
   it("регистрация идемпотентна, cleanup удаляет слушатели", () => {
     expect(installDocumentRequestLifetime(target as Window)).toBe(cleanup);
     cleanup();

@@ -12,6 +12,7 @@ import {
 async function fixture(mode: "ready" | "http" | "contract" | "cors" = "ready") {
   const root = resolve("dist-document-lifecycle");
   let apiReads = 0;
+  let overviewReads = 0;
   const foreign = createServer((_request, response) => {
     response.end("{}");
   });
@@ -23,6 +24,7 @@ async function fixture(mode: "ready" | "http" | "contract" | "cors" = "ready") {
     const url = new URL(request.url ?? "/", "http://fixture.invalid");
     if (url.pathname.startsWith("/api/v1/")) {
       apiReads++;
+      if (url.pathname === "/api/v1/overview") overviewReads++;
       const projects = Array.from({ length: 6 }, (_, index) => ({
         ref: `fixture-${String(index)}`,
         name: "Fixture",
@@ -115,6 +117,7 @@ async function fixture(mode: "ready" | "http" | "contract" | "cors" = "ready") {
   return {
     origin: `http://127.0.0.1:${String(address.port)}`,
     reads: () => apiReads,
+    overviewReads: () => overviewReads,
     close: async () => {
       server.closeAllConnections();
       foreign.closeAllConnections();
@@ -237,7 +240,11 @@ for (const mode of ["http", "contract", "cors"] as const) {
       await page.goto(`${server.origin}/projects`);
       await expect(page.locator(".project-list__item")).toHaveCount(6);
       await page.locator("#resume").click();
-      await expect(page.locator("#result")).toHaveText("error");
+      // CORS проходит шесть разрешённых read attempts: 10.3s задержек + HTTP.
+      await expect(page.locator("#result")).toHaveText("error", {
+        timeout: mode === "cors" ? 15_000 : 5_000,
+      });
+      expect(server.overviewReads()).toBe(mode === "cors" ? 6 : 1);
       await page.close();
     } finally {
       await server.close();
