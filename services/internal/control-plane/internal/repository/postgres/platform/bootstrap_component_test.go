@@ -577,6 +577,12 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || foundTotal != 1 || len(foundNodes) != 1 || foundNodes[0].EntityRef != agent.Ref {
 		t.Fatalf("search VFS agents: nodes=%#v total=%d err=%v", foundNodes, foundTotal, err)
 	}
+	globalFound, globalFoundTotal, _, err := service.SearchVFS(ctx, owner, query.Filter{
+		Query: "Managed configuration agent", Page: query.Page{Size: 20},
+	})
+	if err != nil || globalFoundTotal != 1 || len(globalFound) != 1 || globalFound[0].EntityRef != agent.Ref {
+		t.Fatalf("search global VFS agents: nodes=%#v total=%d err=%v", globalFound, globalFoundTotal, err)
+	}
 	models, modelTotal, modelNext, err := service.ListModelCapabilities(ctx, owner, "openai-codex", "", query.Filter{Page: query.Page{Size: 2}})
 	if err != nil || len(models) != 2 || modelTotal != 3 || modelNext == "" || models[0].ID != "future-model" || models[0].DefaultReasoningEffort != "adaptive" {
 		t.Fatalf("list model capabilities: models=%#v total=%d next=%q err=%v", models, modelTotal, modelNext, err)
