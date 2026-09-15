@@ -100,6 +100,7 @@ export const targetedVariants = [
   "assistant-history-shell-1440",
   "assistant-history-shell-768",
   "assistant-history-shell-390",
+  "geometry-home-ru-1920",
 ] as const;
 export function selectedVariants(
   raw: string | undefined,

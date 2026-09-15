@@ -124,7 +124,7 @@ describe("safe session boundary diagnostics", () => {
   });
   it("bounded events и возвращаемая копия сохраняют достоверность", () => {
     const diagnostics = new SessionBoundaryDiagnostics();
-    for (let i = 0; i < 129; i++)
+    for (let i = 0; i < 513; i++)
       diagnostics.observe("SESSION_READ", 200, fixture);
     expect(diagnostics.snapshot().overflow).toBe(1);
     const copied = diagnostics.snapshot().events[0]?.boundary;
