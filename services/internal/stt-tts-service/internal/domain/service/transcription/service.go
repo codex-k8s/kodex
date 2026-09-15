@@ -225,9 +225,11 @@ func validateCredential(credential value.Credential, policy value.Policy, now ti
 	if len(credential.APIKey) < 8 || len(credential.APIKey) > 16<<10 || credential.ProviderAccountRef != policy.ProviderAccountRef ||
 		credential.ProviderCredentialGeneration != policy.ProviderCredentialGeneration ||
 		subtle.ConstantTimeCompare([]byte(credential.ConfigDigestSHA256), []byte(policy.DigestSHA256)) != 1 ||
-		!now.Before(credential.ExpiresAt) || credential.ExpiresAt.After(policy.ExpiresAt) {
+		!now.Before(credential.ExpiresAt) || !now.Before(policy.ExpiresAt) {
 		return errs.ErrGrantRevoked
 	}
+	// Policy и credential получены по отдельным continuation одного родителя.
+	// Их сроки могут различаться; вложенные contexts ограничивают вызов минимумом.
 	return nil
 }
 

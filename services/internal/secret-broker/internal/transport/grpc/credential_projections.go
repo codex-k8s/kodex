@@ -202,17 +202,20 @@ func validProjectionIdentity(identity *internalrpcauthorityv1.AuthorityIdentity)
 
 func sameDelegatedAuthorityLocator(locator *sttv1.DelegatedAuthorityLocator, verified *internalrpcauthorityv1.VerifiedAuthorizationContext) bool {
 	if locator == nil || verified == nil || locator.GetExpiresAt() == nil || locator.GetExpiresAt().CheckValid() != nil ||
+		verified.GetExpiresAt() == nil || verified.GetExpiresAt().CheckValid() != nil ||
+		!verified.GetExpiresAt().AsTime().After(time.Now()) || verified.GetExpiresAt().AsTime().After(locator.GetExpiresAt().AsTime()) ||
 		uuid.Validate(locator.GetRequestId()) != nil || !validCorrelation(locator.GetCorrelationId()) {
 		return false
 	}
+	// Locator относится к родителю; issuer может сократить срок continuation.
+	// Проекция использует срок verified, поэтому locator не продлевает полномочия.
 	authority := verified.GetAuthority()
 	return locator.GetRootActorId() == authority.GetActor().GetId() && locator.GetTenantId() == authority.GetTenant().GetId() &&
 		locator.GetProjectId() == authority.GetProject().GetId() && locator.GetSourceRevision() == verified.GetSourceRevision() &&
 		locator.GetSourceDigestSha256() == verified.GetSourceDigestSha256() &&
 		sameProjectionProvenance(locator.GetActor(), authority.GetActor().GetProvenance()) &&
 		sameProjectionProvenance(locator.GetTenant(), authority.GetTenant().GetProvenance()) &&
-		((authority.GetProject() == nil && locator.GetProject() == nil) || sameProjectionProvenance(locator.GetProject(), authority.GetProject().GetProvenance())) &&
-		locator.GetExpiresAt().AsTime().Equal(verified.GetExpiresAt().AsTime())
+		((authority.GetProject() == nil && locator.GetProject() == nil) || sameProjectionProvenance(locator.GetProject(), authority.GetProject().GetProvenance()))
 }
 
 func sameProjectionProvenance(locator *sttv1.AuthorityIdentityProvenance, verified *internalrpcauthorityv1.AuthorityProvenance) bool {

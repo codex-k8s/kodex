@@ -671,6 +671,30 @@ for (const { width, height } of [
       page.getByRole("dialog", { name: "Kodex", exact: true }),
       false,
     );
+    const assistantGeometry = await page
+      .locator("#assistant-workspace")
+      .evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          width: rect.width / innerWidth,
+          height: rect.height / innerHeight,
+          horizontalMarginDifference: Math.abs(
+            rect.left - (innerWidth - rect.right),
+          ),
+          verticalMarginDifference: Math.abs(
+            rect.top - (innerHeight - rect.bottom),
+          ),
+          headerHeight: element
+            .querySelector(".assistant-drawer__header")
+            ?.getBoundingClientRect().height,
+        };
+      });
+    const expectedFraction = width <= 720 ? 1 : 0.92;
+    expect(assistantGeometry.width).toBeCloseTo(expectedFraction, 2);
+    expect(assistantGeometry.height).toBeCloseTo(expectedFraction, 2);
+    expect(assistantGeometry.horizontalMarginDifference).toBeLessThan(2);
+    expect(assistantGeometry.verticalMarginDifference).toBeLessThan(2);
+    expect(assistantGeometry.headerHeight).toBe(72);
     await expect
       .poll(() =>
         page.evaluate(

@@ -970,18 +970,18 @@ onBeforeUnmount(() => {
 }
 .assistant-drawer {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  inset: 4dvh 4vw;
   display: flex;
-  width: clamp(520px, 38vw, 640px);
-  max-width: calc(100vw - 32px);
-  height: 100dvh;
+  width: 92vw;
+  max-width: 92vw;
+  height: 92dvh;
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   background: var(--surface);
-  box-shadow: -18px 0 48px rgb(15 23 42 / 20%);
+  box-shadow: 0 18px 48px rgb(15 23 42 / 20%);
   outline: 0;
 }
 .assistant-drawer--plan {
@@ -1058,10 +1058,11 @@ onBeforeUnmount(() => {
   z-index: 4;
   top: 0;
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 0 72px;
   align-items: center;
   gap: 10px;
-  min-height: 64px;
+  height: 72px;
+  min-height: 72px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);

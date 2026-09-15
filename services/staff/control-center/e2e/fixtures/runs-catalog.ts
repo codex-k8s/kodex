@@ -16,15 +16,15 @@ export async function checkRunsCatalog(
   await page.route("**/api/v1/runs?**", async (route) => {
     const params = new URL(route.request().url()).searchParams;
     expect(params.get("projectRef")).toBe(projectRef);
-    if (params.get("pageSize") === "100") {
+    if (params.get("pageSize") === "6") {
       expect(params.getAll("states")).toEqual([]);
       expect(params.get("pageToken")).toBeNull();
       await route.fulfill({
         json: {
           items: [
-            ...Array.from({ length: 8 }, (_, index) => run(index)),
             ...(newRun ? [run(99)] : []),
-          ],
+            ...Array.from({ length: 6 }, (_, index) => run(index)),
+          ].slice(0, 6),
           nextPageToken: "",
         },
       });

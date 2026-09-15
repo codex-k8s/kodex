@@ -29,7 +29,7 @@ export async function checkHomeResults(
   });
   await page.route("**/api/v1/runs?**", async (route) => {
     const params = new URL(route.request().url()).searchParams;
-    if (params.get("pageSize") === "100") {
+    if (params.get("pageSize") === "6") {
       if (!initialRunsReleased) initialRuns = route;
       else await route.fulfill({ json: { items: [], total: 0 } });
       return;
