@@ -609,6 +609,17 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
         );
       throw error;
     }
+    const publicationResult = page.getByRole("dialog", {
+      name: "План публикации",
+      exact: true,
+    });
+    await expect(
+      publicationResult.locator('.publication-impact [data-state="APPLIED"]'),
+    ).toBeVisible();
+    await publicationResult
+      .getByRole("button", { name: "Закрыть", exact: true })
+      .click();
+    await expect(publicationResult).toBeHidden();
     await promptEditor
       .getByRole("button", { name: "История", exact: true })
       .click();
@@ -626,6 +637,9 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
     await integrationEditor
       .getByRole("button", { name: "Источник", exact: true })
       .click();
+    await integrationEditor
+      .locator(".configuration-editor__fields select")
+      .selectOption("YAML");
     await (await sourceEditor(page)).fill(integrationSource);
     await integrationEditor
       .getByRole("button", { name: "Форма", exact: true })
@@ -710,7 +724,9 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
       historyDialog.locator(".configuration-editor__revision"),
     ).not.toHaveCount(0);
     await historyDialog
-      .locator(`.configuration-editor__revision[data-revision-ref="${publishedRef}"]`)
+      .locator(
+        `.configuration-editor__revision[data-revision-ref="${publishedRef}"]`,
+      )
       .click();
     await mutation(
       page,
