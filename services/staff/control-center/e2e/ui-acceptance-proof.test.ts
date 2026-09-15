@@ -12,6 +12,7 @@ import {
   applicability,
   integrationPageShape,
   conditionFailure,
+  safeErrorMetrics,
   UIConditionError,
   selectedVariants,
   targetedVariants,
@@ -40,6 +41,22 @@ const variant: Variant = {
   timestampUTC: "2026-09-08T12:00:00.000Z",
 };
 const directories: string[] = [];
+test("safe error diagnostics сохраняет только закрытый класс", () => {
+  const assertion = Object.assign(new Error("private"), { matcherResult: {} });
+  expect(safeErrorMetrics(assertion)).toEqual({
+    errorAbort: false,
+    errorAssertion: true,
+    errorTimeout: false,
+    errorType: false,
+    errorOther: false,
+  });
+  expect(
+    safeErrorMetrics(new DOMException("private", "AbortError")),
+  ).toMatchObject({ errorAbort: true, errorOther: false });
+  expect(
+    JSON.stringify(safeErrorMetrics(new TypeError("private"))),
+  ).not.toContain("private");
+});
 test("RoleImage permission read пропускает только exact query body, не administration mutations", () => {
   const path = "/api/v1/administration/access/effective-access/query";
   const body = {

@@ -77,6 +77,20 @@ export function conditionFailure(
     },
   };
 }
+export function safeErrorMetrics(error: unknown): Record<string, boolean> {
+  const name = error instanceof Error ? error.name : "";
+  const assertion =
+    error instanceof Error && name === "Error" && "matcherResult" in error;
+  return {
+    errorAbort: name === "AbortError",
+    errorAssertion: assertion,
+    errorTimeout: name === "TimeoutError",
+    errorType: name === "TypeError",
+    errorOther:
+      !["AbortError", "Error", "TimeoutError", "TypeError"].includes(name) ||
+      (name === "Error" && !assertion),
+  };
+}
 export const targetedVariants = [
   "route-integrations-ru-1440",
   "route-integrations-ru-390",

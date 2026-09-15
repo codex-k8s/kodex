@@ -657,7 +657,7 @@ const serverMessage = useServerMessage();
                   >
                     {{
                       $t("decisions.consequenceSummary", {
-                        summary: item.gate.consequencesSummary,
+                        summary: serverMessage(item.gate.consequencesSummary),
                       })
                     }}
                   </small>
@@ -916,7 +916,7 @@ const serverMessage = useServerMessage();
                   formatDate(event.occurredAt)
                 }}</time>
                 <strong>{{ event.initiator.displayName }}</strong>
-                <span>{{ event.safeSummary }}</span>
+                <span>{{ serverMessage(event.safeSummary) }}</span>
                 <code>{{ event.action }} · {{ event.outcome }}</code>
               </li>
             </ol>

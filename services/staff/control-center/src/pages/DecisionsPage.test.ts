@@ -88,7 +88,7 @@ const gate: OwnerGate = {
   nodeRef: "nod_offer_gate",
   title: "Утвердить отправку предложения",
   contextSummary: "Проверены цена, срок и состав работ.",
-  consequencesSummary: "После одобрения агент отправит предложение клиенту.",
+  consequencesSummary: "i18n:INTEGRATION_EFFECT_GATE_PROMPT",
   requestedBy: { ref: "agt_sales", displayName: "Менеджер продаж" },
   state: "OPEN",
   allowedDecisions: ["APPROVE", "REQUEST_CHANGES", "REJECT"],
@@ -127,7 +127,7 @@ const auditEvent: AuditEvent = {
   resourceRef: gate.ref,
   resourceName: gate.title,
   outcome: "SUCCEEDED",
-  safeSummary: "Запрос решения зарегистрирован",
+  safeSummary: "i18n:OWNER_GATE_REVIEW_PROMPT",
   occurredAt: "2026-08-29T10:05:00Z",
 };
 
@@ -210,6 +210,8 @@ describe("DecisionsPage", () => {
             actionsUnavailable: "Ответ недоступен",
             actionsUnavailableText: "Нет разрешённого действия",
           },
+          serverMessages:
+            applicationI18n.global.getLocaleMessage("ru").serverMessages,
           states: {
             OPEN: "Открыто",
             CLEAN: "Проверен",
@@ -231,7 +233,7 @@ describe("DecisionsPage", () => {
     expect(html).toContain("Согласование коммерческого предложения");
     expect(html).toContain("Проверены цена, срок и состав работ.");
     expect(html).toContain(
-      "После одобрения агент отправит предложение клиенту.",
+      "Проверьте последствия внешнего действия и примите решение",
     );
     expect(html).toContain("Менеджер продаж");
     expect(html).toContain("Согласование коммерческого предложения");
@@ -239,7 +241,8 @@ describe("DecisionsPage", () => {
     expect(html).toContain("Сессия");
     expect(html).toContain("Попытка 1");
     expect(html).toContain("Инициатор Run");
-    expect(html).toContain("Запрос решения зарегистрирован");
+    expect(html).toContain("Проверьте результат и примите решение");
+    expect(html).not.toContain("i18n:");
     expect(html).toContain("OWNER_GATE_OPENED · SUCCEEDED");
     expect(html.match(/type="radio"/g)).toHaveLength(3);
     expect(html).toContain('data-state="APPROVED"');

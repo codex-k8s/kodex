@@ -42,6 +42,7 @@ import {
   createJournal,
   integrationPageShape,
   conditionFailure,
+  safeErrorMetrics,
   selectedVariants,
   type Condition,
   permittedRequest,
@@ -413,6 +414,7 @@ test("широкая UI-приёмка сохраняет независимые
         "UI_ASSERTION_FAILED",
         {
           ...failure.metrics,
+          ...safeErrorMetrics(error),
           ...connectionShape,
           ...(await safeAlertMetrics(page).catch(() => ({}))),
           ...(await safeFocusMetrics(page).catch(() => ({}))),
