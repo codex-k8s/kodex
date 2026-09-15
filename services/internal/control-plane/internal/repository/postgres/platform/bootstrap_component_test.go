@@ -575,9 +575,15 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 			t.Fatalf("owner managed prompt history was unexpectedly redacted: %#v", revision)
 		}
 	}
-	_, remainingHistory, remainingTotal, remainingNext, err := service.ListManagedConfigurationHistory(ctx, owner, created.ManagedConfiguration.Ref, query.Page{Size: 2, Token: next})
+	if configuration.CurrentRevision == nil || configuration.CurrentRevision.State != "PUBLISHED" || configuration.CurrentRevision.Content == "" {
+		t.Fatal("owner prompt history is missing the readable published revision")
+	}
+	remainingConfiguration, remainingHistory, remainingTotal, remainingNext, err := service.ListManagedConfigurationHistory(ctx, owner, created.ManagedConfiguration.Ref, query.Page{Size: 2, Token: next})
 	if err != nil || len(remainingHistory) != 1 || remainingTotal != historyTotal || remainingNext != "" {
 		t.Fatalf("continue managed prompt history: history=%#v total=%d next=%q err=%v", remainingHistory, remainingTotal, remainingNext, err)
+	}
+	if remainingConfiguration.CurrentRevision == nil || remainingConfiguration.CurrentRevision.Ref != configuration.CurrentRevision.Ref || remainingConfiguration.CurrentRevision.Digest != configuration.CurrentRevision.Digest {
+		t.Fatal("later prompt history page lost the exact published revision")
 	}
 	testManagedPromptHistoryRedaction(t, ctx, repository, service, owner, projectResult.Project.Ref, created.ManagedConfiguration.Ref)
 	testManagedGitOwnership(t, ctx, service, pool, owner, *correctedRebound.ManagedConfiguration, effective.Ref)
@@ -612,6 +618,10 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 		Payload:  command.ManagedConfigurationInput{ConfigurationRef: sttCreated.ManagedConfiguration.Ref, RevisionRef: sttCreated.ManagedRevision.Ref}})
 	if err != nil || sttPublished.ManagedRevision == nil || sttPublished.ManagedRevision.State != "PUBLISHED" {
 		t.Fatalf("publish system STT draft: result=%#v err=%v", sttPublished, err)
+	}
+	sttHistory, _, _, _, err := service.ListManagedConfigurationHistory(ctx, owner, sttCreated.ManagedConfiguration.Ref, query.Page{Size: 1})
+	if err != nil || sttHistory.CurrentRevision == nil || sttHistory.CurrentRevision.Ref != sttPublished.ManagedRevision.Ref || sttHistory.CurrentRevision.Digest != sttPublished.ManagedRevision.Digest {
+		t.Fatalf("system STT history lost the published revision: %v", err)
 	}
 	sttImpact, err := service.GetManagedConfigurationImpact(ctx, owner, sttCreated.ManagedConfiguration.Ref, sttCreated.ManagedRevision.Ref, query.Filter{})
 	if err != nil || sttImpact.Digest == "" {
@@ -910,9 +920,12 @@ func testManagedPromptHistoryRedaction(
 	if int64(len(seenConfigurations)) != catalogTotal || !seenConfigurations[configurationRef] {
 		t.Fatal("managed catalog total or visibility mismatch")
 	}
-	_, history, total, _, err := service.ListManagedConfigurationHistory(ctx, reader, configurationRef, query.Page{Size: 20})
+	configuration, history, total, _, err := service.ListManagedConfigurationHistory(ctx, reader, configurationRef, query.Page{Size: 20})
 	if err != nil || total < 1 || len(history) < 1 {
 		t.Fatalf("read redacted prompt history: history=%#v total=%d err=%v", history, total, err)
+	}
+	if configuration.CurrentRevision == nil || configuration.CurrentRevision.State != "PUBLISHED" || configuration.CurrentRevision.Content != "" {
+		t.Fatal("metadata-only prompt history lost the published pointer or leaked its content")
 	}
 	for _, revision := range history {
 		if revision.Content != "" {

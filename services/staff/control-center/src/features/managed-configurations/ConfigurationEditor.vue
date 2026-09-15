@@ -1380,6 +1380,7 @@ watch(
           v-for="item in revisions"
           :key="item.ref"
           class="configuration-editor__revision"
+          :data-revision-ref="item.ref"
           @click="choose(item)"
         >
           <span>{{ $t("managed.revision", { revision: item.revision }) }}</span

@@ -710,9 +710,7 @@ test("UI lifecycle шаблона и Synthetic IntegrationDefinition без Git"
       historyDialog.locator(".configuration-editor__revision"),
     ).not.toHaveCount(0);
     await historyDialog
-      .locator(".configuration-editor__revision")
-      .filter({ hasText: "PUBLISHED" })
-      .first()
+      .locator(`.configuration-editor__revision[data-revision-ref="${publishedRef}"]`)
       .click();
     await mutation(
       page,
