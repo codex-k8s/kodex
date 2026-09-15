@@ -61,6 +61,29 @@ it("does not accept timeout, late abort, duplicate identity, method mismatch or 
     expect(c.confirmed(r), variant).toBe(false);
   }
 });
+it("отделяет восстановленное точное GET-чтение после смены сети от отмены", () => {
+  const c = new ReadNetworkCorrelator<object>(),
+    failed = {},
+    success = {};
+  c.request(failed, address, "GET", undefined);
+  c.failed(failed, "net::ERR_NETWORK_CHANGED", 20);
+  c.request(success, address, "GET", undefined);
+  c.succeeded(success, 200, 30);
+  c.terminal(success, 31);
+  expect(c.recovered(failed)).toBe(true);
+  expect(c.confirmed(failed)).toBe(false);
+  expect(c.snapshot()).toMatchObject({
+    rawFailedRequests: 1,
+    confirmedCancellations: 0,
+    recoveredReadFailures: 1,
+    unexplainedFailures: 0,
+  });
+  expect(c.safeDiagnostics().failures[0]).toMatchObject({
+    code: "NETWORK_CHANGED",
+    exactCancellation: false,
+    exactReadRecovery: true,
+  });
+});
 it("navigation intent without a committed document never proves API cancellation", () => {
   const c = new ReadNetworkCorrelator<object>(),
     r = {};

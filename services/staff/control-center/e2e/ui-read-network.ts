@@ -63,6 +63,7 @@ export class ReadNetworkCorrelator<T extends object> {
   private readonly ids = new Map<string, Set<T>>();
   private readonly seen = new WeakSet<T>();
   private readonly finalized = new WeakMap<T, boolean>();
+  private readonly finalizedRecovery = new WeakMap<T, boolean>();
   // Watermark нужен после удаления private identity: поздний callback/повтор
   // прежнего ID не становится новой причиной отмены. Незавершённые ID сохранены.
   private readonly retired = new Map<string, number>();
@@ -70,6 +71,7 @@ export class ReadNetworkCorrelator<T extends object> {
   private checkpointSequence = 0;
   private completedFailures = 0;
   private completedConfirmed = 0;
+  private completedRecovered = 0;
   private events = 0;
   private overflow = 0;
   observe(event: ReadSignalEvent): void {
@@ -148,6 +150,9 @@ export class ReadNetworkCorrelator<T extends object> {
     if (item) item.terminal = at;
     this.documents.terminal(request, at);
   }
+  succeeded(request: T, status: number, at = Date.now()): void {
+    this.diagnostics.succeeded(request, status, at);
+  }
   failed(request: T, code: string, at = Date.now()): void {
     const item = this.requests.get(request);
     if (item && item.failed === undefined && item.terminal === undefined) {
@@ -200,6 +205,19 @@ export class ReadNetworkCorrelator<T extends object> {
       signal.rejected
     );
   }
+  recovered(request: T): boolean {
+    const finalized = this.finalizedRecovery.get(request);
+    if (finalized !== undefined) return finalized;
+    const item = this.requests.get(request);
+    if (!item || item.failed === undefined || item.method !== "GET") return false;
+    const failure = this.diagnostics
+      .snapshot()
+      .failures.find((value) => value.requestSequence === item.sequence);
+    return (
+      failure?.code === "NETWORK_CHANGED" &&
+      failure.recoveredByExactSuccess === true
+    );
+  }
   safeDiagnostics() {
     const snapshot = this.diagnostics.snapshot();
     return {
@@ -214,6 +232,7 @@ export class ReadNetworkCorrelator<T extends object> {
         return {
           ...failure,
           exactCancellation: entry ? this.confirmed(entry[0]) : false,
+          exactReadRecovery: entry ? this.recovered(entry[0]) : false,
           nativeIdentityKnown: !!signal && !signal.invalid,
           nativeAbortObserved: signal?.abort !== undefined,
           nativeRejected: signal?.rejected ?? false,
@@ -256,9 +275,12 @@ export class ReadNetworkCorrelator<T extends object> {
       if (item.terminal === undefined) continue;
       if (item.failed !== undefined) {
         const confirmed = this.confirmed(request);
+        const recovered = this.recovered(request);
         this.finalized.set(request, confirmed);
+        this.finalizedRecovery.set(request, recovered);
         this.completedFailures++;
         if (confirmed) this.completedConfirmed++;
+        if (recovered) this.completedRecovered++;
       }
       if (item.id) {
         this.retireIdentity(item.id);
@@ -279,6 +301,8 @@ export class ReadNetworkCorrelator<T extends object> {
     const failed = [...this.requests.entries()].filter(
       ([, item]) => item.failed !== undefined,
     );
+    const confirmed = failed.filter(([request]) => this.confirmed(request));
+    const recovered = failed.filter(([request]) => this.recovered(request));
     return {
       observedRequests: this.observed,
       retainedRequests: this.requests.size,
@@ -290,12 +314,15 @@ export class ReadNetworkCorrelator<T extends object> {
         this.diagnostics.snapshot().overflow,
       rawFailedRequests: this.completedFailures + failed.length,
       confirmedCancellations:
-        this.completedConfirmed +
-        failed.filter(([request]) => this.confirmed(request)).length,
+        this.completedConfirmed + confirmed.length,
+      recoveredReadFailures: this.completedRecovered + recovered.length,
       unexplainedFailures:
         this.completedFailures -
-        this.completedConfirmed +
-        failed.filter(([request]) => !this.confirmed(request)).length,
+        this.completedConfirmed -
+        this.completedRecovered +
+        failed.filter(
+          ([request]) => !this.confirmed(request) && !this.recovered(request),
+        ).length,
     };
   }
 }
@@ -481,6 +508,9 @@ export async function installReadNetworkObserver(
       );
   });
   page.on("requestfinished", (request) => observer.terminal(request));
+  page.on("response", (response) =>
+    observer.succeeded(response.request(), response.status()),
+  );
   page.on("requestfailed", (request) =>
     observer.failed(request, request.failure()?.errorText ?? "UNKNOWN"),
   );

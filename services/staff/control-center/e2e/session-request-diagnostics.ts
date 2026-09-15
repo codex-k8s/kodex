@@ -36,6 +36,7 @@ const errors = new Map([
   ["net::ERR_FAILED", "NETWORK_FAILED"],
   ["net::ERR_CONNECTION_RESET", "CONNECTION_RESET"],
   ["net::ERR_CONNECTION_CLOSED", "CONNECTION_CLOSED"],
+  ["net::ERR_NETWORK_CHANGED", "NETWORK_CHANGED"],
   ["net::ERR_BLOCKED_BY_CLIENT", "BLOCKED_BY_CLIENT"],
 ]);
 const routes: Record<string, string> = {
@@ -167,6 +168,7 @@ export class SessionRequestDiagnostics<T extends object> {
               "CHROMIUM_ABORTED",
               "FIREFOX_ABORTED",
               "WEBKIT_CANCELLED",
+              "NETWORK_CHANGED",
             ].includes(failure.code) &&
             (this.successes.get(identitySHA256) ?? 0) > failedAt,
         }),

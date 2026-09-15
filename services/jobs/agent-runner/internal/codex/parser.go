@@ -1149,6 +1149,18 @@ func optionalDuration(fields map[string]json.RawMessage, key string) (int64, boo
 }
 
 func (state *protocolState) workspaceScope(pathValue string) string {
+	// filepath.Rel возвращает "." для точного корня workspace. Для cwd это
+	// допустимая граница, хотя safeWorkspacePath отклоняет корень как путь файла.
+	if state.workspaceRoot != "" && pathValue != "" && utf8.ValidString(pathValue) {
+		cleanRoot := filepath.Clean(state.workspaceRoot)
+		cleanPath := filepath.Clean(pathValue)
+		if !filepath.IsAbs(cleanPath) {
+			cleanPath = filepath.Join(cleanRoot, cleanPath)
+		}
+		if cleanPath == cleanRoot {
+			return "WORKSPACE"
+		}
+	}
 	if _, ok := state.safeWorkspacePath(pathValue); ok {
 		return "WORKSPACE"
 	}
