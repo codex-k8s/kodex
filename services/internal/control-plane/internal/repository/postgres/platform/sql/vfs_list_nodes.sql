@@ -245,23 +245,44 @@ WITH projects AS (
     -- Корень организации не должен материализовать все Runs, artifacts и
     -- context revisions до применения path. Литеральный kind позволяет
     -- PostgreSQL удалить неприменимые UNION branches ещё в плане запроса.
+    -- Поиск также отсекает несовпавшие узлы до дорогой проверки полномочий.
+    -- Skill остаётся кандидатом: совпадение может находиться в его файле,
+    -- который безопасно раскрывается только на следующем шаге.
     SELECT * FROM nodes
-    WHERE @mode <> 'TREE' OR @path <> '/projects' OR kind = 'PROJECT'
-), visible AS MATERIALIZED (
-    SELECT filtered.*
-    FROM scoped_nodes filtered JOIN control_plane.catalog_access_targets target
-      ON target.organization_id = @organization_id::uuid AND target.kind = filtered.access_kind AND target.ref = filtered.access_ref
+    WHERE (@mode <> 'TREE' OR @path <> '/projects' OR kind = 'PROJECT')
+      AND (@mode <> 'SEARCH' OR kind = 'SKILL' OR (
+          (@path = '' OR starts_with(path, @path || '/') OR path = @path)
+          AND (@query = '' OR strpos(lower(name), lower(@query)) > 0 OR strpos(lower(path), lower(@query)) > 0)
+      ))
+), authorized_targets AS MATERIALIZED (
+    -- Несколько виртуальных узлов могут принадлежать одному ресурсу.
+    -- Проверяем его полномочия один раз и присоединяем разрешённый набор.
+    SELECT candidate.access_kind, candidate.access_ref
+    FROM (SELECT DISTINCT access_kind, access_ref FROM scoped_nodes) candidate
+    JOIN control_plane.catalog_access_targets target
+      ON target.organization_id = @organization_id::uuid
+     AND target.kind = candidate.access_kind AND target.ref = candidate.access_ref
     WHERE (@authority_project = '' OR target.project_id = NULLIF(@authority_project, '')::uuid)
       AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid,
-          CASE filtered.access_kind WHEN 'PROJECT' THEN 'project.view' WHEN 'AGENT' THEN 'agent.view'
+          CASE candidate.access_kind WHEN 'PROJECT' THEN 'project.view' WHEN 'AGENT' THEN 'agent.view'
             WHEN 'WORKFLOW' THEN 'workflow.view' WHEN 'RUN' THEN 'run.view' WHEN 'ARTIFACT' THEN 'artifact.view'
             WHEN 'SCHEDULE' THEN 'schedule.view' ELSE '' END,
-          target.kind, target.id, target.project_id, target.owner_id, target.related_ids, @evaluated_at, filtered.access_kind IN ('PROJECT','ARTIFACT'))
-      AND (filtered.run_ref = '' OR filtered.access_kind = 'RUN' OR EXISTS (
-          SELECT 1 FROM control_plane.catalog_access_targets parent
-          WHERE parent.organization_id = @organization_id::uuid AND parent.kind = 'RUN' AND parent.ref = filtered.run_ref
-            AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid, 'run.view', 'RUN',
-                parent.id, parent.project_id, parent.owner_id, parent.related_ids, @evaluated_at, false)
+          target.kind, target.id, target.project_id, target.owner_id, target.related_ids, @evaluated_at,
+          candidate.access_kind IN ('PROJECT','ARTIFACT'))
+), authorized_runs AS MATERIALIZED (
+    SELECT candidate.run_ref
+    FROM (SELECT DISTINCT run_ref FROM scoped_nodes WHERE run_ref <> '' AND access_kind <> 'RUN') candidate
+    JOIN control_plane.catalog_access_targets target
+      ON target.organization_id = @organization_id::uuid AND target.kind = 'RUN' AND target.ref = candidate.run_ref
+    WHERE control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid, 'run.view', 'RUN',
+        target.id, target.project_id, target.owner_id, target.related_ids, @evaluated_at, false)
+), visible AS MATERIALIZED (
+    SELECT filtered.*
+    FROM scoped_nodes filtered
+    JOIN authorized_targets target
+      ON target.access_kind = filtered.access_kind AND target.access_ref = filtered.access_ref
+    WHERE (filtered.run_ref = '' OR filtered.access_kind = 'RUN' OR EXISTS (
+          SELECT 1 FROM authorized_runs parent WHERE parent.run_ref = filtered.run_ref
       ))
 ), skill_files AS MATERIALIZED (
     SELECT parent.ref AS parent_ref,parent.path AS source_path,parent.project_ref,parent.run_ref,
@@ -307,14 +328,7 @@ WITH projects AS (
         COALESCE(artifact.lifecycle_state,bundle.state,memory.state,'ACTIVE') AS lifecycle_state,
         COALESCE(artifact.scan_state,skill_revision.scan_state,'') AS scan_state,
         CASE WHEN artifact.id IS NOT NULL THEN 'ARTIFACT' WHEN bundle.id IS NOT NULL THEN 'SKILL_BUNDLE'
-            WHEN memory.id IS NOT NULL THEN 'MEMORY_RECORD' ELSE '' END AS resource_kind,
-        EXISTS (
-            SELECT 1 FROM control_plane.catalog_access_targets target
-            WHERE target.organization_id=@organization_id::uuid AND target.kind=visible.access_kind AND target.ref=visible.access_ref
-              AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
-                  CASE visible.access_kind WHEN 'PROJECT' THEN 'project.manage' WHEN 'AGENT' THEN 'agent.manage' ELSE '' END,
-                  target.kind,target.id,target.project_id,target.owner_id,target.related_ids,@evaluated_at)
-        ) AS can_manage
+            WHEN memory.id IS NOT NULL THEN 'MEMORY_RECORD' ELSE '' END AS resource_kind
     FROM expanded visible
     LEFT JOIN control_plane.artifacts artifact ON artifact.organization_id=@organization_id::uuid AND visible.access_kind='ARTIFACT' AND artifact.ref=visible.entity_ref
     LEFT JOIN control_plane.agent_context_bindings binding ON binding.organization_id=@organization_id::uuid AND visible.ref='context-binding:'||binding.ref
@@ -340,6 +354,16 @@ WITH projects AS (
     SELECT * FROM filtered
     WHERE (@cursor_path = '' OR (path, ref) > (@cursor_path, @cursor_ref))
     ORDER BY path, ref LIMIT @page_size
+), result_page AS (
+    SELECT page.*,
+        EXISTS (
+            SELECT 1 FROM control_plane.catalog_access_targets target
+            WHERE target.organization_id=@organization_id::uuid AND target.kind=page.access_kind AND target.ref=page.access_ref
+              AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
+                  CASE page.access_kind WHEN 'PROJECT' THEN 'project.manage' WHEN 'AGENT' THEN 'agent.manage' ELSE '' END,
+                  target.kind,target.id,target.project_id,target.owner_id,target.related_ids,@evaluated_at)
+        ) AS can_manage
+    FROM page
 )
-SELECT COALESCE(jsonb_agg(to_jsonb(page) ORDER BY page.path, page.ref), '[]'::jsonb), (SELECT count(*) FROM filtered)
-FROM page;
+SELECT COALESCE(jsonb_agg(to_jsonb(result_page) ORDER BY result_page.path, result_page.ref), '[]'::jsonb), (SELECT count(*) FROM filtered)
+FROM result_page;
