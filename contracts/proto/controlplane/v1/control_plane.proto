@@ -2687,6 +2687,7 @@ message ListAssistantConversationsRequest {
   string project_ref = 2;
   string query = 3;
   AssistantConversationState state = 4;
+  bool match_localized_default_title = 5;
 }
 message ListAssistantConversationsResponse {
   repeated AssistantConversation conversations = 1;

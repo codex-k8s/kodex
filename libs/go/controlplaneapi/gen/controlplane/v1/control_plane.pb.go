@@ -25766,13 +25766,14 @@ func (x *GetSystemAssistantResponse) GetAssistant() *SystemAssistant {
 }
 
 type ListAssistantConversationsRequest struct {
-	state         protoimpl.MessageState     `protogen:"open.v1"`
-	Page          *PageRequest               `protobuf:"bytes,1,opt,name=page,proto3" json:"page,omitempty"`
-	ProjectRef    string                     `protobuf:"bytes,2,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
-	Query         string                     `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
-	State         AssistantConversationState `protobuf:"varint,4,opt,name=state,proto3,enum=controlplane.v1.AssistantConversationState" json:"state,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                      protoimpl.MessageState     `protogen:"open.v1"`
+	Page                       *PageRequest               `protobuf:"bytes,1,opt,name=page,proto3" json:"page,omitempty"`
+	ProjectRef                 string                     `protobuf:"bytes,2,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	Query                      string                     `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
+	State                      AssistantConversationState `protobuf:"varint,4,opt,name=state,proto3,enum=controlplane.v1.AssistantConversationState" json:"state,omitempty"`
+	MatchLocalizedDefaultTitle bool                       `protobuf:"varint,5,opt,name=match_localized_default_title,json=matchLocalizedDefaultTitle,proto3" json:"match_localized_default_title,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *ListAssistantConversationsRequest) Reset() {
@@ -25831,6 +25832,13 @@ func (x *ListAssistantConversationsRequest) GetState() AssistantConversationStat
 		return x.State
 	}
 	return AssistantConversationState_ASSISTANT_CONVERSATION_STATE_UNSPECIFIED
+}
+
+func (x *ListAssistantConversationsRequest) GetMatchLocalizedDefaultTitle() bool {
+	if x != nil {
+		return x.MatchLocalizedDefaultTitle
+	}
+	return false
 }
 
 type ListAssistantConversationsResponse struct {
@@ -75142,13 +75150,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"connection\"\x1b\n" +
 	"\x19GetSystemAssistantRequest\"\\\n" +
 	"\x1aGetSystemAssistantResponse\x12>\n" +
-	"\tassistant\x18\x01 \x01(\v2 .controlplane.v1.SystemAssistantR\tassistant\"\xcf\x01\n" +
+	"\tassistant\x18\x01 \x01(\v2 .controlplane.v1.SystemAssistantR\tassistant\"\x92\x02\n" +
 	"!ListAssistantConversationsRequest\x120\n" +
 	"\x04page\x18\x01 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12\x1f\n" +
 	"\vproject_ref\x18\x02 \x01(\tR\n" +
 	"projectRef\x12\x14\n" +
 	"\x05query\x18\x03 \x01(\tR\x05query\x12A\n" +
-	"\x05state\x18\x04 \x01(\x0e2+.controlplane.v1.AssistantConversationStateR\x05state\"\xa1\x01\n" +
+	"\x05state\x18\x04 \x01(\x0e2+.controlplane.v1.AssistantConversationStateR\x05state\x12A\n" +
+	"\x1dmatch_localized_default_title\x18\x05 \x01(\bR\x1amatchLocalizedDefaultTitle\"\xa1\x01\n" +
 	"\"ListAssistantConversationsResponse\x12L\n" +
 	"\rconversations\x18\x01 \x03(\v2&.controlplane.v1.AssistantConversationR\rconversations\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xd7\x01\n" +

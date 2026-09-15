@@ -48,9 +48,11 @@ export function classifyNoWorkLog(phase,output) {
  const operation=phase==='claim'?'claim':phase==='promote'?'claim-promotion':null;
  requireValue(operation&&typeof output==='string'&&output.length<=8192,'QUIESCE_NO_WORK_PROOF_REJECTED');
  const attempts=[1,...Array.from({length:10},(_,index)=>(index+1)*12)];
- const expected=[...attempts.map(attempt=>`image admission bridge claim retry: operation=${operation} attempt=${attempt}/120 class=no-work`),
-  `image admission failed: owner ${phase==='claim'?'admission':'promotion'} work is unavailable`];
- requireValue(fingerprint(output.trim().split('\n'))===fingerprint(expected),'QUIESCE_NO_WORK_PROOF_REJECTED');
+ const terminal=`image admission failed: owner ${phase==='claim'?'admission':'promotion'} work is unavailable`;
+ const legacy=[...attempts.map(attempt=>`image admission bridge claim retry: operation=${operation} attempt=${attempt}/120 class=no-work`),terminal];
+ const immediate=[`image admission bridge claim retry: operation=${operation} attempt=1/120 class=no-work`,terminal];
+ const actual=fingerprint(output.trim().split('\n'));
+ requireValue([legacy,immediate].some(expected=>fingerprint(expected)===actual),'QUIESCE_NO_WORK_PROOF_REJECTED');
  return 'NO_WORK';
 }
 

@@ -10,7 +10,8 @@ JOIN LATERAL control_plane.assistant_context_projection(c.organization_id,@actor
 WHERE c.organization_id=@organization_id::uuid AND c.created_by=@actor_id::uuid
   AND (@project_ref='' OR p.ref=@project_ref) AND c.state=@state
   AND (@authority_project='' OR c.project_id IS NULL OR c.project_id=NULLIF(@authority_project,'')::uuid)
-  AND (@query='' OR strpos(lower(c.title || ' ' || c.ref),lower(@query))>0)
+  AND (@query='' OR strpos(lower(c.title || ' ' || c.ref),lower(@query))>0
+    OR (@match_localized_default_title AND c.title='i18n:NEW_ASSISTANT_CONVERSATION'))
   AND ((p.id IS NULL AND control_plane.catalog_resource_visible(c.organization_id,@actor_id::uuid,
         'organization.view','ORGANIZATION',c.organization_id,NULL::uuid,NULL::uuid,'{}'::jsonb,@evaluated_at))
     OR (p.lifecycle='ACTIVE' AND control_plane.catalog_resource_visible(c.organization_id,@actor_id::uuid,

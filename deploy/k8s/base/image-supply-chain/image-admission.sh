@@ -271,9 +271,16 @@ claim_owner_work() {
       trap - EXIT HUP INT TERM
       return 0
     fi
+    classification=$(classify_claim_retry_error "$claim_retry_error_file")
+    # Отсутствие owner work является штатным пустым polling cycle. Долгое
+    # ожидание не изменит это состояние, но блокирует quiesce и следующий
+    # независимый release на весь Job deadline.
+    if [ "$classification" = no-work ]; then
+      emit_claim_retry_diagnostic "$operation" "$attempt" "$classification"
+      fail "$unavailable_reason"
+    fi
     if [ "$attempt" -eq 1 ] || [ "$attempt" -eq "$CLAIM_RETRY_ATTEMPT_LIMIT" ] ||
       [ $((attempt % CLAIM_RETRY_DIAGNOSTIC_INTERVAL)) -eq 0 ]; then
-      classification=$(classify_claim_retry_error "$claim_retry_error_file")
       emit_claim_retry_diagnostic "$operation" "$attempt" "$classification"
     fi
     attempt=$((attempt + 1))

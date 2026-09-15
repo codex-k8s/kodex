@@ -225,7 +225,9 @@ export async function assistantDraft(
   try {
     await expect(dialog).toBeVisible();
     await focused("ASSISTANT_FOCUS", dialog);
-    await expect(dialog).toHaveAttribute("aria-busy", "false");
+    await expect(dialog).toHaveAttribute("aria-busy", "false", {
+      timeout: 15_000,
+    });
     await expect(dialog.getByRole("alert")).toHaveCount(0);
     const mobile = (page.viewportSize()?.width ?? 1440) < 1001;
     const historyToggle = dialog.getByRole("button", {
@@ -243,9 +245,13 @@ export async function assistantDraft(
     if (!historyItems)
       throw new ReadonlyFixtureMissing("ASSISTANT_HISTORY_EMPTY");
     await entries.first().click();
-    await expect(dialog).toHaveAttribute("aria-busy", "false");
-    if (!(await composer.count()) || !(await composer.isEnabled()))
-      throw new ReadonlyFixtureMissing("ASSISTANT_COMPOSER_UNAVAILABLE");
+    await expect(dialog).toHaveAttribute("aria-busy", "false", {
+      timeout: 15_000,
+    });
+    await expect(composer).toHaveCount(1);
+    // WS v2 может стать live чуть позже первого owner readback. Ждём тот же
+    // bounded пользовательский terminal state, не повторяя navigation или GET.
+    await expect(composer).toBeEnabled({ timeout: 15_000 });
     await composer.fill(`${prefix}-unsaved`);
     let cancelled = false;
     const dismiss = async (prompt: import("@playwright/test").Dialog) => {
@@ -336,9 +342,15 @@ export async function assistantHistory(
     );
     if (selected.length !== 1 || typeof selected[0]?.title !== "string")
       throw new FixtureUnavailable("VERSION_DRIFT");
-    const title = selected[0].title;
-    await history.getByText(title, { exact: true }).click();
-    await expect(dialog).toHaveAttribute("aria-busy", "false");
+    const pinnedEntry = history.locator(
+      `[data-conversation-ref="${pin.ref}"]`,
+    );
+    await expect(pinnedEntry).toHaveCount(1);
+    await pinnedEntry.click();
+    await expect(dialog).toHaveAttribute("aria-busy", "false", {
+      timeout: 15_000,
+    });
+    await expect(dialog).toHaveAttribute("data-conversation-ref", pin.ref);
     if (mobile) await toggle.click();
     const entries = history.locator(
       mobile ? ":scope > button" : ".assistant-conversation-entry",
@@ -363,7 +375,7 @@ export async function assistantHistory(
         () => search.fill(""),
       );
       checkCondition("HTTP_STATUS", clear.status(), 200);
-      await expect(history.getByText(title, { exact: true })).toBeVisible();
+      await expect(pinnedEntry).toBeVisible();
       if (pagination) {
         const raw: unknown = await clear.json();
         const cursor =

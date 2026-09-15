@@ -31,6 +31,21 @@ func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *
 		t.Fatalf("history reader project: %v", err)
 	}
 	foreign := contextProjectReader(t, ctx, repository, service, owner, project.Project.Ref, "ASSISTANT")
+	defaultConversation, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "history-create-default"}, Payload: command.AssistantConversationInput{ProjectRef: project.Project.Ref}})
+	if err != nil || defaultConversation.Conversation == nil {
+		t.Fatalf("create default history fixture: %v", err)
+	}
+	withoutDefault, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Query: "New conversation", Page: query.Page{Size: 10}})
+	if err != nil || len(withoutDefault) != 0 {
+		t.Fatalf("localized title unexpectedly matched the stored message key: count=%d %v", len(withoutDefault), err)
+	}
+	withDefault, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{ProjectRef: project.Project.Ref, Query: "New conversation", MatchAssistantLocalizedDefaultTitle: true, Page: query.Page{Size: 10}})
+	if err != nil || len(withDefault) != 1 || withDefault[0].Ref != defaultConversation.Conversation.Ref {
+		t.Fatalf("localized default title search failed: count=%d %v", len(withDefault), err)
+	}
+	if _, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{MatchAssistantLocalizedDefaultTitle: true, Page: query.Page{Size: 10}}); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("default title expansion without a query was accepted: %v", err)
+	}
 	for _, key := range []string{"one", "two", "three"} {
 		created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "history-create-" + key}, Payload: command.AssistantConversationInput{}})
 		if err != nil || created.Conversation == nil {

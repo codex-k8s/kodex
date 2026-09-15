@@ -1591,7 +1591,7 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 			err := tx.QueryRow(ctx, queryCatalogArtifactsCount, pgx.StrictNamedArgs{
 				"authority_project": scope.authorityProjectID, "organization_id": scope.organizationID,
 				"project_ref": filter.ProjectRef, "run_ref": filter.ResourceRef, "actor_id": scope.actorID,
-				"role": scope.role,
+				"role":  scope.role,
 				"query": filter.Query, "lifecycle_state": lifecycleState, "artifact_type": artifactType,
 				"scan_state": scanState, "source_kind": sourceKind, "source_kinds": sourceKinds,
 			}).Scan(&total)
@@ -2098,7 +2098,9 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	if filter.State == "" {
 		filter.State = "ACTIVE"
 	}
-	if len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) || (filter.State != "ACTIVE" && filter.State != "CLOSED" && filter.State != "ARCHIVED") {
+	if len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) ||
+		(filter.MatchAssistantLocalizedDefaultTitle && filter.Query == "") ||
+		(filter.State != "ACTIVE" && filter.State != "CLOSED" && filter.State != "ARCHIVED") {
 		return nil, "", errs.ErrInvalid
 	}
 	scope, err := repository.resolveScope(ctx, principal)
@@ -2130,7 +2132,8 @@ func (repository *Repository) ListAssistantConversations(ctx context.Context, pr
 	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx, queryQueriesListassistantconversationsSelectAssistantConversationsOrganizationIdRef, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "actor_id": scope.actorID, "project_ref": filter.ProjectRef, "authority_project": scope.authorityProjectID,
-		"query": filter.Query, "state": filter.State, "evaluated_at": time.Now().UTC(), "cursor_at": cursorAt, "cursor_ref": cursorRef, "page_size": limit + 1})
+		"query": filter.Query, "match_localized_default_title": filter.MatchAssistantLocalizedDefaultTitle,
+		"state": filter.State, "evaluated_at": time.Now().UTC(), "cursor_at": cursorAt, "cursor_ref": cursorRef, "page_size": limit + 1})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
 	}

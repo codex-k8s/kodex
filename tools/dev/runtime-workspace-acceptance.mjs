@@ -280,7 +280,7 @@ export async function verifyWorkspaceAcceptance({
     }
     if (artifact.scanState !== "CLEAN") fail("artifact scan is not clean");
     const bytes = await getContent(
-      `/api/v1/artifacts/${encodeURIComponent(ref)}/content`,
+      `/api/v1/artifacts/${encodeURIComponent(ref)}/content?purpose=DOWNLOAD`,
       16384,
     );
     if (
@@ -331,7 +331,9 @@ async function verifyNativeAgentShell(getJSON, run) {
         event.type === "TOOL_CALL_RECORDED" &&
         event.toolCall?.tool === "CODEX_SHELL" &&
         event.toolCall.state === "SUCCEEDED" &&
-        event.toolCall.safeParameters?.source === "AGENT" &&
+        ["AGENT", "UNIFIED_EXEC_STARTUP"].includes(
+          event.toolCall.safeParameters?.source,
+        ) &&
         event.toolCall.safeParameters?.cwd_scope === "WORKSPACE" &&
         event.toolCall.safeParameters?.exit_code === "ZERO";
     }

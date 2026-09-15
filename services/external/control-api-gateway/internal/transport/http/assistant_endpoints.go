@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"net/http"
+	"strings"
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -30,7 +31,13 @@ func (server *Server) ListAssistantConversations(w http.ResponseWriter, r *http.
 	if !ok {
 		return
 	}
-	response, err := server.control.Assistant.ListAssistantConversations(r.Context(), &controlplanev1.ListAssistantConversationsRequest{ProjectRef: stringValue(p.ProjectRef), Query: stringValue(p.Query), State: state, Page: page(p.PageSize, p.PageToken)})
+	query := stringValue(p.Query)
+	matchLocalizedDefaultTitle := false
+	if localizer, ok := w.(interface{ Localize(string) string }); ok && strings.TrimSpace(query) != "" {
+		localized := localizer.Localize("NEW_ASSISTANT_CONVERSATION")
+		matchLocalizedDefaultTitle = strings.Contains(strings.ToLower(localized), strings.ToLower(strings.TrimSpace(query)))
+	}
+	response, err := server.control.Assistant.ListAssistantConversations(r.Context(), &controlplanev1.ListAssistantConversationsRequest{ProjectRef: stringValue(p.ProjectRef), Query: query, State: state, MatchLocalizedDefaultTitle: matchLocalizedDefaultTitle, Page: page(p.PageSize, p.PageToken)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
