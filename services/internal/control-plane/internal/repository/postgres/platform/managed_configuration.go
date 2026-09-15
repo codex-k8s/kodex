@@ -696,7 +696,7 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 	if err := hydrateConfigurationSource(ctx, tx, current.organizationID, &set); err != nil {
 		return entity.ManagedConfigurationSet{}, nil, 0, "", err
 	}
-	if set.currentRevisionID != "" && (set.Kind == revisionservice.KindRoleImage || set.Kind == revisionservice.KindIntegrationDefinition) {
+	if set.currentRevisionID != "" {
 		revision, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationCurrentRevision, current.organizationID, set.id, set.currentRevisionID))
 		if err != nil {
 			return entity.ManagedConfigurationSet{}, nil, 0, "", errs.ErrUnavailable
@@ -727,6 +727,14 @@ func (repository *Repository) ListManagedConfigurationHistory(ctx context.Contex
 		}
 		if includeContent && repository.requireAccess(ctx, tx, current, "prompt.full.view", fullTarget) != nil {
 			includeContent = false
+		}
+		if set.CurrentRevision != nil {
+			if !includeContent {
+				set.CurrentRevision.Content = ""
+			}
+			if err := repository.hydratePromptScopeTx(ctx, tx, current, set.CurrentRevision); err != nil {
+				return entity.ManagedConfigurationSet{}, nil, 0, "", err
+			}
 		}
 	}
 	cursor, err := decodeManagedHistoryCursor(page.Token, ref)
