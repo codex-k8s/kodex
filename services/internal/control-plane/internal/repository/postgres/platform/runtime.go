@@ -1587,7 +1587,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt, sessionID); err != nil {
+		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt,
+			sessionID, assistantConversationTitle(payload)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	}
@@ -1718,6 +1719,30 @@ func nonEmptyResult(payload command.CompleteExecutionInput) string {
 		return "i18n:RUN_COMPLETED"
 	}
 	return "i18n:" + payload.SafeErrorCode
+}
+
+func assistantConversationTitle(payload command.CompleteExecutionInput) string {
+	if !payload.Success {
+		return ""
+	}
+	text := strings.TrimSpace(payload.ResultSummary)
+	if text == "" || strings.HasPrefix(text, "i18n:") {
+		return ""
+	}
+	text = strings.TrimSpace(strings.TrimLeft(strings.Join(strings.Fields(text), " "), "#*->"))
+	const maximumRunes = 96
+	runes := []rune(text)
+	limit := min(len(runes), maximumRunes)
+	for index := 23; index < limit; index++ {
+		switch runes[index] {
+		case '.', '!', '?':
+			return strings.TrimSpace(string(runes[:index+1]))
+		}
+	}
+	if len(runes) <= maximumRunes {
+		return text
+	}
+	return strings.TrimSpace(string(runes[:maximumRunes]))
 }
 
 func runtimeSafeErrorCode(code string) bool {

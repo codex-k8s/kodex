@@ -6529,6 +6529,21 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
 		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
 	}
+	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	if err != nil {
+		t.Fatalf("list assistant conversations after completion: %v", err)
+	}
+	var completedConversation *entity.AssistantConversation
+	for index := range conversations {
+		if conversations[index].Ref == created.Conversation.Ref {
+			completedConversation = &conversations[index]
+			break
+		}
+	}
+	if completedConversation == nil || completedConversation.Title != "The configuration plan is ready for review." ||
+		completedConversation.TitleSource != "AGENT_PROPOSED" || completedConversation.TitleRevision != 2 {
+		t.Fatalf("assistant completion did not propose bounded title: %#v", completedConversation)
+	}
 	purgeImpact, err := service.GetArtifactImpact(ctx, owner, assistantInput.Ref, "PURGE")
 	if err != nil || !purgeImpact.Permitted || purgeImpact.AttachmentCount < 1 ||
 		purgeImpact.ActiveRuntimeCount != int64(len(purgeImpact.ActiveRuns)) || purgeImpact.ActiveRunsTruncated ||
