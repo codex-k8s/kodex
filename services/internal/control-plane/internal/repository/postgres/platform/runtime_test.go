@@ -161,6 +161,22 @@ func TestRuntimeSafeErrorCodeAcceptsMCPUnavailable(t *testing.T) {
 	}
 }
 
+func TestAssistantConversationTitleUsesSuccessfulBoundedAgentResult(t *testing.T) {
+	t.Parallel()
+
+	if title := assistantConversationTitle(command.CompleteExecutionInput{Success: false, ResultSummary: "Do not use"}); title != "" {
+		t.Fatalf("failed result proposed title %q", title)
+	}
+	if title := assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: "i18n:RUN_COMPLETED"}); title != "" {
+		t.Fatalf("localized fallback proposed title %q", title)
+	}
+	result := "  ## Подготовлен   подробный план настройки проекта.  В нём сохранены только выбранные изменения. " + strings.Repeat("Дальше. ", 30)
+	title := assistantConversationTitle(command.CompleteExecutionInput{Success: true, ResultSummary: result})
+	if title != "Подготовлен подробный план настройки проекта." || len([]rune(title)) > 96 {
+		t.Fatalf("assistant title = %q", title)
+	}
+}
+
 func TestDecodeRunUsageValidatesStoredTurnBreakdown(t *testing.T) {
 	t.Parallel()
 
