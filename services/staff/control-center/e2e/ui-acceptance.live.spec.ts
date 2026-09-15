@@ -1000,24 +1000,20 @@ test("широкая UI-приёмка сохраняет независимые
         "NOT RUN",
         "FIXTURE_UNAVAILABLE",
       );
-    await record(
-      "remaining-product-variants",
-      [
-        "MVP-UI-11",
-        "MVP-UI-16",
-        "MVP-UI-29",
-        "MVP-UI-35",
-        "MVP-UI-36",
-        "MVP-UI-47",
-        "MVP-UI-55",
-        "MVP-UI-57",
-        "MVP-UI-59",
-        "MVP-UI-60",
-        "MVP-UI-61",
-      ],
-      "NOT RUN",
-      "OUTSIDE_PROFILE",
-    );
+    for (const [id, requirement] of [
+      ["session-two-tab-natural-refresh", "MVP-UI-11"],
+      ["prompt-preview-runtime-input", "MVP-UI-16"],
+      ["agent-avatar-upload-lifecycle", "MVP-UI-29"],
+      ["runtime-semantic-slot-materialization", "MVP-UI-35"],
+      ["runtime-continuation-diff", "MVP-UI-36"],
+      ["publication-impact-selection", "MVP-UI-47"],
+      ["stt-runtime-deployment-readiness", "MVP-UI-55"],
+      ["stt-org-project-permission", "MVP-UI-57"],
+      ["stt-transport-boundary", "MVP-UI-59"],
+      ["stt-live-openai-browser", "MVP-UI-60"],
+      ["runtime-workspace-native-agent", "MVP-UI-61"],
+    ] as const)
+      await record(id, [requirement], "NOT RUN", "OUTSIDE_PROFILE");
   } finally {
     // Закрываем страницы до reporter/error-context; персональные данные не снимаются.
     network.setStage("COMPLETE");

@@ -1275,7 +1275,8 @@ watch(
     <ul
       v-if="revision?.validationDiagnostics.length"
       class="configuration-editor__diagnostics"
-      role="alert"
+      role="status"
+      aria-live="polite"
     >
       <li
         v-for="(diagnostic, index) in revision.validationDiagnostics"

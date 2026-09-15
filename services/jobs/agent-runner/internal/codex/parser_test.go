@@ -157,6 +157,25 @@ func TestNativeToolItemsProduceBoundedRedactedTimelineWithoutMCPDuplicates(t *te
 	}
 }
 
+func TestWorkspaceScopeAcceptsExactRootAndUnifiedExecStartup(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.workspaceRoot = "/workspace"
+	item := raw(`{"aggregatedOutput":"SECRET_OUTPUT","command":"printf SECRET_COMMAND","commandActions":[],"cwd":"/workspace","durationMs":25,"exitCode":0,"id":"call-shell-root","source":"unifiedExecStartup","status":"completed","type":"commandExecution"}`)
+	if err := state.consumeItem(item, false, 100); err != nil {
+		t.Fatalf("start exact workspace root: %v", err)
+	}
+	if err := state.consumeItem(item, true, 125); err != nil {
+		t.Fatalf("complete exact workspace root: %v", err)
+	}
+	if len(state.toolCalls) != 1 {
+		t.Fatalf("unexpected tool calls: %#v", state.toolCalls)
+	}
+	call := state.toolCalls["call-shell-root"]
+	if call.SafeParameters["cwd_scope"] != "WORKSPACE" || call.SafeParameters["source"] != "UNIFIED_EXEC_STARTUP" {
+		t.Fatalf("exact workspace root projection = %#v", call)
+	}
+}
+
 func TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.workspaceRoot = "/workspace"
