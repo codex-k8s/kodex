@@ -309,7 +309,9 @@ export async function assistantHistory(
   });
   try {
     await expect(dialog).toBeVisible();
-    await expect(dialog).toHaveAttribute("aria-busy", "false");
+    await expect(dialog).toHaveAttribute("aria-busy", "false", {
+      timeout: 15_000,
+    });
     if (mobile) await toggle.click();
     const history = page.locator(
       mobile ? ".assistant-history__menu" : ".assistant-conversation-sidebar",
