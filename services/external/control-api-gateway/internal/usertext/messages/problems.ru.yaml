@@ -265,7 +265,7 @@ INTEGRATION_RESPONSE_INVALID:
 INTEGRATION_RATE_LIMITED:
   other: Внешняя система временно ограничила частоту запросов
 NEW_ASSISTANT_CONVERSATION:
-  other: Новый разговор
+  other: Новый диалог
 ASSISTANT_CONVERSATION_CREATED:
   other: Разговор с помощником создан
 ASSISTANT_CONVERSATION_TITLE_UPDATED:

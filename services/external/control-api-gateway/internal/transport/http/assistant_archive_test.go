@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/usertext"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -25,6 +26,15 @@ func (recorder *assistantSearchRecorder) Localize(messageID string) string {
 }
 
 func TestAssistantHistorySearchAndState(t *testing.T) {
+	texts, err := usertext.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for locale, expected := range map[string]string{"ru": "Новый диалог", "en": "New conversation"} {
+		if actual := texts.Localize(locale, "NEW_ASSISTANT_CONVERSATION", nil); actual != expected {
+			t.Fatalf("default assistant title for %s=%q", locale, actual)
+		}
+	}
 	for _, state := range []string{"ACTIVE", "CLOSED", "ARCHIVED"} {
 		value := cp.AssistantConversationState(cp.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+state])
 		client := &catalogRPCRecorder{response: &cp.ListAssistantConversationsResponse{Conversations: []*cp.AssistantConversation{{Ref: "conv_fixture01", State: value}}}}
