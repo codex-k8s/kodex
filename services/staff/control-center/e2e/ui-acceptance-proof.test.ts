@@ -274,10 +274,10 @@ test("закрытая диагностика сохраняет измерен�
       .metrics,
   ).toEqual({ measurementAvailable: false, expected: true });
 });
-test("targeted профиль допускает только восемь read-only variants без fixture writes", () => {
+test("targeted профиль допускает только утверждённые read-only variants без fixture writes", () => {
   expect(selectedVariants(undefined, "1")).toBeUndefined();
   const selected = selectedVariants(targetedVariants.join(","), "0");
-  expect(selected?.size).toBe(8);
+  expect(selected?.size).toBe(targetedVariants.length);
   expect(selected?.has("fixture-create-project-0")).toBe(false);
   for (const raw of [
     "",

@@ -220,7 +220,9 @@ export async function emailAgentAcceptance({ phase, profile, journal, get, reque
   const component = (name) => { const values = diff.changes?.filter((c) => c.component === name); check(values?.length === 1, 'REVISION_COMPONENT_REQUIRED'); return values[0].current; };
   const configuration = component('RUNTIME_CONFIGURATION'); const policy = component('PROVIDER_POLICY');
   check(configuration.ref === plan.configurationRef && configuration.version === plan.configurationVersion && configuration.digest === plan.configurationDigest && policy.ref === plan.accountPolicyRef && policy.version === plan.accountPolicyVersion && policy.digest === plan.accountPolicyDigest && component('MODEL').ref === plan.model, 'RUNTIME_PLAN_CHANGED');
-  const graph = await get(`/api/v1/runs/${enc(run.ref)}/graph`);
+  const graphEnvelope = await get(`/api/v1/runs/${enc(run.ref)}/graph`);
+  check(graphEnvelope.run?.ref === run.ref && graphEnvelope.run.projectRef === profile.projectRef && graphEnvelope.run.sessionRef === run.sessionRef && graphEnvelope.run.attempt === run.attempt, 'GRAPH_RUN_CHANGED');
+  const graph = graphEnvelope.graph;
   const node = graph.nodes?.find((n) => n.ref === current.nodeRef);
   check(graph.runRef === run.ref && node?.runRef === run.ref && node.agentRef === agentRef && node.turnRef === revision.turnRef && node.attempt === run.attempt, 'NODE_BINDING_CHANGED');
   const old = saved(journal, 'capture');

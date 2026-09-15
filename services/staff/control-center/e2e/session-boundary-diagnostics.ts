@@ -2,7 +2,10 @@ import type { Page, Response } from "@playwright/test";
 
 const invalidMetadata = "Session boundary metadata is invalid";
 const maximumDelta = 366 * 86_400_000;
-const eventLimit = 128;
+// Полный последовательный Chrome profile выполняет несколько session reads
+// на каждый из 149 variants.
+// Лимит остаётся конечным, но не превращает штатную матрицу в ложный FAIL.
+const eventLimit = 512;
 
 export function safeSessionBoundary(value: unknown) {
   if (!value || typeof value !== "object") throw new Error(invalidMetadata);

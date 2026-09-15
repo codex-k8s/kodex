@@ -34,7 +34,16 @@ export async function combinedRuntimeBinding(profile,plan,launched,get) {
  const run=await get(`/api/v1/runs/${encodeURIComponent(launched.runRef)}`);
  check(run.ref===launched.runRef&&run.projectRef===profile.projectRef&&run.sessionRef===launched.sessionRef&&run.target?.ref===profile.agentRef&&run.attempt===launched.attempt,'COMBINED_RUN_CHANGED');
  if(run.state==='QUEUED')return {status:'PENDING',runRef:run.ref};
- const diff=await get(`/api/v1/runs/${encodeURIComponent(run.ref)}/runtime-revision-diff`),revision=diff.current;
+ let diff;
+ try {
+  diff=await get(`/api/v1/runs/${encodeURIComponent(run.ref)}/runtime-revision-diff`);
+ } catch(error) {
+  // RuntimeRevision публикуется после перехода Run в RUNNING. Короткое окно
+  // между этими двумя фактами не является terminal failure и не создаёт effect.
+  if(run.state==='RUNNING'&&error?.message==='READ_HTTP_404')return {status:'PENDING',runRef:run.ref};
+  throw error;
+ }
+ const revision=diff.current;
  check(revision?.runRef===run.ref&&revision.sessionRef===run.sessionRef&&revision.attempt===run.attempt&&/^[A-Za-z0-9_-]{8,128}$/.test(revision.turnRef??'')&&digest(revision.revisionDigest),'COMBINED_REVISION_CHANGED');
  const image=diff.changes?.find(c=>c.component==='IMAGE')?.current;
  check(image?.digest?.replace(/^sha256:/,'')===plan.combined.fixture.manifestDigest.slice(7),'COMBINED_IMAGE_CHANGED');
