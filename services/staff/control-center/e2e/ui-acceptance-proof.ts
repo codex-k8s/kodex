@@ -92,6 +92,7 @@ export function safeErrorMetrics(error: unknown): Record<string, boolean> {
   };
 }
 export const targetedVariants = [
+  "geometry-home-ru-1280",
   "route-integrations-ru-1440",
   "route-integrations-ru-390",
   "route-integrations-en-1440",
@@ -101,6 +102,11 @@ export const targetedVariants = [
   "assistant-history-shell-768",
   "assistant-history-shell-390",
   "geometry-home-ru-1920",
+  "geometry-home-en-1440",
+  "route-role-images-en-1440",
+  "project-1-secrets",
+  "project-1-files-trash",
+  "configuration-history-prompt-template",
 ] as const;
 export function selectedVariants(
   raw: string | undefined,
