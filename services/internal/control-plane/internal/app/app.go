@@ -22,6 +22,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/grpcserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
@@ -266,6 +267,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	grpcServer := grpc.NewServer(serverOptions...)
 	controlplanev1.RegisterPlatformQueryServiceServer(grpcServer, transport)
 	sttv1.RegisterTranscriptionPolicyProjectionServiceServer(grpcServer, transport)
+	if config.RPCProfile == transportprofile.TrustedCluster {
+		sttv1.RegisterTranscriptionAuthorityServiceServer(grpcServer, transport)
+	}
 	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)

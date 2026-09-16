@@ -8,6 +8,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/integration/provider/openai"
 )
 
@@ -23,6 +24,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile              string `env:"KODEX_RPC_PROFILE"`
 	Egress                  openai.EgressConfig
 	GRPCListen              string        `env:"STT_GRPC_LISTEN"`
 	TechnicalListen         string        `env:"STT_TECHNICAL_LISTEN"`
@@ -74,6 +76,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
+		return errors.New("STT RPC profile is unsupported")
+	}
 	if err := config.Egress.Validate(); err != nil {
 		return err
 	}
@@ -82,19 +87,25 @@ func (config Config) validate() error {
 			return errors.New("STT listen address is invalid")
 		}
 	}
-	if config.PolicyTarget != policyTarget || config.PolicyTLSServerName != policySNI ||
-		config.CredentialTarget != credentialTarget || config.CredentialTLSServerName != credentialSNI ||
-		config.AuthorityVerifierSocket != authorityclient.VerifierSocketPath ||
-		config.AuthorityVerifierUID != 29002 || config.AuthorityVerifierGID != 29000 ||
-		config.AuthorityIssuerSocket != authorityclient.IssuerSocketPath ||
-		config.AuthorityIssuerUID != 29001 || config.AuthorityIssuerGID != 29000 ||
+	if config.PolicyTarget != policyTarget || config.CredentialTarget != credentialTarget ||
 		config.RequestTimeout != requestTimeout || config.StartupTimeout != startupTimeout ||
 		config.ReadinessTimeout != readinessTimeout || config.ShutdownTimeout != shutdownTimeout {
 		return errors.New("STT configuration is invalid")
 	}
-	for _, path := range []string{config.SpoolDirectory, config.ServerCertificateFile, config.ServerPrivateKeyFile,
-		config.ClientCAFile, config.WorkloadCertificateFile, config.WorkloadPrivateKeyFile,
-		config.DependencyCAFile, config.AuthorityVerifierSocket, config.AuthorityIssuerSocket} {
+	paths := []string{config.SpoolDirectory}
+	if config.RPCProfile != transportprofile.TrustedCluster {
+		if config.PolicyTLSServerName != policySNI || config.CredentialTLSServerName != credentialSNI ||
+			config.AuthorityVerifierSocket != authorityclient.VerifierSocketPath ||
+			config.AuthorityVerifierUID != 29002 || config.AuthorityVerifierGID != 29000 ||
+			config.AuthorityIssuerSocket != authorityclient.IssuerSocketPath ||
+			config.AuthorityIssuerUID != 29001 || config.AuthorityIssuerGID != 29000 {
+			return errors.New("STT protected configuration is invalid")
+		}
+		paths = append(paths, config.ServerCertificateFile, config.ServerPrivateKeyFile,
+			config.ClientCAFile, config.WorkloadCertificateFile, config.WorkloadPrivateKeyFile,
+			config.DependencyCAFile, config.AuthorityVerifierSocket, config.AuthorityIssuerSocket)
+	}
+	for _, path := range paths {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("STT file path is invalid")
 		}

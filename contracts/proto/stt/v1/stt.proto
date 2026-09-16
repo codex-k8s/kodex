@@ -36,6 +36,41 @@ service TranscriptionPolicyProjectionService {
   rpc ResolveTranscriptionPolicy(ResolveTranscriptionPolicyRequest) returns (ResolveTranscriptionPolicyResponse);
 }
 
+// TranscriptionAuthorityService принадлежит Control Plane и регистрируется
+// только в явном trusted-cluster. Caller — только stt-tts-service по закрытому
+// registry и NetworkPolicy. OIDC credential передаётся внутренней metadata;
+// actor/tenant разрешает CP из проверенной сессии и собственного состояния.
+// Это read-only snapshot, не подписанный proof и не разрешение на чтение Secret.
+service TranscriptionAuthorityService {
+  // Проверяет platform.stt.use без требования настроенного AI-провайдера.
+  rpc ResolveTranscriptionAuthority(ResolveTranscriptionAuthorityRequest) returns (ResolveTranscriptionAuthorityResponse);
+  // Отдельно проверяет system.configuration.manage, не наследует право STT-use.
+  rpc ResolveTranscriptionCatalogAuthority(ResolveTranscriptionCatalogAuthorityRequest) returns (ResolveTranscriptionCatalogAuthorityResponse);
+}
+
+message ResolveTranscriptionAuthorityRequest {}
+message ResolveTranscriptionAuthorityResponse {
+  TrustedTranscriptionAuthority authority = 1;
+}
+message ResolveTranscriptionCatalogAuthorityRequest {}
+message ResolveTranscriptionCatalogAuthorityResponse {
+  TrustedTranscriptionAuthority authority = 1;
+}
+
+// Принимается только adapter явно выбранного trusted-cluster от exact CP service.
+// Request ID назначается сервером. Срок ограничен текущим RPC и 30 секундами;
+// policy/credential projection повторно проверяют сессию и domain ownership.
+// Scope org-only; request не может добавить project или назначить полномочия.
+message TrustedTranscriptionAuthority {
+  string rpc_profile = 1;
+  string request_id = 2;
+  string actor_id = 3;
+  string tenant_id = 4;
+  uint64 credential_revision = 5;
+  string permission = 6;
+  google.protobuf.Timestamp expires_at = 7;
+}
+
 // TranscriptionCredentialProjectionService — producer contract secret-broker
 // для #1024. Payload служит только locator/echo и не является authority. Для
 // вызова обязателен тот же delegated/continuation proof-контракт #1023.

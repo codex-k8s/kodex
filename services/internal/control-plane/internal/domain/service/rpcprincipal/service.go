@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/serviceidentity"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -68,12 +69,15 @@ func (service *Service) Resolve(ctx context.Context, input Input) (value.Princip
 	if workload == "" || strings.ContainsAny(workload, "/?#") {
 		return value.Principal{}, errs.ErrForbidden
 	}
-	principalInput := platformrepo.ProofPrincipalInput{CallerWorkload: workload, Operation: admission.OperationID, ProjectRef: input.ProjectRef, RequestDigestSHA256: input.RequestDigestSHA256}
+	principalInput := platformrepo.ProofPrincipalInput{RPCProfile: admission.RPCProfile, CallerWorkload: workload, Operation: admission.OperationID, ProjectRef: input.ProjectRef, RequestDigestSHA256: input.RequestDigestSHA256}
 	var credential oidcverifier.Principal
 	var generation uint64
 	switch admission.ActorMode {
 	case serviceidentity.UserActor:
-		if admission.Peer.SPIFFEID != gateway {
+		_, trustedSTT := platformrepo.TrustedSTTAuthorityPermission(workload, admission.OperationID)
+		trustedSTT = trustedSTT && admission.RPCProfile == transportprofile.TrustedCluster &&
+			admission.Permission == admission.OperationID && input.ProjectRef == "" && !admission.ProjectRequired
+		if admission.Peer.SPIFFEID != gateway && !trustedSTT {
 			return value.Principal{}, errs.ErrForbidden
 		}
 		token := strings.TrimPrefix(input.Authorization, "Bearer ")

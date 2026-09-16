@@ -20,8 +20,22 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	if input.Operation == sttModelCatalogOperation && (input.CallerWorkload != "control-api-gateway" || input.ProjectRef != "") {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
+	permission, trustedSTT := platformrepo.TrustedSTTAuthorityPermission(input.CallerWorkload, input.Operation)
+	if trustedSTT {
+		if input.RPCProfile == "trusted-cluster" {
+			if !repository.trustedCluster || input.ProjectRef != "" {
+				return platformrepo.ProofAuthority{}, errs.ErrForbidden
+			}
+		} else {
+			if repository.trustedCluster || input.Operation == platformrepo.TrustedSTTAuthorityOperation || input.Operation == platformrepo.TrustedSTTCatalogAuthorityOperation {
+				return platformrepo.ProofAuthority{}, errs.ErrForbidden
+			}
+			// Существующие protected policy/projection сохраняют прежний owner path.
+			trustedSTT = false
+		}
+	}
 	authority, err := repository.resolveProofIdentity(ctx, input)
-	if err != nil || input.Operation != sttModelCatalogOperation {
+	if err != nil || (input.Operation != sttModelCatalogOperation && !trustedSTT) {
 		return authority, err
 	}
 	principal, err := repository.ResolvePrincipal(ctx, value.Principal{ActorID: authority.ActorID, AuthorityTenant: authority.OrganizationID})
@@ -38,7 +52,10 @@ func (repository *Repository) ResolveProofAuthority(ctx context.Context, input p
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	// Каталог adapter не требует enabled STT, но использует тот же ACL, что editor.
-	if err := repository.requireAccess(ctx, tx, current, "organization.manage", organizationTarget(current.organizationRef)); err != nil {
+	if !trustedSTT {
+		permission = "organization.manage"
+	}
+	if err := repository.requireAccess(ctx, tx, current, permission, organizationTarget(current.organizationRef)); err != nil {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	return authority, nil

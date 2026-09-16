@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
@@ -14,6 +15,15 @@ const (
 	expectedAudience   = "urn:kodex:internal-rpc:control-plane"
 	expectedWorkloadID = "control-plane"
 )
+
+// TrustedPrincipal не разрешает включить доверенный профиль входным payload.
+func TrustedPrincipal(ctx context.Context, fullMethod string) (value.Principal, error) {
+	resolved, ok := ctx.Value(resolvedPrincipalKey{}).(resolvedPrincipal)
+	if !ok || resolved.profile != transportprofile.TrustedCluster {
+		return value.Principal{}, errors.New("trusted principal is unavailable")
+	}
+	return Principal(ctx, fullMethod)
+}
 
 func Principal(ctx context.Context, fullMethod string) (value.Principal, error) {
 	if resolved, ok := ctx.Value(resolvedPrincipalKey{}).(resolvedPrincipal); ok {

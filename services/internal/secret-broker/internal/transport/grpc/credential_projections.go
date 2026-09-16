@@ -112,13 +112,9 @@ func (server *Server) CheckRuntimeCredentialProjectionReadiness(ctx context.Cont
 }
 
 func (server *Server) ProjectTranscriptionCredential(ctx context.Context, request *sttv1.ProjectTranscriptionCredentialRequest) (*sttv1.ProjectTranscriptionCredentialResponse, error) {
-	authority, verified, err := verifiedProjectionAuthority(ctx, sttWorkloadID, sttSPIFFEID,
-		sttv1.TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName, sttCredentialOperation)
+	authority, ctx, err := transcriptionProjectionAuthority(ctx, request.GetAuthority())
 	if err != nil {
 		return nil, err
-	}
-	if !sameDelegatedAuthorityLocator(request.GetAuthority(), verified) {
-		return nil, status.Error(codes.PermissionDenied, "transcription delegated authority locator is invalid")
 	}
 	resolved, err := server.owner.ResolveTranscriptionCredentialProjection(ctx, &controlplanev1.ResolveTranscriptionCredentialProjectionRequest{
 		Authority: authority, ProviderAccountRef: request.GetProviderAccountRef(),

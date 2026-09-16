@@ -20,6 +20,7 @@ import (
 type resolvedPrincipalKey struct{}
 type resolvedPrincipal struct {
 	method    string
+	profile   string
 	principal value.Principal
 }
 
@@ -84,6 +85,6 @@ func ServiceIdentityUnary(authorizer AdmissionAuthorizer, resolver *rpcprincipal
 			}
 			return nil, status.Error(codes.PermissionDenied, "RPC domain authority rejected")
 		}
-		return handler(context.WithValue(ctx, resolvedPrincipalKey{}, resolvedPrincipal{method: info.FullMethod, principal: principal}), request)
+		return handler(context.WithValue(ctx, resolvedPrincipalKey{}, resolvedPrincipal{method: info.FullMethod, profile: admission.RPCProfile, principal: principal}), request)
 	}
 }

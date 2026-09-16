@@ -129,6 +129,262 @@ func (ProtectedPathStage) EnumDescriptor() ([]byte, []int) {
 	return file_stt_v1_stt_proto_rawDescGZIP(), []int{1}
 }
 
+type ResolveTranscriptionAuthorityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveTranscriptionAuthorityRequest) Reset() {
+	*x = ResolveTranscriptionAuthorityRequest{}
+	mi := &file_stt_v1_stt_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveTranscriptionAuthorityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveTranscriptionAuthorityRequest) ProtoMessage() {}
+
+func (x *ResolveTranscriptionAuthorityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveTranscriptionAuthorityRequest.ProtoReflect.Descriptor instead.
+func (*ResolveTranscriptionAuthorityRequest) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{0}
+}
+
+type ResolveTranscriptionAuthorityResponse struct {
+	state         protoimpl.MessageState         `protogen:"open.v1"`
+	Authority     *TrustedTranscriptionAuthority `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveTranscriptionAuthorityResponse) Reset() {
+	*x = ResolveTranscriptionAuthorityResponse{}
+	mi := &file_stt_v1_stt_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveTranscriptionAuthorityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveTranscriptionAuthorityResponse) ProtoMessage() {}
+
+func (x *ResolveTranscriptionAuthorityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveTranscriptionAuthorityResponse.ProtoReflect.Descriptor instead.
+func (*ResolveTranscriptionAuthorityResponse) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ResolveTranscriptionAuthorityResponse) GetAuthority() *TrustedTranscriptionAuthority {
+	if x != nil {
+		return x.Authority
+	}
+	return nil
+}
+
+type ResolveTranscriptionCatalogAuthorityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveTranscriptionCatalogAuthorityRequest) Reset() {
+	*x = ResolveTranscriptionCatalogAuthorityRequest{}
+	mi := &file_stt_v1_stt_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveTranscriptionCatalogAuthorityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveTranscriptionCatalogAuthorityRequest) ProtoMessage() {}
+
+func (x *ResolveTranscriptionCatalogAuthorityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveTranscriptionCatalogAuthorityRequest.ProtoReflect.Descriptor instead.
+func (*ResolveTranscriptionCatalogAuthorityRequest) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{2}
+}
+
+type ResolveTranscriptionCatalogAuthorityResponse struct {
+	state         protoimpl.MessageState         `protogen:"open.v1"`
+	Authority     *TrustedTranscriptionAuthority `protobuf:"bytes,1,opt,name=authority,proto3" json:"authority,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveTranscriptionCatalogAuthorityResponse) Reset() {
+	*x = ResolveTranscriptionCatalogAuthorityResponse{}
+	mi := &file_stt_v1_stt_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveTranscriptionCatalogAuthorityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveTranscriptionCatalogAuthorityResponse) ProtoMessage() {}
+
+func (x *ResolveTranscriptionCatalogAuthorityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveTranscriptionCatalogAuthorityResponse.ProtoReflect.Descriptor instead.
+func (*ResolveTranscriptionCatalogAuthorityResponse) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ResolveTranscriptionCatalogAuthorityResponse) GetAuthority() *TrustedTranscriptionAuthority {
+	if x != nil {
+		return x.Authority
+	}
+	return nil
+}
+
+// Принимается только adapter явно выбранного trusted-cluster от exact CP service.
+// Request ID назначается сервером. Срок ограничен текущим RPC и 30 секундами;
+// policy/credential projection повторно проверяют сессию и domain ownership.
+// Scope org-only; request не может добавить project или назначить полномочия.
+type TrustedTranscriptionAuthority struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	RpcProfile         string                 `protobuf:"bytes,1,opt,name=rpc_profile,json=rpcProfile,proto3" json:"rpc_profile,omitempty"`
+	RequestId          string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	ActorId            string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	TenantId           string                 `protobuf:"bytes,4,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	CredentialRevision uint64                 `protobuf:"varint,5,opt,name=credential_revision,json=credentialRevision,proto3" json:"credential_revision,omitempty"`
+	Permission         string                 `protobuf:"bytes,6,opt,name=permission,proto3" json:"permission,omitempty"`
+	ExpiresAt          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *TrustedTranscriptionAuthority) Reset() {
+	*x = TrustedTranscriptionAuthority{}
+	mi := &file_stt_v1_stt_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrustedTranscriptionAuthority) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrustedTranscriptionAuthority) ProtoMessage() {}
+
+func (x *TrustedTranscriptionAuthority) ProtoReflect() protoreflect.Message {
+	mi := &file_stt_v1_stt_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrustedTranscriptionAuthority.ProtoReflect.Descriptor instead.
+func (*TrustedTranscriptionAuthority) Descriptor() ([]byte, []int) {
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *TrustedTranscriptionAuthority) GetRpcProfile() string {
+	if x != nil {
+		return x.RpcProfile
+	}
+	return ""
+}
+
+func (x *TrustedTranscriptionAuthority) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *TrustedTranscriptionAuthority) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *TrustedTranscriptionAuthority) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *TrustedTranscriptionAuthority) GetCredentialRevision() uint64 {
+	if x != nil {
+		return x.CredentialRevision
+	}
+	return 0
+}
+
+func (x *TrustedTranscriptionAuthority) GetPermission() string {
+	if x != nil {
+		return x.Permission
+	}
+	return ""
+}
+
+func (x *TrustedTranscriptionAuthority) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
 type TranscribeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Body:
@@ -144,7 +400,7 @@ type TranscribeRequest struct {
 
 func (x *TranscribeRequest) Reset() {
 	*x = TranscribeRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[0]
+	mi := &file_stt_v1_stt_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -156,7 +412,7 @@ func (x *TranscribeRequest) String() string {
 func (*TranscribeRequest) ProtoMessage() {}
 
 func (x *TranscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[0]
+	mi := &file_stt_v1_stt_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -169,7 +425,7 @@ func (x *TranscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscribeRequest.ProtoReflect.Descriptor instead.
 func (*TranscribeRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{0}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *TranscribeRequest) GetBody() isTranscribeRequest_Body {
@@ -254,7 +510,7 @@ type TranscribeMetadata struct {
 
 func (x *TranscribeMetadata) Reset() {
 	*x = TranscribeMetadata{}
-	mi := &file_stt_v1_stt_proto_msgTypes[1]
+	mi := &file_stt_v1_stt_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -266,7 +522,7 @@ func (x *TranscribeMetadata) String() string {
 func (*TranscribeMetadata) ProtoMessage() {}
 
 func (x *TranscribeMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[1]
+	mi := &file_stt_v1_stt_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -279,7 +535,7 @@ func (x *TranscribeMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscribeMetadata.ProtoReflect.Descriptor instead.
 func (*TranscribeMetadata) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{1}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TranscribeMetadata) GetMediaType() string {
@@ -306,7 +562,7 @@ type TranscribeCommit struct {
 
 func (x *TranscribeCommit) Reset() {
 	*x = TranscribeCommit{}
-	mi := &file_stt_v1_stt_proto_msgTypes[2]
+	mi := &file_stt_v1_stt_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -318,7 +574,7 @@ func (x *TranscribeCommit) String() string {
 func (*TranscribeCommit) ProtoMessage() {}
 
 func (x *TranscribeCommit) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[2]
+	mi := &file_stt_v1_stt_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -331,7 +587,7 @@ func (x *TranscribeCommit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscribeCommit.ProtoReflect.Descriptor instead.
 func (*TranscribeCommit) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{2}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TranscribeCommit) GetSizeBytes() uint64 {
@@ -360,7 +616,7 @@ type TranscribeResponse struct {
 
 func (x *TranscribeResponse) Reset() {
 	*x = TranscribeResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[3]
+	mi := &file_stt_v1_stt_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -372,7 +628,7 @@ func (x *TranscribeResponse) String() string {
 func (*TranscribeResponse) ProtoMessage() {}
 
 func (x *TranscribeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[3]
+	mi := &file_stt_v1_stt_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -385,7 +641,7 @@ func (x *TranscribeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscribeResponse.ProtoReflect.Descriptor instead.
 func (*TranscribeResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{3}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TranscribeResponse) GetText() string {
@@ -431,7 +687,7 @@ type TranscriptionReceipt struct {
 
 func (x *TranscriptionReceipt) Reset() {
 	*x = TranscriptionReceipt{}
-	mi := &file_stt_v1_stt_proto_msgTypes[4]
+	mi := &file_stt_v1_stt_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -443,7 +699,7 @@ func (x *TranscriptionReceipt) String() string {
 func (*TranscriptionReceipt) ProtoMessage() {}
 
 func (x *TranscriptionReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[4]
+	mi := &file_stt_v1_stt_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -456,7 +712,7 @@ func (x *TranscriptionReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscriptionReceipt.ProtoReflect.Descriptor instead.
 func (*TranscriptionReceipt) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{4}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TranscriptionReceipt) GetRequestId() string {
@@ -565,7 +821,7 @@ type CheckReadinessRequest struct {
 
 func (x *CheckReadinessRequest) Reset() {
 	*x = CheckReadinessRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[5]
+	mi := &file_stt_v1_stt_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +833,7 @@ func (x *CheckReadinessRequest) String() string {
 func (*CheckReadinessRequest) ProtoMessage() {}
 
 func (x *CheckReadinessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[5]
+	mi := &file_stt_v1_stt_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +846,7 @@ func (x *CheckReadinessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckReadinessRequest.ProtoReflect.Descriptor instead.
 func (*CheckReadinessRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{5}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{10}
 }
 
 // Actor/organization назначаются проверенным transport context, не payload.
@@ -602,7 +858,7 @@ type GetModelCatalogRequest struct {
 
 func (x *GetModelCatalogRequest) Reset() {
 	*x = GetModelCatalogRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[6]
+	mi := &file_stt_v1_stt_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -614,7 +870,7 @@ func (x *GetModelCatalogRequest) String() string {
 func (*GetModelCatalogRequest) ProtoMessage() {}
 
 func (x *GetModelCatalogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[6]
+	mi := &file_stt_v1_stt_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -627,7 +883,7 @@ func (x *GetModelCatalogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetModelCatalogRequest.ProtoReflect.Descriptor instead.
 func (*GetModelCatalogRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{6}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{11}
 }
 
 type GetModelCatalogResponse struct {
@@ -639,7 +895,7 @@ type GetModelCatalogResponse struct {
 
 func (x *GetModelCatalogResponse) Reset() {
 	*x = GetModelCatalogResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[7]
+	mi := &file_stt_v1_stt_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -651,7 +907,7 @@ func (x *GetModelCatalogResponse) String() string {
 func (*GetModelCatalogResponse) ProtoMessage() {}
 
 func (x *GetModelCatalogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[7]
+	mi := &file_stt_v1_stt_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -664,7 +920,7 @@ func (x *GetModelCatalogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetModelCatalogResponse.ProtoReflect.Descriptor instead.
 func (*GetModelCatalogResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{7}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetModelCatalogResponse) GetCatalog() *TranscriptionModelCatalog {
@@ -683,7 +939,7 @@ type CheckReadinessResponse struct {
 
 func (x *CheckReadinessResponse) Reset() {
 	*x = CheckReadinessResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[8]
+	mi := &file_stt_v1_stt_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -695,7 +951,7 @@ func (x *CheckReadinessResponse) String() string {
 func (*CheckReadinessResponse) ProtoMessage() {}
 
 func (x *CheckReadinessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[8]
+	mi := &file_stt_v1_stt_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -708,7 +964,7 @@ func (x *CheckReadinessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckReadinessResponse.ProtoReflect.Descriptor instead.
 func (*CheckReadinessResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{8}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CheckReadinessResponse) GetReady() bool {
@@ -726,7 +982,7 @@ type CheckProtectedPathRequest struct {
 
 func (x *CheckProtectedPathRequest) Reset() {
 	*x = CheckProtectedPathRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	mi := &file_stt_v1_stt_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -738,7 +994,7 @@ func (x *CheckProtectedPathRequest) String() string {
 func (*CheckProtectedPathRequest) ProtoMessage() {}
 
 func (x *CheckProtectedPathRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[9]
+	mi := &file_stt_v1_stt_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -751,7 +1007,7 @@ func (x *CheckProtectedPathRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckProtectedPathRequest.ProtoReflect.Descriptor instead.
 func (*CheckProtectedPathRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{9}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{14}
 }
 
 type CheckProtectedPathResponse struct {
@@ -767,7 +1023,7 @@ type CheckProtectedPathResponse struct {
 
 func (x *CheckProtectedPathResponse) Reset() {
 	*x = CheckProtectedPathResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[10]
+	mi := &file_stt_v1_stt_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -779,7 +1035,7 @@ func (x *CheckProtectedPathResponse) String() string {
 func (*CheckProtectedPathResponse) ProtoMessage() {}
 
 func (x *CheckProtectedPathResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[10]
+	mi := &file_stt_v1_stt_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -792,7 +1048,7 @@ func (x *CheckProtectedPathResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckProtectedPathResponse.ProtoReflect.Descriptor instead.
 func (*CheckProtectedPathResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{10}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CheckProtectedPathResponse) GetReady() bool {
@@ -838,7 +1094,7 @@ type TranscriptionParameters struct {
 
 func (x *TranscriptionParameters) Reset() {
 	*x = TranscriptionParameters{}
-	mi := &file_stt_v1_stt_proto_msgTypes[11]
+	mi := &file_stt_v1_stt_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -850,7 +1106,7 @@ func (x *TranscriptionParameters) String() string {
 func (*TranscriptionParameters) ProtoMessage() {}
 
 func (x *TranscriptionParameters) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[11]
+	mi := &file_stt_v1_stt_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -863,7 +1119,7 @@ func (x *TranscriptionParameters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscriptionParameters.ProtoReflect.Descriptor instead.
 func (*TranscriptionParameters) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{11}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *TranscriptionParameters) GetLanguages() []string {
@@ -923,7 +1179,7 @@ type TranscriptionModelCatalog struct {
 
 func (x *TranscriptionModelCatalog) Reset() {
 	*x = TranscriptionModelCatalog{}
-	mi := &file_stt_v1_stt_proto_msgTypes[12]
+	mi := &file_stt_v1_stt_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -935,7 +1191,7 @@ func (x *TranscriptionModelCatalog) String() string {
 func (*TranscriptionModelCatalog) ProtoMessage() {}
 
 func (x *TranscriptionModelCatalog) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[12]
+	mi := &file_stt_v1_stt_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -948,7 +1204,7 @@ func (x *TranscriptionModelCatalog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscriptionModelCatalog.ProtoReflect.Descriptor instead.
 func (*TranscriptionModelCatalog) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{12}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *TranscriptionModelCatalog) GetVersion() string {
@@ -1020,7 +1276,7 @@ type TranscriptionModelProfile struct {
 
 func (x *TranscriptionModelProfile) Reset() {
 	*x = TranscriptionModelProfile{}
-	mi := &file_stt_v1_stt_proto_msgTypes[13]
+	mi := &file_stt_v1_stt_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1032,7 +1288,7 @@ func (x *TranscriptionModelProfile) String() string {
 func (*TranscriptionModelProfile) ProtoMessage() {}
 
 func (x *TranscriptionModelProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[13]
+	mi := &file_stt_v1_stt_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1045,7 +1301,7 @@ func (x *TranscriptionModelProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscriptionModelProfile.ProtoReflect.Descriptor instead.
 func (*TranscriptionModelProfile) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{13}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TranscriptionModelProfile) GetModel() string {
@@ -1147,7 +1403,7 @@ type DelegatedAuthorityLocator struct {
 
 func (x *DelegatedAuthorityLocator) Reset() {
 	*x = DelegatedAuthorityLocator{}
-	mi := &file_stt_v1_stt_proto_msgTypes[14]
+	mi := &file_stt_v1_stt_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1159,7 +1415,7 @@ func (x *DelegatedAuthorityLocator) String() string {
 func (*DelegatedAuthorityLocator) ProtoMessage() {}
 
 func (x *DelegatedAuthorityLocator) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[14]
+	mi := &file_stt_v1_stt_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1172,7 +1428,7 @@ func (x *DelegatedAuthorityLocator) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DelegatedAuthorityLocator.ProtoReflect.Descriptor instead.
 func (*DelegatedAuthorityLocator) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{14}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DelegatedAuthorityLocator) GetRequestId() string {
@@ -1266,7 +1522,7 @@ type AuthorityIdentityProvenance struct {
 
 func (x *AuthorityIdentityProvenance) Reset() {
 	*x = AuthorityIdentityProvenance{}
-	mi := &file_stt_v1_stt_proto_msgTypes[15]
+	mi := &file_stt_v1_stt_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1278,7 +1534,7 @@ func (x *AuthorityIdentityProvenance) String() string {
 func (*AuthorityIdentityProvenance) ProtoMessage() {}
 
 func (x *AuthorityIdentityProvenance) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[15]
+	mi := &file_stt_v1_stt_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1291,7 +1547,7 @@ func (x *AuthorityIdentityProvenance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorityIdentityProvenance.ProtoReflect.Descriptor instead.
 func (*AuthorityIdentityProvenance) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{15}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AuthorityIdentityProvenance) GetSource() int32 {
@@ -1331,7 +1587,7 @@ type ResolveTranscriptionPolicyRequest struct {
 
 func (x *ResolveTranscriptionPolicyRequest) Reset() {
 	*x = ResolveTranscriptionPolicyRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[16]
+	mi := &file_stt_v1_stt_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1343,7 +1599,7 @@ func (x *ResolveTranscriptionPolicyRequest) String() string {
 func (*ResolveTranscriptionPolicyRequest) ProtoMessage() {}
 
 func (x *ResolveTranscriptionPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[16]
+	mi := &file_stt_v1_stt_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1356,7 +1612,7 @@ func (x *ResolveTranscriptionPolicyRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ResolveTranscriptionPolicyRequest.ProtoReflect.Descriptor instead.
 func (*ResolveTranscriptionPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{16}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ResolveTranscriptionPolicyRequest) GetAuthority() *DelegatedAuthorityLocator {
@@ -1386,7 +1642,7 @@ type ResolveTranscriptionPolicyResponse struct {
 
 func (x *ResolveTranscriptionPolicyResponse) Reset() {
 	*x = ResolveTranscriptionPolicyResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[17]
+	mi := &file_stt_v1_stt_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1398,7 +1654,7 @@ func (x *ResolveTranscriptionPolicyResponse) String() string {
 func (*ResolveTranscriptionPolicyResponse) ProtoMessage() {}
 
 func (x *ResolveTranscriptionPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[17]
+	mi := &file_stt_v1_stt_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1411,7 +1667,7 @@ func (x *ResolveTranscriptionPolicyResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ResolveTranscriptionPolicyResponse.ProtoReflect.Descriptor instead.
 func (*ResolveTranscriptionPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{17}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ResolveTranscriptionPolicyResponse) GetConfigRevision() uint64 {
@@ -1511,7 +1767,7 @@ type ProjectTranscriptionCredentialRequest struct {
 
 func (x *ProjectTranscriptionCredentialRequest) Reset() {
 	*x = ProjectTranscriptionCredentialRequest{}
-	mi := &file_stt_v1_stt_proto_msgTypes[18]
+	mi := &file_stt_v1_stt_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1523,7 +1779,7 @@ func (x *ProjectTranscriptionCredentialRequest) String() string {
 func (*ProjectTranscriptionCredentialRequest) ProtoMessage() {}
 
 func (x *ProjectTranscriptionCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[18]
+	mi := &file_stt_v1_stt_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1536,7 +1792,7 @@ func (x *ProjectTranscriptionCredentialRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use ProjectTranscriptionCredentialRequest.ProtoReflect.Descriptor instead.
 func (*ProjectTranscriptionCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{18}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ProjectTranscriptionCredentialRequest) GetAuthority() *DelegatedAuthorityLocator {
@@ -1589,7 +1845,7 @@ type ProjectTranscriptionCredentialResponse struct {
 
 func (x *ProjectTranscriptionCredentialResponse) Reset() {
 	*x = ProjectTranscriptionCredentialResponse{}
-	mi := &file_stt_v1_stt_proto_msgTypes[19]
+	mi := &file_stt_v1_stt_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1601,7 +1857,7 @@ func (x *ProjectTranscriptionCredentialResponse) String() string {
 func (*ProjectTranscriptionCredentialResponse) ProtoMessage() {}
 
 func (x *ProjectTranscriptionCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stt_v1_stt_proto_msgTypes[19]
+	mi := &file_stt_v1_stt_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1614,7 +1870,7 @@ func (x *ProjectTranscriptionCredentialResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ProjectTranscriptionCredentialResponse.ProtoReflect.Descriptor instead.
 func (*ProjectTranscriptionCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_stt_v1_stt_proto_rawDescGZIP(), []int{19}
+	return file_stt_v1_stt_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ProjectTranscriptionCredentialResponse) GetApiKey() []byte {
@@ -1670,7 +1926,26 @@ var File_stt_v1_stt_proto protoreflect.FileDescriptor
 
 const file_stt_v1_stt_proto_rawDesc = "" +
 	"\n" +
-	"\x10stt/v1/stt.proto\x12\x06stt.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf5\x01\n" +
+	"\x10stt/v1/stt.proto\x12\x06stt.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"&\n" +
+	"$ResolveTranscriptionAuthorityRequest\"l\n" +
+	"%ResolveTranscriptionAuthorityResponse\x12C\n" +
+	"\tauthority\x18\x01 \x01(\v2%.stt.v1.TrustedTranscriptionAuthorityR\tauthority\"-\n" +
+	"+ResolveTranscriptionCatalogAuthorityRequest\"s\n" +
+	",ResolveTranscriptionCatalogAuthorityResponse\x12C\n" +
+	"\tauthority\x18\x01 \x01(\v2%.stt.v1.TrustedTranscriptionAuthorityR\tauthority\"\xa3\x02\n" +
+	"\x1dTrustedTranscriptionAuthority\x12\x1f\n" +
+	"\vrpc_profile\x18\x01 \x01(\tR\n" +
+	"rpcProfile\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x12\x19\n" +
+	"\bactor_id\x18\x03 \x01(\tR\aactorId\x12\x1b\n" +
+	"\ttenant_id\x18\x04 \x01(\tR\btenantId\x12/\n" +
+	"\x13credential_revision\x18\x05 \x01(\x04R\x12credentialRevision\x12\x1e\n" +
+	"\n" +
+	"permission\x18\x06 \x01(\tR\n" +
+	"permission\x129\n" +
+	"\n" +
+	"expires_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xf5\x01\n" +
 	"\x11TranscribeRequest\x128\n" +
 	"\bmetadata\x18\x01 \x01(\v2\x1a.stt.v1.TranscribeMetadataH\x00R\bmetadata\x12\x16\n" +
 	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunk\x122\n" +
@@ -1823,7 +2098,10 @@ const file_stt_v1_stt_proto_rawDesc = "" +
 	"\x0eCheckReadiness\x12\x1d.stt.v1.CheckReadinessRequest\x1a\x1e.stt.v1.CheckReadinessResponse\x12[\n" +
 	"\x12CheckProtectedPath\x12!.stt.v1.CheckProtectedPathRequest\x1a\".stt.v1.CheckProtectedPathResponse2\x9b\x01\n" +
 	"$TranscriptionPolicyProjectionService\x12s\n" +
-	"\x1aResolveTranscriptionPolicy\x12).stt.v1.ResolveTranscriptionPolicyRequest\x1a*.stt.v1.ResolveTranscriptionPolicyResponse2\xab\x01\n" +
+	"\x1aResolveTranscriptionPolicy\x12).stt.v1.ResolveTranscriptionPolicyRequest\x1a*.stt.v1.ResolveTranscriptionPolicyResponse2\xb1\x02\n" +
+	"\x1dTranscriptionAuthorityService\x12|\n" +
+	"\x1dResolveTranscriptionAuthority\x12,.stt.v1.ResolveTranscriptionAuthorityRequest\x1a-.stt.v1.ResolveTranscriptionAuthorityResponse\x12\x91\x01\n" +
+	"$ResolveTranscriptionCatalogAuthority\x123.stt.v1.ResolveTranscriptionCatalogAuthorityRequest\x1a4.stt.v1.ResolveTranscriptionCatalogAuthorityResponse2\xab\x01\n" +
 	"(TranscriptionCredentialProjectionService\x12\x7f\n" +
 	"\x1eProjectTranscriptionCredential\x12-.stt.v1.ProjectTranscriptionCredentialRequest\x1a..stt.v1.ProjectTranscriptionCredentialResponseB<Z:github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1;sttv1b\x06proto3"
 
@@ -1840,73 +2118,85 @@ func file_stt_v1_stt_proto_rawDescGZIP() []byte {
 }
 
 var file_stt_v1_stt_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_stt_v1_stt_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_stt_v1_stt_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_stt_v1_stt_proto_goTypes = []any{
-	(TranscriptionStage)(0),                        // 0: stt.v1.TranscriptionStage
-	(ProtectedPathStage)(0),                        // 1: stt.v1.ProtectedPathStage
-	(*TranscribeRequest)(nil),                      // 2: stt.v1.TranscribeRequest
-	(*TranscribeMetadata)(nil),                     // 3: stt.v1.TranscribeMetadata
-	(*TranscribeCommit)(nil),                       // 4: stt.v1.TranscribeCommit
-	(*TranscribeResponse)(nil),                     // 5: stt.v1.TranscribeResponse
-	(*TranscriptionReceipt)(nil),                   // 6: stt.v1.TranscriptionReceipt
-	(*CheckReadinessRequest)(nil),                  // 7: stt.v1.CheckReadinessRequest
-	(*GetModelCatalogRequest)(nil),                 // 8: stt.v1.GetModelCatalogRequest
-	(*GetModelCatalogResponse)(nil),                // 9: stt.v1.GetModelCatalogResponse
-	(*CheckReadinessResponse)(nil),                 // 10: stt.v1.CheckReadinessResponse
-	(*CheckProtectedPathRequest)(nil),              // 11: stt.v1.CheckProtectedPathRequest
-	(*CheckProtectedPathResponse)(nil),             // 12: stt.v1.CheckProtectedPathResponse
-	(*TranscriptionParameters)(nil),                // 13: stt.v1.TranscriptionParameters
-	(*TranscriptionModelCatalog)(nil),              // 14: stt.v1.TranscriptionModelCatalog
-	(*TranscriptionModelProfile)(nil),              // 15: stt.v1.TranscriptionModelProfile
-	(*DelegatedAuthorityLocator)(nil),              // 16: stt.v1.DelegatedAuthorityLocator
-	(*AuthorityIdentityProvenance)(nil),            // 17: stt.v1.AuthorityIdentityProvenance
-	(*ResolveTranscriptionPolicyRequest)(nil),      // 18: stt.v1.ResolveTranscriptionPolicyRequest
-	(*ResolveTranscriptionPolicyResponse)(nil),     // 19: stt.v1.ResolveTranscriptionPolicyResponse
-	(*ProjectTranscriptionCredentialRequest)(nil),  // 20: stt.v1.ProjectTranscriptionCredentialRequest
-	(*ProjectTranscriptionCredentialResponse)(nil), // 21: stt.v1.ProjectTranscriptionCredentialResponse
-	(*timestamppb.Timestamp)(nil),                  // 22: google.protobuf.Timestamp
+	(TranscriptionStage)(0),                              // 0: stt.v1.TranscriptionStage
+	(ProtectedPathStage)(0),                              // 1: stt.v1.ProtectedPathStage
+	(*ResolveTranscriptionAuthorityRequest)(nil),         // 2: stt.v1.ResolveTranscriptionAuthorityRequest
+	(*ResolveTranscriptionAuthorityResponse)(nil),        // 3: stt.v1.ResolveTranscriptionAuthorityResponse
+	(*ResolveTranscriptionCatalogAuthorityRequest)(nil),  // 4: stt.v1.ResolveTranscriptionCatalogAuthorityRequest
+	(*ResolveTranscriptionCatalogAuthorityResponse)(nil), // 5: stt.v1.ResolveTranscriptionCatalogAuthorityResponse
+	(*TrustedTranscriptionAuthority)(nil),                // 6: stt.v1.TrustedTranscriptionAuthority
+	(*TranscribeRequest)(nil),                            // 7: stt.v1.TranscribeRequest
+	(*TranscribeMetadata)(nil),                           // 8: stt.v1.TranscribeMetadata
+	(*TranscribeCommit)(nil),                             // 9: stt.v1.TranscribeCommit
+	(*TranscribeResponse)(nil),                           // 10: stt.v1.TranscribeResponse
+	(*TranscriptionReceipt)(nil),                         // 11: stt.v1.TranscriptionReceipt
+	(*CheckReadinessRequest)(nil),                        // 12: stt.v1.CheckReadinessRequest
+	(*GetModelCatalogRequest)(nil),                       // 13: stt.v1.GetModelCatalogRequest
+	(*GetModelCatalogResponse)(nil),                      // 14: stt.v1.GetModelCatalogResponse
+	(*CheckReadinessResponse)(nil),                       // 15: stt.v1.CheckReadinessResponse
+	(*CheckProtectedPathRequest)(nil),                    // 16: stt.v1.CheckProtectedPathRequest
+	(*CheckProtectedPathResponse)(nil),                   // 17: stt.v1.CheckProtectedPathResponse
+	(*TranscriptionParameters)(nil),                      // 18: stt.v1.TranscriptionParameters
+	(*TranscriptionModelCatalog)(nil),                    // 19: stt.v1.TranscriptionModelCatalog
+	(*TranscriptionModelProfile)(nil),                    // 20: stt.v1.TranscriptionModelProfile
+	(*DelegatedAuthorityLocator)(nil),                    // 21: stt.v1.DelegatedAuthorityLocator
+	(*AuthorityIdentityProvenance)(nil),                  // 22: stt.v1.AuthorityIdentityProvenance
+	(*ResolveTranscriptionPolicyRequest)(nil),            // 23: stt.v1.ResolveTranscriptionPolicyRequest
+	(*ResolveTranscriptionPolicyResponse)(nil),           // 24: stt.v1.ResolveTranscriptionPolicyResponse
+	(*ProjectTranscriptionCredentialRequest)(nil),        // 25: stt.v1.ProjectTranscriptionCredentialRequest
+	(*ProjectTranscriptionCredentialResponse)(nil),       // 26: stt.v1.ProjectTranscriptionCredentialResponse
+	(*timestamppb.Timestamp)(nil),                        // 27: google.protobuf.Timestamp
 }
 var file_stt_v1_stt_proto_depIdxs = []int32{
-	3,  // 0: stt.v1.TranscribeRequest.metadata:type_name -> stt.v1.TranscribeMetadata
-	4,  // 1: stt.v1.TranscribeRequest.commit:type_name -> stt.v1.TranscribeCommit
-	11, // 2: stt.v1.TranscribeRequest.availability_check:type_name -> stt.v1.CheckProtectedPathRequest
-	6,  // 3: stt.v1.TranscribeResponse.receipt:type_name -> stt.v1.TranscriptionReceipt
-	12, // 4: stt.v1.TranscribeResponse.availability:type_name -> stt.v1.CheckProtectedPathResponse
-	0,  // 5: stt.v1.TranscriptionReceipt.completed_stage:type_name -> stt.v1.TranscriptionStage
-	14, // 6: stt.v1.GetModelCatalogResponse.catalog:type_name -> stt.v1.TranscriptionModelCatalog
-	1,  // 7: stt.v1.CheckProtectedPathResponse.stage:type_name -> stt.v1.ProtectedPathStage
-	22, // 8: stt.v1.CheckProtectedPathResponse.valid_until:type_name -> google.protobuf.Timestamp
-	14, // 9: stt.v1.CheckProtectedPathResponse.catalog:type_name -> stt.v1.TranscriptionModelCatalog
-	22, // 10: stt.v1.TranscriptionModelCatalog.observed_at:type_name -> google.protobuf.Timestamp
-	15, // 11: stt.v1.TranscriptionModelCatalog.models:type_name -> stt.v1.TranscriptionModelProfile
-	17, // 12: stt.v1.DelegatedAuthorityLocator.actor:type_name -> stt.v1.AuthorityIdentityProvenance
-	17, // 13: stt.v1.DelegatedAuthorityLocator.tenant:type_name -> stt.v1.AuthorityIdentityProvenance
-	17, // 14: stt.v1.DelegatedAuthorityLocator.project:type_name -> stt.v1.AuthorityIdentityProvenance
-	22, // 15: stt.v1.DelegatedAuthorityLocator.expires_at:type_name -> google.protobuf.Timestamp
-	16, // 16: stt.v1.ResolveTranscriptionPolicyRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	22, // 17: stt.v1.ResolveTranscriptionPolicyResponse.expires_at:type_name -> google.protobuf.Timestamp
-	16, // 18: stt.v1.ResolveTranscriptionPolicyResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	13, // 19: stt.v1.ResolveTranscriptionPolicyResponse.parameters:type_name -> stt.v1.TranscriptionParameters
-	16, // 20: stt.v1.ProjectTranscriptionCredentialRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	22, // 21: stt.v1.ProjectTranscriptionCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
-	16, // 22: stt.v1.ProjectTranscriptionCredentialResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
-	8,  // 23: stt.v1.SpeechToTextService.GetModelCatalog:input_type -> stt.v1.GetModelCatalogRequest
-	2,  // 24: stt.v1.SpeechToTextService.Transcribe:input_type -> stt.v1.TranscribeRequest
-	7,  // 25: stt.v1.SpeechToTextService.CheckReadiness:input_type -> stt.v1.CheckReadinessRequest
-	11, // 26: stt.v1.SpeechToTextService.CheckProtectedPath:input_type -> stt.v1.CheckProtectedPathRequest
-	18, // 27: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:input_type -> stt.v1.ResolveTranscriptionPolicyRequest
-	20, // 28: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:input_type -> stt.v1.ProjectTranscriptionCredentialRequest
-	9,  // 29: stt.v1.SpeechToTextService.GetModelCatalog:output_type -> stt.v1.GetModelCatalogResponse
-	5,  // 30: stt.v1.SpeechToTextService.Transcribe:output_type -> stt.v1.TranscribeResponse
-	10, // 31: stt.v1.SpeechToTextService.CheckReadiness:output_type -> stt.v1.CheckReadinessResponse
-	12, // 32: stt.v1.SpeechToTextService.CheckProtectedPath:output_type -> stt.v1.CheckProtectedPathResponse
-	19, // 33: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:output_type -> stt.v1.ResolveTranscriptionPolicyResponse
-	21, // 34: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:output_type -> stt.v1.ProjectTranscriptionCredentialResponse
-	29, // [29:35] is the sub-list for method output_type
-	23, // [23:29] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	6,  // 0: stt.v1.ResolveTranscriptionAuthorityResponse.authority:type_name -> stt.v1.TrustedTranscriptionAuthority
+	6,  // 1: stt.v1.ResolveTranscriptionCatalogAuthorityResponse.authority:type_name -> stt.v1.TrustedTranscriptionAuthority
+	27, // 2: stt.v1.TrustedTranscriptionAuthority.expires_at:type_name -> google.protobuf.Timestamp
+	8,  // 3: stt.v1.TranscribeRequest.metadata:type_name -> stt.v1.TranscribeMetadata
+	9,  // 4: stt.v1.TranscribeRequest.commit:type_name -> stt.v1.TranscribeCommit
+	16, // 5: stt.v1.TranscribeRequest.availability_check:type_name -> stt.v1.CheckProtectedPathRequest
+	11, // 6: stt.v1.TranscribeResponse.receipt:type_name -> stt.v1.TranscriptionReceipt
+	17, // 7: stt.v1.TranscribeResponse.availability:type_name -> stt.v1.CheckProtectedPathResponse
+	0,  // 8: stt.v1.TranscriptionReceipt.completed_stage:type_name -> stt.v1.TranscriptionStage
+	19, // 9: stt.v1.GetModelCatalogResponse.catalog:type_name -> stt.v1.TranscriptionModelCatalog
+	1,  // 10: stt.v1.CheckProtectedPathResponse.stage:type_name -> stt.v1.ProtectedPathStage
+	27, // 11: stt.v1.CheckProtectedPathResponse.valid_until:type_name -> google.protobuf.Timestamp
+	19, // 12: stt.v1.CheckProtectedPathResponse.catalog:type_name -> stt.v1.TranscriptionModelCatalog
+	27, // 13: stt.v1.TranscriptionModelCatalog.observed_at:type_name -> google.protobuf.Timestamp
+	20, // 14: stt.v1.TranscriptionModelCatalog.models:type_name -> stt.v1.TranscriptionModelProfile
+	22, // 15: stt.v1.DelegatedAuthorityLocator.actor:type_name -> stt.v1.AuthorityIdentityProvenance
+	22, // 16: stt.v1.DelegatedAuthorityLocator.tenant:type_name -> stt.v1.AuthorityIdentityProvenance
+	22, // 17: stt.v1.DelegatedAuthorityLocator.project:type_name -> stt.v1.AuthorityIdentityProvenance
+	27, // 18: stt.v1.DelegatedAuthorityLocator.expires_at:type_name -> google.protobuf.Timestamp
+	21, // 19: stt.v1.ResolveTranscriptionPolicyRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	27, // 20: stt.v1.ResolveTranscriptionPolicyResponse.expires_at:type_name -> google.protobuf.Timestamp
+	21, // 21: stt.v1.ResolveTranscriptionPolicyResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	18, // 22: stt.v1.ResolveTranscriptionPolicyResponse.parameters:type_name -> stt.v1.TranscriptionParameters
+	21, // 23: stt.v1.ProjectTranscriptionCredentialRequest.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	27, // 24: stt.v1.ProjectTranscriptionCredentialResponse.expires_at:type_name -> google.protobuf.Timestamp
+	21, // 25: stt.v1.ProjectTranscriptionCredentialResponse.authority:type_name -> stt.v1.DelegatedAuthorityLocator
+	13, // 26: stt.v1.SpeechToTextService.GetModelCatalog:input_type -> stt.v1.GetModelCatalogRequest
+	7,  // 27: stt.v1.SpeechToTextService.Transcribe:input_type -> stt.v1.TranscribeRequest
+	12, // 28: stt.v1.SpeechToTextService.CheckReadiness:input_type -> stt.v1.CheckReadinessRequest
+	16, // 29: stt.v1.SpeechToTextService.CheckProtectedPath:input_type -> stt.v1.CheckProtectedPathRequest
+	23, // 30: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:input_type -> stt.v1.ResolveTranscriptionPolicyRequest
+	2,  // 31: stt.v1.TranscriptionAuthorityService.ResolveTranscriptionAuthority:input_type -> stt.v1.ResolveTranscriptionAuthorityRequest
+	4,  // 32: stt.v1.TranscriptionAuthorityService.ResolveTranscriptionCatalogAuthority:input_type -> stt.v1.ResolveTranscriptionCatalogAuthorityRequest
+	25, // 33: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:input_type -> stt.v1.ProjectTranscriptionCredentialRequest
+	14, // 34: stt.v1.SpeechToTextService.GetModelCatalog:output_type -> stt.v1.GetModelCatalogResponse
+	10, // 35: stt.v1.SpeechToTextService.Transcribe:output_type -> stt.v1.TranscribeResponse
+	15, // 36: stt.v1.SpeechToTextService.CheckReadiness:output_type -> stt.v1.CheckReadinessResponse
+	17, // 37: stt.v1.SpeechToTextService.CheckProtectedPath:output_type -> stt.v1.CheckProtectedPathResponse
+	24, // 38: stt.v1.TranscriptionPolicyProjectionService.ResolveTranscriptionPolicy:output_type -> stt.v1.ResolveTranscriptionPolicyResponse
+	3,  // 39: stt.v1.TranscriptionAuthorityService.ResolveTranscriptionAuthority:output_type -> stt.v1.ResolveTranscriptionAuthorityResponse
+	5,  // 40: stt.v1.TranscriptionAuthorityService.ResolveTranscriptionCatalogAuthority:output_type -> stt.v1.ResolveTranscriptionCatalogAuthorityResponse
+	26, // 41: stt.v1.TranscriptionCredentialProjectionService.ProjectTranscriptionCredential:output_type -> stt.v1.ProjectTranscriptionCredentialResponse
+	34, // [34:42] is the sub-list for method output_type
+	26, // [26:34] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_stt_v1_stt_proto_init() }
@@ -1914,7 +2204,7 @@ func file_stt_v1_stt_proto_init() {
 	if File_stt_v1_stt_proto != nil {
 		return
 	}
-	file_stt_v1_stt_proto_msgTypes[0].OneofWrappers = []any{
+	file_stt_v1_stt_proto_msgTypes[5].OneofWrappers = []any{
 		(*TranscribeRequest_Metadata)(nil),
 		(*TranscribeRequest_Chunk)(nil),
 		(*TranscribeRequest_Commit)(nil),
@@ -1926,9 +2216,9 @@ func file_stt_v1_stt_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stt_v1_stt_proto_rawDesc), len(file_stt_v1_stt_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   20,
+			NumMessages:   25,
 			NumExtensions: 0,
-			NumServices:   3,
+			NumServices:   4,
 		},
 		GoTypes:           file_stt_v1_stt_proto_goTypes,
 		DependencyIndexes: file_stt_v1_stt_proto_depIdxs,

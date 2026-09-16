@@ -28,6 +28,7 @@ type AuthorityProvenance struct {
 }
 
 type Principal struct {
+	RPCProfile                   string
 	ActorID, TenantID, ProjectID string
 	Actor, Tenant, Project       AuthorityProvenance
 	RequestID                    string

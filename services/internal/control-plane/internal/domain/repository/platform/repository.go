@@ -72,6 +72,7 @@ type ArtifactDownload struct {
 // стабильную system identity. Ни один идентификатор из browser payload не
 // является authority без повторного разрешения в PostgreSQL.
 type ProofPrincipalInput struct {
+	RPCProfile              string
 	ExternalActorID         string
 	ExternalTenantID        string
 	ExternalDisplayName     string

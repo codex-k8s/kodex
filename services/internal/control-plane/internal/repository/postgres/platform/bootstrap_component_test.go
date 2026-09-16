@@ -711,6 +711,36 @@ WHERE account.organization_id = $1::uuid AND account.ref = $3
 	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, organizationProjection); err != nil {
 		t.Fatalf("resolve organization scoped STT credential: %v", err)
 	}
+	trustedRepository := *repository
+	trustedRepository.trustedCluster = true
+	trustedService, err := platformservice.New(&trustedRepository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustedPrincipal := owner
+	trustedPrincipal.CallerWorkload, trustedPrincipal.Permission = "secret-broker", platformrepo.TrustedSTTCredentialOperation
+	trustedPrincipal.AuthorityTenant, trustedPrincipal.ProjectRef, trustedPrincipal.CredentialRevision = ownerScope.organizationID, "", 9
+	trustedProjection := organizationProjection
+	trustedProjection.Authority.RPCProfile, trustedProjection.Authority.ProofJTI = "trusted-cluster", ""
+	trustedProjection.Authority.CallerCredentialRevision = trustedPrincipal.CredentialRevision
+	if projected, err := trustedService.ResolveTranscriptionCredentialProjection(ctx, trustedPrincipal, trustedProjection); err != nil ||
+		projected.ProviderCredential != credentialProjection.ProviderCredential {
+		t.Fatalf("trusted projection did not preserve exact credential descriptor: %v", err)
+	}
+	for _, mutate := range []func(*platformrepo.TranscriptionCredentialProjectionInput){
+		func(i *platformrepo.TranscriptionCredentialProjectionInput) {
+			i.ConfigDigestSHA256 = strings.Repeat("f", 64)
+		},
+		func(i *platformrepo.TranscriptionCredentialProjectionInput) { i.ConfigRevision++ },
+		func(i *platformrepo.TranscriptionCredentialProjectionInput) { i.ProviderCredentialGeneration++ },
+		func(i *platformrepo.TranscriptionCredentialProjectionInput) { i.ProviderAccountRef = "pacc_unrelated" },
+	} {
+		candidate := trustedProjection
+		mutate(&candidate)
+		if _, err := trustedService.ResolveTranscriptionCredentialProjection(ctx, trustedPrincipal, candidate); !errors.Is(err, domainerrs.ErrNotFound) {
+			t.Fatalf("trusted projection accepted changed configuration/account: %v", err)
+		}
+	}
 	changedConfig := projectionInput
 	changedConfig.ConfigDigestSHA256 = strings.Repeat("f", 64)
 	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, changedConfig); !errors.Is(err, domainerrs.ErrNotFound) {
@@ -726,11 +756,17 @@ WHERE account.organization_id = $1::uuid AND account.ref = $3
 	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, projectionInput); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("deleting account granted new speech credential: %v", err)
 	}
+	if _, err := trustedService.ResolveTranscriptionCredentialProjection(ctx, trustedPrincipal, trustedProjection); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("trusted projection accepted deleting account: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.provider_accounts SET enabled = false, state = 'REVOKED', current_credential_revision_id = NULL WHERE ref = $1`, sttProviderAccountRef); err != nil {
 		t.Fatalf("revoke system STT account fixture: %v", err)
 	}
 	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, projectionInput); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("revoked system STT account was accepted: %v", err)
+	}
+	if _, err := trustedService.ResolveTranscriptionCredentialProjection(ctx, trustedPrincipal, trustedProjection); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("trusted projection accepted revoked account: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
 UPDATE control_plane.provider_accounts account

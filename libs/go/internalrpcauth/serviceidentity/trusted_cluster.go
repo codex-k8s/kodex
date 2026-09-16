@@ -38,6 +38,27 @@ func (authorizer *TrustedClusterAuthorizer) UnaryServerInterceptor() grpc.UnaryS
 	}
 }
 
+// StreamServerInterceptor проверяет допуск до чтения первого сообщения.
+// Actor/tenant не выводятся из payload: их разрешает домен-получатель.
+func (authorizer *TrustedClusterAuthorizer) StreamServerInterceptor() grpc.StreamServerInterceptor {
+	return func(server any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		admission, err := authorizer.Admit(stream.Context(), info.FullMethod)
+		if err != nil {
+			return err
+		}
+		return handler(server, &trustedAdmissionStream{ServerStream: stream, admission: admission})
+	}
+}
+
+type trustedAdmissionStream struct {
+	grpc.ServerStream
+	admission Admission
+}
+
+func (stream *trustedAdmissionStream) Context() context.Context {
+	return context.WithValue(stream.ServerStream.Context(), admissionKey{}, stream.admission)
+}
+
 func TrustedClusterFromPolicy(profile string, raw []byte, target string) (*TrustedClusterAuthorizer, error) {
 	if profile != TrustedClusterProfile {
 		return nil, errors.New("trusted cluster profile must be explicitly configured")

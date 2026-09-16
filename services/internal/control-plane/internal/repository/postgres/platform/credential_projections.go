@@ -128,7 +128,6 @@ func (repository *Repository) resolveRuntimeCredentialProjection(ctx context.Con
 
 func (repository *Repository) ResolveTranscriptionCredentialProjection(ctx context.Context, principal value.Principal, input platformrepo.TranscriptionCredentialProjectionInput) (platformrepo.TranscriptionCredentialProjection, error) {
 	if !validCredentialProjectionOwner(principal, "platform.credential-projections.stt.resolve") ||
-		!validProjectionAuthority(input.Authority, "stt-tts-service", sttProjectionMethod) ||
 		!validRuntimeSecretSHA256(input.ConfigDigestSHA256) || input.ConfigRevision == 0 || input.ProviderCredentialGeneration == 0 || input.ProviderAccountRef == "" {
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrForbidden
 	}
@@ -136,7 +135,9 @@ func (repository *Repository) ResolveTranscriptionCredentialProjection(ctx conte
 	if err != nil {
 		return platformrepo.TranscriptionCredentialProjection{}, err
 	}
-	if input.Authority.TenantID != current.organizationID {
+	identity := principal
+	identity.ActorID, identity.AuthorityTenant = current.actorID, current.organizationID
+	if !repository.validSTTProjectionAuthority(identity, input.Authority) || input.Authority.TenantID != current.organizationID {
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrForbidden
 	}
 	var result platformrepo.TranscriptionCredentialProjection
@@ -153,6 +154,11 @@ func (repository *Repository) ResolveTranscriptionCredentialProjection(ctx conte
 		return result, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if input.Authority.RPCProfile == transportprofile.TrustedCluster {
+		if err := repository.requireAccess(ctx, tx, userScope, "platform.stt.use", organizationTarget(userScope.organizationRef)); err != nil {
+			return result, errs.ErrForbidden
+		}
+	}
 	configuration, err := repository.getSystemSTTConfigurationTx(ctx, tx, userScope)
 	if err != nil {
 		return result, err
@@ -192,6 +198,21 @@ func (repository *Repository) ResolveTranscriptionCredentialProjection(ctx conte
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrConflict
 	}
 	return result, nil
+}
+
+func (repository *Repository) validSTTProjectionAuthority(principal value.Principal, authority platformrepo.CredentialProjectionAuthority) bool {
+	if !repository.trustedCluster {
+		return validProjectionAuthority(authority, "stt-tts-service", sttProjectionMethod)
+	}
+	now := time.Now().UTC()
+	return authority.RPCProfile == transportprofile.TrustedCluster && validCredentialProjectionOwner(principal, platformrepo.TrustedSTTCredentialOperation) &&
+		principal.ProjectRef == "" && authority.ProjectID == "" && authority.ProofJTI == "" &&
+		authority.ActorID == principal.ActorID && authority.TenantID == principal.AuthorityTenant &&
+		uuid.Validate(authority.ActorID) == nil && uuid.Validate(authority.TenantID) == nil &&
+		authority.SourceRevision == principal.CredentialRevision && authority.SourceRevision > 0 &&
+		authority.CallerCredentialRevision == principal.CredentialRevision && validRuntimeSecretSHA256(authority.SourceDigestSHA256) &&
+		authority.CallerWorkloadID == "stt-tts-service" && authority.CallerFullMethod == sttProjectionMethod &&
+		authority.ExpiresAt.After(now) && !authority.ExpiresAt.After(now.Add(30*time.Second))
 }
 
 func validCredentialProjectionOwner(principal value.Principal, permission string) bool {

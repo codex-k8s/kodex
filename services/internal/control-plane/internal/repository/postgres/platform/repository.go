@@ -685,7 +685,9 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 	if input.CallerWorkload == "" || input.Operation == "" {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
-	if input.CallerWorkload != "control-api-gateway" {
+	_, trustedSTT := platformrepo.TrustedSTTAuthorityPermission(input.CallerWorkload, input.Operation)
+	trustedSTT = trustedSTT && repository.trustedCluster && input.RPCProfile == "trusted-cluster" && input.ProjectRef == ""
+	if input.CallerWorkload != "control-api-gateway" && !trustedSTT {
 		if input.ExternalActorID != "kodex-system-subject" || input.ExternalTenantID != "kodex-installation" || input.ProjectRef != "" {
 			return platformrepo.ProofAuthority{}, errs.ErrForbidden
 		}
@@ -758,6 +760,10 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 		}
 		authority.ActorVersion = 1
 		return authority, nil
+	}
+	// Впервые назначить владельца установки может только публичный gateway.
+	if trustedSTT {
+		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
