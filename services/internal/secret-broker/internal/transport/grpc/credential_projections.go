@@ -12,6 +12,8 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/serviceidentity"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
@@ -40,7 +42,7 @@ const (
 )
 
 func (server *Server) MaterializeRuntimeCredentials(ctx context.Context, request *secretbrokerv1.MaterializeRuntimeCredentialsRequest) (*secretbrokerv1.MaterializeRuntimeCredentialsResponse, error) {
-	authority, _, err := verifiedProjectionAuthority(ctx, runtimeControllerWorkloadID, runtimeControllerSPIFFEID,
+	authority, err := runtimeProjectionAuthority(ctx,
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName, runtimeProjectionOperation)
 	if err != nil {
 		return nil, err
@@ -49,7 +51,7 @@ func (server *Server) MaterializeRuntimeCredentials(ctx context.Context, request
 }
 
 func (server *Server) MaterializeSystemAssistantCredentials(ctx context.Context, request *secretbrokerv1.MaterializeSystemAssistantCredentialsRequest) (*secretbrokerv1.MaterializeSystemAssistantCredentialsResponse, error) {
-	authority, _, err := verifiedProjectionAuthority(ctx, runtimeControllerWorkloadID, runtimeControllerSPIFFEID,
+	authority, err := runtimeProjectionAuthority(ctx,
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeSystemAssistantCredentials_FullMethodName, assistantProjectionOperation)
 	if err != nil {
 		return nil, err
@@ -99,7 +101,7 @@ func (server *Server) materializeRuntimeCredentials(ctx context.Context, request
 }
 
 func (server *Server) CheckRuntimeCredentialProjectionReadiness(ctx context.Context, _ *secretbrokerv1.CheckRuntimeCredentialProjectionReadinessRequest) (*secretbrokerv1.CheckRuntimeCredentialProjectionReadinessResponse, error) {
-	if _, _, err := verifiedProjectionAuthority(ctx, runtimeControllerWorkloadID, runtimeControllerSPIFFEID,
+	if _, err := runtimeProjectionAuthority(ctx,
 		secretbrokerv1.RuntimeCredentialProjectionService_CheckRuntimeCredentialProjectionReadiness_FullMethodName, runtimeReadinessOperation); err != nil {
 		return nil, err
 	}
@@ -251,7 +253,21 @@ func validProjectionSHA256(value string) bool {
 }
 
 func runtimeProjectionManifest(authority *controlplanev1.CredentialProjectionAuthority, request *secretbrokerv1.MaterializeRuntimeCredentialsRequest, resolved *controlplanev1.ResolveRuntimeCredentialProjectionResponse) (kubernetesstore.CredentialProjectionManifest, error) {
+	if authority != nil && authority.GetRpcProfile() == transportprofile.TrustedCluster {
+		owner := resolved.GetAuthority()
+		if owner == nil || owner.GetRpcProfile() != transportprofile.TrustedCluster || owner.GetProofJti() != "" ||
+			owner.GetCallerWorkloadId() != authority.GetCallerWorkloadId() || owner.GetCallerFullMethod() != authority.GetCallerFullMethod() ||
+			owner.GetSourceRevision() != uint64(request.GetGeneration()) || owner.GetSourceDigestSha256() != request.GetRuntimeRevisionDigest() ||
+			uuid.Validate(owner.GetActorId()) != nil || uuid.Validate(owner.GetTenantId()) != nil ||
+			owner.GetCallerCredentialRevision() == 0 || owner.GetCallerCredentialRevision() > maximumAuthorityRevision {
+			return kubernetesstore.CredentialProjectionManifest{}, status.Error(codes.FailedPrecondition, "trusted projection owner binding is invalid")
+		}
+		authority = owner
+	} else if authority != nil && authority.GetRpcProfile() != "" || resolved.GetAuthority() != nil {
+		return kubernetesstore.CredentialProjectionManifest{}, status.Error(codes.FailedPrecondition, "projection profile binding is invalid")
+	}
 	if authority == nil || request == nil || resolved == nil || resolved.GetProviderCredential() == nil || resolved.GetExpiresAt() == nil ||
+		authority.GetExpiresAt() == nil || authority.GetExpiresAt().CheckValid() != nil ||
 		resolved.GetExpiresAt().CheckValid() != nil || !resolved.GetExpiresAt().AsTime().After(time.Now()) ||
 		resolved.GetExpiresAt().AsTime().After(authority.GetExpiresAt().AsTime()) {
 		return kubernetesstore.CredentialProjectionManifest{}, status.Error(codes.FailedPrecondition, "runtime credential projection binding is invalid")
@@ -259,7 +275,8 @@ func runtimeProjectionManifest(authority *controlplanev1.CredentialProjectionAut
 	provider := resolved.GetProviderCredential()
 	manifest := kubernetesstore.CredentialProjectionManifest{
 		Authority: kubernetesstore.ProjectionAuthority{
-			ActorID: authority.GetActorId(), TenantID: authority.GetTenantId(), ProjectID: authority.GetProjectId(),
+			RPCProfile: authority.GetRpcProfile(),
+			ActorID:    authority.GetActorId(), TenantID: authority.GetTenantId(), ProjectID: authority.GetProjectId(),
 			SourceRevision: authority.GetSourceRevision(), SourceDigestSHA256: authority.GetSourceDigestSha256(),
 			ProofJTI: authority.GetProofJti(), CallerWorkloadID: authority.GetCallerWorkloadId(),
 			CallerFullMethod: authority.GetCallerFullMethod(), CallerCredentialRevision: authority.GetCallerCredentialRevision(),
@@ -286,6 +303,19 @@ func runtimeProjectionManifest(authority *controlplanev1.CredentialProjectionAut
 		})
 	}
 	return manifest, nil
+}
+
+func runtimeProjectionAuthority(ctx context.Context, method, operation string) (*controlplanev1.CredentialProjectionAuthority, error) {
+	if admission, ok := serviceidentity.FromContext(ctx); ok && admission.RPCProfile == transportprofile.TrustedCluster {
+		if admission.Peer.SPIFFEID != runtimeControllerSPIFFEID || admission.TargetSPIFFEID != secretBrokerSPIFFEID ||
+			admission.FullMethod != method || admission.OperationID != operation || admission.Permission != operation {
+			return nil, status.Error(codes.PermissionDenied, "trusted runtime projection admission rejected")
+		}
+		return &controlplanev1.CredentialProjectionAuthority{RpcProfile: transportprofile.TrustedCluster,
+			CallerWorkloadId: runtimeControllerWorkloadID, CallerFullMethod: method}, nil
+	}
+	authority, _, err := verifiedProjectionAuthority(ctx, runtimeControllerWorkloadID, runtimeControllerSPIFFEID, method, operation)
+	return authority, err
 }
 
 func projectedAPIKey(raw []byte) ([]byte, error) {

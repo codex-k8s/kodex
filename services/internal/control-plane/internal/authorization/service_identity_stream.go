@@ -14,7 +14,7 @@ import (
 // ServiceIdentityStream поддерживает закрытый набор streaming RPC. Для upload
 // principal связывается с первой metadata-частью, а размер и digest всего тела
 // проверяет handler до устойчивой записи.
-func ServiceIdentityStream(authorizer *serviceidentity.Authorizer, resolver *rpcprincipal.Service) grpc.StreamServerInterceptor {
+func ServiceIdentityStream(authorizer AdmissionAuthorizer, resolver *rpcprincipal.Service) grpc.StreamServerInterceptor {
 	return func(server any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if authorizer == nil || resolver == nil {
 			return status.Error(codes.Unavailable, "service stream authorization unavailable")
@@ -42,7 +42,7 @@ type servicePrincipalStream struct {
 	grpc.ServerStream
 	ctx           context.Context
 	method        string
-	authorizer    *serviceidentity.Authorizer
+	authorizer    AdmissionAuthorizer
 	resolve       grpc.UnaryServerInterceptor
 	received      bool
 	singleRequest bool

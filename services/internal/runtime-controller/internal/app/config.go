@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
@@ -27,6 +28,7 @@ const (
 var sha256TextPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type Config struct {
+	RPCProfile                     string        `env:"KODEX_RPC_PROFILE"`
 	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	ControlNamespace               string        `env:"POD_NAMESPACE"`
 	RuntimeNamespace               string        `env:"RUNTIME_CONTROLLER_RUNTIME_NAMESPACE"`
@@ -108,6 +110,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
+		return errors.New("runtime controller RPC profile is invalid")
+	}
 	if config.PodUID == "" || len(config.PodUID) > 128 || net.ParseIP(config.PodIP) == nil ||
 		config.ControlNamespace != defaultControlNamespace || config.RuntimeNamespace != defaultRuntimeNamespace ||
 		config.ControlNamespace == config.RuntimeNamespace || config.Environment == "" || config.ControlPlaneTarget != controlPlaneTarget ||

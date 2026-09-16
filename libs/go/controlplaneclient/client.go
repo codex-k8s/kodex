@@ -57,6 +57,7 @@ func validOpaqueReference(reference, prefix string) bool {
 }
 
 type Config struct {
+	RPCProfile, CallerWorkload                                                 string
 	ServiceIdentity                                                            bool
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
 	ResolverTarget, ResolverTLSServerName, ResolverCAFile                      string
@@ -69,6 +70,7 @@ type Config struct {
 }
 
 type Client struct {
+	trustedCluster          bool
 	serviceIdentity         bool
 	Query                   controlplanev1.PlatformQueryServiceClient
 	Command                 controlplanev1.PlatformCommandServiceClient
@@ -99,6 +101,9 @@ func (operations operationSet) OperationID(fullMethod string) (string, bool) {
 }
 
 func Dial(ctx context.Context, config Config) (*Client, error) {
+	if config.RPCProfile != "" {
+		return dialTrustedCluster(ctx, config)
+	}
 	if config.ServiceIdentity {
 		return DialServiceIdentity(ctx, config)
 	}
@@ -196,6 +201,9 @@ func validateOperations(source map[string]string) (operationSet, error) {
 }
 
 func (client *Client) AuthorityProof(ctx context.Context, operationID, fullMethod string) (string, string, error) {
+	if client.trustedCluster {
+		return "", "", errors.New("authority proof is unavailable in trusted cluster profile")
+	}
 	if expected, ok := client.proofOperations[fullMethod]; !ok || expected != operationID {
 		return "", "", authorityclient.NewProofFailure(authorityclient.StageProofOperation, errors.New("control-plane operation is not registered"))
 	}
@@ -248,9 +256,11 @@ func (client *Client) CheckProviderCredentialMaterializer(ctx context.Context) e
 	if err := client.CheckLocalAuthority(ctx); err != nil {
 		return err
 	}
-	ready, err := client.resolver.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorityProofResolverServiceCheckReadinessRequest{})
-	if err != nil || !ready.GetReady() {
-		return errors.New("control-plane proof resolver is not ready")
+	if !client.trustedCluster {
+		ready, err := client.resolver.CheckReadiness(ctx, &internalrpcauthorityv1.AuthorityProofResolverServiceCheckReadinessRequest{})
+		if err != nil || !ready.GetReady() {
+			return errors.New("control-plane proof resolver is not ready")
+		}
 	}
 	response, err := client.ProviderCredentials.CheckProviderCredentialMaterializerReadiness(
 		ctx,

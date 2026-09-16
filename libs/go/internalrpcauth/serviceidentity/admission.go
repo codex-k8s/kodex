@@ -70,6 +70,8 @@ func (CertificateLifetimeBoundary) CheckPeer(ctx context.Context, _ PeerIdentity
 
 // Admission не является пользовательским Principal или task grant.
 type Admission struct {
+	// RPCProfile назначается серверным authorizer, а не request metadata.
+	RPCProfile      string
 	Peer            PeerIdentity
 	TargetSPIFFEID  string
 	FullMethod      string
@@ -87,6 +89,8 @@ type Authorizer struct {
 	revocations RevocationBoundary
 	now         func() time.Time
 }
+
+func (*Authorizer) RPCProfile() string { return "service-v1" }
 
 func New(target string, bindings []Binding, revocations RevocationBoundary) (*Authorizer, error) {
 	domain, ok := identityDomain(target)
@@ -163,7 +167,7 @@ func (authorizer *Authorizer) Admit(ctx context.Context, fullMethod string) (Adm
 		// Причина может содержать private storage details; наружу она не выходит.
 		return Admission{}, status.Error(codes.PermissionDenied, "service credential is revoked or revocation state unavailable")
 	}
-	return Admission{Peer: verified, TargetSPIFFEID: authorizer.target, FullMethod: fullMethod, OperationID: binding.OperationID, Permission: binding.Permission, ActorMode: binding.ActorMode, ProjectRequired: binding.ProjectRequired}, nil
+	return Admission{RPCProfile: authorizer.RPCProfile(), Peer: verified, TargetSPIFFEID: authorizer.target, FullMethod: fullMethod, OperationID: binding.OperationID, Permission: binding.Permission, ActorMode: binding.ActorMode, ProjectRequired: binding.ProjectRequired}, nil
 }
 
 func identityDomain(raw string) (string, bool) {

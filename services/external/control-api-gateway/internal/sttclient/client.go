@@ -19,6 +19,7 @@ import (
 )
 
 type Config struct {
+	RPCProfile                                                                 string
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
 	ExpectedIssuerUID, ExpectedIssuerGID                                       uint32
 	DialTimeout                                                                time.Duration
@@ -39,6 +40,9 @@ func (operations operationSet) OperationID(method string) (string, bool) {
 }
 
 func Dial(ctx context.Context, config Config) (*Client, error) {
+	if config.RPCProfile != "" {
+		return dialTrustedCluster(config)
+	}
 	if config.Target == "" || config.TLSServerName == "" || !filepath.IsAbs(config.CAFile) ||
 		!filepath.IsAbs(config.ClientCertificateFile) || !filepath.IsAbs(config.ClientPrivateKeyFile) ||
 		config.ExpectedIssuerUID == 0 || config.ExpectedIssuerGID == 0 || config.Proofs == nil ||
@@ -89,7 +93,11 @@ func (client *Client) Close() error {
 	if client == nil {
 		return nil
 	}
-	return errors.Join(client.connection.Close(), client.issuer.Close())
+	result := client.connection.Close()
+	if client.issuer != nil {
+		result = errors.Join(result, client.issuer.Close())
+	}
+	return result
 }
 
 func transportCredentials(config Config) (credentials.TransportCredentials, error) {

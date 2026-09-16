@@ -48,6 +48,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, map[string]string{})
 	readiness := serviceruntime.NewReadiness()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
+		RPCProfile: config.RPCProfile, CallerWorkload: serviceName,
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile,
 		ClientCertificateFile: config.ControlPlaneCertificateFile, ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,

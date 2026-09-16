@@ -54,7 +54,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	state.controlPlane, err = controlplane.Dial(startup, controlplane.Config{
-		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
+		RPCProfile: config.RPCProfile,
+		Target:     config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
 		ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, RPCDeadline: config.RPCDeadline,

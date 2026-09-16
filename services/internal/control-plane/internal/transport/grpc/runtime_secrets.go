@@ -84,13 +84,17 @@ func runtimeCredentialProjectionInput(authority *controlplanev1.CredentialProjec
 }
 
 func credentialProjectionAuthority(input *controlplanev1.CredentialProjectionAuthority) platformrepo.CredentialProjectionAuthority {
-	if input == nil || input.GetExpiresAt() == nil || input.GetExpiresAt().CheckValid() != nil {
+	if input == nil || (input.GetExpiresAt() != nil && input.GetExpiresAt().CheckValid() != nil) {
 		return platformrepo.CredentialProjectionAuthority{}
 	}
-	return platformrepo.CredentialProjectionAuthority{ActorID: input.GetActorId(), TenantID: input.GetTenantId(), ProjectID: input.GetProjectId(),
+	result := platformrepo.CredentialProjectionAuthority{RPCProfile: input.GetRpcProfile(), ActorID: input.GetActorId(), TenantID: input.GetTenantId(), ProjectID: input.GetProjectId(),
 		SourceRevision: input.GetSourceRevision(), SourceDigestSHA256: input.GetSourceDigestSha256(), ProofJTI: input.GetProofJti(),
 		CallerWorkloadID: input.GetCallerWorkloadId(), CallerFullMethod: input.GetCallerFullMethod(),
-		CallerCredentialRevision: input.GetCallerCredentialRevision(), ExpiresAt: input.GetExpiresAt().AsTime().UTC()}
+		CallerCredentialRevision: input.GetCallerCredentialRevision()}
+	if input.GetExpiresAt() != nil {
+		result.ExpiresAt = input.GetExpiresAt().AsTime().UTC()
+	}
+	return result
 }
 
 func providerCredentialBinding(input *controlplanev1.ProviderCredentialBinding) platformrepo.ProviderCredentialBinding {
@@ -127,6 +131,14 @@ func castRuntimeSecretProjectionBinding(input platformrepo.RuntimeSecretProjecti
 
 func castRuntimeCredentialProjection(input platformrepo.RuntimeCredentialProjection) *controlplanev1.ResolveRuntimeCredentialProjectionResponse {
 	response := &controlplanev1.ResolveRuntimeCredentialProjectionResponse{ProviderCredential: castProviderCredentialBinding(input.ProviderCredential), ExpiresAt: timestamp(input.ExpiresAt)}
+	if authority := input.Authority; authority.RPCProfile != "" {
+		response.Authority = &controlplanev1.CredentialProjectionAuthority{
+			RpcProfile: authority.RPCProfile, ActorId: authority.ActorID, TenantId: authority.TenantID, ProjectId: authority.ProjectID,
+			SourceRevision: authority.SourceRevision, SourceDigestSha256: authority.SourceDigestSHA256,
+			ProofJti: authority.ProofJTI, CallerWorkloadId: authority.CallerWorkloadID, CallerFullMethod: authority.CallerFullMethod,
+			CallerCredentialRevision: authority.CallerCredentialRevision, ExpiresAt: timestamp(authority.ExpiresAt),
+		}
+	}
 	for _, item := range input.RuntimeSecrets {
 		response.RuntimeSecrets = append(response.RuntimeSecrets, castRuntimeSecretProjectionBinding(item))
 	}

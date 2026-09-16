@@ -14,6 +14,7 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 )
 
@@ -34,6 +35,15 @@ func emailExecutionBinding(invocation, test string, lease *cp.WorkLease) *api.Ex
 }
 
 func newEmailClient(config Config) (*http.Client, error) {
+	if config.RPCProfile != "" {
+		if config.RPCProfile != transportprofile.TrustedCluster {
+			return nil, errors.New("email RPC profile rejected")
+		}
+		return &http.Client{Timeout: config.Timeout,
+			Transport: trustedEmailTransport{base: &http.Transport{MaxConnsPerHost: 8, MaxResponseHeaderBytes: 16384,
+				ResponseHeaderTimeout: config.Timeout}},
+			CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("email redirect forbidden") }}, nil
+	}
 	if config.EmailCAFile == "" && config.EmailCertificateFile == "" && config.EmailPrivateKeyFile == "" {
 		return nil, nil
 	}

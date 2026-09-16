@@ -1,4 +1,4 @@
-// Package rpcprincipal разрешает доменного actor после локального mTLS допуска.
+// Package rpcprincipal разрешает доменного actor после допуска выбранного RPC-профиля.
 package rpcprincipal
 
 import (
@@ -57,8 +57,9 @@ func (service *Service) Resolve(ctx context.Context, input Input) (value.Princip
 	if admission.TargetSPIFFEID != target || admission.OperationID == "" || admission.Permission == "" || digestErr != nil || len(digest) != 32 || hex.EncodeToString(digest) != input.RequestDigestSHA256 {
 		return value.Principal{}, errs.ErrForbidden
 	}
-	// Имя workload берётся только из проверенной SPIFFE identity. Admit уже
-	// проверил canonical URI и точную пару caller/method в target policy.
+	// Имя workload берётся только из результата Admit, не из business payload.
+	// service-v1 подтверждает URI сертификатом; trusted-cluster использует
+	// серверный caller key внутри принятой сетевой границы и тот же реестр методов.
 	prefix := "spiffe://kodex.local/ns/kodex-system/sa/"
 	if !strings.HasPrefix(admission.Peer.SPIFFEID, prefix) {
 		return value.Principal{}, errs.ErrForbidden

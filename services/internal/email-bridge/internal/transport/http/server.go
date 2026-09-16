@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/service/mail"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http/casters"
@@ -16,16 +17,17 @@ const CallerSPIFFE = "spiffe://kodex.local/ns/kodex-system/sa/integration-gatewa
 
 type Observer interface{ Record(api.Operation, string) }
 type Handler struct {
-	Service *mail.Service
-	Current func() *mail.Service
-	Metrics Observer
+	RPCProfile string
+	Service    *mail.Service
+	Current    func() *mail.Service
+	Metrics    Observer
 }
 
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	if r.TLS == nil || len(r.TLS.VerifiedChains) == 0 || len(r.TLS.PeerCertificates) == 0 || len(r.TLS.PeerCertificates[0].URIs) != 1 || r.TLS.PeerCertificates[0].URIs[0].String() != CallerSPIFFE {
+	if !h.admit(r) {
 		writeError(w, errs.Denied)
 		return
 	}
@@ -83,6 +85,18 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (h Handler) admit(r *http.Request) bool {
+	if h.RPCProfile == transportprofile.TrustedCluster {
+		profiles, callers := r.Header.Values("X-Kodex-Rpc-Profile"), r.Header.Values("X-Kodex-Trusted-Caller")
+		return len(profiles) == 1 && profiles[0] == transportprofile.TrustedCluster &&
+			len(callers) == 1 && callers[0] == CallerSPIFFE && len(r.Header.Values("X-Kodex-Authorization")) == 0
+	}
+	return h.RPCProfile == "" && len(r.Header.Values("X-Kodex-Rpc-Profile")) == 0 &&
+		r.TLS != nil && len(r.TLS.VerifiedChains) > 0 &&
+		len(r.TLS.PeerCertificates) > 0 && len(r.TLS.PeerCertificates[0].URIs) == 1 &&
+		r.TLS.PeerCertificates[0].URIs[0].String() == CallerSPIFFE
 }
 func writeError(w http.ResponseWriter, e error) {
 	status := http.StatusServiceUnavailable

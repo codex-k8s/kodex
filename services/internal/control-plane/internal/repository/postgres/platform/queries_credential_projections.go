@@ -3,6 +3,8 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/credential_projection_trusted_authority.sql
+	queryCredentialProjectionTrustedAuthority string
 	//go:embed sql/credential_projection_resolve_runtime.sql
 	queryCredentialProjectionResolveRuntime string
 	//go:embed sql/credential_projection_resolve_runtime_secret.sql

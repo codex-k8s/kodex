@@ -29,8 +29,14 @@ else
 fi
 tools_image=$(jq -er '.data.toolsImage' <<<"$intent")
 admission_image=$(jq -er '.data.admissionImage' <<<"$intent")
-authority_image=$(jq -er '.data.authorityImage' <<<"$intent")
-authority_issuer_image=$(jq -er '.data | if has("authorityIssuerImage") then .authorityIssuerImage else .authorityImage end' <<<"$intent")
+security_profile=$(jq -r '.metadata.labels["kodex.dev/security-profile"] // "protected"' <<<"$intent")
+case "$security_profile" in protected|trusted-cluster) ;; *) echo 'admission security profile is invalid' >&2; exit 78 ;; esac
+authority_image=""
+authority_issuer_image=""
+if [[ $security_profile == protected ]]; then
+  authority_image=$(jq -er '.data.authorityImage' <<<"$intent")
+  authority_issuer_image=$(jq -er '.data | if has("authorityIssuerImage") then .authorityIssuerImage else .authorityImage end' <<<"$intent")
+fi
 promotion_repository=$(jq -er '.data.promotionRepository' <<<"$intent")
 promotion_evidence_repository=$(jq -er '.data.promotionEvidenceRepository' <<<"$intent")
 evidence_repository=$(jq -er '.data.evidenceRepository' <<<"$intent")
@@ -50,7 +56,9 @@ jq -e '.immutable == true and .metadata.labels["kodex.dev/owner-intent"] == "tru
   { echo "admission owner intent is not immutable" >&2; exit 78; }
 [[ -z $local_profile || $local_profile == hot-reload ]] ||
   { echo "admission local profile is invalid" >&2; exit 78; }
-for image in "$tools_image" "$admission_image" "$authority_image" "$authority_issuer_image"; do
+required_images=("$tools_image" "$admission_image")
+[[ $security_profile != protected ]] || required_images+=("$authority_image" "$authority_issuer_image")
+for image in "${required_images[@]}"; do
   [[ $image =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
     { echo "admission image binding is invalid" >&2; exit 78; }
 done
@@ -83,8 +91,11 @@ run_sha256=$(printf '%s\n' "$environment_name" "$run_id" "$admission_image" "$au
   "$policy_revision" "$policy_sha256" "$promotion_repository" "$promotion_evidence_repository" \
   "$evidence_repository" "$promoted_pull_repository" | sha256sum | awk '{print $1}')
 # Legacy reader сохраняет прежнюю identity, новая policy отдельно закрепляет issuer.
-if jq -e '.data | has("authorityIssuerImage")' <<<"$intent" >/dev/null; then
+if [[ $security_profile == protected ]] && jq -e '.data | has("authorityIssuerImage")' <<<"$intent" >/dev/null; then
   run_sha256=$(printf '%s\n' "$run_sha256" "$authority_issuer_image" | sha256sum | awk '{print $1}')
+fi
+if [[ $security_profile == trusted-cluster ]]; then
+  run_sha256=$(printf '%s\n%s\n' "$run_sha256" "$security_profile" | sha256sum | awk '{print $1}')
 fi
 suffix=${run_sha256:0:32}
 claim_name="mc-admit-$suffix"
@@ -125,6 +136,7 @@ emit_job() {
     workload='image-promotion'
     grant_signer_secret='image-promotion-platform-worker-grant-signer'
   fi
+  [[ $security_profile != trusted-cluster ]] || protected=false
   cat <<EOF
 ---
 apiVersion: batch/v1
@@ -153,6 +165,11 @@ spec:
         kodex.dev/image-admission-id: ${suffix}
         kodex.dev/environment: ${environment_name}
 EOF
+  if [[ $security_profile == trusted-cluster ]]; then
+    cat <<EOF
+        kodex.dev/security-profile: trusted-cluster
+EOF
+  fi
   if [[ $local_profile == hot-reload ]]; then
     cat <<EOF
         kodex.dev/local-profile: hot-reload
@@ -281,6 +298,14 @@ EOF
             - {name: ROLE_RUNTIME_CONTRACT_SHA256, value: "${role_runtime_contract_sha256}"}
             - {name: HOME, value: /tmp}
 EOF
+  if [[ $security_profile == trusted-cluster && -n $workload ]]; then
+    cat <<EOF
+            - {name: KODEX_RPC_PROFILE, value: trusted-cluster}
+            - {name: IMAGE_OWNER_CONTROL_PLANE_TARGET, value: control-plane.kodex-system.svc:8443}
+            - {name: IMAGE_OWNER_STATE_FILE, value: /work/owner-claim.json}
+            - {name: IMAGE_OWNER_PROMOTION_FILE, value: /work/owner-promotion.json}
+EOF
+  fi
   if [[ $protected == true ]]; then
     cat <<EOF
             - {name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET, value: /run/kodex/internal-rpc-authority/issuer.sock}

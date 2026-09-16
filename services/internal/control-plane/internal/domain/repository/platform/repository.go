@@ -172,6 +172,7 @@ type RuntimeSecretRecoveryPage struct {
 }
 
 type CredentialProjectionAuthority struct {
+	RPCProfile                               string
 	ActorID, TenantID, ProjectID             string
 	SourceDigestSHA256, ProofJTI             string
 	CallerWorkloadID, CallerFullMethod       string
@@ -203,6 +204,7 @@ type RuntimeCredentialProjectionInput struct {
 }
 
 type RuntimeCredentialProjection struct {
+	Authority          CredentialProjectionAuthority
 	ProviderCredential ProviderCredentialBinding
 	RuntimeSecrets     []RuntimeSecretProjectionBinding
 	ExpiresAt          time.Time

@@ -43,6 +43,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	readiness := serviceruntime.NewReadiness()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true, Target: config.ControlPlaneTarget,
+		RPCProfile: config.RPCProfile, CallerWorkload: serviceName,
 		TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile,
 		ClientCertificateFile: config.ControlPlaneCertificateFile, ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,

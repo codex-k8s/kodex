@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	TechnicalListen             string        `env:"INTEGRATION_GATEWAY_TECHNICAL_LISTEN"`
 	ControlPlaneTarget          string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_TARGET"`
@@ -62,6 +64,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
+		return errors.New("integration-gateway RPC profile is invalid")
+	}
 	if config.ClaimLimit != 1 || config.OperationTimeout+config.RequestTimeout >= 28*time.Second {
 		return errors.New("integration lease budget is invalid")
 	}

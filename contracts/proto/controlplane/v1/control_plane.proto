@@ -7420,9 +7420,9 @@ message ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse {
   ProviderCredentialDescriptor produced_credential = 2;
 }
 
-// CredentialProjectionAuthority переносит только результат проверки bearer
-// proof внутри secret-broker. Обычный consumer не может вызвать owner RPC и
-// назначить эти поля самостоятельно.
+// CredentialProjectionAuthority переносит проверенный proof защищённого профиля
+// либо server-owned snapshot trusted-cluster. Обычный consumer не может вызвать
+// owner RPC и назначить эти поля самостоятельно.
 message CredentialProjectionAuthority {
   string actor_id = 1;
   string tenant_id = 2;
@@ -7434,6 +7434,10 @@ message CredentialProjectionAuthority {
   string caller_full_method = 8;
   uint64 caller_credential_revision = 9;
   google.protobuf.Timestamp expires_at = 10;
+  // Пустое значение сохраняет proof-контракт. В trusted-cluster первый runtime
+  // resolve передаёт только этот discriminator и caller workload/method;
+  // остальные поля назначает CP по exact lease. Recovery возвращает snapshot.
+  string rpc_profile = 11;
 }
 
 message CheckCredentialProjectionWorkReadinessRequest {}
@@ -7459,6 +7463,8 @@ message ResolveRuntimeCredentialProjectionResponse {
   ProviderCredentialBinding provider_credential = 1;
   repeated RuntimeSecretDescriptor runtime_secrets = 2;
   google.protobuf.Timestamp expires_at = 3;
+  // Только trusted-cluster: authority из того же owner snapshot, что descriptors.
+  CredentialProjectionAuthority authority = 4;
 }
 
 message ValidateRuntimeCredentialProjectionRequest {

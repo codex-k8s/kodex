@@ -8,13 +8,14 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    "Usage: $0 up|status|smoke|e2e|full-e2e|down [--kubeconfig <path>] [--context <name>]" \
+    "Usage: $0 up|identity|status|smoke|e2e|full-e2e|down [--kubeconfig <path>] [--context <name>]" \
     "       $0 e2e [--resource-prefix <slug>] [--run-timeout-ms <milliseconds>]" \
     "       $0 full-e2e [--check] [--skip-build] [--resource-prefix <slug>]" \
     "         [--target <test-make-target>]..." \
     "       $0 provider-authorize|provider-import|provider-list [provider options]" \
     '  [--state-directory <path>] [--cluster-marker <root-owned-path>]' \
     '  [--profile web-only|web-with-mattermost]' \
+    '  [--management-surfaces all|control-center]' \
     '  [--expected-sha <40-hex-commit>] [--component-manifest <private-path>]' >&2
 }
 
@@ -45,6 +46,7 @@ cluster_marker=""
 expected_sha=""
 component_manifest=""
 requested_profile=""
+management_surfaces=all
 while (($# > 0)); do
   case "$1" in
     --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
@@ -56,11 +58,13 @@ while (($# > 0)); do
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
     --component-manifest) component_manifest=${2:-}; shift 2 ;;
     --profile) requested_profile=${2:-}; shift 2 ;;
+    --management-surfaces) management_surfaces=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
-case "$command_name" in up|status|smoke|e2e|down) ;; *) usage; fail 'command is invalid' ;; esac
+case "$command_name" in up|identity|status|smoke|e2e|down) ;; *) usage; fail 'command is invalid' ;; esac
+case "$management_surfaces" in all|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
 if [[ -n "$component_manifest" ]]; then
   [[ "$command_name" == status || "$command_name" == smoke || "$command_name" == e2e ]] || fail 'component manifest is restricted to application readback and acceptance'
   [[ "$component_manifest" == /* && -f "$component_manifest" && ! -L "$component_manifest" ]] || fail 'component manifest is absent or unsafe'
@@ -190,7 +194,7 @@ if [[ "$command_name" == down ]]; then
 fi
 
 api_endpoint_mode=readback
-[[ "$command_name" == up ]] && api_endpoint_mode=apply
+[[ "$command_name" == up || "$command_name" == identity ]] && api_endpoint_mode=apply
 "$repository_root/tools/dev/configure-local-api-endpoint.sh" \
   --context "$context" --mode "$api_endpoint_mode"
 
@@ -502,35 +506,25 @@ if [[ "$tls_mode" == public-acme ]]; then
   node_extra_ca_file=""
 fi
 keycloak_origin_arguments=(
+  --management-surfaces "$management_surfaces"
   --public-origin "https://$public_host"
   --grafana-origin "https://$grafana_host"
   --headlamp-origin "https://$headlamp_host"
 )
 
 credentials_file="$state_directory/credentials.env"
-if [[ ! -e "$credentials_file" ]]; then
-  umask 077
-  cat >"$credentials_file" <<EOF
-KODEX_LOCAL_ADMIN_USERNAME=admin
-KODEX_LOCAL_ADMIN_PASSWORD=$(openssl rand -hex 32)
-KODEX_LOCAL_OWNER_USERNAME=owner
-KODEX_LOCAL_OWNER_EMAIL=owner@kodex.local
-KODEX_LOCAL_OWNER_PASSWORD=$(openssl rand -hex 32)
-EOF
-fi
-[[ -f "$credentials_file" && ! -L "$credentials_file" ]] || fail 'credentials file is invalid'
-chmod 0600 "$credentials_file"
+bash "$repository_root/tools/dev/prepare-local-credentials.sh" "$credentials_file"
 # shellcheck disable=SC1090
 source "$credentials_file"
 
 cluster_mode=readback
-[[ "$command_name" == up ]] && cluster_mode=apply
+[[ "$command_name" == up || "$command_name" == identity ]] && cluster_mode=apply
 "$repository_root/tools/dev/bootstrap-cluster.sh" --context "$context" \
   --mode "$cluster_mode" --state-directory "$state_directory" \
   --tls-mode "$tls_mode" --acme-email "$acme_email" \
   --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer"
 
-if [[ "$command_name" == up && "$tls_mode" == public-acme ]]; then
+if [[ ( "$command_name" == up || "$command_name" == identity ) && "$tls_mode" == public-acme ]]; then
   "$repository_root/tools/dev/preflight-public-hosts.sh" \
     --hosts "${KODEX_DEV_PUBLIC_TLS_HOSTS:-$public_host,$oidc_host}" \
     --allowed-ipv4-addresses "${KODEX_DEV_PUBLIC_TLS_ALLOWED_IPV4_ADDRESSES:-}" \
@@ -694,6 +688,8 @@ if [[ ! -d "$material_directory" ]]; then
     --release-registry-username-file "$registry_username" \
     --release-registry-password-file "$registry_password" \
     "${draft_material_arguments[@]}"
+  "$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
+    --state-directory "$state_directory" --mode checkpoint >/dev/null
 fi
 
 if [[ ! -d "$material_directory/identity" ]]; then
@@ -716,7 +712,8 @@ if [[ ! -d "$material_directory/identity" ]]; then
 fi
 
 "$repository_root/tools/deploy/materialize-identity-secrets.sh" \
-  --context "$context" --material-directory "$material_directory"
+  --context "$context" --material-directory "$material_directory" \
+  --management-surfaces "$management_surfaces"
 "$repository_root/infra/identity/bootstrap.sh" --context "$context" --mode apply \
   --oidc-host "$oidc_host" --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer" \
   --ingress-namespace kube-system --ingress-pod-name traefik
@@ -731,6 +728,11 @@ else
 fi
 "$repository_root/tools/deploy/configure-keycloak.sh" --context "$context" --mode apply \
   "${keycloak_origin_arguments[@]}"
+
+if [[ "$command_name" == identity ]]; then
+  printf 'Kodex local identity completed: https://%s\nApplication readiness has not been checked\n' "$oidc_host"
+  exit 0
+fi
 
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
   --context "$context" --material-directory "$material_directory"

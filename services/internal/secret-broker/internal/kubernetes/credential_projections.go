@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,6 +53,7 @@ type CredentialProjectionManifest struct {
 }
 
 type ProjectionAuthority struct {
+	RPCProfile               string    `json:"rpc_profile,omitempty"`
 	ActorID                  string    `json:"actor_id"`
 	TenantID                 string    `json:"tenant_id"`
 	ProjectID                string    `json:"project_id"`
@@ -214,10 +216,18 @@ func credentialProjectionFromSecret(secret *corev1.Secret, checkData bool) (Cred
 }
 
 func validateCredentialProjectionManifest(value CredentialProjectionManifest, namespace string) error {
+	if value.Authority.RPCProfile == transportprofile.TrustedCluster {
+		if value.Authority.ProofJTI != "" || value.Generation < 1 || value.Authority.SourceRevision != uint64(value.Generation) ||
+			value.Authority.SourceDigestSHA256 != value.RuntimeRevisionDigest {
+			return ErrCredentialProjectionInvalid
+		}
+	} else if value.Authority.RPCProfile != "" || value.Authority.ProofJTI == "" {
+		return ErrCredentialProjectionInvalid
+	}
 	assistant := value.Authority.CallerFullMethod == "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeSystemAssistantCredentials"
 	if namespace != "kodex-runtime" || value.Authority.ActorID == "" || value.Authority.TenantID == "" ||
 		(assistant && (value.Authority.ProjectID != "" || len(value.RuntimeSecrets) != 0)) || (!assistant && value.Authority.ProjectID == "") ||
-		value.Authority.ProofJTI == "" || value.Authority.SourceRevision == 0 || value.Authority.CallerCredentialRevision == 0 ||
+		value.Authority.SourceRevision == 0 || value.Authority.CallerCredentialRevision == 0 ||
 		!validProjectionDigest(value.Authority.SourceDigestSHA256) || value.Authority.CallerWorkloadID != "runtime-controller" ||
 		(!assistant && value.Authority.CallerFullMethod != "/secretbroker.v1.RuntimeCredentialProjectionService/MaterializeRuntimeCredentials") ||
 		value.WorkloadInstance == "" || value.LeaseRef == "" || value.Generation < 1 || value.Attempt < 1 ||

@@ -4,11 +4,123 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.4.29
-updated: 2026-09-15
+version: 1.5.0
+updated: 2026-09-16
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+## Прототипный профиль trusted-cluster
+
+Решение владельца от 2026-09-16 (#1728, приёмка #1031) вводит явный профиль
+`trusted-cluster`: разрешённые workload доверены, кластер является доверенной
+DMZ. Для этого профиля внутренний RPC использует обычный gRPC/HTTP без mTLS,
+issuer/verifier sidecar, подписи каждого запроса, authority socket и
+publisher/restore/rotation readiness. Это отдельный профиль, а не автоматический
+fallback при ошибке защищённого транспорта. Сохранённая реализация ниже
+применяется к защищённому профилю и не удаляется этим переходом.
+
+Оба участника выбирают профиль конфигурацией. Заголовок запроса не переключает
+защищённый сервер. Caller в trusted metadata — утверждение доверенного сервиса,
+не подтверждённая сертификатом identity; permission и тип actor берутся только
+из закрытого target-owned реестра. Unknown/duplicate/mixed profile закрыто
+отклоняются. Компрометация разрешённого workload выходит за пределы этой
+прототипной модели; post-MVP план восстановления защиты — #1729.
+
+Обязательные границы, которые профиль НЕ отменяет:
+
+- HTTPS browser ingress, OIDC/session, CSRF/Origin и ограничения upload;
+- authoritative actor/org/project, resource ownership и точные capabilities;
+- доменные lease/claim/attempt, idempotency/OCC, cancel/retry/terminal и audit;
+- deny-by-default и точные пары ingress+egress NetworkPolicy, namespaces и
+  минимальные ServiceAccount/RBAC; внутренние Service только ClusterIP;
+- TLS с hostname verification к внешним провайдерам и защита secret values.
+
+Карта транспортного перехода (доменные события и переходы не меняются):
+
+| Инициатор | Источник полномочий и путь | Владелец и результат |
+| --- | --- | --- |
+| Browser navigation/project API | HTTPS gateway → проверенная OIDC session → внутренний RPC с пользовательским credential; projectRef только locator | CP повторно проверяет credential, разрешает tenant/project и permission; query либо прежняя owner-транзакция с OCC/idempotency/audit/outbox |
+| Browser WebSocket | Проверенная session и одноразовый ticket → gateway → тот же CP authorization | Прежние cursor/rejoin и разрешённая realtime projection; транспорт не выдаёт дополнительных прав |
+| Служебный worker | Разрешённая NetworkPolicy пара и exact caller/method → owner-resolved служебный principal | CP проверяет текущие claim/lease/attempt; прежние атомарные complete/cancel/retry/expiry и события |
+| Runtime/task или внешний provider effect | Отдельное server-owned делегирование с exact session/turn/attempt/input | Не понижается до SERVICE_OWNER_RESOLVED; нужны прежние доменные grant/revoke/receipt проверки |
+
+Для служебного principal `trusted-cluster` читает server-owned PostgreSQL-реестр
+`trusted_workload_generations`, а не создаёт фиктивный подписанный worker grant.
+Forward migration регистрирует закрытый набор workload; runtime имеет только
+SELECT. Reader не понижает ранее сохранённый generation floor защищённого
+профиля, отклоняет неизвестный/отключённый workload и переживает замену Pod.
+Возврат отключённой регистрации требует большего поколения. Этот реестр не
+выдаёт task grant и не заменяет проверки session/turn/attempt и владения.
+
+Runtime credential projection в этом профиле не имитирует подписанный proof.
+Её сквозной контракт (#1728) имеет следующие отдельные переходы:
+
+| Переход | Полномочия и проверка | Результат и авторитетное чтение |
+| --- | --- | --- |
+| Materialize runtime/system assistant | Runtime controller → разрешённый exact RPC secret-broker → owner RPC CP; broker передаёт только profile/caller/method и точную execution lease с fence | CP в одном repeatable-read snapshot назначает actor/org/project из lease/revision/root run, проверяет весь существующий execution и provider/secret scope; broker создаёт projection по точным descriptors |
+| Повтор materialize | Те же lease/generation/attempt/input/revision и действующий fence; серверное поколение workload не от caller | Прежний идемпотентный content-addressed projection; изменение входа не расширяет старый допуск |
+| Recovery/validate | Broker повторно читает owner по сохранённому snapshot без fence; CP заново разрешает lineage и сравнивает все authority поля и generation | Только boolean current; нельзя продлить исходный срок projection. Нет нового доменного события, read path — ValidateRuntimeCredentialProjection |
+| Cancel/delete/terminal/lease expiry | Прежняя owner-транзакция закрывает lease/grants; последующий owner read не находит активный exact execution | Recovery удаляет только exact projection descriptor по прежним UID/resourceVersion preconditions; нового события projection нет, состояние владельца читается через ValidateRuntimeCredentialProjection |
+| Retry | Новая attempt/lease/revision и прежние owner events/grants | Старый snapshot не подходит новой attempt; новый materialize проходит весь путь заново |
+
+Поле `rpc_profile` в authority является discriminator, но не источником прав:
+его принимает только явно настроенный trusted owner от разрешённого broker.
+При первом resolve actor/tenant/project, revision, expiry и proof JTI пусты;
+CP возвращает server-owned authority. При recovery snapshot полностью сравнивается
+с владельцем. `proof_jti` остаётся пустым, source revision/digest связываются с
+execution generation/runtime revision digest. Защищённый профиль сохраняет
+старый proof-контракт и не принимает trusted discriminator.
+
+Callback runner → runtime-controller использует отдельный server-owned
+`callback_tls.profile=trusted-cluster`: только private Pod IP controller и
+HTTP:8444, без CA/client certificate mounts. Это поле входит в immutable
+execution/MCP binding, но не меняет доменный RuntimeRevision digest, из которого
+transport locator уже исключён. Readiness и рабочий MCP используют один transport
+с exact destination и без proxy; protected профиль сохраняет mTLS.
+Каждый progress, complete, artifact, native-tool-call, credential refresh и MCP
+по-прежнему требует execution ticket и exact method/org/project/run/node/session/
+turn/attempt/input/revision/binding. Cancel/terminal/expiry закрывают прежнюю lease
+у CP; retry получает новую attempt/ticket. Callback не создаёт отдельного события:
+owner-транзакции и их outbox остаются источником фактов, read path — прежний CP
+execution API. Provider sandbox не получает callback ticket или transport keys.
+
+Внутренний email adapter сохраняет канонический logical origin
+`https://email-bridge.kodex-system.svc.cluster.local` из IntegrationDefinition.
+Только в `trusted-cluster` транспорт явно отображает POST
+`/v1/mailbox-operations` на HTTP того же Service:443 (Pod:8443), назначает
+caller/profile и запрещает redirects и другие destinations. Получатель
+по-прежнему требует execution binding и bearer fence, которые разрешает CP.
+Это не относится к SMTP/IMAP/POP3: внешний TLS и hostname verification остаются
+прежними. Из email Pod убирается RPC private key, но сохраняется PostgreSQL CA.
+
+Динамические image admission Jobs выбирают профиль только из неизменяемой
+owner policy, а admission сверяет его с server-owned parameters. Label самого
+Job не разрешает понижение защиты. `trusted-cluster` входит в digest run,
+поэтому Jobs двух профилей не разделяют immutable execution identity.
+
+| Фаза image flow | Транспорт и полномочия | Неизменённый результат |
+| --- | --- | --- |
+| claim / admit | image-admission → exact CP RPC по разрешённой NetworkPolicy; закрытый method registry и CP principal; без issuer/socket/grant-agent | Прежние owner claim, attempt, lease, version/idempotency и admission state; artifact tuple назначает CP |
+| promote | image-promotion → exact CP RPC; отдельные ServiceAccount, capability и registry credential | Прежний owner promotion record и проверка exact artifact/evidence; простой RPC не выдаёт право произвольного push |
+| scan / sign | RPC profile не выдаётся; прежние точные scanner/signer images, ServiceAccount и scoped registry credentials | Прежние отчёты и подписи; успешность сканирования не синтезируется |
+
+Retry, cancellation, cleanup и executable proof hold не меняются этим
+транспортным render: авторитетными остаются CP owner records и admission
+controller readback. Unit/CEL-проверка Jobs не доказывает прохождение живого
+image flow; его readiness и переходы проверяются отдельно.
+
+Local renderer дополнительно закрепляет read-only source и host UID/GID для
+писателей cache. Private `.env` и Git credentials не являются runtime config
+и не должны читаться application Pod через source mount. Профиль переносим
+между средами; сейчас разрешена только локальная активация. Staging и production
+требуют отдельных разрешений владельца.
+
+Для реализации проверены Context7 `/kubernetes/website` (NetworkPolicy,
+securityContext), `/grpc/grpc-go` (transport credentials, metadata/interceptors),
+`/jackc/pgx` (QueryRow/ErrNoRows) и `/pressly/goose` (transactional SQL migrations).
+
+## Сохранённый защищённый профиль
 
 Решение владельца #1470 отделяет стабильную идентичность обычного RPC от
 жизненного цикла приложения: mTLS и локальный закрытый список методов не

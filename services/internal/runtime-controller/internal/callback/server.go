@@ -41,6 +41,7 @@ const (
 var progressCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{2,63}$`)
 
 type Config struct {
+	RPCProfile                                                                    string
 	Listen, CertificateFile, PrivateKeyFile, ClientCAFile, ExpectedClientSPIFFEID string
 	RequestTimeout, WarmLongPoll                                                  time.Duration
 	FileTransferTimeout                                                           time.Duration
@@ -166,9 +167,11 @@ func (server *Server) Run(ctx context.Context) error {
 	if err != nil {
 		return errors.New("listen runtime callback")
 	}
-	tlsListener := tls.NewListener(listener, server.http.TLSConfig)
+	if server.http.TLSConfig != nil {
+		listener = tls.NewListener(listener, server.http.TLSConfig)
+	}
 	done := make(chan error, 1)
-	go func() { done <- server.http.Serve(tlsListener) }()
+	go func() { done <- server.http.Serve(listener) }()
 	select {
 	case err := <-done:
 		if errors.Is(err, http.ErrServerClosed) {
@@ -1456,6 +1459,12 @@ func (server *Server) writeMCPError(writer http.ResponseWriter, id json.RawMessa
 }
 
 func serverTLS(config Config) (*tls.Config, error) {
+	if config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
+		return nil, nil
+	}
+	if config.RPCProfile != "" {
+		return nil, errors.New("runtime callback RPC profile is invalid")
+	}
 	certificate, err := tls.LoadX509KeyPair(config.CertificateFile, config.PrivateKeyFile)
 	if err != nil {
 		return nil, errors.New("load runtime callback server identity")

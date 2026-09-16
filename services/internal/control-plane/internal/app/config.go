@@ -21,6 +21,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
 	SkillScannerSocket              string        `env:"CONTROL_PLANE_SKILL_SCANNER_SOCKET"`
 	SkillScannerTimeout             time.Duration `env:"CONTROL_PLANE_SKILL_SCANNER_TIMEOUT"`
 	GRPCListen                      string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
@@ -208,6 +209,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
+		return errors.New("control-plane RPC profile is invalid")
+	}
 	if !filepath.IsAbs(config.SkillScannerSocket) || filepath.Clean(config.SkillScannerSocket) != config.SkillScannerSocket || strings.ContainsAny(config.SkillScannerSocket, "\x00\n\r") || config.SkillScannerTimeout < time.Second || config.SkillScannerTimeout > time.Minute {
 		return errors.New("control-plane skill scanner configuration is invalid")
 	}
@@ -279,8 +283,10 @@ func (config Config) validate() error {
 	if !validObjectStorageBoundary(config) {
 		return errors.New("control-plane object storage boundary is invalid")
 	}
-	if info, err := os.Lstat(filepath.Dir(config.AuthorityVerifierSocket)); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return errors.New("control-plane authority socket directory is invalid")
+	if config.RPCProfile != "trusted-cluster" {
+		if info, err := os.Lstat(filepath.Dir(config.AuthorityVerifierSocket)); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("control-plane authority socket directory is invalid")
+		}
 	}
 	return nil
 }

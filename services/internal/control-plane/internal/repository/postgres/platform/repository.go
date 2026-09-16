@@ -37,6 +37,7 @@ const (
 
 type Repository struct {
 	pool                            *pgxpool.Pool
+	trustedCluster                  bool
 	defaultRuntimeProvider          string
 	defaultRuntimeModel             string
 	providerCredential              ProviderCredentialConfig

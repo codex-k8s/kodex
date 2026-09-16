@@ -47,6 +47,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	readiness := serviceruntime.NewReadiness()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
+		RPCProfile: config.RPCProfile, CallerWorkload: serviceName,
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile,
 		ClientCertificateFile: config.ControlPlaneCertificateFile, ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
@@ -62,6 +63,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		)
 	}
 	adapter, err := integration.New(integration.Config{
+		RPCProfile:          config.RPCProfile,
 		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL,
 		SyntheticBaseURL: config.SyntheticBaseURL, Timeout: config.OperationTimeout,
 		EmailCAFile: config.ControlPlaneCAFile, EmailCertificateFile: config.ControlPlaneCertificateFile, EmailPrivateKeyFile: config.ControlPlanePrivateKeyFile,

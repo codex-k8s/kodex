@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -25,7 +26,7 @@ const (
 
 func (repository *Repository) ResolveRuntimeCredentialProjection(ctx context.Context, principal value.Principal, input platformrepo.RuntimeCredentialProjectionInput) (platformrepo.RuntimeCredentialProjection, error) {
 	if !validCredentialProjectionOwner(principal, "platform.credential-projections.runtime.resolve") ||
-		!validRuntimeProjectionAuthority(input.Authority) || input.Fence == "" {
+		!repository.validRuntimeProjectionAuthority(input.Authority, false) || input.Fence == "" {
 		return platformrepo.RuntimeCredentialProjection{}, errs.ErrForbidden
 	}
 	return repository.resolveRuntimeCredentialProjection(ctx, principal, input)
@@ -33,7 +34,7 @@ func (repository *Repository) ResolveRuntimeCredentialProjection(ctx context.Con
 
 func (repository *Repository) ValidateRuntimeCredentialProjection(ctx context.Context, principal value.Principal, input platformrepo.RuntimeCredentialProjectionInput) (bool, error) {
 	if !validCredentialProjectionOwner(principal, "platform.credential-projections.runtime.validate") ||
-		!validRuntimeProjectionAuthority(input.Authority) || input.Fence != "" {
+		!repository.validRuntimeProjectionAuthority(input.Authority, true) || input.Fence != "" {
 		return false, errs.ErrForbidden
 	}
 	resolved, err := repository.resolveRuntimeCredentialProjection(ctx, principal, input)
@@ -55,7 +56,8 @@ func (repository *Repository) resolveRuntimeCredentialProjection(ctx context.Con
 	if err != nil {
 		return platformrepo.RuntimeCredentialProjection{}, err
 	}
-	if input.Authority.TenantID != current.organizationID {
+	trusted := input.Authority.RPCProfile == transportprofile.TrustedCluster
+	if !trusted && input.Authority.TenantID != current.organizationID {
 		return platformrepo.RuntimeCredentialProjection{}, errs.ErrForbidden
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
@@ -64,6 +66,13 @@ func (repository *Repository) resolveRuntimeCredentialProjection(ctx context.Con
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var result platformrepo.RuntimeCredentialProjection
+	if trusted {
+		input.Authority, err = repository.resolveTrustedProjectionAuthority(ctx, tx, current.organizationID, input)
+		if err != nil {
+			return result, err
+		}
+		result.Authority = input.Authority
+	}
 	var rawSecrets []byte
 	err = tx.QueryRow(ctx, queryCredentialProjectionResolveRuntime, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": input.Authority.ActorID,
@@ -191,7 +200,7 @@ func validCredentialProjectionOwner(principal value.Principal, permission string
 
 func validProjectionAuthority(authority platformrepo.CredentialProjectionAuthority, workload, method string) bool {
 	now := time.Now().UTC()
-	return uuid.Validate(authority.ActorID) == nil && uuid.Validate(authority.TenantID) == nil &&
+	return authority.RPCProfile == "" && uuid.Validate(authority.ActorID) == nil && uuid.Validate(authority.TenantID) == nil &&
 		(uuid.Validate(authority.ProjectID) == nil || (method == assistantProjectionMethod || method == sttProjectionMethod) && authority.ProjectID == "") && uuid.Validate(authority.ProofJTI) == nil &&
 		authority.SourceRevision > 0 && authority.CallerCredentialRevision > 0 && validRuntimeSecretSHA256(authority.SourceDigestSHA256) &&
 		authority.CallerWorkloadID == workload && authority.CallerFullMethod == method &&

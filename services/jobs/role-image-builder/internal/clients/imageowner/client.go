@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	RPCProfile                                                                 string
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
 	ApplicationGrantFile                                                       string
 	ExpectedIssuerUID, ExpectedIssuerGID                                       uint32
@@ -79,10 +80,13 @@ type Client struct {
 
 func Dial(ctx context.Context, config Config) (*Client, error) {
 	operations := sharedclient.ImageAdmissionOperations()
+	caller := "image-admission"
 	if config.Promotion {
 		operations = sharedclient.ImagePromotionOperations()
+		caller = "image-promotion"
 	}
 	client, err := sharedclient.Dial(ctx, sharedclient.Config{
+		RPCProfile: config.RPCProfile, CallerWorkload: caller,
 		Target: config.Target, TLSServerName: config.TLSServerName, CAFile: config.CAFile,
 		ClientCertificateFile: config.ClientCertificateFile, ClientPrivateKeyFile: config.ClientPrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile, ExpectedIssuerUID: config.ExpectedIssuerUID,
