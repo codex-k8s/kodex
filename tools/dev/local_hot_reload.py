@@ -128,6 +128,9 @@ def materialize(resources, source, cache, uid, gid):
                 if not any(volume["name"] == MASK_NAME for volume in volumes):
                     volumes.append({"name": MASK_NAME, "configMap": {"name": MASK_NAME, "defaultMode": 292}})
         if mounted_source:
+            for container in spec.get("containers", []):
+                if container["name"] == "skill-scanner":
+                    container["securityContext"].update({"runAsUser": uid, "runAsGroup": gid})
             spec.setdefault("securityContext", {}).update({
                 "runAsUser": uid, "runAsGroup": gid, "runAsNonRoot": True,
                 "fsGroup": gid, "fsGroupChangePolicy": "OnRootMismatch",
@@ -160,7 +163,10 @@ def verify(resources, source, cache, uid, gid):
         for container in spec.get("containers", []) + spec.get("initContainers", []):
             mounts = container.get("volumeMounts", [])
             host_mounts = [mount for mount in mounts if "hostPath" in volumes.get(mount["name"], {})]
-            if not host_mounts:
+            scanner = container["name"] == "skill-scanner"
+            if scanner:
+                require(not host_mounts, "SCANNER_HOST_PATH_FORBIDDEN")
+            if not host_mounts and not scanner:
                 continue
             require(template.get("metadata", {}).get("labels", {}).get(PROFILE_LABEL) == PROFILE,
                     "TRUSTED_PROFILE_LABEL_REQUIRED")

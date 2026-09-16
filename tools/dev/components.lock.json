@@ -24,7 +24,7 @@
   "tools": {
     "air": {
       "module": "github.com/air-verse/air",
-      "version": "v1.63.4"
+      "version": "v1.67.4"
     }
   }
 }

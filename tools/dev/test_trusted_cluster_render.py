@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from trusted_cluster_render import materialize, verify, PROFILE
+from trusted_cluster_render import materialize, verify, PROFILE, PROFILE_LABEL, selector_matches
 
 
 def workload(name):
@@ -25,6 +25,35 @@ def peer(name):
 
 
 class TrustedClusterRenderTest(unittest.TestCase):
+    def test_stt_removes_internal_identity_but_preserves_spool_and_external_trust(self):
+        service = workload("stt-tts-service")
+        spec = service["spec"]["template"]["spec"]
+        names = ("workload-tls", "internal-ca", "authority-sockets", "stt-spool", "external-ca")
+        spec["volumes"] = [{"name": name, "emptyDir": {}} for name in names]
+        spec["containers"][0]["volumeMounts"] = [
+            {"name": name, "mountPath": "/" + name} for name in names]
+        before = copy.deepcopy(service)
+        result = materialize([service], PROFILE)
+        rendered = result[0]["spec"]["template"]["spec"]
+        self.assertEqual(service, before)
+        self.assertEqual({volume["name"] for volume in rendered["volumes"]},
+                         {"stt-spool", "external-ca"})
+        self.assertEqual({mount["name"] for mount in rendered["containers"][0]["volumeMounts"]},
+                         {"stt-spool", "external-ca"})
+        self.assertEqual(materialize(result, PROFILE), result)
+
+    def test_database_bootstrap_profile_is_explicit_and_required(self):
+        job = workload("kodex-postgresql-runtime-credentials")
+        job["kind"] = "Job"
+        job["spec"]["template"]["spec"]["containers"][0]["name"] = "reconcile"
+        result = materialize([job], PROFILE)
+        container = result[0]["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(container["env"], [{"name": "KODEX_RPC_PROFILE", "value": PROFILE}])
+        self.assertEqual(materialize(result, PROFILE), result)
+        container["env"] = []
+        with self.assertRaisesRegex(ValueError, "EXPLICIT_DATABASE_PROFILE_REQUIRED"):
+            verify(result, PROFILE)
+
     def setUp(self):
         self.resources = [workload("control-api-gateway"), workload("control-plane"),
                           workload("internal-rpc-authority-publisher"),
@@ -64,7 +93,8 @@ class TrustedClusterRenderTest(unittest.TestCase):
         self.resources.append(policy("authority-egress", "control-plane", egress=[{
             "to": [peer("internal-rpc-authority-publisher")], "ports": [{"port": 8443}]}]))
         result = materialize(self.resources, PROFILE)
-        self.assertEqual(result[-1]["spec"]["egress"], [])
+        remaining = next(item for item in result if item["metadata"]["name"] == "authority-egress")
+        self.assertEqual(remaining["spec"]["egress"], [])
 
     def test_label_without_exact_application_profile_is_rejected(self):
         result = materialize(self.resources, PROFILE)
@@ -99,9 +129,22 @@ class TrustedClusterRenderTest(unittest.TestCase):
         resources.append({"kind": "Service", "metadata": {"name": "control-plane"}, "spec": {"type": "NodePort"}})
         with self.assertRaisesRegex(ValueError, "PUBLIC_INTERNAL_SERVICE_FORBIDDEN"):
             verify(resources, PROFILE)
-        self.resources.pop(3)
+        resources = [item for item in materialize(self.resources, PROFILE)
+                     if item["metadata"]["name"] not in ("gateway-deny", "kodex-trusted-cluster-default-deny")]
         with self.assertRaisesRegex(ValueError, "DENY_BY_DEFAULT_REQUIRED"):
-            materialize(self.resources, PROFILE)
+            verify(resources, PROFILE)
+
+    def test_explicit_deny_covers_only_profile_and_rejects_collision(self):
+        self.resources.pop(3)
+        resources = materialize(self.resources, PROFILE)
+        deny = next(item for item in resources if item["metadata"]["name"] == "kodex-trusted-cluster-default-deny")
+        self.assertTrue(selector_matches(deny["spec"]["podSelector"], {PROFILE_LABEL: PROFILE}))
+        self.assertFalse(selector_matches(deny["spec"]["podSelector"], {"app.kubernetes.io/name": "other"}))
+        self.assertEqual(deny["spec"]["ingress"], [])
+        self.assertEqual(deny["spec"]["egress"], [])
+        deny["spec"]["podSelector"] = {}
+        with self.assertRaisesRegex(ValueError, "PROFILE_DEFAULT_DENY_CONTRACT_INVALID"):
+            materialize(resources, PROFILE)
 
 
 if __name__ == "__main__":

@@ -286,7 +286,8 @@ def prime(source, cache, modules, revision, *, process, clean=True, air=False,
                     platform = process.run(["go", "env", "GOOS", "GOARCH"], env=env).decode().split()
                     require(len(platform) == 2 and all(re.fullmatch(r"[a-z0-9]+", p) for p in platform), "GO_PLATFORM_INVALID")
                     contract = f'{lock_data["module"]}@{lock_data["version"]}|CGO_ENABLED=0|{"/".join(platform)}'
-                    binary, receipt = cache / "go-tools/air", cache / "go-tools/air.contract"
+                    binary = cache / "go-tools" / ("air-" + lock_data["version"])
+                    receipt = binary.with_suffix(binary.suffix + ".contract")
                     if not binary.is_file() or not os.access(binary, os.X_OK) or not receipt.is_file() or receipt.read_text().strip() != contract:
                         install = mirror / "bin"
                         install.mkdir()

@@ -47,6 +47,31 @@ class HotReloadContractTest(unittest.TestCase):
         self.assertIn({"name": "kodex-dev-tmp", "mountPath": "/tmp"}, spec["containers"][0]["volumeMounts"])
         self.assertIn({"name": "kodex-dev-tmp", "emptyDir": {"sizeLimit": "4Gi"}}, spec["volumes"])
 
+    def test_scanner_socket_identity_matches_source_container(self):
+        self.resources[0]["spec"]["template"]["spec"]["containers"].append({
+            "name": "skill-scanner", "securityContext": {
+                "runAsUser": 10001, "runAsGroup": 10001, "runAsNonRoot": True,
+                "allowPrivilegeEscalation": False, "readOnlyRootFilesystem": True,
+                "capabilities": {"drop": ["ALL"]},
+            }})
+        result = materialize(self.resources, *self.arguments)
+        scanner = result[0]["spec"]["template"]["spec"]["containers"][1]
+        self.assertEqual(scanner["securityContext"]["runAsUser"], 1000)
+        self.assertEqual(scanner["securityContext"]["runAsGroup"], 1000)
+        self.assertTrue(scanner["securityContext"]["readOnlyRootFilesystem"])
+        self.assertEqual(materialize(result, *self.arguments), result)
+        for mutation in (
+            lambda item: item["securityContext"].update(runAsUser=0),
+            lambda item: item["securityContext"].update(runAsGroup=10001),
+            lambda item: item["securityContext"].update(allowPrivilegeEscalation=True),
+            lambda item: item.update(volumeMounts=[{"name": "cache", "mountPath": "/cache"}]),
+        ):
+            with self.subTest(mutation=mutation):
+                invalid = copy.deepcopy(result)
+                mutation(invalid[0]["spec"]["template"]["spec"]["containers"][1])
+                with self.assertRaises(ValueError):
+                    verify(invalid, *self.arguments)
+
     def test_rejects_root_writable_source_escape_and_missing_mask(self):
         mutations = (
             lambda spec: spec["containers"][0]["securityContext"].update(runAsUser=0),

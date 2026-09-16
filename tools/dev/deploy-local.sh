@@ -9,7 +9,9 @@ fail() {
 usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
-    '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' >&2
+    '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
+    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|core]' \
+    '  [--workload <exact-core-deployment>]' >&2
 }
 
 context=""
@@ -17,6 +19,9 @@ mode=""
 render=""
 state_directory=""
 tls_mode=local-ca
+security_profile=protected
+stage=full
+selected_workload=""
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
@@ -24,6 +29,9 @@ while (($# > 0)); do
     --render) render=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --tls-mode) tls_mode=${2:-}; shift 2 ;;
+    --security-profile) security_profile=${2:-}; shift 2 ;;
+    --stage) stage=${2:-}; shift 2 ;;
+    --workload) selected_workload=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -32,6 +40,14 @@ done
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
+case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
+case "$stage" in full|data|network|migrate|core) ;; *) fail 'deployment stage is invalid' ;; esac
+[[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
+[[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
+if [[ -n "$selected_workload" ]]; then
+  [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge)$ ]] ||
+    fail 'workload selection requires an exact core deployment'
+fi
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && -d "$state_directory" &&
   ! -L "$state_directory" ]] || fail 'state directory is invalid'
@@ -69,8 +85,41 @@ filter_render() {
 apply_render() {
   local name=$1 expression=$2 output
   output=$(filter_render "$name" "$expression")
+  if [[ "$security_profile" == trusted-cluster ]]; then
+    verify_local_resource_ownership "$output"
+    kubectl apply --server-side --field-manager=kodex-local-dev -f "$output" >/dev/null
+    return
+  fi
   bash "$script_directory/migrate-worker-grant-strategy.sh" "$output"
   kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev -f "$output" >/dev/null
+}
+
+verify_local_resource_ownership() {
+  python3 - "$1" "$context" <<'PY'
+import json
+import subprocess
+import sys
+import yaml
+for resource in yaml.safe_load_all(open(sys.argv[1])):
+    if not resource:
+        continue
+    metadata = resource['metadata']
+    command = ['kubectl', '--context', sys.argv[2], 'get', resource['kind'], metadata['name'],
+               '--ignore-not-found', '--show-managed-fields', '-o', 'json']
+    if metadata.get('namespace'):
+        command.extend(['-n', metadata['namespace']])
+    current = subprocess.run(command, check=True, capture_output=True).stdout
+    if not current:
+        continue
+    current_metadata = json.loads(current)['metadata']
+    labels = current_metadata.get('labels', {})
+    local_labels = labels.get('app.kubernetes.io/part-of') == 'kodex' and labels.get('kodex.dev/local-profile') == 'hot-reload'
+    local_created = labels.get('kodex.dev/security-profile') == 'trusted-cluster' and any(
+        entry.get('manager') == 'kodex-local-dev' and entry.get('operation') == 'Apply'
+        for entry in current_metadata.get('managedFields', []))
+    if not (local_labels or local_created):
+        raise SystemExit('Existing resource ownership mismatch: ' + resource['kind'] + '/' + metadata['name'])
+PY
 }
 
 cleanup_local_frontend_transport() {
@@ -314,12 +363,16 @@ wait_job() {
     fi
     if jq -e 'any(.status.conditions[]?; .type == "Failed" and .status == "True")' \
       <<<"$state" >/dev/null 2>&1; then
-      kubectl -n "$namespace" logs "job/$name" --all-containers --tail=200 >&2 || true
+      if [[ "$security_profile" == protected ]]; then
+        kubectl -n "$namespace" logs "job/$name" --all-containers --tail=200 >&2 || true
+      fi
       fail "local Job failed: $name"
     fi
     sleep 2
   done
-  kubectl -n "$namespace" logs "job/$name" --all-containers --tail=200 >&2 || true
+  if [[ "$security_profile" == protected ]]; then
+    kubectl -n "$namespace" logs "job/$name" --all-containers --tail=200 >&2 || true
+  fi
   fail "local Job timed out: $name"
 }
 
@@ -370,6 +423,19 @@ apply_job() {
   JOB_NAME="$name" yq 'select(.kind == "Job" and .metadata.name == strenv(JOB_NAME))' \
     "$render" >"$output"
   [[ -s "$output" ]] || fail "local Job is absent: $name"
+  if [[ "$security_profile" == trusted-cluster ]]; then
+    local digest
+    digest=$(sha256sum "$output" | awk '{print $1}')
+    name="$name-${digest:0:12}"
+    JOB_NAME="$name" JOB_INPUT_DIGEST="$digest" yq -i '
+      .metadata.name = strenv(JOB_NAME) |
+      .metadata.annotations."kodex.dev/job-input-sha256" = strenv(JOB_INPUT_DIGEST)
+    ' "$output"
+    verify_local_resource_ownership "$output"
+    kubectl apply --server-side --field-manager=kodex-local-dev -f "$output" >/dev/null
+    wait_job "$name"
+    return
+  fi
   kubectl -n "$namespace" delete "job/$name" --ignore-not-found --wait=true --timeout=3m >/dev/null
   kubectl apply --server-side --force-conflicts --field-manager=kodex-local-dev -f "$output" >/dev/null
   wait_job "$name"
@@ -1106,6 +1172,104 @@ readback_local_image_supply_chain() {
     --context "$context" --material-directory "$state_directory/material" \
     --promoted-pull-host "$promoted_pull_host" >/dev/null
 }
+
+if [[ "$security_profile" == trusted-cluster ]]; then
+  python3 - "$render" "$script_directory" "$context" <<'PY'
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+from urllib.parse import urlsplit
+import yaml
+sys.path.insert(0, sys.argv[2])
+import local_hot_reload
+import trusted_cluster_render
+config = json.loads(subprocess.check_output(['kubectl', '--context', sys.argv[3],
+                                            'config', 'view', '--minify', '-o', 'json']))
+server = urlsplit(config['clusters'][0]['cluster']['server'])
+if server.scheme != 'https' or server.hostname != '127.0.0.1':
+    raise SystemExit('Local trusted deployment requires loopback Kubernetes API')
+resources = [obj for obj in yaml.safe_load_all(open(sys.argv[1])) if obj]
+trusted_cluster_render.verify(resources, 'trusted-cluster')
+control = next(obj for obj in resources if obj['kind'] == 'Deployment' and obj['metadata']['name'] == 'control-plane')
+annotations = control['spec']['template']['metadata']['annotations']
+source = str(Path(sys.argv[2]).resolve().parents[1])
+if annotations['kodex.dev/source-root'] != source:
+    raise SystemExit('Trusted deployment source root mismatch')
+local_hot_reload.verify(resources, source, annotations['kodex.dev/cache-root'], os.getuid(), os.getgid())
+PY
+  if [[ "$mode" == apply && "$stage" == data ]]; then
+    verify_email_projection_generation
+    ensure_local_object_storage_secret
+    apply_render image-admission-crd 'select(.kind == "CustomResourceDefinition")'
+    kubectl wait --for=condition=Established \
+      customresourcedefinition/imageadmissionpolicyparameters.supplychain.kodex.dev --timeout=3m >/dev/null
+    # Параметры должны существовать до активации закрытых admission bindings.
+    apply_render admission-parameters 'select(.kind == "ConfigMap")'
+    apply_render foundation '
+      select(.kind != "Deployment" and .kind != "StatefulSet" and .kind != "Job" and
+        .kind != "Secret" and .kind != "CustomResourceDefinition" and .kind != "Namespace")
+    '
+    ensure_email_projection_secret
+    wait_certificates
+    apply_render statefulsets 'select(.kind == "StatefulSet")'
+  else
+    discover_local_object_storage_secret
+    OBJECT_STORAGE_SECRET_NAME="$object_storage_secret_name" yq -i '
+      (.. | select(tag == "!!str")) |=
+        sub("^kodex-external-s3$"; strenv(OBJECT_STORAGE_SECRET_NAME))
+    ' "$render"
+  fi
+  for workload in kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql; do
+    kubectl -n "$namespace" rollout status "statefulset/$workload" --timeout=10m >/dev/null ||
+      fail "local StatefulSet is unavailable: $workload"
+  done
+  readback_local_object_storage_secret
+  if [[ "$stage" == network && "$mode" == apply ]]; then
+    apply_render network-policies 'select(.kind == "NetworkPolicy")'
+  fi
+  if [[ "$stage" == migrate ]]; then
+    if [[ "$mode" == apply ]]; then
+      apply_render migration-configuration '
+        select(.kind == "ConfigMap" and .metadata.name == "kodex-postgresql-runtime-credentials")
+      '
+    fi
+    for job in seaweedfs-bucket-bootstrap control-plane-migrate email-bridge-migration \
+      kodex-postgresql-runtime-credentials control-plane-broker-bootstrap; do
+      if [[ "$mode" == apply ]]; then
+        apply_job "$job"
+      else
+        job_output=$(filter_render "readback-$job" "select(.kind == \"Job\" and .metadata.name == \"$job\")")
+        job_digest=$(sha256sum "$job_output" | awk '{print $1}')
+        wait_job "$job-${job_digest:0:12}"
+      fi
+    done
+  fi
+  if [[ "$stage" == core ]]; then
+    if [[ "$mode" == apply ]]; then
+      if [[ -z "$selected_workload" || "$selected_workload" == control-plane ]]; then
+        apply_render core-scanner-config 'select(.kind == "ConfigMap" and .metadata.name == "control-plane-skill-scanner")'
+      fi
+      if [[ -n "$selected_workload" ]]; then
+        apply_render core-application "select(.kind == \"Deployment\" and .metadata.name == \"$selected_workload\")"
+      else
+      apply_render core-applications '
+        select(.kind == "Deployment" and
+          (.metadata.name | test("^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge)$")))
+      '
+      fi
+    fi
+    for workload in egress-gateway control-plane secret-broker control-api-gateway \
+      staff-control-center automation-scheduler integration-gateway email-bridge; do
+      [[ -z "$selected_workload" || "$selected_workload" == "$workload" ]] || continue
+      kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=5m >/dev/null ||
+        fail "local core Deployment is unavailable: $workload"
+    done
+  fi
+  printf 'Kodex trusted-cluster stage completed: %s; application acceptance is not verified\n' "$stage"
+  exit 0
+fi
 
 if [[ "$mode" == apply ]]; then
   verify_email_projection_generation

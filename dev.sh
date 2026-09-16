@@ -737,9 +737,9 @@ fi
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
   --context "$context" --material-directory "$material_directory"
 default_provider_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"
-provider_auth=${KODEX_DEV_PROVIDER_AUTH_FILE:-$default_provider_auth}
+provider_auth=${KODEX_LOCAL_PROVIDER_AUTH_FILE:-${KODEX_DEV_PROVIDER_AUTH_FILE:-$default_provider_auth}}
 [[ "$provider_auth" == /* && -f "$provider_auth" && ! -L "$provider_auth" ]] ||
-  fail 'provider authorization is absent; set KODEX_DEV_PROVIDER_AUTH_FILE to a private Codex auth.json'
+  fail 'provider authorization is absent; set KODEX_LOCAL_PROVIDER_AUTH_FILE to a private Codex auth.json'
 [[ "$(stat -c '%u' "$provider_auth")" == "$(id -u)" &&
   $((8#$(stat -c '%a' "$provider_auth") & 8#077)) == 0 ]] ||
   fail 'provider authorization must be owned by the current user and private'

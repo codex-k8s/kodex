@@ -702,7 +702,7 @@ patch_go_container() {
             {"name":"GOTOOLCHAIN","value":"local"},
             {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
             {"name":"HOME","value":"/go/build-cache/home"},
-            {"name":"KODEX_DEV_AIR_VERSION","value":"v1.63.4"},
+            {"name":"KODEX_DEV_AIR_VERSION","value":"v1.67.4"},
             {"name":"KODEX_DEV_AIR_SHA256","value":strenv(AIR_DIGEST)}
           ])
       )
@@ -1711,8 +1711,12 @@ if [[ "$security_profile" == trusted-cluster ]]; then
   python3 -B "$repository_root/tools/dev/trusted_cluster_render.py" verify \
     --profile "$security_profile" <"$temporary_directory/trusted-hot-reload.json"
   # Digest вычисляется после преобразования; прежний protected digest не наследуется.
-  jq 'map(if .spec.template.metadata.annotations then
-    del(.spec.template.metadata.annotations["kodex.dev/render-sha256"]) else . end)' \
+  jq --arg cliImage "$runner_image" 'map(
+    (if .spec.template.metadata.annotations then
+      del(.spec.template.metadata.annotations["kodex.dev/render-sha256"]) else . end) |
+    (if .kind == "Deployment" and .metadata.name == "secret-broker" then
+      (.spec.template.spec.initContainers[] | select(.name == "codex-cli-install").image) = $cliImage
+      else . end))' \
     "$temporary_directory/trusted-hot-reload.json" >"$temporary_directory/trusted-final.json"
   render_digest=$(sha256sum "$temporary_directory/trusted-final.json" | awk '{print $1}')
   jq --arg digest "$render_digest" 'map(if .spec.template then
@@ -1720,4 +1724,22 @@ if [[ "$security_profile" == trusted-cluster ]]; then
     "$temporary_directory/trusted-final.json" | yq -p=json -o=yaml '.' >"$output"
 fi
 
+# Финальный JSON/YAML переход теряет стиль строк: Kubernetes использует YAML 1.1.
+yq -i '
+  (select(.kind == "Deployment" or .kind == "Job" or .kind == "StatefulSet") |
+    .spec.template.spec | (.initContainers[]?, .containers[]?) |
+    .env[]? | select(has("value")) | .value) style="double"
+' "$output"
+python3 - "$output" <<'PY'
+import sys
+import yaml
+for resource in yaml.safe_load_all(open(sys.argv[1])):
+    if not resource or resource.get('kind') not in ('Deployment', 'Job', 'StatefulSet'):
+        continue
+    spec = resource['spec']['template']['spec']
+    for container in spec.get('containers', []) + spec.get('initContainers', []):
+        for entry in container.get('env', []):
+            if 'value' in entry and not isinstance(entry['value'], str):
+                raise SystemExit('Rendered environment value must be a string: ' + entry['name'])
+PY
 printf 'Kodex local render created: %s (security profile: %s)\n' "$output" "$security_profile"

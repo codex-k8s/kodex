@@ -19,6 +19,7 @@ RPC_WORKLOADS = {
 RPC_VOLUMES = {
     "control-plane": {"workload-tls", "internal-ca", "authority-policy"},
     "secret-broker": {"server-tls", "client-ca", "workload-tls", "control-plane-ca"},
+    "stt-tts-service": {"workload-tls", "internal-ca", "authority-sockets"},
     "automation-scheduler": {"workload-tls", "control-plane-ca", "application-grant"},
     "session-archive": {"workload-tls", "control-plane-ca", "application-grant"},
     "integration-gateway": {"workload-tls", "control-plane-ca", "application-grant"},
@@ -123,6 +124,23 @@ def materialize(resources, profile):
     require(profile == PROFILE, "EXPLICIT_TRUSTED_PROFILE_REQUIRED")
     resources = [copy.deepcopy(resource) for resource in resources
                  if not authority_name(resource.get("metadata", {}).get("name", ""))]
+    # Изоляция касается только Pod выбранного профиля, не чужих Pod namespace.
+    # Отдельная пустая policy делает deny baseline явным даже там, где ранее
+    # изоляция задавалась одной policy вместе с разрешёнными связями.
+    for target_namespace in sorted({namespace(resource) for resource, _ in pod_specs(resources)}):
+        policy_name = "kodex-trusted-cluster-default-deny"
+        expected_spec = {"podSelector": {"matchLabels": {PROFILE_LABEL: PROFILE}},
+                         "policyTypes": ["Ingress", "Egress"], "ingress": [], "egress": []}
+        existing = [item for item in resources if item.get("kind") == "NetworkPolicy" and
+                    item["metadata"]["name"] == policy_name and namespace(item) == target_namespace]
+        require(len(existing) <= 1, "DUPLICATE_PROFILE_DEFAULT_DENY")
+        if existing:
+            require(existing[0]["spec"] == expected_spec, "PROFILE_DEFAULT_DENY_CONTRACT_INVALID")
+        else:
+            resources.append({"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+                              "metadata": {"name": policy_name, "namespace": target_namespace,
+                                           "labels": {"app.kubernetes.io/part-of": "kodex", PROFILE_LABEL: PROFILE}},
+                              "spec": expected_spec})
     for resource in resources:
         runtime_admission_profile(resource)
         resource.setdefault("metadata", {}).setdefault("labels", {})[PROFILE_LABEL] = PROFILE
@@ -161,6 +179,8 @@ def materialize(resources, profile):
                                     if not entry["name"].startswith("INTERNAL_RPC_AUTHORITY_") and
                                     entry["name"] != "KODEX_RPC_PROFILE"]
                 if name in RPC_WORKLOADS and container["name"] == name:
+                    container["env"].append({"name": "KODEX_RPC_PROFILE", "value": PROFILE})
+                if name == "kodex-postgresql-runtime-credentials" and container["name"] == "reconcile":
                     container["env"].append({"name": "KODEX_RPC_PROFILE", "value": PROFILE})
         used = {mount["name"] for group in ("containers", "initContainers")
                 for container in spec.get(group, []) for mount in container.get("volumeMounts", [])}
@@ -202,6 +222,11 @@ def verify(resources, profile):
             require(len(application) == 1 and
                     [entry for entry in application[0].get("env", []) if entry["name"] == "KODEX_RPC_PROFILE"] ==
                     [{"name": "KODEX_RPC_PROFILE", "value": PROFILE}], "EXPLICIT_RPC_PROFILE_REQUIRED:" + name)
+        if name == "kodex-postgresql-runtime-credentials":
+            application = [container for container in spec.get("containers", []) if container["name"] == "reconcile"]
+            require(len(application) == 1 and
+                    [entry for entry in application[0].get("env", []) if entry["name"] == "KODEX_RPC_PROFILE"] ==
+                    [{"name": "KODEX_RPC_PROFILE", "value": PROFILE}], "EXPLICIT_DATABASE_PROFILE_REQUIRED")
         require(not spec.get("hostNetwork") and not spec.get("hostPID"), "HOST_NETWORK_FORBIDDEN")
         for group in ("containers", "initContainers"):
             for container in spec.get(group, []):
