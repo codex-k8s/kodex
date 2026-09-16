@@ -135,7 +135,12 @@ render и не перезапускает StatefulSet. Это позволяет
 недостающую связь уже ожидающей Job. Сам по себе успешный apply не доказывает
 отрицательную сетевую проверку или готовность приложения.
 
-`--stage core` запускает восемь основных Deployments. Для отдельного
+`--stage core` запускает восемь основных Deployments. STT подключается отдельно
+через `--stage core --workload stt-tts-service` после готовности Control Plane,
+secret-broker и egress-gateway; отсутствие STT не задерживает начальный UI
+bootstrap. Эта команда использует тот же render, проверку ownership и rollout
+timeout, не выполняет платный provider smoke. Readiness не заменяет ручную
+проверку voice flow. Для отдельного
 обновления допускается `--workload <имя>` из закрытого списка core; остальные
 Deployments не применяются повторно. Для init установки CLI secret-broker
 профиль использует exact runner digest, уже импортированный локальным

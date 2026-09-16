@@ -11,7 +11,7 @@ usage() {
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
     '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|core]' \
-    '  [--workload <exact-core-deployment>]' >&2
+    '  [--workload <exact-core-deployment|stt-tts-service>]' >&2
 }
 
 context=""
@@ -45,7 +45,7 @@ case "$stage" in full|data|network|migrate|core) ;; *) fail 'deployment stage is
 [[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
-  [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge)$ ]] ||
+  [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge|stt-tts-service)$ ]] ||
     fail 'workload selection requires an exact core deployment'
 fi
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
@@ -1261,7 +1261,8 @@ PY
       fi
     fi
     for workload in egress-gateway control-plane secret-broker control-api-gateway \
-      staff-control-center automation-scheduler integration-gateway email-bridge; do
+      staff-control-center automation-scheduler integration-gateway email-bridge stt-tts-service; do
+      [[ "$workload" != stt-tts-service || "$selected_workload" == stt-tts-service ]] || continue
       [[ -z "$selected_workload" || "$selected_workload" == "$workload" ]] || continue
       kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=5m >/dev/null ||
         fail "local core Deployment is unavailable: $workload"
