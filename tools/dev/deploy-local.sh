@@ -1266,12 +1266,8 @@ PY
         select(.kind == "Deployment" and
           (.metadata.name | test("^kodex-image-registry-(pull|push|promotion|staging-read|evidence)$")))
       '
-      for workload in kodex-image-registry-pull kodex-image-registry-push \
-        kodex-image-registry-promotion kodex-image-registry-staging-read \
-        kodex-image-registry-evidence; do
-        kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=10m >/dev/null ||
-          fail "local image registry Deployment is unavailable: $workload"
-      done
+      # Seed сам bounded ждёт promotion endpoint. Pull readiness проверяет exact
+      # promoted image, поэтому до импорта её ждать нельзя.
       "$script_directory/seed-local-image-supply-chain.sh" --context "$context" \
         --state-directory "$state_directory" --render "$render"
       apply_render buildkit-workload '

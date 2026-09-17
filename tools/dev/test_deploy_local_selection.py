@@ -38,6 +38,15 @@ class DeployLocalSelectionTest(unittest.TestCase):
         self.assertNotIn("deployment stage", result.stderr)
         self.assertNotIn("not implemented", result.stderr)
 
+    def test_supply_chain_seed_precedes_full_registry_readiness(self):
+        source = SCRIPT.read_text()
+        stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        seed = stage.index('seed-local-image-supply-chain.sh')
+        full_readiness = stage.index(
+            'for workload in kodex-image-registry-pull kodex-image-registry-push'
+        )
+        self.assertLess(seed, full_readiness)
+
     def test_unknown_and_noncore_selection_are_rejected(self):
         for workload, stage in [("stt-provider-smoke", "core"),
                                 ("stt-tts-service;echo invalid", "core"),
