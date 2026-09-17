@@ -192,8 +192,26 @@ export async function configurationCreate(
   page: Page,
   kind: string,
   locale: "ru" | "en",
+  projectRef?: string,
 ) {
   await visit(page, `/configurations/${kind}`);
+  if (kind === "PROMPT_TEMPLATE" || kind === "ROLE_IMAGE") {
+    if (!projectRef) throw new FixtureUnavailable("MISSING");
+    const picker = page.locator(".page-header__actions .async-picker");
+    const trigger = picker.locator(".async-picker__trigger");
+    await trigger.click();
+    const popoverId = await trigger.getAttribute("aria-controls");
+    if (!popoverId) throw new Error("Project picker popover is unavailable");
+    const option = page.locator(
+      `[id=${JSON.stringify(popoverId)}] ` +
+        `[role="option"][id$="-option-${projectRef}"]`,
+    );
+    await expect(option).toBeVisible();
+    await option.click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("projectRef"))
+      .toBe(projectRef);
+  }
   await page
     .locator(".configuration-catalog")
     .getByRole("link", {
@@ -344,9 +362,7 @@ export async function assistantHistory(
     );
     if (selected.length !== 1 || typeof selected[0]?.title !== "string")
       throw new FixtureUnavailable("VERSION_DRIFT");
-    const pinnedEntry = history.locator(
-      `[data-conversation-ref="${pin.ref}"]`,
-    );
+    const pinnedEntry = history.locator(`[data-conversation-ref="${pin.ref}"]`);
     await expect(pinnedEntry).toHaveCount(1);
     await pinnedEntry.click();
     await expect(dialog).toHaveAttribute("aria-busy", "false", {

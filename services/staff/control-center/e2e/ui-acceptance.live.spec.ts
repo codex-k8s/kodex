@@ -274,6 +274,7 @@ test("широкая UI-приёмка сохраняет независимые
       selection &&
       !selection.has(id) &&
       id !== "initial-session-shell" &&
+      id !== "fixture-project-discovery" &&
       !id.startsWith("locale-")
     )
       return false;
@@ -616,7 +617,7 @@ test("широкая UI-приёмка сохраняет независимые
                 : kind === "INTEGRATION_DEFINITION"
                   ? ["CFG-02", "CFG-03"]
                   : ["MVP-UI-15", "MVP-UI-30"],
-              () => configurationCreate(page, kind, locale),
+              () => configurationCreate(page, kind, locale, projects[0]),
             );
           }
           await step(

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  configurationCreate,
   projectForm,
   projectCollection,
   searchAssistantHistory,
@@ -64,6 +65,31 @@ test("synthetic: exact permission query читается, соседняя mutat
   });
   expect(read).toEqual({ status: 200, rejected: true });
   expect({ allowed, blocked }).toEqual({ allowed: 1, blocked: 1 });
+});
+
+test("синтетический: project-scoped редактор открывается после точного выбора Проекта", async ({
+  page,
+}) => {
+  const projectRef = "project_fixture";
+  await page.route("https://kodex.test/**", async (route) => {
+    await route.fulfill({
+      contentType: "text/html",
+      body: `<!doctype html><meta charset="UTF-8"><style>body{margin:0}.topbar{height:58px}.async-picker__popover{display:none}.async-picker__popover.open{display:block}</style>
+      <div class="app-shell"><div class="topbar"></div><main class="page-frame"><header class="page-header"><h1>Fixture</h1><div class="page-header__actions"><section class="async-picker"><button class="async-picker__trigger" aria-controls="project-popover">Project</button></section></div></header><section class="configuration-catalog"><button disabled>Create</button></section></main></div><section id="project-popover" class="async-picker__popover"><button id="picker-option-${projectRef}" role="option">Fixture</button></section>
+      <script>
+      const picker = document.querySelector('.async-picker');
+      picker.querySelector('.async-picker__trigger').onclick = () => document.querySelector('#project-popover').classList.add('open');
+      document.querySelector('#project-popover [role=option]').onclick = () => {
+        history.replaceState({}, '', location.pathname + '?projectRef=${projectRef}');
+        document.querySelector('.configuration-catalog').innerHTML = '<a href="#">Create</a>';
+        document.querySelector('.configuration-catalog a').onclick = (event) => {event.preventDefault();document.querySelector('.configuration-catalog').innerHTML = '<section class="configuration-editor"><input></section>'};
+      };
+      </script>`,
+    });
+  });
+  await expect(
+    configurationCreate(page, "PROMPT_TEMPLATE", "en", projectRef),
+  ).resolves.toMatchObject({ visibleEditor: true, fieldCount: 1 });
 });
 
 for (const outcome of ["populated", "empty", "error"] as const) {
