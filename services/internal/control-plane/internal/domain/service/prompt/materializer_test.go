@@ -76,6 +76,31 @@ func TestMaterializeRejectsUnknownAndUnclosedVariables(t *testing.T) {
 	}
 }
 
+func TestValidateLocatesUnknownVariableWithoutEchoingTemplate(t *testing.T) {
+	diagnostics := Validate("первая строка\n{{ .unknown.value }}", Catalog())
+	if len(diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "PROMPT_TEMPLATE_VARIABLE_UNKNOWN" || diagnostic.VariableName != "unknown.value" || diagnostic.Line != 2 || diagnostic.Column < 1 {
+		t.Fatalf("unknown variable diagnostic = %#v", diagnostic)
+	}
+	if strings.Contains(diagnostic.Message, "первая строка") || strings.Contains(diagnostic.Message, "unknown.value") {
+		t.Fatal("diagnostic echoed template input")
+	}
+}
+
+func TestValidateLocatesVariableWithWrongExecutionType(t *testing.T) {
+	diagnostics := Validate("{{.project.name}}\n{{range .agent.name}}value{{end}}", Catalog())
+	if len(diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "PROMPT_TEMPLATE_EXECUTION_INVALID" || diagnostic.VariableName != "agent.name" || diagnostic.Line != 2 || diagnostic.Column < 1 {
+		t.Fatalf("execution diagnostic = %#v", diagnostic)
+	}
+}
+
 func TestIntersectionCannotEscalateAuthority(t *testing.T) {
 	got := Intersection([]string{"read", "write", "admin"}, []string{"read", "write"}, []string{"read"}, []string{"read", "external"}, []string{"read"})
 	if len(got) != 1 || got[0] != "read" {

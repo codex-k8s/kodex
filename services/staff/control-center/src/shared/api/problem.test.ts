@@ -109,6 +109,60 @@ describe("strict Problem normalization", () => {
     expect(problem.kind).toBe("not-found");
   });
 
+  it("сохраняет bounded prompt diagnostics", () => {
+    const problem = normalizeProblem({
+      type: "urn:kodex:problem:prompt_template_invalid",
+      title: "Исправьте ошибку шаблона",
+      status: 400,
+      code: "PROMPT_TEMPLATE_INVALID",
+      correlationId: "00000000-0000-4000-8000-000000000001",
+      retryable: false,
+      diagnostics: [
+        {
+          severity: "ERROR",
+          code: "PROMPT_TEMPLATE_VARIABLE_UNKNOWN",
+          message: "Неизвестная переменная шаблона",
+          line: 2,
+          column: 4,
+          variableName: "unknown.value",
+        },
+      ],
+    });
+    expect(problem.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "PROMPT_TEMPLATE_VARIABLE_UNKNOWN",
+        variableName: "unknown.value",
+        line: 2,
+        column: 4,
+      }),
+    ]);
+  });
+
+  it("закрыто отбрасывает весь набор при невалидной prompt diagnostic", () => {
+    const problem = normalizeProblem({
+      status: 400,
+      code: "PROMPT_TEMPLATE_INVALID",
+      retryable: false,
+      diagnostics: [
+        {
+          severity: "ERROR",
+          code: "PROMPT_TEMPLATE_VARIABLE_UNKNOWN",
+          message: "Неизвестная переменная шаблона",
+          line: 1,
+          column: 1,
+        },
+        {
+          severity: "ERROR",
+          code: "invalid-code",
+          message: "unsafe",
+          line: 1,
+          column: 1,
+        },
+      ],
+    });
+    expect(problem.diagnostics).toEqual([]);
+  });
+
   it.each([undefined, "0", "301", "1, 2", "invalid", "999999999", "-1"])(
     "не выдумывает STT ожидание из некорректной подсказки %s",
     (hint) => {

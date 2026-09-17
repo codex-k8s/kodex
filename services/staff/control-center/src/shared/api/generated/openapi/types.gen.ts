@@ -279,6 +279,7 @@ export type Problem = {
     retryable: boolean;
     actualVersion?: number;
     winnerSummary?: string;
+    diagnostics?: Array<PromptTemplateDiagnostic>;
 };
 
 export type SpeechRateLimitProblem = Problem & {

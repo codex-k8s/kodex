@@ -13,6 +13,7 @@ import (
 	"strings"
 	"text/template"
 	"text/template/parse"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
@@ -91,14 +92,17 @@ func Validate(templateText string, allowedVariables map[string]string) []Diagnos
 	if err != nil {
 		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_SYNTAX_INVALID", Message: "Prompt template syntax is invalid", Line: 1, Column: 1}}
 	}
-	if unknown := firstUnknownTemplateField(parsed.Tree.Root, allowedVariables); unknown != "" {
-		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_VARIABLE_UNKNOWN", Message: "Prompt template contains an unknown variable", Line: 1, Column: 1}}
+	if unknown, position := firstUnknownTemplateField(parsed.Tree.Root, allowedVariables); unknown != "" {
+		line, column := templateLineColumn(templateText, position)
+		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_VARIABLE_UNKNOWN", Message: "Prompt template contains an unknown variable", Line: line, Column: column, VariableName: unknown}}
 	}
 	if _, valid := templateSlots(parsed.Tree.Root); !valid {
 		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_SLOT_INVALID", Message: "Prompt slots require a standalone literal insertion", Line: 1, Column: 1}}
 	}
 	if _, err := executeTemplate(parsed, validationTemplateData()); err != nil {
-		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_EXECUTION_INVALID", Message: "Prompt template cannot be executed with the canonical variable shape", Line: 1, Column: 1}}
+		variable, position := executionDiagnosticField(parsed.Tree.Root, err)
+		line, column := templateLineColumn(templateText, position)
+		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_EXECUTION_INVALID", Message: "Prompt template cannot be executed with the canonical variable shape", Line: line, Column: column, VariableName: variable}}
 	}
 	return nil
 }
@@ -299,15 +303,15 @@ func parseTemplate(templateText string) (*template.Template, error) {
 	return template.New("prompt").Option("missingkey=error").Funcs(template.FuncMap{"slot": validateSlot}).Parse(templateText)
 }
 
-func firstUnknownTemplateField(node parse.Node, allowed map[string]string) string {
+func firstUnknownTemplateField(node parse.Node, allowed map[string]string) (string, parse.Pos) {
 	if node == nil || (reflect.ValueOf(node).Kind() == reflect.Pointer && reflect.ValueOf(node).IsNil()) {
-		return ""
+		return "", 0
 	}
 	switch current := node.(type) {
 	case *parse.ListNode:
 		for _, child := range current.Nodes {
-			if unknown := firstUnknownTemplateField(child, allowed); unknown != "" {
-				return unknown
+			if unknown, position := firstUnknownTemplateField(child, allowed); unknown != "" {
+				return unknown, position
 			}
 		}
 	case *parse.ActionNode:
@@ -319,61 +323,123 @@ func firstUnknownTemplateField(node parse.Node, allowed map[string]string) strin
 	case *parse.WithNode:
 		return firstUnknownBranchField(&current.BranchNode, allowed)
 	case *parse.TemplateNode:
-		return "template"
+		return "template", current.Position()
 	case *parse.PipeNode:
 		for _, command := range current.Cmds {
-			if unknown := firstUnknownTemplateField(command, allowed); unknown != "" {
-				return unknown
+			if unknown, position := firstUnknownTemplateField(command, allowed); unknown != "" {
+				return unknown, position
 			}
 		}
 	case *parse.CommandNode:
 		if len(current.Args) > 0 {
 			if function, ok := current.Args[0].(*parse.IdentifierNode); ok && function.Ident == "slot" {
 				if len(current.Args) != 2 {
-					return "slot"
+					return "slot", current.Position()
 				}
 				name, ok := current.Args[1].(*parse.StringNode)
 				if !ok {
-					return "slot"
+					return "slot", current.Position()
 				}
 				if _, err := validateSlot(name.Text); err != nil {
-					return "slot"
+					return "slot", current.Position()
 				}
 			}
 		}
 		for _, argument := range current.Args {
-			if unknown := firstUnknownTemplateField(argument, allowed); unknown != "" {
-				return unknown
+			if unknown, position := firstUnknownTemplateField(argument, allowed); unknown != "" {
+				return unknown, position
 			}
 		}
 	case *parse.FieldNode:
 		name := strings.Join(current.Ident, ".")
 		if !allowedTemplateField(name, allowed) {
-			return name
+			return name, current.Position()
 		}
 	case *parse.ChainNode:
-		if unknown := firstUnknownTemplateField(current.Node, allowed); unknown != "" {
-			return unknown
+		if unknown, position := firstUnknownTemplateField(current.Node, allowed); unknown != "" {
+			return unknown, position
 		}
 		if name := strings.Join(current.Field, "."); name != "" && !allowedTemplateItemField(name) {
-			return name
+			return name, current.Position()
 		}
 	case *parse.VariableNode:
 		if len(current.Ident) == 1 {
-			return current.Ident[0]
+			return current.Ident[0], current.Position()
 		}
 		name := strings.Join(current.Ident[1:], ".")
 		if !allowedTemplateItemField(name) {
-			return name
+			return name, current.Position()
 		}
 	case *parse.IdentifierNode:
 		if !allowedTemplateFunction(current.Ident) {
-			return current.Ident
+			return current.Ident, current.Position()
 		}
 	case *parse.DotNode:
-		return "."
+		return ".", current.Position()
 	}
-	return ""
+	return "", 0
+}
+
+func templateLineColumn(templateText string, position parse.Pos) (int32, int32) {
+	if position < 1 || int(position) > len(templateText)+1 {
+		return 1, 1
+	}
+	prefix := templateText[:int(position)-1]
+	line := strings.Count(prefix, "\n") + 1
+	lineStart := strings.LastIndex(prefix, "\n") + 1
+	column := utf8.RuneCountInString(prefix[lineStart:]) + 1
+	return int32(line), int32(column)
+}
+
+func executionDiagnosticField(node parse.Node, executionErr error) (string, parse.Pos) {
+	if node == nil || executionErr == nil || (reflect.ValueOf(node).Kind() == reflect.Pointer && reflect.ValueOf(node).IsNil()) {
+		return "", 0
+	}
+	switch current := node.(type) {
+	case *parse.ListNode:
+		for _, child := range current.Nodes {
+			if name, position := executionDiagnosticField(child, executionErr); name != "" {
+				return name, position
+			}
+		}
+	case *parse.ActionNode:
+		return executionDiagnosticField(current.Pipe, executionErr)
+	case *parse.IfNode:
+		return executionDiagnosticBranchField(&current.BranchNode, executionErr)
+	case *parse.RangeNode:
+		return executionDiagnosticBranchField(&current.BranchNode, executionErr)
+	case *parse.WithNode:
+		return executionDiagnosticBranchField(&current.BranchNode, executionErr)
+	case *parse.PipeNode:
+		for _, command := range current.Cmds {
+			if name, position := executionDiagnosticField(command, executionErr); name != "" {
+				return name, position
+			}
+		}
+	case *parse.CommandNode:
+		for _, argument := range current.Args {
+			if name, position := executionDiagnosticField(argument, executionErr); name != "" {
+				return name, position
+			}
+		}
+	case *parse.FieldNode:
+		name := strings.Join(current.Ident, ".")
+		if strings.Contains(executionErr.Error(), "<."+name+">") {
+			return name, current.Position()
+		}
+	case *parse.ChainNode:
+		return executionDiagnosticField(current.Node, executionErr)
+	}
+	return "", 0
+}
+
+func executionDiagnosticBranchField(branch *parse.BranchNode, executionErr error) (string, parse.Pos) {
+	for _, node := range []parse.Node{branch.Pipe, branch.List, branch.ElseList} {
+		if name, position := executionDiagnosticField(node, executionErr); name != "" {
+			return name, position
+		}
+	}
+	return "", 0
 }
 
 func allowedTemplateFunction(name string) bool {
@@ -385,13 +451,13 @@ func allowedTemplateFunction(name string) bool {
 	}
 }
 
-func firstUnknownBranchField(branch *parse.BranchNode, allowed map[string]string) string {
+func firstUnknownBranchField(branch *parse.BranchNode, allowed map[string]string) (string, parse.Pos) {
 	for _, node := range []parse.Node{branch.Pipe, branch.List, branch.ElseList} {
-		if unknown := firstUnknownTemplateField(node, allowed); unknown != "" {
-			return unknown
+		if unknown, position := firstUnknownTemplateField(node, allowed); unknown != "" {
+			return unknown, position
 		}
 	}
-	return ""
+	return "", 0
 }
 
 func allowedTemplateField(name string, allowed map[string]string) bool {

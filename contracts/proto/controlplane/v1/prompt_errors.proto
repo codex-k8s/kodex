@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+import "controlplane/v1/control_plane.proto";
+
+// Безопасная структурированная причина пользовательской ошибки шаблона.
+// Текст шаблона и значения materialized context сюда не попадают.
+message PromptTemplateErrorDetail {
+  repeated PromptTemplateDiagnostic diagnostics = 1;
+}

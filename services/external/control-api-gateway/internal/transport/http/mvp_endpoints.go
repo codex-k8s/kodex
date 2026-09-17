@@ -414,7 +414,7 @@ func (server *Server) PreviewPromptTemplate(w http.ResponseWriter, r *http.Reque
 		IncludeFullMaterialization: body.IncludeFullMaterialization != nil && *body.IncludeFullMaterialization,
 	})
 	if err != nil {
-		writeRPCProblem(w, err)
+		writePromptProblem(w, err)
 		return
 	}
 	result, valid := promptPreviewView(response, body.IncludeFullMaterialization != nil && *body.IncludeFullMaterialization)

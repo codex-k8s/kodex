@@ -43,9 +43,21 @@ func testPromptContextPreview(t *testing.T, ctx context.Context, repository *Rep
 	if _, err := service.PreviewPromptTemplateWithContext(ctx, owner, "Agent", "AGENT", agent.Ref, false, context, strings.Repeat("f", 64)); !errors.Is(err, errs.ErrVersionMismatch) {
 		t.Fatalf("stale context accepted: %v", err)
 	}
-	context.ExpectedAgentVersion++
+	agentVersion := agent.Version
+	updated, err := service.Execute(ctx, command.Command{Kind: command.UpdateAgent, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "prompt-preview-agent-update", ExpectedVersion: &agentVersion},
+		Payload: command.AgentInput{Ref: agent.Ref, Name: agent.Name, Purpose: agent.Purpose + " after revision", RoleDescription: agent.RoleDescription,
+			RoleDefinitionRef: agent.RoleDefinitionRef, RuntimeRef: agent.RuntimeKey, Enabled: agent.Enabled}})
+	if err != nil || updated.Agent == nil || updated.Agent.Version <= agent.Version {
+		t.Fatalf("update preview agent revision: result=%#v err=%v", updated.Agent, err)
+	}
 	if _, err := service.PreviewPromptTemplateWithContext(ctx, owner, "Agent", "AGENT", agent.Ref, false, context, ""); !errors.Is(err, errs.ErrVersionMismatch) {
-		t.Fatalf("stale agent accepted: %v", err)
+		t.Fatalf("preview accepted the prior agent revision: %v", err)
+	}
+	context.ExpectedAgentVersion = updated.Agent.Version
+	afterRevision, err := service.PreviewPromptTemplateWithContext(ctx, owner, `Agent {{.agent.name}} {{slot "PURPOSE"}}`, "AGENT", agent.Ref, false, context, "")
+	if err != nil || afterRevision.ContextPin.AgentVersion != updated.Agent.Version || afterRevision.ContextPin.Digest == first.ContextPin.Digest {
+		t.Fatalf("preview did not re-pin updated agent revision: pin=%#v err=%v", afterRevision.ContextPin, err)
 	}
 	draft := entity.WorkflowVersion{Name: "Preview workflow", Purpose: "Verify rendered stage", CoordinatorAgentRef: agent.Ref, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, CompletionCriteria: "A bounded result", ResultSchema: map[string]any{},
 		Steps: []entity.WorkflowStep{{Key: "analyze", Position: 1, Name: "Analyze", AgentRef: agent.Ref, Instructions: "Analyze {{.project.name}}.", ExpectedResult: "Result by {{.agent.name}}.", TimeoutSeconds: 900}}}

@@ -5447,6 +5447,7 @@ components:
         retryable: { type: boolean }
         actualVersion: { type: integer, format: int64, minimum: 1 }
         winnerSummary: { type: string, maxLength: 300 }
+        diagnostics: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/PromptTemplateDiagnostic' } }
     SpeechRateLimitProblem:
       allOf:
         - { $ref: '#/components/schemas/Problem' }

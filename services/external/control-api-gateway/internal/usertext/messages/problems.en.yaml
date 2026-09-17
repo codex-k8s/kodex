@@ -34,6 +34,26 @@ RUNTIME_ARTIFACT_READ:
   other: Runtime artifact read
 INVALID_REQUEST:
   other: Check the request data
+PROMPT_TEMPLATE_INVALID:
+  other: Fix the template error
+PROMPT_TEMPLATE_VARIABLE_UNKNOWN:
+  other: Unknown template variable
+PROMPT_TEMPLATE_SYNTAX_INVALID:
+  other: Invalid template syntax
+PROMPT_TEMPLATE_EXECUTION_INVALID:
+  other: The variable type is incompatible with the template operation
+PROMPT_SLOT_INVALID:
+  other: A template slot must be a standalone insertion
+RUNTIME_CONTEXT_REQUIRED:
+  other: The variable requires a runtime revision
+NOT_MATERIALIZED:
+  other: The variable context has not been materialized yet
+PERMISSION_REQUIRED:
+  other: The variable requires permission to read its context
+CAPABILITY_REQUIRED:
+  other: The employee needs the corresponding capability for this variable
+REVISION_NOT_SAVED:
+  other: Save the revision before using this variable
 UNAUTHENTICATED:
   other: Sign in to continue
 FRESH_AUTHENTICATION_REQUIRED:
