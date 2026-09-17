@@ -19,6 +19,8 @@ import (
 
 const trustedSTTCaller = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
 
+const trustedAuthorityDeadlineMargin = 10 * time.Millisecond
+
 type trustedPrincipalKey struct{}
 type trustedPrincipal struct {
 	method    string
@@ -67,7 +69,17 @@ func (resolver *TrustedResolver) Resolve(ctx context.Context, method string) (co
 		len(strings.Fields(credentials[0])) != 2 || strings.TrimSpace(credentials[0]) != credentials[0] || len(md.Get("x-kodex-project-ref")) != 0 {
 		return nil, errors.New("trusted STT credential is invalid")
 	}
-	outgoing := metadata.NewOutgoingContext(ctx, metadata.Pairs(
+	ownerContext := ctx
+	if deadline, ok := ctx.Deadline(); ok {
+		ownerDeadline := deadline.Add(-trustedAuthorityDeadlineMargin)
+		if !ownerDeadline.After(time.Now()) {
+			return nil, context.DeadlineExceeded
+		}
+		var cancel context.CancelFunc
+		ownerContext, cancel = context.WithDeadline(ctx, ownerDeadline)
+		defer cancel()
+	}
+	outgoing := metadata.NewOutgoingContext(ownerContext, metadata.Pairs(
 		serviceidentity.ProfileMetadataKey, transportprofile.TrustedCluster,
 		serviceidentity.CallerMetadataKey, trustedSTTCaller, "authorization", credentials[0],
 	))
