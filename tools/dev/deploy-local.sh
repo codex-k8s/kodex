@@ -1261,6 +1261,13 @@ PY
   fi
   if [[ "$stage" == supply-chain ]]; then
     if [[ "$mode" == apply ]]; then
+      "$script_directory/configure-local-node-registry.sh" --mode apply \
+        --context "$context" --material-directory "$state_directory/material" \
+        --promoted-pull-host "$(yq -N -r '
+          select(.kind == "ConfigMap" and
+            .metadata.name == "kodex-image-admission-policy") |
+          .data.pullRegistryHost
+        ' "$render")" >/dev/null
       ensure_seed_secrets
       pause_local_image_admission_controller
       cleanup_local_image_admission_runs

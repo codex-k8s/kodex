@@ -41,6 +41,7 @@ class DeployLocalSelectionTest(unittest.TestCase):
     def test_supply_chain_seed_precedes_full_registry_readiness(self):
         source = SCRIPT.read_text()
         stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        node_registry = stage.index('configure-local-node-registry.sh" --mode apply')
         pause = stage.index('pause_local_image_admission_controller')
         reconcile = stage.index('reconcile_local_immutable_image_admission_policy')
         owner_intent = stage.index('apply_render image-admission-owner-intent')
@@ -49,6 +50,7 @@ class DeployLocalSelectionTest(unittest.TestCase):
         full_readiness = stage.index(
             'for workload in kodex-image-registry-pull kodex-image-registry-push'
         )
+        self.assertLess(node_registry, pause)
         self.assertLess(
             pause, reconcile, 'controller must stop before immutable policy reconciliation'
         )

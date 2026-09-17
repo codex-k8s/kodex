@@ -143,6 +143,9 @@ role-image-builder и runtime-controller. Apply не удаляет Jobs/PVC и 
 а итоговый readback сверяет immutable admission policy, pinned Deployments,
 registry/PVC, user-namespaced BuildKit и конфигурацию containerd для promoted
 registry. Protected-only authority registry в trusted профиле не требуется.
+Перед Kubernetes apply стадия согласует node-pull material через repo-owned
+helper; если exact конфигурация изменилась, helper один раз перезапускает K3s и
+bounded ждёт восстановления API. Неизменная конфигурация restart не вызывает.
 Успех стадии доказывает готовность инфраструктуры supply chain, но не сам
 RoleImage build/admission/promotion и не model Run.
 
