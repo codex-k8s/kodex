@@ -7,7 +7,7 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --context <exact-context> --state-directory <path> --mode reconcile|commit\n' \
+  printf 'Usage: %s --context <exact-context> --state-directory <path> --mode reconcile|checkpoint|commit\n' \
     "$0" >&2
 }
 
@@ -25,7 +25,7 @@ while (($# > 0)); do
 done
 
 [[ -n "$context" ]] || fail 'exact Kubernetes context is required'
-case "$mode" in reconcile|commit) ;; *) fail 'mode is invalid' ;; esac
+case "$mode" in reconcile|checkpoint|commit) ;; *) fail 'mode is invalid' ;; esac
 [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" &&
   "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'state directory is invalid'
@@ -42,6 +42,7 @@ kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 marker="$state_directory/material-contract-revision.json"
+checkpoint="$state_directory/generated-material-contract-revision.json"
 material_directory="$state_directory/material"
 
 digest_files() {
@@ -72,20 +73,30 @@ expected_revision=$(jq -cn \
     }
   ')
 
-if [[ "$mode" == commit ]]; then
+if [[ "$mode" == commit || "$mode" == checkpoint ]]; then
   [[ -d "$material_directory" && ! -L "$material_directory" &&
-    -s "$material_directory/projections.sha256" &&
-    -s "$material_directory/nats/runtime-user-policy.version" ]] ||
+    -s "$material_directory/projections.sha256" ]] ||
     fail 'generated local material is incomplete'
+  if [[ "$mode" == commit ]]; then
+    [[ -s "$material_directory/nats/runtime-user-policy.version" ]] ||
+      fail 'NATS runtime material is incomplete'
+  else
+    marker=$checkpoint
+  fi
   temporary_marker=$(mktemp "$state_directory/.material-contract-revision.XXXXXX")
   printf '%s\n' "$expected_revision" >"$temporary_marker"
   chmod 0600 "$temporary_marker"
   mv -- "$temporary_marker" "$marker"
-  printf 'Kodex local material contract revision committed\n'
+  printf 'Kodex local material contract revision recorded: %s\n' "$mode"
   exit 0
 fi
 
 revision_matches=false
+# Незавершённый bootstrap может повторно использовать только явно записанный
+# контракт генерации; отсутствие такого checkpoint не разрешает adoption.
+if [[ ! -e "$marker" && ! -L "$marker" && -f "$checkpoint" && ! -L "$checkpoint" ]]; then
+  marker=$checkpoint
+fi
 if [[ -f "$marker" && ! -L "$marker" && -d "$material_directory" &&
   ! -L "$material_directory" ]]; then
   actual_revision=$(jq -cS . "$marker" 2>/dev/null || true)
@@ -133,24 +144,10 @@ if [[ -n "$identity_namespace" ]]; then
     fail 'legacy identity namespace cannot be attributed to the local Kodex profile'
 fi
 
-# До удаления serving namespace и обеих файловых копий проверяем retained backup.
-# Ошибка/UNKNOWN не разрешает ни namespace DELETE, ни rm material.
-python3 "$repository_root/tools/install/draft-key-recovery.py" preserve --context "$context"
-
-if [[ -n "$kodex_namespace" || -n "$identity_namespace" ]]; then
-  namespaces=()
-  [[ -z "$kodex_namespace" ]] || namespaces+=(kodex-system)
-  [[ -z "$identity_namespace" ]] || namespaces+=(identity)
-  kubectl delete namespace "${namespaces[@]}" --wait=false >/dev/null
-  for namespace in "${namespaces[@]}"; do
-    deadline=$((SECONDS + 600))
-    while kubectl get "namespace/$namespace" >/dev/null 2>&1; do
-      ((SECONDS < deadline)) || fail "namespace deletion timed out: $namespace"
-      sleep 1
-    done
-  done
+# Обычный up никогда не удаляет namespace, ключи или локальные материалы.
+# Даже retained backup не является разрешением владельца на уничтожение данных.
+if [[ -n "$kodex_namespace" || -n "$identity_namespace" ||
+  -e "$material_directory" || -L "$material_directory" || -e "$marker" || -L "$marker" ]]; then
+  fail 'material revision differs; preserve existing state and request an explicit recovery decision'
 fi
-
-rm -rf -- "$material_directory"
-rm -f -- "$marker"
-printf '%s\n' "$([[ -n "$kodex_namespace" || -n "$identity_namespace" ]] && printf recreate || printf create)"
+printf 'create\n'

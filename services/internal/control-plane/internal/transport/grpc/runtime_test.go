@@ -30,6 +30,14 @@ func TestRuntimePromptProvenanceRequiresVersionedOwnerSnapshot(t *testing.T) {
 	}
 }
 
+func TestCastRuntimeRevisionPreservesAbsentDesiredRevision(t *testing.T) {
+	t.Parallel()
+
+	if castRuntimeRevision(nil) != nil {
+		t.Fatal("absent desired runtime revision became an empty snapshot")
+	}
+}
+
 func TestMapInt64AcceptsUnsignedValuesAndRejectsOverflow(t *testing.T) {
 	t.Parallel()
 

@@ -86,6 +86,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		}
 	}
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
+		RPCProfile: config.RPCProfile, CallerWorkload: "runtime-controller",
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
@@ -97,7 +98,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
 	credentials, err := credentialprojection.Dial(startup, credentialprojection.Config{
-		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName,
+		RPCProfile: config.RPCProfile,
+		Target:     config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName,
 		CAFile: config.SecretBrokerCAFile, CertificateFile: config.ControlPlaneCertificateFile,
 		PrivateKeyFile: config.ControlPlanePrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
 		DialTimeout: config.RequestTimeout, Proofs: control,
@@ -107,6 +109,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, credentials.Close()) }()
 	manager, err := workload.InCluster(workload.Config{
+		RPCProfile:  config.RPCProfile,
 		Environment: config.Environment, ControlNamespace: config.ControlNamespace, RuntimeNamespace: config.RuntimeNamespace,
 		ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
 		CallbackTLSServerName: config.CallbackTLSServerName, CallbackClientCASecret: config.CallbackClientCASecret,
@@ -129,6 +132,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	coordinator := callback.NewCoordinator()
 	callbackServer, err := callback.New(callback.Config{Listen: config.CallbackListen,
+		RPCProfile:      config.RPCProfile,
 		CertificateFile: config.CallbackServerCertificateFile, PrivateKeyFile: config.CallbackServerPrivateKeyFile,
 		ClientCAFile: config.CallbackClientCAFile, ExpectedClientSPIFFEID: config.CallbackExpectedClientSPIFFEID,
 		RequestTimeout: config.RequestTimeout, WarmLongPoll: config.WarmLongPoll,

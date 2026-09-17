@@ -1,4 +1,7 @@
-import type { Problem } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  Problem,
+  PromptTemplateDiagnostic,
+} from "@/shared/api/generated/openapi/types.gen";
 import {
   assertOwnerRequest,
   ownerRequestSignal,
@@ -22,6 +25,7 @@ export class AppProblem extends Error {
   readonly title?: string;
   readonly detail?: string;
   readonly retryAfterSeconds?: number;
+  readonly diagnostics: readonly PromptTemplateDiagnostic[];
 
   constructor(value: {
     status: number;
@@ -32,6 +36,7 @@ export class AppProblem extends Error {
     title?: string;
     detail?: string;
     retryAfterSeconds?: number;
+    diagnostics?: readonly PromptTemplateDiagnostic[];
   }) {
     super(value.code);
     this.name = "AppProblem";
@@ -43,6 +48,7 @@ export class AppProblem extends Error {
     this.title = value.title;
     this.detail = value.detail;
     this.retryAfterSeconds = value.retryAfterSeconds;
+    this.diagnostics = value.diagnostics ?? [];
   }
 }
 
@@ -105,6 +111,42 @@ function isRetryable(value: unknown): value is { retryable: boolean } {
   );
 }
 
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+function promptDiagnostics(value: unknown): PromptTemplateDiagnostic[] {
+  if (typeof value !== "object" || value === null || !("diagnostics" in value))
+    return [];
+  const diagnostics: unknown = value.diagnostics;
+  if (!isUnknownArray(diagnostics) || diagnostics.length > 100) return [];
+  const valid = diagnostics.every(
+    (item): item is PromptTemplateDiagnostic =>
+      typeof item === "object" &&
+      item !== null &&
+      "severity" in item &&
+      (item.severity === "ERROR" || item.severity === "WARNING") &&
+      "code" in item &&
+      typeof item.code === "string" &&
+      /^[A-Z0-9_]{1,80}$/.test(item.code) &&
+      "message" in item &&
+      typeof item.message === "string" &&
+      item.message.length <= 500 &&
+      "line" in item &&
+      typeof item.line === "number" &&
+      Number.isSafeInteger(item.line) &&
+      item.line >= 1 &&
+      "column" in item &&
+      typeof item.column === "number" &&
+      Number.isSafeInteger(item.column) &&
+      item.column >= 1 &&
+      (!("variableName" in item) ||
+        (typeof item.variableName === "string" &&
+          item.variableName.length <= 160)),
+  );
+  return valid ? diagnostics : [];
+}
+
 export function normalizeProblem(
   value: unknown,
   response?: Response,
@@ -162,6 +204,7 @@ export function normalizeProblem(
     ...(correlationId ? { correlationId } : {}),
     ...(title ? { title } : {}),
     ...(detail ? { detail } : {}),
+    diagnostics: promptDiagnostics(value),
   });
 }
 

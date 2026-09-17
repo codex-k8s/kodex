@@ -45,3 +45,18 @@ correlation из detail, credential, request и unknown fields не копиру
 Диагностика не является разрешением, подтверждением эффекта или причиной retry.
 Существующий bounded proof retry и запрет downstream без context сохраняются
 для unary, stream, request-bound stream и continuation.
+
+## Явный транспорт доверенного кластера
+
+`serviceidentity.NewTrustedCluster` требует профиль `trusted-cluster` и закрытый
+набор caller/method bindings. `UnaryServerInterceptor` и
+`StreamServerInterceptor` передают допуск через `serviceidentity.FromContext`;
+поток проверяется до первого чтения сообщения. Обёртка сохраняет cancellation
+и deadline исходного transport context, не запускает фоновых процессов.
+
+Этот допуск не является криптографической workload identity и не назначает
+actor/tenant/project из payload. Composition root выбирает профиль явно;
+NetworkPolicy ограничивает точные пары workload, а принимающий домен проверяет
+пользовательскую сессию и владение ресурсом. Заголовок trusted profile не включает
+этот режим на защищённом сервере. Legacy authorization metadata, неизвестные
+методы и неоднозначные caller/profile отклоняются закрыто.

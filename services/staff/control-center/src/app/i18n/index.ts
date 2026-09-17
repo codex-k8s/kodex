@@ -2912,6 +2912,10 @@ const ru = {
     subtitle:
       "Настраивает платформу через те же типизированные команды и ваши полномочия",
     ready: "Всегда готов",
+    providerAccountRequired: "Подключите аккаунт модели",
+    providerAccountRequiredHelp:
+      "Создайте provider account и завершите авторизацию. До этого Kodex не запускает модели и не создаёт диалоги.",
+    openProviderAccounts: "Перейти к аккаунтам моделей",
     system: "Системный · неудаляемый",
     newConversation: "Новый диалог",
     message: "Опишите, что нужно настроить или запустить",
@@ -3073,6 +3077,7 @@ const ru = {
     STALE_VERSION: "Данные изменились. Показано актуальное состояние.",
     IDEMPOTENCY_CONFLICT: "Такой запрос уже был отправлен с другими данными.",
     RATE_LIMITED: "Слишком много запросов. Подождите немного.",
+    PROMPT_TEMPLATE_INVALID: "Исправьте ошибку шаблона.",
     UNAVAILABLE: "Сервис временно недоступен. Core-состояние не потеряно.",
     CSRF_REJECTED: "Защитный контекст сессии устарел. Войдите снова.",
     CONTENT_LENGTH_REQUIRED:
@@ -5988,6 +5993,10 @@ const en = {
     subtitle:
       "Configures the platform through the same typed commands and your permissions",
     ready: "Always ready",
+    providerAccountRequired: "Connect a model account",
+    providerAccountRequiredHelp:
+      "Create a provider account and complete authorization. Until then, Kodex does not run models or create conversations.",
+    openProviderAccounts: "Open model accounts",
     system: "System · cannot be removed",
     newConversation: "New conversation",
     message: "Describe what to configure or launch",
@@ -6150,6 +6159,7 @@ const en = {
     IDEMPOTENCY_CONFLICT:
       "This request key was already used for different data.",
     RATE_LIMITED: "Too many requests. Wait a moment.",
+    PROMPT_TEMPLATE_INVALID: "Fix the template error.",
     UNAVAILABLE: "The service is temporarily unavailable. Core state is safe.",
     CSRF_REJECTED: "Session protection context expired. Sign in again.",
     CONTENT_LENGTH_REQUIRED:

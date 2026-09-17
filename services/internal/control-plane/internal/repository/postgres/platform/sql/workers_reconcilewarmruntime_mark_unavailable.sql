@@ -18,5 +18,5 @@ SET runtime_state = 'UNAVAILABLE',
         ELSE updated_at
     END
 WHERE organization_id = @organization_id::uuid
-  AND system_session_ref = @session_ref
+  AND system_session_ref IS NOT DISTINCT FROM NULLIF(@session_ref, '')
 RETURNING version;

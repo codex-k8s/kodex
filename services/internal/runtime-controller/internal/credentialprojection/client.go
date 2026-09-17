@@ -31,6 +31,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                                                     string
 	Target, TLSServerName, CAFile, CertificateFile, PrivateKeyFile string
 	ExpectedIssuerUID, ExpectedIssuerGID                           uint32
 	DialTimeout                                                    time.Duration
@@ -57,6 +58,9 @@ func (registry operationRegistry) OperationID(fullMethod string) (string, bool) 
 }
 
 func Dial(ctx context.Context, config Config) (*Client, error) {
+	if config.RPCProfile != "" {
+		return dialTrustedCluster(ctx, config)
+	}
 	if config.Target == "" || config.TLSServerName == "" || !filepath.IsAbs(config.CAFile) ||
 		!filepath.IsAbs(config.CertificateFile) || !filepath.IsAbs(config.PrivateKeyFile) || config.Proofs == nil ||
 		config.ExpectedIssuerUID == 0 || config.ExpectedIssuerGID == 0 ||

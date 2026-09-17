@@ -10378,15 +10378,16 @@ type PrepareConfigurationWriteBackInput struct {
 
 // Problem defines model for Problem.
 type Problem struct {
-	ActualVersion *int64             `json:"actualVersion,omitempty"`
-	Code          string             `json:"code"`
-	CorrelationId openapi_types.UUID `json:"correlationId"`
-	Detail        *string            `json:"detail,omitempty"`
-	Retryable     bool               `json:"retryable"`
-	Status        int                `json:"status"`
-	Title         string             `json:"title"`
-	Type          string             `json:"type"`
-	WinnerSummary *string            `json:"winnerSummary,omitempty"`
+	ActualVersion *int64                      `json:"actualVersion,omitempty"`
+	Code          string                      `json:"code"`
+	CorrelationId openapi_types.UUID          `json:"correlationId"`
+	Detail        *string                     `json:"detail,omitempty"`
+	Diagnostics   *[]PromptTemplateDiagnostic `json:"diagnostics,omitempty"`
+	Retryable     bool                        `json:"retryable"`
+	Status        int                         `json:"status"`
+	Title         string                      `json:"title"`
+	Type          string                      `json:"type"`
+	WinnerSummary *string                     `json:"winnerSummary,omitempty"`
 }
 
 // Project defines model for Project.
@@ -12599,6 +12600,7 @@ type SpeechRateLimitProblem struct {
 	Code          SpeechRateLimitProblemCode   `json:"code"`
 	CorrelationId openapi_types.UUID           `json:"correlationId"`
 	Detail        *string                      `json:"detail,omitempty"`
+	Diagnostics   *[]PromptTemplateDiagnostic  `json:"diagnostics,omitempty"`
 	Retryable     bool                         `json:"retryable"`
 	Status        SpeechRateLimitProblemStatus `json:"status"`
 	Title         string                       `json:"title"`

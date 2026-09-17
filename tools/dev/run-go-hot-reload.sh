@@ -42,9 +42,13 @@ for readonly_directory in "$gomodcache" "$gopath/pkg/sumdb/sum.golang.org" /go/t
   test ! -w "$readonly_directory" || fail "shared Go path must be read-only: $readonly_directory"
 done
 
-air_version=${KODEX_DEV_AIR_VERSION:-v1.63.4}
+air_version=${KODEX_DEV_AIR_VERSION:-v1.67.4}
 air_sha256=${KODEX_DEV_AIR_SHA256:-}
-air_binary=/go/tools/air
+air_binary="/go/tools/air-$air_version"
+# Существующие Pod прежнего render сохраняют старый бинарь до своего rollout.
+if [ ! -x "$air_binary" ] && [ "$air_version" = v1.63.4 ]; then
+  air_binary=/go/tools/air
+fi
 printf '%s' "$air_sha256" | grep -Eq '^[a-f0-9]{64}$' ||
   fail 'Air executable digest is invalid'
 actual_air_sha256=$(sha256sum "$air_binary" | awk '{print $1}') ||

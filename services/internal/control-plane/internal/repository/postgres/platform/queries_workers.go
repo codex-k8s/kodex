@@ -9,6 +9,8 @@ var (
 	queryWorkersScheduleClock string
 	//go:embed sql/workers_reconcilewarmruntime_lock_session_binding.sql
 	queryWorkersReconcilewarmruntimeLockSessionBinding string
+	//go:embed sql/workers__initial_warm_session_binding.sql
+	queryWorkersInitialWarmSessionBinding string
 	//go:embed sql/workers_reconcilewarmruntime_select_system_provider_policy.sql
 	queryWorkersReconcilewarmruntimeSelectSystemProviderPolicy string
 	//go:embed sql/workers_reconcilewarmruntime_publish_system_provider_policy.sql

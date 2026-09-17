@@ -220,7 +220,7 @@ func projectionValidationRequest(manifest kubernetesstore.CredentialProjectionMa
 		Authority: &controlplanev1.CredentialProjectionAuthority{
 			ActorId: manifest.Authority.ActorID, TenantId: manifest.Authority.TenantID, ProjectId: manifest.Authority.ProjectID,
 			SourceRevision: manifest.Authority.SourceRevision, SourceDigestSha256: manifest.Authority.SourceDigestSHA256,
-			ProofJti: manifest.Authority.ProofJTI, CallerWorkloadId: manifest.Authority.CallerWorkloadID,
+			RpcProfile: manifest.Authority.RPCProfile, ProofJti: manifest.Authority.ProofJTI, CallerWorkloadId: manifest.Authority.CallerWorkloadID,
 			CallerFullMethod: manifest.Authority.CallerFullMethod, CallerCredentialRevision: manifest.Authority.CallerCredentialRevision,
 			ExpiresAt: timestamppb.New(manifest.Authority.ExpiresAt),
 		},

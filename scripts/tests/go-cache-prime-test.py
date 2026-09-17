@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CLI = ROOT / "tools/dev/prime-go-cache.py"
 RENDER = ROOT / "tools/dev/prime-render-go-cache.py"
 MODULE = "services/external/control-api-gateway"
+AIR_VERSION = "v1.63.4"
 REAL_GO = shutil.which("go")
 STUB = r'''#!/usr/bin/env python3
 import json,os,pathlib,sys,time
@@ -74,7 +75,7 @@ class CachePrime(unittest.TestCase):
             (target / "go.sum").write_text("")
         (self.source / "README.md").write_text("fixture")
         (self.source / "tools/dev").mkdir(parents=True)
-        (self.source / "tools/dev/components.lock.json").write_text(json.dumps({"tools": {"air": {"module": "github.com/air-verse/air", "version": "v1.63.4"}}}))
+        (self.source / "tools/dev/components.lock.json").write_text(json.dumps({"tools": {"air": {"module": "github.com/air-verse/air", "version": AIR_VERSION}}}))
         self.git("add", ".")
         self.git("commit", "-qm", "fixture")
         self.revision = self.git("rev-parse", "HEAD").strip()
@@ -165,7 +166,7 @@ class CachePrime(unittest.TestCase):
         self.assertRegex(json.loads(render.stdout)['airSHA256'], r'^[a-f0-9]{64}$')
         self.assertEqual((self.source / 'README.md').read_text(), 'dirty local source')
         self.sealed()
-        self.assertEqual((self.cache / 'go-tools/air').stat().st_mode & 0o777, 0o555)
+        self.assertEqual((self.cache / f'go-tools/air-{AIR_VERSION}').stat().st_mode & 0o777, 0o555)
 
     def test_foreign_repository_rejected(self):
         self.git('remote', 'set-url', 'origin', 'https://example.invalid/foreign.git')

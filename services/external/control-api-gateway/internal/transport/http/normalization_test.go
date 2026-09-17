@@ -579,6 +579,26 @@ func TestSafeAttachmentFileNameRemovesHeaderAndPathControls(t *testing.T) {
 	}
 }
 
+func TestAgentAvatarSourceMatchesOpenAPI(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AgentAvatar{
+		Source:           controlplanev1.AgentAvatar_SOURCE_ARTIFACT,
+		ArtifactRef:      "art_avatar01",
+		ArtifactRevision: 1,
+		ContentPath:      "/api/v1/agents/agt_employee01/avatar/content",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value["source"] != "ARTIFACT" {
+		t.Fatalf("avatar source = %#v, want ARTIFACT", value["source"])
+	}
+	if _, err := messageMap(&controlplanev1.AgentAvatar{}); err == nil {
+		t.Fatal("unspecified avatar source accepted")
+	}
+}
+
 func TestLocalizeSafeErrorsResolvesOnlyExplicitMessageReferences(t *testing.T) {
 	t.Parallel()
 

@@ -439,6 +439,14 @@ func ImagePromotionOperations() map[string]string {
 	}
 }
 
+// ImageAdmissionControllerOperations разрешает orchestrator только проверить
+// наличие server-owned work до создания Kubernetes Job.
+func ImageAdmissionControllerOperations() map[string]string {
+	return map[string]string{
+		"platform.role-images.supply-work.get": controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName,
+	}
+}
+
 // AutomationSchedulerOperations возвращает минимальный профиль job, которая
 // только материализует server-owned due occurrences.
 func AutomationSchedulerOperations() map[string]string {
@@ -502,28 +510,28 @@ func InteractionGatewayOperations() map[string]string {
 // control-plane и поэтому не доверяют locator из браузера.
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
-		"platform.command.skill-bundle-drafts.create":           {},
-		"platform.command.memory-records.create":                {},
-		"platform.query.projects.get":                           {},
-		"platform.query.membership-candidates.list":             {},
-		"platform.query.template-variables.list":                {},
-		"platform.query.role-image-revisions.list":              {},
-		"platform.command.projects.update":                      {},
-		"platform.command.memberships.add":                      {},
-		"platform.command.memberships.change":                   {},
-		"platform.command.memberships.remove":                   {},
-		"platform.command.agents.create":                        {},
-		"platform.command.agents.avatar.upload":                 {},
-		"platform.command.workflows.create":                     {},
-		"platform.command.artifacts.upload":                     {},
-		"platform.command.attachment-sets.create-draft":         {},
-		"platform.command.schedules.create":                     {},
-		"platform.command.runtime-environments.create":          {},
-		"platform.command.prompt-templates.create-draft":        {},
-		"platform.command.role-image-revisions.create-draft":    {},
-		"platform.command.runtime-secrets.create":               {},
-		"platform.command.role-images.promote":                  {},
-		"platform.role-images.recipes.list":                     {},
-		"platform.role-images.recipes.manage":                   {},
+		"platform.command.skill-bundle-drafts.create":        {},
+		"platform.command.memory-records.create":             {},
+		"platform.query.projects.get":                        {},
+		"platform.query.membership-candidates.list":          {},
+		"platform.query.template-variables.list":             {},
+		"platform.query.role-image-revisions.list":           {},
+		"platform.command.projects.update":                   {},
+		"platform.command.memberships.add":                   {},
+		"platform.command.memberships.change":                {},
+		"platform.command.memberships.remove":                {},
+		"platform.command.agents.create":                     {},
+		"platform.command.agents.avatar.upload":              {},
+		"platform.command.workflows.create":                  {},
+		"platform.command.artifacts.upload":                  {},
+		"platform.command.attachment-sets.create-draft":      {},
+		"platform.command.schedules.create":                  {},
+		"platform.command.runtime-environments.create":       {},
+		"platform.command.prompt-templates.create-draft":     {},
+		"platform.command.role-image-revisions.create-draft": {},
+		"platform.command.runtime-secrets.create":            {},
+		"platform.command.role-images.promote":               {},
+		"platform.role-images.recipes.list":                  {},
+		"platform.role-images.recipes.manage":                {},
 	}
 }

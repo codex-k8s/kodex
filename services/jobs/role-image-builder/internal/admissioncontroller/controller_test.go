@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"log/slog"
 	"strings"
@@ -398,10 +399,83 @@ func testPolicy() *corev1.ConfigMap {
 }
 
 func testConfig() Config {
-	return Config{Environment: "production", Namespace: "kodex-system", PolicyConfigMap: policyName,
+	return Config{WorkSource: testWorkSource{availability: WorkAvailability{AdmissionAvailable: true, PromotionAvailable: true}},
+		Environment: "production", Namespace: "kodex-system", PolicyConfigMap: policyName,
 		RendererPath: "/opt/kodex/render-image-admission-job.sh", TechnicalListen: ":9090",
 		ReconcileInterval: 5 * time.Second, RetryInterval: 30 * time.Second,
 		InfrastructureCheck: 10 * time.Second, RequestTimeout: 5 * time.Second}
+}
+
+type testWorkSource struct {
+	availability WorkAvailability
+	err          error
+}
+
+func (source testWorkSource) GetAvailability(context.Context) (WorkAvailability, error) {
+	return source.availability, source.err
+}
+
+func TestControllerDoesNotCreateJobsWithoutAuthoritativeWork(t *testing.T) {
+	cfg := testConfig()
+	cfg.WorkSource = testWorkSource{}
+	client := fake.NewClientset(testPolicy())
+	controller, err := New(client, testRenderer{}, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.now = func() time.Time { return time.Date(2026, 9, 17, 12, 30, 0, 0, time.UTC) }
+	if err := controller.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := client.BatchV1().Jobs(cfg.Namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil || len(jobs.Items) != 0 {
+		t.Fatalf("idle reconciliation created jobs: count=%d err=%v", len(jobs.Items), err)
+	}
+	workspaces, err := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil || len(workspaces.Items) != 0 {
+		t.Fatalf("idle reconciliation created workspaces: count=%d err=%v", len(workspaces.Items), err)
+	}
+}
+
+func TestControllerFailsClosedWhenAuthoritativeWorkIsUnavailable(t *testing.T) {
+	cfg := testConfig()
+	cfg.WorkSource = testWorkSource{err: errors.New("control-plane unavailable")}
+	client := fake.NewClientset(testPolicy())
+	controller, err := New(client, testRenderer{}, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.Reconcile(context.Background()); err == nil || !strings.Contains(err.Error(), "work availability") {
+		t.Fatalf("expected closed availability failure, got %v", err)
+	}
+	jobs, _ := client.BatchV1().Jobs(cfg.Namespace).List(context.Background(), metav1.ListOptions{})
+	if len(jobs.Items) != 0 {
+		t.Fatalf("availability failure created jobs: %d", len(jobs.Items))
+	}
+}
+
+func TestControllerCompletesActiveLifecycleWhenAvailabilityReadFails(t *testing.T) {
+	source := &testWorkSource{availability: WorkAvailability{AdmissionAvailable: true, PromotionAvailable: false}}
+	cfg := testConfig()
+	cfg.WorkSource = source
+	client := fake.NewClientset(testPolicy())
+	controller, err := New(client, testRenderer{}, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	controller.now = func() time.Time { return time.Date(2026, 9, 17, 12, 30, 0, 0, time.UTC) }
+	ctx := context.Background()
+	if err := controller.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	workspaces, _ := client.CoreV1().PersistentVolumeClaims(cfg.Namespace).List(ctx, metav1.ListOptions{})
+	id := workspaces.Items[0].Labels[idLabel]
+	markJobSucceeded(t, client, id, "claim")
+	source.err = errors.New("control-plane unavailable")
+	if err := controller.Reconcile(ctx); err == nil || !strings.Contains(err.Error(), "work availability") {
+		t.Fatalf("independent idle promotion preflight did not surface its failure: %v", err)
+	}
+	assertJob(t, client, id, "scan")
 }
 
 func testRenderID(environment, runID string) string {

@@ -6,9 +6,65 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/serviceidentity"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 )
+
+func TestTrustedSTTUserDelegationUsesVerifiedCredentialAndClosedOperations(t *testing.T) {
+	for _, operation := range []string{platformrepo.TrustedSTTAuthorityOperation, platformrepo.TrustedSTTCatalogAuthorityOperation, platformrepo.TrustedSTTPolicyOperation} {
+		owner, credentials := &ownerFixture{}, &credentialFixture{}
+		service, err := New(owner, credentials)
+		if err != nil {
+			t.Fatal(err)
+		}
+		input := Input{Admission: serviceidentity.Admission{
+			RPCProfile: transportprofile.TrustedCluster, TargetSPIFFEID: target,
+			Peer:        serviceidentity.PeerIdentity{SPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"},
+			OperationID: operation, Permission: operation, ActorMode: serviceidentity.UserActor,
+		}, Authorization: "Bearer synthetic", RequestDigestSHA256: strings.Repeat("a", 64)}
+		principal, err := service.Resolve(t.Context(), input)
+		if err != nil || principal.CallerWorkload != "stt-tts-service" || principal.CredentialRevision != 9 ||
+			owner.input.ExternalActorID != "verified-subject" || owner.input.RPCProfile != transportprofile.TrustedCluster || credentials.calls != 1 {
+			t.Fatal("trusted STT did not resolve verified user")
+		}
+		for _, mutate := range []func(*Input){
+			func(i *Input) { i.Admission.RPCProfile = "service-v1" },
+			func(i *Input) { i.Admission.OperationID = "project.read" },
+			func(i *Input) { i.Admission.Permission = "organization.manage" },
+			func(i *Input) { i.Admission.Peer.SPIFFEID = "spiffe://kodex.local/ns/kodex-system/sa/email-bridge" },
+			func(i *Input) { i.ProjectRef = "prj_untrusted"; i.Admission.ProjectRequired = true },
+			func(i *Input) { i.Authorization = "" },
+		} {
+			candidate := input
+			mutate(&candidate)
+			if _, err := service.Resolve(t.Context(), candidate); err == nil || owner.calls != 1 {
+				t.Fatal("invalid trusted delegation reached owner")
+			}
+		}
+	}
+}
+
+func TestTrustedSTTBrokerProjectionRequiresFreshUserCredential(t *testing.T) {
+	owner, credentials := &ownerFixture{}, &credentialFixture{}
+	service, err := New(owner, credentials)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := Input{Admission: serviceidentity.Admission{
+		RPCProfile: transportprofile.TrustedCluster, TargetSPIFFEID: target,
+		Peer:        serviceidentity.PeerIdentity{SPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/secret-broker"},
+		OperationID: platformrepo.TrustedSTTCredentialOperation, Permission: platformrepo.TrustedSTTCredentialOperation, ActorMode: serviceidentity.UserActor,
+	}, Authorization: "Bearer synthetic", RequestDigestSHA256: strings.Repeat("a", 64)}
+	principal, err := service.Resolve(t.Context(), input)
+	if err != nil || principal.CallerWorkload != "secret-broker" || credentials.calls != 1 || owner.input.ExternalActorID != "verified-subject" {
+		t.Fatal("broker projection did not resolve user credential")
+	}
+	input.Authorization = ""
+	if _, err := service.Resolve(t.Context(), input); err == nil || owner.calls != 1 {
+		t.Fatal("broker projection omitted user credential")
+	}
+}
 
 type ownerFixture struct {
 	input      platformrepo.ProofPrincipalInput

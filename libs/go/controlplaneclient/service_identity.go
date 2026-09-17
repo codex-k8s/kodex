@@ -84,15 +84,21 @@ func serviceProjectOperations(operations operationSet, proofOperations map[strin
 }
 
 func serviceIdentityStream(operations operationSet, projects map[string]struct{}) grpc.StreamClientInterceptor {
+	return serviceStream(operations, projects, "service-v1", "")
+}
+
+func serviceStream(operations operationSet, projects map[string]struct{}, profile, caller string) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, conn *grpc.ClientConn, method string, next grpc.Streamer, options ...grpc.CallOption) (grpc.ClientStream, error) {
 		serverStream := (method == cp.RuntimeWorkService_StreamExecutionArtifact_FullMethodName ||
 			method == cp.PlatformCommandService_DownloadArtifact_FullMethodName) && desc != nil && !desc.ClientStreams && desc.ServerStreams
-		clientStream := (method == cp.PlatformCommandService_UploadArtifact_FullMethodName || method == cp.PlatformCommandService_UploadOrganizationArtifact_FullMethodName) && desc != nil && desc.ClientStreams && !desc.ServerStreams
+		clientStream := (method == cp.PlatformCommandService_UploadArtifact_FullMethodName ||
+			method == cp.PlatformCommandService_UploadOrganizationArtifact_FullMethodName ||
+			method == cp.PlatformCommandService_UploadAgentAvatar_FullMethodName) && desc != nil && desc.ClientStreams && !desc.ServerStreams
 		if !serverStream && !clientStream {
 			return nil, status.Error(codes.PermissionDenied, "service stream method rejected")
 		}
 		var stream grpc.ClientStream
-		err := serviceIdentityUnary(operations, projects)(ctx, method, nil, nil, conn, func(ctx context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+		err := serviceUnary(operations, projects, profile, caller)(ctx, method, nil, nil, conn, func(ctx context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
 			var err error
 			stream, err = next(ctx, desc, conn, method, options...)
 			return err
@@ -102,6 +108,10 @@ func serviceIdentityStream(operations operationSet, projects map[string]struct{}
 }
 
 func serviceIdentityUnary(operations operationSet, projects map[string]struct{}) grpc.UnaryClientInterceptor {
+	return serviceUnary(operations, projects, "service-v1", "")
+}
+
+func serviceUnary(operations operationSet, projects map[string]struct{}, profile, caller string) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, request, response any, connection *grpc.ClientConn, invoke grpc.UnaryInvoker, options ...grpc.CallOption) error {
 		operation, ok := operations[method]
 		if !ok {
@@ -113,7 +123,11 @@ func serviceIdentityUnary(operations operationSet, projects map[string]struct{})
 		md.Delete("x-kodex-authorization")
 		md.Delete("authorization")
 		md.Delete("x-kodex-project-ref")
-		md.Set("x-kodex-rpc-profile", "service-v1")
+		md.Delete("x-kodex-trusted-caller")
+		md.Set("x-kodex-rpc-profile", profile)
+		if caller != "" {
+			md.Set("x-kodex-trusted-caller", caller)
+		}
 		if credential, ok := ctx.Value(applicationGrantContextKey{}).(string); ok {
 			md.Set("authorization", "Bearer "+credential)
 		}

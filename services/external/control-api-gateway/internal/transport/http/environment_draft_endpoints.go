@@ -165,7 +165,12 @@ func environmentDraftSpecificationInput(w http.ResponseWriter, input generated.R
 	result := &controlplanev1.RuntimeEnvironmentDraftSpecification{Name: input.Name, Description: input.Description, ImageArtifactRef: input.ImageArtifactRef,
 		Values: runtimeEnvironmentValues(input.Values), SecretBindings: bindings, Tools: runtimeEnvironmentTools(input.Tools)}
 	if input.Policy != nil {
-		result.Policy = runtimeEnvironmentPolicyInput(*input.Policy)
+		policy, valid := runtimeEnvironmentPolicyInput(*input.Policy)
+		if !valid {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return nil, false
+		}
+		result.Policy = policy
 	}
 	return result, true
 }

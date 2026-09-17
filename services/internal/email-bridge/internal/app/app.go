@@ -74,7 +74,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 		return errors.New("metrics unavailable")
 	}
 	stage = stageAuthority
-	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{ServiceIdentity: true, Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
+	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{RPCProfile: c.RPCProfile, CallerWorkload: "email-bridge", ServiceIdentity: true, Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
 	if e != nil {
 		return e
 	}
@@ -127,7 +127,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 		if status >= 500 {
 			logger.Error("Email bridge request failed", "route", route, "status", status)
 		}
-	}, httptransport.Handler{Current: configurationState.Service, Metrics: businessMetrics})
+	}, httptransport.Handler{RPCProfile: c.RPCProfile, Current: configurationState.Service, Metrics: businessMetrics})
 	server := &http.Server{Handler: http.MaxBytesHandler(handler, 24<<20), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 70 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384, TLSConfig: transportTLS, BaseContext: func(net.Listener) context.Context { return ctx }}
 	stage = stageHTTPS
 	listener, e := net.Listen("tcp", c.Listen)
@@ -141,7 +141,11 @@ func Run(ctx, background context.Context, version string) (result error) {
 		}
 		return e
 	}, func(context.Context) error {
-		e := server.Serve(tls.NewListener(netutil.LimitListener(listener, 64), transportTLS))
+		serving := netutil.LimitListener(listener, 64)
+		if transportTLS != nil {
+			serving = tls.NewListener(serving, transportTLS)
+		}
+		e := server.Serve(serving)
 		if errors.Is(e, http.ErrServerClosed) {
 			return nil
 		}

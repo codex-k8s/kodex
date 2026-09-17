@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/google/uuid"
@@ -16,11 +17,27 @@ import (
 var (
 	//go:embed sql/service_credential_generation.sql
 	queryServiceCredentialGeneration string
+	//go:embed sql/trusted_workload__generation.sql
+	queryTrustedWorkloadGeneration string
 	//go:embed sql/proof_worker_grant_accept_generation.sql
 	queryWorkerGrantAcceptGeneration string
 	//go:embed sql/proof_worker_grant_accept_instance.sql
 	queryWorkerGrantAcceptInstance string
 )
+
+// ConfigureRPCProfile вызывается composition root до публикации repository.
+// Профиль не берётся из запроса и не использует fallback после отказа допуска.
+func (repository *Repository) ConfigureRPCProfile(profile string) error {
+	switch profile {
+	case "":
+		repository.trustedCluster = false
+	case transportprofile.TrustedCluster:
+		repository.trustedCluster = true
+	default:
+		return errors.New("repository RPC profile rejected")
+	}
+	return nil
+}
 
 // ResolveServiceCredentialGeneration не принимает поколение от caller и не
 // меняет историю grants. Срок допуска проверяется по сертификату; bounded
@@ -31,7 +48,13 @@ func (repository *Repository) ResolveServiceCredentialGeneration(ctx context.Con
 		return 0, errs.ErrForbidden
 	}
 	var generation uint64
-	err := repository.pool.QueryRow(ctx, queryServiceCredentialGeneration, workload).Scan(&generation)
+	var err error
+	if repository.trustedCluster {
+		err = repository.pool.QueryRow(ctx, queryTrustedWorkloadGeneration,
+			pgx.StrictNamedArgs{"workload_id": workload}).Scan(&generation)
+	} else {
+		err = repository.pool.QueryRow(ctx, queryServiceCredentialGeneration, workload).Scan(&generation)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, errs.ErrForbidden
 	}

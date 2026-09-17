@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +21,34 @@ import (
 )
 
 const projectionNamespace = "kodex-runtime"
+
+func TestTrustedProjectionManifestRequiresExactExecutionSnapshot(t *testing.T) {
+	manifest := projectionManifest(
+		ProviderCredentialDescriptor{SecretName: "provider-trusted", SecretUID: "provider-uid", SecretResourceVersion: "41", ContentSHA256: stringsOfHex('d')},
+		Materialization{Namespace: projectionNamespace, Name: "runtime-trusted", SecretRef: "sec_trusted", Key: "TOKEN", Revision: 1, UID: "runtime-uid", ResourceVersion: "42", ContentSHA256: stringsOfHex('e')})
+	manifest.Authority.RPCProfile = transportprofile.TrustedCluster
+	manifest.Authority.ProofJTI = ""
+	manifest.Authority.SourceRevision = uint64(manifest.Generation)
+	manifest.Authority.SourceDigestSHA256 = manifest.RuntimeRevisionDigest
+	if err := validateCredentialProjectionManifest(manifest, projectionNamespace); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*CredentialProjectionManifest){
+		"fake proof":      func(m *CredentialProjectionManifest) { m.Authority.ProofJTI = "fake-proof" },
+		"generation":      func(m *CredentialProjectionManifest) { m.Generation++ },
+		"digest":          func(m *CredentialProjectionManifest) { m.RuntimeRevisionDigest = stringsOfHex('f') },
+		"unknown profile": func(m *CredentialProjectionManifest) { m.Authority.RPCProfile = "insecure" },
+		"missing profile": func(m *CredentialProjectionManifest) { m.Authority.RPCProfile = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := manifest
+			mutate(&candidate)
+			if validateCredentialProjectionManifest(candidate, projectionNamespace) == nil {
+				t.Fatal("mismatched trusted snapshot accepted")
+			}
+		})
+	}
+}
 
 func TestRuntimeCredentialProjectionMaterializesExactSourcesAndDeletesWithReadback(t *testing.T) {
 	t.Parallel()

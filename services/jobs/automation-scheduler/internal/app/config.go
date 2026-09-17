@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
 const (
@@ -16,6 +17,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	TechnicalListen             string        `env:"AUTOMATION_SCHEDULER_TECHNICAL_LISTEN"`
 	ControlPlaneTarget          string        `env:"AUTOMATION_SCHEDULER_CONTROL_PLANE_TARGET"`
@@ -60,6 +62,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
+		return errors.New("automation-scheduler RPC profile is invalid")
+	}
 	if config.Environment != "staging" && config.Environment != "production" {
 		return errors.New("automation-scheduler environment is invalid")
 	}

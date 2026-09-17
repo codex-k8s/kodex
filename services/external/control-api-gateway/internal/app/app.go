@@ -63,13 +63,14 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	limiter := ratelimit.New(ratelimit.Config{Window: config.RateWindow, Limit: config.RateLimit, MaximumKeys: config.MaximumRateKeys, PreAuthConcurrency: config.PreAuthConcurrency, GlobalHTTPConcurrency: config.MaximumHTTPConcurrency, PerSubjectHTTPConcurrency: config.PerSubjectHTTPConcurrency, GlobalWebSocketConcurrency: config.MaximumWebSocketConcurrency, PerSubjectWebSocketConcurrency: config.PerSubjectWebSocketConcurrency})
-	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true, Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(), ProofOperations: authorityProofOperations(), ProjectRequiredOperations: authorityProjectRequiredOperations(), UnaryClientInterceptor: telemetry.UnaryClientInterceptor(methodOperations())})
+	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{RPCProfile: config.RPCProfile, CallerWorkload: "control-api-gateway", ServiceIdentity: true, Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneClientCertificateFile, ClientPrivateKeyFile: config.ControlPlaneClientPrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Operations: controlplaneclient.ControlAPIGatewayOperations(), ProofOperations: authorityProofOperations(), ProjectRequiredOperations: authorityProjectRequiredOperations(), UnaryClientInterceptor: telemetry.UnaryClientInterceptor(methodOperations())})
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
 	speech, err := sttclient.Dial(startup, sttclient.Config{
-		Target: config.STTTarget, TLSServerName: config.STTTLSServerName, CAFile: config.STTCAFile,
+		RPCProfile: config.RPCProfile,
+		Target:     config.STTTarget, TLSServerName: config.STTTLSServerName, CAFile: config.STTCAFile,
 		ClientCertificateFile: config.STTClientCertificateFile, ClientPrivateKeyFile: config.STTClientPrivateKeyFile,
 		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RPCTimeout, Proofs: control,
 	})
@@ -78,7 +79,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, speech.Close()) }()
 	secrets, err := secretbrokerclient.Dial(startup, secretbrokerclient.Config{
-		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.SecretBrokerCAFile,
+		RPCProfile: config.RPCProfile,
+		Target:     config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName, CAFile: config.SecretBrokerCAFile,
 		ClientCertificateFile: config.SecretBrokerClientCertificateFile, ClientPrivateKeyFile: config.SecretBrokerClientPrivateKeyFile,
 		DialTimeout: config.RPCTimeout, RequestTimeout: config.RPCTimeout,
 		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, Proofs: control,

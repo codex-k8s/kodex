@@ -72,6 +72,7 @@ type ArtifactDownload struct {
 // стабильную system identity. Ни один идентификатор из browser payload не
 // является authority без повторного разрешения в PostgreSQL.
 type ProofPrincipalInput struct {
+	RPCProfile              string
 	ExternalActorID         string
 	ExternalTenantID        string
 	ExternalDisplayName     string
@@ -172,6 +173,7 @@ type RuntimeSecretRecoveryPage struct {
 }
 
 type CredentialProjectionAuthority struct {
+	RPCProfile                               string
 	ActorID, TenantID, ProjectID             string
 	SourceDigestSHA256, ProofJTI             string
 	CallerWorkloadID, CallerFullMethod       string
@@ -203,6 +205,7 @@ type RuntimeCredentialProjectionInput struct {
 }
 
 type RuntimeCredentialProjection struct {
+	Authority          CredentialProjectionAuthority
 	ProviderCredential ProviderCredentialBinding
 	RuntimeSecrets     []RuntimeSecretProjectionBinding
 	ExpiresAt          time.Time

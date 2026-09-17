@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/clients/imageowner"
 	"github.com/google/uuid"
 )
@@ -145,6 +146,18 @@ func run(ctx context.Context) error {
 }
 
 func clientConfig(promotion bool) (imageowner.Config, error) {
+	profile := os.Getenv("KODEX_RPC_PROFILE")
+	if profile == transportprofile.TrustedCluster {
+		target, err := requiredEnv("IMAGE_OWNER_CONTROL_PLANE_TARGET")
+		if err != nil {
+			return imageowner.Config{}, err
+		}
+		return imageowner.Config{RPCProfile: profile, Target: target, DialTimeout: 3 * time.Second,
+			RPCDeadline: 8 * time.Second, Promotion: promotion}, nil
+	}
+	if profile != "" {
+		return imageowner.Config{}, errors.New("image owner RPC profile is invalid")
+	}
 	values := make([]string, 0, 6)
 	for _, name := range []string{"IMAGE_OWNER_CONTROL_PLANE_TARGET", "IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME",
 		"IMAGE_OWNER_CONTROL_PLANE_CA_FILE", "IMAGE_OWNER_CONTROL_PLANE_CERTIFICATE_FILE",

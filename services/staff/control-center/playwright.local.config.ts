@@ -10,7 +10,7 @@ const launchOptions = discoveryChromiumLaunchOptions(environment.baseURL);
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: /local-smoke\.ts/,
+  testMatch: /local-(?:smoke|environment-impact)\.ts/,
   outputDir:
     process.env.KODEX_E2E_PRIVATE_OUTPUT_DIR || "./test-results/local-smoke",
   forbidOnly: true,

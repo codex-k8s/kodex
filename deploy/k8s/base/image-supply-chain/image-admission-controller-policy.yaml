@@ -24,8 +24,14 @@ spec:
       expression: object.metadata.labels['kodex.dev/image-admission-phase']
     - name: admissionId
       expression: object.metadata.labels['kodex.dev/image-admission-id']
+    - name: securityProfile
+      expression: >-
+        has(params.metadata.labels) && 'kodex.dev/security-profile' in params.metadata.labels ?
+        params.metadata.labels['kodex.dev/security-profile'] : 'protected'
+    - name: trustedCluster
+      expression: variables.securityProfile == 'trusted-cluster'
     - name: protected
-      expression: variables.phase in ['claim', 'admit', 'promote']
+      expression: "!variables.trustedCluster && variables.phase in ['claim', 'admit', 'promote']"
     - name: proofHeld
       expression: >-
         has(object.metadata.labels) &&
@@ -80,6 +86,17 @@ spec:
       expression: >-
         variables.protected ? variables.grantAgent.env.map(item, item.name).join(',') : ''
   validations:
+    - expression: >-
+        variables.securityProfile in ['protected', 'trusted-cluster'] &&
+        (variables.trustedCluster ?
+          (has(object.spec.template.metadata.labels) &&
+           'kodex.dev/security-profile' in object.spec.template.metadata.labels &&
+           object.spec.template.metadata.labels['kodex.dev/security-profile'] == 'trusted-cluster' &&
+           !('kodex.dev/internal-rpc-authority-issuer' in object.spec.template.metadata.labels)) :
+          (!has(object.spec.template.metadata.labels) ||
+           !('kodex.dev/security-profile' in object.spec.template.metadata.labels) ||
+           object.spec.template.metadata.labels['kodex.dev/security-profile'] == 'protected'))
+      message: Image admission security profile must match the server-owned parameters.
     - expression: >-
         object.metadata.namespace == 'kodex-system' &&
         has(object.metadata.labels) &&
@@ -178,7 +195,8 @@ spec:
           'PROMOTED_PULL_REPOSITORY,EXPECTED_BUILDER_ID,EXPECTED_BUILD_TYPE,' +
           'TRUSTED_ROLE_BASE_REPOSITORY,TRUSTED_ROLE_BASE_DIGEST,' +
           'ROLE_RUNTIME_CONTRACT_REVISION,ROLE_RUNTIME_CONTRACT_SHA256,HOME' +
-          (variables.protected ?
+          (variables.trustedCluster && variables.phase in ['claim', 'admit', 'promote'] ?
+            ',KODEX_RPC_PROFILE,IMAGE_OWNER_CONTROL_PLANE_TARGET,IMAGE_OWNER_STATE_FILE,IMAGE_OWNER_PROMOTION_FILE' : variables.protected ?
             ',INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET,INTERNAL_RPC_AUTHORITY_LOCAL_ROLE,' +
             'IMAGE_OWNER_CONTROL_PLANE_TARGET,IMAGE_OWNER_CONTROL_PLANE_TLS_SERVER_NAME,' +
             'IMAGE_OWNER_CONTROL_PLANE_CA_FILE,IMAGE_OWNER_CONTROL_PLANE_CERTIFICATE_FILE,' +
@@ -203,6 +221,7 @@ spec:
            item.name == 'ROLE_RUNTIME_CONTRACT_REVISION' ? item.value == params.spec.roleRuntimeContractRevision :
            item.name == 'ROLE_RUNTIME_CONTRACT_SHA256' ? item.value == params.spec.roleRuntimeContractSHA256 :
            item.name == 'HOME' ? item.value == '/tmp' :
+           item.name == 'KODEX_RPC_PROFILE' ? variables.trustedCluster && item.value == 'trusted-cluster' :
            item.name == 'INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET' ? item.value == '/run/kodex/internal-rpc-authority/issuer.sock' :
            item.name == 'INTERNAL_RPC_AUTHORITY_LOCAL_ROLE' ? item.value == 'issuer' :
            item.name == 'IMAGE_OWNER_CONTROL_PLANE_TARGET' ? item.value == 'control-plane.kodex-system.svc:8443' :

@@ -1,6 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
+rpc_profile=${KODEX_RPC_PROFILE:-protected}
+case "$rpc_profile" in
+  protected|trusted-cluster) ;;
+  *) echo 'PostgreSQL runtime security profile is invalid' >&2; exit 1 ;;
+esac
+
 PGPASSWORD=$(cat "$PGPASSWORD_FILE")
 export PGPASSWORD
 
@@ -40,7 +46,15 @@ GRANT artifact_retention_runtime TO artifact_retention_runtime_g1
 
 roles='kodex_backup_reader artifact_retention_runtime_g1 ira_restore_controller_g1 ira_publisher_g4 ira_readback_attestor_g4 ira_role_image_builder_issuer_g1 ira_image_admission_issuer_g1 ira_image_promotion_issuer_g1 ira_automation_scheduler_issuer_g1 ira_session_archive_issuer_g1 ira_secret_broker_issuer_g1 ira_control_api_gateway_issuer_g1 ira_control_plane_issuer_g1 ira_control_plane_verifier_g1 ira_control_plane_resolver_g1 ira_integration_gateway_issuer_g1 ira_interaction_gateway_issuer_g1 ira_email_bridge_issuer_g1 ira_runtime_controller_issuer_g1 ira_secret_broker_verifier_g1 ira_stt_tts_service_issuer_g1 ira_stt_tts_service_verifier_g1'
 
-until [ "$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_roles WHERE rolname IN ('$(printf '%s' "$roles" | sed "s/ /','/g")')")" -eq 22 ]; do
+expected_role_count=22
+if [ "$rpc_profile" = trusted-cluster ]; then
+  roles='kodex_backup_reader artifact_retention_runtime_g1'
+  expected_role_count=2
+fi
+attempt=0
+until [ "$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_roles WHERE rolname IN ('$(printf '%s' "$roles" | sed "s/ /','/g")')")" -eq "$expected_role_count" ]; do
+  attempt=$((attempt + 1))
+  [ "$attempt" -lt 90 ] || { echo 'PostgreSQL runtime roles readiness timed out' >&2; exit 1; }
   sleep 3
 done
 
@@ -51,7 +65,7 @@ for role in $roles; do
 done
 
 verified=$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM pg_authid WHERE rolname IN ('$(printf '%s' "$roles" | sed "s/ /','/g")') AND rolpassword LIKE 'SCRAM-SHA-256%'")
-[ "$verified" -eq 22 ] || { echo 'PostgreSQL runtime credential readback failed' >&2; exit 1; }
+[ "$verified" -eq "$expected_role_count" ] || { echo 'PostgreSQL runtime credential readback failed' >&2; exit 1; }
 
 psql --dbname control_plane --set ON_ERROR_STOP=1 <<'SQL' >/dev/null
 GRANT CONNECT ON DATABASE control_plane TO kodex_backup_reader;
@@ -64,6 +78,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane
   GRANT USAGE, SELECT ON SEQUENCES TO kodex_backup_reader;
 SQL
 
+if [ "$rpc_profile" = protected ]; then
 psql --dbname internal_rpc_authority --set ON_ERROR_STOP=1 <<'SQL' >/dev/null
 GRANT CONNECT ON DATABASE internal_rpc_authority TO kodex_backup_reader;
 GRANT USAGE ON SCHEMA public, internal_rpc_authority TO kodex_backup_reader;
@@ -78,6 +93,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE internal_rpc_authority_readback_owner IN SCHEM
 ALTER DEFAULT PRIVILEGES FOR ROLE internal_rpc_authority_readback_owner IN SCHEMA internal_rpc_authority
   GRANT USAGE, SELECT ON SEQUENCES TO kodex_backup_reader;
 SQL
+fi
 
 backup_verified=$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command "
 SELECT count(*)
@@ -93,6 +109,7 @@ WHERE rolname = 'kodex_backup_reader'
   exit 1
 }
 
+if [ "$rpc_profile" = protected ]; then
 authority_verified=$(psql --dbname internal_rpc_authority --tuples-only --no-align \
   --set ON_ERROR_STOP=1 --command "
 SELECT count(*)
@@ -110,3 +127,4 @@ WHERE (identity.capability, identity.principal, identity.generation) IN (
   echo 'PostgreSQL authority identity readback failed' >&2
   exit 1
 }
+fi

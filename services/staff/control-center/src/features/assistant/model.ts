@@ -99,3 +99,12 @@ export function assistantEffectiveRuntimeState(
     return "RECOVERING";
   return assistant.runtimeState;
 }
+
+export function assistantRequiresProviderAccount(
+  assistant: SystemAssistant,
+): boolean {
+  return (
+    !assistant.warmSessionRef &&
+    !assistant.nextActions.includes("CREATE_CONVERSATION")
+  );
+}

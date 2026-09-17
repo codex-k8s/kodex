@@ -15,6 +15,35 @@ func testSTTCatalogAuthority(t *testing.T, ctx context.Context, repository *Repo
 	if authority, err := repository.ResolveProofAuthority(ctx, owner); err != nil || authority.ActorID == "" || authority.ProjectID != "" {
 		t.Fatalf("catalog before configured STT: %v", err)
 	}
+	trusted := *repository
+	trusted.trustedCluster = true
+	for _, operation := range []string{platformrepo.TrustedSTTAuthorityOperation, platformrepo.TrustedSTTCatalogAuthorityOperation, platformrepo.TrustedSTTPolicyOperation, platformrepo.TrustedSTTCredentialOperation} {
+		input := owner
+		input.RPCProfile, input.Operation, input.CallerWorkload = "trusted-cluster", operation, "stt-tts-service"
+		if operation == platformrepo.TrustedSTTCredentialOperation {
+			input.CallerWorkload = "secret-broker"
+		}
+		if authority, err := trusted.ResolveProofAuthority(ctx, input); err != nil || authority.ActorID == "" || authority.ProjectID != "" {
+			t.Fatalf("trusted STT owner ACL %s: %v", operation, err)
+		}
+		if _, err := repository.ResolveProofAuthority(ctx, input); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("protected repository accepted trusted operation %s: %v", operation, err)
+		}
+		for _, mutate := range []func(*platformrepo.ProofPrincipalInput){
+			func(i *platformrepo.ProofPrincipalInput) { i.RPCProfile = "" },
+			func(i *platformrepo.ProofPrincipalInput) { i.ProjectRef = "project-forbidden" },
+			func(i *platformrepo.ProofPrincipalInput) {
+				i.ExternalActorID = "20000000-0000-4000-8000-000000000099"
+				i.OwnerClaim = true
+			},
+		} {
+			candidate := input
+			mutate(&candidate)
+			if _, err := trusted.ResolveProofAuthority(ctx, candidate); !errors.Is(err, errs.ErrForbidden) {
+				t.Fatalf("trusted STT scope or owner claim accepted for %s: %v", operation, err)
+			}
+		}
+	}
 	for _, kind := range []string{"project", "workload", "nonmember"} {
 		input := owner
 		switch kind {

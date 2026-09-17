@@ -91,6 +91,11 @@ type PromotionRequestInput struct {
 	RecipeRef, ArtifactRef, ExpectedProvenanceSHA256 string
 }
 
+type SupplyWorkAvailability struct {
+	AdmissionAvailable bool
+	PromotionAvailable bool
+}
+
 type Repository interface {
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	List(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, int64, error)
@@ -101,6 +106,7 @@ type Repository interface {
 	ReportBuildProgress(context.Context, BuildProgressInput) (entity.ImageBuild, error)
 	CompleteBuild(context.Context, BuildCompletionInput) (entity.ImageBuild, entity.ImageArtifact, error)
 	FailBuild(context.Context, BuildFailureInput) (entity.ImageBuild, error)
+	GetSupplyWorkAvailability(context.Context, value.Principal) (SupplyWorkAvailability, error)
 	ClaimAdmission(context.Context, value.Principal, string) (entity.ImageAdmissionClaim, error)
 	RecordAdmission(context.Context, AdmissionRecordInput) (entity.ImageArtifact, error)
 	ClaimPromotion(context.Context, value.Principal, string) (entity.ImagePromotionClaim, error)

@@ -1004,6 +1004,55 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	}
 }
 
+func TestDeactivateWarmDeletesOnlyOwnedRuntimeMaterial(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	input, binding, err := manager.BuildWarmInput(testWarmRevision())
+	if err != nil {
+		t.Fatalf("BuildWarmInput() error = %v", err)
+	}
+	if _, err := manager.EnsureWarm(t.Context(), input, binding); err != nil {
+		t.Fatalf("EnsureWarm() error = %v", err)
+	}
+	if err := manager.DeactivateWarm(t.Context()); err != nil {
+		t.Fatalf("DeactivateWarm() error = %v", err)
+	}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Get(t.Context(), "system-assistant-warm", metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("warm Pod survived deactivation: %v", err)
+	}
+	for _, resource := range []struct {
+		kind string
+		list func() (int, error)
+	}{
+		{kind: "tickets", list: func() (int, error) {
+			items, err := client.CoreV1().Secrets("kodex-runtime").List(t.Context(), metav1.ListOptions{LabelSelector: labels.Set{managedLabel: "true", modeLabel: "warm"}.AsSelector().String()})
+			return len(items.Items), err
+		}},
+		{kind: "projections", list: func() (int, error) {
+			items, err := client.CoreV1().ConfigMaps("kodex-runtime").List(t.Context(), metav1.ListOptions{LabelSelector: labels.Set{managedLabel: "true", modeLabel: "warm"}.AsSelector().String()})
+			return len(items.Items), err
+		}},
+	} {
+		count, err := resource.list()
+		if err != nil || count != 0 {
+			t.Fatalf("warm %s after deactivation: count=%d err=%v", resource.kind, count, err)
+		}
+	}
+	if err := manager.DeactivateWarm(t.Context()); err != nil {
+		t.Fatalf("repeated DeactivateWarm() error = %v", err)
+	}
+	foreign := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "system-assistant-warm", Namespace: "kodex-runtime"}}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Create(t.Context(), foreign, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("create foreign warm Pod: %v", err)
+	}
+	if err := manager.DeactivateWarm(t.Context()); err == nil {
+		t.Fatal("foreign warm Pod ownership was accepted")
+	}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Get(t.Context(), "system-assistant-warm", metav1.GetOptions{}); err != nil {
+		t.Fatalf("foreign warm Pod was deleted: %v", err)
+	}
+}
+
 func TestEnsureWarmRecreatesRunningPodWithTerminatedRuntime(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)

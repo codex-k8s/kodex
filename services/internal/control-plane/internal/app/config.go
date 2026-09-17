@@ -21,6 +21,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
 	SkillScannerSocket              string        `env:"CONTROL_PLANE_SKILL_SCANNER_SOCKET"`
 	SkillScannerTimeout             time.Duration `env:"CONTROL_PLANE_SKILL_SCANNER_TIMEOUT"`
 	GRPCListen                      string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
@@ -208,6 +209,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
+		return errors.New("control-plane RPC profile is invalid")
+	}
 	if !filepath.IsAbs(config.SkillScannerSocket) || filepath.Clean(config.SkillScannerSocket) != config.SkillScannerSocket || strings.ContainsAny(config.SkillScannerSocket, "\x00\n\r") || config.SkillScannerTimeout < time.Second || config.SkillScannerTimeout > time.Minute {
 		return errors.New("control-plane skill scanner configuration is invalid")
 	}
@@ -236,9 +240,7 @@ func (config Config) validate() error {
 		config.NATSStream != "CONTROL_PLANE" || config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.NATSMaxBytes < 256<<20 ||
 		config.InstanceID == "" || len(config.InstanceID) > 128 ||
 		config.DefaultRuntimeProvider != "openai-codex" || !validRuntimeIdentifier(config.DefaultRuntimeModel) ||
-		!validDNSLabel(config.DefaultProviderSecretName) || !validUUID(config.DefaultProviderSecretUID) ||
-		config.DefaultProviderSecretVersion == "" || len(config.DefaultProviderSecretVersion) > 128 ||
-		!validSHA256(config.DefaultProviderCredentialSHA256) ||
+		!validBootstrapProviderCredentialConfig(config) ||
 		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
 		!validDNSLabel(config.RuntimeSecretNamespace) ||
 		!validDNSLabel(config.RuntimeSecretStagingNamespace) || config.RuntimeSecretNamespace == config.RuntimeSecretStagingNamespace ||
@@ -279,10 +281,24 @@ func (config Config) validate() error {
 	if !validObjectStorageBoundary(config) {
 		return errors.New("control-plane object storage boundary is invalid")
 	}
-	if info, err := os.Lstat(filepath.Dir(config.AuthorityVerifierSocket)); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return errors.New("control-plane authority socket directory is invalid")
+	if config.RPCProfile != "trusted-cluster" {
+		if info, err := os.Lstat(filepath.Dir(config.AuthorityVerifierSocket)); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("control-plane authority socket directory is invalid")
+		}
 	}
 	return nil
+}
+
+// Полностью отсутствующая bootstrap credential допустима: аккаунты создаются
+// владельцем после входа. Частичная конфигурация не превращается в отсутствие.
+func validBootstrapProviderCredentialConfig(config Config) bool {
+	if config.DefaultProviderSecretName == "" && config.DefaultProviderSecretUID == "" &&
+		config.DefaultProviderSecretVersion == "" && config.DefaultProviderCredentialSHA256 == "" {
+		return true
+	}
+	return validDNSLabel(config.DefaultProviderSecretName) && validUUID(config.DefaultProviderSecretUID) &&
+		config.DefaultProviderSecretVersion != "" && len(config.DefaultProviderSecretVersion) <= 128 &&
+		validSHA256(config.DefaultProviderCredentialSHA256)
 }
 
 func validProviderCredentialCleanupConfig(config Config) bool {

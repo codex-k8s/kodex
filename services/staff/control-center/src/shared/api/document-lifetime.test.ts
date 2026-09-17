@@ -28,6 +28,31 @@ afterEach(() => {
 });
 
 describe("document request lifetime", () => {
+  it.each([204, 205, 304])(
+    "сохраняет нативный ответ %i даже при ненулевом body Chrome",
+    async (status) => {
+      const response = new Response(null, { status });
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+      Object.defineProperty(response, "body", { value: body });
+      const parent = new Request("https://kodex.example/api/v1/session");
+      const remove = vi.spyOn(parent.signal, "removeEventListener");
+      vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(response));
+      const result = await documentFetch(
+        retainRequestSignalParents(new Request(parent), parent),
+      );
+      expect(result).toBe(response);
+      expect(result.status).toBe(status);
+      expect(result.body).toBe(body);
+      expect(result.clone().status).toBe(status);
+      await expect(result.text()).resolves.toBe("");
+      expect(remove).toHaveBeenCalled();
+    },
+  );
+
   it("закрытие документа отменяет запросы, но только смена владельца отзывает recovery", () => {
     const owner = ownerInvalidationSignal();
     const request = ownerRequestSignal();

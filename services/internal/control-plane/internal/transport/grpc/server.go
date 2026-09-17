@@ -29,6 +29,7 @@ const (
 )
 
 type Server struct {
+	sttv1.UnimplementedTranscriptionAuthorityServiceServer
 	sttv1.UnimplementedTranscriptionPolicyProjectionServiceServer
 	controlplanev1.UnimplementedPlatformQueryServiceServer
 	controlplanev1.UnimplementedPlatformCommandServiceServer

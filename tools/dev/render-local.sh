@@ -28,6 +28,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --source-root <path> --cache-root <path> --output <path>" \
     '  [--profile web-only|web-with-mattermost]' \
+    '  [--security-profile protected|trusted-cluster] [--host-uid <uid>] [--host-gid <gid>]' \
     '  [--mail-configuration <exact-snapshot>] [--mail-resolv-conf <trusted-resolver-file>]' \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
     '  [--ingress-class <name>] [--cluster-issuer <name>] [--tls-mode local-ca|public-acme]' \
@@ -55,6 +56,10 @@ output=""
 mail_configuration=""
 mail_resolv_conf=/etc/resolv.conf
 deployment_profile=web-only
+security_profile=protected
+host_uid=$(id -u)
+host_gid=$(id -g)
+cache_directory_mode=0777
 public_host=""
 oidc_host=""
 ingress_class=traefik
@@ -86,6 +91,9 @@ while (($# > 0)); do
     --mail-configuration) mail_configuration=${2:-}; shift 2 ;;
     --mail-resolv-conf) mail_resolv_conf=${2:-}; shift 2 ;;
     --profile) deployment_profile=${2:-}; shift 2 ;;
+    --security-profile) security_profile=${2:-}; shift 2 ;;
+    --host-uid) host_uid=${2:-}; shift 2 ;;
+    --host-gid) host_gid=${2:-}; shift 2 ;;
     --public-host) public_host=${2:-}; shift 2 ;;
     --oidc-host) oidc_host=${2:-}; shift 2 ;;
     --ingress-class) ingress_class=${2:-}; shift 2 ;;
@@ -115,6 +123,16 @@ while (($# > 0)); do
 done
 
 case "$deployment_profile" in web-only|web-with-mattermost) ;; *) fail 'deployment profile is invalid' ;; esac
+case "$security_profile" in
+  protected) ;;
+  trusted-cluster)
+    [[ "$host_uid" =~ ^[1-9][0-9]*$ && "$host_gid" =~ ^[1-9][0-9]*$ &&
+      "$host_uid" == "$(id -u)" && "$host_gid" == "$(id -g)" ]] ||
+      fail 'trusted hot reload identity must match the non-root host user'
+    cache_directory_mode=0700
+    ;;
+  *) fail 'security profile is invalid' ;;
+esac
 
 [[ "$source_root" == /* && -d "$source_root/.git" || -f "$source_root/.git" ]] ||
   fail 'source root must be an exact Git worktree path'
@@ -190,8 +208,7 @@ go_build_cache="$cache_root/go-build-v2"
 go_prime_result=$(python3 "$repository_root/tools/dev/prime-render-go-cache.py" \
   "$source_root" "$cache_root" "$deployment_profile")
 air_digest=$(jq -er '.airSHA256 | select(test("^[a-f0-9]{64}$"))' <<<"$go_prime_result")
-install -d -m 0777 "$source_root/services/staff/control-center/node_modules"
-chmod 0777 "$source_root/services/staff/control-center/node_modules"
+install -d -m "$cache_directory_mode" "$source_root/services/staff/control-center/node_modules"
 frontend_cache=$(bash "$source_root/tools/dev/prime-frontend-cache.sh" "$source_root" "$cache_root")
 node_image=$(sed -n 's/^FROM \(docker.io\/library\/node:[^ ]*\) AS build$/\1/p' \
   "$source_root/services/staff/control-center/Dockerfile")
@@ -639,7 +656,7 @@ patch_go_container() {
   cache_key="$workload-$container"
   build_volume="dev-build-$container"
   build_cache_path="$go_build_cache/$cache_key"
-  install -d -m 0777 "$build_cache_path"
+  install -d -m "$cache_directory_mode" "$build_cache_path"
   add_development_volumes "$kind" "$workload"
   KIND="$kind" WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
   COMMAND_ARGS="$command_args" BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
@@ -685,7 +702,7 @@ patch_go_container() {
             {"name":"GOTOOLCHAIN","value":"local"},
             {"name":"GOTMPDIR","value":"/go/build-cache/tmp"},
             {"name":"HOME","value":"/go/build-cache/home"},
-            {"name":"KODEX_DEV_AIR_VERSION","value":"v1.63.4"},
+            {"name":"KODEX_DEV_AIR_VERSION","value":"v1.67.4"},
             {"name":"KODEX_DEV_AIR_SHA256","value":strenv(AIR_DIGEST)}
           ])
       )
@@ -1674,4 +1691,55 @@ if rg -n 'skipTLSVerify:[[:space:]]*true|insecure:[[:space:]]*true|tls_verify:[[
   fail 'local RoleImage supply-chain contains an insecure transport fallback'
 fi
 
-printf 'Kodex local render created: %s\n' "$output"
+if [[ "$security_profile" == trusted-cluster ]]; then
+  # Controller archive меняется через Air; отдельный worker по-прежнему
+  # использует exact image с вшитым бинарём для краткоживущих archive Jobs.
+  protected_render=$render
+  render=$output
+  patch_go_container Deployment session-archive session-archive services/jobs/session-archive ./cmd/session-archive
+  render=$protected_render
+  yq -o=json -I=0 '.' "$output" | jq -s '.' |
+    python3 -B "$repository_root/tools/dev/trusted_cluster_render.py" materialize \
+      --profile "$security_profile" >"$temporary_directory/trusted-cluster.json"
+  python3 -B "$repository_root/tools/dev/local_hot_reload.py" prepare-source-mask \
+    --source-root "$source_root" --cache-root "$cache_root" \
+    --host-uid "$host_uid" --host-gid "$host_gid"
+  python3 -B "$repository_root/tools/dev/local_hot_reload.py" materialize \
+    --source-root "$source_root" --cache-root "$cache_root" \
+    --host-uid "$host_uid" --host-gid "$host_gid" \
+    <"$temporary_directory/trusted-cluster.json" >"$temporary_directory/trusted-hot-reload.json"
+  python3 -B "$repository_root/tools/dev/trusted_cluster_render.py" verify \
+    --profile "$security_profile" <"$temporary_directory/trusted-hot-reload.json"
+  # Digest вычисляется после преобразования; прежний protected digest не наследуется.
+  jq --arg cliImage "$runner_image" 'map(
+    (if .spec.template.metadata.annotations then
+      del(.spec.template.metadata.annotations["kodex.dev/render-sha256"]) else . end) |
+    (if .kind == "Deployment" and .metadata.name == "secret-broker" then
+      (.spec.template.spec.initContainers[] | select(.name == "codex-cli-install").image) = $cliImage
+      else . end))' \
+    "$temporary_directory/trusted-hot-reload.json" >"$temporary_directory/trusted-final.json"
+  render_digest=$(sha256sum "$temporary_directory/trusted-final.json" | awk '{print $1}')
+  jq --arg digest "$render_digest" 'map(if .spec.template then
+    .spec.template.metadata.annotations["kodex.dev/render-sha256"] = $digest else . end) | .[]' \
+    "$temporary_directory/trusted-final.json" | yq -p=json -o=yaml '.' >"$output"
+fi
+
+# Финальный JSON/YAML переход теряет стиль строк: Kubernetes использует YAML 1.1.
+yq -i '
+  (select(.kind == "Deployment" or .kind == "Job" or .kind == "StatefulSet") |
+    .spec.template.spec | (.initContainers[]?, .containers[]?) |
+    .env[]? | select(has("value")) | .value) style="double"
+' "$output"
+python3 - "$output" <<'PY'
+import sys
+import yaml
+for resource in yaml.safe_load_all(open(sys.argv[1])):
+    if not resource or resource.get('kind') not in ('Deployment', 'Job', 'StatefulSet'):
+        continue
+    spec = resource['spec']['template']['spec']
+    for container in spec.get('containers', []) + spec.get('initContainers', []):
+        for entry in container.get('env', []):
+            if 'value' in entry and not isinstance(entry['value'], str):
+                raise SystemExit('Rendered environment value must be a string: ' + entry['name'])
+PY
+printf 'Kodex local render created: %s (security profile: %s)\n' "$output" "$security_profile"

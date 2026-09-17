@@ -204,11 +204,16 @@ func (server *Server) CreateRuntimeEnvironmentSet(writer http.ResponseWriter, re
 	if !ok {
 		return
 	}
+	policy, ok := runtimeEnvironmentPolicyInput(body.Policy)
+	if !ok {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	response, err := server.control.Command.CreateRuntimeEnvironmentSet(request.Context(), &controlplanev1.CreateRuntimeEnvironmentSetRequest{
 		Mutation: mutation, ProjectRef: projectRef, Name: body.Name, Description: body.Description,
 		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
 		SecretBindings: bindings, Tools: runtimeEnvironmentTools(body.Tools),
-		Policy: runtimeEnvironmentPolicyInput(body.Policy),
+		Policy: policy,
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -230,11 +235,16 @@ func (server *Server) PublishRuntimeEnvironmentVersion(writer http.ResponseWrite
 	if !ok {
 		return
 	}
+	policy, ok := runtimeEnvironmentPolicyInput(body.Policy)
+	if !ok {
+		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
 	response, err := server.control.Command.PublishRuntimeEnvironmentVersion(request.Context(), &controlplanev1.PublishRuntimeEnvironmentVersionRequest{
 		Mutation: mutation, EnvironmentRef: environmentRef, Name: body.Name, Description: body.Description,
 		ImageArtifactRef: body.ImageArtifactRef, Values: runtimeEnvironmentValues(body.Values),
 		SecretBindings: bindings, Tools: runtimeEnvironmentTools(body.Tools),
-		Policy: runtimeEnvironmentPolicyInput(body.Policy),
+		Policy: policy,
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -309,7 +319,10 @@ func runtimeEnvironmentTools(input []generated.RuntimeEnvironmentTool) []*contro
 	return result
 }
 
-func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput) *controlplanev1.RuntimeEnvironmentPolicyInput {
+func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput) (*controlplanev1.RuntimeEnvironmentPolicyInput, bool) {
+	if !input.KubernetesAccess.Valid() {
+		return nil, false
+	}
 	result := &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: &controlplanev1.RuntimeResourcePolicy{
 		CpuRequestMilli: input.Resources.CpuRequestMilli, CpuLimitMilli: input.Resources.CpuLimitMilli,
 		MemoryRequestMib: input.Resources.MemoryRequestMib, MemoryLimitMib: input.Resources.MemoryLimitMib,
@@ -317,14 +330,20 @@ func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput
 		EphemeralStorageLimitMib:   input.Resources.EphemeralStorageLimitMib,
 	}, KubernetesAccess: runtimeKubernetesAccessKind(string(input.KubernetesAccess))}
 	for _, volume := range input.Volumes {
+		if !volume.Kind.Valid() {
+			return nil, false
+		}
 		result.Volumes = append(result.Volumes, &controlplanev1.RuntimeVolumeInput{
 			Name: volume.Name, Kind: runtimeVolumeKind(string(volume.Kind)), SizeMib: volume.SizeMib,
 		})
 	}
 	for _, destination := range input.NetworkDestinations {
+		if !destination.Valid() {
+			return nil, false
+		}
 		result.NetworkDestinations = append(result.NetworkDestinations, runtimeNetworkDestination(string(destination)))
 	}
-	return result
+	return result, true
 }
 
 func runtimeVolumeKind(value string) controlplanev1.RuntimeVolumeKind {

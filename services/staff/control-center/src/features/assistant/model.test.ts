@@ -3,6 +3,7 @@ import { reactive } from "vue";
 
 import {
   assistantEffectiveRuntimeState,
+  assistantRequiresProviderAccount,
   editableOperations,
   operationActionLabel,
   operationInputs,
@@ -132,6 +133,7 @@ describe("assistant runtime presentation", () => {
       corePromptRevision: "core-v1",
       ownerInstructions: "",
       runtimeState,
+      warmSessionRef: "sess_system",
       readinessSummary: "Восстановление runtime",
       nextActions,
     };
@@ -153,5 +155,17 @@ describe("assistant runtime presentation", () => {
 
   it("не подменяет явное состояние выполнения", () => {
     expect(assistantEffectiveRuntimeState(assistant("BUSY", []))).toBe("BUSY");
+  });
+
+  it("отличает provider-free first-run от готовой warm session", () => {
+    expect(
+      assistantRequiresProviderAccount({
+        ...assistant("FAILED", []),
+        warmSessionRef: "",
+      }),
+    ).toBe(true);
+    expect(assistantRequiresProviderAccount(assistant("READY", []))).toBe(
+      false,
+    );
   });
 });

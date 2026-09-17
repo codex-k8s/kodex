@@ -19,6 +19,10 @@ components:
   - ../../components/internal-rpc-authority-control-plane-verifier
   - ../../components/internal-rpc-authority-control-plane-issuer
 configMapGenerator:
+  - name: control-plane-skill-scanner
+    files:
+      - skill-scanner/clamd.conf
+      - skill-scanner/healthcheck.sh
   - name: control-plane-runtime
     literals:
       - CONTROL_PLANE_NATS_STREAM=CONTROL_PLANE

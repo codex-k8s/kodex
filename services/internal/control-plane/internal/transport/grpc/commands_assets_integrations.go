@@ -78,16 +78,18 @@ func (server *Server) UploadArtifact(stream controlplanev1.PlatformCommandServic
 }
 
 func (server *Server) UploadAgentAvatar(stream controlplanev1.PlatformCommandService_UploadAgentAvatarServer) error {
-	p, err := principal(stream.Context(), controlplanev1.PlatformCommandService_UploadAgentAvatar_FullMethodName)
-	if err != nil {
-		return err
-	}
 	adapter := &agentAvatarUploadAdapter{stream: stream}
 	upload, err := receiveArtifactUpload(adapter)
 	if err != nil {
 		return err
 	}
 	defer upload.close()
+	// Как и для обычного UploadArtifact, actor client-stream появляется в
+	// контексте только после первой metadata-части, принятой interceptor-ом.
+	p, err := principal(stream.Context(), controlplanev1.PlatformCommandService_UploadAgentAvatar_FullMethodName)
+	if err != nil {
+		return err
+	}
 	metadata := adapter.metadata
 	if metadata == nil || metadata.GetProjectRef() == "" || metadata.GetAgentRef() == "" ||
 		metadata.GetMutation() == nil || metadata.GetMutation().ExpectedVersion == nil || metadata.GetSizeBytes() > 5<<20 {

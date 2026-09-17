@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
 	Environment                     string        `env:"SESSION_ARCHIVE_ENVIRONMENT"`
 	WorkerNamespace                 string        `env:"SESSION_ARCHIVE_WORKER_NAMESPACE"`
 	InstanceID                      string        `env:"SESSION_ARCHIVE_INSTANCE_ID"`
@@ -65,6 +67,9 @@ func loadConfig() (Config, error) {
 }
 
 func (value Config) validate() error {
+	if value.RPCProfile != "" && value.RPCProfile != transportprofile.TrustedCluster {
+		return errors.New("session archive RPC profile is invalid")
+	}
 	if value.Environment != "staging" && value.Environment != "production" {
 		return errors.New("session archive environment is invalid")
 	}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/clients/mailtransport"
 )
@@ -15,6 +16,7 @@ import (
 const mailEgressAddress = "egress-gateway.kodex-system.svc:8082"
 
 type Config struct {
+	RPCProfile                    string `env:"KODEX_RPC_PROFILE"`
 	ReconciliationIntervalSeconds int    `env:"EMAIL_BRIDGE_RECONCILIATION_INTERVAL_SECONDS"`
 	ReconciliationBatch           int    `env:"EMAIL_BRIDGE_RECONCILIATION_BATCH"`
 	Listen                        string `env:"EMAIL_BRIDGE_LISTEN"`
@@ -38,6 +40,9 @@ func loadConfig() (Config, error) {
 	if env.ParseWithOptions(&c, env.Options{}) != nil {
 		return c, errors.New("invalid email bridge environment")
 	}
+	if c.RPCProfile != "" && c.RPCProfile != transportprofile.TrustedCluster {
+		return c, errors.New("invalid email bridge RPC profile")
+	}
 	if c.ReconciliationIntervalSeconds < 5 || c.ReconciliationIntervalSeconds > 300 || c.ReconciliationBatch < 1 || c.ReconciliationBatch > 64 {
 		return c, errors.New("invalid email reconciliation limits")
 	}
@@ -59,6 +64,9 @@ func (c Config) configurationPins() configurationPins {
 	return configurationPins{mode: c.ConfigurationMode, revision: c.ExpectedConfigurationRevision, digest: c.ExpectedConfigurationDigest}
 }
 func tlsConfig(c Config) (*tls.Config, error) {
+	if c.RPCProfile == transportprofile.TrustedCluster {
+		return nil, nil
+	}
 	cert, e := securefile.Read(c.CertificateFile, 1<<20)
 	if e != nil {
 		return nil, failure(stageCertificate, e)

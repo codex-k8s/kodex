@@ -22,6 +22,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                        string        `env:"KODEX_RPC_PROFILE"`
 	WebSocketLegacyUntil              string        `env:"KODEX_WS_LEGACY_UNTIL"`
 	HTTPListen                        string        `env:"CONTROL_API_GATEWAY_HTTP_LISTEN"`
 	TechnicalListen                   string        `env:"CONTROL_API_GATEWAY_TECHNICAL_LISTEN"`
@@ -93,6 +94,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
+		return errors.New("control API RPC profile is invalid")
+	}
 	if _, err := config.legacyWebSocketDeadline(time.Now().UTC()); err != nil {
 		return err
 	}

@@ -47,9 +47,6 @@ func bootstrapUnpinnedCatalogCandidates(ctx context.Context, tx pgx.Tx, organiza
 	if rows.Err() != nil {
 		return nil, errs.ErrUnavailable
 	}
-	if len(result) == 0 {
-		return nil, errs.ErrConflict
-	}
 	return result, nil
 }
 

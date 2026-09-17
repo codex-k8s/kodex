@@ -28,6 +28,7 @@ const (
 	permissionProgressBuild      = "platform.role-images.builds.progress"
 	permissionCompleteBuild      = "platform.role-images.builds.complete"
 	permissionFailBuild          = "platform.role-images.builds.fail"
+	permissionGetSupplyWork      = "platform.role-images.supply-work.get"
 	permissionClaimAdmission     = "platform.role-images.admission.claim"
 	permissionRecordAdmission    = "platform.role-images.admission.record"
 	permissionRequestPromotion   = "platform.command.role-images.promote"
@@ -47,6 +48,17 @@ var (
 type Service struct {
 	repository repository.Repository
 	catalog    *Catalog
+}
+
+func (service *Service) GetSupplyWorkAvailability(ctx context.Context, principal value.Principal) (repository.SupplyWorkAvailability, error) {
+	principal, err := service.resolvePrincipal(ctx, principal)
+	if err != nil {
+		return repository.SupplyWorkAvailability{}, err
+	}
+	if principal.Permission != permissionGetSupplyWork || principal.CallerWorkload != "image-admission-controller" {
+		return repository.SupplyWorkAvailability{}, errs.ErrForbidden
+	}
+	return service.repository.GetSupplyWorkAvailability(ctx, principal)
 }
 
 func New(repo repository.Repository, catalog *Catalog) (*Service, error) {

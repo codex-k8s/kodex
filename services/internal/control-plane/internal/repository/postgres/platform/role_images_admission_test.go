@@ -39,3 +39,27 @@ func TestRoleImageAdmissionPolicyRotationQueries(t *testing.T) {
 		}
 	}
 }
+
+func TestRoleImageSupplyWorkAvailabilityIsReadOnlyAndUsesClaimEligibility(t *testing.T) {
+	query := strings.ToLower(queryRoleImagesGetSupplyWorkAvailability)
+	for _, required := range []string{
+		"artifact.policy_revision = @policy_revision",
+		"artifact.policy_sha256 = @policy_sha256",
+		"artifact.admission_state = 'pending'",
+		"artifact.admission_claim_expires_at <= clock_timestamp()",
+		"request.state = 'queued' and artifact.promotion_state = 'pending'",
+		"artifact.promotion_claim_expires_at <= clock_timestamp()",
+		"artifact.promotion_authorization_expires_at <= clock_timestamp()",
+		"recipe.version = artifact.recipe_version",
+		"recipe.generation = artifact.recipe_generation",
+	} {
+		if !strings.Contains(query, required) {
+			t.Fatalf("supply work availability does not enforce %q", required)
+		}
+	}
+	for _, forbidden := range []string{"for update", "insert ", "update ", "delete "} {
+		if strings.Contains(query, forbidden) {
+			t.Fatalf("supply work availability is not read-only: %q", forbidden)
+		}
+	}
+}
