@@ -147,14 +147,16 @@ Deployments не применяются повторно. Для init устан
 helper. Runtime execution и RoleImage по-прежнему используют свой admission
 и promoted image flow.
 
-Текущий Control Plane требует настоящий provider account при начальном
-bootstrap организации. Поэтому `--provider-mode deferred` позволяет поднять
-данные и UI, но пока не обеспечивает запуск Control Plane и вход в продукт.
-Для полного bootstrap владелец указывает `KODEX_LOCAL_PROVIDER_AUTH_FILE` —
-путь к приватному auth.json в локальной `.env`; токены не копируются в чат
-или Git. `dev.sh` поддерживает это имя, прежнее `KODEX_DEV_PROVIDER_AUTH_FILE`
-оставлено для совместимости. Не следует считать доступность оболочки UI
-подтверждением login/API/project сценариев.
+Control Plane допускает первый bootstrap организации без provider account.
+В `trusted-cluster` режим `--provider-mode deferred` не создаёт credential,
+фиктивный `AUTHORIZED` account или warm session: владелец входит через SSO,
+создаёт account и завершает device-code authorization в Control Center.
+Только после появления настоящей credential и проверенного model catalog
+reconcile публикует непустую provider policy и создаёт первую warm session.
+Запуск модели до этого закрыто отклоняется. Для уже настроенной установки
+можно явно передать `KODEX_LOCAL_PROVIDER_AUTH_FILE`; прежнее имя
+`KODEX_DEV_PROVIDER_AUTH_FILE` оставлено для совместимости. Доступность UI
+сама по себе не подтверждает login/API/project или model execution.
 
 Air закреплён на `v1.67.4` в `components.lock.json`. Prime размещает бинарь
 и receipt в versioned путях `go-tools/air-<version>`: обновление инструмента

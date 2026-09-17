@@ -105,6 +105,35 @@ class TrustedClusterRenderTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "EXPLICIT_RPC_PROFILE_REQUIRED"):
                 verify(candidate, PROFILE)
 
+    def test_control_plane_provider_bootstrap_metadata_is_all_optional_or_absent(self):
+        provider_entries = [{"name": name, "valueFrom": {"configMapKeyRef": {
+            "name": "runtime-provider-openai-default-metadata", "key": key, "optional": True}}}
+                            for name, key in {
+                                "CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME": "secretName",
+                                "CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID": "secretUID",
+                                "CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION": "secretResourceVersion",
+                                "CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256": "contentSHA256",
+                            }.items()]
+        resources = materialize(self.resources, PROFILE)
+        control_plane = next(item for item in resources if item["metadata"]["name"] == "control-plane")
+        container = control_plane["spec"]["template"]["spec"]["containers"][0]
+        container["env"].extend(provider_entries)
+        verify(resources, PROFILE)
+        candidate = copy.deepcopy(resources)
+        current = next(item for item in candidate if item["metadata"]["name"] == "control-plane")
+        current_container = current["spec"]["template"]["spec"]["containers"][0]
+        current_container["env"] = [entry for entry in current_container["env"]
+                                    if entry["name"] != "CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256"]
+        with self.assertRaisesRegex(ValueError, "PARTIAL_PROVIDER_BOOTSTRAP_ENV_FORBIDDEN"):
+            verify(candidate, PROFILE)
+        candidate = copy.deepcopy(resources)
+        current = next(item for item in candidate if item["metadata"]["name"] == "control-plane")
+        current_container = current["spec"]["template"]["spec"]["containers"][0]
+        next(entry for entry in current_container["env"]
+             if entry["name"] == "CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME")["valueFrom"]["configMapKeyRef"].pop("optional")
+        with self.assertRaisesRegex(ValueError, "OPTIONAL_PROVIDER_BOOTSTRAP_REFERENCE_REQUIRED"):
+            verify(candidate, PROFILE)
+
     def test_runtime_projection_requires_both_network_directions(self):
         self.resources.extend([
             workload("runtime-controller"), workload("secret-broker"),

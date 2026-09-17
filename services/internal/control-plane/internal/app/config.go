@@ -240,9 +240,7 @@ func (config Config) validate() error {
 		config.NATSStream != "CONTROL_PLANE" || config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.NATSMaxBytes < 256<<20 ||
 		config.InstanceID == "" || len(config.InstanceID) > 128 ||
 		config.DefaultRuntimeProvider != "openai-codex" || !validRuntimeIdentifier(config.DefaultRuntimeModel) ||
-		!validDNSLabel(config.DefaultProviderSecretName) || !validUUID(config.DefaultProviderSecretUID) ||
-		config.DefaultProviderSecretVersion == "" || len(config.DefaultProviderSecretVersion) > 128 ||
-		!validSHA256(config.DefaultProviderCredentialSHA256) ||
+		!validBootstrapProviderCredentialConfig(config) ||
 		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
 		!validDNSLabel(config.RuntimeSecretNamespace) ||
 		!validDNSLabel(config.RuntimeSecretStagingNamespace) || config.RuntimeSecretNamespace == config.RuntimeSecretStagingNamespace ||
@@ -289,6 +287,18 @@ func (config Config) validate() error {
 		}
 	}
 	return nil
+}
+
+// Полностью отсутствующая bootstrap credential допустима: аккаунты создаются
+// владельцем после входа. Частичная конфигурация не превращается в отсутствие.
+func validBootstrapProviderCredentialConfig(config Config) bool {
+	if config.DefaultProviderSecretName == "" && config.DefaultProviderSecretUID == "" &&
+		config.DefaultProviderSecretVersion == "" && config.DefaultProviderCredentialSHA256 == "" {
+		return true
+	}
+	return validDNSLabel(config.DefaultProviderSecretName) && validUUID(config.DefaultProviderSecretUID) &&
+		config.DefaultProviderSecretVersion != "" && len(config.DefaultProviderSecretVersion) <= 128 &&
+		validSHA256(config.DefaultProviderCredentialSHA256)
 }
 
 func validProviderCredentialCleanupConfig(config Config) bool {

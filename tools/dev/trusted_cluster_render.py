@@ -48,6 +48,12 @@ CORE_EDGES = {
 }
 
 RUNTIME_PROFILE_MESSAGE = "runtime Pod requires the configured trusted cluster profile"
+PROVIDER_BOOTSTRAP_ENV = {
+    "CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME": "secretName",
+    "CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID": "secretUID",
+    "CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION": "secretResourceVersion",
+    "CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256": "contentSHA256",
+}
 
 
 def runtime_admission_profile(resource):
@@ -118,6 +124,19 @@ def authority_peer(peer):
     labels = peer.get("podSelector", {}).get("matchLabels", {})
     return any(authority_name(value) for value in labels.values() if isinstance(value, str)) or any(
         key.startswith("kodex.dev/internal-rpc-authority") for key in labels)
+
+
+def verify_optional_provider_bootstrap(container):
+    entries = {entry["name"]: entry for entry in container.get("env", [])
+               if entry["name"] in PROVIDER_BOOTSTRAP_ENV}
+    if not entries:
+        return
+    require(set(entries) == set(PROVIDER_BOOTSTRAP_ENV), "PARTIAL_PROVIDER_BOOTSTRAP_ENV_FORBIDDEN")
+    for name, key in PROVIDER_BOOTSTRAP_ENV.items():
+        reference = entries[name].get("valueFrom", {}).get("configMapKeyRef", {})
+        require(reference == {"name": "runtime-provider-openai-default-metadata",
+                              "key": key, "optional": True},
+                "OPTIONAL_PROVIDER_BOOTSTRAP_REFERENCE_REQUIRED:" + name)
 
 
 def materialize(resources, profile):
@@ -222,6 +241,8 @@ def verify(resources, profile):
             require(len(application) == 1 and
                     [entry for entry in application[0].get("env", []) if entry["name"] == "KODEX_RPC_PROFILE"] ==
                     [{"name": "KODEX_RPC_PROFILE", "value": PROFILE}], "EXPLICIT_RPC_PROFILE_REQUIRED:" + name)
+            if name == "control-plane":
+                verify_optional_provider_bootstrap(application[0])
         if name == "kodex-postgresql-runtime-credentials":
             application = [container for container in spec.get("containers", []) if container["name"] == "reconcile"]
             require(len(application) == 1 and

@@ -294,7 +294,8 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	}
 	if json.Unmarshal(rawCurrent, &snapshot.currentCandidates) != nil ||
 		json.Unmarshal(rawDesired, &snapshot.desiredCandidates) != nil ||
-		!validProviderPolicy(snapshot.mode, snapshot.currentCandidates) {
+		(!validProviderPolicy(snapshot.mode, snapshot.currentCandidates) &&
+			!(snapshot.configVersion == 1 && snapshot.mode == "LEAST_USED" && string(rawCurrent) == "[]")) {
 		return false, errs.ErrConflict
 	}
 	if len(snapshot.desiredCandidates) == 0 {
@@ -390,7 +391,18 @@ func (repository *Repository) lockWarmSessionBinding(
 	organizationID string,
 ) (warmSessionBinding, error) {
 	var binding warmSessionBinding
-	err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeLockSessionBinding, pgx.StrictNamedArgs{
+	// Отсутствующая первая сессия блокируется владельцем runtime, а не
+	// заменяется сессией с фиктивным provider account.
+	err := tx.QueryRow(ctx, queryWorkersInitialWarmSessionBinding, pgx.StrictNamedArgs{
+		"organization_id": organizationID,
+	}).Scan(&binding.assistantRef, &binding.createdBy)
+	if err == nil {
+		return binding, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return warmSessionBinding{}, errs.ErrUnavailable
+	}
+	err = tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeLockSessionBinding, pgx.StrictNamedArgs{
 		"organization_id": organizationID,
 	}).Scan(
 		&binding.assistantRef,
@@ -418,11 +430,13 @@ func (repository *Repository) replaceWarmSession(
 	if providerAccountID == "" {
 		return errs.ErrConflict
 	}
-	if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntimeCloseSession, pgx.StrictNamedArgs{
-		"organization_id": organizationID,
-		"session_id":      current.sessionID,
-	}); err != nil {
-		return errs.ErrUnavailable
+	if current.sessionID != "" {
+		if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntimeCloseSession, pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"session_id":      current.sessionID,
+		}); err != nil {
+			return errs.ErrUnavailable
+		}
 	}
 	nextSessionRef, err := newRef("ses")
 	if err != nil {
@@ -459,11 +473,13 @@ func (repository *Repository) markWarmRuntimeUnavailable(
 	organizationID string,
 	current warmSessionBinding,
 ) error {
-	if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntimeCloseSession, pgx.StrictNamedArgs{
-		"organization_id": organizationID,
-		"session_id":      current.sessionID,
-	}); err != nil {
-		return errs.ErrUnavailable
+	if current.sessionID != "" {
+		if _, err := tx.Exec(ctx, queryWorkersReconcilewarmruntimeCloseSession, pgx.StrictNamedArgs{
+			"organization_id": organizationID,
+			"session_id":      current.sessionID,
+		}); err != nil {
+			return errs.ErrUnavailable
+		}
 	}
 	var runtimeVersion int64
 	if err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeMarkUnavailable, pgx.StrictNamedArgs{

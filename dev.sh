@@ -15,6 +15,7 @@ usage() {
     "       $0 provider-authorize|provider-import|provider-list [provider options]" \
     '  [--state-directory <path>] [--cluster-marker <root-owned-path>]' \
     '  [--profile web-only|web-with-mattermost]' \
+    '  [--security-profile protected|trusted-cluster]' \
     '  [--management-surfaces all|control-center]' \
     '  [--expected-sha <40-hex-commit>] [--component-manifest <private-path>]' >&2
 }
@@ -47,6 +48,7 @@ expected_sha=""
 component_manifest=""
 requested_profile=""
 management_surfaces=all
+security_profile=protected
 while (($# > 0)); do
   case "$1" in
     --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
@@ -58,6 +60,7 @@ while (($# > 0)); do
     --expected-sha) expected_sha=${2:-}; shift 2 ;;
     --component-manifest) component_manifest=${2:-}; shift 2 ;;
     --profile) requested_profile=${2:-}; shift 2 ;;
+    --security-profile) security_profile=${2:-}; shift 2 ;;
     --management-surfaces) management_surfaces=${2:-}; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
@@ -65,6 +68,7 @@ while (($# > 0)); do
 done
 case "$command_name" in up|identity|status|smoke|e2e|down) ;; *) usage; fail 'command is invalid' ;; esac
 case "$management_surfaces" in all|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
+case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
 if [[ -n "$component_manifest" ]]; then
   [[ "$command_name" == status || "$command_name" == smoke || "$command_name" == e2e ]] || fail 'component manifest is restricted to application readback and acceptance'
   [[ "$component_manifest" == /* && -f "$component_manifest" && ! -L "$component_manifest" ]] || fail 'component manifest is absent or unsafe'
@@ -77,6 +81,11 @@ deployment_profile=${requested_profile:-web-only}
 if [[ "$command_name" != down ]]; then
   deployment_profile=$("$repository_root/tools/dev/resolve-local-profile.sh" \
     "$requested_profile" "$state_directory/render.yaml")
+fi
+if [[ "$security_profile" == trusted-cluster ]]; then
+  case "$state_directory" in
+    "$repository_root"|"$repository_root"/*) fail 'trusted-cluster state directory must be outside the source clone' ;;
+  esac
 fi
 if [[ "${KODEX_DEV_TLS_MODE:-local-ca}" == public-acme ]]; then
   [[ -n "$cluster_marker" ]] || fail 'public development requires a disposable cluster marker'
@@ -554,9 +563,17 @@ if [[ "$command_name" == status || "$command_name" == smoke || "$command_name" =
     fi
   fi
   if [[ -z "$component_manifest" ]]; then
-    "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
-      --render "$state_directory/render.yaml" --state-directory "$state_directory" \
-      --tls-mode "$tls_mode"
+    if [[ "$security_profile" == trusted-cluster ]]; then
+      for stage in data network migrate core; do
+        "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
+          --render "$state_directory/render.yaml" --state-directory "$state_directory" \
+          --tls-mode "$tls_mode" --security-profile "$security_profile" --stage "$stage"
+      done
+    else
+      "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
+        --render "$state_directory/render.yaml" --state-directory "$state_directory" \
+        --tls-mode "$tls_mode"
+    fi
     verify_live_workload_source "$state_directory/render.yaml"
   fi
   record_source_provenance_evidence "$source_evidence" "$command_name"
@@ -738,28 +755,30 @@ fi
   --context "$context" --material-directory "$material_directory"
 default_provider_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"
 provider_auth=${KODEX_LOCAL_PROVIDER_AUTH_FILE:-${KODEX_DEV_PROVIDER_AUTH_FILE:-$default_provider_auth}}
-[[ "$provider_auth" == /* && -f "$provider_auth" && ! -L "$provider_auth" ]] ||
-  fail 'provider authorization is absent; set KODEX_LOCAL_PROVIDER_AUTH_FILE to a private Codex auth.json'
-[[ "$(stat -c '%u' "$provider_auth")" == "$(id -u)" &&
-  $((8#$(stat -c '%a' "$provider_auth") & 8#077)) == 0 ]] ||
-  fail 'provider authorization must be owned by the current user and private'
-[[ "$(stat -c '%s' "$provider_auth")" -le 1048576 ]] ||
-  fail 'provider authorization exceeds the supported size'
-provider_validation_home=$(mktemp -d "$state_directory/.provider-validation.XXXXXX")
-chmod 0700 "$provider_validation_home"
-install -m 0600 "$provider_auth" "$provider_validation_home/auth.json"
-if ! CODEX_HOME="$provider_validation_home" HOME="$provider_validation_home" \
-  codex login status >/dev/null 2>&1; then
+provider_mode=configured
+provider_material_arguments=()
+if [[ "$provider_auth" == /* && -f "$provider_auth" && ! -L "$provider_auth" ]]; then
+  [[ "$(stat -c '%u' "$provider_auth")" == "$(id -u)" &&
+    $((8#$(stat -c '%a' "$provider_auth") & 8#077)) == 0 ]] ||
+    fail 'provider authorization must be owned by the current user and private'
+  [[ "$(stat -c '%s' "$provider_auth")" -le 1048576 ]] ||
+    fail 'provider authorization exceeds the supported size'
+  provider_validation_home=$(mktemp -d "$state_directory/.provider-validation.XXXXXX")
+  chmod 0700 "$provider_validation_home"
+  install -m 0600 "$provider_auth" "$provider_validation_home/auth.json"
+  if ! CODEX_HOME="$provider_validation_home" HOME="$provider_validation_home" \
+    codex login status >/dev/null 2>&1; then
+    rm -rf -- "$provider_validation_home"
+    fail 'Codex does not recognize the provider authorization file'
+  fi
   rm -rf -- "$provider_validation_home"
-  fail 'Codex does not recognize the provider authorization file'
+  provider_material_arguments+=(--provider-auth-file "$provider_auth")
+elif [[ "$security_profile" == trusted-cluster ]]; then
+  provider_mode=deferred
+  provider_auth=""
+else
+  fail 'provider authorization is absent; protected profile requires KODEX_LOCAL_PROVIDER_AUTH_FILE'
 fi
-rm -rf -- "$provider_validation_home"
-"$repository_root/tools/install/materialize-secrets.sh" --context "$context" \
-  --material-directory "$material_directory" \
-  --oidc-ca-file "$oidc_ca_file" \
-  --provider-auth-file "$provider_auth"
-"$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
-  --state-directory "$state_directory" --mode commit >/dev/null
 
 "$repository_root/tools/dev/configure-local-node-registry.sh" --mode apply \
   --context "$context" --material-directory "$material_directory" \
@@ -816,6 +835,7 @@ bash "$repository_root/tools/dev/read-local-mail-configuration.sh" "$state_direc
 "$repository_root/tools/dev/render-local.sh" --source-root "$repository_root" \
   --mail-configuration "$state_directory/mail-source.json" \
   --profile "$deployment_profile" \
+  --security-profile "$security_profile" --host-uid "$(id -u)" --host-gid "$(id -g)" \
   --cache-root "$state_directory/cache" --output "$state_directory/render.yaml" \
   --public-host "$public_host" --oidc-host "$oidc_host" \
   --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer" \
@@ -838,10 +858,26 @@ bash "$repository_root/tools/dev/read-local-mail-configuration.sh" "$state_direc
   --role-image-input-manifest-digest "$role_image_input_manifest_digest" \
   --role-image-input-payload-sha256 "$role_image_input_payload_sha256" \
   --role-image-input-source-sha256 "$role_image_input_source_sha256"
+"$repository_root/tools/install/materialize-secrets.sh" --context "$context" \
+  --material-directory "$material_directory" \
+  --oidc-ca-file "$oidc_ca_file" \
+  --security-profile "$security_profile" --provider-mode "$provider_mode" \
+  --render "$state_directory/render.yaml" \
+  "${provider_material_arguments[@]}"
+"$repository_root/tools/dev/reconcile-local-material.sh" --context "$context" \
+  --state-directory "$state_directory" --mode commit >/dev/null
 record_source_provenance_evidence "$state_directory/source-provenance-up.json" up
-"$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
-  --render "$state_directory/render.yaml" --state-directory "$state_directory" \
-  --tls-mode "$tls_mode"
+if [[ "$security_profile" == trusted-cluster ]]; then
+  for stage in data network migrate core; do
+    "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
+      --render "$state_directory/render.yaml" --state-directory "$state_directory" \
+      --tls-mode "$tls_mode" --security-profile "$security_profile" --stage "$stage"
+  done
+else
+  "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode apply \
+    --render "$state_directory/render.yaml" --state-directory "$state_directory" \
+    --tls-mode "$tls_mode"
+fi
 commit_local_authority_source_state
 
 management_surface_arguments=(
@@ -880,7 +916,7 @@ for metadata_file in "${provider_metadata[@]}"; do
   [[ "$account_key" == "$(basename -- "$(dirname -- "$metadata_file")")" ]] ||
     fail 'provider account metadata directory binding is invalid'
   account_auth_file="$(dirname -- "$metadata_file")/auth.json"
-  if [[ "$account_key" == default-openai-codex ]] &&
+  if [[ "$provider_mode" == configured && "$account_key" == default-openai-codex ]] &&
     [[ "$(realpath -e -- "$account_auth_file")" == "$(realpath -e -- "$provider_auth")" ]]; then
     continue
   fi

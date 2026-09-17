@@ -81,13 +81,13 @@ spec:
             - name: CONTROL_PLANE_NATS_REPLICAS
               value: "1"
             - name: CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_NAME
-              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretName}}
+              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretName, optional: true}}
             - name: CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_UID
-              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretUID}}
+              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretUID, optional: true}}
             - name: CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION
-              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretResourceVersion}}
+              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: secretResourceVersion, optional: true}}
             - name: CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256
-              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: contentSHA256}}
+              valueFrom: {configMapKeyRef: {name: runtime-provider-openai-default-metadata, key: contentSHA256, optional: true}}
             - name: CONTROL_PLANE_INTEGRATION_CREDENTIAL_NAMESPACE
               valueFrom:
                 fieldRef:
