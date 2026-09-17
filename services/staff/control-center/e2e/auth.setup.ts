@@ -112,6 +112,41 @@ test.describe("OIDC-сессия владельца", () => {
     }
   });
 
+  test("после logout владелец повторно входит через warm OIDC", async ({
+    browser,
+  }) => {
+    const context = await warmOwnerContext(browser);
+    const page = await context.newPage();
+
+    try {
+      await authenticateOwner(page, undefined, { mode: "warm" });
+      const logoutResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === "DELETE" &&
+          new URL(response.url()).origin === environment.baseURL &&
+          new URL(response.url()).pathname === "/api/v1/session",
+      );
+      await page.locator(".current-user-menu__trigger").click();
+      await page.getByRole("button", { name: "Выйти", exact: true }).click();
+      expect((await logoutResponse).status()).toBe(204);
+      await expect(
+        page.getByRole("button", { name: "Войти", exact: true }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(async () =>
+          fetch("/api/v1/projects").then((response) => response.status),
+        ),
+      ).toBe(401);
+
+      const sessionResponse = waitForOwnerSession(page);
+      await authenticateOwner(page, undefined, { mode: "warm" });
+      expect((await sessionResponse).status()).toBe(200);
+      await expect(page.locator(".app-shell")).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
   test("warm OIDC закрыто отклоняет ошибку создания owner session", async ({
     browser,
   }) => {
