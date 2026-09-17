@@ -2391,6 +2391,18 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 		!reflect.DeepEqual(boundSecond.RuntimeConfiguration.Environment.CurrentVersion, second.CurrentVersion) {
 		t.Fatalf("rebind second runtime environment: configuration=%#v err=%v", boundSecond.RuntimeConfiguration, err)
 	}
+	readiness, err := service.GetRuntimeEnvironmentReadiness(ctx, owner, second.Ref)
+	if err != nil || !readiness.Ready || readiness.EnvironmentRef != second.Ref ||
+		readiness.EnvironmentVersion != second.Version || readiness.PublishedVersionRef != second.CurrentVersion.Ref ||
+		readiness.PublishedVersionDigest != second.CurrentVersion.Digest || len(readiness.Blockers) != 0 {
+		t.Fatalf("read runtime environment readiness: readiness=%#v err=%v", readiness, err)
+	}
+	boundAgents, next, err := service.ListRuntimeEnvironmentAgents(ctx, owner, query.Filter{
+		ResourceRef: second.Ref, Page: query.Page{Size: 20},
+	})
+	if err != nil || next != "" || len(boundAgents) != 1 || boundAgents[0].Ref != agent.Ref {
+		t.Fatalf("list runtime environment agents: agents=%#v next=%q err=%v", boundAgents, next, err)
+	}
 	deleteCommand := command.Command{
 		Kind: command.DeleteRuntimeEnvironment, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-delete", ExpectedVersion: &deleteVersion},
@@ -2421,6 +2433,14 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 	}
 	if readback, err := service.GetRuntimeEnvironment(ctx, owner, first.Ref); !errors.Is(err, domainerrs.ErrNotFound) || readback.Ref != "" {
 		t.Fatalf("deleted runtime environment remained get-eligible: environment=%#v err=%v", readback, err)
+	}
+	if readiness, err := service.GetRuntimeEnvironmentReadiness(ctx, owner, first.Ref); !errors.Is(err, domainerrs.ErrNotFound) || readiness.EnvironmentRef != "" {
+		t.Fatalf("deleted runtime environment remained readiness-eligible: readiness=%#v err=%v", readiness, err)
+	}
+	if agents, next, err := service.ListRuntimeEnvironmentAgents(ctx, owner, query.Filter{
+		ResourceRef: first.Ref, Page: query.Page{Size: 20},
+	}); !errors.Is(err, domainerrs.ErrNotFound) || len(agents) != 0 || next != "" {
+		t.Fatalf("deleted runtime environment remained agent-list eligible: agents=%#v next=%q err=%v", agents, next, err)
 	}
 	environments, _, err = service.ListRuntimeEnvironments(ctx, owner, query.Filter{ProjectRef: projectRef})
 	if err != nil {

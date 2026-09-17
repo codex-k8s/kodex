@@ -118,29 +118,44 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 }
 
 func (repository *Repository) GetRuntimeEnvironment(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentSet, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	_, tx, item, err := repository.runtimeEnvironmentRead(ctx, principal, ref)
 	if err != nil {
 		return entity.RuntimeEnvironmentSet{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "ENVIRONMENT", EntityRef: ref}, ""); err != nil {
-		return entity.RuntimeEnvironmentSet{}, err
-	}
-	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment, scope.organizationID, ref, scope.role, scope.actorID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.RuntimeEnvironmentSet{}, errs.ErrNotFound
-	}
-	if err != nil {
-		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
-	}
 	if tx.Commit(ctx) != nil {
 		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
 	}
 	return item, nil
+}
+
+func (repository *Repository) runtimeEnvironmentRead(
+	ctx context.Context,
+	principal value.Principal,
+	ref string,
+) (scope, pgx.Tx, entity.RuntimeEnvironmentSet, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return scope, nil, entity.RuntimeEnvironmentSet{}, err
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return scope, nil, entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
+	}
+	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "ENVIRONMENT", EntityRef: ref}, ""); err != nil {
+		_ = tx.Rollback(ctx)
+		return scope, nil, entity.RuntimeEnvironmentSet{}, err
+	}
+	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment, scope.organizationID, ref, scope.role, scope.actorID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		_ = tx.Rollback(ctx)
+		return scope, nil, entity.RuntimeEnvironmentSet{}, errs.ErrNotFound
+	}
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return scope, nil, entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
+	}
+	return scope, tx, item, nil
 }
 
 func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error) {

@@ -725,21 +725,11 @@ func (repository *Repository) ListScheduleRuns(ctx context.Context, principal va
 }
 
 func (repository *Repository) GetRuntimeEnvironmentReadiness(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentReadiness, error) {
-	current, tx, err := repository.authorizedRead(ctx, principal, "project.view", func(scope scope) entity.AccessScope {
-		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: ref}
-	})
+	_, tx, item, err := repository.runtimeEnvironmentRead(ctx, principal, ref)
 	if err != nil {
 		return entity.RuntimeEnvironmentReadiness{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment,
-		current.organizationID, ref, current.role, current.actorID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.RuntimeEnvironmentReadiness{}, errs.ErrNotFound
-	}
-	if err != nil {
-		return entity.RuntimeEnvironmentReadiness{}, errs.ErrUnavailable
-	}
 	result := entity.RuntimeEnvironmentReadiness{
 		EnvironmentRef: item.Ref, EnvironmentVersion: item.Version,
 		PublishedVersionRef: item.CurrentVersion.Ref, PublishedVersionDigest: item.CurrentVersion.Digest,
@@ -774,9 +764,7 @@ func (repository *Repository) runtimeEnvironmentReadiness(item entity.RuntimeEnv
 }
 
 func (repository *Repository) ListRuntimeEnvironmentAgents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Agent, string, error) {
-	current, tx, err := repository.authorizedRead(ctx, principal, "project.view", func(scope scope) entity.AccessScope {
-		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: filter.ResourceRef}
-	})
+	current, tx, _, err := repository.runtimeEnvironmentRead(ctx, principal, filter.ResourceRef)
 	if err != nil {
 		return nil, "", err
 	}
