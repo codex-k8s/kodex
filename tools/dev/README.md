@@ -120,7 +120,7 @@ NATS и SeaweedFS. Конфликты не форсируются; сущест�
 `--mode readback` проверяет этот же этап без повторного apply.
 
 Успех `--stage data` не означает запуска миграций, приложения или готовности
-MVP. Полный deploy нового профиля пока закрыто отклоняется; прежний
+MVP. Монолитный deploy нового профиля закрыто отклоняется; прежний
 `protected --stage full` сохранён отдельно.
 
 Следующий этап — тот же вызов с `--stage migrate`: versioned S3 probe,
@@ -134,6 +134,17 @@ Runtime DB bootstrap в `trusted-cluster` не ожидает authority roles/sc
 render и не перезапускает StatefulSet. Это позволяет доставить точную
 недостающую связь уже ожидающей Job. Сам по себе успешный apply не доказывает
 отрицательную сетевую проверку или готовность приложения.
+
+`--stage supply-chain` выполняется после `data`, `network` и `migrate`. Стадия
+разворачивает пять exact registry endpoints, импортирует закреплённые OCI
+артефакты штатным seed helper, затем запускает BuildKit, image admission,
+role-image-builder и runtime-controller. Apply не удаляет Jobs/PVC и не
+подменяет digest: каждый существующий ресурс проходит local ownership guard,
+а итоговый readback сверяет immutable admission policy, pinned Deployments,
+registry/PVC, user-namespaced BuildKit и конфигурацию containerd для promoted
+registry. Protected-only authority registry в trusted профиле не требуется.
+Успех стадии доказывает готовность инфраструктуры supply chain, но не сам
+RoleImage build/admission/promotion и не model Run.
 
 `--stage core` запускает восемь основных Deployments. STT подключается отдельно
 через `--stage core --workload stt-tts-service` после готовности Control Plane,

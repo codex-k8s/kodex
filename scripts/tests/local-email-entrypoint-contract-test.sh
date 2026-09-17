@@ -9,6 +9,9 @@ command_log="$temporary_directory/commands"
 # Глобальная переменная читается извлечённой функцией deploy-local.
 # shellcheck disable=SC2034
 namespace=kodex-system
+# Fixture проверяет сохранённый protected-путь с replace существующей Job.
+# shellcheck disable=SC2034
+security_profile=protected
 export command_log
 fail() { printf 'Local EMAIL entrypoint contract failed: %s\n' "$*" >&2; exit 1; }
 printf '%s\n' '{"kind":"Job","metadata":{"name":"email-bridge-migration"}}' >"$render"

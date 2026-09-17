@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
-    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|core]' \
+    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|core]' \
     '  [--workload <exact-core-deployment|stt-tts-service>]' >&2
 }
 
@@ -41,7 +41,7 @@ done
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
-case "$stage" in full|data|network|migrate|core) ;; *) fail 'deployment stage is invalid' ;; esac
+case "$stage" in full|data|network|migrate|supply-chain|core) ;; *) fail 'deployment stage is invalid' ;; esac
 [[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
@@ -1087,10 +1087,18 @@ readback_local_image_supply_chain() {
     fail 'runtime-controller materialization config readback mismatch'
   workloads=$(kubectl -n "$namespace" get deployments -o json) ||
     fail 'local Deployments are unavailable for policy readback'
-  expected_deployments=$(yq -o=json -I=0 '
-    select(.kind == "Deployment" and .metadata.namespace == "kodex-system") |
-    .metadata.name
-  ' "$render" | jq -sc 'unique | sort')
+  if [[ "$security_profile" == trusted-cluster ]]; then
+    expected_deployments=$(yq -o=json -I=0 '
+      select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+        (.metadata.name | test("^(kodex-image-registry-(pull|push|promotion|staging-read|evidence)|kodex-buildkit|image-admission-controller|role-image-builder|runtime-controller)$"))) |
+      .metadata.name
+    ' "$render" | jq -sc 'unique | sort')
+  else
+    expected_deployments=$(yq -o=json -I=0 '
+      select(.kind == "Deployment" and .metadata.namespace == "kodex-system") |
+      .metadata.name
+    ' "$render" | jq -sc 'unique | sort')
+  fi
   jq -e --argjson policy "$expected_policy" \
     --argjson expected_deployments "$expected_deployments" \
     -f "$script_directory/readback-rendered-deployments.jq" \
@@ -1152,20 +1160,22 @@ readback_local_image_supply_chain() {
       any(.args[]; . == "--config=/var/run/config/kodex/buildkit/buildkitd.toml"))
   ' >/dev/null || fail 'BuildKit user-namespace/readiness contract failed'
 
-  target_registry=$(kubectl -n "$namespace" get \
-    configmap/internal-rpc-authority-publisher-target-registry \
-    -o jsonpath='{.data.key-delivery-targets\.yaml}')
-  yq -e '
-    [.targets[] | select(
-      (.workload_id == "image-admission" and
-       .service_account == "image-admission") or
-      (.workload_id == "image-promotion" and
-       .service_account == "image-promotion") or
-      (.workload_id == "role-image-builder" and
-       .service_account == "role-image-builder")
-    )] | length == 3
-  ' <<<"$target_registry" >/dev/null ||
-    fail 'image supply-chain authority targets readback failed'
+  if [[ "$security_profile" == protected ]]; then
+    target_registry=$(kubectl -n "$namespace" get \
+      configmap/internal-rpc-authority-publisher-target-registry \
+      -o jsonpath='{.data.key-delivery-targets\.yaml}')
+    yq -e '
+      [.targets[] | select(
+        (.workload_id == "image-admission" and
+         .service_account == "image-admission") or
+        (.workload_id == "image-promotion" and
+         .service_account == "image-promotion") or
+        (.workload_id == "role-image-builder" and
+         .service_account == "role-image-builder")
+      )] | length == 3
+    ' <<<"$target_registry" >/dev/null ||
+      fail 'image supply-chain authority targets readback failed'
+  fi
 
   promoted_pull_host=$(jq -er '.pullRegistryHost' <<<"$expected_policy")
   "$script_directory/configure-local-node-registry.sh" --mode readback \
@@ -1248,6 +1258,40 @@ PY
         wait_job "$job-${job_digest:0:12}"
       fi
     done
+  fi
+  if [[ "$stage" == supply-chain ]]; then
+    if [[ "$mode" == apply ]]; then
+      ensure_seed_secrets
+      apply_render image-registry-workloads '
+        select(.kind == "Deployment" and
+          (.metadata.name | test("^kodex-image-registry-(pull|push|promotion|staging-read|evidence)$")))
+      '
+      for workload in kodex-image-registry-pull kodex-image-registry-push \
+        kodex-image-registry-promotion kodex-image-registry-staging-read \
+        kodex-image-registry-evidence; do
+        kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=10m >/dev/null ||
+          fail "local image registry Deployment is unavailable: $workload"
+      done
+      "$script_directory/seed-local-image-supply-chain.sh" --context "$context" \
+        --state-directory "$state_directory" --render "$render"
+      apply_render buildkit-workload '
+        select(.kind == "Deployment" and .metadata.name == "kodex-buildkit")
+      '
+      kubectl -n "$namespace" rollout status deployment/kodex-buildkit --timeout=15m >/dev/null ||
+        fail 'local BuildKit is unavailable after registry seed'
+      apply_render image-supply-chain-controllers '
+        select(.kind == "Deployment" and
+          (.metadata.name | test("^(image-admission-controller|role-image-builder|runtime-controller)$")))
+      '
+    fi
+    for workload in kodex-image-registry-pull kodex-image-registry-push \
+      kodex-image-registry-promotion kodex-image-registry-staging-read \
+      kodex-image-registry-evidence kodex-buildkit image-admission-controller \
+      role-image-builder runtime-controller; do
+      kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=15m >/dev/null ||
+        fail "local image supply-chain Deployment is unavailable: $workload"
+    done
+    readback_local_image_supply_chain
   fi
   if [[ "$stage" == core ]]; then
     if [[ "$mode" == apply ]]; then
