@@ -188,6 +188,107 @@ test("Материализованный preview показывает pin и б�
   expect(serverFailures).toEqual([]);
 });
 
+test("MVP-UI-35 не дублирует пользовательский slot и показывает служебный порядок", async ({
+  page,
+}) => {
+  const serverFailures: string[] = [];
+  page.on("response", (response) => {
+    if (response.status() >= 500)
+      serverFailures.push(
+        `${String(response.status())} ${new URL(response.url()).pathname}`,
+      );
+  });
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  const project = await exactProject(page);
+  const agent = await exactAgent(page, project.ref);
+  await gotoWithRetry(
+    page,
+    `/projects/${encodeURIComponent(project.ref)}/agents/${encodeURIComponent(agent.ref)}`,
+  );
+  await page.getByRole("tab", { name: "Инструкции", exact: true }).click();
+  const panel = page.locator("#agent-panel-instructions");
+  const editor = panel.getByRole("textbox", {
+    name: "Инструкции",
+    exact: true,
+  });
+  await editor.fill('Пользовательская часть\n{{slot "PURPOSE"}}');
+
+  const previewResponse = page.waitForResponse(isPromptPreviewResponse);
+  await panel
+    .getByRole("button", { name: "Проверка подстановки", exact: true })
+    .click();
+  const response = await previewResponse;
+  expect(response.status()).toBe(200);
+  const preview = (await response.json()) as PromptTemplatePreview;
+  expect(preview.complete).toBe(true);
+  expect(preview.fullMaterializedPrompt).toBeUndefined();
+  expect(preview.diagnostics).toEqual([]);
+  expect(preview.slots).toEqual([
+    { slot: "PURPOSE", source: "USER_TEMPLATE", position: 1 },
+    { slot: "INPUT", source: "PLATFORM", position: 2 },
+    { slot: "CONSTRAINTS", source: "PLATFORM", position: 3 },
+    { slot: "EFFECTIVE_CAPABILITIES", source: "PLATFORM", position: 4 },
+    { slot: "FILES", source: "PLATFORM", position: 5 },
+    { slot: "TOOLS", source: "PLATFORM", position: 6 },
+    { slot: "INTEGRATIONS", source: "PLATFORM", position: 7 },
+  ]);
+  expect(
+    preview.sections.map(({ source, slot, content }) => ({
+      source,
+      slot,
+      content,
+    })),
+  ).toEqual([
+    { source: "USER_TEMPLATE", slot: undefined, content: "[USER_TEMPLATE]" },
+    { source: "PLATFORM", slot: "PURPOSE", content: "[PURPOSE]" },
+    { source: "PLATFORM", slot: "INPUT", content: "[INPUT]" },
+    { source: "PLATFORM", slot: "CONSTRAINTS", content: "[CONSTRAINTS]" },
+    {
+      source: "PLATFORM",
+      slot: "EFFECTIVE_CAPABILITIES",
+      content: "[EFFECTIVE_CAPABILITIES]",
+    },
+    { source: "PLATFORM", slot: "FILES", content: "[FILES]" },
+    { source: "PLATFORM", slot: "TOOLS", content: "[TOOLS]" },
+    {
+      source: "PLATFORM",
+      slot: "INTEGRATIONS",
+      content: "[INTEGRATIONS]",
+    },
+  ]);
+
+  const details = panel.locator(".prompt-context-details");
+  const platform = details
+    .getByRole("heading", {
+      name: "Будет добавлено платформой",
+      exact: true,
+    })
+    .locator("..");
+  await expect(platform.locator("li")).toHaveText([
+    "Входные данные",
+    "Ограничения",
+    "Эффективные возможности",
+    "Файлы",
+    "Инструменты",
+    "Интеграции",
+  ]);
+  await details
+    .getByText("Порядок и происхождение блоков", { exact: true })
+    .click();
+  const orderedSections = details.locator("details").first().locator("ol > li");
+  await expect(orderedSections).toHaveCount(8);
+  await expect(orderedSections.nth(0)).toContainText("Пользовательский шаблон");
+  await expect(orderedSections.nth(1)).toContainText("Платформа · Назначение");
+  expect(serverFailures).toEqual([]);
+});
+
 function isPromptPreviewResponse(response: {
   request(): { method(): string };
   url(): string;
