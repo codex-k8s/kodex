@@ -30,7 +30,7 @@ func (server *Server) GetRuntimeEnvironmentDraft(ctx context.Context, request *c
 func (server *Server) CreateRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.CreateRuntimeEnvironmentDraftRequest) (*controlplanev1.CreateRuntimeEnvironmentDraftResponse, error) {
 	spec, err := domainEnvironmentDraftSpecification(request.GetSpecification())
 	if err != nil {
-		return nil, transportError(err)
+		return nil, transportError(errs.ErrInvalid)
 	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_CreateRuntimeEnvironmentDraft_FullMethodName,
 		command.CreateRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{ProjectRef: request.GetProjectRef(),
@@ -43,7 +43,7 @@ func (server *Server) CreateRuntimeEnvironmentDraft(ctx context.Context, request
 func (server *Server) SaveRuntimeEnvironmentDraft(ctx context.Context, request *controlplanev1.SaveRuntimeEnvironmentDraftRequest) (*controlplanev1.SaveRuntimeEnvironmentDraftResponse, error) {
 	spec, err := domainEnvironmentDraftSpecification(request.GetSpecification())
 	if err != nil {
-		return nil, transportError(err)
+		return nil, transportError(errs.ErrInvalid)
 	}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_SaveRuntimeEnvironmentDraft_FullMethodName,
 		command.SaveRuntimeEnvironmentDraft, request.GetMutation(), command.RuntimeEnvironmentDraftInput{DraftRef: request.GetDraftRef(), Specification: spec})

@@ -1,9 +1,11 @@
 package grpc
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -58,5 +60,21 @@ func TestEnvironmentDraftPreservesAbsentPolicy(t *testing.T) {
 	spec, err := domainEnvironmentDraftSpecification(draft.Specification)
 	if err != nil || !reflect.DeepEqual(spec.Policy, runtimecontract.RuntimeEnvironmentPolicy{}) {
 		t.Fatalf("absent policy round trip: %v", err)
+	}
+}
+
+func TestEnvironmentDraftRejectsInvalidPolicyAsInvalidArgument(t *testing.T) {
+	server := &Server{}
+	request := &controlplanev1.CreateRuntimeEnvironmentDraftRequest{Specification: &controlplanev1.RuntimeEnvironmentDraftSpecification{
+		Policy: &controlplanev1.RuntimeEnvironmentPolicyInput{
+			Resources:        &controlplanev1.RuntimeResourcePolicy{},
+			KubernetesAccess: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED,
+		},
+	}}
+	if _, err := server.CreateRuntimeEnvironmentDraft(context.Background(), request); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("invalid policy returned %v", status.Code(err))
+	}
+	if _, err := server.SaveRuntimeEnvironmentDraft(context.Background(), &controlplanev1.SaveRuntimeEnvironmentDraftRequest{Specification: request.Specification}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("invalid saved policy returned %v", status.Code(err))
 	}
 }

@@ -253,7 +253,7 @@ func withProjectReference(writer http.ResponseWriter, request *http.Request, ref
 func writeMessage(writer http.ResponseWriter, statusCode int, message proto.Message, field string, pageField string) {
 	value, err := messageMap(message)
 	if err != nil {
-		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) || errors.Is(err, errPublicAvatarShape) || errors.Is(err, errPublicIntegrationShape) || errors.Is(err, errRuntimeCatalogView) || errors.Is(err, errOwnerGateShape) {
+		if errors.Is(err, errPublicSecretDescriptor) || errors.Is(err, errPublicProviderStatusReason) || errors.Is(err, errPublicAvatarShape) || errors.Is(err, errPublicIntegrationShape) || errors.Is(err, errPublicRuntimeEnvironmentShape) || errors.Is(err, errRuntimeCatalogView) || errors.Is(err, errOwnerGateShape) {
 			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 			return
 		}
@@ -334,6 +334,7 @@ const maximumSafeJSONInteger = int64(1<<53 - 1)
 var errPublicSecretDescriptor = errors.New("public Secret descriptor revision is invalid")
 var errPublicProviderStatusReason = errors.New("public provider status reason is invalid")
 var errPublicAvatarShape = errors.New("public agent avatar response is invalid")
+var errPublicRuntimeEnvironmentShape = errors.New("public runtime environment response is invalid")
 
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
 	if descriptor.FullName() == "controlplane.v1.IntegrationDefinition" {
@@ -580,6 +581,14 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 	switch field.Kind() {
 	case protoreflect.EnumKind:
+		if prefix, ok := runtimeEnvironmentEnumPrefixes[field.Enum().FullName()]; ok {
+			name, valid := value.(string)
+			item := field.Enum().Values().ByName(protoreflect.Name(name))
+			if !valid || item == nil || item.Number() == 0 || !strings.HasPrefix(name, prefix) {
+				return nil, errPublicRuntimeEnvironmentShape
+			}
+			return strings.TrimPrefix(name, prefix), nil
+		}
 		if field.Enum().FullName() == "controlplane.v1.AgentAvatar.Source" {
 			name, ok := value.(string)
 			item := field.Enum().Values().ByName(protoreflect.Name(name))
@@ -619,6 +628,12 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	default:
 		return value, nil
 	}
+}
+
+var runtimeEnvironmentEnumPrefixes = map[protoreflect.FullName]string{
+	"controlplane.v1.RuntimeVolumeKind":           "RUNTIME_VOLUME_KIND_",
+	"controlplane.v1.RuntimeNetworkDestination":   "RUNTIME_NETWORK_DESTINATION_",
+	"controlplane.v1.RuntimeKubernetesAccessKind": "RUNTIME_KUBERNETES_ACCESS_KIND_",
 }
 
 func isProto64BitInteger(kind protoreflect.Kind) bool {
