@@ -10,6 +10,7 @@
     "playwright.discovery.config.ts",
     "playwright.auth.config.ts",
     "playwright.api-session.config.ts",
+    "playwright.avatar-local.config.ts",
     "playwright.integration.config.ts",
     "playwright.local.config.ts",
     "playwright.skill-local.config.ts",

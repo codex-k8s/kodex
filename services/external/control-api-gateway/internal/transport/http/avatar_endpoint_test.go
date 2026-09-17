@@ -35,7 +35,10 @@ func (stream *avatarStreamStub) Send(message *controlplanev1.UploadAgentAvatarRe
 }
 
 func (stream *avatarStreamStub) CloseAndRecv() (*controlplanev1.UploadAgentAvatarResponse, error) {
-	return &controlplanev1.UploadAgentAvatarResponse{Agent: &controlplanev1.Agent{Ref: "agt_employee01", Version: 5}}, nil
+	return &controlplanev1.UploadAgentAvatarResponse{Agent: &controlplanev1.Agent{
+		Ref: "agt_employee01", Version: 5,
+		Avatar: &controlplanev1.AgentAvatar{Source: controlplanev1.AgentAvatar_SOURCE_ARTIFACT, ArtifactRef: "art_avatar01", ArtifactRevision: 1, ContentPath: "/api/v1/agents/agt_employee01/avatar/content"},
+	}}, nil
 }
 
 func TestUploadAgentAvatarUsesAtomicStreamingRPC(t *testing.T) {
@@ -53,6 +56,9 @@ func TestUploadAgentAvatarUsesAtomicStreamingRPC(t *testing.T) {
 
 	if response.Code != http.StatusOK || command.calls != 1 || len(stream.messages) < 3 {
 		t.Fatalf("avatar upload = status %d calls %d messages %d body %s", response.Code, command.calls, len(stream.messages), response.Body.String())
+	}
+	if !bytes.Contains(response.Body.Bytes(), []byte(`"source":"ARTIFACT"`)) || bytes.Contains(response.Body.Bytes(), []byte("SOURCE_ARTIFACT")) {
+		t.Fatalf("avatar source violates OpenAPI: %s", response.Body.String())
 	}
 	metadata := stream.messages[0].GetMetadata()
 	commit := stream.messages[len(stream.messages)-1].GetCommit()
