@@ -1262,6 +1262,16 @@ PY
   if [[ "$stage" == supply-chain ]]; then
     if [[ "$mode" == apply ]]; then
       ensure_seed_secrets
+      pause_local_image_admission_controller
+      cleanup_local_image_admission_runs
+      reconcile_local_immutable_image_admission_policy
+      apply_render image-admission-owner-intent '
+        select(
+          (.kind == "ConfigMap" and
+           .metadata.name == "kodex-image-admission-policy") or
+          (.kind == "ImageAdmissionPolicyParameters" and
+           .metadata.name == "kodex-image-admission-policy"))
+      '
       apply_render image-registry-workloads '
         select(.kind == "Deployment" and
           (.metadata.name | test("^kodex-image-registry-(pull|push|promotion|staging-read|evidence)$")))
@@ -1279,6 +1289,7 @@ PY
         select(.kind == "Deployment" and
           (.metadata.name | test("^(image-admission-controller|role-image-builder|runtime-controller)$")))
       '
+      image_admission_controller_restore_replicas=""
     fi
     for workload in kodex-image-registry-pull kodex-image-registry-push \
       kodex-image-registry-promotion kodex-image-registry-staging-read \

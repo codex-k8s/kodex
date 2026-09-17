@@ -41,10 +41,20 @@ class DeployLocalSelectionTest(unittest.TestCase):
     def test_supply_chain_seed_precedes_full_registry_readiness(self):
         source = SCRIPT.read_text()
         stage = source[source.index('  if [[ "$stage" == supply-chain ]]'):]
+        pause = stage.index('pause_local_image_admission_controller')
+        reconcile = stage.index('reconcile_local_immutable_image_admission_policy')
+        owner_intent = stage.index('apply_render image-admission-owner-intent')
+        registries = stage.index('apply_render image-registry-workloads')
         seed = stage.index('seed-local-image-supply-chain.sh')
         full_readiness = stage.index(
             'for workload in kodex-image-registry-pull kodex-image-registry-push'
         )
+        self.assertLess(
+            pause, reconcile, 'controller must stop before immutable policy reconciliation'
+        )
+        self.assertLess(reconcile, owner_intent)
+        self.assertLess(owner_intent, registries)
+        self.assertLess(registries, seed)
         self.assertLess(seed, full_readiness)
 
     def test_unknown_and_noncore_selection_are_rejected(self):
