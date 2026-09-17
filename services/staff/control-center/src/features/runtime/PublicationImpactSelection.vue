@@ -17,6 +17,7 @@ const props = defineProps<{ plan: RevisionImpactPlan; busy?: boolean }>();
 const emit = defineEmits<{ publish: [selectedItemRefs: string[]] }>();
 const page = ref<RevisionImpactPage>();
 const selected = ref(new Set<string>());
+const deselected = ref(new Set<string>());
 const query = ref("");
 const loading = ref(false);
 const problem = ref<AppProblem>();
@@ -51,6 +52,7 @@ async function load(more = false): Promise<void> {
   if (!more) {
     page.value = undefined;
     selected.value.clear();
+    deselected.value.clear();
     cursors.clear();
   }
   try {
@@ -75,6 +77,16 @@ async function load(more = false): Promise<void> {
         throw new Error("Publication impact pagination changed");
       page.value = { ...next, items: [...previous.items, ...next.items] };
     } else page.value = next;
+    const defaults = new Set(selected.value);
+    for (const item of next.items) {
+      if (
+        item.outcome === "PENDING" &&
+        !deselected.value.has(item.ref) &&
+        defaults.size < 1000
+      )
+        defaults.add(item.ref);
+    }
+    selected.value = defaults;
   } catch (error) {
     if (current === generation && !active.signal.aborted)
       problem.value = asProblem(error);
@@ -90,8 +102,13 @@ function toggle(ref: string): void {
     )
   )
     return;
-  if (selected.value.has(ref)) selected.value.delete(ref);
-  else if (selected.value.size < 1000) selected.value.add(ref);
+  if (selected.value.has(ref)) {
+    selected.value.delete(ref);
+    deselected.value.add(ref);
+  } else if (selected.value.size < 1000) {
+    selected.value.add(ref);
+    deselected.value.delete(ref);
+  }
 }
 function publish(): void {
   if (!editable.value || !page.value) return;
@@ -119,6 +136,7 @@ watch(query, () => {
   clearTimeout(debounce);
   page.value = undefined;
   selected.value.clear();
+  deselected.value.clear();
   loading.value = true;
   debounce = setTimeout(() => {
     void load();

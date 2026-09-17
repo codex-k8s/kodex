@@ -86,8 +86,9 @@ func authorizedCatalogWithTotal[T any](ctx context.Context, repository *Reposito
 			return nil, 0, "", err
 		}
 		for _, item := range batch {
-			scope := target(item)
-			cursor = scope.ResourceRef
+			actionScope := target(item)
+			cursor = actionScope.ResourceRef
+			scope := actionScope
 			if kind == "RUNTIME_ENVIRONMENT" || kind == "MEMBERSHIP" {
 				scope = entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: scope.ProjectRef, ProjectRef: scope.ProjectRef}
 			}
@@ -106,6 +107,22 @@ func authorizedCatalogWithTotal[T any](ctx context.Context, repository *Reposito
 			}
 			if !allowed(visibilityPermission(kind)) {
 				continue
+			}
+			if kind == "RUNTIME_ENVIRONMENT" {
+				actionTarget, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, actionScope)
+				if errors.Is(err, errs.ErrNotFound) {
+					continue
+				}
+				if err != nil {
+					return nil, 0, "", err
+				}
+				allowed = func(permission string) bool {
+					target := resolved
+					if strings.HasPrefix(permission, "runtime.environment.") {
+						target = actionTarget
+					}
+					return accessservice.Evaluate(subject.AccessSubject, permission, target.scope, target.ownerSubjectRef, bindings, at).Allowed
+				}
 			}
 			if err := decorate(tx, &item, allowed); err != nil {
 				return nil, 0, "", err

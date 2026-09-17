@@ -2321,6 +2321,14 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 			(!environment.Ready || len(environment.ReadinessBlockers) != 0) {
 			t.Fatalf("promoted runtime environment is not ready in list: %#v", environment)
 		}
+		if (environment.Ref == first.Ref || environment.Ref == second.Ref) &&
+			!reflect.DeepEqual(environment.NextActions, []string{"OPEN", "UPDATE", "DISABLE"}) {
+			t.Fatalf("runtime environment list actions are not authoritative: %#v", environment)
+		}
+	}
+	firstDetail, err := service.GetRuntimeEnvironment(ctx, owner, first.Ref)
+	if err != nil || !reflect.DeepEqual(firstDetail.NextActions, []string{"OPEN", "UPDATE", "DISABLE"}) {
+		t.Fatalf("runtime environment detail actions are not authoritative: environment=%#v err=%v", firstDetail, err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, projectRef,
 		"runtime-environment-lifecycle-agent", "Runtime lifecycle specialist")
