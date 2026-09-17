@@ -48,10 +48,14 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 			if err := repository.markWarmRuntimeUnavailable(ctx, tx, scope.organizationID, sessionBinding); err != nil {
 				return entity.SystemAssistant{}, nil, false, err
 			}
+			assistant, err := repository.getAssistantTx(ctx, tx, scope)
+			if err != nil {
+				return entity.SystemAssistant{}, nil, false, err
+			}
 			if err := tx.Commit(ctx); err != nil {
 				return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 			}
-			return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
+			return assistant, nil, false, nil
 		}
 		if selectErr != nil {
 			return entity.SystemAssistant{}, nil, false, selectErr

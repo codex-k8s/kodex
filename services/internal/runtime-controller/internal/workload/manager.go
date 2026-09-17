@@ -1166,6 +1166,33 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 	return podReady(existing), nil
 }
 
+// DeactivateWarm закрыто удаляет только принадлежащий controller warm runtime
+// и его execution-scoped ticket/projection. Session PVC сохраняется.
+func (manager *Manager) DeactivateWarm(ctx context.Context) error {
+	const podName = "system-assistant-warm"
+	pod, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
+	if err == nil {
+		if pod.Labels[managedLabel] != "true" || pod.Labels[modeLabel] != "warm" {
+			return errors.New("warm runtime Pod ownership is invalid")
+		}
+		boundTicket := runtimeInputSecretName(pod)
+		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, podName, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); err != nil && !apierrors.IsNotFound(err) {
+			return errors.New("delete warm runtime Pod")
+		}
+		if boundTicket != "" {
+			if err := manager.deleteOwnedWarmTicket(ctx, boundTicket); err != nil {
+				return err
+			}
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return errors.New("read warm runtime Pod")
+	}
+	if err := manager.cleanupStaleWarmTickets(ctx, ""); err != nil {
+		return err
+	}
+	return manager.cleanupStaleWarmProjections(ctx, "")
+}
+
 func (manager *Manager) deleteOwnedWarmTicket(ctx context.Context, name string) error {
 	secret, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {

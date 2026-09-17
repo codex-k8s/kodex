@@ -47,10 +47,15 @@ type credentialMaterializer interface {
 	Materialize(context.Context, runtimecontract.RunnerInput) (credentialprojection.Projection, error)
 }
 
+type warmDeactivator interface {
+	DeactivateWarm(context.Context) error
+}
+
 type runtime struct {
 	control           controlplanev1.RuntimeWorkServiceClient
 	credentials       credentialMaterializer
 	manager           *workload.Manager
+	warmDeactivator   warmDeactivator
 	turns             turnLifecycle
 	coordinator       *callback.Coordinator
 	config            Config
@@ -67,7 +72,7 @@ type runtime struct {
 }
 
 func newRuntime(control controlplanev1.RuntimeWorkServiceClient, credentials credentialMaterializer, manager *workload.Manager, coordinator *callback.Coordinator, config Config, assistant *serviceruntime.Readiness, logger *slog.Logger) *runtime {
-	return &runtime{control: control, credentials: credentials, manager: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
+	return &runtime{control: control, credentials: credentials, manager: manager, warmDeactivator: manager, turns: manager, coordinator: coordinator, config: config, assistant: assistant, logger: logger,
 		capacity: make(chan struct{}, config.MaximumConcurrentTurns), inspectInterval: defaultTurnInspectionInterval,
 		terminalGrace: defaultTerminalCallbackGrace, completionRetries: defaultFailureCompletionRetryDelays[:]}
 }
@@ -124,7 +129,19 @@ func (runtime *runtime) reconcileWarm(ctx context.Context) error {
 	if err != nil {
 		return boundedRPCFailure(warmReconcileRPCFailure, err)
 	}
-	if response.GetDesiredRevision() == nil {
+	if response != nil && response.GetDesiredRevision() == nil && !response.GetMaterializationRequired() &&
+		response.GetAssistant().GetRuntimeState() == controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_FAILED {
+		runtime.warmMu.Lock()
+		runtime.warmCompatibility = ""
+		runtime.warmTicket = ""
+		runtime.warmMu.Unlock()
+		runtime.assistant.Set(false, "assistant_runtime_provider_unconfigured")
+		cleanupContext, cleanupCancel := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+		deactivateErr := runtime.warmDeactivator.DeactivateWarm(cleanupContext)
+		cleanupCancel()
+		return deactivateErr
+	}
+	if response == nil || response.GetDesiredRevision() == nil {
 		return errors.New(warmDesiredRevisionMissing)
 	}
 	input, providerBinding, err := runtime.manager.BuildWarmInput(response.GetDesiredRevision())

@@ -2,14 +2,12 @@ package platform
 
 import (
 	"context"
-	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -97,8 +95,13 @@ func TestProviderOptionalBootstrapComponent(t *testing.T) {
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.reconcile",
 	}, "runtime-controller")
-	if _, desired, required, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, "first-run-runtime"); !errors.Is(err, errs.ErrUnavailable) || desired != nil || required {
-		t.Fatalf("execution before account was not rejected: desired=%#v required=%v err=%v", desired, required, err)
+	idle, desired, required, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, "first-run-runtime")
+	if err != nil || idle.RuntimeState != "UNAVAILABLE" || idle.WarmSessionRef != "" || desired != nil || required {
+		t.Fatalf("execution before account was not idle: assistant=%#v desired=%#v required=%v err=%v", idle, desired, required, err)
+	}
+	repeatedIdle, repeatedDesired, repeatedRequired, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, "first-run-runtime")
+	if err != nil || repeatedIdle.Version != idle.Version || repeatedDesired != nil || repeatedRequired {
+		t.Fatalf("repeated provider-free reconcile changed state: assistant=%#v desired=%#v required=%v err=%v", repeatedIdle, repeatedDesired, repeatedRequired, err)
 	}
 
 	created, err := service.Execute(ctx, command.Command{
@@ -163,8 +166,9 @@ func TestProviderOptionalBootstrapComponent(t *testing.T) {
 	if err != nil || disabled.ProviderAccount == nil {
 		t.Fatalf("disable first provider account: %v", err)
 	}
-	if _, _, _, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, "first-run-runtime"); !errors.Is(err, errs.ErrUnavailable) {
-		t.Fatalf("disabled first provider remained executable: %v", err)
+	disabledIdle, disabledDesired, disabledRequired, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, "first-run-runtime")
+	if err != nil || disabledIdle.RuntimeState != "UNAVAILABLE" || disabledIdle.WarmSessionRef != firstSessionRef || disabledDesired != nil || disabledRequired {
+		t.Fatalf("disabled first provider did not become idle: assistant=%#v desired=%#v required=%v err=%v", disabledIdle, disabledDesired, disabledRequired, err)
 	}
 	if err := repository.Bootstrap(ctx); err != nil {
 		t.Fatalf("restart after first provider disable: %v", err)
