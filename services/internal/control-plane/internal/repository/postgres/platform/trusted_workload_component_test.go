@@ -40,6 +40,10 @@ func TestTrustedWorkloadGenerationComponent(t *testing.T) {
 	if err != nil || generation != 1 {
 		t.Fatalf("fresh trusted registration: generation=%d error=%v", generation, err)
 	}
+	controllerGeneration, err := repository.ResolveServiceCredentialGeneration(ctx, "image-admission-controller")
+	if err != nil || controllerGeneration != 1 {
+		t.Fatalf("image admission controller trusted registration: generation=%d error=%v", controllerGeneration, err)
+	}
 	if _, err := repository.ResolveServiceCredentialGeneration(ctx, "unknown-workload"); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatal("unknown trusted workload accepted")
 	}

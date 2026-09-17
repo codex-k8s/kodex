@@ -71,5 +71,12 @@ func trustedClusterAuthorizer(profile string) (*serviceidentity.TrustedClusterAu
 			FullMethod:     method, OperationID: operation, Permission: operation, ActorMode: serviceidentity.UserActor,
 		})
 	}
+	policy.Bindings = append(policy.Bindings, serviceidentity.Binding{
+		CallerSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller",
+		FullMethod:     cp.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName,
+		OperationID:    "platform.role-images.supply-work.get",
+		Permission:     "platform.role-images.supply-work.get",
+		ActorMode:      serviceidentity.ServiceActor,
+	})
 	return serviceidentity.NewTrustedCluster(profile, target, policy.Bindings)
 }

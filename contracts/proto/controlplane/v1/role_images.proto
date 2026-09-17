@@ -21,6 +21,7 @@ service RoleImageService {
   rpc CompleteImageBuild(CompleteImageBuildRequest) returns (CompleteImageBuildResponse);
   rpc FailImageBuild(FailImageBuildRequest) returns (FailImageBuildResponse);
 
+  rpc GetImageSupplyWorkAvailability(GetImageSupplyWorkAvailabilityRequest) returns (GetImageSupplyWorkAvailabilityResponse);
   rpc ClaimImageAdmission(ClaimImageAdmissionRequest) returns (ClaimImageAdmissionResponse);
   rpc RecordImageAdmission(RecordImageAdmissionRequest) returns (RecordImageAdmissionResponse);
   rpc ClaimImagePromotion(ClaimImagePromotionRequest) returns (ClaimImagePromotionResponse);
@@ -372,6 +373,14 @@ message FailImageBuildRequest {
 }
 message FailImageBuildResponse {
   ImageBuild image_build = 1;
+}
+
+// Availability является авторитетным read-only preflight. Он не резервирует
+// work и не заменяет fenced ClaimImageAdmission/ClaimImagePromotion.
+message GetImageSupplyWorkAvailabilityRequest {}
+message GetImageSupplyWorkAvailabilityResponse {
+  bool admission_available = 1;
+  bool promotion_available = 2;
 }
 
 message ClaimImageAdmissionRequest {

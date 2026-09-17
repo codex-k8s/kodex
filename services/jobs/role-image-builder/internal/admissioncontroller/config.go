@@ -10,6 +10,7 @@ import (
 // Config задаёт только локальную Kubernetes-границу orchestration. Registry,
 // signing и owner credentials принадлежат создаваемым phase Jobs.
 type Config struct {
+	WorkSource          WorkSource
 	Environment         string
 	Namespace           string
 	PolicyConfigMap     string

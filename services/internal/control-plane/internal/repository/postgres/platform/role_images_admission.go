@@ -12,6 +12,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+func (repository *Repository) GetSupplyWorkAvailability(ctx context.Context, principal value.Principal) (roleimagerepo.SupplyWorkAvailability, error) {
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return roleimagerepo.SupplyWorkAvailability{}, err
+	}
+	arguments := pgx.StrictNamedArgs{
+		"organization_id": current.organizationID,
+		"policy_revision": repository.roleImages.PolicyRevision,
+		"policy_sha256":   repository.roleImages.PolicySHA256,
+	}
+	var result roleimagerepo.SupplyWorkAvailability
+	if err := repository.pool.QueryRow(ctx, queryRoleImagesGetSupplyWorkAvailability, arguments).Scan(
+		&result.AdmissionAvailable, &result.PromotionAvailable); err != nil {
+		return roleimagerepo.SupplyWorkAvailability{}, errs.ErrUnavailable
+	}
+	return result, nil
+}
+
 func (repository *Repository) ClaimAdmission(ctx context.Context, principal value.Principal, key string) (entity.ImageAdmissionClaim, error) {
 	return retryRoleImageTransaction(ctx, func() (entity.ImageAdmissionClaim, error) {
 		return repository.claimAdmission(ctx, principal, key)

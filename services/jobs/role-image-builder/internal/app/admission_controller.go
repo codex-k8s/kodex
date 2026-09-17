@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/admissioncontroller"
@@ -39,7 +40,17 @@ func RunAdmissionController(lifecycle, shutdownBase context.Context, buildVersio
 	if err != nil {
 		return err
 	}
-	controller, err := admissioncontroller.InCluster(config.controllerConfig(), renderer, logger)
+	controllerConfig := config.controllerConfig()
+	controllerConfig.WorkSource = admissioncontroller.LegacyPollingWorkSource{}
+	if config.RPCProfile == transportprofile.TrustedCluster {
+		workSource, dialErr := admissioncontroller.DialWorkSource(startup, config.workSourceConfig())
+		if dialErr != nil {
+			return dialErr
+		}
+		defer func() { resultErr = errors.Join(resultErr, workSource.Close()) }()
+		controllerConfig.WorkSource = workSource
+	}
+	controller, err := admissioncontroller.InCluster(controllerConfig, renderer, logger)
 	if err != nil {
 		return err
 	}

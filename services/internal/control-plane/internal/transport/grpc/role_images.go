@@ -410,6 +410,21 @@ func (server *RoleImageServer) ClaimImageAdmission(ctx context.Context, request 
 	}, nil
 }
 
+func (server *RoleImageServer) GetImageSupplyWorkAvailability(ctx context.Context, _ *controlplanev1.GetImageSupplyWorkAvailabilityRequest) (*controlplanev1.GetImageSupplyWorkAvailabilityResponse, error) {
+	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	availability, err := server.service.GetSupplyWorkAvailability(ctx, p)
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetImageSupplyWorkAvailabilityResponse{
+		AdmissionAvailable: availability.AdmissionAvailable,
+		PromotionAvailable: availability.PromotionAvailable,
+	}, nil
+}
+
 func (server *RoleImageServer) RecordImageAdmission(ctx context.Context, request *controlplanev1.RecordImageAdmissionRequest) (*controlplanev1.RecordImageAdmissionResponse, error) {
 	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_RecordImageAdmission_FullMethodName)
 	if err != nil {

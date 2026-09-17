@@ -110,6 +110,16 @@ Retry, cancellation, cleanup и executable proof hold не меняются эт
 controller readback. Unit/CEL-проверка Jobs не доказывает прохождение живого
 image flow; его readiness и переходы проверяются отдельно.
 
+Периодический orchestrator не должен материализовать Kubernetes Job только
+для обнаружения пустой owner queue: это превращает штатный `no-work` в
+неограниченный инфраструктурный эффект. В `trusted-cluster` controller сначала
+использует отдельный read-only owner RPC с точным caller/method и создаёт Job
+только при положительном ответе. Ответ не является claim и не выдаёт artifact
+locator; гонку после ответа закрывает прежний fenced claim. Недоступный owner
+запрещает новый цикл, но не блокирует cleanup и продолжение уже созданной
+цепочки. Protected-профиль расширяется таким preflight только вместе с полным
+workload identity, key delivery, NetworkPolicy и readiness lifecycle.
+
 Local renderer дополнительно закрепляет read-only source и host UID/GID для
 писателей cache. Private `.env` и Git credentials не являются runtime config
 и не должны читаться application Pod через source mount. Профиль переносим
