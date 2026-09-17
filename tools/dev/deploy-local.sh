@@ -1205,6 +1205,7 @@ PY
     apply_render image-admission-crd 'select(.kind == "CustomResourceDefinition")'
     kubectl wait --for=condition=Established \
       customresourcedefinition/imageadmissionpolicyparameters.supplychain.kodex.dev --timeout=3m >/dev/null
+    reconcile_local_immutable_image_admission_policy
     # Параметры должны существовать до активации закрытых admission bindings.
     apply_render admission-parameters 'select(.kind == "ConfigMap")'
     apply_render foundation '
@@ -1214,6 +1215,8 @@ PY
     ensure_email_projection_secret
     wait_certificates
     apply_render statefulsets 'select(.kind == "StatefulSet")'
+    reconcile_local_statefulset_rollout \
+      kodex-postgresql kodex-nats seaweedfs email-bridge-postgresql
   else
     discover_local_object_storage_secret
     OBJECT_STORAGE_SECRET_NAME="$object_storage_secret_name" yq -i '

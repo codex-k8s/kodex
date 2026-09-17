@@ -301,8 +301,17 @@ verify_live_workload_source() {
       fail 'rendered workload namespace is invalid'
     name=$(jq -er '.metadata.name | select(type == "string" and length > 0)' <<<"$workload") ||
       fail 'rendered workload name is invalid'
-    live=$(kubectl -n "$namespace" get "$kind" "$name" -o json) ||
-      fail "live workload is absent: $kind $namespace/$name"
+    live=$(kubectl -n "$namespace" get "$kind" "$name" --ignore-not-found -o json) ||
+      fail "live workload readback failed: $kind $namespace/$name"
+    if [[ -z "$live" ]]; then
+      [[ "$security_profile" == trusted-cluster ]] ||
+        fail "live workload is absent: $kind $namespace/$name"
+      # В trusted-cluster полный render является переносимым каталогом, а
+      # staged deploy применяет только выбранные обязательные/optional unit.
+      # Доступность обязательного набора уже закрыто проверена stage readback;
+      # здесь сравниваем source projection каждого фактически serving workload.
+      continue
+    fi
     jq -e '.metadata.generation > 0 and .status.observedGeneration == .metadata.generation' <<<"$live" >/dev/null ||
       fail "live workload generation is not observed: $kind $namespace/$name"
     expected_projection=$(jq -cS "$projection" <<<"$workload") ||

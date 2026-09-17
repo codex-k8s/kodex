@@ -35,6 +35,7 @@ import {
 import { openAssistantEvent } from "@/features/assistant/events";
 import {
   assistantEffectiveRuntimeState,
+  assistantRequiresProviderAccount,
   operationActionLabel,
   operationTargetLabel,
 } from "@/features/assistant/model";
@@ -149,6 +150,16 @@ const assistantRuntimeState = computed(() =>
   store.assistant
     ? assistantEffectiveRuntimeState(store.assistant)
     : "RECOVERING",
+);
+const providerAccountRequired = computed(
+  () =>
+    store.assistant !== undefined &&
+    assistantRequiresProviderAccount(store.assistant),
+);
+const assistantReadinessLabel = computed(() =>
+  providerAccountRequired.value
+    ? t("assistant.providerAccountRequired")
+    : store.assistant?.readinessSummary,
 );
 const canCreateConversation = computed(
   () =>
@@ -488,7 +499,7 @@ onBeforeUnmount(() => {
         <StatusBadge
           v-if="store.assistant"
           :state="assistantRuntimeState"
-          :label="store.assistant.readinessSummary"
+          :label="assistantReadinessLabel"
         />
         <button
           class="assistant-new-conversation"
@@ -807,8 +818,20 @@ onBeforeUnmount(() => {
                 class="assistant-empty-state"
               >
                 <Sparkles :size="28" aria-hidden="true" />
-                <h2>{{ $t("assistant.ready") }}</h2>
-                <p>{{ $t("assistant.contextHelp") }}</p>
+                <template v-if="providerAccountRequired">
+                  <h2>{{ $t("assistant.providerAccountRequired") }}</h2>
+                  <p>{{ $t("assistant.providerAccountRequiredHelp") }}</p>
+                  <RouterLink
+                    class="button button--primary"
+                    :to="{ name: 'provider-accounts' }"
+                    @click="close"
+                    >{{ $t("assistant.openProviderAccounts") }}</RouterLink
+                  >
+                </template>
+                <template v-else>
+                  <h2>{{ $t("assistant.ready") }}</h2>
+                  <p>{{ $t("assistant.contextHelp") }}</p>
+                </template>
               </div>
               <article
                 v-for="turn in store.selectedConversation?.turns ?? []"

@@ -2912,6 +2912,10 @@ const ru = {
     subtitle:
       "Настраивает платформу через те же типизированные команды и ваши полномочия",
     ready: "Всегда готов",
+    providerAccountRequired: "Подключите аккаунт модели",
+    providerAccountRequiredHelp:
+      "Создайте provider account и завершите авторизацию. До этого Kodex не запускает модели и не создаёт диалоги.",
+    openProviderAccounts: "Перейти к аккаунтам моделей",
     system: "Системный · неудаляемый",
     newConversation: "Новый диалог",
     message: "Опишите, что нужно настроить или запустить",
@@ -5988,6 +5992,10 @@ const en = {
     subtitle:
       "Configures the platform through the same typed commands and your permissions",
     ready: "Always ready",
+    providerAccountRequired: "Connect a model account",
+    providerAccountRequiredHelp:
+      "Create a provider account and complete authorization. Until then, Kodex does not run models or create conversations.",
+    openProviderAccounts: "Open model accounts",
     system: "System · cannot be removed",
     newConversation: "New conversation",
     message: "Describe what to configure or launch",

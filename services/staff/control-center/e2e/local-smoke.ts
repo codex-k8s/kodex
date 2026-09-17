@@ -4,6 +4,7 @@ import { authenticateOwner } from "./auth-flow";
 import { expectAssistantConversationActions } from "./assistant-readiness";
 import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
+import { installProtocolObserver } from "./session-renewal-proof";
 import { withoutKodexAPICookies, writeStorageState } from "./storage-state";
 
 const environment = loadE2EAuthEnvironment();
@@ -19,6 +20,7 @@ test("локальный OIDC, API и основные экраны доступ
   context,
   page,
 }) => {
+  await context.addInitScript(installProtocolObserver);
   const browserFailures: string[] = [];
   page.on("pageerror", (error) => browserFailures.push(error.message));
   page.on("response", (response) => {
@@ -43,6 +45,20 @@ test("локальный OIDC, API и основные экраны доступ
     { mode: "local" },
   );
   expect((await session).status()).toBe(200);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            (
+              window as unknown as {
+                __kodexSessionProofProtocols?: string[];
+              }
+            ).__kodexSessionProofProtocols?.includes("v2") ?? false,
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
   const currentUserMenu = page.locator("button[aria-haspopup='menu']");
   const logout = page.getByRole("button", { name: "Выйти", exact: true });
   await currentUserMenu.click();
@@ -100,7 +116,80 @@ test("локальный OIDC, API и основные экраны доступ
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
   const assistant = page.getByRole("dialog", { name: "Kodex" });
   await expect(assistant).toBeVisible();
-  await expectAssistantConversationActions(assistant, true);
+  const assistantReadback = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/system-assistant");
+    if (!response.ok)
+      throw new Error(
+        `System assistant readback failed with ${String(response.status)}`,
+      );
+    return (await response.json()) as {
+      runtimeState: string;
+      warmSessionRef?: string;
+      nextActions: string[];
+    };
+  });
+  const providerAccountRequired =
+    !assistantReadback.warmSessionRef &&
+    !assistantReadback.nextActions.includes("CREATE_CONVERSATION");
+  await expectAssistantConversationActions(assistant, !providerAccountRequired);
+  if (providerAccountRequired) {
+    await expect(
+      assistant.getByRole("heading", { name: "Подключите аккаунт модели" }),
+    ).toBeVisible();
+    await expect(
+      assistant.getByRole("link", { name: "Перейти к аккаунтам моделей" }),
+    ).toBeVisible();
+  }
+  await assistant.getByRole("button", { name: "Закрыть" }).click();
+  await expect(assistant).toHaveCount(0);
+
+  const projectName = "Локальная приёмка первого запуска";
+  const existingProject = await page.evaluate(async (exactName) => {
+    const response = await fetch(
+      `/api/v1/projects?query=${encodeURIComponent(exactName)}&pageSize=30`,
+    );
+    if (!response.ok)
+      throw new Error(
+        `Project discovery failed with ${String(response.status)}`,
+      );
+    const body = (await response.json()) as {
+      items: Array<{ name: string; ref: string }>;
+    };
+    return body.items.find((item) => item.name === exactName);
+  }, projectName);
+  let projectRef = existingProject?.ref;
+  if (!projectRef) {
+    await gotoWithRetry(page, "/projects");
+    await page
+      .getByRole("button", { name: "Новый Проект", exact: true })
+      .first()
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Новый Проект" });
+    await dialog.getByLabel("Название", { exact: true }).fill(projectName);
+    await dialog
+      .getByLabel("Назначение", { exact: true })
+      .fill(
+        "Безопасная локальная проверка чтения и записи без provider account.",
+      );
+    const created = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/v1/projects",
+    );
+    await dialog.getByRole("button", { name: "Создать", exact: true }).click();
+    const response = await created;
+    const body = (await response.json()) as { ref?: string };
+    expect(response.status(), JSON.stringify(body)).toBe(201);
+    projectRef = body.ref;
+  }
+  expect(projectRef).toMatch(/^prj_[A-Za-z0-9_-]+$/);
+  await gotoWithRetry(
+    page,
+    `/projects/${encodeURIComponent(projectRef ?? "")}`,
+  );
+  await expect(
+    page.getByRole("heading", { level: 1, name: projectName }),
+  ).toBeVisible();
   expect(browserFailures).toEqual([]);
   await writeStorageState(
     environment.outputStorageState,
