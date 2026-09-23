@@ -871,6 +871,42 @@ describe("assistant plan editor model", () => {
     expect(changed?.target.kind).toBe("WORKFLOW");
   });
 
+  it("редактирует описание процесса, не открывая граф этапов для подмены", () => {
+    const parameters = {
+      workflowRef: "wfl_weekly",
+      projectRef: "prj_market",
+      name: "Недельная сводка",
+      purpose: "Собрать отчёт",
+      instructions: "Проверь источники",
+      completionCriteria: "Сводка готова",
+      maxConcurrency: 1,
+      timeoutSeconds: 3600,
+    };
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "UPDATE_WORKFLOW",
+        action: "UPDATE",
+        target: {
+          kind: "WORKFLOW",
+          ref: "wfl_weekly",
+          name: "Недельная сводка",
+        },
+        parameters,
+        after: { ...parameters },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("UPDATE_WORKFLOW");
+    updateOperationParameter(first, "purpose", "Собрать проверенный отчёт");
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters.purpose).toBe("Собрать проверенный отчёт");
+    expect(changed?.parameters.steps).toBeUndefined();
+    expect(changed?.target.ref).toBe("wfl_weekly");
+  });
+
   it("редактирует задание и cron автоматизации вместе с планируемым состоянием", () => {
     const parameters = {
       projectRef: "prj_market",

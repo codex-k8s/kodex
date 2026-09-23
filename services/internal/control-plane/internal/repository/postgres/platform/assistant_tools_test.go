@@ -588,3 +588,64 @@ func TestAssistantScheduleUpdatePinsSnapshotAndRejectsForgedDraft(t *testing.T) 
 		}
 	}
 }
+
+func TestAssistantWorkflowUpdatePreservesGraphAndRejectsForgedDraft(t *testing.T) {
+	t.Parallel()
+	draft := entity.WorkflowVersion{Name: "Weekly report", Purpose: "Summarize work", CoordinatorAgentRef: "agt_12345678",
+		VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, ResultSchema: map[string]any{},
+		Steps: []entity.WorkflowStep{{Key: "step-1", Position: 1, Name: "Collect", AgentRef: "agt_12345678",
+			Instructions: "Collect completed work.", ExpectedResult: "Summary", TimeoutSeconds: 900}}}
+	before := map[string]any{
+		"workflowRef": "wfl_12345678", "projectRef": "prj_12345678", "name": draft.Name, "purpose": draft.Purpose,
+		"instructions": draft.Instructions, "completionCriteria": draft.CompletionCriteria,
+		"maxConcurrency": float64(draft.Concurrency), "timeoutSeconds": float64(draft.TimeoutSeconds), "draft": draft,
+	}
+	proposed := entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Key: "workflow-update", Title: "Update workflow", Summary: "Update workflow",
+		Parameters: map[string]any{"workflowRef": "wfl_12345678", "name": "Monthly report", "instructions": "Use verified sources."},
+		Input:      map[string]any{"steps": []any{}}}
+	if !assistantOperationMatchesContext("WORKFLOW", "wfl_12345678", proposed) ||
+		assistantOperationMatchesContext("WORKFLOW", "wfl_other", proposed) ||
+		assistantOperationMatchesContext("PROJECT", "wfl_12345678", proposed) {
+		t.Fatal("workflow update accepted a different context")
+	}
+	hydrated, err := hydrateAssistantWorkflowFields(before, 7, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := assistantUpdateWorkflow(normalized); err != nil {
+		t.Fatalf("workflow payload invalid: %v", err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.UpdateWorkflow || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 7 {
+		t.Fatalf("workflow update command invalid: %#v %v", mapped, err)
+	}
+	payload := mapped.Payload.(command.WorkflowInput)
+	if payload.Ref != "wfl_12345678" || payload.ProjectRef != "prj_12345678" || payload.Name != "Monthly report" ||
+		payload.Draft == nil || len(payload.Draft.Steps) != 1 || payload.Draft.Steps[0].Key != "step-1" ||
+		payload.Draft.CoordinatorAgentRef != "agt_12345678" {
+		t.Fatalf("workflow update changed protected draft graph: %#v", payload)
+	}
+	edited := normalized
+	edited.Parameters = cloneAssistantFields(normalized.Parameters)
+	edited.Parameters["purpose"] = "Monthly team summary"
+	edited.Before = map[string]any{"draft": "forged"}
+	edited.Target.Ref = "wfl_other"
+	edited.ExpectedVersion = nil
+	rehydrated, err := rehydrateEditedAssistantWorkflow(normalized, edited)
+	if err != nil || rehydrated.Target.Ref != "wfl_12345678" || *rehydrated.ExpectedVersion != 7 ||
+		assistantString(rehydrated.After, "purpose") != "Monthly team summary" {
+		t.Fatalf("workflow edit lost authoritative envelope: %#v %v", rehydrated, err)
+	}
+	for _, key := range []string{"workflowRef", "projectRef", "draft", "steps", "coordinatorAgentRef"} {
+		forged := edited
+		forged.Parameters = cloneAssistantFields(normalized.Parameters)
+		forged.Parameters[key] = "other"
+		if _, err := rehydrateEditedAssistantWorkflow(normalized, forged); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("workflow field %s was mutable: %v", key, err)
+		}
+	}
+}

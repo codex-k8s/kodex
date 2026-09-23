@@ -279,6 +279,27 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 }
 
+func TestWorkflowUpdateSchemaIsExactAndMetadataOnly(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "WORKFLOW", EntityRef: "wfl_12345678",
+			AllowedOperations: []string{"UPDATE_WORKFLOW"}}}
+	schemas := assistantPlanOperationSchemas(input)
+	if len(schemas) != 1 {
+		t.Fatalf("unexpected workflow update schemas: %#v", schemas)
+	}
+	properties := schemas[0]["properties"].(map[string]any)
+	if properties["type"].(map[string]any)["const"] != "UPDATE_WORKFLOW" {
+		t.Fatalf("wrong workflow operation: %#v", properties)
+	}
+	parameters := properties["parameters"].(map[string]any)
+	fields := parameters["properties"].(map[string]any)
+	if fields["workflowRef"].(map[string]any)["enum"].([]string)[0] != "wfl_12345678" ||
+		fields["steps"] != nil || fields["coordinatorAgentRef"] != nil || fields["projectRef"] != nil {
+		t.Fatalf("workflow update schema exposed graph or project authority: %#v", fields)
+	}
+}
+
 func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current"}

@@ -117,6 +117,29 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if err != nil || workflow.Workflow == nil {
 		t.Fatal(err)
 	}
+	workflowTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflowUpdate, err := repository.hydrateAssistantWorkflowOperation(ctx, workflowTx, ownerScope,
+		project.Project.Ref, entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Key: "context-workflow-update",
+			Title: "Update workflow", Summary: "Update workflow", Parameters: map[string]any{
+				"workflowRef": workflow.Workflow.Ref, "name": "Renamed workflow"}})
+	if err != nil || workflowUpdate.Target.Ref != workflow.Workflow.Ref ||
+		assistantString(workflowUpdate.Before, "name") != workflow.Workflow.Name ||
+		assistantString(workflowUpdate.After, "name") != "Renamed workflow" {
+		_ = workflowTx.Rollback(ctx)
+		t.Fatalf("hydrate exact workflow update: %#v %v", workflowUpdate, err)
+	}
+	matchingWorkflow, err := repository.assistantWorkflowUpdateSnapshotMatches(ctx, workflowTx, ownerScope,
+		project.Project.Ref, workflowUpdate)
+	if err != nil || !matchingWorkflow {
+		_ = workflowTx.Rollback(ctx)
+		t.Fatalf("workflow update snapshot mismatch: matching=%v err=%v", matchingWorkflow, err)
+	}
+	if err := workflowTx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
 	schedule, err := service.Execute(ctx, command.Command{Kind: command.CreateSchedule, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-context-schedule"}, Payload: command.ScheduleInput{
 			ProjectRef: project.Project.Ref, Name: "Context schedule", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
@@ -210,6 +233,9 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		}
 		if resource.kind == "AGENT" && !contains(projection.AllowedOperations, "UPDATE_AGENT") {
 			t.Fatal("agent context did not publish its exact update capability")
+		}
+		if resource.kind == "WORKFLOW" && !contains(projection.AllowedOperations, "UPDATE_WORKFLOW") {
+			t.Fatal("workflow context did not publish its exact update capability")
 		}
 		if resource.kind == "INTEGRATION_CONNECTION" && !contains(projection.AllowedOperations, "UPDATE_INTEGRATION_CONNECTION") {
 			t.Fatal("connection context did not publish its exact update capability")

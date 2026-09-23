@@ -3073,6 +3073,7 @@ const ru = {
     },
     createdWorkflow: {
       title: "Созданный процесс",
+      updatedTitle: "Изменённый черновик процесса",
       loadFailed: "Не удалось прочитать процесс. Повторите обновление.",
       ready: "Процесс готов к запуску.",
       finish: "Проверьте этапы и завершите настройку перед запуском.",
@@ -3208,6 +3209,14 @@ const ru = {
         "Проверьте поля процесса и выберите сотрудников из текущего проекта. Сохранение и применение недоступны, пока данные некорректны.",
       workflowNextSteps:
         "После подтверждения будет создан черновик процесса. Перед запуском проверьте его и опубликуйте на странице процесса.",
+      workflowUpdateBoundary:
+        "Меняются только параметры черновика этого процесса. Сотрудники, этапы, связи и опубликованная версия остаются без изменений.",
+      workflowInstructions: "Общие инструкции процесса",
+      workflowCompletionCriteria: "Критерии завершения",
+      workflowConcurrency: "Параллельных запусков",
+      workflowTimeout: "Лимит времени, секунд",
+      workflowUpdateNextSteps:
+        "После подтверждения откройте процесс, проверьте черновик и опубликуйте новую версию. Текущие запуски не меняются.",
       schedulePreviewFailed:
         "Не удалось проверить ближайшие запуски. Проверьте часовой пояс и расписание.",
       scheduleNextRuns: "Ближайшие запуски",
@@ -6405,6 +6414,7 @@ const en = {
     },
     createdWorkflow: {
       title: "Created workflow",
+      updatedTitle: "Updated workflow draft",
       loadFailed: "Could not read the workflow. Refresh to try again.",
       ready: "The workflow is ready to run.",
       finish: "Review the steps and finish setup before running.",
@@ -6537,6 +6547,14 @@ const en = {
         "Check the workflow fields and choose employees from this project. The plan cannot be saved or applied with invalid data.",
       workflowNextSteps:
         "Confirming this plan creates a workflow draft. Review and publish it on the workflow page before launching it.",
+      workflowUpdateBoundary:
+        "Only this workflow draft's settings change. Employees, stages, dependencies, and the published version stay unchanged.",
+      workflowInstructions: "Workflow instructions",
+      workflowCompletionCriteria: "Completion criteria",
+      workflowConcurrency: "Concurrent runs",
+      workflowTimeout: "Time limit, seconds",
+      workflowUpdateNextSteps:
+        "After confirmation, open the workflow, validate the draft, and publish a new version. Current runs are unchanged.",
       schedulePreviewFailed:
         "Could not verify the next run times. Check the time zone and schedule.",
       scheduleNextRuns: "Next runs",

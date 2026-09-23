@@ -1152,6 +1152,13 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			return commandOutcome{}, err
 		}
 		var outcome commandOutcome
+		if operation.Type == "UPDATE_WORKFLOW" {
+			var matching bool
+			matching, err = repository.assistantWorkflowUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if operation.Type == "UPDATE_SCHEDULE" {
 			var matching bool
 			matching, err = repository.assistantScheduleUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)

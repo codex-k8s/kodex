@@ -71,7 +71,14 @@ watch(
 <template>
   <section v-if="target" class="assistant-workflow-card" aria-live="polite">
     <header>
-      <strong>{{ $t("assistant.createdWorkflow.title") }}</strong>
+      <strong>{{
+        $t(
+          plan.operations.find((item) => item.ref === operationRef)?.type ===
+            "UPDATE_WORKFLOW"
+            ? "assistant.createdWorkflow.updatedTitle"
+            : "assistant.createdWorkflow.title",
+        )
+      }}</strong>
       <StatusBadge v-if="workflow" :state="workflow.state" />
     </header>
     <p v-if="loading && !workflow">{{ $t("common.loading") }}</p>

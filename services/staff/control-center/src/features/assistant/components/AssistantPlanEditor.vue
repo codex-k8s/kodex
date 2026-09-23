@@ -17,6 +17,7 @@ import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/A
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import AssistantSchedulePlanForm from "@/features/assistant/components/AssistantSchedulePlanForm.vue";
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
+import AssistantWorkflowUpdateForm from "@/features/assistant/components/AssistantWorkflowUpdateForm.vue";
 import { prepareConnectionConfiguration } from "@/features/integrations/connection-setup";
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
@@ -362,7 +363,8 @@ const friendlyInputsReady = computed(() =>
         !Object.keys(connectionProblems(operation)).length) &&
         (operation.value.type !== "LAUNCH_RUN" ||
           runFormValidity.value[operation.value.ref] === true) &&
-        (operation.value.type !== "CREATE_WORKFLOW" ||
+        ((operation.value.type !== "CREATE_WORKFLOW" &&
+          operation.value.type !== "UPDATE_WORKFLOW") ||
           workflowFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_SCHEDULE" &&
           operation.value.type !== "UPDATE_SCHEDULE") ||
@@ -864,6 +866,16 @@ function snapshot(value: string): Record<string, unknown> {
               v-else-if="operation.value.type === 'CREATE_WORKFLOW'"
               :operation="operation"
               :project-ref="plan.projectRef"
+              :disabled="!editable"
+              @valid="workflowFormValidity[operation.value.ref] = $event"
+              @dirty="workflowFormTouched = true"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
+              "
+            />
+            <AssistantWorkflowUpdateForm
+              v-else-if="operation.value.type === 'UPDATE_WORKFLOW'"
+              :operation="operation"
               :disabled="!editable"
               @valid="workflowFormValidity[operation.value.ref] = $event"
               @dirty="workflowFormTouched = true"

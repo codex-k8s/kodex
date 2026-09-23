@@ -1022,7 +1022,9 @@ onBeforeUnmount(() => {
                   />
                   <AssistantCreatedWorkflowCard
                     v-for="operation in turn.plan.operations.filter(
-                      (item) => item.type === 'CREATE_WORKFLOW',
+                      (item) =>
+                        item.type === 'CREATE_WORKFLOW' ||
+                        item.type === 'UPDATE_WORKFLOW',
                     )"
                     :key="`workflow-${operation.ref}`"
                     :plan="turn.plan"
