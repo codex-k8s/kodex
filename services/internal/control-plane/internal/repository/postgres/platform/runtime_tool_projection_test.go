@@ -21,3 +21,15 @@ func TestNativeToolProjectionDoesNotRequireMCPGrant(t *testing.T) {
 		}
 	}
 }
+
+func TestAssistantResourceSearchProjectionIsSystemOnly(t *testing.T) {
+	t.Parallel()
+	if !toolCapabilityMatches("find_platform_resources", "platform.resources.search", false, true) {
+		t.Fatal("system assistant resource search projection was rejected")
+	}
+	if toolCapabilityMatches("find_platform_resources", "platform.resources.search", false, false) ||
+		toolCapabilityMatches("find_platform_resources", "platform.configuration.read", false, true) ||
+		toolCapabilityMatches("find_platform_resources", "platform.resources.search", true, true) {
+		t.Fatal("resource search projection crossed its exact capability boundary")
+	}
+}

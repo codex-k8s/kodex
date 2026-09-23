@@ -577,7 +577,7 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
 	result = append(result, runtimeFileTools(input)...)
 	if input.SystemAssistant {
-		result = append(result, configurationCatalogTool(input), assistantPlanTool(input), assistantMetadataTool())
+		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
@@ -654,6 +654,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	switch params.Name {
 	case "get_configuration_catalog":
 		result, err = configurationCatalog(input, params.Arguments)
+	case "find_platform_resources":
+		result, err = server.findPlatformResources(request.Context(), input, params.Arguments)
 	case "propose_configuration_plan":
 		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
 	case "propose_assistant_metadata":
@@ -1173,6 +1175,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	switch tool {
 	case "get_configuration_catalog":
 		return map[string]any{}, "platform.configuration.read", "", input.SystemAssistant
+	case "find_platform_resources":
+		return map[string]any{}, "platform.resources.search", "", input.SystemAssistant
 	case "propose_configuration_plan":
 		operations, _ := arguments["operations"].([]any)
 		return map[string]any{"operation_count": len(operations)}, "platform.configuration.plan", "", input.SystemAssistant

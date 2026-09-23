@@ -104,7 +104,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	}
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_12345678", Name: "Analyst"}}}
 	available := tools(input)
-	if len(available) != 5 {
+	if len(available) != 6 {
 		t.Fatalf("unexpected assistant tool catalog: %#v", available)
 	}
 	if encoded, err := json.Marshal(available); err != nil || len(encoded) > 8000 {
