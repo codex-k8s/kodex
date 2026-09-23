@@ -143,6 +143,7 @@ export type FriendlyPlanOperationType =
   | "UPDATE_PROJECT"
   | "CREATE_AGENT"
   | "UPDATE_AGENT"
+  | "CHANGE_CAPABILITY"
   | "CREATE_WORKFLOW"
   | "CREATE_SCHEDULE"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
@@ -158,6 +159,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "UPDATE_PROJECT" &&
     operation.value.type !== "CREATE_AGENT" &&
     operation.value.type !== "UPDATE_AGENT" &&
+    operation.value.type !== "CHANGE_CAPABILITY" &&
     operation.value.type !== "CREATE_WORKFLOW" &&
     operation.value.type !== "CREATE_SCHEDULE" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&

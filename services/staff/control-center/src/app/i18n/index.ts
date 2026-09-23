@@ -3064,6 +3064,18 @@ const ru = {
       agentRole: "Роль сотрудника",
       agentInstructions: "Инструкции сотруднику",
       agentCapabilities: "Возможности сотрудника",
+      capabilityAgent: "Сотрудник",
+      capabilityName: "Возможность",
+      capabilityChoose: "Выберите возможность",
+      capabilityEnable: "Разрешить сотруднику использовать возможность",
+      capabilityLoadFailed:
+        "Не удалось проверить сотрудника и каталог возможностей. Обновите страницу и план.",
+      capabilityStale:
+        "Версия сотрудника изменилась. Попросите помощника подготовить новый план.",
+      capabilityUnknown:
+        "Возможность отсутствует в текущем каталоге. Выберите доступную или попросите новый план.",
+      capabilityNextSteps:
+        "Изменение права вступит в силу только после проверки и подтверждения плана.",
       agentNextSteps:
         "Образ, рабочее окружение и остальные доступы настраиваются отдельно. Проверьте их перед запуском сотрудника.",
       environmentDescription: "Описание окружения",
@@ -6304,6 +6316,18 @@ const en = {
       agentRole: "Employee role",
       agentInstructions: "Employee instructions",
       agentCapabilities: "Employee capabilities",
+      capabilityAgent: "Employee",
+      capabilityName: "Capability",
+      capabilityChoose: "Choose a capability",
+      capabilityEnable: "Allow the employee to use this capability",
+      capabilityLoadFailed:
+        "Could not verify the employee and capability catalog. Reload the page and plan.",
+      capabilityStale:
+        "The employee version changed. Ask the assistant for a new plan.",
+      capabilityUnknown:
+        "This capability is not in the current catalog. Choose an available one or request a new plan.",
+      capabilityNextSteps:
+        "This permission changes only after the plan is validated and confirmed.",
       agentNextSteps:
         "The image, work environment, and other access grants are configured separately. Review them before launching the employee.",
       environmentDescription: "Environment description",

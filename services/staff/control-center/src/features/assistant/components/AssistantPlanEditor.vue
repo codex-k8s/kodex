@@ -12,6 +12,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
+import AssistantCapabilityPlanForm from "@/features/assistant/components/AssistantCapabilityPlanForm.vue";
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import AssistantSchedulePlanForm from "@/features/assistant/components/AssistantSchedulePlanForm.vue";
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
@@ -77,6 +78,8 @@ const workflowFormValidity = ref<Record<string, boolean>>({});
 const workflowFormTouched = ref(false);
 const scheduleFormValidity = ref<Record<string, boolean>>({});
 const scheduleFormTouched = ref(false);
+const capabilityFormValidity = ref<Record<string, boolean>>({});
+const capabilityFormTouched = ref(false);
 const inputProblem = ref("");
 type EditorTarget =
   | { kind: "SUMMARY" }
@@ -129,6 +132,8 @@ function resetDraft(): void {
   workflowFormTouched.value = false;
   scheduleFormValidity.value = {};
   scheduleFormTouched.value = false;
+  capabilityFormValidity.value = {};
+  capabilityFormTouched.value = false;
   inputProblem.value = "";
 }
 
@@ -318,6 +323,7 @@ const draftMatchesSavedPlan = computed(() => {
       !runFormTouched.value &&
       !workflowFormTouched.value &&
       !scheduleFormTouched.value &&
+      !capabilityFormTouched.value &&
       JSON.stringify(operationInputs(operations.value)) ===
         JSON.stringify(
           operationInputs(editableOperations(props.plan.operations)),
@@ -344,7 +350,9 @@ const friendlyInputsReady = computed(() =>
         (operation.value.type !== "CREATE_WORKFLOW" ||
           workflowFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_SCHEDULE" ||
-          scheduleFormValidity.value[operation.value.ref] === true)),
+          scheduleFormValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "CHANGE_CAPABILITY" ||
+          capabilityFormValidity.value[operation.value.ref] === true)),
   ),
 );
 const canSave = computed(
@@ -841,6 +849,17 @@ function snapshot(value: string): Record<string, unknown> {
               :disabled="!editable"
               @valid="scheduleFormValidity[operation.value.ref] = $event"
               @dirty="scheduleFormTouched = true"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
+              "
+            />
+            <AssistantCapabilityPlanForm
+              v-else-if="operation.value.type === 'CHANGE_CAPABILITY'"
+              :operation="operation"
+              :project-ref="plan.projectRef"
+              :disabled="!editable"
+              @valid="capabilityFormValidity[operation.value.ref] = $event"
+              @dirty="capabilityFormTouched = true"
               @parameter="
                 (key, value) => updateOperationParameter(operation, key, value)
               "

@@ -460,6 +460,47 @@ describe("assistant plan editor model", () => {
     expect(changed?.expectedVersion).toBe(3);
   });
 
+  it("показывает изменение права сотрудника в форме без изменения identity", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CHANGE_CAPABILITY",
+        action: "UPDATE",
+        target: {
+          kind: "AGENT",
+          ref: "agt_existing",
+          name: "Разработчик",
+          version: 3,
+        },
+        expectedVersion: 3,
+        parameters: {
+          agentRef: "agt_existing",
+          capabilityKey: "files.read",
+          enabled: true,
+          expectedVersion: 3,
+        },
+        before: { capabilityKey: "files.read", enabled: false },
+        after: { capabilityKey: "files.read", enabled: true },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("CHANGE_CAPABILITY");
+    updateOperationParameter(first, "capabilityKey", "files.write");
+    updateOperationParameter(first, "enabled", false);
+    const changed = operationInputs(editable)[0];
+    expect(changed?.target.ref).toBe("agt_existing");
+    expect(changed?.expectedVersion).toBe(3);
+    expect(changed?.parameters).toMatchObject({
+      agentRef: "agt_existing",
+      capabilityKey: "files.write",
+      enabled: false,
+      expectedVersion: 3,
+    });
+    expect(changed?.after.capabilityKey).toBe("files.write");
+  });
+
   it("показывает черновик окружения как отдельную форму без секретных значений", () => {
     const editable = editableOperations([
       {
