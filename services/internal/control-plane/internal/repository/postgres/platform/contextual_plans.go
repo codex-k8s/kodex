@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -61,8 +62,9 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	}
 	var planID, conversationRef, state, projectRef string
 	var version, revision int64
+	var rawCurrent []byte
 	if err := tx.QueryRow(ctx, queryConfigurationUpdateassistantplandraftSelectPlan, scope.organizationID, payload.PlanRef).Scan(
-		&planID, &conversationRef, &state, &version, &revision, &projectRef,
+		&planID, &conversationRef, &state, &version, &revision, &projectRef, &rawCurrent,
 	); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
@@ -71,6 +73,31 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	}
 	if state == "APPLIED" || state == "REJECTED" {
 		return commandOutcome{}, errs.ErrAlreadyResolved
+	}
+	var current []entity.AssistantPlanOperation
+	if json.Unmarshal(rawCurrent, &current) != nil {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if len(payload.Operations) != len(current) {
+		return commandOutcome{}, errs.ErrForbidden
+	}
+	currentByKey := make(map[string]entity.AssistantPlanOperation, len(current))
+	for _, operation := range current {
+		currentByKey[operation.Key] = operation
+	}
+	for index, operation := range payload.Operations {
+		original, exists := currentByKey[operation.Key]
+		if !exists || original.Type != operation.Type {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		if operation.Type != "UPDATE_AGENT" {
+			continue
+		}
+		updated, err := rehydrateEditedAssistantAgent(original, operation)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		payload.Operations[index] = updated
 	}
 	operations, err := normalizeAssistantOperations(payload.Operations, projectRef)
 	if err != nil {
@@ -171,6 +198,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 			problems = append(problems, fmt.Sprintf("operation-%d-not-permitted", index+1))
 			continue
 		}
+		if operation.Type == "UPDATE_AGENT" {
+			matching, snapshotErr := repository.assistantAgentUpdateSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
 		current, checked, versionErr := repository.assistantTargetVersion(ctx, tx, scope, operation)
 		if versionErr != nil {
 			problems = append(problems, fmt.Sprintf("operation-%d-target-unavailable", index+1))
@@ -202,6 +236,8 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 	switch operation.Type {
 	case "UPDATE_PROJECT":
 		kind, ref = "PROJECT", assistantString(operation.Input, "projectRef")
+	case "UPDATE_AGENT":
+		kind, ref = "AGENT", assistantString(operation.Input, "agentRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		kind, ref = "AGENT", assistantString(operation.Input, "agentRef")
 		if operation.Type == "ARCHIVE_AGENT" {
@@ -224,6 +260,64 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 		return 0, true, errs.ErrUnavailable
 	}
 	return current, true, nil
+}
+
+func rehydrateEditedAssistantAgent(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	if original.Type != "UPDATE_AGENT" || original.Key != edited.Key || original.Target.Kind != "AGENT" ||
+		original.Target.Ref == "" || original.ExpectedVersion == nil || *original.ExpectedVersion < 1 ||
+		edited.Parameters == nil || !onlyAssistantFields(edited.Parameters, "agentRef", "name", "purpose", "roleDescription", "avatarUrl") ||
+		assistantString(edited.Parameters, "agentRef") != original.Target.Ref {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	if value, supplied := edited.Parameters["avatarUrl"]; supplied && value != original.Before["avatarUrl"] {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	parameters := map[string]any{"agentRef": original.Target.Ref}
+	for _, field := range []string{"name", "purpose", "roleDescription"} {
+		value, supplied := edited.Parameters[field]
+		if !supplied {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		parameters[field] = text
+	}
+	edited.Parameters = parameters
+	selected := edited.Selected
+	hydrated, err := hydrateAssistantAgentFields(original.Target.Ref,
+		assistantString(original.Before, "name"), assistantString(original.Before, "purpose"),
+		assistantString(original.Before, "roleDescription"), assistantString(original.Before, "avatarUrl"),
+		*original.ExpectedVersion, edited)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	if !reflect.DeepEqual(hydrated.Before, original.Before) {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	hydrated.Selected = selected
+	return hydrated, nil
+}
+
+func (repository *Repository) assistantAgentUpdateSnapshotMatches(ctx context.Context, tx pgx.Tx, scope scope, projectRef string,
+	operation entity.AssistantPlanOperation,
+) (bool, error) {
+	var name, purpose, roleDescription, avatarURL string
+	var version int64
+	err := tx.QueryRow(ctx, queryConfigurationHydrateassistantoperationSelectAgent,
+		scope.organizationID, projectRef, operation.Target.Ref,
+	).Scan(&name, &purpose, &roleDescription, &avatarURL, &version)
+	if err != nil {
+		return false, err
+	}
+	before := map[string]any{"agentRef": operation.Target.Ref, "name": name, "purpose": purpose,
+		"roleDescription": roleDescription, "avatarUrl": avatarURL}
+	return operation.ExpectedVersion != nil && *operation.ExpectedVersion == version &&
+		operation.Target.Version != nil && *operation.Target.Version == version &&
+		operation.Target.Name == name && reflect.DeepEqual(operation.Before, before) &&
+		reflect.DeepEqual(operation.Parameters, operation.After) &&
+		assistantString(operation.Parameters, "avatarUrl") == avatarURL, nil
 }
 
 func (repository *Repository) rejectAssistantPlan(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

@@ -6569,6 +6569,15 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil || planResult.Plan == nil || planResult.Plan.State != "DRAFT" {
 		t.Fatalf("propose assistant plan: result=%#v err=%v", planResult.Plan, err)
 	}
+	planVersion := planResult.Plan.Version
+	editedPlan, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantPlan, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-plan-edit-1", ExpectedVersion: &planVersion},
+		Payload: command.AssistantPlanDraftInput{PlanRef: planResult.Plan.Ref, Summary: "Create project Sales after review",
+			Operations: planResult.Plan.Operations}})
+	if err != nil || editedPlan.Plan == nil || editedPlan.Plan.State != "DRAFT" || editedPlan.Plan.Revision != 2 {
+		t.Fatalf("edit assistant plan exact revision: plan=%#v err=%v", editedPlan.Plan, err)
+	}
+	planResult.Plan = editedPlan.Plan
 	toolCall, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolWorker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-tool-call-1"}, Payload: command.RunToolCallInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
@@ -6633,7 +6642,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if readErr != nil || closeErr != nil || !bytes.Equal(downloadedOutput, assistantOutputBody) {
 		t.Fatalf("read assistant result body=%q read_err=%v close_err=%v", string(downloadedOutput), readErr, closeErr)
 	}
-	expectedPlanVersion := int64(1)
+	expectedPlanVersion := planResult.Plan.Version
 	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateAssistantPlan, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-validate-1", ExpectedVersion: &expectedPlanVersion},
 		Payload:  command.AssistantPlanInput{PlanRef: planResult.Plan.Ref, Revision: planResult.Plan.Revision}})
