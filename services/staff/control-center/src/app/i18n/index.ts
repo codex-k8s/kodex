@@ -3018,6 +3018,14 @@ const ru = {
       openCredential: "Открыть защищённую форму",
       open: "Открыть интеграции",
     },
+    createdSchedule: {
+      title: "Созданная автоматизация",
+      loadFailed:
+        "Не удалось прочитать состояние автоматизации. Повторите обновление.",
+      nextRun: "Следующий запуск: {time}",
+      noNextRun: "Следующий запуск пока не назначен.",
+      open: "Открыть автоматизации",
+    },
     launchedRun: {
       title: "Запуск сотрудника или процесса",
       loadFailed:
@@ -6245,6 +6253,13 @@ const en = {
       nextSteps: "Test the connection and assign grants in Integrations.",
       openCredential: "Open protected form",
       open: "Open integrations",
+    },
+    createdSchedule: {
+      title: "Created automation",
+      loadFailed: "Could not read the automation status. Refresh to try again.",
+      nextRun: "Next run: {time}",
+      noNextRun: "No next run is scheduled yet.",
+      open: "Open automations",
     },
     launchedRun: {
       title: "Employee or workflow run",

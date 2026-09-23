@@ -79,6 +79,21 @@ export function assistantIntegrationConnectionTarget(
   return connectionRef ? { connectionRef } : undefined;
 }
 
+export function assistantCreatedScheduleTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; scheduleRef: string } | undefined {
+  const scheduleRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_SCHEDULE",
+    "SCHEDULE",
+  );
+  return plan.projectRef && scheduleRef
+    ? { projectRef: plan.projectRef, scheduleRef }
+    : undefined;
+}
+
 export function assistantLaunchedRunTarget(
   plan: AssistantPlan,
   operationRef: string,

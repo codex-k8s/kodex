@@ -3,6 +3,7 @@ import { reactive } from "vue";
 
 import {
   assistantAwaitingReply,
+  assistantCreatedScheduleTarget,
   assistantEffectiveRuntimeState,
   assistantEnvironmentDraftTarget,
   assistantIntegrationConnectionTarget,
@@ -199,6 +200,62 @@ describe("assistant role image build target", () => {
           receipt: { ...receipt, planRevision: 1 },
         },
         "op_connection",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("показывает созданную автоматизацию только по точной квитанции", () => {
+    const scheduleOperation: AssistantPlanOperation = {
+      ...operation(),
+      ref: "op_schedule",
+      type: "CREATE_SCHEDULE",
+      target: { kind: "SCHEDULE", name: "Еженедельная сводка" },
+    };
+    const schedulePlan: AssistantPlan = {
+      ...plan,
+      operations: [scheduleOperation],
+      receipt: {
+        ...receipt,
+        operationReceipts: [
+          {
+            operationRef: "op_schedule",
+            resourceRef: "sch_exact",
+            outcome: "APPLIED",
+            auditRef: "aud_schedule",
+          },
+        ],
+      },
+    };
+    expect(assistantCreatedScheduleTarget(schedulePlan, "op_schedule")).toEqual(
+      {
+        projectRef: "prj_market",
+        scheduleRef: "sch_exact",
+      },
+    );
+    expect(
+      assistantCreatedScheduleTarget(
+        { ...schedulePlan, revision: schedulePlan.revision + 1 },
+        "op_schedule",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantCreatedScheduleTarget(
+        { ...schedulePlan, projectRef: undefined },
+        "op_schedule",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantCreatedScheduleTarget(
+        {
+          ...schedulePlan,
+          operations: [
+            {
+              ...scheduleOperation,
+              target: { kind: "WORKFLOW", name: "Еженедельная сводка" },
+            },
+          ],
+        },
+        "op_schedule",
       ),
     ).toBeUndefined();
   });
