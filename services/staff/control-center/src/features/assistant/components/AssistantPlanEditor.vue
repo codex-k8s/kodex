@@ -14,9 +14,12 @@ import { useI18n } from "vue-i18n";
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
 import {
   editableOperations,
+  friendlyPlanOperationType,
   operationActionLabel,
   operationInputs,
+  operationParameter,
   operationTargetLabel,
+  updateOperationParameter,
   type EditablePlanOperation,
 } from "@/features/assistant/model";
 import type {
@@ -158,6 +161,65 @@ function optionalNumber(event: Event): number | undefined {
   if (!value) return undefined;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+const initialCapabilities = [
+  "platform.artifact.manage",
+  "platform.run.delegate",
+  "platform.run.launch",
+] as const;
+
+function fieldValue(operation: EditablePlanOperation, key: string): string {
+  const value = operationParameter(operation, key);
+  return typeof value === "string" ? value : "";
+}
+
+function setField(
+  operation: EditablePlanOperation,
+  key: string,
+  event: Event,
+): void {
+  updateOperationParameter(
+    operation,
+    key,
+    (event.target as HTMLInputElement | HTMLTextAreaElement).value,
+  );
+}
+
+function capabilityChecked(
+  operation: EditablePlanOperation,
+  key: string,
+): boolean {
+  const value = operationParameter(operation, "capabilities");
+  return Array.isArray(value) && value.includes(key);
+}
+
+function setCapability(
+  operation: EditablePlanOperation,
+  key: string,
+  event: Event,
+): void {
+  const current = operationParameter(operation, "capabilities");
+  const selected = Array.isArray(current)
+    ? current.filter((item): item is string => typeof item === "string")
+    : [];
+  const next = (event.target as HTMLInputElement).checked
+    ? [...new Set([...selected, key])]
+    : selected.filter((item) => item !== key);
+  updateOperationParameter(operation, "capabilities", next);
+}
+
+function snapshot(value: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 </script>
 
@@ -356,7 +418,7 @@ function optionalNumber(event: Event): number | undefined {
               }}</strong>
               <small>{{ operation.value.target.kind }}</small>
             </div>
-            <label class="field">
+            <label v-if="!friendlyPlanOperationType(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetKind") }}</span>
               <input
                 v-model="operation.value.target.kind"
@@ -364,7 +426,7 @@ function optionalNumber(event: Event): number | undefined {
                 :disabled="!editable"
               />
             </label>
-            <label class="field">
+            <label v-if="!friendlyPlanOperationType(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetName") }}</span>
               <input
                 v-model="operation.value.target.name"
@@ -372,7 +434,7 @@ function optionalNumber(event: Event): number | undefined {
                 :disabled="!editable"
               />
             </label>
-            <label class="field">
+            <label v-if="!friendlyPlanOperationType(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetRef") }}</span>
               <input
                 v-model="operation.value.target.ref"
@@ -380,7 +442,7 @@ function optionalNumber(event: Event): number | undefined {
                 :disabled="!editable"
               />
             </label>
-            <label class="field">
+            <label v-if="!friendlyPlanOperationType(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetVersion") }}</span>
               <input
                 type="number"
@@ -391,7 +453,7 @@ function optionalNumber(event: Event): number | undefined {
                 @input="operation.value.target.version = optionalNumber($event)"
               />
             </label>
-            <label class="field">
+            <label v-if="!friendlyPlanOperationType(operation)" class="field">
               <span>{{ $t("assistant.planEditor.expectedVersion") }}</span>
               <input
                 type="number"
@@ -406,7 +468,113 @@ function optionalNumber(event: Event): number | undefined {
             </label>
           </fieldset>
 
-          <div class="field field--code">
+          <div
+            v-if="friendlyPlanOperationType(operation)"
+            class="assistant-plan-friendly"
+          >
+            <p class="assistant-plan-friendly__hint">
+              {{ $t("assistant.planEditor.friendlyHint") }}
+            </p>
+            <label class="field">
+              <span>{{ $t("assistant.planEditor.entityName") }}</span>
+              <input
+                :value="fieldValue(operation, 'name')"
+                maxlength="160"
+                :disabled="!editable"
+                @input="setField(operation, 'name', $event)"
+              />
+            </label>
+            <label class="field">
+              <span>{{ $t("assistant.planEditor.entityPurpose") }}</span>
+              <textarea
+                :value="fieldValue(operation, 'purpose')"
+                rows="3"
+                maxlength="2000"
+                :disabled="!editable"
+                @input="setField(operation, 'purpose', $event)"
+              />
+            </label>
+            <template v-if="operation.value.target.kind === 'PROJECT'">
+              <label class="field">
+                <span>{{ $t("assistant.planEditor.projectLanguage") }}</span>
+                <select
+                  :value="fieldValue(operation, 'language')"
+                  :disabled="!editable"
+                  @change="setField(operation, 'language', $event)"
+                >
+                  <option value="ru">Русский</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+            </template>
+            <template v-else>
+              <label class="field">
+                <span>{{ $t("assistant.planEditor.agentRole") }}</span>
+                <textarea
+                  :value="fieldValue(operation, 'roleDescription')"
+                  rows="3"
+                  maxlength="2000"
+                  :disabled="!editable"
+                  @input="setField(operation, 'roleDescription', $event)"
+                />
+              </label>
+              <template v-if="operation.value.type === 'CREATE_AGENT'">
+                <label class="field">
+                  <span>{{
+                    $t("assistant.planEditor.agentInstructions")
+                  }}</span>
+                  <textarea
+                    :value="fieldValue(operation, 'instructions')"
+                    rows="7"
+                    maxlength="65536"
+                    :disabled="!editable"
+                    @input="setField(operation, 'instructions', $event)"
+                  />
+                </label>
+                <fieldset class="assistant-plan-friendly__capabilities">
+                  <legend>
+                    {{ $t("assistant.planEditor.agentCapabilities") }}
+                  </legend>
+                  <label v-for="key in initialCapabilities" :key="key">
+                    <input
+                      type="checkbox"
+                      :checked="capabilityChecked(operation, key)"
+                      :disabled="!editable"
+                      @change="setCapability(operation, key, $event)"
+                    />
+                    {{
+                      $t(
+                        `assistant.planEditor.capabilities.${key.replaceAll(".", "_")}`,
+                      )
+                    }}
+                  </label>
+                </fieldset>
+                <p class="assistant-plan-friendly__hint">
+                  {{ $t("assistant.planEditor.agentNextSteps") }}
+                </p>
+              </template>
+            </template>
+            <details class="assistant-plan-friendly__snapshot">
+              <summary>
+                {{ $t("assistant.planEditor.transitionDetails") }}
+              </summary>
+              <h4>{{ $t("assistant.planEditor.before") }}</h4>
+              <SafeStructuredData
+                :value="snapshot(operation.beforeText)"
+                literal
+              />
+              <h4>{{ $t("assistant.planEditor.afterDetails") }}</h4>
+              <SafeStructuredData
+                :value="snapshot(operation.afterText)"
+                literal
+              />
+            </details>
+          </div>
+
+          <div
+            v-if="!friendlyPlanOperationType(operation)"
+            class="field field--code"
+          >
             <span class="assistant-field-label">
               <span>{{ $t("assistant.planEditor.parameters") }}</span>
               <button
@@ -429,7 +597,10 @@ function optionalNumber(event: Event): number | undefined {
               :aria-label="$t('assistant.planEditor.parameters')"
             />
           </div>
-          <div class="assistant-plan-transition">
+          <div
+            v-if="!friendlyPlanOperationType(operation)"
+            class="assistant-plan-transition"
+          >
             <div class="field field--code">
               <span class="assistant-field-label">
                 <span>{{ $t("assistant.planEditor.before") }}</span>
@@ -750,6 +921,48 @@ function optionalNumber(event: Event): number | undefined {
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
+}
+.assistant-plan-friendly {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.assistant-plan-friendly__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+.assistant-plan-friendly__capabilities {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.assistant-plan-friendly__capabilities legend {
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+.assistant-plan-friendly__capabilities label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.assistant-plan-friendly__snapshot {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.assistant-plan-friendly__snapshot summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.assistant-plan-friendly__snapshot h4 {
+  margin: 12px 0 6px;
 }
 .field--code :deep(textarea) {
   font-family: var(--font-mono);

@@ -6,9 +6,11 @@ import {
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
   editableOperations,
+  friendlyPlanOperationType,
   operationActionLabel,
   operationInputs,
   operationTargetLabel,
+  updateOperationParameter,
 } from "@/features/assistant/model";
 import type {
   AssistantConversation,
@@ -58,6 +60,70 @@ function operation(): AssistantPlanOperation {
 }
 
 describe("assistant plan editor model", () => {
+  it("сохраняет согласованные параметры и итог при изменении формы проекта", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        parameters: {
+          name: "Продажи",
+          purpose: "Работа с заказами",
+          language: "ru",
+        },
+        after: {
+          name: "Продажи",
+          purpose: "Работа с заказами",
+          language: "ru",
+        },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("CREATE_PROJECT");
+
+    updateOperationParameter(first, "name", "Маркетплейс");
+    updateOperationParameter(first, "language", "en");
+
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters).toEqual(changed?.after);
+    expect(changed?.parameters.name).toBe("Маркетплейс");
+    expect(changed?.parameters.language).toBe("en");
+    expect(changed?.target.name).toBe("Маркетплейс");
+  });
+
+  it("не подменяет исходную identity сотрудника при редактировании", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "UPDATE_AGENT",
+        action: "UPDATE",
+        target: {
+          kind: "AGENT",
+          ref: "agt_existing",
+          name: "Старое имя",
+          version: 3,
+        },
+        expectedVersion: 3,
+        parameters: { agentRef: "agt_existing", name: "Старое имя" },
+        before: { agentRef: "agt_existing", name: "Старое имя" },
+        after: { agentRef: "agt_existing", name: "Старое имя" },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("UPDATE_AGENT");
+
+    updateOperationParameter(first, "name", "Новое имя");
+
+    const changed = operationInputs(editable)[0];
+    expect(changed?.target.name).toBe("Старое имя");
+    expect(changed?.parameters.name).toBe("Новое имя");
+    expect(changed?.after.name).toBe("Новое имя");
+    expect(changed?.before.name).toBe("Старое имя");
+    expect(changed?.expectedVersion).toBe(3);
+  });
+
   it("создаёт независимый draft из Vue reactive proxy", () => {
     const source = reactive(operation());
 

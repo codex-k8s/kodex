@@ -25,6 +25,65 @@ export interface EditablePlanOperation {
   afterText: string;
 }
 
+export type FriendlyPlanOperationType =
+  | "CREATE_PROJECT"
+  | "UPDATE_PROJECT"
+  | "CREATE_AGENT"
+  | "UPDATE_AGENT";
+
+export function friendlyPlanOperationType(
+  operation: EditablePlanOperation,
+): FriendlyPlanOperationType | undefined {
+  if (
+    operation.value.type !== "CREATE_PROJECT" &&
+    operation.value.type !== "UPDATE_PROJECT" &&
+    operation.value.type !== "CREATE_AGENT" &&
+    operation.value.type !== "UPDATE_AGENT"
+  )
+    return undefined;
+  const expectedKind = operation.value.type.endsWith("PROJECT")
+    ? "PROJECT"
+    : "AGENT";
+  const expectedAction = operation.value.type.startsWith("CREATE_")
+    ? "CREATE"
+    : "UPDATE";
+  if (
+    operation.value.target.kind !== expectedKind ||
+    operation.value.action !== expectedAction
+  )
+    return undefined;
+  try {
+    parseObject(operation.parametersText);
+    parseObject(operation.beforeText);
+    parseObject(operation.afterText);
+    return operation.value.type;
+  } catch {
+    return undefined;
+  }
+}
+
+export function operationParameter(
+  operation: EditablePlanOperation,
+  key: string,
+): unknown {
+  return parseObject(operation.parametersText)[key];
+}
+
+export function updateOperationParameter(
+  operation: EditablePlanOperation,
+  key: string,
+  value: string | string[],
+): void {
+  const parameters = parseObject(operation.parametersText);
+  const after = parseObject(operation.afterText);
+  parameters[key] = value;
+  after[key] = value;
+  operation.parametersText = prettyJSON(parameters);
+  operation.afterText = prettyJSON(after);
+  if (key === "name" && operation.value.action === "CREATE")
+    operation.value.target.name = String(value);
+}
+
 function prettyJSON(value: Record<string, unknown>): string {
   return JSON.stringify(value, null, 2);
 }

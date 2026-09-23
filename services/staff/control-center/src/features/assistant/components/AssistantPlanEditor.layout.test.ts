@@ -8,6 +8,16 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("показывает понятные поля проекта и сотрудника без редактирования authority", () => {
+    expect(source).toContain('v-if="friendlyPlanOperationType(operation)"');
+    expect(source).toContain('v-if="!friendlyPlanOperationType(operation)"');
+    expect(source).toContain("fieldValue(operation, 'name')");
+    expect(source).toContain("fieldValue(operation, 'purpose')");
+    expect(source).toContain("fieldValue(operation, 'instructions')");
+    expect(source).toContain("capabilityChecked(operation, key)");
+    expect(source).toContain("assistant.planEditor.agentNextSteps");
+  });
+
   it("показывает тип, действие и authority результата без скрытых изменений", () => {
     expect(source).toContain("{{ operation.value.type }}");
     expect(source).toContain("{{ operation.value.action }}");

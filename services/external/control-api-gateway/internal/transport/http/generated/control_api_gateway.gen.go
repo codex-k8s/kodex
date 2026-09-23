@@ -599,6 +599,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW              AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
 	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                   AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
 	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION   AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                 AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
 	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT               AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
 )
 
@@ -626,6 +627,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsLAUNCHRUN:
 		return true
 	case AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATEAGENT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATEPROJECT:
 		return true
@@ -743,6 +746,7 @@ const (
 	AssistantPlanOperationTypeCREATEWORKFLOW              AssistantPlanOperationType = "CREATE_WORKFLOW"
 	AssistantPlanOperationTypeLAUNCHRUN                   AssistantPlanOperationType = "LAUNCH_RUN"
 	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION   AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEAGENT                 AssistantPlanOperationType = "UPDATE_AGENT"
 	AssistantPlanOperationTypeUPDATEPROJECT               AssistantPlanOperationType = "UPDATE_PROJECT"
 )
 
@@ -770,6 +774,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeLAUNCHRUN:
 		return true
 	case AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION:
+		return true
+	case AssistantPlanOperationTypeUPDATEAGENT:
 		return true
 	case AssistantPlanOperationTypeUPDATEPROJECT:
 		return true

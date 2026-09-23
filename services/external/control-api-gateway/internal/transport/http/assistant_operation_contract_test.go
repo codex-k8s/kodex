@@ -31,3 +31,25 @@ func TestAssistantUpdateProjectOperationContract(t *testing.T) {
 		t.Fatal("owner operation missing from plan readback")
 	}
 }
+
+func TestAssistantUpdateAgentOperationContract(t *testing.T) {
+	if !generated.AssistantPlanOperationType("UPDATE_AGENT").Valid() || !generated.AssistantContextDescriptorAllowedOperations("UPDATE_AGENT").Valid() {
+		t.Fatal("agent update operation missing from HTTP contract")
+	}
+	input := assistantContextInput(&generated.AssistantContextDescriptor{Route: "/projects/prj_fixture01/agents/agt_fixture01", EntityKind: "AGENT", EntityRef: "agt_fixture01", AllowedOperations: []generated.AssistantContextDescriptorAllowedOperations{"UPDATE_AGENT"}})
+	if len(input.AllowedOperations) != 1 || input.AllowedOperations[0] != cp.AssistantPlanOperation_TYPE_UPDATE_AGENT {
+		t.Fatal("agent update operation changed before owner resolution")
+	}
+	value, err := messageMap(&cp.AssistantConversation{Context: input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operations := value["context"].(map[string]any)["allowedOperations"].([]any)
+	if len(operations) != 1 || operations[0] != "UPDATE_AGENT" {
+		t.Fatal("agent update operation missing from context readback")
+	}
+	operation, err := messageMap(&cp.AssistantPlanOperation{Type: cp.AssistantPlanOperation_TYPE_UPDATE_AGENT})
+	if err != nil || operation["type"] != "UPDATE_AGENT" {
+		t.Fatal("agent update operation missing from plan readback")
+	}
+}

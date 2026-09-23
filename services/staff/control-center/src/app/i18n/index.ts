@@ -2916,6 +2916,7 @@ const ru = {
     contextOperation: {
       CREATE_PROJECT: "Создать Проект",
       UPDATE_PROJECT: "Изменить Проект",
+      UPDATE_AGENT: "Изменить сотрудника",
       CREATE_AGENT: "Создать сотрудника",
       CREATE_WORKFLOW: "Создать Workflow",
       CHANGE_CAPABILITY: "Изменить возможности",
@@ -2989,6 +2990,23 @@ const ru = {
       targetName: "Название объекта",
       targetRef: "Ссылка на объект",
       targetVersion: "Версия объекта",
+      friendlyHint:
+        "Проверьте данные перед сохранением. Изменение плана требует новой проверки перед применением.",
+      entityName: "Название",
+      entityPurpose: "Назначение",
+      projectLanguage: "Язык проекта",
+      agentRole: "Роль сотрудника",
+      agentInstructions: "Инструкции сотруднику",
+      agentCapabilities: "Возможности сотрудника",
+      agentNextSteps:
+        "Образ, рабочее окружение и остальные доступы настраиваются отдельно. Проверьте их перед запуском сотрудника.",
+      transitionDetails: "Технические детали изменения",
+      afterDetails: "Планируемое состояние",
+      capabilities: {
+        platform_artifact_manage: "Работа с файлами",
+        platform_run_delegate: "Делегирование другим сотрудникам",
+        platform_run_launch: "Запуск сотрудников и процессов",
+      },
       commandType: "Команда",
       action: "Техническое действие",
       permitted: "Разрешено",
@@ -6017,6 +6035,7 @@ const en = {
     contextOperation: {
       CREATE_PROJECT: "Create Project",
       UPDATE_PROJECT: "Update Project",
+      UPDATE_AGENT: "Update employee",
       CREATE_AGENT: "Create agent",
       CREATE_WORKFLOW: "Create Workflow",
       CHANGE_CAPABILITY: "Change capabilities",
@@ -6091,6 +6110,23 @@ const en = {
       targetName: "Target name",
       targetRef: "Target reference",
       targetVersion: "Target version",
+      friendlyHint:
+        "Review the details before saving. Changes to the plan require a new validation before applying.",
+      entityName: "Name",
+      entityPurpose: "Purpose",
+      projectLanguage: "Project language",
+      agentRole: "Employee role",
+      agentInstructions: "Employee instructions",
+      agentCapabilities: "Employee capabilities",
+      agentNextSteps:
+        "The image, work environment, and other access grants are configured separately. Review them before launching the employee.",
+      transitionDetails: "Technical change details",
+      afterDetails: "Planned state",
+      capabilities: {
+        platform_artifact_manage: "File access",
+        platform_run_delegate: "Delegate to other employees",
+        platform_run_launch: "Launch employees and workflows",
+      },
       commandType: "Command",
       action: "Technical action",
       permitted: "Permitted",
