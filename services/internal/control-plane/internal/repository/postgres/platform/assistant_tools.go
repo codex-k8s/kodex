@@ -32,12 +32,13 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	}
 	var conversationID, conversationRef, projectID, projectRef string
 	var assistantRef string
+	var contextKind, contextRef string
 	var allowedOperations []string
 	var conversationVersion int64
 	actorScope := scope{correlationRef: machineScope.correlationRef}
 	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantplanSelectContext,
 		machineScope.organizationID, lease["runID"],
-	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations, &assistantRef,
+	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations, &contextKind, &contextRef, &assistantRef,
 		&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.role,
 		&actorScope.organizationRef); err != nil {
 		return commandOutcome{}, errs.ErrForbidden
@@ -54,6 +55,9 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		}
 		seen[operation.Key] = struct{}{}
 		if !contains(allowedOperations, operation.Type) {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		if !assistantOperationMatchesContext(contextKind, contextRef, operation) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		operation, err = repository.hydrateAssistantOperation(ctx, tx, machineScope, projectRef, operation)
@@ -129,13 +133,20 @@ func assistantPlanDigest(summary string, rawOperations []byte) string {
 
 func assistantOperationType(value string) bool {
 	switch value {
-	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CHANGE_CAPABILITY",
+	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		return true
 	default:
 		return false
 	}
+}
+
+func assistantOperationMatchesContext(contextKind, contextRef string, operation entity.AssistantPlanOperation) bool {
+	if operation.Type != "UPDATE_AGENT" {
+		return true
+	}
+	return contextKind == "AGENT" && contextRef != "" && assistantString(operation.Parameters, "agentRef") == contextRef
 }
 
 func (repository *Repository) hydrateAssistantOperation(
@@ -163,6 +174,9 @@ func (repository *Repository) hydrateAssistantOperation(
 		operation.Selected = true
 		return operation, nil
 	}
+	if operation.Type == "UPDATE_AGENT" {
+		return repository.hydrateAssistantAgentOperation(ctx, tx, machineScope, projectRef, operation)
+	}
 	if operation.Type != "UPDATE_PROJECT" {
 		return operation, nil
 	}
@@ -184,6 +198,67 @@ func (repository *Repository) hydrateAssistantOperation(
 		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
 	}
 	return hydrateAssistantProjectOperation(projectRef, name, purpose, language, version, operation)
+}
+
+func (repository *Repository) hydrateAssistantAgentOperation(
+	ctx context.Context,
+	tx pgx.Tx,
+	machineScope scope,
+	projectRef string,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if projectRef == "" || !onlyAssistantFields(operation.Parameters, "agentRef", "name", "purpose", "roleDescription") {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	agentRef := assistantString(operation.Parameters, "agentRef")
+	if agentRef == "" {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	var name, purpose, roleDescription, avatarURL string
+	var version int64
+	if err := tx.QueryRow(ctx, queryConfigurationHydrateassistantoperationSelectAgent,
+		machineScope.organizationID, projectRef, agentRef,
+	).Scan(&name, &purpose, &roleDescription, &avatarURL, &version); errors.Is(err, pgx.ErrNoRows) {
+		return entity.AssistantPlanOperation{}, errs.ErrNotFound
+	} else if err != nil {
+		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
+	}
+	return hydrateAssistantAgentFields(agentRef, name, purpose, roleDescription, avatarURL, version, operation)
+}
+
+func hydrateAssistantAgentFields(
+	agentRef, name, purpose, roleDescription, avatarURL string,
+	version int64,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	before := map[string]any{"agentRef": agentRef, "name": name, "purpose": purpose,
+		"roleDescription": roleDescription, "avatarUrl": avatarURL}
+	after := cloneAssistantFields(before)
+	changed := false
+	for _, field := range []string{"name", "purpose", "roleDescription"} {
+		value, exists := operation.Parameters[field]
+		if !exists {
+			continue
+		}
+		text, ok := value.(string)
+		text = strings.TrimSpace(text)
+		if !ok || text == "" {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		after[field] = text
+		changed = changed || text != before[field]
+	}
+	if !changed {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	operation.Action = "UPDATE"
+	operation.Target = entity.AssistantPlanTarget{Kind: "AGENT", Ref: agentRef, Name: name, Version: &version}
+	operation.Parameters = after
+	operation.Before = before
+	operation.After = cloneAssistantFields(after)
+	operation.ExpectedVersion = &version
+	operation.Selected = true
+	return operation, nil
 }
 
 func withAssistantAgentTemplateContext(parameters map[string]any) map[string]any {
@@ -285,7 +360,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -314,6 +389,9 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "UPDATE_PROJECT":
 		expectedTargetKind = "PROJECT"
 		expectedTargetRef = assistantString(operation.Parameters, "projectRef")
+	case "UPDATE_AGENT":
+		expectedTargetKind = "AGENT"
+		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
@@ -343,6 +421,12 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 }
 
 func bindAssistantOperationProject(operation entity.AssistantPlanOperation, projectRef string) (entity.AssistantPlanOperation, error) {
+	if operation.Type == "UPDATE_AGENT" {
+		if projectRef == "" {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		return operation, nil
+	}
 	switch operation.Type {
 	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN":
 	default:
@@ -417,6 +501,21 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateAgent, payload
+	case "UPDATE_AGENT":
+		if !onlyAssistantFields(operation.Input, "agentRef", "name", "purpose", "roleDescription", "avatarUrl", "expectedVersion") ||
+			!hasAssistantFields(operation.Input, "agentRef", "name", "purpose", "roleDescription", "avatarUrl", "expectedVersion") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		expected, expectedOK := assistantInt64(operation.Input, "expectedVersion")
+		payload := command.AgentInput{Ref: assistantString(operation.Input, "agentRef"), Name: assistantString(operation.Input, "name"),
+			Purpose: assistantString(operation.Input, "purpose"), RoleDescription: assistantString(operation.Input, "roleDescription"),
+			AvatarURL: assistantString(operation.Input, "avatarUrl")}
+		if !expectedOK || expected < 1 || payload.Ref == "" || payload.Name == "" || len(payload.Name) > 160 ||
+			payload.Purpose == "" || len(payload.Purpose) > 2000 || payload.RoleDescription == "" || len(payload.RoleDescription) > 2000 || len(payload.AvatarURL) > 500 {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.UpdateAgent, payload
+		result.Mutation.ExpectedVersion = &expected
 	case "CREATE_WORKFLOW":
 		workflow, err := assistantWorkflow(operation.Input)
 		if err != nil {

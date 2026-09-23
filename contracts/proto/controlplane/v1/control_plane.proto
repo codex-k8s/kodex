@@ -1465,6 +1465,8 @@ message AssistantPlanOperation {
     TYPE_ARCHIVE_WORKFLOW = 11;
     // Изменить Проект по exact version с авторитетным before/after snapshot.
     TYPE_UPDATE_PROJECT = 12;
+    // Изменить профиль обычного ИИ-сотрудника по exact version и owner snapshot.
+    TYPE_UPDATE_AGENT = 13;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

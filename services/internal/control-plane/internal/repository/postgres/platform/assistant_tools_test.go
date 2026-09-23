@@ -48,6 +48,49 @@ func TestAssistantOperationCommandBuildsHydratedProjectUpdate(t *testing.T) {
 	}
 }
 
+func TestAssistantAgentUpdateRequiresExactContextAndOwnerSnapshot(t *testing.T) {
+	t.Parallel()
+	proposed := entity.AssistantPlanOperation{Type: "UPDATE_AGENT", Key: "update-coordinator", Title: "Update coordinator", Summary: "Update coordinator",
+		Parameters: map[string]any{"agentRef": "agt_current", "purpose": "Coordinate releases"}}
+	if !assistantOperationMatchesContext("AGENT", "agt_current", proposed) ||
+		assistantOperationMatchesContext("AGENT", "agt_other", proposed) ||
+		assistantOperationMatchesContext("PROJECT", "agt_current", proposed) {
+		t.Fatal("agent update accepted a different context")
+	}
+	hydrated, err := hydrateAssistantAgentFields("agt_current", "Coordinator", "Coordinate work", "Manage agents", "avatar-ref", 7, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := bindAssistantOperationProject(normalized, "prj_current")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(bound)
+	if err != nil || mapped.Kind != command.UpdateAgent || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 7 {
+		t.Fatalf("map agent update: command=%#v err=%v", mapped, err)
+	}
+	payload := mapped.Payload.(command.AgentInput)
+	if payload.Ref != "agt_current" || payload.Name != "Coordinator" || payload.Purpose != "Coordinate releases" ||
+		payload.RoleDescription != "Manage agents" || payload.AvatarURL != "avatar-ref" ||
+		assistantString(hydrated.Before, "purpose") != "Coordinate work" || assistantString(hydrated.After, "purpose") != "Coordinate releases" {
+		t.Fatalf("agent snapshot lost unchanged fields or version: %#v", hydrated)
+	}
+	for _, invalid := range []map[string]any{
+		{"agentRef": "agt_current", "name": "Coordinator"},
+		{"agentRef": "agt_current", "avatarUrl": "untrusted"},
+		{"agentRef": "agt_current", "name": " "},
+	} {
+		if _, err := hydrateAssistantAgentFields("agt_current", "Coordinator", "Coordinate work", "Manage agents", "avatar-ref", 7,
+			entity.AssistantPlanOperation{Type: "UPDATE_AGENT", Parameters: invalid}); !errors.Is(err, errs.ErrInvalid) && !errors.Is(err, errs.ErrConflict) {
+			t.Fatalf("invalid or no-op agent update accepted: %v", err)
+		}
+	}
+}
+
 func TestAssistantCreateTargetUsesClosedKinds(t *testing.T) {
 	t.Parallel()
 	parameters := map[string]any{"name": "Analyst"}

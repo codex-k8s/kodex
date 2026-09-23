@@ -125,6 +125,9 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		if (resource.kind == "FILE" || resource.kind == "ENVIRONMENT" || resource.kind == "RUN") && len(projection.AllowedOperations) != 0 {
 			t.Fatalf("context %s invented a mutating operation", resource.kind)
 		}
+		if resource.kind == "AGENT" && !contains(projection.AllowedOperations, "UPDATE_AGENT") {
+			t.Fatal("agent context did not publish its exact update capability")
+		}
 		resolved, err := repository.ResolvePrincipal(ctx, owner)
 		if err != nil {
 			t.Fatal(err)
