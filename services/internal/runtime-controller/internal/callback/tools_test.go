@@ -197,6 +197,25 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	if scheduleProperties["timeOfDay"] == nil || scheduleProperties["cronExpression"] != nil {
 		t.Fatalf("assistant schedule schema diverged from owner schedule contract: %#v", scheduleProperties)
 	}
+	for _, operationType := range []string{"CREATE_SCHEDULE", "LAUNCH_RUN"} {
+		parameters := byType[operationType]
+		branches := parameters["oneOf"].([]map[string]any)
+		if len(branches) != 2 || parameters["properties"].(map[string]any)["targetType"].(map[string]any)["enum"].([]string)[1] != "WORKFLOW" {
+			t.Fatalf("assistant %s schema lost workflow launch target: %#v", operationType, parameters)
+		}
+		agent := branches[0]["properties"].(map[string]any)
+		workflow := branches[1]["properties"].(map[string]any)
+		if agent["targetType"].(map[string]any)["const"] != "AGENT" ||
+			agent["targetRef"].(map[string]any)["enum"].([]string)[0] != input.DelegationTargets[0].Ref ||
+			workflow["targetType"].(map[string]any)["const"] != "WORKFLOW" ||
+			workflow["targetRef"].(map[string]any)["pattern"] == nil {
+			t.Fatalf("assistant %s schema lost distinct target boundaries: %#v", operationType, branches)
+		}
+	}
+	runProperties := byType["LAUNCH_RUN"]["properties"].(map[string]any)
+	if runProperties["attachmentSetRef"] == nil || runProperties["artifactRefs"] != nil {
+		t.Fatalf("assistant run schema diverged from accepted attachment contract: %#v", runProperties)
+	}
 }
 
 func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
