@@ -3033,6 +3033,20 @@ const ru = {
       finish: "Проверьте этапы и завершите настройку перед запуском.",
       open: "Открыть процесс",
     },
+    createdEntity: {
+      loadFailed:
+        "Не удалось прочитать созданный объект. Повторите обновление.",
+      PROJECT: {
+        title: "Созданный проект",
+        next: "Откройте проект, чтобы настроить сотрудников и рабочие ресурсы.",
+        open: "Открыть проект",
+      },
+      AGENT: {
+        title: "Созданный сотрудник",
+        next: "Проверьте инструкции, образ, окружение и разрешения перед запуском.",
+        open: "Открыть сотрудника",
+      },
+    },
     launchedRun: {
       title: "Запуск сотрудника или процесса",
       loadFailed:
@@ -6301,6 +6315,19 @@ const en = {
       ready: "The workflow is ready to run.",
       finish: "Review the steps and finish setup before running.",
       open: "Open workflow",
+    },
+    createdEntity: {
+      loadFailed: "Could not read the created resource. Refresh to try again.",
+      PROJECT: {
+        title: "Created project",
+        next: "Open the project to configure employees and work resources.",
+        open: "Open project",
+      },
+      AGENT: {
+        title: "Created employee",
+        next: "Review instructions, image, environment, and permissions before running.",
+        open: "Open employee",
+      },
     },
     launchedRun: {
       title: "Employee or workflow run",

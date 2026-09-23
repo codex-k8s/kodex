@@ -109,6 +109,38 @@ export function assistantCreatedWorkflowTarget(
     : undefined;
 }
 
+export function assistantCreatedEntityTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+):
+  | { kind: "PROJECT" | "AGENT"; projectRef: string; resourceRef: string }
+  | undefined {
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  if (operation?.type === "CREATE_PROJECT") {
+    const projectRef = assistantAppliedResourceRef(
+      plan,
+      operationRef,
+      "CREATE_PROJECT",
+      "PROJECT",
+    );
+    return projectRef
+      ? { kind: "PROJECT", projectRef, resourceRef: projectRef }
+      : undefined;
+  }
+  if (operation?.type === "CREATE_AGENT") {
+    const agentRef = assistantAppliedResourceRef(
+      plan,
+      operationRef,
+      "CREATE_AGENT",
+      "AGENT",
+    );
+    return plan.projectRef && agentRef
+      ? { kind: "AGENT", projectRef: plan.projectRef, resourceRef: agentRef }
+      : undefined;
+  }
+  return undefined;
+}
+
 export function assistantLaunchedRunTarget(
   plan: AssistantPlan,
   operationRef: string,

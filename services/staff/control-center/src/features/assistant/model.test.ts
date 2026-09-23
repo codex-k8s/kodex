@@ -4,6 +4,7 @@ import { reactive } from "vue";
 import {
   assistantAwaitingReply,
   assistantCreatedScheduleTarget,
+  assistantCreatedEntityTarget,
   assistantCreatedWorkflowTarget,
   assistantEffectiveRuntimeState,
   assistantEnvironmentDraftTarget,
@@ -302,6 +303,65 @@ describe("assistant role image build target", () => {
           receipt: { ...receipt, planRef: "pln_other" },
         },
         "op_workflow",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("связывает проект и сотрудника с их собственными квитанциями", () => {
+    const projectOperation: AssistantPlanOperation = {
+      ...operation(),
+      ref: "op_project",
+      type: "CREATE_PROJECT",
+      target: { kind: "PROJECT", name: "Маркетплейс" },
+    };
+    const agentOperation: AssistantPlanOperation = {
+      ...operation(),
+      ref: "op_agent",
+      type: "CREATE_AGENT",
+      target: { kind: "AGENT", name: "Разработчик" },
+    };
+    const entityPlan: AssistantPlan = {
+      ...plan,
+      projectRef: "prj_current",
+      operations: [projectOperation, agentOperation],
+      receipt: {
+        ...receipt,
+        operationReceipts: [
+          {
+            operationRef: "op_project",
+            resourceRef: "prj_new",
+            outcome: "APPLIED",
+            auditRef: "aud_project",
+          },
+          {
+            operationRef: "op_agent",
+            resourceRef: "agt_new",
+            outcome: "APPLIED",
+            auditRef: "aud_agent",
+          },
+        ],
+      },
+    };
+    expect(assistantCreatedEntityTarget(entityPlan, "op_project")).toEqual({
+      kind: "PROJECT",
+      projectRef: "prj_new",
+      resourceRef: "prj_new",
+    });
+    expect(assistantCreatedEntityTarget(entityPlan, "op_agent")).toEqual({
+      kind: "AGENT",
+      projectRef: "prj_current",
+      resourceRef: "agt_new",
+    });
+    expect(
+      assistantCreatedEntityTarget(
+        { ...entityPlan, projectRef: undefined },
+        "op_agent",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantCreatedEntityTarget(
+        { ...entityPlan, revision: entityPlan.revision + 1 },
+        "op_project",
       ),
     ).toBeUndefined();
   });
