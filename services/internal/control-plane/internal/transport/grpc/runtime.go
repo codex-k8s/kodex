@@ -331,6 +331,22 @@ func (server *Server) ReadExecutionArtifact(ctx context.Context, request *contro
 	return &controlplanev1.ReadExecutionArtifactResponse{Artifact: castArtifact(download.Artifact), Content: content}, nil
 }
 
+func (server *Server) SearchAssistantResources(ctx context.Context, request *controlplanev1.SearchAssistantResourcesRequest) (*controlplanev1.SearchAssistantResourcesResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_SearchAssistantResources_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, truncated, err := server.service.SearchAssistantResources(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), request.GetQuery())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.SearchAssistantResourcesResponse{Truncated: truncated}
+	for _, item := range items {
+		response.Results = append(response.Results, castSearchResult(item))
+	}
+	return response, nil
+}
+
 func (server *Server) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest) (*controlplanev1.RenewExecutionResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName, command.RenewExecution, nil, payload)

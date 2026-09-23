@@ -1723,6 +1723,11 @@
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {
+      "operation_id": "platform.runtime.assistant.resources.search",
+      "source_binding_sha256": "f70293cb7f51fa03207182f2d0039ccb0a47dc0d4602443eb5e520b23777cf1d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
       "operation_id": "platform.runtime.execution.artifact.read",
       "source_binding_sha256": "f2d0e89dad25d6aa35085707d94a6b4380b35ba88305e18f2b0c663740f1620e",
       "actor_mode": "SERVICE_OWNER_RESOLVED"

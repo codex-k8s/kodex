@@ -898,6 +898,18 @@ func (service *Service) DownloadArtifact(ctx context.Context, p value.Principal,
 func (service *Service) ReadExecutionArtifact(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {
 	return service.readExecutionArtifact(ctx, p, leaseRef, fence, generation, artifactRef, "platform.runtime.execution.artifact.read")
 }
+func (service *Service) SearchAssistantResources(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, search string) ([]entity.SearchResult, bool, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, false, err
+	}
+	if p.CallerWorkload != "runtime-controller" || p.Permission != "platform.runtime.assistant.resources.search" ||
+		strings.TrimSpace(leaseRef) == "" || strings.TrimSpace(fence) == "" || generation < 1 ||
+		len([]rune(strings.TrimSpace(search))) < 2 || len([]rune(search)) > 160 {
+		return nil, false, errs.ErrForbidden
+	}
+	return service.repository.SearchAssistantResources(ctx, p, leaseRef, fence, generation, strings.TrimSpace(search))
+}
 func (service *Service) OpenExecutionArtifactTransfer(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {
 	return service.readExecutionArtifact(ctx, p, leaseRef, fence, generation, artifactRef, "platform.runtime.execution.artifact.stream")
 }

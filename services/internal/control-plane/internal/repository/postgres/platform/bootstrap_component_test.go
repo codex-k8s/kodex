@@ -6384,6 +6384,10 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read",
 	}, "runtime-controller")
+	searchReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.resources.search",
+	}, "runtime-controller")
 	toolWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.tool-call.record",
@@ -6545,6 +6549,39 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if stringMap(lease, "projectRef") != projectRef {
 		t.Fatalf("assistant runtime lost project binding: got=%q want=%q", stringMap(lease, "projectRef"), projectRef)
 	}
+	projectCreator := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
+	}, "control-api-gateway")
+	searchProject, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: projectCreator,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-resource-search-project"},
+		Payload:  command.ProjectInput{Name: "Assistant resource search project", Language: "en"}})
+	if err != nil || searchProject.Project == nil {
+		t.Fatalf("create owner-visible search project: project=%#v err=%v", searchProject.Project, err)
+	}
+	searchLeaseRef, searchFence, searchGeneration := stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64)
+	results, truncated, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, searchProject.Project.Name)
+	if err != nil || truncated {
+		t.Fatalf("search owner-visible project through assistant lease: results=%#v truncated=%v err=%v", results, truncated, err)
+	}
+	foundProject := false
+	for _, result := range results {
+		if result.Kind == "PROJECT" && result.Ref == searchProject.Project.Ref && result.ProjectRef == searchProject.Project.Ref {
+			foundProject = true
+		}
+	}
+	if !foundProject {
+		t.Fatalf("assistant search omitted owner-visible project: %#v", results)
+	}
+	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, "wrong-fence", searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant search accepted wrong fence: %v", err)
+	}
+	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration+1, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant search accepted wrong generation: %v", err)
+	}
+	if _, _, err := service.SearchAssistantResources(ctx, runtimeReader, searchLeaseRef, searchFence, searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("assistant search accepted another runtime permission: %v", err)
+	}
 	artifactCatalog, ok := lease["artifacts"].([]map[string]any)
 	if !ok || len(artifactCatalog) != 1 || stringMap(artifactCatalog[0], "ref") != assistantInput.Ref {
 		t.Fatalf("assistant runtime lost soft-deleted organization attachment snapshot: %#v", lease["artifacts"])
@@ -6605,6 +6642,9 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		}})
 	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
 		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
+	}
+	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant search accepted completed lease: %v", err)
 	}
 	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
 	if err != nil {
