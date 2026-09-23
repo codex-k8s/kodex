@@ -3,22 +3,29 @@ package callback
 import (
 	"errors"
 	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 const maximumAssistantDiscoveredSchemas = 4
+const maximumAssistantCatalogAgents = 20
 
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover server-owned context and permitted operation types. Pass operation_types=[] for a compact index, then request up to four exact schemas needed for the current task. An omitted operation_types field keeps the legacy full catalog. Names are display data; use only exact opaque refs in plans.",
+		"description": "Discover server-owned context and permitted operation types. Pass operation_types=[] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target, and do not infer absence until pages are exhausted. Names are display data; use only exact opaque refs in plans.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
+			"agent_query":  stringSchema(0, 80),
+			"agent_offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128},
 		}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "agents"}, map[string]any{
-			"current_project_ref": map[string]any{"type": "string"}, "agents": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+			"current_project_ref": map[string]any{"type": "string"}, "agents": map[string]any{"type": "array", "maxItems": maximumAssistantCatalogAgents, "items": map[string]any{"type": "object"}},
+			"agent_total":       map[string]any{"type": "integer", "minimum": 0},
+			"agent_next_offset": map[string]any{"type": "integer", "minimum": 0},
 			"context":           map[string]any{"type": "object"},
 			"operation_types":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"operation_schemas": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
@@ -47,8 +54,33 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.SystemAssistant || len(arguments) > 1 {
+	if !input.SystemAssistant || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset") {
 		return nil, errors.New("configuration catalog is not available")
+	}
+	agentQuery := ""
+	if raw, supplied := arguments["agent_query"]; supplied {
+		query, ok := raw.(string)
+		if !ok || utf8.RuneCountInString(query) > 80 {
+			return nil, errors.New("configuration catalog agent query is invalid")
+		}
+		agentQuery = strings.ToLower(strings.TrimSpace(query))
+	}
+	agentOffset := 0
+	if raw, supplied := arguments["agent_offset"]; supplied {
+		switch value := raw.(type) {
+		case int:
+			agentOffset = value
+		case float64:
+			if value < 0 || value > 128 || value != float64(int(value)) {
+				return nil, errors.New("configuration catalog agent offset is invalid")
+			}
+			agentOffset = int(value)
+		default:
+			return nil, errors.New("configuration catalog agent offset is invalid")
+		}
+		if agentOffset < 0 || agentOffset > 128 {
+			return nil, errors.New("configuration catalog agent offset is invalid")
+		}
 	}
 	schemas := assistantPlanOperationSchemas(input)
 	operationTypes := assistantOperationTypesFromSchemas(schemas)
@@ -83,8 +115,6 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 			}
 		}
 		schemas = filtered
-	} else if len(arguments) != 0 {
-		return nil, errors.New("configuration catalog selection is invalid")
 	}
 	targets := append([]runtimecontract.RunnerDelegationTarget(nil), input.DelegationTargets...)
 	sort.Slice(targets, func(left, right int) bool {
@@ -93,12 +123,25 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		}
 		return targets[left].Name < targets[right].Name
 	})
-	agents := make([]map[string]string, 0, len(targets))
+	matching := make([]runtimecontract.RunnerDelegationTarget, 0, len(targets))
 	for _, target := range targets {
-		agents = append(agents, map[string]string{
-			"ref": target.Ref, "name": target.Name, "purpose": target.Purpose,
-			"role_description": target.RoleDescription,
-		})
+		if agentQuery != "" && !strings.Contains(strings.ToLower(target.Name+" "+target.Purpose+" "+target.RoleDescription), agentQuery) {
+			continue
+		}
+		matching = append(matching, target)
+	}
+	end := agentOffset + maximumAssistantCatalogAgents
+	if end > len(matching) {
+		end = len(matching)
+	}
+	agents := make([]map[string]string, 0, maximumAssistantCatalogAgents)
+	if agentOffset < len(matching) {
+		for _, target := range matching[agentOffset:end] {
+			agents = append(agents, map[string]string{
+				"ref": target.Ref, "name": target.Name, "purpose": truncateRunes(target.Purpose, 240),
+				"role_description": truncateRunes(target.RoleDescription, 240),
+			})
+		}
 	}
 	context := map[string]any{"route": "", "entity_kind": "", "entity_ref": "", "entity_name": "", "allowed_operations": []string{}}
 	if input.AssistantContext != nil {
@@ -106,13 +149,18 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 			"entity_ref": input.AssistantContext.EntityRef, "entity_name": input.AssistantContext.EntityName,
 			"entity_version": input.AssistantContext.EntityVersion, "allowed_operations": input.AssistantContext.AllowedOperations}
 	}
-	return map[string]any{
+	result := map[string]any{
 		"current_project_ref": input.ProjectRef,
 		"agents":              agents,
+		"agent_total":         len(matching),
 		"context":             context,
 		"operation_types":     operationTypes,
 		"operation_schemas":   schemas,
-	}, nil
+	}
+	if end < len(matching) {
+		result["agent_next_offset"] = end
+	}
+	return result, nil
 }
 
 func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
