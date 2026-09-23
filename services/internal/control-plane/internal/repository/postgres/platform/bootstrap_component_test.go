@@ -6601,6 +6601,18 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if !foundProject {
 		t.Fatalf("assistant search omitted owner-visible project: %#v", results)
 	}
+	searchConnection, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-resource-search-connection"},
+		Payload: command.ConnectionInput{DefinitionKey: "synthetic", Name: "Assistant search integration connection",
+			PublicConfiguration: map[string]any{"journal": "assistant-search"}}})
+	if err != nil || searchConnection.Connection == nil {
+		t.Fatalf("create searchable integration connection: connection=%#v err=%v", searchConnection.Connection, err)
+	}
+	connectionResults, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, searchConnection.Connection.Name)
+	if err != nil || len(connectionResults) != 1 || connectionResults[0].Kind != "INTEGRATION" ||
+		connectionResults[0].Ref != searchConnection.Connection.Ref || connectionResults[0].ProjectRef != "" {
+		t.Fatalf("assistant search lost organization-scoped integration: results=%#v err=%v", connectionResults, err)
+	}
 	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, "wrong-fence", searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("assistant search accepted wrong fence: %v", err)
 	}

@@ -13,14 +13,14 @@ import (
 func assistantResourceSearchTool() map[string]any {
 	return map[string]any{
 		"name":        "find_platform_resources",
-		"description": "Find projects, AI employees, workflows and runs visible to the initiating user across projects. Use exact opaque refs from results. When a result belongs to another project, ask the user to open its route before proposing changes; this tool never changes browser context or grants access.",
+		"description": "Find projects, AI employees, workflows, runs, role images, runtime environments, schedules, integration connections and secret metadata visible to the initiating user. Secret values are never returned. Use exact opaque refs from results. When a result belongs to another project, ask the user to open its route before proposing changes; this tool never changes browser context or grants access.",
 		"inputSchema": objectSchema([]string{"query"}, map[string]any{"query": stringSchema(2, 160)}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "results", "truncated"}, map[string]any{
 			"current_project_ref": map[string]any{"type": "string"},
 			"results": map[string]any{"type": "array", "maxItems": maximumAssistantSearchResults,
 				"items": objectSchema([]string{"kind", "ref", "project_ref", "title", "subtitle", "state", "route", "requires_context_switch"}, map[string]any{
-					"kind": enumSchema("PROJECT", "AGENT", "WORKFLOW", "RUN"), "ref": opaqueRefSchema(),
-					"project_ref": opaqueRefSchema(), "title": stringSchema(0, 160), "subtitle": stringSchema(0, 160),
+					"kind": enumSchema("PROJECT", "AGENT", "WORKFLOW", "RUN", "ROLE_IMAGE", "RUNTIME_ENVIRONMENT", "SCHEDULE", "INTEGRATION", "SECRET"), "ref": opaqueRefSchema(),
+					"project_ref": stringSchema(0, 96), "title": stringSchema(0, 160), "subtitle": stringSchema(0, 160),
 					"state": map[string]any{"type": "string"}, "route": map[string]any{"type": "string"},
 					"requires_context_switch": map[string]any{"type": "boolean"},
 				}),
@@ -54,7 +54,9 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 	}
 	items := make([]map[string]any, 0, len(response.GetResults()))
 	for _, item := range response.GetResults() {
-		if item == nil || !validAssistantResourceRef(item.GetRef()) || !validAssistantResourceRef(item.GetProjectRef()) {
+		if item == nil || !validAssistantResourceRef(item.GetRef()) ||
+			(item.GetKind() != controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_INTEGRATION && !validAssistantResourceRef(item.GetProjectRef())) ||
+			(item.GetKind() == controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_INTEGRATION && item.GetProjectRef() != "") {
 			return nil, errors.New("assistant resource search result is invalid")
 		}
 		kind, route := assistantResourceRoute(item)
@@ -65,7 +67,7 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 			"kind": kind, "ref": item.GetRef(), "project_ref": item.GetProjectRef(),
 			"title": truncateRunes(item.GetTitle(), 160), "subtitle": truncateRunes(item.GetSubtitle(), 160),
 			"state": item.GetState(), "route": route,
-			"requires_context_switch": item.GetProjectRef() != input.ProjectRef,
+			"requires_context_switch": item.GetProjectRef() != "" && item.GetProjectRef() != input.ProjectRef,
 		})
 	}
 	return map[string]any{"current_project_ref": input.ProjectRef, "results": items, "truncated": response.GetTruncated()}, nil
@@ -89,6 +91,19 @@ func assistantResourceRoute(item *controlplanev1.SearchResult) (string, string) 
 		return "WORKFLOW", project + "/workflows/" + url.PathEscape(item.GetRef())
 	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_RUN:
 		return "RUN", project + "/runs/" + url.PathEscape(item.GetRef())
+	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_ROLE_IMAGE:
+		return "ROLE_IMAGE", project + "/role-images/" + url.PathEscape(item.GetRef())
+	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_RUNTIME_ENVIRONMENT:
+		return "RUNTIME_ENVIRONMENT", project + "/environments/" + url.PathEscape(item.GetRef())
+	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_SCHEDULE:
+		return "SCHEDULE", project + "/automations"
+	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_SECRET:
+		return "SECRET", project + "/secrets"
+	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_INTEGRATION:
+		if item.GetProjectRef() != "" {
+			return "", ""
+		}
+		return "INTEGRATION", "/integrations"
 	default:
 		return "", ""
 	}

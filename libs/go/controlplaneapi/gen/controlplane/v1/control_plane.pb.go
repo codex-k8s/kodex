@@ -2094,11 +2094,16 @@ func (AssistantConversationState) EnumDescriptor() ([]byte, []int) {
 type SearchResultKind int32
 
 const (
-	SearchResultKind_SEARCH_RESULT_KIND_UNSPECIFIED SearchResultKind = 0
-	SearchResultKind_SEARCH_RESULT_KIND_PROJECT     SearchResultKind = 1
-	SearchResultKind_SEARCH_RESULT_KIND_AGENT       SearchResultKind = 2
-	SearchResultKind_SEARCH_RESULT_KIND_WORKFLOW    SearchResultKind = 3
-	SearchResultKind_SEARCH_RESULT_KIND_RUN         SearchResultKind = 4
+	SearchResultKind_SEARCH_RESULT_KIND_UNSPECIFIED         SearchResultKind = 0
+	SearchResultKind_SEARCH_RESULT_KIND_PROJECT             SearchResultKind = 1
+	SearchResultKind_SEARCH_RESULT_KIND_AGENT               SearchResultKind = 2
+	SearchResultKind_SEARCH_RESULT_KIND_WORKFLOW            SearchResultKind = 3
+	SearchResultKind_SEARCH_RESULT_KIND_RUN                 SearchResultKind = 4
+	SearchResultKind_SEARCH_RESULT_KIND_ROLE_IMAGE          SearchResultKind = 5
+	SearchResultKind_SEARCH_RESULT_KIND_RUNTIME_ENVIRONMENT SearchResultKind = 6
+	SearchResultKind_SEARCH_RESULT_KIND_SCHEDULE            SearchResultKind = 7
+	SearchResultKind_SEARCH_RESULT_KIND_INTEGRATION         SearchResultKind = 8
+	SearchResultKind_SEARCH_RESULT_KIND_SECRET              SearchResultKind = 9
 )
 
 // Enum value maps for SearchResultKind.
@@ -2109,13 +2114,23 @@ var (
 		2: "SEARCH_RESULT_KIND_AGENT",
 		3: "SEARCH_RESULT_KIND_WORKFLOW",
 		4: "SEARCH_RESULT_KIND_RUN",
+		5: "SEARCH_RESULT_KIND_ROLE_IMAGE",
+		6: "SEARCH_RESULT_KIND_RUNTIME_ENVIRONMENT",
+		7: "SEARCH_RESULT_KIND_SCHEDULE",
+		8: "SEARCH_RESULT_KIND_INTEGRATION",
+		9: "SEARCH_RESULT_KIND_SECRET",
 	}
 	SearchResultKind_value = map[string]int32{
-		"SEARCH_RESULT_KIND_UNSPECIFIED": 0,
-		"SEARCH_RESULT_KIND_PROJECT":     1,
-		"SEARCH_RESULT_KIND_AGENT":       2,
-		"SEARCH_RESULT_KIND_WORKFLOW":    3,
-		"SEARCH_RESULT_KIND_RUN":         4,
+		"SEARCH_RESULT_KIND_UNSPECIFIED":         0,
+		"SEARCH_RESULT_KIND_PROJECT":             1,
+		"SEARCH_RESULT_KIND_AGENT":               2,
+		"SEARCH_RESULT_KIND_WORKFLOW":            3,
+		"SEARCH_RESULT_KIND_RUN":                 4,
+		"SEARCH_RESULT_KIND_ROLE_IMAGE":          5,
+		"SEARCH_RESULT_KIND_RUNTIME_ENVIRONMENT": 6,
+		"SEARCH_RESULT_KIND_SCHEDULE":            7,
+		"SEARCH_RESULT_KIND_INTEGRATION":         8,
+		"SEARCH_RESULT_KIND_SECRET":              9,
 	}
 )
 
@@ -80110,13 +80125,18 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"(ASSISTANT_CONVERSATION_STATE_UNSPECIFIED\x10\x00\x12'\n" +
 	"#ASSISTANT_CONVERSATION_STATE_ACTIVE\x10\x01\x12'\n" +
 	"#ASSISTANT_CONVERSATION_STATE_CLOSED\x10\x02\x12)\n" +
-	"%ASSISTANT_CONVERSATION_STATE_ARCHIVED\x10\x03*\xb1\x01\n" +
+	"%ASSISTANT_CONVERSATION_STATE_ARCHIVED\x10\x03*\xe4\x02\n" +
 	"\x10SearchResultKind\x12\"\n" +
 	"\x1eSEARCH_RESULT_KIND_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aSEARCH_RESULT_KIND_PROJECT\x10\x01\x12\x1c\n" +
 	"\x18SEARCH_RESULT_KIND_AGENT\x10\x02\x12\x1f\n" +
 	"\x1bSEARCH_RESULT_KIND_WORKFLOW\x10\x03\x12\x1a\n" +
-	"\x16SEARCH_RESULT_KIND_RUN\x10\x04*\xed\x02\n" +
+	"\x16SEARCH_RESULT_KIND_RUN\x10\x04\x12!\n" +
+	"\x1dSEARCH_RESULT_KIND_ROLE_IMAGE\x10\x05\x12*\n" +
+	"&SEARCH_RESULT_KIND_RUNTIME_ENVIRONMENT\x10\x06\x12\x1f\n" +
+	"\x1bSEARCH_RESULT_KIND_SCHEDULE\x10\a\x12\"\n" +
+	"\x1eSEARCH_RESULT_KIND_INTEGRATION\x10\b\x12\x1d\n" +
+	"\x19SEARCH_RESULT_KIND_SECRET\x10\t*\xed\x02\n" +
 	"\vVFSNodeKind\x12\x1d\n" +
 	"\x19VFS_NODE_KIND_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17VFS_NODE_KIND_DIRECTORY\x10\x01\x12\x19\n" +

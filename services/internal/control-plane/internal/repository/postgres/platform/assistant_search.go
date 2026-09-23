@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,6 +21,9 @@ const maximumAssistantSearchResults = 10
 
 //go:embed sql/assistant_search_resolve_lease.sql
 var queryAssistantSearchResolveLease string
+
+//go:embed sql/assistant_search_extra.sql
+var queryAssistantSearchExtra string
 
 func (repository *Repository) SearchAssistantResources(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, search string) ([]entity.SearchResult, bool, error) {
 	current, err := repository.resolveScope(ctx, principal)
@@ -56,41 +60,58 @@ func (repository *Repository) SearchAssistantResources(ctx context.Context, prin
 	if err != nil {
 		return nil, false, err
 	}
-	rows, err := tx.Query(ctx, queryQueriesSearchSelectEligibleResources, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "query": search, "project_ref": "",
-	})
-	if err != nil {
-		return nil, false, errs.ErrUnavailable
+	type rankedResult struct {
+		entity.SearchResult
+		relevance int
+		orderTime time.Time
 	}
-	candidates := make([]entity.SearchResult, 0, maximumAssistantSearchCandidates)
-	for rows.Next() {
-		if len(candidates) == maximumAssistantSearchCandidates {
-			rows.Close()
-			return nil, false, errs.ErrInvalid
+	candidates := make([]rankedResult, 0, maximumAssistantSearchCandidates)
+	for _, statement := range []string{queryQueriesSearchSelectEligibleResources, queryAssistantSearchExtra} {
+		rows, queryErr := tx.Query(ctx, statement, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "query": search, "project_ref": "",
+		})
+		if queryErr != nil {
+			return nil, false, errs.ErrUnavailable
 		}
-		var item entity.SearchResult
-		var relevance int
-		var orderTime time.Time
-		if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle,
-			&item.State, &item.UpdatedAt, &relevance, &orderTime); err != nil {
+		for rows.Next() {
+			if len(candidates) == maximumAssistantSearchCandidates {
+				rows.Close()
+				return nil, false, errs.ErrInvalid
+			}
+			var item rankedResult
+			if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle,
+				&item.State, &item.UpdatedAt, &item.relevance, &item.orderTime); err != nil {
+				rows.Close()
+				return nil, false, errs.ErrUnavailable
+			}
+			candidates = append(candidates, item)
+		}
+		if rows.Err() != nil {
 			rows.Close()
 			return nil, false, errs.ErrUnavailable
 		}
-		candidates = append(candidates, item)
-	}
-	if rows.Err() != nil {
 		rows.Close()
-		return nil, false, errs.ErrUnavailable
 	}
-	rows.Close()
+	sort.Slice(candidates, func(left, right int) bool {
+		if candidates[left].relevance != candidates[right].relevance {
+			return candidates[left].relevance < candidates[right].relevance
+		}
+		if !candidates[left].orderTime.Equal(candidates[right].orderTime) {
+			return candidates[left].orderTime.After(candidates[right].orderTime)
+		}
+		return candidates[left].Kind+"\x00"+candidates[left].Ref < candidates[right].Kind+"\x00"+candidates[right].Ref
+	})
 	result := make([]entity.SearchResult, 0, maximumAssistantSearchResults)
 	truncated := false
+	evaluatedAt := time.Now().UTC()
 	for _, item := range candidates {
-		if item.Kind != "PROJECT" && item.Kind != "AGENT" && item.Kind != "WORKFLOW" && item.Kind != "RUN" {
+		if item.Kind != "PROJECT" && item.Kind != "AGENT" && item.Kind != "WORKFLOW" && item.Kind != "RUN" &&
+			item.Kind != "ROLE_IMAGE" && item.Kind != "RUNTIME_ENVIRONMENT" && item.Kind != "SCHEDULE" &&
+			item.Kind != "INTEGRATION" && item.Kind != "SECRET" {
 			continue
 		}
 		visible, err := repository.resourceVisible(ctx, tx, current, subject.AccessSubject, bindings,
-			item.Kind, item.Ref, item.ProjectRef, time.Now().UTC())
+			item.Kind, item.Ref, item.ProjectRef, evaluatedAt)
 		if err != nil {
 			return nil, false, err
 		}
@@ -101,12 +122,12 @@ func (repository *Repository) SearchAssistantResources(ctx context.Context, prin
 			truncated = true
 			continue
 		}
-		item.Title = strings.TrimSpace(item.Title)
-		item.Subtitle = strings.TrimSpace(item.Subtitle)
+		item.SearchResult.Title = strings.TrimSpace(item.Title)
+		item.SearchResult.Subtitle = strings.TrimSpace(item.Subtitle)
 		if len([]rune(item.Subtitle)) > 160 {
-			item.Subtitle = string([]rune(item.Subtitle)[:160])
+			item.SearchResult.Subtitle = string([]rune(item.Subtitle)[:160])
 		}
-		result = append(result, item)
+		result = append(result, item.SearchResult)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, false, errs.ErrUnavailable
