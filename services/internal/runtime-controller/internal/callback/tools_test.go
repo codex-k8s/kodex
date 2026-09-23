@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -251,6 +252,57 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	restricted.AssistantContext = &runtimecontract.RunnerAssistantContext{AllowedOperations: []string{"CREATE_AGENT"}}
 	if _, err := configurationCatalog(restricted, map[string]any{"operation_types": []any{"CREATE_PROJECT"}}); err == nil {
 		t.Fatal("configuration catalog exposed an operation outside the current context")
+	}
+}
+
+func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current"}
+	for index := range 45 {
+		input.DelegationTargets = append(input.DelegationTargets, runtimecontract.RunnerDelegationTarget{
+			Ref: fmt.Sprintf("agt_%08d", index), Name: fmt.Sprintf("Сотрудник %03d", index),
+			Purpose: strings.Repeat("З", 1000), RoleDescription: strings.Repeat("Р", 1000),
+		})
+	}
+	compact := map[string]any{"operation_types": []any{}}
+	first, err := configurationCatalog(input, compact)
+	if err != nil {
+		t.Fatalf("first catalog page: %v", err)
+	}
+	firstPage := first.(map[string]any)
+	if got := len(firstPage["agents"].([]map[string]string)); got != maximumAssistantCatalogAgents ||
+		firstPage["agent_total"] != 45 || firstPage["agent_next_offset"] != 20 ||
+		len(firstPage["operation_schemas"].([]map[string]any)) != 0 {
+		t.Fatalf("compact catalog is not bounded: count=%d total=%v next=%v", got, firstPage["agent_total"], firstPage["agent_next_offset"])
+	}
+	if len([]rune(firstPage["agents"].([]map[string]string)[0]["purpose"])) != 240 ||
+		len([]rune(firstPage["agents"].([]map[string]string)[0]["role_description"])) != 240 {
+		t.Fatal("catalog exposed unbounded agent descriptions")
+	}
+	second, err := configurationCatalog(input, map[string]any{"operation_types": []any{}, "agent_offset": float64(20)})
+	if err != nil || second.(map[string]any)["agents"].([]map[string]string)[0]["ref"] != "agt_00000020" ||
+		second.(map[string]any)["agent_next_offset"] != 40 {
+		t.Fatalf("second catalog page is invalid: %v", err)
+	}
+	last, err := configurationCatalog(input, map[string]any{"operation_types": []any{}, "agent_offset": 40})
+	if err != nil || len(last.(map[string]any)["agents"].([]map[string]string)) != 5 || last.(map[string]any)["agent_next_offset"] != nil {
+		t.Fatalf("last catalog page is invalid: %v", err)
+	}
+	filtered, err := configurationCatalog(input, map[string]any{"operation_types": []any{}, "agent_query": "СОТРУДНИК 042"})
+	if err != nil || filtered.(map[string]any)["agent_total"] != 1 ||
+		filtered.(map[string]any)["agents"].([]map[string]string)[0]["ref"] != "agt_00000042" {
+		t.Fatalf("filtered catalog page is invalid: %v", err)
+	}
+	for _, invalid := range []map[string]any{
+		{"operation_types": []any{}, "agent_offset": float64(1.5)},
+		{"operation_types": []any{}, "agent_offset": 129},
+		{"operation_types": []any{}, "agent_offset": -1},
+		{"operation_types": []any{}, "agent_offset": "20"},
+		{"operation_types": []any{}, "agent_query": strings.Repeat("я", 81)},
+	} {
+		if _, err := configurationCatalog(input, invalid); err == nil {
+			t.Fatalf("catalog accepted invalid pagination: %#v", invalid)
+		}
 	}
 }
 
