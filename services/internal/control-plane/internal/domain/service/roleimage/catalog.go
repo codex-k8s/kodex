@@ -71,6 +71,17 @@ func (catalog *Catalog) List() []Environment {
 	return result
 }
 
+// RecommendedSelection возвращает безопасный выбор, проверенный тем же каталогом,
+// что используется для ручного создания образа.
+func (catalog *Catalog) RecommendedSelection() (entity.RoleEnvironmentSelection, error) {
+	for _, current := range catalog.ordered {
+		if current.Available && current.Recommended {
+			return entity.RoleEnvironmentSelection{EnvironmentKey: current.Key}, nil
+		}
+	}
+	return entity.RoleEnvironmentSelection{}, errs.ErrUnavailable
+}
+
 // Bootstrap recipe имеет отдельный ключ; копия выбирает среду по точному образу,
 // не добавляя к исходному образу пакеты либо инструменты каталога.
 func (catalog *Catalog) CopyBootstrapSelection(input entity.RoleImageRecipeInput) (entity.RoleEnvironmentSelection, error) {

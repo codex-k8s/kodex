@@ -183,6 +183,52 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 	}
 }
 
+func TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields(t *testing.T) {
+	t.Parallel()
+	parameters := map[string]any{"projectRef": "prj_example", "agentRef": "agt_example", "agentVersion": int64(3),
+		"name": "Developer image", "environmentKey": "standard"}
+	operation := entity.AssistantPlanOperation{Type: "CREATE_ROLE_IMAGE_RECIPE", Key: "image-1", Title: "Developer image",
+		Summary: "Create image", Action: "CREATE", Target: entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Name: "Developer image"},
+		Parameters: parameters, Before: map[string]any{}, After: cloneAssistantFields(parameters), Selected: true}
+	normalized, err := normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := bindAssistantOperationProject(normalized, "prj_example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(bound)
+	if err != nil || mapped.Kind != command.CreateAssistantRoleImageRecipe {
+		t.Fatalf("map role image: kind=%q err=%v", mapped.Kind, err)
+	}
+	payload := mapped.Payload.(command.AssistantRoleImageRecipeInput)
+	if payload.AgentRef != "agt_example" || payload.AgentVersion != 3 || payload.Environment.EnvironmentKey != "standard" {
+		t.Fatalf("role image lost agent snapshot: %#v", payload)
+	}
+	edited := operation
+	edited.Parameters = cloneAssistantFields(parameters)
+	edited.Parameters["name"] = "Analyst image"
+	rehydrated, err := rehydrateEditedAssistantRoleImage(operation, edited)
+	if err != nil || rehydrated.Target.Name != "Analyst image" || assistantString(rehydrated.After, "name") != "Analyst image" {
+		t.Fatalf("role image edit lost trusted target: operation=%#v err=%v", rehydrated, err)
+	}
+	for _, field := range []string{"agentRef", "agentVersion", "projectRef"} {
+		forged := edited
+		forged.Parameters = cloneAssistantFields(edited.Parameters)
+		forged.Parameters[field] = "forged"
+		if _, err := rehydrateEditedAssistantRoleImage(operation, forged); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("role image edit changed %s: %v", field, err)
+		}
+	}
+	forged := operation
+	forged.Input = cloneAssistantFields(parameters)
+	forged.Input["secretValue"] = "must-not-enter-plan"
+	if _, err := assistantOperationCommand(forged); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("role image accepted secret field: %v", err)
+	}
+}
+
 func TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities(t *testing.T) {
 	t.Parallel()
 	input := map[string]any{

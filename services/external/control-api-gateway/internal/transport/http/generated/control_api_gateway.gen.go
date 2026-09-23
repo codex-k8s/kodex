@@ -595,6 +595,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCREATEAGENT                   AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
 	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION   AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                 AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE         AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
 	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
 	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
 	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
@@ -620,6 +621,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT:
 		return true
@@ -745,6 +748,7 @@ const (
 	AssistantPlanOperationTypeCREATEAGENT                   AssistantPlanOperationType = "CREATE_AGENT"
 	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION   AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeCREATEPROJECT                 AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE         AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
 	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
 	AssistantPlanOperationTypeCREATESCHEDULE                AssistantPlanOperationType = "CREATE_SCHEDULE"
 	AssistantPlanOperationTypeCREATEWORKFLOW                AssistantPlanOperationType = "CREATE_WORKFLOW"
@@ -770,6 +774,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeCREATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeCREATEROLEIMAGERECIPE:
 		return true
 	case AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT:
 		return true

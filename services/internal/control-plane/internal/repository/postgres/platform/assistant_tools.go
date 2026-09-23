@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -60,7 +61,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		if !assistantOperationMatchesContext(contextKind, contextRef, operation) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
-		operation, err = repository.hydrateAssistantOperation(ctx, tx, machineScope, projectRef, operation)
+		operation, err = repository.hydrateAssistantOperation(ctx, tx, actorScope, projectRef, operation)
 		if err != nil {
 			return commandOutcome{}, err
 		}
@@ -136,7 +137,7 @@ func assistantOperationType(value string) bool {
 	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
-		"CREATE_RUNTIME_ENVIRONMENT_DRAFT":
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
 		return true
 	default:
 		return false
@@ -153,7 +154,7 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 func (repository *Repository) hydrateAssistantOperation(
 	ctx context.Context,
 	tx pgx.Tx,
-	machineScope scope,
+	actorScope scope,
 	projectRef string,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
@@ -162,6 +163,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Parameters == nil || len(operation.Parameters) > 100 {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if operation.Type == "CREATE_ROLE_IMAGE_RECIPE" {
+		return repository.hydrateAssistantRoleImage(ctx, tx, actorScope, projectRef, operation)
 	}
 
 	if targetKind, targetName, ok := assistantCreateTarget(operation.Type, operation.Parameters); ok {
@@ -176,7 +180,7 @@ func (repository *Repository) hydrateAssistantOperation(
 		return operation, nil
 	}
 	if operation.Type == "UPDATE_AGENT" {
-		return repository.hydrateAssistantAgentOperation(ctx, tx, machineScope, projectRef, operation)
+		return repository.hydrateAssistantAgentOperation(ctx, tx, actorScope, projectRef, operation)
 	}
 	if operation.Type != "UPDATE_PROJECT" {
 		return operation, nil
@@ -192,13 +196,71 @@ func (repository *Repository) hydrateAssistantOperation(
 	var name, purpose, language string
 	var version int64
 	if err := tx.QueryRow(ctx, queryConfigurationHydrateassistantoperationSelectProject,
-		machineScope.organizationID, projectRef,
+		actorScope.organizationID, projectRef,
 	).Scan(&name, &purpose, &language, &version); errors.Is(err, pgx.ErrNoRows) {
 		return entity.AssistantPlanOperation{}, errs.ErrNotFound
 	} else if err != nil {
 		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
 	}
 	return hydrateAssistantProjectOperation(projectRef, name, purpose, language, version, operation)
+}
+
+func (repository *Repository) hydrateAssistantRoleImage(
+	ctx context.Context, tx pgx.Tx, actorScope scope, projectRef string,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if projectRef == "" || !onlyAssistantFields(operation.Parameters, "projectRef", "agentRef", "name", "environmentKey") {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	requestedProject := assistantString(operation.Parameters, "projectRef")
+	if requestedProject != "" && requestedProject != "current" && requestedProject != projectRef {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	agentRef, name := assistantString(operation.Parameters, "agentRef"), assistantString(operation.Parameters, "name")
+	if agentRef == "" || name == "" {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	_, target, err := repository.resolveCommandTarget(ctx, tx, actorScope, "agent.view", "AGENT", agentRef, projectRef)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	if err := repository.requireAccess(ctx, tx, actorScope, "agent.view", target); err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	var roleRef string
+	var agentVersion int64
+	if err := tx.QueryRow(ctx, queryConfigurationAssistantRoleImageAgent, actorScope.organizationID, projectRef, agentRef).Scan(&roleRef, &agentVersion); errors.Is(err, pgx.ErrNoRows) {
+		return entity.AssistantPlanOperation{}, errs.ErrNotFound
+	} else if err != nil {
+		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
+	}
+	selection := entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Parameters, "environmentKey")}
+	if selection.EnvironmentKey == "" {
+		if repository.roleImageRecommendedSelection == nil {
+			return entity.AssistantPlanOperation{}, errs.ErrUnavailable
+		}
+		var err error
+		selection, err = repository.roleImageRecommendedSelection()
+		if err != nil {
+			return entity.AssistantPlanOperation{}, err
+		}
+	}
+	if repository.roleImageCatalogResolver == nil {
+		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
+	}
+	recipe, err := repository.roleImageCatalogResolver(selection)
+	if err != nil || roleimageservice.ValidateManagedRecipe(projectRef, roleRef, name, recipe) != nil {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	parameters := map[string]any{"projectRef": projectRef, "agentRef": agentRef, "agentVersion": agentVersion,
+		"name": name, "environmentKey": selection.EnvironmentKey}
+	operation.Parameters = parameters
+	operation.Action = "CREATE"
+	operation.Target = entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Name: name}
+	operation.Before = map[string]any{}
+	operation.After = cloneAssistantFields(parameters)
+	operation.Selected = true
+	return operation, nil
 }
 
 func (repository *Repository) hydrateAssistantAgentOperation(
@@ -335,6 +397,8 @@ func assistantCreateTarget(operationType string, parameters map[string]any) (str
 		kind = "SCHEDULE"
 	case "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
 		kind = "RUNTIME_ENVIRONMENT_DRAFT"
+	case "CREATE_ROLE_IMAGE_RECIPE":
+		kind = "ROLE_IMAGE_RECIPE"
 	default:
 		return "", "", false
 	}
@@ -437,7 +501,7 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 		return operation, nil
 	}
 	switch operation.Type {
-	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN", "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
+	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
 	default:
 		return operation, nil
 	}
@@ -529,6 +593,24 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 				Name: name, Description: description, ImageArtifactRef: imageArtifactRef,
 			},
 		}
+	case "CREATE_ROLE_IMAGE_RECIPE":
+		if !onlyAssistantFields(operation.Input, "projectRef", "agentRef", "name", "environmentKey", "agentVersion") ||
+			!hasAssistantFields(operation.Input, "projectRef", "agentRef", "name", "environmentKey", "agentVersion") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		version, versionOK := assistantInt64(operation.Input, "agentVersion")
+		payload := command.AssistantRoleImageRecipeInput{
+			ProjectRef:   assistantString(operation.Input, "projectRef"),
+			AgentRef:     assistantString(operation.Input, "agentRef"),
+			Name:         assistantString(operation.Input, "name"),
+			AgentVersion: version,
+			Environment:  entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey")},
+		}
+		if !versionOK || version < 1 || payload.ProjectRef == "" || payload.AgentRef == "" ||
+			payload.Name == "" || len(payload.Name) > 160 || payload.Environment.EnvironmentKey == "" || len(payload.Environment.EnvironmentKey) > 96 {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.CreateAssistantRoleImageRecipe, payload
 	case "UPDATE_AGENT":
 		if !onlyAssistantFields(operation.Input, "agentRef", "name", "purpose", "roleDescription", "avatarUrl", "expectedVersion") ||
 			!hasAssistantFields(operation.Input, "agentRef", "name", "purpose", "roleDescription", "avatarUrl", "expectedVersion") {

@@ -21,6 +21,12 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.CreateAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		return repository.authorizeAssistantRoleImage(ctx, tx, current, payload)
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
 		_, ok := input.Payload.(command.ProjectLifecycleInput)
 		if !ok {
