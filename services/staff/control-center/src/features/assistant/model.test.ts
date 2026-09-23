@@ -152,6 +152,44 @@ describe("assistant plan editor model", () => {
     expect(changed?.parameters.secretValue).toBeUndefined();
   });
 
+  it("показывает рецепт образа как форму, сохраняя привязку к сотруднику", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CREATE_ROLE_IMAGE_RECIPE",
+        target: { kind: "ROLE_IMAGE_RECIPE", name: "Образ разработчика" },
+        parameters: {
+          projectRef: "prj_market",
+          agentRef: "agt_developer",
+          agentVersion: 7,
+          name: "Образ разработчика",
+          environmentKey: "standard",
+        },
+        after: {
+          projectRef: "prj_market",
+          agentRef: "agt_developer",
+          agentVersion: 7,
+          name: "Образ разработчика",
+          environmentKey: "standard",
+        },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("CREATE_ROLE_IMAGE_RECIPE");
+
+    updateOperationParameter(first, "name", "Образ Marketplace");
+    updateOperationParameter(first, "environmentKey", "documents");
+
+    const changed = operationInputs(editable)[0];
+    expect(changed?.target.name).toBe("Образ Marketplace");
+    expect(changed?.parameters).toEqual(changed?.after);
+    expect(changed?.parameters.agentRef).toBe("agt_developer");
+    expect(changed?.parameters.agentVersion).toBe(7);
+    expect(changed?.parameters.environmentKey).toBe("documents");
+  });
+
   it("создаёт независимый draft из Vue reactive proxy", () => {
     const source = reactive(operation());
 

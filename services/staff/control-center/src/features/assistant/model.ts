@@ -30,7 +30,8 @@ export type FriendlyPlanOperationType =
   | "UPDATE_PROJECT"
   | "CREATE_AGENT"
   | "UPDATE_AGENT"
-  | "CREATE_RUNTIME_ENVIRONMENT_DRAFT";
+  | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+  | "CREATE_ROLE_IMAGE_RECIPE";
 
 export function friendlyPlanOperationType(
   operation: EditablePlanOperation,
@@ -40,14 +41,18 @@ export function friendlyPlanOperationType(
     operation.value.type !== "UPDATE_PROJECT" &&
     operation.value.type !== "CREATE_AGENT" &&
     operation.value.type !== "UPDATE_AGENT" &&
-    operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+    operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
+    operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE"
   )
     return undefined;
-  const expectedKind = operation.value.type.endsWith("PROJECT")
-    ? "PROJECT"
-    : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-      ? "RUNTIME_ENVIRONMENT_DRAFT"
-      : "AGENT";
+  const expectedKind =
+    operation.value.type === "CREATE_ROLE_IMAGE_RECIPE"
+      ? "ROLE_IMAGE_RECIPE"
+      : operation.value.type.endsWith("PROJECT")
+        ? "PROJECT"
+        : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+          ? "RUNTIME_ENVIRONMENT_DRAFT"
+          : "AGENT";
   const expectedAction = operation.value.type.startsWith("CREATE_")
     ? "CREATE"
     : "UPDATE";

@@ -3008,6 +3008,15 @@ const ru = {
       environmentSelectedImage: "Выбранный артефакт образа",
       environmentDraftNextSteps:
         "Это только черновик. Для рабочего окружения выберите проверенный образ, дополните параметры и секретные привязки в защищённой форме, затем проверьте и опубликуйте его.",
+      roleImageAgent: "Образ для сотрудника",
+      roleImageAgentUnavailable: "Сотрудник не найден в доступном каталоге",
+      roleImageAgentFixed:
+        "Если нужен другой сотрудник, попросите помощника переделать план. Здесь привязка не меняется.",
+      roleImageEnvironment: "Тип рабочего окружения",
+      roleImageCatalogUnavailable:
+        "Не удалось загрузить каталог сотрудников и окружений. Обновите страницу и проверьте план снова.",
+      roleImageNextSteps:
+        "После подтверждения платформа создаст рецепт и поставит первую сборку в очередь. Образ станет доступен сотруднику только после успешной проверки и публикации.",
       transitionDetails: "Технические детали изменения",
       afterDetails: "Планируемое состояние",
       capabilities: {
@@ -6136,6 +6145,15 @@ const en = {
       environmentSelectedImage: "Selected image artifact",
       environmentDraftNextSteps:
         "This creates only a draft. To make it runnable, select a verified image, complete its settings and secret bindings in the protected form, then validate and publish it.",
+      roleImageAgent: "Image for employee",
+      roleImageAgentUnavailable: "Employee not found in the accessible catalog",
+      roleImageAgentFixed:
+        "Ask the assistant to revise the plan if you need another employee. This binding cannot be changed here.",
+      roleImageEnvironment: "Work environment type",
+      roleImageCatalogUnavailable:
+        "Could not load the employee and environment catalog. Reload the page and validate the plan again.",
+      roleImageNextSteps:
+        "After confirmation, the platform creates a recipe and queues its first build. The employee can use the image only after successful verification and promotion.",
       transitionDetails: "Technical change details",
       afterDetails: "Planned state",
       capabilities: {

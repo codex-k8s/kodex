@@ -26,6 +26,15 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("assistant.planEditor.environmentDraftNextSteps");
   });
 
+  it("показывает сотрудника и каталог окружений для рецепта образа", () => {
+    expect(source).toContain("CREATE_ROLE_IMAGE_RECIPE");
+    expect(source).toContain("roleImageAgentNames[");
+    expect(source).toMatch(/fieldValue\(operation,\s*"agentRef"\)/);
+    expect(source).toContain("loadRoleEnvironmentCatalog");
+    expect(source).toContain("assistant.planEditor.roleImageAgentFixed");
+    expect(source).toContain("assistant.planEditor.roleImageNextSteps");
+  });
+
   it("показывает тип, действие и authority результата без скрытых изменений", () => {
     expect(source).toContain("{{ operation.value.type }}");
     expect(source).toContain("{{ operation.value.action }}");

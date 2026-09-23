@@ -12,6 +12,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
+import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
   editableOperations,
@@ -27,7 +28,10 @@ import type {
   AssistantPlan,
   AssistantPlanOperationInput,
   AssistantPlanReceipt,
+  RoleEnvironment,
 } from "@/shared/api/generated/openapi/types.gen";
+import { listAgents } from "@/shared/api/generated/openapi/sdk.gen";
+import { unwrap } from "@/shared/api/problem";
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
@@ -54,6 +58,9 @@ const runtime = useRuntimeStore();
 const summary = ref("");
 const operations = ref<EditablePlanOperation[]>([]);
 const selectedImages = ref<Record<string, AsyncEntityOption>>({});
+const roleImageAgentNames = ref<Record<string, string>>({});
+const roleImageEnvironments = ref<RoleEnvironment[]>([]);
+const roleImageCatalogProblem = ref(false);
 const inputProblem = ref("");
 type EditorTarget =
   | { kind: "SUMMARY" }
@@ -70,6 +77,57 @@ function resetDraft(): void {
 }
 
 watch(() => props.plan, resetDraft, { immediate: true });
+
+watch(
+  () => props.plan,
+  (plan, _previous, onCleanup) => {
+    roleImageAgentNames.value = {};
+    roleImageEnvironments.value = [];
+    roleImageCatalogProblem.value = false;
+    const projectRef = plan.projectRef;
+    if (
+      !projectRef ||
+      !plan.operations.some(
+        (operation) => operation.type === "CREATE_ROLE_IMAGE_RECIPE",
+      )
+    )
+      return;
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    void (async () => {
+      try {
+        const names: Record<string, string> = {};
+        const visitedTokens = new Set<string>();
+        let pageToken: string | undefined;
+        do {
+          const page = (
+            await unwrap(
+              listAgents({
+                path: { projectRef },
+                query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+                signal: controller.signal,
+              }),
+            )
+          ).data;
+          for (const agent of page.items) names[agent.ref] = agent.name;
+          pageToken = page.nextPageToken;
+          if (pageToken && visitedTokens.has(pageToken))
+            throw new Error("Agent catalog returned a repeated page token");
+          if (pageToken) visitedTokens.add(pageToken);
+        } while (pageToken);
+        const environments = await loadRoleEnvironmentCatalog(
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        roleImageAgentNames.value = names;
+        roleImageEnvironments.value = environments;
+      } catch {
+        if (!controller.signal.aborted) roleImageCatalogProblem.value = true;
+      }
+    })();
+  },
+  { immediate: true },
+);
 
 const selectedCount = computed(
   () => operations.value.filter((operation) => operation.value.selected).length,
@@ -534,7 +592,10 @@ function snapshot(value: string): Record<string, unknown> {
               />
             </label>
             <label
-              v-if="operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT'"
+              v-if="
+                operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
+                operation.value.target.kind !== 'ROLE_IMAGE_RECIPE'
+              "
               class="field"
             >
               <span>{{ $t("assistant.planEditor.entityPurpose") }}</span>
@@ -600,6 +661,69 @@ function snapshot(value: string): Record<string, unknown> {
               </label>
               <p class="assistant-plan-friendly__hint">
                 {{ $t("assistant.planEditor.environmentDraftNextSteps") }}
+              </p>
+            </template>
+            <template
+              v-else-if="operation.value.target.kind === 'ROLE_IMAGE_RECIPE'"
+            >
+              <div class="field">
+                <span>{{ $t("assistant.planEditor.roleImageAgent") }}</span>
+                <strong>{{
+                  roleImageAgentNames[fieldValue(operation, "agentRef")] ||
+                  $t("assistant.planEditor.roleImageAgentUnavailable")
+                }}</strong>
+                <small>{{
+                  $t("assistant.planEditor.roleImageAgentFixed")
+                }}</small>
+              </div>
+              <label class="field">
+                <span>{{
+                  $t("assistant.planEditor.roleImageEnvironment")
+                }}</span>
+                <select
+                  :value="fieldValue(operation, 'environmentKey')"
+                  :disabled="
+                    !editable ||
+                    roleImageCatalogProblem ||
+                    !roleImageEnvironments.length
+                  "
+                  @change="setField(operation, 'environmentKey', $event)"
+                >
+                  <option
+                    v-if="
+                      !roleImageEnvironments.some(
+                        (item) =>
+                          item.key === fieldValue(operation, 'environmentKey'),
+                      )
+                    "
+                    :value="fieldValue(operation, 'environmentKey')"
+                  >
+                    {{ fieldValue(operation, "environmentKey") }}
+                  </option>
+                  <option
+                    v-for="environment in roleImageEnvironments"
+                    :key="environment.key"
+                    :value="environment.key"
+                    :disabled="!environment.available"
+                  >
+                    {{ $t(environment.nameMessageKey) }}
+                    {{
+                      environment.recommended
+                        ? `· ${$t("roleEnvironments.recommended")}`
+                        : ""
+                    }}
+                  </option>
+                </select>
+              </label>
+              <p
+                v-if="roleImageCatalogProblem"
+                class="field-error"
+                role="alert"
+              >
+                {{ $t("assistant.planEditor.roleImageCatalogUnavailable") }}
+              </p>
+              <p class="assistant-plan-friendly__hint">
+                {{ $t("assistant.planEditor.roleImageNextSteps") }}
               </p>
             </template>
             <template v-else>
