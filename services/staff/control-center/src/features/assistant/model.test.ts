@@ -6,6 +6,7 @@ import {
   assistantEffectiveRuntimeState,
   assistantEnvironmentDraftTarget,
   assistantIntegrationConnectionTarget,
+  assistantLaunchedRunTarget,
   assistantRequiresProviderAccount,
   assistantRoleImageBuildTarget,
   editableOperations,
@@ -198,6 +199,77 @@ describe("assistant role image build target", () => {
           receipt: { ...receipt, planRevision: 1 },
         },
         "op_connection",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("показывает запуск только по точной квитанции применённого плана", () => {
+    const runOperation: AssistantPlanOperation = {
+      ...operation(),
+      ref: "op_run",
+      type: "LAUNCH_RUN",
+      action: "EXECUTE",
+      target: { kind: "WORKFLOW", name: "Еженедельный отчёт" },
+    };
+    const runPlan: AssistantPlan = {
+      ...plan,
+      operations: [runOperation],
+      receipt: {
+        ...receipt,
+        operationReceipts: [
+          {
+            operationRef: "op_run",
+            resourceRef: "run_exact",
+            outcome: "APPLIED",
+            auditRef: "aud_run",
+          },
+        ],
+      },
+    };
+    expect(assistantLaunchedRunTarget(runPlan, "op_run")).toEqual({
+      projectRef: "prj_market",
+      runRef: "run_exact",
+    });
+    expect(
+      assistantLaunchedRunTarget(
+        {
+          ...runPlan,
+          operations: [
+            { ...runOperation, target: { kind: "EXECUTION", name: "Отчёт" } },
+          ],
+        },
+        "op_run",
+      ),
+    ).toEqual({ projectRef: "prj_market", runRef: "run_exact" });
+    expect(
+      assistantLaunchedRunTarget(
+        { ...runPlan, projectRef: undefined },
+        "op_run",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantLaunchedRunTarget(
+        { ...runPlan, operations: [{ ...runOperation, selected: false }] },
+        "op_run",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantLaunchedRunTarget(
+        {
+          ...runPlan,
+          receipt: {
+            ...receipt,
+            operationReceipts: [
+              {
+                operationRef: "op_run",
+                resourceRef: "../unsafe",
+                outcome: "APPLIED",
+                auditRef: "aud_run",
+              },
+            ],
+          },
+        },
+        "op_run",
       ),
     ).toBeUndefined();
   });

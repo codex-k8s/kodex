@@ -3018,6 +3018,16 @@ const ru = {
       openCredential: "Открыть защищённую форму",
       open: "Открыть интеграции",
     },
+    launchedRun: {
+      title: "Запуск сотрудника или процесса",
+      loadFailed:
+        "Не удалось прочитать состояние запуска. Повторите обновление.",
+      awaitingDecision:
+        "Запуск ожидает решения человека. Откройте его для продолжения.",
+      open: "Открыть запуск",
+      stop: "Остановить запуск",
+      stopConfirm: "Отменить этот запуск и все его ещё выполняющиеся задачи?",
+    },
     planEditor: {
       back: "Вернуться к диалогу",
       revision: "Ревизия {revision} · операций: {count}",
@@ -6205,6 +6215,14 @@ const en = {
       nextSteps: "Test the connection and assign grants in Integrations.",
       openCredential: "Open protected form",
       open: "Open integrations",
+    },
+    launchedRun: {
+      title: "Employee or workflow run",
+      loadFailed: "Could not read run status. Refresh to try again.",
+      awaitingDecision: "This run needs a human decision. Open it to continue.",
+      open: "Open run",
+      stop: "Stop run",
+      stopConfirm: "Cancel this run and all tasks still in progress?",
     },
     planEditor: {
       back: "Back to conversation",

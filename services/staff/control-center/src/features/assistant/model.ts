@@ -11,7 +11,7 @@ function assistantAppliedResourceRef(
   plan: AssistantPlan,
   operationRef: string,
   operationType: string,
-  targetKind: string,
+  targetKinds?: string | readonly string[],
 ): string | undefined {
   const operation = plan.operations.find((item) => item.ref === operationRef);
   const receipt = plan.receipt;
@@ -19,7 +19,10 @@ function assistantAppliedResourceRef(
     plan.state !== "APPLIED" ||
     !operation?.selected ||
     operation.type !== operationType ||
-    operation.target.kind !== targetKind ||
+    (targetKinds !== undefined &&
+      !(typeof targetKinds === "string"
+        ? operation.target.kind === targetKinds
+        : targetKinds.includes(operation.target.kind))) ||
     !receipt ||
     receipt.planRef !== plan.ref ||
     receipt.planRevision !== plan.revision ||
@@ -74,6 +77,16 @@ export function assistantIntegrationConnectionTarget(
     "INTEGRATION_CONNECTION",
   );
   return connectionRef ? { connectionRef } : undefined;
+}
+
+export function assistantLaunchedRunTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; runRef: string } | undefined {
+  const runRef = assistantAppliedResourceRef(plan, operationRef, "LAUNCH_RUN");
+  return plan.projectRef && runRef && /^[A-Za-z0-9_-]{8,96}$/.test(runRef)
+    ? { projectRef: plan.projectRef, runRef }
+    : undefined;
 }
 
 export function assistantAwaitingReply(
