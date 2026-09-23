@@ -10,8 +10,12 @@
     "playwright.discovery.config.ts",
     "playwright.auth.config.ts",
     "playwright.api-session.config.ts",
+    "playwright.avatar-local.config.ts",
     "playwright.integration.config.ts",
     "playwright.local.config.ts",
+    "playwright.prompt-local.config.ts",
+    "playwright.skill-local.config.ts",
+    "playwright.stt-local.config.ts",
     "playwright.synthetic.config.ts",
     "e2e/**/*.ts"
   ]

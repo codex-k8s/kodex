@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
@@ -25,6 +26,12 @@ const (
 )
 
 func Principal(ctx context.Context, fullMethod string) (value.Principal, error) {
+	if resolved, ok := ctx.Value(trustedPrincipalKey{}).(trustedPrincipal); ok {
+		if resolved.method != fullMethod || ctx.Err() != nil || !resolved.principal.ExpiresAt.After(time.Now()) {
+			return value.Principal{}, errors.New("trusted STT principal is invalid")
+		}
+		return resolved.principal, nil
+	}
 	operation, permission, binding, domainPermission := transcribeOperation, value.TransportPermissionTranscribe, internalrpcauth.RequestBindingStream, value.PermissionTranscribe
 	switch fullMethod {
 	case sttv1.SpeechToTextService_Transcribe_FullMethodName:

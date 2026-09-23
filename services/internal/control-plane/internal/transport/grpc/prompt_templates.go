@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -10,6 +11,8 @@ import (
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (server *Server) ValidatePromptTemplate(ctx context.Context, request *controlplanev1.ValidatePromptTemplateRequest) (*controlplanev1.ValidatePromptTemplateResponse, error) {
@@ -40,9 +43,40 @@ func (server *Server) PreviewPromptTemplate(ctx context.Context, request *contro
 	result, err := server.service.PreviewPromptTemplateWithContext(ctx, p, request.GetTemplate(), request.GetTargetKind(),
 		request.GetTargetRef(), request.GetIncludeFullMaterialization(), previewContext, request.GetExpectedContextDigest())
 	if err != nil {
+		if errors.Is(err, errs.ErrInvalid) && len(result.Diagnostics) > 0 {
+			return nil, promptTemplateError(result.Diagnostics)
+		}
 		return nil, transportError(err)
 	}
+	if !result.Complete {
+		if promptDiagnosticsHaveError(result.Diagnostics) {
+			return nil, promptTemplateError(result.Diagnostics)
+		}
+		return nil, transportError(errs.ErrUnavailable)
+	}
 	return castPromptMaterialization(result, request.GetIncludeFullMaterialization())
+}
+
+func promptDiagnosticsHaveError(diagnostics []promptservice.Diagnostic) bool {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Severity == "ERROR" {
+			return true
+		}
+	}
+	return false
+}
+
+func promptTemplateError(diagnostics []promptservice.Diagnostic) error {
+	base := status.New(codes.InvalidArgument, "prompt template is invalid")
+	detail := &controlplanev1.PromptTemplateErrorDetail{}
+	for _, diagnostic := range diagnostics {
+		detail.Diagnostics = append(detail.Diagnostics, castPromptDiagnostic(diagnostic))
+	}
+	withDetails, err := base.WithDetails(detail)
+	if err != nil {
+		return base.Err()
+	}
+	return withDetails.Err()
 }
 
 func castPromptMaterialization(result promptservice.Materialization, full bool) (*controlplanev1.PreviewPromptTemplateResponse, error) {

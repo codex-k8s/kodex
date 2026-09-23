@@ -19,20 +19,21 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RoleImageService_ListRoleEnvironments_FullMethodName     = "/controlplane.v1.RoleImageService/ListRoleEnvironments"
-	RoleImageService_ListRoleImageRecipes_FullMethodName     = "/controlplane.v1.RoleImageService/ListRoleImageRecipes"
-	RoleImageService_GetRoleImageRecipe_FullMethodName       = "/controlplane.v1.RoleImageService/GetRoleImageRecipe"
-	RoleImageService_ManageRoleImageRecipe_FullMethodName    = "/controlplane.v1.RoleImageService/ManageRoleImageRecipe"
-	RoleImageService_ClaimImageBuild_FullMethodName          = "/controlplane.v1.RoleImageService/ClaimImageBuild"
-	RoleImageService_RenewImageBuild_FullMethodName          = "/controlplane.v1.RoleImageService/RenewImageBuild"
-	RoleImageService_ReportImageBuildProgress_FullMethodName = "/controlplane.v1.RoleImageService/ReportImageBuildProgress"
-	RoleImageService_CompleteImageBuild_FullMethodName       = "/controlplane.v1.RoleImageService/CompleteImageBuild"
-	RoleImageService_FailImageBuild_FullMethodName           = "/controlplane.v1.RoleImageService/FailImageBuild"
-	RoleImageService_ClaimImageAdmission_FullMethodName      = "/controlplane.v1.RoleImageService/ClaimImageAdmission"
-	RoleImageService_RecordImageAdmission_FullMethodName     = "/controlplane.v1.RoleImageService/RecordImageAdmission"
-	RoleImageService_ClaimImagePromotion_FullMethodName      = "/controlplane.v1.RoleImageService/ClaimImagePromotion"
-	RoleImageService_AuthorizeImagePromotion_FullMethodName  = "/controlplane.v1.RoleImageService/AuthorizeImagePromotion"
-	RoleImageService_CompleteImagePromotion_FullMethodName   = "/controlplane.v1.RoleImageService/CompleteImagePromotion"
+	RoleImageService_ListRoleEnvironments_FullMethodName           = "/controlplane.v1.RoleImageService/ListRoleEnvironments"
+	RoleImageService_ListRoleImageRecipes_FullMethodName           = "/controlplane.v1.RoleImageService/ListRoleImageRecipes"
+	RoleImageService_GetRoleImageRecipe_FullMethodName             = "/controlplane.v1.RoleImageService/GetRoleImageRecipe"
+	RoleImageService_ManageRoleImageRecipe_FullMethodName          = "/controlplane.v1.RoleImageService/ManageRoleImageRecipe"
+	RoleImageService_ClaimImageBuild_FullMethodName                = "/controlplane.v1.RoleImageService/ClaimImageBuild"
+	RoleImageService_RenewImageBuild_FullMethodName                = "/controlplane.v1.RoleImageService/RenewImageBuild"
+	RoleImageService_ReportImageBuildProgress_FullMethodName       = "/controlplane.v1.RoleImageService/ReportImageBuildProgress"
+	RoleImageService_CompleteImageBuild_FullMethodName             = "/controlplane.v1.RoleImageService/CompleteImageBuild"
+	RoleImageService_FailImageBuild_FullMethodName                 = "/controlplane.v1.RoleImageService/FailImageBuild"
+	RoleImageService_GetImageSupplyWorkAvailability_FullMethodName = "/controlplane.v1.RoleImageService/GetImageSupplyWorkAvailability"
+	RoleImageService_ClaimImageAdmission_FullMethodName            = "/controlplane.v1.RoleImageService/ClaimImageAdmission"
+	RoleImageService_RecordImageAdmission_FullMethodName           = "/controlplane.v1.RoleImageService/RecordImageAdmission"
+	RoleImageService_ClaimImagePromotion_FullMethodName            = "/controlplane.v1.RoleImageService/ClaimImagePromotion"
+	RoleImageService_AuthorizeImagePromotion_FullMethodName        = "/controlplane.v1.RoleImageService/AuthorizeImagePromotion"
+	RoleImageService_CompleteImagePromotion_FullMethodName         = "/controlplane.v1.RoleImageService/CompleteImagePromotion"
 )
 
 // RoleImageServiceClient is the client API for RoleImageService service.
@@ -51,6 +52,7 @@ type RoleImageServiceClient interface {
 	ReportImageBuildProgress(ctx context.Context, in *ReportImageBuildProgressRequest, opts ...grpc.CallOption) (*ReportImageBuildProgressResponse, error)
 	CompleteImageBuild(ctx context.Context, in *CompleteImageBuildRequest, opts ...grpc.CallOption) (*CompleteImageBuildResponse, error)
 	FailImageBuild(ctx context.Context, in *FailImageBuildRequest, opts ...grpc.CallOption) (*FailImageBuildResponse, error)
+	GetImageSupplyWorkAvailability(ctx context.Context, in *GetImageSupplyWorkAvailabilityRequest, opts ...grpc.CallOption) (*GetImageSupplyWorkAvailabilityResponse, error)
 	ClaimImageAdmission(ctx context.Context, in *ClaimImageAdmissionRequest, opts ...grpc.CallOption) (*ClaimImageAdmissionResponse, error)
 	RecordImageAdmission(ctx context.Context, in *RecordImageAdmissionRequest, opts ...grpc.CallOption) (*RecordImageAdmissionResponse, error)
 	ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error)
@@ -156,6 +158,16 @@ func (c *roleImageServiceClient) FailImageBuild(ctx context.Context, in *FailIma
 	return out, nil
 }
 
+func (c *roleImageServiceClient) GetImageSupplyWorkAvailability(ctx context.Context, in *GetImageSupplyWorkAvailabilityRequest, opts ...grpc.CallOption) (*GetImageSupplyWorkAvailabilityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetImageSupplyWorkAvailabilityResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_GetImageSupplyWorkAvailability_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *roleImageServiceClient) ClaimImageAdmission(ctx context.Context, in *ClaimImageAdmissionRequest, opts ...grpc.CallOption) (*ClaimImageAdmissionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimImageAdmissionResponse)
@@ -222,6 +234,7 @@ type RoleImageServiceServer interface {
 	ReportImageBuildProgress(context.Context, *ReportImageBuildProgressRequest) (*ReportImageBuildProgressResponse, error)
 	CompleteImageBuild(context.Context, *CompleteImageBuildRequest) (*CompleteImageBuildResponse, error)
 	FailImageBuild(context.Context, *FailImageBuildRequest) (*FailImageBuildResponse, error)
+	GetImageSupplyWorkAvailability(context.Context, *GetImageSupplyWorkAvailabilityRequest) (*GetImageSupplyWorkAvailabilityResponse, error)
 	ClaimImageAdmission(context.Context, *ClaimImageAdmissionRequest) (*ClaimImageAdmissionResponse, error)
 	RecordImageAdmission(context.Context, *RecordImageAdmissionRequest) (*RecordImageAdmissionResponse, error)
 	ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error)
@@ -263,6 +276,9 @@ func (UnimplementedRoleImageServiceServer) CompleteImageBuild(context.Context, *
 }
 func (UnimplementedRoleImageServiceServer) FailImageBuild(context.Context, *FailImageBuildRequest) (*FailImageBuildResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FailImageBuild not implemented")
+}
+func (UnimplementedRoleImageServiceServer) GetImageSupplyWorkAvailability(context.Context, *GetImageSupplyWorkAvailabilityRequest) (*GetImageSupplyWorkAvailabilityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetImageSupplyWorkAvailability not implemented")
 }
 func (UnimplementedRoleImageServiceServer) ClaimImageAdmission(context.Context, *ClaimImageAdmissionRequest) (*ClaimImageAdmissionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimImageAdmission not implemented")
@@ -462,6 +478,24 @@ func _RoleImageService_FailImageBuild_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RoleImageService_GetImageSupplyWorkAvailability_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetImageSupplyWorkAvailabilityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).GetImageSupplyWorkAvailability(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_GetImageSupplyWorkAvailability_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).GetImageSupplyWorkAvailability(ctx, req.(*GetImageSupplyWorkAvailabilityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RoleImageService_ClaimImageAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimImageAdmissionRequest)
 	if err := dec(in); err != nil {
@@ -594,6 +628,10 @@ var RoleImageService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FailImageBuild",
 			Handler:    _RoleImageService_FailImageBuild_Handler,
+		},
+		{
+			MethodName: "GetImageSupplyWorkAvailability",
+			Handler:    _RoleImageService_GetImageSupplyWorkAvailability_Handler,
 		},
 		{
 			MethodName: "ClaimImageAdmission",

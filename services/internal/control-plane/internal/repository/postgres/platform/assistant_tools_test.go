@@ -2,6 +2,7 @@ package platform
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -55,6 +56,84 @@ func TestAssistantCreateTargetUsesClosedKinds(t *testing.T) {
 	}
 	if _, _, ok := assistantCreateTarget("DELETE_AGENT", parameters); ok {
 		t.Fatal("unknown operation received a server-owned target")
+	}
+}
+
+func TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities(t *testing.T) {
+	t.Parallel()
+	input := map[string]any{
+		"projectRef": "prj_example", "name": "Coordinator", "purpose": "Coordinate project work",
+		"roleDescription": "Coordinate assigned work", "instructions": "Coordinate work using verified project context.",
+		"capabilities": []any{"platform.artifact.manage", "platform.run.launch", "platform.run.delegate"},
+	}
+	operation := entity.AssistantPlanOperation{Type: "CREATE_AGENT", Summary: "Create coordinator", Input: input}
+	commandValue, err := assistantOperationCommand(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	capabilities := commandValue.Payload.(command.AgentInput).InitialCapabilities
+	if len(capabilities) != 3 || capabilities[0] != "platform.artifact.manage" || capabilities[2] != "platform.run.delegate" {
+		t.Fatalf("initial capabilities lost: %v", capabilities)
+	}
+	for _, invalid := range [][]any{{"platform.run.launch", "platform.run.launch"}, {"platform.project.manage"}, {"unknown"}} {
+		operation.Input["capabilities"] = invalid
+		if _, err := assistantOperationCommand(operation); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("invalid capability input %v accepted: %v", invalid, err)
+		}
+	}
+	templated := withAssistantAgentTemplateContext(input)
+	instructions := assistantString(templated, "instructions")
+	for _, variable := range []string{"{{ .organization.name }}", "{{ .project.name }}", "{{ .agent.name }}"} {
+		if !strings.Contains(instructions, variable) {
+			t.Fatalf("assistant template is missing %s", variable)
+		}
+	}
+	if assistantString(input, "instructions") != "Coordinate work using verified project context." {
+		t.Fatal("assistant template hydration mutated the original operation")
+	}
+	for _, invalid := range []string{
+		`Name: {{ index . "i18n:SYSTEM_ASSISTANT_NAME" }}`,
+		`Name: i18n:SYSTEM_ASSISTANT_NAME`,
+	} {
+		operation.Input["instructions"] = "Coordinate work using verified project context. " + invalid
+		if _, err := assistantOperationCommand(operation); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("internal localization key accepted in employee instructions: %v", err)
+		}
+	}
+}
+
+func TestAssistantCreateAgentHydrationReachesApprovedCommand(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{
+		Type: "CREATE_AGENT", Key: "create-coordinator", Title: "Create coordinator", Summary: "Create coordinator",
+		Input: map[string]any{
+			"projectRef": "current", "name": "Coordinator", "purpose": "Coordinate project work",
+			"roleDescription": "Coordinate assigned work", "instructions": "Coordinate work using verified project context.",
+			"capabilities": []any{"platform.artifact.manage", "platform.run.launch", "platform.run.delegate"},
+		},
+	}
+	hydrated, err := (&Repository{}).hydrateAssistantOperation(t.Context(), nil, scope{}, "prj_example", operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := bindAssistantOperationProject(normalized, "prj_example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(bound)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := mapped.Payload.(command.AgentInput)
+	if payload.ProjectRef != "prj_example" || len(payload.InitialCapabilities) != 3 ||
+		!strings.Contains(payload.Instructions, "{{ .organization.name }}") ||
+		!strings.Contains(payload.Instructions, "{{ .project.name }}") ||
+		!strings.Contains(payload.Instructions, "{{ .agent.name }}") {
+		t.Fatalf("approved plan lost project, capabilities, or template context: project=%q capabilities=%v instructions_length=%d", payload.ProjectRef, payload.InitialCapabilities, len(payload.Instructions))
 	}
 }
 

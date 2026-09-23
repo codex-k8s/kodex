@@ -223,9 +223,19 @@ INSTREAM framing и VERSION provenance реализованы по
 Смена engine/database revision во время scan, ошибка, неизвестный ответ или база
 старше семи суток закрыто отклоняются. Verdict не выдаётся за runtime readiness.
 
-CP-owned scanner container, signature database delivery и его readiness ещё
-не подключены. Без них Validate возвращает INVALID/ERROR с
-`SKILL_MALWARE_SCANNER_UNAVAILABLE`, а не фиктивный CLEAN. Реальный ClamAV: NOT RUN.
+CP-owned контейнер `skill-scanner` доставляется в базовом Deployment с
+закреплённым digest официального ClamAV. База сигнатур входит в образ и
+не изменяется во время работы; сетевой updater и TCP listener отсутствуют.
+Unix socket доступен только контейнерам этого Pod. В local hot reload scanner
+получает тот же UID/GID, что и Control Plane; source/cache ему не монтируются.
+Readiness проверяет PING и возраст базы не более семи суток. Liveness проверяет
+только daemon, поэтому просроченная база не вызывает бесконечные перезапуски.
+До истечения семи суток оператор обязан обновить закреплённый digest на образ
+со свежей базой и повторить `bash tools/dev/test-local-skill-scanner.sh`.
+Проверка изолирована от сети и пользовательских файлов: безвредный поток должен
+получить CLEAN, контрольный EICAR — обнаружение. Недоступная или просроченная
+база по-прежнему даёт INVALID/ERROR с `SKILL_MALWARE_SCANNER_UNAVAILABLE`,
+а не фиктивный CLEAN. Эта проверка не заменяет приёмку публикации Skill в Chrome.
 Структурный artifact scan не заменяет malware scanner.
 
 ## Agent bindings

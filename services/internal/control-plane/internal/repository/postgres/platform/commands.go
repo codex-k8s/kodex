@@ -268,6 +268,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.createProject(ctx, tx, scope, input.Payload)
 	case command.UpdateProject:
 		return repository.updateProject(ctx, tx, scope, input.Mutation, input.Payload)
+	case command.TrashProject, command.RestoreProject, command.PurgeProject:
+		return repository.changeProjectLifecycle(ctx, tx, scope, input)
 	case command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership:
 		return repository.changePlatformMembership(ctx, tx, scope, input)
 	case command.AddMembership, command.ChangeMembership, command.RemoveMembership:
@@ -762,6 +764,9 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	if projectID == "" {
 		return commandOutcome{}, errs.ErrNotFound
 	}
+	if err := repository.authorizeInitialAgentCapabilities(ctx, tx, scope, input.ProjectRef, input.InitialCapabilities); err != nil {
+		return commandOutcome{}, err
+	}
 	avatarURL, err := repository.validateAvatarArtifact(ctx, tx, scope, projectID, input.AvatarURL)
 	if err != nil {
 		return commandOutcome{}, err
@@ -797,7 +802,7 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	ref, _ := newRef("agt")
 	var agentID string
 	var item entity.Agent
-	err = tx.QueryRow(ctx, queryCommandsCreateagentInsertAgentsRefProjectIdPurpose, ref, scope.organizationID, projectID, roleID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), strings.TrimSpace(input.RoleDescription), strings.TrimSpace(input.AvatarURL), runtimeKey, scope.actorID).Scan(&agentID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
+	err = tx.QueryRow(ctx, queryCommandsCreateagentInsertAgentsRefProjectIdPurpose, ref, scope.organizationID, projectID, roleID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Purpose), strings.TrimSpace(input.RoleDescription), strings.TrimSpace(input.AvatarURL), runtimeKey, scope.actorID, input.InitialCapabilities).Scan(&agentID, &item.Ref, &item.Name, &item.Purpose, &item.RoleDescription, &item.AvatarURL, &item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
@@ -828,6 +833,7 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	item.Provider = runtime.Provider
 	item.Model = runtime.Model
 	item.RuntimeRevision = runtime.RuntimeRevision
+	item.Capabilities = append([]string(nil), input.InitialCapabilities...)
 	item.PublishedInstructions = &entity.InstructionVersion{Ref: instructionRef, VersionNumber: 1, State: "PUBLISHED", Content: input.Instructions, Digest: hex.EncodeToString(digest[:]), CreatedAt: publishedAt, PublishedAt: &publishedAt}
 	item.NextActions = agentActions(item, true, true)
 	return commandOutcome{result: command.Result{Agent: &item}, projectID: projectID, projectRef: input.ProjectRef, resourceKind: "AGENT", resourceRef: ref, summary: "i18n:AGENT_CREATED_READY", platformEvent: "AGENT_CHANGED"}, nil

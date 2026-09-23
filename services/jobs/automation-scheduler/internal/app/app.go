@@ -57,6 +57,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	readiness := serviceruntime.NewReadiness()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
+		RPCProfile: config.RPCProfile, CallerWorkload: serviceName,
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
@@ -67,9 +68,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
-	if err := control.CheckLocalAuthority(startup); err != nil {
-		return fmt.Errorf("automation scheduler startup barrier failed: %w", err)
-	}
 	technical, err := httpserver.New(httpserver.Config{
 		Address: config.TechnicalListen, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
 		WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 32 << 10, MaximumConnections: 128,
@@ -80,10 +78,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := technical.Listen(); err != nil {
 		return err
 	}
+	readiness.Set(true, "ready")
+	metrics.SetReady(true)
 	workers := serviceruntime.StartWorkers(
 		lifecycle,
 		serveTechnical(technical),
-		runScheduleLoop(control, readiness, metrics, ownedMetrics, logger, config),
+		runScheduleLoop(control, ownedMetrics, logger, config),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
@@ -112,20 +112,12 @@ func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	}
 }
 
-func runScheduleLoop(control *controlplaneclient.Client, readiness *serviceruntime.Readiness, sharedMetrics *sharedobservability.Metrics, ownedMetrics *schedulerobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func runScheduleLoop(control *controlplaneclient.Client, ownedMetrics *schedulerobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
 		degraded := false
 		for {
-			local, cancel := context.WithTimeout(ctx, config.RPCDeadline)
-			err := control.CheckLocalAuthority(local)
-			cancel()
-			readiness.Set(err == nil, "local_authority")
-			sharedMetrics.SetReady(err == nil)
-			processed := 0
-			if err == nil {
-				processed, err = materializeDue(ctx, control.Runtime, ownedMetrics, config)
-			}
+			processed, err := materializeDue(ctx, control.Runtime, ownedMetrics, config)
 			ownedMetrics.Cycle(err != nil)
 			if err != nil && !degraded {
 				degraded = true

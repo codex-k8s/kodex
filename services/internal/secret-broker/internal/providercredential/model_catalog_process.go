@@ -162,10 +162,11 @@ func readAppServerCatalog(ctx context.Context, server *appServer) ([]CatalogMode
 		}
 		var result struct {
 			Data *[]struct {
-				ID      string `json:"id"`
-				Model   string `json:"model"`
-				Default string `json:"defaultReasoningEffort"`
-				Efforts []struct {
+				ID        string `json:"id"`
+				Model     string `json:"model"`
+				Default   string `json:"defaultReasoningEffort"`
+				IsDefault bool   `json:"isDefault"`
+				Efforts   []struct {
 					Effort string `json:"reasoningEffort"`
 				} `json:"supportedReasoningEfforts"`
 			} `json:"data"`
@@ -178,7 +179,7 @@ func readAppServerCatalog(ctx context.Context, server *appServer) ([]CatalogMode
 			if item.Model != item.ID {
 				return nil, atCatalogStage(catalogStageListIdentity, errModelCatalogUnverified)
 			}
-			model := CatalogModel{ID: item.Model, DefaultReasoningEffort: item.Default}
+			model := CatalogModel{ID: item.Model, DefaultReasoningEffort: item.Default, IsDefault: item.IsDefault}
 			for _, effort := range item.Efforts {
 				model.ReasoningEfforts = append(model.ReasoningEfforts, effort.Effort)
 			}

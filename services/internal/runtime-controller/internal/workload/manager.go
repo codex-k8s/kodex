@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -89,6 +90,7 @@ const (
 var ErrProviderCredentialRefreshRejected = errors.New("provider credential refresh is rejected")
 
 type Config struct {
+	RPCProfile                                                                         string
 	Environment, ControlNamespace, RuntimeNamespace, ControllerPodUID, ControllerPodIP string
 	CallbackTLSServerName, CallbackClientCASecret, CallbackClientTLSSecret             string
 	StorageClass, SessionPVCSize, RunnerServiceAccount                                 string
@@ -143,12 +145,14 @@ func InCluster(config Config) (*Manager, error) {
 }
 
 func New(client kubernetes.Interface, config Config) (*Manager, error) {
+	if config.RPCProfile != "" && config.RPCProfile != runtimecontract.CallbackProfileTrustedCluster {
+		return nil, errors.New("runtime manager RPC profile is invalid")
+	}
 	pvcRequest, err := resource.ParseQuantity(config.SessionPVCSize)
 	if client == nil || err != nil || pvcRequest.Sign() <= 0 || config.ControlNamespace == "" ||
 		config.RuntimeNamespace == "" || config.ControlNamespace == config.RuntimeNamespace ||
 		config.ControllerPodUID == "" || net.ParseIP(config.ControllerPodIP) == nil ||
-		config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" ||
-		config.CallbackClientTLSSecret == "" ||
+		(config.RPCProfile == "" && (config.CallbackTLSServerName == "" || config.CallbackClientCASecret == "" || config.CallbackClientTLSSecret == "")) ||
 		config.ProviderHTTPSProxy == "" ||
 		(config.ProviderAppArmorProfile != "" && config.ProviderAppArmorProfile != "kodex-provider-runtime") ||
 		net.ParseIP(config.KubernetesAPIServiceIP) == nil ||
@@ -610,6 +614,10 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		ExecutionTicketFile: "/var/run/secrets/kodex/runtime/ticket/token",
 		ProviderAuthFile:    "/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
 		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
+	}
+	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
+		input.CallbackURL = "http://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444")
+		input.CallbackTLS = runtimecontract.RuntimeTLSBinding{Profile: runtimecontract.CallbackProfileTrustedCluster}
 	}
 	workspacePolicy, err := runtimeWorkspacePolicyFromProto(revision.GetWorkspacePolicy())
 	if err != nil {
@@ -1156,6 +1164,33 @@ func (manager *Manager) EnsureWarm(ctx context.Context, input runtimecontract.Ru
 		return false, err
 	}
 	return podReady(existing), nil
+}
+
+// DeactivateWarm закрыто удаляет только принадлежащий controller warm runtime
+// и его execution-scoped ticket/projection. Session PVC сохраняется.
+func (manager *Manager) DeactivateWarm(ctx context.Context) error {
+	const podName = "system-assistant-warm"
+	pod, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
+	if err == nil {
+		if pod.Labels[managedLabel] != "true" || pod.Labels[modeLabel] != "warm" {
+			return errors.New("warm runtime Pod ownership is invalid")
+		}
+		boundTicket := runtimeInputSecretName(pod)
+		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, podName, metav1.DeleteOptions{GracePeriodSeconds: int64Pointer(0)}); err != nil && !apierrors.IsNotFound(err) {
+			return errors.New("delete warm runtime Pod")
+		}
+		if boundTicket != "" {
+			if err := manager.deleteOwnedWarmTicket(ctx, boundTicket); err != nil {
+				return err
+			}
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return errors.New("read warm runtime Pod")
+	}
+	if err := manager.cleanupStaleWarmTickets(ctx, ""); err != nil {
+		return err
+	}
+	return manager.cleanupStaleWarmProjections(ctx, "")
 }
 
 func (manager *Manager) deleteOwnedWarmTicket(ctx context.Context, name string) error {
@@ -1914,7 +1949,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		compatibility, _ := runtimecontract.WarmCompatibilityDigest(input)
 		annotations[warmCompatibilityAnnotation] = compatibility
 	}
-	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace,
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: manager.config.RuntimeNamespace,
 		Labels:      labels,
 		Annotations: annotations},
 		Spec: corev1.PodSpec{ServiceAccountName: serviceAccountName, AutomountServiceAccountToken: boolPointer(false), EnableServiceLinks: boolPointer(false), RestartPolicy: corev1.RestartPolicyNever, TerminationGracePeriodSeconds: int64Pointer(150),
@@ -1924,6 +1959,20 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 				{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()},
 			},
 			Containers: []corev1.Container{role, provider, relay}, Volumes: volumes}}
+	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
+		pod.Labels["kodex.dev/security-profile"] = runtimecontract.CallbackProfileTrustedCluster
+		pod.Spec.Volumes = slices.DeleteFunc(pod.Spec.Volumes, func(volume corev1.Volume) bool {
+			return volume.Name == "callback-ca" || volume.Name == "callback-client"
+		})
+		for _, group := range [][]corev1.Container{pod.Spec.Containers, pod.Spec.InitContainers} {
+			for index := range group {
+				group[index].VolumeMounts = slices.DeleteFunc(group[index].VolumeMounts, func(mount corev1.VolumeMount) bool {
+					return mount.Name == "callback-ca" || mount.Name == "callback-client"
+				})
+			}
+		}
+	}
+	return pod
 }
 
 func runtimePolicyResourceRequirements(policy runtimecontract.RuntimeResourcePolicy) corev1.ResourceRequirements {

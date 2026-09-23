@@ -4,7 +4,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -48,6 +47,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, map[string]string{})
 	readiness := serviceruntime.NewReadiness()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
+		RPCProfile: config.RPCProfile, CallerWorkload: serviceName,
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile,
 		ClientCertificateFile: config.ControlPlaneCertificateFile, ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
@@ -57,9 +57,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
-	if err := control.CheckLocalAuthority(startup); err != nil {
-		return fmt.Errorf("interaction gateway startup barrier failed: %w", err)
-	}
 	text, err := usertext.New()
 	if err != nil {
 		return err
@@ -81,10 +78,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := technical.Listen(); err != nil {
 		return err
 	}
+	readiness.Set(true, "ready")
+	metrics.SetReady(true)
 	sources := newSourceManager(control.Interaction, adapter, logger, config)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveTechnical(technical),
-		monitorLocalReadiness(control, readiness, metrics, logger, config),
 		runDeliveryLoop(control, adapter, logger, config),
 		runInvocationLoop(control.Runtime, adapter, logger, config),
 		runSourceRefresh(sources, control, logger, config),
@@ -110,34 +108,6 @@ func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 			return err
 		case <-ctx.Done():
 			return ctx.Err()
-		}
-	}
-}
-
-func monitorLocalReadiness(control *controlplaneclient.Client, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		ticker := time.NewTicker(config.ReadinessInterval)
-		defer ticker.Stop()
-		for {
-			check, cancel := context.WithTimeout(ctx, config.RequestTimeout)
-			err := control.CheckLocalAuthority(check)
-			cancel()
-			if err == nil {
-				if readiness.Set(true, "ready") {
-					logger.InfoContext(ctx, "interaction gateway readiness restored")
-				}
-				metrics.SetReady(true)
-			} else {
-				if readiness.Set(false, "local_authority_unavailable") {
-					logger.WarnContext(ctx, "interaction gateway readiness lost", "error_class", "sidecar")
-				}
-				metrics.SetReady(false)
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-ticker.C:
-			}
 		}
 	}
 }

@@ -58,6 +58,7 @@ const props = defineProps<{
   canEdit: boolean;
 }>();
 const emit = defineEmits<{
+  "runtime-saved": [];
   "apply-state": [
     state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED",
     scope: string,
@@ -448,6 +449,7 @@ async function execute(
     if (current !== generation) return;
     view.value = result;
     sync(preserveRuntime, preserveOverlay);
+    if (target === "RUNTIME") emit("runtime-saved");
   } catch (error) {
     if (current === generation) {
       problem.value = asProblem(error);

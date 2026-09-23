@@ -279,6 +279,7 @@ export type Problem = {
     retryable: boolean;
     actualVersion?: number;
     winnerSummary?: string;
+    diagnostics?: Array<PromptTemplateDiagnostic>;
 };
 
 export type SpeechRateLimitProblem = Problem & {
@@ -992,7 +993,7 @@ export type Project = {
     name: string;
     purpose: string;
     language: 'ru' | 'en';
-    lifecycle: 'ACTIVE' | 'ARCHIVED';
+    lifecycle: 'ACTIVE' | 'ARCHIVED' | 'TRASHED' | 'PURGE_PENDING';
     agentCount: number;
     workflowCount: number;
     activeRunCount: number;
@@ -1007,6 +1008,8 @@ export type Project = {
     lastActivityAt?: Timestamp;
     createdAt?: Timestamp;
     updatedAt: Timestamp;
+    deletedAt?: Timestamp;
+    purgeAfter?: Timestamp;
     nextActions: Array<NextAction>;
 };
 
@@ -1054,6 +1057,11 @@ export type ProjectPage = {
     items: Array<Project>;
     nextPageToken?: string;
     nextActions: Array<NextAction>;
+};
+
+export type TrashedProjectPage = {
+    items: Array<Project>;
+    nextPageToken?: string;
 };
 
 export type Membership = {
@@ -4407,6 +4415,66 @@ export type CreateProjectResponses = {
 
 export type CreateProjectResponse = CreateProjectResponses[keyof CreateProjectResponses];
 
+export type ListTrashedProjectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/trash';
+};
+
+export type ListTrashedProjectsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListTrashedProjectsError = ListTrashedProjectsErrors[keyof ListTrashedProjectsErrors];
+
+export type ListTrashedProjectsResponses = {
+    /**
+     * Корзина Проектов, доступная владельцу или администратору организации
+     */
+    200: TrashedProjectPage;
+};
+
+export type ListTrashedProjectsResponse = ListTrashedProjectsResponses[keyof ListTrashedProjectsResponses];
+
+export type TrashProjectData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}';
+};
+
+export type TrashProjectErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type TrashProjectError = TrashProjectErrors[keyof TrashProjectErrors];
+
+export type TrashProjectResponses = {
+    /**
+     * Проект и дочерние объекты перенесены в корзину; активные запуски отменены
+     */
+    200: Project;
+};
+
+export type TrashProjectResponse = TrashProjectResponses[keyof TrashProjectResponses];
+
 export type GetProjectData = {
     body?: never;
     path: {
@@ -4465,6 +4533,70 @@ export type UpdateProjectResponses = {
 };
 
 export type UpdateProjectResponse = UpdateProjectResponses[keyof UpdateProjectResponses];
+
+export type RestoreProjectData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/restore';
+};
+
+export type RestoreProjectErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RestoreProjectError = RestoreProjectErrors[keyof RestoreProjectErrors];
+
+export type RestoreProjectResponses = {
+    /**
+     * Проект и дочерние объекты восстановлены; отменённые запуски не возобновляются
+     */
+    200: Project;
+};
+
+export type RestoreProjectResponse = RestoreProjectResponses[keyof RestoreProjectResponses];
+
+export type PurgeProjectData = {
+    body?: never;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/purge';
+};
+
+export type PurgeProjectErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type PurgeProjectError = PurgeProjectErrors[keyof PurgeProjectErrors];
+
+export type PurgeProjectResponses = {
+    /**
+     * Безвозвратное удаление проекта и дочерних ресурсов принято; внешняя очистка и БД завершаются фоново
+     */
+    202: Project;
+};
+
+export type PurgeProjectResponse = PurgeProjectResponses[keyof PurgeProjectResponses];
 
 export type ListProjectMembershipsData = {
     body?: never;

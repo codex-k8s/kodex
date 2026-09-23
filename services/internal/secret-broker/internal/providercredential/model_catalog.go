@@ -47,6 +47,7 @@ type CatalogModel struct {
 	ID                     string
 	DefaultReasoningEffort string
 	ReasoningEfforts       []string
+	IsDefault              bool
 }
 
 func validateCatalogModels(models []CatalogModel) error {
@@ -54,6 +55,7 @@ func validateCatalogModels(models []CatalogModel) error {
 		return errModelCatalogUnverified
 	}
 	ids := make(map[string]struct{}, len(models))
+	defaults := 0
 	for _, model := range models {
 		if !modelCatalogIDPattern.MatchString(model.ID) || len(model.ReasoningEfforts) > maximumCatalogEfforts {
 			return errModelCatalogUnverified
@@ -62,6 +64,12 @@ func validateCatalogModels(models []CatalogModel) error {
 			return errModelCatalogUnverified
 		}
 		ids[model.ID] = struct{}{}
+		if model.IsDefault {
+			defaults++
+			if defaults > 1 {
+				return errModelCatalogUnverified
+			}
+		}
 		if len(model.ReasoningEfforts) == 0 {
 			if model.DefaultReasoningEffort != "" {
 				return errModelCatalogUnverified

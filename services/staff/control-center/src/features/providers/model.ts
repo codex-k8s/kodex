@@ -44,15 +44,20 @@ export function isPendingDeviceAuthorization(
   now = Date.now(),
 ): boolean {
   const authorization = account.authorization;
-  if (
-    authorization?.method !== "DEVICE_CODE" ||
-    authorization.state !== "PENDING"
-  )
-    return false;
+  if (!authorization || !hasPendingDeviceAuthorization(account)) return false;
   const expiresAt = authorization.expiresAt
     ? Date.parse(authorization.expiresAt)
     : Number.NaN;
   return Number.isFinite(expiresAt) && expiresAt > now;
+}
+
+export function hasPendingDeviceAuthorization(
+  account: Pick<ProviderAccount, "authorization">,
+): boolean {
+  return (
+    account.authorization?.method === "DEVICE_CODE" &&
+    account.authorization.state === "PENDING"
+  );
 }
 
 export function safeVerificationUri(value: string | undefined): string | null {

@@ -165,6 +165,7 @@ func testRuntimeCandidateIsolationBatch(t *testing.T, ctx context.Context, repos
 		t.Fatal("healthy candidate did not progress in the same batch")
 	}
 	testDeletingAccountRetainsExactActiveProjection(t, ctx, repository, stringMap(healthyLease, "leaseRef"))
+	verifyTrustedProjectionTerminal := testTrustedRuntimeProjection(t, ctx, repository, healthyLease)
 	failed, graph, err := service.GetRunGraph(ctx, owner, badRun.Ref)
 	if err != nil || failed.State != "FAILED" {
 		t.Fatalf("stale candidate lacks terminal owner readback: %v", err)
@@ -180,6 +181,7 @@ func testRuntimeCandidateIsolationBatch(t *testing.T, ctx context.Context, repos
 		t.Fatalf("candidate savepoint retained partial runtime state: %v", err)
 	}
 	completeClaimedExecution(t, ctx, service, worker, healthyLease, "claim-isolation-healthy-complete-"+suffix, false)
+	verifyTrustedProjectionTerminal()
 	if allStale {
 		claim.Mutation.IdempotencyKey += "-idle"
 		idle, err := service.Execute(ctx, claim)

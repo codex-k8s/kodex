@@ -7,5 +7,5 @@ SET system_session_ref = @next_session_ref,
     version = version + 1,
     updated_at = clock_timestamp()
 WHERE organization_id = @organization_id::uuid
-  AND system_session_ref = @current_session_ref
+  AND system_session_ref IS NOT DISTINCT FROM NULLIF(@current_session_ref, '')
 RETURNING version;

@@ -38,6 +38,10 @@ spec:
               app.kubernetes.io/name: role-image-builder
         - podSelector:
             matchLabels:
+              app.kubernetes.io/name: image-admission-controller
+              app.kubernetes.io/component: image-admission-orchestrator
+        - podSelector:
+            matchLabels:
               app.kubernetes.io/name: kodex-image-admission
               app.kubernetes.io/component: image-admission
             matchExpressions:

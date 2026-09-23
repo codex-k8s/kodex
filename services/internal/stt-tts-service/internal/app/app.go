@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/httpserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
@@ -31,7 +32,6 @@ import (
 	transportgrpc "github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/transport/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 )
 
 const (
@@ -79,7 +79,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "local_runtime_starting")
 	metrics.SetReady(false)
-	issuer, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{
+	issuer, err := dialProfileAuthority(startup, config.RPCProfile, authorityclient.LocalConfig{
 		SocketPath: config.AuthorityIssuerSocket, ExpectedServerUID: config.AuthorityIssuerUID,
 		ExpectedServerGID: config.AuthorityIssuerGID, DialTimeout: config.ReadinessTimeout,
 	})
@@ -87,6 +87,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return errors.New("connect STT authorization issuer")
 	}
 	dependencies, err := protectedrpc.Dial(startup, protectedrpc.Config{
+		RPCProfile:      config.RPCProfile,
 		Policy:          protectedrpc.TargetConfig{Target: config.PolicyTarget, TLSServerName: config.PolicyTLSServerName, CAFile: config.DependencyCAFile},
 		Credential:      protectedrpc.TargetConfig{Target: config.CredentialTarget, TLSServerName: config.CredentialTLSServerName, CAFile: config.DependencyCAFile},
 		CertificateFile: config.WorkloadCertificateFile, PrivateKeyFile: config.WorkloadPrivateKeyFile,
@@ -120,7 +121,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = issuer.Close()
 		return err
 	}
-	verifier, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{
+	verifier, err := dialProfileAuthority(startup, config.RPCProfile, authorityclient.LocalConfig{
 		SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID,
 		ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: config.ReadinessTimeout,
 	})
@@ -136,7 +137,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = issuer.Close()
 		return err
 	}
-	tlsConfig, err := serverTLS(config)
+	security, err := newRPCSecurity(config, verifier, dependencies)
 	if err != nil {
 		_ = verifier.Close()
 		_ = dependencies.Close()
@@ -147,16 +148,17 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		logger.ErrorContext(ctx, "unexpected gRPC failure", "method", normalizeMethod(methods, method), "code", code.String(),
 			"correlation_id", normalizeCorrelation(sharedobservability.CorrelationID(ctx)))
 	})
-	grpcServer := grpc.NewServer(
-		grpc.Creds(credentials.NewTLS(tlsConfig)), grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
+	serverOptions := []grpc.ServerOption{
+		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(metrics.UnaryServerInterceptor(), telemetry.UnaryServerInterceptor(methods),
-			authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier()), grpcserver.RejectMalformedUnary,
+			security.unary, grpcserver.RejectMalformedUnary,
 			grpcserver.ErrorBoundary(errorObserver)),
 		grpc.ChainStreamInterceptor(metrics.StreamServerInterceptor(), sharedobservability.StreamCorrelationServerInterceptor(),
-			telemetry.StreamServerInterceptor(methods), authorityclient.VerifierStreamServerInterceptor(verifier.Verifier()),
+			telemetry.StreamServerInterceptor(methods), security.stream,
 			handler.StreamServerInterceptor(), grpcserver.RejectMalformedStream, grpcserver.StreamErrorBoundary(errorObserver)),
-		grpc.MaxConcurrentStreams(uint32(value.MaximumConcurrentStreams)), grpc.MaxRecvMsgSize(68<<10), grpc.MaxSendMsgSize(1<<20),
-	)
+		grpc.MaxConcurrentStreams(uint32(value.MaximumConcurrentStreams)), grpc.MaxRecvMsgSize(68 << 10), grpc.MaxSendMsgSize(1 << 20),
+	}
+	grpcServer := grpc.NewServer(append(serverOptions, security.options...)...)
 	sttv1.RegisterSpeechToTextServiceServer(grpcServer, handler)
 	grpcListener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
@@ -180,7 +182,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = issuer.Close()
 		return errors.New("listen for STT technical HTTP")
 	}
-	localChecks := []checker{domainLocalCheck{domain}, dependencies, verifierReadiness{verifier.Verifier()}, spoolReadiness{config.SpoolDirectory}}
+	localChecks := []checker{domainLocalCheck{domain}, spoolReadiness{config.SpoolDirectory}}
+	if config.RPCProfile != transportprofile.TrustedCluster {
+		localChecks = append(localChecks, verifierReadiness{verifier.Verifier()})
+	}
 	if _, err := updateLocalReadiness(startup, readiness, metrics, localChecks...); err != nil {
 		_ = grpcListener.Close()
 		_ = technical.Shutdown(shutdownBase)

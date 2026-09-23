@@ -120,6 +120,14 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toContain("attachmentState.value.ready");
   });
 
+  it("ведёт provider-free first-run к авторизации без включения диалога", () => {
+    expect(source).toContain("assistantRequiresProviderAccount");
+    expect(template).toContain('v-if="providerAccountRequired"');
+    expect(template).toContain("assistant.providerAccountRequiredHelp");
+    expect(template).toContain(":to=\"{ name: 'provider-accounts' }\"");
+    expect(template).toContain("assistant.openProviderAccounts");
+  });
+
   it("показывает в карточке плана действие, target и все явные параметры", () => {
     expect(template).toContain('class="assistant-plan-card__action"');
     expect(template).toContain("operationActionLabel(operation.action)");

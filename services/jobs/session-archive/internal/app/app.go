@@ -43,6 +43,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	readiness := serviceruntime.NewReadiness()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true, Target: config.ControlPlaneTarget,
+		RPCProfile: config.RPCProfile, CallerWorkload: serviceName,
 		TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile,
 		ClientCertificateFile: config.ControlPlaneCertificateFile, ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
@@ -57,10 +58,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		ObjectStorageBucket: config.ObjectStorageBucket, ObjectStorageAllowInsecureLocal: config.ObjectStorageAllowInsecureLocal,
 		WorkerTimeout: config.WorkerTimeout})
 	if err != nil {
-		_ = control.Close()
-		return err
-	}
-	if err := control.CheckLocalAuthority(startup); err != nil {
 		_ = control.Close()
 		return err
 	}
@@ -125,6 +122,9 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 					readiness.Set(false, "kubernetes_unavailable")
 					metrics.SetReady(false)
 					logger.WarnContext(ctx, "session archive Kubernetes check failed", "error_class", "kubernetes_api")
+				} else {
+					readiness.Set(true, "ready")
+					metrics.SetReady(true)
 				}
 			}
 			if !kubernetesReady {
@@ -135,13 +135,9 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 				cancel()
 				if err != nil {
 					owned.cycles.WithLabelValues("error").Inc()
-					readiness.Set(false, "control_plane_unavailable")
-					metrics.SetReady(false)
 					logger.WarnContext(ctx, "session archive claim failed", "error_class", "control_plane")
 				} else {
 					owned.cycles.WithLabelValues("success").Inc()
-					readiness.Set(true, "ready")
-					metrics.SetReady(true)
 					if len(claimed.GetTasks()) > 0 {
 						if err := process(ctx, control, kube, claimed.GetTasks()[0], owned, config); err != nil {
 							logger.WarnContext(ctx, "session archive task processing failed", "error_class", "task_processing")

@@ -111,6 +111,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.vfs.list":                                       controlplanev1.PlatformQueryService_ListVFSNodes_FullMethodName,
 		"platform.query.vfs.search":                                     controlplanev1.PlatformQueryService_SearchVFS_FullMethodName,
 		"platform.query.projects.list":                                  controlplanev1.PlatformQueryService_ListProjects_FullMethodName,
+		"platform.query.projects.trash.list":                            controlplanev1.PlatformQueryService_ListTrashedProjects_FullMethodName,
 		"platform.query.projects.get":                                   controlplanev1.PlatformQueryService_GetProject_FullMethodName,
 		"platform.query.organization-memberships.list":                  controlplanev1.PlatformQueryService_ListPlatformMemberships_FullMethodName,
 		"platform.query.organization-membership-candidates.list":        controlplanev1.PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName,
@@ -208,6 +209,9 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.onboarding.complete":                          controlplanev1.PlatformCommandService_CompleteOnboarding_FullMethodName,
 		"platform.command.projects.create":                              controlplanev1.PlatformCommandService_CreateProject_FullMethodName,
 		"platform.command.projects.update":                              controlplanev1.PlatformCommandService_UpdateProject_FullMethodName,
+		"platform.command.projects.trash":                               controlplanev1.PlatformCommandService_TrashProject_FullMethodName,
+		"platform.command.projects.restore":                             controlplanev1.PlatformCommandService_RestoreProject_FullMethodName,
+		"platform.command.projects.purge":                               controlplanev1.PlatformCommandService_PurgeProject_FullMethodName,
 		"platform.command.organization-memberships.add":                 controlplanev1.PlatformCommandService_AddPlatformMembership_FullMethodName,
 		"platform.command.organization-memberships.change":              controlplanev1.PlatformCommandService_ChangePlatformMembership_FullMethodName,
 		"platform.command.organization-memberships.remove":              controlplanev1.PlatformCommandService_RemovePlatformMembership_FullMethodName,
@@ -439,6 +443,14 @@ func ImagePromotionOperations() map[string]string {
 	}
 }
 
+// ImageAdmissionControllerOperations разрешает orchestrator только проверить
+// наличие server-owned work до создания Kubernetes Job.
+func ImageAdmissionControllerOperations() map[string]string {
+	return map[string]string{
+		"platform.role-images.supply-work.get": controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName,
+	}
+}
+
 // AutomationSchedulerOperations возвращает минимальный профиль job, которая
 // только материализует server-owned due occurrences.
 func AutomationSchedulerOperations() map[string]string {
@@ -502,28 +514,29 @@ func InteractionGatewayOperations() map[string]string {
 // control-plane и поэтому не доверяют locator из браузера.
 func ControlAPIGatewayProjectRequiredOperations() map[string]struct{} {
 	return map[string]struct{}{
-		"platform.command.skill-bundle-drafts.create":           {},
-		"platform.command.memory-records.create":                {},
-		"platform.query.projects.get":                           {},
-		"platform.query.membership-candidates.list":             {},
-		"platform.query.template-variables.list":                {},
-		"platform.query.role-image-revisions.list":              {},
-		"platform.command.projects.update":                      {},
-		"platform.command.memberships.add":                      {},
-		"platform.command.memberships.change":                   {},
-		"platform.command.memberships.remove":                   {},
-		"platform.command.agents.create":                        {},
-		"platform.command.agents.avatar.upload":                 {},
-		"platform.command.workflows.create":                     {},
-		"platform.command.artifacts.upload":                     {},
-		"platform.command.attachment-sets.create-draft":         {},
-		"platform.command.schedules.create":                     {},
-		"platform.command.runtime-environments.create":          {},
-		"platform.command.prompt-templates.create-draft":        {},
-		"platform.command.role-image-revisions.create-draft":    {},
-		"platform.command.runtime-secrets.create":               {},
-		"platform.command.role-images.promote":                  {},
-		"platform.role-images.recipes.list":                     {},
-		"platform.role-images.recipes.manage":                   {},
+		"platform.command.skill-bundle-drafts.create":        {},
+		"platform.command.memory-records.create":             {},
+		"platform.query.projects.get":                        {},
+		"platform.query.membership-candidates.list":          {},
+		"platform.query.template-variables.list":             {},
+		"platform.query.role-image-revisions.list":           {},
+		"platform.command.projects.update":                   {},
+		"platform.command.projects.trash":                    {},
+		"platform.command.memberships.add":                   {},
+		"platform.command.memberships.change":                {},
+		"platform.command.memberships.remove":                {},
+		"platform.command.agents.create":                     {},
+		"platform.command.agents.avatar.upload":              {},
+		"platform.command.workflows.create":                  {},
+		"platform.command.artifacts.upload":                  {},
+		"platform.command.attachment-sets.create-draft":      {},
+		"platform.command.schedules.create":                  {},
+		"platform.command.runtime-environments.create":       {},
+		"platform.command.prompt-templates.create-draft":     {},
+		"platform.command.role-image-revisions.create-draft": {},
+		"platform.command.runtime-secrets.create":            {},
+		"platform.command.role-images.promote":               {},
+		"platform.role-images.recipes.list":                  {},
+		"platform.role-images.recipes.manage":                {},
 	}
 }

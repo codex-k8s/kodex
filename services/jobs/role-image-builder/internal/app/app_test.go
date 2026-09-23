@@ -15,21 +15,15 @@ import (
 
 var errStopReadinessMonitor = errors.New("stop readiness monitor")
 
-type authorityCheckerFunc func(context.Context) error
-
-func (check authorityCheckerFunc) CheckLocalAuthority(ctx context.Context) error {
-	return check(ctx)
-}
-
 type infrastructureCheckerFunc func(context.Context) error
 
 func (check infrastructureCheckerFunc) Check(ctx context.Context) error {
 	return check(ctx)
 }
 
-func TestReadinessMonitorSeparatesRPCAndInfrastructureBudgets(t *testing.T) {
+func TestReadinessMonitorUsesInfrastructureBudget(t *testing.T) {
 	t.Parallel()
-	var authorityBudget, infrastructureBudget time.Duration
+	var infrastructureBudget time.Duration
 	state := readinessTestState()
 	config := Config{
 		RPCDeadline:       5 * time.Second,
@@ -37,10 +31,6 @@ func TestReadinessMonitorSeparatesRPCAndInfrastructureBudgets(t *testing.T) {
 		ReadinessTimeout:  3 * time.Minute,
 	}
 	worker := monitorLocalReadinessWithWait(
-		authorityCheckerFunc(func(ctx context.Context) error {
-			authorityBudget = remainingBudget(t, ctx)
-			return nil
-		}),
 		infrastructureCheckerFunc(func(ctx context.Context) error {
 			infrastructureBudget = remainingBudget(t, ctx)
 			return nil
@@ -58,9 +48,6 @@ func TestReadinessMonitorSeparatesRPCAndInfrastructureBudgets(t *testing.T) {
 	if err := worker(context.Background()); !errors.Is(err, errStopReadinessMonitor) {
 		t.Fatalf("monitor error = %v, want %v", err, errStopReadinessMonitor)
 	}
-	if authorityBudget < 4*time.Second || authorityBudget > config.RPCDeadline {
-		t.Fatalf("authority budget = %s, want approximately %s", authorityBudget, config.RPCDeadline)
-	}
 	if infrastructureBudget < 179*time.Second || infrastructureBudget > config.ReadinessTimeout {
 		t.Fatalf("infrastructure budget = %s, want approximately %s", infrastructureBudget, config.ReadinessTimeout)
 	}
@@ -70,15 +57,12 @@ func TestReadinessMonitorSeparatesRPCAndInfrastructureBudgets(t *testing.T) {
 	}
 }
 
-func TestReadinessMonitorSkipsBuildKitWhenLocalAuthorityIsUnavailable(t *testing.T) {
+func TestReadinessMonitorClosesForBuildKitFailure(t *testing.T) {
 	t.Parallel()
-	infrastructureCalls := 0
 	state := readinessTestState()
 	worker := monitorLocalReadinessWithWait(
-		authorityCheckerFunc(func(context.Context) error { return errors.New("authority unavailable") }),
 		infrastructureCheckerFunc(func(context.Context) error {
-			infrastructureCalls++
-			return nil
+			return errors.New("buildkit unavailable")
 		}),
 		state,
 		Config{RPCDeadline: time.Second, ReadinessInterval: time.Second, ReadinessTimeout: 3 * time.Minute},
@@ -88,12 +72,9 @@ func TestReadinessMonitorSkipsBuildKitWhenLocalAuthorityIsUnavailable(t *testing
 	if err := worker(context.Background()); !errors.Is(err, errStopReadinessMonitor) {
 		t.Fatalf("monitor error = %v, want %v", err, errStopReadinessMonitor)
 	}
-	if infrastructureCalls != 0 {
-		t.Fatalf("infrastructure calls = %d, want 0", infrastructureCalls)
-	}
 	ready, _ := state.readiness.Ready()
 	if ready {
-		t.Fatal("readiness stayed open while local authority was unavailable")
+		t.Fatal("readiness stayed open while BuildKit was unavailable")
 	}
 }
 

@@ -20,10 +20,17 @@ import (
 type resolvedPrincipalKey struct{}
 type resolvedPrincipal struct {
 	method    string
+	profile   string
 	principal value.Principal
 }
 
-func ServiceIdentityUnary(authorizer *serviceidentity.Authorizer, resolver *rpcprincipal.Service) grpc.UnaryServerInterceptor {
+// AdmissionAuthorizer выбирается только composition root выбранного профиля.
+type AdmissionAuthorizer interface {
+	Admit(context.Context, string) (serviceidentity.Admission, error)
+	RPCProfile() string
+}
+
+func ServiceIdentityUnary(authorizer AdmissionAuthorizer, resolver *rpcprincipal.Service) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if authorizer == nil || resolver == nil {
 			return nil, status.Error(codes.Unavailable, "service authorization is unavailable")
@@ -43,7 +50,7 @@ func ServiceIdentityUnary(authorizer *serviceidentity.Authorizer, resolver *rpcp
 		digest := sha256.Sum256(raw)
 		md, _ := metadata.FromIncomingContext(ctx)
 		profiles := md.Get("x-kodex-rpc-profile")
-		if len(profiles) != 1 || profiles[0] != "service-v1" || len(md.Get("x-kodex-authorization")) != 0 {
+		if len(profiles) != 1 || profiles[0] != authorizer.RPCProfile() || len(md.Get("x-kodex-authorization")) != 0 {
 			return nil, status.Error(codes.Unauthenticated, "RPC service profile rejected")
 		}
 		projects := md.Get("x-kodex-project-ref")
@@ -78,6 +85,6 @@ func ServiceIdentityUnary(authorizer *serviceidentity.Authorizer, resolver *rpcp
 			}
 			return nil, status.Error(codes.PermissionDenied, "RPC domain authority rejected")
 		}
-		return handler(context.WithValue(ctx, resolvedPrincipalKey{}, resolvedPrincipal{method: info.FullMethod, principal: principal}), request)
+		return handler(context.WithValue(ctx, resolvedPrincipalKey{}, resolvedPrincipal{method: info.FullMethod, profile: admission.RPCProfile, principal: principal}), request)
 	}
 }

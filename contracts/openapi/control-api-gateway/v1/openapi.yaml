@@ -274,6 +274,20 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Project' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/trash:
+    get:
+      tags: [Projects]
+      operationId: listTrashedProjects
+      parameters:
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/PageToken' }
+      responses:
+        '200':
+          description: Корзина Проектов, доступная владельцу или администратору организации
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrashedProjectPage' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/projects/{projectRef}:
     parameters: [{ $ref: '#/components/parameters/ProjectRef' }]
     get:
@@ -299,6 +313,46 @@ paths:
       responses:
         '200':
           description: Проект изменён
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [Projects]
+      operationId: trashProject
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Проект и дочерние объекты перенесены в корзину; активные запуски отменены
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/restore:
+    parameters: [{ $ref: '#/components/parameters/ProjectRef' }]
+    post:
+      tags: [Projects]
+      operationId: restoreProject
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200':
+          description: Проект и дочерние объекты восстановлены; отменённые запуски не возобновляются
+          headers: { ETag: { $ref: '#/components/headers/ETag' } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/projects/{projectRef}/purge:
+    parameters: [{ $ref: '#/components/parameters/ProjectRef' }]
+    post:
+      tags: [Projects]
+      operationId: purgeProject
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '202':
+          description: Безвозвратное удаление проекта и дочерних ресурсов принято; внешняя очистка и БД завершаются фоново
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content:
             application/json:
@@ -5447,6 +5501,7 @@ components:
         retryable: { type: boolean }
         actualVersion: { type: integer, format: int64, minimum: 1 }
         winnerSummary: { type: string, maxLength: 300 }
+        diagnostics: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/PromptTemplateDiagnostic' } }
     SpeechRateLimitProblem:
       allOf:
         - { $ref: '#/components/schemas/Problem' }
@@ -6279,7 +6334,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 120 }
         purpose: { type: string, maxLength: 1000 }
         language: { type: string, enum: [ru, en] }
-        lifecycle: { type: string, enum: [ACTIVE, ARCHIVED] }
+        lifecycle: { type: string, enum: [ACTIVE, ARCHIVED, TRASHED, PURGE_PENDING] }
         agentCount: { type: integer, minimum: 0 }
         workflowCount: { type: integer, minimum: 0 }
         activeRunCount: { type: integer, minimum: 0 }
@@ -6293,6 +6348,8 @@ components:
           description: Последняя доступная активность по проекции владельца; отсутствует без активности. Не подменяется updatedAt проекта.
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
+        deletedAt: { $ref: '#/components/schemas/Timestamp' }
+        purgeAfter: { $ref: '#/components/schemas/Timestamp' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
     SearchResult:
       type: object
@@ -6352,6 +6409,13 @@ components:
         items: { type: array, items: { $ref: '#/components/schemas/Project' } }
         nextPageToken: { type: string }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
+    TrashedProjectPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/Project' } }
+        nextPageToken: { type: string, minLength: 1, maxLength: 512 }
     Membership:
       type: object
       additionalProperties: false

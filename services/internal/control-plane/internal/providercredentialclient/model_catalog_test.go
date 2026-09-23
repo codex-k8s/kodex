@@ -62,9 +62,9 @@ func TestModelCatalogRequestRejectsChangedOwnerBindingBeforeRPC(t *testing.T) {
 
 func TestModelCatalogObservationPreservesCapabilitiesAndRejectsUnverifiedModels(t *testing.T) {
 	task := catalogTask()
-	base := &controlplanev1.ObserveProviderModelCatalogResponse{AccountRef: task.AccountRef, CredentialRevisionRef: task.CredentialRef, ObservedAt: timestamppb.New(task.ExpiresAt.Add(-time.Second)), Source: controlplanev1.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API, Failure: controlplanev1.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE, Models: []*controlplanev1.ProviderModelCatalogRecord{{Id: "future-model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}}, {Id: "non-reasoning"}}}
+	base := &controlplanev1.ObserveProviderModelCatalogResponse{AccountRef: task.AccountRef, CredentialRevisionRef: task.CredentialRef, ObservedAt: timestamppb.New(task.ExpiresAt.Add(-time.Second)), Source: controlplanev1.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API, Failure: controlplanev1.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE, Models: []*controlplanev1.ProviderModelCatalogRecord{{Id: "future-model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}, IsDefault: true}, {Id: "non-reasoning"}}}
 	result, err := modelCatalogObservation(task, base)
-	if err != nil || len(result.Models) != 2 || result.Models[0].DefaultReasoningEffort != "adaptive" || result.Models[1].DefaultReasoningEffort != "" {
+	if err != nil || len(result.Models) != 2 || result.Models[0].DefaultReasoningEffort != "adaptive" || !result.Models[0].IsDefault || result.Models[1].DefaultReasoningEffort != "" || result.Models[1].IsDefault {
 		t.Fatalf("capabilities lost: %+v %v", result, err)
 	}
 	for name, change := range map[string]func(*controlplanev1.ObserveProviderModelCatalogResponse){
@@ -84,6 +84,9 @@ func TestModelCatalogObservationPreservesCapabilitiesAndRejectsUnverifiedModels(
 		},
 		"duplicate effort": func(r *controlplanev1.ObserveProviderModelCatalogResponse) {
 			r.Models[0].ReasoningEfforts = []string{"adaptive", "adaptive"}
+		},
+		"multiple defaults": func(r *controlplanev1.ObserveProviderModelCatalogResponse) {
+			r.Models[1].IsDefault = true
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

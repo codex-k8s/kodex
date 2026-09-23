@@ -22,6 +22,11 @@ async function fixture(mode: "ready" | "http" | "contract" | "cors" = "ready") {
     throw new Error("Missing fixture port");
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://fixture.invalid");
+    if (/^\/null-body\/(204|205|304)$/.test(url.pathname)) {
+      response.writeHead(Number(url.pathname.split("/").pop()));
+      response.end();
+      return;
+    }
     if (url.pathname.startsWith("/api/v1/")) {
       apiReads++;
       if (url.pathname === "/api/v1/overview") overviewReads++;
@@ -128,6 +133,18 @@ async function fixture(mode: "ready" | "http" | "contract" | "cors" = "ready") {
     },
   };
 }
+
+test("document lifetime preserves null-body responses", async ({ page }) => {
+  const server = await fixture();
+  try {
+    await page.goto(`${server.origin}/projects`);
+    await page.locator("#null-body").click();
+    await expect(page.locator("#null-body-result")).toHaveText("pass");
+  } finally {
+    await page.close();
+    await server.close();
+  }
+});
 
 for (const observer of [false, true]) {
   test(`document lifecycle: delayed Projects → close → locale, observer=${String(observer)}`, async ({

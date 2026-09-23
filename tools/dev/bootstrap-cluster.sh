@@ -215,6 +215,7 @@ trust_browser_ca() {
 }
 
 if [[ "$mode" == apply ]]; then
+  sudo -n "$repository_root/tools/dev/configure-provider-sandbox.sh" --mode apply
   if [[ "$tls_mode" == local-ca ]]; then
     install_cert_manager
   else
@@ -230,6 +231,8 @@ if [[ "$mode" == apply ]]; then
     trust_browser_ca
   fi
 fi
+
+sudo -n "$repository_root/tools/dev/configure-provider-sandbox.sh" --mode readback
 
 for deployment in cert-manager cert-manager-cainjector cert-manager-webhook; do
   kubectl -n cert-manager rollout status "deployment/$deployment" --timeout=3m >/dev/null ||

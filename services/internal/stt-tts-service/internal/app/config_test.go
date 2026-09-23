@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
 func TestConfigRejectsAlternateSecurityBoundary(t *testing.T) {
@@ -57,5 +58,37 @@ func TestLoadConfigRequiresDeploymentEgressExpectations(t *testing.T) {
 	config, err := loadConfig()
 	if err != nil || config.Egress.Revision != "test-generation" || config.Egress.Digest != strings.Repeat("a", 64) {
 		t.Fatal("typed egress configuration not loaded")
+	}
+}
+
+func TestTrustedConfigDoesNotRequireInternalAuthorityFiles(t *testing.T) {
+	t.Setenv("STT_EGRESS_EXPECTED_REVISION", "test-generation")
+	t.Setenv("STT_EGRESS_EXPECTED_DIGEST", strings.Repeat("a", 64))
+	t.Setenv("KODEX_RPC_PROFILE", transportprofile.TrustedCluster)
+	config, err := loadConfig()
+	if err != nil || config.RPCProfile != transportprofile.TrustedCluster {
+		t.Fatal("explicit trusted profile not loaded")
+	}
+	config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile = "", "", ""
+	config.WorkloadCertificateFile, config.WorkloadPrivateKeyFile, config.DependencyCAFile = "", "", ""
+	config.AuthorityIssuerSocket, config.AuthorityVerifierSocket = "", ""
+	config.AuthorityIssuerUID, config.AuthorityIssuerGID, config.AuthorityVerifierUID, config.AuthorityVerifierGID = 0, 0, 0, 0
+	config.PolicyTLSServerName, config.CredentialTLSServerName = "", ""
+	if err := config.validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*Config){
+		func(c *Config) { c.RPCProfile = "" },
+		func(c *Config) { c.RPCProfile = "insecure" },
+		func(c *Config) { c.PolicyTarget = "dns:///external.example:8443" },
+		func(c *Config) { c.CredentialTarget = "dns:///external.example:8443" },
+		func(c *Config) { c.SpoolDirectory = "relative" },
+		func(c *Config) { c.Egress.Digest = "" },
+	} {
+		candidate := config
+		mutate(&candidate)
+		if candidate.validate() == nil {
+			t.Fatal("trusted profile weakened a retained boundary")
+		}
 	}
 }

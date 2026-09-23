@@ -177,6 +177,13 @@ func (service *Service) ListProjects(ctx context.Context, p value.Principal, fil
 	}
 	return service.repository.ListProjects(ctx, p, filter)
 }
+func (service *Service) ListTrashedProjects(ctx context.Context, p value.Principal, page query.Page) ([]entity.Project, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, "", err
+	}
+	return service.repository.ListTrashedProjects(ctx, p, page)
+}
 func (service *Service) GetProject(ctx context.Context, p value.Principal, ref string) (entity.Project, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -1287,7 +1294,7 @@ func knownCommand(kind command.Kind) bool {
 	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
 		command.PrepareEnvironmentDraftImpact, command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft, command.RebindRuntimeEnvironment, command.RebindRuntimeSecret, command.BindInteractionIdentity, command.RevokeInteractionIdentity:
 		return true
-	case command.CompleteOnboarding, command.CreateProject, command.UpdateProject,
+	case command.CompleteOnboarding, command.CreateProject, command.UpdateProject, command.TrashProject, command.RestoreProject, command.PurgeProject,
 		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,

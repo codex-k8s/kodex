@@ -22,6 +22,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	RuntimeNamespace            string        `env:"SECRET_BROKER_RUNTIME_NAMESPACE"`
 	DraftNamespace              string        `env:"SECRET_BROKER_DRAFT_NAMESPACE"`
@@ -87,6 +88,9 @@ func loadConfig() (Config, error) {
 }
 
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
+		return errors.New("secret broker RPC profile is invalid")
+	}
 	if (config.Environment != "staging" && config.Environment != "production") ||
 		config.RuntimeNamespace != "kodex-runtime" || config.DraftNamespace != "kodex-secret-drafts" ||
 		config.DraftKeyGuardName != "secret-broker-draft-key-guard" || config.ClaimantID == "" || len(config.ClaimantID) > 128 ||

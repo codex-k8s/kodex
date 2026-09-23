@@ -34,7 +34,9 @@ import {
 } from "@/features/assistant/context";
 import { openAssistantEvent } from "@/features/assistant/events";
 import {
+  assistantAwaitingReply,
   assistantEffectiveRuntimeState,
+  assistantRequiresProviderAccount,
   operationActionLabel,
   operationTargetLabel,
 } from "@/features/assistant/model";
@@ -150,6 +152,19 @@ const assistantRuntimeState = computed(() =>
     ? assistantEffectiveRuntimeState(store.assistant)
     : "RECOVERING",
 );
+const awaitingReply = computed(() =>
+  assistantAwaitingReply(store.selectedConversation),
+);
+const providerAccountRequired = computed(
+  () =>
+    store.assistant !== undefined &&
+    assistantRequiresProviderAccount(store.assistant),
+);
+const assistantReadinessLabel = computed(() =>
+  providerAccountRequired.value
+    ? t("assistant.providerAccountRequired")
+    : store.assistant?.readinessSummary,
+);
 const canCreateConversation = computed(
   () =>
     assistantRuntimeState.value === "READY" &&
@@ -239,7 +254,7 @@ function close(): void {
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key === "Escape") {
     if (historyOpen.value) historyOpen.value = false;
-    else if (openPlanRef.value) openPlanRef.value = undefined;
+    else if (openPlanRef.value) void closePlan();
     else close();
     return;
   }
@@ -348,6 +363,17 @@ function handleComposerKeydown(event: KeyboardEvent): void {
 function openPlan(plan: AssistantPlan): void {
   store.clearReceipt();
   openPlanRef.value = plan.ref;
+}
+
+async function closePlan(): Promise<void> {
+  const refresh = ["APPLIED", "REJECTED"].includes(
+    currentPlan.value?.state ?? "",
+  );
+  openPlanRef.value = undefined;
+  store.clearReceipt();
+  await nextTick();
+  scrollToLatest();
+  if (refresh && open.value) await store.load(props.context, props.projectRef);
 }
 
 async function savePlan(
@@ -488,7 +514,7 @@ onBeforeUnmount(() => {
         <StatusBadge
           v-if="store.assistant"
           :state="assistantRuntimeState"
-          :label="store.assistant.readinessSummary"
+          :label="assistantReadinessLabel"
         />
         <button
           class="assistant-new-conversation"
@@ -648,7 +674,7 @@ onBeforeUnmount(() => {
         :busy="store.busy"
         :readonly="store.selectedConversation?.state === 'ARCHIVED'"
         :problem="store.problem"
-        @close="openPlanRef = undefined"
+        @close="closePlan"
         @save="savePlan"
         @validate="validatePlan"
         @apply="applyPlan"
@@ -807,8 +833,20 @@ onBeforeUnmount(() => {
                 class="assistant-empty-state"
               >
                 <Sparkles :size="28" aria-hidden="true" />
-                <h2>{{ $t("assistant.ready") }}</h2>
-                <p>{{ $t("assistant.contextHelp") }}</p>
+                <template v-if="providerAccountRequired">
+                  <h2>{{ $t("assistant.providerAccountRequired") }}</h2>
+                  <p>{{ $t("assistant.providerAccountRequiredHelp") }}</p>
+                  <RouterLink
+                    class="button button--primary"
+                    :to="{ name: 'provider-accounts' }"
+                    @click="close"
+                    >{{ $t("assistant.openProviderAccounts") }}</RouterLink
+                  >
+                </template>
+                <template v-else>
+                  <h2>{{ $t("assistant.ready") }}</h2>
+                  <p>{{ $t("assistant.contextHelp") }}</p>
+                </template>
               </div>
               <article
                 v-for="turn in store.selectedConversation?.turns ?? []"
@@ -882,6 +920,17 @@ onBeforeUnmount(() => {
                   </button>
                 </section>
               </article>
+              <div
+                v-if="awaitingReply && !store.loading && !store.problem"
+                class="assistant-message assistant-message--typing"
+                role="status"
+                :aria-label="$t('assistant.working')"
+              >
+                <strong>{{ $t("assistant.working") }}</strong>
+                <span class="assistant-typing-dots" aria-hidden="true">
+                  <i></i><i></i><i></i>
+                </span>
+              </div>
             </section>
 
             <footer class="assistant-composer">
@@ -1033,9 +1082,12 @@ onBeforeUnmount(() => {
     background: var(--accent-soft);
   }
   .assistant-conversation-entry strong {
+    display: -webkit-box;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
   }
   .assistant-conversation-entry time {
     color: var(--muted);
@@ -1298,6 +1350,48 @@ onBeforeUnmount(() => {
 .assistant-message--system_receipt {
   width: 100%;
   background: var(--panel);
+}
+.assistant-message--typing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.assistant-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.assistant-typing-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: assistant-typing 1.2s ease-in-out infinite;
+}
+.assistant-typing-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.assistant-typing-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes assistant-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant-typing-dots i {
+    animation: none;
+    opacity: 0.75;
+  }
 }
 .assistant-message > header,
 .assistant-plan-card > header {

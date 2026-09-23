@@ -9,7 +9,7 @@ import (
 
 func TestModelCatalogContentIdentityExcludesFreshnessAndCredentialButBindsCapabilities(t *testing.T) {
 	task := platformrepo.ProviderModelCatalogTask{OrganizationID: "tenant", AccountRef: "pacc_account", AccountVersion: 1, CredentialRef: "credential", CredentialRevision: 1, AuthorizationMethod: "API_KEY"}
-	observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, ObservedAt: time.Now(), Source: "REMOTE_API", Failure: "NONE", Models: []platformrepo.ProviderModelCatalogRecord{{ID: "model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}}, {ID: "non-reasoning"}}}
+	observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, ObservedAt: time.Now(), Source: "REMOTE_API", Failure: "NONE", Models: []platformrepo.ProviderModelCatalogRecord{{ID: "model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}, IsDefault: true}, {ID: "non-reasoning"}}}
 	_, content, receipt, err := canonicalModelCatalogObservation(task, observation)
 	if err != nil {
 		t.Fatal(err)
@@ -30,6 +30,12 @@ func TestModelCatalogContentIdentityExcludesFreshnessAndCredentialButBindsCapabi
 	_, changed, _, err = canonicalModelCatalogObservation(task, observation)
 	if err != nil || changed == content {
 		t.Fatal("capabilities not bound")
+	}
+	observation.Models[0].ReasoningEfforts = []string{"adaptive"}
+	observation.Models[0].IsDefault = false
+	_, changed, _, err = canonicalModelCatalogObservation(task, observation)
+	if err != nil || changed == content {
+		t.Fatal("provider default not bound")
 	}
 }
 
@@ -52,5 +58,9 @@ func TestModelCatalogObservationFailsClosedWithoutRemoteEvidence(t *testing.T) {
 	base.Models = []platformrepo.ProviderModelCatalogRecord{{ID: "non-reasoning", DefaultReasoningEffort: "none"}}
 	if _, _, _, err := canonicalModelCatalogObservation(task, base); err == nil {
 		t.Fatal("invented non-reasoning effort accepted")
+	}
+	base.Models = []platformrepo.ProviderModelCatalogRecord{{ID: "first", IsDefault: true}, {ID: "second", IsDefault: true}}
+	if _, _, _, err := canonicalModelCatalogObservation(task, base); err == nil {
+		t.Fatal("multiple provider defaults accepted")
 	}
 }

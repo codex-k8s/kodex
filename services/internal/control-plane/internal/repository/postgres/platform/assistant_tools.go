@@ -153,6 +153,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 
 	if targetKind, targetName, ok := assistantCreateTarget(operation.Type, operation.Parameters); ok {
+		if operation.Type == "CREATE_AGENT" {
+			operation.Parameters = withAssistantAgentTemplateContext(operation.Parameters)
+		}
 		operation.Action = "CREATE"
 		operation.Target = entity.AssistantPlanTarget{Kind: targetKind, Name: targetName}
 		operation.Before = map[string]any{}
@@ -181,6 +184,30 @@ func (repository *Repository) hydrateAssistantOperation(
 		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
 	}
 	return hydrateAssistantProjectOperation(projectRef, name, purpose, language, version, operation)
+}
+
+func withAssistantAgentTemplateContext(parameters map[string]any) map[string]any {
+	instructions, ok := parameters["instructions"].(string)
+	if !ok {
+		return parameters
+	}
+	context := []struct{ variable, label string }{
+		{"organization.name", "Организация"},
+		{"project.name", "Проект"},
+		{"agent.name", "Сотрудник"},
+	}
+	lines := make([]string, 0, len(context))
+	for _, item := range context {
+		if !strings.Contains(instructions, "{{ ."+item.variable+" }}") {
+			lines = append(lines, item.label+": {{ ."+item.variable+" }}")
+		}
+	}
+	if len(lines) == 0 {
+		return parameters
+	}
+	result := cloneAssistantFields(parameters)
+	result["instructions"] = strings.Join(lines, "\n") + "\n\n" + instructions
+	return result
 }
 
 func hydrateAssistantProjectOperation(
@@ -367,16 +394,26 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		result.Kind, result.Payload = command.UpdateProject, payload
 		result.Mutation.ExpectedVersion = &expected
 	case "CREATE_AGENT":
-		if !onlyAssistantFields(operation.Input, "projectRef", "roleDefinitionRef", "name", "purpose", "roleDescription", "avatarUrl", "runtimeRef", "instructions") ||
+		if !onlyAssistantFields(operation.Input, "projectRef", "roleDefinitionRef", "name", "purpose", "roleDescription", "avatarUrl", "runtimeRef", "instructions", "capabilities") ||
 			!hasAssistantFields(operation.Input, "projectRef", "name", "purpose", "roleDescription", "instructions") {
 			return command.Command{}, errs.ErrInvalid
+		}
+		var initialCapabilities []string
+		if _, requested := operation.Input["capabilities"]; requested {
+			var valid bool
+			initialCapabilities, valid = assistantStringsValue(operation.Input, "capabilities")
+			if !valid || !validInitialAgentCapabilities(initialCapabilities) {
+				return command.Command{}, errs.ErrInvalid
+			}
 		}
 		payload := command.AgentInput{ProjectRef: assistantString(operation.Input, "projectRef"), RoleDefinitionRef: assistantString(operation.Input, "roleDefinitionRef"),
 			Name: assistantString(operation.Input, "name"), Purpose: assistantString(operation.Input, "purpose"),
 			RoleDescription: assistantString(operation.Input, "roleDescription"), AvatarURL: assistantString(operation.Input, "avatarUrl"),
-			RuntimeRef: assistantString(operation.Input, "runtimeRef"), Instructions: assistantString(operation.Input, "instructions")}
+			RuntimeRef: assistantString(operation.Input, "runtimeRef"), Instructions: assistantString(operation.Input, "instructions"),
+			InitialCapabilities: initialCapabilities}
 		if payload.ProjectRef == "" || payload.Name == "" || len(payload.Name) > 160 || payload.Purpose == "" || len(payload.Purpose) > 2000 ||
-			payload.RoleDescription == "" || len(payload.RoleDescription) > 2000 || len(payload.AvatarURL) > 500 || len(payload.Instructions) < 20 || len(payload.Instructions) > 65536 {
+			payload.RoleDescription == "" || len(payload.RoleDescription) > 2000 || len(payload.AvatarURL) > 500 || len(payload.Instructions) < 20 || len(payload.Instructions) > 65536 ||
+			strings.Contains(payload.Instructions, "i18n:") || strings.Contains(payload.Instructions, "{{ index .") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateAgent, payload

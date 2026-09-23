@@ -102,7 +102,14 @@ function responseWithLifetime(
   disposeSignals: () => void,
 ): Response {
   const nativeBody = response.body;
-  if (!nativeBody) {
+  // Chrome может вернуть stream даже для null-body status; новый Response
+  // с таким status и stream запрещён. Сохраняем нативный ответ без обёртки.
+  if (
+    !nativeBody ||
+    response.status === 204 ||
+    response.status === 205 ||
+    response.status === 304
+  ) {
     disposeSignals();
     return response;
   }

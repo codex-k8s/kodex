@@ -6,3 +6,4 @@
 /.kodex-remote-env
 /.kodex-material/
 /.agents/
+__pycache__/

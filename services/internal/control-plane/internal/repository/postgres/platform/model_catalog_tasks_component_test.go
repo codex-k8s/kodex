@@ -144,7 +144,7 @@ func seedObservedCatalogFixture(t *testing.T, ctx context.Context, repository *R
 			source = "REMOTE_API"
 		}
 		observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, Source: source, Failure: "NONE", ObservedAt: time.Now(), Models: []platformrepo.ProviderModelCatalogRecord{
-			{ID: "gpt-5", DefaultReasoningEffort: "high", ReasoningEfforts: []string{"low", "medium", "high"}},
+			{ID: "gpt-5", DefaultReasoningEffort: "high", ReasoningEfforts: []string{"low", "medium", "high"}, IsDefault: true},
 			{ID: "future-model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}},
 			{ID: "non-reasoning"},
 		}}

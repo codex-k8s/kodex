@@ -28,9 +28,10 @@ type fakeOwner struct {
 	completedValue   *controlplanev1.RuntimeSecretMaterialization
 	failedCode       controlplanev1.RuntimeSecretFailureCode
 	events           *[]string
+	checkErr         error
 }
 
-func (owner *fakeOwner) Check(context.Context) error                     { return nil }
+func (owner *fakeOwner) Check(context.Context) error                     { return owner.checkErr }
 func (owner *fakeOwner) CheckCredentialProjection(context.Context) error { return nil }
 func (owner *fakeOwner) ResolveRuntimeCredentialProjection(context.Context, *controlplanev1.ResolveRuntimeCredentialProjectionRequest) (*controlplanev1.ResolveRuntimeCredentialProjectionResponse, error) {
 	return nil, errors.New("unexpected runtime credential projection")
@@ -85,6 +86,7 @@ type fakeStore struct {
 	resolveErr    error
 	readErr       error
 	deleteErr     error
+	checkErr      error
 	deleteCalls   int
 	events        *[]string
 }
@@ -94,7 +96,7 @@ type fakeRecovery struct{ err error }
 func (recovery *fakeRecovery) Check(context.Context) error { return recovery.err }
 
 func (store *fakeStore) Namespace() string           { return runtimeNamespace }
-func (store *fakeStore) Check(context.Context) error { return nil }
+func (store *fakeStore) Check(context.Context) error { return store.checkErr }
 func (store *fakeStore) CreateImmutableForEffect(_ context.Context, effect kubernetesstore.MaterializationEffect, value []byte) (kubernetesstore.Materialization, error) {
 	store.createdEffect = effect
 	store.createdValue = append([]byte(nil), value...)
@@ -272,13 +274,19 @@ func TestInvalidJSONProducesTerminalFailure(t *testing.T) {
 	}
 }
 
-func TestReadinessIncludesRecoveryState(t *testing.T) {
+func TestReadinessIgnoresAdjacentOwnerAndRecovery(t *testing.T) {
 	t.Parallel()
 	owner := successfulOwner("grant", readOperation(controlplanev1.RuntimeSecretOperationKind_RUNTIME_SECRET_OPERATION_KIND_REVEAL, "secop_ready", 1))
+	owner.checkErr = errors.New("synthetic owner outage")
 	server, _ := New(owner, &fakeStore{}, &fakeRecovery{err: errors.New("synthetic recovery backlog")}, 512<<10)
 	response, err := server.CheckReadiness(context.Background(), &secretbrokerv1.CheckReadinessRequest{})
+	if err != nil || !response.GetReady() {
+		t.Fatalf("adjacent outage closed gRPC readiness: response=%#v err=%v", response, err)
+	}
+	server.store = &fakeStore{checkErr: errors.New("synthetic Kubernetes outage")}
+	response, err = server.CheckReadiness(context.Background(), &secretbrokerv1.CheckReadinessRequest{})
 	if status.Code(err) != codes.Unavailable || response.GetReady() {
-		t.Fatalf("recovery failure must close gRPC readiness: response=%#v err=%v", response, err)
+		t.Fatalf("local infrastructure outage kept gRPC readiness open: response=%#v err=%v", response, err)
 	}
 }
 

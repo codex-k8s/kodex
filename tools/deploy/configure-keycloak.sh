@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode apply|readback|retire-initial-passwords" \
     '  --public-origin <https-origin> --grafana-origin <https-origin>' \
-    '  --headlamp-origin <https-origin>' \
+    '  --headlamp-origin <https-origin> [--management-surfaces all|control-center]' \
     '  [--namespace identity] [--deployment sso]' \
     '  [--realm kodex] [--admin-secret keycloak-admin-client]' \
     '  [--bootstrap-secret keycloak-bootstrap]' \
@@ -23,6 +23,7 @@ mode=""
 public_origin=""
 grafana_origin=""
 headlamp_origin=""
+management_surfaces=all
 namespace=identity
 deployment=sso
 realm=kodex
@@ -37,6 +38,7 @@ while (($# > 0)); do
     --public-origin) public_origin="${2:-}"; shift 2 ;;
     --grafana-origin) grafana_origin="${2:-}"; shift 2 ;;
     --headlamp-origin) headlamp_origin="${2:-}"; shift 2 ;;
+    --management-surfaces) management_surfaces="${2:-}"; shift 2 ;;
     --namespace) namespace="${2:-}"; shift 2 ;;
     --deployment) deployment="${2:-}"; shift 2 ;;
     --realm) realm="${2:-}"; shift 2 ;;
@@ -50,6 +52,7 @@ while (($# > 0)); do
 done
 
 [[ -n "$expected_context" ]] || fail 'exact context is required'
+case "$management_surfaces" in all|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
 case "$mode" in apply|readback|retire-initial-passwords) ;; *) fail 'mode is invalid' ;; esac
 [[ "$public_origin" =~ ^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail 'public origin is invalid'
 for management_origin in "$grafana_origin" "$headlamp_origin"; do
@@ -479,10 +482,12 @@ if [[ "$mode" == apply ]]; then
 
   reconcile_confidential_client kodex-control-center-proxy "$public_origin" \
     kodex-system oauth2-control-center
-  reconcile_confidential_client kodex-grafana-proxy "$grafana_origin" \
+  if [[ "$management_surfaces" == all ]]; then
+    reconcile_confidential_client kodex-grafana-proxy "$grafana_origin" \
     observability oauth2-grafana
   reconcile_confidential_client kodex-headlamp-proxy "$headlamp_origin" \
     platform-admin oauth2-headlamp master
+  fi
 fi
 
 realm_json=$(keycloak_request get "realms/$realm")
@@ -533,8 +538,10 @@ keycloak_request get "users/$owner_id/role-mappings/realm" -r "$realm" |
   jq -e 'any(.[]; .name == "kodex-owner")' >/dev/null || fail 'owner role readback failed'
 
 readback_confidential_client kodex-control-center-proxy "$public_origin" "$public_origin/oauth2/callback"
-readback_confidential_client kodex-grafana-proxy "$grafana_origin" "$grafana_origin/oauth2/callback"
+if [[ "$management_surfaces" == all ]]; then
+  readback_confidential_client kodex-grafana-proxy "$grafana_origin" "$grafana_origin/oauth2/callback"
 readback_confidential_client kodex-headlamp-proxy "$headlamp_origin" "$headlamp_origin/oauth2/callback" master
+fi
 
 administrator_id=$(keycloak_request get users -r master -q "username=$admin_username" |
   jq -er --arg username "$admin_username" '

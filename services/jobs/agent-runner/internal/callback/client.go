@@ -42,7 +42,7 @@ const (
 var defaultCallbackRetryDelays = [...]time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second, 5 * time.Second}
 
 func New(input model.Input) (*Client, error) {
-	transport, err := exactTransport(input.CallbackTLS)
+	transport, err := TransportForInput(input)
 	if err != nil {
 		return nil, err
 	}

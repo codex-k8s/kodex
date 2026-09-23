@@ -19,6 +19,11 @@ type promotionRepositoryStub struct {
 	calls    int
 }
 
+func (stub *promotionRepositoryStub) GetSupplyWorkAvailability(context.Context, value.Principal) (repository.SupplyWorkAvailability, error) {
+	stub.calls++
+	return repository.SupplyWorkAvailability{AdmissionAvailable: true}, nil
+}
+
 func (stub *promotionRepositoryStub) ResolvePrincipal(context.Context, value.Principal) (value.Principal, error) {
 	return stub.resolved, nil
 }
@@ -71,6 +76,41 @@ func TestPromoteRoleImageBuildsSpecializedMutation(t *testing.T) {
 	if err != nil || stub.input.Mutation.IntentDigest == firstIntent {
 		t.Fatalf("promotion OCC version is not bound to intent: first=%s second=%s err=%v",
 			firstIntent, stub.input.Mutation.IntentDigest, err)
+	}
+}
+
+func TestGetSupplyWorkAvailabilityRequiresExactControllerAuthority(t *testing.T) {
+	catalog, err := NewCatalog([]Environment{validEnvironment(true, true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := value.Principal{ActorID: "svc_controller", AuthorityTenant: "org_installation",
+		Permission: permissionGetSupplyWork, CorrelationRef: "cor_availability",
+		CallerWorkload: "image-admission-controller", CredentialRevision: 1}
+	for _, test := range []struct {
+		name      string
+		principal value.Principal
+		allowed   bool
+	}{
+		{name: "exact controller", principal: valid, allowed: true},
+		{name: "wrong caller", principal: func() value.Principal { p := valid; p.CallerWorkload = "image-admission"; return p }()},
+		{name: "wrong permission", principal: func() value.Principal { p := valid; p.Permission = permissionClaimAdmission; return p }()},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stub := &promotionRepositoryStub{resolved: test.principal}
+			service, serviceErr := New(stub, catalog)
+			if serviceErr != nil {
+				t.Fatal(serviceErr)
+			}
+			got, getErr := service.GetSupplyWorkAvailability(context.Background(), test.principal)
+			if test.allowed {
+				if getErr != nil || !got.AdmissionAvailable || stub.calls != 1 {
+					t.Fatalf("exact controller rejected: got=%#v calls=%d err=%v", got, stub.calls, getErr)
+				}
+			} else if !errors.Is(getErr, errs.ErrForbidden) || stub.calls != 0 {
+				t.Fatalf("invalid controller authority accepted: calls=%d err=%v", stub.calls, getErr)
+			}
+		})
 	}
 }
 

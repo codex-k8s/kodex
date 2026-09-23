@@ -76,6 +76,33 @@ func TestServiceIdentityAllowsExactArtifactUploadStream(t *testing.T) {
 	}
 }
 
+func TestServiceIdentityAllowsExactAgentAvatarUploadStream(t *testing.T) {
+	method := cp.PlatformCommandService_UploadAgentAvatar_FullMethodName
+	ctx, err := WithApplicationGrant(t.Context(), "synthetic-user-credential")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err = WithProjectReference(ctx, "prj_abcdefghijk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	stream, err := serviceIdentityStream(operationSet{method: "platform.command.agents.avatar.upload"}, map[string]struct{}{"platform.command.agents.avatar.upload": {}})(
+		ctx, &grpc.StreamDesc{ClientStreams: true}, nil, method,
+		func(ctx context.Context, _ *grpc.StreamDesc, _ *grpc.ClientConn, _ string, _ ...grpc.CallOption) (grpc.ClientStream, error) {
+			calls++
+			md, _ := metadata.FromOutgoingContext(ctx)
+			if md.Get("x-kodex-rpc-profile")[0] != "service-v1" || md.Get("x-kodex-project-ref")[0] != "prj_abcdefghijk" || md.Get("authorization")[0] != "Bearer synthetic-user-credential" {
+				t.Fatal("agent avatar upload stream metadata is incomplete")
+			}
+			return serviceIdentityClientStream{}, nil
+		},
+	)
+	if err != nil || stream == nil || calls != 1 {
+		t.Fatalf("agent avatar upload stream rejected: calls=%d err=%v", calls, err)
+	}
+}
+
 func TestServiceIdentityAllowsExactArtifactDownloadStream(t *testing.T) {
 	method := cp.PlatformCommandService_DownloadArtifact_FullMethodName
 	ctx, err := WithApplicationGrant(t.Context(), "synthetic-user-credential")

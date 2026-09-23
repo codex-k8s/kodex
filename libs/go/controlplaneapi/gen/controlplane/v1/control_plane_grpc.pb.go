@@ -43,6 +43,7 @@ const (
 	PlatformQueryService_ListVFSNodes_FullMethodName                             = "/controlplane.v1.PlatformQueryService/ListVFSNodes"
 	PlatformQueryService_SearchVFS_FullMethodName                                = "/controlplane.v1.PlatformQueryService/SearchVFS"
 	PlatformQueryService_ListProjects_FullMethodName                             = "/controlplane.v1.PlatformQueryService/ListProjects"
+	PlatformQueryService_ListTrashedProjects_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListTrashedProjects"
 	PlatformQueryService_GetProject_FullMethodName                               = "/controlplane.v1.PlatformQueryService/GetProject"
 	PlatformQueryService_ListPlatformMemberships_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListPlatformMemberships"
 	PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName         = "/controlplane.v1.PlatformQueryService/ListPlatformMembershipCandidates"
@@ -142,6 +143,7 @@ type PlatformQueryServiceClient interface {
 	ListVFSNodes(ctx context.Context, in *ListVFSNodesRequest, opts ...grpc.CallOption) (*ListVFSNodesResponse, error)
 	SearchVFS(ctx context.Context, in *SearchVFSRequest, opts ...grpc.CallOption) (*SearchVFSResponse, error)
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
+	ListTrashedProjects(ctx context.Context, in *ListTrashedProjectsRequest, opts ...grpc.CallOption) (*ListTrashedProjectsResponse, error)
 	GetProject(ctx context.Context, in *GetProjectRequest, opts ...grpc.CallOption) (*GetProjectResponse, error)
 	// ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
 	ListPlatformMemberships(ctx context.Context, in *ListPlatformMembershipsRequest, opts ...grpc.CallOption) (*ListPlatformMembershipsResponse, error)
@@ -457,6 +459,16 @@ func (c *platformQueryServiceClient) ListProjects(ctx context.Context, in *ListP
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListProjectsResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_ListProjects_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListTrashedProjects(ctx context.Context, in *ListTrashedProjectsRequest, opts ...grpc.CallOption) (*ListTrashedProjectsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTrashedProjectsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListTrashedProjects_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1181,6 +1193,7 @@ type PlatformQueryServiceServer interface {
 	ListVFSNodes(context.Context, *ListVFSNodesRequest) (*ListVFSNodesResponse, error)
 	SearchVFS(context.Context, *SearchVFSRequest) (*SearchVFSResponse, error)
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
+	ListTrashedProjects(context.Context, *ListTrashedProjectsRequest) (*ListTrashedProjectsResponse, error)
 	GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error)
 	// ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
 	ListPlatformMemberships(context.Context, *ListPlatformMembershipsRequest) (*ListPlatformMembershipsResponse, error)
@@ -1333,6 +1346,9 @@ func (UnimplementedPlatformQueryServiceServer) SearchVFS(context.Context, *Searc
 }
 func (UnimplementedPlatformQueryServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListTrashedProjects(context.Context, *ListTrashedProjectsRequest) (*ListTrashedProjectsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTrashedProjects not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetProject(context.Context, *GetProjectRequest) (*GetProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetProject not implemented")
@@ -1990,6 +2006,24 @@ func _PlatformQueryService_ListProjects_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).ListProjects(ctx, req.(*ListProjectsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListTrashedProjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTrashedProjectsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListTrashedProjects(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListTrashedProjects_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListTrashedProjects(ctx, req.(*ListTrashedProjectsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3340,6 +3374,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_ListProjects_Handler,
 		},
 		{
+			MethodName: "ListTrashedProjects",
+			Handler:    _PlatformQueryService_ListTrashedProjects_Handler,
+		},
+		{
 			MethodName: "GetProject",
 			Handler:    _PlatformQueryService_GetProject_Handler,
 		},
@@ -3673,6 +3711,9 @@ const (
 	PlatformCommandService_CompleteOnboarding_FullMethodName                        = "/controlplane.v1.PlatformCommandService/CompleteOnboarding"
 	PlatformCommandService_CreateProject_FullMethodName                             = "/controlplane.v1.PlatformCommandService/CreateProject"
 	PlatformCommandService_UpdateProject_FullMethodName                             = "/controlplane.v1.PlatformCommandService/UpdateProject"
+	PlatformCommandService_TrashProject_FullMethodName                              = "/controlplane.v1.PlatformCommandService/TrashProject"
+	PlatformCommandService_RestoreProject_FullMethodName                            = "/controlplane.v1.PlatformCommandService/RestoreProject"
+	PlatformCommandService_PurgeProject_FullMethodName                              = "/controlplane.v1.PlatformCommandService/PurgeProject"
 	PlatformCommandService_AddPlatformMembership_FullMethodName                     = "/controlplane.v1.PlatformCommandService/AddPlatformMembership"
 	PlatformCommandService_ChangePlatformMembership_FullMethodName                  = "/controlplane.v1.PlatformCommandService/ChangePlatformMembership"
 	PlatformCommandService_RemovePlatformMembership_FullMethodName                  = "/controlplane.v1.PlatformCommandService/RemovePlatformMembership"
@@ -3845,6 +3886,9 @@ type PlatformCommandServiceClient interface {
 	CompleteOnboarding(ctx context.Context, in *CompleteOnboardingRequest, opts ...grpc.CallOption) (*CompleteOnboardingResponse, error)
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*CreateProjectResponse, error)
 	UpdateProject(ctx context.Context, in *UpdateProjectRequest, opts ...grpc.CallOption) (*UpdateProjectResponse, error)
+	TrashProject(ctx context.Context, in *TrashProjectRequest, opts ...grpc.CallOption) (*TrashProjectResponse, error)
+	RestoreProject(ctx context.Context, in *RestoreProjectRequest, opts ...grpc.CallOption) (*RestoreProjectResponse, error)
+	PurgeProject(ctx context.Context, in *PurgeProjectRequest, opts ...grpc.CallOption) (*PurgeProjectResponse, error)
 	// AddPlatformMembership назначает platform role выбранному из авторитетного списка OIDC subject.
 	AddPlatformMembership(ctx context.Context, in *AddPlatformMembershipRequest, opts ...grpc.CallOption) (*AddPlatformMembershipResponse, error)
 	// ChangePlatformMembership применяет OCC после organization owner resolution и защищает последнего Owner.
@@ -4488,6 +4532,36 @@ func (c *platformCommandServiceClient) UpdateProject(ctx context.Context, in *Up
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateProjectResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_UpdateProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) TrashProject(ctx context.Context, in *TrashProjectRequest, opts ...grpc.CallOption) (*TrashProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TrashProjectResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_TrashProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RestoreProject(ctx context.Context, in *RestoreProjectRequest, opts ...grpc.CallOption) (*RestoreProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RestoreProjectResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RestoreProject_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) PurgeProject(ctx context.Context, in *PurgeProjectRequest, opts ...grpc.CallOption) (*PurgeProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeProjectResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_PurgeProject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5708,6 +5782,9 @@ type PlatformCommandServiceServer interface {
 	CompleteOnboarding(context.Context, *CompleteOnboardingRequest) (*CompleteOnboardingResponse, error)
 	CreateProject(context.Context, *CreateProjectRequest) (*CreateProjectResponse, error)
 	UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error)
+	TrashProject(context.Context, *TrashProjectRequest) (*TrashProjectResponse, error)
+	RestoreProject(context.Context, *RestoreProjectRequest) (*RestoreProjectResponse, error)
+	PurgeProject(context.Context, *PurgeProjectRequest) (*PurgeProjectResponse, error)
 	// AddPlatformMembership назначает platform role выбранному из авторитетного списка OIDC subject.
 	AddPlatformMembership(context.Context, *AddPlatformMembershipRequest) (*AddPlatformMembershipResponse, error)
 	// ChangePlatformMembership применяет OCC после organization owner resolution и защищает последнего Owner.
@@ -5992,6 +6069,15 @@ func (UnimplementedPlatformCommandServiceServer) CreateProject(context.Context, 
 }
 func (UnimplementedPlatformCommandServiceServer) UpdateProject(context.Context, *UpdateProjectRequest) (*UpdateProjectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateProject not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) TrashProject(context.Context, *TrashProjectRequest) (*TrashProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TrashProject not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RestoreProject(context.Context, *RestoreProjectRequest) (*RestoreProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RestoreProject not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) PurgeProject(context.Context, *PurgeProjectRequest) (*PurgeProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgeProject not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) AddPlatformMembership(context.Context, *AddPlatformMembershipRequest) (*AddPlatformMembershipResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddPlatformMembership not implemented")
@@ -7289,6 +7375,60 @@ func _PlatformCommandService_UpdateProject_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).UpdateProject(ctx, req.(*UpdateProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_TrashProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TrashProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).TrashProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_TrashProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).TrashProject(ctx, req.(*TrashProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RestoreProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RestoreProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RestoreProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RestoreProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RestoreProject(ctx, req.(*RestoreProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_PurgeProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).PurgeProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_PurgeProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).PurgeProject(ctx, req.(*PurgeProjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -9519,6 +9659,18 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateProject",
 			Handler:    _PlatformCommandService_UpdateProject_Handler,
+		},
+		{
+			MethodName: "TrashProject",
+			Handler:    _PlatformCommandService_TrashProject_Handler,
+		},
+		{
+			MethodName: "RestoreProject",
+			Handler:    _PlatformCommandService_RestoreProject_Handler,
+		},
+		{
+			MethodName: "PurgeProject",
+			Handler:    _PlatformCommandService_PurgeProject_Handler,
 		},
 		{
 			MethodName: "AddPlatformMembership",

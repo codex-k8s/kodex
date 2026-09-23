@@ -47,6 +47,7 @@ var integrationDefinitionVersionPattern = regexp.MustCompile(`^[1-9][0-9]*\.[0-9
 
 // RuntimeTLSBinding описывает точную mTLS-границу callback runtime-controller.
 type RuntimeTLSBinding struct {
+	Profile         string `json:"profile,omitempty"`
 	ServerName      string `json:"server_name"`
 	CAFile          string `json:"ca_file"`
 	CertificateFile string `json:"certificate_file"`
@@ -288,7 +289,7 @@ func (input RunnerInput) Validate() error {
 		(input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write") ||
 		(input.CodexApprovalPolicy != "untrusted" && input.CodexApprovalPolicy != "on-request" && input.CodexApprovalPolicy != "never") ||
 		(input.CodexSessionID != "" && !uuidPattern.MatchString(input.CodexSessionID)) ||
-		input.CallbackTLS.validate() != nil || !validCallbackURL(input.CallbackURL, input.CallbackTLS.ServerName) ||
+		input.ValidateCallbackTransport() != nil ||
 		!validSecretFile(input.ExecutionTicketFile) || !validSecretFile(input.ProviderAuthFile) ||
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
 		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/workspace/.kodex/state/codex-home" ||

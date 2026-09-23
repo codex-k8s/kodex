@@ -79,6 +79,33 @@ func TestHandleRejectsSNIMismatchBeforeResolutionAndDial(t *testing.T) {
 	}
 }
 
+func TestHandleRejectsDNSFailureWithoutExternalDial(t *testing.T) {
+	resolver := &fakeResolver{err: &dnsresolver.Error{Reason: dnsresolver.ReasonTimeout}}
+	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
+	server, err := New(context.Background(), "unused", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverSide, clientSide := net.Pipe()
+	done := make(chan struct{})
+	go func() { server.handle(serverSide); close(done) }()
+	_, _ = io.WriteString(clientSide, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n")
+	response := make([]byte, len(connectEstablished))
+	if _, err := io.ReadFull(clientSide, response); err != nil || string(response) != connectEstablished {
+		t.Fatalf("unexpected CONNECT response: %q, %v", response, err)
+	}
+	_, _ = clientSide.Write(gatewayClientHello("api.openai.com"))
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("DNS rejection did not close the connection")
+	}
+	if resolver.calls != 1 || len(dialer.targets) != 0 {
+		t.Fatalf("DNS rejection crossed zero-dial boundary: resolver=%d dial=%d", resolver.calls, len(dialer.targets))
+	}
+	_ = clientSide.Close()
+}
+
 func TestDialFallsBackAcrossAddressFamiliesWithinOneBudget(t *testing.T) {
 	dialer := newDualStackDialer()
 	server, err := New(context.Background(), "unused", fakePolicy{}, &fakeResolver{}, dialer, readyStub(true), newTestMetrics(t))
@@ -261,6 +288,7 @@ func (fakePolicy) Limits() policy.Limits {
 type fakeResolver struct {
 	mu       sync.Mutex
 	snapshot dnsresolver.Snapshot
+	err      error
 	calls    int
 	healthy  bool
 }
@@ -269,6 +297,9 @@ func (resolver *fakeResolver) Resolve(context.Context, string) (dnsresolver.Snap
 	resolver.mu.Lock()
 	defer resolver.mu.Unlock()
 	resolver.calls++
+	if resolver.err != nil {
+		return dnsresolver.Snapshot{}, resolver.err
+	}
 	resolver.healthy = true
 	return resolver.snapshot, nil
 }

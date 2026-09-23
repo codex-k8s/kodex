@@ -71,6 +71,9 @@ func castLease(values map[string]any) *controlplanev1.WorkLease {
 }
 
 func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionSnapshot {
+	if values == nil {
+		return nil
+	}
 	instructions := mapString(values, "instructions")
 	if instructions == "" {
 		instructions = mapString(values, "corePrompt")

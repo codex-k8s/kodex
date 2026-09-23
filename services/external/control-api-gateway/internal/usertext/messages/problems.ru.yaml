@@ -34,6 +34,26 @@ INTERNAL:
   other: Внутренняя ошибка
 INVALID_REQUEST:
   other: Проверьте данные запроса
+PROMPT_TEMPLATE_INVALID:
+  other: Исправьте ошибку шаблона
+PROMPT_TEMPLATE_VARIABLE_UNKNOWN:
+  other: Неизвестная переменная шаблона
+PROMPT_TEMPLATE_SYNTAX_INVALID:
+  other: Некорректный синтаксис шаблона
+PROMPT_TEMPLATE_EXECUTION_INVALID:
+  other: Тип переменной несовместим с операцией шаблона
+PROMPT_SLOT_INVALID:
+  other: Слот шаблона должен быть отдельной вставкой
+RUNTIME_CONTEXT_REQUIRED:
+  other: Для переменной требуется ревизия выполнения
+NOT_MATERIALIZED:
+  other: Контекст переменной ещё не материализован
+PERMISSION_REQUIRED:
+  other: Для переменной требуется право чтения контекста
+CAPABILITY_REQUIRED:
+  other: Для переменной сотруднику нужно назначить соответствующую возможность
+REVISION_NOT_SAVED:
+  other: Для переменной сначала нужно сохранить ревизию
 UNAUTHENTICATED:
   other: Войдите, чтобы продолжить
 FRESH_AUTHENTICATION_REQUIRED:

@@ -88,7 +88,11 @@ canonicalizer `cmd/policy-digest`, который использует runtime. 
 любой CONNECT закрыто отклоняется, а ограниченный `/policy` readback показывает
 `policyState=INVALID` без ложной
 loaded revision/digest. Некорректный resolver primitive аналогично оставляет
-policy `ACTIVE`, resolver `INVALID` и трафик закрытым.
+policy `ACTIVE`, resolver `INVALID` и трафик закрытым. Исправная конфигурация
+resolver публикуется как `CONFIGURED`; это не утверждение об успешном DNS
+запросе или доступности внешнего провайдера. Внешний DNS не блокирует readiness
+Pod: каждый CONNECT отдельно проверяет полный свежий DNS snapshot и при отказе
+закрывается до внешнего dial.
 
 Активная revision разрешает только:
 
@@ -133,7 +137,7 @@ Wildcard, suffix/pattern, IP literal, uppercase/trailing-dot alias и любой
 | DNS snapshot | Server-owned resolver после полной A/AAAA/CNAME/special-purpose validation | Внешний DNS answer |
 | Dial target | Проверенный literal `netip.AddrPort` | Hostname |
 | TLS peer, certificate и application auth | TLS stack consumer | Gateway |
-| Readiness/readback | ACTIVE policy state, version/digest и resolver primitives | Caller parameters |
+| Readiness/readback | ACTIVE policy state, version/digest и конфигурация resolver | Caller parameters и доступность внешних DNS-имён |
 | Observability | Закрытые internal stage/outcome/reason | Hostname, IP, URL, SNI, headers и payload |
 
 ## Матрица состояния и lifecycle

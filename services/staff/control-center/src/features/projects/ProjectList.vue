@@ -4,35 +4,33 @@ import {
   Bot,
   Files,
   GitBranch,
+  Flame,
   Play,
+  RotateCcw,
+  Trash2,
   Workflow,
 } from "@lucide/vue";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
-defineProps<{ items: Project[]; expanded?: boolean }>();
-const emit = defineEmits<{ more: [] }>();
-function scroll(event: Event): void {
-  if (
-    event.currentTarget instanceof HTMLElement &&
-    nearScrollEnd(event.currentTarget)
-  )
-    emit("more");
-}
+withDefaults(defineProps<{ items: Project[]; trashed?: boolean }>(), {
+  trashed: false,
+});
+const emit = defineEmits<{
+  trash: [project: Project];
+  restore: [project: Project];
+  purge: [project: Project];
+}>();
 </script>
 <template>
-  <div
-    class="project-list"
-    :class="{ 'project-list--expanded': expanded }"
-    @scroll="scroll"
-  >
+  <div class="project-list">
     <article
       v-for="project in items"
       :key="project.ref"
       class="project-list__item"
     >
       <div class="project-list__identity">
-        <RouterLink :to="`/projects/${encodeURIComponent(project.ref)}`"
+        <strong v-if="trashed">{{ project.name }}</strong>
+        <RouterLink v-else :to="`/projects/${encodeURIComponent(project.ref)}`"
           ><strong>{{ project.name }}</strong></RouterLink
         >
         <p>{{ project.purpose }}</p>
@@ -63,7 +61,13 @@ function scroll(event: Event): void {
         </div>
       </dl>
       <footer>
-        <div class="project-list__activity" data-metric="lastActivityAt">
+        <div v-if="trashed" class="project-list__activity">
+          <span>{{ $t(project.lifecycle === "PURGE_PENDING" ? "projects.purgePending" : "projects.purgeAfter") }}</span>
+          <time v-if="project.lifecycle === 'TRASHED' && project.purgeAfter" :datetime="project.purgeAfter">{{
+            new Date(project.purgeAfter).toLocaleString($i18n.locale)
+          }}</time>
+        </div>
+        <div v-else class="project-list__activity" data-metric="lastActivityAt">
           <span>{{ $t("entityCards.lastActivityAt") }}</span>
           <time
             v-if="project.lastActivityAt"
@@ -74,7 +78,29 @@ function scroll(event: Event): void {
           >
           <span v-else>{{ $t("common.noData") }}</span>
         </div>
-        <nav :aria-label="project.name">
+        <nav v-if="trashed" :aria-label="project.name">
+          <button
+            v-if="project.nextActions.includes('RESTORE')"
+            class="icon-button"
+            type="button"
+            :title="$t('projects.restore')"
+            :aria-label="$t('projects.restore')"
+            @click="emit('restore', project)"
+          >
+            <RotateCcw :size="18" aria-hidden="true" />
+          </button>
+          <button
+            v-if="project.nextActions.includes('PURGE')"
+            class="icon-button icon-button--danger"
+            type="button"
+            :title="$t('projects.purge')"
+            :aria-label="$t('projects.purge')"
+            @click="emit('purge', project)"
+          >
+            <Flame :size="18" aria-hidden="true" />
+          </button>
+        </nav>
+        <nav v-else :aria-label="project.name">
           <RouterLink
             class="icon-button"
             :to="`/projects/${encodeURIComponent(project.ref)}`"
@@ -125,6 +151,16 @@ function scroll(event: Event): void {
               ><GitBranch :size="18"
             /></RouterLink>
           </template>
+          <button
+            v-if="project.nextActions.includes('DELETE')"
+            class="icon-button icon-button--danger"
+            type="button"
+            :title="$t('projects.trashProject')"
+            :aria-label="$t('projects.trashProject')"
+            @click="emit('trash', project)"
+          >
+            <Trash2 :size="18" aria-hidden="true" />
+          </button>
         </nav>
       </footer>
     </article>
@@ -132,19 +168,13 @@ function scroll(event: Event): void {
 </template>
 <style scoped>
 .project-list {
-  --row-height: 246px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  max-height: calc(6 * var(--row-height));
-  overflow: auto;
   min-width: 0;
 }
-.project-list--expanded {
-  max-height: 65dvh;
-}
 .project-list__item {
-  min-height: var(--row-height);
+  min-height: 246px;
   box-sizing: border-box;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -212,6 +242,9 @@ footer nav {
   display: flex;
   gap: 2px;
   flex-wrap: wrap;
+}
+.icon-button--danger {
+  color: var(--danger);
 }
 .project-list__activity {
   display: grid;

@@ -36,6 +36,7 @@ service PlatformQueryService {
   rpc ListVFSNodes(ListVFSNodesRequest) returns (ListVFSNodesResponse);
   rpc SearchVFS(SearchVFSRequest) returns (SearchVFSResponse);
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc ListTrashedProjects(ListTrashedProjectsRequest) returns (ListTrashedProjectsResponse);
   rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
   // ListPlatformMemberships возвращает organization-scoped platform roles только проверенному Owner или Administrator.
   rpc ListPlatformMemberships(ListPlatformMembershipsRequest) returns (ListPlatformMembershipsResponse);
@@ -162,6 +163,9 @@ service PlatformCommandService {
   rpc CompleteOnboarding(CompleteOnboardingRequest) returns (CompleteOnboardingResponse);
   rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
   rpc UpdateProject(UpdateProjectRequest) returns (UpdateProjectResponse);
+  rpc TrashProject(TrashProjectRequest) returns (TrashProjectResponse);
+  rpc RestoreProject(RestoreProjectRequest) returns (RestoreProjectResponse);
+  rpc PurgeProject(PurgeProjectRequest) returns (PurgeProjectResponse);
   // AddPlatformMembership назначает platform role выбранному из авторитетного списка OIDC subject.
   rpc AddPlatformMembership(AddPlatformMembershipRequest) returns (AddPlatformMembershipResponse);
   // ChangePlatformMembership применяет OCC после organization owner resolution и защищает последнего Owner.
@@ -514,6 +518,8 @@ enum EntityLifecycle {
   ENTITY_LIFECYCLE_DRAFT = 1;
   ENTITY_LIFECYCLE_ACTIVE = 2;
   ENTITY_LIFECYCLE_ARCHIVED = 3;
+  ENTITY_LIFECYCLE_TRASHED = 4;
+  ENTITY_LIFECYCLE_PURGE_PENDING = 5;
 }
 
 enum AgentState {
@@ -806,6 +812,8 @@ message Project {
   repeated NextAction next_actions = 13;
   google.protobuf.Timestamp last_activity_at = 14;
   string integration_state = 15;
+  google.protobuf.Timestamp deleted_at = 16;
+  google.protobuf.Timestamp purge_after = 17;
 }
 
 message PlatformCapability {
@@ -1793,6 +1801,13 @@ message ListProjectsResponse {
   PageInfo page = 2;
   repeated NextAction next_actions = 3;
 }
+message ListTrashedProjectsRequest {
+  PageRequest page = 1;
+}
+message ListTrashedProjectsResponse {
+  repeated Project projects = 1;
+  PageInfo page = 2;
+}
 message GetProjectRequest {
   string project_ref = 1;
 }
@@ -1816,6 +1831,27 @@ message UpdateProjectRequest {
   string language = 5;
 }
 message UpdateProjectResponse {
+  Project project = 1;
+}
+message TrashProjectRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+}
+message TrashProjectResponse {
+  Project project = 1;
+}
+message RestoreProjectRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+}
+message RestoreProjectResponse {
+  Project project = 1;
+}
+message PurgeProjectRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+}
+message PurgeProjectResponse {
   Project project = 1;
 }
 
@@ -7255,6 +7291,7 @@ message ProviderModelCatalogRecord {
   string id = 1;
   string default_reasoning_effort = 2;
   repeated string reasoning_efforts = 3;
+  bool is_default = 4;
 }
 
 // Все поля сверяются с active owner task в proof issuance до credential read.
@@ -7420,9 +7457,9 @@ message ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse {
   ProviderCredentialDescriptor produced_credential = 2;
 }
 
-// CredentialProjectionAuthority переносит только результат проверки bearer
-// proof внутри secret-broker. Обычный consumer не может вызвать owner RPC и
-// назначить эти поля самостоятельно.
+// CredentialProjectionAuthority переносит проверенный proof защищённого профиля
+// либо server-owned snapshot trusted-cluster. Обычный consumer не может вызвать
+// owner RPC и назначить эти поля самостоятельно.
 message CredentialProjectionAuthority {
   string actor_id = 1;
   string tenant_id = 2;
@@ -7434,6 +7471,10 @@ message CredentialProjectionAuthority {
   string caller_full_method = 8;
   uint64 caller_credential_revision = 9;
   google.protobuf.Timestamp expires_at = 10;
+  // Пустое значение сохраняет proof-контракт. В trusted-cluster первый runtime
+  // resolve передаёт только этот discriminator и caller workload/method;
+  // остальные поля назначает CP по exact lease. Recovery возвращает snapshot.
+  string rpc_profile = 11;
 }
 
 message CheckCredentialProjectionWorkReadinessRequest {}
@@ -7459,6 +7500,8 @@ message ResolveRuntimeCredentialProjectionResponse {
   ProviderCredentialBinding provider_credential = 1;
   repeated RuntimeSecretDescriptor runtime_secrets = 2;
   google.protobuf.Timestamp expires_at = 3;
+  // Только trusted-cluster: authority из того же owner snapshot, что descriptors.
+  CredentialProjectionAuthority authority = 4;
 }
 
 message ValidateRuntimeCredentialProjectionRequest {

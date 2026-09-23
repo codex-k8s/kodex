@@ -23,6 +23,9 @@ done
   fail 'frontend directory is invalid'
 playwright_cli="$frontend_directory/node_modules/.bin/playwright"
 [[ -x "$playwright_cli" ]] || fail 'project-local Playwright CLI is absent'
+node_binary=$(command -v node)
+[[ "$node_binary" == /* && -x "$node_binary" ]] ||
+  fail 'Node.js executable is absent'
 
 browser_path=$(
   cd -- "$frontend_directory"
@@ -35,7 +38,10 @@ JS
   fail 'Playwright browser path is outside the current user cache'
 
 if [[ ! -x "$browser_path" ]]; then
-  sudo -n "$playwright_cli" install-deps chromium
+  # sudo secure_path не обязан содержать пользовательский Node runtime.
+  # Передаём точный executable, но сам browser cache по-прежнему наполняет
+  # непривилегированный пользователь.
+  sudo -n "$node_binary" "$playwright_cli" install-deps chromium
   "$playwright_cli" install chromium
 fi
 [[ -x "$browser_path" ]] || fail 'Chromium executable is absent after installation'

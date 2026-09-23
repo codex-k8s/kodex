@@ -13,6 +13,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	authorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -25,6 +26,16 @@ type warmDiagnosticOwner struct {
 	response *controlplanev1.ReconcileWarmRuntimeResponse
 	err      error
 	calls    int
+}
+
+type warmDiagnosticDeactivator struct {
+	err   error
+	calls int
+}
+
+func (deactivator *warmDiagnosticDeactivator) DeactivateWarm(context.Context) error {
+	deactivator.calls++
+	return deactivator.err
 }
 
 func (owner *warmDiagnosticOwner) ReconcileWarmRuntime(ctx context.Context, request *controlplanev1.ReconcileWarmRuntimeRequest, _ ...grpc.CallOption) (*controlplanev1.ReconcileWarmRuntimeResponse, error) {
@@ -44,7 +55,7 @@ func (owner *warmDiagnosticOwner) ReportWarmRuntime(ctx context.Context, request
 }
 
 func warmDiagnosticRuntime(owner *warmDiagnosticOwner) *runtime {
-	return &runtime{control: owner, config: Config{PodUID: "test-pod", RequestTimeout: time.Second}}
+	return &runtime{control: owner, warmDeactivator: &warmDiagnosticDeactivator{}, assistant: serviceruntime.NewReadiness(), config: Config{PodUID: "test-pod", RequestTimeout: time.Second}}
 }
 
 func assertWarmDiagnostic(t *testing.T, err error, want string) {
@@ -86,7 +97,14 @@ func TestWarmRPCDiagnosticsDropMessagesAndDetails(t *testing.T) {
 }
 
 func TestWarmMissingDesiredRevisionIsDistinctFromRPCFailure(t *testing.T) {
-	for _, response := range []*controlplanev1.ReconcileWarmRuntimeResponse{nil, {}} {
+	for _, response := range []*controlplanev1.ReconcileWarmRuntimeResponse{
+		nil,
+		{},
+		{
+			Assistant:               &controlplanev1.SystemAssistant{RuntimeState: controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_FAILED},
+			MaterializationRequired: true,
+		},
+	} {
 		owner := &warmDiagnosticOwner{response: response}
 		runtime := warmDiagnosticRuntime(owner)
 		assertWarmDiagnostic(t, runtime.reconcileWarm(t.Context()), warmDesiredRevisionMissing)
@@ -97,6 +115,28 @@ func TestWarmMissingDesiredRevisionIsDistinctFromRPCFailure(t *testing.T) {
 			t.Fatal("successful report changed")
 		}
 	}
+}
+
+func TestWarmUnavailableWithoutDesiredRevisionIsIdleAndRevokesLocalRuntime(t *testing.T) {
+	owner := &warmDiagnosticOwner{response: &controlplanev1.ReconcileWarmRuntimeResponse{
+		Assistant: &controlplanev1.SystemAssistant{RuntimeState: controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_FAILED},
+	}}
+	deactivator := &warmDiagnosticDeactivator{}
+	runtime := warmDiagnosticRuntime(owner)
+	runtime.warmDeactivator = deactivator
+	runtime.warmCompatibility = warmDiagnosticSentinel
+	runtime.warmTicket = warmDiagnosticSentinel
+	if err := runtime.reconcileWarm(t.Context()); err != nil {
+		t.Fatalf("provider-free idle returned an error: %v", err)
+	}
+	if deactivator.calls != 1 || runtime.warmCompatibility != "" || runtime.warmTicket != "" {
+		t.Fatalf("provider-free idle retained local warm authority: calls=%d compatibility=%q ticket=%q", deactivator.calls, runtime.warmCompatibility, runtime.warmTicket)
+	}
+	if ready, reason := runtime.assistant.Ready(); ready || reason != "assistant_runtime_provider_unconfigured" {
+		t.Fatalf("provider-free readiness = %t/%q", ready, reason)
+	}
+	deactivator.err = errors.New("delete warm runtime Pod")
+	assertWarmDiagnostic(t, runtime.reconcileWarm(t.Context()), "delete warm runtime Pod")
 }
 
 type warmDiagnosticAuthority struct {

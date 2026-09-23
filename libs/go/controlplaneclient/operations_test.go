@@ -38,6 +38,13 @@ func TestImageSupplyChainWorkerOperationsAreExact(t *testing.T) {
 		want map[string]string
 	}{
 		{
+			name: "controller",
+			got:  ImageAdmissionControllerOperations(),
+			want: map[string]string{
+				"platform.role-images.supply-work.get": controlplanev1.RoleImageService_GetImageSupplyWorkAvailability_FullMethodName,
+			},
+		},
+		{
 			name: "admission",
 			got:  ImageAdmissionOperations(),
 			want: map[string]string{

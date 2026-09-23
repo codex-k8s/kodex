@@ -54,6 +54,9 @@ const (
 	CompleteOnboarding                 Kind = "COMPLETE_ONBOARDING"
 	CreateProject                      Kind = "CREATE_PROJECT"
 	UpdateProject                      Kind = "UPDATE_PROJECT"
+	TrashProject                       Kind = "TRASH_PROJECT"
+	RestoreProject                     Kind = "RESTORE_PROJECT"
+	PurgeProject                       Kind = "PURGE_PROJECT"
 	AddPlatformMembership              Kind = "ADD_PLATFORM_MEMBERSHIP"
 	ChangePlatformMembership           Kind = "CHANGE_PLATFORM_MEMBERSHIP"
 	RemovePlatformMembership           Kind = "REMOVE_PLATFORM_MEMBERSHIP"
@@ -218,6 +221,8 @@ type Command struct {
 }
 
 type ProjectInput struct{ Ref, Name, Purpose, Language string }
+
+type ProjectLifecycleInput struct{ Ref string }
 type PlatformMembershipInput struct {
 	MembershipRef, UserRef, Role string
 	Active                       bool
@@ -230,6 +235,7 @@ type MembershipInput struct {
 type AgentInput struct {
 	PlanRef                                                                                                 string
 	SelectedItemRefs                                                                                        []string
+	InitialCapabilities                                                                                     []string
 	Ref, ProjectRef, RoleDefinitionRef, Name, Purpose, RoleDescription, AvatarURL, RuntimeRef, Instructions string
 	Enabled                                                                                                 bool
 }

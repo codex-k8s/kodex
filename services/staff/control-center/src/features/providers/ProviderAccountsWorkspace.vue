@@ -25,6 +25,7 @@ import {
 } from "vue";
 
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { readSpeechAvailability } from "@/shared/api/speech";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -39,6 +40,7 @@ import type { ProviderLifecycleResult } from "./lifecycle";
 
 import {
   accountAllows,
+  hasPendingDeviceAuthorization,
   isPendingDeviceAuthorization,
   pageAllowsAccountCreation,
   readableProviderBlocker,
@@ -84,6 +86,38 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 const canCreate = computed(() =>
   pageAllowsAccountCreation(pageNextActions.value),
+);
+const authorizedApiKeyRefs = computed(() =>
+  accounts.value
+    .filter(
+      (account) =>
+        account.state === "AUTHORIZED" &&
+        account.enabled &&
+        account.authorization?.method === "API_KEY",
+    )
+    .map((account) => account.ref)
+    .sort()
+    .join(","),
+);
+const speechConfigurationMissing = ref(false);
+watch(
+  authorizedApiKeyRefs,
+  (refs, _previous, cleanup) => {
+    speechConfigurationMissing.value = false;
+    if (!refs) return;
+    const controller = new AbortController();
+    cleanup(() => controller.abort());
+    void readSpeechAvailability(controller.signal)
+      .then((availability) => {
+        if (!controller.signal.aborted)
+          speechConfigurationMissing.value =
+            availability.reason === "STT_NOT_CONFIGURED";
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) speechConfigurationMissing.value = false;
+      });
+  },
+  { immediate: true },
 );
 const availableDefinitions = computed(() =>
   definitions.value.filter((item) => item.available),
@@ -176,8 +210,6 @@ async function createAccount(): Promise<void> {
 }
 
 function openAuthorization(account: ProviderAccount): void {
-  if (authorizationAccount.value)
-    store.stopPolling(authorizationAccount.value.ref);
   authorizationAccount.value = account;
   authorizationMethod.value =
     account.authorization?.method ??
@@ -190,8 +222,6 @@ function openAuthorization(account: ProviderAccount): void {
 }
 
 function closeAuthorization(): void {
-  if (authorizationAccount.value)
-    store.stopPolling(authorizationAccount.value.ref);
   apiKey.value = "";
   authorizationAccount.value = undefined;
   localProblem.value = undefined;
@@ -200,7 +230,6 @@ function closeAuthorization(): void {
 function syncAuthorizationAccount(account: ProviderAccount): void {
   if (authorizationAccount.value?.ref === account.ref)
     authorizationAccount.value = account;
-  else store.stopPolling(account.ref);
 }
 
 async function startDevice(): Promise<void> {
@@ -312,7 +341,7 @@ function recovered(result: ProviderLifecycleResult): void {
   receiveLifecycleAccount(result.account);
   if (
     authorizationAccount.value?.ref === result.account.ref &&
-    isPendingDeviceAuthorization(result.account)
+    hasPendingDeviceAuthorization(result.account)
   )
     store.schedulePoll(result.account.ref);
 }
@@ -407,8 +436,6 @@ watch(accounts, (items) => {
 watch(authorizationMethod, () => {
   apiKey.value = "";
   replacingApiKey.value = false;
-  if (authorizationAccount.value && authorizationMethod.value !== "DEVICE_CODE")
-    store.stopPolling(authorizationAccount.value.ref);
 });
 onBeforeUnmount(() => {
   stopVerificationObservation();
@@ -456,6 +483,13 @@ onBeforeUnmount(() => {
         <Maximize2 :size="17" />
       </button>
     </header>
+
+    <aside v-if="speechConfigurationMissing" class="provider-speech-setup" role="status">
+      <p>{{ $t("providers.speechSetupRequired") }}</p>
+      <RouterLink class="button" to="/configurations/SYSTEM_STT">
+        {{ $t("providers.configureSpeech") }}
+      </RouterLink>
+    </aside>
 
     <section
       class="provider-readiness"
@@ -1089,6 +1123,19 @@ onBeforeUnmount(() => {
   max-height: 1000px;
   overflow: auto;
 }
+.provider-speech-setup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.provider-speech-setup p {
+  margin: 0;
+}
 .provider-account-list--expanded {
   max-height: calc(100dvh - 230px);
 }
@@ -1216,6 +1263,10 @@ onBeforeUnmount(() => {
   }
 }
 @media (max-width: 560px) {
+  .provider-speech-setup {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .providers-toolbar,
   .authorization-methods {
     align-items: stretch;

@@ -8,6 +8,8 @@
     <button id="arm">Отложить обновление</button>
     <button id="resume">Продолжить</button>
     <button id="locale">EN</button>
+    <button id="null-body">Проверить ответы без тела</button>
+    <output id="null-body-result">idle</output>
     <output id="result">idle</output>
     <header class="topbar" style="height: 58px; position: static">
       Fixture
@@ -22,7 +24,10 @@
       import { configureApiClient } from "../../src/shared/api/client";
       import { i18n } from "../../src/app/i18n";
       import { persistLocale } from "../../src/shared/locale";
-      import { documentRequestSignal } from "../../src/shared/api/document-lifetime";
+      import {
+        documentFetch,
+        documentRequestSignal,
+      } from "../../src/shared/api/document-lifetime";
       import "../../src/app/styles/base.css";
       configureApiClient();
       i18n.global.locale.value = "ru";
@@ -36,6 +41,30 @@
       await router.isReady();
       app.mount("#app");
       const platform = usePlatformStore();
+      document
+        .querySelector("#null-body")
+        ?.addEventListener("click", async () => {
+          const output = document.querySelector("#null-body-result");
+          try {
+            const results = [];
+            for (const status of [204, 205, 304]) {
+              const response = await documentFetch(
+                `${location.origin}/null-body/${status}`,
+              );
+              const body = response.body;
+              const clone = response.clone();
+              results.push(
+                response.status === status &&
+                  clone.status === status &&
+                  body !== undefined &&
+                  (await response.text()) === "",
+              );
+            }
+            output.textContent = results.every(Boolean) ? "pass" : "fail";
+          } catch {
+            output.textContent = "error";
+          }
+        });
       function output(value) {
         const node = document.querySelector("#result");
         if (node) node.textContent = value;

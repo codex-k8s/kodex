@@ -299,8 +299,12 @@ func TestEnvironmentDraftPolicyKeepsTypedResourceAndNetworkSettings(t *testing.T
 		}, KubernetesAccess: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE,
 	}
 	view, ok := environmentDraftPolicyView(input)
-	if !ok || view == nil || view.Volumes[0].Kind != "EPHEMERAL_DISK" || view.KubernetesAccess != "NONE" || view.NetworkDestinations[0] != "DNS" ||
-		!proto.Equal(input, runtimeEnvironmentPolicyInput(*view)) {
+	if !ok || view == nil {
+		t.Fatal("valid draft policy was rejected")
+	}
+	roundTrip, roundTripOK := runtimeEnvironmentPolicyInput(*view)
+	if view.Volumes[0].Kind != "EPHEMERAL_DISK" || view.KubernetesAccess != "NONE" || view.NetworkDestinations[0] != "DNS" ||
+		!roundTripOK || !proto.Equal(input, roundTrip) {
 		t.Fatal("draft policy was not preserved by typed round trip")
 	}
 	input.NetworkDestinations[0] = controlplanev1.RuntimeNetworkDestination(999)
@@ -309,6 +313,47 @@ func TestEnvironmentDraftPolicyKeepsTypedResourceAndNetworkSettings(t *testing.T
 	}
 	if view, ok := environmentDraftPolicyView(&controlplanev1.RuntimeEnvironmentPolicyInput{Resources: &controlplanev1.RuntimeResourcePolicy{}, KubernetesAccess: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE}); !ok || view != nil {
 		t.Fatal("unset draft policy became a published policy")
+	}
+}
+
+func TestEnvironmentDraftRejectsUnknownPolicyEnumBeforeRPC(t *testing.T) {
+	for _, body := range []string{
+		`{"name":"draft","description":"","imageArtifactRef":"","tools":[],"values":[],"secretBindings":[],"policy":{"resources":{"cpuRequestMilli":1000,"cpuLimitMilli":2000,"memoryRequestMib":1024,"memoryLimitMib":4096,"ephemeralStorageRequestMib":1024,"ephemeralStorageLimitMib":2048},"volumes":[],"networkDestinations":["DNS","RUNTIME_CALLBACK","PROVIDER_PROXY"],"kubernetesAccess":"RUNTIME_KUBERNETES_ACCESS_KIND_NONE"}}`,
+		`{"name":"draft","description":"","imageArtifactRef":"","tools":[],"values":[],"secretBindings":[],"policy":{"resources":{"cpuRequestMilli":1000,"cpuLimitMilli":2000,"memoryRequestMib":1024,"memoryLimitMib":4096,"ephemeralStorageRequestMib":1024,"ephemeralStorageLimitMib":2048},"volumes":[],"networkDestinations":["RUNTIME_NETWORK_DESTINATION_DNS","RUNTIME_CALLBACK","PROVIDER_PROXY"],"kubernetesAccess":"NONE"}}`,
+	} {
+		client := &environmentDraftRecorder{}
+		response := httptest.NewRecorder()
+		draftTestHandler(client).ServeHTTP(response, managedTestRequest(http.MethodPost, "/api/v1/projects/prj_fixture01/runtime-environment-drafts", `{"specification":`+body+`}`))
+		if response.Code != http.StatusBadRequest || client.request != nil {
+			t.Fatalf("unknown policy enum reached RPC: status=%d", response.Code)
+		}
+	}
+}
+
+func TestRuntimeEnvironmentReadbackUsesOpenAPIEnums(t *testing.T) {
+	policy := &controlplanev1.RuntimeEnvironmentPolicy{
+		Resources:        &controlplanev1.RuntimeResourcePolicy{},
+		Volumes:          []*controlplanev1.RuntimeVolume{{Name: "scratch", Kind: controlplanev1.RuntimeVolumeKind_RUNTIME_VOLUME_KIND_EPHEMERAL_DISK}},
+		Network:          &controlplanev1.RuntimeNetworkPolicy{Egress: []*controlplanev1.RuntimeNetworkEgress{{Destination: controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS}}},
+		KubernetesAccess: &controlplanev1.RuntimeKubernetesAccessProfile{Kind: controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE},
+	}
+	value, err := messageMap(&controlplanev1.GetRuntimeEnvironmentSetResponse{Environment: &controlplanev1.RuntimeEnvironmentSet{CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{Policy: policy}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	environment := value["environment"].(map[string]any)
+	version := environment["currentVersion"].(map[string]any)
+	policyView := version["policy"].(map[string]any)
+	if policyView["kubernetesAccess"].(map[string]any)["kind"] != "NONE" ||
+		policyView["volumes"].([]any)[0].(map[string]any)["kind"] != "EPHEMERAL_DISK" ||
+		policyView["network"].(map[string]any)["egress"].([]any)[0].(map[string]any)["destination"] != "DNS" {
+		t.Fatal("runtime environment enum was not normalized to OpenAPI")
+	}
+	encoded, _ := json.Marshal(value)
+	for _, forbidden := range []string{"RUNTIME_VOLUME_KIND_", "RUNTIME_NETWORK_DESTINATION_", "RUNTIME_KUBERNETES_ACCESS_KIND_"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("Proto enum prefix leaked to HTTP readback: %s", forbidden)
+		}
 	}
 }
 

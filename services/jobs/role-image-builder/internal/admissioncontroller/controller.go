@@ -52,6 +52,15 @@ type Controller struct {
 	lastPromotionAttempt time.Time
 }
 
+type WorkAvailability struct {
+	AdmissionAvailable bool
+	PromotionAvailable bool
+}
+
+type WorkSource interface {
+	GetAvailability(context.Context) (WorkAvailability, error)
+}
+
 func InCluster(config Config, renderer Renderer, logger *slog.Logger) (*Controller, error) {
 	client, err := inClusterClient(config.RequestTimeout)
 	if err != nil {
@@ -61,7 +70,7 @@ func InCluster(config Config, renderer Renderer, logger *slog.Logger) (*Controll
 }
 
 func New(client kubernetes.Interface, renderer Renderer, config Config, logger *slog.Logger) (*Controller, error) {
-	if client == nil || renderer == nil || logger == nil || config.Validate() != nil {
+	if client == nil || renderer == nil || logger == nil || config.WorkSource == nil || config.Validate() != nil {
 		return nil, errors.New("image admission controller configuration is invalid")
 	}
 	return &Controller{client: client, renderer: renderer, config: config, logger: logger, now: time.Now}, nil
@@ -218,6 +227,13 @@ func (controller *Controller) reconcileAdmissions(ctx context.Context, policy *c
 	if active || len(workspaces) != 0 || controller.config.PauseNewRuns || now.Sub(controller.lastAdmissionAttempt) < controller.config.RetryInterval {
 		return nil
 	}
+	availability, err := controller.config.WorkSource.GetAvailability(ctx)
+	if err != nil {
+		return errors.New("read image supply work availability")
+	}
+	if !availability.AdmissionAvailable {
+		return nil
+	}
 	runID := makeRunID(now, revision)
 	if err := controller.ensurePhase(ctx, policy, runID, "claim"); err != nil {
 		return err
@@ -253,6 +269,13 @@ func (controller *Controller) reconcilePromotions(ctx context.Context, policy *c
 		}
 	}
 	if controller.config.PauseNewRuns || now.Sub(controller.lastPromotionAttempt) < controller.config.RetryInterval {
+		return nil
+	}
+	availability, err := controller.config.WorkSource.GetAvailability(ctx)
+	if err != nil {
+		return errors.New("read image supply work availability")
+	}
+	if !availability.PromotionAvailable {
 		return nil
 	}
 	if err := controller.ensurePhase(ctx, policy, makeRunID(now, revision), "promote"); err != nil {

@@ -1,9 +1,22 @@
 import type {
+  AssistantConversation,
   AssistantPlanOperation,
   AssistantPlanOperationInput,
   AssistantPlanTarget,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+
+export function assistantAwaitingReply(
+  conversation?: AssistantConversation,
+): boolean {
+  const latest = conversation?.turns.at(-1);
+  return Boolean(
+    latest &&
+    (latest.state === "QUEUED" ||
+      latest.state === "RUNNING" ||
+      (latest.role === "USER" && latest.state === "COMPLETED")),
+  );
+}
 
 export interface EditablePlanOperation {
   value: AssistantPlanOperationInput;
@@ -98,4 +111,13 @@ export function assistantEffectiveRuntimeState(
   )
     return "RECOVERING";
   return assistant.runtimeState;
+}
+
+export function assistantRequiresProviderAccount(
+  assistant: SystemAssistant,
+): boolean {
+  return (
+    !assistant.warmSessionRef &&
+    !assistant.nextActions.includes("CREATE_CONVERSATION")
+  );
 }

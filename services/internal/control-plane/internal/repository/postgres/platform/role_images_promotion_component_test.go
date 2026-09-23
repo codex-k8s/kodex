@@ -69,6 +69,11 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	if err != nil {
 		t.Fatalf("construct role image service: %v", err)
 	}
+	availabilityPrincipal := resolvedOwner
+	availabilityPrincipal.CallerWorkload = "image-admission-controller"
+	availabilityPrincipal.Permission = "platform.role-images.supply-work.get"
+	availabilityPrincipal.CorrelationRef = "role-image-supply-work-availability"
+	assertSupplyWorkAvailability(t, ctx, repository, availabilityPrincipal, false, false)
 
 	promotionWorker := owner
 	promotionWorker.CallerWorkload = "image-promotion"
@@ -108,6 +113,7 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 		receipt.ImageArtifactRef != artifact.Ref || receipt.ProvenanceSHA256 != artifact.ProvenanceSHA256 {
 		t.Fatalf("request exact promotion: receipt=%#v err=%v", receipt, err)
 	}
+	assertSupplyWorkAvailability(t, ctx, repository, availabilityPrincipal, false, true)
 	queuedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
 	if err != nil || queuedDetail.PromotionCandidate == nil ||
 		queuedDetail.PromotionCandidate.Ref != artifact.Ref ||
@@ -159,12 +165,14 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	if _, err := roleImages.ClaimPromotion(ctx, promotionWorker, "promotion-worker-other-claim"); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("second worker claimed an active promotion: %v", err)
 	}
+	assertSupplyWorkAvailability(t, ctx, repository, availabilityPrincipal, false, false)
 	if _, err := repository.pool.Exec(ctx, `
 UPDATE control_plane.image_artifacts
 SET promotion_claim_expires_at = clock_timestamp() - interval '1 second'
 WHERE ref = $1`, artifact.Ref); err != nil {
 		t.Fatalf("expire promotion claim fixture: %v", err)
 	}
+	assertSupplyWorkAvailability(t, ctx, repository, availabilityPrincipal, false, true)
 	retriedClaim, err := roleImages.ClaimPromotion(ctx, promotionWorker, "promotion-worker-retry-claim")
 	if err != nil || retriedClaim.Fence <= claim.Fence || retriedClaim.PromotionClaim == claim.PromotionClaim {
 		t.Fatalf("expired promotion claim retry mismatch: first=%#v retry=%#v err=%v", claim, retriedClaim, err)
@@ -200,6 +208,7 @@ WHERE ref = $1`, artifact.Ref); err != nil {
 	if err != nil || promoted.PromotedReference != promotedReference {
 		t.Fatalf("complete requested promotion: artifact=%#v err=%v", promoted, err)
 	}
+	assertSupplyWorkAvailability(t, ctx, repository, availabilityPrincipal, false, false)
 	replayedPromotion, err := roleImages.CompletePromotion(ctx, completion)
 	if err != nil || !reflect.DeepEqual(replayedPromotion, promoted) {
 		t.Fatalf("completion replay mismatch: replay=%#v promoted=%#v err=%v", replayedPromotion, promoted, err)
@@ -265,6 +274,14 @@ WHERE ref = $1`, revisionRef, strings.Repeat("0", 64)); err == nil {
 		t.Fatal("immutable promoted role image revision was mutable")
 	}
 	testRoleImageImpactLifecycle(t, ctx, repository, platform, roleImages, owner, resolvedOwner, readback, *activeArtifact, agent)
+}
+
+func assertSupplyWorkAvailability(t *testing.T, ctx context.Context, repository *Repository, principal value.Principal, admission, promotion bool) {
+	t.Helper()
+	got, err := repository.GetSupplyWorkAvailability(ctx, principal)
+	if err != nil || got.AdmissionAvailable != admission || got.PromotionAvailable != promotion {
+		t.Fatalf("supply work availability: got=%#v want admission=%t promotion=%t err=%v", got, admission, promotion, err)
+	}
 }
 
 func promotionComponentCatalog(t *testing.T) (*roleimageservice.Catalog, entity.RoleImageRecipeInput) {

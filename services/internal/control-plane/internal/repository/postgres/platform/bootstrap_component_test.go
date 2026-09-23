@@ -252,6 +252,10 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("direct run continuation cancel and retry", func(t *testing.T) {
 		testDirectRunLifecycle(t, ctx, repository)
 	})
+	t.Run("project trash cancels run graph", func(t *testing.T) {
+		prepareObservedWarmFixture(t, ctx, repository)
+		testProjectTrashCancelsRuns(t, ctx, repository, pool)
+	})
 	t.Run("session archive snapshot restore and GC", func(t *testing.T) {
 		testSessionArchiveLifecycle(t, ctx, repository, pool)
 	})
@@ -711,6 +715,36 @@ WHERE account.organization_id = $1::uuid AND account.ref = $3
 	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, organizationProjection); err != nil {
 		t.Fatalf("resolve organization scoped STT credential: %v", err)
 	}
+	trustedRepository := *repository
+	trustedRepository.trustedCluster = true
+	trustedService, err := platformservice.New(&trustedRepository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustedPrincipal := owner
+	trustedPrincipal.CallerWorkload, trustedPrincipal.Permission = "secret-broker", platformrepo.TrustedSTTCredentialOperation
+	trustedPrincipal.AuthorityTenant, trustedPrincipal.ProjectRef, trustedPrincipal.CredentialRevision = ownerScope.organizationID, "", 9
+	trustedProjection := organizationProjection
+	trustedProjection.Authority.RPCProfile, trustedProjection.Authority.ProofJTI = "trusted-cluster", ""
+	trustedProjection.Authority.CallerCredentialRevision = trustedPrincipal.CredentialRevision
+	if projected, err := trustedService.ResolveTranscriptionCredentialProjection(ctx, trustedPrincipal, trustedProjection); err != nil ||
+		projected.ProviderCredential != credentialProjection.ProviderCredential {
+		t.Fatalf("trusted projection did not preserve exact credential descriptor: %v", err)
+	}
+	for _, mutate := range []func(*platformrepo.TranscriptionCredentialProjectionInput){
+		func(i *platformrepo.TranscriptionCredentialProjectionInput) {
+			i.ConfigDigestSHA256 = strings.Repeat("f", 64)
+		},
+		func(i *platformrepo.TranscriptionCredentialProjectionInput) { i.ConfigRevision++ },
+		func(i *platformrepo.TranscriptionCredentialProjectionInput) { i.ProviderCredentialGeneration++ },
+		func(i *platformrepo.TranscriptionCredentialProjectionInput) { i.ProviderAccountRef = "pacc_unrelated" },
+	} {
+		candidate := trustedProjection
+		mutate(&candidate)
+		if _, err := trustedService.ResolveTranscriptionCredentialProjection(ctx, trustedPrincipal, candidate); !errors.Is(err, domainerrs.ErrNotFound) {
+			t.Fatalf("trusted projection accepted changed configuration/account: %v", err)
+		}
+	}
 	changedConfig := projectionInput
 	changedConfig.ConfigDigestSHA256 = strings.Repeat("f", 64)
 	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, changedConfig); !errors.Is(err, domainerrs.ErrNotFound) {
@@ -726,11 +760,17 @@ WHERE account.organization_id = $1::uuid AND account.ref = $3
 	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, projectionInput); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("deleting account granted new speech credential: %v", err)
 	}
+	if _, err := trustedService.ResolveTranscriptionCredentialProjection(ctx, trustedPrincipal, trustedProjection); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("trusted projection accepted deleting account: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `UPDATE control_plane.provider_accounts SET enabled = false, state = 'REVOKED', current_credential_revision_id = NULL WHERE ref = $1`, sttProviderAccountRef); err != nil {
 		t.Fatalf("revoke system STT account fixture: %v", err)
 	}
 	if _, err := service.ResolveTranscriptionCredentialProjection(ctx, broker, projectionInput); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("revoked system STT account was accepted: %v", err)
+	}
+	if _, err := trustedService.ResolveTranscriptionCredentialProjection(ctx, trustedPrincipal, trustedProjection); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("trusted projection accepted revoked account: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
 UPDATE control_plane.provider_accounts account
@@ -2285,6 +2325,14 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 			(!environment.Ready || len(environment.ReadinessBlockers) != 0) {
 			t.Fatalf("promoted runtime environment is not ready in list: %#v", environment)
 		}
+		if (environment.Ref == first.Ref || environment.Ref == second.Ref) &&
+			!reflect.DeepEqual(environment.NextActions, []string{"OPEN", "UPDATE", "DISABLE"}) {
+			t.Fatalf("runtime environment list actions are not authoritative: %#v", environment)
+		}
+	}
+	firstDetail, err := service.GetRuntimeEnvironment(ctx, owner, first.Ref)
+	if err != nil || !reflect.DeepEqual(firstDetail.NextActions, []string{"OPEN", "UPDATE", "DISABLE"}) {
+		t.Fatalf("runtime environment detail actions are not authoritative: environment=%#v err=%v", firstDetail, err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, projectRef,
 		"runtime-environment-lifecycle-agent", "Runtime lifecycle specialist")
@@ -2355,6 +2403,18 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 		!reflect.DeepEqual(boundSecond.RuntimeConfiguration.Environment.CurrentVersion, second.CurrentVersion) {
 		t.Fatalf("rebind second runtime environment: configuration=%#v err=%v", boundSecond.RuntimeConfiguration, err)
 	}
+	readiness, err := service.GetRuntimeEnvironmentReadiness(ctx, owner, second.Ref)
+	if err != nil || !readiness.Ready || readiness.EnvironmentRef != second.Ref ||
+		readiness.EnvironmentVersion != second.Version || readiness.PublishedVersionRef != second.CurrentVersion.Ref ||
+		readiness.PublishedVersionDigest != second.CurrentVersion.Digest || len(readiness.Blockers) != 0 {
+		t.Fatalf("read runtime environment readiness: readiness=%#v err=%v", readiness, err)
+	}
+	boundAgents, next, err := service.ListRuntimeEnvironmentAgents(ctx, owner, query.Filter{
+		ResourceRef: second.Ref, Page: query.Page{Size: 20},
+	})
+	if err != nil || next != "" || len(boundAgents) != 1 || boundAgents[0].Ref != agent.Ref {
+		t.Fatalf("list runtime environment agents: agents=%#v next=%q err=%v", boundAgents, next, err)
+	}
 	deleteCommand := command.Command{
 		Kind: command.DeleteRuntimeEnvironment, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "runtime-environment-delete", ExpectedVersion: &deleteVersion},
@@ -2385,6 +2445,14 @@ LIMIT 1`).Scan(&artifactRef, &projectRef); err != nil {
 	}
 	if readback, err := service.GetRuntimeEnvironment(ctx, owner, first.Ref); !errors.Is(err, domainerrs.ErrNotFound) || readback.Ref != "" {
 		t.Fatalf("deleted runtime environment remained get-eligible: environment=%#v err=%v", readback, err)
+	}
+	if readiness, err := service.GetRuntimeEnvironmentReadiness(ctx, owner, first.Ref); !errors.Is(err, domainerrs.ErrNotFound) || readiness.EnvironmentRef != "" {
+		t.Fatalf("deleted runtime environment remained readiness-eligible: readiness=%#v err=%v", readiness, err)
+	}
+	if agents, next, err := service.ListRuntimeEnvironmentAgents(ctx, owner, query.Filter{
+		ResourceRef: first.Ref, Page: query.Page{Size: 20},
+	}); !errors.Is(err, domainerrs.ErrNotFound) || len(agents) != 0 || next != "" {
+		t.Fatalf("deleted runtime environment remained agent-list eligible: agents=%#v next=%q err=%v", agents, next, err)
 	}
 	environments, _, err = service.ListRuntimeEnvironments(ctx, owner, query.Filter{ProjectRef: projectRef})
 	if err != nil {
@@ -2934,8 +3002,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 		}
 		return tx.Commit(ctx)
 	}
-	const upgradedRevision = "system-assistant-core-v3"
-	const upgradedPrompt = "Platform-owned system assistant core prompt revision three."
+	const upgradedRevision = "system-assistant-core-v6"
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision six."
 	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
 		t.Fatalf("upgrade core prompt: %v", err)
 	}

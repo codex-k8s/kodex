@@ -368,6 +368,163 @@ var TranscriptionPolicyProjectionService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	TranscriptionAuthorityService_ResolveTranscriptionAuthority_FullMethodName        = "/stt.v1.TranscriptionAuthorityService/ResolveTranscriptionAuthority"
+	TranscriptionAuthorityService_ResolveTranscriptionCatalogAuthority_FullMethodName = "/stt.v1.TranscriptionAuthorityService/ResolveTranscriptionCatalogAuthority"
+)
+
+// TranscriptionAuthorityServiceClient is the client API for TranscriptionAuthorityService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// TranscriptionAuthorityService принадлежит Control Plane и регистрируется
+// только в явном trusted-cluster. Caller — только stt-tts-service по закрытому
+// registry и NetworkPolicy. OIDC credential передаётся внутренней metadata;
+// actor/tenant разрешает CP из проверенной сессии и собственного состояния.
+// Это read-only snapshot, не подписанный proof и не разрешение на чтение Secret.
+type TranscriptionAuthorityServiceClient interface {
+	// Проверяет platform.stt.use без требования настроенного AI-провайдера.
+	ResolveTranscriptionAuthority(ctx context.Context, in *ResolveTranscriptionAuthorityRequest, opts ...grpc.CallOption) (*ResolveTranscriptionAuthorityResponse, error)
+	// Отдельно проверяет system.configuration.manage, не наследует право STT-use.
+	ResolveTranscriptionCatalogAuthority(ctx context.Context, in *ResolveTranscriptionCatalogAuthorityRequest, opts ...grpc.CallOption) (*ResolveTranscriptionCatalogAuthorityResponse, error)
+}
+
+type transcriptionAuthorityServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewTranscriptionAuthorityServiceClient(cc grpc.ClientConnInterface) TranscriptionAuthorityServiceClient {
+	return &transcriptionAuthorityServiceClient{cc}
+}
+
+func (c *transcriptionAuthorityServiceClient) ResolveTranscriptionAuthority(ctx context.Context, in *ResolveTranscriptionAuthorityRequest, opts ...grpc.CallOption) (*ResolveTranscriptionAuthorityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveTranscriptionAuthorityResponse)
+	err := c.cc.Invoke(ctx, TranscriptionAuthorityService_ResolveTranscriptionAuthority_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *transcriptionAuthorityServiceClient) ResolveTranscriptionCatalogAuthority(ctx context.Context, in *ResolveTranscriptionCatalogAuthorityRequest, opts ...grpc.CallOption) (*ResolveTranscriptionCatalogAuthorityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveTranscriptionCatalogAuthorityResponse)
+	err := c.cc.Invoke(ctx, TranscriptionAuthorityService_ResolveTranscriptionCatalogAuthority_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// TranscriptionAuthorityServiceServer is the server API for TranscriptionAuthorityService service.
+// All implementations must embed UnimplementedTranscriptionAuthorityServiceServer
+// for forward compatibility.
+//
+// TranscriptionAuthorityService принадлежит Control Plane и регистрируется
+// только в явном trusted-cluster. Caller — только stt-tts-service по закрытому
+// registry и NetworkPolicy. OIDC credential передаётся внутренней metadata;
+// actor/tenant разрешает CP из проверенной сессии и собственного состояния.
+// Это read-only snapshot, не подписанный proof и не разрешение на чтение Secret.
+type TranscriptionAuthorityServiceServer interface {
+	// Проверяет platform.stt.use без требования настроенного AI-провайдера.
+	ResolveTranscriptionAuthority(context.Context, *ResolveTranscriptionAuthorityRequest) (*ResolveTranscriptionAuthorityResponse, error)
+	// Отдельно проверяет system.configuration.manage, не наследует право STT-use.
+	ResolveTranscriptionCatalogAuthority(context.Context, *ResolveTranscriptionCatalogAuthorityRequest) (*ResolveTranscriptionCatalogAuthorityResponse, error)
+	mustEmbedUnimplementedTranscriptionAuthorityServiceServer()
+}
+
+// UnimplementedTranscriptionAuthorityServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedTranscriptionAuthorityServiceServer struct{}
+
+func (UnimplementedTranscriptionAuthorityServiceServer) ResolveTranscriptionAuthority(context.Context, *ResolveTranscriptionAuthorityRequest) (*ResolveTranscriptionAuthorityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveTranscriptionAuthority not implemented")
+}
+func (UnimplementedTranscriptionAuthorityServiceServer) ResolveTranscriptionCatalogAuthority(context.Context, *ResolveTranscriptionCatalogAuthorityRequest) (*ResolveTranscriptionCatalogAuthorityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveTranscriptionCatalogAuthority not implemented")
+}
+func (UnimplementedTranscriptionAuthorityServiceServer) mustEmbedUnimplementedTranscriptionAuthorityServiceServer() {
+}
+func (UnimplementedTranscriptionAuthorityServiceServer) testEmbeddedByValue() {}
+
+// UnsafeTranscriptionAuthorityServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to TranscriptionAuthorityServiceServer will
+// result in compilation errors.
+type UnsafeTranscriptionAuthorityServiceServer interface {
+	mustEmbedUnimplementedTranscriptionAuthorityServiceServer()
+}
+
+func RegisterTranscriptionAuthorityServiceServer(s grpc.ServiceRegistrar, srv TranscriptionAuthorityServiceServer) {
+	// If the following call panics, it indicates UnimplementedTranscriptionAuthorityServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&TranscriptionAuthorityService_ServiceDesc, srv)
+}
+
+func _TranscriptionAuthorityService_ResolveTranscriptionAuthority_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveTranscriptionAuthorityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TranscriptionAuthorityServiceServer).ResolveTranscriptionAuthority(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TranscriptionAuthorityService_ResolveTranscriptionAuthority_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TranscriptionAuthorityServiceServer).ResolveTranscriptionAuthority(ctx, req.(*ResolveTranscriptionAuthorityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TranscriptionAuthorityService_ResolveTranscriptionCatalogAuthority_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveTranscriptionCatalogAuthorityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TranscriptionAuthorityServiceServer).ResolveTranscriptionCatalogAuthority(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TranscriptionAuthorityService_ResolveTranscriptionCatalogAuthority_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TranscriptionAuthorityServiceServer).ResolveTranscriptionCatalogAuthority(ctx, req.(*ResolveTranscriptionCatalogAuthorityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// TranscriptionAuthorityService_ServiceDesc is the grpc.ServiceDesc for TranscriptionAuthorityService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var TranscriptionAuthorityService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "stt.v1.TranscriptionAuthorityService",
+	HandlerType: (*TranscriptionAuthorityServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ResolveTranscriptionAuthority",
+			Handler:    _TranscriptionAuthorityService_ResolveTranscriptionAuthority_Handler,
+		},
+		{
+			MethodName: "ResolveTranscriptionCatalogAuthority",
+			Handler:    _TranscriptionAuthorityService_ResolveTranscriptionCatalogAuthority_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "stt/v1/stt.proto",
+}
+
+const (
 	TranscriptionCredentialProjectionService_ProjectTranscriptionCredential_FullMethodName = "/stt.v1.TranscriptionCredentialProjectionService/ProjectTranscriptionCredential"
 )
 

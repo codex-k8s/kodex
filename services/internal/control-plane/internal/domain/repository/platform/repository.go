@@ -72,6 +72,7 @@ type ArtifactDownload struct {
 // стабильную system identity. Ни один идентификатор из browser payload не
 // является authority без повторного разрешения в PostgreSQL.
 type ProofPrincipalInput struct {
+	RPCProfile              string
 	ExternalActorID         string
 	ExternalTenantID        string
 	ExternalDisplayName     string
@@ -172,6 +173,7 @@ type RuntimeSecretRecoveryPage struct {
 }
 
 type CredentialProjectionAuthority struct {
+	RPCProfile                               string
 	ActorID, TenantID, ProjectID             string
 	SourceDigestSHA256, ProofJTI             string
 	CallerWorkloadID, CallerFullMethod       string
@@ -203,6 +205,7 @@ type RuntimeCredentialProjectionInput struct {
 }
 
 type RuntimeCredentialProjection struct {
+	Authority          CredentialProjectionAuthority
 	ProviderCredential ProviderCredentialBinding
 	RuntimeSecrets     []RuntimeSecretProjectionBinding
 	ExpiresAt          time.Time
@@ -268,6 +271,7 @@ type Repository interface {
 	ListVFSNodes(context.Context, value.Principal, query.Filter) ([]entity.VFSNode, int64, string, error)
 	SearchVFS(context.Context, value.Principal, query.Filter) ([]entity.VFSNode, int64, string, error)
 	ListProjects(context.Context, value.Principal, query.Filter) ([]entity.Project, string, []string, error)
+	ListTrashedProjects(context.Context, value.Principal, query.Page) ([]entity.Project, string, error)
 	GetProject(context.Context, value.Principal, string) (entity.Project, error)
 	ListPlatformMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)
 	ListPlatformMembershipCandidates(context.Context, value.Principal, query.Filter) ([]entity.User, string, error)

@@ -512,7 +512,7 @@ describe("assistant workspace store", () => {
   it("сохраняет conflict receipt и авторитетный STALE plan без частичного успеха", async () => {
     const stale = plan("STALE");
     applyPlanDraftMock.mockResolvedValue({
-      conversation: conversation(stale),
+      conversation: { ref: "cnv_sales" },
       plan: stale,
       createdResourceRefs: [],
       receipt: {
@@ -545,5 +545,38 @@ describe("assistant workspace store", () => {
     expect(receipt.operationReceipts).toEqual([]);
     expect(receipt.createdResourceRefs).toEqual([]);
     expect(store.selectedConversation?.turns[0]?.plan?.state).toBe("STALE");
+    expect(store.sortedConversations[0]?.title).toBe("Настройка отдела продаж");
+  });
+
+  it("не подменяет полный диалог ответом применения с одним ref", async () => {
+    const applied = { ...plan(), state: "APPLIED" as const, applied: true };
+    applyPlanDraftMock.mockResolvedValue({
+      conversation: { ref: "cnv_sales" },
+      plan: applied,
+      createdResourceRefs: ["agt_created"],
+      receipt: {
+        ref: "rcp_applied",
+        planRef: applied.ref,
+        planRevision: applied.revision,
+        outcome: "APPLIED",
+        operationReceipts: [],
+        conflicts: [],
+        auditRefs: [],
+        createdResourceRefs: ["agt_created"],
+        createdAt: "2026-08-28T00:02:00Z",
+      },
+    });
+    const store = useAssistantStore();
+    store.conversations = [conversation()];
+    store.selectedRef = "cnv_sales";
+
+    const receipt = await store.apply(plan());
+
+    expect(receipt.outcome).toBe("APPLIED");
+    expect(store.sortedConversations[0]?.updatedAt).toBe(
+      "2026-08-28T00:00:00Z",
+    );
+    expect(store.selectedConversation?.title).toBe("Настройка отдела продаж");
+    expect(store.selectedConversation?.turns[0]?.plan?.state).toBe("APPLIED");
   });
 });

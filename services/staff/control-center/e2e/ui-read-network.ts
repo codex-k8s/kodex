@@ -209,14 +209,17 @@ export class ReadNetworkCorrelator<T extends object> {
     const finalized = this.finalizedRecovery.get(request);
     if (finalized !== undefined) return finalized;
     const item = this.requests.get(request);
-    if (!item || item.failed === undefined || item.method !== "GET") return false;
+    if (
+      !item ||
+      item.failed === undefined ||
+      item.method !== "GET" ||
+      this.confirmed(request)
+    )
+      return false;
     const failure = this.diagnostics
       .snapshot()
       .failures.find((value) => value.requestSequence === item.sequence);
-    return (
-      failure?.code === "NETWORK_CHANGED" &&
-      failure.recoveredByExactSuccess
-    );
+    return failure?.recoveredByExactSuccess ?? false;
   }
   safeDiagnostics() {
     const snapshot = this.diagnostics.snapshot();
@@ -313,8 +316,7 @@ export class ReadNetworkCorrelator<T extends object> {
         this.documents.overflowCount() +
         this.diagnostics.snapshot().overflow,
       rawFailedRequests: this.completedFailures + failed.length,
-      confirmedCancellations:
-        this.completedConfirmed + confirmed.length,
+      confirmedCancellations: this.completedConfirmed + confirmed.length,
       recoveredReadFailures: this.completedRecovered + recovered.length,
       unexplainedFailures:
         this.completedFailures -

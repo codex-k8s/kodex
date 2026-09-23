@@ -30,6 +30,18 @@ const message = computed(() => {
     <div>
       <strong>{{ heading }}</strong>
       <p>{{ message }}</p>
+      <ul v-if="problem?.diagnostics.length">
+        <li
+          v-for="diagnostic in problem.diagnostics"
+          :key="`${diagnostic.code}-${diagnostic.line}-${diagnostic.column}`"
+        >
+          {{ diagnostic.message }}
+          <code v-if="diagnostic.variableName">{{
+            diagnostic.variableName
+          }}</code>
+          · {{ diagnostic.line }}:{{ diagnostic.column }}
+        </li>
+      </ul>
       <small v-if="problem?.correlationId">{{ problem.correlationId }}</small>
     </div>
     <button

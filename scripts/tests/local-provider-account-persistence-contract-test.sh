@@ -26,6 +26,10 @@ assert "restore_selected_provider_metadata_from_auth" not in installer
 assert 'provider-bootstrap.py" seed' in installer
 assert "runtime-provider-openai-default-r1" not in installer
 assert "preserve_selected_provider_metadata" not in installer
+assert 'elif [[ "$security_profile" == trusted-cluster ]]' in dev
+assert 'provider_mode=deferred' in dev
+assert "protected profile requires KODEX_LOCAL_PROVIDER_AUTH_FILE" in dev
+assert '--security-profile "$security_profile" --provider-mode "$provider_mode"' in dev
 assert '--auth-file "$account_auth_file" --preserve-current' in dev
 for path in ("tools/dev/deploy-local.sh", "tools/install/deploy-platform.sh"):
     source = (root / path).read_text()

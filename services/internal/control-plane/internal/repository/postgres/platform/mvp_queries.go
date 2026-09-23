@@ -76,14 +76,23 @@ func (repository *Repository) ListProviderDefinitions(ctx context.Context, princ
 			return nil, "", err
 		}
 		item.Models = catalog.Models
+		observedDefault, defaultAmbiguous := "", false
 		for _, model := range catalog.Models {
 			item.ModelIDs = append(item.ModelIDs, model.ID)
 			if model.Available {
 				item.Ready = true
-				if model.ID == repository.defaultRuntimeModel {
+				if model.IsDefault {
+					if observedDefault != "" && observedDefault != model.ID {
+						defaultAmbiguous = true
+					}
+					observedDefault = model.ID
+				} else if item.DefaultModelID == "" && model.ID == repository.defaultRuntimeModel {
 					item.DefaultModelID = model.ID
 				}
 			}
+		}
+		if observedDefault != "" && !defaultAmbiguous {
+			item.DefaultModelID = observedDefault
 		}
 		if !item.Available {
 			item.Ready = false
@@ -204,12 +213,13 @@ func readModelCatalogTx(ctx context.Context, tx pgx.Tx, current scope, definitio
 			if !exists {
 				position = len(result.Models)
 				positions[modelKey] = position
-				result.Models = append(result.Models, entity.ModelCapability{ID: record.ID, ProviderDefinitionKey: key, DefaultReasoningEffort: record.DefaultReasoningEffort, ReasoningEfforts: append([]string{}, record.ReasoningEfforts...)})
+				result.Models = append(result.Models, entity.ModelCapability{ID: record.ID, ProviderDefinitionKey: key, DefaultReasoningEffort: record.DefaultReasoningEffort, ReasoningEfforts: append([]string{}, record.ReasoningEfforts...), IsDefault: record.IsDefault})
 			}
 			item := &result.Models[position]
 			if item.DefaultReasoningEffort != record.DefaultReasoningEffort || !slices.Equal(item.ReasoningEfforts, record.ReasoningEfforts) {
 				conflicts[modelKey] = true
 			}
+			item.IsDefault = item.IsDefault || record.IsDefault
 			if blocker == "" {
 				item.EligibleProviderAccountRefs = append(item.EligibleProviderAccountRefs, ref)
 			} else if !slices.Contains(item.ReadinessBlockers, blocker) {
@@ -725,21 +735,11 @@ func (repository *Repository) ListScheduleRuns(ctx context.Context, principal va
 }
 
 func (repository *Repository) GetRuntimeEnvironmentReadiness(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentReadiness, error) {
-	current, tx, err := repository.authorizedRead(ctx, principal, "project.view", func(scope scope) entity.AccessScope {
-		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: ref}
-	})
+	_, tx, item, err := repository.runtimeEnvironmentRead(ctx, principal, ref)
 	if err != nil {
 		return entity.RuntimeEnvironmentReadiness{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment,
-		current.organizationID, ref, current.role, current.actorID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.RuntimeEnvironmentReadiness{}, errs.ErrNotFound
-	}
-	if err != nil {
-		return entity.RuntimeEnvironmentReadiness{}, errs.ErrUnavailable
-	}
 	result := entity.RuntimeEnvironmentReadiness{
 		EnvironmentRef: item.Ref, EnvironmentVersion: item.Version,
 		PublishedVersionRef: item.CurrentVersion.Ref, PublishedVersionDigest: item.CurrentVersion.Digest,
@@ -774,9 +774,7 @@ func (repository *Repository) runtimeEnvironmentReadiness(item entity.RuntimeEnv
 }
 
 func (repository *Repository) ListRuntimeEnvironmentAgents(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.Agent, string, error) {
-	current, tx, err := repository.authorizedRead(ctx, principal, "project.view", func(scope scope) entity.AccessScope {
-		return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: filter.ResourceRef}
-	})
+	current, tx, _, err := repository.runtimeEnvironmentRead(ctx, principal, filter.ResourceRef)
 	if err != nil {
 		return nil, "", err
 	}

@@ -9,12 +9,13 @@ fail() {
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 prepare_host="$repository_root/tools/install/prepare-host.sh"
 bootstrap_cluster="$repository_root/tools/dev/bootstrap-cluster.sh"
+provider_sandbox="$repository_root/tools/dev/configure-provider-sandbox.sh"
 lock_file="$repository_root/tools/install/components.lock.json"
 temporary_directory=$(mktemp -d)
 cleanup() { rm -rf -- "$temporary_directory"; }
 trap cleanup EXIT
 
-bash -n "$prepare_host" "$bootstrap_cluster"
+bash -n "$prepare_host" "$bootstrap_cluster" "$provider_sandbox"
 
 jq -e '
   .schemaVersion == 1 and
@@ -48,6 +49,22 @@ for package_contract in \
   'readback_locked_host_packages'; do
   rg -Fq -- "$package_contract" "$prepare_host" ||
     fail "host package lock contract is absent: $package_contract"
+done
+
+for provider_sandbox_contract in \
+  'profile_target=/etc/apparmor.d/kodex-provider-runtime' \
+  'apparmor_parser -Q "$profile_source"' \
+  'install -o root -g root -m 0644 "$profile_source" "$profile_target"' \
+  'apparmor_parser -r "$profile_target"' \
+  "grep -Fxq 'kodex-provider-runtime (unconfined)' /sys/kernel/security/apparmor/profiles"; do
+  rg -Fq -- "$provider_sandbox_contract" "$provider_sandbox" ||
+    fail "provider sandbox host contract is absent: $provider_sandbox_contract"
+done
+for bootstrap_sandbox_contract in \
+  'configure-provider-sandbox.sh" --mode apply' \
+  'configure-provider-sandbox.sh" --mode readback'; do
+  rg -Fq -- "$bootstrap_sandbox_contract" "$bootstrap_cluster" ||
+    fail "local bootstrap does not enforce provider sandbox readback: $bootstrap_sandbox_contract"
 done
 
 for forbidden_firewall_rule in \

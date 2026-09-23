@@ -4,7 +4,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -47,6 +46,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	readiness := serviceruntime.NewReadiness()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
+		RPCProfile: config.RPCProfile, CallerWorkload: serviceName,
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName, CAFile: config.ControlPlaneCAFile,
 		ClientCertificateFile: config.ControlPlaneCertificateFile, ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 		ApplicationGrantFile: config.ApplicationGrantFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
@@ -55,13 +55,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	if err := control.CheckLocalAuthority(startup); err != nil {
-		return errors.Join(
-			fmt.Errorf("integration gateway startup barrier failed: %w", err),
-			control.Close(),
-		)
-	}
 	adapter, err := integration.New(integration.Config{
+		RPCProfile:          config.RPCProfile,
 		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL,
 		SyntheticBaseURL: config.SyntheticBaseURL, Timeout: config.OperationTimeout,
 		EmailCAFile: config.ControlPlaneCAFile, EmailCertificateFile: config.ControlPlaneCertificateFile, EmailPrivateKeyFile: config.ControlPlanePrivateKeyFile,
@@ -76,8 +71,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err := technical.Listen(); err != nil {
 		return err
 	}
+	readiness.Set(true, "ready")
+	metrics.SetReady(true)
 	workHealth := &workCycleHealth{}
-	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), monitorLocalReadiness(control, readiness, workHealth, metrics, business, logger, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), monitorWorkPathHealth(workHealth, business, config), runIntegrationLoop(control, adapter, workHealth, business, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
 	metrics.SetReady(false)
@@ -105,26 +102,12 @@ func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	}
 }
 
-func monitorLocalReadiness(control *controlplaneclient.Client, readiness *serviceruntime.Readiness, workHealth *workCycleHealth, metrics *sharedobservability.Metrics, business *businessmetrics.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorWorkPathHealth(workHealth *workCycleHealth, business *businessmetrics.Metrics, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {
-			check, cancel := context.WithTimeout(ctx, config.RequestTimeout)
-			err := control.CheckLocalAuthority(check)
-			cancel()
-			business.WorkPathReady(err == nil && workHealth.ready(time.Now(), integrationCycleBudget(config)+5*time.Second+config.ReadinessInterval))
-			if err == nil {
-				if readiness.Set(true, "ready") {
-					logger.InfoContext(ctx, "integration gateway readiness restored")
-				}
-				metrics.SetReady(true)
-			} else {
-				if readiness.Set(false, "local_authority_unavailable") {
-					logger.WarnContext(ctx, "integration gateway readiness lost", "error_class", "local_authority_unavailable")
-				}
-				metrics.SetReady(false)
-			}
+			business.WorkPathReady(workHealth.ready(time.Now(), integrationCycleBudget(config)+5*time.Second+config.ReadinessInterval))
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

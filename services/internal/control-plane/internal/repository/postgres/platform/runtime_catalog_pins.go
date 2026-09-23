@@ -47,9 +47,6 @@ func bootstrapUnpinnedCatalogCandidates(ctx context.Context, tx pgx.Tx, organiza
 	if rows.Err() != nil {
 		return nil, errs.ErrUnavailable
 	}
-	if len(result) == 0 {
-		return nil, errs.ErrConflict
-	}
 	return result, nil
 }
 
@@ -200,4 +197,35 @@ func captureRuntimeCatalogPins(ctx context.Context, tx pgx.Tx, current scope, pr
 	}
 	result, _, err := validateRuntimeCatalogCandidates(ctx, tx, current, provider, model, "", eligible, true)
 	return result, err
+}
+
+// firstRunProviderDefaultModel применяется только к неизменённой provider-free
+// bootstrap configuration. Уже опубликованная или выбранная владельцем модель
+// никогда не заменяется этим путём молча.
+func firstRunProviderDefaultModel(ctx context.Context, tx pgx.Tx, current scope, provider string, candidates []entity.ProviderAccountCandidate) (string, error) {
+	selected := ""
+	for _, candidate := range candidates {
+		catalog, err := readModelCatalogTx(ctx, tx, current, provider, candidate.AccountRef)
+		if err != nil || catalog.Status == nil || catalog.Status.State != "READY" {
+			return "", errs.ErrConflict
+		}
+		accountDefault := ""
+		for _, capability := range catalog.Models {
+			if !capability.IsDefault || !capability.Available || !slices.Contains(capability.EligibleProviderAccountRefs, candidate.AccountRef) {
+				continue
+			}
+			if accountDefault != "" && accountDefault != capability.ID {
+				return "", errs.ErrConflict
+			}
+			accountDefault = capability.ID
+		}
+		if accountDefault == "" || selected != "" && selected != accountDefault {
+			return "", errs.ErrConflict
+		}
+		selected = accountDefault
+	}
+	if selected == "" {
+		return "", errs.ErrConflict
+	}
+	return selected, nil
 }

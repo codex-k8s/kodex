@@ -162,6 +162,8 @@ func TestProjectReferenceBinding(t *testing.T) {
 		{name: "exact project delete path", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, wantBound: true},
 		{name: "matching exact project header", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: projectID, wantBound: true},
 		{name: "project collection is unbound", method: http.MethodPost, path: "/api/v1/projects"},
+		{name: "project trash collection is unbound", method: http.MethodGet, path: "/api/v1/projects/trash"},
+		{name: "project trash collection rejects mismatched method", method: http.MethodDelete, path: "/api/v1/projects/trash", wantErr: true},
 		{name: "invalid header", method: http.MethodGet, path: "/api/v1/runs", header: "invalid", wantErr: true},
 		{name: "invalid exact project path", method: http.MethodDelete, path: "/api/v1/projects/invalid", wantErr: true},
 		{name: "mismatched exact project scope", method: http.MethodDelete, path: "/api/v1/projects/" + projectID, header: "prj_EhEQDw4NDAsKCQgHBgUEAwIB", wantErr: true},

@@ -86,6 +86,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		}
 	}
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
+		RPCProfile: config.RPCProfile, CallerWorkload: "runtime-controller",
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
@@ -97,7 +98,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
 	credentials, err := credentialprojection.Dial(startup, credentialprojection.Config{
-		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName,
+		RPCProfile: config.RPCProfile,
+		Target:     config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName,
 		CAFile: config.SecretBrokerCAFile, CertificateFile: config.ControlPlaneCertificateFile,
 		PrivateKeyFile: config.ControlPlanePrivateKeyFile, ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID,
 		DialTimeout: config.RequestTimeout, Proofs: control,
@@ -107,6 +109,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	defer func() { resultErr = errors.Join(resultErr, credentials.Close()) }()
 	manager, err := workload.InCluster(workload.Config{
+		RPCProfile:  config.RPCProfile,
 		Environment: config.Environment, ControlNamespace: config.ControlNamespace, RuntimeNamespace: config.RuntimeNamespace,
 		ControllerPodUID: config.PodUID, ControllerPodIP: config.PodIP,
 		CallbackTLSServerName: config.CallbackTLSServerName, CallbackClientCASecret: config.CallbackClientCASecret,
@@ -121,14 +124,12 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	if err := errors.Join(
-		control.CheckLocalAuthority(startup),
-		manager.Check(startup),
-	); err != nil {
+	if err := manager.Check(startup); err != nil {
 		return errors.Join(errors.New("runtime controller startup barrier failed"), err)
 	}
 	coordinator := callback.NewCoordinator()
 	callbackServer, err := callback.New(callback.Config{Listen: config.CallbackListen,
+		RPCProfile:      config.RPCProfile,
 		CertificateFile: config.CallbackServerCertificateFile, PrivateKeyFile: config.CallbackServerPrivateKeyFile,
 		ClientCAFile: config.CallbackClientCAFile, ExpectedClientSPIFFEID: config.CallbackExpectedClientSPIFFEID,
 		RequestTimeout: config.RequestTimeout, WarmLongPoll: config.WarmLongPoll,
@@ -149,7 +150,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		func(ctx context.Context) error {
 			return runCallbackDuringDrain(ctx, runtimeDone, workload.ControllerShutdownDrain+5*time.Second, callbackServer.Run)
 		},
-		monitorUnitReadiness(control, manager, callbackServer, unitReadiness, metrics, logger, config),
+		monitorUnitReadiness(manager, callbackServer, unitReadiness, metrics, logger, config),
 		func(ctx context.Context) error {
 			defer close(runtimeDone)
 			return manager.RunAsLeader(ctx, runtime.Run)
@@ -221,15 +222,12 @@ func readinessHandler(readiness *serviceruntime.Readiness) http.HandlerFunc {
 	}
 }
 
-func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.Manager, callbacks *callback.Server, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorUnitReadiness(manager *workload.Manager, callbacks *callback.Server, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.InfrastructureCheckInterval)
 		defer ticker.Stop()
 		kubernetes := newKubernetesReadinessObserver()
 		for {
-			authorityCheck, cancelAuthority := context.WithTimeout(ctx, config.RequestTimeout)
-			authorityErr := control.CheckLocalAuthority(authorityCheck)
-			cancelAuthority()
 			spoolCheck, cancelSpool := context.WithTimeout(ctx, config.RequestTimeout)
 			spoolErr := callbacks.CheckArtifactSpool(spoolCheck)
 			cancelSpool()
@@ -244,7 +242,7 @@ func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.
 					logger.InfoContext(ctx, "Kubernetes runtime observation restored")
 				}
 			}
-			if authorityErr == nil && spoolErr == nil && kubernetesAvailable {
+			if spoolErr == nil && kubernetesAvailable {
 				metrics.SetReady(true)
 				if readiness.Set(true, "ready") {
 					logger.InfoContext(ctx, "runtime readiness restored")
@@ -252,9 +250,7 @@ func monitorUnitReadiness(control *controlplaneclient.Client, manager *workload.
 			} else if readiness.Set(false, "local_infrastructure_unavailable") {
 				metrics.SetReady(false)
 				class := "kubernetes"
-				if authorityErr != nil {
-					class = "sidecar"
-				} else if spoolErr != nil {
+				if spoolErr != nil {
 					class = "artifact_spool"
 				}
 				logger.WarnContext(ctx, "runtime readiness lost", "error_class", class)

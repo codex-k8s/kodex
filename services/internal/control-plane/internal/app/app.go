@@ -22,6 +22,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/grpcserver"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
@@ -31,6 +32,7 @@ import (
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providercredentialcleanup"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/projectpurge"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providermodelcatalog"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
@@ -79,6 +81,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
 	}
+	if err := repository.ConfigureRPCProfile(config.RPCProfile); err != nil {
+		return fmt.Errorf("configure repository RPC profile: %w", err)
+	}
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
 		return fmt.Errorf("configure runtime secrets: %w", err)
 	}
@@ -126,6 +131,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return fmt.Errorf("construct integration credential materializer: %w", err)
 	}
 	providerControl, err := controlplaneclient.Dial(startup, controlplaneclient.Config{
+		RPCProfile: config.RPCProfile, CallerWorkload: "control-plane",
 		Target: config.SecretBrokerTarget, TLSServerName: config.SecretBrokerTLSServerName,
 		CAFile: config.ClientCAFile, ClientCertificateFile: config.ServerCertificateFile,
 		ClientPrivateKeyFile: config.ServerPrivateKeyFile, ApplicationGrantFile: config.ProviderApplicationGrantFile,
@@ -166,27 +172,55 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return fmt.Errorf("construct role image service: %w", err)
 	}
 	repository.ConfigureRoleImageCatalog(roleEnvironmentCatalog)
-	workerGrantTrustFiles := workerGrantTrustFilesFor(config)
-	proofService, err := authorityproof.New(startup, service, authorityproof.Config{
-		PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
-		SignerTrustFile:          config.ProofSignerTrustFile,
-		WorkerGrantTrustFiles:    workerGrantTrustFiles,
-		ReadinessWorkerGrantFile: config.ProviderApplicationGrantFile,
-		OIDC: oidcverifier.Config{
-			Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, JWKSURL: config.OIDCJWKSURL,
-			ConnectAddress: config.OIDCConnectAddress, TLSServerName: config.OIDCTLSServerName,
-			CAFile: config.OIDCCAFile, Timeout: config.ReadinessTimeout,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("construct authority proof resolver: %w", err)
+	var proofService *authorityproof.Service
+	var verifiedUnary grpc.UnaryServerInterceptor
+	var verifiedStream grpc.StreamServerInterceptor
+	var refreshOIDC func(context.Context) error
+	var transportOptions []grpc.ServerOption
+	if config.RPCProfile == "trusted-cluster" {
+		var verifier *oidcverifier.Verifier
+		verifiedUnary, verifiedStream, verifier, err = trustedClusterReader(startup, config, service)
+		if err != nil {
+			return fmt.Errorf("construct trusted cluster reader: %w", err)
+		}
+		defer verifier.Close()
+		refreshOIDC = verifier.Refresh
+	} else {
+		workerGrantTrustFiles := workerGrantTrustFilesFor(config)
+		proofService, err = authorityproof.New(startup, service, authorityproof.Config{
+			PolicyFile: config.AuthorityPolicyFile, SignerPrivateJWKFile: config.ProofSignerFile,
+			SignerTrustFile:          config.ProofSignerTrustFile,
+			WorkerGrantTrustFiles:    workerGrantTrustFiles,
+			ReadinessWorkerGrantFile: config.ProviderApplicationGrantFile,
+			OIDC: oidcverifier.Config{
+				Issuer: config.OIDCIssuer, Audience: config.OIDCAudience, JWKSURL: config.OIDCJWKSURL,
+				ConnectAddress: config.OIDCConnectAddress, TLSServerName: config.OIDCTLSServerName,
+				CAFile: config.OIDCCAFile, Timeout: config.ReadinessTimeout,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("construct authority proof resolver: %w", err)
+		}
+		defer proofService.Close()
+		authority, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID, ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: 2 * time.Second})
+		if err != nil {
+			return fmt.Errorf("connect authorization verifier: %w", err)
+		}
+		defer authority.Close()
+		refreshOIDC = proofService.RefreshOIDC
+		verifiedUnary = authorityclient.VerifierUnaryServerInterceptor(authority.Verifier())
+		verifiedStream = authorityclient.VerifierStreamServerInterceptor(authority.Verifier(), controlplanev1.RuntimeWorkService_StreamExecutionArtifact_FullMethodName)
+		verifiedUnary, verifiedStream, err = serviceIdentityReader(service, proofService, verifiedUnary, verifiedStream)
+		if err != nil {
+			return fmt.Errorf("construct service identity reader: %w", err)
+		}
+		verifiedUnary = routeResolverUnary(verifiedUnary)
+		tlsConfig, err := loadServerTLS(config)
+		if err != nil {
+			return err
+		}
+		transportOptions = append(transportOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
-	defer proofService.Close()
-	authority, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID, ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: 2 * time.Second})
-	if err != nil {
-		return fmt.Errorf("connect authorization verifier: %w", err)
-	}
-	defer authority.Close()
 	publisher, err := natsjetstream.New(natsjetstream.Config{
 		URL: config.NATSURL, TLSServerName: config.NATSTLSServerName, CAFile: config.NATSCAFile,
 		CertificateFile: config.NATSCertificateFile, PrivateKeyFile: config.NATSPrivateKeyFile,
@@ -210,32 +244,17 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct gRPC transport: %w", err)
 	}
-	proofTransport, err := platformgrpc.NewAuthorityProofServer(proofService)
-	if err != nil {
-		return fmt.Errorf("construct authority proof transport: %w", err)
-	}
 	roleImageTransport, err := platformgrpc.NewRoleImageServer(roleImageService)
 	if err != nil {
 		return fmt.Errorf("construct role image transport: %w", err)
 	}
-	tlsConfig, err := loadServerTLS(config)
-	if err != nil {
-		return err
-	}
-	verifiedUnary := authorityclient.VerifierUnaryServerInterceptor(authority.Verifier())
-	verifiedStream := authorityclient.VerifierStreamServerInterceptor(authority.Verifier(), controlplanev1.RuntimeWorkService_StreamExecutionArtifact_FullMethodName)
-	verifiedUnary, verifiedStream, err = serviceIdentityReader(service, proofService, verifiedUnary, verifiedStream)
-	if err != nil {
-		return fmt.Errorf("construct service identity reader: %w", err)
-	}
-	grpcServer := grpc.NewServer(
-		grpc.Creds(credentials.NewTLS(tlsConfig)),
+	serverOptions := append(transportOptions,
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
 				slog.Error("unexpected gRPC failure", "method", method, "code", code.String())
 			})),
-			routeResolverUnary(verifiedUnary),
+			verifiedUnary,
 			grpcserver.RejectMalformedUnary,
 		),
 		grpc.ChainStreamInterceptor(
@@ -246,8 +265,12 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 			grpcserver.RejectMalformedStream,
 		),
 	)
+	grpcServer := grpc.NewServer(serverOptions...)
 	controlplanev1.RegisterPlatformQueryServiceServer(grpcServer, transport)
 	sttv1.RegisterTranscriptionPolicyProjectionServiceServer(grpcServer, transport)
+	if config.RPCProfile == transportprofile.TrustedCluster {
+		sttv1.RegisterTranscriptionAuthorityServiceServer(grpcServer, transport)
+	}
 	controlplanev1.RegisterPlatformCommandServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSystemAssistantServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeWorkServiceServer(grpcServer, transport)
@@ -259,7 +282,13 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRoleImageServiceServer(grpcServer, roleImageTransport)
-	internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
+	if proofService != nil {
+		proofTransport, err := platformgrpc.NewAuthorityProofServer(proofService)
+		if err != nil {
+			return fmt.Errorf("construct authority proof transport: %w", err)
+		}
+		internalrpcauthorityv1.RegisterAuthorityProofResolverServiceServer(grpcServer, proofTransport)
+	}
 	cleanupClaimHealth := serviceruntime.NewReadiness()
 	cleanupClaimHealth.Set(true, "ready")
 	cleanupWorker, err := providercredentialcleanup.New(
@@ -290,13 +319,14 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, emailProjection, cleanupClaimHealth, readiness, slog.Default(), config),
+		monitorReadiness(service, repository, publisher, readiness, slog.Default(), config),
 		emailProjection.Run,
-		monitorOIDCSigningKeys(proofService, slog.Default(), config),
+		monitorOIDCSigningKeys(refreshOIDC, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 		cleanupWorker.Run,
 		catalogWorker.Run,
 		runAgentAvatarCleanup(repository, slog.Default()),
+		projectpurge.Run(repository, objects, config.RuntimeSecretNamespace, slog.Default()),
 	)
 	workerDone := make(chan error, 1)
 	go func() { workerDone <- workers.Wait(lifecycle) }()
@@ -346,7 +376,7 @@ func routeResolverUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerI
 	}
 }
 
-func monitorOIDCSigningKeys(service *authorityproof.Service, logger *slog.Logger, config Config) serviceruntime.Worker {
+func monitorOIDCSigningKeys(refresh func(context.Context) error, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.OIDCRefreshInterval)
 		defer ticker.Stop()
@@ -357,7 +387,7 @@ func monitorOIDCSigningKeys(service *authorityproof.Service, logger *slog.Logger
 				return ctx.Err()
 			case <-ticker.C:
 				probe, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
-				err := service.RefreshOIDC(probe)
+				err := refresh(probe)
 				cancel()
 				if err != nil && !degraded {
 					logger.Warn("OIDC signing-key refresh degraded")
@@ -493,37 +523,28 @@ type readinessPublisher interface {
 	Check(context.Context) error
 }
 
-type readinessCondition interface {
-	Ready() (bool, string)
-}
-
 type readinessOwner interface {
 	Ready(context.Context) error
 }
 
-// Общий endpoint зависит только от owned infrastructure. Catalog worker сохраняет
-// собственную диагностику, но его downstream broker сам требует доступного CP.
-func monitorReadiness(service readinessOwner, store readinessStore, publisher readinessPublisher, emailProjection readinessPublisher, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
+// Общий endpoint зависит только от owned PostgreSQL, object storage и NATS.
+// Вспомогательные projection, cleanup и catalog paths сохраняют собственную
+// диагностику и fail-closed ошибки.
+func monitorReadiness(service readinessOwner, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {
 			check, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
-			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check), emailProjection.Check(check))
+			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check))
 			cancel()
-			reason, errorClass := "direct_infrastructure_unavailable", "direct_infrastructure"
-			if cleanupReady, _ := cleanupClaim.Ready(); err == nil && !cleanupReady {
-				err = errors.New("provider credential cleanup claim is unavailable")
-				reason = "provider_credential_cleanup_claim_unavailable"
-				errorClass = "provider_credential_cleanup_claim"
-			}
 			if err == nil {
 				if readiness.Set(true, "ready") {
 					logger.InfoContext(ctx, "control-plane readiness restored")
 				}
 			} else {
-				if readiness.Set(false, reason) {
-					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", errorClass)
+				if readiness.Set(false, "primary_infrastructure_unavailable") {
+					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", "postgresql_object_storage_or_nats")
 				}
 			}
 			select {

@@ -90,11 +90,18 @@ func modelCatalogObservation(task platformrepo.ProviderModelCatalogTask, respons
 		return invalid()
 	}
 	seen := map[string]bool{}
+	defaults := 0
 	for _, model := range response.GetModels() {
 		if model == nil || !validBoundedSafeText(model.GetId(), 200) || seen[model.GetId()] || len(model.GetReasoningEfforts()) > 16 {
 			return invalid()
 		}
 		seen[model.GetId()] = true
+		if model.GetIsDefault() {
+			defaults++
+			if defaults > 1 {
+				return invalid()
+			}
+		}
 		efforts := append([]string{}, model.GetReasoningEfforts()...)
 		slices.Sort(efforts)
 		for index, effort := range efforts {
@@ -105,7 +112,7 @@ func modelCatalogObservation(task platformrepo.ProviderModelCatalogTask, respons
 		if len(efforts) == 0 && model.GetDefaultReasoningEffort() != "" || len(efforts) > 0 && !slices.Contains(efforts, model.GetDefaultReasoningEffort()) {
 			return invalid()
 		}
-		result.Models = append(result.Models, platformrepo.ProviderModelCatalogRecord{ID: model.GetId(), ReasoningEfforts: efforts, DefaultReasoningEffort: model.GetDefaultReasoningEffort()})
+		result.Models = append(result.Models, platformrepo.ProviderModelCatalogRecord{ID: model.GetId(), ReasoningEfforts: efforts, DefaultReasoningEffort: model.GetDefaultReasoningEffort(), IsDefault: model.GetIsDefault()})
 	}
 	return result, nil
 }

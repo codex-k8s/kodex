@@ -74,7 +74,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 		return errors.New("metrics unavailable")
 	}
 	stage = stageAuthority
-	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{ServiceIdentity: true, Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
+	client, e := controlplaneclient.Dial(ctx, controlplaneclient.Config{RPCProfile: c.RPCProfile, CallerWorkload: "email-bridge", ServiceIdentity: true, Target: c.AuthorityTarget, TLSServerName: "control-plane.kodex-system.svc.cluster.local", CAFile: c.CAFile, ClientCertificateFile: c.CertificateFile, ClientPrivateKeyFile: c.PrivateKeyFile, ApplicationGrantFile: c.ApplicationGrantFile, ExpectedIssuerUID: 29001, ExpectedIssuerGID: 29000, DialTimeout: 3 * time.Second, Operations: controlplaneclient.EmailBridgeOperations()})
 	if e != nil {
 		return e
 	}
@@ -88,7 +88,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 	}
 	stage = stageConfiguration
 	startup, cancel = context.WithTimeout(ctx, 20*time.Second)
-	e = configurationState.Refresh(startup)
+	e = configurationState.RefreshLocal(startup)
 	cancel()
 	if e != nil {
 		return e
@@ -115,6 +115,8 @@ func Run(ctx, background context.Context, version string) (result error) {
 	if e = tech.Listen(); e != nil {
 		return e
 	}
+	readiness.Set(true, "ready")
+	metrics.SetReady(true)
 	defer serviceruntime.RunShutdown(background, serviceruntime.ShutdownOperation{Name: "technical", Timeout: 5 * time.Second, Run: tech.Shutdown})
 	handler := telemetry.HTTPMiddleware(func(path string) string {
 		switch path {
@@ -127,7 +129,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 		if status >= 500 {
 			logger.Error("Email bridge request failed", "route", route, "status", status)
 		}
-	}, httptransport.Handler{Current: configurationState.Service, Metrics: businessMetrics})
+	}, httptransport.Handler{RPCProfile: c.RPCProfile, Current: configurationState.Service, Metrics: businessMetrics})
 	server := &http.Server{Handler: http.MaxBytesHandler(handler, 24<<20), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 70 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384, TLSConfig: transportTLS, BaseContext: func(net.Listener) context.Context { return ctx }}
 	stage = stageHTTPS
 	listener, e := net.Listen("tcp", c.Listen)
@@ -141,7 +143,11 @@ func Run(ctx, background context.Context, version string) (result error) {
 		}
 		return e
 	}, func(context.Context) error {
-		e := server.Serve(tls.NewListener(netutil.LimitListener(listener, 64), transportTLS))
+		serving := netutil.LimitListener(listener, 64)
+		if transportTLS != nil {
+			serving = tls.NewListener(serving, transportTLS)
+		}
+		e := server.Serve(serving)
 		if errors.Is(e, http.ErrServerClosed) {
 			return nil
 		}
@@ -154,12 +160,11 @@ func Run(ctx, background context.Context, version string) (result error) {
 		defer ticker.Stop()
 		for {
 			probe, stop := context.WithTimeout(worker, 10*time.Second)
-			ok := repository.Ready(probe) == nil && client.CheckLocalAuthority(probe) == nil && configurationState.Refresh(probe) == nil
+			databaseReady := repository.Ready(probe) == nil
+			_ = configurationState.Refresh(probe)
+			ok := databaseReady && configurationState.Service() != nil
 			stop()
-			if !ok {
-				configurationState.current.Store(nil)
-			}
-			readiness.Set(ok, "dependencies")
+			readiness.Set(ok, "primary_infrastructure")
 			metrics.SetReady(ok)
 			select {
 			case <-worker.Done():

@@ -55,12 +55,22 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		return nil, errors.New("required MCP tool catalog is invalid")
 	}
 	upstream, err := url.Parse(input.CallbackURL)
-	if err != nil || upstream.Scheme != "https" || upstream.Host == "" {
+	if err != nil || upstream.Host == "" ||
+		(input.CallbackTLS.Profile == "" && upstream.Scheme != "https") ||
+		(input.CallbackTLS.Profile != "" && input.ValidateCallbackTransport() != nil) {
 		return nil, errors.New("required MCP endpoint is invalid")
 	}
 	upstream.Path = "/v1/executions/" + url.PathEscape(input.LeaseRef) + "/mcp"
 	stage = mcpStageTLSIdentity
-	transport, err := exactMCPTransport(input.CallbackTLS)
+	var transport *http.Transport
+	if input.CallbackTLS.Profile == "" {
+		transport, err = exactMCPTransport(input.CallbackTLS)
+	} else {
+		transport, err = callback.TransportForInput(input)
+		if err == nil {
+			transport.ResponseHeaderTimeout = time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+5) * time.Second
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

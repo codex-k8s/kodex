@@ -15,6 +15,7 @@ import {
 } from "./api";
 import {
   accountAllows,
+  hasPendingDeviceAuthorization,
   isPendingDeviceAuthorization,
   pageAllowsAccountCreation,
   upsertProviderAccount,
@@ -111,6 +112,7 @@ export const useProvidersStore = defineStore("providers", {
         this.accounts = accounts.items;
         this.accountsNextPageToken = accounts.nextPageToken;
         this.pageNextActions = accounts.nextActions;
+        this.resumeDeviceAuthorizationPolling();
       } catch (error) {
         if (controller.signal.aborted || generation !== loadGeneration) return;
         this.problem = asProblem(error);
@@ -166,7 +168,7 @@ export const useProvidersStore = defineStore("providers", {
       );
       if (
         generation === (pollGenerations.get(account.ref) ?? 0) &&
-        isPendingDeviceAuthorization(updated)
+        hasPendingDeviceAuthorization(updated)
       )
         this.schedulePoll(updated.ref);
       return updated;
@@ -174,14 +176,17 @@ export const useProvidersStore = defineStore("providers", {
     async refreshAuthorization(
       account: ProviderAccount,
     ): Promise<ProviderAccount> {
-      if (!accountAllows(account, "REFRESH_AUTHORIZATION")) {
+      const pendingDeviceAuthorization = hasPendingDeviceAuthorization(account);
+      if (
+        !pendingDeviceAuthorization &&
+        !accountAllows(account, "REFRESH_AUTHORIZATION")
+      ) {
         this.stopPolling(account.ref);
         return account;
       }
       const generation = pollGenerations.get(account.ref) ?? 0;
       const updated = await this.execute(account.ref, () =>
-        account.authorization?.method === "DEVICE_CODE" &&
-        account.authorization.state === "PENDING"
+        pendingDeviceAuthorization
           ? pollDeviceAuthorization(account)
           : startProviderLifecycle(
               account,
@@ -191,7 +196,7 @@ export const useProvidersStore = defineStore("providers", {
             ).then((result) => result.account),
       );
       if (generation === (pollGenerations.get(account.ref) ?? 0)) {
-        if (isPendingDeviceAuthorization(updated))
+        if (hasPendingDeviceAuthorization(updated))
           this.schedulePoll(updated.ref);
         else this.stopPolling(updated.ref);
       }
@@ -233,7 +238,24 @@ export const useProvidersStore = defineStore("providers", {
         ).then((result) => result.account),
       );
     },
-    schedulePoll(accountRef: string): void {
+    resumeDeviceAuthorizationPolling(): void {
+      const observable = new Set(
+        this.accounts
+          .filter((account) => hasPendingDeviceAuthorization(account))
+          .map((account) => account.ref),
+      );
+      for (const accountRef of this.pollingRefs) {
+        if (!observable.has(accountRef)) this.stopPolling(accountRef);
+      }
+      for (const account of this.accounts) {
+        if (!observable.has(account.ref)) continue;
+        this.schedulePoll(
+          account.ref,
+          isPendingDeviceAuthorization(account) ? devicePollDelayMs : 0,
+        );
+      }
+    },
+    schedulePoll(accountRef: string, delayMs = devicePollDelayMs): void {
       this.stopPolling(accountRef);
       this.pollingRefs = [...new Set([...this.pollingRefs, accountRef])];
       pollTimers.set(
@@ -241,14 +263,14 @@ export const useProvidersStore = defineStore("providers", {
         setTimeout(() => {
           pollTimers.delete(accountRef);
           const account = this.accounts.find((item) => item.ref === accountRef);
-          if (!account || !isPendingDeviceAuthorization(account)) {
+          if (!account || !hasPendingDeviceAuthorization(account)) {
             this.stopPolling(accountRef);
             return;
           }
           void this.refreshAuthorization(account).catch(() => {
             this.stopPolling(accountRef);
           });
-        }, devicePollDelayMs),
+        }, delayMs),
       );
     },
     stopPolling(accountRef: string): void {

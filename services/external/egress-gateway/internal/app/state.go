@@ -31,7 +31,7 @@ type state struct {
 func newState(activePolicy *policy.Active, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, business *internalobservability.Metrics) *state {
 	value := &state{
 		process: processBooting, policyState: "ACTIVE", revision: activePolicy.Revision(), digest: activePolicy.Digest(),
-		resolverState: "REJECTED", readiness: readiness, metrics: metrics,
+		resolverState: "INVALID", readiness: readiness, metrics: metrics,
 	}
 	business.SetPolicyActive(true)
 	value.publishReadiness()
@@ -71,20 +71,16 @@ func (value *state) setProcess(process string) {
 	value.publishReadiness()
 }
 
-func (value *state) setResolverReady(ready bool) {
+func (value *state) setResolverConfigured() {
 	value.mu.Lock()
-	if ready {
-		value.resolverState = "VALIDATED"
-	} else {
-		value.resolverState = "REJECTED"
-	}
+	value.resolverState = "CONFIGURED"
 	value.mu.Unlock()
 	value.publishReadiness()
 }
 
 func (value *state) publishReadiness() {
 	value.mu.RLock()
-	ready := value.process == processReady && value.policyState == "ACTIVE" && value.resolverState == "VALIDATED"
+	ready := value.process == processReady && value.policyState == "ACTIVE" && value.resolverState == "CONFIGURED"
 	value.mu.RUnlock()
 	reason := "not_ready"
 	if ready {

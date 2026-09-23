@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	accessservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/access"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -114,33 +115,114 @@ func (repository *Repository) ListRuntimeEnvironments(ctx context.Context, princ
 			return items, rows.Err()
 		}, func(item entity.RuntimeEnvironmentSet) entity.AccessScope {
 			return entity.AccessScope{ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
-		}, func(_ pgx.Tx, _ *entity.RuntimeEnvironmentSet, _ func(string) bool) error { return nil })
+		}, func(_ pgx.Tx, item *entity.RuntimeEnvironmentSet, allowed func(string) bool) error {
+			item.NextActions = runtimeEnvironmentActions(*item, allowed("project.manage"),
+				allowed("runtime.environment.disable"), allowed("runtime.environment.delete"))
+			return nil
+		})
 }
 
 func (repository *Repository) GetRuntimeEnvironment(ctx context.Context, principal value.Principal, ref string) (entity.RuntimeEnvironmentSet, error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	current, tx, item, err := repository.runtimeEnvironmentRead(ctx, principal, ref)
 	if err != nil {
 		return entity.RuntimeEnvironmentSet{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "ENVIRONMENT", EntityRef: ref}, ""); err != nil {
-		return entity.RuntimeEnvironmentSet{}, err
-	}
-	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment, scope.organizationID, ref, scope.role, scope.actorID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.RuntimeEnvironmentSet{}, errs.ErrNotFound
-	}
+	item.NextActions, err = repository.runtimeEnvironmentActions(ctx, tx, current, item)
 	if err != nil {
-		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
+		return entity.RuntimeEnvironmentSet{}, err
 	}
 	if tx.Commit(ctx) != nil {
 		return entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
 	}
 	return item, nil
+}
+
+func (repository *Repository) runtimeEnvironmentRead(
+	ctx context.Context,
+	principal value.Principal,
+	ref string,
+) (scope, pgx.Tx, entity.RuntimeEnvironmentSet, error) {
+	scope, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return scope, nil, entity.RuntimeEnvironmentSet{}, err
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return scope, nil, entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
+	}
+	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "ENVIRONMENT", EntityRef: ref}, ""); err != nil {
+		_ = tx.Rollback(ctx)
+		return scope, nil, entity.RuntimeEnvironmentSet{}, err
+	}
+	item, err := repository.scanRuntimeEnvironment(tx.QueryRow(ctx, queryRuntimeConfigurationGetEnvironment, scope.organizationID, ref, scope.role, scope.actorID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		_ = tx.Rollback(ctx)
+		return scope, nil, entity.RuntimeEnvironmentSet{}, errs.ErrNotFound
+	}
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return scope, nil, entity.RuntimeEnvironmentSet{}, errs.ErrUnavailable
+	}
+	return scope, tx, item, nil
+}
+
+func runtimeEnvironmentActions(item entity.RuntimeEnvironmentSet, canManage, canDisable, canDelete bool) []string {
+	if item.State == "DELETED" {
+		return []string{}
+	}
+	actions := []string{"OPEN"}
+	if canManage {
+		actions = append(actions, "UPDATE")
+		if item.CurrentVersion.Revision > 1 {
+			actions = append(actions, "ROLLBACK")
+		}
+	}
+	if canDisable {
+		if item.State == "ACTIVE" {
+			actions = append(actions, "DISABLE")
+		} else if item.State == "DISABLED" {
+			actions = append(actions, "ENABLE")
+		}
+	}
+	if canDelete && item.State == "DISABLED" {
+		actions = append(actions, "DELETE")
+	}
+	return actions
+}
+
+func (repository *Repository) runtimeEnvironmentActions(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	item entity.RuntimeEnvironmentSet,
+) ([]string, error) {
+	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
+	if err != nil {
+		return nil, err
+	}
+	bindings, err := repository.loadAccessBindings(ctx, tx, current.organizationID, subject)
+	if err != nil {
+		return nil, err
+	}
+	project, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+		Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: item.ProjectRef, ProjectRef: item.ProjectRef,
+	})
+	if err != nil {
+		return nil, err
+	}
+	environment, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+		Kind: "RESOURCE_INSTANCE", ResourceKind: "RUNTIME_ENVIRONMENT", ResourceRef: item.Ref, ProjectRef: item.ProjectRef,
+	})
+	if err != nil {
+		return nil, err
+	}
+	at := time.Now().UTC()
+	allowed := func(permission string, target resolvedAccessTarget) bool {
+		return accessservice.Evaluate(subject.AccessSubject, permission, target.scope, target.ownerSubjectRef, bindings, at).Allowed
+	}
+	return runtimeEnvironmentActions(item, allowed("project.manage", project),
+		allowed("runtime.environment.disable", environment), allowed("runtime.environment.delete", environment)), nil
 }
 
 func (repository *Repository) ListRuntimeEnvironmentVersions(ctx context.Context, principal value.Principal, filter query.Filter) ([]entity.RuntimeEnvironmentVersion, string, error) {

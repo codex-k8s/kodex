@@ -41,6 +41,33 @@ func (server *Server) UpdateProject(ctx context.Context, request *controlplanev1
 	return &controlplanev1.UpdateProjectResponse{Project: castProject(*result.Project)}, nil
 }
 
+func (server *Server) TrashProject(ctx context.Context, request *controlplanev1.TrashProjectRequest) (*controlplanev1.TrashProjectResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_TrashProject_FullMethodName,
+		command.TrashProject, request.GetMutation(), command.ProjectLifecycleInput{Ref: request.GetProjectRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.TrashProjectResponse{Project: castProject(*result.Project)}, nil
+}
+
+func (server *Server) RestoreProject(ctx context.Context, request *controlplanev1.RestoreProjectRequest) (*controlplanev1.RestoreProjectResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_RestoreProject_FullMethodName,
+		command.RestoreProject, request.GetMutation(), command.ProjectLifecycleInput{Ref: request.GetProjectRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.RestoreProjectResponse{Project: castProject(*result.Project)}, nil
+}
+
+func (server *Server) PurgeProject(ctx context.Context, request *controlplanev1.PurgeProjectRequest) (*controlplanev1.PurgeProjectResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_PurgeProject_FullMethodName,
+		command.PurgeProject, request.GetMutation(), command.ProjectLifecycleInput{Ref: request.GetProjectRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.PurgeProjectResponse{Project: castProject(*result.Project)}, nil
+}
+
 func (server *Server) AddPlatformMembership(ctx context.Context, request *controlplanev1.AddPlatformMembershipRequest) (*controlplanev1.AddPlatformMembershipResponse, error) {
 	payload := command.PlatformMembershipInput{UserRef: request.GetUserRef(), Role: enumSuffix(request.GetRole(), "PLATFORM_ROLE_"), Active: true}
 	result, err := execute(ctx, server.service, controlplanev1.PlatformCommandService_AddPlatformMembership_FullMethodName, command.AddPlatformMembership, request.GetMutation(), payload)

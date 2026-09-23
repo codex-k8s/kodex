@@ -73,6 +73,46 @@ func (server *Server) UpdateProject(w http.ResponseWriter, r *http.Request, ref 
 	}
 	writeMessage(w, http.StatusOK, response, "project", "")
 }
+func (server *Server) TrashProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.TrashProjectParams) {
+	r, ok := withProjectReference(w, r, ref)
+	if !ok {
+		return
+	}
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.TrashProject(r.Context(), &controlplanev1.TrashProjectRequest{Mutation: m, ProjectRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "project", "")
+}
+func (server *Server) RestoreProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.RestoreProjectParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.RestoreProject(r.Context(), &controlplanev1.RestoreProjectRequest{Mutation: m, ProjectRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "project", "")
+}
+func (server *Server) PurgeProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.PurgeProjectParams) {
+	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Command.PurgeProject(r.Context(), &controlplanev1.PurgeProjectRequest{Mutation: m, ProjectRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusAccepted, response, "project", "")
+}
 func (server *Server) AddPlatformMembership(w http.ResponseWriter, r *http.Request, p generated.AddPlatformMembershipParams) {
 	body, ok := decodeJSON[generated.PlatformMembershipCreateInput](w, r)
 	if !ok {

@@ -237,7 +237,9 @@ yq -o=json -I=0 '.' "$render" | jq -s -e --arg profile "$deployment_profile" '
         (.name | endswith("platform-worker-grant-agent")))))
 ' >/dev/null || fail 'local worker grant Deployments do not serialize their rollout'
 
-air_binary="$cache_root/go-tools/air"
+air_version=$(jq -er '.tools.air.version | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+  "$source_root/tools/dev/components.lock.json")
+air_binary="$cache_root/go-tools/air-$air_version"
 [[ -x "$air_binary" ]] || fail 'pinned Air executable is absent from the local tool cache'
 [[ "$(stat -c '%a' "$air_binary")" == 555 ]] || fail 'pinned Air executable is not read-only executable for every runtime UID'
 if readelf -l "$air_binary" | rg -q 'Requesting program interpreter'; then
@@ -583,6 +585,8 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .kind == "Deployment" and .metadata.name == "secret-broker" and
     any(.spec.template.spec.initContainers[]?;
       .name == "codex-cli-install" and
+      .image == "pull.127.0.0.1.nip.io/kodex/agent-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and
+      .imagePullPolicy == "IfNotPresent" and
       .resources.requests.cpu == "10m" and
       .resources.requests.memory == "64Mi" and
       .resources.limits.cpu == "100m" and

@@ -82,14 +82,11 @@ func runActive(
 	current.state = newState(activePolicy, readiness, metrics, business)
 	resolver, err := dnsresolver.New(activePolicy.DNS(), servers, nil, func(outcome string, reason dnsresolver.Reason) {
 		business.DNSObserver(outcome, string(reason))
-		if outcome == "rejected" {
-			current.state.setResolverReady(false)
-			current.state.setProcess(processNotReady)
-		}
 	})
 	if err != nil {
 		return err
 	}
+	current.state.setResolverConfigured()
 	current.technical, err = newTechnicalServer(config.TechnicalAddress, current.state, metrics)
 	if err != nil {
 		return err
@@ -99,25 +96,6 @@ func runActive(
 	}
 	technicalResult := make(chan error, 1)
 	go func() { technicalResult <- current.technical.Serve() }()
-
-	startupInterval := time.Duration(activePolicy.DNS().MinimumTTLSeconds) * time.Second
-	for {
-		if err := preflight(runContext, resolver, activePolicy); err == nil {
-			current.state.setResolverReady(true)
-			break
-		}
-		current.state.setProcess(processNotReady)
-		timer := time.NewTimer(startupInterval)
-		select {
-		case <-lifecycle.Done():
-			timer.Stop()
-			return nil
-		case serveErr := <-technicalResult:
-			timer.Stop()
-			return serveResult("technical HTTP", serveErr)
-		case <-timer.C:
-		}
-	}
 
 	sttPolicy, err := activePolicy.ForProfile(policy.STTProfileName)
 	if err != nil {
@@ -167,7 +145,8 @@ func runActive(
 		}
 		go func() { connectResult <- server.Serve() }()
 	}
-	current.workers = serviceruntime.StartWorkers(runContext, refresh(activePolicy, resolver, current.state), mailReadiness.Run(startupInterval))
+	mailRefreshInterval := time.Duration(activePolicy.DNS().MinimumTTLSeconds) * time.Second
+	current.workers = serviceruntime.StartWorkers(runContext, mailReadiness.Run(mailRefreshInterval))
 	workerResult := make(chan error, 1)
 	go func() { workerResult <- current.workers.Wait(runContext) }()
 	current.state.setProcess(processReady)
@@ -299,37 +278,6 @@ func (current *runtime) shutdown(base context.Context) error {
 	)
 	current.state.setProcess(processStopped)
 	return result
-}
-
-func preflight(ctx context.Context, resolver *dnsresolver.Resolver, activePolicy *policy.Active) error {
-	for _, destination := range activePolicy.Destinations() {
-		if _, err := resolver.Resolve(ctx, destination.Hostname); err != nil {
-			return errors.New("DNS readiness preflight failed")
-		}
-	}
-	return nil
-}
-
-func refresh(activePolicy *policy.Active, resolver *dnsresolver.Resolver, currentState *state) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		interval := time.Duration(activePolicy.DNS().MinimumTTLSeconds) * time.Second
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-ticker.C:
-				if err := preflight(ctx, resolver, activePolicy); err != nil {
-					currentState.setResolverReady(false)
-					currentState.setProcess(processNotReady)
-					continue
-				}
-				currentState.setResolverReady(true)
-				currentState.setProcess(processReady)
-			}
-		}
-	}
 }
 
 func serveResult(name string, err error) error {

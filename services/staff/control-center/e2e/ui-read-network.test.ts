@@ -84,6 +84,71 @@ it("отделяет восстановленное точное GET-чтени�
     exactReadRecovery: true,
   });
 });
+it("считает browser abort восстановленным только после точного успешного GET", () => {
+  for (const code of [
+    "net::ERR_ABORTED",
+    "NS_BINDING_ABORTED",
+    "Load request cancelled",
+  ]) {
+    const c = new ReadNetworkCorrelator<object>(),
+      failed = {},
+      success = {};
+    c.request(failed, address, "GET", undefined);
+    c.failed(failed, code, 20);
+    expect(c.recovered(failed), code).toBe(false);
+    c.request(success, address, "GET", undefined);
+    c.succeeded(success, 200, 30);
+    c.terminal(success, 31);
+    expect(c.recovered(failed), code).toBe(true);
+    expect(c.confirmed(failed), code).toBe(false);
+    expect(c.snapshot(), code).toMatchObject({
+      rawFailedRequests: 1,
+      confirmedCancellations: 0,
+      recoveredReadFailures: 1,
+      unexplainedFailures: 0,
+    });
+  }
+});
+it("не учитывает подтверждённую отмену повторно как recovery", () => {
+  const c = new ReadNetworkCorrelator<object>(),
+    failed = {},
+    success = {};
+  c.observe(event("start", 10));
+  c.request(failed, address, "GET", id);
+  c.observe(event("abort", 20));
+  c.observe(event("reject", 22));
+  c.failed(failed, "net::ERR_ABORTED", 21);
+  c.request(success, address, "GET", undefined);
+  c.succeeded(success, 200, 30);
+  c.terminal(success, 31);
+  expect(c.confirmed(failed)).toBe(true);
+  expect(c.recovered(failed)).toBe(false);
+  expect(c.snapshot()).toMatchObject({
+    rawFailedRequests: 1,
+    confirmedCancellations: 1,
+    recoveredReadFailures: 0,
+    unexplainedFailures: 0,
+  });
+});
+it("не восстанавливает POST и настоящий network failure последующим успехом", () => {
+  for (const variant of ["post", "reset"] as const) {
+    const c = new ReadNetworkCorrelator<object>(),
+      failed = {},
+      success = {},
+      method = variant === "post" ? "POST" : "GET";
+    c.request(failed, address, method, undefined);
+    c.failed(
+      failed,
+      variant === "post" ? "net::ERR_ABORTED" : "net::ERR_CONNECTION_RESET",
+      20,
+    );
+    c.request(success, address, method, undefined);
+    c.succeeded(success, 200, 30);
+    c.terminal(success, 31);
+    expect(c.recovered(failed), variant).toBe(false);
+    expect(c.snapshot(), variant).toMatchObject({ unexplainedFailures: 1 });
+  }
+});
 it("navigation intent without a committed document never proves API cancellation", () => {
   const c = new ReadNetworkCorrelator<object>(),
     r = {};

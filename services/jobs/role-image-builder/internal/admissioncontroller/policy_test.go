@@ -351,6 +351,7 @@ func evaluateAdmissionPolicyWithOld(policy admissionPolicyDocument, object, oldO
 		"metadata": map[string]any{
 			"name":      ownerPolicy.Name,
 			"namespace": ownerPolicy.Namespace,
+			"labels":    ownerPolicy.Labels,
 		},
 		"spec": parameterSpec,
 	}

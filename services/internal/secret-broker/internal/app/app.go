@@ -97,6 +97,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		cancelSentry()
 	}()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
+		RPCProfile: config.RPCProfile, CallerWorkload: "secret-broker",
 		Target: config.ControlPlaneTarget, TLSServerName: config.ControlPlaneTLSServerName,
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
@@ -142,31 +143,43 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, providerCredentials.Close()) }()
-	verifier, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{
-		SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID,
-		ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: config.RequestTimeout,
-	})
-	if err != nil {
-		return errors.New("connect provider credential authorization verifier")
+	var admission grpc.UnaryServerInterceptor
+	var transportOptions []grpc.ServerOption
+	var securityCheckers []checker
+	if config.RPCProfile == "trusted-cluster" {
+		admission, err = trustedClusterAdmission(config.RPCProfile)
+		if err != nil {
+			return err
+		}
+	} else {
+		verifier, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{
+			SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID,
+			ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: config.RequestTimeout,
+		})
+		if err != nil {
+			return errors.New("connect provider credential authorization verifier")
+		}
+		defer func() { resultErr = errors.Join(resultErr, verifier.Close()) }()
+		admission = routeProtectedUnary(authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier()))
+		securityCheckers = append(securityCheckers, providerVerifierReadiness{client: verifier.Verifier()})
+		tlsConfig, err := serverTLS(config)
+		if err != nil {
+			return err
+		}
+		transportOptions = append(transportOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
-	defer func() { resultErr = errors.Join(resultErr, verifier.Close()) }()
 	handler, err := transportgrpc.New(owner, store, reconciler, config.MaximumSecretBytes,
 		transportgrpc.WithProviderCredentialMaterializer(providerCredentials), transportgrpc.WithDraftCommands(drafts),
 		transportgrpc.WithCatalogLogger(logger))
 	if err != nil {
 		return err
 	}
-	tlsConfig, err := serverTLS(config)
-	if err != nil {
-		return err
-	}
-	grpcServer := grpc.NewServer(
-		grpc.Creds(credentials.NewTLS(tlsConfig)),
+	serverOptions := append(transportOptions,
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			metrics.UnaryServerInterceptor(),
 			telemetry.UnaryServerInterceptor(methods),
-			routeProtectedUnary(authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier())),
+			admission,
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(
 				_ context.Context,
 				method string,
@@ -182,6 +195,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		),
 		grpc.MaxRecvMsgSize(config.MaximumSecretBytes+(64<<10)), grpc.MaxSendMsgSize(config.MaximumSecretBytes+(64<<10)),
 	)
+	grpcServer := grpc.NewServer(serverOptions...)
 	secretbrokerv1.RegisterSecretBrokerServiceServer(grpcServer, handler)
 	secretbrokerv1.RegisterRuntimeCredentialProjectionServiceServer(grpcServer, handler)
 	sttv1.RegisterTranscriptionCredentialProjectionServiceServer(grpcServer, handler)
@@ -194,22 +208,23 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	readiness.Set(false, "infrastructure_starting")
 	metrics.SetReady(false)
 	technical := technicalServer(lifecycle, config, readiness, metrics)
-	verifierReadiness := providerVerifierReadiness{client: verifier.Verifier()}
-	if err := errors.Join(owner.Check(startup), store.Check(startup), reconciler.ReconcileOnce(startup),
-		providerCredentials.Check(startup), verifierReadiness.Check(startup), drafts.CheckDependencies(startup)); err != nil {
-		_ = listener.Close()
-		return errors.Join(errors.New("secret broker startup barrier failed"), err)
+	for _, security := range securityCheckers {
+		if err := security.Check(startup); err != nil {
+			_ = listener.Close()
+			return err
+		}
 	}
-	if err := drafts.ReconcileOnce(startup); err != nil {
+	if err := errors.Join(store.Check(startup), providerCredentials.Check(startup)); err != nil {
 		_ = listener.Close()
-		return errors.New("secret draft startup reconciliation failed")
+		return errors.Join(errors.New("secret broker local infrastructure startup barrier failed"), err)
 	}
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
+	readinessCheckers := append([]checker{store, providerCredentials}, securityCheckers...)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(readiness, metrics, logger, config.RequestTimeout, owner, store, reconciler, providerCredentials, verifierReadiness, drafts),
+		monitorReadiness(readiness, metrics, logger, config.RequestTimeout, readinessCheckers...),
 		reconciler.Worker(),
 		drafts.Worker(config.RecoveryInterval, config.RecoveryTimeout, func(err error) {
 			if err != nil {
@@ -291,8 +306,8 @@ func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobserv
 				}
 			} else {
 				metrics.SetReady(false)
-				if readiness.Set(false, "dependency_unavailable") {
-					logger.WarnContext(ctx, "secret broker readiness lost", "error_class", "dependency")
+				if readiness.Set(false, "local_infrastructure_unavailable") {
+					logger.WarnContext(ctx, "secret broker readiness lost", "error_class", "kubernetes_or_local_runtime")
 				}
 			}
 			select {

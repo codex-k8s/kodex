@@ -86,6 +86,45 @@ func (repository *Repository) requireCapabilityGrantAuthority(ctx context.Contex
 	return nil
 }
 
+// Начальные права помощник может предложить только в закрытом наборе; владелец
+// подтверждает весь план, а сервер повторно проверяет право выдачи при создании.
+func (repository *Repository) authorizeInitialAgentCapabilities(ctx context.Context, tx pgx.Tx, current scope, projectRef string, keys []string) error {
+	if !validInitialAgentCapabilities(keys) {
+		return errs.ErrInvalid
+	}
+	for _, key := range keys {
+		var enabledKey string
+		if err := tx.QueryRow(ctx, queryCommandsChangeagentbindingSelectEnabledCapability, key).Scan(&enabledKey); errors.Is(err, pgx.ErrNoRows) {
+			return errs.ErrNotFound
+		} else if err != nil {
+			return errs.ErrUnavailable
+		}
+		if err := repository.requireCapabilityGrantAuthority(ctx, tx, current, projectRef, "", enabledKey); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validInitialAgentCapabilities(keys []string) bool {
+	if len(keys) > 3 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		switch key {
+		case "platform.artifact.manage", "platform.run.delegate", "platform.run.launch":
+		default:
+			return false
+		}
+		if _, duplicate := seen[key]; duplicate {
+			return false
+		}
+		seen[key] = struct{}{}
+	}
+	return true
+}
+
 func (repository *Repository) requireAgentIntegrationGrantAuthority(ctx context.Context, tx pgx.Tx, current scope, agentRef, grantRef string) error {
 	var connectionRef string
 	if err := tx.QueryRow(ctx, queryEffectiveCapabilitiesGrantTarget, current.organizationID, grantRef, agentRef).Scan(&connectionRef); errors.Is(err, pgx.ErrNoRows) {

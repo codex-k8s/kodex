@@ -563,6 +563,21 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.command.projects.purge",
+      "source_binding_sha256": "712c88f2ade016d51e043e1a96491e41abe46b7e88caa8cfd8baaff75fa02c6f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.projects.restore",
+      "source_binding_sha256": "c0e90775abe22420908c40811c0306a9acff62ee9cfe67b9c687b8d9dcf9ac88",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.command.projects.trash",
+      "source_binding_sha256": "f32af5ec2b5c0e6fa8400d2c0b4f93408fdaa1a199c0c7d2194ff6223334f5c4",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.command.projects.update",
       "source_binding_sha256": "fd9008cb75696d1b4dc4c1e760f2c6dbf9eaa265bb0db5daaf69fa5d18ddd32f",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
@@ -1340,6 +1355,11 @@
     {
       "operation_id": "platform.query.projects.list",
       "source_binding_sha256": "28789fc00ff4cf0ffc2d1afeff17d1c3ae1693828660b93e696fd45a82293939",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.projects.trash.list",
+      "source_binding_sha256": "9667c9730136e2bd14ac521c938fe4f05925f2143890fda37cce1f74ba02ba74",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {

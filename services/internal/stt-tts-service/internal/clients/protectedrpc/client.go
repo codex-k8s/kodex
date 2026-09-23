@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 	"google.golang.org/grpc"
@@ -25,6 +26,7 @@ type TargetConfig struct {
 }
 
 type Config struct {
+	RPCProfile                      string
 	Policy, Credential              TargetConfig
 	CertificateFile, PrivateKeyFile string
 	DialTimeout                     time.Duration
@@ -32,13 +34,21 @@ type Config struct {
 }
 
 type Client struct {
+	Authority          sttv1.TranscriptionAuthorityServiceClient
+	trustedCluster     bool
 	Policy             sttv1.TranscriptionPolicyProjectionServiceClient
 	Credential         sttv1.TranscriptionCredentialProjectionServiceClient
 	issuer             internalrpcauthorityv1.AuthorizationIssuerServiceClient
 	policy, credential *grpc.ClientConn
 }
 
-func Dial(_ context.Context, config Config) (*Client, error) {
+func Dial(ctx context.Context, config Config) (*Client, error) {
+	if config.RPCProfile == transportprofile.TrustedCluster {
+		return dialTrustedCluster(ctx, config)
+	}
+	if config.RPCProfile != "" {
+		return nil, errors.New("STT RPC profile is unsupported")
+	}
 	if config.DialTimeout < 100*time.Millisecond || config.DialTimeout > 5*time.Second ||
 		!filepath.IsAbs(config.CertificateFile) || !filepath.IsAbs(config.PrivateKeyFile) || config.Issuer == nil {
 		return nil, errors.New("STT protected RPC configuration is invalid")
@@ -86,6 +96,9 @@ func (client *Client) BindDelegated(
 	principal value.Principal,
 	requestID, correlationID, fullMethod, operation string,
 ) (context.Context, error) {
+	if client != nil && client.trustedCluster {
+		return bindTrustedDelegated(ctx, principal, requestID, correlationID, fullMethod, operation)
+	}
 	verified, ok := authorityclient.VerifiedAuthorizationContext(ctx)
 	if client == nil || ctx == nil || requestID == "" || correlationID == "" || operationFor(fullMethod) != operation ||
 		!ok || verified.GetAuthorityAbiVersion() != internalrpcauth.AuthorityABIVersion ||
@@ -128,6 +141,9 @@ func sameIdentity(actual *internalrpcauthorityv1.AuthorityIdentity, id string, p
 
 // Check подтверждает, что issuer обслуживает ту же ABI, которую использует клиент.
 func (client *Client) Check(ctx context.Context) error {
+	if client != nil && client.trustedCluster {
+		return client.checkTrustedConnections(ctx)
+	}
 	if client == nil || client.issuer == nil {
 		return errors.New("STT continuation issuer is unavailable")
 	}

@@ -34,6 +34,7 @@ const (
 )
 
 type Config struct {
+	RPCProfile                                             string
 	CredentialDirectory, ProxyURL, SyntheticBaseURL        string
 	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile string
 	Timeout                                                time.Duration

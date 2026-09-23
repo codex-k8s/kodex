@@ -37,6 +37,7 @@ const (
 
 type Repository struct {
 	pool                            *pgxpool.Pool
+	trustedCluster                  bool
 	defaultRuntimeProvider          string
 	defaultRuntimeModel             string
 	providerCredential              ProviderCredentialConfig
@@ -120,6 +121,10 @@ func (repository *Repository) ConfigureRoleImages(config RoleImageConfig) error 
 }
 
 func (repository *Repository) ConfigureProviderCredential(config ProviderCredentialConfig) error {
+	if config == (ProviderCredentialConfig{}) {
+		repository.providerCredential = config
+		return nil
+	}
 	if !validDNSLabel(config.SecretName) || uuid.Validate(config.SecretUID) != nil ||
 		config.SecretResourceVersion == "" || len(config.SecretResourceVersion) > 128 ||
 		len(config.ContentSHA256) != sha256.Size*2 {
@@ -166,9 +171,6 @@ func (repository *Repository) Ready(ctx context.Context) error {
 }
 
 func (repository *Repository) Bootstrap(ctx context.Context) error {
-	if repository.providerCredential.SecretName == "" {
-		return errors.New("provider credential metadata is required")
-	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return errors.New("begin bootstrap transaction")
@@ -179,8 +181,10 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 		return errors.New("lock installation bootstrap")
 	}
 	if bootstrappedAt != nil {
-		if err := repository.reconcileProviderCredential(ctx, tx); err != nil {
-			return err
+		if repository.providerCredential.SecretName != "" {
+			if err := repository.reconcileProviderCredential(ctx, tx); err != nil {
+				return err
+			}
 		}
 		if err := repository.reconcileSystemAssistantCorePrompt(
 			ctx,
@@ -241,30 +245,32 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertProviderDefinition); err != nil {
 		return errors.New("seed provider definition")
 	}
-	providerAccountRef, err := newRef("pacc")
-	if err != nil {
-		return err
-	}
 	var providerAccountID string
-	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertProviderAccount,
-		providerAccountRef, organizationID, systemSubjectID).Scan(&providerAccountID); err != nil {
-		return errors.New("seed provider account")
-	}
-	providerCredentialRef, err := newRef("pcr")
-	if err != nil {
-		return err
-	}
-	var providerCredentialID string
-	if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertProviderCredentialRevision,
-		providerCredentialRef, organizationID, providerAccountID,
-		repository.providerCredential.SecretName, repository.providerCredential.SecretUID,
-		repository.providerCredential.SecretResourceVersion, repository.providerCredential.ContentSHA256,
-	).Scan(&providerCredentialID); err != nil {
-		return errors.New("seed provider credential revision")
-	}
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrapActivateProviderCredentialRevision,
-		providerAccountID, providerCredentialID); err != nil {
-		return errors.New("activate provider credential revision")
+	if repository.providerCredential.SecretName != "" {
+		providerAccountRef, err := newRef("pacc")
+		if err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertProviderAccount,
+			providerAccountRef, organizationID, systemSubjectID).Scan(&providerAccountID); err != nil {
+			return errors.New("seed provider account")
+		}
+		providerCredentialRef, err := newRef("pcr")
+		if err != nil {
+			return err
+		}
+		var providerCredentialID string
+		if err := tx.QueryRow(ctx, queryRepositoryBootstrapInsertProviderCredentialRevision,
+			providerCredentialRef, organizationID, providerAccountID,
+			repository.providerCredential.SecretName, repository.providerCredential.SecretUID,
+			repository.providerCredential.SecretResourceVersion, repository.providerCredential.ContentSHA256,
+		).Scan(&providerCredentialID); err != nil {
+			return errors.New("seed provider credential revision")
+		}
+		if _, err := tx.Exec(ctx, queryRepositoryBootstrapActivateProviderCredentialRevision,
+			providerAccountID, providerCredentialID); err != nil {
+			return errors.New("activate provider credential revision")
+		}
 	}
 	roleRef, err := newRef("role")
 	if err != nil {
@@ -307,13 +313,16 @@ func (repository *Repository) Bootstrap(ctx context.Context) error {
 	if _, _, err := assignInstructionBinding(ctx, tx, organizationID, agentID, promptRef); err != nil {
 		return err
 	}
-	systemSessionRef, err := newRef("ses")
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertSessionsRefTargetTypeState,
-		systemSessionRef, organizationID, providerAccountID, systemSubjectID); err != nil {
-		return errors.New("create system assistant warm session")
+	var systemSessionRef string
+	if providerAccountID != "" {
+		systemSessionRef, err = newRef("ses")
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertSessionsRefTargetTypeState,
+			systemSessionRef, organizationID, providerAccountID, systemSubjectID); err != nil {
+			return errors.New("create system assistant warm session")
+		}
 	}
 	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertAssistantRuntimeOrganizationIdStableKeyCorePromptRevision,
 		organizationID, agentID, promptRef, systemassistant.CorePromptRevision, systemSessionRef, limits); err != nil {
@@ -684,7 +693,9 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 	if input.CallerWorkload == "" || input.Operation == "" {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
-	if input.CallerWorkload != "control-api-gateway" {
+	_, trustedSTT := platformrepo.TrustedSTTAuthorityPermission(input.CallerWorkload, input.Operation)
+	trustedSTT = trustedSTT && repository.trustedCluster && input.RPCProfile == "trusted-cluster" && input.ProjectRef == ""
+	if input.CallerWorkload != "control-api-gateway" && !trustedSTT {
 		if input.ExternalActorID != "kodex-system-subject" || input.ExternalTenantID != "kodex-installation" || input.ProjectRef != "" {
 			return platformrepo.ProofAuthority{}, errs.ErrForbidden
 		}
@@ -757,6 +768,10 @@ func (repository *Repository) resolveProofIdentity(ctx context.Context, input pl
 		}
 		authority.ActorVersion = 1
 		return authority, nil
+	}
+	// Впервые назначить владельца установки может только публичный gateway.
+	if trustedSTT {
+		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {

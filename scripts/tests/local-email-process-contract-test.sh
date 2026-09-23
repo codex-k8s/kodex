@@ -4,7 +4,10 @@ set -euo pipefail
 cache_root=${1:?primed local Go cache root is required}
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 image=docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83
-air_sha=$(sha256sum "$cache_root/go-tools/air" | awk '{print $1}')
+air_version=$(jq -er '.tools.air.version | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+  "$root/tools/dev/components.lock.json")
+air_binary="$cache_root/go-tools/air-$air_version"
+air_sha=$(sha256sum "$air_binary" | awk '{print $1}')
 common=(--rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges
   --mount "type=bind,src=$root,dst=/workspace,readonly"
   --mount "type=bind,src=$cache_root/go-mod-v2,dst=/go/pkg/mod,readonly"
@@ -30,7 +33,7 @@ printf 'Local EMAIL non-root socket init passed\n'
 # Новый контейнер получает отдельный tmpfs cache, как отдельный cache в render.
 docker run "${common[@]}" --user 10001:10001 \
   --tmpfs /tmp:rw,exec,uid=10001,gid=10001,mode=0700 \
-  -e "KODEX_DEV_AIR_SHA256=$air_sha" "$image" sh -ec '
+  -e "KODEX_DEV_AIR_VERSION=$air_version" -e "KODEX_DEV_AIR_SHA256=$air_sha" "$image" sh -ec '
     mkdir -p "$GOCACHE" "$GOTMPDIR" "$HOME"
     cd /workspace/services/internal/email-bridge
     timeout 180s go build -trimpath -buildvcs=false -o /tmp/email-cli ./cmd/cli
@@ -52,6 +55,6 @@ docker run "${common[@]}" --user 10001:10001 \
     done
     test ! -w /workspace/go.work
     test ! -w /go/pkg/mod
-    test ! -w /go/tools/air
+    test ! -w "/go/tools/air-$KODEX_DEV_AIR_VERSION"
   '
 printf 'Local EMAIL process contract passed: offline non-root socket init, migration rejection and Air build\n'

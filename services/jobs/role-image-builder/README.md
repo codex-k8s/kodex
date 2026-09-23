@@ -75,6 +75,14 @@ identity отклоняет чужой image, command, env, volume либо Serv
 `render-image-admission-job.sh` остаётся встроенным deterministic renderer и
 read-only способом сравнить будущий phase manifest.
 
+В `trusted-cluster` controller перед созданием новой claim/promotion цепочки
+читает у control-plane только два server-owned признака доступности work.
+Пустая очередь не создаёт Job/PVC; ошибка preflight закрыто запрещает новый
+цикл, но не прерывает cleanup или следующую фазу уже созданной цепочки. Сам
+preflight не резервирует work: право на эффект по-прежнему выдаёт только
+fenced claim внутри соответствующего phase Job. Защищённый профиль сохраняет
+прежний polling path до отдельного полного lifecycle его workload identity.
+
 События для этого пути не публикуются: producer, admission и runtime используют
 авторитетные защищённые read/command RPC. Ложного AsyncAPI consumer нет.
 

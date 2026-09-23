@@ -121,7 +121,9 @@ func TestConfigurationFailureStageAndClosedPublication(t *testing.T) {
 			}
 			err := r.Refresh(t.Context())
 			stage, _ := failureFields(failure(stageConfiguration, err))
-			if err == nil || stage != string(target) || r.Service() != nil {
+			published := r.Service() != nil
+			wantPublished := target == stageReadback
+			if err == nil || stage != string(target) || published != wantPublished {
 				t.Fatal("failed startup published service or lost exact stage")
 			}
 			if target == stageConfiguration && len(visited) != 0 {

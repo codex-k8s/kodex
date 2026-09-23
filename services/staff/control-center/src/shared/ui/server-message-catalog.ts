@@ -635,6 +635,12 @@ export const serverTokenTranslations = {
   ],
   PROJECT_CREATED: ["Проект создан", "Project created"],
   PROJECT_UPDATED: ["Проект обновлён", "Project updated"],
+  PROJECT_TRASHED: ["Проект перемещён в корзину", "Project moved to trash"],
+  PROJECT_RESTORED: ["Проект восстановлен", "Project restored"],
+  PROJECT_PURGE_REQUESTED: [
+    "Запрошено окончательное удаление проекта",
+    "Permanent project deletion requested",
+  ],
   PROVIDER_ACCOUNT_AUTHORIZED: [
     "Учётная запись провайдера авторизована",
     "Provider account authorized",
