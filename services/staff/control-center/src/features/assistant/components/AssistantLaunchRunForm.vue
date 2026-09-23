@@ -73,9 +73,9 @@ const selectedOption = computed(() =>
 );
 
 watch(
-  () => props.operation,
-  (operation) => {
-    const input = operationParameter(operation, "input");
+  () => JSON.stringify([props.operation.value.ref, parameter("input")]),
+  () => {
+    const input = parameter("input");
     invalidInitialInputKeys.value = new Set(
       typeof input === "object" && input !== null && !Array.isArray(input)
         ? Object.entries(input)

@@ -26,6 +26,9 @@ describe("дружественная форма плана запуска", () =
     expect(source).toContain('stringParameter("task")');
     expect(source).toContain("workflow.inputFields");
     expect(source).toContain('emit("parameter", "input", prepared.value)');
+    expect(source).toContain(
+      'JSON.stringify([props.operation.value.ref, parameter("input")])',
+    );
     expect(source).not.toContain("props.operation.value.target.kind =");
     expect(editor).toContain("!runFormTouched.value");
   });

@@ -530,6 +530,42 @@ describe("assistant plan editor model", () => {
     expect(changed?.target.kind).toBe("WORKFLOW");
   });
 
+  it("редактирует задание и cron автоматизации вместе с планируемым состоянием", () => {
+    const parameters = {
+      projectRef: "prj_market",
+      name: "Недельная сводка",
+      targetType: "WORKFLOW",
+      targetRef: "wfl_weekly",
+      preset: "CUSTOM",
+      cronExpression: "0 9 * * 1",
+      timeOfDay: "",
+      timezone: "Europe/Saratov",
+      input: {},
+      automationText: "Составь сводку за неделю",
+      sessionPolicy: "NEW_EACH_RUN",
+      notificationPolicy: "CONTROL_CENTER_ONLY",
+    };
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CREATE_SCHEDULE",
+        target: { kind: "SCHEDULE", name: "Недельная сводка" },
+        parameters,
+        after: parameters,
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("CREATE_SCHEDULE");
+    updateOperationParameter(first, "automationText", "Проверь итоги недели");
+    updateOperationParameter(first, "cronExpression", "0 10 * * 1");
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters).toEqual(changed?.after);
+    expect(changed?.parameters.automationText).toBe("Проверь итоги недели");
+    expect(changed?.parameters.cronExpression).toBe("0 10 * * 1");
+  });
+
   it("создаёт независимый draft из Vue reactive proxy", () => {
     const source = reactive(operation());
 

@@ -3103,6 +3103,13 @@ const ru = {
         "Проверьте поля процесса и выберите сотрудников из текущего проекта. Сохранение и применение недоступны, пока данные некорректны.",
       workflowNextSteps:
         "После подтверждения будет создан черновик процесса. Перед запуском проверьте его и опубликуйте на странице процесса.",
+      schedulePreviewFailed:
+        "Не удалось проверить ближайшие запуски. Проверьте часовой пояс и расписание.",
+      scheduleNextRuns: "Ближайшие запуски",
+      scheduleNotReady:
+        "Укажите задание, исполнителя и корректное расписание, затем дождитесь проверки ближайших запусков.",
+      scheduleNextSteps:
+        "Автоматизация будет создана только после проверки и подтверждения плана. Её можно приостановить и изменить на странице автоматизаций.",
       transitionDetails: "Технические детали изменения",
       afterDetails: "Планируемое состояние",
       capabilities: {
@@ -6322,6 +6329,13 @@ const en = {
         "Check the workflow fields and choose employees from this project. The plan cannot be saved or applied with invalid data.",
       workflowNextSteps:
         "Confirming this plan creates a workflow draft. Review and publish it on the workflow page before launching it.",
+      schedulePreviewFailed:
+        "Could not verify the next run times. Check the time zone and schedule.",
+      scheduleNextRuns: "Next runs",
+      scheduleNotReady:
+        "Provide a task, executor and valid schedule, then wait for the next run preview.",
+      scheduleNextSteps:
+        "The automation will be created only after plan validation and confirmation. You can pause or edit it on the Automations page.",
       transitionDetails: "Technical change details",
       afterDetails: "Planned state",
       capabilities: {
