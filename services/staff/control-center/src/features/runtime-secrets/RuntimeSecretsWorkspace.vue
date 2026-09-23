@@ -34,6 +34,7 @@ const props = defineProps<{
   initialSecretRef?: string;
   initialDraftRef?: string;
   initialPlanRef?: string;
+  assistantCreateSecret?: boolean;
 }>();
 const emit = defineEmits<{
   draftSaved: [draftRef: string];
@@ -69,6 +70,13 @@ function openCreate(): void {
   prepareMutation();
   createOpen.value = true;
 }
+watch(
+  () => props.assistantCreateSecret,
+  (requested) => {
+    if (requested && !createOpen.value) openCreate();
+  },
+  { immediate: true },
+);
 
 function openRotate(secret: RuntimeSecret): void {
   if (!canRuntimeSecretAction(secret, "ROTATE")) return;

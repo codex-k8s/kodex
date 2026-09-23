@@ -2899,6 +2899,7 @@ const ru = {
     },
   },
   assistant: {
+    openSecretForm: "Открыть защищённую форму нового секрета",
     title: "Kodex",
     contextVersion: "Версия {version}",
     contextKind: {
@@ -6184,6 +6185,7 @@ const en = {
   },
   assistant: {
     ...ru.assistant,
+    openSecretForm: "Open the protected new-secret form",
     contextVersion: "Version {version}",
     contextKind: {
       PROJECT: "Project",

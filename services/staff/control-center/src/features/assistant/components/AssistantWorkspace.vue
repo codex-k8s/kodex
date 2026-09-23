@@ -1048,6 +1048,17 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
               </div>
+              <RouterLink
+                v-if="projectRef"
+                class="assistant-composer__protected-link"
+                :to="{
+                  name: 'runtime-secrets',
+                  params: { projectRef },
+                  query: { assistantCreateSecret: '1' },
+                }"
+                @click="close"
+                >{{ $t("assistant.openSecretForm") }}</RouterLink
+              >
               <small>{{ $t("assistant.audit") }}</small>
             </footer>
           </div>
@@ -1601,6 +1612,11 @@ onBeforeUnmount(() => {
 }
 .assistant-composer > small {
   color: var(--subtle);
+}
+.assistant-composer__protected-link {
+  width: fit-content;
+  color: var(--accent-strong);
+  font-size: 0.82rem;
 }
 @media (max-width: 720px) {
   .assistant-fab {

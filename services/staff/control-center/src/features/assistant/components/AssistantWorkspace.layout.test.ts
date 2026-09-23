@@ -69,6 +69,19 @@ describe("AssistantWorkspace layout", () => {
     expect(attachmentComposer).toContain('purpose="ASSISTANT_MESSAGE"');
   });
 
+  it("открывает защищённую форму секрета только в текущем проекте", () => {
+    const composer = template.slice(
+      template.indexOf('<footer class="assistant-composer">'),
+      template.indexOf("</footer>"),
+    );
+    expect(composer).toContain('v-if="projectRef"');
+    expect(composer).toContain("name: 'runtime-secrets'");
+    expect(composer).toContain("params: { projectRef }");
+    expect(composer).toContain("assistantCreateSecret: '1'");
+    expect(composer).not.toContain("credentialValue");
+    expect(composer).not.toContain("secretValue");
+  });
+
   it("держит новый диалог видимым действием, а не пунктом history menu", () => {
     const header = template.slice(
       template.indexOf('<header class="assistant-drawer__header">'),
