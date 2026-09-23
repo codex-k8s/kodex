@@ -387,22 +387,33 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 }
 
 func scheduleInputSchema(projectRef, targetRef map[string]any) map[string]any {
-	return objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "sessionPolicy", "notificationPolicy"}, map[string]any{
-		"projectRef": projectRef, "name": stringSchema(1, 160), "targetType": enumSchema("AGENT"), "targetRef": targetRef,
+	schema := objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "sessionPolicy", "notificationPolicy"}, map[string]any{
+		"projectRef": projectRef, "name": stringSchema(1, 160), "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
 		"preset": stringSchema(1, 120), "timeOfDay": stringSchema(0, 5), "dayOfWeek": stringSchema(0, 9), "timezone": stringSchema(1, 80),
 		"input":              map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
 		"sessionPolicy":      enumSchema("NEW_EACH_RUN", "CONTINUE_ONE"),
 		"notificationPolicy": enumSchema("CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"),
 	})
+	schema["oneOf"] = assistantExecutionTargetBranches(targetRef)
+	return schema
 }
 
 func runInputSchema(projectRef, targetRef map[string]any) map[string]any {
-	return objectSchema([]string{"projectRef", "targetType", "targetRef", "title", "task", "input"}, map[string]any{
-		"projectRef": projectRef, "targetType": enumSchema("AGENT"), "targetRef": targetRef,
+	schema := objectSchema([]string{"projectRef", "targetType", "targetRef", "title", "task", "input"}, map[string]any{
+		"projectRef": projectRef, "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
 		"title": stringSchema(1, 240), "task": stringSchema(1, 32768), "sessionRef": opaqueRefSchema(),
-		"input":        map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
-		"artifactRefs": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": opaqueRefSchema()},
+		"input":            map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+		"attachmentSetRef": opaqueRefSchema(),
 	})
+	schema["oneOf"] = assistantExecutionTargetBranches(targetRef)
+	return schema
+}
+
+func assistantExecutionTargetBranches(agentRef map[string]any) []map[string]any {
+	return []map[string]any{
+		{"properties": map[string]any{"targetType": map[string]any{"const": "AGENT"}, "targetRef": agentRef}},
+		{"properties": map[string]any{"targetType": map[string]any{"const": "WORKFLOW"}, "targetRef": opaqueRefSchema()}},
+	}
 }
 
 func objectSchema(required []string, properties map[string]any) map[string]any {
