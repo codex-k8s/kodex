@@ -198,8 +198,14 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
-	if input.AssistantContext == nil || len(input.AssistantContext.AllowedOperations) == 0 {
+	if input.AssistantContext == nil {
 		return result
+	}
+	if input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef != "" {
+		result = append(result, assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(enumSchema(input.AssistantContext.EntityRef))))
+	}
+	if len(input.AssistantContext.AllowedOperations) == 0 {
+		return nil
 	}
 	allowed := make(map[string]struct{}, len(input.AssistantContext.AllowedOperations))
 	for _, operation := range input.AssistantContext.AllowedOperations {
@@ -213,6 +219,17 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		}
 	}
 	return filtered
+}
+
+func agentUpdateInputSchema(agentRef map[string]any) map[string]any {
+	schema := objectSchema([]string{"agentRef"}, map[string]any{
+		"agentRef": agentRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 2000),
+		"roleDescription": stringSchema(1, 2000),
+	})
+	schema["anyOf"] = []map[string]any{
+		{"required": []string{"name"}}, {"required": []string{"purpose"}}, {"required": []string{"roleDescription"}},
+	}
+	return schema
 }
 
 func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
@@ -245,7 +262,7 @@ func integrationGrantInputSchema() map[string]any {
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true
@@ -270,7 +287,7 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		before = objectSchema(nil, map[string]any{})
 		after = parameters
 	}
-	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT"
+	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT"
 	if !serverHydrated {
 		required = append(required, "before", "after")
 	}

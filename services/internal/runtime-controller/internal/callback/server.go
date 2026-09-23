@@ -759,16 +759,16 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		return nil, invalidAssistantPlan("summary_or_count")
 	}
 	operations := make([]*controlplanev1.AssistantPlanOperation, 0, len(rawOperations))
-	currentProjectName := ""
-	if input.AssistantContext != nil && input.AssistantContext.EntityKind == "PROJECT" && input.AssistantContext.EntityRef == input.ProjectRef {
-		currentProjectName = input.AssistantContext.EntityName
+	currentEntityName := ""
+	if input.AssistantContext != nil {
+		currentEntityName = input.AssistantContext.EntityName
 	}
 	for index, raw := range rawOperations {
 		operation, ok := raw.(map[string]any)
 		if !ok || !onlyKeys(operation, "type", "action", "title", "summary", "target", "parameters", "expectedVersion", "before", "after", "selected") {
 			return nil, invalidAssistantPlan("operation_shape")
 		}
-		operation, normalizeErr := normalizeServerHydratedAssistantOperation(operation, summary, input.ProjectRef, currentProjectName)
+		operation, normalizeErr := normalizeServerHydratedAssistantOperation(operation, summary, input.ProjectRef, currentEntityName)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -792,7 +792,7 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		selected, selectedOK := operation["selected"].(bool)
 		if serverHydrated {
 			action = assistantServerAction(kind)
-			target = assistantServerTarget(kind, parameters)
+			target = assistantServerTarget(kind, parameters, input.AssistantContext)
 			targetOK = target != nil
 			selected, selectedOK = true, true
 		}
@@ -903,7 +903,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	}
 	normalized["type"] = kind
 	normalized["parameters"] = normalizedParameters
-	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" {
+	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" {
 		normalized["title"] = assistantOperationTitle(kind, normalizedParameters, projectName)
 	}
 	if operationSummary, _ := normalized["summary"].(string); strings.TrimSpace(operationSummary) == "" {
@@ -977,10 +977,10 @@ func normalizeAssistantParameterValue(value any) (any, error) {
 	}
 }
 
-func assistantOperationTitle(kind string, parameters map[string]any, projectName string) string {
+func assistantOperationTitle(kind string, parameters map[string]any, entityName string) string {
 	name, _ := parameters["name"].(string)
-	if kind == "UPDATE_PROJECT" && strings.TrimSpace(projectName) != "" {
-		name = projectName
+	if (kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT") && strings.TrimSpace(entityName) != "" {
+		name = entityName
 	}
 	if strings.TrimSpace(name) == "" {
 		name, _ = parameters["projectRef"].(string)
@@ -989,6 +989,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, projectName
 		"CREATE_PROJECT":                "Создать Проект",
 		"UPDATE_PROJECT":                "Изменить Проект",
 		"CREATE_AGENT":                  "Создать ИИ-сотрудника",
+		"UPDATE_AGENT":                  "Изменить ИИ-сотрудника",
 		"CREATE_WORKFLOW":               "Создать Процесс",
 		"CREATE_INTEGRATION_CONNECTION": "Создать подключение",
 		"CREATE_SCHEDULE":               "Создать автоматизацию",
@@ -1022,7 +1023,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "UPDATE_PROJECT":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "UPDATE_PROJECT", "UPDATE_AGENT":
 		return true
 	default:
 		return false
@@ -1030,19 +1031,26 @@ func assistantServerHydratedOperation(kind string) bool {
 }
 
 func assistantServerAction(kind string) string {
-	if kind == "UPDATE_PROJECT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" {
 		return "UPDATE"
 	}
 	return "CREATE"
 }
 
-func assistantServerTarget(kind string, parameters map[string]any) map[string]any {
+func assistantServerTarget(kind string, parameters map[string]any, context *runtimecontract.RunnerAssistantContext) map[string]any {
 	if parameters == nil {
 		return nil
 	}
 	targetKind := strings.TrimPrefix(kind, "CREATE_")
 	if kind == "UPDATE_PROJECT" {
 		targetKind = "PROJECT"
+	} else if kind == "UPDATE_AGENT" {
+		requestedRef, _ := parameters["agentRef"].(string)
+		if context == nil || context.EntityKind != "AGENT" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "AGENT", "name": context.EntityName}
 	}
 	name, _ := parameters["name"].(string)
 	if strings.TrimSpace(name) == "" {

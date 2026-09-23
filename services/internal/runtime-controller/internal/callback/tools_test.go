@@ -243,6 +243,41 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 }
 
+func TestConfigurationCatalogPinsAgentUpdateToExactContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
+		EntityKind: "AGENT", EntityRef: "agt_current", EntityName: "Coordinator", AllowedOperations: []string{"UPDATE_AGENT"},
+	}}
+	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
+	if err != nil || !reflect.DeepEqual(compact.(map[string]any)["operation_types"], []string{"UPDATE_AGENT"}) {
+		t.Fatalf("unexpected exact-context operation index: result=%#v err=%v", compact, err)
+	}
+	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"UPDATE_AGENT"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemas := selected.(map[string]any)["operation_schemas"].([]map[string]any)
+	if len(schemas) != 1 || !reflect.DeepEqual(schemas[0]["required"], []string{"type", "title", "summary", "parameters"}) {
+		t.Fatalf("agent update must be server hydrated: %#v", schemas)
+	}
+	parameters := schemas[0]["properties"].(map[string]any)["parameters"].(map[string]any)
+	properties := parameters["properties"].(map[string]any)
+	if !reflect.DeepEqual(properties["agentRef"].(map[string]any)["enum"], []string{"agt_current"}) ||
+		properties["avatarUrl"] != nil || len(parameters["anyOf"].([]map[string]any)) != 3 {
+		t.Fatalf("agent update leaked another target or immutable field: %#v", parameters)
+	}
+	if target := assistantServerTarget("UPDATE_AGENT", map[string]any{"agentRef": "agt_current", "purpose": "Coordinate releases"}, input.AssistantContext); target == nil || target["name"] != "Coordinator" {
+		t.Fatalf("server target lost current agent name: %#v", target)
+	}
+	if target := assistantServerTarget("UPDATE_AGENT", map[string]any{"agentRef": "agt_other", "purpose": "Coordinate releases"}, input.AssistantContext); target != nil {
+		t.Fatalf("server accepted a different agent target: %#v", target)
+	}
+	input.AssistantContext.AllowedOperations = nil
+	if result, err := configurationCatalog(input, map[string]any{"operation_types": []any{}}); err != nil || len(result.(map[string]any)["operation_types"].([]string)) != 0 {
+		t.Fatalf("empty context exposed operations: result=%#v err=%v", result, err)
+	}
+}
+
 func containsString(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {
