@@ -3026,6 +3026,13 @@ const ru = {
       noNextRun: "Следующий запуск пока не назначен.",
       open: "Открыть автоматизации",
     },
+    createdWorkflow: {
+      title: "Созданный процесс",
+      loadFailed: "Не удалось прочитать процесс. Повторите обновление.",
+      ready: "Процесс готов к запуску.",
+      finish: "Проверьте этапы и завершите настройку перед запуском.",
+      open: "Открыть процесс",
+    },
     launchedRun: {
       title: "Запуск сотрудника или процесса",
       loadFailed:
@@ -6260,6 +6267,13 @@ const en = {
       nextRun: "Next run: {time}",
       noNextRun: "No next run is scheduled yet.",
       open: "Open automations",
+    },
+    createdWorkflow: {
+      title: "Created workflow",
+      loadFailed: "Could not read the workflow. Refresh to try again.",
+      ready: "The workflow is ready to run.",
+      finish: "Review the steps and finish setup before running.",
+      open: "Open workflow",
     },
     launchedRun: {
       title: "Employee or workflow run",

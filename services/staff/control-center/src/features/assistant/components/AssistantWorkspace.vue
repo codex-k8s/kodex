@@ -25,6 +25,7 @@ import { useI18n } from "vue-i18n";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
+import AssistantCreatedWorkflowCard from "@/features/assistant/components/AssistantCreatedWorkflowCard.vue";
 import AssistantEnvironmentDraftCard from "@/features/assistant/components/AssistantEnvironmentDraftCard.vue";
 import AssistantIntegrationConnectionCard from "@/features/assistant/components/AssistantIntegrationConnectionCard.vue";
 import AssistantLaunchedRunCard from "@/features/assistant/components/AssistantLaunchedRunCard.vue";
@@ -948,6 +949,15 @@ onBeforeUnmount(() => {
                       (item) => item.type === 'CREATE_SCHEDULE',
                     )"
                     :key="`schedule-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                    @navigate="close"
+                  />
+                  <AssistantCreatedWorkflowCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) => item.type === 'CREATE_WORKFLOW',
+                    )"
+                    :key="`workflow-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
                     @navigate="close"

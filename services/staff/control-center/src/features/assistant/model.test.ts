@@ -4,6 +4,7 @@ import { reactive } from "vue";
 import {
   assistantAwaitingReply,
   assistantCreatedScheduleTarget,
+  assistantCreatedWorkflowTarget,
   assistantEffectiveRuntimeState,
   assistantEnvironmentDraftTarget,
   assistantIntegrationConnectionTarget,
@@ -256,6 +257,51 @@ describe("assistant role image build target", () => {
           ],
         },
         "op_schedule",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("показывает созданный процесс только по точной квитанции", () => {
+    const workflowOperation: AssistantPlanOperation = {
+      ...operation(),
+      ref: "op_workflow",
+      type: "CREATE_WORKFLOW",
+      target: { kind: "WORKFLOW", name: "Еженедельная сводка" },
+    };
+    const workflowPlan: AssistantPlan = {
+      ...plan,
+      operations: [workflowOperation],
+      receipt: {
+        ...receipt,
+        operationReceipts: [
+          {
+            operationRef: "op_workflow",
+            resourceRef: "wfl_exact",
+            outcome: "APPLIED",
+            auditRef: "aud_workflow",
+          },
+        ],
+      },
+    };
+    expect(assistantCreatedWorkflowTarget(workflowPlan, "op_workflow")).toEqual(
+      {
+        projectRef: "prj_market",
+        workflowRef: "wfl_exact",
+      },
+    );
+    expect(
+      assistantCreatedWorkflowTarget(
+        { ...workflowPlan, state: "VALID" },
+        "op_workflow",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantCreatedWorkflowTarget(
+        {
+          ...workflowPlan,
+          receipt: { ...receipt, planRef: "pln_other" },
+        },
+        "op_workflow",
       ),
     ).toBeUndefined();
   });

@@ -94,6 +94,21 @@ export function assistantCreatedScheduleTarget(
     : undefined;
 }
 
+export function assistantCreatedWorkflowTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; workflowRef: string } | undefined {
+  const workflowRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_WORKFLOW",
+    "WORKFLOW",
+  );
+  return plan.projectRef && workflowRef
+    ? { projectRef: plan.projectRef, workflowRef }
+    : undefined;
+}
+
 export function assistantLaunchedRunTarget(
   plan: AssistantPlan,
   operationRef: string,
