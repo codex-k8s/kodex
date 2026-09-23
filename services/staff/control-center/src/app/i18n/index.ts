@@ -3099,6 +3099,10 @@ const ru = {
         "Выберите доступного исполнителя и заполните обязательные данные перед сохранением плана.",
       runNextSteps:
         "Запуск начнётся только после проверки и подтверждения плана. Его состояние и отмена появятся в диалоге.",
+      workflowNotReady:
+        "Проверьте поля процесса и выберите сотрудников из текущего проекта. Сохранение и применение недоступны, пока данные некорректны.",
+      workflowNextSteps:
+        "После подтверждения будет создан черновик процесса. Перед запуском проверьте его и опубликуйте на странице процесса.",
       transitionDetails: "Технические детали изменения",
       afterDetails: "Планируемое состояние",
       capabilities: {
@@ -6314,6 +6318,10 @@ const en = {
         "Choose an available executor and complete required inputs before saving the plan.",
       runNextSteps:
         "The run starts only after the plan is validated and confirmed. Its status and cancellation controls will appear in the conversation.",
+      workflowNotReady:
+        "Check the workflow fields and choose employees from this project. The plan cannot be saved or applied with invalid data.",
+      workflowNextSteps:
+        "Confirming this plan creates a workflow draft. Review and publish it on the workflow page before launching it.",
       transitionDetails: "Technical change details",
       afterDetails: "Planned state",
       capabilities: {

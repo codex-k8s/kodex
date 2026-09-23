@@ -113,6 +113,7 @@ export type FriendlyPlanOperationType =
   | "UPDATE_PROJECT"
   | "CREATE_AGENT"
   | "UPDATE_AGENT"
+  | "CREATE_WORKFLOW"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
   | "CREATE_ROLE_IMAGE_RECIPE"
   | "CREATE_INTEGRATION_CONNECTION"
@@ -126,6 +127,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "UPDATE_PROJECT" &&
     operation.value.type !== "CREATE_AGENT" &&
     operation.value.type !== "UPDATE_AGENT" &&
+    operation.value.type !== "CREATE_WORKFLOW" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
     operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
     operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
@@ -137,11 +139,13 @@ export function friendlyPlanOperationType(
       ? "ROLE_IMAGE_RECIPE"
       : operation.value.type === "CREATE_INTEGRATION_CONNECTION"
         ? "INTEGRATION_CONNECTION"
-        : operation.value.type.endsWith("PROJECT")
-          ? "PROJECT"
-          : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-            ? "RUNTIME_ENVIRONMENT_DRAFT"
-            : "AGENT";
+        : operation.value.type === "CREATE_WORKFLOW"
+          ? "WORKFLOW"
+          : operation.value.type.endsWith("PROJECT")
+            ? "PROJECT"
+            : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+              ? "RUNTIME_ENVIRONMENT_DRAFT"
+              : "AGENT";
   const expectedAction = operation.value.type.startsWith("CREATE_")
     ? "CREATE"
     : operation.value.type === "LAUNCH_RUN"
@@ -173,7 +177,7 @@ export function operationParameter(
 export function updateOperationParameter(
   operation: EditablePlanOperation,
   key: string,
-  value: string | string[] | Record<string, unknown>,
+  value: unknown,
 ): void {
   const parameters = parseObject(operation.parametersText);
   const after = parseObject(operation.afterText);

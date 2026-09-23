@@ -493,6 +493,43 @@ describe("assistant plan editor model", () => {
     expect(changed?.target.kind).toBe("EXECUTION");
   });
 
+  it("редактирует массив этапов процесса через обычную форму, сохраняя серверный target", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CREATE_WORKFLOW",
+        target: { kind: "WORKFLOW", name: "Недельная сводка" },
+        parameters: {
+          projectRef: "prj_market",
+          name: "Недельная сводка",
+          purpose: "Собрать отчёт",
+          coordinatorAgentRef: "agt_manager",
+          steps: [{ name: "Сбор", agentRef: "agt_analyst" }],
+        },
+        after: {
+          projectRef: "prj_market",
+          name: "Недельная сводка",
+          purpose: "Собрать отчёт",
+          coordinatorAgentRef: "agt_manager",
+          steps: [{ name: "Сбор", agentRef: "agt_analyst" }],
+        },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("CREATE_WORKFLOW");
+    updateOperationParameter(first, "steps", [
+      { name: "Анализ", agentRef: "agt_analyst" },
+    ]);
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters).toEqual(changed?.after);
+    expect(changed?.parameters.steps).toEqual([
+      { name: "Анализ", agentRef: "agt_analyst" },
+    ]);
+    expect(changed?.target.kind).toBe("WORKFLOW");
+  });
+
   it("создаёт независимый draft из Vue reactive proxy", () => {
     const source = reactive(operation());
 

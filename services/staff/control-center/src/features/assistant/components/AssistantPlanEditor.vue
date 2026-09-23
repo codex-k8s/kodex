@@ -13,6 +13,7 @@ import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
+import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
 import { prepareConnectionConfiguration } from "@/features/integrations/connection-setup";
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
@@ -71,6 +72,8 @@ const connectionInputs = ref<Record<string, Record<string, string>>>({});
 const connectionInputsTouched = ref(false);
 const runFormValidity = ref<Record<string, boolean>>({});
 const runFormTouched = ref(false);
+const workflowFormValidity = ref<Record<string, boolean>>({});
+const workflowFormTouched = ref(false);
 const inputProblem = ref("");
 type EditorTarget =
   | { kind: "SUMMARY" }
@@ -119,6 +122,8 @@ function resetDraft(): void {
   connectionInputsTouched.value = false;
   runFormValidity.value = {};
   runFormTouched.value = false;
+  workflowFormValidity.value = {};
+  workflowFormTouched.value = false;
   inputProblem.value = "";
 }
 
@@ -306,6 +311,7 @@ const draftMatchesSavedPlan = computed(() => {
       summary.value === props.plan.auditSummary &&
       !connectionInputsTouched.value &&
       !runFormTouched.value &&
+      !workflowFormTouched.value &&
       JSON.stringify(operationInputs(operations.value)) ===
         JSON.stringify(
           operationInputs(editableOperations(props.plan.operations)),
@@ -328,7 +334,9 @@ const friendlyInputsReady = computed(() =>
       ((operation.value.type !== "CREATE_INTEGRATION_CONNECTION" ||
         !Object.keys(connectionProblems(operation)).length) &&
         (operation.value.type !== "LAUNCH_RUN" ||
-          runFormValidity.value[operation.value.ref] === true)),
+          runFormValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "CREATE_WORKFLOW" ||
+          workflowFormValidity.value[operation.value.ref] === true)),
   ),
 );
 const canSave = computed(
@@ -806,6 +814,17 @@ function snapshot(value: string): Record<string, unknown> {
                 (key, value) => updateOperationParameter(operation, key, value)
               "
               @target="setRunTarget(operation, $event)"
+            />
+            <AssistantWorkflowPlanForm
+              v-else-if="operation.value.type === 'CREATE_WORKFLOW'"
+              :operation="operation"
+              :project-ref="plan.projectRef"
+              :disabled="!editable"
+              @valid="workflowFormValidity[operation.value.ref] = $event"
+              @dirty="workflowFormTouched = true"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
+              "
             />
             <template v-else>
               <label class="field">
