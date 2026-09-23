@@ -12,6 +12,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
+import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import { prepareConnectionConfiguration } from "@/features/integrations/connection-setup";
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
@@ -68,6 +69,8 @@ const connectionDefinitions = ref<Record<string, IntegrationDefinition>>({});
 const connectionCatalogProblem = ref(false);
 const connectionInputs = ref<Record<string, Record<string, string>>>({});
 const connectionInputsTouched = ref(false);
+const runFormValidity = ref<Record<string, boolean>>({});
+const runFormTouched = ref(false);
 const inputProblem = ref("");
 type EditorTarget =
   | { kind: "SUMMARY" }
@@ -114,6 +117,8 @@ function resetDraft(): void {
       }),
   );
   connectionInputsTouched.value = false;
+  runFormValidity.value = {};
+  runFormTouched.value = false;
   inputProblem.value = "";
 }
 
@@ -189,7 +194,11 @@ function connectionProblems(
     if (!definition?.available) return { definitionKey: "UNAVAILABLE" };
     const raw = connectionInputs.value[operation.value.ref] ?? {};
     const initial = operationParameter(operation, "publicConfiguration");
-    if (typeof initial !== "object" || initial === null || Array.isArray(initial))
+    if (
+      typeof initial !== "object" ||
+      initial === null ||
+      Array.isArray(initial)
+    )
       return { publicConfiguration: "INVALID_VALUE" };
     const known = new Set(
       definition.configurationFields.map((field) => field.key),
@@ -296,6 +305,7 @@ const draftMatchesSavedPlan = computed(() => {
     return (
       summary.value === props.plan.auditSummary &&
       !connectionInputsTouched.value &&
+      !runFormTouched.value &&
       JSON.stringify(operationInputs(operations.value)) ===
         JSON.stringify(
           operationInputs(editableOperations(props.plan.operations)),
@@ -311,17 +321,22 @@ const editable = computed(
     !props.busy &&
     !["APPLIED", "REJECTED"].includes(props.plan.state),
 );
+const friendlyInputsReady = computed(() =>
+  operations.value.every(
+    (operation) =>
+      !operation.value.selected ||
+      ((operation.value.type !== "CREATE_INTEGRATION_CONNECTION" ||
+        !Object.keys(connectionProblems(operation)).length) &&
+        (operation.value.type !== "LAUNCH_RUN" ||
+          runFormValidity.value[operation.value.ref] === true)),
+  ),
+);
 const canSave = computed(
   () =>
     editable.value &&
     summary.value.trim().length > 0 &&
     selectedCount.value > 0 &&
-    operations.value.every(
-      (operation) =>
-        !operation.value.selected ||
-        operation.value.type !== "CREATE_INTEGRATION_CONNECTION" ||
-        !Object.keys(connectionProblems(operation)).length,
-    ) &&
+    friendlyInputsReady.value &&
     !["APPLIED", "REJECTED"].includes(props.plan.state),
 );
 const canValidate = computed(
@@ -337,6 +352,7 @@ const canApply = computed(
     !props.busy &&
     exactRevisionValidated.value &&
     draftMatchesSavedPlan.value &&
+    friendlyInputsReady.value &&
     props.plan.nextActions.includes("APPLY_PLAN"),
 );
 const canReject = computed(() => editable.value);
@@ -441,6 +457,13 @@ function setField(
     key,
     (event.target as HTMLInputElement | HTMLTextAreaElement).value,
   );
+}
+
+function setRunTarget(
+  operation: EditablePlanOperation,
+  target: { kind: string; ref?: string; name: string; version?: number },
+): void {
+  operation.value.target = { ...target };
 }
 
 function selectedImage(
@@ -772,334 +795,353 @@ function snapshot(value: string): Record<string, unknown> {
             <p class="assistant-plan-friendly__hint">
               {{ $t("assistant.planEditor.friendlyHint") }}
             </p>
-            <label class="field">
-              <span>{{ $t("assistant.planEditor.entityName") }}</span>
-              <input
-                :value="fieldValue(operation, 'name')"
-                :maxlength="
-                  operation.value.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT'
-                    ? 120
-                    : 160
-                "
-                :disabled="!editable"
-                @input="setField(operation, 'name', $event)"
-              />
-            </label>
-            <label
-              v-if="
-                operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
-                operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
-                operation.value.target.kind !== 'INTEGRATION_CONNECTION'
+            <AssistantLaunchRunForm
+              v-if="operation.value.type === 'LAUNCH_RUN'"
+              :operation="operation"
+              :project-ref="plan.projectRef"
+              :disabled="!editable"
+              @valid="runFormValidity[operation.value.ref] = $event"
+              @dirty="runFormTouched = true"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
               "
-              class="field"
-            >
-              <span>{{ $t("assistant.planEditor.entityPurpose") }}</span>
-              <textarea
-                :value="fieldValue(operation, 'purpose')"
-                rows="3"
-                maxlength="2000"
-                :disabled="!editable"
-                @input="setField(operation, 'purpose', $event)"
-              />
-            </label>
-            <template v-if="operation.value.target.kind === 'PROJECT'">
-              <label class="field">
-                <span>{{ $t("assistant.planEditor.projectLanguage") }}</span>
-                <select
-                  :value="fieldValue(operation, 'language')"
-                  :disabled="!editable"
-                  @change="setField(operation, 'language', $event)"
-                >
-                  <option value="ru">Русский</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
-            </template>
-            <template
-              v-else-if="
-                operation.value.target.kind === 'RUNTIME_ENVIRONMENT_DRAFT'
-              "
-            >
-              <label class="field">
-                <span>{{
-                  $t("assistant.planEditor.environmentDescription")
-                }}</span>
-                <textarea
-                  :value="fieldValue(operation, 'description')"
-                  rows="3"
-                  maxlength="1000"
-                  :disabled="!editable"
-                  @input="setField(operation, 'description', $event)"
-                />
-              </label>
-              <label class="field">
-                <span>{{
-                  $t("assistant.planEditor.environmentImageArtifact")
-                }}</span>
-                <AsyncEntityPicker
-                  :model-value="fieldValue(operation, 'imageArtifactRef')"
-                  :selected="selectedImage(operation)"
-                  :load-page="loadImagePage"
-                  :trigger-label="
-                    $t('assistant.planEditor.environmentImageArtifact')
-                  "
-                  :placeholder="
-                    $t('assistant.planEditor.environmentChooseImage')
-                  "
-                  :search-placeholder="
-                    $t('assistant.planEditor.environmentSearchImage')
-                  "
-                  :disabled="!editable || !plan.projectRef"
-                  @update:model-value="setImageArtifact(operation, $event)"
-                  @select="rememberSelectedImage"
-                />
-              </label>
-              <p class="assistant-plan-friendly__hint">
-                {{ $t("assistant.planEditor.environmentDraftNextSteps") }}
-              </p>
-            </template>
-            <template
-              v-else-if="
-                operation.value.target.kind === 'INTEGRATION_CONNECTION'
-              "
-            >
-              <div class="field">
-                <span>{{
-                  $t("assistant.planEditor.connectionDefinition")
-                }}</span>
-                <strong>{{
-                  connectionDefinition(operation)?.name ||
-                  fieldValue(operation, "definitionKey")
-                }}</strong>
-                <small>{{
-                  $t("assistant.planEditor.connectionDefinitionFixed")
-                }}</small>
-              </div>
-              <p
-                v-if="connectionCatalogProblem"
-                class="field-error"
-                role="alert"
-              >
-                {{ $t("assistant.planEditor.connectionCatalogUnavailable") }}
-              </p>
-              <p
-                v-else-if="connectionDefinition(operation)?.available === false"
-                class="field-error"
-                role="alert"
-              >
-                {{ $t("assistant.planEditor.connectionCatalogUnavailable") }}
-              </p>
-              <template
-                v-for="field in connectionDefinition(operation)
-                  ?.configurationFields ?? []"
-                :key="field.key"
-              >
-                <label class="field">
-                  <span>{{ field.label }}</span>
-                  <select
-                    v-if="field.allowedValues?.length"
-                    :value="
-                      connectionInputs[operation.value.ref]?.[field.key] ?? ''
-                    "
-                    :disabled="!editable"
-                    @change="
-                      setConnectionField(
-                        operation,
-                        field.key,
-                        ($event.target as HTMLSelectElement).value,
-                      )
-                    "
-                  >
-                    <option value=""></option>
-                    <option
-                      v-for="choice in field.allowedValues"
-                      :key="choice"
-                      :value="choice"
-                    >
-                      {{ choice }}
-                    </option>
-                  </select>
-                  <input
-                    v-else-if="field.valueType === 'BOOLEAN'"
-                    type="checkbox"
-                    :checked="
-                      connectionInputs[operation.value.ref]?.[field.key] ===
-                      'true'
-                    "
-                    :disabled="!editable"
-                    @change="
-                      setConnectionField(
-                        operation,
-                        field.key,
-                        ($event.target as HTMLInputElement).checked
-                          ? 'true'
-                          : 'false',
-                      )
-                    "
-                  />
-                  <input
-                    v-else
-                    :value="
-                      connectionInputs[operation.value.ref]?.[field.key] ?? ''
-                    "
-                    :type="field.valueType === 'URL' ? 'url' : 'text'"
-                    :inputmode="
-                      field.valueType === 'INTEGER' ? 'numeric' : undefined
-                    "
-                    :required="field.required"
-                    :placeholder="field.placeholder"
-                    :maxlength="
-                      field.maximumLength ??
-                      (field.valueType === 'URL' ? 2048 : 500)
-                    "
-                    :disabled="!editable"
-                    :aria-invalid="
-                      Boolean(connectionProblems(operation)[field.key])
-                    "
-                    autocomplete="off"
-                    @input="
-                      setConnectionField(
-                        operation,
-                        field.key,
-                        ($event.target as HTMLInputElement).value,
-                      )
-                    "
-                  />
-                  <small>{{ field.help }}</small>
-                  <small v-if="field.valueType === 'STRING_LIST'">{{
-                    $t("assistant.planEditor.connectionListHint")
-                  }}</small>
-                  <small
-                    v-if="connectionProblems(operation)[field.key]"
-                    class="field-error"
-                  >
-                    {{
-                      connectionProblemLabel(
-                        connectionProblems(operation)[field.key],
-                      )
-                    }}
-                  </small>
-                </label>
-              </template>
-              <p
-                v-if="connectionProblems(operation).publicConfiguration"
-                class="field-error"
-                role="alert"
-              >
-                {{ $t("assistant.planEditor.connectionConfigurationInvalid") }}
-              </p>
-              <p class="assistant-plan-friendly__hint">
-                {{ $t("assistant.planEditor.connectionCredentialNextSteps") }}
-              </p>
-            </template>
-            <template
-              v-else-if="operation.value.target.kind === 'ROLE_IMAGE_RECIPE'"
-            >
-              <div class="field">
-                <span>{{ $t("assistant.planEditor.roleImageAgent") }}</span>
-                <strong>{{
-                  roleImageAgentNames[fieldValue(operation, "agentRef")] ||
-                  $t("assistant.planEditor.roleImageAgentUnavailable")
-                }}</strong>
-                <small>{{
-                  $t("assistant.planEditor.roleImageAgentFixed")
-                }}</small>
-              </div>
-              <label class="field">
-                <span>{{
-                  $t("assistant.planEditor.roleImageEnvironment")
-                }}</span>
-                <select
-                  :value="fieldValue(operation, 'environmentKey')"
-                  :disabled="
-                    !editable ||
-                    roleImageCatalogProblem ||
-                    !roleImageEnvironments.length
-                  "
-                  @change="setField(operation, 'environmentKey', $event)"
-                >
-                  <option
-                    v-if="
-                      !roleImageEnvironments.some(
-                        (item) =>
-                          item.key === fieldValue(operation, 'environmentKey'),
-                      )
-                    "
-                    :value="fieldValue(operation, 'environmentKey')"
-                  >
-                    {{ fieldValue(operation, "environmentKey") }}
-                  </option>
-                  <option
-                    v-for="environment in roleImageEnvironments"
-                    :key="environment.key"
-                    :value="environment.key"
-                    :disabled="!environment.available"
-                  >
-                    {{ $t(environment.nameMessageKey) }}
-                    {{
-                      environment.recommended
-                        ? `· ${$t("roleEnvironments.recommended")}`
-                        : ""
-                    }}
-                  </option>
-                </select>
-              </label>
-              <p
-                v-if="roleImageCatalogProblem"
-                class="field-error"
-                role="alert"
-              >
-                {{ $t("assistant.planEditor.roleImageCatalogUnavailable") }}
-              </p>
-              <p class="assistant-plan-friendly__hint">
-                {{ $t("assistant.planEditor.roleImageNextSteps") }}
-              </p>
-            </template>
+              @target="setRunTarget(operation, $event)"
+            />
             <template v-else>
               <label class="field">
-                <span>{{ $t("assistant.planEditor.agentRole") }}</span>
+                <span>{{ $t("assistant.planEditor.entityName") }}</span>
+                <input
+                  :value="fieldValue(operation, 'name')"
+                  :maxlength="
+                    operation.value.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT'
+                      ? 120
+                      : 160
+                  "
+                  :disabled="!editable"
+                  @input="setField(operation, 'name', $event)"
+                />
+              </label>
+              <label
+                v-if="
+                  operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
+                  operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
+                  operation.value.target.kind !== 'INTEGRATION_CONNECTION'
+                "
+                class="field"
+              >
+                <span>{{ $t("assistant.planEditor.entityPurpose") }}</span>
                 <textarea
-                  :value="fieldValue(operation, 'roleDescription')"
+                  :value="fieldValue(operation, 'purpose')"
                   rows="3"
                   maxlength="2000"
                   :disabled="!editable"
-                  @input="setField(operation, 'roleDescription', $event)"
+                  @input="setField(operation, 'purpose', $event)"
                 />
               </label>
-              <template v-if="operation.value.type === 'CREATE_AGENT'">
+              <template v-if="operation.value.target.kind === 'PROJECT'">
+                <label class="field">
+                  <span>{{ $t("assistant.planEditor.projectLanguage") }}</span>
+                  <select
+                    :value="fieldValue(operation, 'language')"
+                    :disabled="!editable"
+                    @change="setField(operation, 'language', $event)"
+                  >
+                    <option value="ru">Русский</option>
+                    <option value="en">English</option>
+                  </select>
+                </label>
+              </template>
+              <template
+                v-else-if="
+                  operation.value.target.kind === 'RUNTIME_ENVIRONMENT_DRAFT'
+                "
+              >
                 <label class="field">
                   <span>{{
-                    $t("assistant.planEditor.agentInstructions")
+                    $t("assistant.planEditor.environmentDescription")
                   }}</span>
                   <textarea
-                    :value="fieldValue(operation, 'instructions')"
-                    rows="7"
-                    maxlength="65536"
+                    :value="fieldValue(operation, 'description')"
+                    rows="3"
+                    maxlength="1000"
                     :disabled="!editable"
-                    @input="setField(operation, 'instructions', $event)"
+                    @input="setField(operation, 'description', $event)"
                   />
                 </label>
-                <fieldset class="assistant-plan-friendly__capabilities">
-                  <legend>
-                    {{ $t("assistant.planEditor.agentCapabilities") }}
-                  </legend>
-                  <label v-for="key in initialCapabilities" :key="key">
-                    <input
-                      type="checkbox"
-                      :checked="capabilityChecked(operation, key)"
-                      :disabled="!editable"
-                      @change="setCapability(operation, key, $event)"
-                    />
-                    {{
-                      $t(
-                        `assistant.planEditor.capabilities.${key.replaceAll(".", "_")}`,
-                      )
-                    }}
-                  </label>
-                </fieldset>
+                <label class="field">
+                  <span>{{
+                    $t("assistant.planEditor.environmentImageArtifact")
+                  }}</span>
+                  <AsyncEntityPicker
+                    :model-value="fieldValue(operation, 'imageArtifactRef')"
+                    :selected="selectedImage(operation)"
+                    :load-page="loadImagePage"
+                    :trigger-label="
+                      $t('assistant.planEditor.environmentImageArtifact')
+                    "
+                    :placeholder="
+                      $t('assistant.planEditor.environmentChooseImage')
+                    "
+                    :search-placeholder="
+                      $t('assistant.planEditor.environmentSearchImage')
+                    "
+                    :disabled="!editable || !plan.projectRef"
+                    @update:model-value="setImageArtifact(operation, $event)"
+                    @select="rememberSelectedImage"
+                  />
+                </label>
                 <p class="assistant-plan-friendly__hint">
-                  {{ $t("assistant.planEditor.agentNextSteps") }}
+                  {{ $t("assistant.planEditor.environmentDraftNextSteps") }}
                 </p>
+              </template>
+              <template
+                v-else-if="
+                  operation.value.target.kind === 'INTEGRATION_CONNECTION'
+                "
+              >
+                <div class="field">
+                  <span>{{
+                    $t("assistant.planEditor.connectionDefinition")
+                  }}</span>
+                  <strong>{{
+                    connectionDefinition(operation)?.name ||
+                    fieldValue(operation, "definitionKey")
+                  }}</strong>
+                  <small>{{
+                    $t("assistant.planEditor.connectionDefinitionFixed")
+                  }}</small>
+                </div>
+                <p
+                  v-if="connectionCatalogProblem"
+                  class="field-error"
+                  role="alert"
+                >
+                  {{ $t("assistant.planEditor.connectionCatalogUnavailable") }}
+                </p>
+                <p
+                  v-else-if="
+                    connectionDefinition(operation)?.available === false
+                  "
+                  class="field-error"
+                  role="alert"
+                >
+                  {{ $t("assistant.planEditor.connectionCatalogUnavailable") }}
+                </p>
+                <template
+                  v-for="field in connectionDefinition(operation)
+                    ?.configurationFields ?? []"
+                  :key="field.key"
+                >
+                  <label class="field">
+                    <span>{{ field.label }}</span>
+                    <select
+                      v-if="field.allowedValues?.length"
+                      :value="
+                        connectionInputs[operation.value.ref]?.[field.key] ?? ''
+                      "
+                      :disabled="!editable"
+                      @change="
+                        setConnectionField(
+                          operation,
+                          field.key,
+                          ($event.target as HTMLSelectElement).value,
+                        )
+                      "
+                    >
+                      <option value=""></option>
+                      <option
+                        v-for="choice in field.allowedValues"
+                        :key="choice"
+                        :value="choice"
+                      >
+                        {{ choice }}
+                      </option>
+                    </select>
+                    <input
+                      v-else-if="field.valueType === 'BOOLEAN'"
+                      type="checkbox"
+                      :checked="
+                        connectionInputs[operation.value.ref]?.[field.key] ===
+                        'true'
+                      "
+                      :disabled="!editable"
+                      @change="
+                        setConnectionField(
+                          operation,
+                          field.key,
+                          ($event.target as HTMLInputElement).checked
+                            ? 'true'
+                            : 'false',
+                        )
+                      "
+                    />
+                    <input
+                      v-else
+                      :value="
+                        connectionInputs[operation.value.ref]?.[field.key] ?? ''
+                      "
+                      :type="field.valueType === 'URL' ? 'url' : 'text'"
+                      :inputmode="
+                        field.valueType === 'INTEGER' ? 'numeric' : undefined
+                      "
+                      :required="field.required"
+                      :placeholder="field.placeholder"
+                      :maxlength="
+                        field.maximumLength ??
+                        (field.valueType === 'URL' ? 2048 : 500)
+                      "
+                      :disabled="!editable"
+                      :aria-invalid="
+                        Boolean(connectionProblems(operation)[field.key])
+                      "
+                      autocomplete="off"
+                      @input="
+                        setConnectionField(
+                          operation,
+                          field.key,
+                          ($event.target as HTMLInputElement).value,
+                        )
+                      "
+                    />
+                    <small>{{ field.help }}</small>
+                    <small v-if="field.valueType === 'STRING_LIST'">{{
+                      $t("assistant.planEditor.connectionListHint")
+                    }}</small>
+                    <small
+                      v-if="connectionProblems(operation)[field.key]"
+                      class="field-error"
+                    >
+                      {{
+                        connectionProblemLabel(
+                          connectionProblems(operation)[field.key],
+                        )
+                      }}
+                    </small>
+                  </label>
+                </template>
+                <p
+                  v-if="connectionProblems(operation).publicConfiguration"
+                  class="field-error"
+                  role="alert"
+                >
+                  {{
+                    $t("assistant.planEditor.connectionConfigurationInvalid")
+                  }}
+                </p>
+                <p class="assistant-plan-friendly__hint">
+                  {{ $t("assistant.planEditor.connectionCredentialNextSteps") }}
+                </p>
+              </template>
+              <template
+                v-else-if="operation.value.target.kind === 'ROLE_IMAGE_RECIPE'"
+              >
+                <div class="field">
+                  <span>{{ $t("assistant.planEditor.roleImageAgent") }}</span>
+                  <strong>{{
+                    roleImageAgentNames[fieldValue(operation, "agentRef")] ||
+                    $t("assistant.planEditor.roleImageAgentUnavailable")
+                  }}</strong>
+                  <small>{{
+                    $t("assistant.planEditor.roleImageAgentFixed")
+                  }}</small>
+                </div>
+                <label class="field">
+                  <span>{{
+                    $t("assistant.planEditor.roleImageEnvironment")
+                  }}</span>
+                  <select
+                    :value="fieldValue(operation, 'environmentKey')"
+                    :disabled="
+                      !editable ||
+                      roleImageCatalogProblem ||
+                      !roleImageEnvironments.length
+                    "
+                    @change="setField(operation, 'environmentKey', $event)"
+                  >
+                    <option
+                      v-if="
+                        !roleImageEnvironments.some(
+                          (item) =>
+                            item.key ===
+                            fieldValue(operation, 'environmentKey'),
+                        )
+                      "
+                      :value="fieldValue(operation, 'environmentKey')"
+                    >
+                      {{ fieldValue(operation, "environmentKey") }}
+                    </option>
+                    <option
+                      v-for="environment in roleImageEnvironments"
+                      :key="environment.key"
+                      :value="environment.key"
+                      :disabled="!environment.available"
+                    >
+                      {{ $t(environment.nameMessageKey) }}
+                      {{
+                        environment.recommended
+                          ? `· ${$t("roleEnvironments.recommended")}`
+                          : ""
+                      }}
+                    </option>
+                  </select>
+                </label>
+                <p
+                  v-if="roleImageCatalogProblem"
+                  class="field-error"
+                  role="alert"
+                >
+                  {{ $t("assistant.planEditor.roleImageCatalogUnavailable") }}
+                </p>
+                <p class="assistant-plan-friendly__hint">
+                  {{ $t("assistant.planEditor.roleImageNextSteps") }}
+                </p>
+              </template>
+              <template v-else>
+                <label class="field">
+                  <span>{{ $t("assistant.planEditor.agentRole") }}</span>
+                  <textarea
+                    :value="fieldValue(operation, 'roleDescription')"
+                    rows="3"
+                    maxlength="2000"
+                    :disabled="!editable"
+                    @input="setField(operation, 'roleDescription', $event)"
+                  />
+                </label>
+                <template v-if="operation.value.type === 'CREATE_AGENT'">
+                  <label class="field">
+                    <span>{{
+                      $t("assistant.planEditor.agentInstructions")
+                    }}</span>
+                    <textarea
+                      :value="fieldValue(operation, 'instructions')"
+                      rows="7"
+                      maxlength="65536"
+                      :disabled="!editable"
+                      @input="setField(operation, 'instructions', $event)"
+                    />
+                  </label>
+                  <fieldset class="assistant-plan-friendly__capabilities">
+                    <legend>
+                      {{ $t("assistant.planEditor.agentCapabilities") }}
+                    </legend>
+                    <label v-for="key in initialCapabilities" :key="key">
+                      <input
+                        type="checkbox"
+                        :checked="capabilityChecked(operation, key)"
+                        :disabled="!editable"
+                        @change="setCapability(operation, key, $event)"
+                      />
+                      {{
+                        $t(
+                          `assistant.planEditor.capabilities.${key.replaceAll(".", "_")}`,
+                        )
+                      }}
+                    </label>
+                  </fieldset>
+                  <p class="assistant-plan-friendly__hint">
+                    {{ $t("assistant.planEditor.agentNextSteps") }}
+                  </p>
+                </template>
               </template>
             </template>
             <details class="assistant-plan-friendly__snapshot">

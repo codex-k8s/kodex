@@ -464,6 +464,35 @@ describe("assistant plan editor model", () => {
     expect(changed?.parameters.credentialValue).toBeUndefined();
   });
 
+  it("показывает запуск процесса как форму без доверия к свободному target kind", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "LAUNCH_RUN",
+        action: "EXECUTE",
+        target: { kind: "EXECUTION", name: "Недельная сводка" },
+        parameters: {
+          projectRef: "prj_market",
+          targetType: "WORKFLOW",
+          targetRef: "wfl_weekly",
+          title: "Недельная сводка",
+          task: "Составь сводку за неделю",
+          input: {},
+        },
+        after: { state: "QUEUED" },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("LAUNCH_RUN");
+    updateOperationParameter(first, "task", "Проверь неделю и дай сводку");
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters.targetRef).toBe("wfl_weekly");
+    expect(changed?.parameters.task).toBe("Проверь неделю и дай сводку");
+    expect(changed?.target.kind).toBe("EXECUTION");
+  });
+
   it("создаёт независимый draft из Vue reactive proxy", () => {
     const source = reactive(operation());
 

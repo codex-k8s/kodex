@@ -115,7 +115,8 @@ export type FriendlyPlanOperationType =
   | "UPDATE_AGENT"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
   | "CREATE_ROLE_IMAGE_RECIPE"
-  | "CREATE_INTEGRATION_CONNECTION";
+  | "CREATE_INTEGRATION_CONNECTION"
+  | "LAUNCH_RUN";
 
 export function friendlyPlanOperationType(
   operation: EditablePlanOperation,
@@ -127,7 +128,8 @@ export function friendlyPlanOperationType(
     operation.value.type !== "UPDATE_AGENT" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
     operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
-    operation.value.type !== "CREATE_INTEGRATION_CONNECTION"
+    operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
+    operation.value.type !== "LAUNCH_RUN"
   )
     return undefined;
   const expectedKind =
@@ -142,9 +144,12 @@ export function friendlyPlanOperationType(
             : "AGENT";
   const expectedAction = operation.value.type.startsWith("CREATE_")
     ? "CREATE"
-    : "UPDATE";
+    : operation.value.type === "LAUNCH_RUN"
+      ? "EXECUTE"
+      : "UPDATE";
   if (
-    operation.value.target.kind !== expectedKind ||
+    (operation.value.type !== "LAUNCH_RUN" &&
+      operation.value.target.kind !== expectedKind) ||
     operation.value.action !== expectedAction
   )
     return undefined;

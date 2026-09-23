@@ -3080,6 +3080,25 @@ const ru = {
       connectionListHint: "Значения разделяются запятыми.",
       connectionCredentialNextSteps:
         "Здесь только общедоступные параметры. Если интеграции нужен ключ или пароль, после создания откроется защищённая форма. Не отправляйте секрет помощнику.",
+      runTitle: "Название запуска",
+      runTargetType: "Кого запустить",
+      runAgent: "ИИ-сотрудника",
+      runWorkflow: "Процесс",
+      runTarget: "Исполнитель",
+      runChooseTarget: "Выбрать исполнителя",
+      runSearchTarget: "Найти сотрудника или процесс",
+      runTargetUnavailable:
+        "Выбранный исполнитель недоступен для запуска в этом проекте. Выберите другого или попросите помощника изменить план.",
+      runTask: "Задание",
+      runWorkflowInput: "Входные данные процесса",
+      runInputInvalid: "Проверьте значение обязательного поля.",
+      runUnknownInput:
+        "План содержит поля, которых нет в текущей версии процесса. Попросите помощника изменить план.",
+      runAdditionalInput: "Дополнительные входные данные",
+      runNotReady:
+        "Выберите доступного исполнителя и заполните обязательные данные перед сохранением плана.",
+      runNextSteps:
+        "Запуск начнётся только после проверки и подтверждения плана. Его состояние и отмена появятся в диалоге.",
       transitionDetails: "Технические детали изменения",
       afterDetails: "Планируемое состояние",
       capabilities: {
@@ -6276,6 +6295,25 @@ const en = {
       connectionListHint: "Separate values with commas.",
       connectionCredentialNextSteps:
         "Only public settings belong here. If the integration needs a key or password, use the protected form after creation. Never send secrets to the assistant.",
+      runTitle: "Run title",
+      runTargetType: "What to launch",
+      runAgent: "AI employee",
+      runWorkflow: "Workflow",
+      runTarget: "Executor",
+      runChooseTarget: "Choose an executor",
+      runSearchTarget: "Find an employee or workflow",
+      runTargetUnavailable:
+        "The selected executor cannot be launched in this project. Choose another or ask the assistant to revise the plan.",
+      runTask: "Task",
+      runWorkflowInput: "Workflow inputs",
+      runInputInvalid: "Check this required field value.",
+      runUnknownInput:
+        "The plan contains fields outside the current workflow version. Ask the assistant to revise it.",
+      runAdditionalInput: "Additional input",
+      runNotReady:
+        "Choose an available executor and complete required inputs before saving the plan.",
+      runNextSteps:
+        "The run starts only after the plan is validated and confirmed. Its status and cancellation controls will appear in the conversation.",
       transitionDetails: "Technical change details",
       afterDetails: "Planned state",
       capabilities: {

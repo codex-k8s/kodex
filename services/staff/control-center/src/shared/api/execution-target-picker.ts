@@ -112,6 +112,8 @@ export function createExecutionTargetPickerLoader(
                 signal: combinedSignal(signal),
               }),
             );
+      if (response.data.items.some((item) => item.projectRef !== projectRef))
+        throw new Error("Execution target catalog project mismatch");
       const items = response.data.items.filter((item) =>
         targetType === "AGENT"
           ? isEligibleAgent(item as Agent)
