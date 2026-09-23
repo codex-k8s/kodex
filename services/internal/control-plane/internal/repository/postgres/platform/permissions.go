@@ -21,6 +21,15 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.TrashProject, command.RestoreProject, command.PurgeProject:
+		_, ok := input.Payload.(command.ProjectLifecycleInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		if current.role != "OWNER" && current.role != "ADMINISTRATOR" {
+			return errs.ErrNotFound
+		}
+		return nil
 	case command.ChangeIntegrationGrant:
 		payload, ok := input.Payload.(command.IntegrationGrantInput)
 		if !ok {
@@ -86,6 +95,13 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	}
 	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 		return errs.ErrNotFound
+	}
+	if input.Kind == command.CreateAgent {
+		payload, ok := input.Payload.(command.AgentInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		return repository.authorizeInitialAgentCapabilities(ctx, tx, current, payload.ProjectRef, payload.InitialCapabilities)
 	}
 	if input.Kind == command.RetryRun {
 		return repository.authorizeRetryTarget(ctx, tx, current, input)

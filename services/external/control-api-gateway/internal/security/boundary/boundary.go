@@ -362,6 +362,9 @@ func isRealtimePath(path string) bool {
 
 func exactProjectPathReference(request *http.Request) (string, error) {
 	const prefix = "/api/v1/projects/"
+	if request.Method == http.MethodGet && request.URL.Path == "/api/v1/projects/trash" {
+		return "", nil
+	}
 	if !strings.HasPrefix(request.URL.Path, prefix) {
 		return "", nil
 	}

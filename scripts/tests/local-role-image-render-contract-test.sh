@@ -585,6 +585,8 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .kind == "Deployment" and .metadata.name == "secret-broker" and
     any(.spec.template.spec.initContainers[]?;
       .name == "codex-cli-install" and
+      .image == "pull.127.0.0.1.nip.io/kodex/agent-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and
+      .imagePullPolicy == "IfNotPresent" and
       .resources.requests.cpu == "10m" and
       .resources.requests.memory == "64Mi" and
       .resources.limits.cpu == "100m" and

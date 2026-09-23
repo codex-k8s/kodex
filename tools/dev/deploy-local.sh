@@ -1311,6 +1311,11 @@ PY
     if [[ "$mode" == apply ]]; then
       if [[ -z "$selected_workload" || "$selected_workload" == control-plane ]]; then
         apply_render core-scanner-config 'select(.kind == "ConfigMap" and .metadata.name == "control-plane-skill-scanner")'
+        apply_render core-project-purge-rbac '
+          select((.kind == "Role" or .kind == "RoleBinding") and
+            .metadata.name == "control-plane-project-purge" and
+            .metadata.namespace == "kodex-runtime")
+        '
       fi
       if [[ -n "$selected_workload" ]]; then
         apply_render core-application "select(.kind == \"Deployment\" and .metadata.name == \"$selected_workload\")"

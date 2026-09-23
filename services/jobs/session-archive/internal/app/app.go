@@ -61,10 +61,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		_ = control.Close()
 		return err
 	}
-	if err := control.CheckLocalAuthority(startup); err != nil {
-		_ = control.Close()
-		return err
-	}
 	if err := kubernetes.Check(startup); err != nil {
 		_ = control.Close()
 		return err
@@ -126,6 +122,9 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 					readiness.Set(false, "kubernetes_unavailable")
 					metrics.SetReady(false)
 					logger.WarnContext(ctx, "session archive Kubernetes check failed", "error_class", "kubernetes_api")
+				} else {
+					readiness.Set(true, "ready")
+					metrics.SetReady(true)
 				}
 			}
 			if !kubernetesReady {
@@ -136,13 +135,9 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 				cancel()
 				if err != nil {
 					owned.cycles.WithLabelValues("error").Inc()
-					readiness.Set(false, "control_plane_unavailable")
-					metrics.SetReady(false)
 					logger.WarnContext(ctx, "session archive claim failed", "error_class", "control_plane")
 				} else {
 					owned.cycles.WithLabelValues("success").Inc()
-					readiness.Set(true, "ready")
-					metrics.SetReady(true)
 					if len(claimed.GetTasks()) > 0 {
 						if err := process(ctx, control, kube, claimed.GetTasks()[0], owned, config); err != nil {
 							logger.WarnContext(ctx, "session archive task processing failed", "error_class", "task_processing")

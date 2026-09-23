@@ -32,6 +32,7 @@ import (
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providercredentialcleanup"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/projectpurge"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providermodelcatalog"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/providercredentialclient"
 	platformrepository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
@@ -318,13 +319,14 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
-		monitorReadiness(service, repository, publisher, emailProjection, cleanupClaimHealth, readiness, slog.Default(), config),
+		monitorReadiness(service, repository, publisher, readiness, slog.Default(), config),
 		emailProjection.Run,
 		monitorOIDCSigningKeys(refreshOIDC, slog.Default(), config),
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 		cleanupWorker.Run,
 		catalogWorker.Run,
 		runAgentAvatarCleanup(repository, slog.Default()),
+		projectpurge.Run(repository, objects, config.RuntimeSecretNamespace, slog.Default()),
 	)
 	workerDone := make(chan error, 1)
 	go func() { workerDone <- workers.Wait(lifecycle) }()
@@ -521,37 +523,28 @@ type readinessPublisher interface {
 	Check(context.Context) error
 }
 
-type readinessCondition interface {
-	Ready() (bool, string)
-}
-
 type readinessOwner interface {
 	Ready(context.Context) error
 }
 
-// Общий endpoint зависит только от owned infrastructure. Catalog worker сохраняет
-// собственную диагностику, но его downstream broker сам требует доступного CP.
-func monitorReadiness(service readinessOwner, store readinessStore, publisher readinessPublisher, emailProjection readinessPublisher, cleanupClaim readinessCondition, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
+// Общий endpoint зависит только от owned PostgreSQL, object storage и NATS.
+// Вспомогательные projection, cleanup и catalog paths сохраняют собственную
+// диагностику и fail-closed ошибки.
+func monitorReadiness(service readinessOwner, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
 		defer ticker.Stop()
 		for {
 			check, cancel := context.WithTimeout(ctx, config.ReadinessTimeout)
-			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check), emailProjection.Check(check))
+			err := errors.Join(service.Ready(check), store.CheckOutbox(check), publisher.Check(check))
 			cancel()
-			reason, errorClass := "direct_infrastructure_unavailable", "direct_infrastructure"
-			if cleanupReady, _ := cleanupClaim.Ready(); err == nil && !cleanupReady {
-				err = errors.New("provider credential cleanup claim is unavailable")
-				reason = "provider_credential_cleanup_claim_unavailable"
-				errorClass = "provider_credential_cleanup_claim"
-			}
 			if err == nil {
 				if readiness.Set(true, "ready") {
 					logger.InfoContext(ctx, "control-plane readiness restored")
 				}
 			} else {
-				if readiness.Set(false, reason) {
-					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", errorClass)
+				if readiness.Set(false, "primary_infrastructure_unavailable") {
+					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", "postgresql_object_storage_or_nats")
 				}
 			}
 			select {

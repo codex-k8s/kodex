@@ -22,18 +22,23 @@ WITH expired_locked AS MATERIALIZED (
            encode(digest(prepared.object_key || chr(31) || COALESCE(prepared.object_version, ''), 'sha256'), 'hex'),
            prepared.object_key, prepared.object_version, @maximum_attempts
     FROM cleanup_prepared prepared
+    LEFT JOIN control_plane.projects cleanup_project ON cleanup_project.id = prepared.project_id
+    WHERE prepared.project_id IS NULL OR cleanup_project.lifecycle <> 'PURGE_PENDING'
     ON CONFLICT DO NOTHING
     RETURNING id
 ), expired_updated AS (
     UPDATE control_plane.session_archive_tasks task
-       SET state = CASE WHEN task.attempt >= task.maximum_attempts THEN 'DEAD_LETTER' ELSE 'READY' END,
+       SET state = CASE WHEN project.lifecycle = 'PURGE_PENDING' THEN 'CANCELLED'
+                        WHEN task.attempt >= task.maximum_attempts THEN 'DEAD_LETTER' ELSE 'READY' END,
            available_at = CASE WHEN task.attempt >= task.maximum_attempts THEN task.available_at
                                ELSE clock_timestamp() + LEAST(300, 5 * power(2, task.attempt)) * interval '1 second' END,
            workload_instance = NULL, lease_ref = NULL, fence_digest = NULL,
            lease_expires_at = NULL, safe_error_code = 'SESSION_ARCHIVE_LEASE_EXPIRED',
-           completed_at = CASE WHEN task.attempt >= task.maximum_attempts THEN clock_timestamp() ELSE NULL END,
+           completed_at = CASE WHEN project.lifecycle = 'PURGE_PENDING' OR task.attempt >= task.maximum_attempts
+                               THEN clock_timestamp() ELSE NULL END,
            updated_at = clock_timestamp()
       FROM expired_locked expired
+      LEFT JOIN control_plane.projects project ON project.id = expired.project_id
      WHERE task.id = expired.id
     RETURNING task.session_id, task.kind, task.state
 ), expired_storage AS (
@@ -88,6 +93,7 @@ WITH expired_locked AS MATERIALIZED (
     JOIN control_plane.organizations organization ON organization.id = storage.organization_id
     LEFT JOIN control_plane.projects project ON project.id = storage.project_id
     WHERE storage.state = 'LIVE'
+      AND (storage.project_id IS NULL OR project.lifecycle <> 'PURGE_PENDING')
       AND session.state IN ('ACTIVE', 'CLOSED')
       AND (
           session.state = 'CLOSED'
@@ -133,7 +139,9 @@ WITH expired_locked AS MATERIALIZED (
            archive.object_version
     FROM control_plane.session_storage storage
     JOIN control_plane.session_archives archive ON archive.id = storage.current_archive_id
+    LEFT JOIN control_plane.projects restore_project ON restore_project.id=storage.project_id
     WHERE storage.state = 'ARCHIVED'
+      AND (storage.project_id IS NULL OR restore_project.lifecycle <> 'PURGE_PENDING')
       AND archive.lifecycle_state = 'AVAILABLE'
       AND EXISTS (
           SELECT 1 FROM control_plane.session_turns turn
@@ -165,7 +173,9 @@ WITH expired_locked AS MATERIALIZED (
     SELECT archive.*
     FROM control_plane.session_archives archive
     JOIN control_plane.sessions session ON session.id = archive.session_id
+    LEFT JOIN control_plane.projects gc_project ON gc_project.id=archive.project_id
     WHERE archive.retention_until <= clock_timestamp()
+      AND (archive.project_id IS NULL OR gc_project.lifecycle <> 'PURGE_PENDING')
       AND archive.lifecycle_state IN ('SUPERSEDED', 'AVAILABLE')
       AND (archive.lifecycle_state = 'SUPERSEDED' OR session.state = 'CLOSED')
       AND NOT EXISTS (

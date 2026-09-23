@@ -25,7 +25,10 @@ SELECT s.id::text,
        revision.created_by::text
 FROM control_plane.schedules s
 JOIN control_plane.schedule_revisions revision ON revision.id = s.current_revision_id
+JOIN control_plane.projects project ON project.id = s.project_id
 WHERE s.organization_id = $1::uuid
+  AND project.organization_id = s.organization_id
+  AND project.lifecycle = 'ACTIVE'
   AND s.lifecycle_state = 'ACTIVE'
   AND s.enabled
   AND s.next_run_at <= clock_timestamp()

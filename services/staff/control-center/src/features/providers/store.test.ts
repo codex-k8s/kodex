@@ -246,11 +246,11 @@ describe("providers store", () => {
     expect(JSON.stringify(store.$state)).not.toContain("must-not-be-sent");
   });
 
-  it("polling вызывает explicit refresh и завершается на authorized", async () => {
+  it("polling pending device flow не зависит от отсутствующего UI action", async () => {
     vi.useFakeTimers();
     const pending = account({
       state: "PENDING_AUTHORIZATION",
-      nextActions: ["REFRESH_AUTHORIZATION", "REVOKE"],
+      nextActions: ["REVOKE"],
       authorization: {
         ref: "pauth_one",
         method: "DEVICE_CODE",
@@ -273,6 +273,91 @@ describe("providers store", () => {
     expect(api.verifyDeviceAuthorization).not.toHaveBeenCalled();
     expect(store.pollingRefs).toEqual([]);
     expect(store.accounts[0]?.state).toBe("AUTHORIZED");
+  });
+
+  it("возобновляет polling после загрузки без UI action", async () => {
+    vi.useFakeTimers();
+    const pending = account({
+      state: "PENDING_AUTHORIZATION",
+      enabled: false,
+      ready: false,
+      nextActions: ["REVOKE"],
+      authorization: {
+        ref: "pauth_loaded",
+        method: "DEVICE_CODE",
+        state: "PENDING",
+        expiresAt: "2099-08-30T08:10:00Z",
+      },
+    });
+    const failed = account({
+      ...pending,
+      version: 2,
+      state: "REAUTHORIZATION_REQUIRED",
+      nextActions: ["CONFIGURE_CREDENTIAL", "REVOKE"],
+      authorization: {
+        ref: "pauth_loaded",
+        method: "DEVICE_CODE",
+        state: "FAILED",
+        expiresAt: "2099-08-30T08:10:00Z",
+      },
+    });
+    api.loadProviderAccounts.mockResolvedValue({
+      items: [pending],
+      nextPageToken: "",
+      nextActions: [],
+    });
+    api.pollDeviceAuthorization.mockResolvedValue(failed);
+    const store = useProvidersStore();
+
+    await store.load();
+    expect(store.pollingRefs).toEqual([pending.ref]);
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(api.pollDeviceAuthorization).toHaveBeenCalledWith(pending);
+    expect(store.accounts).toEqual([failed]);
+    expect(store.pollingRefs).toEqual([]);
+  });
+
+  it("сразу сверяет просроченный PENDING с materializer после загрузки", async () => {
+    vi.useFakeTimers();
+    const pending = account({
+      state: "PENDING_AUTHORIZATION",
+      enabled: false,
+      ready: false,
+      nextActions: ["REFRESH_AUTHORIZATION", "REVOKE"],
+      authorization: {
+        ref: "pauth_expired",
+        method: "DEVICE_CODE",
+        state: "PENDING",
+        expiresAt: "2020-01-01T00:00:00Z",
+      },
+    });
+    const failed = account({
+      ...pending,
+      version: 2,
+      state: "REAUTHORIZATION_REQUIRED",
+      nextActions: ["CONFIGURE_CREDENTIAL", "REVOKE"],
+      authorization: {
+        ref: "pauth_expired",
+        method: "DEVICE_CODE",
+        state: "FAILED",
+        expiresAt: "2020-01-01T00:00:00Z",
+      },
+    });
+    api.loadProviderAccounts.mockResolvedValue({
+      items: [pending],
+      nextPageToken: "",
+      nextActions: [],
+    });
+    api.pollDeviceAuthorization.mockResolvedValue(failed);
+    const store = useProvidersStore();
+
+    await store.load();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(api.pollDeviceAuthorization).toHaveBeenCalledWith(pending);
+    expect(store.accounts).toEqual([failed]);
+    expect(store.pollingRefs).toEqual([]);
   });
 
   it("использует reauthorize для expired device flow и delete для API key", async () => {

@@ -51,8 +51,17 @@ type configurationRuntime struct {
 	current atomic.Pointer[mail.Service]
 }
 
-// Refresh вызывается при startup, затем только единственным bounded monitor.
+// Refresh публикует локально проверенную конфигурацию независимо от readback
+// смежного control-plane. Ошибка readback остаётся диагностикой рабочего пути.
 func (r *configurationRuntime) Refresh(ctx context.Context) (result error) {
+	return r.refresh(ctx, true)
+}
+
+func (r *configurationRuntime) RefreshLocal(ctx context.Context) (result error) {
+	return r.refresh(ctx, false)
+}
+
+func (r *configurationRuntime) refresh(ctx context.Context, report bool) (result error) {
 	stage := stageConfiguration
 	defer func() { result = failure(stage, result) }()
 	snapshot, err := configuration.Load(ctx, r.root)
@@ -76,10 +85,6 @@ func (r *configurationRuntime) Refresh(ctx context.Context) (result error) {
 			err = errors.New("email configuration service unavailable")
 		}
 	}
-	if err == nil && r.report != nil {
-		stage = stageReadback
-		err = r.report(ctx, snapshot.Configuration.Revision, digest)
-	}
 	if err == nil {
 		err = ctx.Err()
 	}
@@ -88,6 +93,12 @@ func (r *configurationRuntime) Refresh(ctx context.Context) (result error) {
 		return err
 	}
 	r.current.Store(service)
+	if report && r.report != nil {
+		stage = stageReadback
+		if err = r.report(ctx, snapshot.Configuration.Revision, digest); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

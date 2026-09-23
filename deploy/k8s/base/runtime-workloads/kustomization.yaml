@@ -5,4 +5,5 @@ resources:
   - serviceaccount.yaml
   - runtime-controller-rbac.yaml
   - secret-broker-rbac.yaml
+  - project-purge-rbac.yaml
   - networkpolicy.yaml

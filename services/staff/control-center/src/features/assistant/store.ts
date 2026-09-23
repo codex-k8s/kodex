@@ -444,8 +444,14 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   async function apply(plan: AssistantPlan): Promise<AssistantPlanReceipt> {
     return runMutation(async () => {
       const value = await applyPlanDraft(plan);
+      if (
+        value.conversation.ref !== plan.conversationRef ||
+        value.plan.ref !== plan.ref
+      )
+        throw new Error("Assistant plan application response mismatch");
       receipt.value = value.receipt;
-      upsertConversation(value.conversation);
+      // Ответ применения содержит только ref диалога. Полный снимок придёт
+      // из авторитетного чтения при выходе из редактора плана.
       replacePlan(value.plan);
       return value.receipt;
     });

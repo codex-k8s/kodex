@@ -25,6 +25,7 @@ type ProviderModelCatalogRecord struct {
 	ID                     string   `json:"id"`
 	DefaultReasoningEffort string   `json:"defaultReasoningEffort"`
 	ReasoningEfforts       []string `json:"reasoningEfforts"`
+	IsDefault              bool     `json:"isDefault"`
 }
 
 type ProviderModelCatalogObservation struct {

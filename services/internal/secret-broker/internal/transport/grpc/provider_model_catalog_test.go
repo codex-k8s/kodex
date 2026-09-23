@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
 	av1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/serviceidentity"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
 	googlegrpc "google.golang.org/grpc"
@@ -148,6 +150,56 @@ func TestProviderCatalogMiddlewareRejectsDetachedAuthorityBeforeCredentialRead(t
 			}
 			if err != nil || response.(*cp.ObserveProviderModelCatalogResponse).GetFailure() != cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE || materializer.calls != 1 || materializer.account != request.AccountRef || materializer.descriptor.SecretResourceVersion != request.Credential.SecretResourceVersion || materializer.method != providercredential.CatalogMethodAPIKey || materializer.deadline.After(request.ExpiresAt.AsTime()) {
 				t.Fatal("exact catalog binding was not preserved")
+			}
+		})
+	}
+}
+
+func TestTrustedProviderCatalogRequiresExactServerAdmission(t *testing.T) {
+	method := cp.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName
+	caller := "spiffe://kodex.local/ns/kodex-system/sa/control-plane"
+	for _, mode := range []string{"allowed", "metadata_only", "operation", "permission", "actor", "project", "target"} {
+		t.Run(mode, func(t *testing.T) {
+			binding := serviceidentity.Binding{CallerSPIFFEID: caller, FullMethod: method,
+				OperationID: providerCatalogOperation, Permission: providerCatalogOperation, ActorMode: serviceidentity.ServiceActor}
+			target := secretBrokerSPIFFEID
+			switch mode {
+			case "operation":
+				binding.OperationID = "platform.provider-accounts.read"
+			case "permission":
+				binding.Permission = "platform.provider-accounts.read"
+			case "actor":
+				binding.ActorMode = serviceidentity.UserActor
+			case "project":
+				binding.ProjectRequired = true
+			case "target":
+				target = "spiffe://kodex.local/ns/kodex-system/sa/other-broker"
+			}
+			authorizer, err := serviceidentity.NewTrustedCluster(transportprofile.TrustedCluster, target, []serviceidentity.Binding{binding})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := catalogRequestFixture()
+			materializer := &catalogMaterializerFixture{failure: providercredential.CatalogFailureNone}
+			server := &Server{providerCredentials: materializer}
+			ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+				serviceidentity.ProfileMetadataKey, transportprofile.TrustedCluster,
+				serviceidentity.CallerMetadataKey, caller,
+			))
+			if mode == "metadata_only" {
+				_, err = server.ObserveProviderModelCatalog(ctx, request)
+			} else {
+				_, err = authorizer.UnaryServerInterceptor()(ctx, request, &googlegrpc.UnaryServerInfo{FullMethod: method},
+					func(ctx context.Context, _ any) (any, error) { return server.ObserveProviderModelCatalog(ctx, request) })
+			}
+			if mode == "allowed" {
+				if err != nil || materializer.calls != 1 {
+					t.Fatalf("trusted catalog admission did not reach exact credential read: calls=%d err=%v", materializer.calls, err)
+				}
+				return
+			}
+			if status.Code(err) != codes.PermissionDenied || materializer.calls != 0 {
+				t.Fatal("invalid trusted catalog admission reached credential read")
 			}
 		})
 	}

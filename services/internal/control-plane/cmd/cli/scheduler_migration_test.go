@@ -88,7 +88,7 @@ func TestScheduleProtocolUpgrade(t *testing.T) {
 	).Scan(&unrelatedModel); err != nil {
 		t.Fatal(err)
 	}
-	if defaultModel != "gpt-5.4" || defaultVersion != 8 || unrelatedModel != "synthetic" {
+	if defaultModel != "gpt-6-sol" || defaultVersion != 9 || unrelatedModel != "synthetic" {
 		t.Fatalf("runtime profile upgrade invariants: default=%q version=%d unrelated=%q", defaultModel, defaultVersion, unrelatedModel)
 	}
 	if err := readback.Commit(); err != nil {

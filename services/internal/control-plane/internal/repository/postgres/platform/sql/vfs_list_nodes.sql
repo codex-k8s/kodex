@@ -3,7 +3,7 @@ WITH projects AS (
     SELECT project.id, project.ref, project.name, project.updated_at
     FROM control_plane.projects AS project
     WHERE project.organization_id = @organization_id::uuid
-      AND project.lifecycle <> 'ARCHIVED'
+      AND project.lifecycle = 'ACTIVE'
       AND (@project_ref = '' OR project.ref = @project_ref)
       AND (
           @mode = 'SEARCH' AND (@path = '' OR @path = '/projects')

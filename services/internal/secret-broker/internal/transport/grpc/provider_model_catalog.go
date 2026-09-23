@@ -9,6 +9,9 @@ import (
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
+	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/serviceidentity"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
 	"google.golang.org/grpc/codes"
@@ -38,18 +41,19 @@ func (server *Server) logCatalogFailure(ctx context.Context, result providercred
 }
 
 func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *cp.ObserveProviderModelCatalogRequest) (*cp.ObserveProviderModelCatalogResponse, error) {
-	_, verified, err := verifiedProjectionAuthority(ctx, "control-plane", "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
-		cp.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName, providerCatalogOperation)
+	verified, trusted, err := providerCatalogAuthority(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if request == nil || len(request.ProtoReflect().GetUnknown()) != 0 || proto.Size(request) > 16<<10 {
 		return nil, status.Error(codes.InvalidArgument, "provider catalog request is invalid")
 	}
-	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
-	digest := sha256.Sum256(raw)
-	if err != nil || verified.GetAuthorityAbiVersion() != internalrpcauth.AuthorityABIVersion || verified.GetRequestBindingMode() != internalrpcauth.RequestBindingUnary || verified.GetContinuation() != nil || verified.GetRequestDigestSha256() != hex.EncodeToString(digest[:]) {
-		return nil, status.Error(codes.PermissionDenied, "provider catalog request binding is invalid")
+	if !trusted {
+		raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
+		digest := sha256.Sum256(raw)
+		if err != nil || verified.GetAuthorityAbiVersion() != internalrpcauth.AuthorityABIVersion || verified.GetRequestBindingMode() != internalrpcauth.RequestBindingUnary || verified.GetContinuation() != nil || verified.GetRequestDigestSha256() != hex.EncodeToString(digest[:]) {
+			return nil, status.Error(codes.PermissionDenied, "provider catalog request binding is invalid")
+		}
 	}
 	if !validCatalogRequest(request) {
 		return nil, status.Error(codes.InvalidArgument, "provider catalog task binding is invalid")
@@ -57,7 +61,11 @@ func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *
 	if server.providerCredentials == nil {
 		return nil, status.Error(codes.Unavailable, "provider catalog observer is unavailable")
 	}
-	deadline := minCatalogDeadline(time.Now().Add(15*time.Second), verified.GetExpiresAt().AsTime(), request.GetExpiresAt().AsTime())
+	deadlines := []time.Time{time.Now().Add(15 * time.Second), request.GetExpiresAt().AsTime()}
+	if !trusted {
+		deadlines = append(deadlines, verified.GetExpiresAt().AsTime())
+	}
+	deadline := minCatalogDeadline(deadlines...)
 	if !deadline.After(time.Now()) {
 		return nil, status.Error(codes.DeadlineExceeded, "provider catalog task expired")
 	}
@@ -92,7 +100,7 @@ func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *
 			return nil, status.Error(codes.Unavailable, "provider catalog source is invalid")
 		}
 		for _, model := range result.Models {
-			response.Models = append(response.Models, &cp.ProviderModelCatalogRecord{Id: model.ID, DefaultReasoningEffort: model.DefaultReasoningEffort, ReasoningEfforts: append([]string(nil), model.ReasoningEfforts...)})
+			response.Models = append(response.Models, &cp.ProviderModelCatalogRecord{Id: model.ID, DefaultReasoningEffort: model.DefaultReasoningEffort, ReasoningEfforts: append([]string(nil), model.ReasoningEfforts...), IsDefault: model.IsDefault})
 		}
 	case providercredential.CatalogFailureUnavailable:
 		response.Failure = cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_UNAVAILABLE
@@ -108,6 +116,22 @@ func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *
 	}
 	server.logCatalogFailure(ctx, result)
 	return response, nil
+}
+
+func providerCatalogAuthority(ctx context.Context) (*internalrpcauthorityv1.VerifiedAuthorizationContext, bool, error) {
+	method := cp.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName
+	if admission, ok := serviceidentity.FromContext(ctx); ok && admission.RPCProfile == transportprofile.TrustedCluster {
+		if admission.Peer.SPIFFEID != "spiffe://kodex.local/ns/kodex-system/sa/control-plane" ||
+			admission.TargetSPIFFEID != secretBrokerSPIFFEID || admission.FullMethod != method ||
+			admission.OperationID != providerCatalogOperation || admission.Permission != providerCatalogOperation ||
+			admission.ActorMode != serviceidentity.ServiceActor || admission.ProjectRequired {
+			return nil, false, status.Error(codes.PermissionDenied, "trusted provider catalog admission rejected")
+		}
+		return nil, true, nil
+	}
+	_, verified, err := verifiedProjectionAuthority(ctx, "control-plane", "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+		method, providerCatalogOperation)
+	return verified, false, err
 }
 
 func validCatalogRequest(request *cp.ObserveProviderModelCatalogRequest) bool {

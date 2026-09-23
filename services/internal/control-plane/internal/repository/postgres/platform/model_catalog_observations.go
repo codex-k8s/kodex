@@ -37,10 +37,17 @@ func canonicalModelCatalogObservation(task platformrepo.ProviderModelCatalogTask
 		observation.Models = []platformrepo.ProviderModelCatalogRecord{}
 	}
 	slices.SortFunc(observation.Models, func(a, b platformrepo.ProviderModelCatalogRecord) int { return strings.Compare(a.ID, b.ID) })
+	defaults := 0
 	for index := range observation.Models {
 		model := &observation.Models[index]
 		if !validModel(model.ID) || len(model.ReasoningEfforts) > 16 || index > 0 && observation.Models[index-1].ID == model.ID {
 			return observation, "", "", errs.ErrInvalid
+		}
+		if model.IsDefault {
+			defaults++
+			if defaults > 1 {
+				return observation, "", "", errs.ErrInvalid
+			}
 		}
 		model.ReasoningEfforts = slices.Clone(model.ReasoningEfforts)
 		if model.ReasoningEfforts == nil {

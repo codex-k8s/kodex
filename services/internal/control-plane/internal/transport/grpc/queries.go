@@ -108,6 +108,22 @@ func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.
 	return response, nil
 }
 
+func (server *Server) ListTrashedProjects(ctx context.Context, request *controlplanev1.ListTrashedProjectsRequest) (*controlplanev1.ListTrashedProjectsResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListTrashedProjects_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, next, err := server.service.ListTrashedProjects(ctx, p, page(request.GetPage()))
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListTrashedProjectsResponse{Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for _, item := range items {
+		response.Projects = append(response.Projects, castProject(item))
+	}
+	return response, nil
+}
+
 func (server *Server) GetProject(ctx context.Context, request *controlplanev1.GetProjectRequest) (*controlplanev1.GetProjectResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetProject_FullMethodName)
 	if err != nil {

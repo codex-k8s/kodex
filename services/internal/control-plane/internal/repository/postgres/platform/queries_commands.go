@@ -21,6 +21,24 @@ var (
 	queryCommandsCreateprojectInsertMembershipsRefProjectIdRole string
 	//go:embed sql/commands_updateproject_update_projects_name_purpose_language.sql
 	queryCommandsUpdateprojectUpdateProjectsNamePurposeLanguage string
+	//go:embed sql/project_trash__lock.sql
+	queryProjectTrashLock string
+	//go:embed sql/project_trash__active_run_roots.sql
+	queryProjectTrashActiveRunRoots string
+	//go:embed sql/project_trash__cancel_occurrences.sql
+	queryProjectTrashCancelOccurrences string
+	//go:embed sql/project_trash__mark.sql
+	queryProjectTrashMark string
+	//go:embed sql/project_trash__restore.sql
+	queryProjectTrashRestore string
+	//go:embed sql/project_trash__purge.sql
+	queryProjectTrashPurge string
+	//go:embed sql/project_trash__purge_receipt.sql
+	queryProjectTrashPurgeReceipt string
+	//go:embed sql/project_purge__cancel_ready_archive_tasks.sql
+	queryProjectPurgeCancelReadyArchiveTasks string
+	//go:embed sql/project_trash__list.sql
+	queryProjectTrashList string
 	//go:embed sql/project_membership__insert.sql
 	queryProjectMembershipInsert string
 	//go:embed sql/project_membership__resolve_for_update.sql

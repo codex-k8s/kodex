@@ -18,6 +18,7 @@ import (
 func expectedAPICapabilities() []CatalogModel {
 	return []CatalogModel{
 		{ID: "gpt-6-astra", DefaultReasoningEffort: "low", ReasoningEfforts: []string{"low", "medium", "high", "xhigh", "max"}},
+		{ID: "gpt-6-sol", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"none", "low", "medium", "high", "xhigh", "max"}},
 		{ID: "gpt-5.6-sol", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"none", "low", "medium", "high", "xhigh", "max"}},
 		{ID: "gpt-5.6-terra", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"none", "low", "medium", "high", "xhigh", "max"}},
 		{ID: "gpt-5.6-luna", DefaultReasoningEffort: "medium", ReasoningEfforts: []string{"none", "low", "medium", "high", "xhigh", "max"}},
@@ -27,9 +28,9 @@ func expectedAPICapabilities() []CatalogModel {
 	}
 }
 
-func TestAPIExactSevenCapabilitiesAndAccountSubsets(t *testing.T) {
+func TestAPIExactEightCapabilitiesAndAccountSubsets(t *testing.T) {
 	want := expectedAPICapabilities()
-	models, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC))
+	models, err := readAPICapabilities(apiCatalogSource, apiCatalogDigest, time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC))
 	if err != nil || !reflect.DeepEqual(models, want) {
 		t.Fatalf("API capabilities mismatch: %v", err)
 	}

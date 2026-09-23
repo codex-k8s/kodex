@@ -22,7 +22,10 @@ const (
 	maximumAppServerRequest   = 1 << 20
 	maximumAuthJSONBytes      = 1 << 20
 	processShutdownTimeout    = 5 * time.Second
+	fileCredentialStoreConfig = `cli_auth_credentials_store="file"`
 )
+
+var errCredentialMaterialization = errors.New("Codex credential materialization failed")
 
 type DeviceAuthorizationSession interface {
 	MaterializerAttemptRef() string
@@ -163,7 +166,10 @@ type appServer struct {
 }
 
 func startAppServer(binary, home string) (*appServer, error) {
-	command := exec.Command(binary, "app-server", "--strict-config", "--listen", "stdio://")
+	// Materialization owns an isolated CODEX_HOME and must receive the managed
+	// credential as a file. The default "auto" store may select an OS keyring,
+	// which cannot be copied into the immutable runtime Secret.
+	command := exec.Command(binary, "app-server", "-c", fileCredentialStoreConfig, "--strict-config", "--listen", "stdio://")
 	command.WaitDelay = processShutdownTimeout
 	command.Dir = home
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + home, "CODEX_HOME=" + home}
@@ -379,6 +385,7 @@ func (session *deviceSession) VerificationURI() string        { return session.v
 func (session *deviceSession) UserCode() string               { return session.userCode }
 
 func (session *deviceSession) Wait(ctx context.Context) ([]byte, string, error) {
+	loginCompleted, accountUpdated := false, false
 	for {
 		select {
 		case <-ctx.Done():
@@ -397,31 +404,45 @@ func (session *deviceSession) Wait(ctx context.Context) ([]byte, string, error) 
 				_ = session.server.write(map[string]any{"id": event.message.ID, "error": map[string]any{"code": -32000, "message": "Server requests are not authorized"}})
 				return nil, "", errors.New("Codex app-server requested unsupported authority")
 			}
-			if event.message.Method != "account/login/completed" {
+			switch event.message.Method {
+			case "account/login/completed":
+				var completed struct {
+					LoginID string  `json:"loginId"`
+					Success bool    `json:"success"`
+					Error   *string `json:"error"`
+				}
+				if json.Unmarshal(event.message.Params, &completed) != nil || completed.LoginID != session.loginID {
+					return nil, "", errors.New("Codex app-server device authorization completion is invalid")
+				}
+				if !completed.Success || completed.Error != nil {
+					return nil, "", errors.New("Codex device authorization failed")
+				}
+				loginCompleted = true
+			case "account/updated":
+				var updated struct {
+					AuthMode *string `json:"authMode"`
+				}
+				if json.Unmarshal(event.message.Params, &updated) != nil || updated.AuthMode == nil || *updated.AuthMode != "chatgpt" {
+					return nil, "", errors.Join(errCredentialMaterialization, errors.New("Codex account update is invalid"))
+				}
+				accountUpdated = true
+			default:
 				continue
 			}
-			var completed struct {
-				LoginID string  `json:"loginId"`
-				Success bool    `json:"success"`
-				Error   *string `json:"error"`
-			}
-			if json.Unmarshal(event.message.Params, &completed) != nil || completed.LoginID != session.loginID {
-				return nil, "", errors.New("Codex app-server device authorization completion is invalid")
-			}
-			if !completed.Success || completed.Error != nil {
-				return nil, "", errors.New("Codex device authorization failed")
+			if !loginCompleted || !accountUpdated {
+				continue
 			}
 			raw, err := session.server.call(ctx, "account/read", map[string]bool{"refreshToken": false})
 			if err != nil {
-				return nil, "", err
+				return nil, "", errors.Join(errCredentialMaterialization, err)
 			}
 			masked, err := maskedAccount(raw)
 			if err != nil {
-				return nil, "", err
+				return nil, "", errors.Join(errCredentialMaterialization, err)
 			}
 			authJSON, err := readAuthJSON(session.home)
 			if err != nil {
-				return nil, "", err
+				return nil, "", errors.Join(errCredentialMaterialization, err)
 			}
 			return authJSON, masked, nil
 		}
@@ -439,15 +460,21 @@ func (session *deviceSession) Close() error {
 func maskedAccount(raw json.RawMessage) (string, error) {
 	var response struct {
 		Account struct {
-			Type  string `json:"type"`
-			Email string `json:"email"`
+			Type  string  `json:"type"`
+			Email *string `json:"email"`
 		} `json:"account"`
 	}
-	if json.Unmarshal(raw, &response) != nil || response.Account.Type != "chatgpt" ||
-		response.Account.Email == "" || len(response.Account.Email) > 320 {
+	if json.Unmarshal(raw, &response) != nil || response.Account.Type != "chatgpt" {
 		return "", errors.New("Codex account metadata is invalid")
 	}
-	local, domain, found := strings.Cut(response.Account.Email, "@")
+	if response.Account.Email == nil {
+		return "ChatGPT", nil
+	}
+	email := *response.Account.Email
+	if email == "" || len(email) > 320 {
+		return "", errors.New("Codex account metadata is invalid")
+	}
+	local, domain, found := strings.Cut(email, "@")
 	if !found || local == "" || domain == "" {
 		return "", errors.New("Codex account metadata is invalid")
 	}

@@ -727,6 +727,16 @@ function updateApplyState(
   setApplyState(state, scope, boundary);
 }
 
+async function refreshRuntimeSummary(): Promise<void> {
+  const active = captureScope();
+  const ref = agentRef.value;
+  try {
+    await platform.loadAgent(ref);
+  } catch (error) {
+    if (active()) problem.value = asProblem(error);
+  }
+}
+
 async function toggleCapability(
   key: string,
   enabled: boolean,
@@ -1063,6 +1073,7 @@ onBeforeUnmount(() => {
             :agent-ref="agent.ref"
             :can-edit="canEdit"
             @apply-state="updateApplyState"
+            @runtime-saved="refreshRuntimeSummary"
           />
           <ProblemNotice
             v-if="platform.problems.runtimes"

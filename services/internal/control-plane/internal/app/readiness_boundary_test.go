@@ -31,26 +31,24 @@ func (dependency *readinessBoundaryDependency) CheckOutbox(ctx context.Context) 
 	return dependency.Check(ctx)
 }
 
-func TestOwnedReadinessKeepsEndpointWithoutCatalogButRejectsInfrastructureFailure(t *testing.T) {
-	for _, failed := range []string{"none", "owner", "outbox", "publisher", "email", "cleanup_claim"} {
+func TestReadinessDependsOnlyOnPostgreSQLAndNATS(t *testing.T) {
+	for _, failed := range []string{"none", "postgresql", "outbox", "nats"} {
 		t.Run(failed, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			dependencies := map[string]*readinessBoundaryDependency{}
-			for _, name := range []string{"owner", "outbox", "publisher", "email"} {
+			for _, name := range []string{"postgresql", "outbox", "nats"} {
 				dependencies[name] = &readinessBoundaryDependency{}
 				if name == failed {
 					dependencies[name].err = errors.New("owned infrastructure unavailable")
 				}
 			}
 			// Последняя проверка завершает один настоящий цикл без таймеров/гонок.
-			dependencies["email"].cancel = cancel
-			cleanup := serviceruntime.NewReadiness()
-			cleanup.Set(failed != "cleanup_claim", "claim")
+			dependencies["nats"].cancel = cancel
 			readiness := serviceruntime.NewReadiness()
 			// Начинаем с противоположного состояния, чтобы доказать сам переход.
 			readiness.Set(failed != "none", "previous")
-			worker := monitorReadiness(dependencies["owner"], dependencies["outbox"], dependencies["publisher"], dependencies["email"], cleanup, readiness, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{ReadinessInterval: time.Hour, ReadinessTimeout: time.Second})
+			worker := monitorReadiness(dependencies["postgresql"], dependencies["outbox"], dependencies["nats"], readiness, slog.New(slog.NewTextHandler(io.Discard, nil)), Config{ReadinessInterval: time.Hour, ReadinessTimeout: time.Second})
 			if err := worker(ctx); !errors.Is(err, context.Canceled) {
 				t.Fatal(err)
 			}

@@ -132,7 +132,7 @@ func TestCatalogCardsPreserveEveryProducerResponseEnvelope(t *testing.T) {
 		}
 		return true
 	})
-	for name, expected := range map[protoreflect.FullName]int{"controlplane.v1.Project": 4, "controlplane.v1.Agent": 16, "controlplane.v1.Workflow": 7} {
+	for name, expected := range map[protoreflect.FullName]int{"controlplane.v1.Project": 8, "controlplane.v1.Agent": 16, "controlplane.v1.Workflow": 7} {
 		if counts[name] != expected {
 			t.Fatalf("response envelope inventory changed for %s: %d", name, counts[name])
 		}

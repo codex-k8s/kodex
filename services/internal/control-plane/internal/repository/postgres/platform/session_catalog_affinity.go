@@ -57,7 +57,7 @@ func bindSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, ses
 		if !model.Available {
 			return errs.ErrConflict
 		}
-		models = append(models, platformrepo.ProviderModelCatalogRecord{ID: model.ID, DefaultReasoningEffort: model.DefaultReasoningEffort, ReasoningEfforts: model.ReasoningEfforts})
+		models = append(models, platformrepo.ProviderModelCatalogRecord{ID: model.ID, DefaultReasoningEffort: model.DefaultReasoningEffort, ReasoningEfforts: model.ReasoningEfforts, IsDefault: model.IsDefault})
 	}
 	result, err := tx.Exec(ctx, queryRuntimeCatalogBindSession, sessionID, organizationID, agentRef, catalog.Revision, catalog.Digest, asJSON(models))
 	if err != nil {

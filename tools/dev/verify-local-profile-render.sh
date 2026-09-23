@@ -7,7 +7,7 @@ case "$profile" in web-only|web-with-mattermost) ;; *) exit 1 ;; esac
 targets=$(yq -r '
   select(.kind == "ConfigMap" and .metadata.name == "internal-rpc-authority-publisher-target-registry") |
   .data."key-delivery-targets.yaml"
-' "$render" | yq -o=json -I=0 '.targets' | jq '[.[] | select(.workload_id == "interaction-gateway")]')
+' "$render" | yq -o=json -I=0 '.targets // []' | jq '[.[] | select(.workload_id == "interaction-gateway")]')
 yq -o=json -I=0 '.' "$render" | jq -s -e --arg profile "$profile" \
   --argjson targets "$targets" '
   any(.[]; .kind == "ConfigMap" and .metadata.name == "kodex-dev-source-provenance" and

@@ -28,7 +28,7 @@ func TestProviderOptionalBootstrapComponent(t *testing.T) {
 		t.Fatal("open disposable PostgreSQL")
 	}
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
+	repository, err := New(pool, "openai-codex", "retired-bootstrap-model", objectstoragetest.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,6 +91,20 @@ func TestProviderOptionalBootstrapComponent(t *testing.T) {
 	if err != nil || result.Project == nil {
 		t.Fatalf("create project before account: %v", err)
 	}
+	initialAgent, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateAgent, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "first-run-initial-capabilities"},
+		Payload: command.AgentInput{ProjectRef: result.Project.Ref, Name: "Coordinator", Purpose: "Coordinate project work",
+			RoleDescription: "Coordinate assigned work", Instructions: "Coordinate work using verified project context.",
+			InitialCapabilities: []string{"platform.artifact.manage", "platform.run.launch", "platform.run.delegate"}},
+	})
+	if err != nil || initialAgent.Agent == nil || len(initialAgent.Agent.Capabilities) != 3 {
+		t.Fatalf("create agent with owner-approved initial capabilities: agent=%#v err=%v", initialAgent.Agent, err)
+	}
+	var storedCapabilities []string
+	if err := pool.QueryRow(ctx, `SELECT capabilities FROM control_plane.agents WHERE ref=$1`, initialAgent.Agent.Ref).Scan(&storedCapabilities); err != nil || len(storedCapabilities) != 3 {
+		t.Fatalf("initial capability readback: capabilities=%v err=%v", storedCapabilities, err)
+	}
 	reconcileWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.reconcile",
@@ -143,7 +157,7 @@ func TestProviderOptionalBootstrapComponent(t *testing.T) {
 	}
 	seedObservedCatalogFixture(t, ctx, repository)
 	reconciled, desired, required, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, "first-run-runtime")
-	if err != nil || !required || reconciled.WarmSessionRef == "" || desired["providerAccountRef"] != authorized.ProviderAccount.Ref {
+	if err != nil || !required || reconciled.WarmSessionRef == "" || desired["providerAccountRef"] != authorized.ProviderAccount.Ref || desired["runtimeModel"] != "gpt-5" {
 		t.Fatalf("create first warm session: assistant=%#v desired=%#v required=%v err=%v", reconciled, desired, required, err)
 	}
 	firstSessionRef := reconciled.WarmSessionRef

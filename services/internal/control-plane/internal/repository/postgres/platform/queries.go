@@ -352,6 +352,9 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 			permissions = allPermissions()
 		}
 		item.NextActions = projectActions(permissions)
+		if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
+			item.NextActions = append(item.NextActions, "DELETE")
+		}
 		result = append(result, item)
 	}
 	actions := collectionCreateActions(scope.role, "CREATE_PROJECT")
@@ -399,6 +402,9 @@ func (repository *Repository) GetProject(ctx context.Context, principal value.Pr
 		}
 	}
 	item.NextActions = projectActions(permissions)
+	if scope.role == "OWNER" || scope.role == "ADMINISTRATOR" {
+		item.NextActions = append(item.NextActions, "DELETE")
+	}
 	if err := projectProjectCards(ctx, tx, scope, []*entity.Project{&item}); err != nil {
 		return entity.Project{}, err
 	}

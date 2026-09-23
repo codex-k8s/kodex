@@ -214,18 +214,13 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 			return err
 		}
 	}
-	if err := errors.Join(owner.Check(startup), store.Check(startup), reconciler.ReconcileOnce(startup),
-		providerCredentials.Check(startup), drafts.CheckDependencies(startup)); err != nil {
+	if err := errors.Join(store.Check(startup), providerCredentials.Check(startup)); err != nil {
 		_ = listener.Close()
-		return errors.Join(errors.New("secret broker startup barrier failed"), err)
-	}
-	if err := drafts.ReconcileOnce(startup); err != nil {
-		_ = listener.Close()
-		return errors.New("secret draft startup reconciliation failed")
+		return errors.Join(errors.New("secret broker local infrastructure startup barrier failed"), err)
 	}
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
-	readinessCheckers := append([]checker{owner, store, reconciler, providerCredentials, drafts}, securityCheckers...)
+	readinessCheckers := append([]checker{store, providerCredentials}, securityCheckers...)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
@@ -311,8 +306,8 @@ func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobserv
 				}
 			} else {
 				metrics.SetReady(false)
-				if readiness.Set(false, "dependency_unavailable") {
-					logger.WarnContext(ctx, "secret broker readiness lost", "error_class", "dependency")
+				if readiness.Set(false, "local_infrastructure_unavailable") {
+					logger.WarnContext(ctx, "secret broker readiness lost", "error_class", "kubernetes_or_local_runtime")
 				}
 			}
 			select {

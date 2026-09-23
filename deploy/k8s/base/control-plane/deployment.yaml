@@ -275,7 +275,7 @@ spec:
             - name: tmp
               mountPath: /tmp
         - name: skill-scanner
-          image: docker.io/clamav/clamav@sha256:49a035c7b33154dc829bc15eff2fe44f1d07c63d3d20b681bf42e8e658d21152
+          image: docker.io/clamav/clamav@sha256:0e31ce089574268aefa0b543767d66b70240ab51ed49eec53e07f18d5629d817
           imagePullPolicy: IfNotPresent
           command: [/usr/sbin/clamd]
           args: [--config-file=/etc/kodex-skill-scanner/clamd.conf]
@@ -300,11 +300,6 @@ spec:
             periodSeconds: 2
             timeoutSeconds: 3
             failureThreshold: 90
-          readinessProbe:
-            exec:
-              command: [sh, /etc/kodex-skill-scanner/healthcheck.sh]
-            periodSeconds: 30
-            timeoutSeconds: 5
           livenessProbe:
             exec:
               command: [clamdscan, --config-file=/etc/kodex-skill-scanner/clamd.conf, --ping=1]

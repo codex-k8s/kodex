@@ -18,9 +18,10 @@ import (
 )
 
 type cleanupDeviceSession struct {
-	closed chan struct{}
-	once   sync.Once
-	waits  int
+	closed  chan struct{}
+	once    sync.Once
+	waits   int
+	waitErr error
 }
 
 func (*cleanupDeviceSession) VerificationURI() string        { return "https://example.invalid/device" }
@@ -28,7 +29,40 @@ func (*cleanupDeviceSession) MaterializerAttemptRef() string { return "pmat_synt
 func (*cleanupDeviceSession) UserCode() string               { return "SYNTHETIC-ONLY" }
 func (session *cleanupDeviceSession) Wait(context.Context) ([]byte, string, error) {
 	session.waits++
+	if session.waitErr != nil {
+		return nil, "", session.waitErr
+	}
 	return []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"synthetic-only"}}`), "synthetic masked account", nil
+}
+
+func TestAuthorizationWorkerClassifiesTerminalFailure(t *testing.T) {
+	t.Parallel()
+	for name, fixture := range map[string]struct {
+		err  error
+		code string
+	}{
+		"device":          {err: errors.New("synthetic device failure"), code: "DEVICE_AUTHORIZATION_FAILED"},
+		"materialization": {err: errors.Join(errCredentialMaterialization, errors.New("synthetic materialization failure")), code: "CREDENTIAL_MATERIALIZATION_FAILED"},
+		"expired":         {err: context.DeadlineExceeded, code: "DEVICE_AUTHORIZATION_EXPIRED"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			attempt := pendingProviderAttempt(time.Now().Add(time.Minute))
+			store := &providerCredentialStoreStub{attempt: attempt}
+			session := &cleanupDeviceSession{closed: make(chan struct{}), waitErr: fixture.err}
+			service, err := New(t.Context(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+			if err != nil {
+				t.Fatal(err)
+			}
+			worker := &deviceWorker{session: session, done: make(chan struct{}), discard: make(chan struct{})}
+			service.workers.Add(1)
+			service.waitForDeviceAuthorization(attempt, worker)
+			if len(store.completed) != 1 || store.completed[0].State == "PENDING" ||
+				store.completed[0].SafeFailureCode != fixture.code {
+				t.Fatalf("unexpected terminal state: %#v", store.completed)
+			}
+		})
+	}
 }
 
 func TestAuthorizationWorkerDoesNotStartAfterPendingFence(t *testing.T) {

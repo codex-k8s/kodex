@@ -30,16 +30,16 @@ func TestStateAndSharedTechnicalServerPublishEffectiveReadinessAndReadback(t *te
 	if ready, _ := current.Ready(); ready {
 		t.Fatal("BOOTING state must not be ready")
 	}
-	current.setResolverReady(true)
+	current.setResolverConfigured()
 	current.setProcess(processReady)
 	if ready, _ := current.Ready(); !ready {
-		t.Fatal("ACTIVE policy and validated resolver must be ready")
+		t.Fatal("ACTIVE policy and configured resolver must be ready")
 	}
 	request := httptest.NewRequest(http.MethodGet, "/policy", nil)
 	response := httptest.NewRecorder()
 	newPolicyHandler(current).ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"policyState":"ACTIVE"`) ||
-		!strings.Contains(response.Body.String(), `"resolverState":"VALIDATED"`) || !strings.Contains(response.Body.String(), active.Digest()) {
+		!strings.Contains(response.Body.String(), `"resolverState":"CONFIGURED"`) || !strings.Contains(response.Body.String(), active.Digest()) {
 		t.Fatalf("unexpected safe readback: %d %s", response.Code, response.Body.String())
 	}
 	current.setProcess(processDraining)

@@ -252,6 +252,10 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("direct run continuation cancel and retry", func(t *testing.T) {
 		testDirectRunLifecycle(t, ctx, repository)
 	})
+	t.Run("project trash cancels run graph", func(t *testing.T) {
+		prepareObservedWarmFixture(t, ctx, repository)
+		testProjectTrashCancelsRuns(t, ctx, repository, pool)
+	})
 	t.Run("session archive snapshot restore and GC", func(t *testing.T) {
 		testSessionArchiveLifecycle(t, ctx, repository, pool)
 	})
@@ -2998,8 +3002,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 		}
 		return tx.Commit(ctx)
 	}
-	const upgradedRevision = "system-assistant-core-v3"
-	const upgradedPrompt = "Platform-owned system assistant core prompt revision three."
+	const upgradedRevision = "system-assistant-core-v6"
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision six."
 	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
 		t.Fatalf("upgrade core prompt: %v", err)
 	}

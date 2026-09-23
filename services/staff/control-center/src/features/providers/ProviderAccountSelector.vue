@@ -208,11 +208,21 @@ watch(selectedAccounts, (accounts, _previous, cleanup) => {
     ),
   );
   if (!Number.isFinite(expiry)) return;
+  const remaining = expiry - Date.now();
+  if (remaining <= 0) {
+    freshness.value = Date.now();
+    return;
+  }
+  const refreshBeforeExpiry = remaining > 2_500;
   const timer = setTimeout(
     () => {
       freshness.value = Date.now();
+      if (refreshBeforeExpiry) refreshGeneration.value += 1;
     },
-    Math.min(2_147_483_647, Math.max(0, expiry - Date.now())),
+    Math.min(
+      2_147_483_647,
+      refreshBeforeExpiry ? remaining - 2_000 : remaining,
+    ),
   );
   cleanup(() => clearTimeout(timer));
 });
@@ -331,7 +341,6 @@ function changeWeight(accountRef: string, event: Event): void {
                 $t("states.DISABLED")
               }}</small></span
             >
-            <ProviderUsageDetails :usage="item.account.usage" compact />
             <StatusBadge :state="item.account.state" />
           </template>
         </AsyncEntityPicker>
@@ -436,6 +445,7 @@ function changeWeight(accountRef: string, event: Event): void {
 }
 .provider-selector__option-copy {
   display: grid;
+  flex: 1;
   gap: 3px;
   min-width: 0;
   overflow-wrap: anywhere;

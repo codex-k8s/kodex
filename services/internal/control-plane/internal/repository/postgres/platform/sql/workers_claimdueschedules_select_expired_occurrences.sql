@@ -17,8 +17,11 @@ SELECT occurrence.id::text,
        occurrence.prompt_inputs_digest
 FROM control_plane.schedule_occurrences occurrence
 JOIN control_plane.schedules schedule ON schedule.id = occurrence.schedule_id
+JOIN control_plane.projects project ON project.id = schedule.project_id
 JOIN control_plane.schedule_revisions revision ON revision.id = occurrence.schedule_revision_id
 WHERE occurrence.organization_id = $1::uuid
+  AND project.organization_id = occurrence.organization_id
+  AND project.lifecycle = 'ACTIVE'
   AND occurrence.state IN ('CLAIMED', 'RETRY_WAIT')
   AND (occurrence.state = 'RETRY_WAIT' OR occurrence.lease_expires_at <= clock_timestamp())
   AND occurrence.attempt < 3

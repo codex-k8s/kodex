@@ -182,7 +182,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		_ = issuer.Close()
 		return errors.New("listen for STT technical HTTP")
 	}
-	localChecks := []checker{domainLocalCheck{domain}, dependencies, spoolReadiness{config.SpoolDirectory}}
+	localChecks := []checker{domainLocalCheck{domain}, spoolReadiness{config.SpoolDirectory}}
 	if config.RPCProfile != transportprofile.TrustedCluster {
 		localChecks = append(localChecks, verifierReadiness{verifier.Verifier()})
 	}

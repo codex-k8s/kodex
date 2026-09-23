@@ -84,9 +84,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	if err := state.controlPlane.CheckLocalAuthority(startup); err != nil {
-		return err
-	}
 	if err := executor.Check(startup); err != nil {
 		return err
 	}
@@ -110,7 +107,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	go func() { serveResult <- state.httpServer.Serve(); cancelServe() }()
 	state.workers = serviceruntime.StartWorkers(serveContext,
 		runBuildLoop(job.Cycle, state, config),
-		monitorLocalReadiness(state.controlPlane, executor, state, config),
+		monitorLocalReadiness(executor, state, config),
 	)
 	state.readiness.Set(true, "ready")
 	state.metrics.SetReady(true)
@@ -156,10 +153,6 @@ func runBuildLoop(run func(context.Context) error, state *runtimeState, config C
 	}
 }
 
-type localAuthorityChecker interface {
-	CheckLocalAuthority(context.Context) error
-}
-
 type localInfrastructureChecker interface {
 	Check(context.Context) error
 }
@@ -167,16 +160,14 @@ type localInfrastructureChecker interface {
 type readinessIntervalWaiter func(context.Context, time.Duration) error
 
 func monitorLocalReadiness(
-	control localAuthorityChecker,
 	executor localInfrastructureChecker,
 	state *runtimeState,
 	config Config,
 ) serviceruntime.Worker {
-	return monitorLocalReadinessWithWait(control, executor, state, config, waitReadinessInterval)
+	return monitorLocalReadinessWithWait(executor, state, config, waitReadinessInterval)
 }
 
 func monitorLocalReadinessWithWait(
-	control localAuthorityChecker,
 	executor localInfrastructureChecker,
 	state *runtimeState,
 	config Config,
@@ -184,16 +175,10 @@ func monitorLocalReadinessWithWait(
 ) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		for {
-			authorityCheck, cancelAuthority := context.WithTimeout(ctx, config.RPCDeadline)
-			authorityErr := control.CheckLocalAuthority(authorityCheck)
-			cancelAuthority()
-			var infrastructureErr error
-			if authorityErr == nil {
-				infrastructureCheck, cancelInfrastructure := context.WithTimeout(ctx, config.ReadinessTimeout)
-				infrastructureErr = executor.Check(infrastructureCheck)
-				cancelInfrastructure()
-			}
-			if authorityErr == nil && infrastructureErr == nil {
+			infrastructureCheck, cancelInfrastructure := context.WithTimeout(ctx, config.ReadinessTimeout)
+			infrastructureErr := executor.Check(infrastructureCheck)
+			cancelInfrastructure()
+			if infrastructureErr == nil {
 				state.metrics.SetReady(true)
 				if state.readiness.Set(true, "ready") {
 					state.logger.InfoContext(ctx, "role image builder readiness restored")
@@ -201,11 +186,7 @@ func monitorLocalReadinessWithWait(
 			} else {
 				state.metrics.SetReady(false)
 				if state.readiness.Set(false, "local_infrastructure_unavailable") {
-					failureClass := "buildkit_or_registry"
-					if authorityErr != nil {
-						failureClass = "sidecar"
-					}
-					state.logger.WarnContext(ctx, "role image builder readiness lost", "error_class", failureClass)
+					state.logger.WarnContext(ctx, "role image builder readiness lost", "error_class", "buildkit_or_registry")
 				}
 			}
 			if err := wait(ctx, config.ReadinessInterval); err != nil {

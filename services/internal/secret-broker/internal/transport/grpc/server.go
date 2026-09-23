@@ -292,8 +292,8 @@ func (server *Server) cleanupRevoked(ctx context.Context, descriptors []kubernet
 }
 
 func (server *Server) CheckReadiness(ctx context.Context, _ *secretbrokerv1.CheckReadinessRequest) (*secretbrokerv1.CheckReadinessResponse, error) {
-	if err := errors.Join(server.owner.Check(ctx), server.store.Check(ctx), server.recovery.Check(ctx)); err != nil {
-		return &secretbrokerv1.CheckReadinessResponse{Ready: false}, status.Error(codes.Unavailable, "secret broker dependencies are unavailable")
+	if err := server.store.Check(ctx); err != nil {
+		return &secretbrokerv1.CheckReadinessResponse{Ready: false}, status.Error(codes.Unavailable, "secret broker local infrastructure is unavailable")
 	}
 	return &secretbrokerv1.CheckReadinessResponse{Ready: true}, nil
 }

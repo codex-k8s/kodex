@@ -20,6 +20,7 @@ JOIN control_plane.runtime_revisions revision ON revision.id = storage.runtime_r
 LEFT JOIN control_plane.session_archives archive ON archive.id = task.archive_id
 WHERE task.organization_id = @organization_id::uuid
   AND task.state = 'READY'
+  AND (task.project_id IS NULL OR project.lifecycle <> 'PURGE_PENDING')
   AND task.available_at <= clock_timestamp()
 ORDER BY CASE task.kind WHEN 'RESTORE' THEN 0 WHEN 'DELETE_PVC' THEN 1 WHEN 'SNAPSHOT' THEN 2 ELSE 3 END,
          task.created_at

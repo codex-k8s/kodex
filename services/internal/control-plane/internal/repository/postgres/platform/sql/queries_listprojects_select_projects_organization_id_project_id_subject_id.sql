@@ -23,7 +23,7 @@ SELECT p.id,
        (SELECT count(*)::integer FROM control_plane.owner_gates gate WHERE gate.project_id=p.id AND gate.state='OPEN')
 FROM control_plane.projects p
 WHERE p.organization_id=$1::uuid
-  AND p.lifecycle<>'ARCHIVED'
+  AND p.lifecycle='ACTIVE'
   AND ($5='' OR p.id=NULLIF($5,'')::uuid)
   AND EXISTS(SELECT 1 FROM control_plane.assistant_context_projection(
       p.organization_id,$2::uuid,NULLIF($5,'')::uuid,'PROJECT',p.ref,statement_timestamp()))

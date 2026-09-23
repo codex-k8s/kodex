@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { reactive } from "vue";
 
 import {
+  assistantAwaitingReply,
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
   editableOperations,
@@ -10,9 +11,34 @@ import {
   operationTargetLabel,
 } from "@/features/assistant/model";
 import type {
+  AssistantConversation,
   AssistantPlanOperation,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+
+describe("assistant reply indicator", () => {
+  const conversation = (
+    role: "USER" | "ASSISTANT",
+    state: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED",
+  ) => ({ turns: [{ role, state }] }) as AssistantConversation;
+
+  it("ожидает ответ после принятого сообщения пользователя", () => {
+    expect(assistantAwaitingReply(conversation("USER", "COMPLETED"))).toBe(
+      true,
+    );
+    expect(assistantAwaitingReply(conversation("USER", "QUEUED"))).toBe(true);
+  });
+
+  it("скрывает индикатор после ответа или ошибки", () => {
+    expect(assistantAwaitingReply(conversation("ASSISTANT", "COMPLETED"))).toBe(
+      false,
+    );
+    expect(assistantAwaitingReply(conversation("ASSISTANT", "FAILED"))).toBe(
+      false,
+    );
+    expect(assistantAwaitingReply()).toBe(false);
+  });
+});
 
 function operation(): AssistantPlanOperation {
   return {

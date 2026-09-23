@@ -349,6 +349,9 @@ func (service *Service) waitForDeviceAuthorization(
 	if errors.Is(err, context.DeadlineExceeded) {
 		terminal.State = "EXPIRED"
 		terminal.SafeFailureCode = "DEVICE_AUTHORIZATION_EXPIRED"
+	} else if errors.Is(err, errCredentialMaterialization) {
+		terminal.State = "FAILED"
+		terminal.SafeFailureCode = "CREDENTIAL_MATERIALIZATION_FAILED"
 	} else {
 		terminal.State = "FAILED"
 		terminal.SafeFailureCode = "DEVICE_AUTHORIZATION_FAILED"

@@ -53,7 +53,7 @@ func TestConfigurationDeploymentPins(t *testing.T) {
 	}
 }
 
-func TestManagedReadbackBeforeServingAndRecovery(t *testing.T) {
+func TestManagedReadbackFailureRetainsLocalConfigurationAndRecovers(t *testing.T) {
 	root := t.TempDir()
 	mountConfiguration(t, root, "..first", 7)
 	value := api.Configuration{Version: "email-bridge/v1", Revision: 7, ManagedBy: "git", Source: "fixture", Mailboxes: []api.Mailbox{}}
@@ -77,8 +77,8 @@ func TestManagedReadbackBeforeServingAndRecovery(t *testing.T) {
 		}
 		return nil
 	}
-	if runtime.Refresh(t.Context()) == nil || runtime.Service() != nil || reports != 1 {
-		t.Fatal("missing owner acknowledgement allowed requests")
+	if runtime.Refresh(t.Context()) == nil || runtime.Service() == nil || reports != 1 {
+		t.Fatal("owner readback failure removed locally valid configuration")
 	}
 	failure = false
 	if err := runtime.Refresh(t.Context()); err != nil || runtime.Service() == nil || reports != 2 {
@@ -89,6 +89,26 @@ func TestManagedReadbackBeforeServingAndRecovery(t *testing.T) {
 	accepted, built = false, false
 	if runtime.Refresh(t.Context()) == nil || runtime.Service() != nil || accepted || built || reports != 2 || old.Config.Revision != 7 {
 		t.Fatal("unapproved projection passed watermark or replaced in-flight snapshot")
+	}
+}
+
+func TestLocalRefreshDoesNotDependOnOwnerReadback(t *testing.T) {
+	root := t.TempDir()
+	mountConfiguration(t, root, "..first", 1)
+	reports := 0
+	runtime := &configurationRuntime{
+		root:   root,
+		accept: func(context.Context, api.Configuration, string) error { return nil },
+		build: func(snapshot *configuration.Snapshot) *mail.Service {
+			return &mail.Service{Config: snapshot.Configuration}
+		},
+		report: func(context.Context, int64, string) error {
+			reports++
+			return errors.New("owner unavailable")
+		},
+	}
+	if err := runtime.RefreshLocal(t.Context()); err != nil || runtime.Service() == nil || reports != 0 {
+		t.Fatalf("local refresh depends on owner readback: err=%v reports=%d", err, reports)
 	}
 }
 

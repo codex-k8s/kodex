@@ -171,7 +171,7 @@ func TestModelCatalogProcessIsolatedCredentialAndCleanup(t *testing.T) {
 			if method == CatalogMethodAPIKey && calls != 1 || method == CatalogMethodDeviceCode && calls != 0 {
 				t.Fatal("authorization mode changed provider path")
 			}
-			if method == CatalogMethodAPIKey && (result.Source != CatalogRemoteAPI || result.Models[0].ID != "gpt-6-astra") || method == CatalogMethodDeviceCode && (result.Source != CatalogRemoteCodex || result.Models[0].ID != "fixture-reasoning") {
+			if method == CatalogMethodAPIKey && (result.Source != CatalogRemoteAPI || result.Models[0].ID != "gpt-6-astra" || result.Models[0].IsDefault) || method == CatalogMethodDeviceCode && (result.Source != CatalogRemoteCodex || result.Models[0].ID != "fixture-reasoning" || !result.Models[0].IsDefault) {
 				t.Fatal("API and device catalog authority was mixed")
 			}
 			entries, err := os.ReadDir(root)
@@ -197,7 +197,7 @@ func TestStagingModelCatalogAcceptsValidatedProtocolWithoutOptionalCache(t *test
 	}
 	auth := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"synthetic-catalog-token","account_id":"fixture-cache-missing"}}`)
 	result, err := process.ObserveModelCatalog(t.Context(), auth, CatalogMethodDeviceCode)
-	if err != nil || result.Failure != CatalogFailureNone || result.Source != CatalogRemoteCodex || len(result.Models) != 1 || result.Models[0].ID != "fixture-reasoning" {
+	if err != nil || result.Failure != CatalogFailureNone || result.Source != CatalogRemoteCodex || len(result.Models) != 1 || result.Models[0].ID != "fixture-reasoning" || !result.Models[0].IsDefault {
 		t.Fatalf("validated protocol catalog was rejected: result=%#v err=%v", result, err)
 	}
 	entries, err := os.ReadDir(root)
@@ -220,7 +220,9 @@ func TestMain(m *testing.M) {
 }
 
 func runCatalogProcessFixture() int {
-	if len(os.Args) != 5 || os.Args[2] != "--strict-config" || os.Args[3] != "--listen" || os.Args[4] != "stdio://" || os.Getenv("HTTPS_PROXY") != providerEgressProxyURL || os.Getenv("NO_PROXY") != "" {
+	if len(os.Args) != 7 || os.Args[2] != "-c" || os.Args[3] != fileCredentialStoreConfig ||
+		os.Args[4] != "--strict-config" || os.Args[5] != "--listen" || os.Args[6] != "stdio://" ||
+		os.Getenv("HTTPS_PROXY") != providerEgressProxyURL || os.Getenv("NO_PROXY") != "" {
 		return 2
 	}
 	home := os.Getenv("CODEX_HOME")
@@ -280,7 +282,7 @@ func runCatalogProcessFixture() int {
 				}
 				continue
 			}
-			result = map[string]any{"data": []any{map[string]any{"id": "fixture-reasoning", "model": "fixture-reasoning", "defaultReasoningEffort": "medium", "supportedReasoningEfforts": []any{map[string]string{"reasoningEffort": "medium"}}}}, "nextCursor": nil}
+			result = map[string]any{"data": []any{map[string]any{"id": "fixture-reasoning", "model": "fixture-reasoning", "defaultReasoningEffort": "medium", "supportedReasoningEfforts": []any{map[string]string{"reasoningEffort": "medium"}}, "isDefault": true}}, "nextCursor": nil}
 			if external {
 				cache, _ := json.Marshal(map[string]any{"fetched_at": time.Now().UTC(), "client_version": catalogCodexVersion, "models": []any{map[string]any{"slug": "fixture-reasoning", "default_reasoning_level": "medium", "supported_reasoning_levels": []any{map[string]string{"effort": "medium"}}}}})
 				if os.WriteFile(filepath.Join(home, "models_cache.json"), cache, 0o600) != nil {

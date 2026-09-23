@@ -78,6 +78,25 @@ func (server *Server) ListProjects(w http.ResponseWriter, r *http.Request, p gen
 	}
 	writeMessage(w, http.StatusOK, response, "", "projects")
 }
+func (server *Server) ListTrashedProjects(w http.ResponseWriter, r *http.Request, p generated.ListTrashedProjectsParams) {
+	response, err := server.control.Query.ListTrashedProjects(r.Context(), &controlplanev1.ListTrashedProjectsRequest{Page: page(p.PageSize, p.PageToken)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if response == nil {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	for _, project := range response.Projects {
+		if project == nil || project.Lifecycle != controlplanev1.EntityLifecycle_ENTITY_LIFECYCLE_TRASHED &&
+			project.Lifecycle != controlplanev1.EntityLifecycle_ENTITY_LIFECYCLE_PURGE_PENDING {
+			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
+	}
+	writeMessage(w, http.StatusOK, response, "", "projects")
+}
 func (server *Server) GetProject(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {

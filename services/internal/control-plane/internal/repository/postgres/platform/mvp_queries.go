@@ -76,14 +76,23 @@ func (repository *Repository) ListProviderDefinitions(ctx context.Context, princ
 			return nil, "", err
 		}
 		item.Models = catalog.Models
+		observedDefault, defaultAmbiguous := "", false
 		for _, model := range catalog.Models {
 			item.ModelIDs = append(item.ModelIDs, model.ID)
 			if model.Available {
 				item.Ready = true
-				if model.ID == repository.defaultRuntimeModel {
+				if model.IsDefault {
+					if observedDefault != "" && observedDefault != model.ID {
+						defaultAmbiguous = true
+					}
+					observedDefault = model.ID
+				} else if item.DefaultModelID == "" && model.ID == repository.defaultRuntimeModel {
 					item.DefaultModelID = model.ID
 				}
 			}
+		}
+		if observedDefault != "" && !defaultAmbiguous {
+			item.DefaultModelID = observedDefault
 		}
 		if !item.Available {
 			item.Ready = false
@@ -204,12 +213,13 @@ func readModelCatalogTx(ctx context.Context, tx pgx.Tx, current scope, definitio
 			if !exists {
 				position = len(result.Models)
 				positions[modelKey] = position
-				result.Models = append(result.Models, entity.ModelCapability{ID: record.ID, ProviderDefinitionKey: key, DefaultReasoningEffort: record.DefaultReasoningEffort, ReasoningEfforts: append([]string{}, record.ReasoningEfforts...)})
+				result.Models = append(result.Models, entity.ModelCapability{ID: record.ID, ProviderDefinitionKey: key, DefaultReasoningEffort: record.DefaultReasoningEffort, ReasoningEfforts: append([]string{}, record.ReasoningEfforts...), IsDefault: record.IsDefault})
 			}
 			item := &result.Models[position]
 			if item.DefaultReasoningEffort != record.DefaultReasoningEffort || !slices.Equal(item.ReasoningEfforts, record.ReasoningEfforts) {
 				conflicts[modelKey] = true
 			}
+			item.IsDefault = item.IsDefault || record.IsDefault
 			if blocker == "" {
 				item.EligibleProviderAccountRefs = append(item.EligibleProviderAccountRefs, ref)
 			} else if !slices.Contains(item.ReadinessBlockers, blocker) {

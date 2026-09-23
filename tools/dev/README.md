@@ -66,6 +66,10 @@ Helper разрешает только loopback Kubernetes API, проверяе
 обновляется системное доверие. Другой существующий CA не перезаписывается.
 Chrome получает доверие через NSS на общем этапе `bootstrap-cluster.sh`;
 после изменения доверия уже открытый браузер может потребовать перезапуска.
+Тот же bootstrap устанавливает и проверяет точный repo-owned AppArmor-профиль
+`kodex-provider-runtime`, необходимый для внутреннего bubblewrap sandbox при
+включённом системном запрете unprivileged user namespaces. Отдельный безопасный
+readback доступен через `sudo -n tools/dev/configure-provider-sandbox.sh --mode readback`.
 
 Сертификаты обслуживают `control.127.0.0.1.nip.io` и
 `sso.127.0.0.1.nip.io`. Успешный TLS не означает готовности приложения:

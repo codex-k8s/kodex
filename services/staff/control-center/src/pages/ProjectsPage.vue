@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
-import { Expand, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import { searchProjects } from "@/features/projects/api";
+import {
+  loadProjectTrash,
+  moveProjectToTrash,
+  purgeProjectFromTrash,
+  restoreProjectFromTrash,
+  searchProjects,
+} from "@/features/projects/api";
 import ProjectList from "@/features/projects/ProjectList.vue";
 import { catalogInvalidated } from "@/features/catalogs/api";
 import type {
@@ -20,23 +25,30 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
+const trashMode = computed(() => route.query.trash === "1");
 const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
+const lifecycleTarget = ref<Project>();
+const lifecycleAction = ref<"TRASH" | "RESTORE" | "PURGE">("TRASH");
+const purgeConfirmation = ref("");
+const lifecycleBusy = ref(false);
+const lifecycleProblem = ref<AppProblem>();
 const form = reactive({ name: "", purpose: "", language: "ru" as "ru" | "en" });
 const actions = ref<NextAction[]>([]);
-const canCreate = computed(() => actions.value.includes("CREATE_PROJECT"));
+const canCreate = computed(
+  () => !trashMode.value && actions.value.includes("CREATE_PROJECT"),
+);
+const canViewTrash = computed(() =>
+  ["OWNER", "ADMINISTRATOR"].includes(platform.bootstrap?.platformRole ?? ""),
+);
 const items = ref<Project[]>([]);
 const loading = ref(false);
 const listProblem = ref<AppProblem>();
 const pageToken = ref<string>();
-const expanded = ref(false);
-const query = computed({
-  get: () => (typeof route.query.q === "string" ? route.query.q : ""),
-  set: (q: string) => {
-    void router.replace({ query: { ...route.query, q: q || undefined } });
-  },
-});
+const query = computed(() =>
+  typeof route.query.q === "string" ? route.query.q : "",
+);
 let controller: AbortController | undefined;
 let generation = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -66,11 +78,17 @@ async function load(more = false): Promise<void> {
   loading.value = true;
   listProblem.value = undefined;
   try {
-    const page = await searchProjects(
-      query.value.trim(),
-      more ? pageToken.value : undefined,
-      request.signal,
-    );
+    const inTrash = trashMode.value;
+    const page = inTrash
+      ? await loadProjectTrash(
+          more ? pageToken.value : undefined,
+          request.signal,
+        )
+      : await searchProjects(
+          query.value.trim(),
+          more ? pageToken.value : undefined,
+          request.signal,
+        );
     if (request.signal.aborted || current !== generation) return;
     const next = more ? [...items.value, ...page.items] : page.items;
     if (
@@ -82,8 +100,12 @@ async function load(more = false): Promise<void> {
     if (page.nextPageToken) cursors.add(page.nextPageToken);
     items.value = next;
     pageToken.value = page.nextPageToken;
-    actions.value = page.nextActions;
-    if (route.query.create === "1" && canCreate.value) dialog.value = true;
+    actions.value =
+      "nextActions" in page && Array.isArray(page.nextActions)
+        ? (page.nextActions as NextAction[])
+        : [];
+    if (!inTrash && route.query.create === "1" && canCreate.value)
+      dialog.value = true;
   } catch (error) {
     if (!request.signal.aborted && current === generation)
       listProblem.value = asProblem(error);
@@ -92,7 +114,7 @@ async function load(more = false): Promise<void> {
   }
 }
 watch(
-  query,
+  [query, trashMode],
   (_value, previous) => {
     controller?.abort();
     generation += 1;
@@ -101,7 +123,18 @@ watch(
     pageToken.value = undefined;
     listProblem.value = undefined;
     loading.value = true;
-    timer = setTimeout(() => void load(), previous === undefined ? 0 : 500);
+    timer = setTimeout(() => void load(), previous === undefined ? 0 : 150);
+  },
+  { immediate: true },
+);
+watch(
+  () => trashMode.value && items.value.some((project) => project.lifecycle === "PURGE_PENDING"),
+  (pending, _previous, onCleanup) => {
+    if (!pending) return;
+    const refresh = setInterval(() => {
+      if (!loading.value && !lifecycleBusy.value) void load();
+    }, 3000);
+    onCleanup(() => clearInterval(refresh));
   },
   { immediate: true },
 );
@@ -132,7 +165,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
   loading.value = name !== "clearOwnerState";
   if (name === "clearOwnerState") {
     dialog.value = false;
-    expanded.value = false;
+    lifecycleTarget.value = undefined;
     return;
   }
   after(() => {
@@ -146,6 +179,40 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
     }
   });
 });
+
+function toggleTrash(): void {
+  const next = { ...route.query };
+  if (trashMode.value) delete next.trash;
+  else next.trash = "1";
+  void router.push({ query: next });
+}
+
+async function confirmLifecycle(): Promise<void> {
+  const target = lifecycleTarget.value;
+  if (!target || lifecycleBusy.value) return;
+  if (lifecycleAction.value === "PURGE" && purgeConfirmation.value !== target.name) return;
+  lifecycleBusy.value = true;
+  lifecycleProblem.value = undefined;
+  try {
+    if (lifecycleAction.value === "PURGE") await purgeProjectFromTrash(target);
+    else if (lifecycleAction.value === "RESTORE") await restoreProjectFromTrash(target);
+    else await moveProjectToTrash(target);
+    lifecycleTarget.value = undefined;
+    purgeConfirmation.value = "";
+    await load();
+    await platform.reloadPlatformKind("PROJECT");
+  } catch (error) {
+    lifecycleProblem.value = asProblem(error);
+  } finally {
+    lifecycleBusy.value = false;
+  }
+}
+function openLifecycle(project: Project, action: "TRASH" | "RESTORE" | "PURGE"): void {
+  lifecycleAction.value = action;
+  lifecycleTarget.value = project;
+  lifecycleProblem.value = undefined;
+  purgeConfirmation.value = "";
+}
 onBeforeUnmount(() => {
   unsubscribe();
   controller?.abort();
@@ -156,42 +223,40 @@ onBeforeUnmount(() => {
 
 <template>
   <PageFrame :title="$t('projects.title')" :subtitle="$t('projects.subtitle')">
-    <template v-if="canCreate" #actions
-      ><button
+    <template #actions>
+      <button
+        v-if="canViewTrash"
+        class="button"
+        type="button"
+        @click="toggleTrash"
+      >
+        {{ $t(trashMode ? "projects.backToProjects" : "projects.trash") }}
+      </button>
+      <button
+        v-if="canCreate"
         class="button button--primary"
         type="button"
         @click="dialog = true"
       >
         {{ $t("projects.new") }}
-      </button></template
-    >
-    <div class="projects-toolbar">
-      <label
-        ><Search :size="18" /><input
-          v-model="query"
-          type="search"
-          :aria-label="$t('common.search')"
-          :placeholder="$t('common.search')"
-      /></label>
-      <button
-        class="icon-button"
-        :title="$t('catalog.expand')"
-        :aria-label="$t('catalog.expand')"
-        @click="expanded = true"
-      >
-        <Expand :size="18" />
       </button>
-    </div>
+    </template>
     <ProblemNotice v-if="listProblem" :problem="listProblem" @retry="load()" />
     <p v-if="loading && !items.length" role="status">
       {{ $t("common.loading") }}
     </p>
     <p v-else-if="!items.length && !listProblem">
-      {{ $t("projects.emptyTitle") }}
+      {{ $t(trashMode ? "projects.trashEmpty" : "projects.emptyTitle") }}
     </p>
-    <ProjectList v-if="!expanded" :items="items" @more="load(true)" />
+    <ProjectList
+      :items="items"
+      :trashed="trashMode"
+      @trash="openLifecycle($event, 'TRASH')"
+      @restore="openLifecycle($event, 'RESTORE')"
+      @purge="openLifecycle($event, 'PURGE')"
+    />
     <button
-      v-if="pageToken && !expanded"
+      v-if="pageToken"
       class="button"
       :disabled="loading"
       @click="load(true)"
@@ -199,38 +264,54 @@ onBeforeUnmount(() => {
       {{ $t("managed.more") }}
     </button>
     <ModalDialog
-      v-if="expanded"
-      :title="$t('projects.title')"
-      size="lg"
-      @close="expanded = false"
+      v-if="lifecycleTarget"
+      :title="$t(lifecycleAction === 'PURGE' ? 'projects.purge' : lifecycleAction === 'RESTORE' ? 'projects.restore' : 'projects.trashProject')"
+      :busy="lifecycleBusy"
+      size="sm"
+      @close="lifecycleTarget = undefined"
     >
-      <label class="projects-search"
-        ><Search :size="18" /><input
-          v-model="query"
-          type="search"
-          :aria-label="$t('common.search')"
-          :placeholder="$t('common.search')"
-      /></label>
+      <p>
+        <strong>{{ lifecycleTarget.name }}</strong>
+      </p>
+      <p>
+        {{
+          $t(
+            lifecycleAction === 'PURGE'
+              ? "projects.purgeDescription"
+              : lifecycleAction === 'RESTORE'
+                ? "projects.restoreDescription"
+                : "projects.trashDescription",
+          )
+        }}
+      </p>
+      <label v-if="lifecycleAction === 'PURGE'" class="field">
+        <span>{{ $t("projects.purgeConfirmName") }}</span>
+        <input v-model="purgeConfirmation" autocomplete="off" data-dialog-initial-focus />
+      </label>
       <ProblemNotice
-        v-if="listProblem"
-        :problem="listProblem"
-        @retry="load()"
+        v-if="lifecycleProblem"
+        :problem="lifecycleProblem"
+        compact
       />
-      <p v-if="loading && !items.length" role="status">
-        {{ $t("common.loading") }}
-      </p>
-      <p v-else-if="!items.length && !listProblem">
-        {{ $t("projects.emptyTitle") }}
-      </p>
-      <ProjectList :items="items" expanded @more="load(true)" />
-      <button
-        v-if="pageToken"
-        class="button"
-        :disabled="loading"
-        @click="load(true)"
-      >
-        {{ $t("managed.more") }}
-      </button>
+      <template #actions>
+        <button
+          class="button"
+          type="button"
+          :disabled="lifecycleBusy"
+          @click="lifecycleTarget = undefined"
+        >
+          {{ $t("common.cancel") }}
+        </button>
+        <button
+          class="button"
+          :class="lifecycleAction === 'RESTORE' ? 'button--primary' : 'button--danger'"
+          type="button"
+          :disabled="lifecycleBusy || (lifecycleAction === 'PURGE' && purgeConfirmation !== lifecycleTarget.name)"
+          @click="confirmLifecycle"
+        >
+          {{ $t(lifecycleAction === 'PURGE' ? "projects.purge" : lifecycleAction === 'RESTORE' ? "projects.restore" : "projects.trashProject") }}
+        </button>
+      </template>
     </ModalDialog>
     <ModalDialog
       v-if="dialog"
@@ -295,26 +376,3 @@ onBeforeUnmount(() => {
     </ModalDialog>
   </PageFrame>
 </template>
-
-<style scoped>
-.projects-toolbar,
-.projects-toolbar label,
-.projects-search {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-.projects-toolbar {
-  justify-content: space-between;
-}
-.projects-toolbar label {
-  flex: 1;
-  max-width: 640px;
-}
-.projects-toolbar input,
-.projects-search input {
-  min-width: 0;
-  width: 100%;
-}
-</style>

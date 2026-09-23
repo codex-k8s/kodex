@@ -305,7 +305,15 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	if len(snapshot.desiredCandidates) == 0 {
 		return false, nil
 	}
-	snapshot.desiredCandidates, err = captureRuntimeCatalogPins(ctx, tx, current, snapshot.provider, snapshot.model, snapshot.desiredCandidates)
+	bootstrapPolicy := snapshot.configVersion == 1 && snapshot.mode == "LEAST_USED" && len(snapshot.currentCandidates) == 0
+	desiredCandidates := snapshot.desiredCandidates
+	snapshot.desiredCandidates, err = captureRuntimeCatalogPins(ctx, tx, current, snapshot.provider, snapshot.model, desiredCandidates)
+	if bootstrapPolicy && errors.Is(err, errs.ErrConflict) {
+		snapshot.model, err = firstRunProviderDefaultModel(ctx, tx, current, snapshot.provider, desiredCandidates)
+		if err == nil {
+			snapshot.desiredCandidates, err = captureRuntimeCatalogPins(ctx, tx, current, snapshot.provider, snapshot.model, desiredCandidates)
+		}
+	}
 	if err != nil {
 		return false, err
 	}

@@ -11,6 +11,17 @@ func validProjectCard(project *cp.Project) bool {
 	if project == nil || project.AgentCount < 0 || project.WorkflowCount < 0 || project.ActiveRunCount < 0 || project.PendingGateCount < 0 || !validOptionalCardTime(project.LastActivityAt) {
 		return false
 	}
+	switch project.Lifecycle {
+	case cp.EntityLifecycle_ENTITY_LIFECYCLE_TRASHED, cp.EntityLifecycle_ENTITY_LIFECYCLE_PURGE_PENDING:
+		if project.DeletedAt == nil || project.PurgeAfter == nil || project.DeletedAt.CheckValid() != nil ||
+			project.PurgeAfter.CheckValid() != nil || !project.PurgeAfter.AsTime().After(project.DeletedAt.AsTime()) {
+			return false
+		}
+	default:
+		if project.DeletedAt != nil || project.PurgeAfter != nil {
+			return false
+		}
+	}
 	switch project.IntegrationState {
 	case "NONE", "READY", "DEGRADED", "UNKNOWN":
 		return true

@@ -846,6 +846,21 @@ const ru = {
       "Интеграции подключать не обязательно — начать можно с инструкций и задачи.",
     open: "Открыть Проект",
     language: "Рабочий язык",
+    trash: "Корзина",
+    backToProjects: "К Проектам",
+    trashEmpty: "Корзина пуста",
+    trashProject: "Переместить в корзину",
+    trashDescription:
+      "Проект и всё его содержимое станут недоступны. Выполняющиеся запуски будут отменены. Восстановить проект можно в течение 30 дней.",
+    restore: "Восстановить Проект",
+    restoreDescription:
+      "Проект и его содержимое снова станут доступны. Отменённые запуски не возобновятся.",
+    purge: "Удалить безвозвратно",
+    purgeDescription:
+      "Проект, сотрудники, запуски, файлы и рабочие тома будут удалены без возможности восстановления из корзины. Резервные копии хранятся до штатного срока. Для подтверждения введите точное название проекта.",
+    purgeConfirmName: "Название проекта для подтверждения",
+    purgePending: "Идёт безвозвратное удаление",
+    purgeAfter: "Автоматическое удаление после",
   },
   project: {
     subtitle: "Работа, сотрудники и процессы этого Проекта",
@@ -2710,6 +2725,9 @@ const ru = {
     title: "Учётные записи моделей",
     subtitle:
       "Авторизация нескольких учётных записей провайдеров и их готовность к новым сессиям",
+    speechSetupRequired:
+      "API-ключ авторизован. Для голосового ввода отдельно создайте и активируйте конфигурацию распознавания речи, выбрав эту учётную запись.",
+    configureSpeech: "Настроить распознавание речи",
     definitions: "Доступные провайдеры",
     create: "Добавить учётную запись",
     definition: "Провайдер",
@@ -2912,6 +2930,7 @@ const ru = {
     subtitle:
       "Настраивает платформу через те же типизированные команды и ваши полномочия",
     ready: "Всегда готов",
+    working: "Kodex отвечает",
     providerAccountRequired: "Подключите аккаунт модели",
     providerAccountRequiredHelp:
       "Создайте provider account и завершите авторизацию. До этого Kodex не запускает модели и не создаёт диалоги.",
@@ -3005,6 +3024,8 @@ const ru = {
     PENDING_AUTHORIZATION: "Ожидает авторизации",
     REAUTHORIZATION_REQUIRED: "Требуется повторная авторизация",
     DELETED: "Удалено",
+    TRASHED: "В корзине",
+    PURGE_PENDING: "Удаляется безвозвратно",
     ACTIVE: "Активен",
     PROMOTED: "Promoted",
     DRAFT: "Черновик",
@@ -4003,6 +4024,21 @@ const en = {
       "Integrations are optional — start with instructions and a task.",
     open: "Open Project",
     language: "Working language",
+    trash: "Trash",
+    backToProjects: "Back to Projects",
+    trashEmpty: "Trash is empty",
+    trashProject: "Move to Trash",
+    trashDescription:
+      "The Project and its contents will become unavailable. Active runs will be cancelled. You can restore the Project within 30 days.",
+    restore: "Restore Project",
+    restoreDescription:
+      "The Project and its contents will become available again. Cancelled runs will not resume.",
+    purge: "Delete permanently",
+    purgeDescription:
+      "The Project, employees, runs, files and working volumes will be deleted and cannot be restored from Trash. Backups follow their normal retention period. Enter the exact Project name to confirm.",
+    purgeConfirmName: "Project name for confirmation",
+    purgePending: "Permanent deletion in progress",
+    purgeAfter: "Automatic removal after",
   },
   project: {
     subtitle: "Work, employees and processes in this Project",
@@ -5791,6 +5827,9 @@ const en = {
     title: "Model accounts",
     subtitle:
       "Authorize multiple provider accounts and control their readiness for new sessions",
+    speechSetupRequired:
+      "The API key is authorized. To enable voice input, create and activate a speech transcription configuration using this account.",
+    configureSpeech: "Configure speech transcription",
     definitions: "Available providers",
     create: "Add account",
     definition: "Provider",
@@ -5993,6 +6032,7 @@ const en = {
     subtitle:
       "Configures the platform through the same typed commands and your permissions",
     ready: "Always ready",
+    working: "Kodex is responding",
     providerAccountRequired: "Connect a model account",
     providerAccountRequiredHelp:
       "Create a provider account and complete authorization. Until then, Kodex does not run models or create conversations.",
@@ -6086,6 +6126,8 @@ const en = {
     PENDING_AUTHORIZATION: "Awaiting authorization",
     REAUTHORIZATION_REQUIRED: "Reauthorization required",
     DELETED: "Deleted",
+    TRASHED: "In Trash",
+    PURGE_PENDING: "Permanently deleting",
     ACTIVE: "Active",
     PROMOTED: "Promoted",
     DRAFT: "Draft",

@@ -1711,7 +1711,7 @@ if [[ "$security_profile" == trusted-cluster ]]; then
   python3 -B "$repository_root/tools/dev/trusted_cluster_render.py" verify \
     --profile "$security_profile" <"$temporary_directory/trusted-hot-reload.json"
   # Digest вычисляется после преобразования; прежний protected digest не наследуется.
-  jq --arg cliImage "$runner_image" 'map(
+  jq --arg cliImage "$runtime_runner_image" 'map(
     (if .spec.template.metadata.annotations then
       del(.spec.template.metadata.annotations["kodex.dev/render-sha256"]) else . end) |
     (if .kind == "Deployment" and .metadata.name == "secret-broker" then
@@ -1742,4 +1742,12 @@ for resource in yaml.safe_load_all(open(sys.argv[1])):
             if 'value' in entry and not isinstance(entry['value'], str):
                 raise SystemExit('Rendered environment value must be a string: ' + entry['name'])
 PY
+yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_image" '
+  any(.[];
+    .kind == "Deployment" and .metadata.name == "secret-broker" and
+    any(.spec.template.spec.initContainers[]?;
+      .name == "codex-cli-install" and
+      .image == $runnerImage and
+      .imagePullPolicy == "IfNotPresent"))
+' >/dev/null || fail 'secret-broker Codex CLI must use the promoted node pull reference'
 printf 'Kodex local render created: %s (security profile: %s)\n' "$output" "$security_profile"

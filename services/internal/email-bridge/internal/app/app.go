@@ -88,7 +88,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 	}
 	stage = stageConfiguration
 	startup, cancel = context.WithTimeout(ctx, 20*time.Second)
-	e = configurationState.Refresh(startup)
+	e = configurationState.RefreshLocal(startup)
 	cancel()
 	if e != nil {
 		return e
@@ -115,6 +115,8 @@ func Run(ctx, background context.Context, version string) (result error) {
 	if e = tech.Listen(); e != nil {
 		return e
 	}
+	readiness.Set(true, "ready")
+	metrics.SetReady(true)
 	defer serviceruntime.RunShutdown(background, serviceruntime.ShutdownOperation{Name: "technical", Timeout: 5 * time.Second, Run: tech.Shutdown})
 	handler := telemetry.HTTPMiddleware(func(path string) string {
 		switch path {
@@ -158,12 +160,11 @@ func Run(ctx, background context.Context, version string) (result error) {
 		defer ticker.Stop()
 		for {
 			probe, stop := context.WithTimeout(worker, 10*time.Second)
-			ok := repository.Ready(probe) == nil && client.CheckLocalAuthority(probe) == nil && configurationState.Refresh(probe) == nil
+			databaseReady := repository.Ready(probe) == nil
+			_ = configurationState.Refresh(probe)
+			ok := databaseReady && configurationState.Service() != nil
 			stop()
-			if !ok {
-				configurationState.current.Store(nil)
-			}
-			readiness.Set(ok, "dependencies")
+			readiness.Set(ok, "primary_infrastructure")
 			metrics.SetReady(ok)
 			select {
 			case <-worker.Done():

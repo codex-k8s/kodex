@@ -127,13 +127,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return err
 	}
 	if err := errors.Join(
-		control.CheckLocalAuthority(startup),
-		secrets.Check(startup),
 		realtime.Check(startup),
 		revocations.Check(startup),
 		browserState.Check(startup),
 	); err != nil {
-		return errors.Join(errors.New("control API startup barrier failed"), err)
+		return errors.Join(errors.New("control API local infrastructure startup barrier failed"), err)
 	}
 	texts, err := usertext.New()
 	if err != nil {
@@ -172,7 +170,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	technicalMux.Handle("/metrics", metrics.PrometheusHandler())
 	technical := &http.Server{Addr: config.TechnicalListen, Handler: technicalMux, BaseContext: func(net.Listener) context.Context { return lifecycle }, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
 	readiness.Set(false, "dependencies_starting")
-	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(control, secrets, realtime, revocations, browserState, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
+	workers := serviceruntime.StartWorkers(lifecycle, httpWorker(public, true, config), httpWorker(technical, false, config), readinessWorker(realtime, revocations, browserState, readiness, metrics, logger, config), oidcRefreshWorker(oidc, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	// HTTP-запросы уже завершены либо принудительно закрыты по бюджету.
 	// Отмена закрывает также контексты hijacked WebSocket до закрытия клиентов.
@@ -248,7 +246,7 @@ func httpWorker(server *http.Server, tlsEnabled bool, config Config) servicerunt
 		}
 	}
 }
-func readinessWorker(control *controlplaneclient.Client, secrets *secretbrokerclient.Client, realtime *websockettransport.Server, revocations *sessionrevocation.Store, browserState *browserstate.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
+func readinessWorker(realtime *websockettransport.Server, revocations *sessionrevocation.Store, browserState *browserstate.Store, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		defer func() {
 			readiness.Set(false, "shutting_down")
@@ -258,7 +256,7 @@ func readinessWorker(control *controlplaneclient.Client, secrets *secretbrokercl
 		defer ticker.Stop()
 		for {
 			check, cancel := context.WithTimeout(ctx, config.RPCTimeout)
-			err := errors.Join(control.CheckLocalAuthority(check), secrets.Check(check), realtime.Check(check), revocations.Check(check), browserState.Check(check))
+			err := errors.Join(realtime.Check(check), revocations.Check(check), browserState.Check(check))
 			cancel()
 			if err == nil {
 				changed := readiness.Set(true, "ready")

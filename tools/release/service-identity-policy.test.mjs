@@ -7,8 +7,15 @@ const source = JSON.parse(readFileSync(new URL("../../deploy/k8s/base/internal-r
 const classification = JSON.parse(readFileSync(new URL("../../services/internal/control-plane/internal/app/service-identity-classification.json",import.meta.url),"utf8"));
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,375);
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,290);
+  assert.equal(policy.bindings.length,379);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,294);
+  for (const operation of ["platform.command.projects.trash", "platform.command.projects.restore", "platform.command.projects.purge", "platform.query.projects.trash.list"]) {
+    assert.equal(policy.bindings.filter(binding=>binding.operation_id===operation&&binding.actor_mode==="USER_CREDENTIAL_REQUIRED").length,1);
+  }
+  assert.equal(policy.bindings.find(binding=>binding.operation_id==="platform.command.projects.trash").project_required,true);
+  for (const operation of ["platform.command.projects.restore", "platform.command.projects.purge"]) {
+    assert.equal(policy.bindings.find(binding=>binding.operation_id===operation).project_required,false);
+  }
   assert.equal(policy.bindings.some(b=>b.operation_id==="platform.stt.policy.resolve"),false);
   for(const binding of policy.bindings) {
     const original=source.policy.operation_bindings.find(b=>b.operation_id===binding.operation_id);

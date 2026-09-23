@@ -10,6 +10,7 @@ import (
 
 type Project struct {
 	LastActivityAt                          *time.Time
+	DeletedAt, PurgeAfter                   *time.Time
 	IntegrationState                        string
 	Ref, Name, Purpose, Language, Lifecycle string
 	Version                                 int64
@@ -217,7 +218,7 @@ type ModelCapability struct {
 	ID, ProviderDefinitionKey, DefaultReasoningEffort string
 	ReasoningEfforts                                  []string
 	EligibleProviderAccountRefs, ReadinessBlockers    []string
-	Available                                         bool
+	Available, IsDefault                              bool
 }
 
 type ModelCatalog struct {

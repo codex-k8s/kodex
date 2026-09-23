@@ -7,7 +7,7 @@ WITH matches AS (
                 WHEN project.name ILIKE @query || '%' THEN 1 ELSE 2 END AS relevance
     FROM control_plane.projects AS project
     WHERE project.organization_id = @organization_id::uuid
-      AND project.lifecycle <> 'ARCHIVED'
+      AND project.lifecycle = 'ACTIVE'
       AND (@project_ref = '' OR project.ref = @project_ref)
       AND (project.name ILIKE '%' || @query || '%' OR project.purpose ILIKE '%' || @query || '%')
     UNION ALL
@@ -15,7 +15,7 @@ WITH matches AS (
            agent.updated_at, agent.created_at,
            CASE WHEN lower(agent.name) = lower(@query) THEN 0 WHEN agent.name ILIKE @query || '%' THEN 1 ELSE 2 END
     FROM control_plane.agents AS agent
-    JOIN control_plane.projects AS project ON project.id = agent.project_id
+    JOIN control_plane.projects AS project ON project.id = agent.project_id AND project.lifecycle NOT IN ('TRASHED', 'PURGE_PENDING')
     WHERE agent.organization_id = @organization_id::uuid
       AND (@project_ref = '' OR project.ref = @project_ref)
       AND agent.system_key IS NULL AND agent.state <> 'ARCHIVED'
@@ -25,7 +25,7 @@ WITH matches AS (
            workflow.state, workflow.updated_at, workflow.created_at,
            CASE WHEN lower(workflow.name) = lower(@query) THEN 0 WHEN workflow.name ILIKE @query || '%' THEN 1 ELSE 2 END
     FROM control_plane.workflows AS workflow
-    JOIN control_plane.projects AS project ON project.id = workflow.project_id
+    JOIN control_plane.projects AS project ON project.id = workflow.project_id AND project.lifecycle NOT IN ('TRASHED', 'PURGE_PENDING')
     WHERE workflow.organization_id = @organization_id::uuid
       AND (@project_ref = '' OR project.ref = @project_ref)
       AND workflow.state <> 'ARCHIVED'
@@ -35,7 +35,7 @@ WITH matches AS (
            run.updated_at, run.created_at,
            CASE WHEN lower(run.title) = lower(@query) THEN 0 WHEN run.title ILIKE @query || '%' THEN 1 ELSE 2 END
     FROM control_plane.runs AS run
-    JOIN control_plane.projects AS project ON project.id = run.project_id
+    JOIN control_plane.projects AS project ON project.id = run.project_id AND project.lifecycle NOT IN ('TRASHED', 'PURGE_PENDING')
     WHERE run.organization_id = @organization_id::uuid
       AND (@project_ref = '' OR project.ref = @project_ref)
       AND (run.title ILIKE '%' || @query || '%' OR run.task ILIKE '%' || @query || '%')
@@ -44,7 +44,7 @@ WITH matches AS (
            artifact.lifecycle_state, artifact.created_at, artifact.created_at,
            CASE WHEN lower(artifact.file_name) = lower(@query) THEN 0 WHEN artifact.file_name ILIKE @query || '%' THEN 1 ELSE 2 END
     FROM control_plane.artifacts AS artifact
-    JOIN control_plane.projects AS project ON project.id = artifact.project_id
+    JOIN control_plane.projects AS project ON project.id = artifact.project_id AND project.lifecycle NOT IN ('TRASHED', 'PURGE_PENDING')
     WHERE artifact.organization_id = @organization_id::uuid
       AND (@project_ref = '' OR project.ref = @project_ref)
       AND artifact.lifecycle_state = 'ACTIVE'
