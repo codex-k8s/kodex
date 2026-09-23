@@ -764,6 +764,7 @@ enum IntegrationResourceKind {
   INTEGRATION_RESOURCE_KIND_JIRA_PROJECT = 5;
   INTEGRATION_RESOURCE_KIND_CONFLUENCE_SPACE = 6;
   INTEGRATION_RESOURCE_KIND_EMAIL_SENDER = 7;
+  INTEGRATION_RESOURCE_KIND_HTTPS_RESOURCE = 8;
 }
 
 // IntegrationDefinitionOrigin фиксирует источник immutable definition revision.

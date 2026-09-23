@@ -332,6 +332,8 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		configuration = map[string]string{"base_url": "https://confluence.example.test", "auth_scheme": "BEARER", "space_id": "42"}
 	case "email":
 		configuration = map[string]string{"base_url": emailOrigin, "from_address": "sender@example.test", "mailbox_id": "mailbox"}
+	case "https-json":
+		configuration = map[string]string{"base_url": "https://api.example.test", "resource_path": "/v1/status"}
 	}
 	scope, err := capability.ResourceScopeValues(configuration)
 	if err != nil {

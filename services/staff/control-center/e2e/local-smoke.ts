@@ -113,6 +113,28 @@ test("локальный OIDC, API и основные экраны доступ
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeVisible();
   }
+  const httpsJSONDefinition = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/integration-definitions?pageSize=30");
+    if (!response.ok)
+      throw new Error(
+        `Integration catalog readback failed with ${String(response.status)}`,
+      );
+    const catalog = (await response.json()) as {
+      items: Array<{
+        key: string;
+        adapter: string;
+        credentialSecretKey?: string;
+        available: boolean;
+      }>;
+    };
+    return catalog.items.find((item) => item.key === "https-json");
+  });
+  expect(httpsJSONDefinition).toMatchObject({
+    key: "https-json",
+    adapter: "HTTPS_JSON_READ",
+    credentialSecretKey: "token",
+    available: true,
+  });
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
   const assistant = page.getByRole("dialog", { name: "Kodex" });
   await expect(assistant).toBeVisible();
@@ -196,9 +218,13 @@ test("локальный OIDC, API и основные экраны доступ
     .getByRole("link", { name: "Открыть защищённую форму нового секрета" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(`/projects/${encodeURIComponent(projectRef ?? "")}/secrets\\?assistantCreateSecret=1`),
+    new RegExp(
+      `/projects/${encodeURIComponent(projectRef ?? "")}/secrets\\?assistantCreateSecret=1`,
+    ),
   );
-  await expect(page.getByRole("dialog", { name: "Новый секрет" })).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Новый секрет" }),
+  ).toBeVisible();
   expect(browserFailures).toEqual([]);
   await writeStorageState(
     environment.outputStorageState,

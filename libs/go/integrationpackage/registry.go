@@ -22,6 +22,7 @@ const (
 	AdapterJira          AdapterKey = "JIRA"
 	AdapterConfluence    AdapterKey = "CONFLUENCE"
 	AdapterEmailHTTPS    AdapterKey = "EMAIL_HTTPS"
+	AdapterHTTPSJSONRead AdapterKey = "HTTPS_JSON_READ"
 	AdapterMattermost    AdapterKey = "MATTERMOST_INTERACTION"
 
 	OwnerIntegrationGateway AdapterOwner = "integration-gateway"
@@ -63,6 +64,7 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterJira:          {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterConfluence:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterEmailHTTPS:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterHTTPSJSONRead: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
 }
 
@@ -95,13 +97,13 @@ func (capability Capability) CallableByAgent() bool {
 
 var (
 	fieldFormats = map[FieldFormat]struct{}{
-		"": {}, "PLAIN": {}, "HTTPS_ORIGIN": {}, "HTTPS_URL": {},
+		"": {}, "PLAIN": {}, "HTTPS_ORIGIN": {}, "HTTPS_URL": {}, "HTTPS_PATH": {},
 		"EMAIL": {}, "HOST": {}, "IDENTIFIER": {},
 	}
 	resourceKinds = map[ResourceKind]struct{}{
 		"SYNTHETIC_JOURNAL": {}, "GITHUB_REPOSITORY": {}, "GITLAB_PROJECT": {},
 		"JIRA_PROJECT": {}, "CONFLUENCE_SPACE": {}, "EMAIL_SENDER": {},
-		"MATTERMOST_CHANNEL": {},
+		"MATTERMOST_CHANNEL": {}, "HTTPS_RESOURCE": {},
 	}
 )
 

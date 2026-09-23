@@ -50,6 +50,7 @@
             "JIRA",
             "CONFLUENCE",
             "EMAIL_HTTPS",
+            "HTTPS_JSON_READ",
             "MATTERMOST_INTERACTION"
           ]
         },
@@ -97,7 +98,7 @@
       "properties": {
         "key": { "$ref": "#/$defs/key" },
         "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] },
-        "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "EMAIL", "HOST", "IDENTIFIER"] },
+        "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "HTTPS_PATH", "EMAIL", "HOST", "IDENTIFIER"] },
         "required": { "type": "boolean" },
         "maximumLength": { "type": "integer", "minimum": 1, "maximum": 349528 },
         "allowEmpty": { "type": "boolean", "description": "Пустая строка допустима только в PLAIN input/output, не в конфигурации подключения." },
@@ -181,7 +182,8 @@
             "JIRA_PROJECT",
             "CONFLUENCE_SPACE",
             "EMAIL_SENDER",
-            "MATTERMOST_CHANNEL"
+            "MATTERMOST_CHANNEL",
+            "HTTPS_RESOURCE"
           ]
         },
         "connectionFields": {

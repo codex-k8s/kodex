@@ -288,6 +288,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		// Legacy metadata уже проверена вместе с owner claim; в mail adapter она не передаётся.
 		request.Credential = nil
 		result, err = adapter.executeEmail(ctx, request, capability, configuration, canonicalInput)
+	case "HTTPS_JSON_READ":
+		result, err = adapter.executeHTTPSJSONRead(ctx, request, capability, configuration)
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}

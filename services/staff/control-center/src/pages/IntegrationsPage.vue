@@ -690,6 +690,8 @@ function configurationProblem(field: IntegrationConfigurationField): string {
   if (code === "REQUIRED") return "Заполните обязательное поле.";
   if (code === "INVALID_HTTPS_URL")
     return "Укажите полный URL с протоколом https://.";
+  if (code === "INVALID_RESOURCE_PATH")
+    return "Укажите абсолютный путь без параметров, фрагмента и перехода к родительскому каталогу.";
   if (code === "INVALID_VALUE")
     return "Значение не соответствует схеме подключения.";
   return "";

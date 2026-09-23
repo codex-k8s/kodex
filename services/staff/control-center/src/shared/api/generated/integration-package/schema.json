@@ -81,6 +81,7 @@
             "JIRA",
             "CONFLUENCE",
             "EMAIL_HTTPS",
+            "HTTPS_JSON_READ",
             "MATTERMOST_INTERACTION"
           ]
         },
@@ -170,6 +171,7 @@
             "PLAIN",
             "HTTPS_ORIGIN",
             "HTTPS_URL",
+            "HTTPS_PATH",
             "EMAIL",
             "HOST",
             "IDENTIFIER"
@@ -379,7 +381,8 @@
             "JIRA_PROJECT",
             "CONFLUENCE_SPACE",
             "EMAIL_SENDER",
-            "MATTERMOST_CHANNEL"
+            "MATTERMOST_CHANNEL",
+            "HTTPS_RESOURCE"
           ]
         },
         "connectionFields": {

@@ -36,6 +36,7 @@ interface ConnectionSetupDependencies {
 export type ConnectionConfigurationProblem =
   | "REQUIRED"
   | "INVALID_HTTPS_URL"
+  | "INVALID_RESOURCE_PATH"
   | "INVALID_VALUE";
 
 export interface PreparedConnectionConfiguration {
@@ -70,6 +71,15 @@ function validHttpsUrl(value: string, originOnly: boolean): boolean {
   } catch {
     return false;
   }
+}
+
+function validHttpsResourcePath(value: string): boolean {
+  return (
+    /^\/[A-Za-z0-9/._~-]*$/.test(value) &&
+    !value.startsWith("//") &&
+    !value.includes("//") &&
+    !value.split("/").some((segment) => segment === "." || segment === "..")
+  );
 }
 
 export function prepareConnectionConfiguration(
@@ -126,6 +136,13 @@ export function prepareConnectionConfiguration(
       !validHttpsUrl(prepared, field.format === "HTTPS_ORIGIN")
     ) {
       problems[field.key] = "INVALID_HTTPS_URL";
+      continue;
+    }
+    if (
+      field.format === "HTTPS_PATH" &&
+      (typeof prepared !== "string" || !validHttpsResourcePath(prepared))
+    ) {
+      problems[field.key] = "INVALID_RESOURCE_PATH";
       continue;
     }
     value[field.key] = prepared;

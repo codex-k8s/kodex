@@ -426,6 +426,10 @@ func validateStringValue(field Field, value string, allowPlainMultiline bool) er
 			(field.Format == "HTTPS_ORIGIN" && (parsed.RawQuery != "" || parsed.Path != "" && parsed.Path != "/")) {
 			return errors.New("HTTPS URL field is invalid")
 		}
+	case "HTTPS_PATH":
+		if !ValidHTTPSResourcePath(value) {
+			return errors.New("HTTPS resource path is invalid")
+		}
 	case "EMAIL":
 		parsed, err := mail.ParseAddress(value)
 		if err != nil || parsed.Address != value || !strings.Contains(value, "@") {
@@ -439,6 +443,27 @@ func validateStringValue(field Field, value string, allowPlainMultiline bool) er
 		return errors.New("string field format is invalid")
 	}
 	return nil
+}
+
+// ValidHTTPSResourcePath принимает только абсолютный путь без query, fragment,
+// percent-encoding и сегментов обхода. Caller не может менять его при вызове.
+func ValidHTTPSResourcePath(value string) bool {
+	if value == "" || value[0] != '/' || strings.HasPrefix(value, "//") || strings.Contains(value, "//") {
+		return false
+	}
+	for _, segment := range strings.Split(value, "/") {
+		if segment == "." || segment == ".." {
+			return false
+		}
+	}
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || strings.ContainsRune("/-._~", character) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // EMAIL проверяет approval по авторитетной mailbox policy перед каждым effect.
