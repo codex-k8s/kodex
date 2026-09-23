@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import AssistantEnvironmentBindingDialog from "@/features/assistant/components/AssistantEnvironmentBindingDialog.vue";
 import { assistantEnvironmentDraftTarget } from "@/features/assistant/model";
 import { readEnvironmentDraft } from "@/features/runtime/environment-drafts";
 import type {
@@ -17,6 +18,8 @@ const target = computed(() =>
 const draft = ref<RuntimeEnvironmentDraft>();
 const loading = ref(false);
 const problem = ref(false);
+const bindingOpen = ref(false);
+const boundAgentName = ref("");
 const destination = computed(() => {
   const exact = target.value;
   const current = draft.value;
@@ -45,6 +48,8 @@ watch(
     draft.value = undefined;
     loading.value = false;
     problem.value = false;
+    bindingOpen.value = false;
+    boundAgentName.value = "";
     if (!value) return;
     const controller = new AbortController();
     onCleanup(() => {
@@ -100,6 +105,9 @@ watch(
         {{ $t("assistant.environmentDraft.discarded") }}
       </p>
       <p v-else>{{ $t("assistant.environmentDraft.incomplete") }}</p>
+      <p v-if="boundAgentName">
+        {{ $t("assistant.environmentDraft.bound", { agent: boundAgentName }) }}
+      </p>
     </template>
     <div class="assistant-environment-card__actions">
       <button
@@ -118,7 +126,25 @@ watch(
       >
         {{ $t("assistant.environmentDraft.continue") }}
       </RouterLink>
+      <button
+        v-if="draft?.state === 'PUBLISHED' && draft.publishedEnvironmentRef"
+        class="button button--primary"
+        type="button"
+        @click="bindingOpen = true"
+      >
+        {{ $t("assistant.environmentDraft.bind") }}
+      </button>
     </div>
+    <AssistantEnvironmentBindingDialog
+      v-if="bindingOpen && target && draft?.publishedEnvironmentRef"
+      :project-ref="target.projectRef"
+      :environment-ref="draft.publishedEnvironmentRef"
+      @close="bindingOpen = false"
+      @bound="
+        boundAgentName = $event;
+        bindingOpen = false;
+      "
+    />
   </section>
 </template>
 

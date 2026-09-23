@@ -3004,6 +3004,19 @@ const ru = {
       published: "Окружение опубликовано. Привяжите его к нужному сотруднику.",
       discarded: "Черновик окружения отброшен.",
       continue: "Продолжить настройку",
+      bind: "Назначить сотруднику",
+      bindTitle: "Назначить опубликованное окружение",
+      bindExplanation:
+        "Выберите сотрудника этого проекта. Проверьте текущее и новое окружение перед подтверждением; назначение повлияет на следующий запуск.",
+      bindUnavailable:
+        "Окружение изменилось, не готово или больше не относится к этому проекту. Обновите его состояние.",
+      agentUnavailable:
+        "Сотрудник изменился или недоступен в этом проекте. Выберите его заново.",
+      targetEnvironment: "Новое окружение",
+      currentEnvironment: "Текущее окружение",
+      chooseAgent: "Сотрудник",
+      searchAgent: "Найти сотрудника в проекте",
+      bound: "Окружение назначено сотруднику {agent}.",
     },
     connection: {
       title: "Подключение интеграции",
@@ -6291,6 +6304,19 @@ const en = {
         "The environment is published. Bind it to the intended employee.",
       discarded: "The environment draft was discarded.",
       continue: "Continue setup",
+      bind: "Assign to employee",
+      bindTitle: "Assign published environment",
+      bindExplanation:
+        "Choose an employee in this project. Review the current and new environments before confirming; the assignment affects the next run.",
+      bindUnavailable:
+        "The environment changed, is not ready, or is no longer in this project. Refresh its state.",
+      agentUnavailable:
+        "The employee changed or is unavailable in this project. Select them again.",
+      targetEnvironment: "New environment",
+      currentEnvironment: "Current environment",
+      chooseAgent: "Employee",
+      searchAgent: "Find an employee in this project",
+      bound: "Environment assigned to {agent}.",
     },
     connection: {
       title: "Integration connection",
