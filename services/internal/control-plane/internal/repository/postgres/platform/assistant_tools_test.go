@@ -449,14 +449,26 @@ func TestAssistantOperationCommandBuildsOwnerFriendlySchedule(t *testing.T) {
 	schedule := entity.AssistantPlanOperation{Type: "CREATE_SCHEDULE", Summary: "Schedule lead review", Input: map[string]any{
 		"projectRef": "prj_12345678", "name": "Daily lead review", "targetType": "AGENT", "targetRef": "agt_12345678",
 		"preset": "DAILY", "timeOfDay": "09:30", "timezone": "Europe/Saratov", "input": map[string]any{},
-		"sessionPolicy": "NEW_EACH_RUN", "notificationPolicy": "CONTROL_CENTER_ONLY",
+		"automationText": "Review today's leads and report changes",
+		"sessionPolicy":  "NEW_EACH_RUN", "notificationPolicy": "CONTROL_CENTER_ONLY",
 	}}
 	mapped, err := assistantOperationCommand(schedule)
 	if err != nil || mapped.Kind != command.CreateSchedule {
 		t.Fatalf("map owner-friendly schedule operation: kind=%q err=%v", mapped.Kind, err)
 	}
 	payload := mapped.Payload.(command.ScheduleInput)
-	if payload.TimeOfDay != "09:30" || payload.CronExpression != "" {
+	if payload.TimeOfDay != "09:30" || payload.CronExpression != "" || payload.AutomationText != "Review today's leads and report changes" {
 		t.Fatalf("assistant must not synthesize a hidden cron expression: %#v", payload)
+	}
+	delete(schedule.Input, "automationText")
+	if _, err := assistantOperationCommand(schedule); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("schedule without task must be rejected, got %v", err)
+	}
+	schedule.Input["automationText"] = "Review today's leads and report changes"
+	schedule.Input["preset"] = "CUSTOM"
+	schedule.Input["cronExpression"] = "0 9 * * 1-5"
+	mapped, err = assistantOperationCommand(schedule)
+	if err != nil || mapped.Payload.(command.ScheduleInput).CronExpression != "0 9 * * 1-5" {
+		t.Fatalf("custom cron expression must be preserved: %#v err=%v", mapped, err)
 	}
 }
