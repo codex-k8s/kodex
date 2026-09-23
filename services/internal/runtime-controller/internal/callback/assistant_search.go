@@ -67,7 +67,8 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 			"kind": kind, "ref": item.GetRef(), "project_ref": item.GetProjectRef(),
 			"title": truncateRunes(item.GetTitle(), 160), "subtitle": truncateRunes(item.GetSubtitle(), 160),
 			"state": item.GetState(), "route": route,
-			"requires_context_switch": item.GetProjectRef() != "" && item.GetProjectRef() != input.ProjectRef,
+			"requires_context_switch": item.GetProjectRef() != "" && item.GetProjectRef() != input.ProjectRef ||
+				(kind == "INTEGRATION" && (input.AssistantContext == nil || input.AssistantContext.EntityKind != "INTEGRATION_CONNECTION" || input.AssistantContext.EntityRef != item.GetRef())),
 		})
 	}
 	return map[string]any{"current_project_ref": input.ProjectRef, "results": items, "truncated": response.GetTruncated()}, nil
@@ -103,7 +104,7 @@ func assistantResourceRoute(item *controlplanev1.SearchResult) (string, string) 
 		if item.GetProjectRef() != "" {
 			return "", ""
 		}
-		return "INTEGRATION", "/integrations"
+		return "INTEGRATION", "/integrations?connectionRef=" + url.QueryEscape(item.GetRef())
 	default:
 		return "", ""
 	}

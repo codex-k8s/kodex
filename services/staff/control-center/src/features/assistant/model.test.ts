@@ -723,6 +723,52 @@ describe("assistant plan editor model", () => {
     expect(changed?.parameters.credentialValue).toBeUndefined();
   });
 
+  it("показывает изменение подключения той же дружественной формой", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "UPDATE_INTEGRATION_CONNECTION",
+        action: "UPDATE",
+        target: {
+          kind: "INTEGRATION_CONNECTION",
+          ref: "con_source",
+          name: "Source",
+          version: 3,
+        },
+        expectedVersion: 3,
+        parameters: {
+          connectionRef: "con_source",
+          definitionKey: "github",
+          name: "Source code",
+          publicConfiguration: { organization: "marketplace" },
+        },
+        before: {
+          connectionRef: "con_source",
+          definitionKey: "github",
+          name: "Source",
+          publicConfiguration: { organization: "marketplace" },
+        },
+        after: {
+          connectionRef: "con_source",
+          definitionKey: "github",
+          name: "Source code",
+          publicConfiguration: { organization: "marketplace" },
+        },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe(
+      "UPDATE_INTEGRATION_CONNECTION",
+    );
+    updateOperationParameter(first, "name", "Production source");
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters.name).toBe("Production source");
+    expect(changed?.parameters.definitionKey).toBe("github");
+    expect(changed?.before.name).toBe("Source");
+  });
+
   it("показывает запуск процесса как форму без доверия к свободному target kind", () => {
     const editable = editableOperations([
       {

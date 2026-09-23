@@ -444,6 +444,63 @@ func TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC(t *testing.
 	}
 }
 
+func TestAssistantConnectionUpdateRequiresExactContextAndPreservesAuthority(t *testing.T) {
+	t.Parallel()
+	connection := entity.IntegrationConnection{Ref: "con_current", DefinitionKey: "github", Name: "Source", Version: 5,
+		PublicConfiguration: map[string]any{"owner": "team", "repository": "app"}}
+	proposed := entity.AssistantPlanOperation{Type: "UPDATE_INTEGRATION_CONNECTION", Key: "update-connection",
+		Title: "Update connection", Summary: "Update connection", Selected: true,
+		Parameters: map[string]any{"connectionRef": connection.Ref, "name": "Source code"}}
+	if !assistantOperationMatchesContext("INTEGRATION_CONNECTION", connection.Ref, proposed) ||
+		assistantOperationMatchesContext("INTEGRATION_CONNECTION", "con_other", proposed) ||
+		assistantOperationMatchesContext("PROJECT", connection.Ref, proposed) {
+		t.Fatal("connection update accepted a different context")
+	}
+	hydrated, err := hydrateAssistantConnectionFields(connection, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.UpdateConnection || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 5 {
+		t.Fatalf("connection update command invalid: %#v %v", mapped, err)
+	}
+	payload := mapped.Payload.(command.ConnectionInput)
+	if payload.Ref != connection.Ref || payload.Name != "Source code" || payload.PublicConfiguration["repository"] != "app" ||
+		payload.CredentialRevision != nil || payload.DefinitionKey != "" {
+		t.Fatalf("connection update changed immutable or secret fields: %#v", payload)
+	}
+	edited := normalized
+	edited.Parameters = cloneAssistantFields(normalized.Parameters)
+	edited.Parameters["name"] = "Production source"
+	edited.Before = map[string]any{"name": "forged"}
+	edited.After = map[string]any{"name": "forged"}
+	edited.Target.Ref = "con_other"
+	edited.ExpectedVersion = nil
+	rehydrated, err := rehydrateEditedAssistantConnection(normalized, edited)
+	if err != nil || rehydrated.Target.Ref != connection.Ref || *rehydrated.ExpectedVersion != 5 ||
+		assistantString(rehydrated.Before, "name") != "Source" || assistantString(rehydrated.After, "name") != "Production source" {
+		t.Fatalf("draft edit lost authoritative envelope: %#v %v", rehydrated, err)
+	}
+	for _, invalid := range []map[string]any{
+		{"connectionRef": connection.Ref, "name": "Source"},
+		{"connectionRef": connection.Ref, "name": " "},
+		{"connectionRef": connection.Ref, "credential": "secret"},
+		{"connectionRef": connection.Ref, "publicConfiguration": map[string]any{"repository": 1}},
+	} {
+		if _, err := hydrateAssistantConnectionFields(connection, entity.AssistantPlanOperation{Type: proposed.Type, Parameters: invalid}); err == nil {
+			t.Fatalf("invalid connection change accepted: %#v", invalid)
+		}
+	}
+	edited.Parameters["definitionKey"] = "gitlab"
+	if _, err := rehydrateEditedAssistantConnection(normalized, edited); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("definition switch accepted: %v", err)
+	}
+}
+
 func TestAssistantOperationCommandBuildsOwnerFriendlySchedule(t *testing.T) {
 	t.Parallel()
 	schedule := entity.AssistantPlanOperation{Type: "CREATE_SCHEDULE", Summary: "Schedule lead review", Input: map[string]any{

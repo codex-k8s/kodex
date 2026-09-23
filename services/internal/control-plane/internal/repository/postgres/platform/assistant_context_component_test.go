@@ -88,6 +88,30 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if err != nil || connection.Connection == nil {
 		t.Fatal(err)
 	}
+	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	connectionTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	connectionUpdate, err := repository.hydrateAssistantConnectionOperation(ctx, connectionTx, ownerScope,
+		entity.AssistantPlanOperation{Type: "UPDATE_INTEGRATION_CONNECTION", Key: "context-connection-update", Title: "Update connection",
+			Parameters: map[string]any{"connectionRef": connection.Connection.Ref, "name": "Renamed connection"}})
+	if err != nil || connectionUpdate.Target.Ref != connection.Connection.Ref ||
+		assistantString(connectionUpdate.Before, "name") != connection.Connection.Name ||
+		assistantString(connectionUpdate.After, "name") != "Renamed connection" {
+		_ = connectionTx.Rollback(ctx)
+		t.Fatalf("hydrate exact connection update: %#v %v", connectionUpdate, err)
+	}
+	if err := connectionTx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
 	draft := entity.WorkflowVersion{Name: "Context workflow", Purpose: "Context fixture", CoordinatorAgentRef: agent.Ref, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, CompletionCriteria: "Bounded result", ResultSchema: map[string]any{}, Steps: []entity.WorkflowStep{{Key: "step", Position: 1, Name: "Step", AgentRef: agent.Ref, Instructions: "Complete fixture.", ExpectedResult: "Fixture result", TimeoutSeconds: 900}}}
 	workflow, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "context-workflow"}, Payload: command.WorkflowInput{ProjectRef: project.Project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: agent.Ref, Draft: &draft}})
 	if err != nil || workflow.Workflow == nil {
@@ -127,6 +151,9 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		}
 		if resource.kind == "AGENT" && !contains(projection.AllowedOperations, "UPDATE_AGENT") {
 			t.Fatal("agent context did not publish its exact update capability")
+		}
+		if resource.kind == "INTEGRATION_CONNECTION" && !contains(projection.AllowedOperations, "UPDATE_INTEGRATION_CONNECTION") {
+			t.Fatal("connection context did not publish its exact update capability")
 		}
 		if resource.kind == "PROJECT" && !contains(projection.AllowedOperations, "CREATE_RUNTIME_ENVIRONMENT_DRAFT") {
 			t.Fatal("project context did not publish its environment draft capability")

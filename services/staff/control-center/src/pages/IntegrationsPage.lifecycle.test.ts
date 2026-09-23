@@ -4,6 +4,7 @@ import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 
 import { usePlatformStore } from "@/features/platform/store";
 import IntegrationsPage from "@/pages/IntegrationsPage.vue";
@@ -75,6 +76,7 @@ interface IntegrationsSetup {
   openDelete: (connection: IntegrationConnection) => Promise<void>;
   openEdit: (connection: IntegrationConnection) => Promise<void>;
   submit: () => Promise<void>;
+  detailsConnection: { value?: IntegrationConnection };
 }
 
 describe("IntegrationsPage lifecycle", () => {
@@ -161,5 +163,32 @@ describe("IntegrationsPage lifecycle", () => {
     expect(source).toContain("<ModalDialog");
     expect(source).toContain('@click="confirmDelete"');
     expect(source).not.toContain("window.confirm");
+  });
+
+  it("открывает прямую ссылку на подключение любого типа", async () => {
+    const pinia = createPinia();
+    const platform = usePlatformStore(pinia);
+    const selected = connection("connection_source", ["UPDATE"]);
+    vi.spyOn(platform, "loadIntegrations").mockResolvedValue();
+    vi.spyOn(platform, "loadProjects").mockResolvedValue();
+    const read = vi
+      .spyOn(platform, "readConnection")
+      .mockResolvedValue(selected);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/integrations", component: IntegrationsPage }],
+    });
+    await router.push(`/integrations?connectionRef=${selected.ref}`);
+    await router.isReady();
+    const setup = (await captureSetupState(IntegrationsPage, (app) => {
+      app.use(pinia);
+      app.use(
+        createI18n({ legacy: false, locale: "ru", messages: { ru: {} } }),
+      );
+      app.use(router);
+    })) as unknown as IntegrationsSetup;
+    await nextTick();
+    expect(read).toHaveBeenCalledWith(selected.ref);
+    expect(setup.detailsConnection.value?.ref).toBe(selected.ref);
   });
 });

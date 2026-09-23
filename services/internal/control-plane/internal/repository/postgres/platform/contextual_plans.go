@@ -97,6 +97,12 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 				return commandOutcome{}, err
 			}
 			payload.Operations[index] = updated
+		case "UPDATE_INTEGRATION_CONNECTION":
+			updated, err := rehydrateEditedAssistantConnection(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		case "CREATE_ROLE_IMAGE_RECIPE":
 			updated, err := rehydrateEditedAssistantRoleImage(original, operation)
 			if err != nil {
@@ -211,6 +217,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 				continue
 			}
 		}
+		if operation.Type == "UPDATE_INTEGRATION_CONNECTION" {
+			matching, snapshotErr := repository.assistantConnectionUpdateSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
 		current, checked, versionErr := repository.assistantTargetVersion(ctx, tx, scope, operation)
 		if versionErr != nil {
 			problems = append(problems, fmt.Sprintf("operation-%d-target-unavailable", index+1))
@@ -251,7 +264,7 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 		}
 	case "ARCHIVE_WORKFLOW":
 		kind, ref = "WORKFLOW", operation.Target.Ref
-	case "CHANGE_INTEGRATION_GRANT", "TEST_INTEGRATION_CONNECTION":
+	case "CHANGE_INTEGRATION_GRANT", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION":
 		kind, ref = "INTEGRATION_CONNECTION", assistantString(operation.Input, "connectionRef")
 	default:
 		return 0, false, nil
@@ -304,6 +317,62 @@ func rehydrateEditedAssistantAgent(original, edited entity.AssistantPlanOperatio
 	}
 	hydrated.Selected = selected
 	return hydrated, nil
+}
+
+func rehydrateEditedAssistantConnection(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	if original.Type != "UPDATE_INTEGRATION_CONNECTION" || original.Key != edited.Key ||
+		original.Target.Kind != "INTEGRATION_CONNECTION" || original.Target.Ref == "" ||
+		original.ExpectedVersion == nil || *original.ExpectedVersion < 1 || edited.Parameters == nil ||
+		!onlyAssistantFields(edited.Parameters, "connectionRef", "definitionKey", "name", "publicConfiguration") ||
+		assistantString(edited.Parameters, "connectionRef") != original.Target.Ref ||
+		assistantString(edited.Parameters, "definitionKey") != assistantString(original.Before, "definitionKey") {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	parameters := map[string]any{"connectionRef": original.Target.Ref}
+	if name, supplied := edited.Parameters["name"]; supplied {
+		parameters["name"] = name
+	}
+	if configuration, supplied := edited.Parameters["publicConfiguration"]; supplied {
+		parameters["publicConfiguration"] = configuration
+	}
+	connection := entity.IntegrationConnection{Ref: original.Target.Ref,
+		DefinitionKey: assistantString(original.Before, "definitionKey"),
+		Name:          assistantString(original.Before, "name"), Version: *original.ExpectedVersion}
+	configuration, ok := assistantObjectValue(original.Before, "publicConfiguration")
+	if !ok {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	connection.PublicConfiguration = configuration
+	edited.Parameters = parameters
+	selected := edited.Selected
+	hydrated, err := hydrateAssistantConnectionFields(connection, edited)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	if !reflect.DeepEqual(hydrated.Before, original.Before) {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	hydrated.Selected = selected
+	return hydrated, nil
+}
+
+func (repository *Repository) assistantConnectionUpdateSnapshotMatches(ctx context.Context, tx pgx.Tx, actorScope scope,
+	operation entity.AssistantPlanOperation,
+) (bool, error) {
+	connection, err := readConnection(ctx, tx, actorScope, operation.Target.Ref)
+	if err != nil {
+		return false, err
+	}
+	before := map[string]any{"connectionRef": connection.Ref, "definitionKey": connection.DefinitionKey,
+		"name": connection.Name, "publicConfiguration": connection.PublicConfiguration}
+	if err := repository.validateAssistantConnectionConfiguration(ctx, tx, actorScope, connection, operation.After); err != nil {
+		return false, err
+	}
+	return operation.ExpectedVersion != nil && *operation.ExpectedVersion == connection.Version &&
+		operation.Target.Version != nil && *operation.Target.Version == connection.Version &&
+		operation.Target.Name == connection.Name && reflect.DeepEqual(operation.Before, before) &&
+		reflect.DeepEqual(operation.Parameters, operation.After) &&
+		assistantString(operation.Parameters, "definitionKey") == connection.DefinitionKey, nil
 }
 
 func rehydrateEditedAssistantRoleImage(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {

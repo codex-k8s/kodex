@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v13" {
+	if CorePromptRevision != "system-assistant-core-v14" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -22,6 +22,7 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"definition_next_offset",
 		"credential_secret_key",
 		"CREATE_INTEGRATION_CONNECTION",
+		"UPDATE_INTEGRATION_CONNECTION",
 		"Ручной UI/Git draft сейчас не публикует новый исполняемый adapter",
 	} {
 		if !strings.Contains(CorePrompt(), required) {

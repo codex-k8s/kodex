@@ -602,6 +602,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                     AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
 	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION     AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                   AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION   AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                 AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
 )
 
@@ -635,6 +636,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATEAGENT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATEPROJECT:
 		return true
@@ -755,6 +758,7 @@ const (
 	AssistantPlanOperationTypeLAUNCHRUN                     AssistantPlanOperationType = "LAUNCH_RUN"
 	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION     AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeUPDATEAGENT                   AssistantPlanOperationType = "UPDATE_AGENT"
+	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION   AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeUPDATEPROJECT                 AssistantPlanOperationType = "UPDATE_PROJECT"
 )
 
@@ -788,6 +792,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeUPDATEAGENT:
+		return true
+	case AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeUPDATEPROJECT:
 		return true

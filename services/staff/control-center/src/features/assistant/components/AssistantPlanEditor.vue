@@ -100,7 +100,9 @@ function resetDraft(): void {
   connectionInputs.value = Object.fromEntries(
     operations.value
       .filter(
-        (operation) => operation.value.type === "CREATE_INTEGRATION_CONNECTION",
+        (operation) =>
+          operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+          operation.value.type === "UPDATE_INTEGRATION_CONNECTION",
       )
       .map((operation) => {
         const configuration = operationParameter(
@@ -155,7 +157,9 @@ watch(
       ...new Set(
         plan.operations
           .filter(
-            (operation) => operation.type === "CREATE_INTEGRATION_CONNECTION",
+            (operation) =>
+              operation.type === "CREATE_INTEGRATION_CONNECTION" ||
+              operation.type === "UPDATE_INTEGRATION_CONNECTION",
           )
           .map((operation) => operation.parameters.definitionKey)
           .filter((value): value is string => typeof value === "string"),
@@ -351,7 +355,10 @@ const friendlyInputsReady = computed(() =>
   operations.value.every(
     (operation) =>
       !operation.value.selected ||
-      ((operation.value.type !== "CREATE_INTEGRATION_CONNECTION" ||
+      ((!(
+        operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+        operation.value.type === "UPDATE_INTEGRATION_CONNECTION"
+      ) ||
         !Object.keys(connectionProblems(operation)).length) &&
         (operation.value.type !== "LAUNCH_RUN" ||
           runFormValidity.value[operation.value.ref] === true) &&
@@ -407,7 +414,8 @@ function save(): void {
     for (const operation of operations.value) {
       if (
         !operation.value.selected ||
-        operation.value.type !== "CREATE_INTEGRATION_CONNECTION"
+        (operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
+          operation.value.type !== "UPDATE_INTEGRATION_CONNECTION")
       )
         continue;
       const definition = connectionDefinition(operation);

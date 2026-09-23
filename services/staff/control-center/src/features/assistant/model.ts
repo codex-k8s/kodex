@@ -186,6 +186,7 @@ export type FriendlyPlanOperationType =
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
   | "CREATE_ROLE_IMAGE_RECIPE"
   | "CREATE_INTEGRATION_CONNECTION"
+  | "UPDATE_INTEGRATION_CONNECTION"
   | "LAUNCH_RUN";
 
 export function friendlyPlanOperationType(
@@ -203,6 +204,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
     operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
     operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
+    operation.value.type !== "UPDATE_INTEGRATION_CONNECTION" &&
     operation.value.type !== "LAUNCH_RUN"
   )
     return undefined;
@@ -211,17 +213,19 @@ export function friendlyPlanOperationType(
       ? "ROLE_IMAGE_RECIPE"
       : operation.value.type === "CREATE_INTEGRATION_CONNECTION"
         ? "INTEGRATION_CONNECTION"
-        : operation.value.type === "CHANGE_INTEGRATION_GRANT"
+        : operation.value.type === "UPDATE_INTEGRATION_CONNECTION"
           ? "INTEGRATION_CONNECTION"
-          : operation.value.type === "CREATE_WORKFLOW"
-            ? "WORKFLOW"
-            : operation.value.type === "CREATE_SCHEDULE"
-              ? "SCHEDULE"
-              : operation.value.type.endsWith("PROJECT")
-                ? "PROJECT"
-                : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-                  ? "RUNTIME_ENVIRONMENT_DRAFT"
-                  : "AGENT";
+          : operation.value.type === "CHANGE_INTEGRATION_GRANT"
+            ? "INTEGRATION_CONNECTION"
+            : operation.value.type === "CREATE_WORKFLOW"
+              ? "WORKFLOW"
+              : operation.value.type === "CREATE_SCHEDULE"
+                ? "SCHEDULE"
+                : operation.value.type.endsWith("PROJECT")
+                  ? "PROJECT"
+                  : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                    ? "RUNTIME_ENVIRONMENT_DRAFT"
+                    : "AGENT";
   const expectedAction = operation.value.type.startsWith("CREATE_")
     ? "CREATE"
     : operation.value.type === "LAUNCH_RUN"

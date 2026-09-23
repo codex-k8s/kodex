@@ -905,7 +905,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	}
 	normalized["type"] = kind
 	normalized["parameters"] = normalizedParameters
-	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" {
+	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" {
 		normalized["title"] = assistantOperationTitle(kind, normalizedParameters, projectName)
 	}
 	if operationSummary, _ := normalized["summary"].(string); strings.TrimSpace(operationSummary) == "" {
@@ -982,7 +982,7 @@ func normalizeAssistantParameterValue(value any) (any, error) {
 
 func assistantOperationTitle(kind string, parameters map[string]any, entityName string) string {
 	name, _ := parameters["name"].(string)
-	if (kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT") && strings.TrimSpace(entityName) != "" {
+	if (kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION") && strings.TrimSpace(entityName) != "" {
 		name = entityName
 	}
 	if strings.TrimSpace(name) == "" {
@@ -995,6 +995,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		"UPDATE_AGENT":                     "Изменить ИИ-сотрудника",
 		"CREATE_WORKFLOW":                  "Создать Процесс",
 		"CREATE_INTEGRATION_CONNECTION":    "Создать подключение",
+		"UPDATE_INTEGRATION_CONNECTION":    "Изменить подключение",
 		"CREATE_SCHEDULE":                  "Создать автоматизацию",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT": "Создать черновик среды",
 		"CREATE_ROLE_IMAGE_RECIPE":         "Создать рецепт образа",
@@ -1028,7 +1029,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_INTEGRATION_CONNECTION":
 		return true
 	default:
 		return false
@@ -1036,7 +1037,7 @@ func assistantServerHydratedOperation(kind string) bool {
 }
 
 func assistantServerAction(kind string) string {
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" {
 		return "UPDATE"
 	}
 	return "CREATE"
@@ -1056,6 +1057,13 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 			return nil
 		}
 		return map[string]any{"kind": "AGENT", "name": context.EntityName}
+	} else if kind == "UPDATE_INTEGRATION_CONNECTION" {
+		requestedRef, _ := parameters["connectionRef"].(string)
+		if context == nil || context.EntityKind != "INTEGRATION_CONNECTION" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "INTEGRATION_CONNECTION", "name": context.EntityName}
 	}
 	name, _ := parameters["name"].(string)
 	if strings.TrimSpace(name) == "" {

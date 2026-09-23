@@ -52,8 +52,8 @@ func TestAssistantResourceSearchUsesOnlyVerifiedLeaseAndReturnsSafeRoutes(t *tes
 		!reflect.DeepEqual([]any{items[0]["route"], items[1]["route"], items[2]["route"], items[3]["route"], items[4]["route"], items[5]["route"], items[6]["route"]}, []any{
 			"/projects/prj_target123", "/projects/prj_target123/agents/agt_manager123",
 			"/projects/prj_target123/role-images/imgrec_image123", "/projects/prj_target123/environments/renv_test123",
-			"/projects/prj_target123/automations", "/projects/prj_target123/secrets", "/integrations",
-		}) || items[0]["requires_context_switch"] != true || items[1]["requires_context_switch"] != true || items[6]["requires_context_switch"] != false {
+			"/projects/prj_target123/automations", "/projects/prj_target123/secrets", "/integrations?connectionRef=int_test123",
+		}) || items[0]["requires_context_switch"] != true || items[1]["requires_context_switch"] != true || items[6]["requires_context_switch"] != true {
 		t.Fatalf("resource search lost cross-project navigation hints: %#v", result)
 	}
 	if parameters, permission, _, ok := safeToolCallParameters(input, "find_platform_resources", map[string]any{"query": "Marketplace"}); !ok || permission != "platform.resources.search" || len(parameters) != 0 {

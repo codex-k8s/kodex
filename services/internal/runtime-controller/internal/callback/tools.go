@@ -264,6 +264,9 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(enumSchema(input.AssistantContext.EntityRef))))
 	}
+	if input.AssistantContext.EntityKind == "INTEGRATION_CONNECTION" && input.AssistantContext.EntityRef != "" {
+		result = append(result, assistantOperationSchema("UPDATE_INTEGRATION_CONNECTION", connectionUpdateInputSchema(input.AssistantContext.EntityRef)))
+	}
 	if len(input.AssistantContext.AllowedOperations) == 0 {
 		return nil
 	}
@@ -289,6 +292,15 @@ func agentUpdateInputSchema(agentRef map[string]any) map[string]any {
 	schema["anyOf"] = []map[string]any{
 		{"required": []string{"name"}}, {"required": []string{"purpose"}}, {"required": []string{"roleDescription"}},
 	}
+	return schema
+}
+
+func connectionUpdateInputSchema(connectionRef string) map[string]any {
+	schema := objectSchema([]string{"connectionRef"}, map[string]any{
+		"connectionRef": enumSchema(connectionRef), "name": stringSchema(1, 160),
+		"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+	})
+	schema["anyOf"] = []map[string]any{{"required": []string{"name"}}, {"required": []string{"publicConfiguration"}}}
 	return schema
 }
 
@@ -322,7 +334,7 @@ func integrationGrantInputSchema() map[string]any {
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true
@@ -347,7 +359,7 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		before = objectSchema(nil, map[string]any{})
 		after = parameters
 	}
-	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT"
+	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION"
 	if !serverHydrated {
 		required = append(required, "before", "after")
 	}

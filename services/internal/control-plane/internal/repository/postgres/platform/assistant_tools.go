@@ -136,7 +136,7 @@ func assistantOperationType(value string) bool {
 	switch value {
 	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "LAUNCH_RUN",
-		"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
+		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
 		return true
 	default:
@@ -145,10 +145,14 @@ func assistantOperationType(value string) bool {
 }
 
 func assistantOperationMatchesContext(contextKind, contextRef string, operation entity.AssistantPlanOperation) bool {
-	if operation.Type != "UPDATE_AGENT" {
+	switch operation.Type {
+	case "UPDATE_AGENT":
+		return contextKind == "AGENT" && contextRef != "" && assistantString(operation.Parameters, "agentRef") == contextRef
+	case "UPDATE_INTEGRATION_CONNECTION":
+		return contextKind == "INTEGRATION_CONNECTION" && contextRef != "" && assistantString(operation.Parameters, "connectionRef") == contextRef
+	default:
 		return true
 	}
-	return contextKind == "AGENT" && contextRef != "" && assistantString(operation.Parameters, "agentRef") == contextRef
 }
 
 func (repository *Repository) hydrateAssistantOperation(
@@ -181,6 +185,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "UPDATE_AGENT" {
 		return repository.hydrateAssistantAgentOperation(ctx, tx, actorScope, projectRef, operation)
+	}
+	if operation.Type == "UPDATE_INTEGRATION_CONNECTION" {
+		return repository.hydrateAssistantConnectionOperation(ctx, tx, actorScope, operation)
 	}
 	if operation.Type != "UPDATE_PROJECT" {
 		return operation, nil
@@ -324,6 +331,89 @@ func hydrateAssistantAgentFields(
 	return operation, nil
 }
 
+func (repository *Repository) hydrateAssistantConnectionOperation(
+	ctx context.Context, tx pgx.Tx, actorScope scope, operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if !onlyAssistantFields(operation.Parameters, "connectionRef", "name", "publicConfiguration") {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	ref := assistantString(operation.Parameters, "connectionRef")
+	if ref == "" {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if _, err := repository.resolveAssistantContext(ctx, tx, actorScope,
+		entity.AssistantContextDescriptor{EntityKind: "INTEGRATION_CONNECTION", EntityRef: ref}, ""); err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	connection, err := readConnection(ctx, tx, actorScope, ref)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	hydrated, err := hydrateAssistantConnectionFields(connection, operation)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	if err := repository.validateAssistantConnectionConfiguration(ctx, tx, actorScope, connection, hydrated.After); err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	return hydrated, nil
+}
+
+func (repository *Repository) validateAssistantConnectionConfiguration(ctx context.Context, tx pgx.Tx, actorScope scope,
+	connection entity.IntegrationConnection, after map[string]any,
+) error {
+	definition, err := repository.integrationPackage(ctx, tx, actorScope.organizationID, connection.Ref,
+		connection.DefinitionKey, connection.DefinitionVersion, connection.DefinitionDigest)
+	if err != nil {
+		return err
+	}
+	raw, ok := assistantObjectValue(after, "publicConfiguration")
+	configuration, valid := integrationStringConfiguration(raw)
+	if !ok || !valid || definition.ValidateConfiguration(configuration) != nil {
+		return errs.ErrInvalid
+	}
+	return nil
+}
+
+func hydrateAssistantConnectionFields(connection entity.IntegrationConnection, operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	before := map[string]any{"connectionRef": connection.Ref, "definitionKey": connection.DefinitionKey,
+		"name": connection.Name, "publicConfiguration": connection.PublicConfiguration}
+	after := cloneAssistantFields(before)
+	changed := false
+	if value, supplied := operation.Parameters["name"]; supplied {
+		name, ok := value.(string)
+		name = strings.TrimSpace(name)
+		if !ok || name == "" || len(name) > 160 {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		after["name"] = name
+		changed = changed || name != connection.Name
+	}
+	if value, supplied := operation.Parameters["publicConfiguration"]; supplied {
+		configuration, ok := value.(map[string]any)
+		if !ok || len(configuration) > 100 {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		if _, valid := integrationStringConfiguration(configuration); !valid {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		after["publicConfiguration"] = configuration
+		changed = changed || !reflect.DeepEqual(configuration, connection.PublicConfiguration)
+	}
+	if !changed {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	version := connection.Version
+	operation.Action = "UPDATE"
+	operation.Target = entity.AssistantPlanTarget{Kind: "INTEGRATION_CONNECTION", Ref: connection.Ref, Name: connection.Name, Version: &version}
+	operation.Parameters = after
+	operation.Before = before
+	operation.After = cloneAssistantFields(after)
+	operation.ExpectedVersion = &version
+	operation.Selected = true
+	return operation, nil
+}
+
 func withAssistantAgentTemplateContext(parameters map[string]any) map[string]any {
 	instructions, ok := parameters["instructions"].(string)
 	if !ok {
@@ -427,7 +517,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_INTEGRATION_CONNECTION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -465,6 +555,9 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "UPDATE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
+	case "UPDATE_INTEGRATION_CONNECTION":
+		expectedTargetKind = "INTEGRATION_CONNECTION"
+		expectedTargetRef = assistantString(operation.Parameters, "connectionRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
@@ -625,6 +718,20 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.UpdateAgent, payload
+		result.Mutation.ExpectedVersion = &expected
+	case "UPDATE_INTEGRATION_CONNECTION":
+		if !onlyAssistantFields(operation.Input, "connectionRef", "definitionKey", "name", "publicConfiguration", "expectedVersion") ||
+			!hasAssistantFields(operation.Input, "connectionRef", "definitionKey", "name", "publicConfiguration", "expectedVersion") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		expected, expectedOK := assistantInt64(operation.Input, "expectedVersion")
+		configuration, configurationOK := assistantObjectValue(operation.Input, "publicConfiguration")
+		payload := command.ConnectionInput{Ref: assistantString(operation.Input, "connectionRef"), Name: assistantString(operation.Input, "name"), PublicConfiguration: configuration}
+		if !expectedOK || expected < 1 || !configurationOK || payload.Ref == "" ||
+			!validCapabilityKey(assistantString(operation.Input, "definitionKey")) || payload.Name == "" || len(payload.Name) > 160 || len(configuration) > 100 {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.UpdateConnection, payload
 		result.Mutation.ExpectedVersion = &expected
 	case "CREATE_WORKFLOW":
 		workflow, err := assistantWorkflow(operation.Input)

@@ -365,6 +365,33 @@ func TestConfigurationCatalogPinsAgentUpdateToExactContext(t *testing.T) {
 	}
 }
 
+func TestConfigurationCatalogPinsConnectionUpdateToExactContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{SystemAssistant: true, AssistantContext: &runtimecontract.RunnerAssistantContext{
+		EntityKind: "INTEGRATION_CONNECTION", EntityRef: "con_current", EntityName: "Source", AllowedOperations: []string{"UPDATE_INTEGRATION_CONNECTION"},
+	}}
+	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"UPDATE_INTEGRATION_CONNECTION"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemas := selected.(map[string]any)["operation_schemas"].([]map[string]any)
+	if len(schemas) != 1 || !reflect.DeepEqual(schemas[0]["required"], []string{"type", "title", "summary", "parameters"}) {
+		t.Fatalf("connection update must be server hydrated: %#v", schemas)
+	}
+	parameters := schemas[0]["properties"].(map[string]any)["parameters"].(map[string]any)
+	properties := parameters["properties"].(map[string]any)
+	if !reflect.DeepEqual(properties["connectionRef"].(map[string]any)["enum"], []string{"con_current"}) ||
+		properties["credential"] != nil || properties["definitionKey"] != nil || len(parameters["anyOf"].([]map[string]any)) != 2 {
+		t.Fatalf("connection update schema leaked target or secret fields: %#v", parameters)
+	}
+	if target := assistantServerTarget("UPDATE_INTEGRATION_CONNECTION", map[string]any{"connectionRef": "con_current", "name": "Source code"}, input.AssistantContext); target == nil || target["name"] != "Source" {
+		t.Fatalf("server target lost exact connection: %#v", target)
+	}
+	if target := assistantServerTarget("UPDATE_INTEGRATION_CONNECTION", map[string]any{"connectionRef": "con_other", "name": "Source code"}, input.AssistantContext); target != nil {
+		t.Fatalf("server accepted a different connection: %#v", target)
+	}
+}
+
 func containsString(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {

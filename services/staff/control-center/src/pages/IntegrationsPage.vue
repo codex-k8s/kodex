@@ -311,9 +311,9 @@ watch(
       if (current !== detailsGeneration) return;
       if (
         connection.ref !== connectionRef ||
-        connection.definitionKey !== "email"
+        (invocationRef !== undefined && connection.definitionKey !== "email")
       )
-        throw new Error("Invalid email confirmation connection");
+        throw new Error("Integration connection route mismatch");
       detailsConnection.value = connection;
     } catch (error) {
       if (current === detailsGeneration)
