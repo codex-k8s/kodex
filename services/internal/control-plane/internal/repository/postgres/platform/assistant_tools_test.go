@@ -91,6 +91,41 @@ func TestAssistantAgentUpdateRequiresExactContextAndOwnerSnapshot(t *testing.T) 
 	}
 }
 
+func TestAssistantEditedAgentUpdateRehydratesAuthorityEnvelope(t *testing.T) {
+	t.Parallel()
+	original, err := hydrateAssistantAgentFields("agt_current", "Coordinator", "Coordinate work", "Manage agents", "avatar-ref", 7,
+		entity.AssistantPlanOperation{Type: "UPDATE_AGENT", Key: "update-agent", Title: "Update agent", Summary: "Update agent",
+			Parameters: map[string]any{"agentRef": "agt_current", "purpose": "Coordinate releases"}, Selected: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := original
+	edited.Parameters = cloneAssistantFields(original.Parameters)
+	edited.Parameters["purpose"] = "Coordinate delivery"
+	edited.Before = map[string]any{"name": "forged"}
+	edited.After = map[string]any{"purpose": "forged"}
+	edited.Target.Ref = "agt_other"
+	edited.ExpectedVersion = nil
+	rehydrated, err := rehydrateEditedAssistantAgent(original, edited)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rehydrated.Target.Ref != "agt_current" || rehydrated.ExpectedVersion == nil || *rehydrated.ExpectedVersion != 7 ||
+		assistantString(rehydrated.Before, "name") != "Coordinator" || assistantString(rehydrated.After, "purpose") != "Coordinate delivery" ||
+		assistantString(rehydrated.After, "avatarUrl") != "avatar-ref" {
+		t.Fatalf("user edit changed server-owned agent authority: %#v", rehydrated)
+	}
+	edited.Parameters["avatarUrl"] = "forged"
+	if _, err := rehydrateEditedAssistantAgent(original, edited); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("user edit changed immutable avatar: %v", err)
+	}
+	edited.Parameters["avatarUrl"] = "avatar-ref"
+	edited.Parameters["agentRef"] = "agt_other"
+	if _, err := rehydrateEditedAssistantAgent(original, edited); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("user edit changed agent ref: %v", err)
+	}
+}
+
 func TestAssistantCreateTargetUsesClosedKinds(t *testing.T) {
 	t.Parallel()
 	parameters := map[string]any{"name": "Analyst"}
