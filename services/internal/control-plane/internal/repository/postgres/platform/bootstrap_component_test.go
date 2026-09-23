@@ -6724,6 +6724,24 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil || applied.Plan == nil || applied.Plan.State != "APPLIED" || applied.PlanReceipt == nil || len(applied.CreatedRefs) != 1 {
 		t.Fatalf("apply assistant plan: result=%#v refs=%v err=%v", applied.Plan, applied.CreatedRefs, err)
 	}
+	readback, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	if err != nil {
+		t.Fatalf("list assistant conversations after plan application: %v", err)
+	}
+	var appliedReadback *entity.AssistantPlan
+	for index := range readback {
+		if readback[index].Ref == created.Conversation.Ref {
+			appliedReadback = readback[index].LatestPlan
+			break
+		}
+	}
+	if appliedReadback == nil || appliedReadback.Receipt == nil ||
+		appliedReadback.Receipt.Ref != applied.PlanReceipt.Ref ||
+		appliedReadback.Receipt.PlanRevision != appliedReadback.Revision ||
+		len(appliedReadback.Receipt.Operations) != 1 ||
+		appliedReadback.Receipt.Operations[0].ResourceRef != applied.CreatedRefs[0] {
+		t.Fatalf("assistant conversation lost exact applied receipt: plan=%#v", appliedReadback)
+	}
 }
 
 func resolvedTestPrincipal(t *testing.T, ctx context.Context, repository *Repository, input platformrepo.ProofPrincipalInput, workload string) value.Principal {

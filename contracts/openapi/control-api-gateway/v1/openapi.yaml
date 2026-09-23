@@ -9535,6 +9535,7 @@ components:
         validationProblems: { type: array, maxItems: 100, items: { type: string, maxLength: 500 } }
         validatedAt: { $ref: '#/components/schemas/Timestamp' }
         appliedAt: { $ref: '#/components/schemas/Timestamp' }
+        receipt: { $ref: '#/components/schemas/AssistantPlanReceipt' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
     AssistantTurn:
       type: object

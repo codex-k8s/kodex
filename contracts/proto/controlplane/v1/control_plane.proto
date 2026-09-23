@@ -1527,6 +1527,7 @@ message AssistantPlan {
   repeated string validation_problems = 13;
   google.protobuf.Timestamp validated_at = 14;
   google.protobuf.Timestamp applied_at = 15;
+  AssistantPlanReceipt receipt = 16;
 }
 
 message AssistantContextDescriptor {

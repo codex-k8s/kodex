@@ -785,6 +785,7 @@ type AssistantPlan struct {
 	ValidationProblems                                              []string
 	CreatedAt                                                       time.Time
 	ValidatedAt, AppliedAt                                          *time.Time
+	Receipt                                                         *AssistantPlanReceipt
 }
 
 type AssistantPlanOperationReceipt struct {

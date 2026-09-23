@@ -2192,15 +2192,37 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		return errs.ErrUnavailable
 	}
 	rows.Close()
-	var raw []byte
+	var raw, rawReceiptOperations, rawReceiptConflicts []byte
 	var plan entity.AssistantPlan
+	var receiptRef, receiptOutcome string
+	var receiptRevision int64
+	var receiptAuditRefs, receiptCreatedRefs []string
+	var receiptCreatedAt *time.Time
 	err = tx.QueryRow(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref).Scan(
 		&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &plan.Revision, &plan.ValidatedRevision,
 		&plan.ContentDigest, &plan.ValidationProblems, &raw, &plan.CreatedAt, &plan.ValidatedAt, &plan.AppliedAt,
+		&receiptRef, &receiptRevision, &receiptOutcome, &rawReceiptOperations, &rawReceiptConflicts,
+		&receiptAuditRefs, &receiptCreatedRefs, &receiptCreatedAt,
 	)
 	if err == nil {
 		if json.Unmarshal(raw, &plan.Operations) != nil {
 			return errs.ErrUnavailable
+		}
+		if receiptRef != "" && receiptRevision == plan.Revision {
+			if receiptCreatedAt == nil ||
+				!((plan.State == "APPLIED" && receiptOutcome == "APPLIED") ||
+					(plan.State == "REJECTED" && receiptOutcome == "REJECTED") ||
+					(plan.State == "STALE" && receiptOutcome == "CONFLICT")) {
+				return errs.ErrUnavailable
+			}
+			receipt := entity.AssistantPlanReceipt{Ref: receiptRef, PlanRef: plan.Ref,
+				PlanRevision: receiptRevision, Outcome: receiptOutcome, AuditRefs: receiptAuditRefs,
+				CreatedResourceRefs: receiptCreatedRefs, CreatedAt: *receiptCreatedAt}
+			if json.Unmarshal(rawReceiptOperations, &receipt.Operations) != nil ||
+				json.Unmarshal(rawReceiptConflicts, &receipt.Conflicts) != nil {
+				return errs.ErrUnavailable
+			}
+			plan.Receipt = &receipt
 		}
 		plan.ConversationRef = item.Ref
 		plan.ProjectRef = item.ProjectRef

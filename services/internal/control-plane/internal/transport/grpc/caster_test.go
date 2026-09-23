@@ -280,6 +280,18 @@ func TestCastPlanBoundsOperationTitleWithoutChangingSummary(t *testing.T) {
 	}
 }
 
+func TestCastPlanIncludesPersistedReceipt(t *testing.T) {
+	t.Parallel()
+	plan := castPlan(&entity.AssistantPlan{Ref: "pln_exact", Revision: 2, State: "APPLIED",
+		Receipt: &entity.AssistantPlanReceipt{Ref: "rct_exact", PlanRef: "pln_exact", PlanRevision: 2,
+			Outcome: "APPLIED", Operations: []entity.AssistantPlanOperationReceipt{{OperationRef: "op_exact",
+				ResourceRef: "rimg_exact", Outcome: "APPLIED", AuditRef: "aud_exact"}}}})
+	if plan.GetReceipt().GetPlanRef() != "pln_exact" ||
+		plan.GetReceipt().GetOperations()[0].GetResourceRef() != "rimg_exact" {
+		t.Fatalf("plan receipt was not projected: %#v", plan.GetReceipt())
+	}
+}
+
 func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
 	t.Parallel()
 

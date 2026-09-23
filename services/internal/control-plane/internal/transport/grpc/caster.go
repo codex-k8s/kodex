@@ -609,7 +609,8 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 		ProjectRef: value.ProjectRef, AuditSummary: value.Summary, Applied: value.State == "APPLIED",
 		State: controlplanev1.AssistantPlanState(rawState), Revision: value.Revision, ValidatedRevision: value.ValidatedRevision,
 		ContentDigest: value.ContentDigest, ValidationProblems: append([]string(nil), value.ValidationProblems...),
-		ValidatedAt: optionalTimestamp(value.ValidatedAt), AppliedAt: optionalTimestamp(value.AppliedAt)}
+		ValidatedAt: optionalTimestamp(value.ValidatedAt), AppliedAt: optionalTimestamp(value.AppliedAt),
+		Receipt: castPlanReceipt(value.Receipt)}
 	for _, operation := range value.Operations {
 		raw := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+operation.Type]
 		rawAction := controlplanev1.AssistantPlanOperation_Action_value["ACTION_"+operation.Action]
