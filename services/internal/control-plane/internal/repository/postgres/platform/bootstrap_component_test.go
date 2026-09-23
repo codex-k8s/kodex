@@ -3002,8 +3002,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 		}
 		return tx.Commit(ctx)
 	}
-	const upgradedRevision = "system-assistant-core-v7"
-	const upgradedPrompt = "Platform-owned system assistant core prompt revision seven."
+	const upgradedRevision = "system-assistant-core-v8"
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision eight."
 	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
 		t.Fatalf("upgrade core prompt: %v", err)
 	}
