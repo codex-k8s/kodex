@@ -8724,6 +8724,7 @@ type AssistantPlan struct {
 	NextActions        []NextAction             `json:"nextActions"`
 	Operations         []AssistantPlanOperation `json:"operations"`
 	ProjectRef         *OpaqueRef               `json:"projectRef,omitempty"`
+	Receipt            *AssistantPlanReceipt    `json:"receipt,omitempty"`
 	Ref                OpaqueRef                `json:"ref"`
 	Revision           int64                    `json:"revision"`
 	State              AssistantPlanState       `json:"state"`
