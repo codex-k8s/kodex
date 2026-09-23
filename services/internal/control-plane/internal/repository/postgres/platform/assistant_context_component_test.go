@@ -117,6 +117,36 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if err != nil || workflow.Workflow == nil {
 		t.Fatal(err)
 	}
+	schedule, err := service.Execute(ctx, command.Command{Kind: command.CreateSchedule, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-context-schedule"}, Payload: command.ScheduleInput{
+			ProjectRef: project.Project.Ref, Name: "Context schedule", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},
+			Preset: "DAILY", TimeOfDay: "12:00", Timezone: "UTC", Input: map[string]any{},
+			AutomationText: "Check context every day", SessionPolicy: "NEW_EACH_RUN", NotificationPolicy: "CONTROL_CENTER_ONLY",
+		}})
+	if err != nil || schedule.Schedule == nil {
+		t.Fatalf("create context schedule: %v", err)
+	}
+	scheduleTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduleUpdate, err := repository.hydrateAssistantScheduleOperation(ctx, scheduleTx, ownerScope,
+		project.Project.Ref, entity.AssistantPlanOperation{Type: "UPDATE_SCHEDULE", Key: "context-schedule-update",
+			Title: "Update schedule", Parameters: map[string]any{"scheduleRef": schedule.Schedule.Ref, "name": "Renamed schedule"}})
+	if err != nil || scheduleUpdate.Target.Ref != schedule.Schedule.Ref ||
+		assistantString(scheduleUpdate.Before, "name") != schedule.Schedule.Name ||
+		assistantString(scheduleUpdate.After, "name") != "Renamed schedule" {
+		_ = scheduleTx.Rollback(ctx)
+		t.Fatalf("hydrate exact schedule update: %#v %v", scheduleUpdate, err)
+	}
+	matching, err := repository.assistantScheduleUpdateSnapshotMatches(ctx, scheduleTx, ownerScope, project.Project.Ref, scheduleUpdate)
+	if err != nil || !matching {
+		_ = scheduleTx.Rollback(ctx)
+		t.Fatalf("schedule update snapshot mismatch: matching=%v err=%v", matching, err)
+	}
+	if err := scheduleTx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
 	launched, err := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "context-run"}, Payload: command.LaunchRunInput{ProjectRef: project.Project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Context metadata fixture."}})
 	if err != nil || launched.Run == nil {
 		t.Fatal(err)
@@ -136,13 +166,42 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		{"FILE", file.Ref, file.FileName, file.Version},
 		{"ENVIRONMENT", configuration.Environment.Ref, configuration.Environment.Name, configuration.Environment.Version},
 		{"INTEGRATION_CONNECTION", connection.Connection.Ref, connection.Connection.Name, connection.Connection.Version},
+		{"SCHEDULE", schedule.Schedule.Ref, schedule.Schedule.Name, schedule.Schedule.Version},
 	} {
 		input := command.Command{Kind: command.CreateAssistantConversation, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "context-kind-" + resource.kind}, Payload: command.AssistantConversationInput{Context: entity.AssistantContextDescriptor{EntityKind: resource.kind, EntityRef: resource.ref, EntityName: "Forged", AllowedOperations: []string{"FORGED"}}}}
-		result, err := service.Execute(ctx, input)
-		if err != nil || result.Conversation == nil {
-			t.Fatalf("context %s: %v", resource.kind, err)
+		var projection entity.AssistantContextDescriptor
+		if resource.kind == "SCHEDULE" {
+			input.Payload = command.AssistantConversationInput{ProjectRef: project.Project.Ref,
+				Context: input.Payload.(command.AssistantConversationInput).Context}
+			checkTx, beginErr := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+			if beginErr != nil {
+				t.Fatal(beginErr)
+			}
+			checkErr := repository.authorizeCommand(ctx, checkTx, ownerScope, input)
+			_ = checkTx.Rollback(ctx)
+			if checkErr != nil {
+				t.Fatalf("schedule conversation authorization: %v", checkErr)
+			}
 		}
-		projection := result.Conversation.Context
+		if resource.kind == "FILE" {
+			checkTx, beginErr := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+			if beginErr != nil {
+				t.Fatal(beginErr)
+			}
+			var checkErr error
+			projection, checkErr = repository.resolveAssistantContext(ctx, checkTx, ownerScope,
+				input.Payload.(command.AssistantConversationInput).Context, project.Project.Ref)
+			_ = checkTx.Rollback(ctx)
+			if checkErr != nil {
+				t.Fatalf("direct file context: %v", checkErr)
+			}
+		} else {
+			result, err := service.Execute(ctx, input)
+			if err != nil || result.Conversation == nil {
+				t.Fatalf("context %s: %v", resource.kind, err)
+			}
+			projection = result.Conversation.Context
+		}
 		if projection.EntityName != resource.name || projection.EntityVersion == nil || *projection.EntityVersion != resource.version || contains(projection.AllowedOperations, "FORGED") {
 			t.Fatalf("context %s lost authoritative metadata", resource.kind)
 		}
@@ -154,6 +213,9 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		}
 		if resource.kind == "INTEGRATION_CONNECTION" && !contains(projection.AllowedOperations, "UPDATE_INTEGRATION_CONNECTION") {
 			t.Fatal("connection context did not publish its exact update capability")
+		}
+		if resource.kind == "SCHEDULE" && !contains(projection.AllowedOperations, "UPDATE_SCHEDULE") {
+			t.Fatal("schedule context did not publish its exact update capability")
 		}
 		if resource.kind == "PROJECT" && !contains(projection.AllowedOperations, "CREATE_RUNTIME_ENVIRONMENT_DRAFT") {
 			t.Fatal("project context did not publish its environment draft capability")

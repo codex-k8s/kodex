@@ -208,9 +208,13 @@ watch(workflow, (current) => {
 });
 
 const previewInput = computed(() => {
+  const misfirePolicy = stringParameter("misfirePolicy") || "COALESCE";
+  const overlapPolicy = stringParameter("overlapPolicy") || "FORBID";
   if (
     !presets.includes(preset.value as ScheduleInput["preset"]) ||
-    !stringParameter("timezone")
+    !stringParameter("timezone") ||
+    !["COALESCE", "CATCH_UP_ONE", "SKIP"].includes(misfirePolicy) ||
+    !["FORBID", "ALLOW"].includes(overlapPolicy)
   )
     return undefined;
   return scheduleTimePreview({
@@ -219,8 +223,8 @@ const previewInput = computed(() => {
     timeOfDay: stringParameter("timeOfDay"),
     dayOfWeek: stringParameter("dayOfWeek") as ScheduleInput["dayOfWeek"],
     timezone: stringParameter("timezone"),
-    misfirePolicy: "COALESCE",
-    overlapPolicy: "FORBID",
+    misfirePolicy: misfirePolicy as ScheduleInput["misfirePolicy"],
+    overlapPolicy: overlapPolicy as ScheduleInput["overlapPolicy"],
   });
 });
 const previewKey = computed(() => JSON.stringify(previewInput.value));

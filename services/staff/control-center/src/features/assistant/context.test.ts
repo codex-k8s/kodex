@@ -199,6 +199,21 @@ describe("assistant route context", () => {
     expect(value.descriptor.entityVersion).toBeUndefined();
   });
 
+  it("связывает выбранную автоматизацию с точным project context", () => {
+    const current = route(
+      "/projects/prj_sales/automations?scheduleRef=sch_daily",
+      {
+        projectRef: "prj_sales",
+      },
+    );
+    current.name = "automations";
+    current.query = { scheduleRef: "sch_daily" };
+    const value = resolveAssistantContext(current, sources);
+    expect(value.projectRef).toBe("prj_sales");
+    expect(value.descriptor.entityKind).toBe("SCHEDULE");
+    expect(value.descriptor.entityRef).toBe("sch_daily");
+  });
+
   it("не принимает неоднозначный query и не переносит выбор на другую страницу", () => {
     const current = route("/files", {});
     current.name = "organization-files";

@@ -977,7 +977,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 func (repository *Repository) resolveAssistantContext(ctx context.Context, tx pgx.Tx, current scope, descriptor entity.AssistantContextDescriptor, projectRef string) (entity.AssistantContextDescriptor, error) {
 	if len(descriptor.Route) > 500 || len(descriptor.EntityKind) > 80 || len(descriptor.EntityRef) > 96 ||
 		(descriptor.EntityKind == "") != (descriptor.EntityRef == "") ||
-		!contains([]string{"", "PROJECT", "AGENT", "WORKFLOW", "RUN", "FILE", "ENVIRONMENT", "INTEGRATION_CONNECTION"}, descriptor.EntityKind) {
+		!contains([]string{"", "PROJECT", "AGENT", "WORKFLOW", "RUN", "FILE", "ENVIRONMENT", "INTEGRATION_CONNECTION", "SCHEDULE"}, descriptor.EntityKind) {
 		return entity.AssistantContextDescriptor{}, errs.ErrInvalid
 	}
 	if projectRef != "" {
@@ -1151,7 +1151,17 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
-		outcome, err := repository.applyCommand(ctx, operationEffectsTx, scope, planned)
+		var outcome commandOutcome
+		if operation.Type == "UPDATE_SCHEDULE" {
+			var matching bool
+			matching, err = repository.assistantScheduleUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if err == nil {
+			outcome, err = repository.applyCommand(ctx, operationEffectsTx, scope, planned)
+		}
 		if err != nil {
 			if errors.Is(err, errs.ErrVersionMismatch) || errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrNotFound) {
 				if rollbackErr := operationEffectsTx.Rollback(ctx); rollbackErr != nil {

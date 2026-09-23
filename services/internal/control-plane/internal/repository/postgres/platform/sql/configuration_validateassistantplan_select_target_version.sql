@@ -8,6 +8,9 @@ UNION ALL
 SELECT version FROM control_plane.workflows
 WHERE $2='WORKFLOW' AND organization_id=$1::uuid AND ref=$3
 UNION ALL
+SELECT version FROM control_plane.schedules
+WHERE $2='SCHEDULE' AND organization_id=$1::uuid AND ref=$3 AND lifecycle_state='ACTIVE'
+UNION ALL
 SELECT version FROM control_plane.projects
 WHERE $2='PROJECT' AND organization_id=$1::uuid AND ref=$3 AND lifecycle='ACTIVE'
 LIMIT 1

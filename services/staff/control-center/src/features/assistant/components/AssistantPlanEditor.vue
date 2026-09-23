@@ -364,7 +364,8 @@ const friendlyInputsReady = computed(() =>
           runFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_WORKFLOW" ||
           workflowFormValidity.value[operation.value.ref] === true) &&
-        (operation.value.type !== "CREATE_SCHEDULE" ||
+        ((operation.value.type !== "CREATE_SCHEDULE" &&
+          operation.value.type !== "UPDATE_SCHEDULE") ||
           scheduleFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CHANGE_CAPABILITY" ||
           capabilityFormValidity.value[operation.value.ref] === true) &&
@@ -871,7 +872,10 @@ function snapshot(value: string): Record<string, unknown> {
               "
             />
             <AssistantSchedulePlanForm
-              v-else-if="operation.value.type === 'CREATE_SCHEDULE'"
+              v-else-if="
+                operation.value.type === 'CREATE_SCHEDULE' ||
+                operation.value.type === 'UPDATE_SCHEDULE'
+              "
               :operation="operation"
               :project-ref="plan.projectRef"
               :disabled="!editable"

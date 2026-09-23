@@ -392,6 +392,33 @@ func TestConfigurationCatalogPinsConnectionUpdateToExactContext(t *testing.T) {
 	}
 }
 
+func TestConfigurationCatalogPinsScheduleUpdateToExactContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
+		EntityKind: "SCHEDULE", EntityRef: "sch_current", EntityName: "Daily review", AllowedOperations: []string{"UPDATE_SCHEDULE"},
+	}}
+	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"UPDATE_SCHEDULE"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemas := selected.(map[string]any)["operation_schemas"].([]map[string]any)
+	if len(schemas) != 1 || !reflect.DeepEqual(schemas[0]["required"], []string{"type", "title", "summary", "parameters"}) {
+		t.Fatalf("schedule update must be server hydrated: %#v", schemas)
+	}
+	parameters := schemas[0]["properties"].(map[string]any)["parameters"].(map[string]any)
+	properties := parameters["properties"].(map[string]any)
+	if !reflect.DeepEqual(properties["scheduleRef"].(map[string]any)["enum"], []string{"sch_current"}) ||
+		properties["projectRef"] != nil || properties["promptInputs"] != nil || len(parameters["anyOf"].([]map[string]any)) != 12 {
+		t.Fatalf("schedule update schema leaked another target or pinned fields: %#v", parameters)
+	}
+	if target := assistantServerTarget("UPDATE_SCHEDULE", map[string]any{"scheduleRef": "sch_current", "name": "Weekly review"}, input.AssistantContext); target == nil || target["name"] != "Daily review" {
+		t.Fatalf("server target lost exact schedule: %#v", target)
+	}
+	if target := assistantServerTarget("UPDATE_SCHEDULE", map[string]any{"scheduleRef": "sch_other", "name": "Weekly review"}, input.AssistantContext); target != nil {
+		t.Fatalf("server accepted a different schedule: %#v", target)
+	}
+}
+
 func containsString(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {

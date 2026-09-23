@@ -135,7 +135,7 @@ func assistantPlanDigest(summary string, rawOperations []byte) string {
 func assistantOperationType(value string) bool {
 	switch value {
 	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_WORKFLOW", "CHANGE_CAPABILITY",
-		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "LAUNCH_RUN",
+		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
 		return true
@@ -150,6 +150,8 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 		return contextKind == "AGENT" && contextRef != "" && assistantString(operation.Parameters, "agentRef") == contextRef
 	case "UPDATE_INTEGRATION_CONNECTION":
 		return contextKind == "INTEGRATION_CONNECTION" && contextRef != "" && assistantString(operation.Parameters, "connectionRef") == contextRef
+	case "UPDATE_SCHEDULE":
+		return contextKind == "SCHEDULE" && contextRef != "" && assistantString(operation.Parameters, "scheduleRef") == contextRef
 	default:
 		return true
 	}
@@ -188,6 +190,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "UPDATE_INTEGRATION_CONNECTION" {
 		return repository.hydrateAssistantConnectionOperation(ctx, tx, actorScope, operation)
+	}
+	if operation.Type == "UPDATE_SCHEDULE" {
+		return repository.hydrateAssistantScheduleOperation(ctx, tx, actorScope, projectRef, operation)
 	}
 	if operation.Type != "UPDATE_PROJECT" {
 		return operation, nil
@@ -517,7 +522,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_INTEGRATION_CONNECTION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -558,6 +563,9 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "UPDATE_INTEGRATION_CONNECTION":
 		expectedTargetKind = "INTEGRATION_CONNECTION"
 		expectedTargetRef = assistantString(operation.Parameters, "connectionRef")
+	case "UPDATE_SCHEDULE":
+		expectedTargetKind = "SCHEDULE"
+		expectedTargetRef = assistantString(operation.Parameters, "scheduleRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
@@ -805,6 +813,13 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			return command.Command{}, err
 		}
 		result.Kind, result.Payload = command.CreateSchedule, schedule
+	case "UPDATE_SCHEDULE":
+		schedule, expected, err := assistantUpdateSchedule(operation.Input)
+		if err != nil {
+			return command.Command{}, err
+		}
+		result.Kind, result.Payload = command.UpdateSchedule, schedule
+		result.Mutation.ExpectedVersion = &expected
 	case "LAUNCH_RUN":
 		run, err := assistantRun(operation.Input)
 		if err != nil {

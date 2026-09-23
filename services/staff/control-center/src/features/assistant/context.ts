@@ -31,6 +31,7 @@ export const assistantContextOperations = [
   "CHANGE_CAPABILITY",
   "CHANGE_INTEGRATION_GRANT",
   "CREATE_SCHEDULE",
+  "UPDATE_SCHEDULE",
   "LAUNCH_RUN",
   "CREATE_INTEGRATION_CONNECTION",
   "UPDATE_INTEGRATION_CONNECTION",
@@ -49,6 +50,7 @@ export function readableContextKind(kind: string) {
       "FILE",
       "ENVIRONMENT",
       "INTEGRATION_CONNECTION",
+      "SCHEDULE",
     ] as const
   ).find((known) => known === kind);
 }
@@ -112,11 +114,13 @@ export function resolveAssistantContext(
       ? { kind: "ENVIRONMENT", ref: routeParameter(route, "environmentRef") }
       : route.name === "integrations"
         ? { kind: "INTEGRATION_CONNECTION", ref: route.query.connectionRef }
-        : ["files", "files-trash", "organization-files"].includes(
-              String(route.name),
-            )
-          ? { kind: "FILE", ref: route.query.artifactRef }
-          : undefined;
+        : route.name === "automations"
+          ? { kind: "SCHEDULE", ref: route.query.scheduleRef }
+          : ["files", "files-trash", "organization-files"].includes(
+                String(route.name),
+              )
+            ? { kind: "FILE", ref: route.query.artifactRef }
+            : undefined;
 
   if (typeof selectedResource?.ref === "string" && selectedResource.ref) {
     return {

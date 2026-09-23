@@ -97,7 +97,7 @@ func assistantResourceRoute(item *controlplanev1.SearchResult) (string, string) 
 	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_RUNTIME_ENVIRONMENT:
 		return "RUNTIME_ENVIRONMENT", project + "/environments/" + url.PathEscape(item.GetRef())
 	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_SCHEDULE:
-		return "SCHEDULE", project + "/automations"
+		return "SCHEDULE", project + "/automations?scheduleRef=" + url.QueryEscape(item.GetRef())
 	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_SECRET:
 		return "SECRET", project + "/secrets"
 	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_INTEGRATION:

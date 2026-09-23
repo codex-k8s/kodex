@@ -87,12 +87,22 @@ export function assistantCreatedScheduleTarget(
   plan: AssistantPlan,
   operationRef: string,
 ): { projectRef: string; scheduleRef: string } | undefined {
-  const scheduleRef = assistantAppliedResourceRef(
+  const createdRef = assistantAppliedResourceRef(
     plan,
     operationRef,
     "CREATE_SCHEDULE",
     "SCHEDULE",
   );
+  const updatedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "UPDATE_SCHEDULE",
+    "SCHEDULE",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const scheduleRef =
+    createdRef ||
+    (updatedRef === operation?.target.ref ? updatedRef : undefined);
   return plan.projectRef && scheduleRef
     ? { projectRef: plan.projectRef, scheduleRef }
     : undefined;
@@ -183,6 +193,7 @@ export type FriendlyPlanOperationType =
   | "CHANGE_INTEGRATION_GRANT"
   | "CREATE_WORKFLOW"
   | "CREATE_SCHEDULE"
+  | "UPDATE_SCHEDULE"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
   | "CREATE_ROLE_IMAGE_RECIPE"
   | "CREATE_INTEGRATION_CONNECTION"
@@ -201,6 +212,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "CHANGE_INTEGRATION_GRANT" &&
     operation.value.type !== "CREATE_WORKFLOW" &&
     operation.value.type !== "CREATE_SCHEDULE" &&
+    operation.value.type !== "UPDATE_SCHEDULE" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
     operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
     operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
@@ -219,7 +231,8 @@ export function friendlyPlanOperationType(
             ? "INTEGRATION_CONNECTION"
             : operation.value.type === "CREATE_WORKFLOW"
               ? "WORKFLOW"
-              : operation.value.type === "CREATE_SCHEDULE"
+              : operation.value.type === "CREATE_SCHEDULE" ||
+                  operation.value.type === "UPDATE_SCHEDULE"
                 ? "SCHEDULE"
                 : operation.value.type.endsWith("PROJECT")
                   ? "PROJECT"

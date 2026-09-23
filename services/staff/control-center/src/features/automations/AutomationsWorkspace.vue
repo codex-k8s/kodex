@@ -56,6 +56,7 @@ const props = defineProps<{
   projectRef: string;
   initialScheduleRef?: string;
 }>();
+const emit = defineEmits<{ select: [scheduleRef: string] }>();
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
 
@@ -67,6 +68,10 @@ const listLoading = ref(false);
 const moreLoading = ref(false);
 const listProblem = ref<AppProblem>();
 const selectedRef = ref("");
+function selectSchedule(scheduleRef: string): void {
+  selectedRef.value = scheduleRef;
+  emit("select", scheduleRef);
+}
 const selectedSection = ref<"OVERVIEW" | "VERSIONS" | "RUNS">("OVERVIEW");
 const editorOpen = ref(false);
 const editorScheduleRef = ref("");
@@ -610,7 +615,7 @@ onBeforeUnmount(() => {
             }"
             type="button"
             role="listitem"
-            @click="selectedRef = schedule.ref"
+            @click="selectSchedule(schedule.ref)"
             @dblclick="openEdit(schedule)"
           >
             <span class="automation-row__identity">

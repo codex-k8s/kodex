@@ -244,6 +244,42 @@ describe("assistant role image build target", () => {
         scheduleRef: "sch_exact",
       },
     );
+    const updated = {
+      ...schedulePlan,
+      operations: [
+        {
+          ...scheduleOperation,
+          type: "UPDATE_SCHEDULE" as const,
+          action: "UPDATE" as const,
+          target: {
+            kind: "SCHEDULE",
+            ref: "sch_exact",
+            name: "Еженедельная сводка",
+          },
+        },
+      ],
+    };
+    expect(assistantCreatedScheduleTarget(updated, "op_schedule")).toEqual({
+      projectRef: "prj_market",
+      scheduleRef: "sch_exact",
+    });
+    const updatedOperation = updated.operations[0];
+    expect(updatedOperation).toBeDefined();
+    if (!updatedOperation) return;
+    expect(
+      assistantCreatedScheduleTarget(
+        {
+          ...updated,
+          operations: [
+            {
+              ...updatedOperation,
+              target: { kind: "SCHEDULE", ref: "sch_other", name: "Другая" },
+            },
+          ],
+        },
+        "op_schedule",
+      ),
+    ).toBeUndefined();
     expect(
       assistantCreatedScheduleTarget(
         { ...schedulePlan, revision: schedulePlan.revision + 1 },
@@ -869,6 +905,63 @@ describe("assistant plan editor model", () => {
     expect(changed?.parameters).toEqual(changed?.after);
     expect(changed?.parameters.automationText).toBe("Проверь итоги недели");
     expect(changed?.parameters.cronExpression).toBe("0 10 * * 1");
+  });
+
+  it("редактирует точную существующую автоматизацию без изменения её ссылки и версии", () => {
+    const parameters = {
+      scheduleRef: "sch_weekly",
+      projectRef: "prj_market",
+      name: "Недельная сводка",
+      targetType: "AGENT",
+      targetRef: "agt_manager",
+      preset: "WEEKLY",
+      cronExpression: "0 9 * * 1",
+      timeOfDay: "09:00",
+      dayOfWeek: "MONDAY",
+      timezone: "Europe/Saratov",
+      input: {},
+      automationText: "Составь сводку за неделю",
+      sessionPolicy: "NEW_EACH_RUN",
+      notificationPolicy: "CONTROL_CENTER_ONLY",
+      dstGapPolicy: "SHIFT_FORWARD",
+      dstFoldPolicy: "RUN_ONCE_EARLIEST",
+      misfirePolicy: "COALESCE",
+      overlapPolicy: "FORBID",
+      promptInputs: {},
+    };
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "UPDATE_SCHEDULE",
+        action: "UPDATE",
+        target: {
+          kind: "SCHEDULE",
+          ref: "sch_weekly",
+          name: "Недельная сводка",
+          version: 4,
+        },
+        expectedVersion: 4,
+        parameters,
+        before: { ...parameters, automationText: "Старая задача" },
+        after: parameters,
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("UPDATE_SCHEDULE");
+    updateOperationParameter(
+      first,
+      "automationText",
+      "Проверь завершённые работы",
+    );
+    const changed = operationInputs(editable)[0];
+    expect(changed?.target.ref).toBe("sch_weekly");
+    expect(changed?.expectedVersion).toBe(4);
+    expect(changed?.parameters.automationText).toBe(
+      "Проверь завершённые работы",
+    );
+    expect(changed?.parameters).toEqual(changed?.after);
   });
 
   it("создаёт независимый draft из Vue reactive proxy", () => {

@@ -16,6 +16,13 @@ const { locale } = useI18n();
 const target = computed(() =>
   assistantCreatedScheduleTarget(props.plan, props.operationRef),
 );
+const updated = computed(() =>
+  props.plan.operations.some(
+    (operation) =>
+      operation.ref === props.operationRef &&
+      operation.type === "UPDATE_SCHEDULE",
+  ),
+);
 const schedule = ref<Schedule>();
 const loading = ref(false);
 const problem = ref(false);
@@ -75,7 +82,13 @@ watch(
 <template>
   <section v-if="target" class="assistant-schedule-card" aria-live="polite">
     <header>
-      <strong>{{ $t("assistant.createdSchedule.title") }}</strong>
+      <strong>{{
+        $t(
+          updated
+            ? "assistant.createdSchedule.updatedTitle"
+            : "assistant.createdSchedule.title",
+        )
+      }}</strong>
       <StatusBadge v-if="schedule" :state="schedule.state" />
     </header>
     <p v-if="loading && !schedule">{{ $t("common.loading") }}</p>
@@ -100,7 +113,11 @@ watch(
       </button>
       <RouterLink
         class="button button--primary"
-        :to="{ name: 'automations', params: { projectRef: target.projectRef } }"
+        :to="{
+          name: 'automations',
+          params: { projectRef: target.projectRef },
+          query: { scheduleRef: target.scheduleRef },
+        }"
         @click="emit('navigate')"
         >{{ $t("assistant.createdSchedule.open") }}</RouterLink
       >

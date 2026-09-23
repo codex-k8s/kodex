@@ -1011,7 +1011,9 @@ onBeforeUnmount(() => {
                   />
                   <AssistantCreatedScheduleCard
                     v-for="operation in turn.plan.operations.filter(
-                      (item) => item.type === 'CREATE_SCHEDULE',
+                      (item) =>
+                        item.type === 'CREATE_SCHEDULE' ||
+                        item.type === 'UPDATE_SCHEDULE',
                     )"
                     :key="`schedule-${operation.ref}`"
                     :plan="turn.plan"

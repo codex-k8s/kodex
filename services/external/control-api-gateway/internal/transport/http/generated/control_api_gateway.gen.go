@@ -604,6 +604,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                   AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
 	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION   AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                 AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
 )
 
 // Valid indicates whether the value is a known member of the AssistantContextDescriptorAllowedOperations enum.
@@ -640,6 +641,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE:
 		return true
 	default:
 		return false
@@ -760,6 +763,7 @@ const (
 	AssistantPlanOperationTypeUPDATEAGENT                   AssistantPlanOperationType = "UPDATE_AGENT"
 	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION   AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeUPDATEPROJECT                 AssistantPlanOperationType = "UPDATE_PROJECT"
+	AssistantPlanOperationTypeUPDATESCHEDULE                AssistantPlanOperationType = "UPDATE_SCHEDULE"
 )
 
 // Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
@@ -796,6 +800,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeUPDATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeUPDATESCHEDULE:
 		return true
 	default:
 		return false

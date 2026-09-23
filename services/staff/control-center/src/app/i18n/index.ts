@@ -3064,6 +3064,7 @@ const ru = {
     },
     createdSchedule: {
       title: "Созданная автоматизация",
+      updatedTitle: "Изменённая автоматизация",
       loadFailed:
         "Не удалось прочитать состояние автоматизации. Повторите обновление.",
       nextRun: "Следующий запуск: {time}",
@@ -6396,6 +6397,7 @@ const en = {
     },
     createdSchedule: {
       title: "Created automation",
+      updatedTitle: "Updated automation",
       loadFailed: "Could not read the automation status. Refresh to try again.",
       nextRun: "Next run: {time}",
       noNextRun: "No next run is scheduled yet.",

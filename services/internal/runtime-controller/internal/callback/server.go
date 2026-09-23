@@ -905,7 +905,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	}
 	normalized["type"] = kind
 	normalized["parameters"] = normalizedParameters
-	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" {
+	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" {
 		normalized["title"] = assistantOperationTitle(kind, normalizedParameters, projectName)
 	}
 	if operationSummary, _ := normalized["summary"].(string); strings.TrimSpace(operationSummary) == "" {
@@ -935,6 +935,7 @@ var assistantParameterAliases = map[string]string{
 	"image_artifact_ref": "imageArtifactRef", "environment_key": "environmentKey",
 	"notification_policy": "notificationPolicy", "parallel_group": "parallelGroup",
 	"project_ref": "projectRef", "public_configuration": "publicConfiguration",
+	"schedule_ref": "scheduleRef", "cron_expression": "cronExpression", "automation_text": "automationText",
 	"required_capability_keys": "requiredCapabilityKeys", "role_definition_ref": "roleDefinitionRef",
 	"role_description": "roleDescription", "runtime_ref": "runtimeRef", "session_policy": "sessionPolicy",
 	"session_ref": "sessionRef", "target_ref": "targetRef", "target_type": "targetType",
@@ -982,7 +983,7 @@ func normalizeAssistantParameterValue(value any) (any, error) {
 
 func assistantOperationTitle(kind string, parameters map[string]any, entityName string) string {
 	name, _ := parameters["name"].(string)
-	if (kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION") && strings.TrimSpace(entityName) != "" {
+	if (kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE") && strings.TrimSpace(entityName) != "" {
 		name = entityName
 	}
 	if strings.TrimSpace(name) == "" {
@@ -997,6 +998,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		"CREATE_INTEGRATION_CONNECTION":    "Создать подключение",
 		"UPDATE_INTEGRATION_CONNECTION":    "Изменить подключение",
 		"CREATE_SCHEDULE":                  "Создать автоматизацию",
+		"UPDATE_SCHEDULE":                  "Изменить автоматизацию",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT": "Создать черновик среды",
 		"CREATE_ROLE_IMAGE_RECIPE":         "Создать рецепт образа",
 	}
@@ -1029,7 +1031,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_INTEGRATION_CONNECTION":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE":
 		return true
 	default:
 		return false
@@ -1037,7 +1039,7 @@ func assistantServerHydratedOperation(kind string) bool {
 }
 
 func assistantServerAction(kind string) string {
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" {
 		return "UPDATE"
 	}
 	return "CREATE"
@@ -1064,6 +1066,13 @@ func assistantServerTarget(kind string, parameters map[string]any, context *runt
 			return nil
 		}
 		return map[string]any{"kind": "INTEGRATION_CONNECTION", "name": context.EntityName}
+	} else if kind == "UPDATE_SCHEDULE" {
+		requestedRef, _ := parameters["scheduleRef"].(string)
+		if context == nil || context.EntityKind != "SCHEDULE" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "SCHEDULE", "name": context.EntityName}
 	}
 	name, _ := parameters["name"].(string)
 	if strings.TrimSpace(name) == "" {

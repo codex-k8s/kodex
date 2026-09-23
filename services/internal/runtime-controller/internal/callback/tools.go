@@ -267,6 +267,9 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "INTEGRATION_CONNECTION" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_INTEGRATION_CONNECTION", connectionUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
+	if input.AssistantContext.EntityKind == "SCHEDULE" && input.AssistantContext.EntityRef != "" {
+		result = append(result, assistantOperationSchema("UPDATE_SCHEDULE", scheduleUpdateInputSchema(input.AssistantContext.EntityRef)))
+	}
 	if len(input.AssistantContext.AllowedOperations) == 0 {
 		return nil
 	}
@@ -304,6 +307,25 @@ func connectionUpdateInputSchema(connectionRef string) map[string]any {
 	return schema
 }
 
+func scheduleUpdateInputSchema(scheduleRef string) map[string]any {
+	schema := objectSchema([]string{"scheduleRef"}, map[string]any{
+		"scheduleRef": enumSchema(scheduleRef), "name": stringSchema(1, 160),
+		"targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
+		"preset":         enumSchema("HOURLY", "DAILY", "WEEKDAYS", "WEEKLY", "CUSTOM"),
+		"cronExpression": stringSchema(0, 120), "timeOfDay": stringSchema(0, 5),
+		"dayOfWeek": enumSchema("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"),
+		"timezone":  stringSchema(1, 80), "input": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+		"automationText": stringSchema(1, 32768), "sessionPolicy": enumSchema("NEW_EACH_RUN", "CONTINUE_ONE"),
+		"notificationPolicy": enumSchema("CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"),
+	})
+	branches := make([]map[string]any, 0, 12)
+	for _, field := range []string{"name", "targetType", "targetRef", "preset", "cronExpression", "timeOfDay", "dayOfWeek", "timezone", "input", "automationText", "sessionPolicy", "notificationPolicy"} {
+		branches = append(branches, map[string]any{"required": []string{field}})
+	}
+	schema["anyOf"] = branches
+	return schema
+}
+
 func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"projectRef"}, map[string]any{
 		"projectRef": projectRef,
@@ -334,7 +356,7 @@ func integrationGrantInputSchema() map[string]any {
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true
@@ -359,7 +381,7 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		before = objectSchema(nil, map[string]any{})
 		after = parameters
 	}
-	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION"
+	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE"
 	if !serverHydrated {
 		required = append(required, "before", "after")
 	}

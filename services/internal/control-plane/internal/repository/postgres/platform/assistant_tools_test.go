@@ -529,3 +529,62 @@ func TestAssistantOperationCommandBuildsOwnerFriendlySchedule(t *testing.T) {
 		t.Fatalf("custom cron expression must be preserved: %#v err=%v", mapped, err)
 	}
 }
+
+func TestAssistantScheduleUpdatePinsSnapshotAndRejectsForgedDraft(t *testing.T) {
+	t.Parallel()
+	before := map[string]any{
+		"scheduleRef": "sch_12345678", "projectRef": "prj_12345678", "name": "Daily review",
+		"targetType": "AGENT", "targetRef": "agt_12345678", "preset": "DAILY",
+		"cronExpression": "30 9 * * *", "timeOfDay": "09:30", "dayOfWeek": "",
+		"timezone": "Europe/Saratov", "input": map[string]any{}, "automationText": "Review the work",
+		"sessionPolicy": "NEW_EACH_RUN", "notificationPolicy": "CONTROL_CENTER_ONLY",
+		"dstGapPolicy": "SHIFT_FORWARD", "dstFoldPolicy": "RUN_ONCE_EARLIEST", "misfirePolicy": "COALESCE",
+		"overlapPolicy": "FORBID", "promptInputs": map[string]any{},
+	}
+	proposed := entity.AssistantPlanOperation{Type: "UPDATE_SCHEDULE", Key: "schedule-update",
+		Title: "Update schedule", Summary: "Update schedule", Parameters: map[string]any{
+			"scheduleRef": "sch_12345678", "name": "Weekly review", "preset": "WEEKLY", "dayOfWeek": "MONDAY",
+		}}
+	if !assistantOperationMatchesContext("SCHEDULE", "sch_12345678", proposed) ||
+		assistantOperationMatchesContext("SCHEDULE", "sch_other", proposed) ||
+		assistantOperationMatchesContext("PROJECT", "sch_12345678", proposed) {
+		t.Fatal("schedule update accepted a different context")
+	}
+	hydrated, err := hydrateAssistantScheduleFields(before, 7, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.UpdateSchedule || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 7 {
+		t.Fatalf("schedule update command invalid: %#v %v", mapped, err)
+	}
+	payload := mapped.Payload.(command.ScheduleInput)
+	if payload.Ref != "sch_12345678" || payload.ProjectRef != "prj_12345678" || payload.Name != "Weekly review" ||
+		payload.Preset != "WEEKLY" || payload.DSTFoldPolicy != "RUN_ONCE_EARLIEST" || payload.Target.Ref != "agt_12345678" {
+		t.Fatalf("schedule update lost the preserved snapshot: %#v", payload)
+	}
+	edited := normalized
+	edited.Parameters = cloneAssistantFields(normalized.Parameters)
+	edited.Parameters["name"] = "Team review"
+	edited.Before = map[string]any{"name": "forged"}
+	edited.After = map[string]any{"name": "forged"}
+	edited.Target.Ref = "sch_other"
+	edited.ExpectedVersion = nil
+	rehydrated, err := rehydrateEditedAssistantSchedule(normalized, edited)
+	if err != nil || rehydrated.Target.Ref != "sch_12345678" || *rehydrated.ExpectedVersion != 7 ||
+		assistantString(rehydrated.After, "name") != "Team review" {
+		t.Fatalf("schedule draft edit lost authoritative envelope: %#v %v", rehydrated, err)
+	}
+	for _, key := range []string{"scheduleRef", "projectRef", "dstGapPolicy", "promptInputs"} {
+		forged := edited
+		forged.Parameters = cloneAssistantFields(normalized.Parameters)
+		forged.Parameters[key] = "other"
+		if _, err := rehydrateEditedAssistantSchedule(normalized, forged); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("schedule field %s was mutable: %v", key, err)
+		}
+	}
+}
