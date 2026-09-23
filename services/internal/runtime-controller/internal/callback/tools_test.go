@@ -135,7 +135,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatal("assistant plan envelope lost the allowed operation types")
 	}
 	oneOf := assistantPlanOperationSchemas(input)
-	if len(oneOf) != 12 {
+	if len(oneOf) != 13 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
@@ -167,6 +167,11 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	if workflowProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
 		workflowProperties["coordinatorAgentRef"].(map[string]any)["enum"].([]string)[0] != input.DelegationTargets[0].Ref {
 		t.Fatalf("workflow schema is not bound to the server catalog: %#v", workflowProperties)
+	}
+	environmentProperties := byType["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]["properties"].(map[string]any)
+	if environmentProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
+		environmentProperties["imageArtifactRef"] == nil {
+		t.Fatalf("environment draft schema lost project binding or artifact pointer: %#v", environmentProperties)
 	}
 	stepProperties := workflowProperties["steps"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
 	if len(stepProperties["parallelGroup"].(map[string]any)["oneOf"].([]map[string]any)) != 2 {
@@ -200,7 +205,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	catalog := result.(map[string]any)
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
-	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 12 {
+	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 13 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
 	}
 	workflowFound := false
@@ -424,5 +429,25 @@ func TestNormalizeServerHydratedAssistantOperationPinsCurrentProject(t *testing.
 	}
 	if operation["title"] != "Изменить Проект «Sales»" || operation["summary"] != "Изменить Проект «Sales» — назначение: «Updated purpose»." {
 		t.Fatalf("project update is not explicit: %#v", operation)
+	}
+}
+
+func TestNormalizeEnvironmentDraftPinsCurrentProjectAndKeepsOnlyMetadata(t *testing.T) {
+	t.Parallel()
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"type": "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+		"parameters": map[string]any{
+			"project_ref": "prj_untrusted", "name": "Developer environment",
+			"image_artifact_ref": "imgart_selected1",
+		},
+	}, "Prepare environment", "prj_current1", "Marketplace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parameters := operation["parameters"].(map[string]any)
+	if parameters["projectRef"] != "prj_current1" || parameters["imageArtifactRef"] != "imgart_selected1" ||
+		operation["title"] != "Создать черновик среды «Developer environment»" ||
+		assistantServerTarget("CREATE_RUNTIME_ENVIRONMENT_DRAFT", parameters, nil)["kind"] != "RUNTIME_ENVIRONMENT_DRAFT" {
+		t.Fatalf("environment draft was not server-bound: %#v", operation)
 	}
 }
