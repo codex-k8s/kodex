@@ -7,18 +7,20 @@ import type {
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 
-export function assistantRoleImageBuildTarget(
+function assistantAppliedResourceTarget(
   plan: AssistantPlan,
   operationRef: string,
-): { projectRef: string; recipeRef: string } | undefined {
+  operationType: string,
+  targetKind: string,
+): { projectRef: string; resourceRef: string } | undefined {
   const operation = plan.operations.find((item) => item.ref === operationRef);
   const receipt = plan.receipt;
   if (
     !plan.projectRef ||
     plan.state !== "APPLIED" ||
     !operation?.selected ||
-    operation.type !== "CREATE_ROLE_IMAGE_RECIPE" ||
-    operation.target.kind !== "ROLE_IMAGE_RECIPE" ||
+    operation.type !== operationType ||
+    operation.target.kind !== targetKind ||
     !receipt ||
     receipt.planRef !== plan.ref ||
     receipt.planRevision !== plan.revision ||
@@ -29,7 +31,37 @@ export function assistantRoleImageBuildTarget(
     (item) => item.operationRef === operationRef,
   );
   if (matching.length !== 1 || !matching[0]?.resourceRef) return undefined;
-  return { projectRef: plan.projectRef, recipeRef: matching[0].resourceRef };
+  return { projectRef: plan.projectRef, resourceRef: matching[0].resourceRef };
+}
+
+export function assistantRoleImageBuildTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; recipeRef: string } | undefined {
+  const target = assistantAppliedResourceTarget(
+    plan,
+    operationRef,
+    "CREATE_ROLE_IMAGE_RECIPE",
+    "ROLE_IMAGE_RECIPE",
+  );
+  return (
+    target && { projectRef: target.projectRef, recipeRef: target.resourceRef }
+  );
+}
+
+export function assistantEnvironmentDraftTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; draftRef: string } | undefined {
+  const target = assistantAppliedResourceTarget(
+    plan,
+    operationRef,
+    "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+    "RUNTIME_ENVIRONMENT_DRAFT",
+  );
+  return (
+    target && { projectRef: target.projectRef, draftRef: target.resourceRef }
+  );
 }
 
 export function assistantAwaitingReply(

@@ -4,6 +4,7 @@ import { reactive } from "vue";
 import {
   assistantAwaitingReply,
   assistantEffectiveRuntimeState,
+  assistantEnvironmentDraftTarget,
   assistantRequiresProviderAccount,
   assistantRoleImageBuildTarget,
   editableOperations,
@@ -123,6 +124,42 @@ describe("assistant role image build target", () => {
       assistantRoleImageBuildTarget(
         { ...plan, operations: [{ ...imageOperation, selected: false }] },
         "op_image",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("связывает черновик среды только с его операцией и квитанцией", () => {
+    const environmentOperation: AssistantPlanOperation = {
+      ...operation(),
+      ref: "op_environment",
+      type: "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+      target: { kind: "RUNTIME_ENVIRONMENT_DRAFT", name: "Среда разработчика" },
+    };
+    const environmentPlan: AssistantPlan = {
+      ...plan,
+      operations: [environmentOperation],
+      receipt: {
+        ...receipt,
+        operationReceipts: [
+          {
+            operationRef: "op_environment",
+            resourceRef: "envdraft_exact",
+            outcome: "APPLIED",
+            auditRef: "aud_environment",
+          },
+        ],
+      },
+    };
+    expect(
+      assistantEnvironmentDraftTarget(environmentPlan, "op_environment"),
+    ).toEqual({ projectRef: "prj_market", draftRef: "envdraft_exact" });
+    expect(
+      assistantRoleImageBuildTarget(environmentPlan, "op_environment"),
+    ).toBeUndefined();
+    expect(
+      assistantEnvironmentDraftTarget(
+        { ...environmentPlan, state: "DRAFT" },
+        "op_environment",
       ),
     ).toBeUndefined();
   });

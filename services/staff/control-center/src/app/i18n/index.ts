@@ -2992,6 +2992,18 @@ const ru = {
       stopConfirm:
         "Остановить текущую сборку и архивировать рецепт образа? Чтобы продолжить позже, его потребуется восстановить.",
     },
+    environmentDraft: {
+      title: "Окружение сотрудника",
+      loadFailed:
+        "Не удалось получить состояние черновика окружения. Повторите обновление.",
+      incomplete:
+        "Это ещё черновик. Выберите проверенный образ, настройте параметры, проверьте и опубликуйте окружение.",
+      invalid:
+        "Проверка не прошла. Откройте редактор и исправьте параметры окружения.",
+      published: "Окружение опубликовано. Привяжите его к нужному сотруднику.",
+      discarded: "Черновик окружения отброшен.",
+      continue: "Продолжить настройку",
+    },
     planEditor: {
       back: "Вернуться к диалогу",
       revision: "Ревизия {revision} · операций: {count}",
@@ -6142,6 +6154,18 @@ const en = {
       stop: "Stop and archive",
       stopConfirm:
         "Stop the current build and archive its image recipe? You will need to restore it to continue later.",
+    },
+    environmentDraft: {
+      title: "Employee environment",
+      loadFailed: "Could not load the environment draft. Refresh to try again.",
+      incomplete:
+        "This is still a draft. Select an admitted image, configure, validate, and publish the environment.",
+      invalid:
+        "Validation failed. Open the editor and correct the environment configuration.",
+      published:
+        "The environment is published. Bind it to the intended employee.",
+      discarded: "The environment draft was discarded.",
+      continue: "Continue setup",
     },
     planEditor: {
       back: "Back to conversation",

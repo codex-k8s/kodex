@@ -24,6 +24,7 @@ import {
 import { useI18n } from "vue-i18n";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import AssistantEnvironmentDraftCard from "@/features/assistant/components/AssistantEnvironmentDraftCard.vue";
 import AssistantRoleImageBuildCard from "@/features/assistant/components/AssistantRoleImageBuildCard.vue";
 import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
 import {
@@ -919,6 +920,16 @@ onBeforeUnmount(() => {
                     :key="`build-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
+                  />
+                  <AssistantEnvironmentDraftCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) =>
+                        item.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT',
+                    )"
+                    :key="`environment-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                    @navigate="close"
                   />
                   <button
                     class="button button--primary"

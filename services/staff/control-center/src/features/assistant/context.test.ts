@@ -70,6 +70,9 @@ describe("assistant route context", () => {
     expect(
       readableContextOperations(["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]),
     ).toEqual(["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]);
+    expect(readableContextOperations(["CREATE_ROLE_IMAGE_RECIPE"])).toEqual([
+      "CREATE_ROLE_IMAGE_RECIPE",
+    ]);
     expect(readableContextOperations([])).toEqual([]);
     expect(
       readableContextOperations(["LAUNCH_RUN", "UNKNOWN_COMMAND"]),
