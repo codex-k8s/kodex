@@ -135,7 +135,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatal("assistant plan envelope lost the allowed operation types")
 	}
 	oneOf := assistantPlanOperationSchemas(input)
-	if len(oneOf) != 13 {
+	if len(oneOf) != 14 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
@@ -173,6 +173,12 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		environmentProperties["imageArtifactRef"] == nil {
 		t.Fatalf("environment draft schema lost project binding or artifact pointer: %#v", environmentProperties)
 	}
+	imageProperties := byType["CREATE_ROLE_IMAGE_RECIPE"]["properties"].(map[string]any)
+	if imageProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
+		imageProperties["agentRef"] == nil || imageProperties["name"] == nil ||
+		imageProperties["agentVersion"] != nil || imageProperties["secretValue"] != nil {
+		t.Fatalf("role image schema exposed owner fields or lost project binding: %#v", imageProperties)
+	}
 	stepProperties := workflowProperties["steps"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
 	if len(stepProperties["parallelGroup"].(map[string]any)["oneOf"].([]map[string]any)) != 2 {
 		t.Fatalf("workflow schema must admit numeric and named parallel groups: %#v", stepProperties["parallelGroup"])
@@ -205,7 +211,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	catalog := result.(map[string]any)
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
-	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 13 {
+	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 14 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
 	}
 	workflowFound := false
@@ -449,5 +455,23 @@ func TestNormalizeEnvironmentDraftPinsCurrentProjectAndKeepsOnlyMetadata(t *test
 		operation["title"] != "Создать черновик среды «Developer environment»" ||
 		assistantServerTarget("CREATE_RUNTIME_ENVIRONMENT_DRAFT", parameters, nil)["kind"] != "RUNTIME_ENVIRONMENT_DRAFT" {
 		t.Fatalf("environment draft was not server-bound: %#v", operation)
+	}
+}
+
+func TestNormalizeRoleImageRecipePinsCurrentProjectAndAgentReference(t *testing.T) {
+	t.Parallel()
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"type": "CREATE_ROLE_IMAGE_RECIPE",
+		"parameters": map[string]any{"project_ref": "prj_untrusted", "agent_ref": "agt_selected1",
+			"name": "Developer image", "environment_key": "standard"},
+	}, "Create image", "prj_current1", "Marketplace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parameters := operation["parameters"].(map[string]any)
+	if parameters["projectRef"] != "prj_current1" || parameters["agentRef"] != "agt_selected1" ||
+		parameters["environmentKey"] != "standard" || operation["title"] != "Создать рецепт образа «Developer image»" ||
+		assistantServerTarget("CREATE_ROLE_IMAGE_RECIPE", parameters, nil)["kind"] != "ROLE_IMAGE_RECIPE" {
+		t.Fatalf("role image recipe was not server-bound: %#v", operation)
 	}
 }

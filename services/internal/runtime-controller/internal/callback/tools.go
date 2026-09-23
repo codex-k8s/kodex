@@ -185,6 +185,10 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			"projectRef": projectRef, "name": stringSchema(1, 120), "description": stringSchema(0, 1000),
 			"imageArtifactRef": opaqueRefSchema(),
 		})),
+		assistantOperationSchema("CREATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"projectRef", "agentRef", "name"}, map[string]any{
+			"projectRef": projectRef, "agentRef": opaqueRefSchema(), "name": stringSchema(1, 160),
+			"environmentKey": stringSchema(1, 96),
+		})),
 		assistantOperationSchema("ARCHIVE_AGENT", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("ARCHIVE_WORKFLOW", objectSchema(nil, map[string]any{})),
