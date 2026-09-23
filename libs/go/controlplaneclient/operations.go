@@ -393,6 +393,7 @@ func RuntimeOperations() map[string]string {
 		"platform.runtime.execution.artifact.read":            controlplanev1.RuntimeWorkService_ReadExecutionArtifact_FullMethodName,
 		"platform.runtime.execution.artifact.stream":          controlplanev1.RuntimeWorkService_StreamExecutionArtifact_FullMethodName,
 		"platform.runtime.files.search":                       controlplanev1.RuntimeWorkService_SearchExecutionFiles_FullMethodName,
+		"platform.runtime.assistant.resources.search":         controlplanev1.RuntimeWorkService_SearchAssistantResources_FullMethodName,
 		"platform.runtime.files.metadata":                     controlplanev1.RuntimeWorkService_GetExecutionFileMetadata_FullMethodName,
 		"platform.runtime.files.preview":                      controlplanev1.RuntimeWorkService_PreviewExecutionFile_FullMethodName,
 		"platform.runtime.files.manifest":                     controlplanev1.RuntimeWorkService_GetExecutionFileManifest_FullMethodName,

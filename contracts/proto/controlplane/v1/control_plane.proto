@@ -359,6 +359,9 @@ service RuntimeWorkService {
   // bounded chunks после owner resolution exact input/Skill/catalog grant.
   rpc StreamExecutionArtifact(StreamExecutionArtifactRequest) returns (stream StreamExecutionArtifactResponse);
   rpc SearchExecutionFiles(SearchExecutionFilesRequest) returns (SearchExecutionFilesResponse);
+  // Поиск разрешает инициатора из действующей fenced lease системного помощника;
+  // caller не передаёт actor или tenant в payload.
+  rpc SearchAssistantResources(SearchAssistantResourcesRequest) returns (SearchAssistantResourcesResponse);
   rpc GetExecutionFileMetadata(GetExecutionFileMetadataRequest) returns (GetExecutionFileMetadataResponse);
   rpc PreviewExecutionFile(PreviewExecutionFileRequest) returns (PreviewExecutionFileResponse);
   rpc GetExecutionFileManifest(GetExecutionFileManifestRequest) returns (GetExecutionFileManifestResponse);
@@ -1725,6 +1728,17 @@ message SearchPlatformResponse {
   repeated SearchResult results = 1;
   int64 total = 2;
   PageInfo page = 3;
+}
+
+message SearchAssistantResourcesRequest {
+  string lease_ref = 1;
+  string fence = 2;
+  int64 generation = 3;
+  string query = 4;
+}
+message SearchAssistantResourcesResponse {
+  repeated SearchResult results = 1;
+  bool truncated = 2;
 }
 
 enum VFSNodeKind {
