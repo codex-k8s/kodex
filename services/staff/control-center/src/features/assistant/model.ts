@@ -1,10 +1,36 @@
 import type {
   AssistantConversation,
+  AssistantPlan,
   AssistantPlanOperation,
   AssistantPlanOperationInput,
   AssistantPlanTarget,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+
+export function assistantRoleImageBuildTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; recipeRef: string } | undefined {
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const receipt = plan.receipt;
+  if (
+    !plan.projectRef ||
+    plan.state !== "APPLIED" ||
+    !operation?.selected ||
+    operation.type !== "CREATE_ROLE_IMAGE_RECIPE" ||
+    operation.target.kind !== "ROLE_IMAGE_RECIPE" ||
+    !receipt ||
+    receipt.planRef !== plan.ref ||
+    receipt.planRevision !== plan.revision ||
+    receipt.outcome !== "APPLIED"
+  )
+    return undefined;
+  const matching = receipt.operationReceipts.filter(
+    (item) => item.operationRef === operationRef,
+  );
+  if (matching.length !== 1 || !matching[0]?.resourceRef) return undefined;
+  return { projectRef: plan.projectRef, recipeRef: matching[0].resourceRef };
+}
 
 export function assistantAwaitingReply(
   conversation?: AssistantConversation,

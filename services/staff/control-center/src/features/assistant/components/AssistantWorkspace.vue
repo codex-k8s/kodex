@@ -24,6 +24,7 @@ import {
 import { useI18n } from "vue-i18n";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import AssistantRoleImageBuildCard from "@/features/assistant/components/AssistantRoleImageBuildCard.vue";
 import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
 import {
   assistantContextIdentity,
@@ -911,6 +912,14 @@ onBeforeUnmount(() => {
                       </section>
                     </li>
                   </ol>
+                  <AssistantRoleImageBuildCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) => item.type === 'CREATE_ROLE_IMAGE_RECIPE',
+                    )"
+                    :key="`build-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
                   <button
                     class="button button--primary"
                     type="button"

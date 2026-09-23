@@ -132,12 +132,13 @@ export async function loadRoleImagePage(
 export async function loadRoleImageDetail(
   projectRef: string,
   recipeRef: string,
+  signal: AbortSignal = requestSignal(),
 ): Promise<RoleImageRecipeDetail> {
   return (
     await unwrap(
       getRoleImageRecipe({
         path: { projectRef, recipeRef },
-        signal: requestSignal(),
+        signal,
       }),
     )
   ).data;

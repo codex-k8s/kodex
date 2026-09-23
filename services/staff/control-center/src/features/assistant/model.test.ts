@@ -5,6 +5,7 @@ import {
   assistantAwaitingReply,
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
+  assistantRoleImageBuildTarget,
   editableOperations,
   friendlyPlanOperationType,
   operationActionLabel,
@@ -14,6 +15,8 @@ import {
 } from "@/features/assistant/model";
 import type {
   AssistantConversation,
+  AssistantPlan,
+  AssistantPlanReceipt,
   AssistantPlanOperation,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -39,6 +42,89 @@ describe("assistant reply indicator", () => {
       false,
     );
     expect(assistantAwaitingReply()).toBe(false);
+  });
+});
+
+describe("assistant role image build target", () => {
+  const imageOperation: AssistantPlanOperation = {
+    ...operation(),
+    ref: "op_image",
+    type: "CREATE_ROLE_IMAGE_RECIPE",
+    target: { kind: "ROLE_IMAGE_RECIPE", name: "Образ разработчика" },
+  };
+  const receipt: AssistantPlanReceipt = {
+    ref: "rct_exact",
+    planRef: "pln_exact",
+    planRevision: 2,
+    outcome: "APPLIED",
+    operationReceipts: [
+      {
+        operationRef: "op_image",
+        resourceRef: "rimg_exact",
+        outcome: "APPLIED",
+        auditRef: "aud_exact",
+      },
+    ],
+    conflicts: [],
+    auditRefs: ["aud_exact"],
+    createdResourceRefs: ["rimg_exact"],
+    createdAt: "2026-09-23T18:00:00Z",
+  };
+  const plan: AssistantPlan = {
+    ref: "pln_exact",
+    version: 3,
+    revision: 2,
+    state: "APPLIED",
+    conversationRef: "conv_exact",
+    projectRef: "prj_market",
+    operations: [imageOperation],
+    auditSummary: "Создать образ",
+    applied: true,
+    contentDigest: "a".repeat(64),
+    validationProblems: [],
+    nextActions: [],
+    receipt,
+  };
+
+  it("берёт только точный ref из сохранённой квитанции", () => {
+    expect(assistantRoleImageBuildTarget(plan, "op_image")).toEqual({
+      projectRef: "prj_market",
+      recipeRef: "rimg_exact",
+    });
+    expect(assistantRoleImageBuildTarget(plan, "op_other")).toBeUndefined();
+  });
+
+  it("не связывает сборку с другой ревизией, планом или дублированным эффектом", () => {
+    expect(
+      assistantRoleImageBuildTarget({ ...plan, revision: 3 }, "op_image"),
+    ).toBeUndefined();
+    expect(
+      assistantRoleImageBuildTarget(
+        { ...plan, receipt: { ...receipt, planRef: "pln_other" } },
+        "op_image",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantRoleImageBuildTarget(
+        {
+          ...plan,
+          receipt: {
+            ...receipt,
+            operationReceipts: [
+              ...receipt.operationReceipts,
+              ...receipt.operationReceipts,
+            ],
+          },
+        },
+        "op_image",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantRoleImageBuildTarget(
+        { ...plan, operations: [{ ...imageOperation, selected: false }] },
+        "op_image",
+      ),
+    ).toBeUndefined();
   });
 });
 

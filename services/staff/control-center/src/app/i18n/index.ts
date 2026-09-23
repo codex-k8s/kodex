@@ -2919,6 +2919,7 @@ const ru = {
       UPDATE_AGENT: "Изменить сотрудника",
       CREATE_AGENT: "Создать сотрудника",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
+      CREATE_ROLE_IMAGE_RECIPE: "Создать рецепт образа",
       CREATE_WORKFLOW: "Создать Workflow",
       CHANGE_CAPABILITY: "Изменить возможности",
       CHANGE_INTEGRATION_GRANT: "Изменить доступ к подключению",
@@ -2978,6 +2979,19 @@ const ru = {
       "Файлы выбраны, но API вложений помощника ещё недоступен. Они не будут отправлены; уберите их, чтобы отправить текст.",
     attachmentsBlockSend:
       "Отправка заблокирована: выбранные файлы пока нельзя передать помощнику",
+    roleImageBuild: {
+      title: "Подготовка образа сотрудника",
+      progress: "Сборка: {progress}%",
+      loadFailed: "Не удалось получить состояние образа. Повторите обновление.",
+      awaitingPromotion:
+        "Сборка завершена. Проверьте допуск и публикацию образа на его странице.",
+      ready: "Образ опубликован и готов к использованию.",
+      noBuild: "Сборка не найдена. Проверьте состояние на странице образа.",
+      open: "Открыть образ",
+      stop: "Остановить и архивировать",
+      stopConfirm:
+        "Остановить текущую сборку и архивировать рецепт образа? Чтобы продолжить позже, его потребуется восстановить.",
+    },
     planEditor: {
       back: "Вернуться к диалогу",
       revision: "Ревизия {revision} · операций: {count}",
@@ -6055,6 +6069,7 @@ const en = {
       UPDATE_AGENT: "Update employee",
       CREATE_AGENT: "Create agent",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
+      CREATE_ROLE_IMAGE_RECIPE: "Create image recipe",
       CREATE_WORKFLOW: "Create Workflow",
       CHANGE_CAPABILITY: "Change capabilities",
       CHANGE_INTEGRATION_GRANT: "Change connection access",
@@ -6115,6 +6130,19 @@ const en = {
       "Files are selected, but the assistant attachment API is not available yet. They will not be sent; remove them to send the text.",
     attachmentsBlockSend:
       "Sending is blocked because the selected files cannot be delivered to the assistant yet",
+    roleImageBuild: {
+      title: "Preparing employee image",
+      progress: "Build: {progress}%",
+      loadFailed: "Could not load image status. Refresh to try again.",
+      awaitingPromotion:
+        "The build is complete. Check admission and promotion on the image page.",
+      ready: "The image is promoted and ready to use.",
+      noBuild: "Build not found. Check the image page for its state.",
+      open: "Open image",
+      stop: "Stop and archive",
+      stopConfirm:
+        "Stop the current build and archive its image recipe? You will need to restore it to continue later.",
+    },
     planEditor: {
       back: "Back to conversation",
       revision: "Revision {revision} · operations: {count}",
