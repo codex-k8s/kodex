@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
-import { assistantIntegrationConnectionTarget } from "@/features/assistant/model";
+import {
+  assistantIntegrationConnectionTarget,
+  assistantPollDelay,
+} from "@/features/assistant/model";
 import { requestSignal } from "@/shared/api/client";
 import { getIntegrationConnection } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -71,11 +74,11 @@ watch(
         if (!controller.signal.aborted) {
           loading.value = false;
           attempts += 1;
-          if (
-            attempts < 120 &&
-            (problem.value || connection.value?.state === "TESTING")
-          )
-            timer = setTimeout(() => void refresh?.(), 5000);
+          if (problem.value || connection.value?.state === "TESTING")
+            timer = setTimeout(
+              () => void refresh?.(),
+              assistantPollDelay(attempts),
+            );
         }
       }
     };

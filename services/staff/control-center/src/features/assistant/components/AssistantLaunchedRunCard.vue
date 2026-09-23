@@ -2,7 +2,10 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { assistantLaunchedRunTarget } from "@/features/assistant/model";
+import {
+  assistantLaunchedRunTarget,
+  assistantPollDelay,
+} from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { requestSignal } from "@/shared/api/client";
 import { getRun } from "@/shared/api/generated/openapi/sdk.gen";
@@ -89,8 +92,11 @@ watch(
         if (!controller.signal.aborted) {
           loading.value = false;
           attempts += 1;
-          if (attempts < 120 && (problem.value || active.value))
-            timer = setTimeout(() => void refresh?.(), 5000);
+          if (problem.value || active.value)
+            timer = setTimeout(
+              () => void refresh?.(),
+              assistantPollDelay(attempts),
+            );
         }
       }
     };

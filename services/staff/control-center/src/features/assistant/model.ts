@@ -7,6 +7,10 @@ import type {
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 
+export function assistantPollDelay(attempts: number): number {
+  return attempts < 120 ? 5000 : 30000;
+}
+
 function assistantAppliedResourceRef(
   plan: AssistantPlan,
   operationRef: string,

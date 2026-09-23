@@ -167,6 +167,16 @@ const providerAccountRequired = computed(
     store.assistant !== undefined &&
     assistantRequiresProviderAccount(store.assistant),
 );
+const setupSuggestions = computed(() =>
+  (props.projectRef
+    ? ["agent", "environment", "integration", "launch"]
+    : ["project"]
+  ).map((step) => ({
+    step,
+    title: t(`assistant.setup.${step}.title`),
+    prompt: t(`assistant.setup.${step}.prompt`),
+  })),
+);
 const assistantReadinessLabel = computed(() =>
   providerAccountRequired.value
     ? t("assistant.providerAccountRequired")
@@ -361,6 +371,12 @@ function scrollToLatest(): void {
   chatLog.value?.scrollTo({ top: chatLog.value.scrollHeight });
 }
 
+function suggestSetup(prompt: string): void {
+  if (!canSend.value || message.value.trim()) return;
+  message.value = prompt;
+  void nextTick(() => composer.value?.focus());
+}
+
 function handleComposerKeydown(event: KeyboardEvent): void {
   if (event.key !== "Enter" || event.shiftKey) return;
   event.preventDefault();
@@ -405,6 +421,20 @@ async function applyPlan(): Promise<void> {
 async function rejectPlan(): Promise<void> {
   const plan = currentPlan.value;
   if (plan) await handleStoreMutation(() => store.reject(plan));
+}
+
+async function requestPlanChanges(): Promise<void> {
+  const plan = currentPlan.value;
+  if (!plan || store.busy || store.selectedConversation?.state !== "ACTIVE")
+    return;
+  await closePlan();
+  if (!message.value.trim())
+    message.value = t("assistant.planEditor.revisionRequest", {
+      revision: plan.revision,
+      summary: plan.auditSummary.slice(0, 160),
+    });
+  await nextTick();
+  composer.value?.focus();
 }
 
 function documentPointerDown(event: PointerEvent): void {
@@ -680,12 +710,16 @@ onBeforeUnmount(() => {
         :receipt="store.receipt"
         :busy="store.busy"
         :readonly="store.selectedConversation?.state === 'ARCHIVED'"
+        :can-request-changes="
+          props.live && store.selectedConversation?.state === 'ACTIVE'
+        "
         :problem="store.problem"
         @close="closePlan"
         @save="savePlan"
         @validate="validatePlan"
         @apply="applyPlan"
         @reject="rejectPlan"
+        @request-changes="requestPlanChanges"
       />
       <template v-else>
         <nav v-if="isRunContext" class="assistant-drawer__tabs">
@@ -853,6 +887,25 @@ onBeforeUnmount(() => {
                 <template v-else>
                   <h2>{{ $t("assistant.ready") }}</h2>
                   <p>{{ $t("assistant.contextHelp") }}</p>
+                  <div class="assistant-setup-guide">
+                    <strong>{{ $t("assistant.setup.title") }}</strong>
+                    <p>{{ $t("assistant.setup.help") }}</p>
+                    <ol>
+                      <li
+                        v-for="suggestion in setupSuggestions"
+                        :key="suggestion.step"
+                      >
+                        <button
+                          class="button"
+                          type="button"
+                          :disabled="!canSend || !!message.trim()"
+                          @click="suggestSetup(suggestion.prompt)"
+                        >
+                          {{ suggestion.title }}
+                        </button>
+                      </li>
+                    </ol>
+                  </div>
                 </template>
               </div>
               <article
@@ -1417,6 +1470,31 @@ onBeforeUnmount(() => {
 .assistant-empty-state p {
   margin: 0;
 }
+.assistant-setup-guide {
+  display: grid;
+  width: min(100%, 640px);
+  gap: 8px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+.assistant-setup-guide ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.assistant-setup-guide li,
+.assistant-setup-guide button {
+  min-width: 0;
+  width: 100%;
+}
 .assistant-message {
   width: min(86%, 760px);
   margin-bottom: 14px;
@@ -1619,6 +1697,9 @@ onBeforeUnmount(() => {
   font-size: 0.82rem;
 }
 @media (max-width: 720px) {
+  .assistant-setup-guide ol {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .assistant-fab {
     right: 16px;
     bottom: calc(76px + env(safe-area-inset-bottom));

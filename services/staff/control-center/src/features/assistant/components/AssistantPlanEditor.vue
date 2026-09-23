@@ -53,6 +53,7 @@ const props = defineProps<{
   busy?: boolean;
   readonly?: boolean;
   problem?: AppProblem;
+  canRequestChanges?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -60,6 +61,7 @@ const emit = defineEmits<{
   validate: [];
   apply: [];
   reject: [];
+  requestChanges: [];
 }>();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
@@ -388,6 +390,16 @@ const canApply = computed(
     props.plan.nextActions.includes("APPLY_PLAN"),
 );
 const canReject = computed(() => editable.value);
+
+function requestChanges(): void {
+  if (!editable.value || !props.canRequestChanges) return;
+  if (
+    !draftMatchesSavedPlan.value &&
+    !window.confirm(t("assistant.planEditor.unsavedRevisionConfirm"))
+  )
+    return;
+  emit("requestChanges");
+}
 
 function save(): void {
   inputProblem.value = "";
@@ -1343,6 +1355,15 @@ function snapshot(value: string): Record<string, unknown> {
         }}
       </span>
       <div>
+        <button
+          v-if="canRequestChanges && editable"
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="requestChanges"
+        >
+          {{ $t("common.requestChanges") }}
+        </button>
         <button
           v-if="canReject"
           class="button button--danger"

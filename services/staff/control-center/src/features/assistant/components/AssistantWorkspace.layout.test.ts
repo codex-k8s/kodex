@@ -82,6 +82,24 @@ describe("AssistantWorkspace layout", () => {
     expect(composer).not.toContain("secretValue");
   });
 
+  it("после запроса доработки возвращает в диалог без отправки за пользователя", () => {
+    expect(source).toContain("async function requestPlanChanges()");
+    expect(source).toContain("await closePlan()");
+    expect(source).toContain("assistant.planEditor.revisionRequest");
+    expect(source).toContain("composer.value?.focus()");
+    expect(template).toContain('@request-changes="requestPlanChanges"');
+  });
+
+  it("показывает этапы настройки и только подставляет запрос в composer", () => {
+    expect(source).toContain(
+      '["agent", "environment", "integration", "launch"]',
+    );
+    expect(source).toContain('["project"]');
+    expect(source).toContain('class="assistant-setup-guide"');
+    expect(source).toContain("message.value = prompt");
+    expect(source).not.toContain("store.send(prompt");
+  });
+
   it("держит новый диалог видимым действием, а не пунктом history menu", () => {
     const header = template.slice(
       template.indexOf('<header class="assistant-drawer__header">'),

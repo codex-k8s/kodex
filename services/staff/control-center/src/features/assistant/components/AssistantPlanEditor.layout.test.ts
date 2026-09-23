@@ -79,6 +79,13 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain(':disabled="!editable"');
   });
 
+  it("возвращает в диалог для доработки и предупреждает о несохранённой форме", () => {
+    expect(source).toContain("!draftMatchesSavedPlan.value");
+    expect(source).toContain("assistant.planEditor.unsavedRevisionConfirm");
+    expect(source).toContain('emit("requestChanges")');
+    expect(source).toContain('v-if="canRequestChanges && editable"');
+  });
+
   it("укладывает target и переход состояния в одну колонку на mobile", () => {
     const mobile = source.slice(source.indexOf("@media (max-width: 640px)"));
 

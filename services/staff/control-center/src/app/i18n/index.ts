@@ -2962,6 +2962,35 @@ const ru = {
     context: "Контекст текущего экрана",
     contextHelp:
       "Опишите, что нужно сделать на текущем экране. Kodex использует только доступные здесь операции и ваши полномочия.",
+    setup: {
+      title: "С чего начать",
+      help: "Выберите этап — текст появится в поле сообщения. Создание и изменения произойдут только после вашего подтверждения плана.",
+      project: {
+        title: "1. Создать проект",
+        prompt:
+          "Помоги создать новый проект. Сначала уточни название и назначение.",
+      },
+      agent: {
+        title: "1. Создать сотрудника",
+        prompt:
+          "Помоги создать ИИ-сотрудника для этого проекта. Сначала уточни его задачу и необходимые права.",
+      },
+      environment: {
+        title: "2. Подготовить образ и окружение",
+        prompt:
+          "Помоги подготовить образ и рабочее окружение для сотрудника этого проекта. Сначала уточни, какого сотрудника и что ему нужно для работы.",
+      },
+      integration: {
+        title: "3. Настроить интеграции и доступ",
+        prompt:
+          "Помоги настроить интеграцию и нужные разрешения для сотрудника или процесса этого проекта. Сначала уточни сервис и нужные действия; секретные значения в чат не запрашивай.",
+      },
+      launch: {
+        title: "4. Запустить работу",
+        prompt:
+          "Посмотри доступных сотрудников и процессы этого проекта и помоги запустить подходящего исполнителя. Сначала уточни задачу.",
+      },
+    },
     conversationTitle: "Название диалога",
     renameConversation: "Переименовать диалог",
     archiveConversation: "Архивировать диалог",
@@ -3073,6 +3102,10 @@ const ru = {
     },
     planEditor: {
       back: "Вернуться к диалогу",
+      unsavedRevisionConfirm:
+        "Несохранённые правки в форме пропадут. Вернуться в диалог и попросить помощника доработать план?",
+      revisionRequest:
+        "Доработай план ревизии {revision} «{summary}». Мои замечания: ",
       revision: "Ревизия {revision} · операций: {count}",
       atomic:
         "Скрытых изменений нет. План применяется одной транзакцией или не применяется вовсе.",
@@ -6262,6 +6295,35 @@ const en = {
     context: "Current screen context",
     contextHelp:
       "Describe what to do on the current screen. Kodex uses only operations available here and your permissions.",
+    setup: {
+      title: "Where to start",
+      help: "Choose a step to fill the message field. Nothing is created or changed until you confirm a plan.",
+      project: {
+        title: "1. Create a project",
+        prompt:
+          "Help me create a new project. First ask for its name and purpose.",
+      },
+      agent: {
+        title: "1. Create an employee",
+        prompt:
+          "Help me create an AI employee for this project. First clarify the task and required permissions.",
+      },
+      environment: {
+        title: "2. Prepare an image and environment",
+        prompt:
+          "Help me prepare an image and work environment for an employee in this project. First clarify which employee and what they need for work.",
+      },
+      integration: {
+        title: "3. Set up integrations and access",
+        prompt:
+          "Help me configure an integration and the needed permissions for an employee or process in this project. First clarify the service and actions; do not ask for secret values in chat.",
+      },
+      launch: {
+        title: "4. Launch work",
+        prompt:
+          "Look at the available employees and processes in this project and help me launch a suitable executor. First clarify the task.",
+      },
+    },
     conversationTitle: "Conversation title",
     renameConversation: "Rename conversation",
     archiveConversation: "Archive conversation",
@@ -6367,6 +6429,10 @@ const en = {
     },
     planEditor: {
       back: "Back to conversation",
+      unsavedRevisionConfirm:
+        "Unsaved form changes will be lost. Return to the conversation and ask the assistant to revise the plan?",
+      revisionRequest:
+        "Revise plan revision {revision} “{summary}”. My feedback: ",
       revision: "Revision {revision} · operations: {count}",
       atomic:
         "There are no hidden changes. The plan is applied in one transaction or not applied at all.",

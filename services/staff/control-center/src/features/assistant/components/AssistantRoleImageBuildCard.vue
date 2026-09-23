@@ -2,7 +2,10 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
+import {
+  assistantPollDelay,
+  assistantRoleImageBuildTarget,
+} from "@/features/assistant/model";
 import {
   commandRoleImage,
   loadRoleImageDetail,
@@ -68,8 +71,11 @@ watch(
         if (!controller.signal.aborted) {
           loading.value = false;
           attempts += 1;
-          if (attempts < 120 && (problem.value || active.value))
-            timer = setTimeout(() => void refresh?.(), 5000);
+          if (problem.value || active.value)
+            timer = setTimeout(
+              () => void refresh?.(),
+              assistantPollDelay(attempts),
+            );
         }
       }
     };
