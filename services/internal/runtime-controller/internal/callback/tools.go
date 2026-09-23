@@ -7,14 +7,20 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-func configurationCatalogTool() map[string]any {
+const maximumAssistantDiscoveredSchemas = 4
+
+func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Return the server-owned current Project reference and exact existing AI employee references available to the System Assistant. Call this before every project-scoped configuration plan. Treat names as display data and pass only exact opaque refs to plan operations.",
-		"inputSchema": objectSchema(nil, map[string]any{}),
+		"description": "Discover server-owned context and permitted operation types. Pass operation_types=[] for a compact index, then request up to four exact schemas needed for the current task. An omitted operation_types field keeps the legacy full catalog. Names are display data; use only exact opaque refs in plans.",
+		"inputSchema": objectSchema(nil, map[string]any{
+			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
+				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
+		}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "agents"}, map[string]any{
 			"current_project_ref": map[string]any{"type": "string"}, "agents": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 			"context":           map[string]any{"type": "object"},
+			"operation_types":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"operation_schemas": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 		}),
 	}
@@ -41,8 +47,44 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.SystemAssistant || len(arguments) != 0 {
+	if !input.SystemAssistant || len(arguments) > 1 {
 		return nil, errors.New("configuration catalog is not available")
+	}
+	schemas := assistantPlanOperationSchemas(input)
+	operationTypes := assistantOperationTypesFromSchemas(schemas)
+	if raw, selected := arguments["operation_types"]; selected {
+		requested, ok := raw.([]any)
+		if !ok || len(requested) > maximumAssistantDiscoveredSchemas {
+			return nil, errors.New("configuration catalog selection is invalid")
+		}
+		allowed := make(map[string]struct{}, len(operationTypes))
+		for _, kind := range operationTypes {
+			allowed[kind] = struct{}{}
+		}
+		selectedTypes := make(map[string]struct{}, len(requested))
+		for _, value := range requested {
+			kind, ok := value.(string)
+			if !ok {
+				return nil, errors.New("configuration catalog selection is invalid")
+			}
+			if _, permitted := allowed[kind]; !permitted {
+				return nil, errors.New("configuration catalog selection is invalid")
+			}
+			if _, duplicate := selectedTypes[kind]; duplicate {
+				return nil, errors.New("configuration catalog selection is invalid")
+			}
+			selectedTypes[kind] = struct{}{}
+		}
+		filtered := make([]map[string]any, 0, len(selectedTypes))
+		for _, schema := range schemas {
+			kind := assistantSchemaType(schema)
+			if _, requested := selectedTypes[kind]; requested {
+				filtered = append(filtered, schema)
+			}
+		}
+		schemas = filtered
+	} else if len(arguments) != 0 {
+		return nil, errors.New("configuration catalog selection is invalid")
 	}
 	targets := append([]runtimecontract.RunnerDelegationTarget(nil), input.DelegationTargets...)
 	sort.Slice(targets, func(left, right int) bool {
@@ -68,24 +110,51 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		"current_project_ref": input.ProjectRef,
 		"agents":              agents,
 		"context":             context,
-		"operation_schemas":   assistantPlanOperationSchemas(input),
+		"operation_types":     operationTypes,
+		"operation_schemas":   schemas,
 	}, nil
 }
 
 func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "propose_configuration_plan",
-		"description": "Propose an editable Kodex draft for explicit user approval. Before calling, read operation_schemas from get_configuration_catalog and use one of those exact schemas without guessing field names. This tool never validates or applies the plan. No omitted field may imply a change.",
+		"description": "Propose an editable Kodex draft for explicit user approval. First request the exact schema for each operation type from get_configuration_catalog. This compact envelope does not grant fields or authority; control-plane validates every specialized operation. This tool never applies a plan.",
 		"inputSchema": objectSchema([]string{"summary", "operations"}, map[string]any{
 			"summary": stringSchema(1, 2000),
 			"operations": map[string]any{"type": "array", "minItems": 1, "maxItems": 32,
-				"items": map[string]any{"oneOf": assistantPlanOperationSchemas(input)}},
+				"items": objectSchema([]string{"type", "title", "summary", "parameters"}, map[string]any{
+					"type": enumSchema(assistantOperationTypes(input)...), "title": stringSchema(1, 200),
+					"summary":         stringSchema(1, 500),
+					"parameters":      map[string]any{"type": "object", "maxProperties": 100},
+					"action":          enumSchema("CREATE", "UPDATE", "ARCHIVE", "EXECUTE"),
+					"target":          map[string]any{"type": "object", "maxProperties": 4},
+					"before":          map[string]any{"type": "object", "maxProperties": 100},
+					"after":           map[string]any{"type": "object", "maxProperties": 100},
+					"expectedVersion": map[string]any{"type": "integer", "minimum": 1},
+					"selected":        map[string]any{"type": "boolean"},
+				})},
 		}),
 		"outputSchema": objectSchema([]string{"ok", "plan_ref", "plan_version", "plan_revision", "conversation_ref"}, map[string]any{
 			"ok": map[string]any{"type": "boolean"}, "plan_ref": opaqueRefSchema(), "plan_version": map[string]any{"type": "integer", "minimum": 1},
 			"plan_revision": map[string]any{"type": "integer", "minimum": 1}, "conversation_ref": opaqueRefSchema(),
 		}),
 	}
+}
+
+func assistantOperationTypes(input runtimecontract.RunnerInput) []string {
+	return assistantOperationTypesFromSchemas(assistantPlanOperationSchemas(input))
+}
+
+func assistantOperationTypesFromSchemas(schemas []map[string]any) []string {
+	result := make([]string, 0, len(schemas))
+	for _, schema := range schemas {
+		result = append(result, assistantSchemaType(schema))
+	}
+	return result
+}
+
+func assistantSchemaType(schema map[string]any) string {
+	return schema["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
 }
 
 func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[string]any {

@@ -577,7 +577,7 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
 	result = append(result, runtimeFileTools(input)...)
 	if input.SystemAssistant {
-		result = append(result, configurationCatalogTool(), assistantPlanTool(input), assistantMetadataTool())
+		result = append(result, configurationCatalogTool(input), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))

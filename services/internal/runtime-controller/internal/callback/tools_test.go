@@ -107,6 +107,9 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	if len(available) != 5 {
 		t.Fatalf("unexpected assistant tool catalog: %#v", available)
 	}
+	if encoded, err := json.Marshal(available); err != nil || len(encoded) > 8000 {
+		t.Fatalf("assistant tools/list is not compact: bytes=%d err=%v", len(encoded), err)
+	}
 	var planTool map[string]any
 	for _, tool := range available {
 		if tool["name"] == "propose_configuration_plan" {
@@ -124,7 +127,14 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	if operations["maxItems"] != 32 {
 		t.Fatalf("assistant plan must be bounded, got %#v", operations["maxItems"])
 	}
-	oneOf := operations["items"].(map[string]any)["oneOf"].([]map[string]any)
+	items := operations["items"].(map[string]any)
+	if _, expanded := items["oneOf"]; expanded || items["additionalProperties"] != false {
+		t.Fatal("assistant tools/list must keep the plan envelope compact and closed")
+	}
+	if !reflect.DeepEqual(items["properties"].(map[string]any)["type"].(map[string]any)["enum"], assistantOperationTypes(input)) {
+		t.Fatal("assistant plan envelope lost the allowed operation types")
+	}
+	oneOf := assistantPlanOperationSchemas(input)
 	if len(oneOf) != 12 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
@@ -206,6 +216,30 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
 		t.Fatal("configuration catalog accepted caller input")
+	}
+	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
+	if err != nil || len(compact.(map[string]any)["operation_schemas"].([]map[string]any)) != 0 ||
+		len(compact.(map[string]any)["operation_types"].([]string)) != len(schemas) {
+		t.Fatalf("compact configuration catalog is invalid: %v", err)
+	}
+	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN"}})
+	if err != nil || len(selected.(map[string]any)["operation_schemas"].([]map[string]any)) != 2 {
+		t.Fatalf("selected configuration schemas are invalid: %v", err)
+	}
+	for _, invalid := range []map[string]any{
+		{"operation_types": []any{"UNKNOWN"}},
+		{"operation_types": []any{"CREATE_AGENT", "CREATE_AGENT"}},
+		{"operation_types": []any{1}},
+		{"operation_types": []any{"CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "LAUNCH_RUN", "CREATE_SCHEDULE"}},
+	} {
+		if _, err := configurationCatalog(input, invalid); err == nil {
+			t.Fatalf("configuration catalog accepted invalid selection: %#v", invalid)
+		}
+	}
+	restricted := input
+	restricted.AssistantContext = &runtimecontract.RunnerAssistantContext{AllowedOperations: []string{"CREATE_AGENT"}}
+	if _, err := configurationCatalog(restricted, map[string]any{"operation_types": []any{"CREATE_PROJECT"}}); err == nil {
+		t.Fatal("configuration catalog exposed an operation outside the current context")
 	}
 }
 
