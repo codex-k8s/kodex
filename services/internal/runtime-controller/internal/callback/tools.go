@@ -15,20 +15,24 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover server-owned context and permitted operation types. Pass operation_types=[] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target, and do not infer absence until pages are exhausted. Names are display data; use only exact opaque refs in plans.",
+		"description": "Discover server-owned context and permitted operation types. Pass operation_types=[] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target. For integration setup, request definition_query (empty string lists the first page) and optional definition_offset; definitions are read from control-plane in pages of at most 10. Names are display data; use only exact opaque refs in plans.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
-			"agent_query":  stringSchema(0, 80),
-			"agent_offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 128},
+			"agent_query":       stringSchema(0, 80),
+			"agent_offset":      map[string]any{"type": "integer", "minimum": 0, "maximum": 128},
+			"definition_query":  stringSchema(0, 80),
+			"definition_offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 10000},
 		}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "agents"}, map[string]any{
 			"current_project_ref": map[string]any{"type": "string"}, "agents": map[string]any{"type": "array", "maxItems": maximumAssistantCatalogAgents, "items": map[string]any{"type": "object"}},
-			"agent_total":       map[string]any{"type": "integer", "minimum": 0},
-			"agent_next_offset": map[string]any{"type": "integer", "minimum": 0},
-			"context":           map[string]any{"type": "object"},
-			"operation_types":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"operation_schemas": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+			"agent_total":             map[string]any{"type": "integer", "minimum": 0},
+			"agent_next_offset":       map[string]any{"type": "integer", "minimum": 0},
+			"context":                 map[string]any{"type": "object"},
+			"operation_types":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"operation_schemas":       map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+			"integration_definitions": map[string]any{"type": "array", "maxItems": 10, "items": map[string]any{"type": "object"}},
+			"definition_next_offset":  map[string]any{"type": "integer", "minimum": 0},
 		}),
 	}
 }
@@ -54,7 +58,7 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.SystemAssistant || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset") {
+	if !input.SystemAssistant || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset") {
 		return nil, errors.New("configuration catalog is not available")
 	}
 	agentQuery := ""

@@ -336,6 +336,29 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 	if err != nil {
 		return nil, err
 	}
+	if request.GetIntegrationDefinitionCatalog() {
+		if request.GetQuery() != "" {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		definitions, next, err := server.service.ListAssistantIntegrationDefinitions(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), request.GetDefinitionQuery(), request.GetDefinitionOffset())
+		if err != nil {
+			return nil, transportError(err)
+		}
+		response := &controlplanev1.SearchAssistantResourcesResponse{NextDefinitionOffset: next}
+		for _, item := range definitions {
+			definition := &controlplanev1.AssistantIntegrationDefinition{Key: item.Key, Name: item.Name,
+				Description: item.Description, Category: item.Category, Adapter: item.Adapter,
+				CredentialSecretKey: item.CredentialSecretKey, CapabilityKeys: item.CapabilityKeys, Origin: item.Origin}
+			for _, field := range item.ConfigurationFields {
+				definition.ConfigurationFields = append(definition.ConfigurationFields, castIntegrationField(field))
+			}
+			response.Definitions = append(response.Definitions, definition)
+		}
+		return response, nil
+	}
+	if request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
+		return nil, transportError(errs.ErrInvalid)
+	}
 	items, truncated, err := server.service.SearchAssistantResources(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), request.GetQuery())
 	if err != nil {
 		return nil, transportError(err)

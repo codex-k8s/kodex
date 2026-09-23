@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
@@ -18,12 +19,91 @@ import (
 
 const maximumAssistantSearchCandidates = 500
 const maximumAssistantSearchResults = 10
+const maximumAssistantIntegrationDefinitions = 10
 
 //go:embed sql/assistant_search_resolve_lease.sql
 var queryAssistantSearchResolveLease string
 
 //go:embed sql/assistant_search_extra.sql
 var queryAssistantSearchExtra string
+
+//go:embed sql/assistant_integration_definitions.sql
+var queryAssistantIntegrationDefinitions string
+
+func (repository *Repository) ListAssistantIntegrationDefinitions(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, search string, offset int32) ([]entity.AssistantIntegrationDefinition, int32, error) {
+	current, err := repository.resolveScope(ctx, principal)
+	if err != nil {
+		return nil, 0, err
+	}
+	ctx, stop := context.WithTimeout(ctx, 5*time.Second)
+	defer stop()
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return nil, 0, errs.ErrUnavailable
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
+	fenceDigest := sha256.Sum256([]byte(fence))
+	var actorRef, actorID string
+	err = tx.QueryRow(ctx, queryAssistantSearchResolveLease, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "lease_ref": leaseRef,
+		"fence_digest": hex.EncodeToString(fenceDigest[:]), "generation": generation,
+	}).Scan(&actorRef, &actorID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, 0, errs.ErrNotFound
+	}
+	if err != nil {
+		return nil, 0, errs.ErrUnavailable
+	}
+	if _, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, actorRef); err != nil {
+		return nil, 0, err
+	}
+	rows, err := tx.Query(ctx, queryAssistantIntegrationDefinitions, pgx.StrictNamedArgs{
+		"query": search, "limit": maximumAssistantIntegrationDefinitions + 1, "offset": offset,
+	})
+	if err != nil {
+		return nil, 0, errs.ErrUnavailable
+	}
+	definitions := make([]entity.AssistantIntegrationDefinition, 0, maximumAssistantIntegrationDefinitions)
+	for rows.Next() {
+		var item entity.AssistantIntegrationDefinition
+		var schema, capabilities []byte
+		if err := rows.Scan(&item.Key, &item.Name, &item.Description, &item.Category,
+			&item.Adapter, &item.CredentialSecretKey, &schema, &capabilities, &item.Origin); err != nil {
+			rows.Close()
+			return nil, 0, errs.ErrUnavailable
+		}
+		if len(definitions) == maximumAssistantIntegrationDefinitions {
+			rows.Close()
+			if err := tx.Commit(ctx); err != nil {
+				return nil, 0, errs.ErrUnavailable
+			}
+			return definitions, offset + maximumAssistantIntegrationDefinitions, nil
+		}
+		var entries []entity.IntegrationCapability
+		if json.Unmarshal(schema, &item.ConfigurationFields) != nil || json.Unmarshal(capabilities, &entries) != nil ||
+			len(item.ConfigurationFields) > 100 || len(entries) > 100 {
+			rows.Close()
+			return nil, 0, errs.ErrUnavailable
+		}
+		for _, entry := range entries {
+			item.CapabilityKeys = append(item.CapabilityKeys, entry.Key)
+		}
+		definitions = append(definitions, item)
+	}
+	if rows.Err() != nil {
+		rows.Close()
+		return nil, 0, errs.ErrUnavailable
+	}
+	rows.Close()
+	if err := tx.Commit(ctx); err != nil {
+		return nil, 0, errs.ErrUnavailable
+	}
+	return definitions, 0, nil
+}
 
 func (repository *Repository) SearchAssistantResources(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, search string) ([]entity.SearchResult, bool, error) {
 	current, err := repository.resolveScope(ctx, principal)

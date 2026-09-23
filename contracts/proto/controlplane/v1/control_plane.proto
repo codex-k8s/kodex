@@ -1746,10 +1746,16 @@ message SearchAssistantResourcesRequest {
   string fence = 2;
   int64 generation = 3;
   string query = 4;
+  // Взаимоисключающий read-only режим каталога: actor разрешается той же lease.
+  bool integration_definition_catalog = 5;
+  string definition_query = 6;
+  int32 definition_offset = 7;
 }
 message SearchAssistantResourcesResponse {
   repeated SearchResult results = 1;
   bool truncated = 2;
+  repeated AssistantIntegrationDefinition definitions = 3;
+  int32 next_definition_offset = 4;
 }
 
 enum VFSNodeKind {
@@ -7931,4 +7937,17 @@ message FailManagedConfigurationGitWriteBackWorkRequest {
 }
 message FailManagedConfigurationGitWriteBackWorkResponse {
   ManagedConfigurationGitWriteBack proposal = 1;
+}
+
+// Только публичная проекция definition для этапного поиска помощником.
+message AssistantIntegrationDefinition {
+  string key = 1;
+  string name = 2;
+  string description = 3;
+  string category = 4;
+  string adapter = 5;
+  string credential_secret_key = 6;
+  repeated IntegrationConfigurationField configuration_fields = 7;
+  repeated string capability_keys = 8;
+  string origin = 9;
 }

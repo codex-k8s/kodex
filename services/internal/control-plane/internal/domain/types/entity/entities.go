@@ -710,6 +710,14 @@ type IntegrationDefinition struct {
 	ConfigurationFields                                                []IntegrationConfigurationField
 }
 
+// AssistantIntegrationDefinition содержит только публичные поля для этапного
+// выбора подключения. Значения credential и connection сюда не входят.
+type AssistantIntegrationDefinition struct {
+	Key, Name, Description, Category, Adapter, CredentialSecretKey, Origin string
+	ConfigurationFields                                                    []IntegrationConfigurationField
+	CapabilityKeys                                                         []string
+}
+
 type IntegrationCredentialRevision struct {
 	Ref, SecretRef, SecretUID, SecretResourceVersion, ContentSHA256 string
 	Revision                                                        int64

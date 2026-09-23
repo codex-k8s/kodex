@@ -653,7 +653,7 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	err = nil
 	switch params.Name {
 	case "get_configuration_catalog":
-		result, err = configurationCatalog(input, params.Arguments)
+		result, err = server.configurationCatalog(request.Context(), input, params.Arguments)
 	case "find_platform_resources":
 		result, err = server.findPlatformResources(request.Context(), input, params.Arguments)
 	case "propose_configuration_plan":

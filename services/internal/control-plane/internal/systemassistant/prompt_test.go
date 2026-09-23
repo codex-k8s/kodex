@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v11" {
+	if CorePromptRevision != "system-assistant-core-v12" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -18,6 +18,10 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"после подтверждения пользователем",
 		"Если результат Run ещё не получен",
 		"Никогда не проси значение в диалоге",
+		"definition_query",
+		"definition_next_offset",
+		"credential_secret_key",
+		"CREATE_INTEGRATION_CONNECTION",
 	} {
 		if !strings.Contains(CorePrompt(), required) {
 			t.Fatalf("system assistant prompt does not contain required guidance %q", required)

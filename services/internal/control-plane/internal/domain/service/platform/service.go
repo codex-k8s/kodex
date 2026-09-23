@@ -910,6 +910,18 @@ func (service *Service) SearchAssistantResources(ctx context.Context, p value.Pr
 	}
 	return service.repository.SearchAssistantResources(ctx, p, leaseRef, fence, generation, strings.TrimSpace(search))
 }
+func (service *Service) ListAssistantIntegrationDefinitions(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, search string, offset int32) ([]entity.AssistantIntegrationDefinition, int32, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, 0, err
+	}
+	if p.CallerWorkload != "runtime-controller" || p.Permission != "platform.runtime.assistant.resources.search" ||
+		strings.TrimSpace(leaseRef) == "" || strings.TrimSpace(fence) == "" || generation < 1 ||
+		len([]rune(strings.TrimSpace(search))) > 80 || offset < 0 || offset > 10000 {
+		return nil, 0, errs.ErrForbidden
+	}
+	return service.repository.ListAssistantIntegrationDefinitions(ctx, p, leaseRef, fence, generation, strings.TrimSpace(search), offset)
+}
 func (service *Service) OpenExecutionArtifactTransfer(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {
 	return service.readExecutionArtifact(ctx, p, leaseRef, fence, generation, artifactRef, "platform.runtime.execution.artifact.stream")
 }

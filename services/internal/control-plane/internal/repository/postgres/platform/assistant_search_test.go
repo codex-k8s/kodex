@@ -17,3 +17,16 @@ func TestAssistantSearchExtraKeepsTenantScopeAndSecretMetadataOnly(t *testing.T)
 		}
 	}
 }
+
+func TestAssistantIntegrationCatalogOnlyReturnsEnabledPublicMetadata(t *testing.T) {
+	t.Parallel()
+	if !strings.Contains(queryAssistantIntegrationDefinitions, "WHERE enabled") ||
+		!strings.Contains(queryAssistantIntegrationDefinitions, "LIMIT @limit OFFSET @offset") {
+		t.Fatal("assistant integration catalog lost bounded enabled-only selection")
+	}
+	for _, forbidden := range []string{"credential_materialization_ref", "secret_value", "integration_credential_revisions", "public_configuration"} {
+		if strings.Contains(queryAssistantIntegrationDefinitions, forbidden) {
+			t.Fatalf("assistant integration catalog projects secret or connection data %q", forbidden)
+		}
+	}
+}

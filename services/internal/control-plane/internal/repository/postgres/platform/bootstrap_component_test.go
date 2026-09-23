@@ -3030,8 +3030,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 		}
 		return tx.Commit(ctx)
 	}
-	const upgradedRevision = "system-assistant-core-v12"
-	const upgradedPrompt = "Platform-owned system assistant core prompt revision twelve."
+	const upgradedRevision = "system-assistant-core-v13"
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision thirteen."
 	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
 		t.Fatalf("upgrade core prompt: %v", err)
 	}
@@ -6612,6 +6612,17 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil || len(connectionResults) != 1 || connectionResults[0].Kind != "INTEGRATION" ||
 		connectionResults[0].Ref != searchConnection.Connection.Ref || connectionResults[0].ProjectRef != "" {
 		t.Fatalf("assistant search lost organization-scoped integration: results=%#v err=%v", connectionResults, err)
+	}
+	definitions, nextDefinition, err := service.ListAssistantIntegrationDefinitions(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, "https-json", 0)
+	if err != nil || nextDefinition != 0 || len(definitions) != 1 || definitions[0].Key != "https-json" ||
+		definitions[0].CredentialSecretKey != "token" || len(definitions[0].ConfigurationFields) != 2 {
+		t.Fatalf("assistant integration catalog lost verified public schema: count=%d next=%d err=%v", len(definitions), nextDefinition, err)
+	}
+	if _, _, err := service.ListAssistantIntegrationDefinitions(ctx, searchReader, searchLeaseRef, "wrong-fence", searchGeneration, "https-json", 0); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant integration catalog accepted wrong fence: %v", err)
+	}
+	if _, _, err := service.ListAssistantIntegrationDefinitions(ctx, runtimeReader, searchLeaseRef, searchFence, searchGeneration, "https-json", 0); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("assistant integration catalog accepted another runtime permission: %v", err)
 	}
 	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, "wrong-fence", searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
 		t.Fatalf("assistant search accepted wrong fence: %v", err)
