@@ -124,6 +124,34 @@ describe("assistant plan editor model", () => {
     expect(changed?.expectedVersion).toBe(3);
   });
 
+  it("показывает черновик окружения как отдельную форму без секретных значений", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+        target: {
+          kind: "RUNTIME_ENVIRONMENT_DRAFT",
+          name: "Среда разработчика",
+        },
+        parameters: { projectRef: "prj_market", name: "Среда разработчика" },
+        after: { projectRef: "prj_market", name: "Среда разработчика" },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe(
+      "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+    );
+    updateOperationParameter(first, "name", "Среда Marketplace");
+    updateOperationParameter(first, "description", "Сборка и тесты");
+    const changed = operationInputs(editable)[0];
+    expect(changed?.target.name).toBe("Среда Marketplace");
+    expect(changed?.parameters).toEqual(changed?.after);
+    expect(changed?.parameters.description).toBe("Сборка и тесты");
+    expect(changed?.parameters.secretValue).toBeUndefined();
+  });
+
   it("создаёт независимый draft из Vue reactive proxy", () => {
     const source = reactive(operation());
 

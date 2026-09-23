@@ -113,9 +113,10 @@ async function load(more = false): Promise<void> {
     if (current === generation) loading.value = false;
   }
 }
+let firstProjectLoad = true;
 watch(
   [query, trashMode],
-  (_value, previous) => {
+  () => {
     controller?.abort();
     generation += 1;
     if (timer) clearTimeout(timer);
@@ -123,12 +124,15 @@ watch(
     pageToken.value = undefined;
     listProblem.value = undefined;
     loading.value = true;
-    timer = setTimeout(() => void load(), previous === undefined ? 0 : 150);
+    timer = setTimeout(() => void load(), firstProjectLoad ? 0 : 150);
+    firstProjectLoad = false;
   },
   { immediate: true },
 );
 watch(
-  () => trashMode.value && items.value.some((project) => project.lifecycle === "PURGE_PENDING"),
+  () =>
+    trashMode.value &&
+    items.value.some((project) => project.lifecycle === "PURGE_PENDING"),
   (pending, _previous, onCleanup) => {
     if (!pending) return;
     const refresh = setInterval(() => {
@@ -190,12 +194,17 @@ function toggleTrash(): void {
 async function confirmLifecycle(): Promise<void> {
   const target = lifecycleTarget.value;
   if (!target || lifecycleBusy.value) return;
-  if (lifecycleAction.value === "PURGE" && purgeConfirmation.value !== target.name) return;
+  if (
+    lifecycleAction.value === "PURGE" &&
+    purgeConfirmation.value !== target.name
+  )
+    return;
   lifecycleBusy.value = true;
   lifecycleProblem.value = undefined;
   try {
     if (lifecycleAction.value === "PURGE") await purgeProjectFromTrash(target);
-    else if (lifecycleAction.value === "RESTORE") await restoreProjectFromTrash(target);
+    else if (lifecycleAction.value === "RESTORE")
+      await restoreProjectFromTrash(target);
     else await moveProjectToTrash(target);
     lifecycleTarget.value = undefined;
     purgeConfirmation.value = "";
@@ -207,7 +216,10 @@ async function confirmLifecycle(): Promise<void> {
     lifecycleBusy.value = false;
   }
 }
-function openLifecycle(project: Project, action: "TRASH" | "RESTORE" | "PURGE"): void {
+function openLifecycle(
+  project: Project,
+  action: "TRASH" | "RESTORE" | "PURGE",
+): void {
   lifecycleAction.value = action;
   lifecycleTarget.value = project;
   lifecycleProblem.value = undefined;
@@ -265,7 +277,15 @@ onBeforeUnmount(() => {
     </button>
     <ModalDialog
       v-if="lifecycleTarget"
-      :title="$t(lifecycleAction === 'PURGE' ? 'projects.purge' : lifecycleAction === 'RESTORE' ? 'projects.restore' : 'projects.trashProject')"
+      :title="
+        $t(
+          lifecycleAction === 'PURGE'
+            ? 'projects.purge'
+            : lifecycleAction === 'RESTORE'
+              ? 'projects.restore'
+              : 'projects.trashProject',
+        )
+      "
       :busy="lifecycleBusy"
       size="sm"
       @close="lifecycleTarget = undefined"
@@ -276,9 +296,9 @@ onBeforeUnmount(() => {
       <p>
         {{
           $t(
-            lifecycleAction === 'PURGE'
+            lifecycleAction === "PURGE"
               ? "projects.purgeDescription"
-              : lifecycleAction === 'RESTORE'
+              : lifecycleAction === "RESTORE"
                 ? "projects.restoreDescription"
                 : "projects.trashDescription",
           )
@@ -286,7 +306,11 @@ onBeforeUnmount(() => {
       </p>
       <label v-if="lifecycleAction === 'PURGE'" class="field">
         <span>{{ $t("projects.purgeConfirmName") }}</span>
-        <input v-model="purgeConfirmation" autocomplete="off" data-dialog-initial-focus />
+        <input
+          v-model="purgeConfirmation"
+          autocomplete="off"
+          data-dialog-initial-focus
+        />
       </label>
       <ProblemNotice
         v-if="lifecycleProblem"
@@ -304,12 +328,26 @@ onBeforeUnmount(() => {
         </button>
         <button
           class="button"
-          :class="lifecycleAction === 'RESTORE' ? 'button--primary' : 'button--danger'"
+          :class="
+            lifecycleAction === 'RESTORE' ? 'button--primary' : 'button--danger'
+          "
           type="button"
-          :disabled="lifecycleBusy || (lifecycleAction === 'PURGE' && purgeConfirmation !== lifecycleTarget.name)"
+          :disabled="
+            lifecycleBusy ||
+            (lifecycleAction === 'PURGE' &&
+              purgeConfirmation !== lifecycleTarget.name)
+          "
           @click="confirmLifecycle"
         >
-          {{ $t(lifecycleAction === 'PURGE' ? "projects.purge" : lifecycleAction === 'RESTORE' ? "projects.restore" : "projects.trashProject") }}
+          {{
+            $t(
+              lifecycleAction === "PURGE"
+                ? "projects.purge"
+                : lifecycleAction === "RESTORE"
+                  ? "projects.restore"
+                  : "projects.trashProject",
+            )
+          }}
         </button>
       </template>
     </ModalDialog>

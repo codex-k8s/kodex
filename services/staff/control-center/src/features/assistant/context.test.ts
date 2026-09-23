@@ -67,6 +67,9 @@ it("показывает поздно загруженное имя текуще
 describe("assistant route context", () => {
   it("показывает только объявленные владельцем операции и не придумывает unknown", () => {
     expect(readableContextOperations(["LAUNCH_RUN"])).toEqual(["LAUNCH_RUN"]);
+    expect(
+      readableContextOperations(["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]),
+    ).toEqual(["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]);
     expect(readableContextOperations([])).toEqual([]);
     expect(
       readableContextOperations(["LAUNCH_RUN", "UNKNOWN_COMMAND"]),

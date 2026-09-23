@@ -2918,6 +2918,7 @@ const ru = {
       UPDATE_PROJECT: "Изменить Проект",
       UPDATE_AGENT: "Изменить сотрудника",
       CREATE_AGENT: "Создать сотрудника",
+      CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
       CREATE_WORKFLOW: "Создать Workflow",
       CHANGE_CAPABILITY: "Изменить возможности",
       CHANGE_INTEGRATION_GRANT: "Изменить доступ к подключению",
@@ -3000,6 +3001,13 @@ const ru = {
       agentCapabilities: "Возможности сотрудника",
       agentNextSteps:
         "Образ, рабочее окружение и остальные доступы настраиваются отдельно. Проверьте их перед запуском сотрудника.",
+      environmentDescription: "Описание окружения",
+      environmentImageArtifact: "Ссылка на проверенный образ (необязательно)",
+      environmentChooseImage: "Выбрать готовый образ",
+      environmentSearchImage: "Найти готовый образ",
+      environmentSelectedImage: "Выбранный артефакт образа",
+      environmentDraftNextSteps:
+        "Это только черновик. Для рабочего окружения выберите проверенный образ, дополните параметры и секретные привязки в защищённой форме, затем проверьте и опубликуйте его.",
       transitionDetails: "Технические детали изменения",
       afterDetails: "Планируемое состояние",
       capabilities: {
@@ -6037,6 +6045,7 @@ const en = {
       UPDATE_PROJECT: "Update Project",
       UPDATE_AGENT: "Update employee",
       CREATE_AGENT: "Create agent",
+      CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
       CREATE_WORKFLOW: "Create Workflow",
       CHANGE_CAPABILITY: "Change capabilities",
       CHANGE_INTEGRATION_GRANT: "Change connection access",
@@ -6120,6 +6129,13 @@ const en = {
       agentCapabilities: "Employee capabilities",
       agentNextSteps:
         "The image, work environment, and other access grants are configured separately. Review them before launching the employee.",
+      environmentDescription: "Environment description",
+      environmentImageArtifact: "Verified image reference (optional)",
+      environmentChooseImage: "Choose a ready image",
+      environmentSearchImage: "Search ready images",
+      environmentSelectedImage: "Selected image artifact",
+      environmentDraftNextSteps:
+        "This creates only a draft. To make it runnable, select a verified image, complete its settings and secret bindings in the protected form, then validate and publish it.",
       transitionDetails: "Technical change details",
       afterDetails: "Planned state",
       capabilities: {

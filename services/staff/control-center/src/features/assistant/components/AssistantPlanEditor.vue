@@ -12,6 +12,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
+import { useRuntimeStore } from "@/features/runtime/store";
 import {
   editableOperations,
   friendlyPlanOperationType,
@@ -28,6 +29,8 @@ import type {
   AssistantPlanReceipt,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -47,8 +50,10 @@ const emit = defineEmits<{
   reject: [];
 }>();
 const { t } = useI18n();
+const runtime = useRuntimeStore();
 const summary = ref("");
 const operations = ref<EditablePlanOperation[]>([]);
+const selectedImages = ref<Record<string, AsyncEntityOption>>({});
 const inputProblem = ref("");
 type EditorTarget =
   | { kind: "SUMMARY" }
@@ -184,6 +189,46 @@ function setField(
     key,
     (event.target as HTMLInputElement | HTMLTextAreaElement).value,
   );
+}
+
+function selectedImage(
+  operation: EditablePlanOperation,
+): AsyncEntityOption | undefined {
+  const ref = fieldValue(operation, "imageArtifactRef");
+  return ref
+    ? (selectedImages.value[ref] ?? {
+        ref,
+        title: ref,
+        description: t("assistant.planEditor.environmentSelectedImage"),
+      })
+    : undefined;
+}
+
+function rememberSelectedImage(option: AsyncEntityOption): void {
+  selectedImages.value = { ...selectedImages.value, [option.ref]: option };
+}
+
+function loadImagePage(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+) {
+  if (!props.plan.projectRef) return Promise.resolve({ items: [] });
+  return runtime.searchPromotedRoleImagePage(
+    props.plan.projectRef,
+    query,
+    cursor,
+    signal,
+  );
+}
+
+function setImageArtifact(
+  operation: EditablePlanOperation,
+  value: string | null | readonly string[],
+): void {
+  if (typeof value === "string" || value === null) {
+    updateOperationParameter(operation, "imageArtifactRef", value ?? "");
+  }
 }
 
 function capabilityChecked(
@@ -479,12 +524,19 @@ function snapshot(value: string): Record<string, unknown> {
               <span>{{ $t("assistant.planEditor.entityName") }}</span>
               <input
                 :value="fieldValue(operation, 'name')"
-                maxlength="160"
+                :maxlength="
+                  operation.value.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT'
+                    ? 120
+                    : 160
+                "
                 :disabled="!editable"
                 @input="setField(operation, 'name', $event)"
               />
             </label>
-            <label class="field">
+            <label
+              v-if="operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT'"
+              class="field"
+            >
               <span>{{ $t("assistant.planEditor.entityPurpose") }}</span>
               <textarea
                 :value="fieldValue(operation, 'purpose')"
@@ -506,6 +558,49 @@ function snapshot(value: string): Record<string, unknown> {
                   <option value="en">English</option>
                 </select>
               </label>
+            </template>
+            <template
+              v-else-if="
+                operation.value.target.kind === 'RUNTIME_ENVIRONMENT_DRAFT'
+              "
+            >
+              <label class="field">
+                <span>{{
+                  $t("assistant.planEditor.environmentDescription")
+                }}</span>
+                <textarea
+                  :value="fieldValue(operation, 'description')"
+                  rows="3"
+                  maxlength="1000"
+                  :disabled="!editable"
+                  @input="setField(operation, 'description', $event)"
+                />
+              </label>
+              <label class="field">
+                <span>{{
+                  $t("assistant.planEditor.environmentImageArtifact")
+                }}</span>
+                <AsyncEntityPicker
+                  :model-value="fieldValue(operation, 'imageArtifactRef')"
+                  :selected="selectedImage(operation)"
+                  :load-page="loadImagePage"
+                  :trigger-label="
+                    $t('assistant.planEditor.environmentImageArtifact')
+                  "
+                  :placeholder="
+                    $t('assistant.planEditor.environmentChooseImage')
+                  "
+                  :search-placeholder="
+                    $t('assistant.planEditor.environmentSearchImage')
+                  "
+                  :disabled="!editable || !plan.projectRef"
+                  @update:model-value="setImageArtifact(operation, $event)"
+                  @select="rememberSelectedImage"
+                />
+              </label>
+              <p class="assistant-plan-friendly__hint">
+                {{ $t("assistant.planEditor.environmentDraftNextSteps") }}
+              </p>
             </template>
             <template v-else>
               <label class="field">

@@ -18,6 +18,14 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("assistant.planEditor.agentNextSteps");
   });
 
+  it("даёт выбрать продвинутый образ для черновика среды без ручного ref", () => {
+    expect(source).toContain("CREATE_RUNTIME_ENVIRONMENT_DRAFT");
+    expect(source).toContain("runtime.searchPromotedRoleImagePage");
+    expect(source).toContain("<AsyncEntityPicker");
+    expect(source).toContain("setImageArtifact(operation, $event)");
+    expect(source).toContain("assistant.planEditor.environmentDraftNextSteps");
+  });
+
   it("показывает тип, действие и authority результата без скрытых изменений", () => {
     expect(source).toContain("{{ operation.value.type }}");
     expect(source).toContain("{{ operation.value.action }}");
