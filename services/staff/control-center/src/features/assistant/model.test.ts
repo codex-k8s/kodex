@@ -501,6 +501,51 @@ describe("assistant plan editor model", () => {
     expect(changed?.after.capabilityKey).toBe("files.write");
   });
 
+  it("показывает право интеграции в форме с неизменной identity подключения", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CHANGE_INTEGRATION_GRANT",
+        action: "UPDATE",
+        target: {
+          kind: "INTEGRATION_CONNECTION",
+          ref: "conn_exact",
+          name: "GitHub",
+          version: 4,
+        },
+        expectedVersion: 4,
+        parameters: {
+          connectionRef: "conn_exact",
+          agentRef: "agt_exact",
+          capabilityKey: "github.repo.read",
+          enabled: true,
+          expectedVersion: 4,
+        },
+        before: { capabilityKey: "github.repo.read", enabled: false },
+        after: { capabilityKey: "github.repo.read", enabled: true },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("CHANGE_INTEGRATION_GRANT");
+    updateOperationParameter(first, "capabilityKey", "github.repo.write");
+    const changed = operationInputs(editable)[0];
+    expect(changed?.target).toMatchObject({
+      kind: "INTEGRATION_CONNECTION",
+      ref: "conn_exact",
+      version: 4,
+    });
+    expect(changed?.parameters).toMatchObject({
+      connectionRef: "conn_exact",
+      agentRef: "agt_exact",
+      capabilityKey: "github.repo.write",
+      enabled: true,
+      expectedVersion: 4,
+    });
+    expect(changed?.parameters.workflowRef).toBeUndefined();
+  });
+
   it("показывает черновик окружения как отдельную форму без секретных значений", () => {
     const editable = editableOperations([
       {

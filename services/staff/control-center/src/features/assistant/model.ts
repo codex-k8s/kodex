@@ -144,6 +144,7 @@ export type FriendlyPlanOperationType =
   | "CREATE_AGENT"
   | "UPDATE_AGENT"
   | "CHANGE_CAPABILITY"
+  | "CHANGE_INTEGRATION_GRANT"
   | "CREATE_WORKFLOW"
   | "CREATE_SCHEDULE"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
@@ -160,6 +161,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "CREATE_AGENT" &&
     operation.value.type !== "UPDATE_AGENT" &&
     operation.value.type !== "CHANGE_CAPABILITY" &&
+    operation.value.type !== "CHANGE_INTEGRATION_GRANT" &&
     operation.value.type !== "CREATE_WORKFLOW" &&
     operation.value.type !== "CREATE_SCHEDULE" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
@@ -173,15 +175,17 @@ export function friendlyPlanOperationType(
       ? "ROLE_IMAGE_RECIPE"
       : operation.value.type === "CREATE_INTEGRATION_CONNECTION"
         ? "INTEGRATION_CONNECTION"
-        : operation.value.type === "CREATE_WORKFLOW"
-          ? "WORKFLOW"
-          : operation.value.type === "CREATE_SCHEDULE"
-            ? "SCHEDULE"
-            : operation.value.type.endsWith("PROJECT")
-              ? "PROJECT"
-              : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-                ? "RUNTIME_ENVIRONMENT_DRAFT"
-                : "AGENT";
+        : operation.value.type === "CHANGE_INTEGRATION_GRANT"
+          ? "INTEGRATION_CONNECTION"
+          : operation.value.type === "CREATE_WORKFLOW"
+            ? "WORKFLOW"
+            : operation.value.type === "CREATE_SCHEDULE"
+              ? "SCHEDULE"
+              : operation.value.type.endsWith("PROJECT")
+                ? "PROJECT"
+                : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                  ? "RUNTIME_ENVIRONMENT_DRAFT"
+                  : "AGENT";
   const expectedAction = operation.value.type.startsWith("CREATE_")
     ? "CREATE"
     : operation.value.type === "LAUNCH_RUN"

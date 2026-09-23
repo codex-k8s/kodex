@@ -3076,6 +3076,21 @@ const ru = {
         "Возможность отсутствует в текущем каталоге. Выберите доступную или попросите новый план.",
       capabilityNextSteps:
         "Изменение права вступит в силу только после проверки и подтверждения плана.",
+      grantConnection: "Подключение",
+      grantRecipient: "Получатель",
+      grantCapability: "Возможность интеграции",
+      grantEnable: "Выдать разрешение (снимите, чтобы отозвать существующее)",
+      grantLoadFailed:
+        "Не удалось проверить подключение или получателя. Обновите страницу и план.",
+      grantStale:
+        "Версия подключения изменилась. Попросите помощника подготовить новый план.",
+      grantCandidateFailed:
+        "Не удалось проверить доступность разрешения. Попробуйте обновить план.",
+      grantUnavailable:
+        "Это разрешение недоступно для выбранного получателя. Проверьте подключение или попросите другой план.",
+      grantNothingToRevoke: "Активного разрешения для отзыва не найдено.",
+      grantFixedTarget:
+        "Подключение и получатель закреплены в этом плане. Если нужен другой объект, попросите помощника изменить план. Секреты сюда не вводятся.",
       agentNextSteps:
         "Образ, рабочее окружение и остальные доступы настраиваются отдельно. Проверьте их перед запуском сотрудника.",
       environmentDescription: "Описание окружения",
@@ -6328,6 +6343,21 @@ const en = {
         "This capability is not in the current catalog. Choose an available one or request a new plan.",
       capabilityNextSteps:
         "This permission changes only after the plan is validated and confirmed.",
+      grantConnection: "Connection",
+      grantRecipient: "Recipient",
+      grantCapability: "Integration capability",
+      grantEnable: "Grant permission (clear to revoke an existing grant)",
+      grantLoadFailed:
+        "Could not verify the connection or recipient. Reload the page and plan.",
+      grantStale:
+        "The connection version changed. Ask the assistant for a new plan.",
+      grantCandidateFailed:
+        "Could not verify permission availability. Refresh the plan.",
+      grantUnavailable:
+        "This permission is unavailable for the selected recipient. Check the connection or request another plan.",
+      grantNothingToRevoke: "No active grant was found to revoke.",
+      grantFixedTarget:
+        "This plan fixes the connection and recipient. Ask the assistant to revise it for another target. Do not enter secrets here.",
       agentNextSteps:
         "The image, work environment, and other access grants are configured separately. Review them before launching the employee.",
       environmentDescription: "Environment description",

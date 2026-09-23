@@ -13,6 +13,7 @@ import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
 import AssistantCapabilityPlanForm from "@/features/assistant/components/AssistantCapabilityPlanForm.vue";
+import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import AssistantSchedulePlanForm from "@/features/assistant/components/AssistantSchedulePlanForm.vue";
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
@@ -80,6 +81,8 @@ const scheduleFormValidity = ref<Record<string, boolean>>({});
 const scheduleFormTouched = ref(false);
 const capabilityFormValidity = ref<Record<string, boolean>>({});
 const capabilityFormTouched = ref(false);
+const integrationGrantValidity = ref<Record<string, boolean>>({});
+const integrationGrantTouched = ref(false);
 const inputProblem = ref("");
 type EditorTarget =
   | { kind: "SUMMARY" }
@@ -134,6 +137,8 @@ function resetDraft(): void {
   scheduleFormTouched.value = false;
   capabilityFormValidity.value = {};
   capabilityFormTouched.value = false;
+  integrationGrantValidity.value = {};
+  integrationGrantTouched.value = false;
   inputProblem.value = "";
 }
 
@@ -324,6 +329,7 @@ const draftMatchesSavedPlan = computed(() => {
       !workflowFormTouched.value &&
       !scheduleFormTouched.value &&
       !capabilityFormTouched.value &&
+      !integrationGrantTouched.value &&
       JSON.stringify(operationInputs(operations.value)) ===
         JSON.stringify(
           operationInputs(editableOperations(props.plan.operations)),
@@ -352,7 +358,9 @@ const friendlyInputsReady = computed(() =>
         (operation.value.type !== "CREATE_SCHEDULE" ||
           scheduleFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CHANGE_CAPABILITY" ||
-          capabilityFormValidity.value[operation.value.ref] === true)),
+          capabilityFormValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "CHANGE_INTEGRATION_GRANT" ||
+          integrationGrantValidity.value[operation.value.ref] === true)),
   ),
 );
 const canSave = computed(
@@ -860,6 +868,17 @@ function snapshot(value: string): Record<string, unknown> {
               :disabled="!editable"
               @valid="capabilityFormValidity[operation.value.ref] = $event"
               @dirty="capabilityFormTouched = true"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
+              "
+            />
+            <AssistantIntegrationGrantPlanForm
+              v-else-if="operation.value.type === 'CHANGE_INTEGRATION_GRANT'"
+              :operation="operation"
+              :project-ref="plan.projectRef"
+              :disabled="!editable"
+              @valid="integrationGrantValidity[operation.value.ref] = $event"
+              @dirty="integrationGrantTouched = true"
               @parameter="
                 (key, value) => updateOperationParameter(operation, key, value)
               "
