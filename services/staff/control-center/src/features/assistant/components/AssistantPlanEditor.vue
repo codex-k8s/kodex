@@ -12,6 +12,8 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
+import { prepareConnectionConfiguration } from "@/features/integrations/connection-setup";
+import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
@@ -28,6 +30,7 @@ import type {
   AssistantPlan,
   AssistantPlanOperationInput,
   AssistantPlanReceipt,
+  IntegrationDefinition,
   RoleEnvironment,
 } from "@/shared/api/generated/openapi/types.gen";
 import { listAgents } from "@/shared/api/generated/openapi/sdk.gen";
@@ -61,6 +64,10 @@ const selectedImages = ref<Record<string, AsyncEntityOption>>({});
 const roleImageAgentNames = ref<Record<string, string>>({});
 const roleImageEnvironments = ref<RoleEnvironment[]>([]);
 const roleImageCatalogProblem = ref(false);
+const connectionDefinitions = ref<Record<string, IntegrationDefinition>>({});
+const connectionCatalogProblem = ref(false);
+const connectionInputs = ref<Record<string, Record<string, string>>>({});
+const connectionInputsTouched = ref(false);
 const inputProblem = ref("");
 type EditorTarget =
   | { kind: "SUMMARY" }
@@ -73,10 +80,157 @@ const editorTarget = ref<EditorTarget>();
 function resetDraft(): void {
   summary.value = props.plan.auditSummary;
   operations.value = editableOperations(props.plan.operations);
+  connectionInputs.value = Object.fromEntries(
+    operations.value
+      .filter(
+        (operation) => operation.value.type === "CREATE_INTEGRATION_CONNECTION",
+      )
+      .map((operation) => {
+        const configuration = operationParameter(
+          operation,
+          "publicConfiguration",
+        );
+        const values =
+          typeof configuration === "object" &&
+          configuration !== null &&
+          !Array.isArray(configuration)
+            ? (configuration as Record<string, unknown>)
+            : {};
+        return [
+          operation.value.ref,
+          Object.fromEntries(
+            Object.entries(values).map(([key, value]) => [
+              key,
+              Array.isArray(value)
+                ? value.map(String).join(", ")
+                : typeof value === "string" ||
+                    typeof value === "number" ||
+                    typeof value === "boolean"
+                  ? String(value)
+                  : "",
+            ]),
+          ),
+        ];
+      }),
+  );
+  connectionInputsTouched.value = false;
   inputProblem.value = "";
 }
 
 watch(() => props.plan, resetDraft, { immediate: true });
+
+watch(
+  () => props.plan,
+  (plan, _previous, onCleanup) => {
+    connectionDefinitions.value = {};
+    connectionCatalogProblem.value = false;
+    const keys = [
+      ...new Set(
+        plan.operations
+          .filter(
+            (operation) => operation.type === "CREATE_INTEGRATION_CONNECTION",
+          )
+          .map((operation) => operation.parameters.definitionKey)
+          .filter((value): value is string => typeof value === "string"),
+      ),
+    ];
+    if (!keys.length) return;
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    void Promise.all(
+      keys.map((key) => loadExactIntegrationDefinition(key, controller.signal)),
+    )
+      .then((definitions) => {
+        if (controller.signal.aborted) return;
+        connectionDefinitions.value = Object.fromEntries(
+          definitions.map((definition) => [definition.key, definition]),
+        );
+        for (const operation of operations.value) {
+          const definition = definitions.find(
+            (item) =>
+              item.key === operationParameter(operation, "definitionKey"),
+          );
+          if (!definition) continue;
+          const raw = { ...connectionInputs.value[operation.value.ref] };
+          for (const field of definition.configurationFields)
+            if (field.valueType === "BOOLEAN" && raw[field.key] === undefined)
+              raw[field.key] = "false";
+          connectionInputs.value = {
+            ...connectionInputs.value,
+            [operation.value.ref]: raw,
+          };
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) connectionCatalogProblem.value = true;
+      });
+  },
+  { immediate: true },
+);
+
+function connectionDefinition(
+  operation: EditablePlanOperation,
+): IntegrationDefinition | undefined {
+  try {
+    const key = operationParameter(operation, "definitionKey");
+    return typeof key === "string"
+      ? connectionDefinitions.value[key]
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function connectionProblems(
+  operation: EditablePlanOperation,
+): Partial<Record<string, string>> {
+  try {
+    const definition = connectionDefinition(operation);
+    if (!definition?.available) return { definitionKey: "UNAVAILABLE" };
+    const raw = connectionInputs.value[operation.value.ref] ?? {};
+    const initial = operationParameter(operation, "publicConfiguration");
+    if (typeof initial !== "object" || initial === null || Array.isArray(initial))
+      return { publicConfiguration: "INVALID_VALUE" };
+    const known = new Set(
+      definition.configurationFields.map((field) => field.key),
+    );
+    if (Object.keys(raw).some((key) => !known.has(key)))
+      return { publicConfiguration: "UNKNOWN_FIELD" };
+    return prepareConnectionConfiguration(definition.configurationFields, raw)
+      .problems;
+  } catch {
+    return { publicConfiguration: "INVALID_VALUE" };
+  }
+}
+
+function connectionProblemLabel(code: string | undefined): string {
+  if (code === "REQUIRED") return t("assistant.planEditor.connectionRequired");
+  if (code === "INVALID_HTTPS_URL")
+    return t("assistant.planEditor.connectionHttpsUrl");
+  return t("assistant.planEditor.connectionInvalidValue");
+}
+
+function setConnectionField(
+  operation: EditablePlanOperation,
+  key: string,
+  value: string,
+): void {
+  const definition = connectionDefinition(operation);
+  if (!definition?.configurationFields.some((field) => field.key === key))
+    return;
+  const raw = { ...connectionInputs.value[operation.value.ref], [key]: value };
+  connectionInputs.value = {
+    ...connectionInputs.value,
+    [operation.value.ref]: raw,
+  };
+  connectionInputsTouched.value = true;
+  const prepared = prepareConnectionConfiguration(
+    definition.configurationFields,
+    raw,
+  );
+  if (!Object.keys(prepared.problems).length)
+    updateOperationParameter(operation, "publicConfiguration", prepared.value);
+}
 
 watch(
   () => props.plan,
@@ -137,6 +291,20 @@ const exactRevisionValidated = computed(
     props.plan.state === "VALID" &&
     props.plan.validatedRevision === props.plan.revision,
 );
+const draftMatchesSavedPlan = computed(() => {
+  try {
+    return (
+      summary.value === props.plan.auditSummary &&
+      !connectionInputsTouched.value &&
+      JSON.stringify(operationInputs(operations.value)) ===
+        JSON.stringify(
+          operationInputs(editableOperations(props.plan.operations)),
+        )
+    );
+  } catch {
+    return false;
+  }
+});
 const editable = computed(
   () =>
     !props.readonly &&
@@ -148,6 +316,12 @@ const canSave = computed(
     editable.value &&
     summary.value.trim().length > 0 &&
     selectedCount.value > 0 &&
+    operations.value.every(
+      (operation) =>
+        !operation.value.selected ||
+        operation.value.type !== "CREATE_INTEGRATION_CONNECTION" ||
+        !Object.keys(connectionProblems(operation)).length,
+    ) &&
     !["APPLIED", "REJECTED"].includes(props.plan.state),
 );
 const canValidate = computed(
@@ -162,6 +336,7 @@ const canApply = computed(
     !props.readonly &&
     !props.busy &&
     exactRevisionValidated.value &&
+    draftMatchesSavedPlan.value &&
     props.plan.nextActions.includes("APPLY_PLAN"),
 );
 const canReject = computed(() => editable.value);
@@ -169,6 +344,25 @@ const canReject = computed(() => editable.value);
 function save(): void {
   inputProblem.value = "";
   try {
+    for (const operation of operations.value) {
+      if (
+        !operation.value.selected ||
+        operation.value.type !== "CREATE_INTEGRATION_CONNECTION"
+      )
+        continue;
+      const definition = connectionDefinition(operation);
+      if (!definition || Object.keys(connectionProblems(operation)).length)
+        return;
+      const prepared = prepareConnectionConfiguration(
+        definition.configurationFields,
+        connectionInputs.value[operation.value.ref] ?? {},
+      );
+      updateOperationParameter(
+        operation,
+        "publicConfiguration",
+        prepared.value,
+      );
+    }
     emit("save", summary.value.trim(), operationInputs(operations.value));
   } catch {
     inputProblem.value = t("assistant.planEditor.jsonError");
@@ -594,7 +788,8 @@ function snapshot(value: string): Record<string, unknown> {
             <label
               v-if="
                 operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
-                operation.value.target.kind !== 'ROLE_IMAGE_RECIPE'
+                operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
+                operation.value.target.kind !== 'INTEGRATION_CONNECTION'
               "
               class="field"
             >
@@ -661,6 +856,140 @@ function snapshot(value: string): Record<string, unknown> {
               </label>
               <p class="assistant-plan-friendly__hint">
                 {{ $t("assistant.planEditor.environmentDraftNextSteps") }}
+              </p>
+            </template>
+            <template
+              v-else-if="
+                operation.value.target.kind === 'INTEGRATION_CONNECTION'
+              "
+            >
+              <div class="field">
+                <span>{{
+                  $t("assistant.planEditor.connectionDefinition")
+                }}</span>
+                <strong>{{
+                  connectionDefinition(operation)?.name ||
+                  fieldValue(operation, "definitionKey")
+                }}</strong>
+                <small>{{
+                  $t("assistant.planEditor.connectionDefinitionFixed")
+                }}</small>
+              </div>
+              <p
+                v-if="connectionCatalogProblem"
+                class="field-error"
+                role="alert"
+              >
+                {{ $t("assistant.planEditor.connectionCatalogUnavailable") }}
+              </p>
+              <p
+                v-else-if="connectionDefinition(operation)?.available === false"
+                class="field-error"
+                role="alert"
+              >
+                {{ $t("assistant.planEditor.connectionCatalogUnavailable") }}
+              </p>
+              <template
+                v-for="field in connectionDefinition(operation)
+                  ?.configurationFields ?? []"
+                :key="field.key"
+              >
+                <label class="field">
+                  <span>{{ field.label }}</span>
+                  <select
+                    v-if="field.allowedValues?.length"
+                    :value="
+                      connectionInputs[operation.value.ref]?.[field.key] ?? ''
+                    "
+                    :disabled="!editable"
+                    @change="
+                      setConnectionField(
+                        operation,
+                        field.key,
+                        ($event.target as HTMLSelectElement).value,
+                      )
+                    "
+                  >
+                    <option value=""></option>
+                    <option
+                      v-for="choice in field.allowedValues"
+                      :key="choice"
+                      :value="choice"
+                    >
+                      {{ choice }}
+                    </option>
+                  </select>
+                  <input
+                    v-else-if="field.valueType === 'BOOLEAN'"
+                    type="checkbox"
+                    :checked="
+                      connectionInputs[operation.value.ref]?.[field.key] ===
+                      'true'
+                    "
+                    :disabled="!editable"
+                    @change="
+                      setConnectionField(
+                        operation,
+                        field.key,
+                        ($event.target as HTMLInputElement).checked
+                          ? 'true'
+                          : 'false',
+                      )
+                    "
+                  />
+                  <input
+                    v-else
+                    :value="
+                      connectionInputs[operation.value.ref]?.[field.key] ?? ''
+                    "
+                    :type="field.valueType === 'URL' ? 'url' : 'text'"
+                    :inputmode="
+                      field.valueType === 'INTEGER' ? 'numeric' : undefined
+                    "
+                    :required="field.required"
+                    :placeholder="field.placeholder"
+                    :maxlength="
+                      field.maximumLength ??
+                      (field.valueType === 'URL' ? 2048 : 500)
+                    "
+                    :disabled="!editable"
+                    :aria-invalid="
+                      Boolean(connectionProblems(operation)[field.key])
+                    "
+                    autocomplete="off"
+                    @input="
+                      setConnectionField(
+                        operation,
+                        field.key,
+                        ($event.target as HTMLInputElement).value,
+                      )
+                    "
+                  />
+                  <small>{{ field.help }}</small>
+                  <small v-if="field.valueType === 'STRING_LIST'">{{
+                    $t("assistant.planEditor.connectionListHint")
+                  }}</small>
+                  <small
+                    v-if="connectionProblems(operation)[field.key]"
+                    class="field-error"
+                  >
+                    {{
+                      connectionProblemLabel(
+                        connectionProblems(operation)[field.key],
+                      )
+                    }}
+                  </small>
+                </label>
+              </template>
+              <p
+                v-if="connectionProblems(operation).publicConfiguration"
+                class="field-error"
+                role="alert"
+              >
+                {{ $t("assistant.planEditor.connectionConfigurationInvalid") }}
+              </p>
+              <p class="assistant-plan-friendly__hint">
+                {{ $t("assistant.planEditor.connectionCredentialNextSteps") }}
               </p>
             </template>
             <template

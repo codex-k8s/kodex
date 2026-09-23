@@ -35,6 +35,19 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("assistant.planEditor.roleImageNextSteps");
   });
 
+  it("проверяет схему подключения и не показывает ввод секрета в плане", () => {
+    expect(source).toContain("CREATE_INTEGRATION_CONNECTION");
+    expect(source).toContain("loadExactIntegrationDefinition");
+    expect(source).toContain("prepareConnectionConfiguration");
+    expect(source).toContain("connectionCredentialNextSteps");
+    expect(source).not.toContain('v-model="credentialValue"');
+  });
+
+  it("не применяет проверенную старую ревизию при несохранённых изменениях", () => {
+    expect(source).toContain("draftMatchesSavedPlan.value");
+    expect(source).toContain("exactRevisionValidated.value");
+  });
+
   it("показывает тип, действие и authority результата без скрытых изменений", () => {
     expect(source).toContain("{{ operation.value.type }}");
     expect(source).toContain("{{ operation.value.action }}");

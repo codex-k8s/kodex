@@ -5,6 +5,7 @@ import {
   assistantAwaitingReply,
   assistantEffectiveRuntimeState,
   assistantEnvironmentDraftTarget,
+  assistantIntegrationConnectionTarget,
   assistantRequiresProviderAccount,
   assistantRoleImageBuildTarget,
   editableOperations,
@@ -163,6 +164,43 @@ describe("assistant role image build target", () => {
       ),
     ).toBeUndefined();
   });
+
+  it("связывает подключение с квитанцией без проектного контекста", () => {
+    const connectionOperation: AssistantPlanOperation = {
+      ...operation(),
+      ref: "op_connection",
+      type: "CREATE_INTEGRATION_CONNECTION",
+      target: { kind: "INTEGRATION_CONNECTION", name: "GitHub" },
+    };
+    const connectionPlan: AssistantPlan = {
+      ...plan,
+      projectRef: undefined,
+      operations: [connectionOperation],
+      receipt: {
+        ...receipt,
+        operationReceipts: [
+          {
+            operationRef: "op_connection",
+            resourceRef: "conn_exact",
+            outcome: "APPLIED",
+            auditRef: "aud_connection",
+          },
+        ],
+      },
+    };
+    expect(
+      assistantIntegrationConnectionTarget(connectionPlan, "op_connection"),
+    ).toEqual({ connectionRef: "conn_exact" });
+    expect(
+      assistantIntegrationConnectionTarget(
+        {
+          ...connectionPlan,
+          receipt: { ...receipt, planRevision: 1 },
+        },
+        "op_connection",
+      ),
+    ).toBeUndefined();
+  });
 });
 
 function operation(): AssistantPlanOperation {
@@ -311,6 +349,47 @@ describe("assistant plan editor model", () => {
     expect(changed?.parameters.agentRef).toBe("agt_developer");
     expect(changed?.parameters.agentVersion).toBe(7);
     expect(changed?.parameters.environmentKey).toBe("documents");
+  });
+
+  it("редактирует только публичную конфигурацию подключения, сохраняя тип интеграции", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CREATE_INTEGRATION_CONNECTION",
+        target: { kind: "INTEGRATION_CONNECTION", name: "GitHub" },
+        parameters: {
+          definitionKey: "github",
+          name: "GitHub",
+          publicConfiguration: { organization: "marketplace" },
+        },
+        after: {
+          definitionKey: "github",
+          name: "GitHub",
+          publicConfiguration: { organization: "marketplace" },
+        },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe(
+      "CREATE_INTEGRATION_CONNECTION",
+    );
+
+    updateOperationParameter(first, "name", "Marketplace GitHub");
+    updateOperationParameter(first, "publicConfiguration", {
+      organization: "marketplace",
+      webhookEnabled: false,
+    });
+
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters).toEqual(changed?.after);
+    expect(changed?.parameters.definitionKey).toBe("github");
+    expect(changed?.parameters.publicConfiguration).toEqual({
+      organization: "marketplace",
+      webhookEnabled: false,
+    });
+    expect(changed?.parameters.credentialValue).toBeUndefined();
   });
 
   it("создаёт независимый draft из Vue reactive proxy", () => {

@@ -18,6 +18,7 @@ import {
   prepareConnectionConfiguration,
   type PendingCredentialSetup,
 } from "@/features/integrations/connection-setup";
+import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import IntegrationApprovalPanel from "@/features/integrations/ui/IntegrationApprovalPanel.vue";
 import IntegrationCatalogPanel from "@/features/integrations/ui/IntegrationCatalogPanel.vue";
 import IntegrationIntegerBounds from "@/features/integrations/ui/IntegrationIntegerBounds.vue";
@@ -231,6 +232,8 @@ const mailboxConfigurationBusy = ref(false);
 const mailboxConfigurationPanel = ref<{ canClose(): boolean }>();
 const route = useRoute();
 const router = useRouter();
+const integrationsLoaded = ref(false);
+const assistantCredentialDefinition = ref<IntegrationDefinition>();
 function closeConnectionDetails(): void {
   if (
     mailboxCredentialBusy.value ||
@@ -457,6 +460,9 @@ const visibleGrants = computed(() =>
 );
 const selectedDefinition = computed(
   () =>
+    (assistantCredentialDefinition.value?.key === form.definitionKey
+      ? assistantCredentialDefinition.value
+      : undefined) ??
     catalogDefinitions.value.find((item) => item.key === form.definitionKey) ??
     platform.definitions[form.definitionKey],
 );
@@ -543,6 +549,11 @@ function closeConnectionDialog(force = false): void {
   form.definitionKey = "";
   form.name = "";
   form.configuration = {};
+  assistantCredentialDefinition.value = undefined;
+  if (route.query.assistantCredentialRef)
+    void router.replace({
+      query: { ...route.query, assistantCredentialRef: undefined },
+    });
 }
 
 function editableConfigurationValue(
@@ -602,14 +613,22 @@ function credentialChanged(): void {
 
 async function openCredential(
   connection: IntegrationConnection,
+  definitionOverride?: IntegrationDefinition,
 ): Promise<void> {
-  const definition = platform.definitions[connection.definitionKey];
+  const definition =
+    definitionOverride ?? platform.definitions[connection.definitionKey];
   if (!canConfigureCredential(definition, connection)) return;
   commandRef.value = connection.ref;
   problem.value = undefined;
   try {
     const current = await platform.readConnection(connection.ref);
-    if (!canConfigureCredential(definition, current)) return;
+    if (
+      current.ref !== connection.ref ||
+      current.definitionKey !== definition?.key ||
+      !canConfigureCredential(definition, current)
+    )
+      return;
+    assistantCredentialDefinition.value = definition;
     dialogMode.value = "CREDENTIAL";
     form.definitionKey = current.definitionKey;
     form.name = current.name;
@@ -631,6 +650,40 @@ async function openCredential(
     commandRef.value = "";
   }
 }
+
+watch(
+  [() => route.query.assistantCredentialRef, integrationsLoaded] as const,
+  ([ref, loaded], _previous, onCleanup) => {
+    if (
+      !loaded ||
+      typeof ref !== "string" ||
+      !/^[A-Za-z0-9_-]{8,128}$/.test(ref)
+    )
+      return;
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    void (async () => {
+      try {
+        const connection = await platform.readConnection(ref);
+        if (controller.signal.aborted || connection.ref !== ref) return;
+        const definition = await loadExactIntegrationDefinition(
+          connection.definitionKey,
+          controller.signal,
+        );
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать поиск definition во время await.
+        if (controller.signal.aborted || dialog.value) return;
+        if (!canConfigureCredential(definition, connection)) return;
+        activeSection.value = "CONNECTIONS";
+        await openCredential(connection, definition);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может закрыть маршрут во время await.
+        if (controller.signal.aborted) closeConnectionDialog(true);
+      } catch (error) {
+        if (!controller.signal.aborted) problem.value = asProblem(error);
+      }
+    })();
+  },
+  { immediate: true },
+);
 
 function configurationProblem(field: IntegrationConfigurationField): string {
   const code = preparedConfiguration.value.problems[field.key];
@@ -871,7 +924,10 @@ async function revokeGrant(item: IntegrationGrantPresentation): Promise<void> {
 }
 
 onMounted(() => {
-  void platform.loadIntegrations().then(() => loadConnections());
+  void platform.loadIntegrations().then(() => {
+    integrationsLoaded.value = true;
+    return loadConnections();
+  });
   void platform.loadProjects();
 });
 

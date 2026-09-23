@@ -3004,6 +3004,20 @@ const ru = {
       discarded: "Черновик окружения отброшен.",
       continue: "Продолжить настройку",
     },
+    connection: {
+      title: "Подключение интеграции",
+      loadFailed:
+        "Не удалось прочитать состояние подключения. Повторите обновление.",
+      credentialNeeded:
+        "Метаданные созданы. Введите учётные данные в защищённой форме — не отправляйте их помощнику.",
+      testing: "Проверяем подключение. Состояние обновится автоматически.",
+      connected:
+        "Подключение работает. При необходимости выдайте точные разрешения сотрудникам и процессам.",
+      nextSteps:
+        "Проверьте подключение и назначьте разрешения в разделе интеграций.",
+      openCredential: "Открыть защищённую форму",
+      open: "Открыть интеграции",
+    },
     planEditor: {
       back: "Вернуться к диалогу",
       revision: "Ревизия {revision} · операций: {count}",
@@ -3043,6 +3057,19 @@ const ru = {
         "Не удалось загрузить каталог сотрудников и окружений. Обновите страницу и проверьте план снова.",
       roleImageNextSteps:
         "После подтверждения платформа создаст рецепт и поставит первую сборку в очередь. Образ станет доступен сотруднику только после успешной проверки и публикации.",
+      connectionDefinition: "Тип интеграции",
+      connectionDefinitionFixed:
+        "Если нужен другой тип интеграции, попросите помощника переделать план.",
+      connectionCatalogUnavailable:
+        "Не удалось загрузить схему интеграции. Обновите страницу и проверьте план снова.",
+      connectionRequired: "Заполните обязательное поле.",
+      connectionHttpsUrl: "Укажите полный URL с протоколом https://.",
+      connectionInvalidValue: "Значение не соответствует схеме подключения.",
+      connectionConfigurationInvalid:
+        "План содержит неподдерживаемые поля интеграции. Попросите помощника переделать план.",
+      connectionListHint: "Значения разделяются запятыми.",
+      connectionCredentialNextSteps:
+        "Здесь только общедоступные параметры. Если интеграции нужен ключ или пароль, после создания откроется защищённая форма. Не отправляйте секрет помощнику.",
       transitionDetails: "Технические детали изменения",
       afterDetails: "Планируемое состояние",
       capabilities: {
@@ -6167,6 +6194,18 @@ const en = {
       discarded: "The environment draft was discarded.",
       continue: "Continue setup",
     },
+    connection: {
+      title: "Integration connection",
+      loadFailed: "Could not read connection status. Refresh to try again.",
+      credentialNeeded:
+        "Metadata is created. Enter credentials in the protected form, never in assistant chat.",
+      testing: "Testing the connection. Status will refresh automatically.",
+      connected:
+        "The connection works. Grant exact permissions to employees and workflows when needed.",
+      nextSteps: "Test the connection and assign grants in Integrations.",
+      openCredential: "Open protected form",
+      open: "Open integrations",
+    },
     planEditor: {
       back: "Back to conversation",
       revision: "Revision {revision} · operations: {count}",
@@ -6206,6 +6245,19 @@ const en = {
         "Could not load the employee and environment catalog. Reload the page and validate the plan again.",
       roleImageNextSteps:
         "After confirmation, the platform creates a recipe and queues its first build. The employee can use the image only after successful verification and promotion.",
+      connectionDefinition: "Integration type",
+      connectionDefinitionFixed:
+        "Ask the assistant to revise the plan if you need another integration type.",
+      connectionCatalogUnavailable:
+        "Could not load the integration schema. Reload the page and review the plan again.",
+      connectionRequired: "Complete this required field.",
+      connectionHttpsUrl: "Enter a full URL using https://.",
+      connectionInvalidValue: "The value does not match the connection schema.",
+      connectionConfigurationInvalid:
+        "The plan contains unsupported integration fields. Ask the assistant to revise it.",
+      connectionListHint: "Separate values with commas.",
+      connectionCredentialNextSteps:
+        "Only public settings belong here. If the integration needs a key or password, use the protected form after creation. Never send secrets to the assistant.",
       transitionDetails: "Technical change details",
       afterDetails: "Planned state",
       capabilities: {

@@ -7,16 +7,15 @@ import type {
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 
-function assistantAppliedResourceTarget(
+function assistantAppliedResourceRef(
   plan: AssistantPlan,
   operationRef: string,
   operationType: string,
   targetKind: string,
-): { projectRef: string; resourceRef: string } | undefined {
+): string | undefined {
   const operation = plan.operations.find((item) => item.ref === operationRef);
   const receipt = plan.receipt;
   if (
-    !plan.projectRef ||
     plan.state !== "APPLIED" ||
     !operation?.selected ||
     operation.type !== operationType ||
@@ -31,37 +30,50 @@ function assistantAppliedResourceTarget(
     (item) => item.operationRef === operationRef,
   );
   if (matching.length !== 1 || !matching[0]?.resourceRef) return undefined;
-  return { projectRef: plan.projectRef, resourceRef: matching[0].resourceRef };
+  return matching[0].resourceRef;
 }
 
 export function assistantRoleImageBuildTarget(
   plan: AssistantPlan,
   operationRef: string,
 ): { projectRef: string; recipeRef: string } | undefined {
-  const target = assistantAppliedResourceTarget(
+  const recipeRef = assistantAppliedResourceRef(
     plan,
     operationRef,
     "CREATE_ROLE_IMAGE_RECIPE",
     "ROLE_IMAGE_RECIPE",
   );
-  return (
-    target && { projectRef: target.projectRef, recipeRef: target.resourceRef }
-  );
+  return plan.projectRef && recipeRef
+    ? { projectRef: plan.projectRef, recipeRef }
+    : undefined;
 }
 
 export function assistantEnvironmentDraftTarget(
   plan: AssistantPlan,
   operationRef: string,
 ): { projectRef: string; draftRef: string } | undefined {
-  const target = assistantAppliedResourceTarget(
+  const draftRef = assistantAppliedResourceRef(
     plan,
     operationRef,
     "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
     "RUNTIME_ENVIRONMENT_DRAFT",
   );
-  return (
-    target && { projectRef: target.projectRef, draftRef: target.resourceRef }
+  return plan.projectRef && draftRef
+    ? { projectRef: plan.projectRef, draftRef }
+    : undefined;
+}
+
+export function assistantIntegrationConnectionTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { connectionRef: string } | undefined {
+  const connectionRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_INTEGRATION_CONNECTION",
+    "INTEGRATION_CONNECTION",
   );
+  return connectionRef ? { connectionRef } : undefined;
 }
 
 export function assistantAwaitingReply(
@@ -89,7 +101,8 @@ export type FriendlyPlanOperationType =
   | "CREATE_AGENT"
   | "UPDATE_AGENT"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-  | "CREATE_ROLE_IMAGE_RECIPE";
+  | "CREATE_ROLE_IMAGE_RECIPE"
+  | "CREATE_INTEGRATION_CONNECTION";
 
 export function friendlyPlanOperationType(
   operation: EditablePlanOperation,
@@ -100,17 +113,20 @@ export function friendlyPlanOperationType(
     operation.value.type !== "CREATE_AGENT" &&
     operation.value.type !== "UPDATE_AGENT" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
-    operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE"
+    operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
+    operation.value.type !== "CREATE_INTEGRATION_CONNECTION"
   )
     return undefined;
   const expectedKind =
     operation.value.type === "CREATE_ROLE_IMAGE_RECIPE"
       ? "ROLE_IMAGE_RECIPE"
-      : operation.value.type.endsWith("PROJECT")
-        ? "PROJECT"
-        : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-          ? "RUNTIME_ENVIRONMENT_DRAFT"
-          : "AGENT";
+      : operation.value.type === "CREATE_INTEGRATION_CONNECTION"
+        ? "INTEGRATION_CONNECTION"
+        : operation.value.type.endsWith("PROJECT")
+          ? "PROJECT"
+          : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+            ? "RUNTIME_ENVIRONMENT_DRAFT"
+            : "AGENT";
   const expectedAction = operation.value.type.startsWith("CREATE_")
     ? "CREATE"
     : "UPDATE";
@@ -139,7 +155,7 @@ export function operationParameter(
 export function updateOperationParameter(
   operation: EditablePlanOperation,
   key: string,
-  value: string | string[],
+  value: string | string[] | Record<string, unknown>,
 ): void {
   const parameters = parseObject(operation.parametersText);
   const after = parseObject(operation.afterText);
@@ -147,8 +163,12 @@ export function updateOperationParameter(
   after[key] = value;
   operation.parametersText = prettyJSON(parameters);
   operation.afterText = prettyJSON(after);
-  if (key === "name" && operation.value.action === "CREATE")
-    operation.value.target.name = String(value);
+  if (
+    key === "name" &&
+    operation.value.action === "CREATE" &&
+    typeof value === "string"
+  )
+    operation.value.target.name = value;
 }
 
 function prettyJSON(value: Record<string, unknown>): string {
