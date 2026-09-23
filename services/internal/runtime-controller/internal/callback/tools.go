@@ -387,10 +387,12 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 }
 
 func scheduleInputSchema(projectRef, targetRef map[string]any) map[string]any {
-	schema := objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "sessionPolicy", "notificationPolicy"}, map[string]any{
+	schema := objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "automationText", "sessionPolicy", "notificationPolicy"}, map[string]any{
 		"projectRef": projectRef, "name": stringSchema(1, 160), "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
-		"preset": stringSchema(1, 120), "timeOfDay": stringSchema(0, 5), "dayOfWeek": stringSchema(0, 9), "timezone": stringSchema(1, 80),
+		"preset": enumSchema("HOURLY", "DAILY", "WEEKDAYS", "WEEKLY", "CUSTOM"), "cronExpression": stringSchema(0, 120), "timeOfDay": stringSchema(0, 5),
+		"dayOfWeek": enumSchema("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"), "timezone": stringSchema(1, 80),
 		"input":              map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+		"automationText":     stringSchema(1, 32768),
 		"sessionPolicy":      enumSchema("NEW_EACH_RUN", "CONTINUE_ONE"),
 		"notificationPolicy": enumSchema("CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"),
 	})

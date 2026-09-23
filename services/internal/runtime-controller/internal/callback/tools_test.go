@@ -194,8 +194,13 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatalf("integration grant schema lost target exclusivity: %#v", grant)
 	}
 	scheduleProperties := byType["CREATE_SCHEDULE"]["properties"].(map[string]any)
-	if scheduleProperties["timeOfDay"] == nil || scheduleProperties["cronExpression"] != nil {
+	if scheduleProperties["timeOfDay"] == nil || scheduleProperties["cronExpression"] == nil ||
+		scheduleProperties["automationText"] == nil ||
+		scheduleProperties["preset"].(map[string]any)["enum"].([]string)[4] != "CUSTOM" {
 		t.Fatalf("assistant schedule schema diverged from owner schedule contract: %#v", scheduleProperties)
+	}
+	if !containsString(byType["CREATE_SCHEDULE"]["required"].([]string), "automationText") {
+		t.Fatalf("assistant schedule must require explicit task: %#v", byType["CREATE_SCHEDULE"])
 	}
 	for _, operationType := range []string{"CREATE_SCHEDULE", "LAUNCH_RUN"} {
 		parameters := byType[operationType]
