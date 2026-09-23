@@ -308,12 +308,13 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 	}
 	expected := map[string]string{
 		"get_configuration_catalog":  "platform.configuration.read",
+		"find_platform_resources":    "platform.resources.search",
 		"propose_configuration_plan": "platform.configuration.plan",
 		"propose_assistant_metadata": "platform.presentation.propose",
 		"propose_run_metadata":       "platform.presentation.propose",
 		"delegate_agent":             "platform.run.delegate",
 	}
-	if (tool == "get_configuration_catalog" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !systemAssistant {
+	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !systemAssistant {
 		return false
 	}
 	return expected[tool] != "" && expected[tool] == capability
