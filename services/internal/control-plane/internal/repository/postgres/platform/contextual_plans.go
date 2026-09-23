@@ -90,14 +90,20 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 		if !exists || original.Type != operation.Type {
 			return commandOutcome{}, errs.ErrForbidden
 		}
-		if operation.Type != "UPDATE_AGENT" {
-			continue
+		switch operation.Type {
+		case "UPDATE_AGENT":
+			updated, err := rehydrateEditedAssistantAgent(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "CREATE_ROLE_IMAGE_RECIPE":
+			updated, err := rehydrateEditedAssistantRoleImage(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		}
-		updated, err := rehydrateEditedAssistantAgent(original, operation)
-		if err != nil {
-			return commandOutcome{}, err
-		}
-		payload.Operations[index] = updated
 	}
 	operations, err := normalizeAssistantOperations(payload.Operations, projectRef)
 	if err != nil {
@@ -298,6 +304,35 @@ func rehydrateEditedAssistantAgent(original, edited entity.AssistantPlanOperatio
 	}
 	hydrated.Selected = selected
 	return hydrated, nil
+}
+
+func rehydrateEditedAssistantRoleImage(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	if original.Type != "CREATE_ROLE_IMAGE_RECIPE" || original.Key != edited.Key ||
+		original.Target.Kind != "ROLE_IMAGE_RECIPE" || edited.Parameters == nil ||
+		!onlyAssistantFields(edited.Parameters, "projectRef", "agentRef", "agentVersion", "name", "environmentKey") ||
+		assistantString(edited.Parameters, "projectRef") != assistantString(original.Parameters, "projectRef") ||
+		assistantString(edited.Parameters, "agentRef") != assistantString(original.Parameters, "agentRef") {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	originalVersion, originalOK := assistantInt64(original.Parameters, "agentVersion")
+	editedVersion, editedOK := assistantInt64(edited.Parameters, "agentVersion")
+	if !originalOK || !editedOK || originalVersion != editedVersion {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	name := assistantString(edited.Parameters, "name")
+	environmentKey := assistantString(edited.Parameters, "environmentKey")
+	if name == "" || environmentKey == "" {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	parameters := cloneAssistantFields(original.Parameters)
+	parameters["name"], parameters["environmentKey"] = name, environmentKey
+	edited.Parameters = parameters
+	edited.Action = "CREATE"
+	edited.Target = entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Name: name}
+	edited.Before = map[string]any{}
+	edited.After = cloneAssistantFields(parameters)
+	edited.ExpectedVersion = nil
+	return edited, nil
 }
 
 func (repository *Repository) assistantAgentUpdateSnapshotMatches(ctx context.Context, tx pgx.Tx, scope scope, projectRef string,

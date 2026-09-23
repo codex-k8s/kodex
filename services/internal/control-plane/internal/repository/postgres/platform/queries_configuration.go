@@ -81,6 +81,8 @@ var (
 	queryConfigurationHydrateassistantoperationSelectProject string
 	//go:embed sql/configuration_hydrateassistantoperation_select_agent.sql
 	queryConfigurationHydrateassistantoperationSelectAgent string
+	//go:embed sql/configuration_assistant_role_image_agent.sql
+	queryConfigurationAssistantRoleImageAgent string
 	//go:embed sql/configuration_addassistantturncommand_select_assistant_runtime_organization_id.sql
 	queryConfigurationAddassistantturncommandSelectAssistantRuntimeOrganizationId string
 	//go:embed sql/configuration_addassistantturncommand_select_assistant_conversations_organization_id_ref_state.sql

@@ -195,6 +195,7 @@ func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context,
 
 func (repository *Repository) ConfigureRoleImageCatalog(catalog *roleimageservice.Catalog) {
 	repository.roleImageCatalogResolver = catalog.Resolve
+	repository.roleImageRecommendedSelection = catalog.RecommendedSelection
 	repository.roleImageBootstrapCopySelection = catalog.CopyBootstrapSelection
 }
 

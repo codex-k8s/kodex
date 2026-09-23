@@ -7313,6 +7313,8 @@ const (
 	AssistantPlanOperation_TYPE_UPDATE_AGENT AssistantPlanOperation_Type = 13
 	// Создать черновик среды выполнения; публикация требует проверенного образа.
 	AssistantPlanOperation_TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT AssistantPlanOperation_Type = 14
+	// Создать рецепт образа для выбранного сотрудника и поставить первую сборку в очередь.
+	AssistantPlanOperation_TYPE_CREATE_ROLE_IMAGE_RECIPE AssistantPlanOperation_Type = 15
 )
 
 // Enum value maps for AssistantPlanOperation_Type.
@@ -7333,6 +7335,7 @@ var (
 		12: "TYPE_UPDATE_PROJECT",
 		13: "TYPE_UPDATE_AGENT",
 		14: "TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+		15: "TYPE_CREATE_ROLE_IMAGE_RECIPE",
 	}
 	AssistantPlanOperation_Type_value = map[string]int32{
 		"TYPE_UNSPECIFIED":                      0,
@@ -7350,6 +7353,7 @@ var (
 		"TYPE_UPDATE_PROJECT":                   12,
 		"TYPE_UPDATE_AGENT":                     13,
 		"TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT": 14,
+		"TYPE_CREATE_ROLE_IMAGE_RECIPE":         15,
 	}
 )
 
@@ -74681,7 +74685,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa2\n" +
+	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xc5\n" +
 	"\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
@@ -74706,7 +74710,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06before\x18\x0e \x01(\v2\x17.google.protobuf.StructR\x06before\x12-\n" +
 	"\x05after\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x05after\x12\x1a\n" +
 	"\bselected\x18\x10 \x01(\bR\bselected\x12/\n" +
-	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xb0\x03\n" +
+	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xd3\x03\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -74723,7 +74727,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x15TYPE_ARCHIVE_WORKFLOW\x10\v\x12\x17\n" +
 	"\x13TYPE_UPDATE_PROJECT\x10\f\x12\x15\n" +
 	"\x11TYPE_UPDATE_AGENT\x10\r\x12)\n" +
-	"%TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT\x10\x0e\"n\n" +
+	"%TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT\x10\x0e\x12!\n" +
+	"\x1dTYPE_CREATE_ROLE_IMAGE_RECIPE\x10\x0f\"n\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rACTION_CREATE\x10\x01\x12\x11\n" +

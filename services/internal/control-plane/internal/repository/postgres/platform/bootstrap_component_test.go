@@ -797,6 +797,34 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	roleCatalog, _ := promotionComponentCatalog(t)
 	repository.ConfigureRoleImageCatalog(roleCatalog)
 	roleAgent := createLifecycleAgent(t, ctx, service, owner, environmentProjectRef, "managed-role-image-agent", "Managed image role")
+	assistantRecipeInput := command.AssistantRoleImageRecipeInput{ProjectRef: environmentProjectRef,
+		AgentRef: roleAgent.Ref, AgentVersion: roleAgent.Version, Name: "Assistant-managed image",
+		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"}}
+	staleRecipeInput := assistantRecipeInput
+	staleRecipeInput.AgentVersion++
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-stale"}, Payload: staleRecipeInput}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("assistant image accepted stale employee role: %v", err)
+	}
+	foreignRecipeInput := assistantRecipeInput
+	foreignRecipeInput.ProjectRef = "prj_unknown"
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-cross-project"}, Payload: foreignRecipeInput}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant image crossed project boundary: %v", err)
+	}
+	assistantRecipe, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-create"}, Payload: assistantRecipeInput})
+	if err != nil || len(assistantRecipe.RuntimeItems) != 1 || assistantRecipe.RuntimeItems[0]["imageBuildRef"] == "" {
+		t.Fatalf("assistant image did not queue a build: result=%#v err=%v", assistantRecipe.RuntimeItems, err)
+	}
+	var assistantConfigurationRef, assistantRevisionRef, assistantState, assistantContent, assistantBuildRef string
+	var assistantGeneration uint64
+	if err := pool.QueryRow(ctx, queryRoleImageManagedReadback, assistantRecipe.CreatedRefs[0],
+		assistantRecipe.RuntimeItems[0]["imageBuildRef"]).Scan(&assistantConfigurationRef, &assistantRevisionRef,
+		&assistantState, &assistantContent, &assistantGeneration, &assistantBuildRef); err != nil ||
+		assistantConfigurationRef == "" || assistantRevisionRef == "" || assistantState != "PUBLISHED" || assistantBuildRef == "" {
+		t.Fatalf("assistant image managed build readback: state=%q err=%v", assistantState, err)
+	}
 	roleContent := string(asJSON(map[string]any{"name": "Runtime role image", "roleImage": map[string]any{"roleDefinitionRef": roleAgent.RoleDefinitionRef, "environment": map[string]any{"environmentKey": "promotion"}}}))
 	roleImage := publishAndRebindManagedConfiguration(t, ctx, service, owner,
 		"managed-role-image", command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
@@ -3002,8 +3030,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 		}
 		return tx.Commit(ctx)
 	}
-	const upgradedRevision = "system-assistant-core-v10"
-	const upgradedPrompt = "Platform-owned system assistant core prompt revision ten."
+	const upgradedRevision = "system-assistant-core-v11"
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision eleven."
 	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
 		t.Fatalf("upgrade core prompt: %v", err)
 	}

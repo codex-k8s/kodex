@@ -46,6 +46,7 @@ type Repository struct {
 	skillScanner                    skillpolicy.Scanner
 	integrationDefinitions          map[string]integrationpackage.Package
 	roleImageCatalogResolver        func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)
+	roleImageRecommendedSelection   func() (entity.RoleEnvironmentSelection, error)
 	roleImageBootstrapCopySelection func(entity.RoleImageRecipeInput) (entity.RoleEnvironmentSelection, error)
 	runtimeSecretNamespace          string
 	runtimeSecretStagingNamespace   string

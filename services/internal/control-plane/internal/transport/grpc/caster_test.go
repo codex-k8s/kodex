@@ -236,6 +236,7 @@ func TestCastPlanUsesBoundedHumanReadableOperationTitles(t *testing.T) {
 		{name: "workflow name", operationType: "CREATE_WORKFLOW", input: map[string]any{"name": "Обработка заявок", "coordinatorAgentRef": "agt_secret"}, wantTitle: "Обработка заявок"},
 		{name: "schedule name", operationType: "CREATE_SCHEDULE", input: map[string]any{"name": "Ежедневная проверка", "targetRef": "wfl_secret"}, wantTitle: "Ежедневная проверка"},
 		{name: "connection name", operationType: "CREATE_INTEGRATION_CONNECTION", input: map[string]any{"name": "Рабочая CRM", "definitionKey": "secret.provider"}, wantTitle: "Рабочая CRM"},
+		{name: "role image name", operationType: "CREATE_ROLE_IMAGE_RECIPE", input: map[string]any{"name": "Образ разработчика", "agentRef": "agt_secret"}, wantTitle: "Образ разработчика"},
 		{name: "run title", operationType: "LAUNCH_RUN", input: map[string]any{"title": "Разобрать новые заявки", "sessionRef": "ses_secret"}, wantTitle: "Разобрать новые заявки"},
 		{name: "fallback for unsupported operation", operationType: "CHANGE_CAPABILITY", input: map[string]any{"name": "Не показывать", "capabilityKey": "secret.capability"}, wantTitle: "Безопасное описание"},
 		{name: "fallback for absent display field", operationType: "CREATE_WORKFLOW", input: map[string]any{"name": 42, "workflowRef": "wfl_secret"}, wantTitle: "Безопасное описание"},
