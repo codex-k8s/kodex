@@ -128,6 +128,9 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		if resource.kind == "AGENT" && !contains(projection.AllowedOperations, "UPDATE_AGENT") {
 			t.Fatal("agent context did not publish its exact update capability")
 		}
+		if resource.kind == "PROJECT" && !contains(projection.AllowedOperations, "CREATE_RUNTIME_ENVIRONMENT_DRAFT") {
+			t.Fatal("project context did not publish its environment draft capability")
+		}
 		resolved, err := repository.ResolvePrincipal(ctx, owner)
 		if err != nil {
 			t.Fatal(err)

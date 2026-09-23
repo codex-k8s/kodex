@@ -1470,6 +1470,8 @@ message AssistantPlanOperation {
     TYPE_UPDATE_PROJECT = 12;
     // Изменить профиль обычного ИИ-сотрудника по exact version и owner snapshot.
     TYPE_UPDATE_AGENT = 13;
+    // Создать черновик среды выполнения; публикация требует проверенного образа.
+    TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT = 14;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

@@ -181,6 +181,10 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			"runtimeRef": opaqueRefSchema(), "instructions": stringSchema(20, 65536),
 			"capabilities": map[string]any{"type": "array", "maxItems": 3, "uniqueItems": true, "items": enumSchema("platform.artifact.manage", "platform.run.delegate", "platform.run.launch")},
 		})),
+		assistantOperationSchema("CREATE_RUNTIME_ENVIRONMENT_DRAFT", objectSchema([]string{"projectRef", "name"}, map[string]any{
+			"projectRef": projectRef, "name": stringSchema(1, 120), "description": stringSchema(0, 1000),
+			"imageArtifactRef": opaqueRefSchema(),
+		})),
 		assistantOperationSchema("ARCHIVE_AGENT", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("ARCHIVE_WORKFLOW", objectSchema(nil, map[string]any{})),

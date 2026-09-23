@@ -7311,6 +7311,8 @@ const (
 	AssistantPlanOperation_TYPE_UPDATE_PROJECT AssistantPlanOperation_Type = 12
 	// Изменить профиль обычного ИИ-сотрудника по exact version и owner snapshot.
 	AssistantPlanOperation_TYPE_UPDATE_AGENT AssistantPlanOperation_Type = 13
+	// Создать черновик среды выполнения; публикация требует проверенного образа.
+	AssistantPlanOperation_TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT AssistantPlanOperation_Type = 14
 )
 
 // Enum value maps for AssistantPlanOperation_Type.
@@ -7330,22 +7332,24 @@ var (
 		11: "TYPE_ARCHIVE_WORKFLOW",
 		12: "TYPE_UPDATE_PROJECT",
 		13: "TYPE_UPDATE_AGENT",
+		14: "TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT",
 	}
 	AssistantPlanOperation_Type_value = map[string]int32{
-		"TYPE_UNSPECIFIED":                   0,
-		"TYPE_CREATE_PROJECT":                1,
-		"TYPE_CREATE_AGENT":                  2,
-		"TYPE_CREATE_WORKFLOW":               3,
-		"TYPE_CHANGE_CAPABILITY":             4,
-		"TYPE_CHANGE_INTEGRATION_GRANT":      5,
-		"TYPE_CREATE_SCHEDULE":               6,
-		"TYPE_LAUNCH_RUN":                    7,
-		"TYPE_CREATE_INTEGRATION_CONNECTION": 8,
-		"TYPE_TEST_INTEGRATION_CONNECTION":   9,
-		"TYPE_ARCHIVE_AGENT":                 10,
-		"TYPE_ARCHIVE_WORKFLOW":              11,
-		"TYPE_UPDATE_PROJECT":                12,
-		"TYPE_UPDATE_AGENT":                  13,
+		"TYPE_UNSPECIFIED":                      0,
+		"TYPE_CREATE_PROJECT":                   1,
+		"TYPE_CREATE_AGENT":                     2,
+		"TYPE_CREATE_WORKFLOW":                  3,
+		"TYPE_CHANGE_CAPABILITY":                4,
+		"TYPE_CHANGE_INTEGRATION_GRANT":         5,
+		"TYPE_CREATE_SCHEDULE":                  6,
+		"TYPE_LAUNCH_RUN":                       7,
+		"TYPE_CREATE_INTEGRATION_CONNECTION":    8,
+		"TYPE_TEST_INTEGRATION_CONNECTION":      9,
+		"TYPE_ARCHIVE_AGENT":                    10,
+		"TYPE_ARCHIVE_WORKFLOW":                 11,
+		"TYPE_UPDATE_PROJECT":                   12,
+		"TYPE_UPDATE_AGENT":                     13,
+		"TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT": 14,
 	}
 )
 
@@ -74677,7 +74681,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xf7\t\n" +
+	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa2\n" +
+	"\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
 	"\x04type\x18\x02 \x01(\x0e2,.controlplane.v1.AssistantPlanOperation.TypeR\x04type\x12\x14\n" +
@@ -74701,7 +74706,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06before\x18\x0e \x01(\v2\x17.google.protobuf.StructR\x06before\x12-\n" +
 	"\x05after\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x05after\x12\x1a\n" +
 	"\bselected\x18\x10 \x01(\bR\bselected\x12/\n" +
-	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\x85\x03\n" +
+	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xb0\x03\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -74717,7 +74722,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12\x19\n" +
 	"\x15TYPE_ARCHIVE_WORKFLOW\x10\v\x12\x17\n" +
 	"\x13TYPE_UPDATE_PROJECT\x10\f\x12\x15\n" +
-	"\x11TYPE_UPDATE_AGENT\x10\r\"n\n" +
+	"\x11TYPE_UPDATE_AGENT\x10\r\x12)\n" +
+	"%TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT\x10\x0e\"n\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rACTION_CREATE\x10\x01\x12\x11\n" +

@@ -588,19 +588,20 @@ func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
 
 // Defines values for AssistantContextDescriptorAllowedOperations.
 const (
-	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
-	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW             AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY            AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
-	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT      AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
-	AssistantContextDescriptorAllowedOperationsCREATEAGENT                 AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECT               AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
-	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE              AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
-	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW              AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                   AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
-	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION   AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                 AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT               AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                  AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
+	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW               AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY              AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
+	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT        AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCREATEAGENT                   AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION   AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                 AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                     AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
+	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION     AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                   AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                 AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
 )
 
 // Valid indicates whether the value is a known member of the AssistantContextDescriptorAllowedOperations enum.
@@ -619,6 +620,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATESCHEDULE:
 		return true
@@ -735,19 +738,20 @@ func (e AssistantPlanOperationAction) Valid() bool {
 
 // Defines values for AssistantPlanOperationType.
 const (
-	AssistantPlanOperationTypeARCHIVEAGENT                AssistantPlanOperationType = "ARCHIVE_AGENT"
-	AssistantPlanOperationTypeARCHIVEWORKFLOW             AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
-	AssistantPlanOperationTypeCHANGECAPABILITY            AssistantPlanOperationType = "CHANGE_CAPABILITY"
-	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT      AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
-	AssistantPlanOperationTypeCREATEAGENT                 AssistantPlanOperationType = "CREATE_AGENT"
-	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeCREATEPROJECT               AssistantPlanOperationType = "CREATE_PROJECT"
-	AssistantPlanOperationTypeCREATESCHEDULE              AssistantPlanOperationType = "CREATE_SCHEDULE"
-	AssistantPlanOperationTypeCREATEWORKFLOW              AssistantPlanOperationType = "CREATE_WORKFLOW"
-	AssistantPlanOperationTypeLAUNCHRUN                   AssistantPlanOperationType = "LAUNCH_RUN"
-	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION   AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeUPDATEAGENT                 AssistantPlanOperationType = "UPDATE_AGENT"
-	AssistantPlanOperationTypeUPDATEPROJECT               AssistantPlanOperationType = "UPDATE_PROJECT"
+	AssistantPlanOperationTypeARCHIVEAGENT                  AssistantPlanOperationType = "ARCHIVE_AGENT"
+	AssistantPlanOperationTypeARCHIVEWORKFLOW               AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
+	AssistantPlanOperationTypeCHANGECAPABILITY              AssistantPlanOperationType = "CHANGE_CAPABILITY"
+	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT        AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCREATEAGENT                   AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION   AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeCREATEPROJECT                 AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantPlanOperationTypeCREATESCHEDULE                AssistantPlanOperationType = "CREATE_SCHEDULE"
+	AssistantPlanOperationTypeCREATEWORKFLOW                AssistantPlanOperationType = "CREATE_WORKFLOW"
+	AssistantPlanOperationTypeLAUNCHRUN                     AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION     AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEAGENT                   AssistantPlanOperationType = "UPDATE_AGENT"
+	AssistantPlanOperationTypeUPDATEPROJECT                 AssistantPlanOperationType = "UPDATE_PROJECT"
 )
 
 // Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
@@ -766,6 +770,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeCREATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT:
 		return true
 	case AssistantPlanOperationTypeCREATESCHEDULE:
 		return true

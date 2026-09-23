@@ -919,7 +919,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 
 func assistantProjectScopedOperation(kind string) bool {
 	switch kind {
-	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE":
+	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
 		return true
 	default:
 		return false
@@ -932,6 +932,7 @@ var assistantParameterAliases = map[string]string{
 	"connection_ref": "connectionRef", "coordinator_agent_ref": "coordinatorAgentRef",
 	"day_of_week": "dayOfWeek", "definition_key": "definitionKey", "gate_decisions": "gateDecisions",
 	"human_gate": "humanGate", "input_fields": "inputFields", "max_concurrency": "maxConcurrency",
+	"image_artifact_ref":  "imageArtifactRef",
 	"notification_policy": "notificationPolicy", "parallel_group": "parallelGroup",
 	"project_ref": "projectRef", "public_configuration": "publicConfiguration",
 	"required_capability_keys": "requiredCapabilityKeys", "role_definition_ref": "roleDefinitionRef",
@@ -988,13 +989,14 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		name, _ = parameters["projectRef"].(string)
 	}
 	labels := map[string]string{
-		"CREATE_PROJECT":                "Создать Проект",
-		"UPDATE_PROJECT":                "Изменить Проект",
-		"CREATE_AGENT":                  "Создать ИИ-сотрудника",
-		"UPDATE_AGENT":                  "Изменить ИИ-сотрудника",
-		"CREATE_WORKFLOW":               "Создать Процесс",
-		"CREATE_INTEGRATION_CONNECTION": "Создать подключение",
-		"CREATE_SCHEDULE":               "Создать автоматизацию",
+		"CREATE_PROJECT":                   "Создать Проект",
+		"UPDATE_PROJECT":                   "Изменить Проект",
+		"CREATE_AGENT":                     "Создать ИИ-сотрудника",
+		"UPDATE_AGENT":                     "Изменить ИИ-сотрудника",
+		"CREATE_WORKFLOW":                  "Создать Процесс",
+		"CREATE_INTEGRATION_CONNECTION":    "Создать подключение",
+		"CREATE_SCHEDULE":                  "Создать автоматизацию",
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT": "Создать черновик среды",
 	}
 	label := labels[kind]
 	if strings.TrimSpace(name) == "" {
@@ -1025,7 +1027,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "UPDATE_PROJECT", "UPDATE_AGENT":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "UPDATE_PROJECT", "UPDATE_AGENT":
 		return true
 	default:
 		return false

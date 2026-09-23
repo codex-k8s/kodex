@@ -135,6 +135,52 @@ func TestAssistantCreateTargetUsesClosedKinds(t *testing.T) {
 	if _, _, ok := assistantCreateTarget("DELETE_AGENT", parameters); ok {
 		t.Fatal("unknown operation received a server-owned target")
 	}
+	if kind, name, ok := assistantCreateTarget("CREATE_RUNTIME_ENVIRONMENT_DRAFT", parameters); !ok || kind != "RUNTIME_ENVIRONMENT_DRAFT" || name != "Analyst" {
+		t.Fatalf("unexpected environment draft target: kind=%q name=%q ok=%v", kind, name, ok)
+	}
+}
+
+func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{
+		Type: "CREATE_RUNTIME_ENVIRONMENT_DRAFT", Key: "environment-draft", Title: "Prepare environment", Summary: "Prepare environment draft",
+		Input: map[string]any{"projectRef": "current", "name": "Developer environment", "description": "Build and test project code"},
+	}
+	hydrated, err := (&Repository{}).hydrateAssistantOperation(t.Context(), nil, scope{}, "prj_example", operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := bindAssistantOperationProject(normalized, "prj_example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(bound)
+	if err != nil || mapped.Kind != command.CreateRuntimeEnvironmentDraft {
+		t.Fatalf("map environment draft: kind=%q err=%v", mapped.Kind, err)
+	}
+	payload := mapped.Payload.(command.RuntimeEnvironmentDraftInput)
+	if payload.ProjectRef != "prj_example" || payload.Specification.Name != "Developer environment" || payload.Specification.Description != "Build and test project code" || payload.Specification.ImageArtifactRef != "" {
+		t.Fatalf("unexpected environment draft payload: %#v", payload)
+	}
+	forged := hydrated
+	forged.Target.Kind = "AGENT"
+	if _, err := normalizeAssistantOperation(forged); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("forged create target accepted: %v", err)
+	}
+	for _, invalid := range []map[string]any{
+		{"projectRef": "prj_example", "name": "Environment", "secretValue": "forged"},
+		{"projectRef": "prj_example", "name": "Environment", "imageArtifactRef": "https://untrusted.example/image"},
+		{"projectRef": "", "name": "Environment"},
+	} {
+		bound.Input = invalid
+		if _, err := assistantOperationCommand(bound); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("invalid environment draft accepted: %v", err)
+		}
+	}
 }
 
 func TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities(t *testing.T) {
