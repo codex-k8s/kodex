@@ -85,11 +85,10 @@ poll_interval = 500
 stop_on_error = true
 send_interrupt = true
 kill_delay = "$kill_delay"
-# Локальные sidecar и service процессы могут стартовать раньше соседней
-# зависимости во время одновременного apply. Air повторяет только запуск уже
-# собранного бинаря; production lifecycle этим профилем не изменяется.
-rerun = true
-rerun_delay = 2000
+# Повторный запуск упавшего процесса принадлежит liveness probe Kubernetes.
+# Air с rerun=true может параллельно породить новые процессы до остановки
+# прежнего и вызвать гонки bootstrap и занятие gRPC-порта.
+rerun = false
 
 [log]
 time = true
