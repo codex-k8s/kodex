@@ -1472,6 +1472,8 @@ message AssistantPlanOperation {
     TYPE_UPDATE_AGENT = 13;
     // Создать черновик среды выполнения; публикация требует проверенного образа.
     TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT = 14;
+    // Создать рецепт образа для выбранного сотрудника и поставить первую сборку в очередь.
+    TYPE_CREATE_ROLE_IMAGE_RECIPE = 15;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

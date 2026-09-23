@@ -276,6 +276,12 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeMembership(ctx, tx, scope, input)
 	case command.CreateAgent:
 		return repository.createAgent(ctx, tx, scope, input.Payload)
+	case command.CreateAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
+		if !ok {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		return repository.createAssistantRoleImage(ctx, tx, scope, payload)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
 	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,

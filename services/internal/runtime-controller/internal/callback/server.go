@@ -919,7 +919,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 
 func assistantProjectScopedOperation(kind string) bool {
 	switch kind {
-	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
+	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
 		return true
 	default:
 		return false
@@ -932,7 +932,7 @@ var assistantParameterAliases = map[string]string{
 	"connection_ref": "connectionRef", "coordinator_agent_ref": "coordinatorAgentRef",
 	"day_of_week": "dayOfWeek", "definition_key": "definitionKey", "gate_decisions": "gateDecisions",
 	"human_gate": "humanGate", "input_fields": "inputFields", "max_concurrency": "maxConcurrency",
-	"image_artifact_ref":  "imageArtifactRef",
+	"image_artifact_ref": "imageArtifactRef", "environment_key": "environmentKey",
 	"notification_policy": "notificationPolicy", "parallel_group": "parallelGroup",
 	"project_ref": "projectRef", "public_configuration": "publicConfiguration",
 	"required_capability_keys": "requiredCapabilityKeys", "role_definition_ref": "roleDefinitionRef",
@@ -997,6 +997,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 		"CREATE_INTEGRATION_CONNECTION":    "Создать подключение",
 		"CREATE_SCHEDULE":                  "Создать автоматизацию",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT": "Создать черновик среды",
+		"CREATE_ROLE_IMAGE_RECIPE":         "Создать рецепт образа",
 	}
 	label := labels[kind]
 	if strings.TrimSpace(name) == "" {
@@ -1027,7 +1028,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "UPDATE_PROJECT", "UPDATE_AGENT":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT":
 		return true
 	default:
 		return false
