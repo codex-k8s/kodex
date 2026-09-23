@@ -3727,6 +3727,7 @@ export type AssistantPlan = {
     validationProblems: Array<string>;
     validatedAt?: Timestamp;
     appliedAt?: Timestamp;
+    receipt?: AssistantPlanReceipt;
     nextActions: Array<NextAction>;
 };
 
