@@ -635,7 +635,7 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 func assistantPlanOperationTitle(operation entity.AssistantPlanOperation) string {
 	field := ""
 	switch operation.Type {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
 		field = "name"
 	case "LAUNCH_RUN":
 		field = "title"

@@ -135,7 +135,8 @@ func assistantOperationType(value string) bool {
 	switch value {
 	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "LAUNCH_RUN",
-		"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
+		"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT":
 		return true
 	default:
 		return false
@@ -332,6 +333,8 @@ func assistantCreateTarget(operationType string, parameters map[string]any) (str
 		kind = "INTEGRATION_CONNECTION"
 	case "CREATE_SCHEDULE":
 		kind = "SCHEDULE"
+	case "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
+		kind = "RUNTIME_ENVIRONMENT_DRAFT"
 	default:
 		return "", "", false
 	}
@@ -375,6 +378,12 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	if expectedAction == "CREATE" && (len(operation.Before) != 0 || !reflect.DeepEqual(operation.Parameters, operation.After)) {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if expectedAction == "CREATE" {
+		kind, name, supported := assistantCreateTarget(operation.Type, operation.Parameters)
+		if !supported || operation.Target.Kind != kind || operation.Target.Name != name || operation.Target.Ref != "" || operation.Target.Version != nil {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
 	}
 	if expectedAction == "UPDATE" || expectedAction == "ARCHIVE" {
 		if operation.ExpectedVersion == nil || *operation.ExpectedVersion < 1 || operation.Target.Ref == "" || len(operation.Before) == 0 || len(operation.After) == 0 {
@@ -428,7 +437,7 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 		return operation, nil
 	}
 	switch operation.Type {
-	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN":
+	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN", "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
 	default:
 		return operation, nil
 	}
@@ -501,6 +510,25 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateAgent, payload
+	case "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
+		if !onlyAssistantFields(operation.Input, "projectRef", "name", "description", "imageArtifactRef") ||
+			!hasAssistantFields(operation.Input, "projectRef", "name") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		name := assistantString(operation.Input, "name")
+		description := assistantString(operation.Input, "description")
+		imageArtifactRef := assistantString(operation.Input, "imageArtifactRef")
+		if assistantString(operation.Input, "projectRef") == "" || name == "" || len(name) > 120 || len(description) > 1000 ||
+			(imageArtifactRef != "" && (!strings.HasPrefix(imageArtifactRef, "imgart_") || len(imageArtifactRef) > 96)) {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind = command.CreateRuntimeEnvironmentDraft
+		result.Payload = command.RuntimeEnvironmentDraftInput{
+			ProjectRef: assistantString(operation.Input, "projectRef"),
+			Specification: entity.RuntimeEnvironmentDraftSpecification{
+				Name: name, Description: description, ImageArtifactRef: imageArtifactRef,
+			},
+		}
 	case "UPDATE_AGENT":
 		if !onlyAssistantFields(operation.Input, "agentRef", "name", "purpose", "roleDescription", "avatarUrl", "expectedVersion") ||
 			!hasAssistantFields(operation.Input, "agentRef", "name", "purpose", "roleDescription", "avatarUrl", "expectedVersion") {
