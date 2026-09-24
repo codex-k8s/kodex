@@ -145,3 +145,44 @@ func TestInspectOpenAPIMarksNonJSONSuccessResponseUnsupported(t *testing.T) {
 		}
 	}
 }
+
+func TestInspectOpenAPIMarksOperationsRejectedByImporter(t *testing.T) {
+	for name, fixture := range map[string]struct {
+		raw, reason string
+	}{
+		"unsupported basic authentication": {
+			raw: strings.Replace(openAPIImportFixture, "paths:\n", `components:
+  securitySchemes:
+    password:
+      type: http
+      scheme: basic
+security:
+  - password: []
+paths:
+`, 1), reason: "SECURITY_SCHEME_UNSUPPORTED",
+		},
+		"open request body": {
+			raw: strings.Replace(openAPIImportFixture, "              additionalProperties: false\n", "", 1), reason: "INPUT_SCHEMA_UNSUPPORTED",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := InspectOpenAPI(t.Context(), []byte(fixture.raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var found bool
+			for _, operation := range result.Operations {
+				if operation.ID != "updateTicket" {
+					continue
+				}
+				found = true
+				if operation.Candidate || operation.HealthCandidate || operation.Reason != fixture.reason {
+					t.Fatalf("non-importable operation appears selectable: %#v", operation)
+				}
+			}
+			if !found {
+				t.Fatal("operation disappeared from inspection")
+			}
+		})
+	}
+}

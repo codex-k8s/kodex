@@ -107,6 +107,20 @@ func InspectOpenAPI(ctx context.Context, raw []byte) (OpenAPIInspection, error) 
 					entry.Candidate, entry.Reason = false, reason
 				}
 			}
+			var input map[string]any
+			if entry.Candidate {
+				if _, _, err := openAPIImportSecurity(document, operation); err != nil {
+					entry.Candidate, entry.Reason = false, "SECURITY_SCHEME_UNSUPPORTED"
+				} else if imported, err := openAPIImportInput(item, operation); err != nil {
+					entry.Candidate, entry.Reason = false, "INPUT_SCHEMA_UNSUPPORTED"
+				} else if _, _, err := validateOpenAPIInputSchema(imported); err != nil {
+					entry.Candidate, entry.Reason = false, "INPUT_SCHEMA_UNSUPPORTED"
+				} else if err := validateOpenAPIHTTPInput(&OpenAPIHTTP{Method: entry.Method, Path: path, InputSchema: imported}); err != nil {
+					entry.Candidate, entry.Reason = false, "INPUT_SCHEMA_UNSUPPORTED"
+				} else {
+					input = imported
+				}
+			}
 			if operation.OperationID != "" {
 				if _, exists := seenIDs[operation.OperationID]; exists {
 					return OpenAPIInspection{}, errors.New("OpenAPI operationId is duplicated")
@@ -114,10 +128,7 @@ func InspectOpenAPI(ctx context.Context, raw []byte) (OpenAPIInspection, error) 
 				seenIDs[operation.OperationID] = struct{}{}
 			}
 			if entry.Candidate && entry.Method == http.MethodGet {
-				input, inputErr := openAPIImportInput(item, operation)
-				if inputErr == nil {
-					_, inputErr = (Capability{OpenAPI: &OpenAPIHTTP{InputSchema: input}}).ValidateInput([]byte("{}"))
-				}
+				_, inputErr := (Capability{OpenAPI: &OpenAPIHTTP{InputSchema: input}}).ValidateInput([]byte("{}"))
 				entry.HealthCandidate = inputErr == nil
 			}
 			operations = append(operations, entry)
