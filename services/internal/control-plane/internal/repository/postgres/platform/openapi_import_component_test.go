@@ -142,11 +142,106 @@ func testOpenAPIImportLifecycle(t *testing.T, ctx context.Context, repository *R
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-bound-test", ExpectedVersion: &bound.Version},
+		Payload:  command.ConnectionInput{Ref: bound.Ref}}); err != nil {
+		t.Fatalf("bound OpenAPI health operation was not accepted: %v", err)
+	}
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "integration-gateway", Operation: "platform.runtime.integrations.tests.claim",
+	}, "integration-gateway")
+	claimTest := func() map[string]any {
+		t.Helper()
+		claims, err := service.ClaimIntegrationConnectionTests(ctx, worker, "openapi-import-worker", 32)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, claim := range claims {
+			if stringMap(claim, "connectionRef") == bound.Ref {
+				return claim
+			}
+		}
+		return nil
+	}
+	first := claimTest()
+	if first == nil {
+		t.Fatal("bound OpenAPI READ-test was not claimed")
+	}
+	complete := func(claim map[string]any, key string, success bool, code string) (command.Result, error) {
+		t.Helper()
+		return service.Execute(ctx, command.Command{Kind: command.CompleteConnectionTest, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.IntegrationConnectionTestInput{
+				TestRef: stringMap(claim, "testRef"), LeaseRef: stringMap(claim, "leaseRef"),
+				Fence: stringMap(claim, "fence"), Generation: claim["generation"].(int64),
+				Success: success, SafeErrorCode: code,
+			}})
+	}
+	retry, err := complete(first, "openapi-import-first-unavailable", false, "INTEGRATION_UNAVAILABLE")
+	if err != nil || retry.Connection == nil || retry.Connection.State != "TESTING" {
+		t.Fatalf("transient OpenAPI network failure was not requeued: %v", err)
+	}
+	if claimTest() != nil {
+		t.Fatal("OpenAPI retry ignored bounded backoff")
+	}
+	if tag, err := repository.pool.Exec(ctx, `UPDATE control_plane.integration_connection_tests
+SET updated_at=clock_timestamp()-INTERVAL '6 seconds' WHERE ref=$1 AND state='DUE'`, stringMap(first, "testRef")); err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("advance disposable retry clock: %v", err)
+	}
+	second := claimTest()
+	if second == nil || second["generation"].(int64) <= first["generation"].(int64) ||
+		stringMap(second, "leaseRef") == stringMap(first, "leaseRef") {
+		t.Fatal("OpenAPI retry reused an old claim or lease")
+	}
+	if _, err := complete(first, "openapi-import-stale-fence", true, ""); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("stale OpenAPI test fence completed new attempt: %v", err)
+	}
+	done, err := complete(second, "openapi-import-second-success", true, "")
+	if err != nil || done.Connection == nil || done.Connection.State != "CONNECTED" {
+		t.Fatalf("OpenAPI retry did not reach connected state: %v", err)
+	}
+	bound, err = service.GetIntegrationConnection(ctx, owner, connection.Connection.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-permanent-test", ExpectedVersion: &bound.Version},
+		Payload: command.ConnectionInput{Ref: bound.Ref}}); err != nil {
+		t.Fatalf("start permanent failure test: %v", err)
+	}
+	permanentClaim := claimTest()
+	if permanentClaim == nil {
+		t.Fatal("permanent failure test was not claimed")
+	}
+	permanent, err := complete(permanentClaim, "openapi-import-permanent-failure", false, "INTEGRATION_RESPONSE_INVALID")
+	if err != nil || permanent.Connection == nil || permanent.Connection.State != "DEGRADED" || claimTest() != nil {
+		t.Fatalf("permanent OpenAPI failure was retried: state=%v err=%v", permanent.Connection, err)
+	}
+	bound, err = service.GetIntegrationConnection(ctx, owner, connection.Connection.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-disable-due-test", ExpectedVersion: &bound.Version},
+		Payload: command.ConnectionInput{Ref: bound.Ref}}); err != nil {
+		t.Fatalf("start disable-due test: %v", err)
+	}
+	dueClaim := claimTest()
+	if dueClaim == nil {
+		t.Fatal("disable-due test was not claimed")
+	}
+	due, err := complete(dueClaim, "openapi-import-disable-due-failure", false, "INTEGRATION_UNAVAILABLE")
+	if err != nil || due.Connection == nil || due.Connection.State != "TESTING" {
+		t.Fatalf("disable-due test was not requeued: %v", err)
+	}
 	disabled, err := service.Execute(ctx, command.Command{Kind: command.SetConnectionEnabled, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "openapi-import-disable", ExpectedVersion: &bound.Version},
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-disable", ExpectedVersion: &due.Connection.Version},
 		Payload:  command.ConnectionInput{Ref: bound.Ref, Enabled: false}})
 	if err != nil || disabled.Connection == nil || disabled.Connection.Enabled {
 		t.Fatalf("disable bound OpenAPI connection: %v", err)
+	}
+	if claimTest() != nil {
+		t.Fatal("disabled OpenAPI connection reclaimed a queued test")
 	}
 	hosts, err = repository.IntegrationEgressHostnames(ctx)
 	if err != nil || len(hosts) != 0 {

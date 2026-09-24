@@ -109,6 +109,28 @@ export async function providerAccount(
   ).data;
 }
 
+export async function listDefinitionConnectionCandidates(
+  definitionKey: string,
+  query: string,
+  pageToken: string | undefined,
+  signal: AbortSignal,
+) {
+  if (definitionKey.length > 120 || !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(definitionKey))
+    throw new Error("Integration definition key is invalid");
+  const page = (
+    await unwrap(
+      sdk.listIntegrationConnections({
+        query: { definitionKey, query: query.trim(), pageToken, pageSize: 30 },
+        signal: AbortSignal.any([signal, requestSignal()]),
+        cache: "no-store",
+      }),
+    )
+  ).data;
+  if (page.items.some((item) => item.definitionKey !== definitionKey))
+    throw new Error("Integration connection catalog scope mismatch");
+  return page;
+}
+
 export async function inspectOpenAPI(source: string, signal: AbortSignal) {
   if (!source || new TextEncoder().encode(source).length > 128 * 1024)
     throw new Error("OpenAPI document size is invalid");

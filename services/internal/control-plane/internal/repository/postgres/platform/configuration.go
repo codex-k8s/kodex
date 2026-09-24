@@ -500,7 +500,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		health, found := definition.Capability(definition.Spec.HealthCheck.Operation)
+		health, found := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
 		if !found || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
 			return commandOutcome{}, errs.ErrForbidden
 		}

@@ -337,6 +337,8 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		configuration = map[string]string{"base_url": emailOrigin, "from_address": "sender@example.test", "mailbox_id": "mailbox"}
 	case "https-json":
 		configuration = map[string]string{"base_url": "https://api.example.test", "resource_path": "/v1/status"}
+	case "openapi-mcp":
+		configuration = map[string]string{"base_url": "https://api.example.test"}
 	}
 	scope, err := capability.ResourceScopeValues(configuration)
 	if err != nil {

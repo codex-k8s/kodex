@@ -243,7 +243,7 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	if err != nil || definition.ValidateConfiguration(configuration) != nil {
 		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	capability, ok := definition.Capability(definition.Spec.HealthCheck.Operation)
+	capability, ok := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
 	if !ok || capability.ApprovalPolicy != "NONE" {
 		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}

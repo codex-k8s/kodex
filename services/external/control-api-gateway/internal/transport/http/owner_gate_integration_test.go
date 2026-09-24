@@ -119,6 +119,23 @@ func TestOwnerGateIntegrationProjectionParity(t *testing.T) {
 	}
 }
 
+func TestOwnerGateHTTPSResourceProjection(t *testing.T) {
+	for _, kind := range []string{"get", "list", "resolve"} {
+		gate := integrationGateFixture()
+		gate.IntegrationIntent.ResourceScope.Kind = cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_HTTPS_RESOURCE
+		gate.IntegrationIntent.ResourceScope.Values = map[string]string{"base_url": "https://example.invalid"}
+		code, result := gateProjectionResponse(t, kind, gate)
+		if code != 200 {
+			t.Fatalf("%s HTTPS resource projection status: %d", kind, code)
+		}
+		intent := result["integrationIntent"].(map[string]any)
+		scope := intent["resourceScope"].(map[string]any)
+		if scope["kind"] != "HTTPS_RESOURCE" {
+			t.Fatal("HTTPS resource kind was lost")
+		}
+	}
+}
+
 func TestOwnerGateIntegrationRejectsMalformedProjectionOnEveryPath(t *testing.T) {
 	for name, change := range map[string]func(*cp.OwnerGate){
 		"unknown state":       func(g *cp.OwnerGate) { g.State = cp.OwnerGateState(999) },

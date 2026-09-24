@@ -50,6 +50,7 @@ import {
   operationTargetLabel,
 } from "@/features/assistant/model";
 import { useAssistantStore } from "@/features/assistant/store";
+import { usePlatformStore } from "@/features/platform/store";
 import {
   persistAssistantWorkspaceOpen,
   restoreAssistantWorkspaceOpen,
@@ -58,6 +59,7 @@ import RunActivityView from "@/features/runs/RunActivityView.vue";
 import type {
   AssistantContextDescriptor,
   AssistantPlan,
+  AssistantPlanReceipt,
   RunEvent,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
@@ -91,6 +93,7 @@ const props = withDefaults(
 const { t } = useI18n();
 const router = useRouter();
 const store = useAssistantStore();
+const platform = usePlatformStore();
 const open = ref(restoreAssistantWorkspaceOpen());
 const historyOpen = ref(false);
 const contextOpen = ref(false);
@@ -445,7 +448,55 @@ async function validatePlan(): Promise<void> {
 
 async function applyPlan(): Promise<void> {
   const plan = currentPlan.value;
-  if (plan) await handleStoreMutation(() => store.apply(plan));
+  if (!plan) return;
+  let receipt: AssistantPlanReceipt | undefined;
+  if (!(await handleStoreMutation(async () => {
+    receipt = await store.apply(plan);
+  })) || receipt?.outcome !== "APPLIED") return;
+  const applied = new Set(receipt.operationReceipts.map((item) => item.operationRef));
+  const kinds = new Set<string>();
+  for (const operation of plan.operations) {
+    if (!applied.has(operation.ref)) continue;
+    switch (operation.type) {
+      case "CREATE_PROJECT":
+      case "UPDATE_PROJECT":
+        kinds.add("PROJECT");
+        break;
+      case "CREATE_AGENT":
+      case "UPDATE_AGENT":
+      case "ARCHIVE_AGENT":
+      case "CHANGE_CAPABILITY":
+      case "BIND_AGENT_RUNTIME_ENVIRONMENT":
+        kinds.add("AGENT");
+        break;
+      case "CREATE_WORKFLOW":
+      case "UPDATE_WORKFLOW":
+      case "ARCHIVE_WORKFLOW":
+        kinds.add("WORKFLOW");
+        break;
+      case "CREATE_ROLE_IMAGE_RECIPE":
+      case "UPDATE_ROLE_IMAGE_RECIPE":
+        kinds.add("ROLE_IMAGE_RECIPE");
+        break;
+      case "CREATE_SCHEDULE":
+      case "UPDATE_SCHEDULE":
+        kinds.add("SCHEDULE");
+        break;
+      case "LAUNCH_RUN":
+        kinds.add("RUN");
+        break;
+      case "CREATE_INTEGRATION_CONNECTION":
+      case "UPDATE_INTEGRATION_CONNECTION":
+      case "TEST_INTEGRATION_CONNECTION":
+        kinds.add("INTEGRATION_CONNECTION");
+        break;
+      case "CHANGE_INTEGRATION_GRANT":
+        kinds.add("INTEGRATION_GRANT");
+        break;
+    }
+  }
+  // Квитанция уже применена; ошибка вторичного чтения не меняет её исход.
+  await Promise.allSettled([...kinds].map((kind) => platform.reloadPlatformKind(kind)));
 }
 
 async function rejectPlan(): Promise<void> {

@@ -38,6 +38,10 @@ type MailAccess interface {
 	AllowsLiteral(string, int, netip.Addr) bool
 }
 
+type literalAccess interface {
+	AllowsLiteral(string, int, netip.Addr) bool
+}
+
 // Resolver возвращает только validated literal snapshots.
 type Resolver interface {
 	Resolve(context.Context, string) (dnsresolver.Snapshot, error)
@@ -51,6 +55,19 @@ type LiteralDialer interface {
 // Readiness предоставляет тот же effective state, что technical `/readyz`.
 type Readiness interface {
 	Ready() (bool, string)
+}
+
+type destinationReadiness interface {
+	ReadyFor(string) (bool, string)
+}
+
+func (server *Server) readyFor(host string) bool {
+	if scoped, ok := server.readiness.(destinationReadiness); ok {
+		ready, _ := scoped.ReadyFor(host)
+		return ready
+	}
+	ready, _ := server.readiness.Ready()
+	return ready
 }
 
 // Server владеет listener, active connections и cancel/join boundary.
@@ -199,7 +216,7 @@ func (server *Server) handle(client net.Conn) {
 		server.writeCompatibilityReadiness(client, duration(limits.WriteTimeoutMilliseconds))
 		return
 	}
-	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+	if !server.readyFor(request.Target.Hostname) || server.draining.Load() {
 		server.metrics.Connection("rejected", "connect", "not_ready")
 		server.writeResponse(client, readinessNotReady, duration(limits.WriteTimeoutMilliseconds))
 		return
@@ -223,7 +240,7 @@ func (server *Server) handle(client net.Conn) {
 			return
 		}
 	}
-	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+	if !server.readyFor(target.Hostname) || server.draining.Load() {
 		server.metrics.Connection("rejected", "connect", "not_ready")
 		return
 	}
@@ -232,15 +249,23 @@ func (server *Server) handle(client net.Conn) {
 		server.metrics.Connection("rejected", "dns", dnsReason(err))
 		return
 	}
-	if isMail {
+	if pinned, ok := server.policy.(literalAccess); ok {
+		permitted := make([]netip.Addr, 0, len(snapshot.Addresses))
 		for _, address := range snapshot.Addresses {
-			if !mail.AllowsLiteral(target.Hostname, target.Port, address) {
-				server.metrics.Connection("rejected", "connect", "policy")
-				return
+			if pinned.AllowsLiteral(target.Hostname, target.Port, address) {
+				permitted = append(permitted, address)
 			}
 		}
+		// Mail сохраняет полный DNS snapshot; динамический OpenAPI-origin
+		// может использовать только пересечение свежего DNS с ранее
+		// проверенными публичными адресами immutable policy.
+		if len(permitted) == 0 || isMail && len(permitted) != len(snapshot.Addresses) {
+			server.metrics.Connection("rejected", "connect", "policy")
+			return
+		}
+		snapshot.Addresses = permitted
 	}
-	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+	if !server.readyFor(target.Hostname) || server.draining.Load() {
 		server.metrics.Connection("rejected", "connect", "not_ready")
 		return
 	}

@@ -266,6 +266,8 @@ INTEGRATION_GRANT_UPDATED:
   other: Integration permission updated
 INTEGRATION_CONNECTION_TEST_COMPLETED:
   other: Connection test completed
+INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED:
+  other: Connection test retry scheduled
 INTEGRATION_TEST_SUCCEEDED:
   other: Connection is working
 INTEGRATION_CREDENTIAL_NOT_CONFIGURED:

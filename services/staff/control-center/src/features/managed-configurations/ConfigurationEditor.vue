@@ -24,6 +24,8 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -151,6 +153,31 @@ const impactOpen = ref(false);
 const impactQuery = ref("");
 const impactLoading = ref(false);
 const impactProblem = ref<AppProblem>();
+const newConnection = ref<AsyncEntityOption>();
+const impactDefinitionKey = computed(() => {
+  if (props.kind !== "INTEGRATION_DEFINITION" || !revision.value)
+    return undefined;
+  if (
+    revision.value.contentFormat !== "JSON" &&
+    revision.value.contentFormat !== "YAML"
+  )
+    return undefined;
+  try {
+    const document = parseConfigurationDocument(
+      revision.value.content,
+      revision.value.contentFormat,
+    );
+    const metadata = document.metadata;
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+      return undefined;
+    const key = (metadata as Record<string, unknown>).key;
+    return typeof key === "string" && key.length <= 120 && /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(key)
+      ? key
+      : undefined;
+  } catch {
+    return undefined;
+  }
+});
 let impactGeneration = 0;
 let impactController: AbortController | undefined;
 let impactTimer: ReturnType<typeof setTimeout> | undefined;
@@ -162,6 +189,7 @@ function closeImpact(): void {
   impactOpen.value = false;
   impactValue.value = undefined;
   impactLoading.value = false;
+  newConnection.value = undefined;
 }
 const selected = ref<string[]>([]);
 const sourceAction = ref<"copy" | "detach">();
@@ -831,6 +859,72 @@ async function rebind(): Promise<void> {
     ),
   );
 }
+async function connectionCandidates(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+) {
+  const key = impactDefinitionKey.value;
+  if (!key) throw new Error("Integration definition key is unavailable");
+  const page = await api.listDefinitionConnectionCandidates(
+    key,
+    query,
+    cursor,
+    signal,
+  );
+  const bound = new Set(
+    (impactValue.value?.consumers ?? [])
+      .filter((item) => item.kind === "INTEGRATION_CONNECTION")
+      .map((item) => item.ref),
+  );
+  return {
+    items: page.items.map((item) => ({
+      ref: item.ref,
+      title: item.name,
+      description: item.state,
+      disabled: item.state === "DELETED" || bound.has(item.ref),
+      disabledReason: bound.has(item.ref)
+        ? t("managed.connectionAlreadyBound")
+        : undefined,
+    })),
+    nextPageToken: page.nextPageToken || undefined,
+  };
+}
+async function bindNewConnection(): Promise<void> {
+  const current = configuration.value;
+  const target = revision.value;
+  const impact = impactValue.value;
+  const candidate = newConnection.value;
+  if (
+    !current ||
+    current.kind !== "INTEGRATION_DEFINITION" ||
+    current.archived ||
+    !target ||
+    target.state !== "PUBLISHED" ||
+    !impact ||
+    !candidate ||
+    !impactDefinitionKey.value ||
+    busy.value ||
+    impactLoading.value ||
+    impactProblem.value ||
+    problem.value
+  )
+    return;
+  await perform(async () =>
+    accept(
+      await api.rebind(current, target, {
+        impactDigest: impact.digest,
+        consumers: [
+          {
+            kind: "INTEGRATION_CONNECTION",
+            ref: candidate.ref,
+            expectedAbsent: true,
+          },
+        ],
+      }),
+    ),
+  );
+}
 async function applyRoleImage(selected: string[]): Promise<void> {
   const hadUnknownAttempt = imageAttempt.value !== undefined;
   const plan = imagePlan.value;
@@ -1447,6 +1541,41 @@ watch(
           ><span>v{{ consumer.version }}</span></label
         >
       </div>
+      <div
+        v-if="
+          kind === 'INTEGRATION_DEFINITION' &&
+          impactDefinitionKey &&
+          revision?.state === 'PUBLISHED'
+        "
+        class="configuration-editor__new-connection"
+      >
+        <h3>{{ $t("managed.newConnection") }}</h3>
+        <p>{{ $t("managed.newConnectionHint") }}</p>
+        <AsyncEntityPicker
+          :model-value="newConnection?.ref"
+          :selected="newConnection"
+          :load-page="connectionCandidates"
+          :context-key="`${configuration?.ref}:${revision?.ref}:${impactDefinitionKey}`"
+          :trigger-label="$t('managed.newConnection')"
+          :disabled="busy || impactLoading || !!impactProblem"
+          @select="newConnection = $event"
+          @update:model-value="!$event && (newConnection = undefined)"
+        />
+        <button
+          class="button button--primary"
+          type="button"
+          :disabled="
+            busy ||
+            impactLoading ||
+            !!impactProblem ||
+            !!problem ||
+            !newConnection
+          "
+          @click="bindNewConnection"
+        >
+          {{ $t("managed.bindNewConnection") }}
+        </button>
+      </div>
       <button
         v-if="impactValue?.nextPageToken"
         class="button"
@@ -1643,6 +1772,19 @@ watch(
 .configuration-editor__consumer code {
   overflow-wrap: anywhere;
   min-width: 0;
+}
+.configuration-editor__new-connection {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.configuration-editor__new-connection h3,
+.configuration-editor__new-connection p {
+  margin: 0;
 }
 .configuration-editor__diagnostics {
   overflow-wrap: anywhere;

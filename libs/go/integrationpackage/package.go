@@ -218,6 +218,17 @@ func (definition Package) Capability(key string) (Capability, bool) {
 	return Capability{}, false
 }
 
+// CapabilityByOperation разрешает закреплённую операцию, которая у импортированных
+// интеграций может отличаться от публичного ключа возможности.
+func (definition Package) CapabilityByOperation(operation string) (Capability, bool) {
+	for _, capability := range definition.Spec.Capabilities {
+		if capability.Operation == operation {
+			return capability, true
+		}
+	}
+	return Capability{}, false
+}
+
 // ValidateConfiguration проверяет public configuration без credential values.
 func (definition Package) ValidateConfiguration(configuration map[string]string) error {
 	return definition.validateConfiguration(configuration, false)

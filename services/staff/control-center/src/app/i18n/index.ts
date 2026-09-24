@@ -621,6 +621,11 @@ const ru = {
     format: "Формат",
     more: "Загрузить ещё",
     noConsumers: "Привязок нет",
+    newConnection: "Новое подключение",
+    newConnectionHint:
+      "Выберите созданное подключение с тем же типом адаптера. Первая привязка требует отдельного подтверждения и не запускает интеграцию.",
+    connectionAlreadyBound: "Уже привязано к этой конфигурации",
+    bindNewConnection: "Привязать подключение",
     detach: "Отсоединить от Git",
     copy: "Создать копию",
     copyConfirm:
@@ -3777,6 +3782,11 @@ const en = {
     format: "Format",
     more: "Load more",
     noConsumers: "No bindings",
+    newConnection: "New connection",
+    newConnectionHint:
+      "Select a connection with the same adapter. The first binding requires confirmation and does not run the integration.",
+    connectionAlreadyBound: "Already bound to this configuration",
+    bindNewConnection: "Bind connection",
     detach: "Detach from Git",
     copy: "Create copy",
     copyConfirm:

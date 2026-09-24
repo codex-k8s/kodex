@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -204,7 +205,7 @@ func completeTest(ctx context.Context, control *controlplaneclient.Client, claim
 		return errors.New("integration test lease is missing")
 	}
 	success, code := integration.Outcome(operationErr)
-	_, err := control.Runtime.CompleteIntegrationConnectionTest(ctx, &controlplanev1.CompleteIntegrationConnectionTestRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetTestRef(), "complete")}, TestRef: claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), Success: success, ResultSummary: result, SafeErrorCode: code})
+	_, err := control.Runtime.CompleteIntegrationConnectionTest(ctx, &controlplanev1.CompleteIntegrationConnectionTestRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetTestRef(), fmt.Sprintf("complete:%d", lease.GetGeneration()))}, TestRef: claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), Success: success, ResultSummary: result, SafeErrorCode: code})
 	return err
 }
 

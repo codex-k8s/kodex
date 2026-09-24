@@ -22,6 +22,43 @@ func openAPITestCapability() integrationpackage.Capability {
 	}
 }
 
+func TestImportedOpenAPIHealthUsesOperationNotCapabilityKey(t *testing.T) {
+	const source = `openapi: 3.1.0
+info: {title: Проверка, version: 1.0.0}
+servers:
+  - url: https://api.example.test
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses: {'200': {description: OK}}
+`
+	definition, err := integrationpackage.DraftOpenAPIPackage(t.Context(), []byte(source), integrationpackage.OpenAPIImportOptions{
+		Version: "1.0.0", HealthOperationID: "getHealth",
+		Choices: []integrationpackage.OpenAPIImportChoice{{OperationID: "getHealth", Risk: "READ", ApprovalPolicy: "NONE"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	health, found := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
+	if !found || health.Key == health.Operation {
+		t.Fatal("imported health operation did not exercise distinct capability key")
+	}
+	adapter := testAdapter(t)
+	request := invocationRequest(t, definition, health.Key, map[string]any{}, nil)
+	calls := 0
+	adapter.openAPIHTTPClient = &http.Client{Transport: roundTripFunc(func(outbound *http.Request) (*http.Response, error) {
+		calls++
+		if outbound.Method != http.MethodGet || outbound.URL.String() != "https://api.example.test/health" {
+			t.Fatal("health check escaped its imported endpoint")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+	})}
+	if _, err := adapter.Test(t.Context(), request); err != nil || calls != 1 {
+		t.Fatalf("imported health check failed: %v, calls=%d", err, calls)
+	}
+}
+
 func TestOpenAPIExecutionRejectsChangedOriginBeforeCredentialReadOrNetwork(t *testing.T) {
 	adapter := testAdapter(t)
 	capability := openAPITestCapability()

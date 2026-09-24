@@ -3,10 +3,12 @@ package integrationpolicy
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
+	"github.com/codex-k8s/kodex/libs/go/mailpolicy"
 )
 
 type Resolver interface {
@@ -14,12 +16,14 @@ type Resolver interface {
 	Refresh(context.Context, string) (dnsresolver.Snapshot, error)
 }
 
-// Readiness проверяет полный актуальный DNS snapshot; пустой список закрыт.
-// Не влияет на готовность остальных listener и корневого Pod.
+// Readiness проверяет актуальный DNS snapshot каждого origin отдельно;
+// пустой список закрыт. Не влияет на готовность других listener и корневого Pod.
 type Readiness struct {
 	policy     *Active
 	resolver   Resolver
 	validUntil atomic.Int64
+	mu         sync.RWMutex
+	perHost    map[string]int64
 }
 
 func NewReadiness(active *Active, resolver Resolver) *Readiness {
@@ -27,44 +31,80 @@ func NewReadiness(active *Active, resolver Resolver) *Readiness {
 }
 
 func (r *Readiness) Ready() (bool, string) {
-	if r != nil && time.Now().UnixNano() < r.validUntil.Load() {
-		return true, "ready"
+	if r != nil {
+		r.mu.RLock()
+		defer r.mu.RUnlock()
+		now := time.Now().UnixNano()
+		for _, until := range r.perHost {
+			if now < until {
+				return true, "ready"
+			}
+		}
 	}
 	return false, "integration projection is not ready"
 }
 
+// ReadyFor закрывает только недоступный origin, не блокируя остальные
+// независимые интеграции того же listener.
+func (r *Readiness) ReadyFor(host string) (bool, string) {
+	if r != nil {
+		r.mu.RLock()
+		until := r.perHost[host]
+		r.mu.RUnlock()
+		if time.Now().UnixNano() < until {
+			return true, "ready"
+		}
+	}
+	return false, "integration destination is not ready"
+}
+
+func (r *Readiness) setReady(ready map[string]int64, earliest int64) {
+	r.mu.Lock()
+	r.perHost = ready
+	r.mu.Unlock()
+	r.validUntil.Store(earliest)
+}
+
 func (r *Readiness) Check(ctx context.Context) {
 	if r.policy == nil || !r.policy.Configured() || r.resolver == nil {
-		r.validUntil.Store(0)
+		r.setReady(nil, 0)
 		return
 	}
 	var earliest time.Time
+	ready := make(map[string]int64)
 	for _, destination := range r.policy.Destinations() {
 		snapshot, err := r.resolver.Refresh(ctx, destination.Hostname)
-		if err != nil || len(snapshot.Addresses) == 0 || !time.Now().Before(snapshot.ExpiresAt) {
-			r.validUntil.Store(0)
-			return
+		if err != nil || mailpolicy.ValidateAddresses(snapshot.Addresses) != nil || !time.Now().Before(snapshot.ExpiresAt) {
+			continue
 		}
+		allowed := false
 		for _, address := range snapshot.Addresses {
-			if !r.policy.AllowsLiteral(destination.Hostname, destination.Port, address) {
-				r.validUntil.Store(0)
-				return
+			if r.policy.AllowsLiteral(destination.Hostname, destination.Port, address) {
+				allowed = true
 			}
 		}
+		if !allowed {
+			continue
+		}
+		ready[destination.Hostname] = snapshot.ExpiresAt.UnixNano()
 		if earliest.IsZero() || snapshot.ExpiresAt.Before(earliest) {
 			earliest = snapshot.ExpiresAt
 		}
 	}
 	if ctx.Err() != nil {
-		r.validUntil.Store(0)
+		r.setReady(nil, 0)
 		return
 	}
-	r.validUntil.Store(earliest.UnixNano())
+	if earliest.IsZero() {
+		r.setReady(nil, 0)
+		return
+	}
+	r.setReady(ready, earliest.UnixNano())
 }
 
 func (r *Readiness) Run(interval time.Duration) func(context.Context) error {
 	return func(ctx context.Context) error {
-		defer r.validUntil.Store(0)
+		defer r.setReady(nil, 0)
 		if interval <= 0 {
 			return errors.New("integration readiness refresh interval is invalid")
 		}

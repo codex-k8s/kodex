@@ -67,13 +67,53 @@ func TestStrictIntegrationPolicyAndExactLiteral(t *testing.T) {
 	}
 }
 
-type resolverFixture struct{ snapshot dnsresolver.Snapshot }
+type resolverFixture struct {
+	snapshot  dnsresolver.Snapshot
+	snapshots map[string]dnsresolver.Snapshot
+}
 
-func (r *resolverFixture) Resolve(context.Context, string) (dnsresolver.Snapshot, error) {
+func (r *resolverFixture) Resolve(_ context.Context, host string) (dnsresolver.Snapshot, error) {
+	if r.snapshots != nil {
+		return r.snapshots[host], nil
+	}
 	return r.snapshot, nil
 }
-func (r *resolverFixture) Refresh(context.Context, string) (dnsresolver.Snapshot, error) {
-	return r.snapshot, nil
+func (r *resolverFixture) Refresh(ctx context.Context, host string) (dnsresolver.Snapshot, error) {
+	return r.Resolve(ctx, host)
+}
+
+func TestReadinessIsIndependentPerIntegrationDestination(t *testing.T) {
+	doc := document(t)
+	doc.Destinations = append(doc.Destinations, shared.Destination{Hostname: "other.example.test", Port: 443, Addresses: []string{"9.9.9.9"}})
+	doc.SourceDigest = shared.SourceDigest([]string{"api.example.test", "other.example.test"})
+	raw, _ := json.Marshal(doc)
+	active, err := Load(raw, doc.Digest(), base(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expires := time.Now().Add(time.Minute)
+	resolver := &resolverFixture{snapshots: map[string]dnsresolver.Snapshot{
+		"api.example.test":   {Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: expires},
+		"other.example.test": {Addresses: []netip.Addr{netip.MustParseAddr("1.1.1.1")}, ExpiresAt: expires},
+	}}
+	readiness := NewReadiness(active, resolver)
+	readiness.Check(t.Context())
+	if ready, _ := readiness.Ready(); !ready {
+		t.Fatal("healthy destination was blocked by another origin")
+	}
+	if ready, _ := readiness.ReadyFor("api.example.test"); !ready {
+		t.Fatal("healthy destination was rejected")
+	}
+	for _, host := range []string{"other.example.test", "unknown.example.test"} {
+		if ready, _ := readiness.ReadyFor(host); ready {
+			t.Fatal("unready or unknown destination was accepted")
+		}
+	}
+	resolver.snapshots["api.example.test"] = dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("1.1.1.1")}, ExpiresAt: expires}
+	readiness.Check(t.Context())
+	if ready, _ := readiness.Ready(); ready {
+		t.Fatal("all destinations became unavailable without closing listener readiness")
+	}
 }
 
 func TestReadinessClosesOnDNSRebindingAndEmptyFirstRun(t *testing.T) {
@@ -105,5 +145,28 @@ func TestReadinessClosesOnDNSRebindingAndEmptyFirstRun(t *testing.T) {
 	readiness.Check(t.Context())
 	if ready, _ := readiness.Ready(); ready {
 		t.Fatal("empty source became ready")
+	}
+}
+
+func TestReadinessAcceptsOnlyFreshPublicDNSWithPinnedOverlap(t *testing.T) {
+	doc := document(t)
+	raw, _ := json.Marshal(doc)
+	active, err := Load(raw, doc.Digest(), base(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := &resolverFixture{snapshot: dnsresolver.Snapshot{
+		Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("9.9.9.9")},
+		ExpiresAt: time.Now().Add(time.Minute),
+	}}
+	readiness := NewReadiness(active, resolver)
+	readiness.Check(t.Context())
+	if ready, _ := readiness.ReadyFor("api.example.test"); !ready {
+		t.Fatal("rotating public DNS lost its pinned overlap")
+	}
+	resolver.snapshot.Addresses = []netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("10.0.0.1")}
+	readiness.Check(t.Context())
+	if ready, _ := readiness.ReadyFor("api.example.test"); ready {
+		t.Fatal("mixed private DNS answer passed readiness")
 	}
 }

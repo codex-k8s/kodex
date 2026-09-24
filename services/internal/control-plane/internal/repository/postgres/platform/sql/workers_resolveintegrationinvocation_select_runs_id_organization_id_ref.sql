@@ -22,10 +22,24 @@ WHERE r.organization_id=$1::uuid AND r.ref=$2 AND n.ref=$3 AND n.state='RUNNING'
   AND d.enabled AND (d.adapter_owner,d.execution_route) IN
       (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
   AND d.adapter_readiness='READY'
-  AND EXISTS (
+  AND (
+    EXISTS (
       SELECT 1 FROM jsonb_array_elements(d.capabilities) capability
       WHERE capability->>'key'=g.capability_key
         AND capability->>'operation' NOT IN ('mattermost.inbound','mattermost.gate_decisions')
+    )
+    OR (c.definition_key='openapi-mcp' AND EXISTS (
+      SELECT 1
+      FROM control_plane.managed_configuration_bindings binding
+      JOIN control_plane.managed_configuration_revisions revision
+        ON revision.id=binding.configuration_revision_id
+       AND revision.organization_id=binding.organization_id
+      WHERE binding.organization_id=c.organization_id
+        AND binding.consumer_kind='INTEGRATION_CONNECTION'
+        AND binding.consumer_ref=c.ref
+        AND binding.configuration_kind='INTEGRATION_DEFINITION'
+        AND revision.state='PUBLISHED'
+    ))
   )
   AND EXISTS (
     SELECT 1 FROM control_plane.runtime_revisions revision,

@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -30,6 +31,24 @@ func structure(value map[string]any) *structpb.Struct {
 	result, _ := structpb.NewStruct(value)
 	if result == nil {
 		result = &structpb.Struct{}
+	}
+	return result
+}
+
+// Предпросмотр Gate может содержать типизированные Go-структуры. Через JSON
+// приводим их к protobuf Value без потери выбранных параметров согласования.
+func gatePreviewStructure(value map[string]any) *structpb.Struct {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	var normalized map[string]any
+	if json.Unmarshal(encoded, &normalized) != nil {
+		return nil
+	}
+	result, err := structpb.NewStruct(normalized)
+	if err != nil {
+		return nil
 	}
 	return result
 }
@@ -506,7 +525,7 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 		gate.DecisionConsequences = append(gate.DecisionConsequences, &controlplanev1.OwnerGateDecisionConsequence{Decision: gateDecision(consequence.Decision), SafeSummary: consequence.SafeSummary, ExecutesExternalEffect: consequence.ExecutesExternalEffect, TerminalForRun: consequence.TerminalForRun})
 	}
 	if intent := value.IntegrationIntent; intent != nil {
-		gate.IntegrationIntent = &controlplanev1.IntegrationIntent{ConnectionRef: intent.ConnectionRef, ConnectionName: intent.ConnectionName, DefinitionKey: intent.DefinitionKey, CapabilityKey: intent.CapabilityKey, Operation: intent.Operation, EffectKey: intent.EffectKey, EffectPreview: structure(intent.EffectPreview), ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(intent.ResourceKind), Values: intent.ResourceScope, Digest: intent.ResourceScopeDigest}}
+		gate.IntegrationIntent = &controlplanev1.IntegrationIntent{ConnectionRef: intent.ConnectionRef, ConnectionName: intent.ConnectionName, DefinitionKey: intent.DefinitionKey, CapabilityKey: intent.CapabilityKey, Operation: intent.Operation, EffectKey: intent.EffectKey, EffectPreview: gatePreviewStructure(intent.EffectPreview), ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(intent.ResourceKind), Values: intent.ResourceScope, Digest: intent.ResourceScopeDigest}}
 	}
 	return gate
 }

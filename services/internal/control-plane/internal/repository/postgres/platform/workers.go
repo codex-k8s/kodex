@@ -979,7 +979,7 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		if err != nil {
 			return nil, err
 		}
-		health, exists := definition.Capability(definition.Spec.HealthCheck.Operation)
+		health, exists := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
 		if !exists || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
 			return nil, errs.ErrForbidden
 		}
@@ -1030,14 +1030,39 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 		healthCredentialInvalid = report.CredentialInvalid()
 	}
 	var testID, connectionID, connectionRef, storedDigest, state, leaseRef string
+	var definitionKey, connectionState string
+	var connectionEnabled bool
+	var attempt int
+	var createdAt time.Time
 	var generation int64
 	var expiresAt time.Time
-	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef, input.Principal.CallerWorkload).Scan(&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt); err != nil {
+	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef, input.Principal.CallerWorkload).Scan(
+		&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt,
+		&attempt, &createdAt, &definitionKey, &connectionState, &connectionEnabled,
+	); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	digest := sha256.Sum256([]byte(payload.Fence))
 	if state != "CLAIMED" || leaseRef != payload.LeaseRef || generation != payload.Generation || storedDigest != hex.EncodeToString(digest[:]) || time.Now().After(expiresAt) {
 		return commandOutcome{}, errs.ErrForbidden
+	}
+	// Первый READ-test может опередить публикацию сетевой проекции нового
+	// OpenAPI origin. Только временную недоступность повторяем новой fenced
+	// попыткой; credential, schema, чужой adapter и WRITE здесь не повторяются.
+	if !payload.Success && payload.SafeErrorCode == "INTEGRATION_UNAVAILABLE" &&
+		definitionKey == "openapi-mcp" && connectionEnabled && connectionState == "TESTING" &&
+		attempt < 8 && time.Now().Before(createdAt.Add(90*time.Second)) {
+		var requeuedRef string
+		if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestRequeueTransientOpenAPI,
+			testID, leaseRef, generation).Scan(&requeuedRef); err != nil || requeuedRef != payload.TestRef {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		item, err := readConnection(ctx, tx, scope, connectionRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		return commandOutcome{result: command.Result{Connection: &item}, resourceKind: "INTEGRATION_CONNECTION",
+			resourceRef: connectionRef, summary: "i18n:INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED"}, nil
 	}
 	nextTest, nextConnection, credentials := "SUCCEEDED", "CONNECTED", "CONFIGURED"
 	summary := "i18n:INTEGRATION_TEST_SUCCEEDED"

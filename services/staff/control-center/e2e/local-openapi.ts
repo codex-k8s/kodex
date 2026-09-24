@@ -1,0 +1,613 @@
+import { randomUUID } from "node:crypto";
+
+import { expect, test, type Page } from "@playwright/test";
+
+import { authenticateOwner } from "./auth-flow";
+import { loadE2EAuthEnvironment } from "./environment";
+import { gotoWithRetry } from "./helpers";
+
+const environment = loadE2EAuthEnvironment();
+const source = `openapi: 3.1.0
+info: {title: Локальная проверка OpenAPI, version: 1.0.0}
+servers:
+  - url: https://jsonplaceholder.typicode.com
+paths:
+  /posts/1:
+    get:
+      operationId: getHealth
+      summary: Проверить чтение
+      responses:
+        '200': {description: OK}
+  /posts:
+    post:
+      operationId: echoWrite
+      summary: Проверить согласованную запись
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                marker: {type: string, maxLength: 64}
+              required: [marker]
+      responses:
+        '201': {description: Created}
+`;
+
+interface ConfigurationResult {
+  configuration: { ref: string; version: number; kind: string };
+  revision: { ref: string; state: string; content: string };
+}
+
+interface Connection {
+  ref: string;
+  version: number;
+  state: string;
+}
+
+interface ListedConnection extends Connection {
+  name: string;
+  definitionKey: string;
+}
+
+interface Run {
+  ref: string;
+  version: number;
+  state: string;
+  gateRefs: string[];
+  safeErrorCode?: string;
+}
+
+const testRunRefs: string[] = [];
+
+interface OwnerGate {
+  ref: string;
+  version: number;
+  state: string;
+  runRef: string;
+}
+
+interface ModelCapabilityPage {
+  catalogRevision: string;
+  catalogDigest: string;
+  catalogStatus?: { state: string; expiresAt?: string };
+  items: Array<{
+    id: string;
+    available: boolean;
+    providerDefinitionKey: string;
+    eligibleProviderAccountRefs: string[];
+  }>;
+}
+
+interface AgentRuntimeView {
+  agentVersion: number;
+  configuration: {
+    runtimeProfileRef: string;
+    model: string;
+  };
+}
+
+test.afterEach(async ({ page }) => {
+  if (process.env.KODEX_E2E_GATE_READ_REF || process.env.KODEX_E2E_OPENAPI_CANCEL_RUN_REF) return;
+  if (page.url().startsWith(environment.baseURL)) {
+    for (const ref of testRunRefs) {
+      const run = await read<Run>(page, `/api/v1/runs/${ref}`);
+      if (!["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state))
+        await mutate(page, `/api/v1/runs/${ref}/commands`, { action: "CANCEL" }, run.version);
+    }
+    await disablePreviousLocalOpenAPIFixtures(page);
+  }
+});
+
+test("локально отменяется только собственный незавершённый OpenAPI запуск", async ({ page }) => {
+  const runRef = process.env.KODEX_E2E_OPENAPI_CANCEL_RUN_REF;
+  test.skip(!runRef, "Нужен ref только тестового OpenAPI запуска");
+  if (!runRef) throw new Error("Local OpenAPI run ref is missing");
+  await authenticateOwner(page, {
+    username: environment.ownerUsername,
+    password: environment.ownerPassword,
+  }, { mode: "local" });
+  const run = await read<Run>(page, `/api/v1/runs/${runRef}`);
+  expect(run.state).toBe("WAITING_HUMAN");
+  const cancelled = await mutate<{ run: Run }>(
+    page,
+    `/api/v1/runs/${runRef}/commands`,
+    { action: "CANCEL" },
+    run.version,
+  );
+  expect(cancelled.run.state).toBe("CANCELLED");
+});
+
+test("локальное чтение OpenAPI Human Gate сохраняет выбранные параметры", async ({ page }) => {
+  const gateRef = process.env.KODEX_E2E_GATE_READ_REF;
+  test.skip(!gateRef, "Нужен ref только тестового открытого Human Gate");
+  if (!gateRef) throw new Error("Local OpenAPI gate ref is missing");
+  await authenticateOwner(page, {
+    username: environment.ownerUsername,
+    password: environment.ownerPassword,
+  }, { mode: "local" });
+  const gate = await read<OwnerGate & {
+    integrationIntent?: {
+      resourceScope?: { kind: string };
+      effectPreview?: {
+        approvalScope?: { selected?: Array<{ path: string; type: string }> };
+      };
+    };
+  }>(page, `/api/v1/owner-gates/${gateRef}`);
+  expect(gate.state).toBe("OPEN");
+  expect(gate.integrationIntent?.resourceScope?.kind).toBe("HTTPS_RESOURCE");
+  expect(gate.integrationIntent?.effectPreview?.approvalScope?.selected).toEqual(
+    expect.arrayContaining([expect.objectContaining({ path: "/body/marker", type: "string" })]),
+  );
+});
+
+test("локальный OpenAPI импорт, первая привязка и HTTPS test", async ({
+  page,
+}) => {
+  test.setTimeout(process.env.KODEX_E2E_OPENAPI_INVOKE === "1" ? 600_000 : 240_000);
+  const browserFailures: string[] = [];
+  page.on("pageerror", (error) => browserFailures.push(error.name));
+  page.on("response", (response) => {
+    if (response.status() >= 500)
+      browserFailures.push(
+        `${String(response.status())} ${new URL(response.url()).pathname}`,
+      );
+  });
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await disablePreviousLocalOpenAPIFixtures(page);
+  if (process.env.KODEX_E2E_OPENAPI_CLEANUP_ONLY === "1") return;
+  await gotoWithRetry(
+    page,
+    "/configurations/INTEGRATION_DEFINITION?assistantImportOpen=1",
+  );
+  const dialog = page.getByRole("dialog", {
+    name: "Импорт интеграции из OpenAPI",
+  });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Контракт OpenAPI JSON или YAML").fill(source);
+  const inspected = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/openapi-inspections",
+  );
+  await dialog.getByRole("button", { name: "Проверить контракт" }).click();
+  expect((await inspected).status()).toBe(200);
+  await dialog
+    .locator(".openapi-operation")
+    .filter({ hasText: "GET /posts/1" })
+    .locator('input[type="checkbox"]')
+    .check();
+  const write = dialog
+    .locator(".openapi-operation")
+    .filter({ hasText: "POST /posts" });
+  await write.locator('input[type="checkbox"]').check();
+  await write.locator("select").last().selectOption("HUMAN_SCOPED");
+  await dialog.locator("select").last().selectOption("getHealth");
+  await dialog
+    .getByLabel("Название интеграции")
+    .fill(`Локальная проверка OpenAPI ${randomUUID().slice(0, 8)}`);
+  const createdResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/drafts",
+  );
+  await dialog.getByRole("button", { name: "Создать черновик" }).click();
+  const created = await createdResponse;
+  expect(created.status()).toBe(201);
+  const draft = (await created.json()) as ConfigurationResult;
+  expect(draft.configuration.kind).toBe("INTEGRATION_DEFINITION");
+  expect(draft.revision.state).toBe("DRAFT");
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/configurations/INTEGRATION_DEFINITION/${draft.configuration.ref}$`,
+    ),
+  );
+
+  const validated = await mutate<ConfigurationResult>(
+    page,
+    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
+    undefined,
+    draft.configuration.version,
+  );
+  expect(validated.revision.state).toBe("VALID");
+  const published = await mutate<ConfigurationResult>(
+    page,
+    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/publication`,
+    undefined,
+    validated.configuration.version,
+  );
+  expect(published.revision.state).toBe("PUBLISHED");
+
+  const connectionName = `Локальный OpenAPI ${randomUUID().slice(0, 8)}`;
+  const connection = await mutate<Connection>(
+    page,
+    "/api/v1/integration-connections",
+    {
+      definitionKey: "openapi-mcp",
+      name: connectionName,
+      publicConfiguration: { base_url: "https://jsonplaceholder.typicode.com" },
+    },
+  );
+  const impact = await read<{
+    digest: string;
+    consumers: Array<{ ref: string }>;
+    total: number;
+  }>(
+    page,
+    `/api/v1/managed-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/impact?pageSize=40`,
+  );
+  expect(impact.digest).toMatch(/^[a-f0-9]{64}$/);
+  expect(impact.consumers.some((item) => item.ref === connection.ref)).toBe(
+    false,
+  );
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Влияние ревизии" }).click();
+  const impactDialog = page.getByRole("dialog", { name: "Влияние ревизии" });
+  await expect(
+    impactDialog.getByRole("button", { name: "Новое подключение" }),
+  ).toBeEnabled();
+  await impactDialog.getByRole("button", { name: "Новое подключение" }).click();
+  await impactDialog
+    .getByRole("option", { name: new RegExp(connectionName) })
+    .click();
+  const bindingResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/consumer-bindings"),
+  );
+  await impactDialog
+    .getByRole("button", { name: "Привязать подключение" })
+    .click();
+  const boundResponse = await bindingResponse;
+  expect(boundResponse.status()).toBe(200);
+  await expect(impactDialog).toHaveCount(0);
+
+  const bound = await read<Connection>(
+    page,
+    `/api/v1/integration-connections/${connection.ref}`,
+  );
+  expect(bound.ref).toBe(connection.ref);
+  expect(bound.version).toBeGreaterThanOrEqual(connection.version);
+  await mutate<Connection>(
+    page,
+    `/api/v1/integration-connections/${connection.ref}/commands`,
+    { action: "TEST" },
+    bound.version,
+  );
+  await expect
+    .poll(
+      async () =>
+        (
+          await read<Connection>(
+            page,
+            `/api/v1/integration-connections/${connection.ref}`,
+          )
+        ).state,
+      { timeout: 100_000, intervals: [500, 2_000, 5_000] },
+    )
+    .toBe("CONNECTED");
+  if (process.env.KODEX_E2E_OPENAPI_INVOKE === "1") {
+    const executable = JSON.parse(published.revision.content) as {
+      spec: {
+        capabilities: Array<{
+          key: string;
+          risk: string;
+          openapi?: { operationId: string };
+        }>;
+      };
+    };
+    const readKey = executable.spec.capabilities.find(
+      (item) => item.openapi?.operationId === "getHealth" && item.risk === "READ",
+    )?.key;
+    const writeKey = executable.spec.capabilities.find(
+      (item) => item.openapi?.operationId === "echoWrite" && item.risk === "WRITE",
+    )?.key;
+    expect(readKey).toMatch(/^op\.[a-f0-9]{16}$/);
+    expect(writeKey).toMatch(/^op\.[a-f0-9]{16}$/);
+    if (!readKey || !writeKey) throw new Error("Imported OpenAPI capabilities are missing");
+    await verifyImportedMCPInvocation(page, connection.ref, readKey, writeKey);
+  }
+  expect(browserFailures).toEqual([]);
+});
+
+async function read<T>(page: Page, path: string): Promise<T> {
+  return page.evaluate(async (url) => {
+    const response = await fetch(url);
+    if (!response.ok)
+      throw new Error(`API read failed: ${String(response.status)} ${new URL(url, location.origin).pathname}`);
+    return (await response.json()) as T;
+  }, path);
+}
+
+async function disablePreviousLocalOpenAPIFixtures(page: Page): Promise<void> {
+  let cursor = "";
+  for (let index = 0; index < 10; index++) {
+    const query = new URLSearchParams({ pageSize: "100" });
+    if (cursor) query.set("pageToken", cursor);
+    const listing = await read<{
+      items: ListedConnection[];
+      nextPageToken: string;
+    }>(page, `/api/v1/integration-connections?${query.toString()}`);
+    for (const connection of listing.items) {
+      if (
+        connection.state !== "DISABLED" &&
+        connection.name.match(/^Локальный OpenAPI [0-9a-f]{8}$/) &&
+        connection.definitionKey === "openapi-mcp"
+      ) {
+        const disabled = await mutate<Connection>(
+          page,
+          `/api/v1/integration-connections/${connection.ref}/commands`,
+          { action: "DISABLE" },
+          connection.version,
+        );
+        expect(disabled.state).toBe("DISABLED");
+      }
+    }
+    if (!listing.nextPageToken) return;
+    if (listing.nextPageToken === cursor)
+      throw new Error("Integration fixture pagination did not advance");
+    cursor = listing.nextPageToken;
+  }
+  throw new Error("Integration fixture pagination exceeded bound");
+}
+
+async function verifyImportedMCPInvocation(
+  page: Page,
+  connectionRef: string,
+  readKey: string,
+  writeKey: string,
+): Promise<void> {
+  const suffix = randomUUID().slice(0, 8);
+  const project = await mutate<{ ref: string }>(page, "/api/v1/projects", {
+    name: `Локальная проверка MCP ${suffix}`,
+    purpose: "Безопасная проверка импортированной интеграции через сотрудника.",
+    language: "ru",
+  });
+  const agent = await mutate<{ ref: string; state: string }>(
+    page,
+    `/api/v1/projects/${project.ref}/agents`,
+    {
+      name: `Исполнитель OpenAPI ${suffix}`,
+      purpose: "Выполнять только точные вызовы тестовой интеграции.",
+      roleDescription: "Локальный исполнитель проверки MCP и Human Gate.",
+      initialInstructions: [
+        "В каждом задании сначала вызови get_integration_catalog с точными connection_ref и capability_key.",
+        "Из найденного гранта возьми definition_version, definition_digest и input_schema_sha256.",
+        "После этого вызови ровно один invoke_integration с этими полями и указанным input.",
+        "Не используй shell, curl и прямой HTTP.",
+        "После результата кратко сообщи итог и заверши работу.",
+      ].join(" "),
+    },
+  );
+  expect(agent.state).toBe("READY");
+  await pinExecutableTestModel(page, agent.ref);
+  let connection = await read<Connection>(
+    page,
+    `/api/v1/integration-connections/${connectionRef}`,
+  );
+  expect(connection.state).toBe("CONNECTED");
+  connection = await mutate<Connection>(
+    page,
+    `/api/v1/integration-connections/${connectionRef}/grants`,
+    { capabilityKey: readKey, agentRef: agent.ref, enabled: true },
+    connection.version,
+  );
+  connection = await mutate<Connection>(
+    page,
+    `/api/v1/integration-connections/${connectionRef}/grants`,
+    {
+      capabilityKey: writeKey,
+      agentRef: agent.ref,
+      enabled: true,
+      approvalScopePaths: ["/body/marker"],
+    },
+    connection.version,
+  );
+
+  const run = async (
+    title: string,
+    capabilityKey: string,
+    input: Record<string, unknown>,
+  ): Promise<Run> => {
+    const created = await mutate<{ run: Run }>(page, "/api/v1/runs", {
+      projectRef: project.ref,
+      targetRef: agent.ref,
+      targetType: "AGENT",
+      title,
+      task: [
+        "Сначала найди точный грант через get_integration_catalog, затем вызови один invoke_integration для:",
+        JSON.stringify({
+          connection_ref: connectionRef,
+          capability_key: capabilityKey,
+          input,
+        }),
+        "Не меняй эти значения, скопируй обязательные version/digest/schema из каталога и заверши ответ.",
+      ].join("\n"),
+    });
+    testRunRefs.push(created.run.ref);
+    return created.run;
+  };
+  const readRun = await run(`Локальный OpenAPI READ ${suffix}`, readKey, {});
+  await waitForRun(page, readRun.ref, "SUCCEEDED");
+  await expectToolCall(page, readRun.ref);
+
+  const writeRun = await run(`Локальный OpenAPI WRITE ${suffix}`, writeKey, {
+    body: { marker: `kodex-local-${suffix}` },
+  });
+  let gate: OwnerGate | undefined;
+  await expect
+    .poll(
+      async () => {
+        const current = await read<Run>(page, `/api/v1/runs/${writeRun.ref}`);
+        if (["FAILED", "CANCELLED"].includes(current.state))
+          throw new Error(`Run ended before Human Gate: ${current.safeErrorCode ?? current.state}`);
+        for (const gateRef of current.gateRefs) {
+          const candidate = await read<OwnerGate>(
+            page,
+            `/api/v1/owner-gates/${gateRef}`,
+          );
+          if (candidate.runRef === writeRun.ref && candidate.state === "OPEN") {
+            gate = candidate;
+            return true;
+          }
+        }
+        return false;
+      },
+      { timeout: 180_000, intervals: [500, 1_000, 2_000] },
+    )
+    .toBe(true);
+  if (!gate) throw new Error("OpenAPI Human Gate was not opened");
+  const resolution = await mutate<{ gate: OwnerGate }>(
+    page,
+    `/api/v1/owner-gates/${gate.ref}/resolution`,
+    { decision: "APPROVE", comment: "Локальная проверка OpenAPI" },
+    gate.version,
+  );
+  expect(resolution.gate.state).toBe("APPROVED");
+  await waitForRun(page, writeRun.ref, "SUCCEEDED");
+  await expectToolCall(page, writeRun.ref);
+}
+
+async function pinExecutableTestModel(page: Page, agentRef: string): Promise<void> {
+  const model = "gpt-5.6-sol";
+  const accounts = await read<{ items: Array<{ ref: string; state: string }> }>(
+    page,
+    "/api/v1/provider-accounts?pageSize=100",
+  );
+  let accountRef = "";
+  let exact: ModelCapabilityPage | undefined;
+  let providerDefinitionKey = "";
+  for (const account of accounts.items) {
+    if (account.state !== "AUTHORIZED") continue;
+    const candidate = await read<ModelCapabilityPage>(
+      page,
+      `/api/v1/model-capabilities?providerAccountRef=${encodeURIComponent(account.ref)}&query=${encodeURIComponent(model)}&pageSize=100`,
+    );
+    const capability = candidate.items.find(
+      (item) => item.id === model && item.available && item.eligibleProviderAccountRefs.includes(account.ref),
+    );
+    if (candidate.catalogStatus?.state !== "READY" || !capability) continue;
+    accountRef = account.ref;
+    exact = candidate;
+    providerDefinitionKey = capability.providerDefinitionKey;
+    break;
+  }
+  if (!accountRef || !exact) throw new Error("No authorized account offers the local test model");
+  expect(exact.catalogStatus?.state).toBe("READY");
+  expect(Date.parse(exact.catalogStatus?.expiresAt ?? "")).toBeGreaterThan(Date.now());
+  expect(exact.catalogRevision).toMatch(/^mcat_[a-f0-9]{64}$/);
+  expect(exact.catalogDigest).toMatch(/^[a-f0-9]{64}$/);
+  const path = `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`;
+  const current = await read<AgentRuntimeView>(page, path);
+  const saved = await mutate<AgentRuntimeView>(
+    page,
+    path,
+    {
+      runtimeProfileRef: current.configuration.runtimeProfileRef,
+      model,
+      providerPolicyMode: "FIXED",
+      providerAccounts: [{
+        accountRef,
+        weight: 1,
+        catalogRevision: exact.catalogRevision,
+        catalogDigest: exact.catalogDigest,
+        providerDefinitionKey,
+      }],
+    },
+    current.agentVersion,
+    "PUT",
+  );
+  expect(saved.configuration.model).toBe(model);
+}
+
+async function waitForRun(
+  page: Page,
+  runRef: string,
+  expected: string,
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const run = await read<Run>(page, `/api/v1/runs/${runRef}`);
+        if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state) && run.state !== expected)
+          throw new Error(`Run ended with ${run.safeErrorCode ?? run.state}`);
+        return run.state;
+      },
+      { timeout: 180_000, intervals: [500, 1_000, 2_000] },
+    )
+    .toBe(expected);
+}
+
+async function expectToolCall(page: Page, runRef: string): Promise<void> {
+  const events = await read<{
+    items: Array<{
+      messageKind?: string;
+      toolCall?: { tool: string; state: string; auditRef: string };
+    }>;
+  }>(page, `/api/v1/runs/${runRef}/events?afterSequence=0&limit=500`);
+  const calls = events.items.filter(
+    (event) =>
+      event.messageKind === "TOOL_CALL" &&
+      event.toolCall?.tool === "invoke_integration",
+  );
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.toolCall?.state).toBe("SUCCEEDED");
+  expect(calls[0]?.toolCall?.auditRef).not.toBe("");
+}
+
+async function mutate<T>(
+  page: Page,
+  path: string,
+  body?: unknown,
+  version?: number,
+  method: "POST" | "PUT" = "POST",
+): Promise<T> {
+  const result = await page.evaluate(
+    async (input) => {
+      const prefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+      const csrf = document.cookie
+        .split(";")
+        .map((item) => item.trim())
+        .find((item) => item.startsWith(prefix))
+        ?.slice(prefix.length);
+      if (!csrf)
+        return { status: 0, code: "CSRF_UNAVAILABLE", body: undefined };
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "Idempotency-Key": input.key,
+        "X-CSRF-Token": decodeURIComponent(csrf),
+      };
+      if (input.version !== undefined)
+        headers["If-Match"] = `"${String(input.version)}"`;
+      const response = await fetch(input.path, {
+        method: input.method,
+        headers,
+        body: input.body === undefined ? undefined : JSON.stringify(input.body),
+      });
+      const decoded = (await response.json()) as Record<string, unknown>;
+      return {
+        status: response.status,
+        code: typeof decoded.code === "string" ? decoded.code : "UNKNOWN",
+        body: response.ok ? decoded : undefined,
+      };
+    },
+    { path, body, version, method, key: randomUUID() },
+  );
+  if (result.status < 200 || result.status >= 300 || !result.body)
+    throw new Error(
+      `API mutation failed: ${String(result.status)} ${result.code}`,
+    );
+  return result.body as T;
+}
