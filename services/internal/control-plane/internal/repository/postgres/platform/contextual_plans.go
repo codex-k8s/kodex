@@ -91,6 +91,12 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		switch operation.Type {
+		case "BIND_AGENT_RUNTIME_ENVIRONMENT":
+			updated, err := repository.rehydrateEditedAssistantBinding(ctx, tx, scope, projectRef, original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		case "UPDATE_AGENT":
 			updated, err := rehydrateEditedAssistantAgent(original, operation)
 			if err != nil {
@@ -249,6 +255,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 				continue
 			}
 		}
+		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
+			matching, snapshotErr := repository.assistantAgentBindingSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
 		if operation.Type == "UPDATE_INTEGRATION_CONNECTION" {
 			matching, snapshotErr := repository.assistantConnectionUpdateSnapshotMatches(ctx, tx, scope, operation)
 			if snapshotErr != nil || !matching {
@@ -294,7 +307,7 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 	switch operation.Type {
 	case "UPDATE_PROJECT":
 		kind, ref = "PROJECT", assistantString(operation.Input, "projectRef")
-	case "UPDATE_AGENT":
+	case "UPDATE_AGENT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		kind, ref = "AGENT", assistantString(operation.Input, "agentRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		kind, ref = "AGENT", assistantString(operation.Input, "agentRef")

@@ -271,4 +271,85 @@ WHERE project.name = 'Role image promotion' AND image.promotion_state = 'PROMOTE
 		t.Fatalf("unselected consumer changed: %v", err)
 	}
 	testEnvironmentPrepublicationImpact(t, ctx, repository, service, owner, projectRef, target.Ref, spec, firstAgent.Ref, secondAgent.Ref)
+	thirdAgent := createLifecycleAgent(t, ctx, service, owner, projectRef, "draft-assistant-bind-agent", "Assistant bind agent")
+	freshTarget, err := service.GetRuntimeEnvironment(ctx, owner, target.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistantBindingTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistantBinding, err := repository.hydrateAssistantAgentEnvironmentBinding(ctx, assistantBindingTx, ownerScope, projectRef,
+		entity.AssistantPlanOperation{Type: "BIND_AGENT_RUNTIME_ENVIRONMENT", Key: "draft-assistant-bind",
+			Title: "Bind ready environment", Summary: "Bind exact current version",
+			Parameters: map[string]any{"agentRef": thirdAgent.Ref, "environmentRef": target.Ref}})
+	if err != nil {
+		projection, projectionErr := repository.resolveAssistantContext(ctx, assistantBindingTx, ownerScope,
+			entity.AssistantContextDescriptor{EntityKind: "AGENT", EntityRef: thirdAgent.Ref}, projectRef)
+		_ = assistantBindingTx.Rollback(ctx)
+		t.Fatalf("hydrate assistant binding: %v (context=%v allowed=%v)", err, projectionErr, projection.AllowedOperations)
+	}
+	matching, err = repository.assistantAgentBindingSnapshotMatches(ctx, assistantBindingTx, ownerScope, projectRef, assistantBinding)
+	if err != nil || !matching || assistantString(assistantBinding.After, "versionRef") != freshTarget.CurrentVersion.Ref {
+		_ = assistantBindingTx.Rollback(ctx)
+		t.Fatalf("assistant binding snapshot: %v %v", matching, err)
+	}
+	forgedEdit := assistantBinding
+	forgedEdit.Parameters = cloneAssistantFields(assistantBinding.Parameters)
+	forgedEdit.Parameters["secretValue"] = "forged"
+	if _, err := repository.rehydrateEditedAssistantBinding(ctx, assistantBindingTx, ownerScope, projectRef,
+		assistantBinding, forgedEdit); !errors.Is(err, errs.ErrForbidden) {
+		_ = assistantBindingTx.Rollback(ctx)
+		t.Fatalf("binding edit accepted a secret field: %v", err)
+	}
+	forgedEdit.Parameters = cloneAssistantFields(assistantBinding.Parameters)
+	forgedEdit.Parameters["versionRef"] = "renvv_forged"
+	rehydrated, err := repository.rehydrateEditedAssistantBinding(ctx, assistantBindingTx, ownerScope, projectRef,
+		assistantBinding, forgedEdit)
+	if err != nil || assistantString(rehydrated.Parameters, "versionRef") != freshTarget.CurrentVersion.Ref {
+		_ = assistantBindingTx.Rollback(ctx)
+		t.Fatalf("binding edit did not restore server version: %v", err)
+	}
+	forgedEdit.Parameters = cloneAssistantFields(assistantBinding.Parameters)
+	forgedEdit.Parameters["environmentRef"] = assistantString(assistantBinding.Before, "environmentRef")
+	if _, err := repository.rehydrateEditedAssistantBinding(ctx, assistantBindingTx, ownerScope, projectRef,
+		assistantBinding, forgedEdit); err == nil {
+		_ = assistantBindingTx.Rollback(ctx)
+		t.Fatal("binding edit accepted a non-project environment")
+	}
+	if _, err := repository.hydrateAssistantAgentEnvironmentBinding(ctx, assistantBindingTx, ownerScope, "prj_other",
+		entity.AssistantPlanOperation{Type: "BIND_AGENT_RUNTIME_ENVIRONMENT", Parameters: map[string]any{
+			"agentRef": thirdAgent.Ref, "environmentRef": target.Ref,
+		}}); err == nil {
+		_ = assistantBindingTx.Rollback(ctx)
+		t.Fatal("cross-project assistant binding accepted")
+	}
+	if err := assistantBindingTx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assistantBinding, err = normalizeAssistantOperation(assistantBinding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plannedBinding, err := assistantOperationCommand(assistantBinding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plannedBinding.Principal = owner
+	plannedBinding.Mutation.IdempotencyKey = "draft-assistant-bind-apply"
+	boundByAssistant, err := service.Execute(ctx, plannedBinding)
+	if err != nil || boundByAssistant.RuntimeConfiguration == nil ||
+		boundByAssistant.RuntimeConfiguration.EnvironmentBinding.VersionRef != freshTarget.CurrentVersion.Ref {
+		t.Fatalf("assistant binding did not pin ready revision: %v", err)
+	}
+	staleTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	matching, err = repository.assistantAgentBindingSnapshotMatches(ctx, staleTx, ownerScope, projectRef, assistantBinding)
+	_ = staleTx.Rollback(ctx)
+	if err != nil || matching {
+		t.Fatalf("stale assistant binding remained valid: %v %v", matching, err)
+	}
 }

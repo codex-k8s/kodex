@@ -1477,6 +1477,8 @@ message AssistantPlanOperation {
     TYPE_CREATE_ROLE_IMAGE_RECIPE = 15;
     // Подготовить черновую ревизию существующей среды по exact version; публикация отдельно.
     TYPE_PREPARE_RUNTIME_ENVIRONMENT_REVISION = 16;
+    // Привязать текущую проверенную версию окружения к обычному сотруднику по exact version.
+    TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT = 17;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

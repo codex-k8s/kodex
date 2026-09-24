@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v17" {
+	if CorePromptRevision != "system-assistant-core-v18" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -25,6 +25,7 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"UPDATE_INTEGRATION_CONNECTION",
 		"UPDATE_WORKFLOW",
 		"PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+		"BIND_AGENT_RUNTIME_ENVIRONMENT",
 		"Ручной UI/Git draft сейчас не публикует новый исполняемый adapter",
 	} {
 		if !strings.Contains(CorePrompt(), required) {

@@ -590,6 +590,7 @@ func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
 const (
 	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                      AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
 	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW                   AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT       AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
 	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                  AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
 	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT            AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
 	AssistantContextDescriptorAllowedOperationsCREATEAGENT                       AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
@@ -615,6 +616,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsARCHIVEAGENT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW:
+		return true
+	case AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY:
 		return true
@@ -755,6 +758,7 @@ func (e AssistantPlanOperationAction) Valid() bool {
 const (
 	AssistantPlanOperationTypeARCHIVEAGENT                      AssistantPlanOperationType = "ARCHIVE_AGENT"
 	AssistantPlanOperationTypeARCHIVEWORKFLOW                   AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
+	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT       AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
 	AssistantPlanOperationTypeCHANGECAPABILITY                  AssistantPlanOperationType = "CHANGE_CAPABILITY"
 	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT            AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
 	AssistantPlanOperationTypeCREATEAGENT                       AssistantPlanOperationType = "CREATE_AGENT"
@@ -780,6 +784,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeARCHIVEAGENT:
 		return true
 	case AssistantPlanOperationTypeARCHIVEWORKFLOW:
+		return true
+	case AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT:
 		return true
 	case AssistantPlanOperationTypeCHANGECAPABILITY:
 		return true

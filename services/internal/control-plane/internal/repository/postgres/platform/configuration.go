@@ -1166,6 +1166,17 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				err = errs.ErrConflict
 			}
 		}
+		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
+			err = repository.lockAssistantBindingEnvironment(ctx, operationEffectsTx, scope, conversationProjectRef,
+				assistantString(operation.Parameters, "environmentRef"))
+			if err == nil {
+				var matching bool
+				matching, err = repository.assistantAgentBindingSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+				if err != nil || !matching {
+					err = errs.ErrConflict
+				}
+			}
+		}
 		if operation.Type == "UPDATE_SCHEDULE" {
 			var matching bool
 			matching, err = repository.assistantScheduleUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)

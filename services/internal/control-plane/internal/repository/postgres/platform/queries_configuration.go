@@ -3,6 +3,8 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/configuration_lock_assistant_binding_environment.sql
+	queryConfigurationLockAssistantBindingEnvironment string
 	//go:embed sql/configuration_changeschedule_insert_schedules_ref_project_id_target_type.sql
 	queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType string
 	//go:embed sql/configuration_changeschedule_insert_schedule_revision.sql

@@ -322,6 +322,28 @@ func TestEnvironmentRevisionSchemaIsExactAndMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestAgentEnvironmentBindingSchemaIsExact(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "AGENT", EntityRef: "agt_12345678",
+			AllowedOperations: []string{"BIND_AGENT_RUNTIME_ENVIRONMENT"}}}
+	schemas := assistantPlanOperationSchemas(input)
+	if len(schemas) != 1 {
+		t.Fatalf("unexpected agent environment binding schemas: %#v", schemas)
+	}
+	properties := schemas[0]["properties"].(map[string]any)
+	if properties["type"].(map[string]any)["const"] != "BIND_AGENT_RUNTIME_ENVIRONMENT" ||
+		properties["action"].(map[string]any)["const"] != "UPDATE" {
+		t.Fatalf("wrong binding operation: %#v", properties)
+	}
+	fields := properties["parameters"].(map[string]any)["properties"].(map[string]any)
+	if fields["agentRef"].(map[string]any)["enum"].([]string)[0] != "agt_12345678" ||
+		fields["environmentRef"] == nil || fields["projectRef"] != nil ||
+		fields["versionRef"] != nil || fields["secretValue"] != nil {
+		t.Fatalf("binding schema exposed authority or secret fields: %#v", fields)
+	}
+}
+
 func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current"}

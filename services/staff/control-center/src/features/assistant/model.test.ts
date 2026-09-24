@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { reactive } from "vue";
 
 import {
+  assistantAgentEnvironmentBindingTarget,
   assistantAwaitingReply,
   assistantCreatedScheduleTarget,
   assistantCreatedEntityTarget,
@@ -197,6 +198,24 @@ describe("assistant role image build target", () => {
         "op_environment",
       ),
     ).toBeUndefined();
+  });
+
+  it("открывает привязку окружения только по точной применённой квитанции", () => {
+    const bindingOperation: AssistantPlanOperation = {
+      ...operation(), ref: "op_binding", type: "BIND_AGENT_RUNTIME_ENVIRONMENT",
+      action: "UPDATE", target: { kind: "AGENT", ref: "agt_exact", name: "Developer" },
+      after: { environmentRef: "renv_exact", versionRef: "renvv_exact" },
+    };
+    const bindingPlan: AssistantPlan = {
+      ...plan, operations: [bindingOperation], receipt: {
+        ...receipt, operationReceipts: [{ operationRef: "op_binding", resourceRef: "agt_exact", outcome: "APPLIED", auditRef: "aud_binding" }],
+      },
+    };
+    expect(assistantAgentEnvironmentBindingTarget(bindingPlan, "op_binding")).toEqual({
+      projectRef: "prj_market", agentRef: "agt_exact", environmentRef: "renv_exact", versionRef: "renvv_exact",
+    });
+    expect(assistantAgentEnvironmentBindingTarget({ ...bindingPlan, state: "DRAFT" }, "op_binding")).toBeUndefined();
+    expect(assistantAgentEnvironmentBindingTarget({ ...bindingPlan, receipt: { ...receipt, operationReceipts: [{ operationRef: "op_binding", resourceRef: "agt_other", outcome: "APPLIED", auditRef: "aud_binding" }] } }, "op_binding")).toBeUndefined();
   });
 
   it("связывает подключение с квитанцией без проектного контекста", () => {

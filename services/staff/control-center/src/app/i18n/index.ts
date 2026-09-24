@@ -3095,6 +3095,13 @@ const ru = {
         open: "Открыть сотрудника",
       },
     },
+    bindingCard: {
+      title: "Рабочее окружение сотрудника",
+      loadFailed: "Не удалось прочитать привязку окружения. Повторите обновление.",
+      bound: "Назначено окружение «{environment}».",
+      changed: "Привязка изменилась после применения плана. Проверьте текущую конфигурацию сотрудника.",
+      open: "Открыть окружение сотрудника",
+    },
     launchedRun: {
       title: "Запуск сотрудника или процесса",
       loadFailed:
@@ -3172,6 +3179,15 @@ const ru = {
         "Укажите название и корректную ссылку на образ или оставьте поле образа пустым.",
       environmentRevisionNextSteps:
         "После подтверждения будет создан черновик новой ревизии. Откройте его, проверьте влияние на сотрудников и опубликуйте отдельно.",
+      bindingBoundary: "Назначается только готовая опубликованная среда этого проекта. Секреты и параметры окружения здесь не меняются.",
+      bindingLoadFailed: "Не удалось проверить сотрудника или окружение. Обновите план.",
+      bindingStale: "Версия сотрудника изменилась. Попросите новый план.",
+      bindingCurrent: "Сейчас назначено: {environment}.",
+      bindingTarget: "Новое окружение",
+      bindingChoose: "Выберите готовое окружение",
+      bindingSearch: "Найти окружение",
+      bindingUnavailable: "Окружение не готово к назначению.",
+      bindingNextSteps: "После изменения выбора сохраните план и повторно проверьте его перед применением.",
       roleImageAgent: "Образ для сотрудника",
       roleImageAgentUnavailable: "Сотрудник не найден в доступном каталоге",
       roleImageAgentFixed:
@@ -6442,6 +6458,13 @@ const en = {
         open: "Open employee",
       },
     },
+    bindingCard: {
+      title: "Employee work environment",
+      loadFailed: "Could not read the environment binding. Refresh to try again.",
+      bound: "Environment “{environment}” is assigned.",
+      changed: "The binding changed after this plan was applied. Check the employee's current configuration.",
+      open: "Open employee environment",
+    },
     launchedRun: {
       title: "Employee or workflow run",
       loadFailed: "Could not read run status. Refresh to try again.",
@@ -6517,6 +6540,15 @@ const en = {
         "Provide a name and a valid image reference, or leave the image field empty.",
       environmentRevisionNextSteps:
         "Confirmation creates a revision draft. Open it, review its impact on employees, and publish separately.",
+      bindingBoundary: "Only a ready, published environment in this project can be assigned. Secrets and environment settings do not change here.",
+      bindingLoadFailed: "Could not verify the employee or environment. Refresh the plan.",
+      bindingStale: "The employee version changed. Ask for a new plan.",
+      bindingCurrent: "Currently assigned: {environment}.",
+      bindingTarget: "New environment",
+      bindingChoose: "Choose a ready environment",
+      bindingSearch: "Find an environment",
+      bindingUnavailable: "This environment is not ready to assign.",
+      bindingNextSteps: "If you change the selection, save the plan and validate it again before applying.",
       roleImageAgent: "Image for employee",
       roleImageAgentUnavailable: "Employee not found in the accessible catalog",
       roleImageAgentFixed:

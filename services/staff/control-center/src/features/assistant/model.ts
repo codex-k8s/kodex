@@ -77,6 +77,22 @@ export function assistantEnvironmentDraftTarget(
     : undefined;
 }
 
+export function assistantAgentEnvironmentBindingTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; agentRef: string; environmentRef: string; versionRef: string } | undefined {
+  const agentRef = assistantAppliedResourceRef(
+    plan, operationRef, "BIND_AGENT_RUNTIME_ENVIRONMENT", "AGENT",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const environmentRef = operation?.after.environmentRef;
+  const versionRef = operation?.after.versionRef;
+  return plan.projectRef && agentRef && operation?.target.ref === agentRef &&
+    typeof environmentRef === "string" && typeof versionRef === "string"
+    ? { projectRef: plan.projectRef, agentRef, environmentRef, versionRef }
+    : undefined;
+}
+
 export function assistantIntegrationConnectionTarget(
   plan: AssistantPlan,
   operationRef: string,
@@ -211,6 +227,7 @@ export type FriendlyPlanOperationType =
   | "CREATE_WORKFLOW"
   | "UPDATE_WORKFLOW"
   | "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+  | "BIND_AGENT_RUNTIME_ENVIRONMENT"
   | "CREATE_SCHEDULE"
   | "UPDATE_SCHEDULE"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
@@ -232,6 +249,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "CREATE_WORKFLOW" &&
     operation.value.type !== "UPDATE_WORKFLOW" &&
     operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION" &&
+    operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT" &&
     operation.value.type !== "CREATE_SCHEDULE" &&
     operation.value.type !== "UPDATE_SCHEDULE" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
