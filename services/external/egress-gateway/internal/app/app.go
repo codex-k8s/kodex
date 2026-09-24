@@ -279,9 +279,13 @@ func (current *runtime) shutdown(base context.Context) error {
 	}
 	result := serviceruntime.RunShutdown(base,
 		serviceruntime.ShutdownOperation{Name: "CONNECT server", Timeout: shutdownTimeout, Run: func(ctx context.Context) error {
-			var result error
+			results := make(chan error, len(current.connects))
 			for _, server := range current.connects {
-				result = errors.Join(result, server.Shutdown(ctx))
+				go func() { results <- server.Shutdown(ctx) }()
+			}
+			var result error
+			for range current.connects {
+				result = errors.Join(result, <-results)
 			}
 			return result
 		}},

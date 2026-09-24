@@ -85,7 +85,7 @@ type Server struct {
 	global    chan struct{}
 	wait      sync.WaitGroup
 	mu        sync.Mutex
-	active    map[net.Conn]struct{}
+	active    map[net.Conn]bool
 	perSource map[string]int
 }
 
@@ -99,7 +99,7 @@ func New(parent context.Context, address string, accessPolicy AccessPolicy, reso
 	return &Server{
 		address: address, policy: accessPolicy, resolver: resolver, dialer: dialer, readiness: readiness, metrics: metrics,
 		context: lifecycleContext, cancel: cancel, global: make(chan struct{}, limits.MaximumConnections),
-		active: make(map[net.Conn]struct{}), perSource: make(map[string]int),
+		active: make(map[net.Conn]bool), perSource: make(map[string]int),
 	}, nil
 }
 
@@ -114,7 +114,7 @@ func NewReadinessOnly(parent context.Context, address string, readiness Readines
 	return &Server{
 		address: address, policy: accessPolicy, readiness: readiness, metrics: metrics,
 		context: lifecycleContext, cancel: cancel, global: make(chan struct{}, limits.MaximumConnections),
-		active: make(map[net.Conn]struct{}), perSource: make(map[string]int),
+		active: make(map[net.Conn]bool), perSource: make(map[string]int),
 	}, nil
 }
 
@@ -175,21 +175,24 @@ func (server *Server) Serve() error {
 	}
 }
 
-// Drain закрывает accept и tunnels до ожидания других listener.
+// Drain останавливает новые CONNECT и незавершённые рукопожатия. Установленные
+// туннели получают bounded shutdown budget для завершения внешнего эффекта.
 func (server *Server) Drain() {
 	server.draining.Store(true)
-	server.cancel()
 	if server.listener != nil {
 		_ = server.listener.Close()
 	}
 	server.mu.Lock()
-	for connection := range server.active {
-		_ = connection.Close()
+	for connection, established := range server.active {
+		if !established {
+			_ = connection.Close()
+		}
 	}
 	server.mu.Unlock()
 }
 
-// Shutdown останавливает accept, закрывает tunnels и ограниченно ожидает join.
+// Shutdown ждёт завершения туннелей в пределах бюджета и принудительно
+// закрывает их только после исчерпания этого бюджета.
 func (server *Server) Shutdown(ctx context.Context) error {
 	server.Drain()
 	done := make(chan struct{})
@@ -199,8 +202,15 @@ func (server *Server) Shutdown(ctx context.Context) error {
 	}()
 	select {
 	case <-ctx.Done():
+		server.cancel()
+		server.mu.Lock()
+		for connection := range server.active {
+			_ = connection.Close()
+		}
+		server.mu.Unlock()
 		return errors.New("gateway connection join deadline exceeded")
 	case <-done:
+		server.cancel()
 		return nil
 	}
 }
@@ -286,6 +296,10 @@ func (server *Server) handle(client net.Conn) {
 		}
 	}
 	_ = upstream.SetWriteDeadline(time.Time{})
+	if !server.markEstablished(client) {
+		server.metrics.Connection("rejected", "tunnel", "not_ready")
+		return
+	}
 	server.tunnel(client, upstream, duration(limits.IdleTimeoutMilliseconds), duration(limits.WriteTimeoutMilliseconds))
 }
 
@@ -475,10 +489,22 @@ func (server *Server) acquire(connection net.Conn) bool {
 		return false
 	}
 	server.perSource[source]++
-	server.active[connection] = struct{}{}
+	server.active[connection] = false
 	// Add находится под тем же lock, что drain: Wait не обгонит новый handler.
 	server.wait.Add(1)
 	server.metrics.AddActive(1)
+	return true
+}
+
+func (server *Server) markEstablished(connection net.Conn) bool {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	if server.draining.Load() {
+		return false
+	}
+	if _, tracked := server.active[connection]; tracked {
+		server.active[connection] = true
+	}
 	return true
 }
 

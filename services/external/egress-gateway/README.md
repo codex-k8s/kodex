@@ -4,7 +4,7 @@ title: Egress gateway
 type: service
 status: approved
 owner: security
-version: 1.1.0
+version: 1.2.0
 updated: 2026-09-05
 ---
 
@@ -27,6 +27,7 @@ updated: 2026-09-05
 | CONNECT port | `8080/TCP`, имя `connect`; bodyless `CONNECT` и compatibility `GET /readyz` |
 | STT CONNECT port | `8081/TCP`, имя `stt-connect`; только профиль `openai-stt` и workload `stt-tts-service` |
 | Mail CONNECT port | `8082/TCP`, имя `mail-connect`; только `email-mail/email-bridge/email.transport`, отдельная immutable проекция |
+| OpenAPI CONNECT port | `8083/TCP`, имя `openapi-connect`; только проверенные HTTPS origins из owner-проекции интеграций |
 | Technical Service | `egress-gateway-technical.kodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
 | Technical port | `9090/TCP`, имя `metrics` |
 | Endpoint Pod labels | `app.kubernetes.io/name=egress-gateway`, `app.kubernetes.io/component=platform-egress` |
@@ -38,8 +39,12 @@ updated: 2026-09-05
 Consumer задаёт
 `HTTPS_PROXY=http://egress-gateway.kodex-system.svc.cluster.local:8080`.
 STT использует только порт `8081`; CNI не допускает этот workload к `8080`.
-Все три listener делят один глобальный connection budget и закрываются до общего
-bounded join. CONNECT проверяет readiness до ответа и до внешнего dial.
+Все четыре listener делят один глобальный connection budget. При rollout новые
+CONNECT и незавершённые рукопожатия закрываются сразу; установленные туннели
+получают общий bounded shutdown budget для завершения эффекта, затем
+принудительно закрываются. Listener ожидаются параллельно, поэтому один
+долгий туннель не лишает остальные времени завершения. CONNECT проверяет
+readiness до ответа и до внешнего dial.
 Заголовки `X-Kodex-Egress-Revision`, `X-Kodex-Egress-Digest`,
 `X-Kodex-Egress-Profile`, а для STT также `X-Kodex-Egress-Workload` и
 `X-Kodex-Egress-Operation` подтверждают реально обслуживаемый snapshot на
@@ -148,7 +153,7 @@ Wildcard, suffix/pattern, IP literal, uppercase/trailing-dot alias и любой
 | Policy | `UNLOADED -> VALIDATING -> ACTIVE`; ошибка -> `INVALID` | `INVALID` никогда не обслуживает CONNECT; замена только rollout |
 | DNS cache | `MISS -> RESOLVING -> VALIDATED(until expiry) | REJECTED` | Stale и unsafe fallback отсутствуют |
 | Connection | `ACCEPTED -> CONNECT_VALIDATED -> CLIENTHELLO_PENDING -> SNI_VALIDATED -> DNS_VALIDATED -> LITERAL_DIALED -> TUNNELING -> CLOSED` | Любой reject до `LITERAL_DIALED` гарантирует zero external connection |
-| Shutdown | `READY -> DRAINING -> STOPPED` | Stop accept, cancel tunnels до `20s`, join worker `5s`, technical cleanup `5s`; Pod grace `45s` оставляет `15s` margin |
+| Shutdown | `READY -> DRAINING -> STOPPED` | Stop accept и незавершённых рукопожатий сразу; установленные туннели завершаются в пределах `20s`, затем принудительно закрываются; join worker `5s`, technical cleanup `5s`; Pod grace `45s` оставляет `15s` margin |
 | Rollback | Выбор ранее review-approved environment render, policy object и image digest | Runtime mutation, delete/recreate и изменение существующего immutable ConfigMap отсутствуют |
 
 Gateway не хранит business state, не использует PostgreSQL, idempotency/OCC и

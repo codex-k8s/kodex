@@ -163,6 +163,107 @@ func TestShutdownCancelsPendingClientHelloAndJoins(t *testing.T) {
 	_ = client.Close()
 }
 
+func TestDrainPreservesEstablishedTunnelUntilEffectCompletes(t *testing.T) {
+	resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{
+		Addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}, ExpiresAt: time.Now().Add(time.Minute),
+	}}
+	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
+	server, err := New(context.Background(), "127.0.0.1:0", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
+	if err != nil || server.Listen() != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve() }()
+	client, err := net.Dial("tcp", server.Address().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if _, err := io.WriteString(client, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	response := make([]byte, len(connectEstablished))
+	if _, err := io.ReadFull(client, response); err != nil || string(response) != connectEstablished {
+		t.Fatalf("unexpected CONNECT response: %q, %v", response, err)
+	}
+	hello := gatewayClientHello("api.openai.com")
+	if _, err := client.Write(hello); err != nil {
+		t.Fatal(err)
+	}
+	upstream := <-dialer.peers
+	defer upstream.Close()
+	forwarded := make([]byte, len(hello))
+	if _, err := io.ReadFull(upstream, forwarded); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		server.mu.Lock()
+		established := false
+		for _, value := range server.active {
+			established = established || value
+		}
+		server.mu.Unlock()
+		if established {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("CONNECT tunnel did not become established")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	server.Drain()
+	if err := <-serveDone; err != nil {
+		t.Fatal(err)
+	}
+	_ = client.SetDeadline(time.Now().Add(time.Second))
+	_ = upstream.SetDeadline(time.Now().Add(time.Second))
+	if _, err := client.Write([]byte("effect")); err != nil {
+		t.Fatalf("drain closed an established effect: %v", err)
+	}
+	payload := make([]byte, len("effect"))
+	if _, err := io.ReadFull(upstream, payload); err != nil || string(payload) != "effect" {
+		t.Fatalf("effect was interrupted during drain: %q, %v", payload, err)
+	}
+	_ = client.Close()
+	_ = upstream.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestShutdownDeadlineForcesEstablishedTunnelClosed(t *testing.T) {
+	server, err := New(context.Background(), "unused", fakePolicy{}, &fakeResolver{}, &fakeDialer{}, readyStub(true), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned, peer := net.Pipe()
+	defer peer.Close()
+	if !server.acquire(owned) || !server.markEstablished(owned) {
+		t.Fatal("test tunnel was not established")
+	}
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		defer server.wait.Done()
+		defer server.release(owned)
+		buffer := make([]byte, 1)
+		_, _ = owned.Read(buffer)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := server.Shutdown(ctx); err == nil {
+		t.Fatal("stuck tunnel exceeded shutdown budget without an error")
+	}
+	select {
+	case <-joined:
+	case <-time.After(time.Second):
+		t.Fatal("forced tunnel close did not join")
+	}
+}
+
 func TestCompatibilityReadinessUsesEffectiveStateAndNeverDials(t *testing.T) {
 	for _, test := range []struct {
 		ready    bool

@@ -159,7 +159,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		if responseErr != nil {
 			cancel()
 			if mutation {
-				return nil, &UnknownOutcomeError{}
+				return nil, &UnknownOutcomeError{stage: "transport"}
 			}
 			if attempt < attempts && waitProviderRetry(ctx, call.Capability, attempt, "") {
 				continue
@@ -171,7 +171,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		cancel()
 		if readErr != nil {
 			if mutation && response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
-				return nil, &UnknownOutcomeError{}
+				return nil, &UnknownOutcomeError{stage: "response_body"}
 			}
 			return nil, readErr
 		}
@@ -179,7 +179,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			return &providerResponse{Body: responseBody, Header: response.Header.Clone(), StatusCode: response.StatusCode}, nil
 		}
 		if mutation && response.StatusCode >= http.StatusInternalServerError {
-			return nil, &UnknownOutcomeError{}
+			return nil, &UnknownOutcomeError{stage: "provider_status"}
 		}
 		if attempt < attempts && retryableProviderStatus(response.StatusCode) &&
 			waitProviderRetry(ctx, call.Capability, attempt, response.Header.Get("Retry-After")) {

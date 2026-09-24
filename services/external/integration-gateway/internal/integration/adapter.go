@@ -74,9 +74,24 @@ type SafeError struct {
 
 func (err *SafeError) Error() string { return err.Code }
 
-type UnknownOutcomeError struct{}
+type UnknownOutcomeError struct{ stage string }
 
 func (*UnknownOutcomeError) Error() string { return "INTEGRATION_OUTCOME_UNKNOWN" }
+
+// UnknownOutcomeStage возвращает только закрытый диагностический класс без URL,
+// входных данных или учётных данных. Он не меняет внешний код UNKNOWN_OUTCOME.
+func UnknownOutcomeStage(err error) string {
+	var unknown *UnknownOutcomeError
+	if !errors.As(err, &unknown) {
+		return "not_unknown"
+	}
+	switch unknown.stage {
+	case "transport", "response_body", "provider_status", "response_validation", "receipt_validation":
+		return unknown.stage
+	default:
+		return "unclassified"
+	}
+}
 
 func IsUnknownOutcome(err error) bool {
 	var unknown *UnknownOutcomeError
@@ -329,14 +344,14 @@ func validateExecutionResult(capability integrationpackage.Capability, request R
 		var safe *SafeError
 		if capability.Risk != "READ" && errors.As(err, &safe) &&
 			(safe.Code == "INTEGRATION_UNAVAILABLE" || safe.Code == "INTEGRATION_RESPONSE_INVALID") {
-			return Result{}, &UnknownOutcomeError{}
+			return Result{}, &UnknownOutcomeError{stage: "response_validation"}
 		}
 		return Result{}, err
 	}
 	canonicalOutput, err := capability.ValidateOutput([]byte(result.Summary))
 	if err != nil {
 		if capability.Risk != "READ" {
-			return Result{}, &UnknownOutcomeError{}
+			return Result{}, &UnknownOutcomeError{stage: "response_validation"}
 		}
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
@@ -347,7 +362,7 @@ func validateExecutionResult(capability integrationpackage.Capability, request R
 		result.Receipt.InputDigest != request.InputDigest || result.Receipt.ProviderEffectRef == "" ||
 		len(result.Receipt.ResponseDigest) != sha256.Size*2 || result.Summary == "" || len(result.Summary) > maximumResponseBytes {
 		if capability.Risk != "READ" {
-			return Result{}, &UnknownOutcomeError{}
+			return Result{}, &UnknownOutcomeError{stage: "receipt_validation"}
 		}
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}

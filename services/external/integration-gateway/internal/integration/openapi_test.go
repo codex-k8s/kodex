@@ -132,7 +132,7 @@ func TestOpenAPIWriteDoesNotRetryUnknownOutcome(t *testing.T) {
 	})}
 	_, err := adapter.executeOpenAPI(t.Context(), request, capability,
 		map[string]string{"base_url": "https://api.example.test"}, []byte(`{"path":{"id":3}}`))
-	if !IsUnknownOutcome(err) || requests != 1 {
+	if !IsUnknownOutcome(err) || UnknownOutcomeStage(err) != "transport" || requests != 1 {
 		t.Fatalf("ambiguous write was retried: err=%v requests=%d", err, requests)
 	}
 }

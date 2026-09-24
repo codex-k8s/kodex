@@ -209,6 +209,17 @@ func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 	if success || code != "INTEGRATION_UNAVAILABLE" {
 		t.Fatalf("Outcome() = %v, %q", success, code)
 	}
+	for _, stage := range []string{"transport", "response_body", "provider_status", "response_validation", "receipt_validation"} {
+		err := &UnknownOutcomeError{stage: stage}
+		success, code = Outcome(err)
+		if success || code != "INTEGRATION_OUTCOME_UNKNOWN" || UnknownOutcomeStage(err) != stage {
+			t.Fatal("unknown outcome lost the closed diagnostic stage")
+		}
+	}
+	if UnknownOutcomeStage(&UnknownOutcomeError{stage: "raw provider response"}) != "unclassified" ||
+		UnknownOutcomeStage(errors.New("raw provider response")) != "not_unknown" {
+		t.Fatal("untrusted diagnostic stage escaped into logs")
+	}
 }
 
 func TestEmailTypedMailboxAndEffect(t *testing.T) {
