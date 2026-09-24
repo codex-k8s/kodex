@@ -59,7 +59,12 @@ air_is_usable() {
 }
 air_is_usable || fail 'Air executable is unavailable'
 
-runtime_root="/tmp/kodex-dev-$name"
+# /tmp может быть отдельным небольшим scratch tmpfs сервиса. Исполняемый
+# Air binary хранится только в выделенном writable build cache этого workload.
+runtime_root="/go/build-cache/runtime-$name"
+mkdir -p -- "$runtime_root" || fail 'cannot create writable Air runtime path'
+test -w "$runtime_root" || fail 'Air runtime path is not writable'
+chmod 0700 -- "$runtime_root" || fail 'cannot secure Air runtime path'
 config="$runtime_root/air.toml"
 kill_delay=$(sh "$repository_root/tools/dev/go-shutdown-budget.sh" "$name")
 entrypoint="\"$runtime_root/build/main\""
@@ -98,4 +103,5 @@ clean_on_exit = true
 EOF
 
 cd "$repository_root"
+umask 0077
 exec "$air_binary" -c "$config"

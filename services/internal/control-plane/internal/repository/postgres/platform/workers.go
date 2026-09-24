@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/emailpolicy"
@@ -1110,6 +1111,11 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	capability, capabilityExists := definition.Capability(input["capability_key"])
 	if packageErr != nil || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
 		capability.Risk != risk || capability.ApprovalPolicy != approvalPolicy || capability.ResourceScope.Kind != resourceKind {
+		return nil, errs.ErrForbidden
+	}
+	// До появления owner-owned scoped approval lifecycle новый режим не может
+	// перейти в READY только потому, что это не HUMAN_EACH_EFFECT.
+	if approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
 		return nil, errs.ErrForbidden
 	}
 	canonicalInput, err := capability.ValidateInput(encodedInput)

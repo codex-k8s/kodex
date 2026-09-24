@@ -42,8 +42,8 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 8 {
-		t.Fatalf("LoadShipped() returned %d definitions; want 8", len(definitions))
+	if len(definitions) != 9 {
+		t.Fatalf("LoadShipped() returned %d definitions; want 9", len(definitions))
 	}
 	github := definitions["github"]
 	if github.Digest == "" || github.Metadata.Version != "2.3.0" || github.Spec.Credential.SecretKey != "token" {
@@ -58,7 +58,7 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if write.Risk != "WRITE" || write.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
 		t.Fatalf("synthetic write policy = %s/%s", write.Risk, write.ApprovalPolicy)
 	}
-	for _, key := range []string{"gitlab", "jira", "confluence", "email", "https-json", "mattermost", "synthetic"} {
+	for _, key := range []string{"gitlab", "jira", "confluence", "email", "https-json", "mattermost", "synthetic", "openapi-mcp"} {
 		definition := definitions[key]
 		if definition.Digest == "" || definition.Spec.HealthCheck.Operation == "" || len(definition.Spec.NetworkDestinations) == 0 {
 			t.Fatalf("definition %q does not have an executable boundary: %#v", key, definition.Spec)
@@ -66,6 +66,12 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	}
 	for key, definition := range definitions {
 		executable := definition.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP)
+		if key == "openapi-mcp" {
+			if executable || definition.Spec.Readiness != string(ReadinessNotReady) {
+				t.Fatalf("unfinished OpenAPI adapter became executable: %#v", definition.Spec)
+			}
+			continue
+		}
 		if key == "mattermost" {
 			if executable || definition.Spec.AdapterOwner != string(OwnerInteractionGateway) ||
 				definition.Spec.ExecutionRoute != string(RouteInteraction) || !definition.ExecutableBy(OwnerInteractionGateway, RouteInteraction) {

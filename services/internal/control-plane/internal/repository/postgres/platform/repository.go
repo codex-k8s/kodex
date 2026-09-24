@@ -27,6 +27,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -380,6 +381,10 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 			definition.Metadata.Origin, definition.Digest, definition.Spec.Adapter, credentialKey,
 			definition.Spec.AdapterOwner, definition.Spec.ExecutionRoute, definition.Spec.Readiness,
 		); err != nil {
+			var databaseError *pgconn.PgError
+			if errors.As(err, &databaseError) {
+				return fmt.Errorf("reconcile integration definition: sqlstate=%s constraint=%s", databaseError.Code, databaseError.ConstraintName)
+			}
 			return errors.New("reconcile integration definition")
 		}
 		keys = append(keys, definition.Metadata.Key)

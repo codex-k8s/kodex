@@ -290,6 +290,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		result, err = adapter.executeEmail(ctx, request, capability, configuration, canonicalInput)
 	case "HTTPS_JSON_READ":
 		result, err = adapter.executeHTTPSJSONRead(ctx, request, capability, configuration)
+	case "OPENAPI_MCP":
+		result, err = adapter.executeOpenAPI(ctx, request, capability, configuration, canonicalInput)
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}

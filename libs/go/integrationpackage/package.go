@@ -113,6 +113,19 @@ type Capability struct {
 	InputFields    []Field       `yaml:"inputFields" json:"inputFields"`
 	OutputFields   []Field       `yaml:"outputFields" json:"outputFields"`
 	Execution      Execution     `yaml:"execution" json:"execution"`
+	OpenAPI        *OpenAPIHTTP  `yaml:"openapi,omitempty" json:"openapi,omitempty"`
+}
+
+// OpenAPIHTTP является закреплённым результатом import/admission, а не
+// разрешением принимать URL, method или credential из вызова модели.
+type OpenAPIHTTP struct {
+	OperationID       string         `yaml:"operationId" json:"operationId"`
+	Method            string         `yaml:"method" json:"method"`
+	Path              string         `yaml:"path" json:"path"`
+	AuthScheme        string         `yaml:"authScheme" json:"authScheme"`
+	AuthHeader        string         `yaml:"authHeader,omitempty" json:"authHeader,omitempty"`
+	IdempotencyHeader string         `yaml:"idempotencyHeader,omitempty" json:"idempotencyHeader,omitempty"`
+	InputSchema       map[string]any `yaml:"inputSchema" json:"inputSchema"`
 }
 
 type Execution struct {
@@ -238,6 +251,13 @@ func (capability Capability) ResourceScopeValues(configuration map[string]string
 
 // ValidateInput принимает только одно JSON object с закрытым набором primitive fields.
 func (capability Capability) ValidateInput(raw []byte) ([]byte, error) {
+	if capability.OpenAPI != nil {
+		_, compiled, err := validateOpenAPIInputSchema(capability.OpenAPI.InputSchema)
+		if err != nil {
+			return nil, err
+		}
+		return validateOpenAPIInput(raw, compiled)
+	}
 	return validateObject(raw, capability.InputFields, "input")
 }
 
@@ -248,6 +268,10 @@ func (capability Capability) ValidateOutput(raw []byte) ([]byte, error) {
 
 // InputSchema возвращает закрытую JSON Schema, связанную с package digest.
 func (capability Capability) InputSchema() ([]byte, error) {
+	if capability.OpenAPI != nil {
+		encoded, _, err := validateOpenAPIInputSchema(capability.OpenAPI.InputSchema)
+		return encoded, err
+	}
 	properties := make(map[string]any, len(capability.InputFields))
 	required := make([]string, 0, len(capability.InputFields))
 	for _, field := range capability.InputFields {
@@ -535,6 +559,7 @@ func validate(result *Package) error {
 	}
 	capabilityKeys := map[string]struct{}{}
 	capabilityOperations := map[string]Capability{}
+	openAPIOperationIDs := map[string]struct{}{}
 	for _, capability := range result.Spec.Capabilities {
 		if !validKey(capability.Key) || len(capability.Name) == 0 || len(capability.Name) > 120 ||
 			len(capability.Description) == 0 || len(capability.Description) > 500 || !validKey(capability.Operation) ||
@@ -571,6 +596,18 @@ func validate(result *Package) error {
 		if _, err := validateFields(capability.OutputFields); err != nil {
 			return err
 		}
+		if result.Spec.Adapter == string(AdapterOpenAPIMCP) {
+			if err := validateOpenAPICapability(result, capability); err != nil {
+				return err
+			}
+			if _, duplicate := openAPIOperationIDs[capability.OpenAPI.OperationID]; duplicate {
+				return errors.New("OpenAPI operationId is duplicated")
+			}
+			openAPIOperationIDs[capability.OpenAPI.OperationID] = struct{}{}
+		} else if capability.OpenAPI != nil || capability.Execution.Idempotency == string(IdempotencyOneAttempt) ||
+			capability.ApprovalPolicy == string(ApprovalHumanScoped) {
+			return errors.New("integration capability exceeds adapter contract")
+		}
 		if _, exists := capabilityOperations[capability.Operation]; exists {
 			return errors.New("integration package operation is duplicated")
 		}
@@ -580,6 +617,12 @@ func validate(result *Package) error {
 	if !exists || healthCapability.Risk != "READ" || result.Spec.HealthCheck.TimeoutSeconds < 1 ||
 		result.Spec.HealthCheck.TimeoutSeconds > 60 || result.Spec.HealthCheck.MaxAttempts < 1 || result.Spec.HealthCheck.MaxAttempts > 3 {
 		return errors.New("integration package health check is invalid")
+	}
+	if result.Spec.Adapter == string(AdapterOpenAPIMCP) {
+		_, healthInputError := healthCapability.ValidateInput([]byte("{}"))
+		if healthCapability.ApprovalPolicy != string(ApprovalNone) || healthInputError != nil {
+			return errors.New("OpenAPI health operation must be a safe parameterless read")
+		}
 	}
 	return nil
 }

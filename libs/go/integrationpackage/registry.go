@@ -23,6 +23,7 @@ const (
 	AdapterConfluence    AdapterKey = "CONFLUENCE"
 	AdapterEmailHTTPS    AdapterKey = "EMAIL_HTTPS"
 	AdapterHTTPSJSONRead AdapterKey = "HTTPS_JSON_READ"
+	AdapterOpenAPIMCP    AdapterKey = "OPENAPI_MCP"
 	AdapterMattermost    AdapterKey = "MATTERMOST_INTERACTION"
 
 	OwnerIntegrationGateway AdapterOwner = "integration-gateway"
@@ -45,10 +46,12 @@ const (
 
 	ApprovalNone            ApprovalPolicy = "NONE"
 	ApprovalHumanEachEffect ApprovalPolicy = "HUMAN_EACH_EFFECT"
+	ApprovalHumanScoped     ApprovalPolicy = "HUMAN_SCOPED"
 
 	IdempotencyReadOnly       IdempotencyMode = "READ_ONLY"
 	IdempotencyEffectKey      IdempotencyMode = "EFFECT_KEY"
 	IdempotencyProviderNative IdempotencyMode = "PROVIDER_NATIVE"
+	IdempotencyOneAttempt     IdempotencyMode = "ONE_ATTEMPT"
 )
 
 type AdapterDescriptor struct {
@@ -65,7 +68,10 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterConfluence:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterEmailHTTPS:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterHTTPSJSONRead: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
-	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
+	// До появления исполняемого gateway path синтаксис можно валидировать,
+	// но публикация и выдача tools остаются закрытыми.
+	AdapterOpenAPIMCP: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessNotReady},
+	AdapterMattermost: {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
 }
 
 func Adapter(key string) (AdapterDescriptor, bool) {
@@ -122,9 +128,10 @@ func validRisk(value string) bool {
 	return value == string(RiskRead) || value == string(RiskWrite) || value == string(RiskSensitive) || value == string(RiskDestructive)
 }
 func validApprovalPolicy(value string) bool {
-	return value == string(ApprovalNone) || value == string(ApprovalHumanEachEffect)
+	return value == string(ApprovalNone) || value == string(ApprovalHumanEachEffect) || value == string(ApprovalHumanScoped)
 }
 func validResourceKind(value string) bool { _, ok := resourceKinds[ResourceKind(value)]; return ok }
 func validIdempotency(value string) bool {
-	return value == string(IdempotencyReadOnly) || value == string(IdempotencyEffectKey) || value == string(IdempotencyProviderNative)
+	return value == string(IdempotencyReadOnly) || value == string(IdempotencyEffectKey) ||
+		value == string(IdempotencyProviderNative) || value == string(IdempotencyOneAttempt)
 }

@@ -17,13 +17,13 @@ import (
 )
 
 type providerCall struct {
-	BaseURL, Method, Path, AuthScheme, Username, EffectKey string
-	Query                                                  url.Values
-	Body                                                   any
-	Credential                                             *CredentialRevision
-	Capability                                             integrationpackage.Capability
-	MultipartBody                                          []byte
-	MultipartType                                          string
+	BaseURL, Method, Path, AuthScheme, AuthHeader, Username, EffectKey, IdempotencyHeader string
+	Query                                                                                 url.Values
+	Body                                                                                  any
+	Credential                                                                            *CredentialRevision
+	Capability                                                                            integrationpackage.Capability
+	MultipartBody                                                                         []byte
+	MultipartType                                                                         string
 }
 
 func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]byte, error) {
@@ -35,8 +35,9 @@ func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]
 }
 
 type providerResponse struct {
-	Body   []byte
-	Header http.Header
+	Body       []byte
+	Header     http.Header
+	StatusCode int
 }
 
 func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerCall) (*providerResponse, error) {
@@ -44,9 +45,21 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 	if err != nil || call.Path == "" || !strings.HasPrefix(call.Path, "/") || strings.HasPrefix(call.Path, "//") {
 		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	credential, err := adapter.readCredential(ctx, call.Credential)
-	if err != nil {
-		return nil, err
+	if binding := call.Capability.OpenAPI; binding != nil &&
+		(call.AuthScheme != binding.AuthScheme || call.AuthHeader != binding.AuthHeader ||
+			call.IdempotencyHeader != binding.IdempotencyHeader) {
+		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+	}
+	var credential []byte
+	if call.AuthScheme == "NONE" {
+		if call.Capability.OpenAPI == nil || call.Credential != nil {
+			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+		}
+	} else {
+		credential, err = adapter.readCredential(ctx, call.Credential)
+		if err != nil {
+			return nil, err
+		}
 	}
 	defer clear(credential)
 
@@ -101,8 +114,16 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			request.Header.Set("X-Atlassian-Token", "nocheck")
 		}
 		switch call.AuthScheme {
+		case "NONE":
+			// Отсутствие credential явно закреплено package binding.
 		case "BEARER":
 			request.Header.Set("Authorization", "Bearer "+string(credential))
+		case "API_KEY_HEADER":
+			if call.Capability.OpenAPI == nil || !integrationpackage.ValidOpenAPIOutboundHeader(call.AuthHeader) {
+				cancel()
+				return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			}
+			request.Header.Set(call.AuthHeader, string(credential))
 		case "BASIC":
 			if call.Username == "" {
 				cancel()
@@ -114,7 +135,11 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 		}
 		if call.EffectKey != "" {
-			request.Header.Set("Idempotency-Key", call.EffectKey)
+			if call.Capability.OpenAPI == nil {
+				request.Header.Set("Idempotency-Key", call.EffectKey)
+			} else if call.IdempotencyHeader != "" {
+				request.Header.Set(call.IdempotencyHeader, call.EffectKey)
+			}
 		}
 		// Запрещаем неявный повтор Transport даже при provider-native effect key.
 		if mutation {
@@ -146,7 +171,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			return nil, readErr
 		}
 		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
-			return &providerResponse{Body: responseBody, Header: response.Header.Clone()}, nil
+			return &providerResponse{Body: responseBody, Header: response.Header.Clone(), StatusCode: response.StatusCode}, nil
 		}
 		if mutation && response.StatusCode >= http.StatusInternalServerError {
 			return nil, &UnknownOutcomeError{}
