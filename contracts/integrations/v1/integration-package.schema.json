@@ -248,6 +248,8 @@
           "required": ["operationId", "method", "path", "authScheme", "inputSchema"],
           "properties": {
             "operationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "sourceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "serverOrigin": { "type": "string", "format": "uri", "maxLength": 2048 },
             "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
             "path": { "type": "string", "minLength": 1, "maxLength": 512 },
             "authScheme": { "enum": ["NONE", "BEARER", "API_KEY_HEADER"] },

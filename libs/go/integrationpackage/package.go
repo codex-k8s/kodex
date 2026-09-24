@@ -120,6 +120,8 @@ type Capability struct {
 // разрешением принимать URL, method или credential из вызова модели.
 type OpenAPIHTTP struct {
 	OperationID       string         `yaml:"operationId" json:"operationId"`
+	SourceDigest      string         `yaml:"sourceDigest,omitempty" json:"sourceDigest,omitempty"`
+	ServerOrigin      string         `yaml:"serverOrigin,omitempty" json:"serverOrigin,omitempty"`
 	Method            string         `yaml:"method" json:"method"`
 	Path              string         `yaml:"path" json:"path"`
 	AuthScheme        string         `yaml:"authScheme" json:"authScheme"`
@@ -231,6 +233,13 @@ func (definition Package) ValidateConfiguration(configuration map[string]string)
 	for _, field := range definition.Spec.ConfigurationFields {
 		if _, exists := configuration[field.Key]; field.Required && !exists {
 			return errors.New("integration configuration required field is missing")
+		}
+	}
+	if definition.Spec.Adapter == string(AdapterOpenAPIMCP) && definition.Spec.Readiness == "READY" {
+		for _, capability := range definition.Spec.Capabilities {
+			if capability.OpenAPI == nil || capability.OpenAPI.ServerOrigin != configuration["base_url"] {
+				return errors.New("OpenAPI server origin does not match connection")
+			}
 		}
 	}
 	return nil

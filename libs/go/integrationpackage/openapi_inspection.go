@@ -35,7 +35,7 @@ type OpenAPIInspection struct {
 }
 
 type OpenAPIOperation struct {
-	ID, Method, Path, Summary string
+	ID, Method, Path, Summary, ServerOrigin string
 	// Candidate означает только, что operation можно передать на следующий
 	// admission; это не publication, grant или право на HTTP-вызов.
 	Candidate bool
@@ -89,7 +89,10 @@ func InspectOpenAPI(ctx context.Context, raw []byte) (OpenAPIInspection, error) 
 				return OpenAPIInspection{}, errors.New("OpenAPI operation limit exceeded")
 			}
 			entry := OpenAPIOperation{ID: operation.OperationID, Method: strings.ToUpper(method), Path: path, Summary: operation.Summary, Candidate: true}
+			entry.ServerOrigin, entry.Reason = openAPIOperationServerOrigin(document.Servers, item.Servers, operation.Servers)
 			switch {
+			case entry.Reason != "":
+				entry.Candidate = false
 			case operation.OperationID == "":
 				entry.Candidate, entry.Reason = false, "OPERATION_ID_REQUIRED"
 			case !openAPIOperationID.MatchString(operation.OperationID):
@@ -120,9 +123,41 @@ func InspectOpenAPI(ctx context.Context, raw []byte) (OpenAPIInspection, error) 
 		Version: document.Info.Version, Operations: operations}, nil
 }
 
+func openAPIOperationServerOrigin(documentServers, pathServers openapi3.Servers, operationServers *openapi3.Servers) (string, string) {
+	servers := documentServers
+	if len(pathServers) != 0 {
+		servers = pathServers
+	}
+	if operationServers != nil {
+		servers = *operationServers
+	}
+	if len(servers) != 1 || servers[0] == nil || len(servers[0].Variables) != 0 ||
+		validateStringValue(Field{Type: "STRING", Format: "HTTPS_ORIGIN", MaximumLength: 2048}, servers[0].URL, false) != nil {
+		return "", "SERVER_ORIGIN_UNSUPPORTED"
+	}
+	return servers[0].URL, ""
+}
+
 func unsupportedOpenAPIOperation(path *openapi3.PathItem, operation *openapi3.Operation, method string) string {
 	if len(operation.Callbacks) != 0 {
 		return "CALLBACKS_UNSUPPORTED"
+	}
+	if operation.Responses == nil {
+		return "RESPONSES_UNSUPPORTED"
+	}
+	successResponse := false
+	for status, response := range operation.Responses.Map() {
+		if len(status) != 3 || status[0] != '2' || status[1] < '0' || status[1] > '9' || status[2] < '0' || status[2] > '9' {
+			continue
+		}
+		successResponse = true
+		if response == nil || response.Value == nil || len(response.Value.Content) > 1 ||
+			len(response.Value.Content) == 1 && response.Value.Content["application/json"] == nil {
+			return "RESPONSE_MEDIA_UNSUPPORTED"
+		}
+	}
+	if !successResponse {
+		return "RESPONSES_UNSUPPORTED"
 	}
 	if operation.RequestBody != nil {
 		if method == http.MethodGet || operation.RequestBody.Value == nil ||

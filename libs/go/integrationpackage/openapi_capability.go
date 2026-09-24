@@ -14,6 +14,11 @@ func validateOpenAPICapability(definition *Package, capability Capability) error
 	binding := capability.OpenAPI
 	if binding == nil || len(capability.InputFields) != 0 || capability.ResourceScope.Kind != "HTTPS_RESOURCE" ||
 		len(capability.ResourceScope.ConnectionFields) != 1 || capability.ResourceScope.ConnectionFields[0] != "base_url" ||
+		definition.Metadata.Origin != Origin && definition.Spec.Readiness == "READY" && !validOpenAPISourceDigest(binding.SourceDigest) ||
+		binding.SourceDigest != "" && !validOpenAPISourceDigest(binding.SourceDigest) ||
+		definition.Metadata.Origin != Origin && definition.Spec.Readiness == "READY" && binding.ServerOrigin == "" ||
+		binding.ServerOrigin != "" && validateStringValue(Field{Type: "STRING", Format: "HTTPS_ORIGIN", MaximumLength: 2048}, binding.ServerOrigin, false) != nil ||
+		definition.Metadata.Origin == Origin && binding.SourceDigest != "" ||
 		!openAPIOperationID.MatchString(binding.OperationID) || !supportedOpenAPIMethod(binding.Method) ||
 		!validOpenAPIPathTemplate(binding.Path) || !strings.HasPrefix(capability.Operation, "openapi.") ||
 		len(binding.InputSchema) == 0 {
@@ -77,6 +82,18 @@ func validateOpenAPICapability(definition *Package, capability Capability) error
 		return errors.New("OpenAPI network binding is invalid")
 	}
 	return nil
+}
+
+func validOpenAPISourceDigest(digest string) bool {
+	if len(digest) != 64 {
+		return false
+	}
+	for _, character := range digest {
+		if character < '0' || character > '9' && character < 'a' || character > 'f' {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidOpenAPIOutboundHeader исключает заголовки, влияющие на routing,

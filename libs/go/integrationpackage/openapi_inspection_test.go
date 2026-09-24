@@ -9,6 +9,8 @@ const openAPIFixture = `openapi: 3.1.0
 info:
   title: Заявки
   version: 1.0.0
+servers:
+  - url: https://api.example.test
 paths:
   /v1/applications/{id}:
     parameters:
@@ -47,9 +49,30 @@ func TestInspectOpenAPI(t *testing.T) {
 		t.Fatalf("inspection lost document metadata: %#v", result)
 	}
 	for _, operation := range result.Operations {
-		if !operation.Candidate || operation.Path != "/v1/applications/{id}" {
+		if !operation.Candidate || operation.Path != "/v1/applications/{id}" || operation.ServerOrigin != "https://api.example.test" {
 			t.Fatalf("bounded operation rejected: %#v", operation)
 		}
+	}
+}
+
+func TestInspectOpenAPIRejectsUnpinnedOrUnsafeServer(t *testing.T) {
+	for name, raw := range map[string]string{
+		"missing":  strings.Replace(openAPIFixture, "servers:\n  - url: https://api.example.test\n", "", 1),
+		"http":     strings.Replace(openAPIFixture, "https://api.example.test", "http://api.example.test", 1),
+		"variable": strings.Replace(openAPIFixture, "https://api.example.test", "https://{host}.example.test", 1),
+		"path":     strings.Replace(openAPIFixture, "https://api.example.test", "https://api.example.test/v1", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := InspectOpenAPI(t.Context(), []byte(raw))
+			if err != nil {
+				return
+			}
+			for _, operation := range result.Operations {
+				if operation.Candidate || operation.Reason != "SERVER_ORIGIN_UNSUPPORTED" {
+					t.Fatalf("unsafe server is importable: %#v", operation)
+				}
+			}
+		})
 	}
 }
 
@@ -98,6 +121,20 @@ func TestInspectOpenAPIMarksUnsupportedMethod(t *testing.T) {
 	for _, operation := range result.Operations {
 		if operation.ID == "updateApplication" && (operation.Candidate || operation.Reason != "HTTP_METHOD_UNSUPPORTED") {
 			t.Fatalf("unsupported operation hidden or enabled: %#v", operation)
+		}
+	}
+}
+
+func TestInspectOpenAPIMarksNonJSONSuccessResponseUnsupported(t *testing.T) {
+	raw := strings.Replace(openAPIFixture, "'200': {description: OK}",
+		"'200': {description: OK, content: {text/plain: {schema: {type: string}}}}", 1)
+	result, err := InspectOpenAPI(t.Context(), []byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range result.Operations {
+		if operation.ID == "getApplication" && (operation.Candidate || operation.Reason != "RESPONSE_MEDIA_UNSUPPORTED") {
+			t.Fatalf("non-JSON response became callable: %#v", operation)
 		}
 	}
 }

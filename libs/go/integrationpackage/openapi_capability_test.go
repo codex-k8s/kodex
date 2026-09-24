@@ -2,6 +2,7 @@ package integrationpackage
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -95,6 +96,40 @@ func TestOpenAPIPackageRejectsUnsafeWriteBinding(t *testing.T) {
 				t.Fatal("unsafe OpenAPI binding accepted")
 			}
 		})
+	}
+}
+
+func TestOpenAPIReadyRevisionPinsSourceAndServer(t *testing.T) {
+	candidate := openAPIPackageFixture(t)
+	candidate.Spec.Readiness = "READY"
+	for index := range candidate.Spec.Capabilities {
+		candidate.Spec.Capabilities[index].OpenAPI.SourceDigest = strings.Repeat("a", 64)
+		candidate.Spec.Capabilities[index].OpenAPI.ServerOrigin = "https://api.example.test"
+	}
+	for _, capability := range candidate.Spec.Capabilities {
+		if err := validateOpenAPICapability(&candidate, capability); err != nil {
+			t.Fatalf("pinned OpenAPI capability rejected: %v", err)
+		}
+	}
+	if candidate.ValidateConfiguration(map[string]string{"base_url": "https://api.example.test"}) != nil {
+		t.Fatal("matching OpenAPI origin rejected")
+	}
+	if candidate.ValidateConfiguration(map[string]string{"base_url": "https://other.example.test"}) == nil {
+		t.Fatal("different OpenAPI origin accepted")
+	}
+	for _, change := range []func(*OpenAPIHTTP){
+		func(binding *OpenAPIHTTP) { binding.SourceDigest = "" },
+		func(binding *OpenAPIHTTP) { binding.ServerOrigin = "" },
+		func(binding *OpenAPIHTTP) { binding.ServerOrigin = "http://api.example.test" },
+	} {
+		changed := candidate
+		changed.Spec.Capabilities = append([]Capability(nil), candidate.Spec.Capabilities...)
+		binding := *candidate.Spec.Capabilities[0].OpenAPI
+		change(&binding)
+		changed.Spec.Capabilities[0].OpenAPI = &binding
+		if validateOpenAPICapability(&changed, changed.Spec.Capabilities[0]) == nil {
+			t.Fatal("unbound ready OpenAPI revision accepted")
+		}
 	}
 }
 
