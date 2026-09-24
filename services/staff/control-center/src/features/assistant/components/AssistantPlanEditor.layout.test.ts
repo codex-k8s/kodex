@@ -48,6 +48,20 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("exactRevisionValidated.value");
   });
 
+  it("повторно проверяет дружелюбные формы после обновления плана сервером", () => {
+    expect(source).toContain("draftGeneration.value += 1");
+    expect(source).toContain(
+      ':key="`${draftGeneration}:${operation.value.ref}`"',
+    );
+    expect(source).toContain("runFormValidity.value = {}");
+  });
+
+  it("не закрывает план пока применяется операция", () => {
+    expect(source).toMatch(
+      /assistant\.planEditor\.back'[\s\S]*?:disabled="busy"/,
+    );
+  });
+
   it("показывает тип, действие и authority результата без скрытых изменений", () => {
     expect(source).toContain("{{ operation.value.type }}");
     expect(source).toContain("{{ operation.value.action }}");

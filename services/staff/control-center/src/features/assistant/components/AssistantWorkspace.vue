@@ -394,10 +394,7 @@ function handleAssistantLink(event: MouseEvent): void {
   )
     return;
   const link = event.target.closest("a[href]");
-  if (
-    link?.getAttribute("href") !==
-    "/configurations/INTEGRATION_DEFINITION"
-  )
+  if (link?.getAttribute("href") !== "/configurations/INTEGRATION_DEFINITION")
     return;
   event.preventDefault();
   close();
@@ -422,6 +419,7 @@ function openPlan(plan: AssistantPlan): void {
 }
 
 async function closePlan(): Promise<void> {
+  if (store.busy) return;
   const refresh = ["APPLIED", "REJECTED"].includes(
     currentPlan.value?.state ?? "",
   );
@@ -450,10 +448,16 @@ async function applyPlan(): Promise<void> {
   const plan = currentPlan.value;
   if (!plan) return;
   let receipt: AssistantPlanReceipt | undefined;
-  if (!(await handleStoreMutation(async () => {
-    receipt = await store.apply(plan);
-  })) || receipt?.outcome !== "APPLIED") return;
-  const applied = new Set(receipt.operationReceipts.map((item) => item.operationRef));
+  if (
+    !(await handleStoreMutation(async () => {
+      receipt = await store.apply(plan);
+    })) ||
+    receipt?.outcome !== "APPLIED"
+  )
+    return;
+  const applied = new Set(
+    receipt.operationReceipts.map((item) => item.operationRef),
+  );
   const kinds = new Set<string>();
   for (const operation of plan.operations) {
     if (!applied.has(operation.ref)) continue;
@@ -496,7 +500,9 @@ async function applyPlan(): Promise<void> {
     }
   }
   // Квитанция уже применена; ошибка вторичного чтения не меняет её исход.
-  await Promise.allSettled([...kinds].map((kind) => platform.reloadPlatformKind(kind)));
+  await Promise.allSettled(
+    [...kinds].map((kind) => platform.reloadPlatformKind(kind)),
+  );
 }
 
 async function rejectPlan(): Promise<void> {
@@ -609,6 +615,7 @@ onBeforeUnmount(() => {
       @click="close"
     />
     <aside
+      :key="currentPlan ? 'PLAN' : 'CHAT'"
       id="assistant-workspace"
       ref="panel"
       class="assistant-drawer"

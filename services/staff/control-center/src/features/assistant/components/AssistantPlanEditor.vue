@@ -93,6 +93,7 @@ const capabilityFormTouched = ref(false);
 const integrationGrantValidity = ref<Record<string, boolean>>({});
 const integrationGrantTouched = ref(false);
 const inputProblem = ref("");
+const draftGeneration = ref(0);
 type EditorTarget =
   | { kind: "SUMMARY" }
   | {
@@ -102,6 +103,9 @@ type EditorTarget =
 const editorTarget = ref<EditorTarget>();
 
 function resetDraft(): void {
+  // Дочерние формы сообщают о валидности при монтировании. После обновления
+  // плана их нужно создать заново, даже если ссылки на операции не изменились.
+  draftGeneration.value += 1;
   summary.value = props.plan.auditSummary;
   operations.value = editableOperations(props.plan.operations);
   connectionInputs.value = Object.fromEntries(
@@ -628,6 +632,7 @@ function snapshot(value: string): Record<string, unknown> {
         class="icon-button"
         type="button"
         :aria-label="$t('assistant.planEditor.back')"
+        :disabled="busy"
         @click="emit('close')"
       >
         <ArrowLeft :size="19" aria-hidden="true" />
@@ -725,7 +730,7 @@ function snapshot(value: string): Record<string, unknown> {
       <div class="assistant-plan-operations">
         <article
           v-for="(operation, index) in operations"
-          :key="operation.value.ref"
+          :key="`${draftGeneration}:${operation.value.ref}`"
           class="assistant-plan-operation"
           :class="`assistant-plan-operation--${operationActionLabel(operation.value.action)}`"
         >

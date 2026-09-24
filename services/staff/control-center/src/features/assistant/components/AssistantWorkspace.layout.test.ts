@@ -96,6 +96,11 @@ describe("AssistantWorkspace layout", () => {
     expect(template).toContain('@request-changes="requestPlanChanges"');
   });
 
+  it("разделяет DOM экрана плана и чата и не закрывает занятое применение", () => {
+    expect(template).toContain(":key=\"currentPlan ? 'PLAN' : 'CHAT'\"");
+    expect(source).toContain("if (store.busy) return;");
+  });
+
   it("показывает этапы настройки и только подставляет запрос в composer", () => {
     expect(source).toContain(
       '["agent", "environment", "integration", "launch"]',
