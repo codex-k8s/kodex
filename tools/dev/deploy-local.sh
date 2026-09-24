@@ -1056,6 +1056,16 @@ readback_local_image_supply_chain() {
   [[ "$actual_digest" == "$expected_digest" ]] ||
     fail 'image admission policy ConfigMap readback mismatch'
 
+  expected_digest=$(yq -N -r '
+    select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments") |
+    .data."catalog.json" | from_json | to_json
+  ' "$render" | jq -cS . | sha256sum | awk '{print $1}')
+  actual_digest=$(kubectl -n "$namespace" get configmap/kodex-role-environments -o json |
+    jq -cS '.data["catalog.json"] | fromjson' | sha256sum | awk '{print $1}') ||
+    fail 'role environment catalog is absent'
+  [[ "$actual_digest" == "$expected_digest" ]] ||
+    fail 'role environment catalog readback mismatch'
+
   policy_resource=$(kubectl -n "$namespace" get \
     imageadmissionpolicyparameters/kodex-image-admission-policy -o json) ||
     fail 'ImageAdmissionPolicyParameters is absent'
@@ -1287,6 +1297,11 @@ PY
       # promoted image, поэтому до импорта её ждать нельзя.
       "$script_directory/seed-local-image-supply-chain.sh" --context "$context" \
         --state-directory "$state_directory" --render "$render"
+      # Builder проверяет новый trusted runner digest при старте; сначала
+      # публикуем тот же exact catalog, иначе Deployment уйдёт в restart loop.
+      apply_render role-environment-catalog '
+        select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments")
+      '
       apply_render buildkit-workload '
         select(.kind == "Deployment" and .metadata.name == "kodex-buildkit")
       '
