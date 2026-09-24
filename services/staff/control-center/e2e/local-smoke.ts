@@ -145,11 +145,13 @@ test("локальный OIDC, API и основные экраны доступ
         `System assistant readback failed with ${String(response.status)}`,
       );
     return (await response.json()) as {
+      corePromptRevision: string;
       runtimeState: string;
       warmSessionRef?: string;
       nextActions: string[];
     };
   });
+  expect(assistantReadback.corePromptRevision).toBe("system-assistant-core-v21");
   const providerAccountRequired =
     !assistantReadback.warmSessionRef &&
     !assistantReadback.nextActions.includes("CREATE_CONVERSATION");
@@ -165,7 +167,7 @@ test("локальный OIDC, API и основные экраны доступ
   await assistant.getByRole("button", { name: "Закрыть" }).click();
   await expect(assistant).toHaveCount(0);
 
-  const projectName = "Локальная приёмка первого запуска";
+  const baseProjectName = "Локальная приёмка первого запуска";
   const existingProject = await page.evaluate(async (exactName) => {
     const response = await fetch(
       `/api/v1/projects?query=${encodeURIComponent(exactName)}&pageSize=30`,
@@ -177,10 +179,39 @@ test("локальный OIDC, API и основные экраны доступ
     const body = (await response.json()) as {
       items: Array<{ name: string; ref: string }>;
     };
-    return body.items.find((item) => item.name === exactName);
-  }, projectName);
+    return (
+      body.items.find((item) => item.name === exactName) ??
+      body.items.find((item) => item.name.startsWith(`${exactName} · `))
+    );
+  }, baseProjectName);
+  let projectName = existingProject?.name ?? baseProjectName;
   let projectRef = existingProject?.ref;
   if (!projectRef) {
+    const exactNameInTrash = await page.evaluate(async (exactName) => {
+      let pageToken = "";
+      for (let pageIndex = 0; pageIndex < 10; pageIndex += 1) {
+        const suffix = pageToken
+          ? `&pageToken=${encodeURIComponent(pageToken)}`
+          : "";
+        const response = await fetch(
+          `/api/v1/projects/trash?pageSize=30${suffix}`,
+        );
+        if (!response.ok)
+          throw new Error(
+            `Project trash discovery failed with ${String(response.status)}`,
+          );
+        const body = (await response.json()) as {
+          items: Array<{ name: string }>;
+          nextPageToken?: string;
+        };
+        if (body.items.some((item) => item.name === exactName)) return true;
+        if (!body.nextPageToken) return false;
+        pageToken = body.nextPageToken;
+      }
+      throw new Error("Project trash discovery page budget exhausted");
+    }, baseProjectName);
+    if (exactNameInTrash)
+      projectName = `${baseProjectName} · ${Date.now().toString(36)}`;
     await gotoWithRetry(page, "/projects");
     await page
       .getByRole("button", { name: "Новый Проект", exact: true })
