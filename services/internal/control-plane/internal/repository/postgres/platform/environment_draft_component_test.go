@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -96,6 +97,57 @@ WHERE project.name = 'Role image promotion' AND image.promotion_state = 'PROMOTE
 		t.Fatalf("draft readback: %v", err)
 	}
 	target := published.RuntimeEnvironment
+	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistantTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistantOperation, err := repository.hydrateAssistantEnvironmentOperation(ctx, assistantTx, ownerScope, projectRef,
+		entity.AssistantPlanOperation{Type: "PREPARE_RUNTIME_ENVIRONMENT_REVISION", Key: "draft-assistant-revision",
+			Title: "Revise environment", Summary: "Revise environment", Parameters: map[string]any{
+				"environmentRef": target.Ref, "description": "Assistant revision",
+			}})
+	if err != nil {
+		_ = assistantTx.Rollback(ctx)
+		t.Fatalf("hydrate exact environment revision: %v", err)
+	}
+	matching, err := repository.assistantEnvironmentSnapshotMatches(ctx, assistantTx, ownerScope, projectRef, assistantOperation)
+	if err != nil || !matching || assistantOperation.Target.Ref != target.Ref {
+		_ = assistantTx.Rollback(ctx)
+		t.Fatalf("environment revision snapshot: matching=%v err=%v", matching, err)
+	}
+	if err := assistantTx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assistantOperation, err = normalizeAssistantOperation(assistantOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planned, err := assistantOperationCommand(assistantOperation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planned.Principal = owner
+	planned.Mutation.IdempotencyKey = "draft-assistant-revision-apply"
+	assistantDraft, err := service.Execute(ctx, planned)
+	if err != nil || assistantDraft.RuntimeEnvironmentDraft == nil ||
+		assistantDraft.RuntimeEnvironmentDraft.EnvironmentRef != target.Ref ||
+		assistantDraft.RuntimeEnvironmentDraft.BaseVersionRef != target.CurrentVersion.Ref ||
+		assistantDraft.RuntimeEnvironmentDraft.Specification.Description != "Assistant revision" ||
+		len(assistantDraft.RuntimeEnvironmentDraft.Specification.Values) != len(spec.Values) {
+		t.Fatalf("assistant revision did not preserve the exact base: %#v %v", assistantDraft.RuntimeEnvironmentDraft, err)
+	}
+	unchanged, err := service.GetRuntimeEnvironment(ctx, owner, target.Ref)
+	if err != nil || unchanged.Version != target.Version || unchanged.Description != target.Description {
+		t.Fatalf("assistant revision changed published environment: %#v %v", unchanged, err)
+	}
 	change, err := invoke(command.CreateRuntimeEnvironmentDraft, "draft-target-create", nil, command.RuntimeEnvironmentDraftInput{
 		ProjectRef: projectRef, EnvironmentRef: target.Ref, ExpectedEnvironmentVersion: target.Version, Specification: spec})
 	if err != nil {

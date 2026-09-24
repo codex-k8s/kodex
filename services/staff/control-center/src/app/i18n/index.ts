@@ -2921,6 +2921,8 @@ const ru = {
       UPDATE_INTEGRATION_CONNECTION: "Изменить подключение",
       CREATE_AGENT: "Создать сотрудника",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
+      PREPARE_RUNTIME_ENVIRONMENT_REVISION:
+        "Подготовить новую ревизию окружения",
       CREATE_ROLE_IMAGE_RECIPE: "Создать рецепт образа",
       CREATE_WORKFLOW: "Создать Workflow",
       CHANGE_CAPABILITY: "Изменить возможности",
@@ -3164,6 +3166,12 @@ const ru = {
       environmentSelectedImage: "Выбранный артефакт образа",
       environmentDraftNextSteps:
         "Это только черновик. Для рабочего окружения выберите проверенный образ, дополните параметры и секретные привязки в защищённой форме, затем проверьте и опубликуйте его.",
+      environmentRevisionBoundary:
+        "Изменятся только название, описание и образ. Параметры, инструменты, политика и привязки секретов сохранятся из текущей версии.",
+      environmentRevisionNotReady:
+        "Укажите название и корректную ссылку на образ или оставьте поле образа пустым.",
+      environmentRevisionNextSteps:
+        "После подтверждения будет создан черновик новой ревизии. Откройте его, проверьте влияние на сотрудников и опубликуйте отдельно.",
       roleImageAgent: "Образ для сотрудника",
       roleImageAgentUnavailable: "Сотрудник не найден в доступном каталоге",
       roleImageAgentFixed:
@@ -6264,6 +6272,7 @@ const en = {
       UPDATE_INTEGRATION_CONNECTION: "Update connection",
       CREATE_AGENT: "Create agent",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
+      PREPARE_RUNTIME_ENVIRONMENT_REVISION: "Prepare environment revision",
       CREATE_ROLE_IMAGE_RECIPE: "Create image recipe",
       CREATE_WORKFLOW: "Create Workflow",
       CHANGE_CAPABILITY: "Change capabilities",
@@ -6502,6 +6511,12 @@ const en = {
       environmentSelectedImage: "Selected image artifact",
       environmentDraftNextSteps:
         "This creates only a draft. To make it runnable, select a verified image, complete its settings and secret bindings in the protected form, then validate and publish it.",
+      environmentRevisionBoundary:
+        "Only the name, description, and image change. Values, tools, policy, and secret bindings are preserved from the current version.",
+      environmentRevisionNotReady:
+        "Provide a name and a valid image reference, or leave the image field empty.",
+      environmentRevisionNextSteps:
+        "Confirmation creates a revision draft. Open it, review its impact on employees, and publish separately.",
       roleImageAgent: "Image for employee",
       roleImageAgentUnavailable: "Employee not found in the accessible catalog",
       roleImageAgentFixed:

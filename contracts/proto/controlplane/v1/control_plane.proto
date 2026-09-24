@@ -1475,6 +1475,8 @@ message AssistantPlanOperation {
     TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT = 14;
     // Создать рецепт образа для выбранного сотрудника и поставить первую сборку в очередь.
     TYPE_CREATE_ROLE_IMAGE_RECIPE = 15;
+    // Подготовить черновую ревизию существующей среды по exact version; публикация отдельно.
+    TYPE_PREPARE_RUNTIME_ENVIRONMENT_REVISION = 16;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

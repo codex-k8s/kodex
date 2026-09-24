@@ -300,6 +300,28 @@ func TestWorkflowUpdateSchemaIsExactAndMetadataOnly(t *testing.T) {
 	}
 }
 
+func TestEnvironmentRevisionSchemaIsExactAndMetadataOnly(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "ENVIRONMENT", EntityRef: "renv_12345678",
+			AllowedOperations: []string{"PREPARE_RUNTIME_ENVIRONMENT_REVISION"}}}
+	schemas := assistantPlanOperationSchemas(input)
+	if len(schemas) != 1 {
+		t.Fatalf("unexpected environment revision schemas: %#v", schemas)
+	}
+	properties := schemas[0]["properties"].(map[string]any)
+	if properties["type"].(map[string]any)["const"] != "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
+		properties["action"].(map[string]any)["const"] != "UPDATE" {
+		t.Fatalf("wrong environment revision operation: %#v", properties)
+	}
+	fields := properties["parameters"].(map[string]any)["properties"].(map[string]any)
+	if fields["environmentRef"].(map[string]any)["enum"].([]string)[0] != "renv_12345678" ||
+		fields["secretBindings"] != nil || fields["policy"] != nil || fields["values"] != nil ||
+		fields["projectRef"] != nil {
+		t.Fatalf("environment revision schema exposed protected fields: %#v", fields)
+	}
+}
+
 func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current"}

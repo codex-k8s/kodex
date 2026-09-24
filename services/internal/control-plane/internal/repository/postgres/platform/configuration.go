@@ -1159,6 +1159,13 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				err = errs.ErrConflict
 			}
 		}
+		if operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+			var matching bool
+			matching, err = repository.assistantEnvironmentSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if operation.Type == "UPDATE_SCHEDULE" {
 			var matching bool
 			matching, err = repository.assistantScheduleUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)

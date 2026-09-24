@@ -21,6 +21,8 @@ describe("AssistantEnvironmentDraftCard", () => {
 
   it("открывает существующий редактор с exact draftRef", () => {
     expect(source).toContain('name: "runtime-environment-new"');
+    expect(source).toContain('name: "runtime-environment"');
+    expect(source).toContain("environmentRef: current.environmentRef");
     expect(source).toContain("query: { draftRef: exact.draftRef }");
     expect(source).toContain("emit('navigate')");
   });

@@ -228,8 +228,12 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		if projection.EntityName != resource.name || projection.EntityVersion == nil || *projection.EntityVersion != resource.version || contains(projection.AllowedOperations, "FORGED") {
 			t.Fatalf("context %s lost authoritative metadata", resource.kind)
 		}
-		if (resource.kind == "FILE" || resource.kind == "ENVIRONMENT" || resource.kind == "RUN") && len(projection.AllowedOperations) != 0 {
+		if (resource.kind == "FILE" || resource.kind == "RUN") && len(projection.AllowedOperations) != 0 {
 			t.Fatalf("context %s invented a mutating operation", resource.kind)
+		}
+		if resource.kind == "ENVIRONMENT" && (len(projection.AllowedOperations) != 1 ||
+			!contains(projection.AllowedOperations, "PREPARE_RUNTIME_ENVIRONMENT_REVISION")) {
+			t.Fatalf("environment context did not publish its exact revision capability: %#v", projection.AllowedOperations)
 		}
 		if resource.kind == "AGENT" && !contains(projection.AllowedOperations, "UPDATE_AGENT") {
 			t.Fatal("agent context did not publish its exact update capability")

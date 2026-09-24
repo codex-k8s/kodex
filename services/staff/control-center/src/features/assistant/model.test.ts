@@ -169,6 +169,26 @@ describe("assistant role image build target", () => {
       assistantEnvironmentDraftTarget(environmentPlan, "op_environment"),
     ).toEqual({ projectRef: "prj_market", draftRef: "envdraft_exact" });
     expect(
+      assistantEnvironmentDraftTarget(
+        {
+          ...environmentPlan,
+          operations: [
+            {
+              ...environmentOperation,
+              type: "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+              action: "UPDATE",
+              target: {
+                kind: "ENVIRONMENT",
+                ref: "renv_exact",
+                name: "Среда разработчика",
+              },
+            },
+          ],
+        },
+        "op_environment",
+      ),
+    ).toEqual({ projectRef: "prj_market", draftRef: "envdraft_exact" });
+    expect(
       assistantRoleImageBuildTarget(environmentPlan, "op_environment"),
     ).toBeUndefined();
     expect(
@@ -678,6 +698,47 @@ describe("assistant plan editor model", () => {
     expect(changed?.parameters).toEqual(changed?.after);
     expect(changed?.parameters.description).toBe("Сборка и тесты");
     expect(changed?.parameters.secretValue).toBeUndefined();
+  });
+
+  it("редактирует среду через отдельную форму без подмены защищённого снимка", () => {
+    const parameters = {
+      environmentRef: "renv_exact",
+      projectRef: "prj_market",
+      name: "Среда Marketplace",
+      description: "Первая ревизия",
+      imageArtifactRef: "imgart_exact",
+    };
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+        action: "UPDATE",
+        target: {
+          kind: "ENVIRONMENT",
+          ref: "renv_exact",
+          name: "Среда Marketplace",
+        },
+        parameters,
+        before: {
+          ...parameters,
+          specification: { secretBindings: [{ secretRef: "sec_exact" }] },
+        },
+        after: { ...parameters },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe(
+      "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+    );
+    updateOperationParameter(first, "description", "Вторая ревизия");
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters.description).toBe("Вторая ревизия");
+    expect(changed?.before).toEqual({
+      ...parameters,
+      specification: { secretBindings: [{ secretRef: "sec_exact" }] },
+    });
   });
 
   it("показывает рецепт образа как форму, сохраняя привязку к сотруднику", () => {

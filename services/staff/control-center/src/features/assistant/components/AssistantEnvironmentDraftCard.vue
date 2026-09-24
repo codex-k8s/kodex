@@ -34,6 +34,16 @@ const destination = computed(() => {
       },
     };
   }
+  if (current.environmentRef) {
+    return {
+      name: "runtime-environment",
+      params: {
+        projectRef: exact.projectRef,
+        environmentRef: current.environmentRef,
+      },
+      query: { draftRef: exact.draftRef },
+    };
+  }
   return {
     name: "runtime-environment-new",
     params: { projectRef: exact.projectRef },

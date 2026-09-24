@@ -267,6 +267,17 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "WORKFLOW" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_WORKFLOW", workflowUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
+	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" {
+		schema := objectSchema([]string{"environmentRef"}, map[string]any{
+			"environmentRef": enumSchema(input.AssistantContext.EntityRef), "name": stringSchema(1, 120),
+			"description": stringSchema(0, 1000), "imageArtifactRef": stringSchema(0, 96),
+		})
+		schema["anyOf"] = []map[string]any{
+			{"required": []string{"name"}}, {"required": []string{"description"}},
+			{"required": []string{"imageArtifactRef"}},
+		}
+		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION", schema))
+	}
 	if input.AssistantContext.EntityKind == "INTEGRATION_CONNECTION" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_INTEGRATION_CONNECTION", connectionUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
@@ -375,7 +386,7 @@ func integrationGrantInputSchema() map[string]any {
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true
@@ -400,7 +411,7 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		before = objectSchema(nil, map[string]any{})
 		after = parameters
 	}
-	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE"
+	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE"
 	if !serverHydrated {
 		required = append(required, "before", "after")
 	}

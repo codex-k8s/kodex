@@ -59,12 +59,19 @@ export function assistantEnvironmentDraftTarget(
   plan: AssistantPlan,
   operationRef: string,
 ): { projectRef: string; draftRef: string } | undefined {
-  const draftRef = assistantAppliedResourceRef(
+  const createdRef = assistantAppliedResourceRef(
     plan,
     operationRef,
     "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
     "RUNTIME_ENVIRONMENT_DRAFT",
   );
+  const revisedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+    "ENVIRONMENT",
+  );
+  const draftRef = createdRef || revisedRef;
   return plan.projectRef && draftRef
     ? { projectRef: plan.projectRef, draftRef }
     : undefined;
@@ -203,6 +210,7 @@ export type FriendlyPlanOperationType =
   | "CHANGE_INTEGRATION_GRANT"
   | "CREATE_WORKFLOW"
   | "UPDATE_WORKFLOW"
+  | "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
   | "CREATE_SCHEDULE"
   | "UPDATE_SCHEDULE"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
@@ -223,6 +231,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "CHANGE_INTEGRATION_GRANT" &&
     operation.value.type !== "CREATE_WORKFLOW" &&
     operation.value.type !== "UPDATE_WORKFLOW" &&
+    operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION" &&
     operation.value.type !== "CREATE_SCHEDULE" &&
     operation.value.type !== "UPDATE_SCHEDULE" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
@@ -244,14 +253,17 @@ export function friendlyPlanOperationType(
             : operation.value.type === "CREATE_WORKFLOW" ||
                 operation.value.type === "UPDATE_WORKFLOW"
               ? "WORKFLOW"
-              : operation.value.type === "CREATE_SCHEDULE" ||
-                  operation.value.type === "UPDATE_SCHEDULE"
-                ? "SCHEDULE"
-                : operation.value.type.endsWith("PROJECT")
-                  ? "PROJECT"
-                  : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-                    ? "RUNTIME_ENVIRONMENT_DRAFT"
-                    : "AGENT";
+              : operation.value.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+                ? "ENVIRONMENT"
+                : operation.value.type === "CREATE_SCHEDULE" ||
+                    operation.value.type === "UPDATE_SCHEDULE"
+                  ? "SCHEDULE"
+                  : operation.value.type.endsWith("PROJECT")
+                    ? "PROJECT"
+                    : operation.value.type ===
+                        "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                      ? "RUNTIME_ENVIRONMENT_DRAFT"
+                      : "AGENT";
   const expectedAction = operation.value.type.startsWith("CREATE_")
     ? "CREATE"
     : operation.value.type === "LAUNCH_RUN"

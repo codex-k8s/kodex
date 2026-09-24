@@ -993,7 +993,8 @@ onBeforeUnmount(() => {
                   <AssistantEnvironmentDraftCard
                     v-for="operation in turn.plan.operations.filter(
                       (item) =>
-                        item.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT',
+                        item.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' ||
+                        item.type === 'PREPARE_RUNTIME_ENVIRONMENT_REVISION',
                     )"
                     :key="`environment-${operation.ref}`"
                     :plan="turn.plan"

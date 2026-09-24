@@ -103,6 +103,12 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 				return commandOutcome{}, err
 			}
 			payload.Operations[index] = updated
+		case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
+			updated, err := rehydrateEditedAssistantEnvironment(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		case "UPDATE_INTEGRATION_CONNECTION":
 			updated, err := rehydrateEditedAssistantConnection(original, operation)
 			if err != nil {
@@ -236,6 +242,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 				continue
 			}
 		}
+		if operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+			matching, snapshotErr := repository.assistantEnvironmentSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
 		if operation.Type == "UPDATE_INTEGRATION_CONNECTION" {
 			matching, snapshotErr := repository.assistantConnectionUpdateSnapshotMatches(ctx, tx, scope, operation)
 			if snapshotErr != nil || !matching {
@@ -290,6 +303,8 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 		}
 	case "UPDATE_WORKFLOW", "ARCHIVE_WORKFLOW":
 		kind, ref = "WORKFLOW", operation.Target.Ref
+	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
+		kind, ref = "ENVIRONMENT", operation.Target.Ref
 	case "CHANGE_INTEGRATION_GRANT", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION":
 		kind, ref = "INTEGRATION_CONNECTION", assistantString(operation.Input, "connectionRef")
 	case "UPDATE_SCHEDULE":
