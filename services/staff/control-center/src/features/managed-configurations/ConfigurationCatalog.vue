@@ -18,6 +18,7 @@ const props = defineProps<{
   kind: ConfigurationKind;
   projectRef?: string;
   expanded?: boolean;
+  autoOpenImport?: boolean;
 }>();
 const emit = defineEmits<{ created: [configurationRef: string] }>();
 const query = ref("");
@@ -26,7 +27,9 @@ const nextPageToken = ref<string>();
 const total = ref(0);
 const loading = ref(false);
 const expansionOpen = ref(false);
-const importOpen = ref(false);
+const importOpen = ref(
+  props.kind === "INTEGRATION_DEFINITION" && props.autoOpenImport,
+);
 const problem = ref<AppProblem>();
 const cursors = new Set<string>();
 const projectRequired = computed(
@@ -98,6 +101,13 @@ watch(
     }, 500);
   },
   { immediate: true, flush: "sync" },
+);
+watch(
+  () => [props.kind, props.autoOpenImport],
+  () => {
+    if (props.kind === "INTEGRATION_DEFINITION" && props.autoOpenImport)
+      importOpen.value = true;
+  },
 );
 onBeforeUnmount(() => {
   controller?.abort();

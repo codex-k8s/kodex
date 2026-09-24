@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v19" {
+	if CorePromptRevision != "system-assistant-core-v21" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -27,7 +27,10 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"PREPARE_RUNTIME_ENVIRONMENT_REVISION",
 		"BIND_AGENT_RUNTIME_ENVIRONMENT",
 		"UPDATE_ROLE_IMAGE_RECIPE",
-		"Ручной UI/Git draft сейчас не публикует новый исполняемый adapter",
+		"[импорт OpenAPI](/configurations/INTEGRATION_DEFINITION)",
+		"Создание черновика не публикует определение",
+		"Для исполнения создай отдельное подключение по поставленному шаблону `openapi-mcp`",
+		"Новые типы адаптеров вне поставленного реестра остаются недоступными",
 	} {
 		if !strings.Contains(CorePrompt(), required) {
 			t.Fatalf("system assistant prompt does not contain required guidance %q", required)

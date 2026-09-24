@@ -22,6 +22,7 @@ import {
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
@@ -88,6 +89,7 @@ const props = withDefaults(
   { live: false, runEvents: () => [], refreshRevision: "" },
 );
 const { t } = useI18n();
+const router = useRouter();
 const store = useAssistantStore();
 const open = ref(restoreAssistantWorkspaceOpen());
 const historyOpen = ref(false);
@@ -376,6 +378,33 @@ function suggestSetup(prompt: string): void {
   if (!canSend.value || message.value.trim()) return;
   message.value = prompt;
   void nextTick(() => composer.value?.focus());
+}
+
+function handleAssistantLink(event: MouseEvent): void {
+  if (
+    event.button !== 0 ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    !(event.target instanceof Element)
+  )
+    return;
+  const link = event.target.closest("a[href]");
+  if (
+    link?.getAttribute("href") !==
+    "/configurations/INTEGRATION_DEFINITION"
+  )
+    return;
+  event.preventDefault();
+  close();
+  if (!open.value) {
+    void router.push({
+      name: "configuration-catalog",
+      params: { kind: "INTEGRATION_DEFINITION" },
+      query: { assistantImportOpen: "1" },
+    });
+  }
 }
 
 function handleComposerKeydown(event: KeyboardEvent): void {
@@ -917,6 +946,7 @@ onBeforeUnmount(() => {
                 :class="`assistant-message--${turn.role.toLowerCase()}`"
                 :data-turn-ref="turn.ref"
                 :data-turn-sequence="turn.sequence"
+                @click.capture="handleAssistantLink"
               >
                 <header>
                   <strong>{{

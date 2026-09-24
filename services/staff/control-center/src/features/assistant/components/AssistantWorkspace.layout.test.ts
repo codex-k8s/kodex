@@ -82,6 +82,12 @@ describe("AssistantWorkspace layout", () => {
     expect(composer).not.toContain("secretValue");
   });
 
+  it("передаёт ссылку на импорт OpenAPI из ответа в штатную форму", () => {
+    expect(template).toContain('@click.capture="handleAssistantLink"');
+    expect(source).toContain('"/configurations/INTEGRATION_DEFINITION"');
+    expect(source).toContain('assistantImportOpen: "1"');
+  });
+
   it("после запроса доработки возвращает в диалог без отправки за пользователя", () => {
     expect(source).toContain("async function requestPlanChanges()");
     expect(source).toContain("await closePlan()");

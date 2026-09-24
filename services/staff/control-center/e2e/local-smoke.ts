@@ -243,8 +243,10 @@ test("локальный OpenAPI импорт проверяет контрак�
     },
     { mode: "local" },
   );
-  await gotoWithRetry(page, "/configurations/INTEGRATION_DEFINITION");
-  await page.getByRole("button", { name: "Импорт OpenAPI" }).click();
+  await gotoWithRetry(
+    page,
+    "/configurations/INTEGRATION_DEFINITION?assistantImportOpen=1",
+  );
   const importDialog = page.getByRole("dialog", {
     name: "Импорт интеграции из OpenAPI",
   });

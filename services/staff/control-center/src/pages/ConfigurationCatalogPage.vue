@@ -72,6 +72,7 @@ function openCreated(configurationRef: string): void {
       v-if="kind"
       :kind="kind"
       :project-ref="projectRef || undefined"
+      :auto-open-import="route.query.assistantImportOpen === '1'"
       @created="openCreated"
     />
     <p v-else role="alert">{{ $t("errors.NOT_FOUND") }}</p>
