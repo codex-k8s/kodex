@@ -1040,7 +1040,7 @@ wait_stable_workloads() {
 
 readback_local_image_supply_chain() {
   local expected_policy actual_policy policy_resource controller workloads expected_deployments
-  local expected_digest actual_digest
+  local expected_digest actual_digest catalog_expected_digest catalog_actual_digest
   local target_registry promoted_pull_host resource name
   expected_policy=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
@@ -1056,14 +1056,14 @@ readback_local_image_supply_chain() {
   [[ "$actual_digest" == "$expected_digest" ]] ||
     fail 'image admission policy ConfigMap readback mismatch'
 
-  expected_digest=$(yq -N -r '
+  catalog_expected_digest=$(yq -N -r '
     select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments") |
     .data."catalog.json" | from_json | to_json
   ' "$render" | jq -cS . | sha256sum | awk '{print $1}')
-  actual_digest=$(kubectl -n "$namespace" get configmap/kodex-role-environments -o json |
+  catalog_actual_digest=$(kubectl -n "$namespace" get configmap/kodex-role-environments -o json |
     jq -cS '.data["catalog.json"] | fromjson' | sha256sum | awk '{print $1}') ||
     fail 'role environment catalog is absent'
-  [[ "$actual_digest" == "$expected_digest" ]] ||
+  [[ "$catalog_actual_digest" == "$catalog_expected_digest" ]] ||
     fail 'role environment catalog readback mismatch'
 
   policy_resource=$(kubectl -n "$namespace" get \
