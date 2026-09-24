@@ -512,7 +512,9 @@ cluster_issuer=${KODEX_DEV_CLUSTER_ISSUER:-kodex-local}
 acme_email=${KODEX_DEV_ACME_EMAIL:-}
 oidc_ca_file="$state_directory/kodex-local-ca.crt"
 node_extra_ca_file="$state_directory/kodex-local-ca.crt"
-provider_apparmor_profile=${KODEX_DEV_PROVIDER_APPARMOR_PROFILE:-}
+# Локальный bootstrap устанавливает и проверяет этот профиль до render.
+# Пустой профиль оставил бы provider-runtime без разрешённого userns sandbox.
+provider_apparmor_profile=${KODEX_DEV_PROVIDER_APPARMOR_PROFILE:-kodex-provider-runtime}
 [[ -z "$provider_apparmor_profile" || "$provider_apparmor_profile" == kodex-provider-runtime ]] ||
   fail 'KODEX_DEV_PROVIDER_APPARMOR_PROFILE is not approved'
 if [[ "$tls_mode" == public-acme ]]; then
