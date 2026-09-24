@@ -7,6 +7,7 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
+import OpenAPIImportDialog from "./OpenAPIImportDialog.vue";
 import {
   configurationProjectScopeValid,
   configurationRequiresProject,
@@ -18,12 +19,14 @@ const props = defineProps<{
   projectRef?: string;
   expanded?: boolean;
 }>();
+const emit = defineEmits<{ created: [configurationRef: string] }>();
 const query = ref("");
 const items = ref<ManagedConfigurationSummary[]>([]);
 const nextPageToken = ref<string>();
 const total = ref(0);
 const loading = ref(false);
 const expansionOpen = ref(false);
+const importOpen = ref(false);
 const problem = ref<AppProblem>();
 const cursors = new Set<string>();
 const projectRequired = computed(
@@ -109,6 +112,10 @@ function scroll(event: Event): void {
   )
     void load(true);
 }
+function created(configurationRef: string): void {
+  importOpen.value = false;
+  emit("created", configurationRef);
+}
 </script>
 <template>
   <section class="configuration-catalog">
@@ -137,6 +144,14 @@ function scroll(event: Event): void {
         aria-describedby="managed-catalog-project-required"
       >
         <Plus :size="18" />{{ $t("common.create") }}
+      </button>
+      <button
+        v-if="kind === 'INTEGRATION_DEFINITION'"
+        class="button"
+        type="button"
+        @click="importOpen = true"
+      >
+        {{ $t("managed.openapiImport.open") }}
       </button>
       <button
         v-if="!props.expanded && (total > 6 || nextPageToken)"
@@ -206,8 +221,17 @@ function scroll(event: Event): void {
       :title="$t(`managed.kinds.${kind}`)"
       size="xl"
       @close="expansionOpen = false"
-      ><ConfigurationCatalog :kind="kind" :project-ref="projectRef" expanded
+      ><ConfigurationCatalog
+        :kind="kind"
+        :project-ref="projectRef"
+        expanded
+        @created="emit('created', $event)"
     /></ModalDialog>
+    <OpenAPIImportDialog
+      v-if="importOpen"
+      @close="importOpen = false"
+      @created="created"
+    />
   </section>
 </template>
 <style scoped>

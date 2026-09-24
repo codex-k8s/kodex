@@ -82,6 +82,7 @@
             "CONFLUENCE",
             "EMAIL_HTTPS",
             "HTTPS_JSON_READ",
+            "OPENAPI_MCP",
             "MATTERMOST_INTERACTION"
           ]
         },
@@ -410,7 +411,8 @@
           "enum": [
             "READ_ONLY",
             "EFFECT_KEY",
-            "PROVIDER_NATIVE"
+            "PROVIDER_NATIVE",
+            "ONE_ATTEMPT"
           ]
         },
         "timeoutSeconds": {
@@ -473,7 +475,8 @@
         "approvalPolicy": {
           "enum": [
             "NONE",
-            "HUMAN_EACH_EFFECT"
+            "HUMAN_EACH_EFFECT",
+            "HUMAN_SCOPED"
           ]
         },
         "resourceScope": {
@@ -496,6 +499,66 @@
         },
         "execution": {
           "$ref": "#/$defs/execution"
+        },
+        "openapi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operationId",
+            "method",
+            "path",
+            "authScheme",
+            "inputSchema"
+          ],
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "sourceDigest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "serverOrigin": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            },
+            "method": {
+              "enum": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "authScheme": {
+              "enum": [
+                "NONE",
+                "BEARER",
+                "API_KEY_HEADER"
+              ]
+            },
+            "authHeader": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "idempotencyHeader": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "inputSchema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
         }
       }
     }

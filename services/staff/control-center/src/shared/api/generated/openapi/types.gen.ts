@@ -359,6 +359,34 @@ export type SpeechTranscriptionAvailability = {
     validUntil?: Timestamp;
 };
 
+export type OpenApiInspectionInput = {
+    /**
+     * Локальный OpenAPI 3.x JSON или YAML без внешних ссылок; не сохраняется и не отправляется по сети.
+     */
+    source: string;
+};
+
+export type OpenApiInspectionOperation = {
+    operationId: string;
+    method: string;
+    path: string;
+    summary: string;
+    serverOrigin: string;
+    candidate: boolean;
+    /**
+     * GET-операция не требует входных параметров и может быть проверкой соединения.
+     */
+    healthCandidate: boolean;
+    reason: string;
+};
+
+export type OpenApiInspectionResult = {
+    digest: string;
+    title: string;
+    version: string;
+    operations: Array<OpenApiInspectionOperation>;
+};
+
 export type ManagedConfigurationDraftInput = {
     configurationRef?: OpaqueRef;
     projectRef?: OpaqueRef;
@@ -12132,6 +12160,34 @@ export type RebindRoleImageConsumersResponses = {
 };
 
 export type RebindRoleImageConsumersResponse = RebindRoleImageConsumersResponses[keyof RebindRoleImageConsumersResponses];
+
+export type InspectOpenApiIntegrationData = {
+    body: OpenApiInspectionInput;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/openapi-inspections';
+};
+
+export type InspectOpenApiIntegrationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type InspectOpenApiIntegrationError = InspectOpenApiIntegrationErrors[keyof InspectOpenApiIntegrationErrors];
+
+export type InspectOpenApiIntegrationResponses = {
+    /**
+     * Ограниченный список операций-кандидатов; Cache-Control no-store
+     */
+    200: OpenApiInspectionResult;
+};
+
+export type InspectOpenApiIntegrationResponse = InspectOpenApiIntegrationResponses[keyof InspectOpenApiIntegrationResponses];
 
 export type CreateIntegrationDefinitionDraftData = {
     body: ManagedConfigurationDraftInput;

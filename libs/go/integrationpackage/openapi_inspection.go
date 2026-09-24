@@ -38,8 +38,9 @@ type OpenAPIOperation struct {
 	ID, Method, Path, Summary, ServerOrigin string
 	// Candidate означает только, что operation можно передать на следующий
 	// admission; это не publication, grant или право на HTTP-вызов.
-	Candidate bool
-	Reason    string
+	Candidate       bool
+	HealthCandidate bool
+	Reason          string
 }
 
 // InspectOpenAPI читает только локальный документ без внешних $ref и сети.
@@ -111,6 +112,13 @@ func InspectOpenAPI(ctx context.Context, raw []byte) (OpenAPIInspection, error) 
 					return OpenAPIInspection{}, errors.New("OpenAPI operationId is duplicated")
 				}
 				seenIDs[operation.OperationID] = struct{}{}
+			}
+			if entry.Candidate && entry.Method == http.MethodGet {
+				input, inputErr := openAPIImportInput(item, operation)
+				if inputErr == nil {
+					_, inputErr = (Capability{OpenAPI: &OpenAPIHTTP{InputSchema: input}}).ValidateInput([]byte("{}"))
+				}
+				entry.HealthCandidate = inputErr == nil
 			}
 			operations = append(operations, entry)
 		}

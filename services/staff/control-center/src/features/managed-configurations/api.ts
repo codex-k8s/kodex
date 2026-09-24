@@ -9,7 +9,7 @@ import type {
   RevisionImpactPublicationInput,
   RoleImageRebindInput,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, etag } from "@/shared/api/mutation";
+import { mutate, etag, csrfToken } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 import { requestSignal } from "@/shared/api/client";
 import { canChangeDraft } from "./model";
@@ -103,6 +103,20 @@ export async function providerAccount(
     await unwrap(
       sdk.getProviderAccount({
         path: { providerAccountRef },
+        signal: AbortSignal.any([signal, requestSignal()]),
+      }),
+    )
+  ).data;
+}
+
+export async function inspectOpenAPI(source: string, signal: AbortSignal) {
+  if (!source || new TextEncoder().encode(source).length > 128 * 1024)
+    throw new Error("OpenAPI document size is invalid");
+  return (
+    await unwrap(
+      sdk.inspectOpenApiIntegration({
+        body: { source },
+        headers: { "X-CSRF-Token": csrfToken() },
         signal: AbortSignal.any([signal, requestSignal()]),
       }),
     )

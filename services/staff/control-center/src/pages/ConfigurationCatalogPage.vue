@@ -52,6 +52,12 @@ watch(
 function changeProject(value: string): void {
   void router.replace({ query: value ? { projectRef: value } : {} });
 }
+function openCreated(configurationRef: string): void {
+  void router.push({
+    name: "configuration",
+    params: { kind: "INTEGRATION_DEFINITION", configurationRef },
+  });
+}
 </script>
 <template>
   <PageFrame :title="kind ? $t(`managed.kinds.${kind}`) : $t('managed.title')">
@@ -66,6 +72,7 @@ function changeProject(value: string): void {
       v-if="kind"
       :kind="kind"
       :project-ref="projectRef || undefined"
+      @created="openCreated"
     />
     <p v-else role="alert">{{ $t("errors.NOT_FOUND") }}</p>
   </PageFrame>

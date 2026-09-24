@@ -4156,6 +4156,20 @@ paths:
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content: { application/json: { schema: { $ref: '#/components/schemas/RoleImageRebindResult' } } }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/openapi-inspections:
+    post:
+      tags: [Administration]
+      operationId: inspectOpenAPIIntegration
+      description: Проверяет локально переданный OpenAPI 3.x без сетевых запросов и записи документа. Результат не даёт разрешения на публикацию или исполнение интеграции.
+      parameters: [{ $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OpenAPIInspectionInput' } } }
+      responses:
+        '200':
+          description: Ограниченный список операций-кандидатов; Cache-Control no-store
+          content: { application/json: { schema: { $ref: '#/components/schemas/OpenAPIInspectionResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-definition-configurations/drafts:
     post:
       tags: [Administration]
@@ -5595,6 +5609,37 @@ components:
         available: { type: boolean }
         reason: { type: string, enum: [READY, STT_NOT_CONFIGURED, STT_DISABLED, STT_PERMISSION_DENIED, STT_PERMISSION_INVALID, STT_PROVIDER_ACCOUNT_INELIGIBLE, STT_PROVIDER_CREDENTIAL_UNSUPPORTED, STT_PROVIDER_DISABLED, STT_MODEL_UNSUPPORTED, STT_CONFIGURATION_UNAVAILABLE, STT_SERVICE_UNAVAILABLE, STT_CREDENTIAL_UNAVAILABLE, STT_EGRESS_UNAVAILABLE, STT_PROVIDER_UNAVAILABLE] }
         validUntil: { $ref: '#/components/schemas/Timestamp' }
+    OpenAPIInspectionInput:
+      type: object
+      additionalProperties: false
+      required: [source]
+      properties:
+        source: { type: string, minLength: 1, maxLength: 131072, description: OpenAPI 3.x JSON или YAML без внешних ссылок; передаётся только в локальный gateway, не сохраняется и не отправляется во внешнюю сеть. }
+    OpenAPIInspectionOperation:
+      type: object
+      additionalProperties: false
+      required: [operationId, method, path, summary, serverOrigin, candidate, healthCandidate, reason]
+      properties:
+        operationId: { type: string, maxLength: 128 }
+        method: { type: string, maxLength: 16 }
+        path: { type: string, maxLength: 2048 }
+        summary: { type: string, maxLength: 4096 }
+        serverOrigin: { type: string, maxLength: 2048 }
+        candidate: { type: boolean }
+        healthCandidate: { type: boolean, description: GET-операция не требует входных параметров и может быть проверкой соединения. }
+        reason: { type: string, maxLength: 128 }
+    OpenAPIInspectionResult:
+      type: object
+      additionalProperties: false
+      required: [digest, title, version, operations]
+      properties:
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        title: { type: string, maxLength: 4096 }
+        version: { type: string, maxLength: 128 }
+        operations:
+          type: array
+          maxItems: 128
+          items: { $ref: '#/components/schemas/OpenAPIInspectionOperation' }
     ManagedConfigurationDraftInput:
       type: object
       additionalProperties: false

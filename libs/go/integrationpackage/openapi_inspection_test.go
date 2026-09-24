@@ -49,9 +49,16 @@ func TestInspectOpenAPI(t *testing.T) {
 		t.Fatalf("inspection lost document metadata: %#v", result)
 	}
 	for _, operation := range result.Operations {
-		if !operation.Candidate || operation.Path != "/v1/applications/{id}" || operation.ServerOrigin != "https://api.example.test" {
+		if !operation.Candidate || operation.HealthCandidate || operation.Path != "/v1/applications/{id}" || operation.ServerOrigin != "https://api.example.test" {
 			t.Fatalf("bounded operation rejected: %#v", operation)
 		}
+	}
+}
+
+func TestInspectOpenAPIIdentifiesParameterFreeHealthRead(t *testing.T) {
+	result, err := InspectOpenAPI(t.Context(), []byte(openAPIImportFixture))
+	if err != nil || len(result.Operations) != 2 || !result.Operations[0].HealthCandidate || result.Operations[1].HealthCandidate {
+		t.Fatalf("health candidate mismatch: %v %#v", err, result.Operations)
 	}
 }
 

@@ -10293,6 +10293,34 @@ type OIDCGroupState string
 // OpaqueRef defines model for OpaqueRef.
 type OpaqueRef = string
 
+// OpenAPIInspectionInput defines model for OpenAPIInspectionInput.
+type OpenAPIInspectionInput struct {
+	// Source Локальный OpenAPI 3.x JSON или YAML без внешних ссылок; не сохраняется и не отправляется по сети.
+	Source string `json:"source"`
+}
+
+// OpenAPIInspectionOperation defines model for OpenAPIInspectionOperation.
+type OpenAPIInspectionOperation struct {
+	Candidate bool `json:"candidate"`
+
+	// HealthCandidate GET-операция не требует входных параметров и может быть проверкой соединения.
+	HealthCandidate bool   `json:"healthCandidate"`
+	Method          string `json:"method"`
+	OperationId     string `json:"operationId"`
+	Path            string `json:"path"`
+	Reason          string `json:"reason"`
+	ServerOrigin    string `json:"serverOrigin"`
+	Summary         string `json:"summary"`
+}
+
+// OpenAPIInspectionResult defines model for OpenAPIInspectionResult.
+type OpenAPIInspectionResult struct {
+	Digest     string                       `json:"digest"`
+	Operations []OpenAPIInspectionOperation `json:"operations"`
+	Title      string                       `json:"title"`
+	Version    string                       `json:"version"`
+}
+
 // Overview defines model for Overview.
 type Overview struct {
 	ActiveRunCount   int         `json:"activeRunCount"`
@@ -14017,6 +14045,11 @@ type CreateIntegrationDefinitionDraftParams struct {
 	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
 }
 
+// InspectOpenAPIIntegrationParams defines parameters for InspectOpenAPIIntegration.
+type InspectOpenAPIIntegrationParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
+}
+
 // ArchiveIntegrationDefinitionConfigurationParams defines parameters for ArchiveIntegrationDefinitionConfiguration.
 type ArchiveIntegrationDefinitionConfigurationParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -15598,6 +15631,9 @@ type CopyIntegrationDefinitionConfigurationJSONRequestBody = IntegrationDefiniti
 // CreateIntegrationDefinitionDraftJSONRequestBody defines body for CreateIntegrationDefinitionDraft for application/json ContentType.
 type CreateIntegrationDefinitionDraftJSONRequestBody = ManagedConfigurationDraftInput
 
+// InspectOpenAPIIntegrationJSONRequestBody defines body for InspectOpenAPIIntegration for application/json ContentType.
+type InspectOpenAPIIntegrationJSONRequestBody = OpenAPIInspectionInput
+
 // ConfigureIntegrationDefinitionGitSourceJSONRequestBody defines body for ConfigureIntegrationDefinitionGitSource for application/json ContentType.
 type ConfigureIntegrationDefinitionGitSourceJSONRequestBody = IntegrationDefinitionGitSourceInput
 
@@ -16441,6 +16477,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/integration-definition-configurations/drafts)
 	CreateIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request, params CreateIntegrationDefinitionDraftParams)
+
+	// (POST /api/v1/integration-definition-configurations/openapi-inspections)
+	InspectOpenAPIIntegration(w http.ResponseWriter, r *http.Request, params InspectOpenAPIIntegrationParams)
 
 	// (POST /api/v1/integration-definition-configurations/{configurationRef}/archive)
 	ArchiveIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ArchiveIntegrationDefinitionConfigurationParams)
@@ -25633,6 +25672,57 @@ func (siw *ServerInterfaceWrapper) CreateIntegrationDefinitionDraft(w http.Respo
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateIntegrationDefinitionDraft(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InspectOpenAPIIntegration operation middleware
+func (siw *ServerInterfaceWrapper) InspectOpenAPIIntegration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params InspectOpenAPIIntegrationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InspectOpenAPIIntegration(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -44223,6 +44313,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/copies", wrapper.CopyIntegrationDefinitionConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/drafts", wrapper.CreateIntegrationDefinitionDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/openapi-inspections", wrapper.InspectOpenAPIIntegration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/archive", wrapper.ArchiveIntegrationDefinitionConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-source", wrapper.ConfigureIntegrationDefinitionGitSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-source/refresh", wrapper.RefreshIntegrationDefinitionGitSource)
