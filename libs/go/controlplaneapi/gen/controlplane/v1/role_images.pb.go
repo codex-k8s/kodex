@@ -165,6 +165,7 @@ const (
 	RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_ARCHIVE       RoleImageRecipeAction = 3
 	RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_RESTORE       RoleImageRecipeAction = 4
 	RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD RoleImageRecipeAction = 5
+	RoleImageRecipeAction_ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD  RoleImageRecipeAction = 6
 )
 
 // Enum value maps for RoleImageRecipeAction.
@@ -176,6 +177,7 @@ var (
 		3: "ROLE_IMAGE_RECIPE_ACTION_ARCHIVE",
 		4: "ROLE_IMAGE_RECIPE_ACTION_RESTORE",
 		5: "ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD",
+		6: "ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD",
 	}
 	RoleImageRecipeAction_value = map[string]int32{
 		"ROLE_IMAGE_RECIPE_ACTION_UNSPECIFIED":   0,
@@ -184,6 +186,7 @@ var (
 		"ROLE_IMAGE_RECIPE_ACTION_ARCHIVE":       3,
 		"ROLE_IMAGE_RECIPE_ACTION_RESTORE":       4,
 		"ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD": 5,
+		"ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD":  6,
 	}
 )
 
@@ -1978,6 +1981,7 @@ type ManageRoleImageRecipeRequest struct {
 	Name              string                    `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	ProjectRef        string                    `protobuf:"bytes,7,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
 	Environment       *RoleEnvironmentSelection `protobuf:"bytes,8,opt,name=environment,proto3" json:"environment,omitempty"`
+	BuildRef          string                    `protobuf:"bytes,9,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2059,6 +2063,13 @@ func (x *ManageRoleImageRecipeRequest) GetEnvironment() *RoleEnvironmentSelectio
 		return x.Environment
 	}
 	return nil
+}
+
+func (x *ManageRoleImageRecipeRequest) GetBuildRef() string {
+	if x != nil {
+		return x.BuildRef
+	}
+	return ""
 }
 
 type ManageRoleImageRecipeResponse struct {
@@ -4114,7 +4125,7 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x06recipe\x18\x01 \x01(\v2 .controlplane.v1.RoleImageRecipeR\x06recipe\x123\n" +
 	"\x06builds\x18\x02 \x03(\v2\x1b.controlplane.v1.ImageBuildR\x06builds\x12G\n" +
 	"\x0factive_artifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x0eactiveArtifact\x12O\n" +
-	"\x13promotion_candidate\x18\x04 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x12promotionCandidate\"\xfa\x02\n" +
+	"\x13promotion_candidate\x18\x04 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x12promotionCandidate\"\x97\x03\n" +
 	"\x1cManageRoleImageRecipeRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12>\n" +
 	"\x06action\x18\x02 \x01(\x0e2&.controlplane.v1.RoleImageRecipeActionR\x06action\x12\x1d\n" +
@@ -4124,7 +4135,8 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x04name\x18\x05 \x01(\tR\x04name\x12\x1f\n" +
 	"\vproject_ref\x18\a \x01(\tR\n" +
 	"projectRef\x12K\n" +
-	"\venvironment\x18\b \x01(\v2).controlplane.v1.RoleEnvironmentSelectionR\venvironmentJ\x04\b\x06\x10\aR\x05input\"\xf6\x01\n" +
+	"\venvironment\x18\b \x01(\v2).controlplane.v1.RoleEnvironmentSelectionR\venvironment\x12\x1b\n" +
+	"\tbuild_ref\x18\t \x01(\tR\bbuildRefJ\x04\b\x06\x10\aR\x05input\"\xf6\x01\n" +
 	"\x1dManageRoleImageRecipeResponse\x128\n" +
 	"\x06recipe\x18\x01 \x01(\v2 .controlplane.v1.RoleImageRecipeR\x06recipe\x12<\n" +
 	"\vimage_build\x18\x02 \x01(\v2\x1b.controlplane.v1.ImageBuildR\n" +
@@ -4317,14 +4329,15 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x15ImageAdmissionVerdict\x12'\n" +
 	"#IMAGE_ADMISSION_VERDICT_UNSPECIFIED\x10\x00\x12$\n" +
 	" IMAGE_ADMISSION_VERDICT_ACCEPTED\x10\x01\x12$\n" +
-	" IMAGE_ADMISSION_VERDICT_REJECTED\x10\x02*\x83\x02\n" +
+	" IMAGE_ADMISSION_VERDICT_REJECTED\x10\x02*\xae\x02\n" +
 	"\x15RoleImageRecipeAction\x12(\n" +
 	"$ROLE_IMAGE_RECIPE_ACTION_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fROLE_IMAGE_RECIPE_ACTION_CREATE\x10\x01\x12#\n" +
 	"\x1fROLE_IMAGE_RECIPE_ACTION_UPDATE\x10\x02\x12$\n" +
 	" ROLE_IMAGE_RECIPE_ACTION_ARCHIVE\x10\x03\x12$\n" +
 	" ROLE_IMAGE_RECIPE_ACTION_RESTORE\x10\x04\x12*\n" +
-	"&ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD\x10\x052\xe8\r\n" +
+	"&ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD\x10\x05\x12)\n" +
+	"%ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD\x10\x062\xe8\r\n" +
 	"\x10RoleImageService\x12s\n" +
 	"\x14ListRoleEnvironments\x12,.controlplane.v1.ListRoleEnvironmentsRequest\x1a-.controlplane.v1.ListRoleEnvironmentsResponse\x12s\n" +
 	"\x14ListRoleImageRecipes\x12,.controlplane.v1.ListRoleImageRecipesRequest\x1a-.controlplane.v1.ListRoleImageRecipesResponse\x12m\n" +

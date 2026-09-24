@@ -223,6 +223,10 @@ func (server *Server) CommandRoleImageRecipe(writer http.ResponseWriter, request
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
+	buildRef := ""
+	if body.BuildRef != nil {
+		buildRef = *body.BuildRef
+	}
 	request, ok = withProjectReference(writer, request, projectRef)
 	if !ok {
 		return
@@ -233,6 +237,7 @@ func (server *Server) CommandRoleImageRecipe(writer http.ResponseWriter, request
 	}
 	response, err := server.control.RoleImages.ManageRoleImageRecipe(request.Context(), &controlplanev1.ManageRoleImageRecipeRequest{
 		Mutation: mutation, Action: action, ProjectRef: projectRef, RecipeRef: recipeRef,
+		BuildRef: buildRef,
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)

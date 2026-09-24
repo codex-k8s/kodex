@@ -27,6 +27,8 @@ var (
 	queryRoleImagesChangeRecipeState string
 	//go:embed sql/role_images_cancel_open_builds.sql
 	queryRoleImagesCancelOpenBuilds string
+	//go:embed sql/role_images_cancel_exact_build.sql
+	queryRoleImagesCancelExactBuild string
 	//go:embed sql/role_images_cancel_open_promotions.sql
 	queryRoleImagesCancelOpenPromotions string
 	//go:embed sql/role_images_find_promoted_artifact.sql

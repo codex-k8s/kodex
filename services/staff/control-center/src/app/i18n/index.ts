@@ -1520,6 +1520,8 @@ const ru = {
       "Сохранение создаёт новое поколение; уже собранные поколения и digest не изменяются.",
     createRevision: "Создать ревизию",
     requestBuild: "Запросить сборку",
+    cancelBuild: "Остановить сборку",
+    cancelBuildConfirm: "Остановить эту сборку? Рецепт образа останется доступен для повторной сборки.",
     restore: "Восстановить",
     confirmArchive:
       "Архивировать этот образ? Новые сборки станут недоступны до восстановления.",
@@ -3021,9 +3023,9 @@ const ru = {
       ready: "Образ опубликован и готов к использованию.",
       noBuild: "Сборка не найдена. Проверьте состояние на странице образа.",
       open: "Открыть образ",
-      stop: "Остановить и архивировать",
+      stop: "Остановить сборку",
       stopConfirm:
-        "Остановить текущую сборку и архивировать рецепт образа? Чтобы продолжить позже, его потребуется восстановить.",
+        "Остановить эту сборку? Рецепт образа останется доступен для повторной сборки.",
     },
     environmentDraft: {
       title: "Окружение сотрудника",
@@ -4210,6 +4212,8 @@ const en = {
       "Saving creates a new generation; previously built generations and digests remain immutable.",
     createRevision: "Create revision",
     requestBuild: "Request build",
+    cancelBuild: "Stop build",
+    cancelBuildConfirm: "Stop this build? The image recipe will remain available for another build.",
     restore: "Restore",
     confirmArchive:
       "Archive this image? New builds will be unavailable until it is restored.",
@@ -6388,9 +6392,9 @@ const en = {
       ready: "The image is promoted and ready to use.",
       noBuild: "Build not found. Check the image page for its state.",
       open: "Open image",
-      stop: "Stop and archive",
+      stop: "Stop build",
       stopConfirm:
-        "Stop the current build and archive its image recipe? You will need to restore it to continue later.",
+        "Stop this build? The image recipe will remain available for another build.",
     },
     environmentDraft: {
       title: "Employee environment",

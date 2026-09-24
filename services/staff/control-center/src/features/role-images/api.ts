@@ -289,13 +289,14 @@ export async function commandRoleImage(
   projectRef: string,
   recipe: RoleImageRecipe,
   action: RoleImageRecipeCommand["action"],
+  buildRef?: string,
 ): Promise<RoleImageRecipeCommandReceipt> {
   return (
     await mutate(
       (headers) =>
         commandRoleImageRecipe({
           path: { projectRef, recipeRef: recipe.ref },
-          body: { action },
+          body: { action, ...(buildRef ? { buildRef } : {}) },
           headers: versionedHeaders(headers),
           signal: requestSignal(),
         }),

@@ -8,6 +8,7 @@ import {
   PackageCheck,
   RotateCcw,
   ShieldCheck,
+  Square,
   TerminalSquare,
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -20,7 +21,6 @@ import ConfigurationCopyDialog from "@/features/managed-configurations/Configura
 import { recipeCopySource } from "@/features/managed-configurations/copy-source";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import {
-  buildIsActive,
   buildRevisionIdentity,
   canPromoteRoleImage,
   canRequestBuild,
@@ -92,7 +92,9 @@ const promotionReceipt = computed(() =>
   props.recipeRef ? store.promotionReceipts[props.recipeRef] : undefined,
 );
 const buildActive = computed(() =>
-  currentBuild.value ? buildIsActive(currentBuild.value) : false,
+  currentBuild.value
+    ? !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(currentBuild.value.stage)
+    : false,
 );
 const promotionPending = computed(
   () =>
@@ -264,6 +266,22 @@ async function runCommand(
   }
 }
 
+async function cancelCurrentBuild(): Promise<void> {
+  const current = currentBuild.value;
+  if (!recipe.value || !current || store.mutating || hasLocalChanges.value ||
+      !recipe.value.nextActions.includes("CANCEL_BUILD") ||
+      ["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(current.stage) ||
+      !window.confirm(t("roleImages.cancelBuildConfirm"))) return;
+  try {
+    await store.command(props.projectRef, recipe.value, "CANCEL_BUILD", current.ref);
+    lifecyclePollAttempts = 0;
+    sync();
+    scheduleBuildPolling();
+  } catch {
+    // Store сохраняет нормализованную problem-модель для видимого состояния.
+  }
+}
+
 async function confirmLifecycle(): Promise<void> {
   if (!confirmationAction.value) return;
   await runCommand(confirmationAction.value);
@@ -382,6 +400,16 @@ onBeforeUnmount(() => {
           >
             <Hammer :size="16" aria-hidden="true" />
             {{ t("roleImages.requestBuild") }}
+          </button>
+          <button
+            v-if="recipe.nextActions.includes('CANCEL_BUILD') && currentBuild && !['COMPLETED', 'CANCELLED', 'DEAD_LETTER'].includes(currentBuild.stage)"
+            class="button"
+            type="button"
+            :disabled="store.mutating || hasLocalChanges"
+            @click="cancelCurrentBuild"
+          >
+            <Square :size="16" aria-hidden="true" />
+            {{ t("roleImages.cancelBuild") }}
           </button>
           <button
             v-if="recipe.nextActions.includes('ARCHIVE')"

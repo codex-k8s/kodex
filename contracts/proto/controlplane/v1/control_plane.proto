@@ -514,6 +514,7 @@ enum NextAction {
   NEXT_ACTION_RESTORE = 39;
   NEXT_ACTION_REQUEST_BUILD = 40;
   NEXT_ACTION_PURGE = 41;
+  NEXT_ACTION_CANCEL_BUILD = 42;
 }
 
 enum EntityLifecycle {

@@ -2819,6 +2819,7 @@ const (
 	NextActionARCHIVE              NextAction = "ARCHIVE"
 	NextActionBIND                 NextAction = "BIND"
 	NextActionCANCEL               NextAction = "CANCEL"
+	NextActionCANCELBUILD          NextAction = "CANCEL_BUILD"
 	NextActionCOMPLETEONBOARDING   NextAction = "COMPLETE_ONBOARDING"
 	NextActionCONFIGURECREDENTIAL  NextAction = "CONFIGURE_CREDENTIAL"
 	NextActionCOPY                 NextAction = "COPY"
@@ -2871,6 +2872,8 @@ func (e NextAction) Valid() bool {
 	case NextActionBIND:
 		return true
 	case NextActionCANCEL:
+		return true
+	case NextActionCANCELBUILD:
 		return true
 	case NextActionCOMPLETEONBOARDING:
 		return true
@@ -4648,6 +4651,7 @@ func (e RoleImageRecipeState) Valid() bool {
 // Defines values for RoleImageRecipeCommandAction.
 const (
 	RoleImageRecipeCommandActionARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
+	RoleImageRecipeCommandActionCANCELBUILD  RoleImageRecipeCommandAction = "CANCEL_BUILD"
 	RoleImageRecipeCommandActionREQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
 	RoleImageRecipeCommandActionRESTORE      RoleImageRecipeCommandAction = "RESTORE"
 )
@@ -4656,6 +4660,8 @@ const (
 func (e RoleImageRecipeCommandAction) Valid() bool {
 	switch e {
 	case RoleImageRecipeCommandActionARCHIVE:
+		return true
+	case RoleImageRecipeCommandActionCANCELBUILD:
 		return true
 	case RoleImageRecipeCommandActionREQUESTBUILD:
 		return true
@@ -11356,7 +11362,8 @@ type RoleImageRecipeState string
 
 // RoleImageRecipeCommand defines model for RoleImageRecipeCommand.
 type RoleImageRecipeCommand struct {
-	Action RoleImageRecipeCommandAction `json:"action"`
+	Action   RoleImageRecipeCommandAction `json:"action"`
+	BuildRef *string                      `json:"buildRef,omitempty"`
 }
 
 // RoleImageRecipeCommandAction defines model for RoleImageRecipeCommand.Action.

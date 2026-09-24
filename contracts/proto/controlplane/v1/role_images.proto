@@ -234,6 +234,7 @@ enum RoleImageRecipeAction {
   ROLE_IMAGE_RECIPE_ACTION_ARCHIVE = 3;
   ROLE_IMAGE_RECIPE_ACTION_RESTORE = 4;
   ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD = 5;
+  ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD = 6;
 }
 
 message ListRoleImageRecipesRequest {
@@ -271,6 +272,7 @@ message ManageRoleImageRecipeRequest {
   string name = 5;
   string project_ref = 7;
   RoleEnvironmentSelection environment = 8;
+  string build_ref = 9;
 }
 
 message ManageRoleImageRecipeResponse {

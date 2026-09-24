@@ -115,7 +115,7 @@ func (repository *Repository) managedRoleImageTarget(ctx context.Context, tx pgx
 	if err != nil {
 		return nil, err
 	}
-	if set.ManagedBy != "UI" && input.Action != "REQUEST_BUILD" {
+	if set.ManagedBy != "UI" && input.Action != "REQUEST_BUILD" && input.Action != "CANCEL_BUILD" {
 		return nil, errs.ErrConflict
 	}
 	if set.Archived && input.Action != "RESTORE" {

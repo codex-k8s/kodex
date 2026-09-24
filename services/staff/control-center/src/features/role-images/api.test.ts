@@ -289,6 +289,18 @@ describe("role image API adapter", () => {
     );
   });
 
+  it("передаёт точную попытку для отмены без ARCHIVE", async () => {
+    api.commandRoleImageRecipe.mockReturnValueOnce(
+      response({ recipe, reused: false }),
+    );
+    await commandRoleImage("project_1", recipe, "CANCEL_BUILD", "imgbld_12345678");
+    expect(api.commandRoleImageRecipe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { action: "CANCEL_BUILD", buildRef: "imgbld_12345678" },
+      }),
+    );
+  });
+
   it("создаёт и обновляет immutable recipe с точным Dockerfile", async () => {
     api.createRoleImageRecipe.mockReturnValueOnce(response(recipe));
     api.updateRoleImageRecipe.mockReturnValueOnce(

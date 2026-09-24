@@ -294,7 +294,7 @@ func (server *RoleImageServer) ManageRoleImageRecipe(ctx context.Context, reques
 	}
 	result, err := server.service.Manage(ctx, roleimagerepository.ManageInput{
 		Principal: p, Mutation: mutation(request.GetMutation()), Action: roleImageAction(request.GetAction()),
-		RecipeRef: request.GetRecipeRef(), ProjectRef: request.GetProjectRef(),
+		RecipeRef: request.GetRecipeRef(), ProjectRef: request.GetProjectRef(), BuildRef: request.GetBuildRef(),
 		RoleDefinitionRef: request.GetRoleDefinitionRef(), Name: request.GetName(),
 		Environment: domainRoleEnvironmentSelection(request.GetEnvironment()),
 	})

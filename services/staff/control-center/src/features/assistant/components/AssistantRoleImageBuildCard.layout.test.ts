@@ -17,10 +17,10 @@ describe("AssistantRoleImageBuildCard", () => {
     expect(source).toContain("role-image");
   });
 
-  it("останавливает активную сборку только через версионную команду ARCHIVE", () => {
-    expect(source).toContain('current.nextActions.includes("ARCHIVE")');
+  it("отменяет точную сборку без архивирования рецепта", () => {
+    expect(source).toContain('current.nextActions.includes("CANCEL_BUILD")');
     expect(source).toContain(
-      'commandRoleImage(exact.projectRef, current, "ARCHIVE")',
+      'commandRoleImage(exact.projectRef, current, "CANCEL_BUILD", build.value.ref)',
     );
     expect(source).toContain("assistant.roleImageBuild.stopConfirm");
     expect(source).toContain("onCleanup");

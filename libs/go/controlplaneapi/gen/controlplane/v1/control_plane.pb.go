@@ -205,6 +205,7 @@ const (
 	NextAction_NEXT_ACTION_RESTORE              NextAction = 39
 	NextAction_NEXT_ACTION_REQUEST_BUILD        NextAction = 40
 	NextAction_NEXT_ACTION_PURGE                NextAction = 41
+	NextAction_NEXT_ACTION_CANCEL_BUILD         NextAction = 42
 )
 
 // Enum value maps for NextAction.
@@ -252,6 +253,7 @@ var (
 		39: "NEXT_ACTION_RESTORE",
 		40: "NEXT_ACTION_REQUEST_BUILD",
 		41: "NEXT_ACTION_PURGE",
+		42: "NEXT_ACTION_CANCEL_BUILD",
 	}
 	NextAction_value = map[string]int32{
 		"NEXT_ACTION_UNSPECIFIED":          0,
@@ -296,6 +298,7 @@ var (
 		"NEXT_ACTION_RESTORE":              39,
 		"NEXT_ACTION_REQUEST_BUILD":        40,
 		"NEXT_ACTION_PURGE":                41,
+		"NEXT_ACTION_CANCEL_BUILD":         42,
 	}
 )
 
@@ -80034,7 +80037,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"#PROJECT_PERMISSION_MANAGE_SCHEDULES\x10\n" +
 	"\x12*\n" +
 	"&PROJECT_PERMISSION_MANAGE_INTEGRATIONS\x10\v\x12!\n" +
-	"\x1dPROJECT_PERMISSION_VIEW_AUDIT\x10\f*\x9f\t\n" +
+	"\x1dPROJECT_PERMISSION_VIEW_AUDIT\x10\f*\xbd\t\n" +
 	"\n" +
 	"NextAction\x12\x1b\n" +
 	"\x17NEXT_ACTION_UNSPECIFIED\x10\x00\x12\x14\n" +
@@ -80079,7 +80082,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x12NEXT_ACTION_UPDATE\x10&\x12\x17\n" +
 	"\x13NEXT_ACTION_RESTORE\x10'\x12\x1d\n" +
 	"\x19NEXT_ACTION_REQUEST_BUILD\x10(\x12\x15\n" +
-	"\x11NEXT_ACTION_PURGE\x10)*\xcd\x01\n" +
+	"\x11NEXT_ACTION_PURGE\x10)\x12\x1c\n" +
+	"\x18NEXT_ACTION_CANCEL_BUILD\x10**\xcd\x01\n" +
 	"\x0fEntityLifecycle\x12 \n" +
 	"\x1cENTITY_LIFECYCLE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16ENTITY_LIFECYCLE_DRAFT\x10\x01\x12\x1b\n" +

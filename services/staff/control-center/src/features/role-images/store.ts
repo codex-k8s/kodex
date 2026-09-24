@@ -271,11 +271,12 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     projectRef: string,
     recipe: RoleImageRecipe,
     action: RoleImageRecipeCommand["action"],
+    buildRef?: string,
   ): Promise<void> {
     mutating.value = true;
     problem.value = undefined;
     try {
-      const receipt = await commandRoleImage(projectRef, recipe, action);
+      const receipt = await commandRoleImage(projectRef, recipe, action, buildRef);
       recipes[receipt.recipe.ref] = receipt.recipe;
       if (receipt.imageBuild) {
         const current = builds[receipt.recipe.ref] ?? [];

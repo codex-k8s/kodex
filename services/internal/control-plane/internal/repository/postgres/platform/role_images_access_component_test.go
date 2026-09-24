@@ -239,6 +239,42 @@ func testRoleImageApplicationAccess(t *testing.T, ctx context.Context, repositor
 	if err != nil || requested.Build == nil {
 		t.Fatalf("exact builder request build failed: result=%#v err=%v", requested, err)
 	}
+	if _, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: roleImageCandidate, Action: "CANCEL_BUILD", ProjectRef: project.Ref, RecipeRef: current.Ref,
+		BuildRef: "imgbld_not_this_build", Mutation: roleImageTestMutation("role-image-cancel-other-build", "CANCEL_BUILD", &buildVersion),
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("cancellation accepted a build outside the recipe: %v", err)
+	}
+	cancelled, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: roleImageCandidate, Action: "CANCEL_BUILD", ProjectRef: project.Ref, RecipeRef: current.Ref,
+		BuildRef: requested.Build.Ref, Mutation: roleImageTestMutation("role-image-cancel-exact-build", "CANCEL_BUILD", &buildVersion),
+	})
+	if err != nil || cancelled.Build == nil || cancelled.Build.Ref != requested.Build.Ref || cancelled.Build.Stage != "CANCELLED" ||
+		cancelled.Recipe.State != "ACTIVE" || cancelled.Recipe.Version != requested.Recipe.Version {
+		t.Fatalf("exact cancellation changed the recipe or missed the build: result=%#v err=%v", cancelled, err)
+	}
+	replayedCancellation, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: roleImageCandidate, Action: "CANCEL_BUILD", ProjectRef: project.Ref, RecipeRef: current.Ref,
+		BuildRef: requested.Build.Ref, Mutation: roleImageTestMutation("role-image-cancel-exact-build", "CANCEL_BUILD", &buildVersion),
+	})
+	if err != nil || replayedCancellation.Build == nil || replayedCancellation.Build.Ref != requested.Build.Ref || replayedCancellation.Build.Stage != "CANCELLED" {
+		t.Fatalf("exact cancellation replay created another effect: result=%#v err=%v", replayedCancellation, err)
+	}
+	cancelledReadback, err := repository.Get(ctx, roleImageCandidate, current.Ref)
+	if err != nil || cancelledReadback.Recipe.State != "ACTIVE" {
+		t.Fatalf("cancelled recipe readback failed: %#v err=%v", cancelledReadback.Recipe, err)
+	}
+	for _, item := range cancelledReadback.Builds {
+		if item.Ref == requested.Build.Ref && item.Stage != "CANCELLED" {
+			t.Fatalf("cancelled build was resurrected: %#v", item)
+		}
+	}
+	if _, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: roleImageCandidate, Action: "CANCEL_BUILD", ProjectRef: project.Ref, RecipeRef: current.Ref,
+		BuildRef: requested.Build.Ref, Mutation: roleImageTestMutation("role-image-cancel-again", "CANCEL_BUILD", &buildVersion),
+	}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("a new cancellation accepted an already terminal build: %v", err)
+	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.RevokeAccessBinding, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "role-image-source-revoke", ExpectedVersion: &sourceBinding.Version},
 		Payload:  command.AccessBindingInput{BindingRef: sourceBinding.Ref}}); err != nil {
