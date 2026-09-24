@@ -137,7 +137,7 @@ func assistantOperationType(value string) bool {
 	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
-		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE":
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
 		return true
 	default:
 		return false
@@ -176,6 +176,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "CREATE_ROLE_IMAGE_RECIPE" {
 		return repository.hydrateAssistantRoleImage(ctx, tx, actorScope, projectRef, operation)
+	}
+	if operation.Type == "UPDATE_ROLE_IMAGE_RECIPE" {
+		return repository.hydrateAssistantRoleImageUpdate(ctx, tx, actorScope, projectRef, operation)
 	}
 
 	if targetKind, targetName, ok := assistantCreateTarget(operation.Type, operation.Parameters); ok {
@@ -535,7 +538,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -585,6 +588,9 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "UPDATE_SCHEDULE":
 		expectedTargetKind = "SCHEDULE"
 		expectedTargetRef = assistantString(operation.Parameters, "scheduleRef")
+	case "UPDATE_ROLE_IMAGE_RECIPE":
+		expectedTargetKind = "ROLE_IMAGE_RECIPE"
+		expectedTargetRef = assistantString(operation.Parameters, "recipeRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
@@ -735,6 +741,23 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateAssistantRoleImageRecipe, payload
+	case "UPDATE_ROLE_IMAGE_RECIPE":
+		if !onlyAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "expectedVersion") ||
+			!hasAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "expectedVersion") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		expected, valid := assistantInt64(operation.Input, "expectedVersion")
+		payload := command.AssistantRoleImageUpdateInput{
+			ProjectRef: assistantString(operation.Input, "projectRef"), RecipeRef: assistantString(operation.Input, "recipeRef"),
+			Name:        assistantString(operation.Input, "name"),
+			Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey")},
+		}
+		if !valid || expected < 1 || payload.ProjectRef == "" || payload.RecipeRef == "" ||
+			payload.Name == "" || len(payload.Name) > 160 || payload.Environment.EnvironmentKey == "" || len(payload.Environment.EnvironmentKey) > 96 {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.UpdateAssistantRoleImageRecipe, payload
+		result.Mutation.ExpectedVersion = &expected
 	case "UPDATE_AGENT":
 		if !onlyAssistantFields(operation.Input, "agentRef", "name", "purpose", "roleDescription", "avatarUrl", "expectedVersion") ||
 			!hasAssistantFields(operation.Input, "agentRef", "name", "purpose", "roleDescription", "avatarUrl", "expectedVersion") {

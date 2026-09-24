@@ -282,6 +282,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		return repository.createAssistantRoleImage(ctx, tx, scope, payload)
+	case command.UpdateAssistantRoleImageRecipe:
+		return repository.updateAssistantRoleImage(ctx, tx, scope, input)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
 	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,

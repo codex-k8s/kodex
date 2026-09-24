@@ -251,7 +251,8 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		if resource.kind == "PROJECT" && !contains(projection.AllowedOperations, "CREATE_RUNTIME_ENVIRONMENT_DRAFT") {
 			t.Fatal("project context did not publish its environment draft capability")
 		}
-		if resource.kind == "PROJECT" && !contains(projection.AllowedOperations, "CREATE_ROLE_IMAGE_RECIPE") {
+		if resource.kind == "PROJECT" && (!contains(projection.AllowedOperations, "CREATE_ROLE_IMAGE_RECIPE") ||
+			!contains(projection.AllowedOperations, "UPDATE_ROLE_IMAGE_RECIPE")) {
 			t.Fatal("project context did not publish its role image capability")
 		}
 		resolved, err := repository.ResolvePrincipal(ctx, owner)

@@ -111,6 +111,40 @@ describe("assistant role image build target", () => {
     expect(assistantRoleImageBuildTarget(plan, "op_other")).toBeUndefined();
   });
 
+  it("наблюдает новую сборку только у точно обновлённого рецепта", () => {
+    const updated = {
+      ...imageOperation,
+      type: "UPDATE_ROLE_IMAGE_RECIPE" as const,
+      action: "UPDATE" as const,
+      target: {
+        kind: "ROLE_IMAGE_RECIPE",
+        ref: "rimg_exact",
+        name: "Образ разработчика",
+        version: 4,
+      },
+    };
+    expect(
+      assistantRoleImageBuildTarget(
+        { ...plan, operations: [updated] },
+        "op_image",
+      ),
+    ).toEqual({
+      projectRef: "prj_market",
+      recipeRef: "rimg_exact",
+    });
+    expect(
+      assistantRoleImageBuildTarget(
+        {
+          ...plan,
+          operations: [
+            { ...updated, target: { ...updated.target, ref: "rimg_other" } },
+          ],
+        },
+        "op_image",
+      ),
+    ).toBeUndefined();
+  });
+
   it("не связывает сборку с другой ревизией, планом или дублированным эффектом", () => {
     expect(
       assistantRoleImageBuildTarget({ ...plan, revision: 3 }, "op_image"),
@@ -202,20 +236,61 @@ describe("assistant role image build target", () => {
 
   it("открывает привязку окружения только по точной применённой квитанции", () => {
     const bindingOperation: AssistantPlanOperation = {
-      ...operation(), ref: "op_binding", type: "BIND_AGENT_RUNTIME_ENVIRONMENT",
-      action: "UPDATE", target: { kind: "AGENT", ref: "agt_exact", name: "Developer" },
+      ...operation(),
+      ref: "op_binding",
+      type: "BIND_AGENT_RUNTIME_ENVIRONMENT",
+      action: "UPDATE",
+      target: { kind: "AGENT", ref: "agt_exact", name: "Developer" },
       after: { environmentRef: "renv_exact", versionRef: "renvv_exact" },
     };
     const bindingPlan: AssistantPlan = {
-      ...plan, operations: [bindingOperation], receipt: {
-        ...receipt, operationReceipts: [{ operationRef: "op_binding", resourceRef: "agt_exact", outcome: "APPLIED", auditRef: "aud_binding" }],
+      ...plan,
+      operations: [bindingOperation],
+      receipt: {
+        ...receipt,
+        operationReceipts: [
+          {
+            operationRef: "op_binding",
+            resourceRef: "agt_exact",
+            outcome: "APPLIED",
+            auditRef: "aud_binding",
+          },
+        ],
       },
     };
-    expect(assistantAgentEnvironmentBindingTarget(bindingPlan, "op_binding")).toEqual({
-      projectRef: "prj_market", agentRef: "agt_exact", environmentRef: "renv_exact", versionRef: "renvv_exact",
+    expect(
+      assistantAgentEnvironmentBindingTarget(bindingPlan, "op_binding"),
+    ).toEqual({
+      projectRef: "prj_market",
+      agentRef: "agt_exact",
+      environmentRef: "renv_exact",
+      versionRef: "renvv_exact",
     });
-    expect(assistantAgentEnvironmentBindingTarget({ ...bindingPlan, state: "DRAFT" }, "op_binding")).toBeUndefined();
-    expect(assistantAgentEnvironmentBindingTarget({ ...bindingPlan, receipt: { ...receipt, operationReceipts: [{ operationRef: "op_binding", resourceRef: "agt_other", outcome: "APPLIED", auditRef: "aud_binding" }] } }, "op_binding")).toBeUndefined();
+    expect(
+      assistantAgentEnvironmentBindingTarget(
+        { ...bindingPlan, state: "DRAFT" },
+        "op_binding",
+      ),
+    ).toBeUndefined();
+    expect(
+      assistantAgentEnvironmentBindingTarget(
+        {
+          ...bindingPlan,
+          receipt: {
+            ...receipt,
+            operationReceipts: [
+              {
+                operationRef: "op_binding",
+                resourceRef: "agt_other",
+                outcome: "APPLIED",
+                auditRef: "aud_binding",
+              },
+            ],
+          },
+        },
+        "op_binding",
+      ),
+    ).toBeUndefined();
   });
 
   it("связывает подключение с квитанцией без проектного контекста", () => {
@@ -796,6 +871,41 @@ describe("assistant plan editor model", () => {
     expect(changed?.parameters.agentRef).toBe("agt_developer");
     expect(changed?.parameters.agentVersion).toBe(7);
     expect(changed?.parameters.environmentKey).toBe("documents");
+  });
+
+  it("показывает обновление образа в форме без изменения exact ref", () => {
+    const before = {
+      projectRef: "prj_market",
+      recipeRef: "rimg_exact",
+      name: "Образ",
+      environmentKey: "standard",
+    };
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "UPDATE_ROLE_IMAGE_RECIPE",
+        action: "UPDATE",
+        target: {
+          kind: "ROLE_IMAGE_RECIPE",
+          ref: "rimg_exact",
+          name: "Образ",
+          version: 4,
+        },
+        expectedVersion: 4,
+        parameters: { ...before, name: "Образ 2" },
+        before,
+        after: { ...before, name: "Образ 2" },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("UPDATE_ROLE_IMAGE_RECIPE");
+    updateOperationParameter(first, "environmentKey", "documents");
+    const changed = operationInputs(editable)[0];
+    expect(changed?.target.ref).toBe("rimg_exact");
+    expect(changed?.parameters.environmentKey).toBe("documents");
+    expect(changed?.before).toEqual(before);
   });
 
   it("редактирует только публичную конфигурацию подключения, сохраняя тип интеграции", () => {

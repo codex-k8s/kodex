@@ -229,6 +229,50 @@ func TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields(t *testing.T) 
 	}
 }
 
+func TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields(t *testing.T) {
+	t.Parallel()
+	version := int64(4)
+	before := map[string]any{"projectRef": "prj_example", "recipeRef": "imgrec_exact", "name": "Old image", "environmentKey": "standard"}
+	after := cloneAssistantFields(before)
+	after["name"] = "New image"
+	operation := entity.AssistantPlanOperation{Type: "UPDATE_ROLE_IMAGE_RECIPE", Key: "image-update", Title: "New image",
+		Summary: "Update image", Action: "UPDATE", Target: entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Ref: "imgrec_exact", Name: "Old image", Version: &version},
+		ExpectedVersion: &version, Parameters: after, Before: before, After: cloneAssistantFields(after), Selected: true}
+	normalized, err := normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.UpdateAssistantRoleImageRecipe {
+		t.Fatalf("map image update: kind=%q err=%v", mapped.Kind, err)
+	}
+	payload := mapped.Payload.(command.AssistantRoleImageUpdateInput)
+	if payload.ProjectRef != "prj_example" || payload.RecipeRef != "imgrec_exact" || payload.Name != "New image" || *mapped.Mutation.ExpectedVersion != version {
+		t.Fatalf("image update lost trusted target: %#v", payload)
+	}
+	edited := operation
+	edited.Parameters = cloneAssistantFields(after)
+	edited.Parameters["environmentKey"] = "documents"
+	rehydrated, err := rehydrateEditedAssistantRoleImageUpdate(operation, edited)
+	if err != nil || rehydrated.Target.Ref != "imgrec_exact" || assistantString(rehydrated.After, "environmentKey") != "documents" {
+		t.Fatalf("image update edit lost target: operation=%#v err=%v", rehydrated, err)
+	}
+	for _, key := range []string{"projectRef", "recipeRef"} {
+		forged := edited
+		forged.Parameters = cloneAssistantFields(edited.Parameters)
+		forged.Parameters[key] = "forged"
+		if _, err := rehydrateEditedAssistantRoleImageUpdate(operation, forged); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("image update changed %s: %v", key, err)
+		}
+	}
+	forged := operation
+	forged.Input = cloneAssistantFields(after)
+	forged.Input["secretValue"] = "must-not-enter-plan"
+	if _, err := assistantOperationCommand(forged); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("image update accepted secret field: %v", err)
+	}
+}
+
 func TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities(t *testing.T) {
 	t.Parallel()
 	input := map[string]any{

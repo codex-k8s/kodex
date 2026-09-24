@@ -1521,7 +1521,8 @@ const ru = {
     createRevision: "Создать ревизию",
     requestBuild: "Запросить сборку",
     cancelBuild: "Остановить сборку",
-    cancelBuildConfirm: "Остановить эту сборку? Рецепт образа останется доступен для повторной сборки.",
+    cancelBuildConfirm:
+      "Остановить эту сборку? Рецепт образа останется доступен для повторной сборки.",
     restore: "Восстановить",
     confirmArchive:
       "Архивировать этот образ? Новые сборки станут недоступны до восстановления.",
@@ -2926,6 +2927,7 @@ const ru = {
       PREPARE_RUNTIME_ENVIRONMENT_REVISION:
         "Подготовить новую ревизию окружения",
       CREATE_ROLE_IMAGE_RECIPE: "Создать рецепт образа",
+      UPDATE_ROLE_IMAGE_RECIPE: "Изменить рецепт образа",
       CREATE_WORKFLOW: "Создать Workflow",
       CHANGE_CAPABILITY: "Изменить возможности",
       CHANGE_INTEGRATION_GRANT: "Изменить доступ к подключению",
@@ -3099,9 +3101,11 @@ const ru = {
     },
     bindingCard: {
       title: "Рабочее окружение сотрудника",
-      loadFailed: "Не удалось прочитать привязку окружения. Повторите обновление.",
+      loadFailed:
+        "Не удалось прочитать привязку окружения. Повторите обновление.",
       bound: "Назначено окружение «{environment}».",
-      changed: "Привязка изменилась после применения плана. Проверьте текущую конфигурацию сотрудника.",
+      changed:
+        "Привязка изменилась после применения плана. Проверьте текущую конфигурацию сотрудника.",
       open: "Открыть окружение сотрудника",
     },
     launchedRun: {
@@ -3181,16 +3185,20 @@ const ru = {
         "Укажите название и корректную ссылку на образ или оставьте поле образа пустым.",
       environmentRevisionNextSteps:
         "После подтверждения будет создан черновик новой ревизии. Откройте его, проверьте влияние на сотрудников и опубликуйте отдельно.",
-      bindingBoundary: "Назначается только готовая опубликованная среда этого проекта. Секреты и параметры окружения здесь не меняются.",
-      bindingLoadFailed: "Не удалось проверить сотрудника или окружение. Обновите план.",
+      bindingBoundary:
+        "Назначается только готовая опубликованная среда этого проекта. Секреты и параметры окружения здесь не меняются.",
+      bindingLoadFailed:
+        "Не удалось проверить сотрудника или окружение. Обновите план.",
       bindingStale: "Версия сотрудника изменилась. Попросите новый план.",
       bindingCurrent: "Сейчас назначено: {environment}.",
       bindingTarget: "Новое окружение",
       bindingChoose: "Выберите готовое окружение",
       bindingSearch: "Найти окружение",
       bindingUnavailable: "Окружение не готово к назначению.",
-      bindingNextSteps: "После изменения выбора сохраните план и повторно проверьте его перед применением.",
+      bindingNextSteps:
+        "После изменения выбора сохраните план и повторно проверьте его перед применением.",
       roleImageAgent: "Образ для сотрудника",
+      roleImageName: "Название образа",
       roleImageAgentUnavailable: "Сотрудник не найден в доступном каталоге",
       roleImageAgentFixed:
         "Если нужен другой сотрудник, попросите помощника переделать план. Здесь привязка не меняется.",
@@ -4213,7 +4221,8 @@ const en = {
     createRevision: "Create revision",
     requestBuild: "Request build",
     cancelBuild: "Stop build",
-    cancelBuildConfirm: "Stop this build? The image recipe will remain available for another build.",
+    cancelBuildConfirm:
+      "Stop this build? The image recipe will remain available for another build.",
     restore: "Restore",
     confirmArchive:
       "Archive this image? New builds will be unavailable until it is restored.",
@@ -6294,6 +6303,7 @@ const en = {
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION: "Prepare environment revision",
       CREATE_ROLE_IMAGE_RECIPE: "Create image recipe",
+      UPDATE_ROLE_IMAGE_RECIPE: "Update image recipe",
       CREATE_WORKFLOW: "Create Workflow",
       CHANGE_CAPABILITY: "Change capabilities",
       CHANGE_INTEGRATION_GRANT: "Change connection access",
@@ -6464,9 +6474,11 @@ const en = {
     },
     bindingCard: {
       title: "Employee work environment",
-      loadFailed: "Could not read the environment binding. Refresh to try again.",
+      loadFailed:
+        "Could not read the environment binding. Refresh to try again.",
       bound: "Environment “{environment}” is assigned.",
-      changed: "The binding changed after this plan was applied. Check the employee's current configuration.",
+      changed:
+        "The binding changed after this plan was applied. Check the employee's current configuration.",
       open: "Open employee environment",
     },
     launchedRun: {
@@ -6544,16 +6556,20 @@ const en = {
         "Provide a name and a valid image reference, or leave the image field empty.",
       environmentRevisionNextSteps:
         "Confirmation creates a revision draft. Open it, review its impact on employees, and publish separately.",
-      bindingBoundary: "Only a ready, published environment in this project can be assigned. Secrets and environment settings do not change here.",
-      bindingLoadFailed: "Could not verify the employee or environment. Refresh the plan.",
+      bindingBoundary:
+        "Only a ready, published environment in this project can be assigned. Secrets and environment settings do not change here.",
+      bindingLoadFailed:
+        "Could not verify the employee or environment. Refresh the plan.",
       bindingStale: "The employee version changed. Ask for a new plan.",
       bindingCurrent: "Currently assigned: {environment}.",
       bindingTarget: "New environment",
       bindingChoose: "Choose a ready environment",
       bindingSearch: "Find an environment",
       bindingUnavailable: "This environment is not ready to assign.",
-      bindingNextSteps: "If you change the selection, save the plan and validate it again before applying.",
+      bindingNextSteps:
+        "If you change the selection, save the plan and validate it again before applying.",
       roleImageAgent: "Image for employee",
+      roleImageName: "Image name",
       roleImageAgentUnavailable: "Employee not found in the accessible catalog",
       roleImageAgentFixed:
         "Ask the assistant to revise the plan if you need another employee. This binding cannot be changed here.",

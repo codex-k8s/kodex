@@ -7340,6 +7340,8 @@ const (
 	AssistantPlanOperation_TYPE_PREPARE_RUNTIME_ENVIRONMENT_REVISION AssistantPlanOperation_Type = 16
 	// Привязать текущую проверенную версию окружения к обычному сотруднику по exact version.
 	AssistantPlanOperation_TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT AssistantPlanOperation_Type = 17
+	// Изменить существующий каталожный рецепт образа по точной версии и поставить новую сборку.
+	AssistantPlanOperation_TYPE_UPDATE_ROLE_IMAGE_RECIPE AssistantPlanOperation_Type = 18
 )
 
 // Enum value maps for AssistantPlanOperation_Type.
@@ -7363,6 +7365,7 @@ var (
 		15: "TYPE_CREATE_ROLE_IMAGE_RECIPE",
 		16: "TYPE_PREPARE_RUNTIME_ENVIRONMENT_REVISION",
 		17: "TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT",
+		18: "TYPE_UPDATE_ROLE_IMAGE_RECIPE",
 	}
 	AssistantPlanOperation_Type_value = map[string]int32{
 		"TYPE_UNSPECIFIED":                          0,
@@ -7383,6 +7386,7 @@ var (
 		"TYPE_CREATE_ROLE_IMAGE_RECIPE":             15,
 		"TYPE_PREPARE_RUNTIME_ENVIRONMENT_REVISION": 16,
 		"TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT":       17,
+		"TYPE_UPDATE_ROLE_IMAGE_RECIPE":             18,
 	}
 )
 
@@ -74872,7 +74876,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x9d\v\n" +
+	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xc0\v\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
 	"\x04type\x18\x02 \x01(\x0e2,.controlplane.v1.AssistantPlanOperation.TypeR\x04type\x12\x14\n" +
@@ -74896,7 +74900,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06before\x18\x0e \x01(\v2\x17.google.protobuf.StructR\x06before\x12-\n" +
 	"\x05after\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x05after\x12\x1a\n" +
 	"\bselected\x18\x10 \x01(\bR\bselected\x12/\n" +
-	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xab\x04\n" +
+	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xce\x04\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -74916,7 +74920,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"%TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT\x10\x0e\x12!\n" +
 	"\x1dTYPE_CREATE_ROLE_IMAGE_RECIPE\x10\x0f\x12-\n" +
 	")TYPE_PREPARE_RUNTIME_ENVIRONMENT_REVISION\x10\x10\x12'\n" +
-	"#TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT\x10\x11\"n\n" +
+	"#TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT\x10\x11\x12!\n" +
+	"\x1dTYPE_UPDATE_ROLE_IMAGE_RECIPE\x10\x12\"n\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rACTION_CREATE\x10\x01\x12\x11\n" +

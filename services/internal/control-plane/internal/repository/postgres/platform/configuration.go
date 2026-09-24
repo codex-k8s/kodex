@@ -1184,6 +1184,13 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				err = errs.ErrConflict
 			}
 		}
+		if operation.Type == "UPDATE_ROLE_IMAGE_RECIPE" {
+			var matching bool
+			matching, err = repository.assistantRoleImageUpdateSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if err == nil {
 			outcome, err = repository.applyCommand(ctx, operationEffectsTx, scope, planned)
 		}

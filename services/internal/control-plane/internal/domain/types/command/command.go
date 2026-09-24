@@ -188,6 +188,7 @@ const (
 	RebindPromptTemplate               Kind = "REBIND_PROMPT_TEMPLATE_CONSUMERS"
 	CreateRoleImageRevisionDraft       Kind = "CREATE_ROLE_IMAGE_REVISION_DRAFT"
 	CreateAssistantRoleImageRecipe     Kind = "CREATE_ASSISTANT_ROLE_IMAGE_RECIPE"
+	UpdateAssistantRoleImageRecipe     Kind = "UPDATE_ASSISTANT_ROLE_IMAGE_RECIPE"
 	ValidateRoleImageRevision          Kind = "VALIDATE_ROLE_IMAGE_REVISION_DRAFT"
 	PublishRoleImageRevision           Kind = "PUBLISH_ROLE_IMAGE_REVISION_DRAFT"
 	RebindRoleImage                    Kind = "REBIND_ROLE_IMAGE_CONSUMERS"
@@ -244,6 +245,10 @@ type AssistantRoleImageRecipeInput struct {
 	ProjectRef, AgentRef, Name string
 	AgentVersion               int64
 	Environment                entity.RoleEnvironmentSelection
+}
+type AssistantRoleImageUpdateInput struct {
+	ProjectRef, RecipeRef, Name string
+	Environment                 entity.RoleEnvironmentSelection
 }
 type AgentBindingInput struct {
 	AgentRef, BindingRef string

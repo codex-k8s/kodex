@@ -133,6 +133,12 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 				return commandOutcome{}, err
 			}
 			payload.Operations[index] = updated
+		case "UPDATE_ROLE_IMAGE_RECIPE":
+			updated, err := rehydrateEditedAssistantRoleImageUpdate(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		}
 	}
 	operations, err := normalizeAssistantOperations(payload.Operations, projectRef)
@@ -276,6 +282,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 				continue
 			}
 		}
+		if operation.Type == "UPDATE_ROLE_IMAGE_RECIPE" {
+			matching, snapshotErr := repository.assistantRoleImageUpdateSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
 		current, checked, versionErr := repository.assistantTargetVersion(ctx, tx, scope, operation)
 		if versionErr != nil {
 			problems = append(problems, fmt.Sprintf("operation-%d-target-unavailable", index+1))
@@ -322,6 +335,8 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 		kind, ref = "INTEGRATION_CONNECTION", assistantString(operation.Input, "connectionRef")
 	case "UPDATE_SCHEDULE":
 		kind, ref = "SCHEDULE", assistantString(operation.Input, "scheduleRef")
+	case "UPDATE_ROLE_IMAGE_RECIPE":
+		kind, ref = "ROLE_IMAGE_RECIPE", assistantString(operation.Input, "recipeRef")
 	default:
 		return 0, false, nil
 	}

@@ -136,7 +136,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatal("assistant plan envelope lost the allowed operation types")
 	}
 	oneOf := assistantPlanOperationSchemas(input)
-	if len(oneOf) != 14 {
+	if len(oneOf) != 15 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
@@ -179,6 +179,11 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		imageProperties["agentRef"] == nil || imageProperties["name"] == nil ||
 		imageProperties["agentVersion"] != nil || imageProperties["secretValue"] != nil {
 		t.Fatalf("role image schema exposed owner fields or lost project binding: %#v", imageProperties)
+	}
+	updateImageProperties := byType["UPDATE_ROLE_IMAGE_RECIPE"]["properties"].(map[string]any)
+	if updateImageProperties["recipeRef"] == nil || updateImageProperties["name"] == nil ||
+		updateImageProperties["agentRef"] != nil || updateImageProperties["secretValue"] != nil {
+		t.Fatalf("role image update schema exposed owner fields: %#v", updateImageProperties)
 	}
 	stepProperties := workflowProperties["steps"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
 	if len(stepProperties["parallelGroup"].(map[string]any)["oneOf"].([]map[string]any)) != 2 {
@@ -237,7 +242,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
 	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 0 ||
-		len(catalog["operation_types"].([]string)) != 14 {
+		len(catalog["operation_types"].([]string)) != 15 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
@@ -245,7 +250,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
 	if err != nil || len(compact.(map[string]any)["operation_schemas"].([]map[string]any)) != 0 ||
-		len(compact.(map[string]any)["operation_types"].([]string)) != 14 {
+		len(compact.(map[string]any)["operation_types"].([]string)) != 15 {
 		t.Fatalf("compact configuration catalog is invalid: %v", err)
 	}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN", "CREATE_WORKFLOW"}})
@@ -668,5 +673,21 @@ func TestNormalizeRoleImageRecipePinsCurrentProjectAndAgentReference(t *testing.
 		parameters["environmentKey"] != "standard" || operation["title"] != "Создать рецепт образа «Developer image»" ||
 		assistantServerTarget("CREATE_ROLE_IMAGE_RECIPE", parameters, nil)["kind"] != "ROLE_IMAGE_RECIPE" {
 		t.Fatalf("role image recipe was not server-bound: %#v", operation)
+	}
+}
+
+func TestNormalizeRoleImageUpdatePinsCurrentProjectAndRecipe(t *testing.T) {
+	t.Parallel()
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"type":       "UPDATE_ROLE_IMAGE_RECIPE",
+		"parameters": map[string]any{"project_ref": "prj_untrusted", "recipe_ref": "imgrec_exact", "name": "New image"},
+	}, "Update image", "prj_current1", "Marketplace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parameters := operation["parameters"].(map[string]any)
+	if parameters["projectRef"] != "prj_current1" || parameters["recipeRef"] != "imgrec_exact" ||
+		assistantServerTarget("UPDATE_ROLE_IMAGE_RECIPE", parameters, nil)["kind"] != "ROLE_IMAGE_RECIPE" {
+		t.Fatalf("role image update was not server-bound: %#v", operation)
 	}
 }

@@ -974,7 +974,9 @@ onBeforeUnmount(() => {
                   </ol>
                   <AssistantRoleImageBuildCard
                     v-for="operation in turn.plan.operations.filter(
-                      (item) => item.type === 'CREATE_ROLE_IMAGE_RECIPE',
+                      (item) =>
+                        item.type === 'CREATE_ROLE_IMAGE_RECIPE' ||
+                        item.type === 'UPDATE_ROLE_IMAGE_RECIPE',
                     )"
                     :key="`build-${operation.ref}`"
                     :plan="turn.plan"
@@ -1003,7 +1005,9 @@ onBeforeUnmount(() => {
                     @navigate="close"
                   />
                   <AssistantAgentEnvironmentBindingCard
-                    v-for="operation in turn.plan.operations.filter((item) => item.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT')"
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) => item.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT',
+                    )"
                     :key="`binding-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"

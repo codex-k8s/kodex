@@ -44,12 +44,22 @@ export function assistantRoleImageBuildTarget(
   plan: AssistantPlan,
   operationRef: string,
 ): { projectRef: string; recipeRef: string } | undefined {
-  const recipeRef = assistantAppliedResourceRef(
+  const createdRef = assistantAppliedResourceRef(
     plan,
     operationRef,
     "CREATE_ROLE_IMAGE_RECIPE",
     "ROLE_IMAGE_RECIPE",
   );
+  const updatedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "UPDATE_ROLE_IMAGE_RECIPE",
+    "ROLE_IMAGE_RECIPE",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const recipeRef =
+    createdRef ||
+    (updatedRef === operation?.target.ref ? updatedRef : undefined);
   return plan.projectRef && recipeRef
     ? { projectRef: plan.projectRef, recipeRef }
     : undefined;
@@ -80,15 +90,28 @@ export function assistantEnvironmentDraftTarget(
 export function assistantAgentEnvironmentBindingTarget(
   plan: AssistantPlan,
   operationRef: string,
-): { projectRef: string; agentRef: string; environmentRef: string; versionRef: string } | undefined {
+):
+  | {
+      projectRef: string;
+      agentRef: string;
+      environmentRef: string;
+      versionRef: string;
+    }
+  | undefined {
   const agentRef = assistantAppliedResourceRef(
-    plan, operationRef, "BIND_AGENT_RUNTIME_ENVIRONMENT", "AGENT",
+    plan,
+    operationRef,
+    "BIND_AGENT_RUNTIME_ENVIRONMENT",
+    "AGENT",
   );
   const operation = plan.operations.find((item) => item.ref === operationRef);
   const environmentRef = operation?.after.environmentRef;
   const versionRef = operation?.after.versionRef;
-  return plan.projectRef && agentRef && operation?.target.ref === agentRef &&
-    typeof environmentRef === "string" && typeof versionRef === "string"
+  return plan.projectRef &&
+    agentRef &&
+    operation?.target.ref === agentRef &&
+    typeof environmentRef === "string" &&
+    typeof versionRef === "string"
     ? { projectRef: plan.projectRef, agentRef, environmentRef, versionRef }
     : undefined;
 }
@@ -232,6 +255,7 @@ export type FriendlyPlanOperationType =
   | "UPDATE_SCHEDULE"
   | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
   | "CREATE_ROLE_IMAGE_RECIPE"
+  | "UPDATE_ROLE_IMAGE_RECIPE"
   | "CREATE_INTEGRATION_CONNECTION"
   | "UPDATE_INTEGRATION_CONNECTION"
   | "LAUNCH_RUN";
@@ -254,13 +278,15 @@ export function friendlyPlanOperationType(
     operation.value.type !== "UPDATE_SCHEDULE" &&
     operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
     operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
+    operation.value.type !== "UPDATE_ROLE_IMAGE_RECIPE" &&
     operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
     operation.value.type !== "UPDATE_INTEGRATION_CONNECTION" &&
     operation.value.type !== "LAUNCH_RUN"
   )
     return undefined;
   const expectedKind =
-    operation.value.type === "CREATE_ROLE_IMAGE_RECIPE"
+    operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
+    operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
       ? "ROLE_IMAGE_RECIPE"
       : operation.value.type === "CREATE_INTEGRATION_CONNECTION"
         ? "INTEGRATION_CONNECTION"

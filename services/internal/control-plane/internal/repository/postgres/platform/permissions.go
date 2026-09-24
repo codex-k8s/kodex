@@ -27,6 +27,13 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 			return errs.ErrInvalid
 		}
 		return repository.authorizeAssistantRoleImage(ctx, tx, current, payload)
+	case command.UpdateAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.AssistantRoleImageUpdateInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		_, _, err := repository.assistantRoleImageUpdateInput(ctx, tx, current, input.Mutation, payload)
+		return err
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
 		_, ok := input.Payload.(command.ProjectLifecycleInput)
 		if !ok {

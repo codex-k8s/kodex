@@ -285,10 +285,15 @@ watch(
     roleImageEnvironments.value = [];
     roleImageCatalogProblem.value = false;
     const projectRef = plan.projectRef;
+    const createRoleImage = plan.operations.some(
+      (operation) => operation.type === "CREATE_ROLE_IMAGE_RECIPE",
+    );
     if (
       !projectRef ||
       !plan.operations.some(
-        (operation) => operation.type === "CREATE_ROLE_IMAGE_RECIPE",
+        (operation) =>
+          operation.type === "CREATE_ROLE_IMAGE_RECIPE" ||
+          operation.type === "UPDATE_ROLE_IMAGE_RECIPE",
       )
     )
       return;
@@ -297,24 +302,26 @@ watch(
     void (async () => {
       try {
         const names: Record<string, string> = {};
-        const visitedTokens = new Set<string>();
-        let pageToken: string | undefined;
-        do {
-          const page = (
-            await unwrap(
-              listAgents({
-                path: { projectRef },
-                query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
-                signal: controller.signal,
-              }),
-            )
-          ).data;
-          for (const agent of page.items) names[agent.ref] = agent.name;
-          pageToken = page.nextPageToken;
-          if (pageToken && visitedTokens.has(pageToken))
-            throw new Error("Agent catalog returned a repeated page token");
-          if (pageToken) visitedTokens.add(pageToken);
-        } while (pageToken);
+        if (createRoleImage) {
+          const visitedTokens = new Set<string>();
+          let pageToken: string | undefined;
+          do {
+            const page = (
+              await unwrap(
+                listAgents({
+                  path: { projectRef },
+                  query: { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+                  signal: controller.signal,
+                }),
+              )
+            ).data;
+            for (const agent of page.items) names[agent.ref] = agent.name;
+            pageToken = page.nextPageToken;
+            if (pageToken && visitedTokens.has(pageToken))
+              throw new Error("Agent catalog returned a repeated page token");
+            if (pageToken) visitedTokens.add(pageToken);
+          } while (pageToken);
+        }
         const environments = await loadRoleEnvironmentCatalog(
           controller.signal,
         );
@@ -912,13 +919,17 @@ function snapshot(value: string): Record<string, unknown> {
               "
             />
             <AssistantAgentEnvironmentBindingForm
-              v-else-if="operation.value.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT'"
+              v-else-if="
+                operation.value.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT'
+              "
               :operation="operation"
               :project-ref="plan.projectRef"
               :disabled="!editable"
               @valid="bindingFormValidity[operation.value.ref] = $event"
               @dirty="bindingFormTouched = true"
-              @parameter="(key, value) => updateOperationParameter(operation, key, value)"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
+              "
             />
             <AssistantSchedulePlanForm
               v-else-if="
@@ -1184,7 +1195,10 @@ function snapshot(value: string): Record<string, unknown> {
               <template
                 v-else-if="operation.value.target.kind === 'ROLE_IMAGE_RECIPE'"
               >
-                <div class="field">
+                <div
+                  v-if="operation.value.type === 'CREATE_ROLE_IMAGE_RECIPE'"
+                  class="field"
+                >
                   <span>{{ $t("assistant.planEditor.roleImageAgent") }}</span>
                   <strong>{{
                     roleImageAgentNames[fieldValue(operation, "agentRef")] ||
@@ -1194,6 +1208,15 @@ function snapshot(value: string): Record<string, unknown> {
                     $t("assistant.planEditor.roleImageAgentFixed")
                   }}</small>
                 </div>
+                <label v-else class="field">
+                  <span>{{ $t("assistant.planEditor.roleImageName") }}</span>
+                  <input
+                    :value="fieldValue(operation, 'name')"
+                    maxlength="160"
+                    :disabled="!editable"
+                    @input="setField(operation, 'name', $event)"
+                  />
+                </label>
                 <label class="field">
                   <span>{{
                     $t("assistant.planEditor.roleImageEnvironment")

@@ -606,6 +606,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                       AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
 	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                     AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
 	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                    AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
 	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                    AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
 )
@@ -648,6 +649,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE:
 		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE:
 		return true
@@ -774,6 +777,7 @@ const (
 	AssistantPlanOperationTypeUPDATEAGENT                       AssistantPlanOperationType = "UPDATE_AGENT"
 	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeUPDATEPROJECT                     AssistantPlanOperationType = "UPDATE_PROJECT"
+	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE             AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
 	AssistantPlanOperationTypeUPDATESCHEDULE                    AssistantPlanOperationType = "UPDATE_SCHEDULE"
 	AssistantPlanOperationTypeUPDATEWORKFLOW                    AssistantPlanOperationType = "UPDATE_WORKFLOW"
 )
@@ -816,6 +820,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeUPDATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE:
 		return true
 	case AssistantPlanOperationTypeUPDATESCHEDULE:
 		return true

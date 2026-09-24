@@ -825,6 +825,80 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		assistantConfigurationRef == "" || assistantRevisionRef == "" || assistantState != "PUBLISHED" || assistantBuildRef == "" {
 		t.Fatalf("assistant image managed build readback: state=%q err=%v", assistantState, err)
 	}
+	var imageVersion int64
+	if err := pool.QueryRow(ctx, `SELECT version FROM control_plane.role_image_recipes WHERE ref=$1`,
+		assistantRecipe.CreatedRefs[0]).Scan(&imageVersion); err != nil {
+		t.Fatalf("read assistant image version: %v", err)
+	}
+	imageUpdate := command.AssistantRoleImageUpdateInput{ProjectRef: environmentProjectRef,
+		RecipeRef: assistantRecipe.CreatedRefs[0], Name: "Assistant-managed image updated",
+		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"}}
+	imageTx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		t.Fatalf("open assistant image plan snapshot: %v", err)
+	}
+	imageOperation, err := repository.hydrateAssistantRoleImageUpdate(ctx, imageTx, ownerScope, environmentProjectRef,
+		entity.AssistantPlanOperation{Type: "UPDATE_ROLE_IMAGE_RECIPE", Key: "image-update", Title: "Update image",
+			Summary: "Update image", Parameters: map[string]any{"recipeRef": assistantRecipe.CreatedRefs[0], "name": imageUpdate.Name}})
+	if err != nil || imageOperation.Target.Ref != assistantRecipe.CreatedRefs[0] || imageOperation.ExpectedVersion == nil ||
+		*imageOperation.ExpectedVersion != imageVersion {
+		_ = imageTx.Rollback(ctx)
+		t.Fatalf("hydrate assistant image update plan: operation=%#v err=%v", imageOperation, err)
+	}
+	imageOperation, err = normalizeAssistantOperation(imageOperation)
+	if err != nil {
+		_ = imageTx.Rollback(ctx)
+		t.Fatalf("normalize assistant image update: %v", err)
+	}
+	matching, err := repository.assistantRoleImageUpdateSnapshotMatches(ctx, imageTx, ownerScope, imageOperation)
+	if err != nil || !matching {
+		_ = imageTx.Rollback(ctx)
+		t.Fatalf("assistant image plan snapshot mismatch: matching=%t err=%v", matching, err)
+	}
+	if err := imageTx.Rollback(ctx); err != nil {
+		t.Fatalf("close assistant image plan snapshot: %v", err)
+	}
+	foreignImageUpdate := imageUpdate
+	foreignImageUpdate.ProjectRef = "prj_unknown"
+	if _, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-update-cross-project", ExpectedVersion: &imageVersion},
+		Payload:  foreignImageUpdate}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant image update crossed project boundary: %v", err)
+	}
+	staleImageVersion := imageVersion + 1
+	if _, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-update-stale", ExpectedVersion: &staleImageVersion},
+		Payload:  imageUpdate}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("assistant image update accepted stale recipe version: %v", err)
+	}
+	updatedImage, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-update", ExpectedVersion: &imageVersion},
+		Payload:  imageUpdate})
+	if err != nil || len(updatedImage.RuntimeItems) != 1 || updatedImage.RuntimeItems[0]["imageBuildRef"] == "" ||
+		updatedImage.RuntimeItems[0]["imageBuildRef"] == assistantRecipe.RuntimeItems[0]["imageBuildRef"] {
+		t.Fatalf("assistant image update did not queue a new build: result=%#v err=%v", updatedImage.RuntimeItems, err)
+	}
+	var updatedImageName, originalBuildStage string
+	if err := pool.QueryRow(ctx, `SELECT name FROM control_plane.role_image_recipes WHERE ref=$1`,
+		assistantRecipe.CreatedRefs[0]).Scan(&updatedImageName); err != nil || updatedImageName != imageUpdate.Name {
+		t.Fatalf("assistant image update did not persist the name: name=%q err=%v", updatedImageName, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT stage FROM control_plane.image_builds WHERE ref=$1`,
+		assistantRecipe.RuntimeItems[0]["imageBuildRef"]).Scan(&originalBuildStage); err != nil || originalBuildStage != "CANCELLED" {
+		t.Fatalf("assistant image update did not fence previous build: stage=%q err=%v", originalBuildStage, err)
+	}
+	imageTx, err = pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		t.Fatalf("open stale assistant image snapshot: %v", err)
+	}
+	matching, err = repository.assistantRoleImageUpdateSnapshotMatches(ctx, imageTx, ownerScope, imageOperation)
+	if err != nil || matching {
+		_ = imageTx.Rollback(ctx)
+		t.Fatalf("stale assistant image plan remained valid: matching=%t err=%v", matching, err)
+	}
+	if err := imageTx.Rollback(ctx); err != nil {
+		t.Fatalf("close stale assistant image snapshot: %v", err)
+	}
 	roleContent := string(asJSON(map[string]any{"name": "Runtime role image", "roleImage": map[string]any{"roleDefinitionRef": roleAgent.RoleDefinitionRef, "environment": map[string]any{"environmentKey": "promotion"}}}))
 	roleImage := publishAndRebindManagedConfiguration(t, ctx, service, owner,
 		"managed-role-image", command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
@@ -3030,8 +3104,8 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 		}
 		return tx.Commit(ctx)
 	}
-	const upgradedRevision = "system-assistant-core-v19"
-	const upgradedPrompt = "Platform-owned system assistant core prompt revision eighteen."
+	const upgradedRevision = "system-assistant-core-v20"
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision twenty."
 	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
 		t.Fatalf("upgrade core prompt: %v", err)
 	}
