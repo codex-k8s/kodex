@@ -31,6 +31,7 @@ paths:
               additionalProperties: false
               properties:
                 marker: {type: string, maxLength: 64}
+                note: {type: string, maxLength: 64}
               required: [marker]
       responses:
         '201': {description: Created}
@@ -384,7 +385,7 @@ async function verifyImportedMCPInvocation(
       initialInstructions: [
         "В каждом задании сначала вызови get_integration_catalog с точными connection_ref и capability_key.",
         "Из найденного гранта возьми definition_version, definition_digest и input_schema_sha256.",
-        "После этого вызови ровно один invoke_integration с этими полями и указанным input.",
+        "После этого вызови invoke_integration с этими полями и указанным input ровно столько раз, сколько требует задание.",
         "Не используй shell, curl и прямой HTTP.",
         "После результата кратко сообщи итог и заверши работу.",
       ].join(" "),
@@ -419,6 +420,7 @@ async function verifyImportedMCPInvocation(
     title: string,
     capabilityKey: string,
     input: Record<string, unknown>,
+    secondInput?: Record<string, unknown>,
   ): Promise<Run> => {
     const created = await mutate<{ run: Run }>(page, "/api/v1/runs", {
       projectRef: project.ref,
@@ -426,12 +428,16 @@ async function verifyImportedMCPInvocation(
       targetType: "AGENT",
       title,
       task: [
-        "Сначала найди точный грант через get_integration_catalog, затем вызови один invoke_integration для:",
+        "Сначала найди точный грант через get_integration_catalog, затем вызови invoke_integration для:",
         JSON.stringify({
           connection_ref: connectionRef,
           capability_key: capabilityKey,
           input,
         }),
+        ...(secondInput ? [
+          "После результата первого вызова выполни второй invoke_integration для:",
+          JSON.stringify({ connection_ref: connectionRef, capability_key: capabilityKey, input: secondInput }),
+        ] : []),
         "Не меняй эти значения, скопируй обязательные version/digest/schema из каталога и заверши ответ.",
       ].join("\n"),
     });
@@ -440,10 +446,12 @@ async function verifyImportedMCPInvocation(
   };
   const readRun = await run(`Локальный OpenAPI READ ${suffix}`, readKey, {});
   await waitForRun(page, readRun.ref, "SUCCEEDED");
-  await expectToolCall(page, readRun.ref);
+  await expectToolCalls(page, readRun.ref, 1);
 
   const writeRun = await run(`Локальный OpenAPI WRITE ${suffix}`, writeKey, {
-    body: { marker: `kodex-local-${suffix}` },
+    body: { marker: `kodex-local-${suffix}`, note: "first" },
+  }, {
+    body: { marker: `kodex-local-${suffix}`, note: "second" },
   });
   let gate: OwnerGate | undefined;
   await expect
@@ -476,7 +484,9 @@ async function verifyImportedMCPInvocation(
   );
   expect(resolution.gate.state).toBe("APPROVED");
   await waitForRun(page, writeRun.ref, "SUCCEEDED");
-  await expectToolCall(page, writeRun.ref);
+  await expectToolCalls(page, writeRun.ref, 2);
+  const finalRun = await read<Run>(page, `/api/v1/runs/${writeRun.ref}`);
+  expect(finalRun.gateRefs).toEqual([gate.ref]);
 }
 
 async function pinExecutableTestModel(page: Page, agentRef: string): Promise<void> {
@@ -549,11 +559,11 @@ async function waitForRun(
     .toBe(expected);
 }
 
-async function expectToolCall(page: Page, runRef: string): Promise<void> {
+async function expectToolCalls(page: Page, runRef: string, count: number): Promise<void> {
   const events = await read<{
     items: Array<{
       messageKind?: string;
-      toolCall?: { tool: string; state: string; auditRef: string };
+      toolCall?: { tool: string; state: string; auditRef: string; safeResult?: string };
     }>;
   }>(page, `/api/v1/runs/${runRef}/events?afterSequence=0&limit=500`);
   const calls = events.items.filter(
@@ -561,9 +571,25 @@ async function expectToolCall(page: Page, runRef: string): Promise<void> {
       event.messageKind === "TOOL_CALL" &&
       event.toolCall?.tool === "invoke_integration",
   );
-  expect(calls).toHaveLength(1);
-  expect(calls[0]?.toolCall?.state).toBe("SUCCEEDED");
-  expect(calls[0]?.toolCall?.auditRef).not.toBe("");
+  expect(calls).toHaveLength(count);
+  const invocationRefs = new Set<string>();
+  const inputDigests = new Set<string>();
+  for (const call of calls) {
+    expect(call.toolCall?.state).toBe("SUCCEEDED");
+    expect(call.toolCall?.auditRef).not.toBe("");
+    const result = JSON.parse(call.toolCall?.safeResult ?? "null") as {
+      invocationRef?: string;
+      state?: string;
+      inputSHA256?: string;
+    } | null;
+    expect(result?.state).toBe("SUCCEEDED");
+    expect(result?.invocationRef).toMatch(/^inv_/);
+    expect(result?.inputSHA256).toMatch(/^[a-f0-9]{64}$/);
+    invocationRefs.add(result?.invocationRef ?? "");
+    inputDigests.add(result?.inputSHA256 ?? "");
+  }
+  expect(invocationRefs.size).toBe(count);
+  expect(inputDigests.size).toBe(count);
 }
 
 async function mutate<T>(
