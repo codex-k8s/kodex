@@ -151,6 +151,34 @@ describe("Immutable managed drafts", () => {
     ).rejects.toThrow();
     expect(client.post).not.toHaveBeenCalled();
   });
+  it("принимает канонический JSON receipt после OpenAPI импорта интеграции", async () => {
+    const current: ManagedConfiguration = {
+      ...configuration,
+      kind: "INTEGRATION_DEFINITION",
+    };
+    const result: ManagedConfigurationResult = {
+      configuration: { ...current, version: 9 },
+      revision: {
+        ...revision,
+        ref: "revision_new",
+        revision: 4,
+        parentRevisionRef: revision.ref,
+        state: "DRAFT",
+        contentFormat: "JSON",
+        content: '{"kind":"IntegrationPackage"}',
+      },
+    };
+    client.post.mockResolvedValue(response(result));
+    await expect(
+      changeDraft(current, revision, {
+        contentFormat: "OPENAPI_IMPORT",
+        content: '{"source":"openapi: 3.1.0","options":{}}',
+      }),
+    ).resolves.toEqual(result);
+    expect(client.post.mock.calls[0]?.[0].body).toMatchObject({
+      contentFormat: "OPENAPI_IMPORT",
+    });
+  });
   it("не меняет Git-owned и terminal revisions", async () => {
     expect(
       canChangeDraft({ ...configuration, managedBy: "GIT" }, revision),

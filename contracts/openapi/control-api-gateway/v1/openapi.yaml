@@ -5603,7 +5603,10 @@ components:
         configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         name: { type: string, minLength: 1, maxLength: 160 }
-        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        contentFormat:
+          type: string
+          enum: [TEXT, JSON, YAML, TOML, OPENAPI_IMPORT]
+          description: OPENAPI_IMPORT разрешён только для черновика IntegrationDefinition; content содержит JSON с source и options, а сохранённая ревизия возвращается как канонический JSON.
         content: { type: string, minLength: 1, maxLength: 262144 }
         promptScope: { $ref: '#/components/schemas/PromptTemplateScopeInput' }
     ManagedConfigurationDraftSaveInput:
@@ -5611,7 +5614,10 @@ components:
       additionalProperties: false
       required: [contentFormat, content]
       properties:
-        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        contentFormat:
+          type: string
+          enum: [TEXT, JSON, YAML, TOML, OPENAPI_IMPORT]
+          description: OPENAPI_IMPORT разрешён только для IntegrationDefinition и нормализуется в JSON.
         promptScope: { $ref: '#/components/schemas/PromptTemplateScopeInput' }
         content:
           type: string

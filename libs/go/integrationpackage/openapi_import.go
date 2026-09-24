@@ -1,11 +1,13 @@
 package integrationpackage
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -15,15 +17,38 @@ import (
 // OpenAPIImportChoice является выбором владельца, а не входом MCP-вызова.
 // Сервер обязан проверить полномочия владельца перед сохранением результата.
 type OpenAPIImportChoice struct {
-	OperationID       string
-	Risk              string
-	ApprovalPolicy    string
-	IdempotencyHeader string
+	OperationID       string `json:"operationId"`
+	Risk              string `json:"risk"`
+	ApprovalPolicy    string `json:"approvalPolicy"`
+	IdempotencyHeader string `json:"idempotencyHeader,omitempty"`
 }
 
 type OpenAPIImportOptions struct {
-	Version, Name, Description, HealthOperationID string
-	Choices                                       []OpenAPIImportChoice
+	Version           string                `json:"version"`
+	Name              string                `json:"name"`
+	Description       string                `json:"description"`
+	HealthOperationID string                `json:"healthOperationId"`
+	Choices           []OpenAPIImportChoice `json:"choices"`
+}
+
+type OpenAPIImportPayload struct {
+	Source  string               `json:"source"`
+	Options OpenAPIImportOptions `json:"options"`
+}
+
+// DraftOpenAPIPackageFromJSON принимает строго ограниченный импортный
+// envelope из защищённой формы. Исходный документ не сохраняется в package.
+func DraftOpenAPIPackageFromJSON(ctx context.Context, raw []byte) (Package, error) {
+	if len(raw) == 0 || len(raw) > 256<<10 {
+		return Package{}, errors.New("OpenAPI import payload size is invalid")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var payload OpenAPIImportPayload
+	if decoder.Decode(&payload) != nil || decoder.Decode(&struct{}{}) != io.EOF || len(payload.Source) == 0 || len(payload.Source) > 128<<10 {
+		return Package{}, errors.New("OpenAPI import payload is invalid")
+	}
+	return DraftOpenAPIPackage(ctx, []byte(payload.Source), payload.Options)
 }
 
 // DraftOpenAPIPackage создаёт только проверенный черновик. Пока shipped

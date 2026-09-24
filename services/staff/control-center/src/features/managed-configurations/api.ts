@@ -226,7 +226,11 @@ export async function changeDraft(
       body.content.includes("\0") ||
       (configuration.kind === "PROMPT_TEMPLATE"
         ? body.contentFormat !== "TEXT"
-        : !["JSON", "YAML", "TOML"].includes(body.contentFormat)))
+        : !["JSON", "YAML", "TOML"].includes(body.contentFormat) &&
+          !(
+            configuration.kind === "INTEGRATION_DEFINITION" &&
+            body.contentFormat === "OPENAPI_IMPORT"
+          )))
   )
     throw new Error("Invalid managed draft content");
   const result = await mutate((headers) => {
@@ -251,7 +255,10 @@ export async function changeDraft(
         next.revision.parentRevisionRef !== revision.ref ||
         next.revision.state !== "DRAFT" ||
         next.revision.revision <= revision.revision ||
-        next.revision.contentFormat !== body.contentFormat
+        next.revision.contentFormat !==
+          (body.contentFormat === "OPENAPI_IMPORT"
+            ? "JSON"
+            : body.contentFormat)
       : next.revision.ref !== revision.ref ||
         next.revision.state !== "DISCARDED" ||
         next.revision.revision !== revision.revision)

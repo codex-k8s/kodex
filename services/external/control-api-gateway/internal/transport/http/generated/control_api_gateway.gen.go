@@ -2472,16 +2472,19 @@ func (e ManagedConfigurationCopyProvenanceOrigin) Valid() bool {
 
 // Defines values for ManagedConfigurationDraftInputContentFormat.
 const (
-	ManagedConfigurationDraftInputContentFormatJSON ManagedConfigurationDraftInputContentFormat = "JSON"
-	ManagedConfigurationDraftInputContentFormatTEXT ManagedConfigurationDraftInputContentFormat = "TEXT"
-	ManagedConfigurationDraftInputContentFormatTOML ManagedConfigurationDraftInputContentFormat = "TOML"
-	ManagedConfigurationDraftInputContentFormatYAML ManagedConfigurationDraftInputContentFormat = "YAML"
+	ManagedConfigurationDraftInputContentFormatJSON          ManagedConfigurationDraftInputContentFormat = "JSON"
+	ManagedConfigurationDraftInputContentFormatOPENAPIIMPORT ManagedConfigurationDraftInputContentFormat = "OPENAPI_IMPORT"
+	ManagedConfigurationDraftInputContentFormatTEXT          ManagedConfigurationDraftInputContentFormat = "TEXT"
+	ManagedConfigurationDraftInputContentFormatTOML          ManagedConfigurationDraftInputContentFormat = "TOML"
+	ManagedConfigurationDraftInputContentFormatYAML          ManagedConfigurationDraftInputContentFormat = "YAML"
 )
 
 // Valid indicates whether the value is a known member of the ManagedConfigurationDraftInputContentFormat enum.
 func (e ManagedConfigurationDraftInputContentFormat) Valid() bool {
 	switch e {
 	case ManagedConfigurationDraftInputContentFormatJSON:
+		return true
+	case ManagedConfigurationDraftInputContentFormatOPENAPIIMPORT:
 		return true
 	case ManagedConfigurationDraftInputContentFormatTEXT:
 		return true
@@ -2496,16 +2499,19 @@ func (e ManagedConfigurationDraftInputContentFormat) Valid() bool {
 
 // Defines values for ManagedConfigurationDraftSaveInputContentFormat.
 const (
-	ManagedConfigurationDraftSaveInputContentFormatJSON ManagedConfigurationDraftSaveInputContentFormat = "JSON"
-	ManagedConfigurationDraftSaveInputContentFormatTEXT ManagedConfigurationDraftSaveInputContentFormat = "TEXT"
-	ManagedConfigurationDraftSaveInputContentFormatTOML ManagedConfigurationDraftSaveInputContentFormat = "TOML"
-	ManagedConfigurationDraftSaveInputContentFormatYAML ManagedConfigurationDraftSaveInputContentFormat = "YAML"
+	ManagedConfigurationDraftSaveInputContentFormatJSON          ManagedConfigurationDraftSaveInputContentFormat = "JSON"
+	ManagedConfigurationDraftSaveInputContentFormatOPENAPIIMPORT ManagedConfigurationDraftSaveInputContentFormat = "OPENAPI_IMPORT"
+	ManagedConfigurationDraftSaveInputContentFormatTEXT          ManagedConfigurationDraftSaveInputContentFormat = "TEXT"
+	ManagedConfigurationDraftSaveInputContentFormatTOML          ManagedConfigurationDraftSaveInputContentFormat = "TOML"
+	ManagedConfigurationDraftSaveInputContentFormatYAML          ManagedConfigurationDraftSaveInputContentFormat = "YAML"
 )
 
 // Valid indicates whether the value is a known member of the ManagedConfigurationDraftSaveInputContentFormat enum.
 func (e ManagedConfigurationDraftSaveInputContentFormat) Valid() bool {
 	switch e {
 	case ManagedConfigurationDraftSaveInputContentFormatJSON:
+		return true
+	case ManagedConfigurationDraftSaveInputContentFormatOPENAPIIMPORT:
 		return true
 	case ManagedConfigurationDraftSaveInputContentFormatTEXT:
 		return true
@@ -10017,26 +10023,30 @@ type ManagedConfigurationDetachment struct {
 
 // ManagedConfigurationDraftInput defines model for ManagedConfigurationDraftInput.
 type ManagedConfigurationDraftInput struct {
-	ConfigurationRef *OpaqueRef                                  `json:"configurationRef,omitempty"`
-	Content          string                                      `json:"content"`
-	ContentFormat    ManagedConfigurationDraftInputContentFormat `json:"contentFormat"`
-	Name             string                                      `json:"name"`
-	ProjectRef       *OpaqueRef                                  `json:"projectRef,omitempty"`
-	PromptScope      *PromptTemplateScopeInput                   `json:"promptScope,omitempty"`
+	ConfigurationRef *OpaqueRef `json:"configurationRef,omitempty"`
+	Content          string     `json:"content"`
+
+	// ContentFormat OPENAPI_IMPORT разрешён только для черновика IntegrationDefinition; content содержит JSON с source и options, а сохранённая ревизия возвращается как канонический JSON.
+	ContentFormat ManagedConfigurationDraftInputContentFormat `json:"contentFormat"`
+	Name          string                                      `json:"name"`
+	ProjectRef    *OpaqueRef                                  `json:"projectRef,omitempty"`
+	PromptScope   *PromptTemplateScopeInput                   `json:"promptScope,omitempty"`
 }
 
-// ManagedConfigurationDraftInputContentFormat defines model for ManagedConfigurationDraftInput.ContentFormat.
+// ManagedConfigurationDraftInputContentFormat OPENAPI_IMPORT разрешён только для черновика IntegrationDefinition; content содержит JSON с source и options, а сохранённая ревизия возвращается как канонический JSON.
 type ManagedConfigurationDraftInputContentFormat string
 
 // ManagedConfigurationDraftSaveInput defines model for ManagedConfigurationDraftSaveInput.
 type ManagedConfigurationDraftSaveInput struct {
 	// Content Неполный текст допустим; ограничение 256 KiB применяется к UTF-8 байтам. Пустая строка разрешена, отсутствие поля и null запрещены.
-	Content       *string                                         `json:"content"`
+	Content *string `json:"content"`
+
+	// ContentFormat OPENAPI_IMPORT разрешён только для IntegrationDefinition и нормализуется в JSON.
 	ContentFormat ManagedConfigurationDraftSaveInputContentFormat `json:"contentFormat"`
 	PromptScope   *PromptTemplateScopeInput                       `json:"promptScope,omitempty"`
 }
 
-// ManagedConfigurationDraftSaveInputContentFormat defines model for ManagedConfigurationDraftSaveInput.ContentFormat.
+// ManagedConfigurationDraftSaveInputContentFormat OPENAPI_IMPORT разрешён только для IntegrationDefinition и нормализуется в JSON.
 type ManagedConfigurationDraftSaveInputContentFormat string
 
 // ManagedConfigurationGitSource Безопасная owner-проекция без credential, SourceWork, package и lease. READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin. SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта. failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.

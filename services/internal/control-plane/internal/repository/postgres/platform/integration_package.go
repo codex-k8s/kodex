@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
@@ -125,6 +126,25 @@ func (repository *Repository) normalizeIntegrationDraft(format, content, managed
 		return format, content
 	}
 	return "JSON", string(canonical)
+}
+
+func (repository *Repository) prepareIntegrationDraft(ctx context.Context, format, content, managedBy string) (string, string, error) {
+	if format == "OPENAPI_IMPORT" {
+		if managedBy != integrationpackage.OriginUI {
+			return "", "", errs.ErrConflict
+		}
+		definition, err := integrationpackage.DraftOpenAPIPackageFromJSON(ctx, []byte(content))
+		if err != nil {
+			return "", "", errs.ErrInvalid
+		}
+		canonical, err := json.Marshal(definition)
+		if err != nil {
+			return "", "", errs.ErrUnavailable
+		}
+		format, content = "JSON", string(canonical)
+	}
+	format, content = repository.normalizeIntegrationDraft(format, content, managedBy)
+	return format, content, nil
 }
 
 func (repository *Repository) executableIntegrationPackage(format, content string) (integrationpackage.Package, error) {

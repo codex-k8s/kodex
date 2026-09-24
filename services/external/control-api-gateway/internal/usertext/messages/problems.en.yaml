@@ -208,6 +208,12 @@ PROJECT_CREATED:
   other: Project created
 PROJECT_UPDATED:
   other: Project updated
+PROJECT_TRASHED:
+  other: Project moved to trash
+PROJECT_RESTORED:
+  other: Project restored from trash
+PROJECT_PURGE_REQUESTED:
+  other: Permanent project deletion requested
 PROJECT_ACCESS_UPDATED:
   other: Project access updated
 AGENT_CREATED_READY:

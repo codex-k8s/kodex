@@ -1,6 +1,8 @@
 package httptransport
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"unicode/utf8"
@@ -22,7 +24,7 @@ func (server *Server) CreatePromptTemplateDraft(w http.ResponseWriter, r *http.R
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body, true)
+	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body, controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE)
 	if !ok {
 		return
 	}
@@ -123,7 +125,7 @@ func (server *Server) CreateRoleImageRevisionDraft(w http.ResponseWriter, r *htt
 	if !requireManagedDraftProject(w, body, true) {
 		return
 	}
-	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body)
+	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body, controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE)
 	if !ok {
 		return
 	}
@@ -220,7 +222,7 @@ func (server *Server) CreateIntegrationDefinitionDraft(w http.ResponseWriter, r 
 	if !requireManagedDraftProject(w, body, false) {
 		return
 	}
-	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body)
+	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body, controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION)
 	if !ok {
 		return
 	}
@@ -231,6 +233,17 @@ func (server *Server) CreateIntegrationDefinitionDraft(w http.ResponseWriter, r 
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
+	}
+	if body.ContentFormat == "OPENAPI_IMPORT" {
+		canonical, err := canonicalOpenAPIImport(r.Context(), body.Content)
+		digest := sha256.Sum256([]byte(canonical))
+		if err != nil || result.GetConfiguration().GetKind() != controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION ||
+			result.GetConfiguration().GetManagedBy() != controlplanev1.ManagedConfigurationOwner_MANAGED_CONFIGURATION_OWNER_UI ||
+			result.GetRevision().GetContentFormat() != "JSON" || result.GetRevision().GetContent() != canonical ||
+			result.GetRevision().GetDigest() != hex.EncodeToString(digest[:]) {
+			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 	}
 	writeManagedResult(w, http.StatusCreated, result)
 }
@@ -297,7 +310,7 @@ func (server *Server) CreateSystemSTTConfigurationDraft(w http.ResponseWriter, r
 	if !requireManagedDraftProject(w, body, false) {
 		return
 	}
-	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body)
+	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), body, controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT)
 	if !ok {
 		return
 	}

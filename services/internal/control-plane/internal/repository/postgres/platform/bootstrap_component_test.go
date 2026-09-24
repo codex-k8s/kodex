@@ -319,6 +319,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("managed draft save and discard preserve immutable history", func(t *testing.T) {
 		testManagedDraftLifecycle(t, ctx, repository)
 	})
+	t.Run("OpenAPI import stores only a bounded unready definition draft", func(t *testing.T) {
+		testOpenAPIImportDraftLifecycle(t, ctx, repository)
+	})
 	t.Run("runtime environment create rejects a missing exact image", func(t *testing.T) {
 		testRuntimeEnvironmentRejectsMissingImage(t, ctx, repository)
 	})

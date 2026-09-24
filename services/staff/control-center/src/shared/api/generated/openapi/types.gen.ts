@@ -363,13 +363,19 @@ export type ManagedConfigurationDraftInput = {
     configurationRef?: OpaqueRef;
     projectRef?: OpaqueRef;
     name: string;
-    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    /**
+     * OPENAPI_IMPORT разрешён только для черновика IntegrationDefinition; content содержит JSON с source и options, а сохранённая ревизия возвращается как канонический JSON.
+     */
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML' | 'OPENAPI_IMPORT';
     content: string;
     promptScope?: PromptTemplateScopeInput;
 };
 
 export type ManagedConfigurationDraftSaveInput = {
-    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    /**
+     * OPENAPI_IMPORT разрешён только для IntegrationDefinition и нормализуется в JSON.
+     */
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML' | 'OPENAPI_IMPORT';
     promptScope?: PromptTemplateScopeInput;
     /**
      * Неполный текст допустим; ограничение 256 KiB применяется к UTF-8 байтам. Пустая строка разрешена, отсутствие поля и null запрещены.

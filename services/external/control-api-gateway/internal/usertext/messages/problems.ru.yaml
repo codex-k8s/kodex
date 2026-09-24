@@ -208,6 +208,12 @@ PROJECT_CREATED:
   other: Проект создан
 PROJECT_UPDATED:
   other: Проект обновлён
+PROJECT_TRASHED:
+  other: Проект перемещён в корзину
+PROJECT_RESTORED:
+  other: Проект восстановлен из корзины
+PROJECT_PURGE_REQUESTED:
+  other: Запрошено окончательное удаление проекта
 PROJECT_ACCESS_UPDATED:
   other: Доступ к проекту обновлён
 AGENT_CREATED_READY:

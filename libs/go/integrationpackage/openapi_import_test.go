@@ -1,6 +1,7 @@
 package integrationpackage
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -44,6 +45,28 @@ func openAPIImportOptions() OpenAPIImportOptions {
 		{OperationID: "getHealth", Risk: "READ", ApprovalPolicy: "NONE"},
 		{OperationID: "updateTicket", Risk: "WRITE", ApprovalPolicy: "HUMAN_SCOPED"},
 	}}
+}
+
+func TestDraftOpenAPIPackageFromJSONRequiresClosedBoundedEnvelope(t *testing.T) {
+	payload, err := json.Marshal(OpenAPIImportPayload{Source: openAPIImportFixture, Options: openAPIImportOptions()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DraftOpenAPIPackageFromJSON(t.Context(), payload); err != nil {
+		t.Fatal(err)
+	}
+	for name, raw := range map[string][]byte{
+		"unknown field":  append(append([]byte(nil), payload[:len(payload)-1]...), []byte(`,"unknown":true}`)...),
+		"trailing":       append(append([]byte(nil), payload...), []byte(` {}`)...),
+		"missing source": []byte(`{"options":{}}`),
+		"oversized":      []byte(strings.Repeat("x", 256<<10+1)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := DraftOpenAPIPackageFromJSON(t.Context(), raw); err == nil {
+				t.Fatal("invalid import envelope accepted")
+			}
+		})
+	}
 }
 
 func TestDraftOpenAPIPackagePinsSelectedOperationsAndSource(t *testing.T) {
