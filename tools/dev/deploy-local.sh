@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
-    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|core|integration-egress]' \
+    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress]' \
     '  [--workload <exact-core-deployment|stt-tts-service>]' >&2
 }
 
@@ -41,7 +41,7 @@ done
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
-case "$stage" in full|data|network|migrate|supply-chain|core|integration-egress) ;; *) fail 'deployment stage is invalid' ;; esac
+case "$stage" in full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress) ;; *) fail 'deployment stage is invalid' ;; esac
 [[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
@@ -1365,6 +1365,73 @@ PY
         fail "local image supply-chain Deployment is unavailable: $workload"
     done
     readback_local_image_supply_chain
+  fi
+  if [[ "$stage" == builder-runtime ]]; then
+    desired_builder=$(yq -o=json -I=0 '
+      select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime") | .data
+    ' "$render")
+    desired_policy_toolchain=$(yq -r '
+      select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
+      .data.toolchainSHA256
+    ' "$render")
+    desired_policy_sha=$(yq -r '
+      select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
+      .data.policySHA256
+    ' "$render")
+    current_policy=$(kubectl -n "$namespace" get configmap/kodex-image-admission-policy -o json) ||
+      fail 'local image admission policy is unavailable'
+    current_builder=$(kubectl -n "$namespace" get configmap/role-image-builder-runtime -o json) ||
+      fail 'local role image builder configuration is unavailable'
+    current_workload=$(kubectl -n "$namespace" get deployment/role-image-builder -o json) ||
+      fail 'local role image builder Deployment is unavailable'
+    current_control_plane=$(kubectl -n "$namespace" get deployment/control-plane -o json) ||
+      fail 'local control-plane Deployment is unavailable'
+    desired_image=$(yq -r '
+      select(.kind == "Deployment" and .metadata.name == "role-image-builder") |
+      .spec.template.spec.containers[] | select(.name == "role-image-builder") | .image
+    ' "$render")
+    desired_toolchain=$(jq -r '.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256' <<<"$desired_builder")
+    [[ "$desired_toolchain" =~ ^[a-f0-9]{64}$ &&
+      "$desired_toolchain" == "$desired_policy_toolchain" &&
+      "$desired_toolchain" == "$(jq -r '.data.toolchainSHA256' <<<"$current_policy")" ]] ||
+      fail 'role image builder toolchain does not match the live immutable admission policy'
+    [[ "$desired_policy_sha" =~ ^[a-f0-9]{64}$ &&
+      "$desired_policy_sha" == "$(jq -r '.data.policySHA256' <<<"$current_policy")" &&
+      "$desired_policy_sha" == "$(jq -r '
+        [.spec.template.spec.containers[].env[]? |
+          select(.name == "CONTROL_PLANE_IMAGE_POLICY_SHA256") | .value] | unique | first
+      ' <<<"$current_control_plane")" ]] ||
+      fail 'control-plane and role image builder do not share the live admission policy'
+    for resource in "$current_policy" "$current_builder" "$current_workload" "$current_control_plane"; do
+      jq -e '
+        .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+        .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+        .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster"
+      ' <<<"$resource" >/dev/null || fail 'role image builder resource is not owned by the local profile'
+    done
+    [[ "$desired_image" == "$(jq -r '
+      .spec.template.spec.containers[] | select(.name == "role-image-builder") | .image
+    ' <<<"$current_workload")" ]] ||
+      fail 'builder-runtime stage cannot change the role image builder binary'
+    jq -e --argjson desired "$desired_builder" '
+      (.data | del(.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256)) ==
+      ($desired | del(.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256))
+    ' <<<"$current_builder" >/dev/null ||
+      fail 'builder-runtime stage cannot change unrelated builder configuration'
+    if [[ "$mode" == apply ]]; then
+      apply_render role-image-builder-runtime '
+        select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime")
+      '
+      kubectl -n "$namespace" rollout restart deployment/role-image-builder >/dev/null ||
+        fail 'local role image builder could not restart after configuration change'
+    fi
+    kubectl -n "$namespace" rollout status deployment/role-image-builder --timeout=5m >/dev/null ||
+      fail 'local role image builder is unavailable after configuration change'
+    actual_toolchain=$(kubectl -n "$namespace" exec deployment/role-image-builder \
+      -c role-image-builder -- printenv ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256) ||
+      fail 'role image builder toolchain Pod readback failed'
+    [[ "$actual_toolchain" == "$desired_toolchain" ]] ||
+      fail 'role image builder Pod toolchain does not match the admission policy'
   fi
   if [[ "$stage" == core ]]; then
     if [[ "$mode" == apply ]]; then

@@ -88,6 +88,11 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toContain('assistantImportOpen: "1"');
   });
 
+  it("закрывает помощника при переходе к созданному образу", () => {
+    expect(template).toContain("<AssistantRoleImageBuildCard");
+    expect(template).toContain('@navigate="close"');
+  });
+
   it("после запроса доработки возвращает в диалог без отправки за пользователя", () => {
     expect(source).toContain("async function requestPlanChanges()");
     expect(source).toContain("await closePlan()");

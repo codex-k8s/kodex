@@ -15,6 +15,7 @@ describe("AssistantRoleImageBuildCard", () => {
     expect(source).toContain("build.progressPercent");
     expect(source).toContain("build.safeErrorCode");
     expect(source).toContain("role-image");
+    expect(source).toContain("@click=\"emit('navigate')\"");
   });
 
   it("отменяет точную сборку без архивирования рецепта", () => {

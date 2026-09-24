@@ -18,6 +18,7 @@ import type {
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
+const emit = defineEmits<{ navigate: [] }>();
 const { t } = useI18n();
 const target = computed(() =>
   assistantRoleImageBuildTarget(props.plan, props.operationRef),
@@ -27,8 +28,10 @@ const loading = ref(false);
 const stopping = ref(false);
 const problem = ref(false);
 const build = computed(() => latestBuild(detail.value?.builds ?? []));
-const cancellable = computed(() =>
-  build.value && !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(build.value.stage),
+const cancellable = computed(
+  () =>
+    build.value &&
+    !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(build.value.stage),
 );
 let refresh: (() => Promise<void>) | undefined;
 
@@ -92,7 +95,8 @@ async function stopBuild(): Promise<void> {
   if (
     !current ||
     !exact ||
-    !cancellable.value || !build.value ||
+    !cancellable.value ||
+    !build.value ||
     !current.nextActions.includes("CANCEL_BUILD") ||
     stopping.value ||
     !window.confirm(t("assistant.roleImageBuild.stopConfirm"))
@@ -100,7 +104,12 @@ async function stopBuild(): Promise<void> {
     return;
   stopping.value = true;
   try {
-    await commandRoleImage(exact.projectRef, current, "CANCEL_BUILD", build.value.ref);
+    await commandRoleImage(
+      exact.projectRef,
+      current,
+      "CANCEL_BUILD",
+      build.value.ref,
+    );
     await refresh?.();
   } catch {
     problem.value = true;
@@ -165,11 +174,14 @@ async function stopBuild(): Promise<void> {
             recipeRef: target.recipeRef,
           },
         }"
+        @click="emit('navigate')"
       >
         {{ $t("assistant.roleImageBuild.open") }}
       </RouterLink>
       <button
-        v-if="cancellable && detail?.recipe.nextActions.includes('CANCEL_BUILD')"
+        v-if="
+          cancellable && detail?.recipe.nextActions.includes('CANCEL_BUILD')
+        "
         class="button button--danger"
         type="button"
         :disabled="stopping || loading"

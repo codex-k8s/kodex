@@ -162,6 +162,16 @@ bounded ждёт восстановления API. Неизменная конф
 Успех стадии доказывает готовность инфраструктуры supply chain, но не сам
 RoleImage build/admission/promotion и не model Run.
 
+Для локального исправления только версии toolchain в ConfigMap builder без
+замены его образа служит `--stage builder-runtime`. Стадия допускает изменение
+только `ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256`, проверяет владельца
+ресурсов и совпадение toolchain и policy SHA в render, immutable admission
+policy и Deployment control-plane. Затем она перезапускает только Deployment
+builder и сверяет переменную в новом Pod. Если policy SHA разошлись, сначала
+нужно согласовать control-plane с живой policy через новый render и `--stage
+core --workload control-plane`; ослаблять проверку admission или повторять
+неудачный claim нельзя.
+
 `--stage core` запускает восемь основных Deployments. STT подключается отдельно
 через `--stage core --workload stt-tts-service` после готовности Control Plane,
 secret-broker и egress-gateway; отсутствие STT не задерживает начальный UI
