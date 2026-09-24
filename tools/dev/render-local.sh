@@ -388,6 +388,13 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
       (.metadata.name | test("^(kodex-image-registry-|kodex-buildkit$|role-image-builder$)")));
     .spec.replicas = 1
   ) |
+  # На одноузловом стенде второй BuildKit Pod не помещается по CPU.
+  # Нулевой surge освобождает прежний Pod до запуска нового.
+  with(select(.kind == "Deployment" and .metadata.name == "kodex-buildkit");
+    .spec.strategy.type = "RollingUpdate" |
+    .spec.strategy.rollingUpdate.maxSurge = 0 |
+    .spec.strategy.rollingUpdate.maxUnavailable = 1
+  ) |
   with(select(.kind == "Deployment");
     with((.spec.template.spec.initContainers[]?, .spec.template.spec.containers[]?) |
         select(.image | test("/image-admission-tools@sha256:"));
@@ -1625,6 +1632,9 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
       any($resources[]; .kind == "Deployment" and .metadata.name == $name))) and
   any($resources[]; .kind == "Deployment" and .metadata.name == "kodex-buildkit" and
     .spec.replicas == 1 and .spec.template.spec.hostUsers == false and
+    .spec.strategy.type == "RollingUpdate" and
+    .spec.strategy.rollingUpdate.maxSurge == 0 and
+    .spec.strategy.rollingUpdate.maxUnavailable == 1 and
     any(.spec.template.spec.containers[];
       .name == "buildkitd" and .securityContext.privileged == true and
       .resources.requests.cpu == "8" and
