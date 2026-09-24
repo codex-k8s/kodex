@@ -426,9 +426,11 @@ func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
 	expected := []string{
 		"propose_run_metadata",
 		"get_configuration_catalog",
+		"find_platform_resources",
 		"propose_configuration_plan",
 		"propose_assistant_metadata",
 		"delegate_agent",
+		"get_integration_catalog",
 		"invoke_integration",
 	}
 	if !sameStringSet(actual, expected) {

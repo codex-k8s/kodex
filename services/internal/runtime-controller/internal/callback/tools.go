@@ -15,7 +15,7 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover server-owned context and permitted operation types. Pass operation_types=[] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target. For integration setup, request definition_query (empty string lists the first page) and optional definition_offset; definitions are read from control-plane in pages of at most 10. Names are display data; use only exact opaque refs in plans.",
+		"description": "Discover server-owned context and permitted operation types. Omit operation_types or pass [] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target. For integration setup, request definition_query (empty string lists the first page) and optional definition_offset; definitions are read from control-plane in pages of at most 10. Names are display data; use only exact opaque refs in plans.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
@@ -86,8 +86,9 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 			return nil, errors.New("configuration catalog agent offset is invalid")
 		}
 	}
-	schemas := assistantPlanOperationSchemas(input)
-	operationTypes := assistantOperationTypesFromSchemas(schemas)
+	allSchemas := assistantPlanOperationSchemas(input)
+	operationTypes := assistantOperationTypesFromSchemas(allSchemas)
+	schemas := make([]map[string]any, 0, maximumAssistantDiscoveredSchemas)
 	if raw, selected := arguments["operation_types"]; selected {
 		requested, ok := raw.([]any)
 		if !ok || len(requested) > maximumAssistantDiscoveredSchemas {
@@ -111,14 +112,12 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 			}
 			selectedTypes[kind] = struct{}{}
 		}
-		filtered := make([]map[string]any, 0, len(selectedTypes))
-		for _, schema := range schemas {
+		for _, schema := range allSchemas {
 			kind := assistantSchemaType(schema)
 			if _, requested := selectedTypes[kind]; requested {
-				filtered = append(filtered, schema)
+				schemas = append(schemas, schema)
 			}
 		}
-		schemas = filtered
 	}
 	targets := append([]runtimecontract.RunnerDelegationTarget(nil), input.DelegationTargets...)
 	sort.Slice(targets, func(left, right int) bool {

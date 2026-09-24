@@ -33,3 +33,16 @@ func TestAssistantResourceSearchProjectionIsSystemOnly(t *testing.T) {
 		t.Fatal("resource search projection crossed its exact capability boundary")
 	}
 }
+
+func TestIntegrationCatalogProjectionHasExactReadCapability(t *testing.T) {
+	t.Parallel()
+	if !toolCapabilityMatches("get_integration_catalog", "platform.integration.catalog", false, false) ||
+		!toolCapabilityMatches("get_integration_catalog", "platform.integration.catalog", false, true) {
+		t.Fatal("integration catalog projection was rejected")
+	}
+	if toolCapabilityMatches("get_integration_catalog", "", false, true) ||
+		toolCapabilityMatches("get_integration_catalog", "platform.integration.catalog", true, true) ||
+		toolCapabilityMatches("invoke_integration", "platform.integration.catalog", false, true) {
+		t.Fatal("integration catalog projection crossed the invocation boundary")
+	}
+}

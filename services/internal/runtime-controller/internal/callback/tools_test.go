@@ -236,31 +236,31 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	catalog := result.(map[string]any)
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
-	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 14 {
+	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 0 ||
+		len(catalog["operation_types"].([]string)) != 14 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
-	}
-	workflowFound := false
-	for _, schema := range schemas {
-		properties := schema["properties"].(map[string]any)
-		if properties["type"].(map[string]any)["const"] != "CREATE_WORKFLOW" {
-			continue
-		}
-		workflowFound = properties["parameters"].(map[string]any)["properties"].(map[string]any)["steps"] != nil
-	}
-	if !workflowFound {
-		t.Fatal("configuration catalog does not expose the exact workflow contract")
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
 		t.Fatal("configuration catalog accepted caller input")
 	}
 	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
 	if err != nil || len(compact.(map[string]any)["operation_schemas"].([]map[string]any)) != 0 ||
-		len(compact.(map[string]any)["operation_types"].([]string)) != len(schemas) {
+		len(compact.(map[string]any)["operation_types"].([]string)) != 14 {
 		t.Fatalf("compact configuration catalog is invalid: %v", err)
 	}
-	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN"}})
-	if err != nil || len(selected.(map[string]any)["operation_schemas"].([]map[string]any)) != 2 {
+	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN", "CREATE_WORKFLOW"}})
+	if err != nil || len(selected.(map[string]any)["operation_schemas"].([]map[string]any)) != 3 {
 		t.Fatalf("selected configuration schemas are invalid: %v", err)
+	}
+	workflowFound := false
+	for _, schema := range selected.(map[string]any)["operation_schemas"].([]map[string]any) {
+		properties := schema["properties"].(map[string]any)
+		if properties["type"].(map[string]any)["const"] == "CREATE_WORKFLOW" {
+			workflowFound = properties["parameters"].(map[string]any)["properties"].(map[string]any)["steps"] != nil
+		}
+	}
+	if !workflowFound {
+		t.Fatal("configuration catalog does not expose the selected workflow contract")
 	}
 	for _, invalid := range []map[string]any{
 		{"operation_types": []any{"UNKNOWN"}},

@@ -308,6 +308,7 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 	}
 	expected := map[string]string{
 		"get_configuration_catalog":  "platform.configuration.read",
+		"get_integration_catalog":    "platform.integration.catalog",
 		"find_platform_resources":    "platform.resources.search",
 		"propose_configuration_plan": "platform.configuration.plan",
 		"propose_assistant_metadata": "platform.presentation.propose",

@@ -583,34 +583,20 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 		result = append(result, delegationTool(input.DelegationTargets))
 	}
 	if len(input.IntegrationGrants) != 0 {
-		result = append(result, integrationTool(input.IntegrationGrants))
+		result = append(result, integrationCatalogTool(), integrationTool())
 	}
 	return result
 }
 
-func integrationTool(grants []runtimecontract.RunnerIntegrationGrant) map[string]any {
-	variants := make([]any, 0, len(grants))
-	for _, grant := range grants {
-		var inputSchema map[string]any
-		if json.Unmarshal([]byte(grant.InputSchema), &inputSchema) != nil {
-			continue
-		}
-		variants = append(variants, map[string]any{
-			"type": "object", "additionalProperties": false,
-			"required": []string{"connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input"},
-			"properties": map[string]any{
-				"connection_ref":      map[string]any{"type": "string", "const": grant.ConnectionRef},
-				"capability_key":      map[string]any{"type": "string", "const": grant.CapabilityKey},
-				"definition_version":  map[string]any{"type": "string", "const": grant.DefinitionVersion},
-				"definition_digest":   map[string]any{"type": "string", "const": grant.DefinitionDigest},
-				"input_schema_sha256": map[string]any{"type": "string", "const": grant.InputSchemaSHA256},
-				"input":               inputSchema,
-			},
-		})
-	}
+func integrationTool() map[string]any {
 	return map[string]any{
-		"name": "invoke_integration", "description": "Invoke one exact typed integration grant from this RuntimeRevision.",
-		"inputSchema": map[string]any{"oneOf": variants},
+		"name": "invoke_integration", "description": "Invoke one exact typed integration grant from this RuntimeRevision. First use get_integration_catalog with the exact connection_ref and capability_key to read its input schema; the server revalidates this binding and input.",
+		"inputSchema": objectSchema([]string{"connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input"}, map[string]any{
+			"connection_ref": opaqueRefSchema(), "capability_key": stringSchema(1, 255),
+			"definition_version": stringSchema(1, 128), "definition_digest": stringSchema(64, 64),
+			"input_schema_sha256": stringSchema(64, 64),
+			"input":               map[string]any{"type": "object"},
+		}),
 	}
 }
 
@@ -654,6 +640,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	switch params.Name {
 	case "get_configuration_catalog":
 		result, err = server.configurationCatalog(request.Context(), input, params.Arguments)
+	case "get_integration_catalog":
+		result, err = integrationCatalog(input, params.Arguments)
 	case "find_platform_resources":
 		result, err = server.findPlatformResources(request.Context(), input, params.Arguments)
 	case "propose_configuration_plan":
@@ -1212,6 +1200,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	switch tool {
 	case "get_configuration_catalog":
 		return map[string]any{}, "platform.configuration.read", "", input.SystemAssistant
+	case "get_integration_catalog":
+		return map[string]any{}, "platform.integration.catalog", "", len(input.IntegrationGrants) != 0
 	case "find_platform_resources":
 		return map[string]any{}, "platform.resources.search", "", input.SystemAssistant
 	case "propose_configuration_plan":
