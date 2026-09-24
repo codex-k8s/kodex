@@ -11,8 +11,8 @@
         "failurePolicy": "Fail",
         "matchConditions": [
           {
-            "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane'",
-            "name": "control-plane-create"
+            "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane' \u0026\u0026 object.metadata.name.startsWith('egress-gateway-mail-')",
+            "name": "control-plane-mail-create"
           }
         ],
         "matchConstraints": {

@@ -99,6 +99,11 @@ func (repository *Repository) integrationPackage(ctx context.Context, runner que
 		return integrationpackage.Package{}, errs.ErrForbidden
 	}
 	if compatible, ok := integrationpackage.ResolveShippedRevision(shipped, version, digest); ok {
+		if key == "openapi-mcp" {
+			// Поставленный шаблон нужен только для создания подключения.
+			// Без опубликованной owner-ревизии его нельзя исполнять.
+			return integrationpackage.Package{}, errs.ErrForbidden
+		}
 		return compatible, nil
 	}
 	var format, content string

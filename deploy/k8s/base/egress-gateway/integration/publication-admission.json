@@ -1,0 +1,147 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "admissionregistration.k8s.io/v1",
+      "kind": "ValidatingAdmissionPolicy",
+      "metadata": {
+        "name": "egress-integration-configmap-publication"
+      },
+      "spec": {
+        "failurePolicy": "Fail",
+        "matchConditions": [
+          {
+            "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane' \u0026\u0026 object.metadata.name.startsWith('egress-gateway-integration-')",
+            "name": "control-plane-integration-create"
+          }
+        ],
+        "matchConstraints": {
+          "matchPolicy": "Equivalent",
+          "namespaceSelector": {},
+          "objectSelector": {},
+          "resourceRules": [
+            {
+              "apiGroups": [
+                ""
+              ],
+              "apiVersions": [
+                "v1"
+              ],
+              "operations": [
+                "CREATE"
+              ],
+              "resources": [
+                "configmaps"
+              ],
+              "scope": "*"
+            }
+          ]
+        },
+        "validations": [
+          {
+            "expression": "object.metadata.namespace == 'kodex-system' \u0026\u0026 object.metadata.name.matches('^egress-gateway-integration-[a-f0-9]{24}$')",
+            "message": "control-plane may only create exact integration projection ConfigMaps",
+            "reason": "Forbidden"
+          },
+          {
+            "expression": "has(object.immutable) \u0026\u0026 object.immutable == true \u0026\u0026 (!has(object.binaryData) || size(object.binaryData) == 0)",
+            "message": "integration projection ConfigMaps must be immutable",
+            "reason": "Forbidden"
+          },
+          {
+            "expression": "has(object.metadata.labels) \u0026\u0026 object.metadata.labels['app.kubernetes.io/name'] == 'egress-gateway' \u0026\u0026 object.metadata.labels['app.kubernetes.io/component'] == 'platform-egress' \u0026\u0026 (!has(object.metadata.ownerReferences) || size(object.metadata.ownerReferences) == 0)",
+            "message": "integration projection ConfigMap labels or ownership are invalid",
+            "reason": "Forbidden"
+          },
+          {
+            "expression": "has(object.data) \u0026\u0026 size(object.data) == 1 \u0026\u0026 'integration-policy.json' in object.data \u0026\u0026 size(object.data['integration-policy.json']) \u003e 0 \u0026\u0026 size(object.data['integration-policy.json']) \u003c= 65536 \u0026\u0026 object.data['integration-policy.json'].startsWith('{\"schema\":\"egress-integration/v1\",')",
+            "message": "integration projection ConfigMap payload is outside its registered boundary",
+            "reason": "Forbidden"
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "admissionregistration.k8s.io/v1",
+      "kind": "ValidatingAdmissionPolicyBinding",
+      "metadata": {
+        "name": "egress-integration-configmap-publication"
+      },
+      "spec": {
+        "matchResources": {
+          "matchPolicy": "Equivalent",
+          "namespaceSelector": {},
+          "objectSelector": {}
+        },
+        "policyName": "egress-integration-configmap-publication",
+        "validationActions": [
+          "Deny"
+        ]
+      }
+    },
+    {
+      "apiVersion": "admissionregistration.k8s.io/v1",
+      "kind": "ValidatingAdmissionPolicy",
+      "metadata": {
+        "name": "control-plane-egress-configmap-boundary"
+      },
+      "spec": {
+        "failurePolicy": "Fail",
+        "matchConditions": [
+          {
+            "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane'",
+            "name": "control-plane-create"
+          }
+        ],
+        "matchConstraints": {
+          "matchPolicy": "Equivalent",
+          "namespaceSelector": {},
+          "objectSelector": {},
+          "resourceRules": [
+            {
+              "apiGroups": [
+                ""
+              ],
+              "apiVersions": [
+                "v1"
+              ],
+              "operations": [
+                "CREATE"
+              ],
+              "resources": [
+                "configmaps"
+              ],
+              "scope": "*"
+            }
+          ]
+        },
+        "validations": [
+          {
+            "expression": "object.metadata.namespace == 'kodex-system' \u0026\u0026 (object.metadata.name.matches('^egress-gateway-mail-[a-f0-9]{24}$') || object.metadata.name.matches('^egress-gateway-integration-[a-f0-9]{24}$'))",
+            "message": "control-plane may only create registered egress projection ConfigMaps",
+            "reason": "Forbidden"
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "admissionregistration.k8s.io/v1",
+      "kind": "ValidatingAdmissionPolicyBinding",
+      "metadata": {
+        "name": "control-plane-egress-configmap-boundary"
+      },
+      "spec": {
+        "matchResources": {
+          "matchPolicy": "Equivalent",
+          "namespaceSelector": {},
+          "objectSelector": {}
+        },
+        "policyName": "control-plane-egress-configmap-boundary",
+        "validationActions": [
+          "Deny"
+        ]
+      }
+    }
+  ],
+  "kind": "List"
+}

@@ -4,14 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
+	egresspolicy "github.com/codex-k8s/kodex/libs/go/integrationegresspolicy"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
@@ -44,7 +49,16 @@ paths:
       responses: {'200': {description: OK}}
 `
 
-func testOpenAPIImportDraftLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
+type importedOriginResolver struct{}
+
+func (importedOriginResolver) Resolve(_ context.Context, host string) (egresspolicy.Snapshot, error) {
+	if host != "api.example.test" {
+		return egresspolicy.Snapshot{}, errors.New("unexpected test origin")
+	}
+	return egresspolicy.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("93.184.215.14")}, ExpiresAt: time.Now().Add(time.Minute)}, nil
+}
+
+func testOpenAPIImportLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
@@ -72,7 +86,7 @@ func testOpenAPIImportDraftLifecycle(t *testing.T, ctx context.Context, reposito
 	definition, err := integrationpackage.Parse([]byte(created.ManagedRevision.Content))
 	if err != nil || definition.Metadata.Origin != integrationpackage.OriginUI ||
 		definition.Spec.Adapter != string(integrationpackage.AdapterOpenAPIMCP) ||
-		definition.Spec.Readiness != string(integrationpackage.ReadinessNotReady) ||
+		definition.Spec.Readiness != string(integrationpackage.ReadinessReady) ||
 		len(definition.Spec.Capabilities) != 2 ||
 		strings.Contains(created.ManagedRevision.Content, "openapi: 3.1.0") {
 		t.Fatalf("imported draft lost pins or retained raw source: %v", err)
@@ -81,8 +95,66 @@ func testOpenAPIImportDraftLifecycle(t *testing.T, ctx context.Context, reposito
 	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateIntegrationDefinition, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "openapi-import-draft-validate", ExpectedVersion: &version},
 		Payload:  command.ManagedConfigurationInput{ConfigurationRef: created.ManagedConfiguration.Ref, RevisionRef: created.ManagedRevision.Ref}})
-	if err != nil || validated.ManagedRevision == nil || validated.ManagedRevision.State != "INVALID" {
-		t.Fatalf("unready adapter draft became publishable: %v", err)
+	if err != nil || validated.ManagedRevision == nil || validated.ManagedRevision.State != "VALID" {
+		t.Fatalf("bounded OpenAPI draft did not validate: %v", err)
+	}
+	connection, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-connection-create"},
+		Payload:  command.ConnectionInput{DefinitionKey: "openapi-mcp", Name: "Заявки", PublicConfiguration: map[string]any{"base_url": "https://api.example.test"}}})
+	if err != nil || connection.Connection == nil {
+		t.Fatalf("create unbound OpenAPI connection: %v", err)
+	}
+	connectionVersion := connection.Connection.Version
+	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-unbound-test", ExpectedVersion: &connectionVersion},
+		Payload:  command.ConnectionInput{Ref: connection.Connection.Ref}}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("unbound template became executable: %v", err)
+	}
+	version = validated.ManagedConfiguration.Version
+	published, err := service.Execute(ctx, command.Command{Kind: command.PublishIntegrationDefinition, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-publish", ExpectedVersion: &version},
+		Payload:  command.ManagedConfigurationInput{ConfigurationRef: created.ManagedConfiguration.Ref, RevisionRef: created.ManagedRevision.Ref}})
+	if err != nil || published.ManagedRevision == nil || published.ManagedRevision.State != "PUBLISHED" {
+		t.Fatalf("publish OpenAPI definition: %v", err)
+	}
+	impact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref, query.Filter{})
+	if err != nil || impact.Digest == "" {
+		t.Fatalf("read OpenAPI binding impact: %v", err)
+	}
+	version = published.ManagedConfiguration.Version
+	_, err = service.Execute(ctx, command.Command{Kind: command.RebindIntegrationDefinition, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-bind", ExpectedVersion: &version},
+		Payload: command.ManagedConfigurationInput{ConfigurationRef: created.ManagedConfiguration.Ref, RevisionRef: created.ManagedRevision.Ref,
+			ImpactDigest: impact.Digest, Consumers: []entity.ManagedConfigurationConsumer{{Kind: "INTEGRATION_CONNECTION", Ref: connection.Connection.Ref, ExpectedAbsent: true}}}})
+	if err != nil {
+		t.Fatalf("bind OpenAPI connection: %v", err)
+	}
+	hosts, err := repository.IntegrationEgressHostnames(ctx)
+	if err != nil || len(hosts) != 1 || hosts[0] != "api.example.test" {
+		t.Fatalf("bound OpenAPI origin was not projected: hosts=%v err=%v", hosts, err)
+	}
+	projection, err := repository.PrepareIntegrationEgressProjection(ctx, strings.Repeat("a", 64), importedOriginResolver{})
+	if err != nil || projection.Validate() != nil || len(projection.Destinations) != 1 ||
+		projection.Destinations[0].Hostname != "api.example.test" {
+		t.Fatalf("bound OpenAPI origin did not produce exact network pin: %#v err=%v", projection, err)
+	}
+	bound, err := service.GetIntegrationConnection(ctx, owner, connection.Connection.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled, err := service.Execute(ctx, command.Command{Kind: command.SetConnectionEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "openapi-import-disable", ExpectedVersion: &bound.Version},
+		Payload:  command.ConnectionInput{Ref: bound.Ref, Enabled: false}})
+	if err != nil || disabled.Connection == nil || disabled.Connection.Enabled {
+		t.Fatalf("disable bound OpenAPI connection: %v", err)
+	}
+	hosts, err = repository.IntegrationEgressHostnames(ctx)
+	if err != nil || len(hosts) != 0 {
+		t.Fatalf("disabled OpenAPI origin remained authorized: hosts=%v err=%v", hosts, err)
+	}
+	revoked, err := repository.PrepareIntegrationEgressProjection(ctx, strings.Repeat("a", 64), noOriginResolver{})
+	if err != nil || revoked.Validate() != nil || revoked.Generation != projection.Generation+1 || len(revoked.Destinations) != 0 {
+		t.Fatalf("disabled OpenAPI origin did not revoke network projection: %#v err=%v", revoked, err)
 	}
 	payload.Options.Choices[1].ApprovalPolicy = "NONE"
 	encoded, err = json.Marshal(payload)

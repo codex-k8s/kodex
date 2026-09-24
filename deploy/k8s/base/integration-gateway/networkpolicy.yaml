@@ -59,6 +59,7 @@ spec:
               app.kubernetes.io/component: platform-egress
       ports:
         - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 8083}
     - to:
         - namespaceSelector:
             matchLabels:

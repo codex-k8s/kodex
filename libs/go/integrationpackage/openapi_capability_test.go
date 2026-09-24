@@ -16,7 +16,7 @@ func openAPIPackageFixture(t *testing.T) Package {
 	base.Metadata.Key = "ticket-service"
 	base.Metadata.Origin = OriginUI
 	base.Spec.Adapter = string(AdapterOpenAPIMCP)
-	base.Spec.Readiness = string(ReadinessNotReady)
+	base.Spec.Readiness = string(ReadinessReady)
 	base.Spec.ConfigurationFields = base.Spec.ConfigurationFields[:1]
 	base.Spec.HealthCheck.Operation = "openapi.health"
 	base.Spec.Capabilities = []Capability{
@@ -27,6 +27,7 @@ func openAPIPackageFixture(t *testing.T) Package {
 			OutputFields:  base.Spec.Capabilities[0].OutputFields,
 			Execution:     Execution{Idempotency: string(IdempotencyReadOnly), TimeoutSeconds: 20, MaxAttempts: 2, RetryBackoffMilliseconds: 250},
 			OpenAPI: &OpenAPIHTTP{OperationID: "getHealth", Method: "GET", Path: "/health", AuthScheme: "BEARER",
+				SourceDigest: strings.Repeat("a", 64), ServerOrigin: "https://api.example.test",
 				InputSchema: map[string]any{"type": "object", "additionalProperties": false,
 					"properties": map[string]any{}}},
 		},
@@ -37,6 +38,7 @@ func openAPIPackageFixture(t *testing.T) Package {
 			OutputFields:  base.Spec.Capabilities[0].OutputFields,
 			Execution:     Execution{Idempotency: string(IdempotencyOneAttempt), TimeoutSeconds: 20, MaxAttempts: 1, RetryBackoffMilliseconds: 250},
 			OpenAPI: &OpenAPIHTTP{OperationID: "updateTicket", Method: "PATCH", Path: "/tickets/{id}", AuthScheme: "BEARER",
+				SourceDigest: strings.Repeat("a", 64), ServerOrigin: "https://api.example.test",
 				InputSchema: map[string]any{"type": "object", "additionalProperties": false,
 					"properties": map[string]any{
 						"path": map[string]any{"type": "object", "additionalProperties": false,
@@ -49,7 +51,7 @@ func openAPIPackageFixture(t *testing.T) Package {
 	return base
 }
 
-func TestOpenAPIPackageScopedApprovalIsNotExecutableBeforeGateway(t *testing.T) {
+func TestOpenAPIPackageScopedApprovalRequiresManagedPins(t *testing.T) {
 	candidate := openAPIPackageFixture(t)
 	raw, err := json.Marshal(candidate)
 	if err != nil {
@@ -59,8 +61,8 @@ func TestOpenAPIPackageScopedApprovalIsNotExecutableBeforeGateway(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP) {
-		t.Fatal("unimplemented OpenAPI adapter became executable")
+	if !parsed.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP) {
+		t.Fatal("pinned managed OpenAPI adapter is not executable")
 	}
 	write, ok := parsed.Capability("ticket.update")
 	if !ok || write.ValidateApprovalScopePaths([]string{"/path/id"}) != nil {
@@ -140,6 +142,8 @@ func TestOpenAPIManagedRevisionMayAddOnlyTypedBoundOperations(t *testing.T) {
 	baseline.Spec.Capabilities = append([]Capability(nil), candidate.Spec.Capabilities[0])
 	readBinding := *baseline.Spec.Capabilities[0].OpenAPI
 	readBinding.AuthScheme = "NONE"
+	readBinding.SourceDigest = ""
+	readBinding.ServerOrigin = ""
 	baseline.Spec.Capabilities[0].OpenAPI = &readBinding
 	baseline.Spec.Credential = nil
 	baseline = parseOpenAPITestPackage(t, baseline)

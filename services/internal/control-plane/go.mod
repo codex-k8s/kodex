@@ -10,6 +10,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/emailbridgeapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/eventing v0.0.0
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/integrationegresspolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
@@ -154,6 +155,8 @@ replace github.com/codex-k8s/kodex/libs/go/i18n => ../../../libs/go/i18n
 replace github.com/codex-k8s/kodex/libs/go/internalrpcauth => ../../../libs/go/internalrpcauth
 
 replace github.com/codex-k8s/kodex/libs/go/integrationpackage => ../../../libs/go/integrationpackage
+
+replace github.com/codex-k8s/kodex/libs/go/integrationegresspolicy => ../../../libs/go/integrationegresspolicy
 
 replace github.com/codex-k8s/kodex/libs/go/integrationgatewayauth => ../../../libs/go/integrationgatewayauth
 

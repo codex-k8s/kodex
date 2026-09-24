@@ -139,6 +139,15 @@ render и не перезапускает StatefulSet. Это позволяет
 недостающую связь уже ожидающей Job. Сам по себе успешный apply не доказывает
 отрицательную сетевую проверку или готовность приложения.
 
+`--stage integration-egress` после `migrate` доставляет только admission
+policy и bindings публикации, исходную immutable ConfigMap, RBAC, Service
+и NetworkPolicy для OpenAPI-интеграций. Затем выбранные Control Plane,
+integration-gateway и egress-gateway обновляются через `--stage core
+--workload <имя>`. При отсутствии опубликованных подключений порт `8083`
+штатно отвечает `503`, не меняя общую готовность Pod. Положительный вызов
+проверяется отдельно с опубликованной definition и разрешённым origin;
+успешный apply стадии этого не доказывает.
+
 `--stage supply-chain` выполняется после `data`, `network` и `migrate`. Стадия
 разворачивает пять exact registry endpoints, импортирует закреплённые OCI
 артефакты штатным seed helper, затем запускает BuildKit, image admission,

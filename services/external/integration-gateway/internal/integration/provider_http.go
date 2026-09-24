@@ -24,6 +24,7 @@ type providerCall struct {
 	Capability                                                                            integrationpackage.Capability
 	MultipartBody                                                                         []byte
 	MultipartType                                                                         string
+	Client                                                                                *http.Client
 }
 
 func (adapter *Adapter) callProvider(ctx context.Context, call providerCall) ([]byte, error) {
@@ -150,7 +151,11 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			}
 		}
 
-		response, responseErr := adapter.providerHTTPClient.Do(request)
+		client := adapter.providerHTTPClient
+		if call.Client != nil {
+			client = call.Client
+		}
+		response, responseErr := client.Do(request)
 		if responseErr != nil {
 			cancel()
 			if mutation {

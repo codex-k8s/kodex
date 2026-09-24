@@ -105,7 +105,7 @@ any(resource("Role"; "control-plane-email-projection-writer");
   .rules == [
     {apiGroups:[""],resources:["secrets"],resourceNames:["email-bridge-mailbox-projection"],verbs:["get","update"]},
     {apiGroups:["apps"],resources:["deployments"],resourceNames:["email-bridge","egress-gateway"],verbs:["get","update"]},
-    {apiGroups:["networking.k8s.io"],resources:["networkpolicies"],resourceNames:["egress-gateway-mail-destinations"],verbs:["get","update"]},
+    {apiGroups:["networking.k8s.io"],resources:["networkpolicies"],resourceNames:["egress-gateway-mail-destinations","egress-gateway-integration-destinations"],verbs:["get","update"]},
     {apiGroups:[""],resources:["configmaps"],verbs:["get","create"]}
   ]) and
 any(resource("RoleBinding"; "control-plane-email-projection-writer");
@@ -115,7 +115,7 @@ any(resource("ClusterRole"; "control-plane-mail-publication-admission-reader");
   (.metadata.namespace // "") == "" and
   .rules == [{apiGroups:["admissionregistration.k8s.io"],
     resources:["validatingadmissionpolicies","validatingadmissionpolicybindings"],
-    resourceNames:["egress-mail-configmap-publication"],verbs:["get"]}]) and
+    resourceNames:["egress-mail-configmap-publication","egress-integration-configmap-publication","control-plane-egress-configmap-boundary"],verbs:["get"]}]) and
 any(resource("ClusterRoleBinding"; "control-plane-mail-publication-admission-reader");
   (.metadata.namespace // "") == "" and
   .roleRef == {apiGroup:"rbac.authorization.k8s.io",kind:"ClusterRole",name:"control-plane-mail-publication-admission-reader"} and

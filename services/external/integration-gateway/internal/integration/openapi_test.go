@@ -26,7 +26,7 @@ func TestOpenAPIExecutionRejectsChangedOriginBeforeCredentialReadOrNetwork(t *te
 	adapter := testAdapter(t)
 	capability := openAPITestCapability()
 	requests := 0
-	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+	adapter.openAPIHTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		requests++
 		return nil, errors.New("unexpected outbound request")
 	})}
@@ -46,7 +46,7 @@ func TestOpenAPIExecutionPinsEndpointHeadersAndOneEffect(t *testing.T) {
 	capability := openAPITestCapability()
 	request := Request{EffectKey: "eff_exact", InputDigest: strings.Repeat("a", 64), Credential: credential}
 	requests := 0
-	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(outbound *http.Request) (*http.Response, error) {
+	adapter.openAPIHTTPClient = &http.Client{Transport: roundTripFunc(func(outbound *http.Request) (*http.Response, error) {
 		requests++
 		if outbound.Method != "PATCH" || outbound.URL.String() != "https://api.example.test/tickets/3?view=full" ||
 			outbound.Header.Get("X-Api-Key") != "fixture-key" || outbound.Header.Get("X-Request-Key") != "eff_exact" ||
@@ -89,7 +89,7 @@ func TestOpenAPIWriteDoesNotRetryUnknownOutcome(t *testing.T) {
 	capability.OpenAPI.AuthScheme, capability.OpenAPI.AuthHeader, capability.OpenAPI.IdempotencyHeader = "NONE", "", ""
 	request := Request{EffectKey: "eff_once", InputDigest: strings.Repeat("b", 64)}
 	requests := 0
-	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+	adapter.openAPIHTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		requests++
 		return nil, errors.New("synthetic connection failure")
 	})}

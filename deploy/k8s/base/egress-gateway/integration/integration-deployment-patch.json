@@ -1,0 +1,45 @@
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "name": "egress-gateway"
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "kodex.dev/integration-egress-generation": "1",
+          "kodex.dev/integration-egress-source-digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST",
+                "value": "d811998f9f7e53f7765eac93c34e4cd977591646b5436be00e4540706665d77c"
+              }
+            ],
+            "name": "egress-gateway"
+          }
+        ],
+        "volumes": [
+          {
+            "configMap": {
+              "defaultMode": 292,
+              "items": [
+                {
+                  "key": "integration-policy.json",
+                  "path": "integration-policy.json"
+                }
+              ],
+              "name": "egress-gateway-integration-d811998f9f7e53f7765eac93"
+            },
+            "name": "integration-policy"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -51,8 +51,8 @@ func DraftOpenAPIPackageFromJSON(ctx context.Context, raw []byte) (Package, erro
 	return DraftOpenAPIPackage(ctx, []byte(payload.Source), payload.Options)
 }
 
-// DraftOpenAPIPackage создаёт только проверенный черновик. Пока shipped
-// OPENAPI_MCP имеет readiness NOT_READY, публикация и исполнение закрыты.
+// DraftOpenAPIPackage создаёт только проверенный черновик. Публикация,
+// привязка подключения и сетевой допуск остаются отдельными owner-переходами.
 func DraftOpenAPIPackage(ctx context.Context, raw []byte, options OpenAPIImportOptions) (Package, error) {
 	inspection, err := InspectOpenAPI(ctx, raw)
 	if err != nil {

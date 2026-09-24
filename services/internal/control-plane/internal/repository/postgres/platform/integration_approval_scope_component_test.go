@@ -79,8 +79,8 @@ func testScopedIntegrationApproval(t *testing.T, ctx context.Context, repository
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Исполняемый OPENAPI_MCP пока закрыт сетевым admission. Только disposable
-	// fixture обходит adapter registry, чтобы проверить owner-owned lifecycle.
+	// Эта disposable-фикстура изолирует owner-owned scoped lifecycle от
+	// внешнего OpenAPI transport и его DNS-допуска.
 	digest := sha256.Sum256(raw)
 	modified.Digest = hex.EncodeToString(digest[:])
 	capability, ok := modified.Capability("synthetic.journal.write")

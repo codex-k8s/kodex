@@ -220,6 +220,17 @@ func (definition Package) Capability(key string) (Capability, bool) {
 
 // ValidateConfiguration проверяет public configuration без credential values.
 func (definition Package) ValidateConfiguration(configuration map[string]string) error {
+	return definition.validateConfiguration(configuration, false)
+}
+
+// ValidateConnectionBootstrapConfiguration разрешает создать ещё не привязанное
+// OpenAPI-подключение по поставленному шаблону. Исполнение такого шаблона
+// остаётся запрещённым до owner-привязки опубликованной ревизии.
+func (definition Package) ValidateConnectionBootstrapConfiguration(configuration map[string]string) error {
+	return definition.validateConfiguration(configuration, definition.Metadata.Origin == Origin && definition.Spec.Adapter == string(AdapterOpenAPIMCP))
+}
+
+func (definition Package) validateConfiguration(configuration map[string]string, allowUnboundTemplate bool) error {
 	fields := make(map[string]Field, len(definition.Spec.ConfigurationFields))
 	for _, field := range definition.Spec.ConfigurationFields {
 		fields[field.Key] = field
@@ -235,7 +246,7 @@ func (definition Package) ValidateConfiguration(configuration map[string]string)
 			return errors.New("integration configuration required field is missing")
 		}
 	}
-	if definition.Spec.Adapter == string(AdapterOpenAPIMCP) {
+	if definition.Spec.Adapter == string(AdapterOpenAPIMCP) && !allowUnboundTemplate {
 		for _, capability := range definition.Spec.Capabilities {
 			if capability.OpenAPI == nil ||
 				(capability.OpenAPI.ServerOrigin != "" || definition.Spec.Readiness == string(ReadinessReady)) &&

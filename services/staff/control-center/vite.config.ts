@@ -41,7 +41,12 @@ function controlCenterRemoteReloadPlugin(): Plugin {
     apply: "serve",
     enforce: "post",
     configureServer(server) {
-      const advanceRevision = (): void => {
+      const advanceRevision = (file: string): void => {
+        // Встроенный HMR client выключен: сначала сбрасываем серверный кэш
+        // трансформации, затем разрешаем браузеру увидеть новую ревизию.
+        // Иначе reload может повторно получить старый generated SDK.
+        for (const environment of Object.values(server.environments))
+          environment.moduleGraph.onFileChange(file);
         revision += 1;
       };
       server.watcher.on("add", advanceRevision);

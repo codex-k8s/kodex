@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
-    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|core]' \
+    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|core|integration-egress]' \
     '  [--workload <exact-core-deployment|stt-tts-service>]' >&2
 }
 
@@ -41,7 +41,7 @@ done
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
-case "$stage" in full|data|network|migrate|supply-chain|core) ;; *) fail 'deployment stage is invalid' ;; esac
+case "$stage" in full|data|network|migrate|supply-chain|core|integration-egress) ;; *) fail 'deployment stage is invalid' ;; esac
 [[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
@@ -1249,6 +1249,50 @@ PY
       fail "local StatefulSet is unavailable: $workload"
   done
   readback_local_object_storage_secret
+  if [[ "$stage" == integration-egress ]]; then
+    if [[ "$mode" == apply ]]; then
+      # Только объекты этой проекции: остальные живые policy/workload не меняем.
+      apply_render integration-egress-admission-policies '
+        select(.kind == "ValidatingAdmissionPolicy" and
+          (.metadata.name | test("^(egress-mail-configmap-publication|egress-integration-configmap-publication|control-plane-egress-configmap-boundary)$")))
+      '
+      apply_render integration-egress-admission-bindings '
+        select(.kind == "ValidatingAdmissionPolicyBinding" and
+          (.metadata.name | test("^(egress-mail-configmap-publication|egress-integration-configmap-publication|control-plane-egress-configmap-boundary)$")))
+      '
+      apply_render integration-egress-configuration '
+        select(.kind == "ConfigMap" and
+          (.metadata.name == "integration-gateway-runtime" or
+           (.metadata.name | test("^egress-gateway-integration-[a-f0-9]{24}$"))))
+      '
+      apply_render integration-egress-rbac '
+        select(((.kind == "Role" or .kind == "RoleBinding") and
+            .metadata.name == "control-plane-email-projection-writer") or
+          ((.kind == "ClusterRole" or .kind == "ClusterRoleBinding") and
+            .metadata.name == "control-plane-mail-publication-admission-reader"))
+      '
+      apply_render integration-egress-service '
+        select(.kind == "Service" and .metadata.name == "egress-gateway")
+      '
+      apply_render integration-egress-network '
+        select(.kind == "NetworkPolicy" and
+          (.metadata.name | test("^(egress-gateway-integration-destinations|egress-gateway-exact-runtime-paths|integration-gateway-exact-runtime-paths)$")))
+      '
+    fi
+    for resource in \
+      validatingadmissionpolicy/egress-mail-configmap-publication \
+      validatingadmissionpolicy/egress-integration-configmap-publication \
+      validatingadmissionpolicy/control-plane-egress-configmap-boundary; do
+      kubectl get "$resource" -o json | jq -e '
+        .metadata.generation > 0 and
+        .status.observedGeneration == .metadata.generation and
+        (.status.typeChecking.expressionWarnings // [] | length) == 0
+      ' >/dev/null || fail "integration egress admission is not observed: $resource"
+    done
+    kubectl -n "$namespace" get service/egress-gateway configmap/integration-gateway-runtime \
+      networkpolicy/egress-gateway-integration-destinations >/dev/null ||
+      fail 'integration egress foundation readback failed'
+  fi
   if [[ "$stage" == network && "$mode" == apply ]]; then
     apply_render network-policies 'select(.kind == "NetworkPolicy")'
   fi

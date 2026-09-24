@@ -34,10 +34,10 @@ const (
 )
 
 type Config struct {
-	RPCProfile                                             string
-	CredentialDirectory, ProxyURL, SyntheticBaseURL        string
-	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile string
-	Timeout                                                time.Duration
+	RPCProfile                                                       string
+	CredentialDirectory, ProxyURL, OpenAPIProxyURL, SyntheticBaseURL string
+	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile           string
+	Timeout                                                          time.Duration
 }
 
 type CredentialRevision struct {
@@ -90,6 +90,7 @@ type Adapter struct {
 	githubHTTPClient   *http.Client
 	githubBaseURL      *url.URL
 	providerHTTPClient *http.Client
+	openAPIHTTPClient  *http.Client
 	emailHTTPClient    *http.Client
 	syntheticClient    *http.Client
 	syntheticBaseURL   *url.URL
@@ -104,6 +105,11 @@ func New(config Config) (*Adapter, error) {
 	if err != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8080" ||
 		proxy.Path != "" || proxy.RawQuery != "" || proxy.User != nil {
 		return nil, errors.New("integration adapter proxy is invalid")
+	}
+	openAPIProxy, err := url.Parse(config.OpenAPIProxyURL)
+	if err != nil || openAPIProxy.Scheme != "http" || openAPIProxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8083" ||
+		openAPIProxy.Path != "" || openAPIProxy.RawQuery != "" || openAPIProxy.User != nil {
+		return nil, errors.New("integration adapter OpenAPI proxy is invalid")
 	}
 	syntheticBase, err := url.Parse(config.SyntheticBaseURL)
 	if err != nil || syntheticBase.Scheme != "http" || syntheticBase.Hostname() != syntheticServiceHost ||
@@ -129,6 +135,8 @@ func New(config Config) (*Adapter, error) {
 	}
 	providerTransport := githubTransport.Clone()
 	providerTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
+	openAPITransport := providerTransport.Clone()
+	openAPITransport.Proxy = http.ProxyURL(openAPIProxy)
 	emailClient, err := newEmailClient(config)
 	if err != nil {
 		return nil, err
@@ -146,6 +154,8 @@ func New(config Config) (*Adapter, error) {
 				return errors.New("provider redirect is forbidden")
 			},
 		},
+		openAPIHTTPClient: &http.Client{Transport: openAPITransport, Timeout: config.Timeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("OpenAPI redirect is forbidden") }},
 		syntheticClient: &http.Client{
 			Timeout: config.Timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {

@@ -68,10 +68,8 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterConfluence:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterEmailHTTPS:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterHTTPSJSONRead: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
-	// До появления исполняемого gateway path синтаксис можно валидировать,
-	// но публикация и выдача tools остаются закрытыми.
-	AdapterOpenAPIMCP: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessNotReady},
-	AdapterMattermost: {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
+	AdapterOpenAPIMCP:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
 }
 
 func Adapter(key string) (AdapterDescriptor, bool) {
@@ -92,7 +90,8 @@ func ValidateAdapterBinding(definition Package) error {
 func (definition Package) ExecutableBy(owner AdapterOwner, route ExecutionRoute) bool {
 	descriptor, ok := Adapter(definition.Spec.Adapter)
 	return ok && descriptor.Owner == owner && descriptor.Route == route &&
-		descriptor.Readiness == ReadinessReady && ValidateAdapterBinding(definition) == nil
+		descriptor.Readiness == ReadinessReady && ValidateAdapterBinding(definition) == nil &&
+		!(definition.Spec.Adapter == string(AdapterOpenAPIMCP) && definition.Metadata.Origin == Origin)
 }
 
 // CallableByAgent отделяет пользовательскую команду MCP от подписки,

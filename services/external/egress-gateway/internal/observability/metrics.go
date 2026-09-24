@@ -92,6 +92,19 @@ func RegisterMailReadiness(register RegisterCollectors, ready func() (bool, stri
 	}))
 }
 
+// RegisterIntegrationReadiness сообщает состояние отдельного OpenAPI listener.
+func RegisterIntegrationReadiness(register RegisterCollectors, ready func() (bool, string)) error {
+	return register(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "kodex", Subsystem: "egress_gateway", Name: "integration_ready",
+		Help: "Whether the immutable integration projection and current DNS pins are ready.",
+	}, func() float64 {
+		if value, _ := ready(); value {
+			return 1
+		}
+		return 0
+	}))
+}
+
 func normalizeOutcome(value string) string {
 	switch value {
 	case "completed", "rejected", "failed", "cancelled":

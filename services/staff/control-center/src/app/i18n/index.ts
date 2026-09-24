@@ -475,7 +475,7 @@ const ru = {
       open: "Импорт OpenAPI",
       title: "Импорт интеграции из OpenAPI",
       intro:
-        "Добавьте контракт, проверьте операции и выберите только нужные. Исходный файл не сохраняется. Пока адаптер недоступен, это будет только черновик.",
+        "Добавьте контракт, проверьте операции и выберите только нужные. Исходный файл не сохраняется. Сначала создаётся черновик; после проверки и публикации настройте подключение и разрешения.",
       file: "Файл OpenAPI (до 128 КиБ)",
       source: "Контракт OpenAPI JSON или YAML",
       inspect: "Проверить контракт",
@@ -491,7 +491,7 @@ const ru = {
       health: "Проверка соединения",
       chooseHealth: "Выберите операцию без параметров",
       unready:
-        "Будет сохранён черновик. Публикация и исполнение пока закрыты до готовности адаптера и сетевого допуска.",
+        "Будет сохранён черновик. Вызовы станут доступны после проверки, публикации, настройки подключения и сетевого допуска.",
       createDraft: "Создать черновик",
     },
     localValidation: "Проверка схемы",
@@ -3696,7 +3696,7 @@ const en = {
       open: "Import OpenAPI",
       title: "Import integration from OpenAPI",
       intro:
-        "Add a contract, inspect operations, and select only what you need. The source file is not stored. Until the adapter is ready, this creates a draft only.",
+        "Add a contract, inspect operations, and select only what you need. The source file is not stored. First create a draft, then validate and publish it before configuring the connection and grants.",
       file: "OpenAPI file (up to 128 KiB)",
       source: "OpenAPI JSON or YAML contract",
       inspect: "Inspect contract",
@@ -3712,7 +3712,7 @@ const en = {
       health: "Connection check",
       chooseHealth: "Select an operation without parameters",
       unready:
-        "A draft will be saved. Publication and execution remain blocked until adapter and network admission are ready.",
+        "A draft will be saved. Calls become available after validation, publication, connection setup, and network admission.",
       createDraft: "Create draft",
     },
     diff: "Changes",

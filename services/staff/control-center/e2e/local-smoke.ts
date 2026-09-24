@@ -231,3 +231,47 @@ test("локальный OIDC, API и основные экраны доступ
     withoutKodexAPICookies(await context.storageState()),
   );
 });
+
+test("локальный OpenAPI импорт проверяет контракт без записи", async ({
+  page,
+}) => {
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await gotoWithRetry(page, "/configurations/INTEGRATION_DEFINITION");
+  await page.getByRole("button", { name: "Импорт OpenAPI" }).click();
+  const importDialog = page.getByRole("dialog", {
+    name: "Импорт интеграции из OpenAPI",
+  });
+  await importDialog.getByLabel("Контракт OpenAPI JSON или YAML")
+    .fill(`openapi: 3.1.0
+info: {title: Заявки, version: 1.0.0}
+servers:
+  - url: https://api.example.test
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Проверить соединение
+      responses:
+        '200': {description: OK}
+`);
+  const inspected = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/openapi-inspections",
+  );
+  await importDialog
+    .getByRole("button", { name: "Проверить контракт" })
+    .click();
+  expect((await inspected).status()).toBe(200);
+  await expect(importDialog.getByText("Проверить соединение")).toBeVisible();
+  await importDialog.getByRole("button", { name: "Отмена" }).click();
+  await expect(importDialog).toHaveCount(0);
+});

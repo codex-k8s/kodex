@@ -15,6 +15,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/dnsresolver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/emailbridgeapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
+	github.com/codex-k8s/kodex/libs/go/integrationegresspolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/mailpolicy v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
@@ -29,6 +30,8 @@ replace github.com/codex-k8s/kodex/libs/go/emailbridgeapi => ../../../libs/go/em
 replace github.com/codex-k8s/kodex/libs/go/mailpolicy => ../../../libs/go/mailpolicy
 
 replace github.com/codex-k8s/kodex/libs/go/dnsresolver => ../../../libs/go/dnsresolver
+
+replace github.com/codex-k8s/kodex/libs/go/integrationegresspolicy => ../../../libs/go/integrationegresspolicy
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect

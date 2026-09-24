@@ -965,6 +965,12 @@ yq -i '
 
 frontend_middlewares=kodex-system-staff-control-center-retry@kubernetescrd
 api_middlewares=""
+frontend_bootstrap_digest=$(
+  sha256sum "$source_root/services/staff/control-center/vite.config.ts" \
+    "$source_root/tools/dev/run-frontend.sh" |
+    awk '{print $1}' | sha256sum | awk '{print $1}'
+)
+[[ "$frontend_bootstrap_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'frontend bootstrap digest is invalid'
 if [[ "$tls_mode" == public-acme ]]; then
   frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
   api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
@@ -972,6 +978,7 @@ fi
 NODE_IMAGE="$node_image" FRONTEND_CACHE="$frontend_cache" \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
 SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" \
+FRONTEND_BOOTSTRAP_DIGEST="$frontend_bootstrap_digest" \
 FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" yq -i '
   with(select(.kind == "ServersTransport" and .metadata.name == "staff-control-center");
     .metadata.name = "control-api-gateway" |
@@ -983,6 +990,7 @@ FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" 
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "staff-control-center");
     .spec.replicas = 1 |
+    .spec.template.metadata.annotations."kodex.dev/frontend-bootstrap-sha256" = strenv(FRONTEND_BOOTSTRAP_DIGEST) |
     .spec.template.spec.securityContext.runAsNonRoot = false |
     .spec.template.spec.securityContext.runAsUser = 0 |
     .spec.template.spec.securityContext.runAsGroup = 0 |

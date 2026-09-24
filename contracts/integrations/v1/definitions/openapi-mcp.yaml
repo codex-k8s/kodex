@@ -2,16 +2,16 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: openapi-mcp
-  version: 1.0.0
+  version: 1.1.0
   origin: SHIPPED
 spec:
   name: OpenAPI / MCP
-  description: Шаблон для проверенных операций из OpenAPI. До завершения import, согласований и сетевого допуска не исполняется.
+  description: Шаблон для проверенных операций из OpenAPI. Исполнение доступно после публикации определения, привязки подключения и сетевого допуска.
   category: data
   adapter: OPENAPI_MCP
   adapterOwner: integration-gateway
   executionRoute: MANAGED_MCP
-  readiness: NOT_READY
+  readiness: READY
   configurationFields:
     - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
   networkDestinations:

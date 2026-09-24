@@ -75,7 +75,7 @@ func TestDraftOpenAPIPackagePinsSelectedOperationsAndSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	if definition.Metadata.Key != "openapi-mcp" || definition.Metadata.Origin != OriginUI ||
-		definition.Spec.Readiness != string(ReadinessNotReady) || len(definition.Spec.Capabilities) != 2 ||
+		definition.Spec.Readiness != string(ReadinessReady) || !definition.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP) || len(definition.Spec.Capabilities) != 2 ||
 		definition.Spec.Credential != nil || definition.Digest == "" {
 		t.Fatalf("unsafe or incomplete import: %#v", definition.Metadata)
 	}

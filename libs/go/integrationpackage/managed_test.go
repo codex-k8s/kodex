@@ -15,6 +15,11 @@ func TestManagedRevisionPreservesShippedAndRestrictsExecution(t *testing.T) {
 		if err := ValidateExecutableRevision(baseline, baseline); err != nil {
 			t.Fatalf("shipped %s: %v", key, err)
 		}
+		if baseline.Spec.Adapter == string(AdapterOpenAPIMCP) {
+			// Поставленный OpenAPI package — только шаблон. Исполняемая
+			// managed-ревизия требует импортированных source/server pins.
+			continue
+		}
 		for _, origin := range []string{OriginUI, OriginGit} {
 			raw, _ := json.Marshal(baseline)
 			candidate, canonical, err := NormalizeManagedRevision(raw, origin, definitions)

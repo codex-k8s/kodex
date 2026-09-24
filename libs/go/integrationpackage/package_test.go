@@ -67,8 +67,8 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	for key, definition := range definitions {
 		executable := definition.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP)
 		if key == "openapi-mcp" {
-			if executable || definition.Spec.Readiness != string(ReadinessNotReady) {
-				t.Fatalf("unfinished OpenAPI adapter became executable: %#v", definition.Spec)
+			if executable || definition.Spec.Readiness != string(ReadinessReady) {
+				t.Fatalf("unbound OpenAPI template became executable: %#v", definition.Spec)
 			}
 			continue
 		}

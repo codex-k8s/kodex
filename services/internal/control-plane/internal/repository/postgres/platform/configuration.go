@@ -413,7 +413,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, errs.ErrConflict
 		}
 		configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
-		if !valid || definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
+		if !valid || definition.ValidateConnectionBootstrapConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		ref, _ := newRef("int")
