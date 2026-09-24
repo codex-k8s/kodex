@@ -367,6 +367,7 @@ type ConnectionInput struct {
 }
 type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string
+	ApprovalScopePaths                                  []string
 	Enabled                                             bool
 }
 type AssistantConversationInput struct {

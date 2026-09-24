@@ -650,11 +650,15 @@ func (server *Server) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
+	var approvalScopePaths []string
+	if body.ApprovalScopePaths != nil {
+		approvalScopePaths = append(approvalScopePaths, (*body.ApprovalScopePaths)...)
+	}
 	m, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.ChangeIntegrationGrant(r.Context(), &controlplanev1.ChangeIntegrationGrantRequest{Mutation: m, ConnectionRef: ref, CapabilityKey: body.CapabilityKey, AgentRef: stringValue(body.AgentRef), WorkflowRef: stringValue(body.WorkflowRef), Enabled: body.Enabled})
+	response, err := server.control.Command.ChangeIntegrationGrant(r.Context(), &controlplanev1.ChangeIntegrationGrantRequest{Mutation: m, ConnectionRef: ref, CapabilityKey: body.CapabilityKey, AgentRef: stringValue(body.AgentRef), WorkflowRef: stringValue(body.WorkflowRef), Enabled: body.Enabled, ApprovalScopePaths: approvalScopePaths})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

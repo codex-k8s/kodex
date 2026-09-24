@@ -728,6 +728,7 @@ type IntegrationGrant struct {
 	Ref, CapabilityKey, TargetType, TargetRef, TargetName, ApprovalPolicy string
 	Risk, ResourceKind, ResourceScopeDigest                               string
 	ResourceScope                                                         map[string]string
+	ApprovalScopePaths                                                    []string
 	Enabled                                                               bool
 	Version                                                               int64
 }

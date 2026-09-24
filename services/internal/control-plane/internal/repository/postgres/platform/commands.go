@@ -2411,13 +2411,13 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return outcome, err
 	}
 	var gateID, nodeID, rootRunID, projectID, projectRef, gateNodeRef string
-	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID string
+	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID, integrationApprovalPolicy string
 	var version int64
 	var allowed []string
 	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(
 		&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed, &gateNodeRef,
 		&predecessorNodeID, &predecessorNodeRef, &predecessorRunID, &sessionID,
-		&integrationInvocationID,
+		&integrationInvocationID, &integrationApprovalPolicy,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrAlreadyResolved
@@ -2436,6 +2436,11 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, err
 	}
 	if integrationInvocationID != "" {
+		if integrationApprovalPolicy == "HUMAN_SCOPED" && payload.Decision == "APPROVE" {
+			if err := repository.approveIntegrationScope(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		invocationState, safeErrorCode := "READY", ""
 		if payload.Decision == "REJECT" {
 			invocationState, safeErrorCode = "REJECTED", "INTEGRATION_REJECTED_BY_OWNER"

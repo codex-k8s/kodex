@@ -1,7 +1,8 @@
 -- name: workers_resolveintegrationinvocation_select_runs_id_organization_id_ref :one
 SELECT r.id::text,n.id::text,c.id::text,g.id::text,g.ref,r.project_id::text,r.root_run_id::text,
 	c.definition_key,c.definition_version,c.definition_digest,
-	g.risk,g.approval_policy,g.resource_kind,g.resource_scope,g.resource_scope_digest,initiator.ref
+	g.risk,g.approval_policy,g.resource_kind,g.resource_scope,g.resource_scope_digest,initiator.ref,
+	g.version,g.approval_scope_paths,COALESCE(n.agent_id::text,'')
 FROM control_plane.runs r
 JOIN control_plane.runs root ON root.id=r.root_run_id
 JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
@@ -17,6 +18,7 @@ JOIN control_plane.integration_grants g
  AND g.definition_digest=c.definition_digest
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 WHERE r.organization_id=$1::uuid AND r.ref=$2 AND n.ref=$3 AND n.state='RUNNING'
+  AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND d.enabled AND (d.adapter_owner,d.execution_route) IN
       (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
   AND d.adapter_readiness='READY'

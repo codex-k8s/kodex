@@ -753,6 +753,7 @@ enum IntegrationApprovalPolicy {
   INTEGRATION_APPROVAL_POLICY_UNSPECIFIED = 0;
   INTEGRATION_APPROVAL_POLICY_NONE = 1;
   INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT = 2;
+  INTEGRATION_APPROVAL_POLICY_HUMAN_SCOPED = 3;
 }
 
 // IntegrationResourceKind ограничивает provider resource одной typed boundary.
@@ -1419,6 +1420,7 @@ message IntegrationGrant {
   string operation = 20;
   string input_schema = 21;
   string input_schema_sha256 = 22;
+  repeated string approval_scope_paths = 23;
 }
 
 message IntegrationConnection {
@@ -2749,6 +2751,7 @@ message ChangeIntegrationGrantRequest {
   string agent_ref = 4;
   string workflow_ref = 5;
   bool enabled = 6;
+  repeated string approval_scope_paths = 7;
 }
 message ChangeIntegrationGrantResponse {
   IntegrationConnection connection = 1;

@@ -813,13 +813,20 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		result.Mutation.ExpectedVersion = &expected
 		result.Payload = command.AgentBindingInput{AgentRef: assistantString(operation.Input, "agentRef"), BindingRef: assistantString(operation.Input, "capabilityKey"), Enabled: enabled}
 	case "CHANGE_INTEGRATION_GRANT":
-		if !onlyAssistantFields(operation.Input, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "expectedVersion") || !hasAssistantFields(operation.Input, "connectionRef", "capabilityKey", "enabled", "expectedVersion") {
+		if !onlyAssistantFields(operation.Input, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "expectedVersion", "approvalScopePaths") || !hasAssistantFields(operation.Input, "connectionRef", "capabilityKey", "enabled", "expectedVersion") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		enabled, enabledOK := assistantBoolValue(operation.Input, "enabled")
 		expected, expectedOK := assistantInt64(operation.Input, "expectedVersion")
 		payload := command.IntegrationGrantInput{ConnectionRef: assistantString(operation.Input, "connectionRef"), CapabilityKey: assistantString(operation.Input, "capabilityKey"),
 			AgentRef: assistantString(operation.Input, "agentRef"), WorkflowRef: assistantString(operation.Input, "workflowRef"), Enabled: enabled}
+		if _, present := operation.Input["approvalScopePaths"]; present {
+			paths, valid := assistantStringsValue(operation.Input, "approvalScopePaths")
+			if !valid || len(paths) > 16 || !enabled && len(paths) != 0 {
+				return command.Command{}, errs.ErrInvalid
+			}
+			payload.ApprovalScopePaths = paths
+		}
 		if !enabledOK || !expectedOK || expected < 1 || payload.ConnectionRef == "" || !validCapabilityKey(payload.CapabilityKey) || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
 			return command.Command{}, errs.ErrInvalid
 		}

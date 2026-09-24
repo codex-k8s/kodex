@@ -21,6 +21,9 @@ describe("форма разрешения интеграции в плане п�
     expect(source).toContain("candidate.value.grantable");
     expect(source).toContain("candidate.value.pins.connectionVersion");
     expect(source).toContain("existingGrant.value");
+    expect(source).toContain("approvalScopeOptions");
+    expect(source).toContain("validApprovalScopeSelection");
+    expect(source).toContain('changed("approvalScopePaths"');
     expect(source).not.toContain("credentialValue");
     expect(editor).toContain("<AssistantIntegrationGrantPlanForm");
     expect(editor).toContain(

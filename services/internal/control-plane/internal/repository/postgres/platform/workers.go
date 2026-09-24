@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"sort"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principal value.Principal, instance string) (entity.SystemAssistant, map[string]any, bool, error) {
@@ -1086,15 +1088,18 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	if err != nil || len(encodedInput) > 512<<10 {
 		return nil, errs.ErrInvalid
 	}
-	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef string
+	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef, agentID string
 	var definitionKey, definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, resourceScopeDigest string
 	var encodedScope []byte
+	var grantVersion int64
+	var approvalScopePaths []string
 	err = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectRunsIdOrganizationIdRef,
 		scope.organizationID, input["run_ref"], input["node_ref"], input["connection_ref"], input["capability_key"],
 	).Scan(
 		&runID, &nodeID, &connectionID, &grantID, &grantRef, &projectID, &rootRunID,
 		&definitionKey, &definitionVersion, &definitionDigest, &risk, &approvalPolicy,
 		&resourceKind, &encodedScope, &resourceScopeDigest, &initiatorRef,
+		&grantVersion, &approvalScopePaths, &agentID,
 	)
 	if err != nil {
 		if serializableTransactionConflict(err) {
@@ -1111,11 +1116,6 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	capability, capabilityExists := definition.Capability(input["capability_key"])
 	if packageErr != nil || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
 		capability.Risk != risk || capability.ApprovalPolicy != approvalPolicy || capability.ResourceScope.Kind != resourceKind {
-		return nil, errs.ErrForbidden
-	}
-	// До появления owner-owned scoped approval lifecycle новый режим не может
-	// перейти в READY только потому, что это не HUMAN_EACH_EFFECT.
-	if approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
 		return nil, errs.ErrForbidden
 	}
 	canonicalInput, err := capability.ValidateInput(encodedInput)
@@ -1158,16 +1158,61 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 	if approvalPolicy == "HUMAN_EACH_EFFECT" || mailboxGate {
 		state = "WAITING_APPROVAL"
 	}
+	var approvalScopeID string
+	pinnedGrantVersion := int64(0)
+	pinnedApprovalScopePaths := []string{}
+	if approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
+		if agentID == "" || grantVersion < 1 || mailboxGate {
+			return nil, errs.ErrForbidden
+		}
+		approvalScope, scopeErr := capability.ResolveApprovalScope(approvalScopePaths, canonicalInput)
+		if scopeErr != nil {
+			return nil, errs.ErrInvalid
+		}
+		schemaDigest, digestErr := capability.InputSchemaDigest()
+		if digestErr != nil {
+			return nil, errs.ErrUnavailable
+		}
+		paths := sortedApprovalScopePaths(approvalScopePaths)
+		pinnedGrantVersion, pinnedApprovalScopePaths = grantVersion, paths
+		scopeErr = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectApprovalScope,
+			scope.organizationID, projectID, connectionID, grantID, rootRunID, agentID,
+			input["capability_key"], grantVersion, definitionDigest, schemaDigest, paths, approvalScope.Digest,
+		).Scan(&approvalScopeID)
+		if scopeErr != nil && !errors.Is(scopeErr, pgx.ErrNoRows) {
+			return nil, serializableTransactionError(scopeErr, errs.ErrUnavailable)
+		}
+		state = "WAITING_APPROVAL"
+		if approvalScopeID != "" {
+			state = "READY"
+		}
+	}
+	var approvalScopeBinding any
+	if approvalScopeID != "" {
+		approvalScopeBinding = approvalScopeID
+	}
 	var invocationID, resolvedRef, resolvedState string
 	if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertIntegrationInvocationsRefRunIdConnectionId,
 		invocationRef, scope.organizationID, runID, nodeID, connectionID, grantID, input["capability_key"],
 		capability.Operation, input["idempotency_key"], intentDigestHex, inputDigestHex, canonicalInput, state,
-		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey, mailboxGate,
+		definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, encodedScope, resourceScopeDigest, effectKey, mailboxGate, approvalScopeBinding,
+		pinnedGrantVersion, pinnedApprovalScopePaths,
 	).Scan(&invocationID, &resolvedRef, &resolvedState); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errs.ErrIdempotencyReuse
 		}
+		var databaseError *pgconn.PgError
+		if errors.As(err, &databaseError) {
+			return nil, fmt.Errorf("insert integration invocation: sqlstate=%s constraint=%s: %w",
+				databaseError.Code, databaseError.ConstraintName, mapWriteError(err))
+		}
 		return nil, serializableTransactionError(err, mapWriteError(err))
+	}
+	if approvalScopeID != "" && resolvedRef == invocationRef {
+		tag, reserveErr := tx.Exec(ctx, queryWorkersResolveintegrationinvocationReserveApprovalScope, approvalScopeID)
+		if reserveErr != nil || tag.RowsAffected() != 1 {
+			return nil, serializableTransactionError(reserveErr, errs.ErrConflict)
+		}
 	}
 	gateRef := ""
 	if resolvedState == "WAITING_APPROVAL" {
@@ -1254,6 +1299,8 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		initiatorRef                                                         string
 		definitionVersion, definitionDigest, operation, risk, approvalPolicy string
 		resourceKind, resourceScopeDigest, effectKey, inputDigest            string
+		approvalScopeDigest, approvalSchemaDigest                            string
+		approvalScopePaths                                                   []string
 		generation                                                           int64
 		configuration, boundedInput, resourceScope                           []byte
 		credential                                                           entity.IntegrationCredentialRevision
@@ -1270,6 +1317,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			&item.inputDigest, &item.credential.Ref, &item.credential.Revision, &item.credential.SecretRef,
 			&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
 			&item.credentialCreatedAt, &item.initiatorRef,
+			&item.approvalScopePaths, &item.approvalScopeDigest, &item.approvalSchemaDigest,
 		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
@@ -1290,6 +1338,18 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, item.connectionRef, item.definitionKey, item.definitionVersion, item.definitionDigest)
 		if err != nil {
 			return nil, err
+		}
+		if item.approvalPolicy == string(integrationpackage.ApprovalHumanScoped) {
+			capability, ok := definition.Capability(item.capabilityKey)
+			if !ok || capability.ApprovalPolicy != item.approvalPolicy {
+				return nil, errs.ErrForbidden
+			}
+			resolvedScope, scopeErr := capability.ResolveApprovalScope(item.approvalScopePaths, item.boundedInput)
+			schemaDigest, digestErr := capability.InputSchemaDigest()
+			if scopeErr != nil || digestErr != nil || resolvedScope.Digest != item.approvalScopeDigest ||
+				schemaDigest != item.approvalSchemaDigest {
+				return nil, errs.ErrForbidden
+			}
 		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("eff")

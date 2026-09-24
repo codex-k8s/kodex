@@ -6,6 +6,10 @@ import {
   type EditablePlanOperation,
 } from "@/features/assistant/model";
 import { capabilityCandidates } from "@/features/integrations/grant-candidates";
+import {
+  approvalScopeOptions,
+  validApprovalScopeSelection,
+} from "@/features/integrations/approval-scope-options";
 import { requestSignal } from "@/shared/api/client";
 import {
   getAgent,
@@ -28,7 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
-  parameter: [key: string, value: string | boolean];
+  parameter: [key: string, value: string | boolean | string[]];
 }>();
 const connection = ref<IntegrationConnection>();
 const recipient = ref<Agent | Workflow>();
@@ -66,6 +70,31 @@ const selectedCapability = computed(() =>
     (item) => item.key === capabilityKey.value,
   ),
 );
+const approvalScopePaths = computed(() => {
+  const value = parameter("approvalScopePaths");
+  return Array.isArray(value) && value.every((path) => typeof path === "string")
+    ? value
+    : [];
+});
+const approvalScopeParameterValid = computed(() => {
+  const value = parameter("approvalScopePaths");
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.every((path) => typeof path === "string"))
+  );
+});
+const availableApprovalScopePaths = computed(() =>
+  approvalScopeOptions(candidate.value?.capability.inputSchema),
+);
+const approvalScopeValid = computed(() =>
+  selectedCapability.value?.approvalPolicy === "HUMAN_SCOPED" &&
+  enabled.value === true
+    ? validApprovalScopeSelection(
+        approvalScopePaths.value,
+        availableApprovalScopePaths.value,
+      )
+    : approvalScopePaths.value.length === 0,
+);
 const versionMatches = computed(
   () =>
     connection.value?.version === props.operation.value.expectedVersion &&
@@ -98,6 +127,8 @@ const valid = computed(() =>
   Boolean(
     targetMatches.value &&
     selectedCapability.value &&
+    approvalScopeParameterValid.value &&
+    approvalScopeValid.value &&
     (enabled.value === true
       ? candidate.value?.capability.key === capabilityKey.value &&
         candidate.value.grantable &&
@@ -225,9 +256,26 @@ watch(
   { immediate: true },
 );
 
-function changed(key: string, value: string | boolean): void {
+function changed(key: string, value: string | boolean | string[]): void {
   emit("parameter", key, value);
   emit("dirty");
+}
+function chooseCapability(key: string): void {
+  changed("approvalScopePaths", []);
+  changed("capabilityKey", key);
+}
+function setEnabled(value: boolean): void {
+  if (!value) changed("approvalScopePaths", []);
+  changed("enabled", value);
+}
+function toggleApprovalScopePath(path: string, checked: boolean): void {
+  if (!availableApprovalScopePaths.value.includes(path)) return;
+  changed(
+    "approvalScopePaths",
+    checked
+      ? [...new Set([...approvalScopePaths.value, path])].sort()
+      : approvalScopePaths.value.filter((item) => item !== path),
+  );
 }
 </script>
 
@@ -254,9 +302,7 @@ function changed(key: string, value: string | boolean): void {
         <select
           :value="capabilityKey"
           :disabled="disabled || !versionMatches"
-          @change="
-            changed('capabilityKey', ($event.target as HTMLSelectElement).value)
-          "
+          @change="chooseCapability(($event.target as HTMLSelectElement).value)"
         >
           <option value="">
             {{ $t("assistant.planEditor.capabilityChoose") }}
@@ -282,12 +328,50 @@ function changed(key: string, value: string | boolean): void {
           type="checkbox"
           :checked="enabled === true"
           :disabled="disabled || !versionMatches || !selectedCapability"
-          @change="
-            changed('enabled', ($event.target as HTMLInputElement).checked)
-          "
+          @change="setEnabled(($event.target as HTMLInputElement).checked)"
         />
         {{ $t("assistant.planEditor.grantEnable") }}
       </label>
+      <fieldset
+        v-if="
+          selectedCapability?.approvalPolicy === 'HUMAN_SCOPED' &&
+          enabled === true
+        "
+        class="assistant-grant-form__approval-scope"
+      >
+        <legend>{{ $t("integrations.approvalScopeTitle") }}</legend>
+        <p>{{ $t("integrations.approvalScopeHelp") }}</p>
+        <p
+          v-if="!availableApprovalScopePaths.length"
+          class="field-error"
+          role="alert"
+        >
+          {{ $t("integrations.approvalScopeUnavailable") }}
+        </p>
+        <label
+          v-for="path in availableApprovalScopePaths"
+          :key="path"
+          class="assistant-grant-form__scope-option"
+        >
+          <input
+            type="checkbox"
+            :checked="approvalScopePaths.includes(path)"
+            :disabled="
+              disabled ||
+              !versionMatches ||
+              (!approvalScopePaths.includes(path) &&
+                approvalScopePaths.length >= 16)
+            "
+            @change="
+              toggleApprovalScopePath(
+                path,
+                ($event.target as HTMLInputElement).checked,
+              )
+            "
+          />
+          <code>{{ path }}</code>
+        </label>
+      </fieldset>
       <p v-if="candidateProblem" class="field-error" role="alert">
         {{ $t("assistant.planEditor.grantCandidateFailed") }}
       </p>
@@ -323,5 +407,19 @@ function changed(key: string, value: string | boolean): void {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+.assistant-grant-form__approval-scope {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.assistant-grant-form__scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.assistant-grant-form__scope-option code {
+  overflow-wrap: anywhere;
 }
 </style>

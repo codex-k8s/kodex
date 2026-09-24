@@ -1988,6 +1988,11 @@ const ru = {
     resourceKind: "Вид ресурса",
     resourceScope: "Область ресурсов",
     approvalPolicy: "Порядок подтверждения",
+    approvalScopeTitle: "Какие параметры связывает одно согласование",
+    approvalScopeHelp:
+      "Выберите от 1 до 16 полей запроса. После вашего подтверждения повторные действия с теми же значениями этих полей в рамках одного запуска не потребуют нового согласования. Остальные поля могут меняться.",
+    approvalScopeUnavailable:
+      "Для этой возможности нет доступных типизированных полей. Выдать разрешение с повторным согласованием нельзя.",
     revoke: "Отозвать",
     noGrants: "У подключения пока нет выданных разрешений.",
     grantBoundary:
@@ -2130,6 +2135,11 @@ const ru = {
     noEvidence: "Дополнительные материалы не приложены",
     requestedBy: "Запросил",
     consequences: "Что произойдёт",
+    approvalScopeTitle: "Что одобряется повторно",
+    approvalScopeExplanation:
+      "Следующие значения закрепляются за этим сотрудником и запуском. Повторные вызовы с ними не потребуют нового решения, пока право действует.",
+    approvalScopeMutable:
+      "Остальные параметры могут меняться между вызовами без повторного решения:",
     comment: "Комментарий",
     commentPlaceholder: "Добавьте контекст для продолжения работы",
     actionsUnavailable: "Ответ сейчас недоступен",
@@ -5401,6 +5411,11 @@ const en = {
     resourceKind: "Resource kind",
     resourceScope: "Resource scope",
     approvalPolicy: "Approval policy",
+    approvalScopeTitle: "Parameters covered by one approval",
+    approvalScopeHelp:
+      "Select 1 to 16 request fields. After your approval, repeated actions with the same values in one run will not need another approval. Other fields may change.",
+    approvalScopeUnavailable:
+      "This capability has no eligible typed fields. A reusable approval grant cannot be issued.",
     revoke: "Revoke",
     noGrants: "No grants have been assigned to this connection.",
     grantBoundary:
@@ -5544,6 +5559,11 @@ const en = {
     noEvidence: "No additional evidence attached",
     requestedBy: "Requested by",
     consequences: "What happens next",
+    approvalScopeTitle: "What this approval covers",
+    approvalScopeExplanation:
+      "These values are bound to this agent and run. Repeated calls with them need no new decision while the grant remains valid.",
+    approvalScopeMutable:
+      "Other parameters may change between calls without a new decision:",
     comment: "Comment",
     commentPlaceholder: "Add context for the next step",
     actionsUnavailable: "Answer is currently unavailable",

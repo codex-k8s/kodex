@@ -2024,7 +2024,7 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 		if err := rows.Scan(
 			&grant.Ref, &grant.CapabilityKey, &grant.TargetType, &grant.TargetRef, &grant.TargetName,
 			&grant.Enabled, &grant.ApprovalPolicy, &grant.Version, &grant.Risk, &grant.ResourceKind,
-			&resourceScope, &grant.ResourceScopeDigest,
+			&resourceScope, &grant.ResourceScopeDigest, &grant.ApprovalScopePaths,
 		); err != nil {
 			return err
 		}

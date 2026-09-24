@@ -1825,6 +1825,7 @@ func (e IntegrationCandidateReason) Valid() bool {
 // Defines values for IntegrationCapabilityApprovalPolicy.
 const (
 	IntegrationCapabilityApprovalPolicyHUMANEACHEFFECT IntegrationCapabilityApprovalPolicy = "HUMAN_EACH_EFFECT"
+	IntegrationCapabilityApprovalPolicyHUMANSCOPED     IntegrationCapabilityApprovalPolicy = "HUMAN_SCOPED"
 	IntegrationCapabilityApprovalPolicyNONE            IntegrationCapabilityApprovalPolicy = "NONE"
 )
 
@@ -1832,6 +1833,8 @@ const (
 func (e IntegrationCapabilityApprovalPolicy) Valid() bool {
 	switch e {
 	case IntegrationCapabilityApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case IntegrationCapabilityApprovalPolicyHUMANSCOPED:
 		return true
 	case IntegrationCapabilityApprovalPolicyNONE:
 		return true
@@ -2113,6 +2116,7 @@ func (e IntegrationDefinitionGitSourceInputContentFormat) Valid() bool {
 // Defines values for IntegrationGrantApprovalPolicy.
 const (
 	IntegrationGrantApprovalPolicyHUMANEACHEFFECT IntegrationGrantApprovalPolicy = "HUMAN_EACH_EFFECT"
+	IntegrationGrantApprovalPolicyHUMANSCOPED     IntegrationGrantApprovalPolicy = "HUMAN_SCOPED"
 	IntegrationGrantApprovalPolicyNONE            IntegrationGrantApprovalPolicy = "NONE"
 )
 
@@ -2120,6 +2124,8 @@ const (
 func (e IntegrationGrantApprovalPolicy) Valid() bool {
 	switch e {
 	case IntegrationGrantApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case IntegrationGrantApprovalPolicyHUMANSCOPED:
 		return true
 	case IntegrationGrantApprovalPolicyNONE:
 		return true
@@ -9704,18 +9710,19 @@ type IntegrationDefinitionShippedCopyInput struct {
 
 // IntegrationGrant defines model for IntegrationGrant.
 type IntegrationGrant struct {
-	AgentRef          *OpaqueRef                     `json:"agentRef,omitempty"`
-	ApprovalPolicy    IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
-	CapabilityKey     string                         `json:"capabilityKey"`
-	Enabled           bool                           `json:"enabled"`
-	InputSchema       *string                        `json:"inputSchema,omitempty"`
-	InputSchemaSha256 *string                        `json:"inputSchemaSha256,omitempty"`
-	Ref               OpaqueRef                      `json:"ref"`
-	ResourceScope     IntegrationResourceScope       `json:"resourceScope"`
-	Risk              IntegrationGrantRisk           `json:"risk"`
-	TargetName        string                         `json:"targetName"`
-	Version           int64                          `json:"version"`
-	WorkflowRef       *OpaqueRef                     `json:"workflowRef,omitempty"`
+	AgentRef           *OpaqueRef                     `json:"agentRef,omitempty"`
+	ApprovalPolicy     IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
+	ApprovalScopePaths *[]string                      `json:"approvalScopePaths,omitempty"`
+	CapabilityKey      string                         `json:"capabilityKey"`
+	Enabled            bool                           `json:"enabled"`
+	InputSchema        *string                        `json:"inputSchema,omitempty"`
+	InputSchemaSha256  *string                        `json:"inputSchemaSha256,omitempty"`
+	Ref                OpaqueRef                      `json:"ref"`
+	ResourceScope      IntegrationResourceScope       `json:"resourceScope"`
+	Risk               IntegrationGrantRisk           `json:"risk"`
+	TargetName         string                         `json:"targetName"`
+	Version            int64                          `json:"version"`
+	WorkflowRef        *OpaqueRef                     `json:"workflowRef,omitempty"`
 }
 
 // IntegrationGrantApprovalPolicy defines model for IntegrationGrant.ApprovalPolicy.
@@ -9799,10 +9806,11 @@ type IntegrationGrantConnectionCandidatePage struct {
 
 // IntegrationGrantInput defines model for IntegrationGrantInput.
 type IntegrationGrantInput struct {
-	AgentRef      *OpaqueRef `json:"agentRef,omitempty"`
-	CapabilityKey string     `json:"capabilityKey"`
-	Enabled       bool       `json:"enabled"`
-	WorkflowRef   *OpaqueRef `json:"workflowRef,omitempty"`
+	AgentRef           *OpaqueRef `json:"agentRef,omitempty"`
+	ApprovalScopePaths *[]string  `json:"approvalScopePaths,omitempty"`
+	CapabilityKey      string     `json:"capabilityKey"`
+	Enabled            bool       `json:"enabled"`
+	WorkflowRef        *OpaqueRef `json:"workflowRef,omitempty"`
 }
 
 // IntegrationGrantProjectCandidate defines model for IntegrationGrantProjectCandidate.
@@ -10295,7 +10303,7 @@ type OpaqueRef = string
 
 // OpenAPIInspectionInput defines model for OpenAPIInspectionInput.
 type OpenAPIInspectionInput struct {
-	// Source Локальный OpenAPI 3.x JSON или YAML без внешних ссылок; не сохраняется и не отправляется по сети.
+	// Source OpenAPI 3.x JSON или YAML без внешних ссылок; передаётся только в локальный gateway
 	Source string `json:"source"`
 }
 

@@ -93,7 +93,7 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 }
 
 // Один owner read path для connection, grant, invocation и private worker claim.
-func (repository *Repository) integrationPackage(ctx context.Context, tx pgx.Tx, organizationID, connectionRef, key, version, digest string) (integrationpackage.Package, error) {
+func (repository *Repository) integrationPackage(ctx context.Context, runner queryRunner, organizationID, connectionRef, key, version, digest string) (integrationpackage.Package, error) {
 	shipped, ok := repository.integrationDefinitions[key]
 	if !ok {
 		return integrationpackage.Package{}, errs.ErrForbidden
@@ -102,7 +102,7 @@ func (repository *Repository) integrationPackage(ctx context.Context, tx pgx.Tx,
 		return compatible, nil
 	}
 	var format, content string
-	err := tx.QueryRow(ctx, queryIntegrationPackageBoundRevision, organizationID, connectionRef).Scan(&format, &content)
+	err := runner.QueryRow(ctx, queryIntegrationPackageBoundRevision, organizationID, connectionRef).Scan(&format, &content)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return integrationpackage.Package{}, errs.ErrForbidden
 	}

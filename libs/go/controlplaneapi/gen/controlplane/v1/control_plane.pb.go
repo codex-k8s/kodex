@@ -1765,6 +1765,7 @@ const (
 	IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_UNSPECIFIED       IntegrationApprovalPolicy = 0
 	IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_NONE              IntegrationApprovalPolicy = 1
 	IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT IntegrationApprovalPolicy = 2
+	IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_HUMAN_SCOPED      IntegrationApprovalPolicy = 3
 )
 
 // Enum value maps for IntegrationApprovalPolicy.
@@ -1773,11 +1774,13 @@ var (
 		0: "INTEGRATION_APPROVAL_POLICY_UNSPECIFIED",
 		1: "INTEGRATION_APPROVAL_POLICY_NONE",
 		2: "INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT",
+		3: "INTEGRATION_APPROVAL_POLICY_HUMAN_SCOPED",
 	}
 	IntegrationApprovalPolicy_value = map[string]int32{
 		"INTEGRATION_APPROVAL_POLICY_UNSPECIFIED":       0,
 		"INTEGRATION_APPROVAL_POLICY_NONE":              1,
 		"INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT": 2,
+		"INTEGRATION_APPROVAL_POLICY_HUMAN_SCOPED":      3,
 	}
 )
 
@@ -12685,6 +12688,7 @@ type IntegrationGrant struct {
 	Operation             string                    `protobuf:"bytes,20,opt,name=operation,proto3" json:"operation,omitempty"`
 	InputSchema           string                    `protobuf:"bytes,21,opt,name=input_schema,json=inputSchema,proto3" json:"input_schema,omitempty"`
 	InputSchemaSha256     string                    `protobuf:"bytes,22,opt,name=input_schema_sha256,json=inputSchemaSha256,proto3" json:"input_schema_sha256,omitempty"`
+	ApprovalScopePaths    []string                  `protobuf:"bytes,23,rep,name=approval_scope_paths,json=approvalScopePaths,proto3" json:"approval_scope_paths,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -12871,6 +12875,13 @@ func (x *IntegrationGrant) GetInputSchemaSha256() string {
 		return x.InputSchemaSha256
 	}
 	return ""
+}
+
+func (x *IntegrationGrant) GetApprovalScopePaths() []string {
+	if x != nil {
+		return x.ApprovalScopePaths
+	}
+	return nil
 }
 
 type IntegrationConnection struct {
@@ -26178,15 +26189,16 @@ func (x *SetIntegrationConnectionEnabledResponse) GetConnection() *IntegrationCo
 }
 
 type ChangeIntegrationGrantRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Mutation      *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
-	ConnectionRef string                 `protobuf:"bytes,2,opt,name=connection_ref,json=connectionRef,proto3" json:"connection_ref,omitempty"`
-	CapabilityKey string                 `protobuf:"bytes,3,opt,name=capability_key,json=capabilityKey,proto3" json:"capability_key,omitempty"`
-	AgentRef      string                 `protobuf:"bytes,4,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
-	WorkflowRef   string                 `protobuf:"bytes,5,opt,name=workflow_ref,json=workflowRef,proto3" json:"workflow_ref,omitempty"`
-	Enabled       bool                   `protobuf:"varint,6,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Mutation           *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	ConnectionRef      string                 `protobuf:"bytes,2,opt,name=connection_ref,json=connectionRef,proto3" json:"connection_ref,omitempty"`
+	CapabilityKey      string                 `protobuf:"bytes,3,opt,name=capability_key,json=capabilityKey,proto3" json:"capability_key,omitempty"`
+	AgentRef           string                 `protobuf:"bytes,4,opt,name=agent_ref,json=agentRef,proto3" json:"agent_ref,omitempty"`
+	WorkflowRef        string                 `protobuf:"bytes,5,opt,name=workflow_ref,json=workflowRef,proto3" json:"workflow_ref,omitempty"`
+	Enabled            bool                   `protobuf:"varint,6,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	ApprovalScopePaths []string               `protobuf:"bytes,7,rep,name=approval_scope_paths,json=approvalScopePaths,proto3" json:"approval_scope_paths,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ChangeIntegrationGrantRequest) Reset() {
@@ -26259,6 +26271,13 @@ func (x *ChangeIntegrationGrantRequest) GetEnabled() bool {
 		return x.Enabled
 	}
 	return false
+}
+
+func (x *ChangeIntegrationGrantRequest) GetApprovalScopePaths() []string {
+	if x != nil {
+		return x.ApprovalScopePaths
+	}
+	return nil
 }
 
 type ChangeIntegrationGrantResponse struct {
@@ -74827,7 +74846,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x17secret_resource_version\x18\x05 \x01(\tR\x15secretResourceVersion\x12%\n" +
 	"\x0econtent_sha256\x18\x06 \x01(\tR\rcontentSha256\x129\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xbb\a\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xed\a\n" +
 	"\x10IntegrationGrant\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12%\n" +
@@ -74854,7 +74873,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x11definition_digest\x18\x13 \x01(\tR\x10definitionDigest\x12\x1c\n" +
 	"\toperation\x18\x14 \x01(\tR\toperation\x12!\n" +
 	"\finput_schema\x18\x15 \x01(\tR\vinputSchema\x12.\n" +
-	"\x13input_schema_sha256\x18\x16 \x01(\tR\x11inputSchemaSha256\"\xcc\a\n" +
+	"\x13input_schema_sha256\x18\x16 \x01(\tR\x11inputSchemaSha256\x120\n" +
+	"\x14approval_scope_paths\x18\x17 \x03(\tR\x12approvalScopePaths\"\xcc\a\n" +
 	"\x15IntegrationConnection\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12%\n" +
@@ -75942,14 +75962,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"'SetIntegrationConnectionEnabledResponse\x12F\n" +
 	"\n" +
 	"connection\x18\x01 \x01(\v2&.controlplane.v1.IntegrationConnectionR\n" +
-	"connection\"\x85\x02\n" +
+	"connection\"\xb7\x02\n" +
 	"\x1dChangeIntegrationGrantRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12%\n" +
 	"\x0econnection_ref\x18\x02 \x01(\tR\rconnectionRef\x12%\n" +
 	"\x0ecapability_key\x18\x03 \x01(\tR\rcapabilityKey\x12\x1b\n" +
 	"\tagent_ref\x18\x04 \x01(\tR\bagentRef\x12!\n" +
 	"\fworkflow_ref\x18\x05 \x01(\tR\vworkflowRef\x12\x18\n" +
-	"\aenabled\x18\x06 \x01(\bR\aenabled\"h\n" +
+	"\aenabled\x18\x06 \x01(\bR\aenabled\x120\n" +
+	"\x14approval_scope_paths\x18\a \x03(\tR\x12approvalScopePaths\"h\n" +
 	"\x1eChangeIntegrationGrantResponse\x12F\n" +
 	"\n" +
 	"connection\x18\x01 \x01(\v2&.controlplane.v1.IntegrationConnectionR\n" +
@@ -80271,11 +80292,12 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x15INTEGRATION_RISK_READ\x10\x01\x12\x1a\n" +
 	"\x16INTEGRATION_RISK_WRITE\x10\x02\x12\x1e\n" +
 	"\x1aINTEGRATION_RISK_SENSITIVE\x10\x03\x12 \n" +
-	"\x1cINTEGRATION_RISK_DESTRUCTIVE\x10\x04*\xa1\x01\n" +
+	"\x1cINTEGRATION_RISK_DESTRUCTIVE\x10\x04*\xcf\x01\n" +
 	"\x19IntegrationApprovalPolicy\x12+\n" +
 	"'INTEGRATION_APPROVAL_POLICY_UNSPECIFIED\x10\x00\x12$\n" +
 	" INTEGRATION_APPROVAL_POLICY_NONE\x10\x01\x121\n" +
-	"-INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT\x10\x02*\xbc\x03\n" +
+	"-INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT\x10\x02\x12,\n" +
+	"(INTEGRATION_APPROVAL_POLICY_HUMAN_SCOPED\x10\x03*\xbc\x03\n" +
 	"\x17IntegrationResourceKind\x12)\n" +
 	"%INTEGRATION_RESOURCE_KIND_UNSPECIFIED\x10\x00\x12/\n" +
 	"+INTEGRATION_RESOURCE_KIND_SYNTHETIC_JOURNAL\x10\x01\x12/\n" +

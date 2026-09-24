@@ -897,6 +897,9 @@ async function saveGrant(selection: IntegrationGrantSelection): Promise<void> {
         ? { agentRef: grant.targetRef }
         : { workflowRef: grant.targetRef }),
       enabled: true,
+      ...(selection.approvalScopePaths
+        ? { approvalScopePaths: selection.approvalScopePaths }
+        : {}),
     });
     grant.targetRef = "";
   } catch (error) {

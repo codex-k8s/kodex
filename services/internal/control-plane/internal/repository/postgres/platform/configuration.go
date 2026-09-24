@@ -739,6 +739,17 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if packageErr != nil || !valid || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if payload.Enabled {
+		if capability.ApprovalPolicy == "HUMAN_SCOPED" {
+			if capability.ValidateApprovalScopePaths(payload.ApprovalScopePaths) != nil {
+				return commandOutcome{}, errs.ErrInvalid
+			}
+		} else if len(payload.ApprovalScopePaths) != 0 {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+	} else if len(payload.ApprovalScopePaths) != 0 {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	configuration := map[string]string{}
 	if json.Unmarshal(encodedConfiguration, &configuration) != nil || definition.ValidateConfiguration(configuration) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -759,6 +770,7 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 			grantRef, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef,
 			capability.ApprovalPolicy, scope.actorID, capability.Risk, capability.ResourceScope.Kind,
 			encodedScope, hex.EncodeToString(scopeDigest[:]), definition.Metadata.Version, definition.Digest,
+			sortedApprovalScopePaths(payload.ApprovalScopePaths),
 		).Scan(&grantRef)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)

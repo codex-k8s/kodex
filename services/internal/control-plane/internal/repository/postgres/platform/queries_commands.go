@@ -253,6 +253,12 @@ var (
 	queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId string
 	//go:embed sql/commands_resolvegate_select_owner_gates_organization_id_ref_state.sql
 	queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState string
+	//go:embed sql/commands_resolvegate_select_scoped_integration_invocation.sql
+	queryCommandsResolvegateSelectScopedIntegrationInvocation string
+	//go:embed sql/commands_resolvegate_insert_integration_approval_scope.sql
+	queryCommandsResolvegateInsertIntegrationApprovalScope string
+	//go:embed sql/commands_resolvegate_bind_integration_approval_scope.sql
+	queryCommandsResolvegateBindIntegrationApprovalScope string
 	//go:embed sql/commands_resolvegate_update_owner_gates_state_decision_decision_comment.sql
 	queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment string
 	//go:embed sql/commands_resolvegate_update_integration_invocation.sql

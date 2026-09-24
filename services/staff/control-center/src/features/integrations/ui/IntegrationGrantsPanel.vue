@@ -7,6 +7,10 @@ import {
   connectionAllows,
   type IntegrationGrantPresentation,
 } from "@/features/integrations/ui/model";
+import {
+  approvalScopeOptions,
+  validApprovalScopeSelection,
+} from "@/features/integrations/approval-scope-options";
 import type {
   IntegrationConnection,
   IntegrationGrantConnectionCandidate,
@@ -56,6 +60,10 @@ const chosenCapability = ref<AsyncEntityOption>();
 const projectCandidate = ref<IntegrationGrantProjectCandidate>();
 const recipientCandidate = ref<IntegrationGrantRecipientCandidate>();
 const capabilityCandidate = ref<IntegrationGrantCapabilityCandidate>();
+const approvalScopePaths = ref<string[]>([]);
+const availableApprovalScopePaths = computed(() =>
+  approvalScopeOptions(capabilityCandidate.value?.capability.inputSchema),
+);
 const connectionRows = ref(
   new Map<string, IntegrationGrantConnectionCandidate>(),
 );
@@ -135,6 +143,14 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     capability.pins.connectionVersion !== connection.version
   )
     return undefined;
+  if (
+    capability.capability.approvalPolicy === "HUMAN_SCOPED" &&
+    !validApprovalScopeSelection(
+      approvalScopePaths.value,
+      availableApprovalScopePaths.value,
+    )
+  )
+    return undefined;
   return {
     connectionRef: connection.ref,
     connectionVersion: connection.version,
@@ -142,12 +158,22 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     recipientKind: recipient.recipientKind,
     recipientRef: recipient.recipientRef,
     capabilityKey: capability.capability.key,
+    ...(capability.capability.approvalPolicy === "HUMAN_SCOPED"
+      ? { approvalScopePaths: [...approvalScopePaths.value].sort() }
+      : {}),
   };
 });
+function toggleApprovalScopePath(path: string, checked: boolean): void {
+  if (!availableApprovalScopePaths.value.includes(path)) return;
+  approvalScopePaths.value = checked
+    ? [...new Set([...approvalScopePaths.value, path])].sort()
+    : approvalScopePaths.value.filter((candidate) => candidate !== path);
+}
 function submit(): void {
   if (selection.value && !props.busy) emit("save", selection.value);
 }
 function clearCapability(): void {
+  approvalScopePaths.value = [];
   capabilityGeneration += 1;
   capabilityCandidate.value = undefined;
   chosenCapability.value = undefined;
@@ -194,6 +220,7 @@ function chooseRecipient(option: AsyncEntityOption): void {
 function chooseCapability(option: AsyncEntityOption): void {
   const candidate = capabilityRows.get(option.ref);
   if (!candidate?.grantable) return;
+  approvalScopePaths.value = [];
   capabilityCandidate.value = candidate;
   chosenCapability.value = option;
   emit("update:capabilityKey", option.ref);
@@ -438,6 +465,12 @@ const canManageSelected = computed(
               </span>
               <span class="mono">{{ item.resourceKind }}</span>
               <span
+                v-for="path in item.grant.approvalScopePaths"
+                :key="path"
+                class="mono resource-value"
+                >{{ path }}</span
+              >
+              <span
                 v-for="entry in item.resourceValues"
                 :key="entry.key"
                 class="mono resource-value"
@@ -577,6 +610,40 @@ const canManageSelected = computed(
             </dl>
           </section>
 
+          <fieldset
+            v-if="selectedCapability?.approvalPolicy === 'HUMAN_SCOPED'"
+            class="capability-boundary"
+          >
+            <legend>{{ t("integrations.approvalScopeTitle") }}</legend>
+            <p>{{ t("integrations.approvalScopeHelp") }}</p>
+            <p v-if="!availableApprovalScopePaths.length">
+              {{ t("integrations.approvalScopeUnavailable") }}
+            </p>
+            <label
+              v-for="path in availableApprovalScopePaths"
+              :key="path"
+              class="approval-scope-option"
+            >
+              <input
+                type="checkbox"
+                :checked="approvalScopePaths.includes(path)"
+                :disabled="
+                  busy ||
+                  !canManageSelected ||
+                  (!approvalScopePaths.includes(path) &&
+                    approvalScopePaths.length >= 16)
+                "
+                @change="
+                  toggleApprovalScopePath(
+                    path,
+                    ($event.target as HTMLInputElement).checked,
+                  )
+                "
+              />
+              <code>{{ path }}</code>
+            </label>
+          </fieldset>
+
           <SafeStructuredData
             v-if="connectionCandidate"
             :value="connectionCandidate.resourceScope"
@@ -656,6 +723,16 @@ const canManageSelected = computed(
   overflow-wrap: anywhere;
   margin: 0;
   font-size: 0.72rem;
+}
+.approval-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+.approval-scope-option code {
+  overflow-wrap: anywhere;
 }
 .panel-heading,
 .grant-editor > header {

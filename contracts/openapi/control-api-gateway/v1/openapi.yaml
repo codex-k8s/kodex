@@ -9210,7 +9210,7 @@ components:
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
         approvalRequired: { type: boolean }
         operation: { type: string, minLength: 1, maxLength: 120 }
-        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
+        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
         resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
         inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
         inputSchema: { type: string, minLength: 2, maxLength: 262144 }
@@ -9482,7 +9482,11 @@ components:
         targetName: { type: string, maxLength: 160 }
         enabled: { type: boolean }
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
-        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
+        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        approvalScopePaths:
+          type: array
+          maxItems: 16
+          items: { type: string, minLength: 2, maxLength: 256 }
         resourceScope: { $ref: '#/components/schemas/IntegrationResourceScope' }
         inputSchema: { type: string, minLength: 2, maxLength: 262144 }
         inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
@@ -9537,6 +9541,10 @@ components:
         agentRef: { $ref: '#/components/schemas/OpaqueRef' }
         workflowRef: { $ref: '#/components/schemas/OpaqueRef' }
         enabled: { type: boolean }
+        approvalScopePaths:
+          type: array
+          maxItems: 16
+          items: { type: string, minLength: 2, maxLength: 256 }
     AssistantPlanOperation:
       type: object
       additionalProperties: false

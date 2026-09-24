@@ -477,6 +477,28 @@ func TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC(t *testing.
 	if err != nil || mapped.Kind != command.ChangeIntegrationGrant || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 4 {
 		t.Fatalf("map integration grant operation with OCC: command=%#v err=%v", mapped, err)
 	}
+	grant.Input["approvalScopePaths"] = []any{"/action", "/ticket/id"}
+	mapped, err = assistantOperationCommand(grant)
+	if err != nil || len(mapped.Payload.(command.IntegrationGrantInput).ApprovalScopePaths) != 2 {
+		t.Fatalf("map owner-selected approval scope: command=%#v err=%v", mapped, err)
+	}
+	for _, invalid := range []any{[]any{"/action", 3}, []any{""}, []any{1, 2}} {
+		grant.Input["approvalScopePaths"] = invalid
+		if _, err := assistantOperationCommand(grant); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("invalid approval scope accepted: %v", invalid)
+		}
+	}
+	grant.Input["approvalScopePaths"] = []any{"/action"}
+	grant.Input["enabled"] = false
+	if _, err := assistantOperationCommand(grant); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatal("revoked grant retained approval scope")
+	}
+	grant.Input["approvalScopePaths"] = []any{}
+	if _, err := assistantOperationCommand(grant); err != nil {
+		t.Fatalf("revocation with cleared approval scope was rejected: %v", err)
+	}
+	grant.Input["enabled"] = true
+	delete(grant.Input, "approvalScopePaths")
 	delete(grant.Input, "expectedVersion")
 	if _, err := assistantOperationCommand(grant); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("grant without authoritative connection version must be rejected, got %v", err)

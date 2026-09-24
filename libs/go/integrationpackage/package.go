@@ -235,9 +235,11 @@ func (definition Package) ValidateConfiguration(configuration map[string]string)
 			return errors.New("integration configuration required field is missing")
 		}
 	}
-	if definition.Spec.Adapter == string(AdapterOpenAPIMCP) && definition.Spec.Readiness == "READY" {
+	if definition.Spec.Adapter == string(AdapterOpenAPIMCP) {
 		for _, capability := range definition.Spec.Capabilities {
-			if capability.OpenAPI == nil || capability.OpenAPI.ServerOrigin != configuration["base_url"] {
+			if capability.OpenAPI == nil ||
+				(capability.OpenAPI.ServerOrigin != "" || definition.Spec.Readiness == string(ReadinessReady)) &&
+					capability.OpenAPI.ServerOrigin != configuration["base_url"] {
 				return errors.New("OpenAPI server origin does not match connection")
 			}
 		}

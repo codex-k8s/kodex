@@ -361,7 +361,7 @@ export type SpeechTranscriptionAvailability = {
 
 export type OpenApiInspectionInput = {
     /**
-     * Локальный OpenAPI 3.x JSON или YAML без внешних ссылок; не сохраняется и не отправляется по сети.
+     * OpenAPI 3.x JSON или YAML без внешних ссылок; передаётся только в локальный gateway
      */
     source: string;
 };
@@ -3415,7 +3415,7 @@ export type IntegrationCapability = {
     risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
     approvalRequired: boolean;
     operation: string;
-    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
     resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
@@ -3661,7 +3661,8 @@ export type IntegrationGrant = {
     targetName: string;
     enabled: boolean;
     risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
-    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    approvalScopePaths?: Array<string>;
     resourceScope: IntegrationResourceScope;
     inputSchema?: string;
     inputSchemaSha256?: string;
@@ -3713,6 +3714,7 @@ export type IntegrationGrantInput = {
     agentRef?: OpaqueRef;
     workflowRef?: OpaqueRef;
     enabled: boolean;
+    approvalScopePaths?: Array<string>;
 };
 
 export type AssistantPlanOperation = {

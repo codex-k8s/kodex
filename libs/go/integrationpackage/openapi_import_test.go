@@ -82,6 +82,9 @@ func TestDraftOpenAPIPackagePinsSelectedOperationsAndSource(t *testing.T) {
 	if definition.ValidateConfiguration(map[string]string{"base_url": "https://api.example.test"}) != nil {
 		t.Fatal("selected HTTPS origin rejected")
 	}
+	if definition.ValidateConfiguration(map[string]string{"base_url": "https://other.example.test"}) == nil {
+		t.Fatal("imported draft accepted a different HTTPS origin")
+	}
 	if definition.Spec.Capabilities[0].OpenAPI.ServerOrigin != "https://api.example.test" ||
 		len(definition.Spec.Capabilities[0].OpenAPI.SourceDigest) != 64 ||
 		definition.Spec.HealthCheck.Operation != definition.Spec.Capabilities[0].Operation {

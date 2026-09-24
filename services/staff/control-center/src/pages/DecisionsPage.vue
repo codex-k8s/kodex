@@ -224,6 +224,46 @@ const selected = computed(() => {
   }
   return visibleItems.value.find((item) => item.gate.ref === selectedRef.value);
 });
+type ApprovalScopePreview = {
+  selected: Array<{ path: string; type: string; value: unknown }>;
+  mutablePaths: string[];
+};
+function isApprovalScopeField(
+  value: unknown,
+): value is ApprovalScopePreview["selected"][number] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const field = value as Record<string, unknown>;
+  return (
+    typeof field.path === "string" &&
+    typeof field.type === "string" &&
+    "value" in field
+  );
+}
+const selectedApprovalScope = computed<ApprovalScopePreview | undefined>(() => {
+  const candidate =
+    selected.value?.gate.integrationIntent?.effectPreview.approvalScope;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate))
+    return undefined;
+  const scope = candidate as Record<string, unknown>;
+  if (
+    !Array.isArray(scope.selected) ||
+    !scope.selected.every(isApprovalScopeField) ||
+    !Array.isArray(scope.mutablePaths) ||
+    !scope.mutablePaths.every((path) => typeof path === "string")
+  )
+    return undefined;
+  return scope as ApprovalScopePreview;
+});
+const selectedEffectPreview = computed(() => {
+  const preview = selected.value?.gate.integrationIntent?.effectPreview;
+  return preview
+    ? Object.fromEntries(
+        Object.entries(preview).filter(
+          ([key]) => key !== "approvalScope" || !selectedApprovalScope.value,
+        ),
+      )
+    : undefined;
+});
 const selectedActions = computed(() =>
   selected.value
     ? decisionActionLayout(selected.value.gate)
@@ -885,10 +925,34 @@ const serverMessage = useServerMessage();
             <p>
               <code>{{ selected.gate.integrationIntent.effectKey }}</code>
             </p>
-            <SafeStructuredData
-              :value="selected.gate.integrationIntent.effectPreview"
-              literal
-            />
+            <SafeStructuredData :value="selectedEffectPreview" literal />
+            <section
+              v-if="selectedApprovalScope"
+              class="decision-approval-scope"
+            >
+              <h4>{{ $t("decisions.approvalScopeTitle") }}</h4>
+              <p>{{ $t("decisions.approvalScopeExplanation") }}</p>
+              <dl>
+                <div
+                  v-for="field in selectedApprovalScope.selected"
+                  :key="field.path"
+                >
+                  <dt>
+                    <code>{{ field.path }}</code> · {{ field.type }}
+                  </dt>
+                  <dd><SafeStructuredData :value="field.value" literal /></dd>
+                </div>
+              </dl>
+              <p>{{ $t("decisions.approvalScopeMutable") }}</p>
+              <ul>
+                <li
+                  v-for="path in selectedApprovalScope.mutablePaths"
+                  :key="path"
+                >
+                  <code>{{ path }}</code>
+                </li>
+              </ul>
+            </section>
           </section>
 
           <section
@@ -1323,6 +1387,21 @@ const serverMessage = useServerMessage();
 .decision-integration-intent dd {
   margin: 4px 0 0;
   overflow-wrap: anywhere;
+}
+.decision-approval-scope {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.decision-approval-scope h4,
+.decision-approval-scope p,
+.decision-approval-scope ul {
+  margin: 0;
+}
+.decision-approval-scope ul {
+  padding-left: 20px;
 }
 .decision-audit {
   display: grid;

@@ -21,6 +21,7 @@ export interface IntegrationGrantSelection {
   recipientKind: "AGENT" | "WORKFLOW";
   recipientRef: string;
   capabilityKey: string;
+  approvalScopePaths?: string[];
 }
 
 type CandidatePage =

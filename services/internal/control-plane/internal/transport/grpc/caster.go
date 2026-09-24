@@ -565,7 +565,8 @@ func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
 	grant := &controlplanev1.IntegrationGrant{
 		Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
 		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
-		ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
+		ResourceScope:      &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
+		ApprovalScopePaths: append([]string(nil), value.ApprovalScopePaths...),
 	}
 	if value.TargetType == "AGENT" {
 		grant.AgentRef = value.TargetRef
