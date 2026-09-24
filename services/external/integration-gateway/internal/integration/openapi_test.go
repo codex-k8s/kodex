@@ -16,8 +16,27 @@ func openAPITestCapability() integrationpackage.Capability {
 		Execution: integrationpackage.Execution{Idempotency: "EFFECT_KEY", TimeoutSeconds: 10, MaxAttempts: 1, RetryBackoffMilliseconds: 250},
 		OpenAPI: &integrationpackage.OpenAPIHTTP{
 			OperationID: "updateTicket", Method: "PATCH", Path: "/tickets/{id}",
-			AuthScheme: "API_KEY_HEADER", AuthHeader: "X-Api-Key", IdempotencyHeader: "X-Request-Key",
+			ServerOrigin: "https://api.example.test",
+			AuthScheme:   "API_KEY_HEADER", AuthHeader: "X-Api-Key", IdempotencyHeader: "X-Request-Key",
 		},
+	}
+}
+
+func TestOpenAPIExecutionRejectsChangedOriginBeforeCredentialReadOrNetwork(t *testing.T) {
+	adapter := testAdapter(t)
+	capability := openAPITestCapability()
+	requests := 0
+	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		requests++
+		return nil, errors.New("unexpected outbound request")
+	})}
+	for _, origin := range []string{"https://other.example.test", "https://api.example.test/", ""} {
+		_, err := adapter.executeOpenAPI(t.Context(), Request{}, capability,
+			map[string]string{"base_url": origin}, []byte(`{"path":{"id":3}}`))
+		var safe *SafeError
+		if !errors.As(err, &safe) || safe.Code != "INTEGRATION_CONFIGURATION_INVALID" || requests != 0 {
+			t.Fatalf("changed origin was accepted: code=%v requests=%d", err, requests)
+		}
 	}
 }
 

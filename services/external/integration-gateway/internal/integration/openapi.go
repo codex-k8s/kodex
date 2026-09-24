@@ -21,7 +21,7 @@ import (
 func (adapter *Adapter) executeOpenAPI(ctx context.Context, request Request, capability integrationpackage.Capability,
 	configuration map[string]string, canonicalInput []byte) (Result, error) {
 	binding := capability.OpenAPI
-	if binding == nil {
+	if binding == nil || binding.ServerOrigin == "" || configuration["base_url"] != binding.ServerOrigin {
 		return Result{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
 	decoder := json.NewDecoder(bytes.NewReader(canonicalInput))
