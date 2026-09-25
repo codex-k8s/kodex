@@ -13,6 +13,7 @@ export function openAPIImportContent(input: {
   healthOperationId: string;
   risks: Record<string, OpenAPIWriteRisk>;
   approvals: Record<string, OpenAPIWriteApproval>;
+  idempotencyHeaders: Record<string, string>;
 }): string {
   if (
     !input.source ||
@@ -46,12 +47,22 @@ export function openAPIImportContent(input: {
       return { operationId, risk: "READ", approvalPolicy: "NONE" };
     const risk = input.risks[operationId] ?? "WRITE";
     const approvalPolicy = input.approvals[operationId] ?? "HUMAN_EACH_EFFECT";
+    const idempotencyHeader = (
+      input.idempotencyHeaders[operationId] ?? ""
+    ).trim();
     if (
       !["WRITE", "SENSITIVE", "DESTRUCTIVE"].includes(risk) ||
-      !["HUMAN_EACH_EFFECT", "HUMAN_SCOPED"].includes(approvalPolicy)
+      !["HUMAN_EACH_EFFECT", "HUMAN_SCOPED"].includes(approvalPolicy) ||
+      (idempotencyHeader !== "" &&
+        !/^[A-Za-z][A-Za-z0-9-]{0,63}$/.test(idempotencyHeader))
     )
       throw new Error("OpenAPI write policy is invalid");
-    return { operationId, risk, approvalPolicy };
+    return {
+      operationId,
+      risk,
+      approvalPolicy,
+      ...(idempotencyHeader ? { idempotencyHeader } : {}),
+    };
   });
   const content = JSON.stringify({
     source: input.source,

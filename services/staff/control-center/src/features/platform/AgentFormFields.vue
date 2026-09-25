@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, useId, watch } from "vue";
 
 import { isAgentDraftComplete } from "@/features/platform/agent-form";
 import type { RuntimeSelection } from "@/shared/api/generated/openapi/types.gen";
@@ -29,6 +29,11 @@ const emit = defineEmits<{
   "update:runtimeRef": [value: string];
   valid: [value: boolean];
 }>();
+const nameId = useId();
+const purposeId = useId();
+const roleDescriptionId = useId();
+const instructionsId = useId();
+const runtimeId = useId();
 const valid = computed(
   () =>
     isAgentDraftComplete(props) &&
@@ -41,9 +46,11 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
 
 <template>
   <div class="agent-form-fields">
-    <label class="field">
+    <label class="field" :for="nameId">
       <span>{{ $t("common.name") }}</span>
       <input
+        :id="nameId"
+        :name="nameId"
         :value="name"
         :disabled="disabled"
         required
@@ -53,9 +60,11 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
         "
       />
     </label>
-    <label class="field">
+    <label class="field" :for="purposeId">
       <span>{{ $t("common.purpose") }}</span>
       <input
+        :id="purposeId"
+        :name="purposeId"
         :value="purpose"
         :disabled="disabled"
         required
@@ -68,9 +77,11 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
         "
       />
     </label>
-    <label class="field field--wide">
+    <label class="field field--wide" :for="roleDescriptionId">
       <span>{{ $t("agents.role") }}</span>
       <VoiceTextarea
+        :id="roleDescriptionId"
+        :name="roleDescriptionId"
         :model-value="roleDescription"
         :disabled="disabled"
         required
@@ -78,9 +89,11 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
         @update:model-value="emit('update:roleDescription', $event.trim())"
       />
     </label>
-    <label class="field field--wide">
+    <label class="field field--wide" :for="instructionsId">
       <span>{{ $t("agents.instructions") }}</span>
       <VoiceTextarea
+        :id="instructionsId"
+        :name="instructionsId"
         :model-value="initialInstructions"
         :disabled="disabled"
         required
@@ -91,9 +104,11 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
     </label>
     <details class="field--wide advanced-settings" :open="runtimeExpanded">
       <summary>{{ $t("common.advanced") }}</summary>
-      <label class="field">
+      <label class="field" :for="runtimeId">
         <span>{{ $t("agents.runtime") }}</span>
         <select
+          :id="runtimeId"
+          :name="runtimeId"
           :value="runtimeRef"
           :disabled="disabled"
           required

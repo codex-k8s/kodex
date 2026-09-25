@@ -42,6 +42,10 @@ describe("AssistantPlanEditor layout", () => {
   });
 
   it("задаёт стабильные имена полям большой формы для браузерной диагностики", () => {
+    const agentFields = readFileSync(
+      new URL("../../platform/AgentFormFields.vue", import.meta.url),
+      "utf8",
+    );
     const environmentFields = readFileSync(
       new URL(
         "../../runtime/RuntimeEnvironmentFieldListsEditor.vue",
@@ -59,6 +63,11 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain('name="assistant-plan-summary"');
     expect(source).toContain("assistant-operation-selected-${index}");
     expect(source).toContain("assistant-environment-description-${index}");
+    expect(agentFields).toContain(':name="nameId"');
+    expect(agentFields).toContain(':name="purposeId"');
+    expect(agentFields).toContain(':name="roleDescriptionId"');
+    expect(agentFields).toContain(':name="instructionsId"');
+    expect(agentFields).toContain(':name="runtimeId"');
     expect(environmentFields).toContain("runtime-public-value-name-${index}");
     expect(environmentFields).toContain("runtime-secret-binding-name-${index}");
     expect(environmentPolicy).toContain("runtime-resource-${field.key}");

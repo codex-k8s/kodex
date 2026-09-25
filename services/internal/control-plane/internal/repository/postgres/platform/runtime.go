@@ -1578,20 +1578,10 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 	}
 	if targetType == "SYSTEM_ASSISTANT" {
-		turnRef, _ := newRef("trn")
-		var next int64
-		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectSessionsId, sessionID).Scan(&next); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt,
-			sessionID, assistantConversationTitle(payload)); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+		if err := repository.recordSystemAssistantTerminalTurn(ctx, tx, scope,
+			sessionID, stringMap(lease, "runID"), nonEmptyResult(payload),
+			map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success], assistantConversationTitle(payload)); err != nil {
+			return commandOutcome{}, err
 		}
 	}
 	if payload.Success && humanGateAfter && !rootAlreadyTerminal {

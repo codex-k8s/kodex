@@ -77,6 +77,8 @@ onBeforeUnmount(() => observer?.disconnect());
         <span class="sr-only">{{ t("agents.catalogSearch") }}</span>
         <Search :size="16" aria-hidden="true" />
         <input
+          id="agent-catalog-search"
+          name="agent-catalog-search"
           :value="query"
           type="search"
           :placeholder="t('agents.catalogSearchPlaceholder')"

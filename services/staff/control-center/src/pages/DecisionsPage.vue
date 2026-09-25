@@ -13,13 +13,13 @@ import {
   ShieldQuestion,
   UserRound,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import {
   gateSelection,
   readAddressedGate,
 } from "@/features/workboard/gate-navigation";
 import { useI18n } from "vue-i18n";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
@@ -60,6 +60,7 @@ let preferredGateRef =
   typeof route.query.gateRef === "string" ? route.query.gateRef : "";
 const view = ref<"PENDING" | "HISTORY">("PENDING");
 const search = ref("");
+const searchId = useId();
 const catalog = useGateCatalog();
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const addressedGate = ref<OwnerGate>();
@@ -597,9 +598,14 @@ const serverMessage = useServerMessage();
         </div>
         <GateProjectFilter v-model="projectFilter" />
       </div>
-      <label
+      <label :for="searchId"
         ><span>{{ $t("common.search") }}</span
-        ><input v-model="search" type="search" maxlength="200"
+        ><input
+          :id="searchId"
+          v-model="search"
+          name="decision-search"
+          type="search"
+          maxlength="200"
       /></label>
       <span
         v-if="catalog.total.value !== undefined"

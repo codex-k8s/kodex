@@ -1,5 +1,5 @@
 import { createPinia } from "pinia";
-import { createSSRApp, ref } from "vue";
+import { createSSRApp, defineComponent, h, ref } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -138,7 +138,10 @@ describe("DecisionsPage", () => {
       history: createMemoryHistory(),
       routes: [
         { path: "/decisions", component: DecisionsPage },
-        { path: "/:pathMatch(.*)*", component: { template: "<div />" } },
+        {
+          path: "/:pathMatch(.*)*",
+          component: defineComponent({ render: () => h("div") }),
+        },
       ],
     });
     await router.push("/decisions");

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Trash2, Upload } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AgentAvatar from "@/features/agents/detail/AgentAvatar.vue";
@@ -30,6 +30,7 @@ const emit = defineEmits<{
 }>();
 const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
+const avatarInputId = useId();
 const fileInput = ref<HTMLInputElement>();
 const avatarProblem = ref("");
 const removeConfirmationOpen = ref(false);
@@ -139,6 +140,8 @@ function confirmAvatarRemoval(): void {
         </div>
         <input
           ref="fileInput"
+          :id="avatarInputId"
+          :name="avatarInputId"
           class="sr-only"
           type="file"
           accept="image/png,image/jpeg,image/webp"

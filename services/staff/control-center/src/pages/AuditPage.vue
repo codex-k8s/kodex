@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
@@ -13,6 +13,7 @@ const platform = usePlatformStore();
 const route = useRoute();
 const i18n = useI18n();
 const query = ref("");
+const searchId = useId();
 const projectRef = computed(() =>
   typeof route.query.projectRef === "string"
     ? route.query.projectRef
@@ -63,10 +64,12 @@ onUnmounted(() => {
 
 <template>
   <PageFrame :title="$t('audit.title')" :subtitle="$t('audit.subtitle')">
-    <label class="field audit-search"
+    <label class="field audit-search" :for="searchId"
       ><span>{{ $t("audit.search") }}</span
       ><input
+        :id="searchId"
         v-model="query"
+        name="audit-search"
         type="search"
         :placeholder="$t('audit.searchPlaceholder')"
         autocomplete="off"

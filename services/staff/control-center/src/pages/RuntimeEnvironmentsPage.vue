@@ -10,7 +10,7 @@ import {
   Maximize2,
   ExternalLink,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { environmentReadinessMessage } from "@/features/runtime/environment-readiness-message";
 import { useRoute, useRouter } from "vue-router";
@@ -33,6 +33,7 @@ const router = useRouter();
 const registry = ref<HTMLElement>();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
+const searchId = useId();
 const projectRef = computed(() => String(route.params.projectRef));
 const query = ref("");
 const items = ref<RuntimeEnvironmentSet[]>([]);
@@ -282,11 +283,13 @@ onBeforeUnmount(() => {
       @close="expanded = false"
     >
       <header class="environment-toolbar">
-        <label>
+        <label :for="searchId">
           <Search :size="16" aria-hidden="true" />
           <span class="sr-only">{{ $t("runtime.searchEnvironment") }}</span>
           <input
+            :id="searchId"
             v-model="query"
+            :name="searchId"
             type="search"
             :placeholder="$t('runtime.searchEnvironment')"
           />

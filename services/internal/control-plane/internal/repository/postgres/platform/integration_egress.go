@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const localOpenAPIFixtureHostname = "integration-synthetic.kodex-system.svc.cluster.local"
+
 //go:embed sql/integration_egress_origins.sql
 var queryIntegrationEgressOrigins string
 
@@ -67,6 +69,11 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 			if capability.OpenAPI == nil || capability.OpenAPI.ServerOrigin != origin {
 				return nil, errs.ErrUnavailable
 			}
+		}
+		// Точный local-only fixture обслуживается прямым TLS client внутри
+		// integration-gateway и никогда не расширяет внешний CONNECT policy.
+		if host == localOpenAPIFixtureHostname {
+			continue
 		}
 		hosts[host] = struct{}{}
 		if len(hosts) > shared.MaximumDestinations {

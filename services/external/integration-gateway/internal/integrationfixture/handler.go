@@ -2,6 +2,8 @@ package integrationfixture
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,6 +21,9 @@ const (
 	maximumJournalBytes    = 120
 	maximumValueBytes      = 4096
 	maximumRequestBodySize = 8 << 10
+	maximumBearerTokenSize = 512
+	minimumBearerTokenSize = 32
+	openAPIPathPrefix      = "/openapi"
 	replayFaultValuePrefix = "kodex-e2e-replay:"
 	replayFaultDelay       = 4 * time.Second
 )
@@ -31,9 +36,11 @@ type errorResponse struct {
 
 // Handler обслуживает только закрытый synthetic journal contract.
 type Handler struct {
-	store       *Store
-	ready       atomic.Bool
-	replayDelay time.Duration
+	store               *Store
+	ready               atomic.Bool
+	replayDelay         time.Duration
+	bearerDigest        [sha256.Size]byte
+	bearerAuthAvailable bool
 }
 
 func NewHandler(store *Store) *Handler {
@@ -42,6 +49,12 @@ func NewHandler(store *Store) *Handler {
 
 func newHandler(store *Store, delay time.Duration) *Handler {
 	return &Handler{store: store, replayDelay: delay}
+}
+
+// NewBearerHandler включает отдельный защищённый OpenAPI path. Обычный
+// synthetic contract сохраняется для прежних типизированных adapter-ов.
+func NewBearerHandler(store *Store, bearerDigest [sha256.Size]byte) *Handler {
+	return &Handler{store: store, replayDelay: replayFaultDelay, bearerDigest: bearerDigest, bearerAuthAvailable: true}
 }
 
 func (handler *Handler) SetReady(ready bool) {
@@ -54,7 +67,8 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		writeError(writer, http.StatusBadRequest, "query_not_allowed")
 		return
 	}
-	switch request.URL.EscapedPath() {
+	escapedPath := request.URL.EscapedPath()
+	switch escapedPath {
 	case "/healthz":
 		handler.serveHealth(writer, request)
 		return
@@ -62,12 +76,24 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		handler.serveReadiness(writer, request)
 		return
 	}
-	if journal, ok := diagnosticJournalPath(request.URL.EscapedPath()); ok {
+	if strings.HasPrefix(escapedPath, openAPIPathPrefix+"/") {
+		if !handler.bearerAuthAvailable {
+			writeError(writer, http.StatusNotFound, "not_found")
+			return
+		}
+		if !handler.authorizeBearer(request.Header) {
+			writer.Header().Set("WWW-Authenticate", `Bearer realm="kodex-local-integration-fixture"`)
+			writeError(writer, http.StatusUnauthorized, "authentication_required")
+			return
+		}
+		escapedPath = strings.TrimPrefix(escapedPath, openAPIPathPrefix)
+	}
+	if journal, ok := diagnosticJournalPath(escapedPath); ok {
 		handler.readDiagnostic(writer, request, journal)
 		return
 	}
 
-	journal, entries, ok := journalPath(request.URL.EscapedPath())
+	journal, entries, ok := journalPath(escapedPath)
 	if !ok {
 		writeError(writer, http.StatusNotFound, "not_found")
 		return
@@ -77,6 +103,24 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 	handler.readJournal(writer, request, journal)
+}
+
+func (handler *Handler) authorizeBearer(header http.Header) bool {
+	values := header.Values("Authorization")
+	if len(values) != 1 {
+		return false
+	}
+	scheme, token, ok := strings.Cut(values[0], " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") || len(token) < minimumBearerTokenSize || len(token) > maximumBearerTokenSize {
+		return false
+	}
+	for _, character := range token {
+		if character <= ' ' || character == '\u007f' {
+			return false
+		}
+	}
+	digest := sha256.Sum256([]byte(token))
+	return subtle.ConstantTimeCompare(digest[:], handler.bearerDigest[:]) == 1
 }
 
 func (handler *Handler) readDiagnostic(writer http.ResponseWriter, request *http.Request, journal string) {

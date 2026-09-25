@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, useId, watch } from "vue";
 
 import type { AgentProfileDraft } from "./model";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
@@ -12,6 +12,9 @@ const emit = defineEmits<{
   "update:modelValue": [value: AgentProfileDraft];
   valid: [value: boolean];
 }>();
+const nameId = useId();
+const purposeId = useId();
+const roleDescriptionId = useId();
 
 const valid = computed(() =>
   Boolean(
@@ -32,9 +35,11 @@ function update(key: keyof AgentProfileDraft, value: string): void {
 </script>
 
 <template>
-  <label class="field">
+  <label class="field" :for="nameId">
     <span>{{ $t("common.name") }}</span>
     <input
+      :id="nameId"
+      :name="nameId"
       :value="modelValue.name"
       required
       maxlength="120"
@@ -42,9 +47,11 @@ function update(key: keyof AgentProfileDraft, value: string): void {
       @input="update('name', ($event.target as HTMLInputElement).value)"
     />
   </label>
-  <label class="field">
+  <label class="field" :for="purposeId">
     <span>{{ $t("common.purpose") }}</span>
     <input
+      :id="purposeId"
+      :name="purposeId"
       :value="modelValue.purpose"
       required
       maxlength="1000"
@@ -52,9 +59,11 @@ function update(key: keyof AgentProfileDraft, value: string): void {
       @input="update('purpose', ($event.target as HTMLInputElement).value)"
     />
   </label>
-  <label class="field field--wide">
+  <label class="field field--wide" :for="roleDescriptionId">
     <span>{{ $t("agents.role") }}</span>
     <VoiceTextarea
+      :id="roleDescriptionId"
+      :name="roleDescriptionId"
       :model-value="modelValue.roleDescription"
       required
       maxlength="1000"

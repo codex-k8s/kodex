@@ -22,6 +22,9 @@ export interface BreadcrumbLabels {
   environment: string;
   newEnvironment: string;
   secrets: string;
+  roleImages: string;
+  roleImage: string;
+  newRoleImage: string;
   integrations: string;
   decisions: string;
   administration: string;
@@ -173,6 +176,30 @@ export function buildBreadcrumbs(
       ];
     case "runtime-secrets":
       return [...project, current(labels.secrets)];
+    case "role-images":
+      return [...project, current(labels.roleImages)];
+    case "role-image-new":
+      return [
+        ...project,
+        {
+          label: labels.roleImages,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/role-images`
+            : "/projects",
+        },
+        current(labels.newRoleImage),
+      ];
+    case "role-image":
+      return [
+        ...project,
+        {
+          label: labels.roleImages,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/role-images`
+            : "/projects",
+        },
+        current(labels.roleImage),
+      ];
     case "integrations":
       return [current(labels.integrations)];
     case "decisions":

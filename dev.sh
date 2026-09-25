@@ -848,8 +848,11 @@ api_endpoint_port=$(jq -er '
   if length != 1 then error("one Kubernetes API TCP port is required") else .[0] end
 ' <<<"$api_endpoint_slices") || fail 'Kubernetes API endpoint port is ambiguous'
 bash "$repository_root/tools/dev/read-local-mail-configuration.sh" "$state_directory/mail-source.json"
+bash "$repository_root/tools/dev/prepare-local-integration-fixture.sh" \
+  --state-directory "$state_directory"
 "$repository_root/tools/dev/render-local.sh" --source-root "$repository_root" \
   --mail-configuration "$state_directory/mail-source.json" \
+  --integration-fixture-bearer-token-file "$state_directory/integration-fixture-bearer-token" \
   --profile "$deployment_profile" \
   --security-profile "$security_profile" --host-uid "$(id -u)" --host-gid "$(id -g)" \
   --cache-root "$state_directory/cache" --output "$state_directory/render.yaml" \

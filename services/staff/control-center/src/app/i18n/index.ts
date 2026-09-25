@@ -488,6 +488,10 @@ const ru = {
       approval: "Согласование записи",
       eachEffect: "Каждый эффект отдельно",
       scoped: "По выбранным параметрам запуска",
+      idempotencyHeader: "Заголовок идемпотентности",
+      idempotencyPlaceholder: "Например, Idempotency-Key",
+      idempotencyHelp:
+        "Оставьте пустым, если сервис не поддерживает повтор по ключу. Для записи без заголовка выполняется только одна попытка.",
       health: "Проверка соединения",
       chooseHealth: "Выберите операцию без параметров",
       unready:
@@ -1126,7 +1130,7 @@ const ru = {
     environmentsEmptyHelp: "Создайте окружение или измените поисковый запрос.",
     revision: "Ревизия",
     variables: "Переменные",
-    secretDescriptors: "Secret descriptors",
+    secretDescriptors: "Дескрипторы секретов",
     environmentEditorSubtitle: "Публикация создаёт новую неизменяемую ревизию",
     publishRevision: "Опубликовать ревизию",
     reauthCompleted: "Свежая OIDC-аутентификация завершена",
@@ -1198,7 +1202,7 @@ const ru = {
     imageAndTools: "Образ и проверенные инструменты",
     imageAndToolsHelp:
       "Окружение должно закреплять exact promoted image digest и разрешать только проверенные executable.",
-    exactImage: "Exact image revision и digest",
+    exactImage: "Точная ревизия и digest образа",
     choosePromotedImage: "Выберите собранный и promoted образ",
     searchPromotedImage: "Найти promoted образ",
     promotedAndVerified: "Promoted и проверен",
@@ -3811,6 +3815,10 @@ const en = {
       approval: "Write approval",
       eachEffect: "Approve every effect",
       scoped: "By selected run parameters",
+      idempotencyHeader: "Idempotency header",
+      idempotencyPlaceholder: "For example, Idempotency-Key",
+      idempotencyHelp:
+        "Leave empty if the service does not support keyed replay. A write without a header gets one attempt only.",
       health: "Connection check",
       chooseHealth: "Select an operation without parameters",
       unready:

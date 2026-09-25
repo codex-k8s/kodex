@@ -43,7 +43,7 @@ func (adapter *Adapter) executeOpenAPI(ctx context.Context, request Request, cap
 		Query: query, Body: input["body"], AuthScheme: binding.AuthScheme, AuthHeader: binding.AuthHeader,
 		Credential: request.Credential, Capability: capability, EffectKey: request.EffectKey,
 		IdempotencyHeader: binding.IdempotencyHeader,
-		Client:            adapter.openAPIHTTPClient,
+		Client:            adapter.openAPIClient(configuration["base_url"]),
 	})
 	if err != nil {
 		return Result{}, err

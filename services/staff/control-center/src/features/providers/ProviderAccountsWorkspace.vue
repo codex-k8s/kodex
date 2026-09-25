@@ -21,6 +21,7 @@ import {
   onMounted,
   reactive,
   ref,
+  useId,
   watch,
 } from "vue";
 
@@ -68,6 +69,8 @@ const {
   problem,
 } = storeToRefs(store);
 const search = ref("");
+const searchId = useId();
+const expandedSearchId = useId();
 const expanded = ref(false);
 const createOpen = ref(false);
 const authorizationAccount = ref<ProviderAccount>();
@@ -114,7 +117,8 @@ watch(
             availability.reason === "STT_NOT_CONFIGURED";
       })
       .catch(() => {
-        if (!controller.signal.aborted) speechConfigurationMissing.value = false;
+        if (!controller.signal.aborted)
+          speechConfigurationMissing.value = false;
       });
   },
   { immediate: true },
@@ -448,11 +452,13 @@ onBeforeUnmount(() => {
 <template>
   <section class="providers-workspace">
     <header class="providers-toolbar">
-      <label class="providers-toolbar__search">
+      <label class="providers-toolbar__search" :for="searchId">
         <Search :size="17" aria-hidden="true" />
         <span class="sr-only">{{ $t("providers.search") }}</span>
         <input
+          :id="searchId"
           v-model="search"
+          name="provider-account-search"
           type="search"
           :placeholder="$t('providers.searchPlaceholder')"
           @input="scheduleSearch"
@@ -484,7 +490,11 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
-    <aside v-if="speechConfigurationMissing" class="provider-speech-setup" role="status">
+    <aside
+      v-if="speechConfigurationMissing"
+      class="provider-speech-setup"
+      role="status"
+    >
       <p>{{ $t("providers.speechSetupRequired") }}</p>
       <RouterLink class="button" to="/configurations/SYSTEM_STT">
         {{ $t("providers.configureSpeech") }}
@@ -535,12 +545,18 @@ onBeforeUnmount(() => {
         size="full"
         @close="expanded = false"
       >
-        <label v-if="expanded" class="providers-toolbar__search">
+        <label
+          v-if="expanded"
+          class="providers-toolbar__search"
+          :for="expandedSearchId"
+        >
           <Search :size="17" /><span class="sr-only">{{
             $t("providers.search")
           }}</span>
           <input
+            :id="expandedSearchId"
             v-model="search"
+            name="provider-account-expanded-search"
             type="search"
             :placeholder="$t('providers.searchPlaceholder')"
             @input="scheduleSearch"

@@ -49,7 +49,7 @@ if [[ -n "$selected_workload" ]]; then
     [[ "$selected_workload" == control-plane-migrate ]] ||
       fail 'migration workload selection requires control-plane-migrate'
   else
-    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge|stt-tts-service)$ ]] ||
+    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service)$ ]] ||
       fail 'workload selection requires an exact core deployment'
   fi
 fi
@@ -1533,6 +1533,26 @@ PY
             .metadata.namespace == "kodex-runtime")
         '
       fi
+      if [[ "$selected_workload" == integration-synthetic ]]; then
+        apply_render integration-synthetic-foundation '
+          select(
+            (.kind == "Certificate" and .metadata.name == "integration-synthetic-server") or
+            (.kind == "ServiceAccount" and .metadata.name == "integration-synthetic") or
+            (.kind == "Service" and .metadata.name == "integration-synthetic") or
+            (.kind == "NetworkPolicy" and
+              (.metadata.name == "integration-synthetic-default-deny" or
+               .metadata.name == "integration-synthetic-exact-runtime-paths" or
+               .metadata.name == "integration-gateway-exact-runtime-paths")))
+        '
+        kubectl -n "$namespace" wait --for=condition=Ready \
+          certificate/integration-synthetic-server --timeout=2m >/dev/null ||
+          fail 'local integration fixture certificate is unavailable'
+      fi
+      if [[ "$selected_workload" == integration-gateway ]]; then
+        apply_render integration-gateway-local-configuration '
+          select(.kind == "ConfigMap" and .metadata.name == "integration-gateway-runtime")
+        '
+      fi
       if [[ -n "$selected_workload" ]]; then
         apply_render core-application "select(.kind == \"Deployment\" and .metadata.name == \"$selected_workload\")"
       else
@@ -1543,7 +1563,7 @@ PY
       fi
     fi
     for workload in egress-gateway control-plane secret-broker control-api-gateway \
-      staff-control-center automation-scheduler integration-gateway email-bridge stt-tts-service; do
+      staff-control-center automation-scheduler integration-gateway integration-synthetic email-bridge stt-tts-service; do
       [[ "$workload" != stt-tts-service || "$selected_workload" == stt-tts-service ]] || continue
       [[ -z "$selected_workload" || "$selected_workload" == "$workload" ]] || continue
       kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=5m >/dev/null ||

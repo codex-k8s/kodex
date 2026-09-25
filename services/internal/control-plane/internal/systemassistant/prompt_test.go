@@ -3,10 +3,12 @@ package systemassistant
 import (
 	"strings"
 	"testing"
+
+	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v33" {
+	if CorePromptRevision != "system-assistant-core-v35" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -56,6 +58,8 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"предложи владельцу просмотреть его в штатной форме",
 		"Не переписывай его по памяти",
 		"полный Dockerfile в том же редакторе",
+		"серверный динамический блок интеграций",
+		"`{{\"{{\"}} range .integrations.items {{\"}}\"}}`",
 	} {
 		if !strings.Contains(CorePrompt(), required) {
 			t.Fatalf("system assistant prompt does not contain required guidance %q", required)
@@ -70,6 +74,14 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 	} {
 		if strings.Contains(CorePrompt(), forbidden) {
 			t.Fatalf("system assistant prompt contains stale guidance %q", forbidden)
+		}
+	}
+}
+
+func TestCorePromptIsMaterializable(t *testing.T) {
+	for _, diagnostic := range promptservice.Validate(CorePrompt(), promptservice.Catalog()) {
+		if diagnostic.Severity == "ERROR" {
+			t.Fatalf("system assistant prompt is not materializable: %s (%s)", diagnostic.Code, diagnostic.VariableName)
 		}
 	}
 }

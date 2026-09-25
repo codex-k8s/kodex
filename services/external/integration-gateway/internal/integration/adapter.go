@@ -36,6 +36,7 @@ const (
 type Config struct {
 	RPCProfile                                                       string
 	CredentialDirectory, ProxyURL, OpenAPIProxyURL, SyntheticBaseURL string
+	LocalOpenAPIBaseURL, LocalOpenAPICAFile                          string
 	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile           string
 	Timeout                                                          time.Duration
 }
@@ -100,17 +101,19 @@ func IsUnknownOutcome(err error) bool {
 }
 
 type Adapter struct {
-	proxyURL           string
-	credentials        *credentialfs.Store
-	definitions        map[string]integrationpackage.Package
-	githubHTTPClient   *http.Client
-	githubBaseURL      *url.URL
-	providerHTTPClient *http.Client
-	openAPIHTTPClient  *http.Client
-	emailHTTPClient    *http.Client
-	syntheticClient    *http.Client
-	syntheticBaseURL   *url.URL
-	timeout            time.Duration
+	proxyURL            string
+	credentials         *credentialfs.Store
+	definitions         map[string]integrationpackage.Package
+	githubHTTPClient    *http.Client
+	githubBaseURL       *url.URL
+	providerHTTPClient  *http.Client
+	openAPIHTTPClient   *http.Client
+	localOpenAPIClient  *http.Client
+	emailHTTPClient     *http.Client
+	syntheticClient     *http.Client
+	syntheticBaseURL    *url.URL
+	localOpenAPIBaseURL *url.URL
+	timeout             time.Duration
 }
 
 func New(config Config) (*Adapter, error) {
@@ -153,6 +156,10 @@ func New(config Config) (*Adapter, error) {
 	providerTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
 	openAPITransport := providerTransport.Clone()
 	openAPITransport.Proxy = http.ProxyURL(openAPIProxy)
+	localOpenAPIBaseURL, localOpenAPIClient, err := newLocalOpenAPIClient(config)
+	if err != nil {
+		return nil, err
+	}
 	emailClient, err := newEmailClient(config)
 	if err != nil {
 		return nil, err
@@ -172,13 +179,14 @@ func New(config Config) (*Adapter, error) {
 		},
 		openAPIHTTPClient: &http.Client{Transport: openAPITransport, Timeout: config.Timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("OpenAPI redirect is forbidden") }},
+		localOpenAPIClient: localOpenAPIClient,
 		syntheticClient: &http.Client{
 			Timeout: config.Timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return errors.New("synthetic integration redirect is forbidden")
 			},
 		},
-		syntheticBaseURL: syntheticBase, timeout: config.Timeout,
+		syntheticBaseURL: syntheticBase, localOpenAPIBaseURL: localOpenAPIBaseURL, timeout: config.Timeout,
 	}, nil
 }
 

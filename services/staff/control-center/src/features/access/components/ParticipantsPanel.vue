@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 
 import {
   membershipForSubject,
@@ -37,6 +37,7 @@ const emit = defineEmits<{
   retry: [];
 }>();
 const query = ref("");
+const searchId = useId();
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 const groupNames = computed(
@@ -107,10 +108,12 @@ onBeforeUnmount(() => {
           }}
         </p>
       </div>
-      <label class="search-field">
+      <label class="search-field" :for="searchId">
         <span class="sr-only">{{ $t("access.participants.search") }}</span>
         <input
+          :id="searchId"
           v-model="query"
+          :name="searchId"
           type="search"
           autocomplete="off"
           :placeholder="$t('access.participants.searchPlaceholder')"

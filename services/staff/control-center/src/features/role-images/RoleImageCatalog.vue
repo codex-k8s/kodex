@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { Box, Layers3, Maximize2, Plus, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useRoleImagesStore } from "@/features/role-images/store";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 import RoleImageLineage from "./RoleImageLineage.vue";
 
 const props = defineProps<{ projectRef: string }>();
 const { t } = useI18n();
+const localizeServerMessage = useServerMessage();
+const fieldId = useId();
 const store = useRoleImagesStore();
 const query = ref("");
 const expanded = ref(false);
@@ -58,19 +61,25 @@ onBeforeUnmount(() => store.dispose());
     @close="expanded = false"
   >
     <header class="role-image-catalog__toolbar">
-      <label class="catalog-search">
+      <label class="catalog-search" :for="`${fieldId}-search`">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ t("roleImages.search") }}</span>
         <input
+          :id="`${fieldId}-search`"
           v-model="query"
+          :name="`${fieldId}-search`"
           type="search"
           maxlength="128"
           :placeholder="t('roleImages.search')"
         />
       </label>
-      <label class="catalog-filter">
+      <label class="catalog-filter" :for="`${fieldId}-state`">
         <span>{{ t("common.status") }}</span>
-        <select v-model="state">
+        <select
+          :id="`${fieldId}-state`"
+          v-model="state"
+          :name="`${fieldId}-state`"
+        >
           <option value="ALL">{{ t("common.all") }}</option>
           <option value="ACTIVE">{{ t("common.active") }}</option>
           <option value="ARCHIVED">{{ t("roleImages.archived") }}</option>
@@ -130,7 +139,7 @@ onBeforeUnmount(() => store.dispose());
           <header>
             <span class="image-card__icon"><Box :size="20" /></span>
             <div>
-              <h2>{{ recipe.name }}</h2>
+              <h2>{{ localizeServerMessage(recipe.name) }}</h2>
               <p>
                 {{
                   store.roleDefinitionByRef.get(recipe.roleDefinitionRef)

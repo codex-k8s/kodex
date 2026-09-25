@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Expand, Plus, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { RouterLink } from "vue-router";
 import type { ManagedConfigurationSummary } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -22,6 +23,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ created: [configurationRef: string] }>();
 const query = ref("");
+const searchId = useId();
 const items = ref<ManagedConfigurationSummary[]>([]);
 const nextPageToken = ref<string>();
 const total = ref(0);
@@ -130,9 +132,11 @@ function created(configurationRef: string): void {
 <template>
   <section class="configuration-catalog">
     <header>
-      <label
+      <label :for="searchId"
         ><Search :size="18" /><input
+          :id="searchId"
           v-model="query"
+          name="managed-configuration-search"
           type="search"
           :placeholder="$t('common.search')"
           :aria-label="$t('common.search')"

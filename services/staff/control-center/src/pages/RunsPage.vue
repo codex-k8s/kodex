@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { Search, RefreshCw, Plus } from "@lucide/vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -17,6 +17,7 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const platform = usePlatformStore();
+const searchId = useId();
 const route = useRoute();
 const projectRef = computed(() =>
   typeof route.params.projectRef === "string"
@@ -145,9 +146,11 @@ onBeforeUnmount(() => {
     />
 
     <div class="runs-controls" role="group" :aria-label="$t('common.status')">
-      <label class="runs-search"
+      <label class="runs-search" :for="searchId"
         ><Search :size="18" /><input
+          :id="searchId"
           v-model="search"
+          :name="searchId"
           :aria-label="$t('runs.search')"
           :placeholder="$t('runs.search')"
       /></label>

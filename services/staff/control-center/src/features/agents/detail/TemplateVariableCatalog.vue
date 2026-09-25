@@ -23,7 +23,10 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [item: TemplateVariablePickerItem] }>();
 const { locale, t } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value).instructions);
-const listboxId = `template-variable-catalog-${useId()}`;
+const catalogId = useId();
+const listboxId = `template-variable-catalog-${catalogId}`;
+const searchId = `template-variable-search-${catalogId}`;
+const scopeId = `template-variable-scope-${catalogId}`;
 const activeScope = ref("ALL");
 const loader: ReturnType<typeof createTemplateVariableLoader> = (request) =>
   props.loadItems
@@ -110,10 +113,12 @@ function handleScroll(event: Event): void {
     :aria-busy="phase === 'initial-loading' || loadingMore"
   >
     <div class="variable-catalog__toolbar">
-      <label class="variable-catalog__search">
+      <label class="variable-catalog__search" :for="searchId">
         <Search :size="15" aria-hidden="true" />
         <span class="sr-only">{{ copy.variableSearch }}</span>
         <input
+          :id="searchId"
+          :name="searchId"
           v-model="query"
           type="search"
           :placeholder="copy.variableSearch"
@@ -125,9 +130,14 @@ function handleScroll(event: Event): void {
           aria-autocomplete="list"
         />
       </label>
-      <label class="variable-catalog__scope">
+      <label class="variable-catalog__scope" :for="scopeId">
         <span class="sr-only">{{ copy.variableScope }}</span>
-        <select v-model="activeScope" :disabled="disabled">
+        <select
+          :id="scopeId"
+          v-model="activeScope"
+          :name="scopeId"
+          :disabled="disabled"
+        >
           <option value="ALL">{{ copy.allScopes }}</option>
           <option v-for="scope in scopes" :key="scope" :value="scope">
             {{ scope }}

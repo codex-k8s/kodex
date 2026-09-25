@@ -23,6 +23,7 @@ const selectedIds = ref<string[]>([]);
 const healthOperationId = ref("");
 const risks = ref<Record<string, OpenAPIWriteRisk>>({});
 const approvals = ref<Record<string, OpenAPIWriteApproval>>({});
+const idempotencyHeaders = ref<Record<string, string>>({});
 const inspecting = ref(false);
 const creating = ref(false);
 const problem = ref<AppProblem>();
@@ -104,6 +105,7 @@ async function inspect(): Promise<void> {
         )
         .map((operation) => [operation.operationId, "HUMAN_EACH_EFFECT"]),
     );
+    idempotencyHeaders.value = {};
   } catch (error) {
     if (!disposed && !controller.signal.aborted && generation === current)
       problem.value = asProblem(error);
@@ -125,6 +127,7 @@ const content = computed(() => {
       healthOperationId: healthOperationId.value,
       risks: risks.value,
       approvals: approvals.value,
+      idempotencyHeaders: idempotencyHeaders.value,
     });
   } catch {
     return undefined;
@@ -287,6 +290,20 @@ async function create(): Promise<void> {
                     {{ t("managed.openapiImport.scoped") }}
                   </option>
                 </select>
+              </label>
+              <label>
+                <span>{{ t("managed.openapiImport.idempotencyHeader") }}</span>
+                <input
+                  v-model="idempotencyHeaders[operation.operationId]"
+                  :name="`openapi-import-idempotency-${index}`"
+                  type="text"
+                  maxlength="64"
+                  :placeholder="
+                    t('managed.openapiImport.idempotencyPlaceholder')
+                  "
+                  autocomplete="off"
+                />
+                <small>{{ t("managed.openapiImport.idempotencyHelp") }}</small>
               </label>
             </div>
           </div>

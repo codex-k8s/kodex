@@ -32,6 +32,8 @@ type Config struct {
 	EgressProxyURL              string        `env:"INTEGRATION_GATEWAY_EGRESS_PROXY_URL"`
 	OpenAPIProxyURL             string        `env:"INTEGRATION_GATEWAY_OPENAPI_PROXY_URL"`
 	SyntheticBaseURL            string        `env:"INTEGRATION_GATEWAY_SYNTHETIC_BASE_URL"`
+	LocalOpenAPIBaseURL         string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_BASE_URL"`
+	LocalOpenAPICAFile          string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_CA_FILE"`
 	StartupTimeout              time.Duration `env:"INTEGRATION_GATEWAY_STARTUP_TIMEOUT"`
 	ShutdownTimeout             time.Duration `env:"INTEGRATION_GATEWAY_SHUTDOWN_TIMEOUT"`
 	RequestTimeout              time.Duration `env:"INTEGRATION_GATEWAY_REQUEST_TIMEOUT"`
@@ -92,6 +94,20 @@ func (config Config) validate() error {
 	if err != nil || synthetic.Scheme != "http" || synthetic.Host != "integration-synthetic.kodex-system.svc.cluster.local:8080" ||
 		synthetic.Path != "" || synthetic.User != nil || synthetic.RawQuery != "" {
 		return errors.New("integration-gateway synthetic endpoint is invalid")
+	}
+	if (config.LocalOpenAPIBaseURL == "") != (config.LocalOpenAPICAFile == "") {
+		return errors.New("integration-gateway local OpenAPI configuration is incomplete")
+	}
+	if config.LocalOpenAPIBaseURL != "" {
+		localOpenAPI, localErr := url.Parse(config.LocalOpenAPIBaseURL)
+		if config.RPCProfile != transportprofile.TrustedCluster || localErr != nil || localOpenAPI.Scheme != "https" ||
+			localOpenAPI.Host != "integration-synthetic.kodex-system.svc.cluster.local" || localOpenAPI.Path != "" ||
+			localOpenAPI.User != nil || localOpenAPI.RawQuery != "" || localOpenAPI.Fragment != "" {
+			return errors.New("integration-gateway local OpenAPI endpoint is invalid")
+		}
+		if !filepath.IsAbs(config.LocalOpenAPICAFile) || filepath.Clean(config.LocalOpenAPICAFile) != config.LocalOpenAPICAFile {
+			return errors.New("integration-gateway local OpenAPI CA path is invalid")
+		}
 	}
 	if strings.TrimSpace(config.ControlPlaneTLSServerName) == "" || strings.ContainsAny(config.ControlPlaneTLSServerName, "*/") {
 		return errors.New("integration-gateway control-plane TLS name is invalid")

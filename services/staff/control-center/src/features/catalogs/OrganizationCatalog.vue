@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Expand, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -27,6 +27,7 @@ const props = defineProps<{
   expanded?: boolean;
 }>();
 const platform = usePlatformStore();
+const searchId = useId();
 const query = ref("");
 const items = ref<CatalogEntry[]>([]);
 const projects = ref<Record<string, Project>>({});
@@ -184,9 +185,11 @@ onBeforeUnmount(() => {
     class="organization-catalog"
     @scroll.passive="scroll"
   >
-    <label class="organization-catalog__search"
+    <label class="organization-catalog__search" :for="searchId"
       ><Search :size="18" /><input
+        :id="searchId"
         v-model="query"
+        :name="searchId"
         type="search"
         :aria-label="$t('common.search')"
         :placeholder="$t('common.search')"

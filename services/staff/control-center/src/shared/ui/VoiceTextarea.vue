@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, ref, useAttrs } from "vue";
+import { computed, inject, ref, useAttrs, useId } from "vue";
 import VoiceInputButton from "@/shared/ui/VoiceInputButton.vue";
 import { voiceContextKey } from "@/shared/ui/voice-input";
 defineOptions({ inheritAttrs: false });
@@ -13,6 +13,13 @@ const props = defineProps<{
 const emit = defineEmits<{ "update:modelValue": [text: string] }>();
 const field = ref<HTMLTextAreaElement>();
 const attrs = useAttrs();
+const generatedId = useId();
+const fieldId = computed(() =>
+  typeof attrs.id === "string" && attrs.id ? attrs.id : generatedId,
+);
+const fieldName = computed(() =>
+  typeof attrs.name === "string" && attrs.name ? attrs.name : fieldId.value,
+);
 const value = computed(
   () =>
     props.modelValue ??
@@ -59,6 +66,8 @@ defineExpose({ focus: () => field.value?.focus() });
     <textarea
       ref="field"
       v-bind="attrs"
+      :id="fieldId"
+      :name="fieldName"
       :value="value"
       :disabled="disabled"
       :readonly="readonly"

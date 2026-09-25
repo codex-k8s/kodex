@@ -104,6 +104,39 @@ func TestOpenAPIExecutionPinsEndpointHeadersAndOneEffect(t *testing.T) {
 	}
 }
 
+func TestOpenAPIExecutionUsesOnlyExactLocalFixtureClient(t *testing.T) {
+	adapter := testAdapter(t)
+	credential := testCredential(t, adapter, "fixture-bearer-token")
+	localOrigin := "https://" + localOpenAPIHost
+	adapter.localOpenAPIBaseURL = mustURL(localOrigin)
+	publicCalls, localCalls := 0, 0
+	adapter.openAPIHTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		publicCalls++
+		return nil, errors.New("public OpenAPI client must not serve the local fixture")
+	})}
+	adapter.localOpenAPIClient = &http.Client{Transport: roundTripFunc(func(outbound *http.Request) (*http.Response, error) {
+		localCalls++
+		if outbound.URL.String() != localOrigin+"/openapi/v1/journals/main" ||
+			outbound.Header.Get("Authorization") != "Bearer fixture-bearer-token" {
+			t.Fatalf("local fixture request escaped its binding: %s", outbound.URL)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"count":0}`))}, nil
+	})}
+	capability := integrationpackage.Capability{
+		Operation: "openapi.fixture.read", Risk: "READ", ApprovalPolicy: "NONE",
+		Execution: integrationpackage.Execution{Idempotency: "NONE", TimeoutSeconds: 10, MaxAttempts: 1},
+		OpenAPI: &integrationpackage.OpenAPIHTTP{
+			OperationID: "readJournal", Method: http.MethodGet, Path: "/openapi/v1/journals/main",
+			ServerOrigin: localOrigin, AuthScheme: "BEARER",
+		},
+	}
+	_, err := adapter.executeOpenAPI(t.Context(), Request{Credential: credential}, capability,
+		map[string]string{"base_url": localOrigin}, []byte(`{}`))
+	if err != nil || localCalls != 1 || publicCalls != 0 {
+		t.Fatalf("local OpenAPI client selection failed: err=%v local=%d public=%d", err, localCalls, publicCalls)
+	}
+}
+
 func TestOpenAPIProductionClientRejectsRedirectBeforeSecondRequest(t *testing.T) {
 	adapter, err := New(Config{
 		CredentialDirectory: t.TempDir(),

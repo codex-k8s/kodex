@@ -50,6 +50,7 @@ const base = {
   healthOperationId: "getHealth",
   risks: {} as Record<string, "WRITE" | "SENSITIVE" | "DESTRUCTIVE">,
   approvals: {} as Record<string, "HUMAN_EACH_EFFECT" | "HUMAN_SCOPED">,
+  idempotencyHeaders: {} as Record<string, string>,
 };
 
 describe("OpenAPI import selection", () => {
@@ -65,6 +66,18 @@ describe("OpenAPI import selection", () => {
         approvalPolicy: "HUMAN_EACH_EFFECT",
       },
     ]);
+  });
+
+  it("закрепляет выбранный заголовок идемпотентности", () => {
+    const content = JSON.parse(
+      openAPIImportContent({
+        ...base,
+        idempotencyHeaders: { updateTicket: "Idempotency-Key" },
+      }),
+    ) as { options: { choices: Array<{ idempotencyHeader?: string }> } };
+    expect(content.options.choices[1]?.idempotencyHeader).toBe(
+      "Idempotency-Key",
+    );
   });
 
   it("не принимает устаревший документ, неподтвержденную health и чужую операцию", () => {

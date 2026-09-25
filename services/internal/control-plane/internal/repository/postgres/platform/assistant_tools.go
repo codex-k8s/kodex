@@ -472,10 +472,21 @@ func withAssistantAgentTemplateContext(parameters map[string]any) map[string]any
 		}
 	}
 	if len(lines) == 0 {
-		return parameters
+		lines = nil
 	}
 	result := cloneAssistantFields(parameters)
-	result["instructions"] = strings.Join(lines, "\n") + "\n\n" + instructions
+	prefix := ""
+	if len(lines) != 0 {
+		prefix = strings.Join(lines, "\n") + "\n\n"
+	}
+	if !strings.Contains(instructions, ".integrations.items") {
+		prefix += "Доступные в текущем запуске интеграции:\n" +
+			"{{ range .integrations.items }}- {{ .name }}: {{ .description }} (возможность: {{ .capability }})\n{{ else }}- Интеграции не предоставлены.\n{{ end }}\n"
+	}
+	if prefix == "" {
+		return parameters
+	}
+	result["instructions"] = prefix + "\n" + instructions
 	return result
 }
 

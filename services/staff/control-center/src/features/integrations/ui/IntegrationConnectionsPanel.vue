@@ -14,7 +14,7 @@ import {
 } from "@lucide/vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { useI18n } from "vue-i18n";
-import { ref } from "vue";
+import { ref, useId } from "vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 
 import { canConfigureCredential } from "@/features/integrations/connection-setup";
@@ -56,6 +56,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const serverMessage = useServerMessage();
 const expanded = ref(false);
+const searchId = useId();
 </script>
 
 <template>
@@ -88,8 +89,10 @@ const expanded = ref(false);
         <Maximize2 :size="18" />
       </button>
     </header>
-    <label class="connection-search"
+    <label class="connection-search" :for="searchId"
       ><Search :size="18" /><input
+        :id="searchId"
+        name="integration-connection-search"
         type="search"
         :value="search"
         :aria-label="t('common.search')"

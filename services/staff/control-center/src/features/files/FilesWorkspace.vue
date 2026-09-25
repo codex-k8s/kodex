@@ -9,7 +9,7 @@ import {
   Upload,
   X,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 
@@ -76,6 +76,7 @@ const maximumUploadBytes = 512 << 20;
 const maximumTextPreviewBytes = 256 << 10;
 const viewPreferenceKey = "kodex.files.view";
 const platform = usePlatformStore();
+const fieldId = useId();
 const { locale, t } = useI18n();
 const fileInput = ref<HTMLInputElement>();
 const scrollRoot = ref<HTMLElement>();
@@ -1061,7 +1062,9 @@ onBeforeUnmount(() => {
     @drop="handleDrop"
   >
     <input
+      :id="`${fieldId}-upload`"
       ref="fileInput"
+      :name="`${fieldId}-upload`"
       class="sr-only"
       type="file"
       multiple
@@ -1075,11 +1078,13 @@ onBeforeUnmount(() => {
       <strong>{{ custom.dropFiles }}</strong>
     </div>
     <div class="files-workspace__toolbar">
-      <label class="files-workspace__search">
+      <label class="files-workspace__search" :for="`${fieldId}-search`">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ $t("files.search") }}</span>
         <input
+          :id="`${fieldId}-search`"
           v-model="query"
+          :name="`${fieldId}-search`"
           type="search"
           :placeholder="$t('files.search')"
         />
@@ -1093,9 +1098,14 @@ onBeforeUnmount(() => {
           <X :size="15" aria-hidden="true" />
         </button>
       </label>
-      <label v-if="!trashMode">
+      <label v-if="!trashMode" :for="`${fieldId}-tab`">
         <span class="sr-only">{{ custom.viewFilter }}</span>
-        <select v-model="activeTab" :aria-label="custom.viewFilter">
+        <select
+          :id="`${fieldId}-tab`"
+          v-model="activeTab"
+          :name="`${fieldId}-tab`"
+          :aria-label="custom.viewFilter"
+        >
           <option value="FILES">{{ $t("files.tab.FILES") }}</option>
           <option value="KNOWLEDGE">{{ custom.knowledgeSources }}</option>
           <option value="RESULTS">{{ $t("files.tab.RESULTS") }}</option>
@@ -1109,18 +1119,28 @@ onBeforeUnmount(() => {
         <Trash2 v-else :size="16" aria-hidden="true" />
         {{ trashMode ? custom.allFiles : custom.trash }}
       </RouterLink>
-      <label>
+      <label :for="`${fieldId}-kind`">
         <span class="sr-only">{{ $t("files.typeFilter") }}</span>
-        <select v-model="kind" :aria-label="$t('files.typeFilter')">
+        <select
+          :id="`${fieldId}-kind`"
+          v-model="kind"
+          :name="`${fieldId}-kind`"
+          :aria-label="$t('files.typeFilter')"
+        >
           <option value="ALL">{{ $t("files.kind.ALL") }}</option>
           <option value="TEXT">{{ $t("files.kind.TEXT") }}</option>
           <option value="DOCUMENT">{{ $t("files.kind.DOCUMENT") }}</option>
           <option value="IMAGE">{{ $t("files.kind.IMAGE") }}</option>
         </select>
       </label>
-      <label>
+      <label :for="`${fieldId}-state`">
         <span class="sr-only">{{ $t("files.stateFilter") }}</span>
-        <select v-model="scanState" :aria-label="$t('files.stateFilter')">
+        <select
+          :id="`${fieldId}-state`"
+          v-model="scanState"
+          :name="`${fieldId}-state`"
+          :aria-label="$t('files.stateFilter')"
+        >
           <option value="ALL">{{ $t("files.allStates") }}</option>
           <option value="PENDING">{{ $t("states.PENDING") }}</option>
           <option value="SCANNING">{{ $t("states.SCANNING") }}</option>
@@ -1129,9 +1149,14 @@ onBeforeUnmount(() => {
           <option value="FAILED">{{ $t("states.FAILED") }}</option>
         </select>
       </label>
-      <label class="desktop-only">
+      <label class="desktop-only" :for="`${fieldId}-source`">
         <span class="sr-only">{{ $t("files.sourceFilter") }}</span>
-        <select v-model="source" :aria-label="$t('files.sourceFilter')">
+        <select
+          :id="`${fieldId}-source`"
+          v-model="source"
+          :name="`${fieldId}-source`"
+          :aria-label="$t('files.sourceFilter')"
+        >
           <option value="ALL">{{ $t("files.allSources") }}</option>
           <option
             v-for="sourceOption in sourceOptions"

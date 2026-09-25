@@ -90,6 +90,33 @@ func runtimeEligibilityErrorClass(err error) string {
 	return "UNKNOWN"
 }
 
+func (repository *Repository) recordSystemAssistantTerminalTurn(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	sessionID, runID, content, state, title string,
+) error {
+	turnRef, err := newRef("trn")
+	if err != nil {
+		return err
+	}
+	var next int64
+	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectSessionsId, sessionID).Scan(&next); err != nil {
+		return errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertSessionTurnsRefSessionIdTurnNumber,
+		turnRef, current.organizationID, sessionID, runID, next, content, state); err != nil {
+		return errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
+		return errs.ErrUnavailable
+	}
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt, sessionID, title); err != nil {
+		return errs.ErrUnavailable
+	}
+	return nil
+}
+
 // Отказ кандидата закрывает весь принадлежащий владельцу граф. Независимые
 // root run той же пачки сохраняют свои leases и продолжают исполняться.
 func (repository *Repository) failRuntimeCandidateGraph(ctx context.Context, tx pgx.Tx, current scope, input command.Command, candidate claimableExecution) error {
@@ -131,6 +158,12 @@ func (repository *Repository) failRuntimeCandidateGraph(ctx context.Context, tx 
 		}
 		if _, err := repository.emitRunEvent(ctx, tx, current, candidate.projectID, candidate.rootRunID,
 			item.ref, eventKind, item.nodeRef, "", gateRef, "", runtimeClaimEligibilityChanged, "FAILED", nodeState); err != nil {
+			return err
+		}
+	}
+	if candidate.stableKey == "system-assistant" {
+		if err := repository.recordSystemAssistantTerminalTurn(ctx, tx, current,
+			candidate.sessionID, candidate.runID, "i18n:RUNTIME_INPUT_INVALID", "FAILED", ""); err != nil {
 			return err
 		}
 	}

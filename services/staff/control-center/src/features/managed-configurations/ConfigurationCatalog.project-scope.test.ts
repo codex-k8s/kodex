@@ -1,6 +1,7 @@
 import { renderToString } from "@vue/server-renderer";
 import { createSSRApp, defineComponent, h } from "vue";
 import { createI18n } from "vue-i18n";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/shared/ui/ProblemNotice.vue", () => ({
@@ -17,16 +18,23 @@ async function render(
   const app = createSSRApp({
     render: () => h(ConfigurationCatalog, { kind, projectRef, autoOpenImport }),
   });
-  app.component(
-    "RouterLink",
-    defineComponent({
-      props: { to: { type: Object, required: true } },
-      setup:
-        (_props, { slots }) =>
-        () =>
-          h("a", slots.default?.()),
-    }),
-  );
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      {
+        path: "/configurations/:kind/:configurationRef",
+        name: "configuration",
+        component: defineComponent({ render: () => h("div") }),
+      },
+      {
+        path: "/:pathMatch(.*)*",
+        component: defineComponent({ render: () => h("div") }),
+      },
+    ],
+  });
+  await router.push("/");
+  await router.isReady();
+  app.use(router);
   app.use(
     createI18n({
       legacy: false,

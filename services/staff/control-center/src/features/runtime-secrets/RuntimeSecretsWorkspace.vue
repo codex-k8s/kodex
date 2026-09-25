@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   ShieldX,
 } from "@lucide/vue";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useSessionStore } from "@/features/session/store";
@@ -49,6 +49,7 @@ function draftSaved(draft: RuntimeSecretDraft): void {
   if (draft.state !== "PUBLISHED") void store.reload();
 }
 const store = useRuntimeSecretsStore();
+const searchId = useId();
 const session = useSessionStore();
 const { locale } = useI18n();
 const search = ref("");
@@ -195,11 +196,13 @@ onBeforeUnmount(() => {
     @close="expanded = false"
   >
     <header class="runtime-secrets__toolbar">
-      <label class="runtime-secrets__search">
+      <label class="runtime-secrets__search" :for="searchId">
         <Search :size="17" aria-hidden="true" />
         <span class="sr-only">{{ $t("runtimeSecrets.search") }}</span>
         <input
+          :id="searchId"
           v-model="search"
+          :name="searchId"
           type="search"
           :placeholder="$t('runtimeSecrets.searchPlaceholder')"
         />

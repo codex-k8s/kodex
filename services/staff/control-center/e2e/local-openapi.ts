@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -7,6 +8,8 @@ import { loadE2EAuthEnvironment } from "./environment";
 import { gotoWithRetry } from "./helpers";
 
 const environment = loadE2EAuthEnvironment();
+const localFixtureOrigin =
+  "https://integration-synthetic.kodex-system.svc.cluster.local";
 const source = `openapi: 3.1.0
 info: {title: Локальная проверка OpenAPI, version: 1.0.0}
 servers:
@@ -36,19 +39,43 @@ paths:
       responses:
         '201': {description: Created}
 `;
-const credentialSource = source.replace(
-  "paths:\n",
-  `components:
+function credentialSource(journal: string): string {
+  return `openapi: 3.1.0
+info: {title: Локальная Bearer-проверка OpenAPI, version: 1.0.0}
+servers:
+  - url: ${localFixtureOrigin}
+components:
   securitySchemes:
-    token:
-      type: apiKey
-      in: header
-      name: X-Service-Key
+    token: {type: http, scheme: bearer}
 security:
   - token: []
 paths:
-`,
-);
+  /openapi/v1/journals/${journal}:
+    get:
+      operationId: getHealth
+      summary: Проверить защищённое чтение
+      responses:
+        '200': {description: OK}
+  /openapi/v1/journals/${journal}/entries:
+    post:
+      operationId: echoWrite
+      summary: Проверить защищённую запись
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                action: {type: string, enum: [CREATE, UPDATE]}
+                value: {type: string, maxLength: 4096}
+                expected_sequence: {type: integer, minimum: 1}
+              required: [action, value]
+      responses:
+        '200': {description: Updated}
+`;
+}
 
 interface ConfigurationResult {
   configuration: { ref: string; version: number; kind: string };
@@ -600,7 +627,12 @@ test("помощник ведёт к credential-форме OpenAPI без уте
     "Синтетический ключ на локальной установке используется только явно",
   );
   test.setTimeout(300_000);
-  const credentialValue = `local-fixture-${randomUUID()}`;
+  const tokenFile = process.env.KODEX_E2E_OPENAPI_FIXTURE_TOKEN_FILE;
+  if (!tokenFile)
+    throw new Error("Local OpenAPI fixture token file is not configured");
+  const credentialValue = readFileSync(tokenFile, "utf8").trim();
+  expect(credentialValue).toMatch(/^[a-f0-9]{64}$/);
+  const fixtureJournal = `openapi-${randomUUID().slice(0, 8)}`;
   const connectionName = `Локальный OpenAPI ${randomUUID().slice(0, 8)}`;
   const leakedURLs: string[] = [];
   page.on("request", (request) => {
@@ -625,15 +657,23 @@ test("помощник ведёт к credential-форме OpenAPI без уте
   await expect(importDialog).toBeVisible();
   await importDialog
     .getByLabel("Контракт OpenAPI JSON или YAML")
-    .fill(credentialSource);
+    .fill(credentialSource(fixtureJournal));
   await importDialog
     .getByRole("button", { name: "Проверить контракт" })
     .click();
   const readOperation = importDialog
     .locator(".openapi-operation")
-    .filter({ hasText: "GET /posts/1" });
+    .filter({ hasText: `GET /openapi/v1/journals/${fixtureJournal}` });
   await expect(readOperation).toBeVisible();
   await readOperation.locator('input[type="checkbox"]').check();
+  const writeOperation = importDialog.locator(".openapi-operation").filter({
+    hasText: `POST /openapi/v1/journals/${fixtureJournal}/entries`,
+  });
+  await writeOperation.locator('input[type="checkbox"]').check();
+  await writeOperation.locator("select").last().selectOption("HUMAN_SCOPED");
+  await writeOperation
+    .locator('input[name^="openapi-import-idempotency-"]')
+    .fill("Idempotency-Key");
   await importDialog.locator("select").last().selectOption("getHealth");
   await importDialog
     .getByLabel("Название интеграции")
@@ -648,6 +688,11 @@ test("помощник ведёт к credential-форме OpenAPI без уте
   const created = await createdResponse;
   expect(created.status()).toBe(201);
   const draft = (await created.json()) as ConfigurationResult;
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/configurations/INTEGRATION_DEFINITION/${draft.configuration.ref}$`,
+    ),
+  );
   const validated = await mutate<ConfigurationResult>(
     page,
     `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
@@ -663,7 +708,14 @@ test("помощник ведёт к credential-форме OpenAPI без уте
   );
   expect(published.revision.state).toBe("PUBLISHED");
   const executable = JSON.parse(published.revision.content) as {
-    spec: { credential?: { secretKey: string } };
+    spec: {
+      credential?: { secretKey: string };
+      capabilities: Array<{
+        key: string;
+        risk: string;
+        openapi?: { operationId: string };
+      }>;
+    };
   };
   expect(executable.spec.credential?.secretKey).toBe("token");
 
@@ -674,7 +726,7 @@ test("помощник ведёт к credential-форме OpenAPI без уте
       definitionKey: "openapi-mcp",
       name: connectionName,
       publicConfiguration: {
-        base_url: "https://jsonplaceholder.typicode.com",
+        base_url: localFixtureOrigin,
       },
     },
   );
@@ -682,6 +734,7 @@ test("помощник ведёт к credential-форме OpenAPI без уте
   await page.getByRole("button", { name: "Влияние ревизии" }).click();
   const impactDialog = page.getByRole("dialog", { name: "Влияние ревизии" });
   await impactDialog.getByRole("button", { name: "Новое подключение" }).click();
+  await impactDialog.getByRole("combobox").fill(connectionName);
   await impactDialog
     .getByRole("option", { name: new RegExp(connectionName) })
     .click();
@@ -761,6 +814,28 @@ test("помощник ведёт к credential-форме OpenAPI без уте
       { timeout: 100_000, intervals: [500, 2_000, 5_000] },
     )
     .toBe("CONNECTED");
+  const readKey = executable.spec.capabilities.find(
+    (item) => item.openapi?.operationId === "getHealth" && item.risk === "READ",
+  )?.key;
+  const writeKey = executable.spec.capabilities.find(
+    (item) =>
+      item.openapi?.operationId === "echoWrite" && item.risk === "WRITE",
+  )?.key;
+  expect(readKey).toMatch(/^op\.[a-f0-9]{16}$/);
+  expect(writeKey).toMatch(/^op\.[a-f0-9]{16}$/);
+  if (!readKey || !writeKey)
+    throw new Error("Local fixture capabilities are missing");
+  const approvedValue = `kodex-local-${randomUUID().slice(0, 8)}`;
+  await verifyImportedMCPInvocation(page, connection.ref, readKey, writeKey, {
+    firstBody: { action: "CREATE", value: approvedValue },
+    secondBody: {
+      action: "UPDATE",
+      value: approvedValue,
+      expected_sequence: 1,
+    },
+    approvalPath: "/body/value",
+    writeCapabilityName: "Проверить защищённую запись",
+  });
 });
 
 async function read<T>(page: Page, path: string): Promise<T> {
@@ -821,6 +896,17 @@ async function verifyImportedMCPInvocation(
   connectionRef: string,
   readKey: string,
   writeKey: string,
+  options: {
+    firstBody: Record<string, unknown>;
+    secondBody: Record<string, unknown>;
+    approvalPath: string;
+    writeCapabilityName: string;
+  } = {
+    firstBody: { marker: "kodex-local", note: "first" },
+    secondBody: { marker: "kodex-local", note: "second" },
+    approvalPath: "/body/marker",
+    writeCapabilityName: "Проверить согласованную запись",
+  },
 ): Promise<void> {
   const suffix = randomUUID().slice(0, 8);
   const project = await mutate<{ ref: string }>(page, "/api/v1/projects", {
@@ -863,6 +949,8 @@ async function verifyImportedMCPInvocation(
     agent.ref,
     writeKey,
     suffix,
+    options.approvalPath,
+    options.writeCapabilityName,
   );
   connection = await read<Connection>(
     page,
@@ -911,10 +999,10 @@ async function verifyImportedMCPInvocation(
     `Локальный OpenAPI WRITE ${suffix}`,
     writeKey,
     {
-      body: { marker: `kodex-local-${suffix}`, note: "first" },
+      body: options.firstBody,
     },
     {
-      body: { marker: `kodex-local-${suffix}`, note: "second" },
+      body: options.secondBody,
     },
   );
   let gate: OwnerGate | undefined;
@@ -947,7 +1035,7 @@ async function verifyImportedMCPInvocation(
   const decision = page.locator(".decision-detail");
   await expect(decision).toBeVisible();
   await expect(decision.locator(".decision-approval-scope")).toContainText(
-    "/body/marker",
+    options.approvalPath,
   );
   const resolution = page.waitForResponse(
     (response) =>
@@ -973,6 +1061,7 @@ async function verifyImportedMCPInvocation(
     agent.ref,
     writeKey,
     suffix,
+    options.approvalPath,
   );
 }
 
@@ -1075,6 +1164,7 @@ async function grantWorkflowOpenAPIThroughUI(
   await page.reload({ waitUntil: "domcontentloaded" });
   await selectGrantsTab(page);
   await choose("Подключение", connection.name);
+  await choose("Проект", `Локальная проверка MCP ${suffix}`);
   await expect(
     panel
       .locator(".grant-list .entity-row")
@@ -1105,6 +1195,8 @@ async function grantScopedOpenAPIThroughUI(
   agentRef: string,
   capabilityKey: string,
   suffix: string,
+  approvalPath: string,
+  writeCapabilityName: string,
 ): Promise<void> {
   const connection = await read<Connection & { name: string }>(
     page,
@@ -1121,10 +1213,10 @@ async function grantScopedOpenAPIThroughUI(
   await choose("Подключение", connection.name);
   await choose("Проект", `Локальная проверка MCP ${suffix}`);
   await choose("Получатель разрешения", `Исполнитель OpenAPI ${suffix}`);
-  await choose("Возможность", "Проверить согласованную запись");
+  await choose("Возможность", writeCapabilityName);
   await panel
     .locator(".approval-scope-option")
-    .filter({ hasText: "/body/marker" })
+    .filter({ hasText: approvalPath })
     .locator('input[type="checkbox"]')
     .check();
   const created = page.waitForResponse(
@@ -1149,7 +1241,7 @@ async function grantScopedOpenAPIThroughUI(
       expect.objectContaining({
         agentRef,
         capabilityKey,
-        approvalScopePaths: ["/body/marker"],
+        approvalScopePaths: [approvalPath],
       }),
     ]),
   );
@@ -1162,8 +1254,8 @@ async function grantScopedOpenAPIThroughUI(
       .filter({
         hasText: `Исполнитель OpenAPI ${suffix}`,
       })
-      .filter({ hasText: "Проверить согласованную запись" }),
-  ).toContainText("/body/marker");
+      .filter({ hasText: writeCapabilityName }),
+  ).toContainText(approvalPath);
 }
 
 async function revokeScopedOpenAPIThroughUI(
@@ -1172,6 +1264,7 @@ async function revokeScopedOpenAPIThroughUI(
   agentRef: string,
   capabilityKey: string,
   suffix: string,
+  approvalPath: string,
 ): Promise<void> {
   const before = await read<
     Connection & {
@@ -1201,6 +1294,19 @@ async function revokeScopedOpenAPIThroughUI(
   });
   await picker.getByRole("combobox").fill(before.name);
   await picker.getByRole("option", { name: new RegExp(before.name) }).click();
+  await panel.getByRole("button", { name: "Проект", exact: true }).click();
+  const projectPicker = page.getByRole("dialog", {
+    name: "Проект",
+    exact: true,
+  });
+  await projectPicker
+    .getByRole("combobox")
+    .fill(`Локальная проверка MCP ${suffix}`);
+  await projectPicker
+    .getByRole("option", {
+      name: new RegExp(`Локальная проверка MCP ${suffix}`),
+    })
+    .click();
   const row = panel
     .locator(".grant-list .entity-row")
     .filter({ hasText: `Исполнитель OpenAPI ${suffix}` })
@@ -1230,7 +1336,7 @@ async function revokeScopedOpenAPIThroughUI(
   );
   expect(revokedConnection.version).toBe(before.version + 1);
   const stale = await page.evaluate(
-    async ({ ref, key, version, idempotencyKey, targetRef }) => {
+    async ({ ref, key, version, idempotencyKey, targetRef, scopePath }) => {
       const csrf = document.cookie
         .split(";")
         .map((item) => item.trim())
@@ -1252,7 +1358,7 @@ async function revokeScopedOpenAPIThroughUI(
             capabilityKey: key,
             agentRef: targetRef,
             enabled: true,
-            approvalScopePaths: ["/body/marker"],
+            approvalScopePaths: [scopePath],
           }),
         },
       );
@@ -1265,6 +1371,7 @@ async function revokeScopedOpenAPIThroughUI(
       version: before.version,
       idempotencyKey: randomUUID(),
       targetRef: agentRef,
+      scopePath: approvalPath,
     },
   );
   expect(stale).toEqual({ status: 412, code: "VERSION_OR_STATE_CONFLICT" });

@@ -425,6 +425,11 @@ func TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities(t *testing.
 			t.Fatalf("assistant template is missing %s", variable)
 		}
 	}
+	for _, fragment := range []string{"{{ range .integrations.items }}", "{{ .name }}", "{{ .description }}", "{{ .capability }}", "{{ else }}"} {
+		if !strings.Contains(instructions, fragment) {
+			t.Fatalf("assistant template is missing dynamic integration fragment %s", fragment)
+		}
+	}
 	if assistantString(input, "instructions") != "Coordinate work using verified project context." {
 		t.Fatal("assistant template hydration mutated the original operation")
 	}
@@ -471,7 +476,8 @@ func TestAssistantCreateAgentHydrationReachesApprovedCommand(t *testing.T) {
 	if payload.ProjectRef != "prj_example" || len(payload.InitialCapabilities) != 3 ||
 		!strings.Contains(payload.Instructions, "{{ .organization.name }}") ||
 		!strings.Contains(payload.Instructions, "{{ .project.name }}") ||
-		!strings.Contains(payload.Instructions, "{{ .agent.name }}") {
+		!strings.Contains(payload.Instructions, "{{ .agent.name }}") ||
+		!strings.Contains(payload.Instructions, "{{ range .integrations.items }}") {
 		t.Fatalf("approved plan lost project, capabilities, or template context: project=%q capabilities=%v instructions_length=%d", payload.ProjectRef, payload.InitialCapabilities, len(payload.Instructions))
 	}
 }
