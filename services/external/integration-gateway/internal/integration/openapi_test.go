@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
@@ -100,6 +101,42 @@ func TestOpenAPIExecutionPinsEndpointHeadersAndOneEffect(t *testing.T) {
 		[]byte(`{"path":{"id":3},"query":{"view":"full"},"body":{"title":"updated"}}`))
 	if err != nil || requests != 1 || result.Receipt.EffectKey != "eff_exact" || !strings.Contains(result.Summary, `"body_json":"{\"ok\":true}"`) {
 		t.Fatalf("OpenAPI execution failed: %v, requests=%d", err, requests)
+	}
+}
+
+func TestOpenAPIProductionClientRejectsRedirectBeforeSecondRequest(t *testing.T) {
+	adapter, err := New(Config{
+		CredentialDirectory: t.TempDir(),
+		ProxyURL:            "http://egress-gateway.kodex-system.svc.cluster.local:8080",
+		OpenAPIProxyURL:     "http://egress-gateway.kodex-system.svc.cluster.local:8083",
+		SyntheticBaseURL:    "http://integration-synthetic.kodex-system.svc.cluster.local:8080",
+		Timeout:             10 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := 0
+	adapter.openAPIHTTPClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.URL.String() != "https://api.example.test/health" {
+			t.Fatal("OpenAPI redirect escaped the published endpoint")
+		}
+		return &http.Response{
+			StatusCode: http.StatusTemporaryRedirect,
+			Header:     http.Header{"Location": {"https://127.0.0.1/private"}},
+			Body:       io.NopCloser(strings.NewReader("")),
+		}, nil
+	})
+	capability := openAPITestCapability()
+	capability.Risk = "READ"
+	capability.OpenAPI.Method = http.MethodGet
+	capability.OpenAPI.Path = "/health"
+	capability.OpenAPI.AuthScheme = "NONE"
+	capability.OpenAPI.AuthHeader = ""
+	_, err = adapter.executeOpenAPI(t.Context(), Request{}, capability,
+		map[string]string{"base_url": "https://api.example.test"}, []byte(`{}`))
+	if err == nil || requests != 1 {
+		t.Fatalf("OpenAPI redirect was followed: err=%v requests=%d", err, requests)
 	}
 }
 

@@ -23,6 +23,8 @@ test("помощник создаёт рецепт образа и показы�
     "Сборка образа разрешена только явно",
   );
   test.setTimeout(600_000);
+  const mobile = process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_MOBILE === "1";
+  if (mobile) await page.setViewportSize({ width: 390, height: 844 });
   const browserFailures: string[] = [];
   page.on("pageerror", (error) => browserFailures.push(error.name));
   await authenticateOwner(
@@ -127,6 +129,7 @@ test("помощник создаёт рецепт образа и показы�
   await plan.getByRole("button", { name: "Открыть план" }).click();
   const editor = assistant.locator(".assistant-plan-editor");
   await expect(editor).toBeVisible();
+  if (mobile) await expectMobileViewport(page, assistant);
   await expect(editor).toContainText("CREATE_ROLE_IMAGE_RECIPE");
   await expect(editor).toContainText(agent.name);
   await editor.getByRole("button", { name: "Проверить ревизию" }).click();
@@ -140,6 +143,7 @@ test("помощник создаёт рецепт образа и показы�
 
   const card = assistant.locator(".assistant-build-card").last();
   await expect(card).toBeVisible({ timeout: 30_000 });
+  if (mobile) await expectMobileViewport(page, assistant);
   const recipeLink = card.locator(
     `a[href^="/projects/${projectRef}/role-images/imgrec_"]`,
   );
@@ -341,4 +345,18 @@ async function mutate<T>(page: Page, path: string, body: unknown): Promise<T> {
       `API mutation failed: ${String(result.status)} ${result.code}`,
     );
   return result.body as T;
+}
+
+async function expectMobileViewport(
+  page: Page,
+  assistant: Locator,
+): Promise<void> {
+  const bounds = await assistant.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((bounds?.x ?? 390) + (bounds?.width ?? 390)).toBeLessThanOrEqual(391);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
 }

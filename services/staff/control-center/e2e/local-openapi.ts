@@ -230,6 +230,50 @@ test("локальный импорт OpenAPI закрывает private origin 
   ).toBeDisabled();
 });
 
+test("помощник открывает защищённый импорт новой OpenAPI-интеграции", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.KODEX_E2E_OPENAPI_ASSISTANT_IMPORT !== "1",
+    "Реальный ответ модели запускается только явно",
+  );
+  test.setTimeout(240_000);
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await gotoWithRetry(page, "/projects");
+  await page.getByRole("button", { name: "Открыть Kodex" }).click();
+  const assistant = page.getByRole("dialog", { name: "Kodex" });
+  await assistant
+    .locator(".assistant-drawer__header")
+    .getByRole("button", { name: "Новый диалог" })
+    .click();
+  await assistant
+    .getByRole("textbox", {
+      name: "Опишите, что нужно настроить или запустить",
+    })
+    .fill(
+      "У меня есть OpenAPI 3.1 контракт нового HTTPS JSON-сервиса, которого нет в каталоге. Покажи, где открыть защищённую форму импорта, чтобы я выбрал операции. Контракт и ключ в чат отправлять не буду; план и подключение пока не создавай.",
+    );
+  await assistant.getByRole("button", { name: "Отправить помощнику" }).click();
+  const importLink = assistant.locator(
+    'a[href="/configurations/INTEGRATION_DEFINITION"]',
+  );
+  await expect(importLink.last()).toBeVisible({ timeout: 180_000 });
+  await importLink.last().click();
+  await expect(page).toHaveURL(
+    /\/configurations\/INTEGRATION_DEFINITION\?assistantImportOpen=1$/,
+  );
+  await expect(
+    page.getByRole("dialog", { name: "Импорт интеграции из OpenAPI" }),
+  ).toBeVisible();
+});
+
 test("локальный OpenAPI импорт, первая привязка и HTTPS test", async ({
   page,
 }) => {
