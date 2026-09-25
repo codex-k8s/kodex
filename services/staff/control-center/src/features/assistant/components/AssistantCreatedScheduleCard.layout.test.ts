@@ -20,5 +20,14 @@ describe("карточка созданной помощником автома�
     expect(source).toContain("timeZone: current.timezone");
     expect(workspace).toContain("<AssistantCreatedScheduleCard");
     expect(workspace).toContain("item.type === 'CREATE_SCHEDULE'");
+    expect(source).toContain("assistantForm: '1'");
+    expect(source).not.toContain("emit('navigate')");
+    const page = readFileSync(
+      new URL("../../../pages/AutomationsPage.vue", import.meta.url),
+      "utf8",
+    );
+    expect(page).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
   });
 });

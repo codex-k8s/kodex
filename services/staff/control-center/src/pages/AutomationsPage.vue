@@ -6,6 +6,7 @@ import AutomationsWorkspace from "@/features/automations/AutomationsWorkspace.vu
 import PageFrame from "@/shared/ui/PageFrame.vue";
 
 const route = useRoute();
+const assistantForm = computed(() => route.query.assistantForm === "1");
 const router = useRouter();
 const projectRef = computed(() => String(route.params.projectRef));
 const initialScheduleRef = computed(() =>
@@ -20,15 +21,17 @@ function selectSchedule(scheduleRef: string): void {
 </script>
 
 <template>
-  <PageFrame
-    :title="$t('automations.title')"
-    :subtitle="$t('automations.subtitle')"
-  >
-    <AutomationsWorkspace
-      :key="projectRef"
-      :project-ref="projectRef"
-      :initial-schedule-ref="initialScheduleRef"
-      @select="selectSchedule"
-    />
-  </PageFrame>
+  <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
+    <PageFrame
+      :title="$t('automations.title')"
+      :subtitle="$t('automations.subtitle')"
+    >
+      <AutomationsWorkspace
+        :key="projectRef"
+        :project-ref="projectRef"
+        :initial-schedule-ref="initialScheduleRef"
+        @select="selectSchedule"
+      />
+    </PageFrame>
+  </Teleport>
 </template>

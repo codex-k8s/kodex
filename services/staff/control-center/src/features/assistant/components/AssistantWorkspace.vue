@@ -1268,7 +1268,6 @@ onBeforeUnmount(() => {
                     :key="`binding-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
-                    @navigate="close"
                   />
                   <AssistantIntegrationConnectionCard
                     v-for="operation in turn.plan.operations.filter(
@@ -1290,7 +1289,6 @@ onBeforeUnmount(() => {
                     :key="`schedule-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
-                    @navigate="close"
                   />
                   <AssistantCreatedWorkflowCard
                     v-for="operation in turn.plan.operations.filter(

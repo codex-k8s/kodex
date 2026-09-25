@@ -11,7 +11,6 @@ import type {
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
-const emit = defineEmits<{ navigate: [] }>();
 const { locale } = useI18n();
 const target = computed(() =>
   assistantCreatedScheduleTarget(props.plan, props.operationRef),
@@ -116,9 +115,8 @@ watch(
         :to="{
           name: 'automations',
           params: { projectRef: target.projectRef },
-          query: { scheduleRef: target.scheduleRef },
+          query: { scheduleRef: target.scheduleRef, assistantForm: '1' },
         }"
-        @click="emit('navigate')"
         >{{ $t("assistant.createdSchedule.open") }}</RouterLink
       >
     </div>
