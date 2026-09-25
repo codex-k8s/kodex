@@ -230,6 +230,88 @@ test("локальный импорт OpenAPI закрывает private origin 
   ).toBeDisabled();
 });
 
+test("локальный импорт OpenAPI сбрасывает прежний просмотр после недопустимого контракта", async ({
+  page,
+}) => {
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await gotoWithRetry(
+    page,
+    "/configurations/INTEGRATION_DEFINITION?assistantImportOpen=1",
+  );
+  const dialog = page.getByRole("dialog", {
+    name: "Импорт интеграции из OpenAPI",
+  });
+  const document = dialog.getByLabel("Контракт OpenAPI JSON или YAML");
+  await document.fill(source);
+  const validInspection = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/openapi-inspections",
+  );
+  await dialog.getByRole("button", { name: "Проверить контракт" }).click();
+  expect((await validInspection).status()).toBe(200);
+  await expect(dialog.locator(".openapi-operation")).toHaveCount(2);
+
+  await document.fill(
+    source.replace("operationId: echoWrite", "operationId: getHealth"),
+  );
+  await expect(dialog.locator(".openapi-operation")).toHaveCount(0);
+  const invalidInspection = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/openapi-inspections",
+  );
+  await dialog.getByRole("button", { name: "Проверить контракт" }).click();
+  expect((await invalidInspection).status()).toBe(400);
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(dialog.locator(".openapi-operation")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: "Создать черновик" }),
+  ).toBeDisabled();
+});
+
+test("мобильный импорт OpenAPI доступен на английском без выхода за экран", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await page.evaluate(() => localStorage.setItem("kodex.locale", "en"));
+  await gotoWithRetry(
+    page,
+    "/configurations/INTEGRATION_DEFINITION?assistantImportOpen=1",
+  );
+  const dialog = page.getByRole("dialog", {
+    name: "Import integration from OpenAPI",
+  });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("OpenAPI JSON or YAML contract").fill(source);
+  await dialog.getByRole("button", { name: "Inspect contract" }).click();
+  await expect(dialog.locator(".openapi-operation")).toHaveCount(2);
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((bounds?.x ?? 390) + (bounds?.width ?? 390)).toBeLessThanOrEqual(391);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+});
+
 test("помощник открывает защищённый импорт новой OpenAPI-интеграции", async ({
   page,
 }) => {
