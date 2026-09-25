@@ -96,6 +96,19 @@ describe("AssistantWorkspace layout", () => {
     );
   });
 
+  it("расширяет карточку плана, не растягивая обычные реплики", () => {
+    expect(template).toContain(
+      "{ 'assistant-message--with-plan': Boolean(turn.plan) }",
+    );
+    expect(styles).toMatch(
+      /\.assistant-message--with-plan\s*\{[\s\S]*?width:\s*min\(96%, 1180px\)/,
+    );
+    expect(styles).toMatch(
+      /\.assistant-message\s*\{[\s\S]*?width:\s*min\(86%, 760px\)/,
+    );
+    expect(template).not.toContain("assistant-plan-card__parameters");
+  });
+
   it("передаёт точный Project context в файловый composer", () => {
     const attachmentComposer = template.slice(
       template.indexOf("<AttachmentComposer"),
@@ -324,14 +337,19 @@ describe("AssistantWorkspace layout", () => {
     expect(template).toContain("assistant.openProviderAccounts");
   });
 
-  it("показывает в карточке плана действие, target и все явные параметры", () => {
+  it("показывает в краткой карточке плана действие и цель без технических параметров", () => {
     expect(template).toContain('class="assistant-plan-card__action"');
     expect(template).toContain("operationActionLabel(operation.action)");
     expect(template).toContain('class="assistant-plan-card__target"');
     expect(template).toContain("operationTargetLabel(operation.target)");
     expect(template).toContain(
-      '<SafeStructuredData :value="operation.parameters" />',
+      "operationTargetKindLabel(operation.target.kind)",
     );
+    expect(template).toContain("operationSupportingTitle(operation)");
+    expect(source).toContain(
+      'PROJECT: "assistant.planEditor.targetKinds.PROJECT"',
+    );
+    expect(template).not.toContain("operation.parameters");
   });
 
   it("экспонирует стабильную последовательность turn для realtime и E2E", () => {

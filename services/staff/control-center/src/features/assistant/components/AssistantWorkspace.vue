@@ -67,6 +67,7 @@ import type { RuntimeSecretDraftSuggestion } from "@/features/runtime-secrets/mo
 import type {
   AssistantContextDescriptor,
   AssistantPlan,
+  AssistantPlanOperation,
   AssistantPlanReceipt,
   RunEvent,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -84,7 +85,6 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import OverlayPanel from "@/shared/ui/OverlayPanel.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
-import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 
@@ -98,6 +98,36 @@ const props = withDefaults(
   }>(),
   { live: false, runEvents: () => [], refreshRevision: "" },
 );
+
+const planTargetKindTranslationKeys: Readonly<Record<string, string>> = {
+  PROJECT: "assistant.planEditor.targetKinds.PROJECT",
+  AGENT: "assistant.planEditor.targetKinds.AGENT",
+  WORKFLOW: "assistant.planEditor.targetKinds.WORKFLOW",
+  SCHEDULE: "assistant.planEditor.targetKinds.SCHEDULE",
+  EXECUTION: "assistant.planEditor.targetKinds.EXECUTION",
+  ENVIRONMENT: "assistant.planEditor.targetKinds.ENVIRONMENT",
+  RUNTIME_ENVIRONMENT_DRAFT:
+    "assistant.planEditor.targetKinds.RUNTIME_ENVIRONMENT_DRAFT",
+  ROLE_IMAGE_RECIPE: "assistant.planEditor.targetKinds.ROLE_IMAGE_RECIPE",
+  INTEGRATION_CONNECTION:
+    "assistant.planEditor.targetKinds.INTEGRATION_CONNECTION",
+  INTEGRATION_DEFINITION:
+    "assistant.planEditor.targetKinds.INTEGRATION_DEFINITION",
+};
+
+function operationTargetKindLabel(kind: string): string {
+  const key = planTargetKindTranslationKeys[kind];
+  return key ? t(key) : kind;
+}
+
+function operationSupportingTitle(
+  operation: AssistantPlanOperation,
+): string | undefined {
+  const title = operation.title.trim();
+  return title && title !== operationTargetLabel(operation.target)
+    ? title
+    : undefined;
+}
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -1150,7 +1180,10 @@ onBeforeUnmount(() => {
                 v-else
                 :key="turn.ref"
                 class="assistant-message"
-                :class="`assistant-message--${turn.role.toLowerCase()}`"
+                :class="[
+                  `assistant-message--${turn.role.toLowerCase()}`,
+                  { 'assistant-message--with-plan': Boolean(turn.plan) },
+                ]"
                 :data-turn-ref="turn.ref"
                 :data-turn-sequence="turn.sequence"
                 @click.capture="handleAssistantLink"
@@ -1198,19 +1231,17 @@ onBeforeUnmount(() => {
                             )
                           }}
                         </span>
-                        <small>{{ operation.target.kind }}</small>
+                        <small>{{
+                          operationTargetKindLabel(operation.target.kind)
+                        }}</small>
                       </header>
                       <strong class="assistant-plan-card__target">
                         {{ operationTargetLabel(operation.target) }}
                       </strong>
-                      <span>{{ operation.title }}</span>
+                      <span v-if="operationSupportingTitle(operation)">{{
+                        operationSupportingTitle(operation)
+                      }}</span>
                       <p>{{ operation.summary }}</p>
-                      <section class="assistant-plan-card__parameters">
-                        <strong>{{
-                          $t("assistant.planEditor.parametersTitle")
-                        }}</strong>
-                        <SafeStructuredData :value="operation.parameters" />
-                      </section>
                     </li>
                   </ol>
                   <AssistantRoleImageBuildCard
@@ -1905,6 +1936,9 @@ onBeforeUnmount(() => {
   width: 100%;
   background: var(--panel);
 }
+.assistant-message--with-plan {
+  width: min(96%, 1180px);
+}
 .assistant-message--typing {
   display: flex;
   align-items: center;
@@ -2012,16 +2046,6 @@ onBeforeUnmount(() => {
 }
 .assistant-plan-card__operations p {
   margin: 0;
-}
-.assistant-plan-card__parameters {
-  display: grid;
-  gap: 6px;
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-.assistant-plan-card__parameters > strong {
-  font-size: 0.78rem;
 }
 .assistant-plan-card .button {
   justify-self: start;

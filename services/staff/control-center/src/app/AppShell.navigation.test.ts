@@ -9,6 +9,10 @@ const bootstrapSource = readFileSync(
 );
 
 describe("AppShell navigation", () => {
+  it("даёт глобальному поиску стабильное имя поля", () => {
+    expect(source).toContain('name="global-search"');
+  });
+
   it("оставляет Kodex только глобальным FAB и drawer", () => {
     expect(source).not.toContain("assistant-entry");
     expect(source).toContain("<AssistantWorkspace");

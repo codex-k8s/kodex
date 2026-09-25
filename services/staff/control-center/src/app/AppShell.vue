@@ -495,6 +495,7 @@ onBeforeUnmount(() => {
             id="global-search"
             ref="searchInput"
             v-model="search"
+            name="global-search"
             type="search"
             :placeholder="$t('app.search')"
             aria-controls="global-search-results"
