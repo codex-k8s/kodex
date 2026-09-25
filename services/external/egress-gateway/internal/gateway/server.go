@@ -32,10 +32,12 @@ type AccessPolicy interface {
 	Limits() policy.Limits
 }
 
-// MailAccess принадлежит listener, не заголовкам CONNECT; TLS остаётся у bridge.
+// MailAccess принадлежит только почтовому listener: общий TLSMode не делает
+// OpenAPI-профиль почтовым и не запрещает частичное перекрытие DNS-адресов.
 type MailAccess interface {
 	TLSMode(string, int) string
 	AllowsLiteral(string, int, netip.Addr) bool
+	RequireCompleteDNSPinning()
 }
 
 type literalAccess interface {
@@ -257,6 +259,14 @@ func (server *Server) handle(client net.Conn) {
 	snapshot, err := server.resolver.Resolve(server.context, target.Hostname)
 	if err != nil {
 		server.metrics.Connection("rejected", "dns", dnsReason(err))
+		return
+	}
+	if err := dnsresolver.ValidateAddresses(snapshot.Addresses); err != nil {
+		server.metrics.Connection("rejected", "dns", dnsReason(err))
+		return
+	}
+	if !time.Now().Before(snapshot.ExpiresAt) {
+		server.metrics.Connection("rejected", "dns", "timeout")
 		return
 	}
 	if pinned, ok := server.policy.(literalAccess); ok {

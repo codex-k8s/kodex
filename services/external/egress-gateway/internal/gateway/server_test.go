@@ -396,6 +396,13 @@ func (value pinnedIntegrationPolicy) AllowsLiteral(host string, port int, addres
 	return host == "api.openai.com" && port == 443 && address == value.address
 }
 
+func (value pinnedIntegrationPolicy) TLSMode(host string, port int) string {
+	if host == "api.openai.com" && port == 443 {
+		return "implicit"
+	}
+	return ""
+}
+
 func TestIntegrationCONNECTDialsOnlyFreshPinnedDNSIntersection(t *testing.T) {
 	pin := netip.MustParseAddr("8.8.8.8")
 	newAddress := netip.MustParseAddr("9.9.9.9")
@@ -406,6 +413,7 @@ func TestIntegrationCONNECTDialsOnlyFreshPinnedDNSIntersection(t *testing.T) {
 	}{
 		{name: "overlap", addresses: []netip.Addr{pin, newAddress}, wantDial: true},
 		{name: "no overlap", addresses: []netip.Addr{newAddress}, wantDial: false},
+		{name: "private answer", addresses: []netip.Addr{pin, netip.MustParseAddr("10.0.0.1")}, wantDial: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{Addresses: test.addresses, ExpiresAt: time.Now().Add(time.Minute)}}

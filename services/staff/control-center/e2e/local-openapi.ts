@@ -822,6 +822,13 @@ async function verifyImportedMCPInvocation(
   await expectToolCalls(page, writeRun.ref, 2);
   const finalRun = await read<Run>(page, `/api/v1/runs/${writeRun.ref}`);
   expect(finalRun.gateRefs).toEqual([gateRef]);
+  await revokeScopedOpenAPIThroughUI(
+    page,
+    connectionRef,
+    agent.ref,
+    writeKey,
+    suffix,
+  );
 }
 
 async function grantScopedOpenAPIThroughUI(
@@ -890,6 +897,87 @@ async function grantScopedOpenAPIThroughUI(
       })
       .filter({ hasText: "Проверить согласованную запись" }),
   ).toContainText("/body/marker");
+}
+
+async function revokeScopedOpenAPIThroughUI(
+  page: Page,
+  connectionRef: string,
+  agentRef: string,
+  capabilityKey: string,
+  suffix: string,
+): Promise<void> {
+  const before = await read<
+    Connection & {
+      name: string;
+      grants: Array<{
+        ref: string;
+        version: number;
+        agentRef?: string;
+        capabilityKey: string;
+        enabled: boolean;
+      }>;
+    }
+  >(page, `/api/v1/integration-connections/${connectionRef}`);
+  const grant = before.grants.find(
+    (item) =>
+      item.agentRef === agentRef && item.capabilityKey === capabilityKey,
+  );
+  expect(grant?.enabled).toBe(true);
+  if (!grant) throw new Error("Local OpenAPI grant was not found");
+
+  await gotoWithRetry(page, "/integrations");
+  await page.getByRole("tab", { name: /^Разрешения/ }).click();
+  const panel = page.locator(".grant-panel");
+  await panel.getByRole("button", { name: "Подключение", exact: true }).click();
+  const picker = page.getByRole("dialog", {
+    name: "Подключение",
+    exact: true,
+  });
+  await picker.getByRole("combobox").fill(before.name);
+  await picker.getByRole("option", { name: new RegExp(before.name) }).click();
+  const row = panel
+    .locator(".grant-list .entity-row")
+    .filter({ hasText: `Исполнитель OpenAPI ${suffix}` })
+    .filter({ hasText: capabilityKey });
+  await expect(row).toHaveCount(1);
+  const revoked = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/integration-connections/${connectionRef}/grants`,
+  );
+  await row.getByRole("button", { name: "Отозвать" }).click();
+  expect((await revoked).status()).toBe(200);
+  await expect(row.getByRole("button", { name: "Отозвать" })).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const current = await read<typeof before>(
+        page,
+        `/api/v1/integration-connections/${connectionRef}`,
+      );
+      return current.grants.find((item) => item.ref === grant.ref);
+    })
+    .toMatchObject({ enabled: false, version: grant.version + 1 });
+  const effective = await read<{
+    items: Array<{
+      key: string;
+      connectionRef?: string;
+      grantRef?: string;
+      effective: boolean;
+      reason: string;
+    }>;
+  }>(page, `/api/v1/agents/${agentRef}/effective-capabilities?pageSize=100`);
+  expect(
+    effective.items.find(
+      (item) =>
+        item.key === capabilityKey &&
+        item.connectionRef === connectionRef &&
+        item.grantRef === grant.ref,
+    ),
+  ).toMatchObject({
+    effective: false,
+    reason: "INTEGRATION_GRANT_UNAVAILABLE",
+  });
 }
 
 async function pinExecutableTestModel(
