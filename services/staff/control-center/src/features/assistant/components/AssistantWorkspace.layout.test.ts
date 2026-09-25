@@ -108,6 +108,11 @@ describe("AssistantWorkspace layout", () => {
     expect(attachmentComposer).toContain('purpose="ASSISTANT_MESSAGE"');
   });
 
+  it("оставляет подготовку запуска диагностики в текущем чате", () => {
+    expect(template).toContain('@debug="suggestSetup"');
+    expect(source).toContain("function suggestSetup(prompt: string)");
+  });
+
   it("открывает защищённую форму секрета только в текущем проекте", () => {
     const composer = template.slice(
       template.indexOf('<footer class="assistant-composer">'),

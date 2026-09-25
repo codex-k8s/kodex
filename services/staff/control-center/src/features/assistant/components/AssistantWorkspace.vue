@@ -1240,6 +1240,7 @@ onBeforeUnmount(() => {
                     :key="`build-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
+                    @debug="suggestSetup"
                   />
                   <AssistantCreatedEntityCard
                     v-for="operation in turn.plan.operations.filter(

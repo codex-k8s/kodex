@@ -44,4 +44,15 @@ describe("AssistantRoleImageBuildCard", () => {
     expect(source).toContain("receipt.imageArtifactRef !== artifact.ref");
     expect(source).toContain("assistant.roleImageBuild.promotionUnknown");
   });
+
+  it("передаёт сотруднику только безопасную диагностику точной попытки", () => {
+    expect(source).toContain('["FAILED", "EXPIRED", "DEAD_LETTER"]');
+    expect(source).toContain('t("assistant.roleImageBuild.debugPrompt"');
+    expect(source).toContain("recipeRef: exact.recipeRef");
+    expect(source).toContain("buildRef: current.ref");
+    expect(source).toContain("attempt: current.attempt");
+    expect(source).toContain("diagnosticCode: current.diagnosticCode");
+    expect(source).toContain("diagnosticSummary: current.diagnosticSummary");
+    expect(source).toContain('emit(\n    "debug"');
+  });
 });

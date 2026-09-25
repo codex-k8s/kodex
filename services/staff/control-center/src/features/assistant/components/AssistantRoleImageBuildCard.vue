@@ -20,7 +20,7 @@ import type {
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
-const emit = defineEmits<{ navigate: [] }>();
+const emit = defineEmits<{ navigate: []; debug: [prompt: string] }>();
 const { t } = useI18n();
 const target = computed(() =>
   assistantRoleImageBuildTarget(props.plan, props.operationRef),
@@ -94,7 +94,30 @@ const cancellable = computed(
     build.value &&
     !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(build.value.stage),
 );
+const debuggableFailure = computed(
+  () =>
+    Boolean(build.value) &&
+    ["FAILED", "EXPIRED", "DEAD_LETTER"].includes(build.value?.stage ?? ""),
+);
 let refresh: (() => Promise<void>) | undefined;
+
+function requestDebug(): void {
+  const exact = target.value;
+  const current = build.value;
+  if (!exact || !current || !debuggableFailure.value) return;
+  emit(
+    "debug",
+    t("assistant.roleImageBuild.debugPrompt", {
+      recipeRef: exact.recipeRef,
+      buildRef: current.ref,
+      attempt: current.attempt,
+      stage: current.stage,
+      safeErrorCode: current.safeErrorCode || "NONE",
+      diagnosticCode: current.diagnosticCode || "NONE",
+      diagnosticSummary: current.diagnosticSummary || "NONE",
+    }),
+  );
+}
 
 watch(
   target,
@@ -270,6 +293,24 @@ async function promoteCandidate(): Promise<void> {
         <p v-if="build.safeErrorCode" class="assistant-build-card__problem">
           {{ build.safeErrorCode }}
         </p>
+        <dl v-if="debuggableFailure" class="assistant-build-card__diagnostics">
+          <div>
+            <dt>{{ $t("assistant.roleImageBuild.buildRef") }}</dt>
+            <dd>{{ build.ref }}</dd>
+          </div>
+          <div>
+            <dt>{{ $t("assistant.roleImageBuild.attempt") }}</dt>
+            <dd>{{ build.attempt }}</dd>
+          </div>
+          <div v-if="build.diagnosticCode">
+            <dt>{{ $t("assistant.roleImageBuild.diagnosticCode") }}</dt>
+            <dd>{{ build.diagnosticCode }}</dd>
+          </div>
+          <div v-if="build.diagnosticSummary">
+            <dt>{{ $t("assistant.roleImageBuild.diagnosticSummary") }}</dt>
+            <dd>{{ build.diagnosticSummary }}</dd>
+          </div>
+        </dl>
         <p
           v-if="
             build.stage === 'COMPLETED' &&
@@ -356,6 +397,15 @@ async function promoteCandidate(): Promise<void> {
         {{ $t("assistant.roleImageBuild.open") }}
       </RouterLink>
       <button
+        v-if="debuggableFailure"
+        class="button button--primary"
+        type="button"
+        :disabled="loading || stopping"
+        @click="requestDebug"
+      >
+        {{ $t("assistant.roleImageBuild.debug") }}
+      </button>
+      <button
         v-if="
           candidate &&
           detail &&
@@ -417,5 +467,28 @@ async function promoteCandidate(): Promise<void> {
 }
 .assistant-build-card__problem {
   color: var(--danger);
+}
+.assistant-build-card__diagnostics {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.assistant-build-card__diagnostics div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.assistant-build-card__diagnostics dt,
+.assistant-build-card__diagnostics dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.assistant-build-card__diagnostics dt {
+  color: var(--muted);
 }
 </style>

@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v31" {
+	if CorePromptRevision != "system-assistant-core-v32" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -34,6 +34,9 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"отдельное подключение по поставленному шаблону `openapi-mcp`",
 		"Новые типы адаптеров вне поставленного реестра недоступны",
 		"карточка показывает сборку, допуск и публикацию",
+		"серверный безопасный журнал точной попытки",
+		"подготовь отдельный план `LAUNCH_RUN`",
+		"Не запрашивай и не передавай Pod logs, registry credentials или Secret values",
 		"не повторяй команду при неопределённом результате",
 		"`publicValues`",
 		"`secretBindings`",

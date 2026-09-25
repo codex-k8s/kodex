@@ -3099,6 +3099,13 @@ const ru = {
         "Опубликовать этот допущенный образ? Он станет доступен для новых запусков.",
       ready: "Образ опубликован и готов к использованию.",
       noBuild: "Сборка не найдена. Проверьте состояние на странице образа.",
+      buildRef: "Сборка",
+      attempt: "Попытка",
+      diagnosticCode: "Диагностический код",
+      diagnosticSummary: "Безопасный журнал сборки",
+      debug: "Передать на диагностику",
+      debugPrompt:
+        "Помоги передать диагностику неуспешной сборки подходящему ИИ-сотруднику текущего проекта. Сначала предложи выбрать существующего сотрудника, способного разбирать Dockerfile и сборку образов; если такого нет, предложи создать его отдельным планом. После выбора подготовь ровно один план LAUNCH_RUN и ничего не запускай без моего подтверждения. В задание сотруднику передай без изменений этот серверный безопасный журнал точной попытки: recipeRef={recipeRef}; buildRef={buildRef}; attempt={attempt}; stage={stage}; safeErrorCode={safeErrorCode}; diagnosticCode={diagnosticCode}; diagnosticSummary={diagnosticSummary}. Не запрашивай и не передавай Pod logs, registry credentials или Secret values.",
       open: "Открыть образ",
       stop: "Остановить сборку",
       stopConfirm:
@@ -6586,6 +6593,13 @@ const en = {
         "Promote this admitted image? It will become available for new runs.",
       ready: "The image is promoted and ready to use.",
       noBuild: "Build not found. Check the image page for its state.",
+      buildRef: "Build",
+      attempt: "Attempt",
+      diagnosticCode: "Diagnostic code",
+      diagnosticSummary: "Safe build log",
+      debug: "Delegate diagnostics",
+      debugPrompt:
+        "Help delegate diagnostics for the failed build to a suitable AI employee in the current project. First offer existing employees capable of debugging Dockerfiles and image builds; if none exists, offer to create one in a separate plan. After selection, prepare exactly one LAUNCH_RUN plan and do not launch anything without my confirmation. Pass this server-provided safe log for the exact attempt unchanged in the employee task: recipeRef={recipeRef}; buildRef={buildRef}; attempt={attempt}; stage={stage}; safeErrorCode={safeErrorCode}; diagnosticCode={diagnosticCode}; diagnosticSummary={diagnosticSummary}. Do not request or pass Pod logs, registry credentials, or Secret values.",
       open: "Open image",
       stop: "Stop build",
       stopConfirm:
