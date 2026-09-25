@@ -7347,6 +7347,14 @@ const (
 	AssistantPlanOperation_TYPE_UPDATE_ROLE_IMAGE_RECIPE AssistantPlanOperation_Type = 18
 	// Опубликовать уже проверенную ревизию определения интеграции после подтверждения владельца.
 	AssistantPlanOperation_TYPE_PUBLISH_INTEGRATION_DEFINITION AssistantPlanOperation_Type = 19
+	// Сохранить новую черновую ревизию инструкций существующего сотрудника.
+	AssistantPlanOperation_TYPE_CREATE_INSTRUCTION_DRAFT AssistantPlanOperation_Type = 20
+	// Изменить публичную конфигурацию существующего подключения по exact version.
+	AssistantPlanOperation_TYPE_UPDATE_INTEGRATION_CONNECTION AssistantPlanOperation_Type = 21
+	// Изменить черновик существующего Процесса по exact version.
+	AssistantPlanOperation_TYPE_UPDATE_WORKFLOW AssistantPlanOperation_Type = 22
+	// Изменить существующее расписание по exact version.
+	AssistantPlanOperation_TYPE_UPDATE_SCHEDULE AssistantPlanOperation_Type = 23
 )
 
 // Enum value maps for AssistantPlanOperation_Type.
@@ -7372,6 +7380,10 @@ var (
 		17: "TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT",
 		18: "TYPE_UPDATE_ROLE_IMAGE_RECIPE",
 		19: "TYPE_PUBLISH_INTEGRATION_DEFINITION",
+		20: "TYPE_CREATE_INSTRUCTION_DRAFT",
+		21: "TYPE_UPDATE_INTEGRATION_CONNECTION",
+		22: "TYPE_UPDATE_WORKFLOW",
+		23: "TYPE_UPDATE_SCHEDULE",
 	}
 	AssistantPlanOperation_Type_value = map[string]int32{
 		"TYPE_UNSPECIFIED":                          0,
@@ -7394,6 +7406,10 @@ var (
 		"TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT":       17,
 		"TYPE_UPDATE_ROLE_IMAGE_RECIPE":             18,
 		"TYPE_PUBLISH_INTEGRATION_DEFINITION":       19,
+		"TYPE_CREATE_INSTRUCTION_DRAFT":             20,
+		"TYPE_UPDATE_INTEGRATION_CONNECTION":        21,
+		"TYPE_UPDATE_WORKFLOW":                      22,
+		"TYPE_UPDATE_SCHEDULE":                      23,
 	}
 )
 
@@ -74900,7 +74916,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe9\v\n" +
+	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe8\f\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
 	"\x04type\x18\x02 \x01(\x0e2,.controlplane.v1.AssistantPlanOperation.TypeR\x04type\x12\x14\n" +
@@ -74924,7 +74940,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06before\x18\x0e \x01(\v2\x17.google.protobuf.StructR\x06before\x12-\n" +
 	"\x05after\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x05after\x12\x1a\n" +
 	"\bselected\x18\x10 \x01(\bR\bselected\x12/\n" +
-	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xf7\x04\n" +
+	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xf6\x05\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -74946,7 +74962,11 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	")TYPE_PREPARE_RUNTIME_ENVIRONMENT_REVISION\x10\x10\x12'\n" +
 	"#TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT\x10\x11\x12!\n" +
 	"\x1dTYPE_UPDATE_ROLE_IMAGE_RECIPE\x10\x12\x12'\n" +
-	"#TYPE_PUBLISH_INTEGRATION_DEFINITION\x10\x13\"n\n" +
+	"#TYPE_PUBLISH_INTEGRATION_DEFINITION\x10\x13\x12!\n" +
+	"\x1dTYPE_CREATE_INSTRUCTION_DRAFT\x10\x14\x12&\n" +
+	"\"TYPE_UPDATE_INTEGRATION_CONNECTION\x10\x15\x12\x18\n" +
+	"\x14TYPE_UPDATE_WORKFLOW\x10\x16\x12\x18\n" +
+	"\x14TYPE_UPDATE_SCHEDULE\x10\x17\"n\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rACTION_CREATE\x10\x01\x12\x11\n" +

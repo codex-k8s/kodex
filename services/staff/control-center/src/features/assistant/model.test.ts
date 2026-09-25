@@ -293,7 +293,7 @@ describe("assistant role image build target", () => {
     ).toBeUndefined();
   });
 
-  it("связывает подключение с квитанцией без проектного контекста", () => {
+  it("связывает созданное и изменённое подключение с точной квитанцией", () => {
     const connectionOperation: AssistantPlanOperation = {
       ...operation(),
       ref: "op_connection",
@@ -318,6 +318,26 @@ describe("assistant role image build target", () => {
     };
     expect(
       assistantIntegrationConnectionTarget(connectionPlan, "op_connection"),
+    ).toEqual({ connectionRef: "conn_exact" });
+    expect(
+      assistantIntegrationConnectionTarget(
+        {
+          ...connectionPlan,
+          operations: [
+            {
+              ...connectionOperation,
+              type: "UPDATE_INTEGRATION_CONNECTION",
+              action: "UPDATE",
+              target: {
+                kind: "INTEGRATION_CONNECTION",
+                ref: "conn_exact",
+                name: "GitHub",
+              },
+            },
+          ],
+        },
+        "op_connection",
+      ),
     ).toEqual({ connectionRef: "conn_exact" });
     expect(
       assistantIntegrationConnectionTarget(
@@ -467,7 +487,7 @@ describe("assistant role image build target", () => {
     ).toBeUndefined();
   });
 
-  it("связывает проект и сотрудника с их собственными квитанциями", () => {
+  it("связывает созданные и изменённые проект и сотрудника с их квитанциями", () => {
     const projectOperation: AssistantPlanOperation = {
       ...operation(),
       ref: "op_project",
@@ -508,6 +528,65 @@ describe("assistant role image build target", () => {
       resourceRef: "prj_new",
     });
     expect(assistantCreatedEntityTarget(entityPlan, "op_agent")).toEqual({
+      kind: "AGENT",
+      projectRef: "prj_current",
+      resourceRef: "agt_new",
+    });
+    expect(
+      assistantCreatedEntityTarget(
+        {
+          ...entityPlan,
+          operations: [
+            {
+              ...projectOperation,
+              type: "UPDATE_PROJECT",
+              action: "UPDATE",
+              target: {
+                kind: "PROJECT",
+                ref: "prj_new",
+                name: "Маркетплейс",
+              },
+            },
+            {
+              ...agentOperation,
+              type: "UPDATE_AGENT",
+              action: "UPDATE",
+              target: {
+                kind: "AGENT",
+                ref: "agt_new",
+                name: "Разработчик",
+              },
+            },
+          ],
+        },
+        "op_project",
+      ),
+    ).toEqual({
+      kind: "PROJECT",
+      projectRef: "prj_new",
+      resourceRef: "prj_new",
+    });
+    expect(
+      assistantCreatedEntityTarget(
+        {
+          ...entityPlan,
+          operations: [
+            projectOperation,
+            {
+              ...agentOperation,
+              type: "UPDATE_AGENT",
+              action: "UPDATE",
+              target: {
+                kind: "AGENT",
+                ref: "agt_new",
+                name: "Разработчик",
+              },
+            },
+          ],
+        },
+        "op_agent",
+      ),
+    ).toEqual({
       kind: "AGENT",
       projectRef: "prj_current",
       resourceRef: "agt_new",

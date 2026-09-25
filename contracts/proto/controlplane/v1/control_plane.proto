@@ -1486,6 +1486,14 @@ message AssistantPlanOperation {
     TYPE_UPDATE_ROLE_IMAGE_RECIPE = 18;
     // Опубликовать уже проверенную ревизию определения интеграции после подтверждения владельца.
     TYPE_PUBLISH_INTEGRATION_DEFINITION = 19;
+    // Сохранить новую черновую ревизию инструкций существующего сотрудника.
+    TYPE_CREATE_INSTRUCTION_DRAFT = 20;
+    // Изменить публичную конфигурацию существующего подключения по exact version.
+    TYPE_UPDATE_INTEGRATION_CONNECTION = 21;
+    // Изменить черновик существующего Процесса по exact version.
+    TYPE_UPDATE_WORKFLOW = 22;
+    // Изменить существующее расписание по exact version.
+    TYPE_UPDATE_SCHEDULE = 23;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

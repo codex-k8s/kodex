@@ -497,7 +497,7 @@ describe("assistant workspace store", () => {
     await store.send("Создай сотрудника");
     expect(
       store.selectedConversation?.turns.some((turn) => Boolean(turn.plan)),
-    ).toBe(false);
+    ).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
     expect(readConversationsMock).not.toHaveBeenCalled();
 

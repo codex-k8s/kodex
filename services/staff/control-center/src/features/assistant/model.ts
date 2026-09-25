@@ -120,12 +120,22 @@ export function assistantIntegrationConnectionTarget(
   plan: AssistantPlan,
   operationRef: string,
 ): { connectionRef: string } | undefined {
-  const connectionRef = assistantAppliedResourceRef(
+  const createdRef = assistantAppliedResourceRef(
     plan,
     operationRef,
     "CREATE_INTEGRATION_CONNECTION",
     "INTEGRATION_CONNECTION",
   );
+  const updatedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "UPDATE_INTEGRATION_CONNECTION",
+    "INTEGRATION_CONNECTION",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const connectionRef =
+    createdRef ||
+    (updatedRef === operation?.target.ref ? updatedRef : undefined);
   return connectionRef ? { connectionRef } : undefined;
 }
 
@@ -186,22 +196,28 @@ export function assistantCreatedEntityTarget(
   | { kind: "PROJECT" | "AGENT"; projectRef: string; resourceRef: string }
   | undefined {
   const operation = plan.operations.find((item) => item.ref === operationRef);
-  if (operation?.type === "CREATE_PROJECT") {
+  if (
+    operation?.type === "CREATE_PROJECT" ||
+    operation?.type === "UPDATE_PROJECT"
+  ) {
     const projectRef = assistantAppliedResourceRef(
       plan,
       operationRef,
-      "CREATE_PROJECT",
+      operation.type,
       "PROJECT",
     );
     return projectRef
       ? { kind: "PROJECT", projectRef, resourceRef: projectRef }
       : undefined;
   }
-  if (operation?.type === "CREATE_AGENT") {
+  if (
+    operation?.type === "CREATE_AGENT" ||
+    operation?.type === "UPDATE_AGENT"
+  ) {
     const agentRef = assistantAppliedResourceRef(
       plan,
       operationRef,
-      "CREATE_AGENT",
+      operation.type,
       "AGENT",
     );
     return plan.projectRef && agentRef

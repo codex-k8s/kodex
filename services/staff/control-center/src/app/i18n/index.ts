@@ -3068,7 +3068,8 @@ const ru = {
     searchHistory: "Поиск диалогов",
     historyState: "Состояние диалогов",
     receipt: "Квитанция",
-    openPlan: "Открыть план",
+    planVariant: "Вариант {variant}",
+    openPlan: "Просмотреть и изменить",
     microphoneUnavailable: "Голосовой ввод появится позже",
     addAttachments: "Добавить файлы",
     dropAttachments: "Отпустите файлы, чтобы добавить их в сообщение",
@@ -3216,7 +3217,7 @@ const ru = {
       unsavedRevisionConfirm:
         "Несохранённые правки в форме пропадут. Вернуться в диалог и попросить помощника доработать план?",
       revisionRequest:
-        "Доработай план ревизии {revision} «{summary}». Мои замечания: ",
+        "Подготовь новый вариант на основе варианта {variant}, ревизии {revision} «{summary}». Не заменяй предыдущий вариант. Мои замечания: ",
       revision: "Ревизия {revision} · операций: {count}",
       atomic:
         "Скрытых изменений нет. План применяется одной транзакцией или не применяется вовсе.",
@@ -6566,7 +6567,8 @@ const en = {
     searchHistory: "Search conversations",
     historyState: "Conversation state",
     receipt: "Receipt",
-    openPlan: "Open plan",
+    planVariant: "Variant {variant}",
+    openPlan: "Review and edit",
     microphoneUnavailable: "Voice input will be available later",
     addAttachments: "Add files",
     dropAttachments: "Drop files to add them to the message",
@@ -6707,7 +6709,7 @@ const en = {
       unsavedRevisionConfirm:
         "Unsaved form changes will be lost. Return to the conversation and ask the assistant to revise the plan?",
       revisionRequest:
-        "Revise plan revision {revision} “{summary}”. My feedback: ",
+        "Prepare a new variant based on variant {variant}, revision {revision} “{summary}”. Keep the previous variant available. My feedback: ",
       revision: "Revision {revision} · operations: {count}",
       atomic:
         "There are no hidden changes. The plan is applied in one transaction or not applied at all.",

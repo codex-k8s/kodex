@@ -72,10 +72,8 @@ describe("AssistantWorkspace layout", () => {
     expect(styles).toMatch(
       /\.assistant-drawer\s*\{[\s\S]*?inset:\s*4dvh 4vw[\s\S]*?width:\s*92vw[\s\S]*?height:\s*92dvh/,
     );
-    expect(template).toContain("'assistant-drawer--plan': currentPlan");
-    expect(styles).toMatch(
-      /\.assistant-drawer--plan\s*\{[\s\S]*?inset:\s*4dvh 4vw[\s\S]*?width:\s*92vw[\s\S]*?height:\s*92dvh/,
-    );
+    expect(template).not.toContain('v-if="!currentPlan"');
+    expect(template).toContain('class="assistant-conversation-sidebar"');
   });
 
   it("переключает modal в полноэкранный mobile", () => {
@@ -164,10 +162,21 @@ describe("AssistantWorkspace layout", () => {
     expect(credentialDialog).not.toContain("assistantCredentialRef");
   });
 
-  it("показывает ручные редакторы окружения, образа и процесса рядом с чатом", () => {
+  it("показывает штатные редакторы поверх полного чата", () => {
     expect(template).toContain('id="assistant-form-slot"');
+    expect(template).toContain('class="assistant-detail-backdrop"');
+    expect(template).toContain('class="assistant-plan-dialog"');
     expect(template).toContain(
-      "'assistant-drawer--with-form': assistantFormActive",
+      ':inert="Boolean(currentPlan) || assistantFormActive || undefined"',
+    );
+    expect(template).toContain(
+      ':aria-hidden="Boolean(currentPlan) || assistantFormActive || undefined"',
+    );
+    expect(source).toMatch(
+      /\.assistant-detail-backdrop\s*{[^}]*position: fixed;[^}]*inset: 0;[^}]*background:/s,
+    );
+    expect(source).toMatch(
+      /\.assistant-plan-dialog,\s*\.assistant-form-slot\s*{[^}]*position: fixed;[^}]*inset: 6dvh 6vw;[^}]*border: 1px solid var\(--border\);[^}]*box-shadow:/s,
     );
     expect(source).toContain('route.query.assistantForm === "1"');
     expect(template).toContain('@click="closeAssistantForm"');
@@ -221,18 +230,28 @@ describe("AssistantWorkspace layout", () => {
     expect(source).not.toContain(
       '<AssistantIntegrationConnectionCard @navigate="close"',
     );
+    expect(template).toContain("item.type === 'UPDATE_INTEGRATION_CONNECTION'");
+    expect(template).toContain("item.type === 'UPDATE_PROJECT'");
+    expect(template).toContain("item.type === 'UPDATE_AGENT'");
   });
 
   it("после запроса доработки возвращает в диалог без отправки за пользователя", () => {
     expect(source).toContain("async function requestPlanChanges()");
     expect(source).toContain("await closePlan()");
     expect(source).toContain("assistant.planEditor.revisionRequest");
+    expect(source).toContain("planVariantNumber(plan.ref)");
+    expect(template).toContain("assistant.planVariant");
     expect(source).toContain("composer.value?.focus()");
     expect(template).toContain('@request-changes="requestPlanChanges"');
   });
 
-  it("разделяет DOM экрана плана и чата и не закрывает занятое применение", () => {
-    expect(template).toContain(":key=\"currentPlan ? 'PLAN' : 'CHAT'\"");
+  it("сохраняет DOM чата под формой плана и не закрывает занятое применение", () => {
+    expect(template).toContain('<div class="assistant-workspace-content">');
+    expect(template).not.toContain(
+      '<template>\n        <nav v-if="isRunContext"',
+    );
+    expect(template).toContain('key="CHAT"');
+    expect(template).toContain('v-if="currentPlan && !assistantFormActive"');
     expect(source).toContain("if (store.busy) return;");
   });
 

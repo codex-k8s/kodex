@@ -2192,19 +2192,26 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		return errs.ErrUnavailable
 	}
 	rows.Close()
-	var raw, rawReceiptOperations, rawReceiptConflicts []byte
-	var plan entity.AssistantPlan
-	var receiptRef, receiptOutcome string
-	var receiptRevision int64
-	var receiptAuditRefs, receiptCreatedRefs []string
-	var receiptCreatedAt *time.Time
-	err = tx.QueryRow(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref).Scan(
-		&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &plan.Revision, &plan.ValidatedRevision,
-		&plan.ContentDigest, &plan.ValidationProblems, &raw, &plan.CreatedAt, &plan.ValidatedAt, &plan.AppliedAt,
-		&receiptRef, &receiptRevision, &receiptOutcome, &rawReceiptOperations, &rawReceiptConflicts,
-		&receiptAuditRefs, &receiptCreatedRefs, &receiptCreatedAt,
-	)
-	if err == nil {
+	planRows, err := tx.Query(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref)
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	defer planRows.Close()
+	for planRows.Next() {
+		var raw, rawReceiptOperations, rawReceiptConflicts []byte
+		var plan entity.AssistantPlan
+		var receiptRef, receiptOutcome string
+		var receiptRevision int64
+		var receiptAuditRefs, receiptCreatedRefs []string
+		var receiptCreatedAt *time.Time
+		if err := planRows.Scan(
+			&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &plan.Revision, &plan.ValidatedRevision,
+			&plan.ContentDigest, &plan.ValidationProblems, &raw, &plan.CreatedAt, &plan.ValidatedAt, &plan.AppliedAt,
+			&receiptRef, &receiptRevision, &receiptOutcome, &rawReceiptOperations, &rawReceiptConflicts,
+			&receiptAuditRefs, &receiptCreatedRefs, &receiptCreatedAt,
+		); err != nil {
+			return errs.ErrUnavailable
+		}
 		if json.Unmarshal(raw, &plan.Operations) != nil {
 			return errs.ErrUnavailable
 		}
@@ -2226,11 +2233,16 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		}
 		plan.ConversationRef = item.Ref
 		plan.ProjectRef = item.ProjectRef
-		item.LatestPlan = &plan
-	} else if !errors.Is(err, pgx.ErrNoRows) {
+		item.Plans = append(item.Plans, plan)
+	}
+	if planRows.Err() != nil {
 		return errs.ErrUnavailable
 	}
-	return rows.Err()
+	if len(item.Plans) > 0 {
+		latest := item.Plans[len(item.Plans)-1]
+		item.LatestPlan = &latest
+	}
+	return nil
 }
 
 func (repository *Repository) GetAdministration(ctx context.Context, principal value.Principal) (platformrepo.Administration, error) {

@@ -537,6 +537,14 @@ function openPlan(plan: AssistantPlan): void {
   openPlanRef.value = plan.ref;
 }
 
+function planVariantNumber(planRef: string): number {
+  const variants = (store.selectedConversation?.turns ?? []).flatMap((turn) =>
+    turn.plan ? [turn.plan.ref] : [],
+  );
+  const index = variants.indexOf(planRef);
+  return index >= 0 ? index + 1 : 1;
+}
+
 async function closePlan(): Promise<void> {
   if (store.busy) return;
   const refresh = ["APPLIED", "REJECTED"].includes(
@@ -639,6 +647,7 @@ async function requestPlanChanges(): Promise<void> {
   await closePlan();
   if (!message.value.trim())
     message.value = t("assistant.planEditor.revisionRequest", {
+      variant: planVariantNumber(plan.ref),
       revision: plan.revision,
       summary: plan.auditSummary.slice(0, 160),
     });
@@ -744,10 +753,7 @@ onBeforeUnmount(() => {
   <div
     v-if="open"
     class="assistant-overlay"
-    :class="{ 'assistant-overlay--with-form': assistantFormActive }"
-    :role="assistantFormActive ? 'dialog' : 'presentation'"
-    :aria-modal="assistantFormActive || undefined"
-    :aria-label="assistantFormActive ? $t('assistant.title') : undefined"
+    role="presentation"
     :inert="
       integrationImportOpen ||
       secretDialogOpen ||
@@ -768,18 +774,16 @@ onBeforeUnmount(() => {
       @click="close"
     />
     <aside
-      :key="currentPlan ? 'PLAN' : 'CHAT'"
+      key="CHAT"
       id="assistant-workspace"
       ref="panel"
       class="assistant-drawer"
-      :class="{
-        'assistant-drawer--plan': currentPlan,
-        'assistant-drawer--with-form': assistantFormActive,
-      }"
-      :role="assistantFormActive ? 'region' : 'dialog'"
-      :aria-modal="!assistantFormActive || undefined"
+      role="dialog"
+      :aria-modal="!currentPlan && !assistantFormActive ? true : undefined"
       :aria-label="$t('assistant.title')"
       :aria-busy="store.busy || store.loading"
+      :inert="Boolean(currentPlan) || assistantFormActive || undefined"
+      :aria-hidden="Boolean(currentPlan) || assistantFormActive || undefined"
       :data-conversation-ref="store.selectedConversation?.ref"
       tabindex="-1"
       @keydown="handleKeydown"
@@ -892,7 +896,6 @@ onBeforeUnmount(() => {
       </header>
 
       <nav
-        v-if="!currentPlan"
         ref="desktopHistory"
         class="assistant-conversation-sidebar"
         :aria-label="$t('assistant.history')"
@@ -948,25 +951,7 @@ onBeforeUnmount(() => {
         </button>
       </nav>
 
-      <AssistantPlanEditor
-        v-if="currentPlan"
-        :plan="currentPlan"
-        :receipt="store.receipt"
-        :busy="store.busy"
-        :readonly="store.selectedConversation?.state === 'ARCHIVED'"
-        :can-request-changes="
-          props.live && store.selectedConversation?.state === 'ACTIVE'
-        "
-        :problem="store.problem"
-        @close="closePlan"
-        @save="savePlan"
-        @validate="validatePlan"
-        @apply="applyPlan"
-        @reject="rejectPlan"
-        @request-changes="requestPlanChanges"
-        @prepare-secret="openSuggestedSecretForm"
-      />
-      <template v-else>
+      <div class="assistant-workspace-content">
         <nav v-if="isRunContext" class="assistant-drawer__tabs">
           <button
             type="button"
@@ -1192,7 +1177,11 @@ onBeforeUnmount(() => {
                   <header>
                     <ListChecks :size="19" aria-hidden="true" />
                     <div>
-                      <strong>{{ $t("assistant.plan") }}</strong>
+                      <strong>{{
+                        $t("assistant.planVariant", {
+                          variant: planVariantNumber(turn.plan.ref),
+                        })
+                      }}</strong>
                       <span>{{
                         $t("assistant.planEditor.revision", {
                           revision: turn.plan.revision,
@@ -1246,7 +1235,9 @@ onBeforeUnmount(() => {
                     v-for="operation in turn.plan.operations.filter(
                       (item) =>
                         item.type === 'CREATE_PROJECT' ||
-                        item.type === 'CREATE_AGENT',
+                        item.type === 'UPDATE_PROJECT' ||
+                        item.type === 'CREATE_AGENT' ||
+                        item.type === 'UPDATE_AGENT',
                     )"
                     :key="`entity-${operation.ref}`"
                     :plan="turn.plan"
@@ -1280,7 +1271,9 @@ onBeforeUnmount(() => {
                   />
                   <AssistantIntegrationConnectionCard
                     v-for="operation in turn.plan.operations.filter(
-                      (item) => item.type === 'CREATE_INTEGRATION_CONNECTION',
+                      (item) =>
+                        item.type === 'CREATE_INTEGRATION_CONNECTION' ||
+                        item.type === 'UPDATE_INTEGRATION_CONNECTION',
                     )"
                     :key="`connection-${operation.ref}`"
                     :plan="turn.plan"
@@ -1395,13 +1388,56 @@ onBeforeUnmount(() => {
             </footer>
           </div>
         </div>
-      </template>
+      </div>
     </aside>
+    <button
+      v-if="currentPlan && !assistantFormActive"
+      class="assistant-detail-backdrop"
+      type="button"
+      :aria-label="$t('assistant.planEditor.back')"
+      :disabled="store.busy"
+      @click="closePlan"
+    />
+    <section
+      v-if="currentPlan && !assistantFormActive"
+      class="assistant-plan-dialog"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="$t('assistant.plan')"
+    >
+      <AssistantPlanEditor
+        :plan="currentPlan"
+        :variant="planVariantNumber(currentPlan.ref)"
+        :receipt="store.receipt"
+        :busy="store.busy"
+        :readonly="store.selectedConversation?.state === 'ARCHIVED'"
+        :can-request-changes="
+          props.live && store.selectedConversation?.state === 'ACTIVE'
+        "
+        :problem="store.problem"
+        @close="closePlan"
+        @save="savePlan"
+        @validate="validatePlan"
+        @apply="applyPlan"
+        @reject="rejectPlan"
+        @request-changes="requestPlanChanges"
+        @prepare-secret="openSuggestedSecretForm"
+      />
+    </section>
+    <button
+      v-if="assistantFormActive"
+      class="assistant-detail-backdrop"
+      type="button"
+      :aria-label="$t('common.close')"
+      @click="closeAssistantForm"
+    />
     <section
       v-if="assistantFormActive"
       id="assistant-form-slot"
       ref="formSlot"
       class="assistant-form-slot"
+      role="dialog"
+      aria-modal="true"
       :aria-label="$t('assistant.planEditor.parametersTitle')"
       @keydown="handleKeydown"
     >
@@ -1535,12 +1571,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 18px 48px rgb(15 23 42 / 20%);
   outline: 0;
 }
-.assistant-drawer--plan {
-  inset: 4dvh 4vw;
-  width: 92vw;
-  max-width: 92vw;
-  height: 92dvh;
-}
 .assistant-conversation-sidebar {
   display: none;
 }
@@ -1595,11 +1625,17 @@ onBeforeUnmount(() => {
   }
 }
 .assistant-drawer > .assistant-plan-editor,
+.assistant-workspace-content,
 .assistant-drawer__view,
 .assistant-chat-view {
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
+}
+.assistant-workspace-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .assistant-drawer__view,
 .assistant-chat-view {
@@ -2148,38 +2184,27 @@ onBeforeUnmount(() => {
     display: none;
   }
 }
-.assistant-drawer.assistant-drawer--with-form {
-  right: auto;
-  width: min(35vw, 620px);
-  max-width: none;
-}
-@media (min-width: 1001px) {
-  .assistant-drawer.assistant-drawer--with-form {
-    padding-left: 0;
-  }
-  .assistant-drawer--with-form .assistant-conversation-sidebar {
-    display: none;
-  }
-  .assistant-drawer--with-form .assistant-new-conversation span,
-  .assistant-drawer--with-form .assistant-history__toggle span,
-  .assistant-drawer--with-form .assistant-history__toggle svg:last-child,
-  .assistant-drawer--with-form
-    .assistant-drawer__header
-    > :deep(.status-badge) {
-    display: none;
-  }
-}
-.assistant-form-slot {
+.assistant-detail-backdrop {
   position: fixed;
   z-index: 1;
-  top: 4dvh;
-  right: 4vw;
-  bottom: 4dvh;
-  left: min(calc(4vw + min(35vw, 620px) + 12px), 48vw);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgb(17 24 39 / 28%);
+}
+.assistant-plan-dialog,
+.assistant-form-slot {
+  position: fixed;
+  z-index: 2;
+  inset: 6dvh 6vw;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
+  box-shadow: 0 24px 64px rgb(15 23 42 / 28%);
 }
 .assistant-form-slot__close {
   position: sticky;
@@ -2190,16 +2215,11 @@ onBeforeUnmount(() => {
   background: var(--surface);
 }
 @media (max-width: 1000px) {
-  .assistant-drawer.assistant-drawer--with-form {
-    inset: 0 0 auto;
-    width: 100%;
-    height: 42dvh;
-  }
+  .assistant-plan-dialog,
   .assistant-form-slot {
-    top: 42dvh;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
     border-radius: 0;
   }
 }

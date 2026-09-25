@@ -693,14 +693,35 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		TitleSource: value.TitleSource, TitleRevision: value.TitleRevision, ProjectRef: value.ProjectRef,
 		Context: context, UpdatedAt: timestamp(value.UpdatedAt), State: controlplanev1.AssistantConversationState(controlplanev1.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+value.State])}
 	nextSequence := int64(1)
+	plans := value.Plans
+	allPlansLoaded := len(plans) > 0
+	if !allPlansLoaded && value.LatestPlan != nil {
+		plans = []entity.AssistantPlan{*value.LatestPlan}
+	}
+	nextPlan := 0
+	appendPlan := func(plan *entity.AssistantPlan, sequence int64) {
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: plan.Ref, Sequence: sequence, Role: "ASSISTANT", Content: plan.Summary, State: "COMPLETED", Plan: castPlan(plan), CreatedAt: timestamp(plan.CreatedAt)})
+	}
 	for _, turn := range value.Turns {
 		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, CreatedAt: timestamp(turn.CreatedAt)})
 		if turn.Sequence >= nextSequence {
 			nextSequence = turn.Sequence + 1
 		}
+		// План создаётся во время tool-вызова, а итоговый текст ответа сохраняется
+		// несколькими мгновениями позже. Поэтому показываем каждый сохранённый
+		// вариант сразу после первого следующего ответа помощника, а не общей
+		// пачкой в конце истории.
+		if allPlansLoaded && publicAssistantTurnRole(turn.Actor) == "ASSISTANT" {
+			for nextPlan < len(plans) && !plans[nextPlan].CreatedAt.IsZero() && !plans[nextPlan].CreatedAt.After(turn.CreatedAt) {
+				appendPlan(&plans[nextPlan], turn.Sequence)
+				nextPlan++
+			}
+		}
 	}
-	if value.LatestPlan != nil {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: value.LatestPlan.Ref, Sequence: nextSequence, Role: "ASSISTANT", Content: value.LatestPlan.Summary, State: "COMPLETED", Plan: castPlan(value.LatestPlan), CreatedAt: timestamp(value.LatestPlan.CreatedAt)})
+	for nextPlan < len(plans) {
+		appendPlan(&plans[nextPlan], nextSequence)
+		nextSequence++
+		nextPlan++
 	}
 	return result
 }

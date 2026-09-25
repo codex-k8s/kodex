@@ -828,6 +828,7 @@ type AssistantConversation struct {
 	Version, TitleRevision                    int64
 	Context                                   AssistantContextDescriptor
 	Turns                                     []AssistantTurn
+	Plans                                     []AssistantPlan
 	LatestPlan                                *AssistantPlan
 	CreatedAt, UpdatedAt                      time.Time
 }

@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v32" {
+	if CorePromptRevision != "system-assistant-core-v33" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -46,7 +46,10 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"понадобится свежий вход",
 		"создаёт только редактируемый черновик",
 		"полный желаемый список",
-		"в той же форме, что и обычное окружение, рядом с чатом",
+		"в той же форме, что и обычное окружение, открытой поверх чата",
+		"Каждый предложенный план является самостоятельным вариантом",
+		"не изменяя, не отклоняя и не объявляя устаревшим предыдущий вариант",
+		"применить любой сохранённый вариант",
 		"сам `secretSuggestions` не создаёт Secret и не является привязкой",
 		"`CREATE_INSTRUCTION_DRAFT` только сохраняет черновик",
 		"Не составляй полный список `steps` или `inputFields` по памяти",

@@ -295,27 +295,54 @@ func TestCastPlanIncludesPersistedReceipt(t *testing.T) {
 func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
 	t.Parallel()
 
+	firstPlanAt := time.Date(2026, time.September, 25, 10, 0, 5, 0, time.UTC)
+	firstAnswerAt := firstPlanAt.Add(2 * time.Second)
+	secondPlanAt := firstAnswerAt.Add(3 * time.Second)
+	secondAnswerAt := secondPlanAt.Add(2 * time.Second)
 	conversation := castConversation(entity.AssistantConversation{
 		Ref: "cnv-example", ProjectRef: "prj-example",
-		Turns: []entity.AssistantTurn{{
-			Ref: "trn-example", Sequence: 7, Actor: "SYSTEM_ASSISTANT", Content: "План подготовлен", State: "COMPLETED",
-		}},
-		LatestPlan: &entity.AssistantPlan{
-			Ref: "pln-example", ConversationRef: "cnv-example", ProjectRef: "prj-example",
-			State: "DRAFT", Summary: "План готов", Version: 1, Revision: 1,
+		Turns: []entity.AssistantTurn{
+			{Ref: "trn-user-1", Sequence: 6, Actor: "USER", Content: "Первый запрос", State: "COMPLETED", CreatedAt: firstPlanAt.Add(-time.Second)},
+			{Ref: "trn-assistant-1", Sequence: 7, Actor: "SYSTEM_ASSISTANT", Content: "Первый план подготовлен", State: "COMPLETED", CreatedAt: firstAnswerAt},
+			{Ref: "trn-user-2", Sequence: 8, Actor: "USER", Content: "Переработай", State: "COMPLETED", CreatedAt: secondPlanAt.Add(-time.Second)},
+			{Ref: "trn-assistant-2", Sequence: 9, Actor: "SYSTEM_ASSISTANT", Content: "Второй план подготовлен", State: "COMPLETED", CreatedAt: secondAnswerAt},
+		},
+		Plans: []entity.AssistantPlan{
+			{Ref: "pln-example-1", ConversationRef: "cnv-example", ProjectRef: "prj-example",
+				State: "DRAFT", Summary: "Первый вариант", Version: 1, Revision: 1, CreatedAt: firstPlanAt},
+			{Ref: "pln-example-2", ConversationRef: "cnv-example", ProjectRef: "prj-example",
+				State: "DRAFT", Summary: "Второй вариант", Version: 1, Revision: 1, CreatedAt: secondPlanAt},
 		},
 	})
-	if len(conversation.GetTurns()) != 2 {
-		t.Fatalf("assistant turn count = %d, want 2", len(conversation.GetTurns()))
+	if len(conversation.GetTurns()) != 6 {
+		t.Fatalf("assistant turn count = %d, want 6", len(conversation.GetTurns()))
 	}
-	if turn := conversation.GetTurns()[0]; turn.GetRole() != "ASSISTANT" || turn.GetContent() != "План подготовлен" || turn.GetSequence() != 7 {
+	if turn := conversation.GetTurns()[1]; turn.GetRole() != "ASSISTANT" || turn.GetContent() != "Первый план подготовлен" || turn.GetSequence() != 7 {
 		t.Fatalf("system assistant turn leaked internal role: %#v", turn)
 	}
-	turn := conversation.GetTurns()[1]
-	if turn.GetRole() != "ASSISTANT" || turn.GetState() != "COMPLETED" || turn.GetSequence() != 8 {
-		t.Fatalf("assistant plan turn = role %q state %q", turn.GetRole(), turn.GetState())
+	firstVariant := conversation.GetTurns()[2]
+	secondVariant := conversation.GetTurns()[5]
+	if firstVariant.GetRole() != "ASSISTANT" || firstVariant.GetState() != "COMPLETED" || firstVariant.GetSequence() != 7 ||
+		secondVariant.GetRole() != "ASSISTANT" || secondVariant.GetState() != "COMPLETED" || secondVariant.GetSequence() != 9 {
+		t.Fatalf("assistant variant turns = first %#v second %#v", firstVariant, secondVariant)
 	}
-	if turn.GetPlan().GetConversationRef() != "cnv-example" || turn.GetPlan().GetProjectRef() != "prj-example" {
-		t.Fatalf("assistant plan lineage was lost: %#v", turn.GetPlan())
+	if firstVariant.GetPlan().GetRef() != "pln-example-1" || secondVariant.GetPlan().GetRef() != "pln-example-2" ||
+		secondVariant.GetPlan().GetConversationRef() != "cnv-example" || secondVariant.GetPlan().GetProjectRef() != "prj-example" {
+		t.Fatalf("assistant plan variants or lineage were lost: %#v", conversation.GetTurns())
+	}
+}
+
+func TestAssistantEditingOperationsAreRepresentableOnRuntimeTransport(t *testing.T) {
+	t.Parallel()
+
+	for _, operation := range []string{
+		"CREATE_INSTRUCTION_DRAFT",
+		"UPDATE_INTEGRATION_CONNECTION",
+		"UPDATE_WORKFLOW",
+		"UPDATE_SCHEDULE",
+	} {
+		if controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+operation] == 0 {
+			t.Errorf("assistant operation %s is absent from runtime transport enum", operation)
+		}
 	}
 }

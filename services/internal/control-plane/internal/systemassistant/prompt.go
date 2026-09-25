@@ -4,9 +4,9 @@ package systemassistant
 
 import _ "embed"
 
-const CorePromptRevision = "system-assistant-core-v32"
+const CorePromptRevision = "system-assistant-core-v33"
 
-//go:embed prompts/system-assistant-core-v32.md
+//go:embed prompts/system-assistant-core-v33.md
 var corePrompt string
 
 // CorePrompt возвращает versioned core prompt с контекстными границами шаблонов.

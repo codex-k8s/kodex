@@ -72,6 +72,7 @@ const props = defineProps<{
   readonly?: boolean;
   problem?: AppProblem;
   canRequestChanges?: boolean;
+  variant?: number;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -806,7 +807,13 @@ function snapshot(value: string): Record<string, unknown> {
         <ArrowLeft :size="19" aria-hidden="true" />
       </button>
       <div>
-        <h2 id="assistant-plan-title">{{ $t("assistant.plan") }}</h2>
+        <h2 id="assistant-plan-title">
+          {{
+            $t("assistant.planVariant", {
+              variant: variant ?? 1,
+            })
+          }}
+        </h2>
         <p>
           {{
             $t("assistant.planEditor.revision", {
