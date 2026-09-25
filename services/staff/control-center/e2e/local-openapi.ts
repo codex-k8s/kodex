@@ -958,6 +958,61 @@ async function revokeScopedOpenAPIThroughUI(
       return current.grants.find((item) => item.ref === grant.ref);
     })
     .toMatchObject({ enabled: false, version: grant.version + 1 });
+  const revokedConnection = await read<typeof before>(
+    page,
+    `/api/v1/integration-connections/${connectionRef}`,
+  );
+  expect(revokedConnection.version).toBe(before.version + 1);
+  const stale = await page.evaluate(
+    async ({ ref, key, version, idempotencyKey, targetRef }) => {
+      const csrf = document.cookie
+        .split(";")
+        .map((item) => item.trim())
+        .find((item) => item.startsWith("__Host-kodex-csrf="))
+        ?.slice("__Host-kodex-csrf=".length);
+      if (!csrf) return { status: 0, code: "CSRF_UNAVAILABLE" };
+      const response = await fetch(
+        `/api/v1/integration-connections/${ref}/grants`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "X-CSRF-Token": decodeURIComponent(csrf),
+            "Idempotency-Key": idempotencyKey,
+            "If-Match": `"${String(version)}"`,
+          },
+          body: JSON.stringify({
+            capabilityKey: key,
+            agentRef: targetRef,
+            enabled: true,
+            approvalScopePaths: ["/body/marker"],
+          }),
+        },
+      );
+      const problem = (await response.json()) as { code?: string };
+      return { status: response.status, code: problem.code };
+    },
+    {
+      ref: connectionRef,
+      key: capabilityKey,
+      version: before.version,
+      idempotencyKey: randomUUID(),
+      targetRef: agentRef,
+    },
+  );
+  expect(stale).toEqual({ status: 412, code: "VERSION_OR_STATE_CONFLICT" });
+  const preserved = await read<typeof before>(
+    page,
+    `/api/v1/integration-connections/${connectionRef}`,
+  );
+  expect(preserved.version).toBe(revokedConnection.version);
+  expect(preserved.grants.find((item) => item.ref === grant.ref)).toMatchObject(
+    {
+      enabled: false,
+      version: grant.version + 1,
+    },
+  );
   const effective = await read<{
     items: Array<{
       key: string;
