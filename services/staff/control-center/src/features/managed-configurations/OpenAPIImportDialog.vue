@@ -171,6 +171,7 @@ async function create(): Promise<void> {
       <label>
         <span>{{ t("managed.openapiImport.file") }}</span>
         <input
+          name="openapi-import-file"
           type="file"
           accept=".yaml,.yml,.json,application/json,text/yaml"
           :disabled="creating"
@@ -181,6 +182,7 @@ async function create(): Promise<void> {
         <span>{{ t("managed.openapiImport.source") }}</span>
         <textarea
           v-model="source"
+          name="openapi-import-source"
           rows="8"
           :disabled="creating"
           spellcheck="false"
@@ -205,16 +207,26 @@ async function create(): Promise<void> {
         </p>
         <label>
           <span>{{ t("managed.openapiImport.name") }}</span>
-          <input v-model="name" type="text" maxlength="160" />
+          <input
+            v-model="name"
+            name="openapi-import-name"
+            type="text"
+            maxlength="160"
+          />
         </label>
         <label>
           <span>{{ t("managed.openapiImport.version") }}</span>
-          <input v-model="version" type="text" maxlength="64" />
+          <input
+            v-model="version"
+            name="openapi-import-version"
+            type="text"
+            maxlength="64"
+          />
         </label>
         <fieldset>
           <legend>{{ t("managed.openapiImport.choose") }}</legend>
           <div
-            v-for="operation in inspection.operations"
+            v-for="(operation, index) in inspection.operations"
             :key="
               operation.operationId || `${operation.method}:${operation.path}`
             "
@@ -223,6 +235,7 @@ async function create(): Promise<void> {
             <label>
               <input
                 v-model="selectedIds"
+                :name="`openapi-import-operation-${index}`"
                 type="checkbox"
                 :value="operation.operationId"
                 :disabled="!operation.candidate || creating"
@@ -248,7 +261,10 @@ async function create(): Promise<void> {
             >
               <label>
                 <span>{{ t("managed.openapiImport.risk") }}</span>
-                <select v-model="risks[operation.operationId]">
+                <select
+                  v-model="risks[operation.operationId]"
+                  :name="`openapi-import-risk-${index}`"
+                >
                   <option value="WRITE">{{ t("managed.risks.WRITE") }}</option>
                   <option value="SENSITIVE">
                     {{ t("managed.risks.SENSITIVE") }}
@@ -260,7 +276,10 @@ async function create(): Promise<void> {
               </label>
               <label>
                 <span>{{ t("managed.openapiImport.approval") }}</span>
-                <select v-model="approvals[operation.operationId]">
+                <select
+                  v-model="approvals[operation.operationId]"
+                  :name="`openapi-import-approval-${index}`"
+                >
                   <option value="HUMAN_EACH_EFFECT">
                     {{ t("managed.openapiImport.eachEffect") }}
                   </option>
@@ -274,7 +293,10 @@ async function create(): Promise<void> {
         </fieldset>
         <label>
           <span>{{ t("managed.openapiImport.health") }}</span>
-          <select v-model="healthOperationId">
+          <select
+            v-model="healthOperationId"
+            name="openapi-import-health-operation"
+          >
             <option value="">
               {{ t("managed.openapiImport.chooseHealth") }}
             </option>
