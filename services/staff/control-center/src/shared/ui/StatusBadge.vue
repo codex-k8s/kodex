@@ -28,6 +28,8 @@ const tone = computed(() => {
       "CONNECTED",
       "CLEAN",
       "APPROVED",
+      "ACCEPTED",
+      "PROMOTED",
       "OUTCOME_SUCCEEDED",
     ].includes(props.state)
   )
