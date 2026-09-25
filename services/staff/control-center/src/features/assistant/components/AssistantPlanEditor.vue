@@ -23,6 +23,7 @@ import AssistantEnvironmentFieldsForm from "@/features/assistant/components/Assi
 import AssistantAgentEnvironmentBindingForm from "@/features/assistant/components/AssistantAgentEnvironmentBindingForm.vue";
 import { prepareConnectionConfiguration } from "@/features/integrations/connection-setup";
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
+import IntegrationPublicConfigurationFields from "@/features/integrations/ui/IntegrationPublicConfigurationFields.vue";
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
 import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import AgentFormFields from "@/features/platform/AgentFormFields.vue";
@@ -302,6 +303,20 @@ function connectionProblemLabel(code: string | undefined): string {
   if (code === "INVALID_HTTPS_URL")
     return t("assistant.planEditor.connectionHttpsUrl");
   return t("assistant.planEditor.connectionInvalidValue");
+}
+
+function connectionErrorMessages(
+  operation: EditablePlanOperation,
+): Record<string, string> {
+  const problems = connectionProblems(operation);
+  return Object.fromEntries(
+    (connectionDefinition(operation)?.configurationFields ?? []).map(
+      (field) => [
+        field.key,
+        problems[field.key] ? connectionProblemLabel(problems[field.key]) : "",
+      ],
+    ),
+  );
 }
 
 function setConnectionField(
@@ -1208,7 +1223,9 @@ function snapshot(value: string): Record<string, unknown> {
                     <button
                       class="button"
                       type="button"
-                      :disabled="!plan.projectRef || busy || plan.state === 'REJECTED'"
+                      :disabled="
+                        !plan.projectRef || busy || plan.state === 'REJECTED'
+                      "
                       @click="emit('prepareSecret', suggestion)"
                     >
                       {{ $t("assistant.planEditor.openSuggestedSecret") }}
@@ -1260,98 +1277,18 @@ function snapshot(value: string): Record<string, unknown> {
                 >
                   {{ $t("assistant.planEditor.connectionCatalogUnavailable") }}
                 </p>
-                <template
-                  v-for="field in connectionDefinition(operation)
-                    ?.configurationFields ?? []"
-                  :key="field.key"
-                >
-                  <label class="field">
-                    <span>{{ field.label }}</span>
-                    <select
-                      v-if="field.allowedValues?.length"
-                      :value="
-                        connectionInputs[operation.value.ref]?.[field.key] ?? ''
-                      "
-                      :disabled="!editable"
-                      @change="
-                        setConnectionField(
-                          operation,
-                          field.key,
-                          ($event.target as HTMLSelectElement).value,
-                        )
-                      "
-                    >
-                      <option value=""></option>
-                      <option
-                        v-for="choice in field.allowedValues"
-                        :key="choice"
-                        :value="choice"
-                      >
-                        {{ choice }}
-                      </option>
-                    </select>
-                    <input
-                      v-else-if="field.valueType === 'BOOLEAN'"
-                      type="checkbox"
-                      :checked="
-                        connectionInputs[operation.value.ref]?.[field.key] ===
-                        'true'
-                      "
-                      :disabled="!editable"
-                      @change="
-                        setConnectionField(
-                          operation,
-                          field.key,
-                          ($event.target as HTMLInputElement).checked
-                            ? 'true'
-                            : 'false',
-                        )
-                      "
-                    />
-                    <input
-                      v-else
-                      :value="
-                        connectionInputs[operation.value.ref]?.[field.key] ?? ''
-                      "
-                      :type="field.valueType === 'URL' ? 'url' : 'text'"
-                      :inputmode="
-                        field.valueType === 'INTEGER' ? 'numeric' : undefined
-                      "
-                      :required="field.required"
-                      :placeholder="field.placeholder"
-                      :maxlength="
-                        field.maximumLength ??
-                        (field.valueType === 'URL' ? 2048 : 500)
-                      "
-                      :disabled="!editable"
-                      :aria-invalid="
-                        Boolean(connectionProblems(operation)[field.key])
-                      "
-                      autocomplete="off"
-                      @input="
-                        setConnectionField(
-                          operation,
-                          field.key,
-                          ($event.target as HTMLInputElement).value,
-                        )
-                      "
-                    />
-                    <small>{{ field.help }}</small>
-                    <small v-if="field.valueType === 'STRING_LIST'">{{
-                      $t("assistant.planEditor.connectionListHint")
-                    }}</small>
-                    <small
-                      v-if="connectionProblems(operation)[field.key]"
-                      class="field-error"
-                    >
-                      {{
-                        connectionProblemLabel(
-                          connectionProblems(operation)[field.key],
-                        )
-                      }}
-                    </small>
-                  </label>
-                </template>
+                <IntegrationPublicConfigurationFields
+                  :fields="
+                    connectionDefinition(operation)?.configurationFields ?? []
+                  "
+                  :values="connectionInputs[operation.value.ref] ?? {}"
+                  :problems="connectionErrorMessages(operation)"
+                  submitted
+                  :disabled="!editable"
+                  @change="
+                    (key, value) => setConnectionField(operation, key, value)
+                  "
+                />
                 <p
                   v-if="connectionProblems(operation).publicConfiguration"
                   class="field-error"

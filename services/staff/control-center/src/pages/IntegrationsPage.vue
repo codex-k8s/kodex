@@ -21,7 +21,7 @@ import {
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import IntegrationApprovalPanel from "@/features/integrations/ui/IntegrationApprovalPanel.vue";
 import IntegrationCatalogPanel from "@/features/integrations/ui/IntegrationCatalogPanel.vue";
-import IntegrationIntegerBounds from "@/features/integrations/ui/IntegrationIntegerBounds.vue";
+import IntegrationPublicConfigurationFields from "@/features/integrations/ui/IntegrationPublicConfigurationFields.vue";
 import IntegrationConnectionsPanel from "@/features/integrations/ui/IntegrationConnectionsPanel.vue";
 import IntegrationGrantsPanel from "@/features/integrations/ui/IntegrationGrantsPanel.vue";
 import type { IntegrationGrantSelection } from "@/features/integrations/grant-candidates";
@@ -698,6 +698,14 @@ function configurationProblem(field: IntegrationConfigurationField): string {
     return "Значение не соответствует схеме подключения.";
   return "";
 }
+const configurationErrorMessages = computed(() =>
+  Object.fromEntries(
+    (selectedDefinition.value?.configurationFields ?? []).map((field) => [
+      field.key,
+      configurationProblem(field),
+    ]),
+  ),
+);
 
 async function submit(): Promise<void> {
   const definition = selectedDefinition.value;
@@ -1241,71 +1249,15 @@ onBeforeUnmount(() => {
             :label="$t('managed.diff')"
           />
         </div>
-        <label
-          v-for="field in dialogMode !== 'CREDENTIAL' &&
-          configurationMode === 'FORM'
-            ? selectedDefinition.configurationFields
-            : []"
-          :key="field.key"
-          class="field field--wide"
-        >
-          <span>{{ field.label }}</span>
-          <select
-            v-if="field.allowedValues?.length"
-            v-model="form.configuration[field.key]"
-            :required="field.required"
-          >
-            <option value=""></option>
-            <option
-              v-for="value in field.allowedValues"
-              :key="value"
-              :value="value"
-            >
-              {{ value }}
-            </option>
-          </select>
-          <input
-            v-else-if="field.valueType === 'BOOLEAN'"
-            type="checkbox"
-            :checked="form.configuration[field.key] === 'true'"
-            @change="
-              form.configuration[field.key] = (
-                $event.target as HTMLInputElement
-              ).checked
-                ? 'true'
-                : 'false'
-            "
-          />
-          <input
-            v-else
-            v-model="form.configuration[field.key]"
-            :type="field.valueType === 'URL' ? 'url' : 'text'"
-            :inputmode="field.valueType === 'INTEGER' ? 'numeric' : undefined"
-            :required="field.required"
-            :placeholder="field.placeholder"
-            :maxlength="
-              field.maximumLength ?? (field.valueType === 'URL' ? 2048 : 500)
-            "
-            :aria-invalid="
-              formSubmitted &&
-              Boolean(preparedConfiguration.problems[field.key])
-            "
-            autocomplete="off"
-          />
-          <small>
-            {{ field.help }}
-            <IntegrationIntegerBounds :field="field" />
-            <template v-if="field.valueType === 'STRING_LIST'">
-              Значения разделяются запятыми.
-            </template>
-          </small>
-          <small
-            v-if="formSubmitted && configurationProblem(field)"
-            class="field-error"
-          >
-            {{ configurationProblem(field) }}
-          </small>
-        </label>
+        <IntegrationPublicConfigurationFields
+          v-if="dialogMode !== 'CREDENTIAL' && configurationMode === 'FORM'"
+          :fields="selectedDefinition.configurationFields"
+          :values="form.configuration"
+          :problems="configurationErrorMessages"
+          :submitted="formSubmitted"
+          :disabled="busy"
+          @change="(key, value) => (form.configuration[key] = value)"
+        />
         <section
           v-if="dialogMode === 'CREDENTIAL'"
           class="field field--wide card credential-summary"
