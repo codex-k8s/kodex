@@ -7,6 +7,7 @@ import {
   FileText,
   UserRound,
   Wrench,
+  X,
 } from "@lucide/vue";
 import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -114,6 +115,20 @@ function formatBytes(value: number): string {
     role="region"
     :aria-label="$t('runs.activity')"
   >
+    <header class="run-activity-drawer__header">
+      <div>
+        <h2>{{ $t("runs.activity") }}</h2>
+        <p>{{ run.title }} · {{ events.length }}</p>
+      </div>
+      <button
+        class="icon-button"
+        type="button"
+        :aria-label="$t('common.close')"
+        @click="emit('close')"
+      >
+        <X :size="19" aria-hidden="true" />
+      </button>
+    </header>
     <div class="run-activity-drawer__tools">
       <label>
         <span class="sr-only">{{ $t("runs.context") }}</span>
@@ -298,6 +313,36 @@ function formatBytes(value: number): string {
   flex-direction: column;
   overflow: hidden;
   background: var(--surface);
+}
+.run-activity-drawer__header {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.run-activity-drawer__header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.run-activity-drawer__header h2,
+.run-activity-drawer__header p {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-activity-drawer__header h2 {
+  font-size: 1rem;
+}
+.run-activity-drawer__header p {
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 .run-activity-drawer__tools {
   display: flex;
