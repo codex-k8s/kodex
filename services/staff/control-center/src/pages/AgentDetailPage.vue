@@ -67,6 +67,7 @@ import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
 const route = useRoute();
+const assistantForm = computed(() => route.query.assistantForm === "1");
 const router = useRouter();
 const agentRef = computed(() => String(route.params.agentRef));
 const projectRef = computed(() => String(route.params.projectRef));
@@ -863,308 +864,316 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <PageFrame
-    :title="agent?.name ?? $t('agents.title')"
-    :subtitle="agent?.purpose"
-    :eyebrow="$t('nav.agent')"
-  >
-    <template #actions>
-      <StatusBadge v-if="agent" :state="agent.state" />
-      <button
-        v-if="agent?.nextActions.includes(agent.enabled ? 'DISABLE' : 'ENABLE')"
-        class="button"
-        type="button"
-        :disabled="busy"
-        @click="toggle"
-      >
-        <PowerOff v-if="agent.enabled" :size="16" aria-hidden="true" />
-        <Power v-else :size="16" aria-hidden="true" />
-        {{ agent.enabled ? $t("common.disable") : $t("common.enable") }}
-      </button>
-    </template>
-
-    <AsyncState
-      :loading="platform.loading.agent"
-      :problem="platform.problems.agent"
-      @retry="load"
+  <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
+    <PageFrame
+      :title="agent?.name ?? $t('agents.title')"
+      :subtitle="agent?.purpose"
+      :eyebrow="$t('nav.agent')"
     >
-      <div
-        v-if="agent"
-        class="agent-detail-page"
-        :data-agent-version="agent.version"
-      >
-        <AgentApplyState
-          :state="applyState"
-          :scope="applyScope"
-          :boundary="applyBoundary"
-          :readback="applyReadback"
-        />
-
-        <div class="agent-tabs" role="tablist" :aria-label="$t('nav.agent')">
-          <button
-            v-for="tab in tabs"
-            :id="`agent-tab-${tab.id}`"
-            :key="tab.id"
-            class="agent-tab"
-            type="button"
-            role="tab"
-            :disabled="busy || Boolean(capabilityBusy)"
-            :aria-selected="activeTab === tab.id"
-            :aria-controls="`agent-panel-${tab.id}`"
-            @click="selectTab(tab.id)"
-          >
-            {{ tab.label }}
-            <span v-if="tab.id === 'instructions' && agent.draftInstructions">
-              {{ $t("states." + agent.draftInstructions.state) }}
-            </span>
-          </button>
-        </div>
-
-        <section
-          v-if="activeTab === 'profile'"
-          id="agent-panel-profile"
-          class="agent-panel agent-profile-layout"
-          role="tabpanel"
-          aria-labelledby="agent-tab-profile"
+      <template #actions>
+        <StatusBadge v-if="agent" :state="agent.state" />
+        <button
+          v-if="
+            agent?.nextActions.includes(agent.enabled ? 'DISABLE' : 'ENABLE')
+          "
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="toggle"
         >
-          <AgentProfilePanel
-            :model-value="profileDraft"
-            :role-name="agent.roleDefinitionName ?? agent.name"
-            :avatar-url="
-              agent.avatar?.source === 'ARTIFACT'
-                ? agent.avatar.contentPath
-                : undefined
-            "
-            :avatar-asset="avatarAsset"
-            :can-edit="canEdit"
-            :busy="busy"
-            :dirty="profileDirty"
-            @update:model-value="updateProfile"
-            @upload-avatar="avatarFile = $event"
-            @remove-avatar="removeAvatar"
-            @save="saveProfile"
+          <PowerOff v-if="agent.enabled" :size="16" aria-hidden="true" />
+          <Power v-else :size="16" aria-hidden="true" />
+          {{ agent.enabled ? $t("common.disable") : $t("common.enable") }}
+        </button>
+      </template>
+
+      <AsyncState
+        :loading="platform.loading.agent"
+        :problem="platform.problems.agent"
+        @retry="load"
+      >
+        <div
+          v-if="agent"
+          class="agent-detail-page"
+          :data-agent-version="agent.version"
+        >
+          <AgentApplyState
+            :state="applyState"
+            :scope="applyScope"
+            :boundary="applyBoundary"
+            :readback="applyReadback"
           />
-          <aside class="agent-profile-aside">
-            <section
-              v-if="agent.nextActions.includes('LAUNCH')"
-              class="panel launch-panel"
+
+          <div class="agent-tabs" role="tablist" :aria-label="$t('nav.agent')">
+            <button
+              v-for="tab in tabs"
+              :id="`agent-tab-${tab.id}`"
+              :key="tab.id"
+              class="agent-tab"
+              type="button"
+              role="tab"
+              :disabled="busy || Boolean(capabilityBusy)"
+              :aria-selected="activeTab === tab.id"
+              :aria-controls="`agent-panel-${tab.id}`"
+              @click="selectTab(tab.id)"
             >
-              <h2>{{ $t("runs.new") }}</h2>
-              <label class="field">
-                <span>{{ $t("runs.task") }}</span>
-                <VoiceTextarea
-                  v-model="task"
-                  :disabled="busy"
-                  required
-                  maxlength="8000"
-                />
-              </label>
-              <button
-                class="button button--primary"
-                type="button"
-                :disabled="busy || !task.trim()"
-                @click="launch"
-              >
-                <Play :size="16" aria-hidden="true" />{{ $t("common.launch") }}
-              </button>
-            </section>
-            <section class="panel agent-summary">
-              <h2>{{ $t("common.details") }}</h2>
-              <dl>
-                <div>
-                  <dt>{{ $t("agents.runtime") }}</dt>
-                  <dd>{{ agent.runtimeName }}</dd>
-                </div>
-                <div>
-                  <dt>{{ $t("agents.provider") }}</dt>
-                  <dd>{{ agent.runtimeProvider ?? $t("common.noData") }}</dd>
-                </div>
-                <div>
-                  <dt>{{ $t("agents.model") }}</dt>
-                  <dd class="mono">
-                    {{ agent.runtimeModel ?? $t("common.noData") }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ $t("agents.instructions") }}</dt>
-                  <dd class="agent-summary__instruction-state">
-                    <template v-if="agent.publishedInstructions">
-                      <span>
-                        {{
-                          $t("agents.revision", {
-                            revision: agent.publishedInstructions.revision,
-                          })
-                        }}
-                      </span>
-                      <StatusBadge :state="agent.publishedInstructions.state" />
-                    </template>
-                    <template v-else>{{ $t("common.noData") }}</template>
-                  </dd>
-                </div>
-                <div>
-                  <dt>{{ $t("agents.capabilities") }}</dt>
-                  <dd>{{ agent.capabilities.length }}</dd>
-                </div>
-              </dl>
-            </section>
-          </aside>
-        </section>
+              {{ tab.label }}
+              <span v-if="tab.id === 'instructions' && agent.draftInstructions">
+                {{ $t("states." + agent.draftInstructions.state) }}
+              </span>
+            </button>
+          </div>
 
-        <section
-          v-else-if="activeTab === 'instructions'"
-          id="agent-panel-instructions"
-          class="agent-panel"
-          role="tabpanel"
-          aria-labelledby="agent-tab-instructions"
-        >
-          <AgentInstructionsPanel
-            :agent-ref="agent.ref"
-            :agent-version="agent.version"
-            :model-value="instructions"
-            :project-ref="projectRef"
-            :state="instructionState"
-            :validation-messages="instructionValidationMessages"
-            :can-edit="canEdit"
-            :can-validate="agent.nextActions.includes('VALIDATE')"
-            :can-publish="agent.nextActions.includes('PUBLISH')"
-            :busy="busy"
-            :dirty="instructionsDirty"
-            @update:model-value="updateInstructions"
-            @save="saveInstructions"
-            @validate="instructionAction('VALIDATE')"
-            @publish="instructionAction('PUBLISH')"
+          <section
+            v-if="activeTab === 'profile'"
+            id="agent-panel-profile"
+            class="agent-panel agent-profile-layout"
+            role="tabpanel"
+            aria-labelledby="agent-tab-profile"
           >
-            <template #history>
-              <p v-if="agent.instructionBinding">
-                {{
-                  $t(
-                    agent.instructionBinding.effective
-                      ? "publicationImpact.instructionsEffective"
-                      : "publicationImpact.instructionsInactive",
-                  )
-                }}
-                <code>{{ agent.instructionBinding.revisionRef }}</code>
-              </p>
-              <InstructionHistory
-                :versions="instructionHistory"
-                :current-ref="agent.instructionBinding?.revisionRef"
-                :current-effective="agent.instructionBinding?.effective"
-                :can-rollback="agent.nextActions.includes('ROLLBACK')"
-                :busy="busy"
-                @rollback="rollbackInstructions"
-              />
-            </template>
-          </AgentInstructionsPanel>
-          <ProblemNotice
-            v-if="platform.problems.instructionVersions"
-            :problem="platform.problems.instructionVersions"
-            compact
-          />
-        </section>
+            <AgentProfilePanel
+              :model-value="profileDraft"
+              :role-name="agent.roleDefinitionName ?? agent.name"
+              :avatar-url="
+                agent.avatar?.source === 'ARTIFACT'
+                  ? agent.avatar.contentPath
+                  : undefined
+              "
+              :avatar-asset="avatarAsset"
+              :can-edit="canEdit"
+              :busy="busy"
+              :dirty="profileDirty"
+              @update:model-value="updateProfile"
+              @upload-avatar="avatarFile = $event"
+              @remove-avatar="removeAvatar"
+              @save="saveProfile"
+            />
+            <aside class="agent-profile-aside">
+              <section
+                v-if="agent.nextActions.includes('LAUNCH')"
+                class="panel launch-panel"
+              >
+                <h2>{{ $t("runs.new") }}</h2>
+                <label class="field">
+                  <span>{{ $t("runs.task") }}</span>
+                  <VoiceTextarea
+                    v-model="task"
+                    :disabled="busy"
+                    required
+                    maxlength="8000"
+                  />
+                </label>
+                <button
+                  class="button button--primary"
+                  type="button"
+                  :disabled="busy || !task.trim()"
+                  @click="launch"
+                >
+                  <Play :size="16" aria-hidden="true" />{{
+                    $t("common.launch")
+                  }}
+                </button>
+              </section>
+              <section class="panel agent-summary">
+                <h2>{{ $t("common.details") }}</h2>
+                <dl>
+                  <div>
+                    <dt>{{ $t("agents.runtime") }}</dt>
+                    <dd>{{ agent.runtimeName }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("agents.provider") }}</dt>
+                    <dd>{{ agent.runtimeProvider ?? $t("common.noData") }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("agents.model") }}</dt>
+                    <dd class="mono">
+                      {{ agent.runtimeModel ?? $t("common.noData") }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("agents.instructions") }}</dt>
+                    <dd class="agent-summary__instruction-state">
+                      <template v-if="agent.publishedInstructions">
+                        <span>
+                          {{
+                            $t("agents.revision", {
+                              revision: agent.publishedInstructions.revision,
+                            })
+                          }}
+                        </span>
+                        <StatusBadge
+                          :state="agent.publishedInstructions.state"
+                        />
+                      </template>
+                      <template v-else>{{ $t("common.noData") }}</template>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{{ $t("agents.capabilities") }}</dt>
+                    <dd>{{ agent.capabilities.length }}</dd>
+                  </div>
+                </dl>
+              </section>
+            </aside>
+          </section>
 
-        <section
-          v-else-if="activeTab === 'runtime'"
-          id="agent-panel-runtime"
-          class="agent-panel"
-          role="tabpanel"
-          aria-labelledby="agent-tab-runtime"
-        >
-          <AgentRuntimePanel
-            :agent-ref="agent.ref"
-            :can-edit="canEdit"
-            @apply-state="updateApplyState"
-            @runtime-saved="refreshRuntimeSummary"
-          />
-          <ProblemNotice
-            v-if="platform.problems.runtimes"
-            :problem="platform.problems.runtimes"
-            compact
-          />
-        </section>
+          <section
+            v-else-if="activeTab === 'instructions'"
+            id="agent-panel-instructions"
+            class="agent-panel"
+            role="tabpanel"
+            aria-labelledby="agent-tab-instructions"
+          >
+            <AgentInstructionsPanel
+              :agent-ref="agent.ref"
+              :agent-version="agent.version"
+              :model-value="instructions"
+              :project-ref="projectRef"
+              :state="instructionState"
+              :validation-messages="instructionValidationMessages"
+              :can-edit="canEdit"
+              :can-validate="agent.nextActions.includes('VALIDATE')"
+              :can-publish="agent.nextActions.includes('PUBLISH')"
+              :busy="busy"
+              :dirty="instructionsDirty"
+              @update:model-value="updateInstructions"
+              @save="saveInstructions"
+              @validate="instructionAction('VALIDATE')"
+              @publish="instructionAction('PUBLISH')"
+            >
+              <template #history>
+                <p v-if="agent.instructionBinding">
+                  {{
+                    $t(
+                      agent.instructionBinding.effective
+                        ? "publicationImpact.instructionsEffective"
+                        : "publicationImpact.instructionsInactive",
+                    )
+                  }}
+                  <code>{{ agent.instructionBinding.revisionRef }}</code>
+                </p>
+                <InstructionHistory
+                  :versions="instructionHistory"
+                  :current-ref="agent.instructionBinding?.revisionRef"
+                  :current-effective="agent.instructionBinding?.effective"
+                  :can-rollback="agent.nextActions.includes('ROLLBACK')"
+                  :busy="busy"
+                  @rollback="rollbackInstructions"
+                />
+              </template>
+            </AgentInstructionsPanel>
+            <ProblemNotice
+              v-if="platform.problems.instructionVersions"
+              :problem="platform.problems.instructionVersions"
+              compact
+            />
+          </section>
 
-        <section
-          v-else-if="activeTab === 'environment'"
-          id="agent-panel-environment"
-          class="agent-panel"
-          role="tabpanel"
-          aria-labelledby="agent-tab-environment"
-        >
-          <AgentEnvironmentPanel
-            :agent-ref="agent.ref"
-            :project-ref="projectRef"
-            :can-edit="canEdit"
-            @apply-state="updateApplyState"
-          />
-        </section>
+          <section
+            v-else-if="activeTab === 'runtime'"
+            id="agent-panel-runtime"
+            class="agent-panel"
+            role="tabpanel"
+            aria-labelledby="agent-tab-runtime"
+          >
+            <AgentRuntimePanel
+              :agent-ref="agent.ref"
+              :can-edit="canEdit"
+              @apply-state="updateApplyState"
+              @runtime-saved="refreshRuntimeSummary"
+            />
+            <ProblemNotice
+              v-if="platform.problems.runtimes"
+              :problem="platform.problems.runtimes"
+              compact
+            />
+          </section>
 
-        <section
-          v-else
-          id="agent-panel-access"
-          class="agent-panel"
-          role="tabpanel"
-          aria-labelledby="agent-tab-access"
-        >
-          <AgentAccessPanel
-            :project-ref="agent.projectRef"
-            :agent-ref="agent.ref"
-            :agent-version="agent.version"
-            :integrations="agent.integrations"
-            :knowledge-count="agent.knowledgeArtifactRefs.length"
-            :can-manage="canManageCapabilities"
-            :busy-key="capabilityBusy"
-            @toggle="toggleCapability"
-            @refresh="platform.loadAgent(agentRef)"
-          />
-          <ProblemNotice
-            v-if="platform.problems.capabilities"
-            :problem="platform.problems.capabilities"
-            compact
-          />
-        </section>
+          <section
+            v-else-if="activeTab === 'environment'"
+            id="agent-panel-environment"
+            class="agent-panel"
+            role="tabpanel"
+            aria-labelledby="agent-tab-environment"
+          >
+            <AgentEnvironmentPanel
+              :agent-ref="agent.ref"
+              :project-ref="projectRef"
+              :can-edit="canEdit"
+              @apply-state="updateApplyState"
+            />
+          </section>
 
-        <ProblemNotice v-if="problem" :problem="problem" compact />
-      </div>
-    </AsyncState>
-    <AvatarCropDialog
-      v-if="avatarFile"
-      :file="avatarFile"
-      :busy="busy"
-      @close="avatarFile = undefined"
-      @confirm="applyAvatar"
-    />
-    <ModalDialog
-      v-if="instructionPlan"
-      :title="$t('publicationImpact.title')"
-      size="lg"
-      :busy="busy"
-      @close="instructionPlan = undefined"
-    >
-      <ProblemNotice v-if="problem" :problem="problem" />
-      <button
-        v-if="instructionUnknown"
-        class="button"
-        type="button"
-        :disabled="busy"
-        @click="recoverInstructionPublication"
-      >
-        {{ $t("common.refresh") }}
-      </button>
-      <PublicationImpactSelection
-        :plan="instructionPlan"
-        :busy="busy || instructionUnknown"
-        @publish="publishInstructionSelection"
+          <section
+            v-else
+            id="agent-panel-access"
+            class="agent-panel"
+            role="tabpanel"
+            aria-labelledby="agent-tab-access"
+          >
+            <AgentAccessPanel
+              :project-ref="agent.projectRef"
+              :agent-ref="agent.ref"
+              :agent-version="agent.version"
+              :integrations="agent.integrations"
+              :knowledge-count="agent.knowledgeArtifactRefs.length"
+              :can-manage="canManageCapabilities"
+              :busy-key="capabilityBusy"
+              @toggle="toggleCapability"
+              @refresh="platform.loadAgent(agentRef)"
+            />
+            <ProblemNotice
+              v-if="platform.problems.capabilities"
+              :problem="platform.problems.capabilities"
+              compact
+            />
+          </section>
+
+          <ProblemNotice v-if="problem" :problem="problem" compact />
+        </div>
+      </AsyncState>
+      <AvatarCropDialog
+        v-if="avatarFile"
+        :file="avatarFile"
+        :busy="busy"
+        @close="avatarFile = undefined"
+        @confirm="applyAvatar"
       />
-      <button
-        v-if="instructionUnknown && instructionAttempt"
-        type="button"
-        class="button"
-        :disabled="busy"
-        @click="retryInstructionPublication"
+      <ModalDialog
+        v-if="instructionPlan"
+        :title="$t('publicationImpact.title')"
+        size="lg"
+        :busy="busy"
+        @close="instructionPlan = undefined"
       >
-        {{ $t("publicationImpact.retryOriginal") }}
-      </button>
-    </ModalDialog>
-  </PageFrame>
+        <ProblemNotice v-if="problem" :problem="problem" />
+        <button
+          v-if="instructionUnknown"
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="recoverInstructionPublication"
+        >
+          {{ $t("common.refresh") }}
+        </button>
+        <PublicationImpactSelection
+          :plan="instructionPlan"
+          :busy="busy || instructionUnknown"
+          @publish="publishInstructionSelection"
+        />
+        <button
+          v-if="instructionUnknown && instructionAttempt"
+          type="button"
+          class="button"
+          :disabled="busy"
+          @click="retryInstructionPublication"
+        >
+          {{ $t("publicationImpact.retryOriginal") }}
+        </button>
+      </ModalDialog>
+    </PageFrame>
+  </Teleport>
 </template>
 
 <style scoped>

@@ -13,7 +13,6 @@ import { unwrap } from "@/shared/api/problem";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
-const emit = defineEmits<{ navigate: [] }>();
 const target = computed(() =>
   assistantCreatedEntityTarget(props.plan, props.operationRef),
 );
@@ -29,13 +28,18 @@ const destination = computed(() => {
   const current = target.value;
   if (!current) return undefined;
   return current.kind === "PROJECT"
-    ? { name: "project", params: { projectRef: current.projectRef } }
+    ? {
+        name: "project",
+        params: { projectRef: current.projectRef },
+        query: { assistantForm: "1" },
+      }
     : {
         name: "agent",
         params: {
           projectRef: current.projectRef,
           agentRef: current.resourceRef,
         },
+        query: { assistantForm: "1" },
       };
 });
 let refresh: (() => Promise<void>) | undefined;
@@ -125,7 +129,6 @@ watch(
         v-if="entity && destination"
         class="button button--primary"
         :to="destination"
-        @click="emit('navigate')"
         >{{ $t(`assistant.createdEntity.${target.kind}.open`) }}</RouterLink
       >
     </div>

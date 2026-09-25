@@ -22,5 +22,21 @@ describe("карточка созданного помощником проек�
     expect(workspace).toContain("<AssistantCreatedEntityCard");
     expect(workspace).toContain("item.type === 'CREATE_PROJECT'");
     expect(workspace).toContain("item.type === 'CREATE_AGENT'");
+    expect(source).toContain('query: { assistantForm: "1" }');
+    expect(source).not.toContain("emit('navigate')");
+    const agentPage = readFileSync(
+      new URL("../../../pages/AgentDetailPage.vue", import.meta.url),
+      "utf8",
+    );
+    expect(agentPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    const projectPage = readFileSync(
+      new URL("../../../pages/ProjectOverviewPage.vue", import.meta.url),
+      "utf8",
+    );
+    expect(projectPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
   });
 });

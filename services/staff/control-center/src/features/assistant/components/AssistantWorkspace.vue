@@ -1250,7 +1250,6 @@ onBeforeUnmount(() => {
                     :key="`entity-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
-                    @navigate="close"
                   />
                   <AssistantEnvironmentDraftCard
                     v-for="operation in turn.plan.operations.filter(
