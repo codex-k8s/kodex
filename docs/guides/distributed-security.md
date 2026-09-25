@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.5.0
-updated: 2026-09-16
+version: 1.5.1
+updated: 2026-09-25
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -1135,6 +1135,15 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   цепочки. Нижний cache TTL не продлевает этот срок: короткий snapshot не
   кэшируется. Отмена или истечение TTL во время resolution закрывает выдачу;
   producer и consumer используют один resolver и проверку публичных адресов.
+- Для разрешённого OpenAPI origin смена A/AAAA допускает перекрытие только
+  ранее полностью проверенных публичных адресов одного hostname: не более двух
+  минут после последнего наблюдения и не более 32 адресов вместе с новым
+  снимком. Превышение границы либо ответ с приватным адресом закрыто отклоняется
+  без частичной публикации. Producer одновременно обновляет immutable CONNECT
+  policy и точную CNI NetworkPolicy; gateway перед каждым dial пересекает её
+  IP с новым полным проверенным DNS snapshot. Перекрытие не продлевает DNS TTL,
+  не ослабляет ClientHello SNI или проверку CA/hostname у потребителя и не
+  применяется к почтовому профилю.
 - Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
   Он не получает direct outbound: producer из того же version-pinned typed
   mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.

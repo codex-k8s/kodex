@@ -84,6 +84,41 @@ func TestIntegrationDNSProjectionRetainsOnlyRecentVerifiedPublicPins(t *testing.
 	}
 }
 
+func TestIntegrationDNSProjectionBoundsRetainedPinsWithoutPublishingPartialChange(t *testing.T) {
+	start := time.Now()
+	source := &rotatingIntegrationDNS{}
+	first := make([]netip.Addr, 0, 32)
+	for value := 1; value <= 32; value++ {
+		first = append(first, netip.AddrFrom4([4]byte{8, 8, 8, byte(value)}))
+	}
+	newAddress := netip.MustParseAddr("9.9.9.9")
+	for _, addresses := range [][]netip.Addr{first, {newAddress}, {newAddress}} {
+		for range integrationEgressDNSSamples {
+			source.snapshots = append(source.snapshots, dnsresolver.Snapshot{
+				Addresses: addresses, ExpiresAt: start.Add(10 * time.Minute),
+			})
+		}
+	}
+	now := start
+	resolver := &integrationDNSResolver{source: source, now: func() time.Time { return now }}
+	if snapshot, err := resolver.Resolve(t.Context(), "api.example.test"); err != nil || len(snapshot.Addresses) != 32 {
+		t.Fatal("initial bounded DNS set was rejected", err)
+	}
+	now = start.Add(time.Minute)
+	if _, err := resolver.Resolve(t.Context(), "api.example.test"); err == nil {
+		t.Fatal("overlap published more than 32 addresses")
+	}
+	if len(resolver.observed["api.example.test"]) != 32 {
+		t.Fatal("rejected overlap changed the published DNS set")
+	}
+
+	now = start.Add(integrationEgressDNSOverlap + time.Second)
+	if snapshot, err := resolver.Resolve(t.Context(), "api.example.test"); err != nil ||
+		!reflect.DeepEqual(snapshot.Addresses, []netip.Addr{newAddress}) {
+		t.Fatal("expired pins prevented the next bounded DNS publication", err)
+	}
+}
+
 func TestIntegrationDNSProjectionRejectsMixedPublicPrivateSnapshot(t *testing.T) {
 	source := &rotatingIntegrationDNS{snapshots: []dnsresolver.Snapshot{{
 		Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("10.0.0.1")},
