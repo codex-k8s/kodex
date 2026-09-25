@@ -28,6 +28,7 @@ import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
 import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import AgentFormFields from "@/features/platform/AgentFormFields.vue";
 import AgentProfileFields from "@/features/agents/detail/AgentProfileFields.vue";
+import TemplateSourceField from "@/features/agents/detail/TemplateSourceField.vue";
 import type { AgentProfileDraft } from "@/features/agents/detail/model";
 import {
   parseAssistantSecretSuggestions,
@@ -467,6 +468,8 @@ const friendlyInputsReady = computed(() =>
           agentFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "UPDATE_AGENT" ||
           agentProfileValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "CREATE_INSTRUCTION_DRAFT" ||
+          fieldValue(operation, "instructions").trim().length >= 20) &&
         (operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT" ||
           bindingFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_SCHEDULE" &&
@@ -1111,7 +1114,8 @@ function snapshot(value: string): Record<string, unknown> {
                 v-if="
                   operation.value.target.kind !== 'PROJECT' &&
                   operation.value.type !== 'CREATE_AGENT' &&
-                  operation.value.type !== 'UPDATE_AGENT'
+                  operation.value.type !== 'UPDATE_AGENT' &&
+                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT'
                 "
                 class="field"
               >
@@ -1134,7 +1138,8 @@ function snapshot(value: string): Record<string, unknown> {
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
                   operation.value.type !== 'CREATE_AGENT' &&
-                  operation.value.type !== 'UPDATE_AGENT'
+                  operation.value.type !== 'UPDATE_AGENT' &&
+                  operation.value.type !== 'CREATE_INSTRUCTION_DRAFT'
                 "
                 class="field"
               >
@@ -1463,6 +1468,36 @@ function snapshot(value: string): Record<string, unknown> {
                 @valid="agentProfileValidity[operation.value.ref] = $event"
                 @update:model-value="updateAgentProfile(operation, $event)"
               />
+              <template
+                v-else-if="operation.value.type === 'CREATE_INSTRUCTION_DRAFT'"
+              >
+                <TemplateSourceField
+                  :model-value="fieldValue(operation, 'instructions')"
+                  :label="$t('assistant.planEditor.agentInstructions')"
+                  :disabled="!editable"
+                  :target="
+                    props.plan.projectRef &&
+                    operation.value.target.ref &&
+                    operation.value.expectedVersion
+                      ? {
+                          projectRef: props.plan.projectRef,
+                          targetKind: 'AGENT',
+                          targetRef: operation.value.target.ref,
+                          context: {
+                            expectedAgentVersion:
+                              operation.value.expectedVersion,
+                          },
+                        }
+                      : undefined
+                  "
+                  @update:model-value="
+                    updateOperationParameter(operation, 'instructions', $event)
+                  "
+                />
+                <p class="assistant-plan-friendly__hint">
+                  {{ $t("assistant.planEditor.instructionDraftNextSteps") }}
+                </p>
+              </template>
             </template>
             <details class="assistant-plan-friendly__snapshot">
               <summary>

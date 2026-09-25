@@ -2970,6 +2970,7 @@ const ru = {
       CREATE_PROJECT: "Создать Проект",
       UPDATE_PROJECT: "Изменить Проект",
       UPDATE_AGENT: "Изменить сотрудника",
+      CREATE_INSTRUCTION_DRAFT: "Подготовить черновик инструкций сотрудника",
       UPDATE_INTEGRATION_CONNECTION: "Изменить подключение",
       CREATE_AGENT: "Создать сотрудника",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
@@ -3163,6 +3164,15 @@ const ru = {
         open: "Открыть сотрудника",
       },
     },
+    instructionDraft: {
+      title: "Черновик инструкций сотрудника",
+      loadFailed:
+        "Не удалось проверить сохранённый черновик. Обновите состояние.",
+      saved: "Черновик сохранён. Проверьте шаблон и отдельно опубликуйте его.",
+      changed:
+        "Текущий черновик уже отличается от плана. Проверьте сотрудника перед публикацией.",
+      open: "Открыть инструкции",
+    },
     bindingCard: {
       title: "Рабочее окружение сотрудника",
       loadFailed:
@@ -3242,6 +3252,8 @@ const ru = {
         "Подключение и получатель закреплены в этом плане. Если нужен другой объект, попросите помощника изменить план. Секреты сюда не вводятся.",
       agentNextSteps:
         "Образ, рабочее окружение и остальные доступы настраиваются отдельно. Проверьте их перед запуском сотрудника.",
+      instructionDraftNextSteps:
+        "План сохранит только черновик инструкций. После применения откройте штатную форму сотрудника, проверьте шаблон и отдельно опубликуйте его.",
       environmentDescription: "Описание окружения",
       environmentImageArtifact: "Ссылка на проверенный образ (необязательно)",
       environmentChooseImage: "Выбрать готовый образ",
@@ -6424,6 +6436,7 @@ const en = {
       CREATE_PROJECT: "Create Project",
       UPDATE_PROJECT: "Update Project",
       UPDATE_AGENT: "Update employee",
+      CREATE_INSTRUCTION_DRAFT: "Prepare employee instruction draft",
       UPDATE_INTEGRATION_CONNECTION: "Update connection",
       CREATE_AGENT: "Create agent",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
@@ -6613,6 +6626,14 @@ const en = {
         open: "Open employee",
       },
     },
+    instructionDraft: {
+      title: "Employee instruction draft",
+      loadFailed: "Could not verify the saved draft. Refresh its state.",
+      saved: "Draft saved. Validate the template and publish it separately.",
+      changed:
+        "The current draft already differs from the plan. Check the employee before publishing.",
+      open: "Open instructions",
+    },
     bindingCard: {
       title: "Employee work environment",
       loadFailed:
@@ -6690,6 +6711,8 @@ const en = {
         "This plan fixes the connection and recipient. Ask the assistant to revise it for another target. Do not enter secrets here.",
       agentNextSteps:
         "The image, work environment, and other access grants are configured separately. Review them before launching the employee.",
+      instructionDraftNextSteps:
+        "This plan only saves an instruction draft. After applying it, open the employee form, validate the template, and publish it separately.",
       environmentDescription: "Environment description",
       environmentImageArtifact: "Verified image reference (optional)",
       environmentChooseImage: "Choose a ready image",

@@ -680,6 +680,45 @@ describe("assistant plan editor model", () => {
     expect(changed?.expectedVersion).toBe(3);
   });
 
+  it("правит инструкции как версионированный черновик, а не создаёт сотрудника", () => {
+    const text = "Координируй проект и сообщай подтверждённые результаты.";
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CREATE_INSTRUCTION_DRAFT",
+        action: "UPDATE",
+        target: {
+          kind: "AGENT",
+          ref: "agt_existing",
+          name: "Менеджер",
+          version: 7,
+        },
+        expectedVersion: 7,
+        parameters: { agentRef: "agt_existing", instructions: text },
+        before: { agentRef: "agt_existing", name: "Менеджер" },
+        after: { agentRef: "agt_existing", instructions: text },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe("CREATE_INSTRUCTION_DRAFT");
+    updateOperationParameter(
+      first,
+      "instructions",
+      "Проверяй результаты проекта и докладывай владельцу.",
+    );
+    const changed = operationInputs(editable)[0];
+    expect(changed?.action).toBe("UPDATE");
+    expect(changed?.target.ref).toBe("agt_existing");
+    expect(changed?.expectedVersion).toBe(7);
+    expect(changed?.parameters.instructions).toBe(changed?.after.instructions);
+    expect(changed?.before).toEqual({
+      agentRef: "agt_existing",
+      name: "Менеджер",
+    });
+  });
+
   it("показывает изменение права сотрудника в форме без изменения identity", () => {
     const editable = editableOperations([
       {

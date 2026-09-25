@@ -27,6 +27,7 @@ import { useRoute, useRouter } from "vue-router";
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
 import AssistantCreatedEntityCard from "@/features/assistant/components/AssistantCreatedEntityCard.vue";
+import AssistantInstructionDraftCard from "@/features/assistant/components/AssistantInstructionDraftCard.vue";
 import AssistantAgentEnvironmentBindingCard from "@/features/assistant/components/AssistantAgentEnvironmentBindingCard.vue";
 import AssistantCreatedWorkflowCard from "@/features/assistant/components/AssistantCreatedWorkflowCard.vue";
 import AssistantEnvironmentDraftCard from "@/features/assistant/components/AssistantEnvironmentDraftCard.vue";
@@ -1248,6 +1249,14 @@ onBeforeUnmount(() => {
                         item.type === 'CREATE_AGENT',
                     )"
                     :key="`entity-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
+                  <AssistantInstructionDraftCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) => item.type === 'CREATE_INSTRUCTION_DRAFT',
+                    )"
+                    :key="`instruction-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
                   />

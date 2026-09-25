@@ -41,6 +41,20 @@ describe("AssistantPlanEditor layout", () => {
     expect(profile).toContain('maxlength="1000"');
   });
 
+  it("показывает Markdown-редактор черновика и оставляет публикацию отдельной", () => {
+    expect(source).toContain(
+      "operation.value.type === 'CREATE_INSTRUCTION_DRAFT'",
+    );
+    expect(source).toContain("<TemplateSourceField");
+    expect(source).toContain("assistant.planEditor.instructionDraftNextSteps");
+    const card = readFileSync(
+      new URL("./AssistantInstructionDraftCard.vue", import.meta.url),
+      "utf8",
+    );
+    expect(card).toContain("draftInstructions?.content");
+    expect(card).toContain("assistantForm: '1'");
+  });
+
   it("даёт выбрать продвинутый образ для черновика среды без ручного ref", () => {
     expect(source).toContain("CREATE_RUNTIME_ENVIRONMENT_DRAFT");
     expect(source).toContain("runtime.searchPromotedRoleImagePage");

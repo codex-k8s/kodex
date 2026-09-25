@@ -245,6 +245,7 @@ export type FriendlyPlanOperationType =
   | "UPDATE_PROJECT"
   | "CREATE_AGENT"
   | "UPDATE_AGENT"
+  | "CREATE_INSTRUCTION_DRAFT"
   | "CHANGE_CAPABILITY"
   | "CHANGE_INTEGRATION_GRANT"
   | "CREATE_WORKFLOW"
@@ -269,6 +270,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "UPDATE_PROJECT" &&
     operation.value.type !== "CREATE_AGENT" &&
     operation.value.type !== "UPDATE_AGENT" &&
+    operation.value.type !== "CREATE_INSTRUCTION_DRAFT" &&
     operation.value.type !== "CHANGE_CAPABILITY" &&
     operation.value.type !== "CHANGE_INTEGRATION_GRANT" &&
     operation.value.type !== "CREATE_WORKFLOW" &&
@@ -313,11 +315,14 @@ export function friendlyPlanOperationType(
                           "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
                         ? "RUNTIME_ENVIRONMENT_DRAFT"
                         : "AGENT";
-  const expectedAction = operation.value.type.startsWith("CREATE_")
-    ? "CREATE"
-    : operation.value.type === "LAUNCH_RUN"
-      ? "EXECUTE"
-      : "UPDATE";
+  const expectedAction =
+    operation.value.type === "CREATE_INSTRUCTION_DRAFT"
+      ? "UPDATE"
+      : operation.value.type.startsWith("CREATE_")
+        ? "CREATE"
+        : operation.value.type === "LAUNCH_RUN"
+          ? "EXECUTE"
+          : "UPDATE";
   if (
     (operation.value.type !== "LAUNCH_RUN" &&
       operation.value.target.kind !== expectedKind) ||

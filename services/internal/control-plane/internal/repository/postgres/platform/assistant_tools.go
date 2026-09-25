@@ -134,7 +134,7 @@ func assistantPlanDigest(summary string, rawOperations []byte) string {
 
 func assistantOperationType(value string) bool {
 	switch value {
-	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
+	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
@@ -148,7 +148,7 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 	switch operation.Type {
 	case "PUBLISH_INTEGRATION_DEFINITION":
 		return contextKind == "" && contextRef == ""
-	case "UPDATE_AGENT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
+	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		return contextKind == "AGENT" && contextRef != "" && assistantString(operation.Parameters, "agentRef") == contextRef
 	case "UPDATE_WORKFLOW":
 		return contextKind == "WORKFLOW" && contextRef != "" && assistantString(operation.Parameters, "workflowRef") == contextRef
@@ -199,6 +199,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "UPDATE_AGENT" {
 		return repository.hydrateAssistantAgentOperation(ctx, tx, actorScope, projectRef, operation)
+	}
+	if operation.Type == "CREATE_INSTRUCTION_DRAFT" {
+		return repository.hydrateAssistantInstructionDraft(ctx, tx, actorScope, projectRef, operation)
 	}
 	if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
 		return repository.hydrateAssistantAgentEnvironmentBinding(ctx, tx, actorScope, projectRef, operation)
@@ -543,7 +546,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -578,7 +581,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "UPDATE_PROJECT":
 		expectedTargetKind = "PROJECT"
 		expectedTargetRef = assistantString(operation.Parameters, "projectRef")
-	case "UPDATE_AGENT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
+	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
 	case "UPDATE_WORKFLOW":
@@ -628,7 +631,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 }
 
 func bindAssistantOperationProject(operation entity.AssistantPlanOperation, projectRef string) (entity.AssistantPlanOperation, error) {
-	if operation.Type == "UPDATE_AGENT" || operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
+	if operation.Type == "UPDATE_AGENT" || operation.Type == "CREATE_INSTRUCTION_DRAFT" || operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
 		if projectRef == "" {
 			return entity.AssistantPlanOperation{}, errs.ErrInvalid
 		}
@@ -786,6 +789,18 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.UpdateAgent, payload
+		result.Mutation.ExpectedVersion = &expected
+	case "CREATE_INSTRUCTION_DRAFT":
+		if !onlyAssistantFields(operation.Input, "agentRef", "instructions", "expectedVersion") ||
+			!hasAssistantFields(operation.Input, "agentRef", "instructions", "expectedVersion") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		expected, valid := assistantInt64(operation.Input, "expectedVersion")
+		payload := command.AgentInput{Ref: assistantString(operation.Input, "agentRef"), Instructions: assistantString(operation.Input, "instructions")}
+		if !valid || expected < 1 || payload.Ref == "" || len(strings.TrimSpace(payload.Instructions)) < 20 || len(payload.Instructions) > 65536 {
+			return command.Command{}, errs.ErrInvalid
+		}
+		result.Kind, result.Payload = command.CreateInstructions, payload
 		result.Mutation.ExpectedVersion = &expected
 	case "UPDATE_INTEGRATION_CONNECTION":
 		if !onlyAssistantFields(operation.Input, "connectionRef", "definitionKey", "name", "publicConfiguration", "expectedVersion") ||

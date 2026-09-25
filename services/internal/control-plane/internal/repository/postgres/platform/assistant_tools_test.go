@@ -141,6 +141,50 @@ func TestAssistantAgentUpdateRequiresExactContextAndOwnerSnapshot(t *testing.T) 
 	}
 }
 
+func TestAssistantInstructionDraftRequiresExactAgentAndSeparatePublication(t *testing.T) {
+	t.Parallel()
+	proposed := entity.AssistantPlanOperation{Type: "CREATE_INSTRUCTION_DRAFT", Key: "draft-agent-instructions",
+		Title: "Prepare instructions", Summary: "Prepare an unpublished instruction draft",
+		Parameters: map[string]any{"agentRef": "agt_current", "instructions": "Coordinate the project and report verified progress."}}
+	if !assistantOperationMatchesContext("AGENT", "agt_current", proposed) ||
+		assistantOperationMatchesContext("AGENT", "agt_other", proposed) ||
+		assistantOperationMatchesContext("PROJECT", "agt_current", proposed) {
+		t.Fatal("instruction draft accepted a different context")
+	}
+	hydrated, err := hydrateAssistantInstructionDraftFields("agt_current", "Coordinator", 7, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.CreateInstructions || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 7 {
+		t.Fatalf("instruction plan did not map to draft-only command: %#v, %v", mapped, err)
+	}
+	edited := hydrated
+	edited.Parameters = map[string]any{"agentRef": "agt_current", "instructions": "Coordinate delivery and report only verified project progress."}
+	edited.Target.Ref = "agt_forged"
+	edited.ExpectedVersion = nil
+	edited.Before = map[string]any{"name": "forged"}
+	rehydrated, err := rehydrateEditedAssistantInstructionDraft(hydrated, edited)
+	if err != nil || rehydrated.Target.Ref != "agt_current" || rehydrated.ExpectedVersion == nil || *rehydrated.ExpectedVersion != 7 ||
+		assistantString(rehydrated.Before, "name") != "Coordinator" {
+		t.Fatalf("instruction edit did not restore owner snapshot: %#v, %v", rehydrated, err)
+	}
+	for _, invalid := range []map[string]any{
+		{"agentRef": "agt_other", "instructions": "Coordinate delivery and report verified progress."},
+		{"agentRef": "agt_current", "instructions": "short"},
+		{"agentRef": "agt_current", "instructions": "Coordinate delivery and report progress.", "publish": true},
+	} {
+		edited.Parameters = invalid
+		if _, err := rehydrateEditedAssistantInstructionDraft(hydrated, edited); err == nil {
+			t.Fatalf("invalid instruction edit accepted: %#v", invalid)
+		}
+	}
+}
+
 func TestAssistantEditedAgentUpdateRehydratesAuthorityEnvelope(t *testing.T) {
 	t.Parallel()
 	original, err := hydrateAssistantAgentFields("agt_current", "Coordinator", "Coordinate work", "Manage agents", "avatar-ref", 7,

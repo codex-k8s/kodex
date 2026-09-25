@@ -594,6 +594,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                  AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
 	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT            AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
 	AssistantContextDescriptorAllowedOperationsCREATEAGENT                       AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT            AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
 	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                     AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
 	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
@@ -626,6 +627,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEAGENT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION:
 		return true
@@ -768,6 +771,7 @@ const (
 	AssistantPlanOperationTypeCHANGECAPABILITY                  AssistantPlanOperationType = "CHANGE_CAPABILITY"
 	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT            AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
 	AssistantPlanOperationTypeCREATEAGENT                       AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT            AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
 	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeCREATEPROJECT                     AssistantPlanOperationType = "CREATE_PROJECT"
 	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE             AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
@@ -800,6 +804,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT:
 		return true
 	case AssistantPlanOperationTypeCREATEAGENT:
+		return true
+	case AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT:
 		return true
 	case AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION:
 		return true

@@ -236,6 +236,7 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 			t.Fatalf("environment context did not publish its exact revision capability: %#v", projection.AllowedOperations)
 		}
 		if resource.kind == "AGENT" && (!contains(projection.AllowedOperations, "UPDATE_AGENT") ||
+			!contains(projection.AllowedOperations, "CREATE_INSTRUCTION_DRAFT") ||
 			!contains(projection.AllowedOperations, "BIND_AGENT_RUNTIME_ENVIRONMENT")) {
 			t.Fatal("agent context did not publish its exact update and binding capabilities")
 		}
