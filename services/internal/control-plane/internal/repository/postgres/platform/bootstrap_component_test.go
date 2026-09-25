@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -31,6 +32,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type unavailableReadinessObjectStore struct {
+	objectstorage.Store
+	checkCalls int
+}
+
+func (store *unavailableReadinessObjectStore) Check(context.Context) error {
+	store.checkCalls++
+	return objectstorage.ErrUnavailable
+}
 
 var (
 	//go:embed testdata/sql/bootstrap_component_readback.sql
@@ -150,6 +161,18 @@ func TestBootstrapComponent(t *testing.T) {
 			t.Fatalf("bootstrap attempt %d: %v", attempt+1, err)
 		}
 	}
+	t.Run("readiness ignores unavailable object storage", func(t *testing.T) {
+		original := repository.objects
+		unavailable := &unavailableReadinessObjectStore{Store: original}
+		repository.objects = unavailable
+		defer func() { repository.objects = original }()
+		if err := repository.Ready(ctx); err != nil {
+			t.Fatalf("readiness depends on object storage: %v", err)
+		}
+		if unavailable.checkCalls != 0 {
+			t.Fatal("readiness checked object storage")
+		}
+	})
 	assertBootstrapReadback(t, ctx, pool)
 	t.Run("catalog owner probe", func(t *testing.T) { testCatalogOwnerProbe(t, ctx, repository) })
 

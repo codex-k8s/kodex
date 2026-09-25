@@ -74,9 +74,6 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct object storage: %w", err)
 	}
-	if err := objects.Check(startup); err != nil {
-		return fmt.Errorf("verify object storage: %w", err)
-	}
 	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel, objects)
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
@@ -531,7 +528,9 @@ type readinessOwner interface {
 	Ready(context.Context) error
 }
 
-// Общий endpoint зависит только от owned PostgreSQL, object storage и NATS.
+// Общий endpoint зависит только от owned PostgreSQL и NATS. Object storage
+// остаётся обязательным для файловых операций, но его временный отказ не
+// выключает независимые сценарии и не блокирует запуск после перезагрузки узла.
 // Вспомогательные projection, cleanup и catalog paths сохраняют собственную
 // диагностику и fail-closed ошибки.
 func monitorReadiness(service readinessOwner, store readinessStore, publisher readinessPublisher, readiness *serviceruntime.Readiness, logger *slog.Logger, config Config) serviceruntime.Worker {
@@ -548,7 +547,7 @@ func monitorReadiness(service readinessOwner, store readinessStore, publisher re
 				}
 			} else {
 				if readiness.Set(false, "primary_infrastructure_unavailable") {
-					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", "postgresql_object_storage_or_nats")
+					logger.WarnContext(ctx, "control-plane readiness lost", "error_class", "postgresql_or_nats")
 				}
 			}
 			select {

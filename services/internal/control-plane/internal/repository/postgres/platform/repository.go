@@ -166,9 +166,6 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	if repository.pool.QueryRow(ctx, querySecretDraftReadiness).Scan(&draftsReady) != nil || !draftsReady {
 		return errors.New("runtime secret draft schema is unavailable")
 	}
-	if err := repository.objects.Check(ctx); err != nil {
-		return errors.New("artifact object storage is unavailable")
-	}
 	return nil
 }
 
