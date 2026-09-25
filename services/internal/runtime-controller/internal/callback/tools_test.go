@@ -181,8 +181,12 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	environmentProperties := byType["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]["properties"].(map[string]any)
 	if environmentProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
 		environmentProperties["imageArtifactRef"] == nil || environmentProperties["publicValues"] == nil ||
-		environmentProperties["secretBindings"] == nil || environmentProperties["secretValue"] != nil {
+		environmentProperties["secretBindings"] == nil || environmentProperties["secretSuggestions"] == nil || environmentProperties["secretValue"] != nil {
 		t.Fatalf("environment draft schema lost project binding or artifact pointer: %#v", environmentProperties)
+	}
+	suggestion := environmentProperties["secretSuggestions"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	if suggestion["sourceHelp"] == nil || suggestion["valueType"] == nil || suggestion["value"] != nil || suggestion["secretValue"] != nil {
+		t.Fatalf("environment secret suggestion exposed a credential value: %#v", suggestion)
 	}
 	imageProperties := byType["CREATE_ROLE_IMAGE_RECIPE"]["properties"].(map[string]any)
 	if imageProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||

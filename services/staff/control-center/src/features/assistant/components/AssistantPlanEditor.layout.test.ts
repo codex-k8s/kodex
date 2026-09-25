@@ -35,6 +35,13 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("!environmentFieldsTouched.value");
   });
 
+  it("открывает защищённую форму секрета и после применения плана", () => {
+    expect(source).toContain("parseAssistantSecretSuggestions");
+    expect(source).toContain("emit('prepareSecret', suggestion)");
+    expect(source).toContain("plan.state === 'REJECTED'");
+    expect(source).not.toContain('v-model="secretValue"');
+  });
+
   it("показывает сотрудника и каталог окружений для рецепта образа", () => {
     expect(source).toContain("CREATE_ROLE_IMAGE_RECIPE");
     expect(source).toContain("roleImageAgentNames[");

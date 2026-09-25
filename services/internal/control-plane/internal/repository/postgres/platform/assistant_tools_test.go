@@ -218,8 +218,9 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 	}
 	bound.Input = map[string]any{
 		"projectRef": "prj_example", "name": "Developer environment",
-		"publicValues":   []any{map[string]any{"name": "PUBLIC_ENDPOINT", "value": "https://example.test"}},
-		"secretBindings": []any{map[string]any{"name": "SERVICE_AUTH", "secretRef": "sec_example1", "revision": float64(2)}},
+		"publicValues":      []any{map[string]any{"name": "PUBLIC_ENDPOINT", "value": "https://example.test"}},
+		"secretBindings":    []any{map[string]any{"name": "SERVICE_AUTH", "secretRef": "sec_example1", "revision": float64(2)}},
+		"secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "description": "Service credential", "valueType": "STRING", "sourceHelp": "Create a token in the provider dashboard."}},
 	}
 	withFields, err := assistantOperationCommand(bound)
 	if err != nil {
@@ -241,6 +242,9 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "API_TOKEN", "value": "forged"}}},
 		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "VISIBLE", "value": "safe", "secretValue": "forged"}}},
 		{"projectRef": "prj_example", "name": "Environment", "secretBindings": []any{map[string]any{"name": "SERVICE_AUTH", "secretRef": "sec_example1", "value": "forged"}}},
+		{"projectRef": "prj_example", "name": "Environment", "secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "valueType": "STRING", "sourceHelp": "Provider dashboard", "value": "forged"}}},
+		{"projectRef": "prj_example", "name": "Environment", "secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "valueType": "STRING", "sourceHelp": "Provider dashboard"}, map[string]any{"name": "SERVICE_AUTH", "valueType": "JSON", "sourceHelp": "Provider dashboard"}}},
+		{"projectRef": "prj_example", "name": "Environment", "secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "valueType": "FILE", "sourceHelp": "Provider dashboard"}}},
 		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "DUPLICATE", "value": "safe"}}, "secretBindings": []any{map[string]any{"name": "DUPLICATE", "secretRef": "sec_example1"}}},
 		{"projectRef": "prj_example", "name": "Environment", "imageArtifactRef": "https://untrusted.example/image"},
 		{"projectRef": "", "name": "Environment"},

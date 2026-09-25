@@ -26,6 +26,10 @@ import { loadExactIntegrationDefinition } from "@/features/integrations/definiti
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
 import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import AgentFormFields from "@/features/platform/AgentFormFields.vue";
+import {
+  parseAssistantSecretSuggestions,
+  type AssistantSecretSuggestion,
+} from "@/features/assistant/secret-suggestions";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
@@ -69,6 +73,7 @@ const emit = defineEmits<{
   apply: [];
   reject: [];
   requestChanges: [];
+  prepareSecret: [suggestion: AssistantSecretSuggestion];
 }>();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
@@ -254,6 +259,18 @@ function connectionDefinition(
   }
 }
 
+function secretSuggestions(
+  operation: EditablePlanOperation,
+): AssistantSecretSuggestion[] | undefined {
+  try {
+    return parseAssistantSecretSuggestions(
+      operationParameter(operation, "secretSuggestions"),
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 function connectionProblems(
   operation: EditablePlanOperation,
 ): Partial<Record<string, string>> {
@@ -422,6 +439,8 @@ const friendlyInputsReady = computed(() =>
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
           environmentFieldsValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" ||
+          secretSuggestions(operation) !== undefined) &&
         ((operation.value.type !== "CREATE_PROJECT" &&
           operation.value.type !== "UPDATE_PROJECT") ||
           projectFormValidity.value[operation.value.ref] === true) &&
@@ -1165,6 +1184,48 @@ function snapshot(value: string): Record<string, unknown> {
                       updateOperationParameter(operation, key, value)
                   "
                 />
+                <section
+                  v-if="
+                    operation.value.type ===
+                      'CREATE_RUNTIME_ENVIRONMENT_DRAFT' &&
+                    secretSuggestions(operation)?.length
+                  "
+                  class="assistant-plan-friendly__secret-suggestions"
+                >
+                  <h4>{{ $t("assistant.planEditor.secretSuggestions") }}</h4>
+                  <p class="assistant-plan-friendly__hint">
+                    {{ $t("assistant.planEditor.secretSuggestionsBoundary") }}
+                  </p>
+                  <article
+                    v-for="suggestion in secretSuggestions(operation) ?? []"
+                    :key="suggestion.name"
+                  >
+                    <strong>{{ suggestion.name }}</strong>
+                    <p v-if="suggestion.description">
+                      {{ suggestion.description }}
+                    </p>
+                    <p>{{ suggestion.sourceHelp }}</p>
+                    <button
+                      class="button"
+                      type="button"
+                      :disabled="!plan.projectRef || busy || plan.state === 'REJECTED'"
+                      @click="emit('prepareSecret', suggestion)"
+                    >
+                      {{ $t("assistant.planEditor.openSuggestedSecret") }}
+                    </button>
+                  </article>
+                </section>
+                <p
+                  v-if="
+                    operation.value.type ===
+                      'CREATE_RUNTIME_ENVIRONMENT_DRAFT' &&
+                    secretSuggestions(operation) === undefined
+                  "
+                  class="field-error"
+                  role="alert"
+                >
+                  {{ $t("assistant.planEditor.secretSuggestionsInvalid") }}
+                </p>
               </template>
               <template
                 v-else-if="
@@ -1836,6 +1897,30 @@ function snapshot(value: string): Record<string, unknown> {
   margin: 0;
   color: var(--muted);
   font-size: 0.83rem;
+}
+.assistant-plan-friendly__secret-suggestions,
+.assistant-plan-friendly__secret-suggestions article {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.assistant-plan-friendly__secret-suggestions {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.assistant-plan-friendly__secret-suggestions h4,
+.assistant-plan-friendly__secret-suggestions p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.assistant-plan-friendly__secret-suggestions article {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.assistant-plan-friendly__secret-suggestions article .button {
+  justify-self: start;
 }
 .assistant-plan-publication {
   display: grid;

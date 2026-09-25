@@ -1412,6 +1412,8 @@ const ru = {
       reauthenticate: "Войти заново для работы с секретами",
       retry: "Повторить исходный запрос",
       help: "Сохранение создаёт черновик. Действующая версия изменится только после проверки и публикации.",
+      assistantSourceHelp:
+        "Подсказка помощника о получении значения (проверьте её в кабинете сервиса):",
       unknown:
         "Запрос не подтверждён. Повтор использует исходные данные и ключ запроса. Изменение ввода отключено до подтверждения.",
       abandon:
@@ -3247,6 +3249,12 @@ const ru = {
       environmentSelectedImage: "Выбранный артефакт образа",
       environmentDraftNextSteps:
         "Это только черновик. Для рабочего окружения выберите проверенный образ, дополните параметры и секретные привязки в защищённой форме, затем проверьте и опубликуйте его.",
+      secretSuggestions: "Предлагаемые секреты",
+      secretSuggestionsBoundary:
+        "Это только безопасные метаданные. Откройте защищённую форму, проверьте подсказку и введите значение сами; план не создаёт секрет и не привязывает его автоматически.",
+      openSuggestedSecret: "Открыть защищённую форму",
+      secretSuggestionsInvalid:
+        "Подсказка о секрете некорректна. Попросите помощника подготовить новый план.",
       environmentRevisionBoundary:
         "Изменятся только название, описание и образ. Параметры, инструменты, политика и привязки секретов сохранятся из текущей версии.",
       environmentRevisionNotReady:
@@ -4937,6 +4945,8 @@ const en = {
       reauthenticate: "Sign in again to manage secrets",
       retry: "Retry original request",
       help: "Saving creates a draft. The active revision changes only after validation and publication.",
+      assistantSourceHelp:
+        "Assistant hint for obtaining the value (verify it in the provider console):",
       unknown:
         "The request is unconfirmed. Retry keeps the original input and request key. Editing is disabled until confirmation.",
       abandon:
@@ -6687,6 +6697,12 @@ const en = {
       environmentSelectedImage: "Selected image artifact",
       environmentDraftNextSteps:
         "This creates only a draft. To make it runnable, select a verified image, complete its settings and secret bindings in the protected form, then validate and publish it.",
+      secretSuggestions: "Suggested secrets",
+      secretSuggestionsBoundary:
+        "These are safe metadata only. Open the protected form, verify the hint, and enter the value yourself; the plan neither creates nor binds a secret automatically.",
+      openSuggestedSecret: "Open protected form",
+      secretSuggestionsInvalid:
+        "The secret suggestion is invalid. Ask the assistant to prepare a new plan.",
       environmentRevisionBoundary:
         "Only the name, description, and image change. Values, tools, policy, and secret bindings are preserved from the current version.",
       environmentRevisionNotReady:

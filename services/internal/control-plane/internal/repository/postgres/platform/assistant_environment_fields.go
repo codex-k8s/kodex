@@ -9,6 +9,43 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+func assistantEnvironmentSecretSuggestions(input map[string]any) bool {
+	raw, supplied := input["secretSuggestions"]
+	if !supplied {
+		return true
+	}
+	entries, ok := raw.([]any)
+	if !ok || len(entries) > 8 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		item, valid := entry.(map[string]any)
+		if !valid || !onlyAssistantFields(item, "name", "description", "valueType", "sourceHelp") ||
+			!hasAssistantFields(item, "name", "valueType", "sourceHelp") {
+			return false
+		}
+		name, nameOK := item["name"].(string)
+		valueType, typeOK := item["valueType"].(string)
+		sourceHelp, helpOK := item["sourceHelp"].(string)
+		if !nameOK || !typeOK || !helpOK || name != strings.TrimSpace(name) || len(name) < 1 || len(name) > 120 ||
+			!contains([]string{"STRING", "JSON", "BINARY"}, valueType) || len(strings.TrimSpace(sourceHelp)) < 1 || len(sourceHelp) > 1000 {
+			return false
+		}
+		if description, hasDescription := item["description"]; hasDescription {
+			value, valid := description.(string)
+			if !valid || len(value) > 1000 {
+				return false
+			}
+		}
+		if _, duplicate := seen[name]; duplicate {
+			return false
+		}
+		seen[name] = struct{}{}
+	}
+	return true
+}
+
 func assistantEnvironmentSnapshotSpecification(raw any) (entity.RuntimeEnvironmentDraftSpecification, bool) {
 	encoded, err := json.Marshal(raw)
 	if err != nil {

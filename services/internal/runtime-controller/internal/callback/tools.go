@@ -229,6 +229,16 @@ func environmentSecretBindingsSchema() map[string]any {
 	}
 }
 
+func environmentSecretSuggestionsSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 8,
+		"description": "Safe metadata for owner-only Secret forms. Never include credential values or pretend that the Secret already exists.",
+		"items": objectSchema([]string{"name", "valueType", "sourceHelp"}, map[string]any{
+			"name": stringSchema(1, 120), "description": stringSchema(0, 1000),
+			"valueType": enumSchema("STRING", "JSON", "BINARY"), "sourceHelp": stringSchema(1, 1000),
+		}),
+	}
+}
+
 func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[string]any {
 	projectRef := opaqueRefSchema()
 	agentRef := opaqueRefSchema()
@@ -255,9 +265,10 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		})),
 		assistantOperationSchema("CREATE_RUNTIME_ENVIRONMENT_DRAFT", objectSchema([]string{"projectRef", "name"}, map[string]any{
 			"projectRef": projectRef, "name": stringSchema(1, 120), "description": stringSchema(0, 1000),
-			"imageArtifactRef": opaqueRefSchema(),
-			"publicValues":     environmentPublicValuesSchema(),
-			"secretBindings":   environmentSecretBindingsSchema(),
+			"imageArtifactRef":  opaqueRefSchema(),
+			"publicValues":      environmentPublicValuesSchema(),
+			"secretBindings":    environmentSecretBindingsSchema(),
+			"secretSuggestions": environmentSecretSuggestionsSchema(),
 		})),
 		assistantOperationSchema("CREATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"projectRef", "agentRef", "name"}, map[string]any{
 			"projectRef": projectRef, "agentRef": opaqueRefSchema(), "name": stringSchema(1, 160),

@@ -61,6 +61,7 @@ import {
 } from "@/features/assistant/workspace-state";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import RuntimeSecretDraftDialog from "@/features/runtime-secrets/RuntimeSecretDraftDialog.vue";
+import type { RuntimeSecretDraftSuggestion } from "@/features/runtime-secrets/model";
 import type {
   AssistantContextDescriptor,
   AssistantPlan,
@@ -109,6 +110,7 @@ const contextOpen = ref(false);
 const integrationImportOpen = ref(false);
 const secretDialogOpen = ref(false);
 const secretInitialDraftRef = ref<string>();
+const secretSuggestion = ref<RuntimeSecretDraftSuggestion>();
 const createdDefinitionRef = ref<string>();
 const desktopHistory = ref<HTMLElement>();
 const desktopHistorySentinel = ref<HTMLElement>();
@@ -343,6 +345,7 @@ async function resumeAssistantSecretForm(): Promise<void> {
   if (!creating && !resuming) return;
   await show();
   secretInitialDraftRef.value = resuming ? draftRef : undefined;
+  secretSuggestion.value = undefined;
   secretDialogOpen.value = true;
   await router.replace({
     query: {
@@ -351,6 +354,22 @@ async function resumeAssistantSecretForm(): Promise<void> {
       assistantSecretDraftRef: undefined,
     },
   });
+}
+
+function openPlainSecretForm(): void {
+  secretInitialDraftRef.value = undefined;
+  secretSuggestion.value = undefined;
+  secretDialogOpen.value = true;
+}
+
+function openSuggestedSecretForm(
+  suggestion: RuntimeSecretDraftSuggestion,
+): void {
+  if (!props.projectRef || currentPlan.value?.projectRef !== props.projectRef)
+    return;
+  secretInitialDraftRef.value = undefined;
+  secretSuggestion.value = suggestion;
+  secretDialogOpen.value = true;
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -675,6 +694,7 @@ watch(
   () => {
     secretDialogOpen.value = false;
     secretInitialDraftRef.value = undefined;
+    secretSuggestion.value = undefined;
   },
 );
 watch(
@@ -931,6 +951,7 @@ onBeforeUnmount(() => {
         @apply="applyPlan"
         @reject="rejectPlan"
         @request-changes="requestPlanChanges"
+        @prepare-secret="openSuggestedSecretForm"
       />
       <template v-else>
         <nav v-if="isRunContext" class="assistant-drawer__tabs">
@@ -1346,7 +1367,7 @@ onBeforeUnmount(() => {
                 v-if="projectRef"
                 class="assistant-composer__protected-link"
                 type="button"
-                @click="secretDialogOpen = true"
+                @click="openPlainSecretForm"
               >
                 {{ $t("assistant.openSecretForm") }}
               </button>
@@ -1387,10 +1408,12 @@ onBeforeUnmount(() => {
       <RuntimeSecretDraftDialog
         :project-ref="projectRef"
         :initial-draft-ref="secretInitialDraftRef"
+        :suggestion="secretSuggestion"
         assistant
         @close="
           secretDialogOpen = false;
           secretInitialDraftRef = undefined;
+          secretSuggestion = undefined;
         "
       />
     </div>

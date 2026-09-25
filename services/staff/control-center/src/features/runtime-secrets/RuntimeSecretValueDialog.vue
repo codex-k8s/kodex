@@ -14,6 +14,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import type {
   RuntimeSecret,
   RuntimeSecretCreateInput,
+  RuntimeSecretDraftSuggestion,
   RuntimeSecretRotateInput,
   RuntimeSecretValueType,
 } from "./model";
@@ -25,6 +26,7 @@ const props = defineProps<{
   submitLabel?: string;
   problem?: AppProblem;
   secret?: RuntimeSecret;
+  suggestion?: RuntimeSecretDraftSuggestion;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -118,9 +120,11 @@ watch(
   (secret) => {
     clearPlaintext();
     submitted.value = false;
-    name.value = secret?.name ?? "";
-    description.value = secret?.description ?? "";
-    valueType.value = secret?.valueType ?? "STRING";
+    name.value = secret?.name ?? props.suggestion?.name ?? "";
+    description.value =
+      secret?.description ?? props.suggestion?.description ?? "";
+    valueType.value =
+      secret?.valueType ?? props.suggestion?.valueType ?? "STRING";
   },
   { immediate: true },
 );

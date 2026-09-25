@@ -10,6 +10,7 @@ import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import type {
   RuntimeSecret,
   RuntimeSecretCreateInput,
+  RuntimeSecretDraftSuggestion,
   RuntimeSecretRotateInput,
 } from "./model";
 import RuntimeSecretValueDialog from "./RuntimeSecretValueDialog.vue";
@@ -30,6 +31,7 @@ const props = defineProps<{
   initialDraftRef?: string;
   initialPlanRef?: string;
   assistant?: boolean;
+  suggestion?: RuntimeSecretDraftSuggestion;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -258,6 +260,7 @@ onBeforeUnmount(() => {
     :busy="locked"
     :locked="uncertain"
     :problem="problem"
+    :suggestion="suggestion"
     :submit-label="
       t(uncertain ? 'runtimeSecrets.draft.retry' : 'runtimeSecrets.draft.save')
     "
@@ -273,6 +276,10 @@ onBeforeUnmount(() => {
             : "runtimeSecrets.draft.help",
         )
       }}
+    </p>
+    <p v-if="suggestion?.sourceHelp" role="note">
+      {{ t("runtimeSecrets.draft.assistantSourceHelp") }}
+      {{ suggestion.sourceHelp }}
     </p>
     <button
       v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"

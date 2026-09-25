@@ -709,7 +709,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		result.Kind, result.Payload = command.CreateAgent, payload
 	case "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
-		if !onlyAssistantFields(operation.Input, "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings") ||
+		if !onlyAssistantFields(operation.Input, "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "secretSuggestions") ||
 			!hasAssistantFields(operation.Input, "projectRef", "name") {
 			return command.Command{}, errs.ErrInvalid
 		}
@@ -722,7 +722,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		values, valuesOK := assistantEnvironmentPublicValues(operation.Input)
 		bindings, bindingsOK := assistantEnvironmentSecretBindings(operation.Input, values)
-		if !valuesOK || !bindingsOK {
+		if !valuesOK || !bindingsOK || !assistantEnvironmentSecretSuggestions(operation.Input) {
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind = command.CreateRuntimeEnvironmentDraft
