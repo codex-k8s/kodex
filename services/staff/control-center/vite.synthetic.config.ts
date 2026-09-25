@@ -31,6 +31,12 @@ export default mergeConfig(base, {
         cards: fileURLToPath(
           new URL("./e2e/fixtures/cards.html", import.meta.url),
         ),
+        assistantRoleImageBuild: fileURLToPath(
+          new URL(
+            "./e2e/fixtures/assistant-role-image-build.html",
+            import.meta.url,
+          ),
+        ),
         resourceSelection: fileURLToPath(
           new URL("./e2e/fixtures/resource-selection.html", import.meta.url),
         ),
