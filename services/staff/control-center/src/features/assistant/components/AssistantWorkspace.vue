@@ -519,12 +519,11 @@ function integrationDraftCreated(configurationRef: string): void {
 function openCreatedDefinition(): void {
   if (!createdDefinitionRef.value) return;
   const configurationRef = createdDefinitionRef.value;
-  close();
-  if (!open.value)
-    void router.push({
-      name: "configuration",
-      params: { kind: "INTEGRATION_DEFINITION", configurationRef },
-    });
+  void router.push({
+    name: "configuration",
+    params: { kind: "INTEGRATION_DEFINITION", configurationRef },
+    query: { assistantForm: "1" },
+  });
 }
 
 function handleComposerKeydown(event: KeyboardEvent): void {
@@ -1286,7 +1285,6 @@ onBeforeUnmount(() => {
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
                     :refresh-token="connectionRefreshToken"
-                    @navigate="close"
                     @prepare-credential="credentialConnectionRef = $event"
                   />
                   <AssistantCreatedScheduleCard

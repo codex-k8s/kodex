@@ -22,6 +22,14 @@ const workflowPage = readFileSync(
   new URL("../../../pages/WorkflowDetailPage.vue", import.meta.url),
   "utf8",
 );
+const configurationPage = readFileSync(
+  new URL("../../../pages/ConfigurationPage.vue", import.meta.url),
+  "utf8",
+);
+const integrationsPage = readFileSync(
+  new URL("../../../pages/IntegrationsPage.vue", import.meta.url),
+  "utf8",
+);
 const template = source.slice(
   source.indexOf("<template>"),
   source.indexOf("<style scoped>"),
@@ -171,11 +179,28 @@ describe("AssistantWorkspace layout", () => {
     expect(template).toContain("assistant.openIntegrationDraft");
     expect(source).toContain('name: "configuration"');
     expect(source).toContain('kind: "INTEGRATION_DEFINITION"');
+    expect(source).toContain('query: { assistantForm: "1" }');
+    expect(source).not.toContain("if (!open.value)");
+    expect(configurationPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    expect(configurationPage).toContain(
+      '...(assistantForm.value ? { assistantForm: "1" } : {})',
+    );
+    expect(appShell).toContain(
+      'route.params.kind === "INTEGRATION_DEFINITION"',
+    );
   });
 
-  it("закрывает помощника при переходе к созданному образу", () => {
+  it("сохраняет помощника при просмотре образа и интеграционного подключения", () => {
     expect(template).toContain("<AssistantRoleImageBuildCard");
-    expect(template).toContain('@navigate="close"');
+    expect(integrationsPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    expect(source).toContain("<AssistantIntegrationConnectionCard");
+    expect(source).not.toContain(
+      '<AssistantIntegrationConnectionCard @navigate="close"',
+    );
   });
 
   it("после запроса доработки возвращает в диалог без отправки за пользователя", () => {

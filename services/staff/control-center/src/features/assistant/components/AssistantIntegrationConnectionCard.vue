@@ -20,7 +20,6 @@ const props = defineProps<{
   refreshToken?: number;
 }>();
 const emit = defineEmits<{
-  navigate: [];
   prepareCredential: [connectionRef: string];
 }>();
 const target = computed(() =>
@@ -34,6 +33,7 @@ const needsCredential = computed(() =>
 );
 const destination = computed(() => ({
   name: "integrations",
+  query: { assistantForm: "1", connectionRef: connection.value?.ref },
 }));
 let refresh: (() => Promise<void>) | undefined;
 
@@ -141,7 +141,6 @@ watch(
         v-else-if="connection"
         class="button button--primary"
         :to="destination"
-        @click="emit('navigate')"
         >{{ $t("assistant.connection.open") }}</RouterLink
       >
     </div>

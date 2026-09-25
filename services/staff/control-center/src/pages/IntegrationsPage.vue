@@ -233,6 +233,7 @@ const mailboxConfigurationBusy = ref(false);
 const mailboxConfigurationPanel = ref<{ canClose(): boolean }>();
 const route = useRoute();
 const router = useRouter();
+const assistantForm = computed(() => route.query.assistantForm === "1");
 const integrationsLoaded = ref(false);
 const assistantCredentialDefinition = ref<IntegrationDefinition>();
 function closeConnectionDetails(): void {
@@ -964,418 +965,426 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <PageFrame
-    :title="$t('integrations.title')"
-    :subtitle="$t('integrations.subtitle')"
-  >
-    <template #actions>
-      <button
-        v-if="activeSection === 'CONNECTIONS'"
-        class="button"
-        type="button"
-        @click="activeSection = 'CATALOG'"
-      >
-        <PackageOpen :size="16" aria-hidden="true" />
-        {{ $t("integrationsRedesign.tabs.CATALOG") }}
-      </button>
-    </template>
-
-    <div class="integration-page">
-      <ProblemNotice
-        v-if="detailsProblem && !detailsConnection"
-        :problem="detailsProblem"
-      />
-      <IntegrationSectionTabs
-        :active="activeSection"
-        :connection-count="connections.length"
-        :package-count="packages.length"
-        :grant-count="allGrants.length"
-        @select="selectSection"
-      />
-
-      <ProblemNotice
-        v-if="problem && !dialog && !deleteCandidate"
-        :problem="problem"
-        compact
-      />
-      <div
-        v-if="operationSuccess && !dialog"
-        class="operation-success"
-        role="status"
-      >
-        {{ operationSuccess }}
-      </div>
-
-      <AsyncState
-        v-if="activeSection !== 'APPROVALS'"
-        :loading="platform.loading.integrations"
-        :problem="platform.problems.integrations"
-        @retry="platform.loadIntegrations()"
-      >
-        <ProblemNotice
-          v-if="connectionProblem && activeSection === 'CONNECTIONS'"
-          :problem="connectionProblem"
-          @retry="loadConnections()"
-        />
-        <IntegrationConnectionsPanel
+  <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
+    <PageFrame
+      :title="$t('integrations.title')"
+      :subtitle="$t('integrations.subtitle')"
+    >
+      <template #actions>
+        <button
           v-if="activeSection === 'CONNECTIONS'"
-          :connections="connections"
-          :definitions="platform.definitions"
-          :core-ready="platform.integrationCoreReady === true"
-          :busy-ref="commandRef"
-          :busy-action="commandAction"
-          :search="connectionSearch"
-          :loading="connectionLoading"
-          :has-more="!!connectionCursor"
-          @update:search="connectionSearch = $event"
-          @more="loadConnections(true)"
-          @command="command"
-          @credential="openCredential"
-          @edit="openEdit"
-          @delete="openDelete"
-          @grants="openGrants"
-          @details="openConnectionDetails"
-        />
-
-        <IntegrationCatalogPanel
-          v-else-if="activeSection === 'CATALOG'"
-          :packages="visiblePackages"
-          :categories="categories"
-          :search="catalogSearch"
-          :category="catalogCategory"
-          :loading="catalogLoading"
-          :has-more="!!catalogNextPageToken"
-          :problem="catalogProblem"
-          @more="loadCatalogPage(true)"
-          @retry="loadCatalogPage()"
-          @update:search="catalogSearch = $event"
-          @update:category="catalogCategory = $event"
-          @connect="openConnection"
-          @copied="
-            (configuration) =>
-              router.push({
-                name: 'configuration',
-                params: {
-                  kind: configuration.kind,
-                  configurationRef: configuration.ref,
-                },
-              })
-          "
-        />
-
-        <IntegrationGrantsPanel
-          v-else
-          :grants="visibleGrants"
-          :selected-connection="grantConnection"
-          :project-ref="grant.projectRef"
-          :target-kind="grant.targetKind"
-          :target-ref="grant.targetRef"
-          :capability-key="grant.capabilityKey"
-          :busy="busy"
-          @select-connection="selectGrantConnection"
-          @update:project-ref="grant.projectRef = $event"
-          @update:target-kind="grant.targetKind = $event"
-          @update:target-ref="grant.targetRef = $event"
-          @update:capability-key="grant.capabilityKey = $event"
-          @save="saveGrant"
-          @revoke="revokeGrant"
-        />
-      </AsyncState>
-
-      <IntegrationApprovalPanel v-else />
-    </div>
-
-    <ModalDialog
-      v-if="detailsConnection"
-      :title="detailsConnection.name"
-      :busy="mailboxCredentialBusy || mailboxConfigurationBusy"
-      size="xl"
-      @close="closeConnectionDetails"
-    >
-      <StatusBadge :state="detailsConnection.state" />
-      <button
-        class="icon-button"
-        :disabled="detailsLoading"
-        :title="$t('vfs.refresh')"
-        :aria-label="$t('vfs.refresh')"
-        @click="refreshConnectionDetails"
-      >
-        <RefreshCw :size="18" />
-      </button>
-      <ProblemNotice v-if="detailsProblem" :problem="detailsProblem" compact />
-      <p>
-        {{
-          $t("identity.connectionVersion", {
-            version: detailsConnection.version,
-          })
-        }}
-      </p>
-      <code
-        >{{ detailsConnection.definitionKey }} /
-        {{ detailsConnection.definitionVersion }}</code
-      >
-      <InteractionIdentitiesPanel
-        v-if="detailsConnection.definitionKey === 'mattermost'"
-        :key="detailsConnection.ref"
-        :connection="detailsConnection"
-      />
-      <EmailMailboxCredentialPanel
-        v-if="detailsConnection.definitionKey === 'email'"
-        :key="detailsConnection.ref"
-        :connection="detailsConnection"
-        :disabled="mailboxConfigurationBusy"
-        @saved="refreshConnectionDetails"
-        @busy="mailboxCredentialBusy = $event"
-      />
-      <EmailMailboxConfigurationPanel
-        v-if="detailsConnection.definitionKey === 'email'"
-        :key="
-          JSON.stringify([
-            detailsConnection.ref,
-            mailboxRouteRef('mailboxConfigurationRef'),
-            mailboxRouteRef('mailboxRevisionRef'),
-          ])
-        "
-        ref="mailboxConfigurationPanel"
-        :connection="detailsConnection"
-        :disabled="mailboxCredentialBusy"
-        :initial-configuration-ref="mailboxRouteRef('mailboxConfigurationRef')"
-        :initial-revision-ref="mailboxRouteRef('mailboxRevisionRef')"
-        @busy="mailboxConfigurationBusy = $event"
-        @saved="refreshConnectionDetails"
-        @selected="selectMailboxRevision"
-      />
-      <EmailEffectPanel
-        v-if="detailsConnection.definitionKey === 'email'"
-        :key="detailsConnection.ref"
-        :connection="detailsConnection"
-        :initial-invocation-ref="returnedInvocationRef"
-      />
-    </ModalDialog>
-    <ModalDialog
-      v-if="dialog && selectedDefinition"
-      :title="
-        dialogMode === 'EDIT'
-          ? `Изменить подключение «${form.name}»`
-          : $t(
-              dialogMode === 'CREATE'
-                ? 'integrations.connectNamed'
-                : 'integrations.configureCredentialNamed',
-              { name: form.name },
-            )
-      "
-      :busy="busy"
-      size="lg"
-      @close="closeConnectionDialog"
-    >
-      <form
-        id="integration-form"
-        class="form-grid"
-        :inert="busy"
-        @submit.prevent="submit"
-      >
-        <section class="field field--wide manifest-summary">
-          <div>
-            <strong>{{ selectedDefinition.name }}</strong>
-            <span class="mono">
-              {{ selectedDefinition.schemaVersion }} · v{{
-                selectedDefinition.definitionVersion
-              }}
-            </span>
-          </div>
-          <p>{{ selectedDefinition.description }}</p>
-          <div class="manifest-summary__facts">
-            <span class="mono">{{ selectedDefinition.adapter }}</span>
-            <span
-              v-for="capability in selectedDefinition.capabilities"
-              :key="capability.key"
-            >
-              {{ capability.name }} ·
-              {{ $t("integrations.risk." + capability.risk) }}
-              · <code>{{ capability.resourceKind }}</code>
-              <strong v-if="capability.approvalRequired">Human Gate</strong>
-            </span>
-          </div>
-        </section>
-        <label v-if="dialogMode !== 'CREDENTIAL'" class="field field--wide">
-          <span>{{ $t("common.name") }}</span>
-          <input
-            v-model.trim="form.name"
-            required
-            maxlength="160"
-            data-dialog-initial-focus
-          />
-        </label>
-        <div
-          v-if="dialogMode !== 'CREDENTIAL'"
-          class="field field--wide"
-          role="group"
-          :aria-label="$t('managed.editMode')"
+          class="button"
+          type="button"
+          @click="activeSection = 'CATALOG'"
         >
-          <div class="segmented-control">
-            <button
-              v-for="mode in ['FORM', 'YAML'] as const"
-              :key="mode"
-              type="button"
-              :aria-pressed="configurationMode === mode"
-              @click="selectConfigurationMode(mode)"
-            >
-              {{ mode === "FORM" ? $t("managed.form") : "YAML" }}
-            </button>
-          </div>
-          <p v-if="yamlInvalid" role="alert">
-            {{ $t("managed.invalidDocument") }}
-          </p>
-          <CodeEditor
-            v-if="configurationMode === 'YAML'"
-            :model-value="yamlContent"
-            :label="$t('managed.content')"
-            language="yaml"
-            :disabled="busy"
-            @update:model-value="updateYaml"
-          />
-          <button
-            v-if="dialogMode === 'EDIT'"
-            class="button"
-            type="button"
-            :aria-expanded="configurationDiff"
-            @click="configurationDiff = !configurationDiff"
-          >
-            {{ $t("managed.diff") }}
-          </button>
-          <CodeDiff
-            v-if="dialogMode === 'EDIT' && configurationDiff && !yamlInvalid"
-            :original="originalConfigurationYaml"
-            :modified="normalizedConfigurationYaml"
-            :label="$t('managed.diff')"
-          />
-        </div>
-        <IntegrationPublicConfigurationFields
-          v-if="dialogMode !== 'CREDENTIAL' && configurationMode === 'FORM'"
-          :fields="selectedDefinition.configurationFields"
-          :values="form.configuration"
-          :problems="configurationErrorMessages"
-          :submitted="formSubmitted"
-          :disabled="busy"
-          @change="(key, value) => (form.configuration[key] = value)"
-        />
-        <section
-          v-if="dialogMode === 'CREDENTIAL'"
-          class="field field--wide card credential-summary"
-        >
-          <strong>{{ form.name }}</strong>
-          <p>{{ $t("integrations.metadataAlreadyCreated") }}</p>
-        </section>
-        <IntegrationCredentialField
-          v-if="showsCredentialInput"
-          :model-value="credentialValue"
-          :credential-secret-key="selectedDefinition.credentialSecretKey"
-          :invalid="credentialRequired"
-          :disabled="busy"
-          @update:model-value="
-            credentialValue = $event;
-            credentialChanged();
-          "
-        />
-        <section
-          v-else-if="dialogMode === 'EDIT'"
-          class="field field--wide card credential-boundary"
-        >
-          <strong>{{ $t("integrations.credentials") }}</strong>
-          <p>
-            Учётные данные не изменяются вместе с публичной конфигурацией. Для
-            их ротации используйте отдельное действие подключения.
-          </p>
-        </section>
-        <section v-else class="field field--wide card credential-boundary">
-          <strong>{{ $t("integrations.credentials") }}</strong>
-          <p>{{ $t("integrations.credentialsNotRequired") }}</p>
-        </section>
-        <section
-          v-if="credentialStepFailed && problem"
-          class="field field--wide credential-failure"
-          role="alert"
-        >
-          <strong>{{ $t("integrations.credentialFailedTitle") }}</strong>
-          <p>{{ $t(credentialProblemKey) }}</p>
-          <p>{{ $t("integrations.metadataPreserved") }}</p>
-          <small v-if="problem.correlationId">{{
-            problem.correlationId
-          }}</small>
-        </section>
+          <PackageOpen :size="16" aria-hidden="true" />
+          {{ $t("integrationsRedesign.tabs.CATALOG") }}
+        </button>
+      </template>
+
+      <div class="integration-page">
         <ProblemNotice
-          v-if="problem && !credentialStepFailed"
-          class="field--wide"
+          v-if="detailsProblem && !detailsConnection"
+          :problem="detailsProblem"
+        />
+        <IntegrationSectionTabs
+          :active="activeSection"
+          :connection-count="connections.length"
+          :package-count="packages.length"
+          :grant-count="allGrants.length"
+          @select="selectSection"
+        />
+
+        <ProblemNotice
+          v-if="problem && !dialog && !deleteCandidate"
           :problem="problem"
           compact
         />
-      </form>
-      <template #actions>
-        <button
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="closeConnectionDialog()"
+        <div
+          v-if="operationSuccess && !dialog"
+          class="operation-success"
+          role="status"
         >
-          {{ $t("common.cancel") }}
-        </button>
-        <button
-          class="button button--primary"
-          form="integration-form"
-          type="submit"
-          :disabled="busy"
-        >
-          {{
-            busy
-              ? "Сохраняем…"
-              : pendingCredential
-                ? $t("integrations.retryCredential")
-                : dialogMode === "EDIT"
-                  ? $t("common.save")
-                  : $t("integrations.connect")
-          }}
-        </button>
-      </template>
-    </ModalDialog>
+          {{ operationSuccess }}
+        </div>
 
-    <ModalDialog
-      v-if="deleteCandidate"
-      title="Удалить подключение"
-      :busy="busy"
-      size="md"
-      @close="closeDeleteDialog"
-    >
-      <div class="delete-confirmation">
-        <p>
-          Подключение <strong>«{{ deleteCandidate.name }}»</strong> будет
-          отключено и переведено в терминальное состояние.
-        </p>
-        <p>
-          Все разрешения подключения будут отозваны. Это действие не удаляет
-          обязательный аудит.
-        </p>
-        <ProblemNotice v-if="problem" :problem="problem" compact />
+        <AsyncState
+          v-if="activeSection !== 'APPROVALS'"
+          :loading="platform.loading.integrations"
+          :problem="platform.problems.integrations"
+          @retry="platform.loadIntegrations()"
+        >
+          <ProblemNotice
+            v-if="connectionProblem && activeSection === 'CONNECTIONS'"
+            :problem="connectionProblem"
+            @retry="loadConnections()"
+          />
+          <IntegrationConnectionsPanel
+            v-if="activeSection === 'CONNECTIONS'"
+            :connections="connections"
+            :definitions="platform.definitions"
+            :core-ready="platform.integrationCoreReady === true"
+            :busy-ref="commandRef"
+            :busy-action="commandAction"
+            :search="connectionSearch"
+            :loading="connectionLoading"
+            :has-more="!!connectionCursor"
+            @update:search="connectionSearch = $event"
+            @more="loadConnections(true)"
+            @command="command"
+            @credential="openCredential"
+            @edit="openEdit"
+            @delete="openDelete"
+            @grants="openGrants"
+            @details="openConnectionDetails"
+          />
+
+          <IntegrationCatalogPanel
+            v-else-if="activeSection === 'CATALOG'"
+            :packages="visiblePackages"
+            :categories="categories"
+            :search="catalogSearch"
+            :category="catalogCategory"
+            :loading="catalogLoading"
+            :has-more="!!catalogNextPageToken"
+            :problem="catalogProblem"
+            @more="loadCatalogPage(true)"
+            @retry="loadCatalogPage()"
+            @update:search="catalogSearch = $event"
+            @update:category="catalogCategory = $event"
+            @connect="openConnection"
+            @copied="
+              (configuration) =>
+                router.push({
+                  name: 'configuration',
+                  params: {
+                    kind: configuration.kind,
+                    configurationRef: configuration.ref,
+                  },
+                })
+            "
+          />
+
+          <IntegrationGrantsPanel
+            v-else
+            :grants="visibleGrants"
+            :selected-connection="grantConnection"
+            :project-ref="grant.projectRef"
+            :target-kind="grant.targetKind"
+            :target-ref="grant.targetRef"
+            :capability-key="grant.capabilityKey"
+            :busy="busy"
+            @select-connection="selectGrantConnection"
+            @update:project-ref="grant.projectRef = $event"
+            @update:target-kind="grant.targetKind = $event"
+            @update:target-ref="grant.targetRef = $event"
+            @update:capability-key="grant.capabilityKey = $event"
+            @save="saveGrant"
+            @revoke="revokeGrant"
+          />
+        </AsyncState>
+
+        <IntegrationApprovalPanel v-else />
       </div>
-      <template #actions>
+
+      <ModalDialog
+        v-if="detailsConnection"
+        :title="detailsConnection.name"
+        :busy="mailboxCredentialBusy || mailboxConfigurationBusy"
+        size="xl"
+        @close="closeConnectionDetails"
+      >
+        <StatusBadge :state="detailsConnection.state" />
         <button
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="closeDeleteDialog()"
+          class="icon-button"
+          :disabled="detailsLoading"
+          :title="$t('vfs.refresh')"
+          :aria-label="$t('vfs.refresh')"
+          @click="refreshConnectionDetails"
         >
-          {{ $t("common.cancel") }}
+          <RefreshCw :size="18" />
         </button>
-        <button
-          class="button button--danger"
-          type="button"
-          :disabled="busy"
-          @click="confirmDelete"
+        <ProblemNotice
+          v-if="detailsProblem"
+          :problem="detailsProblem"
+          compact
+        />
+        <p>
+          {{
+            $t("identity.connectionVersion", {
+              version: detailsConnection.version,
+            })
+          }}
+        </p>
+        <code
+          >{{ detailsConnection.definitionKey }} /
+          {{ detailsConnection.definitionVersion }}</code
         >
-          {{ busy ? "Удаляем…" : $t("common.delete") }}
-        </button>
-      </template>
-    </ModalDialog>
-  </PageFrame>
+        <InteractionIdentitiesPanel
+          v-if="detailsConnection.definitionKey === 'mattermost'"
+          :key="detailsConnection.ref"
+          :connection="detailsConnection"
+        />
+        <EmailMailboxCredentialPanel
+          v-if="detailsConnection.definitionKey === 'email'"
+          :key="detailsConnection.ref"
+          :connection="detailsConnection"
+          :disabled="mailboxConfigurationBusy"
+          @saved="refreshConnectionDetails"
+          @busy="mailboxCredentialBusy = $event"
+        />
+        <EmailMailboxConfigurationPanel
+          v-if="detailsConnection.definitionKey === 'email'"
+          :key="
+            JSON.stringify([
+              detailsConnection.ref,
+              mailboxRouteRef('mailboxConfigurationRef'),
+              mailboxRouteRef('mailboxRevisionRef'),
+            ])
+          "
+          ref="mailboxConfigurationPanel"
+          :connection="detailsConnection"
+          :disabled="mailboxCredentialBusy"
+          :initial-configuration-ref="
+            mailboxRouteRef('mailboxConfigurationRef')
+          "
+          :initial-revision-ref="mailboxRouteRef('mailboxRevisionRef')"
+          @busy="mailboxConfigurationBusy = $event"
+          @saved="refreshConnectionDetails"
+          @selected="selectMailboxRevision"
+        />
+        <EmailEffectPanel
+          v-if="detailsConnection.definitionKey === 'email'"
+          :key="detailsConnection.ref"
+          :connection="detailsConnection"
+          :initial-invocation-ref="returnedInvocationRef"
+        />
+      </ModalDialog>
+      <ModalDialog
+        v-if="dialog && selectedDefinition"
+        :title="
+          dialogMode === 'EDIT'
+            ? `Изменить подключение «${form.name}»`
+            : $t(
+                dialogMode === 'CREATE'
+                  ? 'integrations.connectNamed'
+                  : 'integrations.configureCredentialNamed',
+                { name: form.name },
+              )
+        "
+        :busy="busy"
+        size="lg"
+        @close="closeConnectionDialog"
+      >
+        <form
+          id="integration-form"
+          class="form-grid"
+          :inert="busy"
+          @submit.prevent="submit"
+        >
+          <section class="field field--wide manifest-summary">
+            <div>
+              <strong>{{ selectedDefinition.name }}</strong>
+              <span class="mono">
+                {{ selectedDefinition.schemaVersion }} · v{{
+                  selectedDefinition.definitionVersion
+                }}
+              </span>
+            </div>
+            <p>{{ selectedDefinition.description }}</p>
+            <div class="manifest-summary__facts">
+              <span class="mono">{{ selectedDefinition.adapter }}</span>
+              <span
+                v-for="capability in selectedDefinition.capabilities"
+                :key="capability.key"
+              >
+                {{ capability.name }} ·
+                {{ $t("integrations.risk." + capability.risk) }}
+                · <code>{{ capability.resourceKind }}</code>
+                <strong v-if="capability.approvalRequired">Human Gate</strong>
+              </span>
+            </div>
+          </section>
+          <label v-if="dialogMode !== 'CREDENTIAL'" class="field field--wide">
+            <span>{{ $t("common.name") }}</span>
+            <input
+              v-model.trim="form.name"
+              required
+              maxlength="160"
+              data-dialog-initial-focus
+            />
+          </label>
+          <div
+            v-if="dialogMode !== 'CREDENTIAL'"
+            class="field field--wide"
+            role="group"
+            :aria-label="$t('managed.editMode')"
+          >
+            <div class="segmented-control">
+              <button
+                v-for="mode in ['FORM', 'YAML'] as const"
+                :key="mode"
+                type="button"
+                :aria-pressed="configurationMode === mode"
+                @click="selectConfigurationMode(mode)"
+              >
+                {{ mode === "FORM" ? $t("managed.form") : "YAML" }}
+              </button>
+            </div>
+            <p v-if="yamlInvalid" role="alert">
+              {{ $t("managed.invalidDocument") }}
+            </p>
+            <CodeEditor
+              v-if="configurationMode === 'YAML'"
+              :model-value="yamlContent"
+              :label="$t('managed.content')"
+              language="yaml"
+              :disabled="busy"
+              @update:model-value="updateYaml"
+            />
+            <button
+              v-if="dialogMode === 'EDIT'"
+              class="button"
+              type="button"
+              :aria-expanded="configurationDiff"
+              @click="configurationDiff = !configurationDiff"
+            >
+              {{ $t("managed.diff") }}
+            </button>
+            <CodeDiff
+              v-if="dialogMode === 'EDIT' && configurationDiff && !yamlInvalid"
+              :original="originalConfigurationYaml"
+              :modified="normalizedConfigurationYaml"
+              :label="$t('managed.diff')"
+            />
+          </div>
+          <IntegrationPublicConfigurationFields
+            v-if="dialogMode !== 'CREDENTIAL' && configurationMode === 'FORM'"
+            :fields="selectedDefinition.configurationFields"
+            :values="form.configuration"
+            :problems="configurationErrorMessages"
+            :submitted="formSubmitted"
+            :disabled="busy"
+            @change="(key, value) => (form.configuration[key] = value)"
+          />
+          <section
+            v-if="dialogMode === 'CREDENTIAL'"
+            class="field field--wide card credential-summary"
+          >
+            <strong>{{ form.name }}</strong>
+            <p>{{ $t("integrations.metadataAlreadyCreated") }}</p>
+          </section>
+          <IntegrationCredentialField
+            v-if="showsCredentialInput"
+            :model-value="credentialValue"
+            :credential-secret-key="selectedDefinition.credentialSecretKey"
+            :invalid="credentialRequired"
+            :disabled="busy"
+            @update:model-value="
+              credentialValue = $event;
+              credentialChanged();
+            "
+          />
+          <section
+            v-else-if="dialogMode === 'EDIT'"
+            class="field field--wide card credential-boundary"
+          >
+            <strong>{{ $t("integrations.credentials") }}</strong>
+            <p>
+              Учётные данные не изменяются вместе с публичной конфигурацией. Для
+              их ротации используйте отдельное действие подключения.
+            </p>
+          </section>
+          <section v-else class="field field--wide card credential-boundary">
+            <strong>{{ $t("integrations.credentials") }}</strong>
+            <p>{{ $t("integrations.credentialsNotRequired") }}</p>
+          </section>
+          <section
+            v-if="credentialStepFailed && problem"
+            class="field field--wide credential-failure"
+            role="alert"
+          >
+            <strong>{{ $t("integrations.credentialFailedTitle") }}</strong>
+            <p>{{ $t(credentialProblemKey) }}</p>
+            <p>{{ $t("integrations.metadataPreserved") }}</p>
+            <small v-if="problem.correlationId">{{
+              problem.correlationId
+            }}</small>
+          </section>
+          <ProblemNotice
+            v-if="problem && !credentialStepFailed"
+            class="field--wide"
+            :problem="problem"
+            compact
+          />
+        </form>
+        <template #actions>
+          <button
+            class="button"
+            type="button"
+            :disabled="busy"
+            @click="closeConnectionDialog()"
+          >
+            {{ $t("common.cancel") }}
+          </button>
+          <button
+            class="button button--primary"
+            form="integration-form"
+            type="submit"
+            :disabled="busy"
+          >
+            {{
+              busy
+                ? "Сохраняем…"
+                : pendingCredential
+                  ? $t("integrations.retryCredential")
+                  : dialogMode === "EDIT"
+                    ? $t("common.save")
+                    : $t("integrations.connect")
+            }}
+          </button>
+        </template>
+      </ModalDialog>
+
+      <ModalDialog
+        v-if="deleteCandidate"
+        title="Удалить подключение"
+        :busy="busy"
+        size="md"
+        @close="closeDeleteDialog"
+      >
+        <div class="delete-confirmation">
+          <p>
+            Подключение <strong>«{{ deleteCandidate.name }}»</strong> будет
+            отключено и переведено в терминальное состояние.
+          </p>
+          <p>
+            Все разрешения подключения будут отозваны. Это действие не удаляет
+            обязательный аудит.
+          </p>
+          <ProblemNotice v-if="problem" :problem="problem" compact />
+        </div>
+        <template #actions>
+          <button
+            class="button"
+            type="button"
+            :disabled="busy"
+            @click="closeDeleteDialog()"
+          >
+            {{ $t("common.cancel") }}
+          </button>
+          <button
+            class="button button--danger"
+            type="button"
+            :disabled="busy"
+            @click="confirmDelete"
+          >
+            {{ busy ? "Удаляем…" : $t("common.delete") }}
+          </button>
+        </template>
+      </ModalDialog>
+    </PageFrame>
+  </Teleport>
 </template>
 
 <style scoped>

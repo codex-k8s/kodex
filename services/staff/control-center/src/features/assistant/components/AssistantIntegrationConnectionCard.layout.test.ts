@@ -20,4 +20,11 @@ describe("AssistantIntegrationConnectionCard", () => {
     expect(source).toContain("refreshToken");
     expect(source).not.toContain("credentialValue");
   });
+
+  it("открывает штатный экран подключения рядом с диалогом", () => {
+    expect(source).toContain(
+      'query: { assistantForm: "1", connectionRef: connection.value?.ref }',
+    );
+    expect(source).not.toContain("emit('navigate')");
+  });
 });

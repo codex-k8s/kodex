@@ -186,7 +186,11 @@ const assistantContext = computed(() => {
   if (
     route.query.assistantForm === "1" &&
     assistantStore.context &&
-    assistantStore.projectRef === resolved.projectRef
+    (assistantStore.projectRef === resolved.projectRef ||
+      (((route.name === "configuration" &&
+        route.params.kind === "INTEGRATION_DEFINITION") ||
+        route.name === "integrations") &&
+        !resolved.projectRef))
   )
     return {
       descriptor: assistantStore.context,

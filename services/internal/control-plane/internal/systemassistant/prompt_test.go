@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v27" {
+	if CorePromptRevision != "system-assistant-core-v28" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -42,6 +42,9 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"обычную форму окружения в чате",
 		"`secretSuggestions` — не команда создания и не привязка",
 		"`CREATE_INSTRUCTION_DRAFT` только сохраняет черновик",
+		"предыдущая инструкция о неизменности графа устарела",
+		"Не составляй полный список `steps` или `inputFields` по памяти",
+		"После импорта предложи владельцу просмотреть созданное определение",
 	} {
 		if !strings.Contains(CorePrompt(), required) {
 			t.Fatalf("system assistant prompt does not contain required guidance %q", required)
