@@ -90,6 +90,15 @@ const readyRuntimes = computed(() =>
 );
 const summary = ref("");
 const operations = ref<EditablePlanOperation[]>([]);
+const showPlanDetails = ref(false);
+const hasFriendlyOperations = computed(() =>
+  operations.value.some(friendlyPlanOperationType),
+);
+const allOperationsFriendly = computed(
+  () =>
+    operations.value.length > 0 &&
+    operations.value.every(friendlyPlanOperationType),
+);
 const selectedImages = ref<Record<string, AsyncEntityOption>>({});
 const roleImageAgentNames = ref<Record<string, string>>({});
 const roleImageEnvironments = ref<RoleEnvironment[]>([]);
@@ -155,6 +164,7 @@ function resetDraft(): void {
   // Дочерние формы сообщают о валидности при монтировании. После обновления
   // плана их нужно создать заново, даже если ссылки на операции не изменились.
   draftGeneration.value += 1;
+  showPlanDetails.value = false;
   summary.value = props.plan.auditSummary;
   operations.value = editableOperations(props.plan.operations);
   connectionInputs.value = Object.fromEntries(
@@ -863,7 +873,23 @@ function snapshot(value: string): Record<string, unknown> {
         </p>
       </section>
 
-      <div class="field">
+      <button
+        v-if="hasFriendlyOperations"
+        class="button button--ghost assistant-plan-details-toggle"
+        type="button"
+        :aria-expanded="showPlanDetails"
+        @click="showPlanDetails = !showPlanDetails"
+      >
+        {{
+          $t(
+            showPlanDetails
+              ? "assistant.planEditor.hideDetails"
+              : "assistant.planEditor.showDetails",
+          )
+        }}
+      </button>
+
+      <div v-show="!allOperationsFriendly || showPlanDetails" class="field">
         <span class="assistant-field-label">
           <span>{{ $t("assistant.planEditor.summary") }}</span>
           <button
@@ -912,7 +938,10 @@ function snapshot(value: string): Record<string, unknown> {
             >
           </header>
 
-          <dl class="assistant-plan-operation__identity">
+          <dl
+            v-show="!friendlyPlanOperationType(operation) || showPlanDetails"
+            class="assistant-plan-operation__identity"
+          >
             <div>
               <dt>{{ $t("assistant.planEditor.commandType") }}</dt>
               <dd>{{ operation.value.type }}</dd>
@@ -929,7 +958,10 @@ function snapshot(value: string): Record<string, unknown> {
             </div>
           </dl>
 
-          <label class="field">
+          <label
+            v-show="!friendlyPlanOperationType(operation) || showPlanDetails"
+            class="field"
+          >
             <span>{{ $t("assistant.planEditor.operationTitle") }}</span>
             <input
               v-model="operation.value.title"
@@ -937,7 +969,10 @@ function snapshot(value: string): Record<string, unknown> {
               :disabled="!editable"
             />
           </label>
-          <div class="field">
+          <div
+            v-show="!friendlyPlanOperationType(operation) || showPlanDetails"
+            class="field"
+          >
             <span class="assistant-field-label">
               <span>{{ $t("assistant.planEditor.operationSummary") }}</span>
               <button
@@ -964,7 +999,10 @@ function snapshot(value: string): Record<string, unknown> {
             />
           </div>
 
-          <fieldset class="assistant-plan-target">
+          <fieldset
+            v-show="!friendlyPlanOperationType(operation) || showPlanDetails"
+            class="assistant-plan-target"
+          >
             <legend>{{ $t("assistant.planEditor.target") }}</legend>
             <div class="assistant-plan-target__summary">
               <span class="assistant-plan-target__action">
@@ -1848,6 +1886,10 @@ function snapshot(value: string): Record<string, unknown> {
   min-height: 0;
   overflow: auto;
   padding: 16px;
+}
+.assistant-plan-details-toggle {
+  margin-bottom: 10px;
+  font-size: 0.8rem;
 }
 .assistant-field-label {
   display: flex;

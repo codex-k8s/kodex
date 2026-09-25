@@ -3212,6 +3212,8 @@ const ru = {
       atomic:
         "Скрытых изменений нет. План применяется одной транзакцией или не применяется вовсе.",
       summary: "Что изменит план",
+      showDetails: "Показать пояснения и технические поля",
+      hideDetails: "Скрыть пояснения и технические поля",
       operationTitle: "Название операции",
       operationSummary: "Описание и последствия",
       target: "Объект",
@@ -6688,6 +6690,8 @@ const en = {
       atomic:
         "There are no hidden changes. The plan is applied in one transaction or not applied at all.",
       summary: "What the plan changes",
+      showDetails: "Show explanation and technical fields",
+      hideDetails: "Hide explanation and technical fields",
       operationTitle: "Operation title",
       operationSummary: "Description and consequences",
       target: "Target",

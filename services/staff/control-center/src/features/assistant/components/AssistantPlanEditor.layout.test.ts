@@ -8,6 +8,21 @@ const source = readFileSync(
 );
 
 describe("AssistantPlanEditor layout", () => {
+  it("сначала показывает штатную форму и оставляет пояснения доступными по запросу", () => {
+    expect(source).toContain("const showPlanDetails = ref(false)");
+    expect(source).toContain("showPlanDetails.value = false");
+    expect(source).toContain('v-if="hasFriendlyOperations"');
+    expect(source).toContain(
+      'v-show="!allOperationsFriendly || showPlanDetails"',
+    );
+    expect(source).toContain(
+      'v-show="!friendlyPlanOperationType(operation) || showPlanDetails"',
+    );
+    expect(source).toContain("assistant.planEditor.showDetails");
+    expect(source).toContain("assistant.planEditor.hideDetails");
+    expect(source).toContain("<ProjectFormFields");
+  });
+
   it("показывает понятные поля проекта и сотрудника без редактирования authority", () => {
     expect(source).toContain('v-if="friendlyPlanOperationType(operation)"');
     expect(source).toContain('v-if="!friendlyPlanOperationType(operation)"');
