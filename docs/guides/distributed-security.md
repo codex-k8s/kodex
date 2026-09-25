@@ -1144,6 +1144,13 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   IP с новым полным проверенным DNS snapshot. Перекрытие не продлевает DNS TTL,
   не ослабляет ClientHello SNI или проверку CA/hostname у потребителя и не
   применяется к почтовому профилю.
+- OpenAPI CONNECT использует отдельный ClusterIP Service с selector точного
+  поколения immutable egress-policy. Publisher сначала публикует CNI policy,
+  затем закрывает маршрут старого поколения selector нового, после чего
+  обновляет Pod template и проверяет полный rollout. Пока новый Pod не Ready,
+  OpenAPI вызов получает ограниченный отказ; прежний Pod с устаревшими pins
+  не обслуживает запросы через Service. Остальные listener используют свой
+  Service и не зависят от переключения OpenAPI selector.
 - Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
   Он не получает direct outbound: producer из того же version-pinned typed
   mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.

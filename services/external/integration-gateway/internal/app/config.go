@@ -51,7 +51,7 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/integration-gateway/application-grant/application-grant.jws",
 		InstanceID:                  "integration-gateway-0", CredentialDirectory: "/var/run/secrets/kodex/integration-connections",
 		EgressProxyURL:   "http://egress-gateway.kodex-system.svc.cluster.local:8080",
-		OpenAPIProxyURL:  "http://egress-gateway.kodex-system.svc.cluster.local:8083",
+		OpenAPIProxyURL:  "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083",
 		SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080",
 		StartupTimeout:   30 * time.Second, ShutdownTimeout: 20 * time.Second, RequestTimeout: 3 * time.Second,
 		OperationTimeout: 20 * time.Second, PollInterval: 500 * time.Millisecond, ReadinessInterval: 10 * time.Second, ClaimLimit: 1,
@@ -85,7 +85,7 @@ func (config Config) validate() error {
 		return errors.New("integration-gateway egress proxy is invalid")
 	}
 	openAPIProxy, err := url.Parse(config.OpenAPIProxyURL)
-	if err != nil || openAPIProxy.Scheme != "http" || openAPIProxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8083" || openAPIProxy.Path != "" || openAPIProxy.User != nil || openAPIProxy.RawQuery != "" {
+	if err != nil || openAPIProxy.Scheme != "http" || openAPIProxy.Host != "egress-gateway-openapi.kodex-system.svc.cluster.local:8083" || openAPIProxy.Path != "" || openAPIProxy.User != nil || openAPIProxy.RawQuery != "" {
 		return errors.New("integration-gateway OpenAPI proxy is invalid")
 	}
 	synthetic, err := url.Parse(config.SyntheticBaseURL)

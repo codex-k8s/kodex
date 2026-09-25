@@ -430,28 +430,54 @@ test("локальный OpenAPI импорт, первая привязка и 
       { timeout: 100_000, intervals: [500, 2_000, 5_000] },
     )
     .toBe("CONNECTED");
-  if (process.env.KODEX_E2E_OPENAPI_INVOKE === "1") {
-    const executable = JSON.parse(published.revision.content) as {
-      spec: {
-        capabilities: Array<{
-          key: string;
-          risk: string;
-          openapi?: { operationId: string };
-        }>;
-      };
+  const executable = JSON.parse(published.revision.content) as {
+    spec: {
+      capabilities: Array<{
+        key: string;
+        risk: string;
+        openapi?: { operationId: string };
+      }>;
     };
-    const readKey = executable.spec.capabilities.find(
-      (item) =>
-        item.openapi?.operationId === "getHealth" && item.risk === "READ",
-    )?.key;
+  };
+  const readKey = executable.spec.capabilities.find(
+    (item) => item.openapi?.operationId === "getHealth" && item.risk === "READ",
+  )?.key;
+  expect(readKey).toMatch(/^op\.[a-f0-9]{16}$/);
+  if (!readKey) throw new Error("Imported OpenAPI READ capability is missing");
+  if (process.env.KODEX_E2E_OPENAPI_WORKFLOW_GRANT === "1") {
+    const suffix = randomUUID().slice(0, 8);
+    const project = await mutate<{ ref: string }>(page, "/api/v1/projects", {
+      name: `Локальная проверка MCP ${suffix}`,
+      purpose: "Безопасная проверка разрешения процессу на OpenAPI READ.",
+      language: "ru",
+    });
+    const agent = await mutate<{ ref: string; state: string }>(
+      page,
+      `/api/v1/projects/${project.ref}/agents`,
+      {
+        name: `Исполнитель OpenAPI ${suffix}`,
+        purpose: "Координировать только тестовый процесс чтения.",
+        roleDescription: "Локальная проверка разрешения процессу.",
+        initialInstructions: "Работай только с тестовым процессом.",
+      },
+    );
+    expect(agent.state).toBe("READY");
+    await grantWorkflowOpenAPIThroughUI(
+      page,
+      project.ref,
+      agent.ref,
+      connection.ref,
+      readKey,
+      suffix,
+    );
+  }
+  if (process.env.KODEX_E2E_OPENAPI_INVOKE === "1") {
     const writeKey = executable.spec.capabilities.find(
       (item) =>
         item.openapi?.operationId === "echoWrite" && item.risk === "WRITE",
     )?.key;
-    expect(readKey).toMatch(/^op\.[a-f0-9]{16}$/);
     expect(writeKey).toMatch(/^op\.[a-f0-9]{16}$/);
-    if (!readKey || !writeKey)
-      throw new Error("Imported OpenAPI capabilities are missing");
+    if (!writeKey) throw new Error("Imported OpenAPI capabilities are missing");
     await verifyImportedMCPInvocation(page, connection.ref, readKey, writeKey);
   }
   expect(browserFailures).toEqual([]);
@@ -630,12 +656,22 @@ test("помощник ведёт к credential-форме OpenAPI без уте
 
 async function read<T>(page: Page, path: string): Promise<T> {
   return page.evaluate(async (url) => {
-    const response = await fetch(url);
-    if (!response.ok)
-      throw new Error(
-        `API read failed: ${String(response.status)} ${new URL(url, location.origin).pathname}`,
-      );
-    return (await response.json()) as T;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      let response: Response;
+      try {
+        response = await fetch(url);
+      } catch {
+        if (attempt === 4) throw new Error("API read transport unavailable");
+        await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+        continue;
+      }
+      if (!response.ok)
+        throw new Error(
+          `API read failed: ${String(response.status)} ${new URL(url, location.origin).pathname}`,
+        );
+      return (await response.json()) as T;
+    }
+    throw new Error("API read transport unavailable");
   }, path);
 }
 
@@ -831,6 +867,129 @@ async function verifyImportedMCPInvocation(
   );
 }
 
+async function selectGrantsTab(page: Page): Promise<void> {
+  const tab = page.getByRole("tab", { name: /^Разрешения/ });
+  await expect(tab).toBeVisible({ timeout: 30_000 });
+  await tab.click();
+}
+
+async function openGrantsTab(page: Page): Promise<void> {
+  await gotoWithRetry(page, "/integrations", undefined, {
+    appShell: false,
+  });
+  await expect(page).toHaveURL(/\/integrations(?:[?#]|$)/);
+  await selectGrantsTab(page);
+}
+
+async function grantWorkflowOpenAPIThroughUI(
+  page: Page,
+  projectRef: string,
+  agentRef: string,
+  connectionRef: string,
+  capabilityKey: string,
+  suffix: string,
+): Promise<void> {
+  const workflowName = `Процесс OpenAPI ${suffix}`;
+  const workflow = await mutate<{
+    ref: string;
+    version: number;
+    state: string;
+    validationMessages: string[];
+  }>(page, `/api/v1/projects/${projectRef}/workflows`, {
+    name: workflowName,
+    purpose: "Безопасная проверка READ-разрешения процессу.",
+    coordinatorAgentRef: agentRef,
+    inputFields: [],
+    steps: [
+      {
+        position: 1,
+        name: "Прочитать тестовые данные",
+        purpose: "Проверить точное право на тестовую интеграцию.",
+        agentRef,
+        parallel: false,
+        parallelGroup: 0,
+        timeoutSeconds: 600,
+        expectedResult: "Краткий результат чтения.",
+        humanGate: false,
+        gateDecisions: [],
+        requiredCapabilityKeys: [],
+      },
+    ],
+    maxConcurrency: 1,
+    timeoutSeconds: 1200,
+    completionCriteria: "Только один ограниченный результат чтения.",
+  });
+  expect(workflow.state).toBe("DRAFT");
+  const connection = await read<Connection & { name: string }>(
+    page,
+    `/api/v1/integration-connections/${connectionRef}`,
+  );
+  await openGrantsTab(page);
+  const panel = page.locator(".grant-panel");
+  const choose = async (label: string, query: string): Promise<void> => {
+    await panel.getByRole("button", { name: label, exact: true }).click();
+    const picker = page.getByRole("dialog", { name: label, exact: true });
+    await picker.getByRole("combobox").fill(query);
+    await picker.getByRole("option", { name: new RegExp(query) }).click();
+  };
+  await choose("Подключение", connection.name);
+  await choose("Проект", `Локальная проверка MCP ${suffix}`);
+  await panel.getByLabel("Кому разрешить").selectOption("WORKFLOW");
+  await choose("Получатель разрешения", workflowName);
+  await choose("Возможность", "Проверить чтение");
+  const granted = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/integration-connections/${connectionRef}/grants`,
+  );
+  await panel.getByRole("button", { name: "Выдать разрешение" }).click();
+  expect((await granted).status()).toBe(200);
+  const updated = await read<
+    Connection & {
+      grants: Array<{
+        workflowRef?: string;
+        capabilityKey: string;
+        enabled: boolean;
+      }>;
+    }
+  >(page, `/api/v1/integration-connections/${connectionRef}`);
+  expect(updated.grants).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        workflowRef: workflow.ref,
+        capabilityKey,
+        enabled: true,
+      }),
+    ]),
+  );
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await selectGrantsTab(page);
+  await choose("Подключение", connection.name);
+  await expect(
+    panel
+      .locator(".grant-list .entity-row")
+      .filter({ hasText: workflowName })
+      .filter({ hasText: capabilityKey }),
+  ).toContainText("Процесс");
+  const commandPath = `/api/v1/workflows/${workflow.ref}/commands`;
+  const validated = await mutate<typeof workflow>(
+    page,
+    commandPath,
+    { action: "VALIDATE" },
+    workflow.version,
+  );
+  expect(validated.validationMessages).toEqual([]);
+  expect(validated.state).toBe("VALID");
+  const published = await mutate<typeof workflow>(
+    page,
+    commandPath,
+    { action: "PUBLISH" },
+    validated.version,
+  );
+  expect(published.state).toBe("PUBLISHED");
+}
+
 async function grantScopedOpenAPIThroughUI(
   page: Page,
   connectionRef: string,
@@ -842,8 +1001,7 @@ async function grantScopedOpenAPIThroughUI(
     page,
     `/api/v1/integration-connections/${connectionRef}`,
   );
-  await gotoWithRetry(page, "/integrations");
-  await page.getByRole("tab", { name: /^Разрешения/ }).click();
+  await openGrantsTab(page);
   const panel = page.locator(".grant-panel");
   const choose = async (label: string, query: string): Promise<void> => {
     await panel.getByRole("button", { name: label, exact: true }).click();
@@ -887,7 +1045,7 @@ async function grantScopedOpenAPIThroughUI(
     ]),
   );
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("tab", { name: /^Разрешения/ }).click();
+  await selectGrantsTab(page);
   await choose("Подключение", connection.name);
   await expect(
     panel
@@ -925,8 +1083,7 @@ async function revokeScopedOpenAPIThroughUI(
   expect(grant?.enabled).toBe(true);
   if (!grant) throw new Error("Local OpenAPI grant was not found");
 
-  await gotoWithRetry(page, "/integrations");
-  await page.getByRole("tab", { name: /^Разрешения/ }).click();
+  await openGrantsTab(page);
   const panel = page.locator(".grant-panel");
   await panel.getByRole("button", { name: "Подключение", exact: true }).click();
   const picker = page.getByRole("dialog", {
@@ -1127,7 +1284,17 @@ async function waitForRun(
   await expect
     .poll(
       async () => {
-        const run = await read<Run>(page, `/api/v1/runs/${runRef}`);
+        let run: Run;
+        try {
+          run = await read<Run>(page, `/api/v1/runs/${runRef}`);
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message.includes("API read transport unavailable")
+          )
+            return "PENDING";
+          throw error;
+        }
         if (
           ["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state) &&
           run.state !== expected

@@ -27,7 +27,7 @@ updated: 2026-09-05
 | CONNECT port | `8080/TCP`, имя `connect`; bodyless `CONNECT` и compatibility `GET /readyz` |
 | STT CONNECT port | `8081/TCP`, имя `stt-connect`; только профиль `openai-stt` и workload `stt-tts-service` |
 | Mail CONNECT port | `8082/TCP`, имя `mail-connect`; только `email-mail/email-bridge/email.transport`, отдельная immutable проекция |
-| OpenAPI CONNECT port | `8083/TCP`, имя `openapi-connect`; только проверенные HTTPS origins из owner-проекции интеграций |
+| OpenAPI CONNECT port | `8083/TCP`, имя `openapi-connect`; отдельный ClusterIP Service `egress-gateway-openapi` выбирает только Pod текущего поколения owner-проекции, остальные listener не переключаются |
 | Technical Service | `egress-gateway-technical.kodex-system.svc.cluster.local`; публикует и not-ready Pod для закрытого readback |
 | Technical port | `9090/TCP`, имя `metrics` |
 | Endpoint Pod labels | `app.kubernetes.io/name=egress-gateway`, `app.kubernetes.io/component=platform-egress` |

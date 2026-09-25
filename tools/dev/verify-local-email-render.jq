@@ -105,6 +105,7 @@ any(resource("Role"; "control-plane-email-projection-writer");
   .rules == [
     {apiGroups:[""],resources:["secrets"],resourceNames:["email-bridge-mailbox-projection"],verbs:["get","update"]},
     {apiGroups:["apps"],resources:["deployments"],resourceNames:["email-bridge","egress-gateway"],verbs:["get","update"]},
+    {apiGroups:[""],resources:["services"],resourceNames:["egress-gateway-openapi"],verbs:["get","update"]},
     {apiGroups:["networking.k8s.io"],resources:["networkpolicies"],resourceNames:["egress-gateway-mail-destinations","egress-gateway-integration-destinations"],verbs:["get","update"]},
     {apiGroups:[""],resources:["configmaps"],verbs:["get","create"]}
   ]) and
@@ -123,6 +124,19 @@ any(resource("ClusterRoleBinding"; "control-plane-mail-publication-admission-rea
 all($admission[]; . as $expected |
   any($all[]; .kind == $expected.kind and .metadata.name == $expected.metadata.name and
     .spec == $expected.spec)) and
+any(resource("Service"; "egress-gateway-openapi");
+  .spec.type == "ClusterIP" and
+  .spec.selector == {"app.kubernetes.io/name":"egress-gateway",
+    "app.kubernetes.io/component":"platform-egress",
+    "kodex.dev/integration-egress-generation":"1"} and
+  .spec.ports == [{name:"openapi-connect",port:8083,targetPort:"openapi-connect",protocol:"TCP"}]) and
+any(resource("Service"; "egress-gateway");
+  all(.spec.ports[]; .name != "openapi-connect" and .port != 8083)) and
+any(resource("Deployment"; "egress-gateway");
+  .spec.template.metadata.labels["kodex.dev/integration-egress-generation"] == "1") and
+any(resource("ConfigMap"; "integration-gateway-runtime");
+  .data.INTEGRATION_GATEWAY_OPENAPI_PROXY_URL ==
+    "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083") and
 any(resource("Service"; "email-bridge");
   .spec.selector["app.kubernetes.io/name"] == "email-bridge" and
   any(.spec.ports[]; .name == "https" and .port == 443 and .targetPort == "https")) and

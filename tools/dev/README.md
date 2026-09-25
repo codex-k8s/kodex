@@ -141,12 +141,18 @@ render и не перезапускает StatefulSet. Это позволяет
 
 `--stage integration-egress` после `migrate` доставляет только admission
 policy и bindings публикации, исходную immutable ConfigMap, RBAC, Service
-и NetworkPolicy для OpenAPI-интеграций. Затем выбранные Control Plane,
+`egress-gateway-openapi` с selector поколения и NetworkPolicy для
+OpenAPI-интеграций. Затем выбранные Control Plane,
 integration-gateway и egress-gateway обновляются через `--stage core
 --workload <имя>`. При отсутствии опубликованных подключений порт `8083`
 штатно отвечает `503`, не меняя общую готовность Pod. Положительный вызов
 проверяется отдельно с опубликованной definition и разрешённым origin;
 успешный apply стадии этого не доказывает.
+При повторном `core --workload egress-gateway` helper сохраняет только
+проверенные live-поля owner-проекции (поколение, digest, immutable ConfigMap)
+и не откатывает их к bootstrap-поколению из render. OpenAPI Service выбирает
+только Pod с этим поколением; во время смены policy старый Pod не получает
+новые OpenAPI CONNECT, а остальные listener остаются на прежнем Service.
 
 `--stage supply-chain` выполняется после `data`, `network` и `migrate`. Стадия
 разворачивает пять exact registry endpoints, импортирует закреплённые OCI

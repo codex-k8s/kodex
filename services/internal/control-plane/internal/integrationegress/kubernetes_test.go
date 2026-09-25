@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func documentFixture() shared.Document {
@@ -39,6 +40,7 @@ func TestDeploymentSwitchIsExactAndFenced(t *testing.T) {
 		t.Fatal(err)
 	}
 	if deployment.Spec.Template.Annotations[generationAnnotation] != "1" ||
+		deployment.Spec.Template.Labels[generationLabel] != "1" ||
 		deployment.Spec.Template.Spec.Containers[0].Env[3].Value != document.Digest() ||
 		deployment.Spec.Template.Spec.Volumes[0].ConfigMap.Name != "egress-gateway-integration-"+document.Digest()[:24] {
 		t.Fatal("deployment did not mount exact immutable policy")
@@ -65,6 +67,57 @@ func TestDeploymentSwitchIsExactAndFenced(t *testing.T) {
 	missing.Spec.Template.Spec.Containers[0].Ports = nil
 	if err := setDeployment(missing, document, "other"); err == nil {
 		t.Fatal("missing listener port accepted")
+	}
+}
+
+func openAPIServiceFixture() *corev1.Service {
+	return &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: openAPIServiceName, Namespace: namespace,
+		Labels: map[string]string{"app.kubernetes.io/name": deploymentName, "app.kubernetes.io/component": "platform-egress"}},
+		Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP,
+			Selector: map[string]string{"app.kubernetes.io/name": deploymentName, "app.kubernetes.io/component": "platform-egress", generationLabel: "1"},
+			Ports: []corev1.ServicePort{{Name: "openapi-connect", Port: 8083, Protocol: corev1.ProtocolTCP,
+				TargetPort: intstr.FromString("openapi-connect")}}}}
+}
+
+func TestOpenAPIServiceSwitchIsExactAndFenced(t *testing.T) {
+	document := documentFixture()
+	document.Generation = 2
+	service := openAPIServiceFixture()
+	if err := setOpenAPIService(service, document); err != nil {
+		t.Fatal(err)
+	}
+	if service.Spec.Selector[generationLabel] != "2" ||
+		service.Annotations[generationAnnotation] != "2" ||
+		service.Annotations[sourceAnnotation] != document.SourceDigest {
+		t.Fatal("OpenAPI Service did not select the exact published generation")
+	}
+	if err := setOpenAPIService(service, document); err != nil {
+		t.Fatal("identical replay must be idempotent", err)
+	}
+	stale := document
+	stale.Generation = 1
+	if err := setOpenAPIService(service, stale); err == nil {
+		t.Fatal("stale generation replaced OpenAPI Service")
+	}
+	forged := service.DeepCopy()
+	forged.Spec.Selector[generationLabel] = "1"
+	if err := setOpenAPIService(forged, document); err == nil {
+		t.Fatal("selector diverged from the fenced generation")
+	}
+	foreign := openAPIServiceFixture()
+	foreign.Spec.Selector["app.kubernetes.io/component"] = "other"
+	if err := setOpenAPIService(foreign, document); err == nil {
+		t.Fatal("foreign Service selector accepted")
+	}
+	broad := openAPIServiceFixture()
+	delete(broad.Spec.Selector, generationLabel)
+	if err := setOpenAPIService(broad, document); err == nil {
+		t.Fatal("unfenced broad Service selector accepted")
+	}
+	external := openAPIServiceFixture()
+	external.Spec.ExternalIPs = []string{"203.0.113.10"}
+	if err := setOpenAPIService(external, document); err == nil {
+		t.Fatal("Service with external IP accepted")
 	}
 }
 

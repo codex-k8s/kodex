@@ -28,7 +28,7 @@ func TestNewUsesOnlyExactProviderEndpoints(t *testing.T) {
 	adapter, err := New(Config{
 		CredentialDirectory: t.TempDir(),
 		ProxyURL:            "http://egress-gateway.kodex-system.svc.cluster.local:8080",
-		OpenAPIProxyURL:     "http://egress-gateway.kodex-system.svc.cluster.local:8083",
+		OpenAPIProxyURL:     "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083",
 		SyntheticBaseURL:    "http://integration-synthetic.kodex-system.svc.cluster.local:8080",
 		Timeout:             10 * time.Second,
 	})
@@ -36,9 +36,9 @@ func TestNewUsesOnlyExactProviderEndpoints(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 	for _, invalid := range []Config{
-		{CredentialDirectory: t.TempDir(), ProxyURL: "http://other:8080", OpenAPIProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8083", SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
+		{CredentialDirectory: t.TempDir(), ProxyURL: "http://other:8080", OpenAPIProxyURL: "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083", SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
 		{CredentialDirectory: t.TempDir(), ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", OpenAPIProxyURL: "http://other:8083", SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
-		{CredentialDirectory: t.TempDir(), ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", OpenAPIProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8083", SyntheticBaseURL: "http://forged.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
+		{CredentialDirectory: t.TempDir(), ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", OpenAPIProxyURL: "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083", SyntheticBaseURL: "http://forged.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
 	} {
 		if _, err := New(invalid); err == nil {
 			t.Fatal("New() accepted alternate provider endpoint")

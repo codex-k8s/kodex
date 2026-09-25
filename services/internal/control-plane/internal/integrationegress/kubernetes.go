@@ -25,6 +25,8 @@ import (
 const (
 	namespace            = "kodex-system"
 	deploymentName       = "egress-gateway"
+	openAPIServiceName   = "egress-gateway-openapi"
+	generationLabel      = "kodex.dev/integration-egress-generation"
 	generationAnnotation = "kodex.dev/integration-egress-generation"
 	sourceAnnotation     = "kodex.dev/integration-egress-source-digest"
 )
@@ -205,6 +207,54 @@ func checkGatewaySource(deployment *appsv1.Deployment, document shared.Document)
 	return nil
 }
 
+// Отдельный Service направляет OpenAPI CONNECT только в Pod с поколением,
+// которое уже опубликовано владельцем. Остальные listener не меняют маршрут.
+func checkOpenAPIServiceSource(service *corev1.Service, document shared.Document) error {
+	if service.Name != openAPIServiceName || service.Namespace != namespace ||
+		service.Labels["app.kubernetes.io/name"] != deploymentName ||
+		service.Labels["app.kubernetes.io/component"] != "platform-egress" ||
+		service.Spec.Type != corev1.ServiceTypeClusterIP || len(service.Spec.ExternalIPs) != 0 ||
+		service.Spec.LoadBalancerIP != "" || service.Spec.PublishNotReadyAddresses ||
+		len(service.Spec.Selector) != 3 ||
+		service.Spec.Selector["app.kubernetes.io/name"] != deploymentName ||
+		service.Spec.Selector["app.kubernetes.io/component"] != "platform-egress" ||
+		len(service.Spec.Ports) != 1 || service.Spec.Ports[0].Name != "openapi-connect" ||
+		service.Spec.Ports[0].Port != 8083 || service.Spec.Ports[0].NodePort != 0 ||
+		service.Spec.Ports[0].Protocol != corev1.ProtocolTCP ||
+		service.Spec.Ports[0].TargetPort.StrVal != "openapi-connect" || service.Spec.Ports[0].TargetPort.IntVal != 0 {
+		return ErrConflict
+	}
+	current := service.Spec.Selector[generationLabel]
+	if service.Annotations[generationAnnotation] == "" {
+		// Только точный repo-owned bootstrap Service может восстановиться после
+		// повторного render; иной unfenced selector не получает полномочие.
+		if current != "1" {
+			return ErrConflict
+		}
+		return nil
+	}
+	if current != service.Annotations[generationAnnotation] {
+		return ErrConflict
+	}
+	return checkFence(service.Annotations, document)
+}
+
+func setOpenAPIService(service *corev1.Service, document shared.Document) error {
+	if document.Validate() != nil {
+		return ErrInvalid
+	}
+	if err := checkOpenAPIServiceSource(service, document); err != nil {
+		return err
+	}
+	if service.Annotations == nil {
+		service.Annotations = map[string]string{}
+	}
+	service.Annotations[generationAnnotation] = strconv.FormatInt(document.Generation, 10)
+	service.Annotations[sourceAnnotation] = document.SourceDigest
+	service.Spec.Selector[generationLabel] = strconv.FormatInt(document.Generation, 10)
+	return nil
+}
+
 func setDeployment(deployment *appsv1.Deployment, document shared.Document, configMapName string) error {
 	if document.Validate() != nil {
 		return ErrInvalid
@@ -217,6 +267,10 @@ func setDeployment(deployment *appsv1.Deployment, document shared.Document, conf
 	}
 	deployment.Spec.Template.Annotations[generationAnnotation] = strconv.FormatInt(document.Generation, 10)
 	deployment.Spec.Template.Annotations[sourceAnnotation] = document.SourceDigest
+	if deployment.Spec.Template.Labels == nil {
+		deployment.Spec.Template.Labels = map[string]string{}
+	}
+	deployment.Spec.Template.Labels[generationLabel] = strconv.FormatInt(document.Generation, 10)
 	containers := 0
 	for index := range deployment.Spec.Template.Spec.Containers {
 		container := &deployment.Spec.Template.Spec.Containers[index]
@@ -358,6 +412,23 @@ func (publisher *Kubernetes) Publish(ctx context.Context, document shared.Docume
 		return ErrConflict
 	}
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current, err := publisher.client.CoreV1().Services(namespace).Get(ctx, openAPIServiceName, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		expected := current.DeepCopy()
+		if err := setOpenAPIService(expected, document); err != nil {
+			return err
+		}
+		if sameJSON(current.Spec, expected.Spec) && sameJSON(current.Annotations, expected.Annotations) {
+			return nil
+		}
+		_, err = publisher.client.CoreV1().Services(namespace).Update(ctx, expected, metav1.UpdateOptions{})
+		return err
+	}); err != nil {
+		return ErrConflict
+	}
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, err := publisher.client.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -402,6 +473,15 @@ func (publisher *Kubernetes) Check(ctx context.Context, document shared.Document
 		currentNetwork.Labels["app.kubernetes.io/component"] != "platform-egress" ||
 		!sameJSON(currentNetwork.Spec, network.Spec) || currentNetwork.Annotations[generationAnnotation] != network.Annotations[generationAnnotation] ||
 		currentNetwork.Annotations[sourceAnnotation] != network.Annotations[sourceAnnotation] {
+		return ErrConflict
+	}
+	service, err := publisher.client.CoreV1().Services(namespace).Get(ctx, openAPIServiceName, metav1.GetOptions{})
+	if err != nil {
+		return ErrUnavailable
+	}
+	expectedService := service.DeepCopy()
+	if setOpenAPIService(expectedService, document) != nil || !sameJSON(service.Spec, expectedService.Spec) ||
+		!sameJSON(service.Annotations, expectedService.Annotations) {
 		return ErrConflict
 	}
 	deployment, err := publisher.client.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})

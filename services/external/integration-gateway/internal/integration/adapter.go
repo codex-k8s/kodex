@@ -123,7 +123,7 @@ func New(config Config) (*Adapter, error) {
 		return nil, errors.New("integration adapter proxy is invalid")
 	}
 	openAPIProxy, err := url.Parse(config.OpenAPIProxyURL)
-	if err != nil || openAPIProxy.Scheme != "http" || openAPIProxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8083" ||
+	if err != nil || openAPIProxy.Scheme != "http" || openAPIProxy.Host != "egress-gateway-openapi.kodex-system.svc.cluster.local:8083" ||
 		openAPIProxy.Path != "" || openAPIProxy.RawQuery != "" || openAPIProxy.User != nil {
 		return nil, errors.New("integration adapter OpenAPI proxy is invalid")
 	}
