@@ -139,6 +139,12 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 				return commandOutcome{}, err
 			}
 			payload.Operations[index] = updated
+		case "PUBLISH_INTEGRATION_DEFINITION":
+			updated, err := rehydrateEditedAssistantIntegrationDefinitionPublication(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
 		}
 	}
 	operations, err := normalizeAssistantOperations(payload.Operations, projectRef)
@@ -284,6 +290,13 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		}
 		if operation.Type == "UPDATE_ROLE_IMAGE_RECIPE" {
 			matching, snapshotErr := repository.assistantRoleImageUpdateSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "PUBLISH_INTEGRATION_DEFINITION" {
+			matching, snapshotErr := repository.assistantIntegrationDefinitionPublicationSnapshotMatches(ctx, tx, scope, operation)
 			if snapshotErr != nil || !matching {
 				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
 				continue

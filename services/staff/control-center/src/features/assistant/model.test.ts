@@ -995,6 +995,43 @@ describe("assistant plan editor model", () => {
     expect(changed?.before.name).toBe("Source");
   });
 
+  it("показывает публикацию интеграции без редактирования закреплённой ревизии", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "PUBLISH_INTEGRATION_DEFINITION",
+        action: "UPDATE",
+        target: {
+          kind: "INTEGRATION_DEFINITION",
+          ref: "mcfg_source",
+          name: "Source API",
+          version: 4,
+        },
+        expectedVersion: 4,
+        parameters: {
+          configurationRef: "mcfg_source",
+          revisionRef: "mrev_valid",
+          revisionDigest: "a".repeat(64),
+        },
+        before: { currentRevisionRef: "mrev_old" },
+        after: { currentRevisionRef: "mrev_valid" },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(friendlyPlanOperationType(first)).toBe(
+      "PUBLISH_INTEGRATION_DEFINITION",
+    );
+    expect(operationInputs(editable)[0]?.parameters).toEqual({
+      configurationRef: "mcfg_source",
+      revisionRef: "mrev_valid",
+      revisionDigest: "a".repeat(64),
+    });
+    first.value.target.kind = "PROJECT";
+    expect(friendlyPlanOperationType(first)).toBeUndefined();
+  });
+
   it("показывает запуск процесса как форму без доверия к свободному target kind", () => {
     const editable = editableOperations([
       {

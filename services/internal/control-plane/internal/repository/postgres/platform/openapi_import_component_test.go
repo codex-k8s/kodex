@@ -98,6 +98,58 @@ func testOpenAPIImportLifecycle(t *testing.T, ctx context.Context, repository *R
 	if err != nil || validated.ManagedRevision == nil || validated.ManagedRevision.State != "VALID" {
 		t.Fatalf("bounded OpenAPI draft did not validate: %v", err)
 	}
+	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerScope, err := repository.resolveScope(ctx, resolvedOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planTx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextDescriptor, err := repository.resolveAssistantContext(ctx, planTx, ownerScope,
+		entity.AssistantContextDescriptor{Route: "/configurations/INTEGRATION_DEFINITION"}, "")
+	if err != nil || !contains(contextDescriptor.AllowedOperations, "PUBLISH_INTEGRATION_DEFINITION") {
+		t.Fatalf("organization assistant context cannot publish a validated integration: %v", err)
+	}
+	operation := entity.AssistantPlanOperation{Type: "PUBLISH_INTEGRATION_DEFINITION", Key: "publish-imported-definition",
+		Title: "Опубликовать определение", Summary: "Опубликовать проверенную ревизию",
+		Parameters: map[string]any{"configurationRef": created.ManagedConfiguration.Ref, "revisionRef": created.ManagedRevision.Ref}}
+	operation, err = repository.hydrateAssistantIntegrationDefinitionPublication(ctx, planTx, ownerScope, "", operation)
+	if err != nil {
+		t.Fatalf("hydrate safe publication metadata: %v", err)
+	}
+	operation, err = normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planned, err := assistantOperationCommand(operation)
+	if err != nil || planned.Kind != command.PublishIntegrationDefinition ||
+		repository.authorizeCommand(ctx, planTx, ownerScope, planned) != nil {
+		t.Fatalf("validated definition was not mapped to the authorized publish command: %v", err)
+	}
+	matching, err := repository.assistantIntegrationDefinitionPublicationSnapshotMatches(ctx, planTx, ownerScope, operation)
+	if err != nil || !matching {
+		t.Fatalf("fresh validated publication snapshot was rejected: %v", err)
+	}
+	encodedOperation, err := json.Marshal(operation)
+	if err != nil || strings.Contains(string(encodedOperation), "api.example.test") || strings.Contains(string(encodedOperation), "getHealth") ||
+		strings.Contains(string(encodedOperation), "updateTicket") {
+		t.Fatalf("assistant plan exposed OpenAPI source or operation content: %v", err)
+	}
+	foreignScope := ownerScope
+	foreignScope.organizationID = "10000000-0000-4000-8000-000000000099"
+	if _, err := repository.hydrateAssistantIntegrationDefinitionPublication(ctx, planTx, foreignScope, "", entity.AssistantPlanOperation{
+		Parameters: map[string]any{"configurationRef": created.ManagedConfiguration.Ref, "revisionRef": created.ManagedRevision.Ref},
+	}); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatalf("cross-organization publication resolved a hidden definition: %v", err)
+	}
+	if err := planTx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
 	connection, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "openapi-import-connection-create"},
 		Payload:  command.ConnectionInput{DefinitionKey: "openapi-mcp", Name: "Заявки", PublicConfiguration: map[string]any{"base_url": "https://api.example.test"}}})
@@ -116,6 +168,17 @@ func testOpenAPIImportLifecycle(t *testing.T, ctx context.Context, repository *R
 		Payload:  command.ManagedConfigurationInput{ConfigurationRef: created.ManagedConfiguration.Ref, RevisionRef: created.ManagedRevision.Ref}})
 	if err != nil || published.ManagedRevision == nil || published.ManagedRevision.State != "PUBLISHED" {
 		t.Fatalf("publish OpenAPI definition: %v", err)
+	}
+	staleTx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matching, err = repository.assistantIntegrationDefinitionPublicationSnapshotMatches(ctx, staleTx, ownerScope, operation)
+	if err == nil && matching {
+		t.Fatal("a published revision remained applicable to the old assistant plan")
+	}
+	if err := staleTx.Rollback(ctx); err != nil {
+		t.Fatal(err)
 	}
 	impact, err := service.GetManagedConfigurationImpact(ctx, owner, created.ManagedConfiguration.Ref, created.ManagedRevision.Ref, query.Filter{})
 	if err != nil || impact.Digest == "" {
@@ -206,7 +269,7 @@ SET updated_at=clock_timestamp()-INTERVAL '6 seconds' WHERE ref=$1 AND state='DU
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "openapi-import-permanent-test", ExpectedVersion: &bound.Version},
-		Payload: command.ConnectionInput{Ref: bound.Ref}}); err != nil {
+		Payload:  command.ConnectionInput{Ref: bound.Ref}}); err != nil {
 		t.Fatalf("start permanent failure test: %v", err)
 	}
 	permanentClaim := claimTest()
@@ -223,7 +286,7 @@ SET updated_at=clock_timestamp()-INTERVAL '6 seconds' WHERE ref=$1 AND state='DU
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "openapi-import-disable-due-test", ExpectedVersion: &bound.Version},
-		Payload: command.ConnectionInput{Ref: bound.Ref}}); err != nil {
+		Payload:  command.ConnectionInput{Ref: bound.Ref}}); err != nil {
 		t.Fatalf("start disable-due test: %v", err)
 	}
 	dueClaim := claimTest()

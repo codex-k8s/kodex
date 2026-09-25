@@ -1484,6 +1484,8 @@ message AssistantPlanOperation {
     TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT = 17;
     // Изменить существующий каталожный рецепт образа по точной версии и поставить новую сборку.
     TYPE_UPDATE_ROLE_IMAGE_RECIPE = 18;
+    // Опубликовать уже проверенную ревизию определения интеграции после подтверждения владельца.
+    TYPE_PUBLISH_INTEGRATION_DEFINITION = 19;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

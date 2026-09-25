@@ -613,6 +613,7 @@ const ru = {
       "Выберите проект. Шаблон промпта и конфигурация образа роли создаются только в выбранном проекте.",
     validate: "Проверить",
     publish: "Опубликовать",
+    publishWithAssistant: "Опубликовать с помощником",
     impact: "Влияние ревизии",
     rebind: "Перепривязать выбранные",
     source: "Источник",
@@ -2941,6 +2942,10 @@ const ru = {
     },
   },
   assistant: {
+    replaceDraftConfirm:
+      "Заменить текущий неотправленный текст запросом на публикацию интеграции?",
+    publishIntegrationRequest:
+      "Предложи план публикации проверенного определения интеграции: конфигурация {configurationRef}, ревизия {revisionRef}. Не включай содержимое OpenAPI в план; используй только эти ссылки. Я проверю план перед применением.",
     openSecretForm: "Открыть защищённую форму нового секрета",
     integrationDraftCreated:
       "Черновик интеграции создан. Проверьте, валидируйте и опубликуйте его перед созданием подключения.",
@@ -2976,6 +2981,7 @@ const ru = {
       CREATE_SCHEDULE: "Создать Автоматизацию",
       LAUNCH_RUN: "Запустить Run",
       CREATE_INTEGRATION_CONNECTION: "Создать подключение",
+      PUBLISH_INTEGRATION_DEFINITION: "Опубликовать интеграцию",
       TEST_INTEGRATION_CONNECTION: "Проверить подключение",
       ARCHIVE_AGENT: "Архивировать сотрудника",
       ARCHIVE_WORKFLOW: "Архивировать Workflow",
@@ -3193,6 +3199,12 @@ const ru = {
       targetVersion: "Версия объекта",
       friendlyHint:
         "Проверьте данные перед сохранением. Изменение плана требует новой проверки перед применением.",
+      integrationPublicationBoundary:
+        "Будет опубликована проверенная ревизия определения интеграции. Содержимое OpenAPI и секреты не передаются помощнику и не редактируются в этом плане.",
+      integrationPublicationName: "Интеграция",
+      integrationPublicationRevision: "Проверенная ревизия",
+      integrationPublicationNextSteps:
+        "Если определение изменилось, вернитесь в диалог и попросите новый план. После публикации настройте подключение и выдайте нужные разрешения отдельно.",
       entityName: "Название",
       entityPurpose: "Назначение",
       projectLanguage: "Язык проекта",
@@ -3793,6 +3805,7 @@ const en = {
       "Select a project. Prompt templates and role image configurations can only be created in a selected project.",
     validate: "Validate",
     publish: "Publish",
+    publishWithAssistant: "Publish with assistant",
     impact: "Revision impact",
     rebind: "Rebind selected",
     source: "Source",
@@ -6375,6 +6388,10 @@ const en = {
   },
   assistant: {
     ...ru.assistant,
+    replaceDraftConfirm:
+      "Replace the unsent draft with an integration publication request?",
+    publishIntegrationRequest:
+      "Propose a plan to publish the validated integration definition: configuration {configurationRef}, revision {revisionRef}. Do not include OpenAPI content in the plan; use only these references. I will review the plan before applying it.",
     openSecretForm: "Open the protected new-secret form",
     integrationDraftCreated:
       "Integration draft created. Review, validate, and publish it before connecting.",
@@ -6409,6 +6426,7 @@ const en = {
       CREATE_SCHEDULE: "Create Automation",
       LAUNCH_RUN: "Launch Run",
       CREATE_INTEGRATION_CONNECTION: "Create connection",
+      PUBLISH_INTEGRATION_DEFINITION: "Publish integration",
       TEST_INTEGRATION_CONNECTION: "Test connection",
       ARCHIVE_AGENT: "Archive agent",
       ARCHIVE_WORKFLOW: "Archive Workflow",
@@ -6621,6 +6639,12 @@ const en = {
       targetVersion: "Target version",
       friendlyHint:
         "Review the details before saving. Changes to the plan require a new validation before applying.",
+      integrationPublicationBoundary:
+        "A validated integration definition revision will be published. OpenAPI content and secrets are not sent to the assistant or edited in this plan.",
+      integrationPublicationName: "Integration",
+      integrationPublicationRevision: "Validated revision",
+      integrationPublicationNextSteps:
+        "If the definition changed, return to the conversation and request a new plan. Configure a connection and grant the required permissions after publication.",
       entityName: "Name",
       entityPurpose: "Purpose",
       projectLanguage: "Project language",

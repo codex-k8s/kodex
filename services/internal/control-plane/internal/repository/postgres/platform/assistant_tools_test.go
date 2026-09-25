@@ -27,6 +27,56 @@ func TestAssistantOperationCommandUsesClosedSpecializedRegistry(t *testing.T) {
 	}
 }
 
+func TestAssistantIntegrationDefinitionPublicationRequiresPinnedMetadata(t *testing.T) {
+	t.Parallel()
+	version := int64(4)
+	digest := strings.Repeat("a", 64)
+	operation := entity.AssistantPlanOperation{
+		Type: "PUBLISH_INTEGRATION_DEFINITION", Key: "publish-definition", Title: "Publish definition", Summary: "Publish validated definition",
+		Target:          entity.AssistantPlanTarget{Kind: "INTEGRATION_DEFINITION", Ref: "mcfg_test", Name: "Tickets", Version: &version},
+		ExpectedVersion: &version,
+		Parameters:      map[string]any{"configurationRef": "mcfg_test", "revisionRef": "mrev_test", "revisionDigest": digest},
+		Before:          map[string]any{"currentRevisionRef": "", "revisionState": "VALID", "revisionDigest": digest},
+		After:           map[string]any{"currentRevisionRef": "mrev_test", "revisionState": "PUBLISHED", "revisionDigest": digest},
+		Selected:        true,
+	}
+	if !assistantOperationMatchesContext("", "", operation) || assistantOperationMatchesContext("PROJECT", "prj_test", operation) {
+		t.Fatal("publication was permitted outside organization context")
+	}
+	normalized, err := normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.PublishIntegrationDefinition || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != version {
+		t.Fatalf("publication did not map to specialized command: kind=%q err=%v", mapped.Kind, err)
+	}
+	payload := mapped.Payload.(command.ManagedConfigurationInput)
+	if payload.ConfigurationRef != "mcfg_test" || payload.RevisionRef != "mrev_test" || payload.Content != "" {
+		t.Fatalf("publication command carried unapproved content: %#v", payload)
+	}
+	for _, key := range []string{"source", "secretValue", "ownerID"} {
+		forged := normalized
+		forged.Input = cloneAssistantFields(normalized.Input)
+		forged.Input[key] = "untrusted"
+		if _, err := assistantOperationCommand(forged); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("publication accepted %s: %v", key, err)
+		}
+	}
+	forged := normalized
+	forged.Input = cloneAssistantFields(normalized.Input)
+	forged.Input["revisionDigest"] = strings.Repeat("z", 64)
+	if _, err := assistantOperationCommand(forged); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("publication accepted invalid digest: %v", err)
+	}
+	edited := normalized
+	edited.Parameters = cloneAssistantFields(normalized.Parameters)
+	edited.Parameters["revisionRef"] = "mrev_other"
+	if _, err := rehydrateEditedAssistantIntegrationDefinitionPublication(operation, edited); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("draft edit switched revision: %v", err)
+	}
+}
+
 func TestAssistantOperationCommandBuildsHydratedProjectUpdate(t *testing.T) {
 	t.Parallel()
 	version := int64(7)

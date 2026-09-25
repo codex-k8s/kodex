@@ -136,7 +136,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatal("assistant plan envelope lost the allowed operation types")
 	}
 	oneOf := assistantPlanOperationSchemas(input)
-	if len(oneOf) != 15 {
+	if len(oneOf) != 16 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
@@ -189,10 +189,14 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	if len(stepProperties["parallelGroup"].(map[string]any)["oneOf"].([]map[string]any)) != 2 {
 		t.Fatalf("workflow schema must admit numeric and named parallel groups: %#v", stepProperties["parallelGroup"])
 	}
-	for _, operationType := range []string{"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION"} {
+	for _, operationType := range []string{"CREATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION"} {
 		if byType[operationType] == nil {
 			t.Fatalf("assistant tool lost specialized operation %q", operationType)
 		}
+	}
+	publication := byType["PUBLISH_INTEGRATION_DEFINITION"]["properties"].(map[string]any)
+	if len(publication) != 2 || publication["configurationRef"] == nil || publication["revisionRef"] == nil {
+		t.Fatalf("publication schema exposed raw specification or authority fields: %#v", publication)
 	}
 	grant := byType["CHANGE_INTEGRATION_GRANT"]
 	if len(grant["oneOf"].([]map[string]any)) != 2 {
@@ -242,7 +246,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
 	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 0 ||
-		len(catalog["operation_types"].([]string)) != 15 {
+		len(catalog["operation_types"].([]string)) != 16 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
@@ -250,7 +254,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
 	if err != nil || len(compact.(map[string]any)["operation_schemas"].([]map[string]any)) != 0 ||
-		len(compact.(map[string]any)["operation_types"].([]string)) != 15 {
+		len(compact.(map[string]any)["operation_types"].([]string)) != 16 {
 		t.Fatalf("compact configuration catalog is invalid: %v", err)
 	}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN", "CREATE_WORKFLOW"}})

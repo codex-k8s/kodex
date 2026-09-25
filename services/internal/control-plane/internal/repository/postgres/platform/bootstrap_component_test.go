@@ -6612,7 +6612,9 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	if turn.Conversation == nil || turn.Conversation.TitleSource != "SERVER_DEFAULT" ||
 		turn.Conversation.TitleRevision != 1 || turn.Conversation.Context.Route != "" ||
-		len(turn.Conversation.Context.AllowedOperations) != 2 {
+		!reflect.DeepEqual(turn.Conversation.Context.AllowedOperations, []string{
+			"CREATE_PROJECT", "CREATE_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION",
+		}) {
 		t.Fatalf("assistant turn returned incomplete conversation: %#v", turn.Conversation)
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ArchiveAssistantConversation, Principal: owner,

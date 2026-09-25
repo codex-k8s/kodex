@@ -136,7 +136,7 @@ func assistantOperationType(value string) bool {
 	switch value {
 	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
-		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
+		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
 		return true
 	default:
@@ -146,6 +146,8 @@ func assistantOperationType(value string) bool {
 
 func assistantOperationMatchesContext(contextKind, contextRef string, operation entity.AssistantPlanOperation) bool {
 	switch operation.Type {
+	case "PUBLISH_INTEGRATION_DEFINITION":
+		return contextKind == "" && contextRef == ""
 	case "UPDATE_AGENT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		return contextKind == "AGENT" && contextRef != "" && assistantString(operation.Parameters, "agentRef") == contextRef
 	case "UPDATE_WORKFLOW":
@@ -179,6 +181,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "UPDATE_ROLE_IMAGE_RECIPE" {
 		return repository.hydrateAssistantRoleImageUpdate(ctx, tx, actorScope, projectRef, operation)
+	}
+	if operation.Type == "PUBLISH_INTEGRATION_DEFINITION" {
+		return repository.hydrateAssistantIntegrationDefinitionPublication(ctx, tx, actorScope, projectRef, operation)
 	}
 
 	if targetKind, targetName, ok := assistantCreateTarget(operation.Type, operation.Parameters); ok {
@@ -538,7 +543,7 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
-	case "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
+	case "UPDATE_PROJECT", "UPDATE_AGENT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
 		expectedAction = "ARCHIVE"
@@ -591,6 +596,9 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	case "UPDATE_ROLE_IMAGE_RECIPE":
 		expectedTargetKind = "ROLE_IMAGE_RECIPE"
 		expectedTargetRef = assistantString(operation.Parameters, "recipeRef")
+	case "PUBLISH_INTEGRATION_DEFINITION":
+		expectedTargetKind = "INTEGRATION_DEFINITION"
+		expectedTargetRef = assistantString(operation.Parameters, "configurationRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		expectedTargetKind = "AGENT"
 		expectedTargetRef = assistantString(operation.Parameters, "agentRef")
@@ -787,6 +795,8 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		result.Kind, result.Payload = command.UpdateConnection, payload
 		result.Mutation.ExpectedVersion = &expected
+	case "PUBLISH_INTEGRATION_DEFINITION":
+		return assistantIntegrationDefinitionPublicationCommand(operation)
 	case "CREATE_WORKFLOW":
 		workflow, err := assistantWorkflow(operation.Input)
 		if err != nil {

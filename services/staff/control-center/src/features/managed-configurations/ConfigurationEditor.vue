@@ -53,6 +53,7 @@ import {
   type PublicationAttempt,
 } from "@/features/runtime/publication-attempt";
 import RoleImageImpactSelection from "./RoleImageImpactSelection.vue";
+import { requestAssistantIntegrationPublication } from "@/features/assistant";
 import {
   prepareImageImpact,
   applyImageImpact,
@@ -171,7 +172,9 @@ const impactDefinitionKey = computed(() => {
     if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
       return undefined;
     const key = (metadata as Record<string, unknown>).key;
-    return typeof key === "string" && key.length <= 120 && /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(key)
+    return typeof key === "string" &&
+      key.length <= 120 &&
+      /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(key)
       ? key
       : undefined;
   } catch {
@@ -1434,6 +1437,26 @@ watch(
         @click="transition('publish')"
       >
         <Send :size="18" />{{ $t("managed.publish") }}
+      </button>
+      <button
+        v-if="
+          configuration &&
+          revision &&
+          kind === 'INTEGRATION_DEFINITION' &&
+          revision.state === 'VALID'
+        "
+        class="button"
+        :disabled="
+          busy || sourceBusy || dirty || !canPublish(configuration, revision)
+        "
+        @click="
+          requestAssistantIntegrationPublication({
+            configurationRef: configuration.ref,
+            revisionRef: revision.ref,
+          })
+        "
+      >
+        {{ $t("managed.publishWithAssistant") }}
       </button>
       <button
         v-if="configuration && revision"

@@ -255,6 +255,9 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			"definitionKey": capabilityKeySchema(), "name": stringSchema(1, 160),
 			"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
 		})),
+		assistantOperationSchema("PUBLISH_INTEGRATION_DEFINITION", objectSchema([]string{"configurationRef", "revisionRef"}, map[string]any{
+			"configurationRef": opaqueRefSchema(), "revisionRef": opaqueRefSchema(),
+		})),
 		assistantOperationSchema("TEST_INTEGRATION_CONNECTION", objectSchema([]string{"connectionRef"}, map[string]any{
 			"connectionRef": opaqueRefSchema(),
 		})),

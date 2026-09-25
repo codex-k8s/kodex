@@ -43,6 +43,17 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).not.toContain('v-model="credentialValue"');
   });
 
+  it("показывает публикацию интеграции без свободного редактирования ревизии", () => {
+    expect(source).toContain(
+      "operation.value.type === 'PUBLISH_INTEGRATION_DEFINITION'",
+    );
+    expect(source).toContain(
+      "assistant.planEditor.integrationPublicationBoundary",
+    );
+    expect(source).toContain('operationParameter(operation, "revisionRef")');
+    expect(source).toContain('v-if="!friendlyPlanOperationType(operation)"');
+  });
+
   it("не применяет проверенную старую ревизию при несохранённых изменениях", () => {
     expect(source).toContain("draftMatchesSavedPlan.value");
     expect(source).toContain("exactRevisionValidated.value");

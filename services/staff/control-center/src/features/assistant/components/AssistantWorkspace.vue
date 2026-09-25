@@ -42,7 +42,10 @@ import {
   readableContextOperations,
   readableContextKind,
 } from "@/features/assistant/context";
-import { openAssistantEvent } from "@/features/assistant/events";
+import {
+  openAssistantEvent,
+  type AssistantIntegrationPublicationRequest,
+} from "@/features/assistant/events";
 import {
   assistantAwaitingReply,
   assistantEffectiveRuntimeState,
@@ -243,8 +246,31 @@ const contextIdentity = computed(() =>
   assistantContextIdentity(props.context, props.projectRef),
 );
 
-function handleOpenAssistant(): void {
-  void show();
+function handleOpenAssistant(event: Event): void {
+  void (async () => {
+    const request =
+      event instanceof CustomEvent
+        ? (event.detail as AssistantIntegrationPublicationRequest | undefined)
+        : undefined;
+    await show();
+    if (
+      !request ||
+      !/^mcfg_[A-Za-z0-9_-]{1,91}$/.test(request.configurationRef) ||
+      !/^mrev_[A-Za-z0-9_-]{1,91}$/.test(request.revisionRef)
+    )
+      return;
+    if (
+      message.value.trim() &&
+      !window.confirm(t("assistant.replaceDraftConfirm"))
+    )
+      return;
+    message.value = t("assistant.publishIntegrationRequest", {
+      configurationRef: request.configurationRef,
+      revisionRef: request.revisionRef,
+    });
+    await nextTick();
+    composer.value?.focus();
+  })();
 }
 
 async function show(): Promise<void> {
@@ -507,6 +533,9 @@ async function applyPlan(): Promise<void> {
       case "UPDATE_INTEGRATION_CONNECTION":
       case "TEST_INTEGRATION_CONNECTION":
         kinds.add("INTEGRATION_CONNECTION");
+        break;
+      case "PUBLISH_INTEGRATION_DEFINITION":
+        kinds.add("INTEGRATION_DEFINITION");
         break;
       case "CHANGE_INTEGRATION_GRANT":
         kinds.add("INTEGRATION_GRANT");

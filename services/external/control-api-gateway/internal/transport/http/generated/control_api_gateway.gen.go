@@ -602,6 +602,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                    AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
 	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                         AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
 	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION      AssistantContextDescriptorAllowedOperations = "PUBLISH_INTEGRATION_DEFINITION"
 	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION         AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                       AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
 	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
@@ -641,6 +642,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsLAUNCHRUN:
 		return true
 	case AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION:
+		return true
+	case AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION:
 		return true
@@ -773,6 +776,7 @@ const (
 	AssistantPlanOperationTypeCREATEWORKFLOW                    AssistantPlanOperationType = "CREATE_WORKFLOW"
 	AssistantPlanOperationTypeLAUNCHRUN                         AssistantPlanOperationType = "LAUNCH_RUN"
 	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION      AssistantPlanOperationType = "PUBLISH_INTEGRATION_DEFINITION"
 	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION         AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeUPDATEAGENT                       AssistantPlanOperationType = "UPDATE_AGENT"
 	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
@@ -812,6 +816,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeLAUNCHRUN:
 		return true
 	case AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION:
+		return true
+	case AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION:
 		return true
 	case AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION:
 		return true

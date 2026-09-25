@@ -258,6 +258,7 @@ export type FriendlyPlanOperationType =
   | "UPDATE_ROLE_IMAGE_RECIPE"
   | "CREATE_INTEGRATION_CONNECTION"
   | "UPDATE_INTEGRATION_CONNECTION"
+  | "PUBLISH_INTEGRATION_DEFINITION"
   | "LAUNCH_RUN";
 
 export function friendlyPlanOperationType(
@@ -281,6 +282,7 @@ export function friendlyPlanOperationType(
     operation.value.type !== "UPDATE_ROLE_IMAGE_RECIPE" &&
     operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
     operation.value.type !== "UPDATE_INTEGRATION_CONNECTION" &&
+    operation.value.type !== "PUBLISH_INTEGRATION_DEFINITION" &&
     operation.value.type !== "LAUNCH_RUN"
   )
     return undefined;
@@ -288,26 +290,29 @@ export function friendlyPlanOperationType(
     operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
     operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
       ? "ROLE_IMAGE_RECIPE"
-      : operation.value.type === "CREATE_INTEGRATION_CONNECTION"
-        ? "INTEGRATION_CONNECTION"
-        : operation.value.type === "UPDATE_INTEGRATION_CONNECTION"
+      : operation.value.type === "PUBLISH_INTEGRATION_DEFINITION"
+        ? "INTEGRATION_DEFINITION"
+        : operation.value.type === "CREATE_INTEGRATION_CONNECTION"
           ? "INTEGRATION_CONNECTION"
-          : operation.value.type === "CHANGE_INTEGRATION_GRANT"
+          : operation.value.type === "UPDATE_INTEGRATION_CONNECTION"
             ? "INTEGRATION_CONNECTION"
-            : operation.value.type === "CREATE_WORKFLOW" ||
-                operation.value.type === "UPDATE_WORKFLOW"
-              ? "WORKFLOW"
-              : operation.value.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-                ? "ENVIRONMENT"
-                : operation.value.type === "CREATE_SCHEDULE" ||
-                    operation.value.type === "UPDATE_SCHEDULE"
-                  ? "SCHEDULE"
-                  : operation.value.type.endsWith("PROJECT")
-                    ? "PROJECT"
-                    : operation.value.type ===
-                        "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-                      ? "RUNTIME_ENVIRONMENT_DRAFT"
-                      : "AGENT";
+            : operation.value.type === "CHANGE_INTEGRATION_GRANT"
+              ? "INTEGRATION_CONNECTION"
+              : operation.value.type === "CREATE_WORKFLOW" ||
+                  operation.value.type === "UPDATE_WORKFLOW"
+                ? "WORKFLOW"
+                : operation.value.type ===
+                    "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+                  ? "ENVIRONMENT"
+                  : operation.value.type === "CREATE_SCHEDULE" ||
+                      operation.value.type === "UPDATE_SCHEDULE"
+                    ? "SCHEDULE"
+                    : operation.value.type.endsWith("PROJECT")
+                      ? "PROJECT"
+                      : operation.value.type ===
+                          "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                        ? "RUNTIME_ENVIRONMENT_DRAFT"
+                        : "AGENT";
   const expectedAction = operation.value.type.startsWith("CREATE_")
     ? "CREATE"
     : operation.value.type === "LAUNCH_RUN"

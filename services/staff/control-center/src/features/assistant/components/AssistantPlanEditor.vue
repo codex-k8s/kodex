@@ -972,6 +972,33 @@ function snapshot(value: string): Record<string, unknown> {
                 (key, value) => updateOperationParameter(operation, key, value)
               "
             />
+            <div
+              v-else-if="
+                operation.value.type === 'PUBLISH_INTEGRATION_DEFINITION'
+              "
+              class="assistant-plan-publication"
+            >
+              <p>
+                {{ $t("assistant.planEditor.integrationPublicationBoundary") }}
+              </p>
+              <dl>
+                <dt>
+                  {{ $t("assistant.planEditor.integrationPublicationName") }}
+                </dt>
+                <dd>{{ operation.value.target.name }}</dd>
+                <dt>
+                  {{
+                    $t("assistant.planEditor.integrationPublicationRevision")
+                  }}
+                </dt>
+                <dd>{{ operationParameter(operation, "revisionRef") }}</dd>
+                <dt>{{ $t("assistant.planEditor.expectedVersion") }}</dt>
+                <dd>{{ operation.value.expectedVersion }}</dd>
+              </dl>
+              <p>
+                {{ $t("assistant.planEditor.integrationPublicationNextSteps") }}
+              </p>
+            </div>
             <template v-else>
               <label class="field">
                 <span>{{ $t("assistant.planEditor.entityName") }}</span>
@@ -1710,6 +1737,27 @@ function snapshot(value: string): Record<string, unknown> {
   margin: 0;
   color: var(--muted);
   font-size: 0.83rem;
+}
+.assistant-plan-publication {
+  display: grid;
+  gap: 10px;
+}
+.assistant-plan-publication p {
+  margin: 0;
+}
+.assistant-plan-publication dl {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 0;
+}
+.assistant-plan-publication dt {
+  color: var(--muted);
+}
+.assistant-plan-publication dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .assistant-plan-friendly__capabilities {
   display: grid;

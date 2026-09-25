@@ -1211,6 +1211,13 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				err = errs.ErrConflict
 			}
 		}
+		if operation.Type == "PUBLISH_INTEGRATION_DEFINITION" {
+			var matching bool
+			matching, err = repository.assistantIntegrationDefinitionPublicationSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if err == nil {
 			outcome, err = repository.applyCommand(ctx, operationEffectsTx, scope, planned)
 		}

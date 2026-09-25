@@ -1,6 +1,62 @@
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 390]) {
+  test(`публикация проверенной интеграции передаёт помощнику только ссылки, ${String(width)}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    const failures: string[] = [];
+    page.on("pageerror", (error) => failures.push(error.message));
+    await page.route("https://kodex.test/**", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.startsWith("/api/")) {
+        failures.push(`Unexpected API request ${url.pathname}`);
+        await route.abort();
+        return;
+      }
+      await route.fulfill({
+        response: await route.fetch({
+          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+        }),
+      });
+    });
+    await page.goto(
+      "/e2e/fixtures/ui-proof.html?fixture=assistant-openapi-import",
+    );
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new CustomEvent("kodex:assistant:open", {
+          detail: {
+            configurationRef: "mcfg_synthetic",
+            revisionRef: "mrev_validated",
+          },
+        }),
+      );
+    });
+    const assistant = page.locator("#assistant-workspace");
+    await expect(assistant).toBeVisible();
+    const draft = assistant.locator(".assistant-composer textarea");
+    await expect(draft).toHaveValue(/mcfg_synthetic/);
+    await expect(draft).toHaveValue(/mrev_validated/);
+    await expect(draft).not.toHaveValue(/openapi: 3\.1\.0|credential|apiKey/);
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new CustomEvent("kodex:assistant:open", {
+          detail: { configurationRef: "../unsafe", revisionRef: "mrev_other" },
+        }),
+      );
+    });
+    await expect(draft).toHaveValue(/mcfg_synthetic/);
+    expect(failures).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  });
+}
+
+for (const width of [1440, 390]) {
   test(`помощник открывает защищённый импорт OpenAPI внутри диалога, ${String(width)}px`, async ({
     page,
   }) => {
