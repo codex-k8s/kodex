@@ -25,6 +25,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
+import WorkflowOverviewFields from "@/features/workflows/WorkflowOverviewFields.vue";
 import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
 const platform = usePlatformStore();
 const route = useRoute();
@@ -344,45 +345,20 @@ onBeforeUnmount(() => {
         >
           <legend class="sr-only">{{ $t("workflows.steps") }}</legend>
           <div class="form-grid">
-            <label class="field"
-              ><span>{{ $t("common.name") }}</span
-              ><input v-model.trim="form.name" required
-            /></label>
-            <div class="field">
-              <span>{{ $t("workflows.coordinator") }}</span
-              ><AsyncEntityPicker
-                :model-value="form.coordinatorAgentRef || null"
-                :selected="selectedAgent(form.coordinatorAgentRef)"
-                :load-page="searchAgents"
-                :disabled="!canEdit || busy"
-                :trigger-label="$t('workflows.coordinator')"
-                @update:model-value="selectAgent($event)"
-              />
-            </div>
-            <label class="field field--wide"
-              ><span>{{ $t("common.purpose") }}</span
-              ><VoiceTextarea
-                v-model.trim="form.purpose"
-                :disabled="!canEdit || busy" /></label
-            ><label class="field"
-              ><span>{{ $t("workflows.timeout") }}</span
-              ><input
-                v-model.number="form.timeoutSeconds"
-                type="number"
-                min="1"
-                max="604800" /></label
-            ><label class="field"
-              ><span>{{ $t("workflows.completion") }}</span
-              ><input v-model.trim="form.completionCriteria" /></label
-            ><label class="field"
-              ><span>{{ $t("workflows.concurrency") }}</span
-              ><input
-                v-model.number="form.maxConcurrency"
-                type="number"
-                min="1"
-                max="100"
-                required
-            /></label>
+            <WorkflowOverviewFields
+              v-model:name="form.name"
+              v-model:purpose="form.purpose"
+              v-model:timeout-seconds="form.timeoutSeconds"
+              v-model:max-concurrency="form.maxConcurrency"
+              v-model:completion-criteria="form.completionCriteria"
+              :coordinator-agent-ref="form.coordinatorAgentRef"
+              :selected-coordinator="selectedAgent(form.coordinatorAgentRef)"
+              :load-agents="searchAgents"
+              :project-ref="projectRef"
+              :disabled="!canEdit || busy"
+              @select-coordinator="selectAgent($event.ref)"
+              @clear-coordinator="selectAgent('')"
+            />
           </div>
           <section class="editor-section">
             <div class="section-header">

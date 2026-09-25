@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 
 import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
+import WorkflowOverviewFields from "@/features/workflows/WorkflowOverviewFields.vue";
 import {
   operationParameter,
   type EditablePlanOperation,
@@ -373,85 +374,25 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
 
 <template>
   <div class="assistant-workflow-form">
-    <label class="field">
-      <span>{{ $t("common.name") }}</span>
-      <input
-        :value="text(parameter('name'))"
-        maxlength="160"
-        :disabled="disabled"
-        @input="change('name', ($event.target as HTMLInputElement).value)"
-      />
-    </label>
-    <label class="field">
-      <span>{{ $t("common.purpose") }}</span>
-      <textarea
-        :value="text(parameter('purpose'))"
-        maxlength="1000"
-        rows="3"
-        :disabled="disabled"
-        @input="change('purpose', ($event.target as HTMLTextAreaElement).value)"
-      />
-    </label>
-    <div class="field">
-      <span>{{ $t("workflows.coordinator") }}</span>
-      <AsyncEntityPicker
-        :model-value="coordinatorRef"
-        :selected="agentOption(coordinatorRef)"
-        :load-page="loadAgents"
-        :context-key="projectRef"
-        :disabled="disabled || !projectRef"
-        :trigger-label="$t('workflows.coordinator')"
-        @select="chooseAgent($event)"
-        @update:model-value="$event === null && clearAgent()"
-      />
-    </div>
-    <div class="assistant-workflow-form__advanced">
-      <label class="field"
-        ><span>{{ $t("workflows.timeout") }}</span
-        ><input
-          :value="parameter('timeoutSeconds') ?? 7200"
-          type="number"
-          min="1"
-          max="604800"
-          :disabled="disabled"
-          @input="
-            change(
-              'timeoutSeconds',
-              Number(($event.target as HTMLInputElement).value),
-            )
-          "
-      /></label>
-      <label class="field"
-        ><span>{{ $t("workflows.concurrency") }}</span
-        ><input
-          :value="parameter('maxConcurrency') ?? 1"
-          type="number"
-          min="1"
-          max="100"
-          :disabled="disabled"
-          @input="
-            change(
-              'maxConcurrency',
-              Number(($event.target as HTMLInputElement).value),
-            )
-          "
-      /></label>
-    </div>
-    <label class="field"
-      ><span>{{ $t("workflows.completion") }}</span
-      ><textarea
-        :value="text(parameter('completionCriteria'))"
-        maxlength="2000"
-        rows="2"
-        :disabled="disabled"
-        @input="
-          change(
-            'completionCriteria',
-            ($event.target as HTMLTextAreaElement).value,
-          )
-        "
-      />
-    </label>
+    <WorkflowOverviewFields
+      :name="text(parameter('name'))"
+      :purpose="text(parameter('purpose'))"
+      :coordinator-agent-ref="coordinatorRef"
+      :selected-coordinator="agentOption(coordinatorRef)"
+      :load-agents="loadAgents"
+      :project-ref="projectRef || ''"
+      :timeout-seconds="Number(parameter('timeoutSeconds') ?? 7200)"
+      :max-concurrency="Number(parameter('maxConcurrency') ?? 1)"
+      :completion-criteria="text(parameter('completionCriteria'))"
+      :disabled="disabled"
+      @update:name="change('name', $event)"
+      @update:purpose="change('purpose', $event)"
+      @select-coordinator="chooseAgent($event)"
+      @clear-coordinator="clearAgent()"
+      @update:timeout-seconds="change('timeoutSeconds', $event)"
+      @update:max-concurrency="change('maxConcurrency', $event)"
+      @update:completion-criteria="change('completionCriteria', $event)"
+    />
 
     <section>
       <header class="assistant-workflow-form__section-heading">
