@@ -21,6 +21,10 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("assistant.planEditor.showDetails");
     expect(source).toContain("assistant.planEditor.hideDetails");
     expect(source).toContain("<ProjectFormFields");
+    expect(source).toContain('class="assistant-plan-operation__title"');
+    expect(source).toMatch(
+      /operation\.value\.title\s*\|\|\s*operationTargetLabel\(operation\.value\.target\)/,
+    );
   });
 
   it("показывает понятные поля проекта и сотрудника без редактирования authority", () => {

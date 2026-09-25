@@ -933,6 +933,12 @@ function snapshot(value: string): Record<string, unknown> {
                 }}
               </span>
             </label>
+            <span class="assistant-plan-operation__title">
+              {{
+                operation.value.title ||
+                operationTargetLabel(operation.value.target)
+              }}
+            </span>
             <span class="assistant-plan-operation__number"
               >#{{ index + 1 }}</span
             >
@@ -1976,6 +1982,13 @@ function snapshot(value: string): Record<string, unknown> {
 }
 .assistant-plan-operation > header {
   justify-content: space-between;
+}
+.assistant-plan-operation__title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.35;
 }
 .assistant-operation-kind {
   display: inline-flex;
