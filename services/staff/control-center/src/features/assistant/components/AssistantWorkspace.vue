@@ -1287,7 +1287,6 @@ onBeforeUnmount(() => {
                     :key="`workflow-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
-                    @navigate="close"
                   />
                   <AssistantLaunchedRunCard
                     v-for="operation in turn.plan.operations.filter(

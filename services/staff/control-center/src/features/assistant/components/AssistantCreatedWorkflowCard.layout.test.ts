@@ -20,5 +20,7 @@ describe("карточка созданного помощником проце�
     expect(source).toContain("workflow.launchReadiness.allowedToSubmit");
     expect(workspace).toContain("<AssistantCreatedWorkflowCard");
     expect(workspace).toContain("item.type === 'CREATE_WORKFLOW'");
+    expect(source).toContain("query: { assistantForm: '1' }");
+    expect(source).not.toContain("emit('navigate')");
   });
 });

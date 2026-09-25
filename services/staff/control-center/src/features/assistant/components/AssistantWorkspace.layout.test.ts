@@ -18,6 +18,10 @@ const roleImagePage = readFileSync(
   new URL("../../../pages/RoleImageEditorPage.vue", import.meta.url),
   "utf8",
 );
+const workflowPage = readFileSync(
+  new URL("../../../pages/WorkflowDetailPage.vue", import.meta.url),
+  "utf8",
+);
 const template = source.slice(
   source.indexOf("<template>"),
   source.indexOf("<style scoped>"),
@@ -87,7 +91,10 @@ describe("AssistantWorkspace layout", () => {
       template.indexOf("</footer>"),
     );
     expect(composer).toContain('v-if="projectRef"');
-    expect(composer).toContain("secretDialogOpen = true");
+    expect(composer).toContain('@click="openPlainSecretForm"');
+    expect(source).toMatch(
+      /function openPlainSecretForm\(\): void \{[\s\S]*?secretDialogOpen\.value = true/,
+    );
     expect(template).toContain('<Teleport to="body">');
     expect(template).toContain("<RuntimeSecretDraftDialog");
     expect(template).toContain(':project-ref="projectRef"');
@@ -102,7 +109,7 @@ describe("AssistantWorkspace layout", () => {
     expect(composer).not.toContain("secretValue");
   });
 
-  it("показывает тот же ручной редактор окружения и образа рядом с чатом", () => {
+  it("показывает ручные редакторы окружения, образа и процесса рядом с чатом", () => {
     expect(template).toContain('id="assistant-form-slot"');
     expect(template).toContain(
       "'assistant-drawer--with-form': assistantFormActive",
@@ -114,6 +121,9 @@ describe("AssistantWorkspace layout", () => {
       '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
     );
     expect(roleImagePage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    expect(workflowPage).toContain(
       '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
     );
   });

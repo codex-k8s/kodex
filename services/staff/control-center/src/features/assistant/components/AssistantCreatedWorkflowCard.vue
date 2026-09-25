@@ -12,7 +12,6 @@ import { unwrap } from "@/shared/api/problem";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
-const emit = defineEmits<{ navigate: [] }>();
 const target = computed(() =>
   assistantCreatedWorkflowTarget(props.plan, props.operationRef),
 );
@@ -109,8 +108,8 @@ watch(
             projectRef: target.projectRef,
             workflowRef: target.workflowRef,
           },
+          query: { assistantForm: '1' },
         }"
-        @click="emit('navigate')"
         >{{ $t("assistant.createdWorkflow.open") }}</RouterLink
       >
     </div>
