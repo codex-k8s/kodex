@@ -169,7 +169,7 @@ describe("AssistantWorkspace layout", () => {
     expect(template).toContain(
       ':inert="Boolean(currentPlan) || assistantFormActive || undefined"',
     );
-    expect(template).toContain(
+    expect(template).not.toContain(
       ':aria-hidden="Boolean(currentPlan) || assistantFormActive || undefined"',
     );
     expect(source).toMatch(

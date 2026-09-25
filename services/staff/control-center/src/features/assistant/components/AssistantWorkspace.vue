@@ -759,12 +759,6 @@ onBeforeUnmount(() => {
       secretDialogOpen ||
       Boolean(credentialConnectionRef)
     "
-    :aria-hidden="
-      integrationImportOpen ||
-      secretDialogOpen ||
-      Boolean(credentialConnectionRef) ||
-      undefined
-    "
   >
     <button
       class="assistant-overlay__backdrop"
@@ -783,7 +777,6 @@ onBeforeUnmount(() => {
       :aria-label="$t('assistant.title')"
       :aria-busy="store.busy || store.loading"
       :inert="Boolean(currentPlan) || assistantFormActive || undefined"
-      :aria-hidden="Boolean(currentPlan) || assistantFormActive || undefined"
       :data-conversation-ref="store.selectedConversation?.ref"
       tabindex="-1"
       @keydown="handleKeydown"

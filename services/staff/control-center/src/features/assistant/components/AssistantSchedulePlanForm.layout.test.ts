@@ -23,6 +23,10 @@ describe("форма автоматизации в плане помощника
     expect(source).toContain("<AutomationPromptPreview");
     expect(source).toContain("automations.misfire");
     expect(source).toContain("automations.overlap");
+    expect(source).toContain("useId");
+    expect(source).toContain(":name=\"fieldName('name')\"");
+    expect(source).toContain(":name=\"fieldName('time-of-day')\"");
+    expect(source).toContain(':name="fieldName(`workflow-${field.key}`)"');
   });
 
   it("не сбрасывает некорректный ввод процесса при изменении названия", () => {

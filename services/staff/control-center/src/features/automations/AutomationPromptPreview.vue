@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
   Schedule,
@@ -24,6 +24,7 @@ const props = defineProps<{
   disabled?: boolean;
 }>();
 const { t, locale } = useI18n();
+const fieldNamePrefix = `automation-prompt-preview-${useId()}`;
 const serverMessage = useServerMessage();
 const mode = ref<"DRAFT" | "CURRENT_REVISION">("DRAFT");
 const full = ref(false);
@@ -105,7 +106,11 @@ async function refresh() {
     <h3>{{ t("automationPreview.title") }}</h3>
     <label class="field"
       ><span>{{ t("automationPreview.revision") }}</span
-      ><select v-model="mode" :disabled="disabled || busy">
+      ><select
+        v-model="mode"
+        :name="`${fieldNamePrefix}-revision`"
+        :disabled="disabled || busy"
+      >
         <option value="DRAFT">{{ t("automationPreview.draft") }}</option>
         <option v-if="schedule" value="CURRENT_REVISION">
           {{ t("automationPreview.current") }}
@@ -128,6 +133,7 @@ async function refresh() {
     <label class="checkbox-label"
       ><input
         v-model="full"
+        :name="`${fieldNamePrefix}-full`"
         type="checkbox"
         :disabled="disabled || busy || !available"
       /><span>{{ t("promptContext.full") }}</span></label

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { loadSchedulePreview } from "@/features/automations/api";
@@ -48,6 +48,7 @@ const emit = defineEmits<{
   parameter: [key: string, value: unknown];
 }>();
 const { locale } = useI18n();
+const fieldNamePrefix = `assistant-schedule-${useId()}`;
 const selected = ref<ExecutionTargetPickerOption>();
 const targetProblem = ref(false);
 const preview = ref<SchedulePreview>();
@@ -68,6 +69,10 @@ const weekdays = [
 const timezoneOptions = computed(() =>
   automationTimezoneOptions(stringParameter("timezone")),
 );
+
+function fieldName(key: string): string {
+  return `${fieldNamePrefix}-${key}`;
+}
 
 function parameter(key: string): unknown {
   try {
@@ -423,6 +428,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
     <label class="field"
       ><span>{{ $t("common.name") }}</span
       ><input
+        :name="fieldName('name')"
         :value="stringParameter('name')"
         maxlength="160"
         :disabled="disabled"
@@ -431,6 +437,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
     <label class="field"
       ><span>{{ $t("automations.automationText") }}</span
       ><textarea
+        :name="fieldName('automation-text')"
         :value="stringParameter('automationText')"
         rows="4"
         maxlength="32768"
@@ -443,7 +450,12 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
     <div class="assistant-schedule-form__grid">
       <label class="field"
         ><span>{{ $t("assistant.planEditor.runTargetType") }}</span
-        ><select :value="targetType" :disabled="disabled" @change="selectType">
+        ><select
+          :name="fieldName('target-type')"
+          :value="targetType"
+          :disabled="disabled"
+          @change="selectType"
+        >
           <option value="AGENT">
             {{ $t("assistant.planEditor.runAgent") }}
           </option>
@@ -473,6 +485,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <label class="field"
         ><span>{{ $t("automations.misfire") }}</span
         ><select
+          :name="fieldName('misfire-policy')"
           :value="stringParameter('misfirePolicy') || 'COALESCE'"
           :disabled="disabled"
           @change="
@@ -493,6 +506,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <label class="field"
         ><span>{{ $t("automations.overlap") }}</span
         ><select
+          :name="fieldName('overlap-policy')"
           :value="stringParameter('overlapPolicy') || 'FORBID'"
           :disabled="disabled"
           @change="
@@ -511,7 +525,12 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
     <div class="assistant-schedule-form__grid">
       <label class="field"
         ><span>{{ $t("automations.preset") }}</span
-        ><select :value="preset" :disabled="disabled" @change="changePreset">
+        ><select
+          :name="fieldName('preset')"
+          :value="preset"
+          :disabled="disabled"
+          @change="changePreset"
+        >
           <option v-for="item in presets" :key="item" :value="item">
             {{
               item === "CUSTOM" ? "Cron" : $t(`automations.presetValue.${item}`)
@@ -522,6 +541,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <label v-if="preset === 'CUSTOM'" class="field"
         ><span>Cron</span
         ><input
+          :name="fieldName('cron-expression')"
           :value="stringParameter('cronExpression')"
           maxlength="120"
           spellcheck="false"
@@ -533,6 +553,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <label v-if="preset !== 'CUSTOM' && preset !== 'HOURLY'" class="field"
         ><span>{{ $t("automations.timeOfDay") }}</span
         ><input
+          :name="fieldName('time-of-day')"
           :value="stringParameter('timeOfDay')"
           type="time"
           :disabled="disabled"
@@ -543,6 +564,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <label v-if="preset === 'WEEKLY'" class="field"
         ><span>{{ $t("automations.dayOfWeek") }}</span
         ><select
+          :name="fieldName('day-of-week')"
           :value="stringParameter('dayOfWeek')"
           :disabled="disabled"
           @change="
@@ -557,6 +579,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <label class="field"
         ><span>{{ $t("automations.timezone") }}</span
         ><select
+          :name="fieldName('timezone')"
           :value="stringParameter('timezone')"
           required
           :disabled="disabled"
@@ -574,6 +597,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <label class="field"
         ><span>{{ $t("automations.sessionPolicy") }}</span
         ><select
+          :name="fieldName('session-policy')"
           :value="stringParameter('sessionPolicy')"
           :disabled="disabled"
           @change="
@@ -591,6 +615,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <label class="field"
         ><span>{{ $t("automations.notifications") }}</span
         ><select
+          :name="fieldName('notification-policy')"
           :value="stringParameter('notificationPolicy')"
           :disabled="disabled"
           @change="
@@ -618,6 +643,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
         ><span>{{ field.label }}</span>
         <select
           v-if="field.valueType === 'SELECT'"
+          :name="fieldName(`workflow-${field.key}`)"
           :value="rawInput[field.key] ?? ''"
           :disabled="disabled"
           @change="
@@ -634,6 +660,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
         </select>
         <input
           v-else-if="field.valueType === 'BOOLEAN'"
+          :name="fieldName(`workflow-${field.key}`)"
           type="checkbox"
           :checked="rawInput[field.key] === 'true'"
           :disabled="disabled"
@@ -646,6 +673,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
         />
         <textarea
           v-else-if="field.valueType === 'LONG_TEXT'"
+          :name="fieldName(`workflow-${field.key}`)"
           :value="rawInput[field.key] ?? ''"
           rows="3"
           maxlength="32768"
@@ -659,6 +687,7 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
         />
         <input
           v-else
+          :name="fieldName(`workflow-${field.key}`)"
           :value="rawInput[field.key] ?? ''"
           :type="
             field.valueType === 'NUMBER'
