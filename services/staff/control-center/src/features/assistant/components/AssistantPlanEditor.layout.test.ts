@@ -22,6 +22,25 @@ describe("AssistantPlanEditor layout", () => {
     );
   });
 
+  it("повторно использует ручную форму профиля для изменения сотрудника", () => {
+    const profile = readFileSync(
+      new URL("../../agents/detail/AgentProfileFields.vue", import.meta.url),
+      "utf8",
+    );
+    const manual = readFileSync(
+      new URL("../../agents/detail/AgentProfilePanel.vue", import.meta.url),
+      "utf8",
+    );
+    expect(manual).toContain("<AgentProfileFields");
+    expect(source).toContain("<AgentProfileFields");
+    expect(source).toContain(
+      "agentProfileValidity.value[operation.value.ref] === true",
+    );
+    expect(source).toContain("operation.value.type === 'UPDATE_AGENT'");
+    expect(profile).toContain('maxlength="120"');
+    expect(profile).toContain('maxlength="1000"');
+  });
+
   it("даёт выбрать продвинутый образ для черновика среды без ручного ref", () => {
     expect(source).toContain("CREATE_RUNTIME_ENVIRONMENT_DRAFT");
     expect(source).toContain("runtime.searchPromotedRoleImagePage");

@@ -27,6 +27,8 @@ import IntegrationPublicConfigurationFields from "@/features/integrations/ui/Int
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
 import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import AgentFormFields from "@/features/platform/AgentFormFields.vue";
+import AgentProfileFields from "@/features/agents/detail/AgentProfileFields.vue";
+import type { AgentProfileDraft } from "@/features/agents/detail/model";
 import {
   parseAssistantSecretSuggestions,
   type AssistantSecretSuggestion,
@@ -102,6 +104,7 @@ const environmentFieldsValidity = ref<Record<string, boolean>>({});
 const environmentFieldsTouched = ref(false);
 const projectFormValidity = ref<Record<string, boolean>>({});
 const agentFormValidity = ref<Record<string, boolean>>({});
+const agentProfileValidity = ref<Record<string, boolean>>({});
 const bindingFormValidity = ref<Record<string, boolean>>({});
 const bindingFormTouched = ref(false);
 const scheduleFormValidity = ref<Record<string, boolean>>({});
@@ -172,6 +175,7 @@ function resetDraft(): void {
   environmentFieldsTouched.value = false;
   projectFormValidity.value = {};
   agentFormValidity.value = {};
+  agentProfileValidity.value = {};
   bindingFormValidity.value = {};
   bindingFormTouched.value = false;
   scheduleFormValidity.value = {};
@@ -461,6 +465,8 @@ const friendlyInputsReady = computed(() =>
           projectFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_AGENT" ||
           agentFormValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "UPDATE_AGENT" ||
+          agentProfileValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT" ||
           bindingFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_SCHEDULE" &&
@@ -597,6 +603,22 @@ const initialCapabilities = [
 function fieldValue(operation: EditablePlanOperation, key: string): string {
   const value = operationParameter(operation, key);
   return typeof value === "string" ? value : "";
+}
+
+function agentProfile(operation: EditablePlanOperation): AgentProfileDraft {
+  return {
+    name: fieldValue(operation, "name"),
+    purpose: fieldValue(operation, "purpose"),
+    roleDescription: fieldValue(operation, "roleDescription"),
+  };
+}
+
+function updateAgentProfile(
+  operation: EditablePlanOperation,
+  profile: AgentProfileDraft,
+): void {
+  for (const key of ["name", "purpose", "roleDescription"] as const)
+    updateOperationParameter(operation, key, profile[key]);
 }
 
 function setField(
@@ -1088,7 +1110,8 @@ function snapshot(value: string): Record<string, unknown> {
               <label
                 v-if="
                   operation.value.target.kind !== 'PROJECT' &&
-                  operation.value.type !== 'CREATE_AGENT'
+                  operation.value.type !== 'CREATE_AGENT' &&
+                  operation.value.type !== 'UPDATE_AGENT'
                 "
                 class="field"
               >
@@ -1110,7 +1133,8 @@ function snapshot(value: string): Record<string, unknown> {
                   operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
-                  operation.value.type !== 'CREATE_AGENT'
+                  operation.value.type !== 'CREATE_AGENT' &&
+                  operation.value.type !== 'UPDATE_AGENT'
                 "
                 class="field"
               >
@@ -1432,18 +1456,13 @@ function snapshot(value: string): Record<string, unknown> {
                   {{ $t("assistant.planEditor.agentNextSteps") }}
                 </p>
               </template>
-              <template v-else>
-                <label class="field">
-                  <span>{{ $t("assistant.planEditor.agentRole") }}</span>
-                  <textarea
-                    :value="fieldValue(operation, 'roleDescription')"
-                    rows="3"
-                    maxlength="2000"
-                    :disabled="!editable"
-                    @input="setField(operation, 'roleDescription', $event)"
-                  />
-                </label>
-              </template>
+              <AgentProfileFields
+                v-else-if="operation.value.type === 'UPDATE_AGENT'"
+                :model-value="agentProfile(operation)"
+                :disabled="!editable"
+                @valid="agentProfileValidity[operation.value.ref] = $event"
+                @update:model-value="updateAgentProfile(operation, $event)"
+              />
             </template>
             <details class="assistant-plan-friendly__snapshot">
               <summary>
