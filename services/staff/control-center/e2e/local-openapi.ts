@@ -622,16 +622,16 @@ async function verifyImportedMCPInvocation(
     { capabilityKey: readKey, agentRef: agent.ref, enabled: true },
     connection.version,
   );
-  connection = await mutate<Connection>(
+  await grantScopedOpenAPIThroughUI(
     page,
-    `/api/v1/integration-connections/${connectionRef}/grants`,
-    {
-      capabilityKey: writeKey,
-      agentRef: agent.ref,
-      enabled: true,
-      approvalScopePaths: ["/body/marker"],
-    },
-    connection.version,
+    connectionRef,
+    agent.ref,
+    writeKey,
+    suffix,
+  );
+  connection = await read<Connection>(
+    page,
+    `/api/v1/integration-connections/${connectionRef}`,
   );
 
   const run = async (
@@ -707,17 +707,99 @@ async function verifyImportedMCPInvocation(
     )
     .toBe(true);
   if (!gate) throw new Error("OpenAPI Human Gate was not opened");
-  const resolution = await mutate<{ gate: OwnerGate }>(
-    page,
-    `/api/v1/owner-gates/${gate.ref}/resolution`,
-    { decision: "APPROVE", comment: "Локальная проверка OpenAPI" },
-    gate.version,
+  const gateRef = gate.ref;
+  await gotoWithRetry(page, `/decisions?gateRef=${gateRef}`);
+  const decision = page.locator(".decision-detail");
+  await expect(decision).toBeVisible();
+  await expect(decision.locator(".decision-approval-scope")).toContainText(
+    "/body/marker",
   );
-  expect(resolution.gate.state).toBe("APPROVED");
+  const resolution = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/owner-gates/${gateRef}/resolution`,
+  );
+  await decision.getByRole("button", { name: "Одобрить", exact: true }).click();
+  expect((await resolution).status()).toBe(200);
+  await expect
+    .poll(
+      async () =>
+        (await read<OwnerGate>(page, `/api/v1/owner-gates/${gateRef}`)).state,
+    )
+    .toBe("APPROVED");
   await waitForRun(page, writeRun.ref, "SUCCEEDED");
   await expectToolCalls(page, writeRun.ref, 2);
   const finalRun = await read<Run>(page, `/api/v1/runs/${writeRun.ref}`);
-  expect(finalRun.gateRefs).toEqual([gate.ref]);
+  expect(finalRun.gateRefs).toEqual([gateRef]);
+}
+
+async function grantScopedOpenAPIThroughUI(
+  page: Page,
+  connectionRef: string,
+  agentRef: string,
+  capabilityKey: string,
+  suffix: string,
+): Promise<void> {
+  const connection = await read<Connection & { name: string }>(
+    page,
+    `/api/v1/integration-connections/${connectionRef}`,
+  );
+  await gotoWithRetry(page, "/integrations");
+  await page.getByRole("tab", { name: /^Разрешения/ }).click();
+  const panel = page.locator(".grant-panel");
+  const choose = async (label: string, query: string): Promise<void> => {
+    await panel.getByRole("button", { name: label, exact: true }).click();
+    const popover = page.getByRole("dialog", { name: label, exact: true });
+    await popover.getByRole("combobox").fill(query);
+    await popover.getByRole("option", { name: new RegExp(query) }).click();
+  };
+  await choose("Подключение", connection.name);
+  await choose("Проект", `Локальная проверка MCP ${suffix}`);
+  await choose("Получатель разрешения", `Исполнитель OpenAPI ${suffix}`);
+  await choose("Возможность", "Проверить согласованную запись");
+  await panel
+    .locator(".approval-scope-option")
+    .filter({ hasText: "/body/marker" })
+    .locator('input[type="checkbox"]')
+    .check();
+  const created = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/integration-connections/${connectionRef}/grants`,
+  );
+  await panel.getByRole("button", { name: "Выдать разрешение" }).click();
+  expect((await created).status()).toBe(200);
+  const updated = await read<
+    Connection & {
+      grants: Array<{
+        agentRef?: string;
+        capabilityKey: string;
+        approvalScopePaths: string[];
+      }>;
+    }
+  >(page, `/api/v1/integration-connections/${connectionRef}`);
+  expect(updated.grants).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        agentRef,
+        capabilityKey,
+        approvalScopePaths: ["/body/marker"],
+      }),
+    ]),
+  );
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("tab", { name: /^Разрешения/ }).click();
+  await choose("Подключение", connection.name);
+  await expect(
+    panel
+      .locator(".grant-list .entity-row")
+      .filter({
+        hasText: `Исполнитель OpenAPI ${suffix}`,
+      })
+      .filter({ hasText: "Проверить согласованную запись" }),
+  ).toContainText("/body/marker");
 }
 
 async function pinExecutableTestModel(
@@ -760,26 +842,47 @@ async function pinExecutableTestModel(
   expect(exact.catalogDigest).toMatch(/^[a-f0-9]{64}$/);
   const path = `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`;
   const current = await read<AgentRuntimeView>(page, path);
-  const saved = await mutate<AgentRuntimeView>(
-    page,
-    path,
-    {
-      runtimeProfileRef: current.configuration.runtimeProfileRef,
-      model,
-      providerPolicyMode: "FIXED",
-      providerAccounts: [
-        {
-          accountRef,
-          weight: 1,
-          catalogRevision: exact.catalogRevision,
-          catalogDigest: exact.catalogDigest,
-          providerDefinitionKey,
-        },
-      ],
-    },
-    current.agentVersion,
-    "PUT",
-  );
+  let saved: AgentRuntimeView | undefined;
+  try {
+    saved = await mutate<AgentRuntimeView>(
+      page,
+      path,
+      {
+        runtimeProfileRef: current.configuration.runtimeProfileRef,
+        model,
+        providerPolicyMode: "FIXED",
+        providerAccounts: [
+          {
+            accountRef,
+            weight: 1,
+            catalogRevision: exact.catalogRevision,
+            catalogDigest: exact.catalogDigest,
+            providerDefinitionKey,
+          },
+        ],
+      },
+      current.agentVersion,
+      "PUT",
+    );
+  } catch (writeError) {
+    // Не повторяем PUT с неопределённым исходом после смены сети браузера.
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      try {
+        const observed = await read<AgentRuntimeView>(page, path);
+        if (
+          observed.agentVersion > current.agentVersion &&
+          observed.configuration.model === model
+        ) {
+          saved = observed;
+          break;
+        }
+      } catch {
+        // Только безопасное чтение до восстановления соединения.
+      }
+      await page.waitForTimeout(500);
+    }
+    if (!saved) throw writeError;
+  }
   expect(saved.configuration.model).toBe(model);
 }
 
