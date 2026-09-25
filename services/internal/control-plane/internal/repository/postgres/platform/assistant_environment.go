@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -13,7 +14,7 @@ import (
 )
 
 var assistantEnvironmentTextFields = []string{"name", "description", "imageArtifactRef"}
-var assistantEnvironmentEditableFields = []string{"name", "description", "imageArtifactRef", "publicValues", "secretBindings"}
+var assistantEnvironmentEditableFields = []string{"name", "description", "imageArtifactRef", "publicValues", "secretBindings", "tools", "policy"}
 
 func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef, environmentRef string,
@@ -60,7 +61,30 @@ func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Conte
 		"imageArtifactRef": environment.CurrentVersion.Image.ArtifactRef,
 		"versionRef":       environment.CurrentVersion.Ref, "versionDigest": environment.CurrentVersion.Digest,
 		"specification": safeSpecification,
+		"policyInput":   assistantEnvironmentPolicyInput(environment.CurrentVersion.Policy),
 	}, environment.Version, nil
+}
+
+func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPolicy) map[string]any {
+	resources := policy.Resources
+	volumes := make([]map[string]any, 0, len(policy.Volumes))
+	for _, volume := range policy.Volumes {
+		volumes = append(volumes, map[string]any{"name": volume.Name, "kind": volume.Kind, "sizeMib": volume.SizeMiB})
+	}
+	destinations := []string{runtimecontract.RuntimeEgressDNS, runtimecontract.RuntimeEgressProviderProxy, runtimecontract.RuntimeEgressRuntimeCallback}
+	if policy.KubernetesAccess.Kind == runtimecontract.RuntimeKubernetesAccessReadOwnExecution {
+		destinations = append(destinations, runtimecontract.RuntimeEgressKubernetesAPI)
+	}
+	return map[string]any{
+		"resources": map[string]any{
+			"cpuRequestMilli": resources.CPURequestMilli, "cpuLimitMilli": resources.CPULimitMilli,
+			"memoryRequestMib": resources.MemoryRequestMiB, "memoryLimitMib": resources.MemoryLimitMiB,
+			"ephemeralStorageRequestMib": resources.EphemeralStorageRequestMiB,
+			"ephemeralStorageLimitMib":   resources.EphemeralStorageLimitMiB,
+		},
+		"volumes": volumes, "networkDestinations": destinations,
+		"kubernetesAccess": policy.KubernetesAccess.Kind,
+	}
 }
 
 func (repository *Repository) hydrateAssistantEnvironmentOperation(ctx context.Context, tx pgx.Tx, actorScope scope,
@@ -122,6 +146,22 @@ func hydrateAssistantEnvironmentFields(before map[string]any, version int64,
 		}
 		after["secretBindings"] = operation.Parameters["secretBindings"]
 		changed = changed || !assistantEnvironmentBindingsMatch(before["specification"], bindings)
+	}
+	if _, toolsSupplied := operation.Parameters["tools"]; toolsSupplied {
+		tools, valid := assistantEnvironmentTools(operation.Parameters)
+		if !valid {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		after["tools"] = operation.Parameters["tools"]
+		changed = changed || !assistantEnvironmentToolsMatch(before["specification"], tools)
+	}
+	if _, policySupplied := operation.Parameters["policy"]; policySupplied {
+		policy, valid := assistantEnvironmentPolicy(operation.Parameters)
+		if !valid {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		after["policy"] = operation.Parameters["policy"]
+		changed = changed || !assistantEnvironmentPolicyMatch(before["specification"], policy)
 	}
 	if _, valuesSupplied := operation.Parameters["publicValues"]; valuesSupplied {
 		if _, bindingsSupplied := operation.Parameters["secretBindings"]; !bindingsSupplied &&
@@ -195,7 +235,7 @@ func (repository *Repository) assistantEnvironmentSnapshotMatches(ctx context.Co
 
 func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	input := operation.Input
-	if !onlyAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "expectedVersion") ||
+	if !onlyAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "tools", "policy", "expectedVersion") ||
 		!hasAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "expectedVersion") ||
 		assistantString(input, "environmentRef") != assistantString(operation.Before, "environmentRef") ||
 		assistantString(input, "projectRef") != assistantString(operation.Before, "projectRef") {
@@ -234,6 +274,20 @@ func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation
 			return command.Command{}, errs.ErrInvalid
 		}
 		specification.SecretBindings = bindings
+	}
+	if _, supplied := input["tools"]; supplied {
+		tools, valid := assistantEnvironmentTools(input)
+		if !valid {
+			return command.Command{}, errs.ErrInvalid
+		}
+		specification.Tools = tools
+	}
+	if _, supplied := input["policy"]; supplied {
+		policy, valid := assistantEnvironmentPolicy(input)
+		if !valid {
+			return command.Command{}, errs.ErrInvalid
+		}
+		specification.Policy = policy
 	}
 	if !assistantEnvironmentBindingsCompatible(specification.Values, specification.SecretBindings) {
 		return command.Command{}, errs.ErrInvalid

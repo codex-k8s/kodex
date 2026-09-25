@@ -83,6 +83,32 @@ describe("AssistantPlanEditor layout", () => {
     );
   });
 
+  it("показывает общий редактор инструментов и очищает старый выбор при смене образа", () => {
+    const manual = readFileSync(
+      new URL(
+        "../../../pages/RuntimeEnvironmentEditorPage.vue",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const editor = readFileSync(
+      new URL(
+        "../../runtime/RuntimeEnvironmentToolsEditor.vue",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    expect(source).toContain("<AssistantEnvironmentToolsForm");
+    expect(source).toContain(
+      'updateOperationParameter(operation, "tools", [])',
+    );
+    expect(source).toContain(
+      "environmentToolsValidity.value[operation.value.ref] === true",
+    );
+    expect(manual).toContain("<RuntimeEnvironmentToolsEditor");
+    expect(editor).toContain("const target = event.target");
+  });
+
   it("открывает защищённую форму секрета и после применения плана", () => {
     expect(source).toContain("parseAssistantSecretSuggestions");
     expect(source).toContain("emit('prepareSecret', suggestion)");

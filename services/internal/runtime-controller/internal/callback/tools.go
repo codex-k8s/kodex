@@ -229,6 +229,38 @@ func environmentSecretBindingsSchema() map[string]any {
 	}
 }
 
+func environmentToolsSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 128,
+		"description": "Complete selected tool list from the exact promoted image. The owner reviews each command before publishing the environment draft.",
+		"items": objectSchema([]string{"name", "command", "description"}, map[string]any{
+			"name":        stringSchema(1, 160),
+			"command":     map[string]any{"type": "string", "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"},
+			"description": stringSchema(1, 500), "usageHint": stringSchema(0, 500),
+		}),
+	}
+}
+
+func environmentPolicySchema() map[string]any {
+	resources := objectSchema([]string{"cpuRequestMilli", "cpuLimitMilli", "memoryRequestMib", "memoryLimitMib", "ephemeralStorageRequestMib", "ephemeralStorageLimitMib"}, map[string]any{
+		"cpuRequestMilli":            map[string]any{"type": "integer", "minimum": 100, "maximum": 8000},
+		"cpuLimitMilli":              map[string]any{"type": "integer", "minimum": 100, "maximum": 16000},
+		"memoryRequestMib":           map[string]any{"type": "integer", "minimum": 128, "maximum": 32768},
+		"memoryLimitMib":             map[string]any{"type": "integer", "minimum": 128, "maximum": 65536},
+		"ephemeralStorageRequestMib": map[string]any{"type": "integer", "minimum": 256, "maximum": 20480},
+		"ephemeralStorageLimitMib":   map[string]any{"type": "integer", "minimum": 256, "maximum": 102400},
+	})
+	return objectSchema([]string{"resources", "volumes", "networkDestinations", "kubernetesAccess"}, map[string]any{
+		"resources": resources,
+		"volumes": map[string]any{"type": "array", "maxItems": 16, "items": objectSchema([]string{"name", "kind", "sizeMib"}, map[string]any{
+			"name": stringSchema(1, 32), "kind": enumSchema("EPHEMERAL_DISK", "EPHEMERAL_MEMORY"),
+			"sizeMib": map[string]any{"type": "integer", "minimum": 16, "maximum": 10240},
+		})},
+		"networkDestinations": map[string]any{"type": "array", "minItems": 3, "maxItems": 4, "uniqueItems": true,
+			"items": enumSchema("DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "KUBERNETES_API")},
+		"kubernetesAccess": enumSchema("NONE", "READ_OWN_EXECUTION"),
+	})
+}
+
 func environmentSecretSuggestionsSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 8,
 		"description": "Safe metadata for owner-only Secret forms. Never include credential values or pretend that the Secret already exists.",
@@ -269,6 +301,8 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			"publicValues":      environmentPublicValuesSchema(),
 			"secretBindings":    environmentSecretBindingsSchema(),
 			"secretSuggestions": environmentSecretSuggestionsSchema(),
+			"tools":             environmentToolsSchema(),
+			"policy":            environmentPolicySchema(),
 		})),
 		assistantOperationSchema("CREATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"projectRef", "agentRef", "name"}, map[string]any{
 			"projectRef": projectRef, "agentRef": opaqueRefSchema(), "name": stringSchema(1, 160),
@@ -320,11 +354,13 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			"environmentRef": enumSchema(input.AssistantContext.EntityRef), "name": stringSchema(1, 120),
 			"description": stringSchema(0, 1000), "imageArtifactRef": stringSchema(0, 96),
 			"publicValues": environmentPublicValuesSchema(), "secretBindings": environmentSecretBindingsSchema(),
+			"tools":  environmentToolsSchema(),
+			"policy": environmentPolicySchema(),
 		})
 		schema["anyOf"] = []map[string]any{
 			{"required": []string{"name"}}, {"required": []string{"description"}},
 			{"required": []string{"imageArtifactRef"}}, {"required": []string{"publicValues"}},
-			{"required": []string{"secretBindings"}},
+			{"required": []string{"secretBindings"}}, {"required": []string{"tools"}}, {"required": []string{"policy"}},
 		}
 		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION", schema))
 	}

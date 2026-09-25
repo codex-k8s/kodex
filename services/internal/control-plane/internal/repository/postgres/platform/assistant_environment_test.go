@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -93,7 +94,46 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 		len(updated.Tools) != 1 || updated.Tools[0].Name != "git" {
 		t.Fatalf("environment revision did not preserve immutable fields: %#v", updated)
 	}
-	for _, key := range []string{"specification", "policy", "values", "tools"} {
+	toolsEdit := normalized
+	toolsEdit.Parameters = cloneAssistantFields(normalized.Parameters)
+	toolsEdit.Parameters["tools"] = []any{map[string]any{"name": "Git", "command": "git", "description": "Manage source files", "usageHint": "Use the verified Git command"}}
+	toolsResult, err := rehydrateEditedAssistantEnvironment(normalized, toolsEdit)
+	if err != nil {
+		t.Fatalf("environment tools edit refused: %v", err)
+	}
+	toolsResult, err = normalizeAssistantOperation(toolsResult)
+	if err != nil {
+		t.Fatalf("environment tools edit could not be normalized: %v", err)
+	}
+	toolsCommand, err := assistantOperationCommand(toolsResult)
+	if err != nil {
+		t.Fatalf("environment tools command refused: %v", err)
+	}
+	tools := toolsCommand.Payload.(command.RuntimeEnvironmentDraftInput).Specification.Tools
+	if len(tools) != 1 || tools[0].Name != "Git" || tools[0].Command != "git" || tools[0].UsageHint != "Use the verified Git command" {
+		t.Fatalf("environment tools edit lost fields: %#v", tools)
+	}
+	policyEdit := normalized
+	policyEdit.Parameters = cloneAssistantFields(normalized.Parameters)
+	policyEdit.Parameters["policy"] = assistantTestEnvironmentPolicy()
+	policyResult, err := rehydrateEditedAssistantEnvironment(normalized, policyEdit)
+	if err != nil {
+		t.Fatalf("environment policy edit refused: %v", err)
+	}
+	policyResult, err = normalizeAssistantOperation(policyResult)
+	if err != nil {
+		t.Fatalf("environment policy edit could not be normalized: %v", err)
+	}
+	policyCommand, err := assistantOperationCommand(policyResult)
+	if err != nil {
+		t.Fatalf("environment policy command refused: %v", err)
+	}
+	policy := policyCommand.Payload.(command.RuntimeEnvironmentDraftInput).Specification.Policy
+	if policy.Resources.CPURequestMilli != 1000 || policy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone ||
+		len(policy.Network.Egress) != 4 {
+		t.Fatalf("environment policy edit lost admission limits: %#v", policy)
+	}
+	for _, key := range []string{"specification", "values"} {
 		forged := edited
 		forged.Parameters = cloneAssistantFields(normalized.Parameters)
 		forged.Parameters[key] = "forged"
@@ -105,6 +145,10 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 		{"publicValues": []any{map[string]any{"name": "API_TOKEN", "value": "forbidden"}}},
 		{"publicValues": []any{map[string]any{"name": "TOKEN", "value": "collision"}}},
 		{"secretBindings": []any{map[string]any{"name": "TOKEN", "secretRef": "sec_other", "secretValue": "forged"}}},
+		{"tools": "forged"},
+		{"tools": []any{map[string]any{"name": "Unsafe", "command": "sh;rm", "description": "Unverified"}}},
+		{"tools": []any{map[string]any{"name": "Git", "command": "git", "description": "First"}, map[string]any{"name": "Git again", "command": "git", "description": "Second"}}},
+		{"policy": map[string]any{"networkDestinations": []any{"ANY"}}},
 	} {
 		forged := edited
 		forged.Parameters = cloneAssistantFields(normalized.Parameters)
@@ -114,5 +158,17 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 		if _, err := rehydrateEditedAssistantEnvironment(normalized, forged); !errors.Is(err, errs.ErrInvalid) {
 			t.Fatalf("invalid environment fields accepted: %v", err)
 		}
+	}
+}
+
+func assistantTestEnvironmentPolicy() map[string]any {
+	return map[string]any{
+		"resources": map[string]any{
+			"cpuRequestMilli": float64(1000), "cpuLimitMilli": float64(2000),
+			"memoryRequestMib": float64(1024), "memoryLimitMib": float64(2048),
+			"ephemeralStorageRequestMib": float64(512), "ephemeralStorageLimitMib": float64(1024),
+		},
+		"volumes": []any{}, "networkDestinations": []any{"DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK"},
+		"kubernetesAccess": "NONE",
 	}
 }

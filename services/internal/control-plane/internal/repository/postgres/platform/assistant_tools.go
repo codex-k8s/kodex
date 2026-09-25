@@ -723,7 +723,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		result.Kind, result.Payload = command.CreateAgent, payload
 	case "CREATE_RUNTIME_ENVIRONMENT_DRAFT":
-		if !onlyAssistantFields(operation.Input, "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "secretSuggestions") ||
+		if !onlyAssistantFields(operation.Input, "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "secretSuggestions", "tools", "policy") ||
 			!hasAssistantFields(operation.Input, "projectRef", "name") {
 			return command.Command{}, errs.ErrInvalid
 		}
@@ -736,7 +736,9 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		values, valuesOK := assistantEnvironmentPublicValues(operation.Input)
 		bindings, bindingsOK := assistantEnvironmentSecretBindings(operation.Input, values)
-		if !valuesOK || !bindingsOK || !assistantEnvironmentSecretSuggestions(operation.Input) {
+		tools, toolsOK := assistantEnvironmentTools(operation.Input)
+		policy, policyOK := assistantEnvironmentPolicy(operation.Input)
+		if !valuesOK || !bindingsOK || !toolsOK || !policyOK || !assistantEnvironmentSecretSuggestions(operation.Input) {
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind = command.CreateRuntimeEnvironmentDraft
@@ -744,7 +746,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			ProjectRef: assistantString(operation.Input, "projectRef"),
 			Specification: entity.RuntimeEnvironmentDraftSpecification{
 				Name: name, Description: description, ImageArtifactRef: imageArtifactRef,
-				Values: values, SecretBindings: bindings,
+				Values: values, SecretBindings: bindings, Tools: tools, Policy: policy,
 			},
 		}
 	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":

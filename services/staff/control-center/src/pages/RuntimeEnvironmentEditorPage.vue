@@ -2,6 +2,8 @@
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import EnvironmentImpactDialog from "@/features/runtime/EnvironmentImpactDialog.vue";
 import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
+import RuntimeEnvironmentToolsEditor from "@/features/runtime/RuntimeEnvironmentToolsEditor.vue";
+import RuntimeEnvironmentPolicyFields from "@/features/runtime/RuntimeEnvironmentPolicyFields.vue";
 import PublicationImpactSelection from "@/features/runtime/PublicationImpactSelection.vue";
 import {
   readPublicationAttempt,
@@ -21,8 +23,6 @@ import {
   CircleAlert,
   Cpu,
   KeyRound,
-  Network,
-  Plus,
   Power,
   PowerOff,
   ServerCog,
@@ -58,12 +58,7 @@ import {
   defaultRuntimeEnvironmentPolicy,
   editableRuntimeEnvironmentPolicy,
   editableSecretBindings,
-  emptyRuntimeVolume,
-  mandatoryRuntimeNetworkDestinations,
   normalizeRuntimeEnvironmentInput,
-  runtimeResourceBounds,
-  runtimeVolumeBounds,
-  setRuntimeKubernetesAccess,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 import {
@@ -89,10 +84,8 @@ import { consumeRuntimeEnvironmentPolicyReauthCompletion } from "@/features/sess
 import { useSessionStore } from "@/features/session/store";
 import type {
   RoleImageArtifact,
-  RoleImageArtifactTool,
   RuntimeEnvironmentInput,
   RuntimeEnvironmentSet,
-  RuntimeKubernetesAccessKind,
   RuntimeEnvironmentDraft,
   RuntimeEnvironmentDraftSpecification,
   RevisionImpactPlan,
@@ -400,59 +393,6 @@ async function selectImage(option: AsyncEntityOption): Promise<void> {
   input.imageArtifactRef = String(option.artifactRef);
   input.tools = [];
   await loadImageArtifact(String(option.recipeRef), String(option.artifactRef));
-}
-
-function isToolSelected(tool: RoleImageArtifactTool): boolean {
-  return input.tools.some((item) => item.command === tool.name);
-}
-
-function toggleTool(tool: RoleImageArtifactTool): void {
-  const index = input.tools.findIndex((item) => item.command === tool.name);
-  if (index >= 0) {
-    input.tools.splice(index, 1);
-    return;
-  }
-  input.tools.push({
-    name: tool.name,
-    command: tool.name,
-    description: "",
-    usageHint: "",
-  });
-}
-
-function updateSelectedTool(
-  command: string,
-  field: "name" | "description" | "usageHint",
-  event: Event,
-): void {
-  const target = event.currentTarget;
-  if (
-    !(
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement
-    )
-  )
-    return;
-  const tool = input.tools.find((item) => item.command === command);
-  if (tool) tool[field] = target.value;
-}
-
-function addVolume(): void {
-  if (input.policy.volumes.length < runtimeVolumeBounds.maxItems)
-    input.policy.volumes.push(emptyRuntimeVolume());
-}
-
-function toggleKubernetesAccess(event: Event): void {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLInputElement)) return;
-  const access: RuntimeKubernetesAccessKind = target.checked
-    ? "READ_OWN_EXECUTION"
-    : "NONE";
-  setRuntimeKubernetesAccess(input.policy, access);
-}
-
-function volumeMountPath(name: string): string {
-  return name ? `/workspace/.kodex/volumes/${name}` : "—";
 }
 
 async function load(): Promise<void> {
@@ -1352,103 +1292,14 @@ onBeforeUnmount(() => {
                   />
                 </article>
 
-                <div class="section-header tool-heading">
-                  <div>
-                    <h3>{{ $t("runtime.verifiedTools") }}</h3>
-                    <p>{{ $t("runtime.verifiedToolsHelp") }}</p>
-                  </div>
-                  <span>
-                    {{
-                      $t("runtime.selectedToolsCount", {
-                        selected: input.tools.length,
-                        total: imageArtifact?.tools.length ?? 0,
-                      })
-                    }}
-                  </span>
-                </div>
-                <div v-if="imageLoading" class="secondary-text" role="status">
-                  {{ $t("common.loading") }}
-                </div>
-                <div
-                  v-else-if="imageArtifact?.tools.length"
-                  class="tool-catalog"
-                >
-                  <article
-                    v-for="tool in imageArtifact.tools"
-                    :key="tool.name"
-                    class="tool-option"
-                  >
-                    <label>
-                      <input
-                        type="checkbox"
-                        :checked="isToolSelected(tool)"
-                        @change="toggleTool(tool)"
-                      />
-                      <span>
-                        <strong
-                          ><code>{{ tool.name }}</code></strong
-                        >
-                        <small>{{ tool.version }}</small>
-                      </span>
-                    </label>
-                    <div v-if="isToolSelected(tool)" class="tool-fields">
-                      <label class="field">
-                        <span>{{ $t("runtime.toolDisplayName") }}</span>
-                        <input
-                          :value="
-                            input.tools.find(
-                              (item) => item.command === tool.name,
-                            )?.name
-                          "
-                          maxlength="160"
-                          @input="updateSelectedTool(tool.name, 'name', $event)"
-                        />
-                      </label>
-                      <label class="field">
-                        <span>{{ $t("runtime.toolCommand") }}</span>
-                        <input :value="tool.name" readonly />
-                      </label>
-                      <label class="field field--wide">
-                        <span>{{ $t("common.description") }}</span>
-                        <VoiceTextarea
-                          :disabled="busy || !draftEditable || !canPublish"
-                          :value="
-                            input.tools.find(
-                              (item) => item.command === tool.name,
-                            )?.description
-                          "
-                          maxlength="500"
-                          required
-                          @input="
-                            updateSelectedTool(tool.name, 'description', $event)
-                          "
-                        />
-                      </label>
-                      <label class="field field--wide">
-                        <span>{{ $t("runtime.toolUsageHint") }}</span>
-                        <VoiceTextarea
-                          :disabled="busy || !draftEditable || !canPublish"
-                          :value="
-                            input.tools.find(
-                              (item) => item.command === tool.name,
-                            )?.usageHint
-                          "
-                          maxlength="500"
-                          @input="
-                            updateSelectedTool(tool.name, 'usageHint', $event)
-                          "
-                        />
-                      </label>
-                    </div>
-                  </article>
-                </div>
-                <p v-else class="secondary-text">
-                  {{
-                    input.imageArtifactRef
-                      ? $t("runtime.noVerifiedTools")
-                      : $t("runtime.chooseImageFirst")
-                  }}
-                </p>
+                <RuntimeEnvironmentToolsEditor
+                  :tools="input.tools"
+                  :catalog="imageArtifact?.tools ?? []"
+                  :image-selected="!!input.imageArtifactRef"
+                  :loading="imageLoading"
+                  :disabled="busy || !draftEditable || !canPublish"
+                  @update:tools="input.tools = $event"
+                />
               </section>
 
               <section
@@ -1509,254 +1360,11 @@ onBeforeUnmount(() => {
                   />
                 </div>
 
-                <section class="policy-group">
-                  <div class="section-header">
-                    <div>
-                      <h3>{{ $t("runtime.resources") }}</h3>
-                      <p>{{ $t("runtime.resourcesHelp") }}</p>
-                    </div>
-                    <Cpu :size="20" aria-hidden="true" />
-                  </div>
-                  <div class="resource-grid">
-                    <label class="field">
-                      <span>{{ $t("runtime.cpuRequest") }}</span>
-                      <input
-                        v-model.number="input.policy.resources.cpuRequestMilli"
-                        type="number"
-                        :min="runtimeResourceBounds.cpuRequestMilli.min"
-                        :max="runtimeResourceBounds.cpuRequestMilli.max"
-                        step="100"
-                      />
-                      <small>{{ $t("runtime.cpuRequestRange") }}</small>
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.cpuLimit") }}</span>
-                      <input
-                        v-model.number="input.policy.resources.cpuLimitMilli"
-                        type="number"
-                        :min="runtimeResourceBounds.cpuLimitMilli.min"
-                        :max="runtimeResourceBounds.cpuLimitMilli.max"
-                        step="100"
-                      />
-                      <small>{{ $t("runtime.cpuLimitRange") }}</small>
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.memoryRequest") }}</span>
-                      <input
-                        v-model.number="input.policy.resources.memoryRequestMib"
-                        type="number"
-                        :min="runtimeResourceBounds.memoryRequestMib.min"
-                        :max="runtimeResourceBounds.memoryRequestMib.max"
-                        step="128"
-                      />
-                      <small>{{ $t("runtime.memoryRequestRange") }}</small>
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.memoryLimit") }}</span>
-                      <input
-                        v-model.number="input.policy.resources.memoryLimitMib"
-                        type="number"
-                        :min="runtimeResourceBounds.memoryLimitMib.min"
-                        :max="runtimeResourceBounds.memoryLimitMib.max"
-                        step="128"
-                      />
-                      <small>{{ $t("runtime.memoryLimitRange") }}</small>
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.ephemeralStorageRequest") }}</span>
-                      <input
-                        v-model.number="
-                          input.policy.resources.ephemeralStorageRequestMib
-                        "
-                        type="number"
-                        :min="
-                          runtimeResourceBounds.ephemeralStorageRequestMib.min
-                        "
-                        :max="
-                          runtimeResourceBounds.ephemeralStorageRequestMib.max
-                        "
-                        step="256"
-                      />
-                      <small>{{
-                        $t("runtime.ephemeralStorageRequestRange")
-                      }}</small>
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.ephemeralStorageLimit") }}</span>
-                      <input
-                        v-model.number="
-                          input.policy.resources.ephemeralStorageLimitMib
-                        "
-                        type="number"
-                        :min="
-                          runtimeResourceBounds.ephemeralStorageLimitMib.min
-                        "
-                        :max="
-                          runtimeResourceBounds.ephemeralStorageLimitMib.max
-                        "
-                        step="256"
-                      />
-                      <small>{{
-                        $t("runtime.ephemeralStorageLimitRange")
-                      }}</small>
-                    </label>
-                  </div>
-                </section>
-
-                <section class="policy-group">
-                  <div class="section-header">
-                    <div>
-                      <h3>{{ $t("runtime.ephemeralVolumes") }}</h3>
-                      <p>{{ $t("runtime.ephemeralVolumesHelp") }}</p>
-                    </div>
-                    <button
-                      class="button"
-                      type="button"
-                      :disabled="
-                        input.policy.volumes.length >=
-                        runtimeVolumeBounds.maxItems
-                      "
-                      @click="addVolume"
-                    >
-                      <Plus :size="15" aria-hidden="true" />
-                      {{ $t("runtime.addVolume") }}
-                    </button>
-                  </div>
-                  <div v-if="input.policy.volumes.length" class="volume-list">
-                    <article
-                      v-for="(volume, index) in input.policy.volumes"
-                      :key="index"
-                      class="volume-row"
-                    >
-                      <label class="field">
-                        <span>{{ $t("common.name") }}</span>
-                        <input
-                          v-model="volume.name"
-                          placeholder="workspace-cache"
-                        />
-                      </label>
-                      <label class="field">
-                        <span>{{ $t("runtime.volumeKind") }}</span>
-                        <select v-model="volume.kind">
-                          <option value="EPHEMERAL_DISK">
-                            {{ $t("runtime.volumeKindLabel.EPHEMERAL_DISK") }}
-                          </option>
-                          <option value="EPHEMERAL_MEMORY">
-                            {{ $t("runtime.volumeKindLabel.EPHEMERAL_MEMORY") }}
-                          </option>
-                        </select>
-                      </label>
-                      <label class="field">
-                        <span>{{ $t("runtime.volumeSize") }}</span>
-                        <input
-                          v-model.number="volume.sizeMib"
-                          type="number"
-                          :min="runtimeVolumeBounds.minSizeMib"
-                          :max="runtimeVolumeBounds.maxSizeMib"
-                          step="16"
-                        />
-                      </label>
-                      <div class="volume-mount">
-                        <span>{{ $t("runtime.mountPath") }}</span>
-                        <code>{{ volumeMountPath(volume.name) }}</code>
-                      </div>
-                      <button
-                        class="icon-button icon-button--danger"
-                        type="button"
-                        :aria-label="$t('common.delete')"
-                        @click="input.policy.volumes.splice(index, 1)"
-                      >
-                        <Trash2 :size="16" aria-hidden="true" />
-                      </button>
-                    </article>
-                  </div>
-                  <p v-else class="secondary-text">
-                    {{ $t("runtime.noEphemeralVolumes") }}
-                  </p>
-                </section>
-
-                <section class="policy-group">
-                  <div class="section-header">
-                    <div>
-                      <h3>{{ $t("runtime.networkPolicy") }}</h3>
-                      <p>{{ $t("runtime.networkPolicyHelp") }}</p>
-                    </div>
-                    <Network :size="20" aria-hidden="true" />
-                  </div>
-                  <div class="destination-list">
-                    <article
-                      v-for="destination in mandatoryRuntimeNetworkDestinations"
-                      :key="destination"
-                      class="destination-row"
-                    >
-                      <div>
-                        <strong>{{
-                          $t(`runtime.networkDestination.${destination}`)
-                        }}</strong>
-                        <p>
-                          {{
-                            $t(`runtime.networkDestinationHelp.${destination}`)
-                          }}
-                        </p>
-                      </div>
-                      <StatusBadge
-                        state="REQUIRED"
-                        :label="$t('runtime.mandatoryDestination')"
-                      />
-                    </article>
-                    <article class="destination-row">
-                      <div>
-                        <strong>{{
-                          $t("runtime.networkDestination.KUBERNETES_API")
-                        }}</strong>
-                        <p>
-                          {{
-                            $t("runtime.networkDestinationHelp.KUBERNETES_API")
-                          }}
-                        </p>
-                      </div>
-                      <StatusBadge
-                        :state="
-                          input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
-                            ? 'AVAILABLE'
-                            : 'DISABLED'
-                        "
-                        :label="
-                          input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
-                            ? $t('runtime.scopedAccessEnabled')
-                            : $t('common.disabled')
-                        "
-                      />
-                    </article>
-                  </div>
-                </section>
-
-                <section class="policy-group">
-                  <div class="section-header">
-                    <div>
-                      <h3>{{ $t("runtime.kubernetesRbac") }}</h3>
-                      <p>{{ $t("runtime.kubernetesRbacHelp") }}</p>
-                    </div>
-                    <ShieldCheck :size="20" aria-hidden="true" />
-                  </div>
-                  <label class="access-toggle">
-                    <input
-                      type="checkbox"
-                      :checked="
-                        input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
-                      "
-                      @change="toggleKubernetesAccess"
-                    />
-                    <span>
-                      <strong>{{ $t("runtime.readOwnExecution") }}</strong>
-                      <small>{{ $t("runtime.readOwnExecutionHelp") }}</small>
-                    </span>
-                  </label>
-                  <p class="boundary-note" role="note">
-                    <CircleAlert :size="17" aria-hidden="true" />
-                    {{ $t("runtime.kubernetesAccessBoundary") }}
-                  </p>
-                </section>
+                <RuntimeEnvironmentPolicyFields
+                  :policy="input.policy"
+                  :disabled="busy || !draftEditable || !canPublish"
+                  @update:policy="input.policy = $event"
+                />
 
                 <div class="effective-preview">
                   <div class="section-header">
@@ -2381,8 +1989,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: var(--surface);
 }
-.selected-image p,
-.tool-heading p {
+.selected-image p {
   margin: 3px 0 0;
   color: var(--text-secondary);
 }
@@ -2393,48 +2000,6 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.tool-heading {
-  padding-top: 6px;
-  border-top: 1px solid var(--hairline);
-}
-.tool-heading > span {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-}
-.tool-catalog {
-  display: grid;
-  gap: 10px;
-}
-.tool-option {
-  display: grid;
-  gap: 12px;
-  padding: 13px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-.tool-option > label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-}
-.tool-option > label > span {
-  display: grid;
-  gap: 2px;
-}
-.tool-option small {
-  color: var(--text-secondary);
-}
-.tool-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding-left: 26px;
-}
-.tool-fields .field--wide {
-  grid-column: 1 / -1;
 }
 .capability-row > svg,
 .readiness-icon {
@@ -2564,15 +2129,11 @@ code {
   .safe-summary,
   .secret-safe-meta,
   .effective-preview dl,
-  .tool-fields,
   .resource-grid,
   .volume-row,
   .policy-summary,
   .digest-grid {
     grid-template-columns: 1fr;
-  }
-  .tool-fields .field--wide {
-    grid-column: auto;
   }
   .capability-row,
   .readiness-check {

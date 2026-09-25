@@ -344,9 +344,15 @@ func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 	}
 	fields := properties["parameters"].(map[string]any)["properties"].(map[string]any)
 	if fields["environmentRef"].(map[string]any)["enum"].([]string)[0] != "renv_12345678" ||
-		fields["publicValues"] == nil || fields["secretBindings"] == nil || fields["secretValue"] != nil ||
-		fields["policy"] != nil || fields["values"] != nil || fields["projectRef"] != nil {
+		fields["publicValues"] == nil || fields["secretBindings"] == nil || fields["tools"] == nil || fields["policy"] == nil ||
+		fields["secretValue"] != nil || fields["values"] != nil || fields["projectRef"] != nil {
 		t.Fatalf("environment revision schema exposed protected fields: %#v", fields)
+	}
+	policy := fields["policy"].(map[string]any)
+	policyFields := policy["properties"].(map[string]any)
+	if policy["additionalProperties"] != false || len(policyFields) != 4 ||
+		policyFields["hostPath"] != nil || policyFields["serviceAccountName"] != nil || policyFields["secretValue"] != nil {
+		t.Fatalf("environment policy schema escaped its closed boundary: %#v", policy)
 	}
 }
 

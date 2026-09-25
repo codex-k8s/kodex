@@ -19,6 +19,8 @@ import AssistantSchedulePlanForm from "@/features/assistant/components/Assistant
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
 import AssistantEnvironmentRevisionForm from "@/features/assistant/components/AssistantEnvironmentRevisionForm.vue";
 import AssistantEnvironmentFieldsForm from "@/features/assistant/components/AssistantEnvironmentFieldsForm.vue";
+import AssistantEnvironmentToolsForm from "@/features/assistant/components/AssistantEnvironmentToolsForm.vue";
+import AssistantEnvironmentPolicyForm from "@/features/assistant/components/AssistantEnvironmentPolicyForm.vue";
 import AssistantAgentEnvironmentBindingForm from "@/features/assistant/components/AssistantAgentEnvironmentBindingForm.vue";
 import { prepareConnectionConfiguration } from "@/features/integrations/connection-setup";
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
@@ -124,6 +126,10 @@ const environmentFormValidity = ref<Record<string, boolean>>({});
 const environmentFormTouched = ref(false);
 const environmentFieldsValidity = ref<Record<string, boolean>>({});
 const environmentFieldsTouched = ref(false);
+const environmentToolsValidity = ref<Record<string, boolean>>({});
+const environmentToolsTouched = ref(false);
+const environmentPolicyValidity = ref<Record<string, boolean>>({});
+const environmentPolicyTouched = ref(false);
 const projectFormValidity = ref<Record<string, boolean>>({});
 const agentFormValidity = ref<Record<string, boolean>>({});
 const agentProfileValidity = ref<Record<string, boolean>>({});
@@ -195,6 +201,10 @@ function resetDraft(): void {
   environmentFormTouched.value = false;
   environmentFieldsValidity.value = {};
   environmentFieldsTouched.value = false;
+  environmentToolsValidity.value = {};
+  environmentToolsTouched.value = false;
+  environmentPolicyValidity.value = {};
+  environmentPolicyTouched.value = false;
   projectFormValidity.value = {};
   agentFormValidity.value = {};
   agentProfileValidity.value = {};
@@ -442,6 +452,8 @@ const draftMatchesSavedPlan = computed(() => {
       !workflowFormTouched.value &&
       !environmentFormTouched.value &&
       !environmentFieldsTouched.value &&
+      !environmentToolsTouched.value &&
+      !environmentPolicyTouched.value &&
       !bindingFormTouched.value &&
       !scheduleFormTouched.value &&
       !capabilityFormTouched.value &&
@@ -480,6 +492,12 @@ const friendlyInputsReady = computed(() =>
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
           environmentFieldsValidity.value[operation.value.ref] === true) &&
+        ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
+          operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
+          environmentToolsValidity.value[operation.value.ref] === true) &&
+        ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
+          operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
+          environmentPolicyValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" ||
           secretSuggestions(operation) !== undefined) &&
         ((operation.value.type !== "CREATE_PROJECT" &&
@@ -720,7 +738,11 @@ function setImageArtifact(
   value: string | null | readonly string[],
 ): void {
   if (typeof value === "string" || value === null) {
-    updateOperationParameter(operation, "imageArtifactRef", value ?? "");
+    const next = value ?? "";
+    if (next !== fieldValue(operation, "imageArtifactRef")) {
+      updateOperationParameter(operation, "imageArtifactRef", next);
+      updateOperationParameter(operation, "tools", []);
+    }
   }
 }
 
@@ -1080,6 +1102,28 @@ function snapshot(value: string): Record<string, unknown> {
                     updateOperationParameter(operation, key, value)
                 "
               />
+              <AssistantEnvironmentToolsForm
+                :operation="operation"
+                :project-ref="plan.projectRef || ''"
+                :selected-image="selectedImage(operation)"
+                :disabled="!editable"
+                @valid="environmentToolsValidity[operation.value.ref] = $event"
+                @dirty="environmentToolsTouched = true"
+                @parameter="
+                  (key, value) =>
+                    updateOperationParameter(operation, key, value)
+                "
+              />
+              <AssistantEnvironmentPolicyForm
+                :operation="operation"
+                :disabled="!editable"
+                @valid="environmentPolicyValidity[operation.value.ref] = $event"
+                @dirty="environmentPolicyTouched = true"
+                @parameter="
+                  (key, value) =>
+                    updateOperationParameter(operation, key, value)
+                "
+              />
             </template>
             <AssistantAgentEnvironmentBindingForm
               v-else-if="
@@ -1272,6 +1316,32 @@ function snapshot(value: string): Record<string, unknown> {
                     environmentFieldsValidity[operation.value.ref] = $event
                   "
                   @dirty="environmentFieldsTouched = true"
+                  @parameter="
+                    (key, value) =>
+                      updateOperationParameter(operation, key, value)
+                  "
+                />
+                <AssistantEnvironmentToolsForm
+                  :operation="operation"
+                  :project-ref="plan.projectRef || ''"
+                  :selected-image="selectedImage(operation)"
+                  :disabled="!editable"
+                  @valid="
+                    environmentToolsValidity[operation.value.ref] = $event
+                  "
+                  @dirty="environmentToolsTouched = true"
+                  @parameter="
+                    (key, value) =>
+                      updateOperationParameter(operation, key, value)
+                  "
+                />
+                <AssistantEnvironmentPolicyForm
+                  :operation="operation"
+                  :disabled="!editable"
+                  @valid="
+                    environmentPolicyValidity[operation.value.ref] = $event
+                  "
+                  @dirty="environmentPolicyTouched = true"
                   @parameter="
                     (key, value) =>
                       updateOperationParameter(operation, key, value)

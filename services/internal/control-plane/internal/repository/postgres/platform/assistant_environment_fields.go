@@ -4,10 +4,141 @@ import (
 	"encoding/json"
 	"reflect"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
+
+func assistantEnvironmentTools(input map[string]any) ([]entity.RuntimeEnvironmentTool, bool) {
+	raw, supplied := input["tools"]
+	if !supplied {
+		return nil, true
+	}
+	entries, ok := raw.([]any)
+	if !ok || len(entries) > 128 {
+		return nil, false
+	}
+	tools := make([]entity.RuntimeEnvironmentTool, 0, len(entries))
+	seen := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		item, valid := entry.(map[string]any)
+		if !valid || !onlyAssistantFields(item, "name", "command", "description", "usageHint") ||
+			!hasAssistantFields(item, "name", "command", "description") {
+			return nil, false
+		}
+		name, nameOK := item["name"].(string)
+		command, commandOK := item["command"].(string)
+		description, descriptionOK := item["description"].(string)
+		usageHint, _ := item["usageHint"].(string)
+		if _, supplied := item["usageHint"]; supplied {
+			if _, valid := item["usageHint"].(string); !valid {
+				return nil, false
+			}
+		}
+		if !nameOK || !commandOK || !descriptionOK || name == "" || name != strings.TrimSpace(name) || len(name) > 160 ||
+			command == "" || command != strings.TrimSpace(command) || len(command) > 160 ||
+			description == "" || description != strings.TrimSpace(description) || len(description) > 500 || len(usageHint) > 500 ||
+			!utf8.ValidString(name+command+description+usageHint) || strings.ContainsRune(name+command+description+usageHint, 0) {
+			return nil, false
+		}
+		for index, character := range command {
+			if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+				character >= '0' && character <= '9' || index > 0 && strings.ContainsRune("._+-", character) {
+				continue
+			}
+			return nil, false
+		}
+		if _, duplicate := seen[command]; duplicate {
+			return nil, false
+		}
+		seen[command] = struct{}{}
+		tools = append(tools, entity.RuntimeEnvironmentTool{Name: name, Command: command, Description: description, UsageHint: usageHint})
+	}
+	return tools, true
+}
+
+func assistantEnvironmentToolsMatch(snapshot any, tools []entity.RuntimeEnvironmentTool) bool {
+	specification, valid := assistantEnvironmentSnapshotSpecification(snapshot)
+	return valid && (len(specification.Tools) == 0 && len(tools) == 0 || reflect.DeepEqual(specification.Tools, tools))
+}
+
+func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEnvironmentPolicy, bool) {
+	raw, supplied := input["policy"]
+	if !supplied {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, true
+	}
+	item, ok := raw.(map[string]any)
+	if !ok || !onlyAssistantFields(item, "resources", "volumes", "networkDestinations", "kubernetesAccess") ||
+		!hasAssistantFields(item, "resources", "volumes", "networkDestinations", "kubernetesAccess") {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, false
+	}
+	resources, ok := item["resources"].(map[string]any)
+	fields := []string{"cpuRequestMilli", "cpuLimitMilli", "memoryRequestMib", "memoryLimitMib", "ephemeralStorageRequestMib", "ephemeralStorageLimitMib"}
+	if !ok || !onlyAssistantFields(resources, fields...) || !hasAssistantFields(resources, fields...) {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, false
+	}
+	numbers := make([]int64, len(fields))
+	for index, field := range fields {
+		value, valid := assistantInt64(resources, field)
+		if !valid {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		numbers[index] = value
+	}
+	volumesRaw, ok := item["volumes"].([]any)
+	if !ok || len(volumesRaw) > 16 {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, false
+	}
+	volumes := make([]runtimecontract.RuntimeVolume, 0, len(volumesRaw))
+	for _, rawVolume := range volumesRaw {
+		volume, valid := rawVolume.(map[string]any)
+		if !valid || !onlyAssistantFields(volume, "name", "kind", "sizeMib") ||
+			!hasAssistantFields(volume, "name", "kind", "sizeMib") {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		name, nameOK := volume["name"].(string)
+		kind, kindOK := volume["kind"].(string)
+		size, sizeOK := assistantInt64(volume, "sizeMib")
+		if !nameOK || !kindOK || !sizeOK {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		volumes = append(volumes, runtimecontract.RuntimeVolume{Name: name, Kind: kind, SizeMiB: size})
+	}
+	destinationsRaw, ok := item["networkDestinations"].([]any)
+	if !ok || len(destinationsRaw) > 4 {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, false
+	}
+	destinations := make([]string, 0, len(destinationsRaw))
+	for _, rawDestination := range destinationsRaw {
+		destination, valid := rawDestination.(string)
+		if !valid {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		destinations = append(destinations, destination)
+	}
+	access, ok := item["kubernetesAccess"].(string)
+	if !ok {
+		return runtimecontract.RuntimeEnvironmentPolicy{}, false
+	}
+	policy, err := runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{
+		Resources: runtimecontract.RuntimeResourcePolicy{
+			CPURequestMilli: numbers[0], CPULimitMilli: numbers[1], MemoryRequestMiB: numbers[2], MemoryLimitMiB: numbers[3],
+			EphemeralStorageRequestMiB: numbers[4], EphemeralStorageLimitMiB: numbers[5],
+		},
+		Volumes: volumes, NetworkDestinations: destinations, KubernetesAccess: access,
+	})
+	return policy, err == nil
+}
+
+func assistantEnvironmentPolicyMatch(snapshot any, policy runtimecontract.RuntimeEnvironmentPolicy) bool {
+	specification, valid := assistantEnvironmentSnapshotSpecification(snapshot)
+	if !valid {
+		return false
+	}
+	current, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(specification.Policy)
+	return err == nil && reflect.DeepEqual(current, policy)
+}
 
 func assistantEnvironmentSecretSuggestions(input map[string]any) bool {
 	raw, supplied := input["secretSuggestions"]

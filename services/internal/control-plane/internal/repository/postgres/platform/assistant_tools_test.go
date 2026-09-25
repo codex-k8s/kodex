@@ -265,6 +265,8 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 		"publicValues":      []any{map[string]any{"name": "PUBLIC_ENDPOINT", "value": "https://example.test"}},
 		"secretBindings":    []any{map[string]any{"name": "SERVICE_AUTH", "secretRef": "sec_example1", "revision": float64(2)}},
 		"secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "description": "Service credential", "valueType": "STRING", "sourceHelp": "Create a token in the provider dashboard."}},
+		"tools":             []any{map[string]any{"name": "Git", "command": "git", "description": "Manage source files", "usageHint": "Use the verified command"}},
+		"policy":            assistantTestEnvironmentPolicy(),
 	}
 	withFields, err := assistantOperationCommand(bound)
 	if err != nil {
@@ -273,7 +275,8 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 	fields := withFields.Payload.(command.RuntimeEnvironmentDraftInput).Specification
 	if len(fields.Values) != 1 || fields.Values[0].Name != "PUBLIC_ENDPOINT" ||
 		fields.Values[0].Value != "https://example.test" || len(fields.SecretBindings) != 1 ||
-		fields.SecretBindings[0].Name != "SERVICE_AUTH" || fields.SecretBindings[0].Revision != 2 {
+		fields.SecretBindings[0].Name != "SERVICE_AUTH" || fields.SecretBindings[0].Revision != 2 ||
+		len(fields.Tools) != 1 || fields.Tools[0].Command != "git" || fields.Policy.Resources.CPURequestMilli != 1000 {
 		t.Fatalf("environment fields lost: %#v", fields)
 	}
 	forged := hydrated
@@ -289,6 +292,9 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 		{"projectRef": "prj_example", "name": "Environment", "secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "valueType": "STRING", "sourceHelp": "Provider dashboard", "value": "forged"}}},
 		{"projectRef": "prj_example", "name": "Environment", "secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "valueType": "STRING", "sourceHelp": "Provider dashboard"}, map[string]any{"name": "SERVICE_AUTH", "valueType": "JSON", "sourceHelp": "Provider dashboard"}}},
 		{"projectRef": "prj_example", "name": "Environment", "secretSuggestions": []any{map[string]any{"name": "SERVICE_AUTH", "valueType": "FILE", "sourceHelp": "Provider dashboard"}}},
+		{"projectRef": "prj_example", "name": "Environment", "tools": []any{map[string]any{"name": "Shell", "command": "sh;rm", "description": "Unsafe command"}}},
+		{"projectRef": "prj_example", "name": "Environment", "tools": []any{map[string]any{"name": "Git", "command": "git", "description": "First"}, map[string]any{"name": "Git again", "command": "git", "description": "Second"}}},
+		{"projectRef": "prj_example", "name": "Environment", "policy": map[string]any{"kubernetesAccess": "READ_OWN_EXECUTION", "networkDestinations": []any{"DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "ANY"}}},
 		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "DUPLICATE", "value": "safe"}}, "secretBindings": []any{map[string]any{"name": "DUPLICATE", "secretRef": "sec_example1"}}},
 		{"projectRef": "prj_example", "name": "Environment", "imageArtifactRef": "https://untrusted.example/image"},
 		{"projectRef": "", "name": "Environment"},

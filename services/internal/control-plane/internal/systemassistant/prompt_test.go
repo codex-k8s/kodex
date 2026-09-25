@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v30" {
+	if CorePromptRevision != "system-assistant-core-v31" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -37,9 +37,13 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"не повторяй команду при неопределённом результате",
 		"`publicValues`",
 		"`secretBindings`",
+		"полный список `tools` только из точного опубликованного образа",
+		"типизированную `policy`",
+		"произвольные egress, hostPath, PVC, ServiceAccount и расширение RBAC запрещены",
+		"понадобится свежий вход",
 		"создаёт только редактируемый черновик",
 		"полный желаемый список",
-		"обычной форме окружения, которая открывается рядом с чатом",
+		"в той же форме, что и обычное окружение, рядом с чатом",
 		"сам `secretSuggestions` не создаёт Secret и не является привязкой",
 		"`CREATE_INSTRUCTION_DRAFT` только сохраняет черновик",
 		"Не составляй полный список `steps` или `inputFields` по памяти",
@@ -55,6 +59,7 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"Граф этапов, назначенные сотрудники, входные поля и опубликованная версия остаются прежними",
 		"Пользовательский Dockerfile и Git-owned рецепт помощник не перезаписывает",
 		"Операция меняет только название, описание и ссылку на проверенный образ",
+		"`tools`, `policy` и сырые Secret не передавай в план",
 		"Уточнение к",
 	} {
 		if strings.Contains(CorePrompt(), forbidden) {

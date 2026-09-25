@@ -3260,7 +3260,7 @@ const ru = {
       environmentSearchImage: "Найти готовый образ",
       environmentSelectedImage: "Выбранный артефакт образа",
       environmentDraftNextSteps:
-        "Это только черновик. Для рабочего окружения выберите проверенный образ, дополните параметры и секретные привязки в защищённой форме, затем проверьте и опубликуйте его.",
+        "Это только черновик. Проверьте образ, инструменты, параметры, привязки секретов и политику в форме; после применения отдельно валидируйте и опубликуйте окружение.",
       secretSuggestions: "Предлагаемые секреты",
       secretSuggestionsBoundary:
         "Это только безопасные метаданные. Откройте защищённую форму, проверьте подсказку и введите значение сами; план не создаёт секрет и не привязывает его автоматически.",
@@ -3268,7 +3268,15 @@ const ru = {
       secretSuggestionsInvalid:
         "Подсказка о секрете некорректна. Попросите помощника подготовить новый план.",
       environmentRevisionBoundary:
-        "Изменятся только название, описание и образ. Параметры, инструменты, политика и привязки секретов сохранятся из текущей версии.",
+        "Проверьте название, описание, образ, инструменты, параметры, привязки секретов и политику. Применение создаст только черновик новой ревизии.",
+      environmentPolicyInvalid:
+        "Политика окружения повреждена или содержит недопустимые поля. Попросите подготовить новый план.",
+      environmentPolicyFreshAuthentication:
+        "Доступ к собственному исполнению Kubernetes потребует свежего входа перед проверкой или публикацией окружения.",
+      environmentToolsUnverified:
+        "Не удалось сверить инструменты с опубликованным образом этого проекта. Выберите готовый образ или обновите план.",
+      environmentToolsPending:
+        "Инструменты из текущей ревизии показаны для проверки; доступность каталога образа пока не подтверждена:",
       environmentRevisionNotReady:
         "Укажите название и корректную ссылку на образ или оставьте поле образа пустым.",
       environmentRevisionNextSteps:
@@ -6719,7 +6727,7 @@ const en = {
       environmentSearchImage: "Search ready images",
       environmentSelectedImage: "Selected image artifact",
       environmentDraftNextSteps:
-        "This creates only a draft. To make it runnable, select a verified image, complete its settings and secret bindings in the protected form, then validate and publish it.",
+        "This creates only a draft. Review the image, tools, values, secret bindings, and policy in the form; validate and publish the environment separately after applying it.",
       secretSuggestions: "Suggested secrets",
       secretSuggestionsBoundary:
         "These are safe metadata only. Open the protected form, verify the hint, and enter the value yourself; the plan neither creates nor binds a secret automatically.",
@@ -6727,7 +6735,15 @@ const en = {
       secretSuggestionsInvalid:
         "The secret suggestion is invalid. Ask the assistant to prepare a new plan.",
       environmentRevisionBoundary:
-        "Only the name, description, and image change. Values, tools, policy, and secret bindings are preserved from the current version.",
+        "Review the name, description, image, tools, values, secret bindings, and policy. Applying this creates only a new revision draft.",
+      environmentPolicyInvalid:
+        "The environment policy is damaged or contains unsupported fields. Request a new plan.",
+      environmentPolicyFreshAuthentication:
+        "Kubernetes access to the current execution requires fresh sign-in before validating or publishing the environment.",
+      environmentToolsUnverified:
+        "Could not verify tools against this project's promoted image. Choose a ready image or refresh the plan.",
+      environmentToolsPending:
+        "Tools from the current revision are shown for review; the image catalog is not verified yet:",
       environmentRevisionNotReady:
         "Provide a name and a valid image reference, or leave the image field empty.",
       environmentRevisionNextSteps:
