@@ -509,6 +509,44 @@ describe("assistant workspace store", () => {
     );
   });
 
+  it("не сбрасывает вручную выбранный диалог при realtime из другого контекста проекта", () => {
+    const selected = conversation();
+    const environmentContext: AssistantContextDescriptor = {
+      ...context,
+      route: "/projects/prj_sales/environments/renv_test",
+      entityKind: "ENVIRONMENT",
+      entityRef: "renv_test",
+      entityName: "Тестовая среда",
+    };
+    const store = useAssistantStore();
+    store.setContext(environmentContext, "prj_sales");
+    store.conversations = [selected];
+    store.selectedRef = selected.ref;
+
+    store.applyRealtimeSnapshot(systemAssistant(), [selected], "prj_sales");
+
+    expect(store.selectedRef).toBe(selected.ref);
+    expect(store.selectedConversation?.context.route).toBe(context.route);
+  });
+
+  it("после загрузки показывает последний диалог проекта, если контекст экрана не совпал", async () => {
+    const source = conversation();
+    const environmentContext: AssistantContextDescriptor = {
+      ...context,
+      route: "/projects/prj_sales/environments/renv_test",
+      entityKind: "ENVIRONMENT",
+      entityRef: "renv_test",
+      entityName: "Тестовая среда",
+    };
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValue({ items: [source] });
+    const store = useAssistantStore();
+
+    await store.load(environmentContext, "prj_sales");
+
+    expect(store.selectedRef).toBe(source.ref);
+  });
+
   it("сохраняет conflict receipt и авторитетный STALE plan без частичного успеха", async () => {
     const stale = plan("STALE");
     applyPlanDraftMock.mockResolvedValue({

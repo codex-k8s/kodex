@@ -93,15 +93,17 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   function selectMatchingConversation(): void {
     const currentContext = context.value;
     if (!currentContext) return;
+    // Ручной выбор пользователя важнее контекста открытого экрана. Диалог
+    // может относиться к другой сущности того же проекта: realtime-снимок и
+    // навигация не должны внезапно возвращать пользователя к новому чату.
     const selected = conversations.value.find(
-      (item) =>
-        item.ref === selectedRef.value &&
-        conversationMatchesContext(item, currentContext),
+      (item) => item.ref === selectedRef.value,
     );
     if (selected) return;
-    selectedRef.value = sortedConversations.value.find((item) =>
-      conversationMatchesContext(item, currentContext),
-    )?.ref;
+    selectedRef.value =
+      sortedConversations.value.find((item) =>
+        conversationMatchesContext(item, currentContext),
+      )?.ref ?? sortedConversations.value[0]?.ref;
   }
 
   async function load(
@@ -112,9 +114,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     cancelReads();
     const current = ++generation;
     const retained =
-      projectRef.value === nextProjectRef &&
-      selectedConversation.value &&
-      conversationMatchesContext(selectedConversation.value, nextContext)
+      projectRef.value === nextProjectRef && selectedConversation.value
         ? selectedRef.value
         : undefined;
     if (projectRef.value !== nextProjectRef) {
