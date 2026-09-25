@@ -51,6 +51,7 @@ const tone = computed(() => {
       "NEEDS_ATTENTION",
       "CANCELLING",
       "RECOVERING",
+      "PROMOTING",
       "DEGRADED",
       "STALE",
       "OUTCOME_NEEDS_ATTENTION",

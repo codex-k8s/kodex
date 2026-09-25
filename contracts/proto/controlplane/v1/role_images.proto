@@ -186,6 +186,15 @@ enum ImageAdmissionVerdict {
   IMAGE_ADMISSION_VERDICT_REJECTED = 2;
 }
 
+enum ImagePromotionState {
+  IMAGE_PROMOTION_STATE_UNSPECIFIED = 0;
+  IMAGE_PROMOTION_STATE_PENDING = 1;
+  IMAGE_PROMOTION_STATE_CLAIMED = 2;
+  IMAGE_PROMOTION_STATE_AUTHORIZED = 3;
+  IMAGE_PROMOTION_STATE_PROMOTED = 4;
+  IMAGE_PROMOTION_STATE_REJECTED = 5;
+}
+
 message ImageArtifact {
   string ref = 1;
   uint64 version = 2;
@@ -225,6 +234,8 @@ message ImageArtifact {
   google.protobuf.Timestamp created_at = 36;
   google.protobuf.Timestamp updated_at = 37;
   repeated RoleImageTool tools = 38;
+  ImagePromotionState promotion_state = 39;
+  bool promotion_requested = 40;
 }
 
 enum RoleImageRecipeAction {

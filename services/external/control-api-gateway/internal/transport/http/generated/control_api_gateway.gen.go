@@ -4465,6 +4465,33 @@ func (e RoleImageArtifactAdmissionVerdict) Valid() bool {
 	}
 }
 
+// Defines values for RoleImageArtifactPromotionState.
+const (
+	RoleImageArtifactPromotionStateAUTHORIZED RoleImageArtifactPromotionState = "AUTHORIZED"
+	RoleImageArtifactPromotionStateCLAIMED    RoleImageArtifactPromotionState = "CLAIMED"
+	RoleImageArtifactPromotionStatePENDING    RoleImageArtifactPromotionState = "PENDING"
+	RoleImageArtifactPromotionStatePROMOTED   RoleImageArtifactPromotionState = "PROMOTED"
+	RoleImageArtifactPromotionStateREJECTED   RoleImageArtifactPromotionState = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageArtifactPromotionState enum.
+func (e RoleImageArtifactPromotionState) Valid() bool {
+	switch e {
+	case RoleImageArtifactPromotionStateAUTHORIZED:
+		return true
+	case RoleImageArtifactPromotionStateCLAIMED:
+		return true
+	case RoleImageArtifactPromotionStatePENDING:
+		return true
+	case RoleImageArtifactPromotionStatePROMOTED:
+		return true
+	case RoleImageArtifactPromotionStateREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleImageBuildStage.
 const (
 	RoleImageBuildStageBASEPULL                   RoleImageBuildStage = "BASE_PULL"
@@ -8199,16 +8226,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
+	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	DELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case SearchVFSParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case SearchVFSParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
 	default:
 		return false
@@ -11210,6 +11237,8 @@ type RoleImageArtifact struct {
 	PromotedAt                  *Timestamp                        `json:"promotedAt,omitempty"`
 	PromotedReference           *string                           `json:"promotedReference,omitempty"`
 	PromotionReceiptSha256      *string                           `json:"promotionReceiptSha256,omitempty"`
+	PromotionRequested          bool                              `json:"promotionRequested"`
+	PromotionState              RoleImageArtifactPromotionState   `json:"promotionState"`
 	ProvenanceSha256            string                            `json:"provenanceSha256"`
 	RecipeGeneration            int64                             `json:"recipeGeneration"`
 	RecipeRef                   OpaqueRef                         `json:"recipeRef"`
@@ -11222,6 +11251,9 @@ type RoleImageArtifact struct {
 
 // RoleImageArtifactAdmissionVerdict defines model for RoleImageArtifact.AdmissionVerdict.
 type RoleImageArtifactAdmissionVerdict string
+
+// RoleImageArtifactPromotionState defines model for RoleImageArtifact.PromotionState.
+type RoleImageArtifactPromotionState string
 
 // RoleImageArtifactTool defines model for RoleImageArtifactTool.
 type RoleImageArtifactTool struct {

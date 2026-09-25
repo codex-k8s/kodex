@@ -214,10 +214,13 @@ func TestPublicRoleImageArtifactPreservesPromotionIdentity(t *testing.T) {
 			artifact := &controlplanev1.ImageArtifact{
 				Ref: "imgart_12345678", Version: 1, RecipeRef: "imgrec_fixture01",
 				RecipeGeneration: 3, BuildRef: "imgbuild_fixture01", ManifestDigest: manifest, ProvenanceSha256: provenance,
-				AdmissionVerdict: controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_ACCEPTED,
+				AdmissionVerdict:   controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_ACCEPTED,
+				PromotionState:     controlplanev1.ImagePromotionState_IMAGE_PROMOTION_STATE_PENDING,
+				PromotionRequested: true,
 			}
 			response := &controlplanev1.GetRoleImageRecipeResponse{Recipe: roleImageRecipeFixture()}
 			if promoted {
+				artifact.PromotionState = controlplanev1.ImagePromotionState_IMAGE_PROMOTION_STATE_PROMOTED
 				artifact.PromotedReference = "registry.example.invalid/kodex/roles@" + manifest
 				artifact.PromotedAt = timestamppb.New(promotedAt)
 				artifact.PromotionReadbackSha256 = receipt
@@ -235,8 +238,9 @@ func TestPublicRoleImageArtifactPreservesPromotionIdentity(t *testing.T) {
 			if json.Unmarshal(detail[name], &fields) != nil {
 				t.Fatal("artifact JSON is missing")
 			}
-			expected := map[string]string{"buildRef": artifact.BuildRef, "provenanceSha256": provenance, "manifestDigest": manifest, "admissionVerdict": "ACCEPTED"}
+			expected := map[string]string{"buildRef": artifact.BuildRef, "provenanceSha256": provenance, "manifestDigest": manifest, "admissionVerdict": "ACCEPTED", "promotionState": "PENDING"}
 			if promoted {
+				expected["promotionState"] = "PROMOTED"
 				expected["promotionReceiptSha256"] = receipt
 				expected["promotedReference"] = artifact.PromotedReference
 				expected["promotedAt"] = promotedAt.Format(time.RFC3339)
@@ -252,6 +256,10 @@ func TestPublicRoleImageArtifactPreservesPromotionIdentity(t *testing.T) {
 				if json.Unmarshal(fields[field], &actual) != nil || actual != expectedValue {
 					t.Fatalf("artifact field %s was not preserved", field)
 				}
+			}
+			var requested bool
+			if json.Unmarshal(fields["promotionRequested"], &requested) != nil || !requested {
+				t.Fatal("promotion request identity was lost")
 			}
 		})
 	}

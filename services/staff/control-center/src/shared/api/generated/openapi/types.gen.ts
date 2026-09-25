@@ -2350,6 +2350,8 @@ export type RoleImageArtifact = {
     provenanceSha256: string;
     promotedReference?: string;
     admissionVerdict: 'ACCEPTED' | 'REJECTED';
+    promotionState: 'PENDING' | 'CLAIMED' | 'AUTHORIZED' | 'PROMOTED' | 'REJECTED';
+    promotionRequested: boolean;
     sbomSha256?: string;
     vulnerabilityEvidenceSha256?: string;
     tools: Array<RoleImageArtifactTool>;

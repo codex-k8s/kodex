@@ -62,6 +62,8 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	admittedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
 	if err != nil || admittedDetail.PromotionCandidate == nil ||
 		admittedDetail.PromotionCandidate.Ref != artifact.Ref ||
+		admittedDetail.PromotionCandidate.PromotionState != "PENDING" ||
+		admittedDetail.PromotionCandidate.PromotionRequested ||
 		!containsString(admittedDetail.Recipe.NextActions, "PROMOTE") {
 		t.Fatalf("admitted promotion candidate readback mismatch: detail=%#v err=%v", admittedDetail, err)
 	}
@@ -83,6 +85,8 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	if err != nil || rejectedDetail.PromotionCandidate == nil ||
 		rejectedDetail.PromotionCandidate.Ref != rejectedArtifact.Ref ||
 		rejectedDetail.PromotionCandidate.AdmissionVerdict != "REJECTED" ||
+		rejectedDetail.PromotionCandidate.PromotionState != "REJECTED" ||
+		rejectedDetail.PromotionCandidate.PromotionRequested ||
 		containsString(rejectedDetail.Recipe.NextActions, "PROMOTE") {
 		t.Fatalf("rejected admission readback or promotion authority mismatch: candidate=%#v actions=%#v err=%v",
 			rejectedDetail.PromotionCandidate, rejectedDetail.Recipe.NextActions, err)
@@ -144,6 +148,8 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	queuedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
 	if err != nil || queuedDetail.PromotionCandidate == nil ||
 		queuedDetail.PromotionCandidate.Ref != artifact.Ref ||
+		queuedDetail.PromotionCandidate.PromotionState != "PENDING" ||
+		!queuedDetail.PromotionCandidate.PromotionRequested ||
 		containsString(queuedDetail.Recipe.NextActions, "PROMOTE") {
 		t.Fatalf("queued promotion candidate readback mismatch: detail=%#v err=%v", queuedDetail, err)
 	}
@@ -249,6 +255,7 @@ WHERE ref = $1`, artifact.Ref); err != nil {
 	detail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
 	readback, activeArtifact := detail.Recipe, detail.ActiveArtifact
 	if err != nil || activeArtifact == nil || detail.PromotionCandidate != nil ||
+		activeArtifact.PromotionState != "PROMOTED" || !activeArtifact.PromotionRequested ||
 		readback.ActiveImageArtifactRef != artifact.Ref || readback.PromotedImageReference != promotedReference {
 		t.Fatalf("promoted active image readback mismatch: recipe=%#v artifact=%#v err=%v",
 			readback, activeArtifact, err)

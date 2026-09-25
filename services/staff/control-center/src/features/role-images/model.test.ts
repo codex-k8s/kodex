@@ -101,6 +101,8 @@ describe("role image model", () => {
       manifestDigest: `sha256:${"a".repeat(64)}`,
       provenanceSha256: "b".repeat(64),
       admissionVerdict: "ACCEPTED" as const,
+      promotionState: "PENDING" as const,
+      promotionRequested: false,
       tools: [],
     };
     expect(

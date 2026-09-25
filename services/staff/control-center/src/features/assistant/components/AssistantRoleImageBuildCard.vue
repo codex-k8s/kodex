@@ -54,16 +54,33 @@ const currentBuildPromoted = computed(
     (!detail.value.promotionCandidate ||
       detail.value.promotionCandidate.ref === detail.value.activeArtifact.ref),
 );
+const promotionFailed = computed(
+  () =>
+    (candidate.value?.promotionRequested === true &&
+      candidate.value.promotionState === "REJECTED") ||
+    promotionReceipt.value?.state === "FAILED",
+);
 const promotionPending = computed(
   () =>
     !currentBuildPromoted.value &&
+    !promotionFailed.value &&
     !promotionTimedOut.value &&
-    ["QUEUED", "PROMOTING"].includes(promotionReceipt.value?.state ?? ""),
+    ((candidate.value?.promotionRequested === true &&
+      ["PENDING", "CLAIMED", "AUTHORIZED"].includes(
+        candidate.value.promotionState,
+      )) ||
+      ["QUEUED", "PROMOTING"].includes(promotionReceipt.value?.state ?? "")),
 );
 const promotionState = computed(() =>
   currentBuildPromoted.value
     ? "PROMOTED"
-    : (promotionReceipt.value?.state ?? "PENDING"),
+    : promotionFailed.value
+      ? "FAILED"
+      : candidate.value?.promotionRequested
+        ? candidate.value.promotionState === "PENDING"
+          ? "QUEUED"
+          : "PROMOTING"
+        : (promotionReceipt.value?.state ?? "PENDING"),
 );
 const awaitingAdmission = computed(
   () =>
@@ -253,8 +270,18 @@ async function promoteCandidate(): Promise<void> {
         <p v-if="build.safeErrorCode" class="assistant-build-card__problem">
           {{ build.safeErrorCode }}
         </p>
-        <p v-if="build.stage === 'COMPLETED' && !currentBuildPromoted">
+        <p
+          v-if="
+            build.stage === 'COMPLETED' &&
+            candidate?.admissionVerdict === 'ACCEPTED' &&
+            !candidate.promotionRequested &&
+            !currentBuildPromoted
+          "
+        >
           {{ $t("assistant.roleImageBuild.awaitingPromotion") }}
+        </p>
+        <p v-if="awaitingAdmission">
+          {{ $t("assistant.roleImageBuild.admissionPending") }}
         </p>
         <p v-if="currentBuildPromoted">
           {{ $t("assistant.roleImageBuild.ready") }}
@@ -289,11 +316,14 @@ async function promoteCandidate(): Promise<void> {
           {{ $t("assistant.roleImageBuild.promotionPending") }}
         </p>
         <p
-          v-if="
-            promotionProblem ||
-            promotionTimedOut ||
-            promotionReceipt?.state === 'FAILED'
-          "
+          v-if="promotionFailed"
+          class="assistant-build-card__problem"
+          role="alert"
+        >
+          {{ $t("assistant.roleImageBuild.promotionFailed") }}
+        </p>
+        <p
+          v-if="(promotionProblem || promotionTimedOut) && !promotionFailed"
           class="assistant-build-card__problem"
           role="alert"
         >

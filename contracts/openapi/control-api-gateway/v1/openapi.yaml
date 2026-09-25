@@ -7984,7 +7984,7 @@ components:
     RoleImageArtifact:
       type: object
       additionalProperties: false
-      required: [ref, version, recipeRef, recipeGeneration, buildRef, manifestDigest, provenanceSha256, admissionVerdict, tools]
+      required: [ref, version, recipeRef, recipeGeneration, buildRef, manifestDigest, provenanceSha256, admissionVerdict, promotionState, promotionRequested, tools]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -7995,6 +7995,8 @@ components:
         provenanceSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         promotedReference: { type: string, minLength: 1, maxLength: 1000 }
         admissionVerdict: { type: string, enum: [ACCEPTED, REJECTED] }
+        promotionState: { type: string, enum: [PENDING, CLAIMED, AUTHORIZED, PROMOTED, REJECTED] }
+        promotionRequested: { type: boolean }
         sbomSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         vulnerabilityEvidenceSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RoleImageArtifactTool' } }

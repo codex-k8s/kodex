@@ -131,6 +131,8 @@ export async function installEnvironmentFixture(
       manifestDigest: digest,
       provenanceSha256: digest,
       admissionVerdict: "ACCEPTED",
+      promotionState: "PROMOTED",
+      promotionRequested: true,
       tools: [],
     },
   };

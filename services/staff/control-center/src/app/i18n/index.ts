@@ -3063,10 +3063,13 @@ const ru = {
         "Сборка завершена. Проверьте допуск и подтвердите публикацию образа.",
       admissionRejected:
         "Допуск отклонён. Откройте страницу образа для подробностей.",
+      admissionPending: "Сборка завершена. Ожидаем результат допуска.",
       admissionUnknown:
         "Допуск не подтверждён вовремя. Обновите состояние или откройте страницу образа.",
       promotionPending:
         "Публикация выполняется. Состояние обновляется автоматически.",
+      promotionFailed:
+        "Публикация не завершилась. Откройте страницу образа для подробностей; не повторяйте действие вслепую.",
       promotionUnknown:
         "Результат публикации не подтверждён. Обновите состояние или откройте страницу образа; не повторяйте действие вслепую.",
       promote: "Опубликовать образ",
@@ -3365,6 +3368,7 @@ const ru = {
     ENABLED: "Включён",
     DISABLED: "Отключён",
     QUEUED: "В очереди",
+    PROMOTING: "Публикуется",
     RUNNING: "Выполняется",
     WAITING: "Ожидает",
     WAITING_HUMAN: "Ждёт решения",
@@ -6490,10 +6494,13 @@ const en = {
         "The build is complete. Check admission and confirm image promotion.",
       admissionRejected:
         "Admission was rejected. Open the image page for details.",
+      admissionPending: "The build is complete. Waiting for admission.",
       admissionUnknown:
         "Admission was not confirmed in time. Refresh status or open the image page.",
       promotionPending:
         "Promotion is in progress. Status updates automatically.",
+      promotionFailed:
+        "Promotion did not complete. Open the image page for details; do not retry blindly.",
       promotionUnknown:
         "Promotion is not confirmed. Refresh status or open the image page; do not retry blindly.",
       promote: "Promote image",
@@ -6786,6 +6793,7 @@ const en = {
     ENABLED: "Enabled",
     DISABLED: "Disabled",
     QUEUED: "Queued",
+    PROMOTING: "Promoting",
     RUNNING: "Running",
     WAITING: "Waiting",
     WAITING_HUMAN: "Waiting for decision",

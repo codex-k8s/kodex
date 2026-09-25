@@ -159,7 +159,8 @@ func scanRoleImageArtifactWith(row roleImageRowScanner, additionalDestinations .
 		&result.RoleRuntimeContractSHA256, &result.Version, &result.RecipeVersion,
 		&result.RecipeGeneration, &result.BuildVersion, &result.PolicyRevision,
 		&result.AdmissionRevision, &result.RoleRuntimeContractRevision,
-		&result.BuildAttempt, &result.PromotedAt, &result.CreatedAt, &result.UpdatedAt}
+		&result.BuildAttempt, &result.PromotedAt, &result.CreatedAt, &result.UpdatedAt,
+		&result.PromotionState, &result.PromotionRequested}
 	destinations = append(destinations, additionalDestinations...)
 	err := row.Scan(destinations...)
 	if err != nil {
@@ -214,6 +215,8 @@ func scanLockedArtifact(row roleImageRowScanner) (lockedArtifact, error) {
 	result.Artifact.FrontendSHA256, result.Artifact.ToolchainSHA256 = recipe.FrontendSHA256, recipe.ToolchainSHA256
 	result.Artifact.Platforms = append([]entity.RoleImagePlatform(nil), recipe.Platforms...)
 	result.Artifact.Tools = append([]entity.RoleImageTool(nil), recipe.Tools...)
+	result.Artifact.PromotionState = result.PromotionState
+	result.Artifact.PromotionRequested = result.PromotionRequestID != ""
 	return result, nil
 }
 

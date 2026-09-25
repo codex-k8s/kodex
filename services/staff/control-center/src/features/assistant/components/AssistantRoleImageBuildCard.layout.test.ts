@@ -37,6 +37,8 @@ describe("AssistantRoleImageBuildCard", () => {
     expect(source).toContain("awaitingAdmission.value");
     expect(source).toContain("admissionPolls >= 120");
     expect(source).toContain("promotionPolls >= 120");
+    expect(source).toContain("candidate.value?.promotionRequested === true");
+    expect(source).toContain('candidate.value.promotionState === "REJECTED"');
     expect(source).toContain("attemptedArtifactRef.value = artifact.ref");
     expect(source).toContain("promoteRoleImageArtifact(");
     expect(source).toContain("receipt.imageArtifactRef !== artifact.ref");

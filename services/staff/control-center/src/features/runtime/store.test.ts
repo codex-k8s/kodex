@@ -417,6 +417,8 @@ describe("runtime store", () => {
           manifestDigest: "f".repeat(64),
           promotedReference: runtimeImage.reference,
           admissionVerdict: "ACCEPTED",
+          promotionState: "PROMOTED",
+          promotionRequested: true,
           tools: [{ name: "gh", version: "2.80.0" }],
           promotedAt: "2026-08-29T11:00:00Z",
         },
