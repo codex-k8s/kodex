@@ -19,11 +19,26 @@ command -v docker >/dev/null 2>&1 || fail 'docker is required'
 command -v pg_isready >/dev/null 2>&1 || fail 'pg_isready is required'
 command -v psql >/dev/null 2>&1 || fail 'psql is required'
 
-docker run --rm -d --name "$container_name" \
-  -e POSTGRES_HOST_AUTH_METHOD=trust \
-  -p 127.0.0.1::5432 \
-  docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7 \
-  >/dev/null
+# У rootless Docker выбранный автоматически порт иногда успевает занять другой
+# локальный процесс до того, как RootlessKit создаст listener. Повторяем только
+# этот отказ до запуска теста; уже созданную БД и тестовые эффекты не повторяем.
+for attempt in 1 2 3 4; do
+  if docker_run_output=$(docker run --rm -d --name "$container_name" \
+    -e POSTGRES_HOST_AUTH_METHOD=trust \
+    -p 127.0.0.1::5432 \
+    docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7 \
+    2>&1); then
+    break
+  fi
+  if [[ "$docker_run_output" != *"RootlessKit PortManager.AddPort()"* ||
+        "$docker_run_output" != *"bind: address already in use"* ]]; then
+    fail "docker run: $docker_run_output"
+  fi
+  if (( attempt == 4 )); then
+    fail 'disposable PostgreSQL port allocation exhausted'
+  fi
+  sleep 1
+done
 
 port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}' "$container_name")
 [[ "$port" =~ ^[0-9]+$ ]] || fail 'disposable PostgreSQL port is invalid'
