@@ -2942,6 +2942,9 @@ const ru = {
   },
   assistant: {
     openSecretForm: "Открыть защищённую форму нового секрета",
+    integrationDraftCreated:
+      "Черновик интеграции создан. Проверьте, валидируйте и опубликуйте его перед созданием подключения.",
+    openIntegrationDraft: "Проверить черновик",
     title: "Kodex",
     contextVersion: "Версия {version}",
     contextKind: {
@@ -6373,6 +6376,9 @@ const en = {
   assistant: {
     ...ru.assistant,
     openSecretForm: "Open the protected new-secret form",
+    integrationDraftCreated:
+      "Integration draft created. Review, validate, and publish it before connecting.",
+    openIntegrationDraft: "Review draft",
     contextVersion: "Version {version}",
     contextKind: {
       PROJECT: "Project",

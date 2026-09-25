@@ -376,10 +376,11 @@ test("помощник открывает защищённый импорт но
   );
   await expect(importLink.last()).toBeVisible({ timeout: 180_000 });
   await importLink.last().click();
-  await expect(page).toHaveURL(/\/configurations\/INTEGRATION_DEFINITION$/);
+  await expect(page).toHaveURL(/\/projects$/);
   await expect(
     page.getByRole("dialog", { name: "Импорт интеграции из OpenAPI" }),
   ).toBeVisible();
+  await expect(assistant).toBeVisible();
 });
 
 test("локальный OpenAPI импорт, первая привязка и HTTPS test", async ({

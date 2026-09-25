@@ -82,10 +82,22 @@ describe("AssistantWorkspace layout", () => {
     expect(composer).not.toContain("secretValue");
   });
 
-  it("передаёт ссылку на импорт OpenAPI из ответа в штатную форму", () => {
+  it("открывает защищённый импорт OpenAPI поверх диалога без передачи документа модели", () => {
     expect(template).toContain('@click.capture="handleAssistantLink"');
     expect(source).toContain('"/configurations/INTEGRATION_DEFINITION"');
-    expect(source).toContain('assistantImportOpen: "1"');
+    expect(source).toContain("integrationImportOpen.value = true");
+    expect(template).toContain("<OpenAPIImportDialog");
+    expect(template).toContain('@created="integrationDraftCreated"');
+    expect(source).not.toContain("message.value = source");
+    expect(source).not.toContain("store.send(source");
+  });
+
+  it("после импорта предлагает проверить и опубликовать созданную ревизию", () => {
+    expect(template).toContain('v-if="createdDefinitionRef"');
+    expect(template).toContain("assistant.integrationDraftCreated");
+    expect(template).toContain("assistant.openIntegrationDraft");
+    expect(source).toContain('name: "configuration"');
+    expect(source).toContain('kind: "INTEGRATION_DEFINITION"');
   });
 
   it("закрывает помощника при переходе к созданному образу", () => {

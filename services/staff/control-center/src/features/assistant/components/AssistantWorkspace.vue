@@ -33,6 +33,7 @@ import AssistantEnvironmentDraftCard from "@/features/assistant/components/Assis
 import AssistantIntegrationConnectionCard from "@/features/assistant/components/AssistantIntegrationConnectionCard.vue";
 import AssistantLaunchedRunCard from "@/features/assistant/components/AssistantLaunchedRunCard.vue";
 import AssistantRoleImageBuildCard from "@/features/assistant/components/AssistantRoleImageBuildCard.vue";
+import { OpenAPIImportDialog } from "@/features/managed-configurations";
 import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
 import {
   assistantContextIdentity,
@@ -97,6 +98,8 @@ const platform = usePlatformStore();
 const open = ref(restoreAssistantWorkspaceOpen());
 const historyOpen = ref(false);
 const contextOpen = ref(false);
+const integrationImportOpen = ref(false);
+const createdDefinitionRef = ref<string>();
 const desktopHistory = ref<HTMLElement>();
 const desktopHistorySentinel = ref<HTMLElement>();
 const mobileHistory = ref<HTMLElement>();
@@ -265,6 +268,8 @@ function close(): void {
   )
     return;
   store.cancelReads();
+  integrationImportOpen.value = false;
+  createdDefinitionRef.value = undefined;
   open.value = false;
   persistAssistantWorkspaceOpen(false);
   historyOpen.value = false;
@@ -397,14 +402,23 @@ function handleAssistantLink(event: MouseEvent): void {
   if (link?.getAttribute("href") !== "/configurations/INTEGRATION_DEFINITION")
     return;
   event.preventDefault();
+  integrationImportOpen.value = true;
+}
+
+function integrationDraftCreated(configurationRef: string): void {
+  integrationImportOpen.value = false;
+  createdDefinitionRef.value = configurationRef;
+}
+
+function openCreatedDefinition(): void {
+  if (!createdDefinitionRef.value) return;
+  const configurationRef = createdDefinitionRef.value;
   close();
-  if (!open.value) {
+  if (!open.value)
     void router.push({
-      name: "configuration-catalog",
-      params: { kind: "INTEGRATION_DEFINITION" },
-      query: { assistantImportOpen: "1" },
+      name: "configuration",
+      params: { kind: "INTEGRATION_DEFINITION", configurationRef },
     });
-  }
 }
 
 function handleComposerKeydown(event: KeyboardEvent): void {
@@ -535,6 +549,8 @@ function documentPointerDown(event: PointerEvent): void {
 
 watch(contextIdentity, () => {
   contextOpen.value = false;
+  integrationImportOpen.value = false;
+  createdDefinitionRef.value = undefined;
   store.setContext(props.context, props.projectRef);
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
@@ -606,7 +622,13 @@ onBeforeUnmount(() => {
     <Sparkles :size="24" aria-hidden="true" />
   </button>
 
-  <div v-if="open" class="assistant-overlay" role="presentation">
+  <div
+    v-if="open"
+    class="assistant-overlay"
+    role="presentation"
+    :inert="integrationImportOpen"
+    :aria-hidden="integrationImportOpen || undefined"
+  >
     <button
       class="assistant-overlay__backdrop"
       type="button"
@@ -846,6 +868,20 @@ onBeforeUnmount(() => {
               <strong>{{ contextTitle }}</strong>
               <small>{{ context.route }}</small>
             </button>
+            <section
+              v-if="createdDefinitionRef"
+              class="assistant-integration-draft"
+              role="status"
+            >
+              <span>{{ $t("assistant.integrationDraftCreated") }}</span>
+              <button
+                class="button button--primary"
+                type="button"
+                @click="openCreatedDefinition"
+              >
+                {{ $t("assistant.openIntegrationDraft") }}
+              </button>
+            </section>
             <OverlayPanel
               v-if="contextOpen"
               v-model:open="contextOpen"
@@ -1225,6 +1261,11 @@ onBeforeUnmount(() => {
       </template>
     </aside>
   </div>
+  <OpenAPIImportDialog
+    v-if="open && integrationImportOpen"
+    @close="integrationImportOpen = false"
+    @created="integrationDraftCreated"
+  />
 </template>
 
 <style scoped>
@@ -1252,6 +1293,21 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 70;
   inset: 0;
+}
+.assistant-integration-draft {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+}
+@media (max-width: 720px) {
+  .assistant-integration-draft {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 .assistant-overlay__backdrop {
   position: absolute;
