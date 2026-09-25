@@ -46,6 +46,7 @@ const allowedDecisions = [
   "CANCEL",
 ] as const;
 const fieldKeys = new Set([
+  "key",
   "label",
   "description",
   "valueType",
@@ -53,6 +54,7 @@ const fieldKeys = new Set([
   "options",
 ]);
 const stepKeys = new Set([
+  "key",
   "name",
   "purpose",
   "agentRef",
@@ -66,6 +68,7 @@ const stepKeys = new Set([
 ]);
 const agentReadback = ref<Record<string, Agent | null>>({});
 const selectableAgents = new Map<string, Agent>();
+const isUpdate = computed(() => props.operation.value.type === "UPDATE_WORKFLOW");
 
 function parameter(key: string): unknown {
   try {
@@ -304,7 +307,9 @@ function addField(): void {
 function validField(field: Item): boolean {
   const options = field.options;
   return (
-    Object.keys(field).every((key) => fieldKeys.has(key)) &&
+    Object.keys(field).every((key) => fieldKeys.has(key) && (key !== "key" || isUpdate.value)) &&
+    (field.key === undefined ||
+      (typeof field.key === "string" && /^[a-z][a-z0-9_-]{0,79}$/.test(field.key))) &&
     text(field.label).trim().length > 0 &&
     text(field.label).length <= 160 &&
     text(field.description).length <= 500 &&
@@ -325,7 +330,9 @@ function validStep(step: Item): boolean {
   const decisions = step.gateDecisions;
   const capabilities = step.requiredCapabilityKeys;
   return (
-    Object.keys(step).every((key) => stepKeys.has(key)) &&
+    Object.keys(step).every((key) => stepKeys.has(key) && (key !== "key" || isUpdate.value)) &&
+    (step.key === undefined ||
+      (typeof step.key === "string" && step.key.length > 0 && step.key.length <= 96)) &&
     text(step.name).trim().length > 0 &&
     text(step.name).length <= 160 &&
     text(step.purpose).trim().length > 0 &&
@@ -365,6 +372,11 @@ function validStep(step: Item): boolean {
 const valid = computed(() =>
   Boolean(
     props.projectRef &&
+    (isUpdate.value
+      ? text(parameter("workflowRef")) === props.operation.value.target.ref &&
+        text(parameter("workflowRef")).length > 0 &&
+        text(parameter("instructions")).length <= 65536
+      : props.operation.value.type === "CREATE_WORKFLOW") &&
     (parameter("projectRef") === props.projectRef ||
       parameter("projectRef") === "current") &&
     text(parameter("name")).trim() &&
@@ -407,6 +419,9 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
 
 <template>
   <div class="assistant-workflow-form">
+    <p v-if="isUpdate" class="assistant-plan-friendly__hint">
+      {{ $t("assistant.planEditor.workflowUpdateBoundary") }}
+    </p>
     <WorkflowOverviewFields
       :name="text(parameter('name'))"
       :purpose="text(parameter('purpose'))"
@@ -426,6 +441,15 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
       @update:max-concurrency="change('maxConcurrency', $event)"
       @update:completion-criteria="change('completionCriteria', $event)"
     />
+    <div v-if="isUpdate" class="field">
+      <span>{{ $t("assistant.planEditor.workflowInstructions") }}</span>
+      <TemplateSourceField
+        :model-value="text(parameter('instructions'))"
+        :label="$t('assistant.planEditor.workflowInstructions')"
+        :disabled="disabled"
+        @update:model-value="change('instructions', $event)"
+      />
+    </div>
 
     <section>
       <header class="assistant-workflow-form__section-heading">
@@ -441,7 +465,7 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
       </header>
       <article
         v-for="(field, index) in fields ?? []"
-        :key="index"
+        :key="text(field.key) || index"
         class="assistant-workflow-form__item"
       >
         <label class="field"
@@ -554,7 +578,7 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
       </header>
       <article
         v-for="(step, index) in steps ?? []"
-        :key="index"
+        :key="text(step.key) || index"
         class="assistant-workflow-form__item"
       >
         <strong>{{ index + 1 }}</strong>
@@ -720,7 +744,7 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
       {{ $t("assistant.planEditor.workflowNotReady") }}
     </p>
     <p class="assistant-plan-friendly__hint">
-      {{ $t("assistant.planEditor.workflowNextSteps") }}
+      {{ $t(isUpdate ? "assistant.planEditor.workflowUpdateNextSteps" : "assistant.planEditor.workflowNextSteps") }}
     </p>
   </div>
 </template>

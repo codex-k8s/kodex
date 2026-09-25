@@ -32,6 +32,10 @@ describe("форма процесса в плане помощника", () => {
 
   it("блокирует сохранение и повторное применение старой ревизии", () => {
     expect(editor).toContain("<AssistantWorkflowPlanForm");
+    expect(editor).toContain("operation.value.type === 'UPDATE_WORKFLOW'");
+    expect(source).toContain("text(parameter(\"workflowRef\")) === props.operation.value.target.ref");
+    expect(source).toContain("text(field.key) || index");
+    expect(source).toContain("text(step.key) || index");
     expect(editor).toContain("workflowFormValidity.value[operation.value.ref]");
     expect(editor).toContain("!workflowFormTouched.value");
     expect(editor).toContain("friendlyInputsReady.value");

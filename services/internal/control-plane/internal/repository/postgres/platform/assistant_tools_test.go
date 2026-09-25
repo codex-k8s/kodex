@@ -776,10 +776,13 @@ func TestAssistantWorkflowUpdatePreservesGraphAndRejectsForgedDraft(t *testing.T
 	t.Parallel()
 	draft := entity.WorkflowVersion{Name: "Weekly report", Purpose: "Summarize work", CoordinatorAgentRef: "agt_12345678",
 		VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 3600, ResultSchema: map[string]any{},
+		Inputs: []entity.WorkflowInputField{{Key: "field-001", Label: "Topic", Type: "TEXT", DefaultValue: "weekly"}},
 		Steps: []entity.WorkflowStep{{Key: "step-1", Position: 1, Name: "Collect", AgentRef: "agt_12345678",
 			Instructions: "Collect completed work.", ExpectedResult: "Summary", TimeoutSeconds: 900}}}
+	fields, steps := assistantWorkflowGraphFields(draft)
 	before := map[string]any{
 		"workflowRef": "wfl_12345678", "projectRef": "prj_12345678", "name": draft.Name, "purpose": draft.Purpose,
+		"coordinatorAgentRef": draft.CoordinatorAgentRef, "inputFields": fields, "steps": steps,
 		"instructions": draft.Instructions, "completionCriteria": draft.CompletionCriteria,
 		"maxConcurrency": float64(draft.Concurrency), "timeoutSeconds": float64(draft.TimeoutSeconds), "draft": draft,
 	}
@@ -809,8 +812,42 @@ func TestAssistantWorkflowUpdatePreservesGraphAndRejectsForgedDraft(t *testing.T
 	payload := mapped.Payload.(command.WorkflowInput)
 	if payload.Ref != "wfl_12345678" || payload.ProjectRef != "prj_12345678" || payload.Name != "Monthly report" ||
 		payload.Draft == nil || len(payload.Draft.Steps) != 1 || payload.Draft.Steps[0].Key != "step-1" ||
-		payload.Draft.CoordinatorAgentRef != "agt_12345678" {
+		payload.Draft.CoordinatorAgentRef != "agt_12345678" || payload.Draft.Inputs[0].DefaultValue != "weekly" {
 		t.Fatalf("workflow update changed protected draft graph: %#v", payload)
+	}
+	graphEdit := normalized
+	graphEdit.Parameters = cloneAssistantFields(normalized.Parameters)
+	updatedSteps := []any{cloneAssistantFields(steps[0].(map[string]any))}
+	updatedSteps[0].(map[string]any)["purpose"] = "Collect verified work."
+	updatedSteps = append(updatedSteps, map[string]any{"name": "Summarize", "purpose": "Summarize work.",
+		"agentRef": "agt_12345678", "parallel": false, "parallelGroup": float64(0),
+		"timeoutSeconds": float64(900), "expectedResult": "Report", "humanGate": false,
+		"gateDecisions": []any{}, "requiredCapabilityKeys": []any{}})
+	graphEdit.Parameters["steps"] = updatedSteps
+	graphEdit, err = rehydrateEditedAssistantWorkflow(normalized, graphEdit)
+	if err != nil {
+		t.Fatalf("workflow graph edit rejected: %v", err)
+	}
+	graphEdit, err = normalizeAssistantOperation(graphEdit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, _, err := assistantUpdateWorkflow(graphEdit)
+	if err != nil || updated.Draft == nil || len(updated.Draft.Steps) != 2 ||
+		updated.Draft.Steps[0].Key != "step-1" || updated.Draft.Steps[1].Key == "step-1" ||
+		len(updated.Draft.Steps[1].DependsOn) != 1 || updated.Draft.Steps[1].DependsOn[0] != "step-1" ||
+		updated.Draft.Inputs[0].DefaultValue != "weekly" {
+		t.Fatalf("workflow graph identity or dependency changed unexpectedly: %#v %v", updated, err)
+	}
+	for _, invalidKey := range []string{"step-foreign", "step-1"} {
+		forgedGraph := normalized
+		forgedGraph.Parameters = cloneAssistantFields(normalized.Parameters)
+		forgedSteps := []any{cloneAssistantFields(steps[0].(map[string]any)), cloneAssistantFields(updatedSteps[1].(map[string]any))}
+		forgedSteps[1].(map[string]any)["key"] = invalidKey
+		forgedGraph.Parameters["steps"] = forgedSteps
+		if _, err := rehydrateEditedAssistantWorkflow(normalized, forgedGraph); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("workflow graph accepted foreign or duplicate key %s: %v", invalidKey, err)
+		}
 	}
 	edited := normalized
 	edited.Parameters = cloneAssistantFields(normalized.Parameters)
@@ -823,7 +860,7 @@ func TestAssistantWorkflowUpdatePreservesGraphAndRejectsForgedDraft(t *testing.T
 		assistantString(rehydrated.After, "purpose") != "Monthly team summary" {
 		t.Fatalf("workflow edit lost authoritative envelope: %#v %v", rehydrated, err)
 	}
-	for _, key := range []string{"workflowRef", "projectRef", "draft", "steps", "coordinatorAgentRef"} {
+	for _, key := range []string{"workflowRef", "projectRef", "draft", "expectedVersion"} {
 		forged := edited
 		forged.Parameters = cloneAssistantFields(normalized.Parameters)
 		forged.Parameters[key] = "other"

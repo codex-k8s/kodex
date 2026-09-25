@@ -3332,7 +3332,7 @@ const ru = {
       workflowNextSteps:
         "После подтверждения будет создан черновик процесса. Перед запуском проверьте его и опубликуйте на странице процесса.",
       workflowUpdateBoundary:
-        "Меняются только параметры черновика этого процесса. Сотрудники, этапы, связи и опубликованная версия остаются без изменений.",
+        "Проверьте координатора, поля и этапы черновика. Перестановка или удаление этапа меняет граф; опубликованная версия и текущие запуски останутся без изменений.",
       workflowInstructions: "Общие инструкции процесса",
       workflowCompletionCriteria: "Критерии завершения",
       workflowConcurrency: "Параллельных запусков",
@@ -6791,7 +6791,7 @@ const en = {
       workflowNextSteps:
         "Confirming this plan creates a workflow draft. Review and publish it on the workflow page before launching it.",
       workflowUpdateBoundary:
-        "Only this workflow draft's settings change. Employees, stages, dependencies, and the published version stay unchanged.",
+        "Review the coordinator, fields, and draft stages. Reordering or removing a stage changes the graph; the published version and current runs stay unchanged.",
       workflowInstructions: "Workflow instructions",
       workflowCompletionCriteria: "Completion criteria",
       workflowConcurrency: "Concurrent runs",

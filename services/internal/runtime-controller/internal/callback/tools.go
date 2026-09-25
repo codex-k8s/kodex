@@ -372,15 +372,26 @@ func connectionUpdateInputSchema(connectionRef string) map[string]any {
 }
 
 func workflowUpdateInputSchema(workflowRef string) map[string]any {
+	graph := workflowInputSchema(opaqueRefSchema(), opaqueRefSchema())["properties"].(map[string]any)
+	fields := graph["inputFields"].(map[string]any)
+	field := fields["items"].(map[string]any)
+	field["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,79}$",
+		"description": "Preserve the existing field key from the workflow readback; omit only for a new field."}
+	steps := graph["steps"].(map[string]any)
+	step := steps["items"].(map[string]any)
+	step["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 96,
+		"description": "Preserve the existing step key from the workflow readback; omit only for a new step."}
 	schema := objectSchema([]string{"workflowRef"}, map[string]any{
 		"workflowRef": enumSchema(workflowRef), "name": stringSchema(1, 160),
-		"purpose": stringSchema(0, 2000), "instructions": stringSchema(0, 65536),
+		"purpose": stringSchema(0, 2000), "coordinatorAgentRef": opaqueRefSchema(),
+		"instructions":       stringSchema(0, 65536),
 		"completionCriteria": stringSchema(0, 65536),
 		"maxConcurrency":     map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"timeoutSeconds":     map[string]any{"type": "integer", "minimum": 1, "maximum": 604800},
+		"inputFields":        fields, "steps": steps,
 	})
-	branches := make([]map[string]any, 0, 6)
-	for _, field := range []string{"name", "purpose", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds"} {
+	branches := make([]map[string]any, 0, 9)
+	for _, field := range []string{"name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps"} {
 		branches = append(branches, map[string]any{"required": []string{field}})
 	}
 	schema["anyOf"] = branches

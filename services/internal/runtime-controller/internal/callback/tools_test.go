@@ -302,7 +302,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 }
 
-func TestWorkflowUpdateSchemaIsExactAndMetadataOnly(t *testing.T) {
+func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
 		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "WORKFLOW", EntityRef: "wfl_12345678",
@@ -318,8 +318,13 @@ func TestWorkflowUpdateSchemaIsExactAndMetadataOnly(t *testing.T) {
 	parameters := properties["parameters"].(map[string]any)
 	fields := parameters["properties"].(map[string]any)
 	if fields["workflowRef"].(map[string]any)["enum"].([]string)[0] != "wfl_12345678" ||
-		fields["steps"] != nil || fields["coordinatorAgentRef"] != nil || fields["projectRef"] != nil {
-		t.Fatalf("workflow update schema exposed graph or project authority: %#v", fields)
+		fields["steps"] == nil || fields["inputFields"] == nil || fields["coordinatorAgentRef"] == nil || fields["projectRef"] != nil {
+		t.Fatalf("workflow update schema lost editable graph or exposed project authority: %#v", fields)
+	}
+	stepSchema := fields["steps"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	fieldSchema := fields["inputFields"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	if stepSchema["key"] == nil || fieldSchema["key"] == nil || stepSchema["requiredCapabilityKeys"] == nil {
+		t.Fatalf("workflow update schema lost graph identity or capabilities: %#v %#v", stepSchema, fieldSchema)
 	}
 }
 

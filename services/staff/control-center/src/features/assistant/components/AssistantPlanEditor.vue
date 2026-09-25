@@ -17,7 +17,6 @@ import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/A
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import AssistantSchedulePlanForm from "@/features/assistant/components/AssistantSchedulePlanForm.vue";
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
-import AssistantWorkflowUpdateForm from "@/features/assistant/components/AssistantWorkflowUpdateForm.vue";
 import AssistantEnvironmentRevisionForm from "@/features/assistant/components/AssistantEnvironmentRevisionForm.vue";
 import AssistantEnvironmentFieldsForm from "@/features/assistant/components/AssistantEnvironmentFieldsForm.vue";
 import AssistantAgentEnvironmentBindingForm from "@/features/assistant/components/AssistantAgentEnvironmentBindingForm.vue";
@@ -986,19 +985,9 @@ function snapshot(value: string): Record<string, unknown> {
               @target="setRunTarget(operation, $event)"
             />
             <AssistantWorkflowPlanForm
-              v-else-if="operation.value.type === 'CREATE_WORKFLOW'"
+              v-else-if="operation.value.type === 'CREATE_WORKFLOW' || operation.value.type === 'UPDATE_WORKFLOW'"
               :operation="operation"
               :project-ref="plan.projectRef"
-              :disabled="!editable"
-              @valid="workflowFormValidity[operation.value.ref] = $event"
-              @dirty="workflowFormTouched = true"
-              @parameter="
-                (key, value) => updateOperationParameter(operation, key, value)
-              "
-            />
-            <AssistantWorkflowUpdateForm
-              v-else-if="operation.value.type === 'UPDATE_WORKFLOW'"
-              :operation="operation"
               :disabled="!editable"
               @valid="workflowFormValidity[operation.value.ref] = $event"
               @dirty="workflowFormTouched = true"
