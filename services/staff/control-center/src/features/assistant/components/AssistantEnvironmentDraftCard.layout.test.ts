@@ -17,6 +17,8 @@ describe("AssistantEnvironmentDraftCard", () => {
     expect(source).toContain("readEnvironmentDraft");
     expect(source).toContain("draft.state === 'PUBLISHED'");
     expect(source).toContain("environmentDraft.incomplete");
+    expect(source).toContain("draft.specification.imageArtifactRef");
+    expect(source).toContain("environmentDraft.incompleteWithImage");
   });
 
   it("открывает существующий редактор с exact draftRef", () => {

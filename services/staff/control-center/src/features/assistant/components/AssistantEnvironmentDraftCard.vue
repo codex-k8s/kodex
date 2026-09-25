@@ -115,6 +115,9 @@ watch(
       <p v-else-if="draft.state === 'DISCARDED'">
         {{ $t("assistant.environmentDraft.discarded") }}
       </p>
+      <p v-else-if="draft.specification.imageArtifactRef">
+        {{ $t("assistant.environmentDraft.incompleteWithImage") }}
+      </p>
       <p v-else>{{ $t("assistant.environmentDraft.incomplete") }}</p>
       <p v-if="boundAgentName">
         {{ $t("assistant.environmentDraft.bound", { agent: boundAgentName }) }}

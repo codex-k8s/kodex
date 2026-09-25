@@ -22,6 +22,7 @@ async function render(props: {
             SUCCEEDED: "Завершён",
             PUBLISHED: "Опубликован",
             ACCEPTED: "Допущен",
+            PREPARED: "Подготовлен",
           },
         },
       },
@@ -67,6 +68,14 @@ describe("StatusBadge", () => {
 
     expect(html).toContain("Допущен");
     expect(html).toContain("status-badge--success");
+    expect(html).not.toContain("Статус недоступен");
+  });
+
+  it("показывает подготовленный план нейтральным состоянием", async () => {
+    const html = await render({ state: "PREPARED" });
+
+    expect(html).toContain("Подготовлен");
+    expect(html).toContain("status-badge--neutral");
     expect(html).not.toContain("Статус недоступен");
   });
 });

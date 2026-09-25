@@ -755,11 +755,14 @@ async function publish(selected: string[]): Promise<void> {
       window.sessionStorage,
     );
     publicationAttempt.value = undefined;
-    publicationPlan.value = result.plan;
     const published = result.draft;
     serverDraft.value = published;
     const ref = published.publishedEnvironmentRef;
     if (!ref) throw new Error("Published environment reference is missing");
+    // Публикация уже подтверждена authoritative readback. Закрываем план до
+    // смены маршрута, чтобы terminal APPLIED не оставался поверх редактора и
+    // его watcher не показывал запоздалую сетевую ошибку после успеха.
+    publicationPlan.value = undefined;
     await router.replace({
       name: "runtime-environment",
       params: { projectRef: projectRef.value, environmentRef: ref },
@@ -1207,12 +1210,18 @@ onBeforeUnmount(() => {
                 </div>
                 <label class="field">
                   <span>{{ $t("common.name") }}</span>
-                  <input v-model="input.name" required maxlength="120" />
+                  <input
+                    v-model="input.name"
+                    name="runtime-environment-name"
+                    required
+                    maxlength="120"
+                  />
                 </label>
                 <label class="field">
                   <span>{{ $t("common.description") }}</span>
                   <VoiceTextarea
                     v-model="input.description"
+                    name="runtime-environment-description"
                     :disabled="busy || !draftEditable || !canPublish"
                     maxlength="1000"
                   />

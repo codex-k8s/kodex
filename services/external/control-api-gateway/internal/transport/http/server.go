@@ -491,6 +491,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if field.Kind() == protoreflect.StringKind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.RuntimeEnvironmentSet", "controlplane.v1.RuntimeEnvironmentDraftSpecification":
+			return "", field.JSONName() == "description"
+		case "controlplane.v1.RuntimeEnvironmentTool":
+			return "", field.JSONName() == "description" || field.JSONName() == "usageHint"
+		case "controlplane.v1.RuntimeEnvironmentValue":
+			return "", field.JSONName() == "value"
 		case "controlplane.v1.OwnerGateDecisionConsequence":
 			return "", field.JSONName() == "safeSummary"
 		case "controlplane.v1.IntegrationIntent":

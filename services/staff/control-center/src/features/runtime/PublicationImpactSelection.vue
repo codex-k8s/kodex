@@ -165,7 +165,13 @@ onBeforeUnmount(() => {
     <p>{{ $t("publicationImpact.snapshotTotal", { count: plan.total }) }}</p>
     <label>
       {{ $t("common.search") }}
-      <input v-model="query" type="search" maxlength="200" :disabled="busy" />
+      <input
+        v-model="query"
+        name="publication-impact-search"
+        type="search"
+        maxlength="200"
+        :disabled="busy"
+      />
     </label>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>

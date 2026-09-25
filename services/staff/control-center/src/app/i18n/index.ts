@@ -3117,6 +3117,8 @@ const ru = {
         "Не удалось получить состояние черновика окружения. Повторите обновление.",
       incomplete:
         "Это ещё черновик. Выберите проверенный образ, настройте параметры, проверьте и опубликуйте окружение.",
+      incompleteWithImage:
+        "Черновик содержит проверенный образ. Проверьте параметры и опубликуйте окружение.",
       invalid:
         "Проверка не прошла. Откройте редактор и исправьте параметры окружения.",
       published: "Окружение опубликовано. Привяжите его к нужному сотруднику.",
@@ -3427,6 +3429,7 @@ const ru = {
     VALID: "Проверен",
     INVALID: "Есть ошибки",
     PUBLISHED: "Опубликован",
+    PREPARED: "Подготовлен",
     APPLIED: "Применён",
     ARCHIVED: "Архивирован",
     CLOSED: "Закрыт",
@@ -6611,6 +6614,8 @@ const en = {
       loadFailed: "Could not load the environment draft. Refresh to try again.",
       incomplete:
         "This is still a draft. Select an admitted image, configure, validate, and publish the environment.",
+      incompleteWithImage:
+        "The draft contains an admitted image. Review its settings and publish the environment.",
       invalid:
         "Validation failed. Open the editor and correct the environment configuration.",
       published:
@@ -6915,6 +6920,7 @@ const en = {
     VALID: "Valid",
     INVALID: "Invalid",
     PUBLISHED: "Published",
+    PREPARED: "Prepared",
     APPLIED: "Applied",
     ARCHIVED: "Archived",
     CLOSED: "Closed",

@@ -249,6 +249,31 @@ func TestMessageMapMaterializesRequiredProviderAccountZeroValues(t *testing.T) {
 	}
 }
 
+func TestMessageMapMaterializesRequiredRuntimeEnvironmentEmptyStrings(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.RuntimeEnvironmentSet{
+		Ref:  "renv-example",
+		Name: "Среда",
+		CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{
+			Values: []*controlplanev1.RuntimeEnvironmentValue{{Name: "EMPTY"}},
+			Tools:  []*controlplanev1.RuntimeEnvironmentTool{{Name: "tool", Command: "tool"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["description"] != "" {
+		t.Fatalf("обязательное описание окружения потеряно: %#v", value)
+	}
+	version := value["currentVersion"].(map[string]any)
+	item := version["values"].([]any)[0].(map[string]any)
+	tool := version["tools"].([]any)[0].(map[string]any)
+	if item["value"] != "" || tool["description"] != "" || tool["usageHint"] != "" {
+		t.Fatalf("обязательные пустые строки окружения потеряны: %#v", version)
+	}
+}
+
 func TestMessageMapNormalizesRunEventEnumsToOpenAPIValues(t *testing.T) {
 	t.Parallel()
 
