@@ -143,6 +143,10 @@ describe("AssistantPlanEditor layout", () => {
       "validateDockerfile(fieldValue(operation, 'dockerfile'))",
     );
     expect(source).toContain("roleImageReady(operation)");
+    expect(source).toContain(
+      "v-if=\"editable || fieldValue(operation, 'dockerfile')\"",
+    );
+    expect(source).toContain("assistant.planEditor.roleImageHistoricalSource");
   });
 
   it("проверяет схему подключения и не показывает ввод секрета в плане", () => {

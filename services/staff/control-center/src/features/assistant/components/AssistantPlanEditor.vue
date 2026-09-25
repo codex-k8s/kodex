@@ -1554,6 +1554,7 @@ function snapshot(value: string): Record<string, unknown> {
                   </select>
                 </label>
                 <RoleImageDockerfileEditor
+                  v-if="editable || fieldValue(operation, 'dockerfile')"
                   :model-value="fieldValue(operation, 'dockerfile')"
                   :label="$t('roleImages.dockerfile')"
                   :validation-messages="
@@ -1566,6 +1567,9 @@ function snapshot(value: string): Record<string, unknown> {
                     updateOperationParameter(operation, 'dockerfile', $event)
                   "
                 />
+                <p v-else class="assistant-plan-friendly__hint">
+                  {{ $t("assistant.planEditor.roleImageHistoricalSource") }}
+                </p>
                 <p
                   v-if="roleImageCatalogProblem"
                   class="field-error"
@@ -1573,7 +1577,7 @@ function snapshot(value: string): Record<string, unknown> {
                 >
                   {{ $t("assistant.planEditor.roleImageCatalogUnavailable") }}
                 </p>
-                <p class="assistant-plan-friendly__hint">
+                <p v-if="editable" class="assistant-plan-friendly__hint">
                   {{ $t("assistant.planEditor.roleImageNextSteps") }}
                 </p>
               </template>

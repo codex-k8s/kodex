@@ -3315,6 +3315,8 @@ const ru = {
         "Не удалось загрузить каталог сотрудников и окружений. Обновите страницу и проверьте план снова.",
       roleImageNextSteps:
         "После подтверждения платформа создаст рецепт и поставит первую сборку в очередь. Образ станет доступен сотруднику только после успешной проверки и публикации.",
+      roleImageHistoricalSource:
+        "В сохранённом плане нет исходника Dockerfile. Если образ создан, откройте его рецепт, чтобы посмотреть текущий исходник.",
       connectionDefinition: "Тип интеграции",
       connectionDefinitionFixed:
         "Если нужен другой тип интеграции, попросите помощника переделать план.",
@@ -6793,6 +6795,8 @@ const en = {
         "Could not load the employee and environment catalog. Reload the page and validate the plan again.",
       roleImageNextSteps:
         "After confirmation, the platform creates a recipe and queues its first build. The employee can use the image only after successful verification and promotion.",
+      roleImageHistoricalSource:
+        "This saved plan does not contain the Dockerfile source. If the image was created, open its recipe to inspect the current source.",
       connectionDefinition: "Integration type",
       connectionDefinitionFixed:
         "Ask the assistant to revise the plan if you need another integration type.",
