@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import { loadSchedulePreview } from "@/features/automations/api";
-import { scheduleTimePreview } from "@/features/automations/prompt-preview";
+import {
+  automationTimezoneOptions,
+  formatAutomationOccurrence,
+  scheduleTimePreview,
+} from "@/features/automations/prompt-preview";
 import {
   operationParameter,
   type EditablePlanOperation,
@@ -41,6 +46,7 @@ const emit = defineEmits<{
   dirty: [];
   parameter: [key: string, value: unknown];
 }>();
+const { locale } = useI18n();
 const selected = ref<ExecutionTargetPickerOption>();
 const targetProblem = ref(false);
 const preview = ref<SchedulePreview>();
@@ -58,14 +64,9 @@ const weekdays = [
   "SATURDAY",
   "SUNDAY",
 ] as const;
-const timezoneExamples = [
-  "UTC",
-  "Europe/Saratov",
-  "Europe/Moscow",
-  "Europe/Berlin",
-  "Asia/Almaty",
-  "America/New_York",
-];
+const timezoneOptions = computed(() =>
+  automationTimezoneOptions(stringParameter("timezone")),
+);
 
 function parameter(key: string): unknown {
   try {
@@ -461,22 +462,19 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       >
       <label class="field"
         ><span>{{ $t("automations.timezone") }}</span
-        ><input
+        ><select
           :value="stringParameter('timezone')"
-          :list="`assistant-schedule-timezones-${operation.value.ref}`"
-          maxlength="80"
+          required
           :disabled="disabled"
-          @input="
-            change('timezone', ($event.target as HTMLInputElement).value)
-          " /><datalist
-          :id="`assistant-schedule-timezones-${operation.value.ref}`"
+          @change="
+            change('timezone', ($event.target as HTMLSelectElement).value)
+          "
         >
-          <option
-            v-for="zone in timezoneExamples"
-            :key="zone"
-            :value="zone"
-          /></datalist
-      ></label>
+          <option v-for="zone in timezoneOptions" :key="zone" :value="zone">
+            {{ zone }}
+          </option>
+        </select></label
+      >
     </div>
     <div class="assistant-schedule-form__grid">
       <label class="field"
@@ -613,7 +611,13 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       <strong>{{ $t("assistant.planEditor.scheduleNextRuns") }}</strong>
       <ol>
         <li v-for="item in preview.occurrences.slice(0, 5)" :key="item">
-          {{ item }}
+          {{
+            formatAutomationOccurrence(
+              item,
+              locale,
+              stringParameter("timezone"),
+            )
+          }}
         </li>
       </ol>
     </div>

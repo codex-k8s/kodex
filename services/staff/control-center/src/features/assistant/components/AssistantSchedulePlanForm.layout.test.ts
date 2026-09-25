@@ -18,6 +18,8 @@ describe("форма автоматизации в плане помощника
     expect(source).toContain("loadSchedulePreview");
     expect(source).toContain("previewIdentity.value === previewKey.value");
     expect(source).toContain("cronExpression");
+    expect(source).toContain("automationTimezoneOptions");
+    expect(source).toContain("formatAutomationOccurrence");
   });
 
   it("не сбрасывает некорректный ввод процесса при изменении названия", () => {

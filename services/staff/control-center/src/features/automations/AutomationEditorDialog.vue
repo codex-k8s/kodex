@@ -7,7 +7,10 @@ import { useI18n } from "vue-i18n";
 import { scheduleInput } from "@/features/automations/model";
 import { loadSchedulePreview } from "@/features/automations/api";
 import AutomationPromptPreview from "./AutomationPromptPreview.vue";
-import { scheduleTimePreview } from "./prompt-preview";
+import {
+  automationTimezoneOptions,
+  scheduleTimePreview,
+} from "./prompt-preview";
 import {
   createExecutionTargetPickerLoader,
   targetRefAfterTypeChange,
@@ -90,20 +93,8 @@ const custom = computed(() =>
         workflow: "Процесс",
       },
 );
-const timezoneOptions = Array.from(
-  new Set([
-    form.timezone,
-    "UTC",
-    "Europe/Saratov",
-    "Europe/Moscow",
-    "Europe/Berlin",
-    "Asia/Dubai",
-    "Asia/Almaty",
-    "Asia/Tokyo",
-    "America/New_York",
-    "America/Chicago",
-    "America/Los_Angeles",
-  ]),
+const timezoneOptions = computed(() =>
+  automationTimezoneOptions(form.timezone),
 );
 const preview = ref<SchedulePreview>();
 const previewProblem = ref<AppProblem>();

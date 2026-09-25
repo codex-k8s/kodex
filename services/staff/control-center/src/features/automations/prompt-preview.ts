@@ -6,6 +6,43 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { normalizeTemplateVariable } from "@/features/agents/detail/model";
 
+const commonAutomationTimezones = [
+  "UTC",
+  "Europe/Saratov",
+  "Europe/Moscow",
+  "Europe/Berlin",
+  "Asia/Dubai",
+  "Asia/Almaty",
+  "Asia/Tokyo",
+  "America/New_York",
+  "America/Chicago",
+  "America/Los_Angeles",
+] as const;
+
+export function automationTimezoneOptions(current?: string): string[] {
+  return Array.from(
+    new Set([current?.trim(), ...commonAutomationTimezones].filter(Boolean)),
+  ) as string[];
+}
+
+export function formatAutomationOccurrence(
+  value: string,
+  locale: string,
+  timezone: string,
+): string {
+  const instant = new Date(value);
+  if (Number.isNaN(instant.valueOf())) return value;
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: timezone,
+    }).format(instant);
+  } catch {
+    return value;
+  }
+}
+
 export function scheduleTimePreview(
   input: Pick<
     ScheduleInput,
