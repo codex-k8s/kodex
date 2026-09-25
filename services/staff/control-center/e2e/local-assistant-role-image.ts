@@ -175,6 +175,25 @@ test("помощник создаёт рецепт образа и показы�
     return;
   }
 
+  const conversationRef = await assistant.getAttribute("data-conversation-ref");
+  if (!conversationRef)
+    throw new Error("Assistant conversation ref is missing");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(assistant).toBeVisible({ timeout: 30_000 });
+  await assistant
+    .locator(`[data-conversation-ref="${conversationRef}"]`)
+    .last()
+    .click({ timeout: 30_000 });
+  await expect(assistant).toHaveAttribute(
+    "data-conversation-ref",
+    conversationRef,
+  );
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await expect(recipeLink).toHaveAttribute(
+    "href",
+    `/projects/${projectRef}/role-images/${recipeRef}`,
+  );
+
   await expect
     .poll(
       async () => {
@@ -217,6 +236,47 @@ test("помощник создаёт рецепт образа и показы�
     )
     .toBe(true);
   expect(browserFailures).toEqual([]);
+});
+
+test("карточка собственной сборки восстанавливается после reload", async ({
+  page,
+}) => {
+  const projectRef = process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_PROJECT ?? "";
+  const conversationRef =
+    process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_CONVERSATION ?? "";
+  const recipeRef = process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_RECIPE_REF ?? "";
+  test.skip(
+    !projectRef || !conversationRef || !recipeRef,
+    "Нужны точные ссылки только собственной тестовой сборки",
+  );
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await gotoWithRetry(page, `/projects/${projectRef}`);
+  await page.getByRole("button", { name: "Открыть Kodex" }).click();
+  const assistant = page.getByRole("dialog", { name: "Kodex" });
+  const conversation = assistant
+    .locator(`[data-conversation-ref="${conversationRef}"]`)
+    .last();
+  await conversation.click();
+  const card = assistant.locator(".assistant-build-card").last();
+  const recipeLink = card.locator(
+    `a[href="/projects/${projectRef}/role-images/${recipeRef}"]`,
+  );
+  await expect(recipeLink).toBeVisible();
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(assistant).toBeVisible({ timeout: 30_000 });
+  await conversation.click();
+  await expect(assistant).toHaveAttribute(
+    "data-conversation-ref",
+    conversationRef,
+  );
+  await expect(recipeLink).toBeVisible();
 });
 
 test("существующий образ проходит допуск и явную публикацию", async ({
