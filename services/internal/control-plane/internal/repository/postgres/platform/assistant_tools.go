@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -718,7 +719,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			InitialCapabilities: initialCapabilities}
 		if payload.ProjectRef == "" || payload.Name == "" || len(payload.Name) > 160 || payload.Purpose == "" || len(payload.Purpose) > 2000 ||
 			payload.RoleDescription == "" || len(payload.RoleDescription) > 2000 || len(payload.AvatarURL) > 500 || len(payload.Instructions) < 20 || len(payload.Instructions) > 65536 ||
-			strings.Contains(payload.Instructions, "i18n:") || strings.Contains(payload.Instructions, "{{ index .") {
+			strings.Contains(payload.Instructions, "i18n:") || strings.Contains(payload.Instructions, "{{ index .") || !validAssistantPromptTemplate(payload.Instructions) {
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateAgent, payload
@@ -816,7 +817,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		expected, valid := assistantInt64(operation.Input, "expectedVersion")
 		payload := command.AgentInput{Ref: assistantString(operation.Input, "agentRef"), Instructions: assistantString(operation.Input, "instructions")}
-		if !valid || expected < 1 || payload.Ref == "" || len(strings.TrimSpace(payload.Instructions)) < 20 || len(payload.Instructions) > 65536 {
+		if !valid || expected < 1 || payload.Ref == "" || len(strings.TrimSpace(payload.Instructions)) < 20 || len(payload.Instructions) > 65536 || !validAssistantPromptTemplate(payload.Instructions) {
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateInstructions, payload
@@ -940,6 +941,15 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		return command.Command{}, errs.ErrInvalid
 	}
 	return result, nil
+}
+
+func validAssistantPromptTemplate(value string) bool {
+	for _, diagnostic := range promptservice.Validate(value, promptservice.Catalog()) {
+		if diagnostic.Severity == "ERROR" {
+			return false
+		}
+	}
+	return true
 }
 
 func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {

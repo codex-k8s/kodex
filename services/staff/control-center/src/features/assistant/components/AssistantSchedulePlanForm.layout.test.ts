@@ -20,6 +20,9 @@ describe("форма автоматизации в плане помощника
     expect(source).toContain("cronExpression");
     expect(source).toContain("automationTimezoneOptions");
     expect(source).toContain("formatAutomationOccurrence");
+    expect(source).toContain("<AutomationPromptPreview");
+    expect(source).toContain("automations.misfire");
+    expect(source).toContain("automations.overlap");
   });
 
   it("не сбрасывает некорректный ввод процесса при изменении названия", () => {

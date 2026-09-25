@@ -431,6 +431,8 @@ func TestAssistantCreateAgentProposesOnlyExplicitInitialCapabilities(t *testing.
 	for _, invalid := range []string{
 		`Name: {{ index . "i18n:SYSTEM_ASSISTANT_NAME" }}`,
 		`Name: i18n:SYSTEM_ASSISTANT_NAME`,
+		`Product: {{ .Kodex }}`,
+		`Project: {{ .Marketplace }}`,
 	} {
 		operation.Input["instructions"] = "Coordinate work using verified project context. " + invalid
 		if _, err := assistantOperationCommand(operation); !errors.Is(err, errs.ErrInvalid) {

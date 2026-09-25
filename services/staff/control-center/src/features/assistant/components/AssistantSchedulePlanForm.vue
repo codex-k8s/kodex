@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { loadSchedulePreview } from "@/features/automations/api";
+import AutomationPromptPreview from "@/features/automations/AutomationPromptPreview.vue";
 import {
   automationTimezoneOptions,
   formatAutomationOccurrence,
@@ -258,6 +259,60 @@ watch(
   { immediate: true },
 );
 
+function objectParameter(key: string): Record<string, unknown> {
+  const value = parameter(key);
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : {};
+}
+const scheduleDraft = computed<ScheduleInput>(() => {
+  const schedulePreset = presets.includes(
+    preset.value as ScheduleInput["preset"],
+  )
+    ? (preset.value as ScheduleInput["preset"])
+    : "DAILY";
+  const sessionPolicy = stringParameter("sessionPolicy");
+  const notificationPolicy = stringParameter("notificationPolicy");
+  const misfirePolicy = stringParameter("misfirePolicy");
+  const overlapPolicy = stringParameter("overlapPolicy");
+  const dayOfWeek = stringParameter("dayOfWeek");
+  return {
+    name: stringParameter("name"),
+    targetType: targetType.value ?? "AGENT",
+    targetRef: targetRef.value,
+    preset: schedulePreset,
+    ...(schedulePreset === "CUSTOM"
+      ? { cronExpression: stringParameter("cronExpression") }
+      : {
+          timeOfDay:
+            schedulePreset === "HOURLY"
+              ? "00:00"
+              : stringParameter("timeOfDay"),
+        }),
+    ...(schedulePreset === "WEEKLY" &&
+    weekdays.includes(dayOfWeek as NonNullable<ScheduleInput["dayOfWeek"]>)
+      ? { dayOfWeek: dayOfWeek as NonNullable<ScheduleInput["dayOfWeek"]> }
+      : {}),
+    timezone: stringParameter("timezone"),
+    input: objectParameter("input"),
+    sessionPolicy:
+      sessionPolicy === "CONTINUE_ONE" ? "CONTINUE_ONE" : "NEW_EACH_RUN",
+    notificationPolicy:
+      notificationPolicy === "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
+        ? "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"
+        : "CONTROL_CENTER_ONLY",
+    dstGapPolicy: "SHIFT_FORWARD",
+    dstFoldPolicy: "RUN_ONCE_EARLIEST",
+    misfirePolicy:
+      misfirePolicy === "CATCH_UP_ONE" || misfirePolicy === "SKIP"
+        ? misfirePolicy
+        : "COALESCE",
+    overlapPolicy: overlapPolicy === "ALLOW" ? "ALLOW" : "FORBID",
+    automationText: stringParameter("automationText"),
+    promptInputs: objectParameter("promptInputs"),
+  };
+});
+
 const valid = computed(() =>
   Boolean(
     props.projectRef &&
@@ -413,6 +468,45 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
           $t("assistant.planEditor.runTargetUnavailable")
         }}</small>
       </div>
+    </div>
+    <div class="assistant-schedule-form__grid">
+      <label class="field"
+        ><span>{{ $t("automations.misfire") }}</span
+        ><select
+          :value="stringParameter('misfirePolicy') || 'COALESCE'"
+          :disabled="disabled"
+          @change="
+            change('misfirePolicy', ($event.target as HTMLSelectElement).value)
+          "
+        >
+          <option value="COALESCE">
+            {{ $t("automations.policies.COALESCE") }}
+          </option>
+          <option value="CATCH_UP_ONE">
+            {{ $t("automations.policies.CATCH_UP_ONE") }}
+          </option>
+          <option value="SKIP">
+            {{ $t("automations.policies.SKIP") }}
+          </option>
+        </select></label
+      >
+      <label class="field"
+        ><span>{{ $t("automations.overlap") }}</span
+        ><select
+          :value="stringParameter('overlapPolicy') || 'FORBID'"
+          :disabled="disabled"
+          @change="
+            change('overlapPolicy', ($event.target as HTMLSelectElement).value)
+          "
+        >
+          <option value="FORBID">
+            {{ $t("automations.policies.FORBID") }}
+          </option>
+          <option value="ALLOW">
+            {{ $t("automations.policies.ALLOW") }}
+          </option>
+        </select></label
+      >
     </div>
     <div class="assistant-schedule-form__grid">
       <label class="field"
@@ -627,6 +721,12 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
     <p class="assistant-plan-friendly__hint">
       {{ $t("assistant.planEditor.scheduleNextSteps") }}
     </p>
+    <AutomationPromptPreview
+      v-if="projectRef"
+      :project-ref="projectRef"
+      :draft="scheduleDraft"
+      :disabled="disabled"
+    />
   </div>
 </template>
 

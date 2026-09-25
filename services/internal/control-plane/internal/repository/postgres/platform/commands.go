@@ -832,6 +832,9 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.validateAgentPromptContextTx(ctx, tx, scope, item.Ref, input.Instructions, false); err != nil {
+		return commandOutcome{}, err
+	}
 	item.InstructionBinding = &entity.AgentInstructionsBinding{Ref: bindingRef, Version: bindingVersion, RevisionRef: instructionRef, Effective: true}
 	item.ProjectRef = input.ProjectRef
 	item.RoleDefinitionRef = roleRef
