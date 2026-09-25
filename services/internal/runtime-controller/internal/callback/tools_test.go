@@ -171,7 +171,8 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	}
 	environmentProperties := byType["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]["properties"].(map[string]any)
 	if environmentProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
-		environmentProperties["imageArtifactRef"] == nil {
+		environmentProperties["imageArtifactRef"] == nil || environmentProperties["publicValues"] == nil ||
+		environmentProperties["secretBindings"] == nil || environmentProperties["secretValue"] != nil {
 		t.Fatalf("environment draft schema lost project binding or artifact pointer: %#v", environmentProperties)
 	}
 	imageProperties := byType["CREATE_ROLE_IMAGE_RECIPE"]["properties"].(map[string]any)

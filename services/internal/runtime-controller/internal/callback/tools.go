@@ -235,6 +235,21 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_RUNTIME_ENVIRONMENT_DRAFT", objectSchema([]string{"projectRef", "name"}, map[string]any{
 			"projectRef": projectRef, "name": stringSchema(1, 120), "description": stringSchema(0, 1000),
 			"imageArtifactRef": opaqueRefSchema(),
+			"publicValues": map[string]any{"type": "array", "maxItems": 128,
+				"description": "Non-secret environment values only. Credentials and tokens must use a protected Secret form and secretBindings.",
+				"items": objectSchema([]string{"name", "value"}, map[string]any{
+					"name":  map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
+					"value": stringSchema(0, 8192),
+				}),
+			},
+			"secretBindings": map[string]any{"type": "array", "maxItems": 128,
+				"description": "References to already created project Secrets; never include plaintext values.",
+				"items": objectSchema([]string{"name", "secretRef"}, map[string]any{
+					"name":      map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
+					"secretRef": map[string]any{"type": "string", "pattern": "^sec_[A-Za-z0-9_-]{4,92}$"},
+					"revision":  map[string]any{"type": "integer", "minimum": 0},
+				}),
+			},
 		})),
 		assistantOperationSchema("CREATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"projectRef", "agentRef", "name"}, map[string]any{
 			"projectRef": projectRef, "agentRef": opaqueRefSchema(), "name": stringSchema(1, 160),

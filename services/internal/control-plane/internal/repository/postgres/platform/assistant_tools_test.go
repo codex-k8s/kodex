@@ -216,6 +216,21 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 	if payload.ProjectRef != "prj_example" || payload.Specification.Name != "Developer environment" || payload.Specification.Description != "Build and test project code" || payload.Specification.ImageArtifactRef != "" {
 		t.Fatalf("unexpected environment draft payload: %#v", payload)
 	}
+	bound.Input = map[string]any{
+		"projectRef": "prj_example", "name": "Developer environment",
+		"publicValues":   []any{map[string]any{"name": "PUBLIC_ENDPOINT", "value": "https://example.test"}},
+		"secretBindings": []any{map[string]any{"name": "SERVICE_AUTH", "secretRef": "sec_example1", "revision": float64(2)}},
+	}
+	withFields, err := assistantOperationCommand(bound)
+	if err != nil {
+		t.Fatalf("map environment fields: %v", err)
+	}
+	fields := withFields.Payload.(command.RuntimeEnvironmentDraftInput).Specification
+	if len(fields.Values) != 1 || fields.Values[0].Name != "PUBLIC_ENDPOINT" ||
+		fields.Values[0].Value != "https://example.test" || len(fields.SecretBindings) != 1 ||
+		fields.SecretBindings[0].Name != "SERVICE_AUTH" || fields.SecretBindings[0].Revision != 2 {
+		t.Fatalf("environment fields lost: %#v", fields)
+	}
 	forged := hydrated
 	forged.Target.Kind = "AGENT"
 	if _, err := normalizeAssistantOperation(forged); !errors.Is(err, errs.ErrInvalid) {
@@ -223,6 +238,10 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 	}
 	for _, invalid := range []map[string]any{
 		{"projectRef": "prj_example", "name": "Environment", "secretValue": "forged"},
+		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "API_TOKEN", "value": "forged"}}},
+		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "VISIBLE", "value": "safe", "secretValue": "forged"}}},
+		{"projectRef": "prj_example", "name": "Environment", "secretBindings": []any{map[string]any{"name": "SERVICE_AUTH", "secretRef": "sec_example1", "value": "forged"}}},
+		{"projectRef": "prj_example", "name": "Environment", "publicValues": []any{map[string]any{"name": "DUPLICATE", "value": "safe"}}, "secretBindings": []any{map[string]any{"name": "DUPLICATE", "secretRef": "sec_example1"}}},
 		{"projectRef": "prj_example", "name": "Environment", "imageArtifactRef": "https://untrusted.example/image"},
 		{"projectRef": "", "name": "Environment"},
 	} {
