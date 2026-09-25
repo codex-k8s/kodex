@@ -19,6 +19,7 @@ import AssistantSchedulePlanForm from "@/features/assistant/components/Assistant
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
 import AssistantWorkflowUpdateForm from "@/features/assistant/components/AssistantWorkflowUpdateForm.vue";
 import AssistantEnvironmentRevisionForm from "@/features/assistant/components/AssistantEnvironmentRevisionForm.vue";
+import AssistantEnvironmentFieldsForm from "@/features/assistant/components/AssistantEnvironmentFieldsForm.vue";
 import AssistantAgentEnvironmentBindingForm from "@/features/assistant/components/AssistantAgentEnvironmentBindingForm.vue";
 import { prepareConnectionConfiguration } from "@/features/integrations/connection-setup";
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
@@ -84,6 +85,8 @@ const workflowFormValidity = ref<Record<string, boolean>>({});
 const workflowFormTouched = ref(false);
 const environmentFormValidity = ref<Record<string, boolean>>({});
 const environmentFormTouched = ref(false);
+const environmentFieldsValidity = ref<Record<string, boolean>>({});
+const environmentFieldsTouched = ref(false);
 const bindingFormValidity = ref<Record<string, boolean>>({});
 const bindingFormTouched = ref(false);
 const scheduleFormValidity = ref<Record<string, boolean>>({});
@@ -150,6 +153,8 @@ function resetDraft(): void {
   workflowFormTouched.value = false;
   environmentFormValidity.value = {};
   environmentFormTouched.value = false;
+  environmentFieldsValidity.value = {};
+  environmentFieldsTouched.value = false;
   bindingFormValidity.value = {};
   bindingFormTouched.value = false;
   scheduleFormValidity.value = {};
@@ -356,6 +361,7 @@ const draftMatchesSavedPlan = computed(() => {
       !runFormTouched.value &&
       !workflowFormTouched.value &&
       !environmentFormTouched.value &&
+      !environmentFieldsTouched.value &&
       !bindingFormTouched.value &&
       !scheduleFormTouched.value &&
       !capabilityFormTouched.value &&
@@ -391,6 +397,9 @@ const friendlyInputsReady = computed(() =>
           workflowFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
           environmentFormValidity.value[operation.value.ref] === true) &&
+        ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
+          operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
+          environmentFieldsValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT" ||
           bindingFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_SCHEDULE" &&
@@ -911,18 +920,33 @@ function snapshot(value: string): Record<string, unknown> {
                 (key, value) => updateOperationParameter(operation, key, value)
               "
             />
-            <AssistantEnvironmentRevisionForm
+            <template
               v-else-if="
                 operation.value.type === 'PREPARE_RUNTIME_ENVIRONMENT_REVISION'
               "
-              :operation="operation"
-              :disabled="!editable"
-              @valid="environmentFormValidity[operation.value.ref] = $event"
-              @dirty="environmentFormTouched = true"
-              @parameter="
-                (key, value) => updateOperationParameter(operation, key, value)
-              "
-            />
+            >
+              <AssistantEnvironmentRevisionForm
+                :operation="operation"
+                :disabled="!editable"
+                @valid="environmentFormValidity[operation.value.ref] = $event"
+                @dirty="environmentFormTouched = true"
+                @parameter="
+                  (key, value) =>
+                    updateOperationParameter(operation, key, value)
+                "
+              />
+              <AssistantEnvironmentFieldsForm
+                :operation="operation"
+                :project-ref="plan.projectRef || ''"
+                :disabled="!editable"
+                @valid="environmentFieldsValidity[operation.value.ref] = $event"
+                @dirty="environmentFieldsTouched = true"
+                @parameter="
+                  (key, value) =>
+                    updateOperationParameter(operation, key, value)
+                "
+              />
+            </template>
             <AssistantAgentEnvironmentBindingForm
               v-else-if="
                 operation.value.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT'
@@ -1085,6 +1109,22 @@ function snapshot(value: string): Record<string, unknown> {
                 <p class="assistant-plan-friendly__hint">
                   {{ $t("assistant.planEditor.environmentDraftNextSteps") }}
                 </p>
+                <AssistantEnvironmentFieldsForm
+                  v-if="
+                    operation.value.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT'
+                  "
+                  :operation="operation"
+                  :project-ref="plan.projectRef || ''"
+                  :disabled="!editable"
+                  @valid="
+                    environmentFieldsValidity[operation.value.ref] = $event
+                  "
+                  @dirty="environmentFieldsTouched = true"
+                  @parameter="
+                    (key, value) =>
+                      updateOperationParameter(operation, key, value)
+                  "
+                />
               </template>
               <template
                 v-else-if="

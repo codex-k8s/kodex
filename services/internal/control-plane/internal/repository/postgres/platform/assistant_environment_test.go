@@ -71,12 +71,48 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 		result.Target.Ref != "renv_exact" || *result.ExpectedVersion != 7 {
 		t.Fatalf("environment edit lost authoritative envelope: %#v %v", result, err)
 	}
-	for _, key := range []string{"specification", "secretBindings", "policy", "values", "tools"} {
+	valuesEdit := normalized
+	valuesEdit.Parameters = cloneAssistantFields(normalized.Parameters)
+	valuesEdit.Parameters["publicValues"] = []any{map[string]any{"name": "MODE", "value": "updated"}}
+	valuesEdit.Parameters["secretBindings"] = []any{map[string]any{"name": "TOKEN", "secretRef": "sec_exact", "revision": float64(3)}}
+	valuesResult, err := rehydrateEditedAssistantEnvironment(normalized, valuesEdit)
+	if err != nil {
+		t.Fatalf("environment value edit refused: %v", err)
+	}
+	valuesResult, err = normalizeAssistantOperation(valuesResult)
+	if err != nil {
+		t.Fatalf("environment value edit could not be normalized: %v", err)
+	}
+	valuesCommand, err := assistantOperationCommand(valuesResult)
+	if err != nil {
+		t.Fatalf("environment value command refused: %v", err)
+	}
+	updated := valuesCommand.Payload.(command.RuntimeEnvironmentDraftInput).Specification
+	if len(updated.Values) != 1 || updated.Values[0].Value != "updated" ||
+		len(updated.SecretBindings) != 1 || updated.SecretBindings[0].Revision != 3 ||
+		len(updated.Tools) != 1 || updated.Tools[0].Name != "git" {
+		t.Fatalf("environment revision did not preserve immutable fields: %#v", updated)
+	}
+	for _, key := range []string{"specification", "policy", "values", "tools"} {
 		forged := edited
 		forged.Parameters = cloneAssistantFields(normalized.Parameters)
 		forged.Parameters[key] = "forged"
 		if _, err := rehydrateEditedAssistantEnvironment(normalized, forged); !errors.Is(err, errs.ErrForbidden) {
 			t.Fatalf("environment field %s was mutable: %v", key, err)
+		}
+	}
+	for _, invalid := range []map[string]any{
+		{"publicValues": []any{map[string]any{"name": "API_TOKEN", "value": "forbidden"}}},
+		{"publicValues": []any{map[string]any{"name": "TOKEN", "value": "collision"}}},
+		{"secretBindings": []any{map[string]any{"name": "TOKEN", "secretRef": "sec_other", "secretValue": "forged"}}},
+	} {
+		forged := edited
+		forged.Parameters = cloneAssistantFields(normalized.Parameters)
+		for key, value := range invalid {
+			forged.Parameters[key] = value
+		}
+		if _, err := rehydrateEditedAssistantEnvironment(normalized, forged); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("invalid environment fields accepted: %v", err)
 		}
 	}
 }

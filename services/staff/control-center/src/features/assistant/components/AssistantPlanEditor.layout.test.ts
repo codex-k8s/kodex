@@ -24,6 +24,11 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("<AsyncEntityPicker");
     expect(source).toContain("setImageArtifact(operation, $event)");
     expect(source).toContain("assistant.planEditor.environmentDraftNextSteps");
+    expect(source).toContain("<AssistantEnvironmentFieldsForm");
+    expect(source).toContain(
+      "environmentFieldsValidity.value[operation.value.ref] === true",
+    );
+    expect(source).toContain("!environmentFieldsTouched.value");
   });
 
   it("показывает сотрудника и каталог окружений для рецепта образа", () => {

@@ -113,6 +113,7 @@ WHERE project.name = 'Role image promotion' AND image.promotion_state = 'PROMOTE
 		entity.AssistantPlanOperation{Type: "PREPARE_RUNTIME_ENVIRONMENT_REVISION", Key: "draft-assistant-revision",
 			Title: "Revise environment", Summary: "Revise environment", Parameters: map[string]any{
 				"environmentRef": target.Ref, "description": "Assistant revision",
+				"publicValues": []any{map[string]any{"name": "MODE", "value": "assistant"}},
 			}})
 	if err != nil {
 		_ = assistantTx.Rollback(ctx)
@@ -141,7 +142,8 @@ WHERE project.name = 'Role image promotion' AND image.promotion_state = 'PROMOTE
 		assistantDraft.RuntimeEnvironmentDraft.EnvironmentRef != target.Ref ||
 		assistantDraft.RuntimeEnvironmentDraft.BaseVersionRef != target.CurrentVersion.Ref ||
 		assistantDraft.RuntimeEnvironmentDraft.Specification.Description != "Assistant revision" ||
-		len(assistantDraft.RuntimeEnvironmentDraft.Specification.Values) != len(spec.Values) {
+		len(assistantDraft.RuntimeEnvironmentDraft.Specification.Values) != len(spec.Values) ||
+		assistantDraft.RuntimeEnvironmentDraft.Specification.Values[0].Value != "assistant" {
 		t.Fatalf("assistant revision did not preserve the exact base: %#v %v", assistantDraft.RuntimeEnvironmentDraft, err)
 	}
 	unchanged, err := service.GetRuntimeEnvironment(ctx, owner, target.Ref)

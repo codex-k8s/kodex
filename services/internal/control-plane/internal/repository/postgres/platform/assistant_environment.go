@@ -12,7 +12,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-var assistantEnvironmentEditableFields = []string{"name", "description", "imageArtifactRef"}
+var assistantEnvironmentTextFields = []string{"name", "description", "imageArtifactRef"}
+var assistantEnvironmentEditableFields = []string{"name", "description", "imageArtifactRef", "publicValues", "secretBindings"}
 
 func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef, environmentRef string,
@@ -89,7 +90,7 @@ func hydrateAssistantEnvironmentFields(before map[string]any, version int64,
 		"imageArtifactRef": before["imageArtifactRef"],
 	}
 	changed := false
-	for _, field := range assistantEnvironmentEditableFields {
+	for _, field := range assistantEnvironmentTextFields {
 		value, supplied := operation.Parameters[field]
 		if !supplied {
 			continue
@@ -101,6 +102,32 @@ func hydrateAssistantEnvironmentFields(before map[string]any, version int64,
 		text = strings.TrimSpace(text)
 		changed = changed || after[field] != text
 		after[field] = text
+	}
+	if _, valuesSupplied := operation.Parameters["publicValues"]; valuesSupplied {
+		values, valid := assistantEnvironmentPublicValues(operation.Parameters)
+		if !valid {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		after["publicValues"] = operation.Parameters["publicValues"]
+		changed = changed || !assistantEnvironmentValuesMatch(before["specification"], values)
+	}
+	if _, bindingsSupplied := operation.Parameters["secretBindings"]; bindingsSupplied {
+		values, valid := assistantEnvironmentValuesForUpdate(before["specification"], operation.Parameters)
+		if !valid {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		bindings, valid := assistantEnvironmentSecretBindings(operation.Parameters, values)
+		if !valid {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		after["secretBindings"] = operation.Parameters["secretBindings"]
+		changed = changed || !assistantEnvironmentBindingsMatch(before["specification"], bindings)
+	}
+	if _, valuesSupplied := operation.Parameters["publicValues"]; valuesSupplied {
+		if _, bindingsSupplied := operation.Parameters["secretBindings"]; !bindingsSupplied &&
+			!assistantEnvironmentExistingBindingsCompatible(before["specification"], operation.Parameters) {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
 	}
 	if !changed || assistantString(after, "name") == "" || len(assistantString(after, "name")) > 120 ||
 		len(assistantString(after, "description")) > 1000 {
@@ -168,7 +195,7 @@ func (repository *Repository) assistantEnvironmentSnapshotMatches(ctx context.Co
 
 func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
 	input := operation.Input
-	if !onlyAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "expectedVersion") ||
+	if !onlyAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "publicValues", "secretBindings", "expectedVersion") ||
 		!hasAssistantFields(input, "environmentRef", "projectRef", "name", "description", "imageArtifactRef", "expectedVersion") ||
 		assistantString(input, "environmentRef") != assistantString(operation.Before, "environmentRef") ||
 		assistantString(input, "projectRef") != assistantString(operation.Before, "projectRef") {
@@ -194,6 +221,23 @@ func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation
 	specification.Name = assistantString(input, "name")
 	specification.Description = assistantString(input, "description")
 	specification.ImageArtifactRef = imageRef
+	if _, supplied := input["publicValues"]; supplied {
+		values, valid := assistantEnvironmentPublicValues(input)
+		if !valid {
+			return command.Command{}, errs.ErrInvalid
+		}
+		specification.Values = values
+	}
+	if _, supplied := input["secretBindings"]; supplied {
+		bindings, valid := assistantEnvironmentSecretBindings(input, specification.Values)
+		if !valid {
+			return command.Command{}, errs.ErrInvalid
+		}
+		specification.SecretBindings = bindings
+	}
+	if !assistantEnvironmentBindingsCompatible(specification.Values, specification.SecretBindings) {
+		return command.Command{}, errs.ErrInvalid
+	}
 	return command.Command{Kind: command.CreateRuntimeEnvironmentDraft, Payload: command.RuntimeEnvironmentDraftInput{
 		ProjectRef: assistantString(input, "projectRef"), EnvironmentRef: assistantString(input, "environmentRef"),
 		ExpectedEnvironmentVersion: version, Specification: specification,
