@@ -184,6 +184,52 @@ test("локальное чтение OpenAPI Human Gate сохраняет вы
   );
 });
 
+test("локальный импорт OpenAPI закрывает private origin до создания черновика", async ({
+  page,
+}) => {
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await gotoWithRetry(
+    page,
+    "/configurations/INTEGRATION_DEFINITION?assistantImportOpen=1",
+  );
+  const dialog = page.getByRole("dialog", {
+    name: "Импорт интеграции из OpenAPI",
+  });
+  await expect(dialog).toBeVisible();
+  await dialog
+    .getByLabel("Контракт OpenAPI JSON или YAML")
+    .fill(
+      source.replace(
+        "https://jsonplaceholder.typicode.com",
+        "https://127.0.0.1",
+      ),
+    );
+  const inspected = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/openapi-inspections",
+  );
+  await dialog.getByRole("button", { name: "Проверить контракт" }).click();
+  expect((await inspected).status()).toBe(200);
+  const operations = dialog.locator(".openapi-operation");
+  await expect(operations).toHaveCount(2);
+  for (const operation of await operations.all()) {
+    await expect(operation.locator('input[type="checkbox"]')).toBeDisabled();
+    await expect(operation).toContainText("SERVER_ORIGIN_UNSUPPORTED");
+  }
+  await expect(
+    dialog.getByRole("button", { name: "Создать черновик" }),
+  ).toBeDisabled();
+});
+
 test("локальный OpenAPI импорт, первая привязка и HTTPS test", async ({
   page,
 }) => {

@@ -16,6 +16,8 @@ test("помощник создаёт проект только после пр�
     "Реальный вызов модели запускается только явно",
   );
   test.setTimeout(240_000);
+  const mobile = process.env.KODEX_E2E_ASSISTANT_MOBILE === "1";
+  if (mobile) await page.setViewportSize({ width: 390, height: 844 });
   const browserFailures: string[] = [];
   page.on("pageerror", (error) => browserFailures.push(error.name));
   await authenticateOwner(
@@ -30,6 +32,7 @@ test("помощник создаёт проект только после пр�
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
   const assistant = page.getByRole("dialog", { name: "Kodex" });
   await expect(assistant).toBeVisible();
+  if (mobile) await expectMobileViewport(page, assistant);
   await assistant
     .locator(".assistant-drawer__header")
     .getByRole("button", { name: "Новый диалог" })
@@ -59,6 +62,7 @@ test("помощник создаёт проект только после пр�
   await plan.getByRole("button", { name: "Открыть план" }).click();
   const editor = assistant.locator(".assistant-plan-editor");
   await expect(editor).toBeVisible();
+  if (mobile) await expectMobileViewport(page, assistant);
   await editor.getByRole("button", { name: "Проверить ревизию" }).click();
   const apply = editor.getByRole("button", { name: "Применить атомарно" });
   await expect(apply).toBeEnabled({ timeout: 30_000 });
@@ -87,3 +91,17 @@ test("помощник создаёт проект только после пр�
   });
   expect(browserFailures).toEqual([]);
 });
+
+async function expectMobileViewport(
+  page: import("@playwright/test").Page,
+  assistant: import("@playwright/test").Locator,
+): Promise<void> {
+  const bounds = await assistant.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect((bounds?.x ?? 390) + (bounds?.width ?? 390)).toBeLessThanOrEqual(391);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+}

@@ -16,13 +16,11 @@ const environment = loadE2EAuthEnvironment();
 test("помощник создаёт рецепт образа и показывает итог сборки", async ({
   page,
 }) => {
-  const projectRef = process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_PROJECT ?? "";
-  const agentRef = process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_AGENT ?? "";
+  let projectRef = process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_PROJECT ?? "";
+  let agentRef = process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_AGENT ?? "";
   test.skip(
-    process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE !== "1" ||
-      !projectRef ||
-      !agentRef,
-    "Сборка образа разрешена только явно и для собственной тестовой сущности",
+    process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE !== "1",
+    "Сборка образа разрешена только явно",
   );
   test.setTimeout(600_000);
   const browserFailures: string[] = [];
@@ -35,6 +33,35 @@ test("помощник создаёт рецепт образа и показы�
     },
     { mode: "local" },
   );
+  if (projectRef || agentRef) {
+    expect(
+      projectRef,
+      "Тестовый проект и сотрудник задаются вместе",
+    ).toBeTruthy();
+    expect(
+      agentRef,
+      "Тестовый проект и сотрудник задаются вместе",
+    ).toBeTruthy();
+  } else {
+    const suffix = randomUUID().slice(0, 8);
+    const project = await mutate<{ ref: string }>(page, "/api/v1/projects", {
+      name: `Локальная проверка образа ${suffix}`,
+      purpose: "Безопасная локальная проверка сборки образа помощником.",
+      language: "ru",
+    });
+    projectRef = project.ref;
+    const createdAgent = await mutate<Agent>(
+      page,
+      `/api/v1/projects/${projectRef}/agents`,
+      {
+        name: `Исполнитель образа ${suffix}`,
+        purpose: "Проверить собственную сборку образа в локальном контуре.",
+        roleDescription: "Тестовый сотрудник проверки образов.",
+        initialInstructions: "Выполняй только задания локальной проверки.",
+      },
+    );
+    agentRef = createdAgent.ref;
+  }
   const agent = await read<Agent>(page, `/api/v1/agents/${agentRef}`);
   expect(agent).toMatchObject({ ref: agentRef, projectRef, state: "READY" });
   const resumeConversationRef =
@@ -121,6 +148,28 @@ test("помощник создаёт рецепт образа и показы�
     (await recipeLink.getAttribute("href"))?.split("/").at(-1) ?? "";
   expect(recipeRef).toMatch(/^imgrec_/);
   const path = `/api/v1/projects/${projectRef}/role-image-recipes/${recipeRef}`;
+
+  if (process.env.KODEX_E2E_ASSISTANT_ROLE_IMAGE_CANCEL === "1") {
+    const stop = card.getByRole("button", { name: "Остановить сборку" });
+    await expect(stop).toBeVisible({ timeout: 30_000 });
+    page.once("dialog", (dialog) => void dialog.accept());
+    await stop.click();
+    await expect
+      .poll(
+        async () => {
+          const detail = await read<RoleImageRecipeDetail>(page, path);
+          return detail.builds.at(-1)?.stage ?? "NO_BUILD";
+        },
+        { timeout: 60_000, intervals: [500, 1_000, 2_000] },
+      )
+      .toBe("CANCELLED");
+    await page.waitForTimeout(2_000);
+    const cancelled = await read<RoleImageRecipeDetail>(page, path);
+    expect(cancelled.builds.at(-1)?.stage).toBe("CANCELLED");
+    expect(cancelled.recipe.promotedImageReady).toBe(false);
+    expect(browserFailures).toEqual([]);
+    return;
+  }
 
   await expect
     .poll(
@@ -255,4 +304,41 @@ async function read<T>(page: Page, path: string): Promise<T> {
     }
     throw new Error("API read retries exhausted");
   }, path);
+}
+
+async function mutate<T>(page: Page, path: string, body: unknown): Promise<T> {
+  const result = await page.evaluate(
+    async (input) => {
+      const prefix = `${encodeURIComponent("__Host-kodex-csrf")}=`;
+      const csrf = document.cookie
+        .split(";")
+        .map((item) => item.trim())
+        .find((item) => item.startsWith(prefix))
+        ?.slice(prefix.length);
+      if (!csrf)
+        return { status: 0, code: "CSRF_UNAVAILABLE", body: undefined };
+      const response = await fetch(input.path, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Idempotency-Key": input.key,
+          "X-CSRF-Token": decodeURIComponent(csrf),
+        },
+        body: JSON.stringify(input.body),
+      });
+      const decoded = (await response.json()) as Record<string, unknown>;
+      return {
+        status: response.status,
+        code: typeof decoded.code === "string" ? decoded.code : "UNKNOWN",
+        body: response.ok ? decoded : undefined,
+      };
+    },
+    { path, body, key: randomUUID() },
+  );
+  if (result.status < 200 || result.status >= 300 || !result.body)
+    throw new Error(
+      `API mutation failed: ${String(result.status)} ${result.code}`,
+    );
+  return result.body as T;
 }
