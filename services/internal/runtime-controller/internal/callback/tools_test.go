@@ -164,6 +164,15 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	if updateProject == nil || !reflect.DeepEqual(schemaByType["UPDATE_PROJECT"]["required"].([]string), []string{"type", "title", "summary", "parameters"}) {
 		t.Fatalf("project update must leave authority fields to the server: %#v", updateProject)
 	}
+	agentProperties := byType["CREATE_AGENT"]["properties"].(map[string]any)
+	for field, limit := range map[string]int{"name": 120, "purpose": 1000, "roleDescription": 1000} {
+		if agentProperties[field].(map[string]any)["maxLength"] != limit {
+			t.Fatalf("agent %s limit differs from the owner form: %#v", field, agentProperties[field])
+		}
+	}
+	if agentProperties["runtimeRef"] == nil || agentProperties["secretValue"] != nil {
+		t.Fatalf("agent schema lost runtime selection or exposed secret input: %#v", agentProperties)
+	}
 	workflowProperties := byType["CREATE_WORKFLOW"]["properties"].(map[string]any)
 	if workflowProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
 		workflowProperties["coordinatorAgentRef"].(map[string]any)["enum"].([]string)[0] != input.DelegationTargets[0].Ref {

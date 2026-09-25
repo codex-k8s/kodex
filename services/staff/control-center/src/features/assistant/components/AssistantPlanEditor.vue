@@ -25,6 +25,8 @@ import { prepareConnectionConfiguration } from "@/features/integrations/connecti
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
 import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
+import AgentFormFields from "@/features/platform/AgentFormFields.vue";
+import { usePlatformStore } from "@/features/platform/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
   editableOperations,
@@ -70,6 +72,10 @@ const emit = defineEmits<{
 }>();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
+const platform = usePlatformStore();
+const readyRuntimes = computed(() =>
+  Object.values(platform.runtimes).filter((item) => item.ready),
+);
 const summary = ref("");
 const operations = ref<EditablePlanOperation[]>([]);
 const selectedImages = ref<Record<string, AsyncEntityOption>>({});
@@ -89,6 +95,7 @@ const environmentFormTouched = ref(false);
 const environmentFieldsValidity = ref<Record<string, boolean>>({});
 const environmentFieldsTouched = ref(false);
 const projectFormValidity = ref<Record<string, boolean>>({});
+const agentFormValidity = ref<Record<string, boolean>>({});
 const bindingFormValidity = ref<Record<string, boolean>>({});
 const bindingFormTouched = ref(false);
 const scheduleFormValidity = ref<Record<string, boolean>>({});
@@ -158,6 +165,7 @@ function resetDraft(): void {
   environmentFieldsValidity.value = {};
   environmentFieldsTouched.value = false;
   projectFormValidity.value = {};
+  agentFormValidity.value = {};
   bindingFormValidity.value = {};
   bindingFormTouched.value = false;
   scheduleFormValidity.value = {};
@@ -170,6 +178,17 @@ function resetDraft(): void {
 }
 
 watch(() => props.plan, resetDraft, { immediate: true });
+
+watch(
+  () =>
+    props.plan.operations.some(
+      (operation) => operation.type === "CREATE_AGENT",
+    ),
+  (hasAgent) => {
+    if (hasAgent) void platform.loadRuntimes();
+  },
+  { immediate: true },
+);
 
 watch(
   () => props.plan,
@@ -406,6 +425,8 @@ const friendlyInputsReady = computed(() =>
         ((operation.value.type !== "CREATE_PROJECT" &&
           operation.value.type !== "UPDATE_PROJECT") ||
           projectFormValidity.value[operation.value.ref] === true) &&
+        (operation.value.type !== "CREATE_AGENT" ||
+          agentFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT" ||
           bindingFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_SCHEDULE" &&
@@ -1031,7 +1052,10 @@ function snapshot(value: string): Record<string, unknown> {
             </div>
             <template v-else>
               <label
-                v-if="operation.value.target.kind !== 'PROJECT'"
+                v-if="
+                  operation.value.target.kind !== 'PROJECT' &&
+                  operation.value.type !== 'CREATE_AGENT'
+                "
                 class="field"
               >
                 <span>{{ $t("assistant.planEditor.entityName") }}</span>
@@ -1051,7 +1075,8 @@ function snapshot(value: string): Record<string, unknown> {
                   operation.value.target.kind !== 'PROJECT' &&
                   operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
-                  operation.value.target.kind !== 'INTEGRATION_CONNECTION'
+                  operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
+                  operation.value.type !== 'CREATE_AGENT'
                 "
                 class="field"
               >
@@ -1355,6 +1380,60 @@ function snapshot(value: string): Record<string, unknown> {
                   {{ $t("assistant.planEditor.roleImageNextSteps") }}
                 </p>
               </template>
+              <template v-else-if="operation.value.type === 'CREATE_AGENT'">
+                <AgentFormFields
+                  :name="fieldValue(operation, 'name')"
+                  :purpose="fieldValue(operation, 'purpose')"
+                  :role-description="fieldValue(operation, 'roleDescription')"
+                  :initial-instructions="fieldValue(operation, 'instructions')"
+                  :runtime-ref="fieldValue(operation, 'runtimeRef')"
+                  :runtimes="readyRuntimes"
+                  :runtime-problem="platform.problems.runtimes"
+                  runtime-expanded
+                  :disabled="!editable"
+                  @valid="agentFormValidity[operation.value.ref] = $event"
+                  @update:name="
+                    updateOperationParameter(operation, 'name', $event)
+                  "
+                  @update:purpose="
+                    updateOperationParameter(operation, 'purpose', $event)
+                  "
+                  @update:role-description="
+                    updateOperationParameter(
+                      operation,
+                      'roleDescription',
+                      $event,
+                    )
+                  "
+                  @update:initial-instructions="
+                    updateOperationParameter(operation, 'instructions', $event)
+                  "
+                  @update:runtime-ref="
+                    updateOperationParameter(operation, 'runtimeRef', $event)
+                  "
+                />
+                <fieldset class="assistant-plan-friendly__capabilities">
+                  <legend>
+                    {{ $t("assistant.planEditor.agentCapabilities") }}
+                  </legend>
+                  <label v-for="key in initialCapabilities" :key="key">
+                    <input
+                      type="checkbox"
+                      :checked="capabilityChecked(operation, key)"
+                      :disabled="!editable"
+                      @change="setCapability(operation, key, $event)"
+                    />
+                    {{
+                      $t(
+                        `assistant.planEditor.capabilities.${key.replaceAll(".", "_")}`,
+                      )
+                    }}
+                  </label>
+                </fieldset>
+                <p class="assistant-plan-friendly__hint">
+                  {{ $t("assistant.planEditor.agentNextSteps") }}
+                </p>
+              </template>
               <template v-else>
                 <label class="field">
                   <span>{{ $t("assistant.planEditor.agentRole") }}</span>
@@ -1366,41 +1445,6 @@ function snapshot(value: string): Record<string, unknown> {
                     @input="setField(operation, 'roleDescription', $event)"
                   />
                 </label>
-                <template v-if="operation.value.type === 'CREATE_AGENT'">
-                  <label class="field">
-                    <span>{{
-                      $t("assistant.planEditor.agentInstructions")
-                    }}</span>
-                    <textarea
-                      :value="fieldValue(operation, 'instructions')"
-                      rows="7"
-                      maxlength="65536"
-                      :disabled="!editable"
-                      @input="setField(operation, 'instructions', $event)"
-                    />
-                  </label>
-                  <fieldset class="assistant-plan-friendly__capabilities">
-                    <legend>
-                      {{ $t("assistant.planEditor.agentCapabilities") }}
-                    </legend>
-                    <label v-for="key in initialCapabilities" :key="key">
-                      <input
-                        type="checkbox"
-                        :checked="capabilityChecked(operation, key)"
-                        :disabled="!editable"
-                        @change="setCapability(operation, key, $event)"
-                      />
-                      {{
-                        $t(
-                          `assistant.planEditor.capabilities.${key.replaceAll(".", "_")}`,
-                        )
-                      }}
-                    </label>
-                  </fieldset>
-                  <p class="assistant-plan-friendly__hint">
-                    {{ $t("assistant.planEditor.agentNextSteps") }}
-                  </p>
-                </template>
               </template>
             </template>
             <details class="assistant-plan-friendly__snapshot">

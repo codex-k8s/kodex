@@ -25,6 +25,21 @@ describe("agent form", () => {
     },
   );
 
+  it("соблюдает границы штатной формы и серверной инструкции", () => {
+    expect(isAgentDraftComplete({ ...complete, name: "n".repeat(121) })).toBe(
+      false,
+    );
+    expect(
+      isAgentDraftComplete({ ...complete, purpose: "p".repeat(1001) }),
+    ).toBe(false);
+    expect(
+      isAgentDraftComplete({ ...complete, roleDescription: "r".repeat(1001) }),
+    ).toBe(false);
+    expect(
+      isAgentDraftComplete({ ...complete, initialInstructions: "short" }),
+    ).toBe(false);
+  });
+
   it("выбирает первый runtime после поздней загрузки каталога", () => {
     expect(resolveAgentRuntimeRef("", [])).toBe("");
     expect(resolveAgentRuntimeRef("", ["runtime_standard"])).toBe(

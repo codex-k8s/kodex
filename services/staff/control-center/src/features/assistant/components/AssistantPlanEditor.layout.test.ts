@@ -16,6 +16,10 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("fieldValue(operation, 'instructions')");
     expect(source).toContain("capabilityChecked(operation, key)");
     expect(source).toContain("assistant.planEditor.agentNextSteps");
+    expect(source).toContain("<AgentFormFields");
+    expect(source).toContain(
+      "agentFormValidity.value[operation.value.ref] === true",
+    );
   });
 
   it("даёт выбрать продвинутый образ для черновика среды без ручного ref", () => {
