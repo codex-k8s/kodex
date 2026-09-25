@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { useServerMessage } from "@/shared/ui/server-message";
-import { AlertTriangle, CalendarClock, ShieldQuestion } from "@lucide/vue";
+import {
+  AlertTriangle,
+  CalendarClock,
+  KeyRound,
+  ShieldQuestion,
+} from "@lucide/vue";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type {
   OwnerGate,
   Project,
+  ProviderAccount,
   Run,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
@@ -19,25 +25,41 @@ const props = defineProps<{
   gates: OwnerGate[];
   gatesCount?: number;
   failedRuns: Run[];
+  providerAccounts: ProviderAccount[];
   failedRunsCount?: number;
   projects: Project[];
   gatesReady: boolean;
   runsReady: boolean;
+  providerReady: boolean;
   gatesLoading?: boolean;
   runsLoading?: boolean;
+  providerLoading?: boolean;
   gatesProblem?: AppProblem;
   runsProblem?: AppProblem;
+  providerProblem?: AppProblem;
   refreshing?: boolean;
 }>();
-const emit = defineEmits<{ retryGates: []; retryRuns: [] }>();
+const emit = defineEmits<{
+  retryGates: [];
+  retryRuns: [];
+  retryProviders: [];
+}>();
 const { locale, t } = useI18n();
 
-const total = computed(() => props.gates.length + props.failedRuns.length);
-const ready = computed(() => props.gatesReady && props.runsReady);
+const total = computed(
+  () =>
+    props.gates.length +
+    props.failedRuns.length +
+    props.providerAccounts.length,
+);
+const ready = computed(
+  () => props.gatesReady && props.runsReady && props.providerReady,
+);
 const initialLoading = computed(
   () =>
     (props.gatesLoading && !props.gatesReady) ||
-    (props.runsLoading && !props.runsReady),
+    (props.runsLoading && !props.runsReady) ||
+    (props.providerLoading && !props.providerReady),
 );
 const projectNames = computed(
   () => new Map(props.projects.map((project) => [project.ref, project.name])),
@@ -61,7 +83,10 @@ const serverMessage = useServerMessage();
   <section class="home-attention panel" aria-labelledby="home-attention-title">
     <header class="home-attention__header">
       <div class="home-attention__heading">
-        <h2 id="home-attention-title">{{ $t("workboard.attention") }}</h2>
+        <h2 id="home-attention-title">
+          {{ $t("workboard.attention") }}
+          <span v-if="total" class="home-attention__count">{{ total }}</span>
+        </h2>
       </div>
       <span
         v-if="refreshing && ready"
@@ -70,6 +95,13 @@ const serverMessage = useServerMessage();
       >
         <span aria-hidden="true" />{{ $t("workboard.refreshing") }}
       </span>
+      <RouterLink
+        v-if="gates.length"
+        to="/decisions"
+        class="home-attention__all"
+      >
+        {{ $t("home.allDecisions") }}
+      </RouterLink>
     </header>
 
     <div
@@ -99,6 +131,11 @@ const serverMessage = useServerMessage();
         :problem="runsProblem"
         @retry="emit('retryRuns')"
       />
+      <ProblemNotice
+        v-if="providerProblem"
+        :problem="providerProblem"
+        @retry="emit('retryProviders')"
+      />
 
       <slot name="gates">
         <div v-if="gates.length" class="home-attention__group">
@@ -117,6 +154,9 @@ const serverMessage = useServerMessage();
             }"
             class="home-attention__item"
           >
+            <span class="home-attention__lead home-attention__lead--gate">
+              <ShieldQuestion :size="17" aria-hidden="true" />
+            </span>
             <div class="home-attention__copy">
               <h4>{{ serverMessage(gate.title) }}</h4>
               <SafeSummary :content="gate.contextSummary" />
@@ -136,6 +176,9 @@ const serverMessage = useServerMessage();
                 }}
               </time>
             </div>
+            <span class="home-attention__action">{{
+              $t("home.reviewDecision")
+            }}</span>
           </RouterLink>
         </div>
       </slot>
@@ -154,6 +197,9 @@ const serverMessage = useServerMessage();
             :to="runPath(run.ref, run.projectRef)"
             class="home-attention__item"
           >
+            <span class="home-attention__lead home-attention__lead--failure">
+              <AlertTriangle :size="17" aria-hidden="true" />
+            </span>
             <div class="home-attention__copy">
               <h4>{{ run.title }}</h4>
               <SafeSummary
@@ -171,12 +217,40 @@ const serverMessage = useServerMessage();
                 {{ formatDate(run.finishedAt ?? run.createdAt) }}
               </time>
             </div>
+            <span class="home-attention__action">{{ $t("home.openRun") }}</span>
           </RouterLink>
         </div>
       </slot>
+      <div v-if="providerAccounts.length" class="home-attention__group">
+        <RouterLink
+          v-for="account in providerAccounts"
+          :key="account.ref"
+          to="/administration/providers"
+          class="home-attention__item"
+        >
+          <span class="home-attention__lead home-attention__lead--gate">
+            <KeyRound :size="17" aria-hidden="true" />
+          </span>
+          <div class="home-attention__copy">
+            <h4>{{ $t("home.providerAuthorizationLost") }}</h4>
+            <p>{{ account.name }}</p>
+          </div>
+          <div class="home-attention__aside">
+            <StatusBadge :state="account.state" tone="warning" />
+          </div>
+          <span class="home-attention__action">{{
+            $t("home.renewAuthorization")
+          }}</span>
+        </RouterLink>
+      </div>
       <p
         v-if="
-          !$slots.gates && ready && !gatesProblem && !runsProblem && total === 0
+          !$slots.gates &&
+          ready &&
+          !gatesProblem &&
+          !runsProblem &&
+          !providerProblem &&
+          total === 0
         "
         class="home-attention__empty"
       >
@@ -220,6 +294,14 @@ const serverMessage = useServerMessage();
 }
 .home-attention__heading h2 {
   font-size: 0.98rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-attention__all {
+  margin-left: auto;
+  color: var(--accent-strong);
+  font-size: 0.8rem;
 }
 .home-attention__count,
 .home-attention__group-head > span {
@@ -244,24 +326,16 @@ const serverMessage = useServerMessage();
   animation: home-attention-pulse 1.2s ease-in-out infinite;
 }
 .home-attention__body {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
+  display: block;
 }
 .home-attention__body > :deep(.problem-notice) {
-  grid-column: 1 / -1;
   margin: 12px 16px 0;
 }
 .home-attention__group {
   min-width: 0;
-  max-height: 596px;
-  overflow: auto;
 }
-.home-attention__body--single {
-  grid-template-columns: minmax(0, 1fr);
-}
-.home-attention__group + .home-attention__group {
-  border-left: 1px solid var(--hairline);
+.home-attention__group-head {
+  display: none;
 }
 .home-attention__group-head {
   position: sticky;
@@ -286,13 +360,37 @@ const serverMessage = useServerMessage();
 }
 .home-attention__item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: 14px;
-  min-height: 92px;
-  padding: 13px 16px;
+  min-height: 68px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--hairline);
   color: inherit;
   text-decoration: none;
+}
+.home-attention__lead {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+.home-attention__lead--gate {
+  color: var(--warning);
+  background: var(--panel);
+}
+.home-attention__lead--failure {
+  color: var(--danger);
+  background: var(--panel);
+}
+.home-attention__action {
+  padding: 7px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .home-attention__item:last-child {
   border-bottom: 0;
@@ -309,7 +407,7 @@ const serverMessage = useServerMessage();
   overflow-wrap: anywhere;
 }
 .home-attention__copy :deep(.safe-summary) {
-  margin: 0 0 8px;
+  margin: 0 0 3px;
   color: var(--muted);
 }
 .home-attention__copy > p {
@@ -323,8 +421,8 @@ const serverMessage = useServerMessage();
   display: flex;
   align-items: flex-end;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: center;
+  gap: 3px;
 }
 .home-attention__aside time {
   color: var(--muted);
@@ -363,13 +461,8 @@ const serverMessage = useServerMessage();
   }
 }
 @media (max-width: 900px) {
-  .home-attention__body,
   .home-attention__skeleton {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .home-attention__group + .home-attention__group {
-    border-top: 1px solid var(--hairline);
-    border-left: 0;
   }
   .home-attention__skeleton span:last-child {
     grid-column: auto;
@@ -380,11 +473,16 @@ const serverMessage = useServerMessage();
     align-items: flex-start;
   }
   .home-attention__item {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 32px minmax(0, 1fr);
   }
   .home-attention__aside {
     align-items: flex-start;
     flex-direction: row;
+    grid-column: 2;
+  }
+  .home-attention__action {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 </style>

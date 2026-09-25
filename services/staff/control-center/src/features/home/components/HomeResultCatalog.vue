@@ -17,6 +17,7 @@ const props = withDefaults(
     kind: "RUN" | "ARTIFACT" | "SESSION";
     fixedFilter?: "FAILED";
     ready?: boolean;
+    dashboard?: boolean;
   }>(),
   { ready: true },
 );
@@ -38,12 +39,18 @@ const title = computed(() =>
   props.fixedFilter
     ? "home.failedRuns"
     : props.kind === "SESSION"
-      ? "common.continue"
+      ? "home.recentWork"
       : props.kind === "RUN"
         ? runFilter.value === "ACTIVE"
           ? "workboard.runningNow"
           : "runs.title"
         : "workboard.recentResults",
+);
+const dashboardItems = computed(() =>
+  props.dashboard ? items.value.slice(0, 3) : items.value,
+);
+const catalogPath = computed(() =>
+  props.kind === "ARTIFACT" ? "/files" : "/runs",
 );
 let controller: AbortController | undefined;
 let generation = 0;
@@ -212,11 +219,20 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section class="home-result-catalog" :data-kind="kind">
+  <section
+    class="home-result-catalog"
+    :class="{ 'home-result-catalog--dashboard': dashboard }"
+    :data-kind="kind"
+  >
     <header>
       <h3>{{ $t(title) }}</h3>
       <span v-if="total !== undefined">{{ total }}</span
+      ><RouterLink v-if="dashboard" :to="catalogPath" class="home-result-all">
+        {{
+          kind === "ARTIFACT" ? $t("home.allFiles") : $t("home.allRuns")
+        }} </RouterLink
       ><button
+        v-if="!dashboard"
         type="button"
         class="button button--ghost"
         :title="$t('common.expand')"
@@ -226,12 +242,14 @@ onBeforeUnmount(() => {
         <Maximize2 :size="16" />
       </button>
     </header>
-    <label class="home-result-search"
+    <label v-if="!dashboard" class="home-result-search"
       ><span>{{ $t("common.search") }}</span
       ><input v-model="query" type="search" maxlength="200"
     /></label>
-    <GateProjectFilter v-model="projectRef" />
-    <label v-if="kind === 'RUN' && !fixedFilter" class="home-result-search"
+    <GateProjectFilter v-if="!dashboard" v-model="projectRef" />
+    <label
+      v-if="!dashboard && kind === 'RUN' && !fixedFilter"
+      class="home-result-search"
       ><span>{{ $t("home.stateFilter") }}</span
       ><select v-model="runFilter">
         <option value="ACTIVE">{{ $t("home.activeFilter") }}</option>
@@ -245,9 +263,10 @@ onBeforeUnmount(() => {
     <p v-else-if="total === 0">{{ $t("common.empty") }}</p>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <HomeResultRows
-      :items="items"
+      :items="dashboardItems"
       :loading="loading"
-      :more="cursor"
+      :more="dashboard ? undefined : cursor"
+      :dashboard="dashboard"
       @more="load(true)"
       @open="open"
     />
@@ -326,6 +345,16 @@ header h3 {
 }
 header button {
   margin-left: auto;
+}
+.home-result-all {
+  margin-left: auto;
+  color: var(--accent-strong);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.home-result-catalog--dashboard header {
+  min-height: 52px;
+  border-bottom: 1px solid var(--hairline);
 }
 .home-result-search {
   display: grid;

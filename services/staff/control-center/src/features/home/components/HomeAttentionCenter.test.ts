@@ -26,7 +26,9 @@ describe("HomeAttentionCenter states", () => {
     expect(template).toContain("total === 0");
   });
 
-  it("не обещает недоступные provider/account данные", () => {
-    expect(template).not.toMatch(/provider|account/i);
+  it("показывает только подтверждённую потерю авторизации, без выдуманного срока", () => {
+    expect(template).toContain('v-if="providerAccounts.length"');
+    expect(template).toContain("account.state");
+    expect(template).not.toContain("account.authorization?.expiresAt");
   });
 });

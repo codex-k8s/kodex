@@ -2,7 +2,12 @@
 import type { HomeResultItem } from "../result-catalog";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
-defineProps<{ items: HomeResultItem[]; more?: string; loading: boolean }>();
+defineProps<{
+  items: HomeResultItem[];
+  more?: string;
+  loading: boolean;
+  dashboard?: boolean;
+}>();
 const emit = defineEmits<{ more: []; open: [item: HomeResultItem] }>();
 const serverMessage = useServerMessage();
 function scroll(event: Event) {
@@ -12,7 +17,11 @@ function scroll(event: Event) {
 }
 </script>
 <template>
-  <div class="home-result-rows" @scroll="scroll">
+  <div
+    class="home-result-rows"
+    :class="{ 'home-result-rows--dashboard': dashboard }"
+    @scroll="scroll"
+  >
     <div v-for="item in items" :key="item.ref" class="home-result-row">
       <RouterLink v-if="item.to" :to="item.to">{{
         serverMessage(item.title)
@@ -67,5 +76,25 @@ function scroll(event: Event) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.home-result-rows--dashboard {
+  max-height: none;
+  overflow: visible;
+}
+.home-result-rows--dashboard .home-result-row {
+  height: auto;
+  min-height: 74px;
+  align-items: center;
+  padding: 12px 16px;
+}
+.home-result-rows--dashboard .home-result-row > :first-child {
+  grid-column: 1;
+}
+.home-result-rows--dashboard .home-result-row small {
+  grid-column: 1;
+}
+.home-result-rows--dashboard .home-result-row :deep(.status-badge) {
+  grid-column: 2;
+  grid-row: 1 / 3;
 }
 </style>
