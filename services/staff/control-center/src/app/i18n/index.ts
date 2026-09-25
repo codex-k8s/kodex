@@ -1408,6 +1408,7 @@ const ru = {
       environmentOnly: "Окружение без привязки агента",
       publish: "Опубликовать и применить выбранное",
       save: "Сохранить черновик",
+      reauthenticate: "Войти заново для работы с секретами",
       retry: "Повторить исходный запрос",
       help: "Сохранение создаёт черновик. Действующая версия изменится только после проверки и публикации.",
       unknown:
@@ -4902,6 +4903,7 @@ const en = {
       environmentOnly: "Environment without an agent binding",
       publish: "Publish and apply selection",
       save: "Save draft",
+      reauthenticate: "Sign in again to manage secrets",
       retry: "Retry original request",
       help: "Saving creates a draft. The active revision changes only after validation and publication.",
       unknown:

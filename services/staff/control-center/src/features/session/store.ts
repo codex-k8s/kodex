@@ -14,6 +14,7 @@ import {
   createEmailReconciliationIntent,
   type EmailReconciliationIntent,
   createRuntimeEnvironmentPolicyIntent,
+  createRuntimeSecretDraftIntent,
   createRuntimeSecretRevealIntent,
   oidcReauthIntentStorageKey,
   recordRuntimeEnvironmentPolicyReauthCompletion,
@@ -74,6 +75,7 @@ export interface LoginCompletion {
   readonly kind:
     | "login"
     | "runtime-secret"
+    | "runtime-secret-draft"
     | "runtime-environment-policy"
     | "email-reconciliation";
   readonly returnPath?: string;
@@ -444,6 +446,28 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
+  async function beginRuntimeSecretDraftReauth(input: {
+    projectRef: string;
+    target: "create" | "draft" | "secret";
+    targetRef?: string;
+  }): Promise<void> {
+    const intent = createRuntimeSecretDraftIntent(
+      input.projectRef,
+      input.target,
+      input.targetRef,
+    );
+    window.sessionStorage.setItem(
+      oidcReauthIntentStorageKey,
+      JSON.stringify(intent),
+    );
+    try {
+      await redirectAuthorization({ freshAuthentication: true });
+    } catch (error) {
+      window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+      throw error;
+    }
+  }
+
   async function beginRuntimeEnvironmentPolicyReauth(input: {
     environmentRef?: string;
     operation: RuntimeEnvironmentPolicyOperation;
@@ -585,6 +609,9 @@ export const useSessionStore = defineStore("session", () => {
         };
         return { kind: intent.kind, returnPath: intent.returnPath };
       }
+      if (intent.kind === "runtime-secret-draft") {
+        return { kind: intent.kind, returnPath: intent.returnPath };
+      }
       if (intent.kind === "runtime-environment-policy") {
         recordRuntimeEnvironmentPolicyReauthCompletion(
           intent,
@@ -673,8 +700,7 @@ export const useSessionStore = defineStore("session", () => {
           }
           if (attempt === 0 && normalized.retryable) continue;
           problem.value = normalized;
-          phase.value =
-            normalized.kind === "forbidden" ? "forbidden" : "error";
+          phase.value = normalized.kind === "forbidden" ? "forbidden" : "error";
           return;
         }
       }
@@ -831,6 +857,7 @@ export const useSessionStore = defineStore("session", () => {
     probe,
     beginLogin,
     beginRuntimeSecretRevealReauth,
+    beginRuntimeSecretDraftReauth,
     beginRuntimeEnvironmentPolicyReauth,
     beginEmailReconciliationReauth,
     hasPendingEmailConfirmation,

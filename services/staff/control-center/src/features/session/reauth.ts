@@ -22,6 +22,12 @@ export interface RuntimeSecretRevealIntent extends ReauthIntentBase {
   readonly secretRef: string;
 }
 
+export interface RuntimeSecretDraftIntent extends ReauthIntentBase {
+  readonly kind: "runtime-secret-draft";
+  readonly target: "create" | "draft" | "secret";
+  readonly targetRef?: string;
+}
+
 export type RuntimeEnvironmentPolicyOperation = "CREATE" | "PUBLISH";
 
 export interface RuntimeEnvironmentPolicyIntent extends ReauthIntentBase {
@@ -119,6 +125,7 @@ export function parseEmailReconciliationIntent(
 
 export type ReauthIntent =
   | RuntimeSecretRevealIntent
+  | RuntimeSecretDraftIntent
   | RuntimeEnvironmentPolicyIntent
   | EmailReconciliationIntent;
 export type OidcIntent = { readonly kind: "login" } | ReauthIntent;
@@ -195,6 +202,15 @@ function sameIntent(left: ReauthIntent, right: ReauthIntent): boolean {
       left.secretRef === right.secretRef && left.projectRef === right.projectRef
     );
   if (
+    left.kind === "runtime-secret-draft" &&
+    right.kind === "runtime-secret-draft"
+  )
+    return (
+      left.projectRef === right.projectRef &&
+      left.target === right.target &&
+      left.targetRef === right.targetRef
+    );
+  if (
     left.kind === "runtime-environment-policy" &&
     right.kind === "runtime-environment-policy"
   )
@@ -236,6 +252,79 @@ export function createRuntimeSecretRevealIntent(
     secretRef,
     version: 1,
   };
+}
+
+function runtimeSecretDraftPath(
+  projectRef: string,
+  target: RuntimeSecretDraftIntent["target"],
+  targetRef?: string,
+): string {
+  const path = runtimeSecretsPath(projectRef);
+  if (target === "create") return `${path}?assistantCreateSecret=1`;
+  return `${path}?${target === "draft" ? "draftRef" : "secretRef"}=${encodeURIComponent(targetRef ?? "")}`;
+}
+
+export function createRuntimeSecretDraftIntent(
+  projectRef: string,
+  target: RuntimeSecretDraftIntent["target"],
+  targetRef?: string,
+  now = Date.now(),
+): RuntimeSecretDraftIntent {
+  if (
+    !opaqueReferencePattern.test(projectRef) ||
+    (target === "create" && targetRef !== undefined) ||
+    (target !== "create" &&
+      (typeof targetRef !== "string" ||
+        !opaqueReferencePattern.test(targetRef)))
+  )
+    throw new Error("OIDC re-auth secret draft target is invalid");
+  return {
+    challengeRef: globalThis.crypto.randomUUID(),
+    issuedAt: now,
+    kind: "runtime-secret-draft",
+    projectRef,
+    returnPath: runtimeSecretDraftPath(projectRef, target, targetRef),
+    target,
+    ...(targetRef ? { targetRef } : {}),
+    version: 1,
+  };
+}
+
+export function parseRuntimeSecretDraftIntent(
+  value: unknown,
+  now = Date.now(),
+): RuntimeSecretDraftIntent {
+  if (!isRecord(value)) throw new Error("OIDC re-auth state shape is invalid");
+  const hasRef = Object.hasOwn(value, "targetRef");
+  if (
+    !hasExactKeys(value, [
+      "challengeRef",
+      "issuedAt",
+      "kind",
+      "projectRef",
+      "returnPath",
+      "target",
+      ...(hasRef ? ["targetRef"] : []),
+      "version",
+    ]) ||
+    !validBase(value, now) ||
+    value.kind !== "runtime-secret-draft" ||
+    (value.target !== "create" &&
+      value.target !== "draft" &&
+      value.target !== "secret") ||
+    (value.target === "create" && hasRef) ||
+    (value.target !== "create" &&
+      (typeof value.targetRef !== "string" ||
+        !opaqueReferencePattern.test(value.targetRef))) ||
+    value.returnPath !==
+      runtimeSecretDraftPath(
+        value.projectRef,
+        value.target,
+        typeof value.targetRef === "string" ? value.targetRef : undefined,
+      )
+  )
+    throw new Error("OIDC re-auth state is invalid or expired");
+  return value as unknown as RuntimeSecretDraftIntent;
 }
 
 export function createRuntimeEnvironmentPolicyIntent(
@@ -335,6 +424,8 @@ function parseReauthIntent(value: unknown, now: number): ReauthIntent {
   if (!isRecord(value)) throw new Error("OIDC re-auth state shape is invalid");
   if (value.kind === "runtime-secret")
     return parseRuntimeSecretRevealIntent(value, now);
+  if (value.kind === "runtime-secret-draft")
+    return parseRuntimeSecretDraftIntent(value, now);
   if (value.kind === "runtime-environment-policy")
     return parseRuntimeEnvironmentPolicyIntent(value, now);
   if (value.kind === "email-reconciliation")

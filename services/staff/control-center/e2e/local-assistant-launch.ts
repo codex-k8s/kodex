@@ -235,6 +235,172 @@ test("помощник запрашивает переход и запускае
   }
 });
 
+interface WorkflowFixture {
+  ref: string;
+  version: number;
+  state: string;
+  validationMessages: string[];
+  launchReadiness: { allowedToSubmit: boolean; reason: string };
+}
+
+test("помощник запускает опубликованный процесс только после подтверждения плана", async ({
+  page,
+}) => {
+  const projectRef = process.env.KODEX_E2E_ASSISTANT_WORKFLOW_PROJECT ?? "";
+  const agentRef = process.env.KODEX_E2E_ASSISTANT_WORKFLOW_AGENT ?? "";
+  test.skip(
+    process.env.KODEX_E2E_ASSISTANT_WORKFLOW !== "1" ||
+      !projectRef ||
+      !agentRef,
+    "Процесс запускается только явно в собственной локальной фикстуре",
+  );
+  test.setTimeout(600_000);
+  const browserFailures: string[] = [];
+  let ownRunRef = "";
+  page.on("pageerror", (error) =>
+    browserFailures.push(safeBrowserFailure(error)),
+  );
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  const agent = await read<{ ref: string; projectRef: string; state: string }>(
+    page,
+    `/api/v1/agents/${agentRef}`,
+  );
+  expect(agent).toMatchObject({ ref: agentRef, projectRef, state: "READY" });
+  const workflowName = `Локальная сводка процесса ${randomUUID().slice(0, 8)}`;
+  const workflowPath = `/api/v1/projects/${projectRef}/workflows`;
+  const created = await mutate<WorkflowFixture>(page, workflowPath, {
+    name: workflowName,
+    purpose: "Подготовить краткую безопасную сводку по тестовому проекту.",
+    coordinatorAgentRef: agentRef,
+    inputFields: [],
+    steps: [
+      {
+        position: 1,
+        name: "Подготовить сводку",
+        purpose: "Ответить краткой фразой без изменения данных.",
+        agentRef,
+        parallel: false,
+        parallelGroup: 0,
+        timeoutSeconds: 600,
+        expectedResult: "Краткий ответ о состоянии тестового проекта.",
+        humanGate: false,
+        gateDecisions: [],
+        requiredCapabilityKeys: [],
+      },
+    ],
+    maxConcurrency: 1,
+    timeoutSeconds: 1200,
+    completionCriteria: "Один краткий ответ, без внешних действий.",
+  });
+  expect(created.state).toBe("DRAFT");
+  const commandPath = `/api/v1/workflows/${created.ref}/commands`;
+  const validated = await mutate<WorkflowFixture>(
+    page,
+    commandPath,
+    { action: "VALIDATE" },
+    created.version,
+  );
+  expect(validated.validationMessages).toEqual([]);
+  expect(validated.state).toBe("VALID");
+  const published = await mutate<WorkflowFixture>(
+    page,
+    commandPath,
+    { action: "PUBLISH" },
+    validated.version,
+  );
+  expect(published.state).toBe("PUBLISHED");
+  await expect
+    .poll(
+      async () =>
+        (await read<WorkflowFixture>(page, `/api/v1/workflows/${created.ref}`))
+          .launchReadiness.allowedToSubmit,
+      { timeout: 30_000, intervals: [500, 1_000, 2_000] },
+    )
+    .toBe(true);
+
+  try {
+    await gotoWithRetry(page, `/projects/${projectRef}`);
+    await page.getByRole("button", { name: "Открыть Kodex" }).click();
+    const assistant = page.getByRole("dialog", { name: "Kodex" });
+    await assistant
+      .locator(".assistant-drawer__header")
+      .getByRole("button", { name: "Новый диалог" })
+      .click();
+    await send(
+      assistant,
+      `Найди в текущем проекте опубликованный Процесс «${workflowName}». Предложи ровно один план LAUNCH_RUN для этого Процесса, чтобы дать краткую сводку за последние семь дней. Не создавай и не меняй объекты и ничего не запускай до моего подтверждения.`,
+    );
+    const plan = assistant.locator(".assistant-plan-card").last();
+    await expect(plan).toBeVisible({ timeout: 180_000 });
+    await expect(
+      plan.locator(".assistant-plan-card__operations > li"),
+    ).toHaveCount(1);
+    await expect(plan).toContainText(workflowName);
+    await plan.getByRole("button", { name: "Открыть план" }).click();
+    const editor = assistant.locator(".assistant-plan-editor");
+    await expect(editor.locator(".assistant-plan-operation")).toHaveCount(1);
+    await expect(
+      editor.locator(".assistant-launch-form select").first(),
+    ).toHaveValue("WORKFLOW");
+    await editor.getByRole("button", { name: "Проверить ревизию" }).click();
+    const apply = editor.getByRole("button", { name: "Применить атомарно" });
+    await expect(apply).toBeEnabled({ timeout: 30_000 });
+    await apply.click();
+    await expect(editor.locator(".assistant-plan-receipt")).toBeVisible({
+      timeout: 90_000,
+    });
+    await editor.getByRole("button", { name: "Вернуться к диалогу" }).click();
+    const card = assistant.locator(".assistant-run-card").last();
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    const runLink = card.locator(
+      `a[href^="/projects/${projectRef}/runs/run_"]`,
+    );
+    await expect(runLink).toBeVisible();
+    ownRunRef = (await runLink.getAttribute("href"))?.split("/").at(-1) ?? "";
+    expect(ownRunRef).toMatch(/^run_/);
+    await expect
+      .poll(
+        async () => {
+          const run = await read<Run>(page, `/api/v1/runs/${ownRunRef}`);
+          if (["FAILED", "CANCELLED"].includes(run.state))
+            throw new Error(
+              `Assistant-launched Workflow ended with ${run.safeErrorCode ?? run.state}`,
+            );
+          return run.state;
+        },
+        { timeout: 240_000, intervals: [1_000, 2_000, 5_000] },
+      )
+      .toBe("SUCCEEDED");
+    const completed = await read<Run>(page, `/api/v1/runs/${ownRunRef}`);
+    expect(completed.projectRef).toBe(projectRef);
+    expect(completed.target).toMatchObject({
+      type: "WORKFLOW",
+      ref: created.ref,
+    });
+    expect(completed.source).toBe("SYSTEM_ASSISTANT");
+    expect(completed.resultSummary).not.toBe("");
+    expect(browserFailures).toEqual([]);
+  } finally {
+    if (ownRunRef && page.url().startsWith(environment.baseURL)) {
+      const run = await read<Run>(page, `/api/v1/runs/${ownRunRef}`);
+      if (!["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state))
+        await mutate(
+          page,
+          `/api/v1/runs/${ownRunRef}/commands`,
+          { action: "CANCEL" },
+          run.version,
+        );
+    }
+  }
+});
+
 async function send(
   assistant: ReturnType<Page["getByRole"]>,
   prompt: string,

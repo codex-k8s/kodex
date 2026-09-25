@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { useI18n } from "vue-i18n";
+import { useSessionStore } from "@/features/session/store";
 import { idempotencyKey } from "@/shared/api/mutation";
 import type { AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -41,6 +42,17 @@ function published(value: RuntimeSecretDraft, secret: RuntimeSecret): void {
   emit("published", secret);
 }
 const { t } = useI18n();
+async function reauthenticate(): Promise<void> {
+  try {
+    await useSessionStore().beginRuntimeSecretDraftReauth({
+      projectRef: props.projectRef,
+      target: draft.value ? "draft" : props.secret ? "secret" : "create",
+      targetRef: draft.value?.ref ?? props.secret?.ref,
+    });
+  } catch (error) {
+    problem.value = safeDraftProblem(error);
+  }
+}
 function prepared(planRef: string): void {
   if (draft.value) emit("planPrepared", draft.value.ref, planRef);
 }
@@ -260,6 +272,14 @@ onBeforeUnmount(() => {
         )
       }}
     </p>
+    <button
+      v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"
+      class="button"
+      type="button"
+      @click="reauthenticate"
+    >
+      {{ t("runtimeSecrets.draft.reauthenticate") }}
+    </button>
   </RuntimeSecretValueDialog>
   <ModalDialog
     v-else-if="restoring"
@@ -278,6 +298,14 @@ onBeforeUnmount(() => {
   >
     <div class="secret-draft">
       <ProblemNotice v-if="problem" :problem="problem" compact />
+      <button
+        v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"
+        class="button"
+        type="button"
+        @click="reauthenticate"
+      >
+        {{ t("runtimeSecrets.draft.reauthenticate") }}
+      </button>
       <p v-if="uncertain" role="status">
         {{ t("runtimeSecrets.draft.unknown") }}
       </p>

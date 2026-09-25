@@ -8,6 +8,7 @@ import {
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
+import { useSessionStore } from "@/features/session/store";
 import { idempotencyKey } from "@/shared/api/mutation";
 import type { RuntimeSecret } from "./model";
 import { readRuntimeSecret } from "./api";
@@ -39,6 +40,17 @@ const emit = defineEmits<{
   prepared: [planRef: string];
 }>();
 const { t } = useI18n();
+async function reauthenticate(): Promise<void> {
+  try {
+    await useSessionStore().beginRuntimeSecretDraftReauth({
+      projectRef: props.draft.projectRef,
+      target: "draft",
+      targetRef: props.draft.ref,
+    });
+  } catch (error) {
+    problem.value = safeDraftProblem(error);
+  }
+}
 const plan = shallowRef<RuntimeSecretDraftImpactPlan>();
 const page = shallowRef<RuntimeSecretDraftImpactPage>();
 const busy = ref(false);
@@ -280,10 +292,50 @@ async function publish(replace = true): Promise<void> {
     await load();
   } catch (error) {
     if (!disposed) {
-      problem.value = safeDraftProblem(error);
+      const publicationProblem = safeDraftProblem(error);
+      problem.value = publicationProblem;
+      if (
+        publishAttempt &&
+        ![400, 401, 403, 404, 412, 422].includes(publicationProblem.status)
+      ) {
+        try {
+          const current = await readSecretDraft(
+            props.draft.projectRef,
+            props.draft.ref,
+            new AbortController().signal,
+          );
+          if (
+            current.state === "PUBLISHED" &&
+            current.ref === publishAttempt.draft.ref &&
+            current.secretRef === publishAttempt.draft.secretRef &&
+            current.publishedRevision > 0
+          ) {
+            const secret = await readRuntimeSecret(
+              current.secretRef,
+              current.projectRef,
+              new AbortController().signal,
+            );
+            if (isActive()) {
+              publishAttempt = undefined;
+              pending.value = false;
+              problem.value = undefined;
+              emit("uncertain", false);
+              emit("published", current, secret);
+              try {
+                await load();
+              } catch (refreshError) {
+                if (isActive()) problem.value = safeDraftProblem(refreshError);
+              }
+            }
+            return;
+          }
+        } catch {
+          // При неопределённом исходе остаётся только read-only восстановление.
+        }
+      }
       if (
         !retrying &&
-        [400, 401, 403, 404, 412, 422].includes(problem.value.status)
+        [400, 401, 403, 404, 412, 422].includes(publicationProblem.status)
       ) {
         publishAttempt = undefined;
         plan.value = undefined;
@@ -345,6 +397,14 @@ onMounted(() => void restore());
   <section class="draft-impact">
     <h3>{{ t("runtimeSecrets.draft.impactTitle") }}</h3>
     <ProblemNotice v-if="problem" :problem="problem" compact />
+    <button
+      v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"
+      class="button"
+      type="button"
+      @click="reauthenticate"
+    >
+      {{ t("runtimeSecrets.draft.reauthenticate") }}
+    </button>
     <button
       v-if="initialPlanRef && !plan"
       class="button"

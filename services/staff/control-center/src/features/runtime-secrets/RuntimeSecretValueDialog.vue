@@ -106,6 +106,12 @@ watch(showValue, (visible) => {
       showValue.value = false;
     }, 30_000);
 });
+watch(
+  () => props.problem?.code,
+  (code) => {
+    if (code === "FRESH_AUTHENTICATION_REQUIRED") clearPlaintext();
+  },
+);
 
 watch(
   () => props.secret,

@@ -7,9 +7,11 @@ import {
   consumeRuntimeEnvironmentPolicyReauthCompletion,
   createRuntimeEnvironmentPolicyIntent,
   createRuntimeSecretRevealIntent,
+  createRuntimeSecretDraftIntent,
   oidcReauthIntentStorageKey,
   parseRuntimeEnvironmentPolicyIntent,
   parseRuntimeSecretRevealIntent,
+  parseRuntimeSecretDraftIntent,
   recordRuntimeEnvironmentPolicyReauthCompletion,
 } from "./reauth";
 
@@ -34,6 +36,36 @@ function pendingStorage(intent: unknown): Storage {
 }
 
 describe("OIDC re-auth intents", () => {
+  it("возвращает форму секрета после fresh re-auth без значения в state", () => {
+    const intent = createRuntimeSecretDraftIntent(
+      "project_sales",
+      "create",
+      undefined,
+      1000,
+    );
+    expect(intent.returnPath).toBe(
+      "/projects/project_sales/secrets?assistantCreateSecret=1",
+    );
+    expect(consumeOidcIntent(intent, pendingStorage(intent), 1100)).toEqual(
+      intent,
+    );
+    expect(JSON.stringify(intent)).not.toContain("secret-value");
+    expect(() =>
+      parseRuntimeSecretDraftIntent(
+        { ...intent, returnPath: "https://attacker.example" },
+        1100,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseRuntimeSecretDraftIntent(
+        { ...intent, targetRef: "secret_other" },
+        1100,
+      ),
+    ).toThrow();
+    expect(() =>
+      createRuntimeSecretDraftIntent("project_sales", "draft"),
+    ).toThrow();
+  });
   it("связывает email state с exact receipt без project и secret", () => {
     const intent = createEmailReconciliationIntent(
       {

@@ -14,6 +14,15 @@ var (
 	ErrInvalid     = errors.New("secret draft request is invalid")
 )
 
+// CleanupAckError сообщает только ограниченный этап диагностики, без дескриптора.
+type CleanupAckError struct {
+	Stage string
+	Cause error
+}
+
+func (failure CleanupAckError) Error() string { return "secret draft cleanup acknowledgement failed" }
+func (failure CleanupAckError) Unwrap() error { return failure.Cause }
+
 type Owner interface {
 	Check(context.Context) error
 	Consume(context.Context, string) (value.DraftWork, error)
