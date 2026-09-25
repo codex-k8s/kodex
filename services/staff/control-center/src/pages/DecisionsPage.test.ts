@@ -256,4 +256,78 @@ describe("DecisionsPage", () => {
     expect(html).toContain("Запросить изменения");
     expect(html).toContain("Отклонить");
   });
+
+  it("убирает внутренние идентификаторы интеграции из основного слоя решения", async () => {
+    gate.integrationIntent = {
+      connectionRef: "intconn_fixture",
+      connectionName: "Тестовый сервис",
+      definitionKey: "fixture",
+      capabilityKey: "openapi.op.internal",
+      operation: "op.internal",
+      resourceScope: {
+        kind: "HTTPS_RESOURCE",
+        values: {},
+        digest: "b".repeat(64),
+      },
+      effectPreview: {
+        risk: "WRITE",
+        inputDigest: "a".repeat(64),
+        inputBytes: 42,
+        fields: [
+          { path: "/body/value", type: "string", value: "новое значение" },
+        ],
+        approvalScope: {
+          selected: [
+            { path: "/body/value", type: "string", value: "новое значение" },
+          ],
+          mutablePaths: ["/body/comment"],
+        },
+      },
+      effectKey: "eff_internal",
+    };
+    const originalContextSummary = gate.contextSummary;
+    gate.contextSummary = 'op.internal {"body":{"value":"новое значение"}}';
+    try {
+      const pinia = createPinia();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: "/decisions", component: DecisionsPage },
+          {
+            path: "/:pathMatch(.*)*",
+            component: defineComponent({ render: () => h("div") }),
+          },
+        ],
+      });
+      await router.push("/decisions");
+      await router.isReady();
+      const platform = usePlatformStore(pinia);
+      platform.projects[project.ref] = project;
+      platform.runs[run.ref] = run;
+      platform.gates[gate.ref] = gate;
+      const i18n = createI18n({
+        legacy: false,
+        locale: "ru",
+        messages: { ru: applicationI18n.global.getLocaleMessage("ru") },
+      });
+      const app = createSSRApp(DecisionsPage);
+      app.use(pinia);
+      app.use(router);
+      app.use(i18n);
+      const html = await renderToString(app);
+
+      expect(html).toContain("Изменить данные через");
+      expect(html).toContain("Тестовый сервис");
+      expect(html).toContain("body.value");
+      expect(html).toContain("body.comment");
+      expect(html).toContain("Технические сведения");
+      expect(html).not.toContain("op.internal {&quot;body&quot;");
+      expect(html.indexOf("Технические сведения")).toBeLessThan(
+        html.indexOf("eff_internal"),
+      );
+    } finally {
+      gate.integrationIntent = undefined;
+      gate.contextSummary = originalContextSummary;
+    }
+  });
 });

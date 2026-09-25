@@ -1861,6 +1861,7 @@ const (
 	IntegrationCapabilityResourceKindEMAILSENDER       IntegrationCapabilityResourceKind = "EMAIL_SENDER"
 	IntegrationCapabilityResourceKindGITHUBREPOSITORY  IntegrationCapabilityResourceKind = "GITHUB_REPOSITORY"
 	IntegrationCapabilityResourceKindGITLABPROJECT     IntegrationCapabilityResourceKind = "GITLAB_PROJECT"
+	IntegrationCapabilityResourceKindHTTPSRESOURCE     IntegrationCapabilityResourceKind = "HTTPS_RESOURCE"
 	IntegrationCapabilityResourceKindJIRAPROJECT       IntegrationCapabilityResourceKind = "JIRA_PROJECT"
 	IntegrationCapabilityResourceKindMATTERMOSTCHANNEL IntegrationCapabilityResourceKind = "MATTERMOST_CHANNEL"
 	IntegrationCapabilityResourceKindSYNTHETICJOURNAL  IntegrationCapabilityResourceKind = "SYNTHETIC_JOURNAL"
@@ -1876,6 +1877,8 @@ func (e IntegrationCapabilityResourceKind) Valid() bool {
 	case IntegrationCapabilityResourceKindGITHUBREPOSITORY:
 		return true
 	case IntegrationCapabilityResourceKindGITLABPROJECT:
+		return true
+	case IntegrationCapabilityResourceKindHTTPSRESOURCE:
 		return true
 	case IntegrationCapabilityResourceKindJIRAPROJECT:
 		return true
@@ -2230,6 +2233,7 @@ const (
 	IntegrationResourceScopeKindEMAILSENDER       IntegrationResourceScopeKind = "EMAIL_SENDER"
 	IntegrationResourceScopeKindGITHUBREPOSITORY  IntegrationResourceScopeKind = "GITHUB_REPOSITORY"
 	IntegrationResourceScopeKindGITLABPROJECT     IntegrationResourceScopeKind = "GITLAB_PROJECT"
+	IntegrationResourceScopeKindHTTPSRESOURCE     IntegrationResourceScopeKind = "HTTPS_RESOURCE"
 	IntegrationResourceScopeKindJIRAPROJECT       IntegrationResourceScopeKind = "JIRA_PROJECT"
 	IntegrationResourceScopeKindMATTERMOSTCHANNEL IntegrationResourceScopeKind = "MATTERMOST_CHANNEL"
 	IntegrationResourceScopeKindSYNTHETICJOURNAL  IntegrationResourceScopeKind = "SYNTHETIC_JOURNAL"
@@ -2245,6 +2249,8 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 	case IntegrationResourceScopeKindGITHUBREPOSITORY:
 		return true
 	case IntegrationResourceScopeKindGITLABPROJECT:
+		return true
+	case IntegrationResourceScopeKindHTTPSRESOURCE:
 		return true
 	case IntegrationResourceScopeKindJIRAPROJECT:
 		return true

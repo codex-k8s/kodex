@@ -3419,7 +3419,7 @@ export type IntegrationCapability = {
     approvalRequired: boolean;
     operation: string;
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
-    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
     inputSchemaSha256?: string;
@@ -3470,7 +3470,7 @@ export type IntegrationDefinition = {
 };
 
 export type IntegrationResourceScope = {
-    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE';
     values: {
         [key: string]: string;
     };

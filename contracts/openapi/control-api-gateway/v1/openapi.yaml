@@ -9214,7 +9214,7 @@ components:
         approvalRequired: { type: boolean }
         operation: { type: string, minLength: 1, maxLength: 120 }
         approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
-        resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
+        resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER, HTTPS_RESOURCE] }
         inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
         inputSchema: { type: string, minLength: 2, maxLength: 262144 }
         inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
@@ -9268,7 +9268,7 @@ components:
       additionalProperties: false
       required: [kind, values, digest]
       properties:
-        kind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
+        kind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER, HTTPS_RESOURCE] }
         values:
           type: object
           maxProperties: 8

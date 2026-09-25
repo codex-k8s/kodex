@@ -229,6 +229,14 @@ type ApprovalScopePreview = {
   selected: Array<{ path: string; type: string; value: unknown }>;
   mutablePaths: string[];
 };
+type IntegrationEffectField = ApprovalScopePreview["selected"][number];
+const integrationTechnicalPreviewKeys = new Set([
+  "approvalPolicy",
+  "contentComplete",
+  "fields",
+  "inputBytes",
+  "inputDigest",
+]);
 function isApprovalScopeField(
   value: unknown,
 ): value is ApprovalScopePreview["selected"][number] {
@@ -255,16 +263,41 @@ const selectedApprovalScope = computed<ApprovalScopePreview | undefined>(() => {
     return undefined;
   return scope as ApprovalScopePreview;
 });
+const selectedEffectFields = computed<IntegrationEffectField[]>(() => {
+  const fields = selected.value?.gate.integrationIntent?.effectPreview.fields;
+  return Array.isArray(fields) && fields.every(isApprovalScopeField)
+    ? fields
+    : [];
+});
 const selectedEffectPreview = computed(() => {
   const preview = selected.value?.gate.integrationIntent?.effectPreview;
   return preview
     ? Object.fromEntries(
         Object.entries(preview).filter(
-          ([key]) => key !== "approvalScope" || !selectedApprovalScope.value,
+          ([key]) =>
+            key !== "approvalScope" &&
+            key !== "risk" &&
+            !integrationTechnicalPreviewKeys.has(key),
         ),
       )
     : undefined;
 });
+const selectedTechnicalPreview = computed(() => {
+  const preview = selected.value?.gate.integrationIntent?.effectPreview;
+  return preview
+    ? Object.fromEntries(
+        Object.entries(preview).filter(([key]) =>
+          integrationTechnicalPreviewKeys.has(key),
+        ),
+      )
+    : undefined;
+});
+const selectedHasEffectPreview = computed(
+  () => Object.keys(selectedEffectPreview.value ?? {}).length > 0,
+);
+const selectedHasTechnicalPreview = computed(
+  () => Object.keys(selectedTechnicalPreview.value ?? {}).length > 0,
+);
 const selectedActions = computed(() =>
   selected.value
     ? decisionActionLayout(selected.value.gate)
@@ -373,6 +406,47 @@ function formatDate(value?: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function integrationRisk(gate: OwnerGate): string {
+  const risk = gate.integrationIntent?.effectPreview.risk;
+  return risk === "READ" ||
+    risk === "WRITE" ||
+    risk === "SENSITIVE" ||
+    risk === "DESTRUCTIVE"
+    ? risk
+    : "UNKNOWN";
+}
+
+function decisionTitle(gate: OwnerGate): string {
+  if (!gate.integrationIntent) return serverMessage(gate.title);
+  const risk = integrationRisk(gate);
+  const key =
+    risk === "READ"
+      ? "decisions.integrationReadTitle"
+      : risk === "WRITE"
+        ? "decisions.integrationWriteTitle"
+        : "decisions.integrationActionTitle";
+  return t(key, { connection: gate.integrationIntent.connectionName });
+}
+
+function decisionQuestion(item: DecisionInboxItem): string {
+  if (!item.gate.integrationIntent)
+    return item.hasQuestion
+      ? serverMessage(item.gate.contextSummary)
+      : t("decisions.questionUnavailable");
+  return t("decisions.integrationQuestion", {
+    connection: item.gate.integrationIntent.connectionName,
+    risk: t(`decisions.integrationRisk.${integrationRisk(item.gate)}`),
+  });
+}
+
+function approvalPathLabel(path: string): string {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
+    .join(".");
 }
 
 function projectPath(item: DecisionInboxItem): string {
@@ -691,12 +765,8 @@ const serverMessage = useServerMessage();
                   <ShieldQuestion :size="18" aria-hidden="true" />
                 </span>
                 <span class="decision-row__copy">
-                  <strong>{{ serverMessage(item.gate.title) }}</strong>
-                  <span>{{
-                    item.hasQuestion
-                      ? item.gate.contextSummary
-                      : $t("decisions.questionUnavailable")
-                  }}</span>
+                  <strong>{{ decisionTitle(item.gate) }}</strong>
+                  <span>{{ decisionQuestion(item) }}</span>
                   <small
                     v-if="item.hasConsequences"
                     class="decision-row__impact"
@@ -720,8 +790,11 @@ const serverMessage = useServerMessage();
                     </template>
                   </small>
                   <small class="decision-row__route">
-                    {{ item.run?.target.displayName }} ·
-                    {{ item.run?.title ?? $t("decisions.runUnavailable") }}
+                    <template v-if="item.run">
+                      {{ item.run.target.displayName }} ·
+                      {{ item.run.title || $t("decisions.openRun") }}
+                    </template>
+                    <template v-else>{{ $t("decisions.openRun") }}</template>
                   </small>
                 </span>
                 <span class="decision-row__status">
@@ -745,7 +818,7 @@ const serverMessage = useServerMessage();
           <header class="decision-detail__header">
             <div>
               <p class="eyebrow">{{ $t("decisions.question") }}</p>
-              <h2>{{ serverMessage(selected.gate.title) }}</h2>
+              <h2>{{ decisionTitle(selected.gate) }}</h2>
             </div>
             <StatusBadge :state="selected.gate.state" />
           </header>
@@ -776,7 +849,7 @@ const serverMessage = useServerMessage();
                   {{ selected.run.target.displayName }}
                 </span>
                 <RouterLink :to="runNodePath(selected)">
-                  {{ selected.run?.title ?? $t("decisions.runUnavailable") }}
+                  {{ selected.run?.title ?? $t("decisions.openRun") }}
                 </RouterLink>
               </dd>
             </div>
@@ -888,11 +961,7 @@ const serverMessage = useServerMessage();
           <section class="decision-copy">
             <h3>{{ $t("decisions.fullQuestion") }}</h3>
             <p>
-              {{
-                selected.hasQuestion
-                  ? selected.gate.contextSummary
-                  : $t("decisions.questionUnavailable")
-              }}
+              {{ decisionQuestion(selected) }}
             </p>
           </section>
           <section class="decision-copy decision-copy--consequences">
@@ -917,21 +986,35 @@ const serverMessage = useServerMessage();
                 <dd>{{ selected.gate.integrationIntent.connectionName }}</dd>
               </div>
               <div>
-                <dt>{{ $t("common.actions") }}</dt>
+                <dt>{{ $t("decisions.integrationRiskLabel") }}</dt>
                 <dd>
-                  {{ selected.gate.integrationIntent.operation }} ·
-                  {{ selected.gate.integrationIntent.capabilityKey }}
+                  {{
+                    $t(
+                      `decisions.integrationRisk.${integrationRisk(selected.gate)}`,
+                    )
+                  }}
                 </dd>
               </div>
             </dl>
             <SafeStructuredData
-              :value="selected.gate.integrationIntent.resourceScope"
+              v-if="selectedHasEffectPreview"
+              :value="selectedEffectPreview"
               literal
             />
-            <p>
-              <code>{{ selected.gate.integrationIntent.effectKey }}</code>
-            </p>
-            <SafeStructuredData :value="selectedEffectPreview" literal />
+            <section
+              v-if="selectedEffectFields.length"
+              class="decision-effect-fields"
+            >
+              <h4>{{ $t("decisions.integrationParameters") }}</h4>
+              <dl>
+                <div v-for="field in selectedEffectFields" :key="field.path">
+                  <dt>
+                    <code>{{ approvalPathLabel(field.path) }}</code>
+                  </dt>
+                  <dd><SafeStructuredData :value="field.value" literal /></dd>
+                </div>
+              </dl>
+            </section>
             <section
               v-if="selectedApprovalScope"
               class="decision-approval-scope"
@@ -944,7 +1027,7 @@ const serverMessage = useServerMessage();
                   :key="field.path"
                 >
                   <dt>
-                    <code>{{ field.path }}</code> · {{ field.type }}
+                    <code>{{ approvalPathLabel(field.path) }}</code>
                   </dt>
                   <dd><SafeStructuredData :value="field.value" literal /></dd>
                 </div>
@@ -955,10 +1038,44 @@ const serverMessage = useServerMessage();
                   v-for="path in selectedApprovalScope.mutablePaths"
                   :key="path"
                 >
-                  <code>{{ path }}</code>
+                  <code>{{ approvalPathLabel(path) }}</code>
                 </li>
               </ul>
             </section>
+            <details class="decision-technical-details">
+              <summary>{{ $t("decisions.technicalDetails") }}</summary>
+              <dl>
+                <div>
+                  <dt>{{ $t("decisions.integrationOperation") }}</dt>
+                  <dd>
+                    <code>{{ selected.gate.integrationIntent.operation }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("decisions.integrationCapability") }}</dt>
+                  <dd>
+                    <code>{{
+                      selected.gate.integrationIntent.capabilityKey
+                    }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("decisions.integrationEffectKey") }}</dt>
+                  <dd>
+                    <code>{{ selected.gate.integrationIntent.effectKey }}</code>
+                  </dd>
+                </div>
+              </dl>
+              <SafeStructuredData
+                :value="selected.gate.integrationIntent.resourceScope"
+                literal
+              />
+              <SafeStructuredData
+                v-if="selectedHasTechnicalPreview"
+                :value="selectedTechnicalPreview"
+                literal
+              />
+            </details>
           </section>
 
           <section
@@ -1314,6 +1431,47 @@ const serverMessage = useServerMessage();
 .decision-detail__header h2 {
   margin-top: 4px;
   font-size: 1.2rem;
+}
+.decision-technical-details {
+  padding-top: 4px;
+  border-top: 1px solid var(--hairline);
+  color: var(--muted);
+}
+.decision-technical-details summary {
+  width: fit-content;
+  cursor: pointer;
+  font-weight: 600;
+}
+.decision-technical-details > dl {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+.decision-technical-details > dl > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.decision-technical-details dt,
+.decision-technical-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.decision-effect-fields > dl {
+  display: grid;
+  gap: 6px;
+}
+.decision-effect-fields > dl > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.decision-effect-fields dt,
+.decision-effect-fields dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .decision-meta {
   display: grid;
