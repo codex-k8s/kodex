@@ -1055,6 +1055,20 @@ function snapshot(value: string): Record<string, unknown> {
                     updateOperationParameter(operation, key, value)
                 "
               />
+              <label class="field">
+                <span>{{ $t("runtime.exactImage") }}</span>
+                <AsyncEntityPicker
+                  :model-value="fieldValue(operation, 'imageArtifactRef')"
+                  :selected="selectedImage(operation)"
+                  :load-page="loadImagePage"
+                  :trigger-label="$t('runtime.exactImage')"
+                  :placeholder="$t('runtime.choosePromotedImage')"
+                  :search-placeholder="$t('runtime.searchPromotedImage')"
+                  :disabled="!editable || !plan.projectRef"
+                  @update:model-value="setImageArtifact(operation, $event)"
+                  @select="rememberSelectedImage"
+                />
+              </label>
               <AssistantEnvironmentFieldsForm
                 :operation="operation"
                 :project-ref="plan.projectRef || ''"

@@ -67,15 +67,6 @@ function changeText(key: string, event: Event): void {
         @input="changeText('description', $event)"
       />
     </label>
-    <label class="field">
-      <span>{{ $t("assistant.planEditor.environmentImageArtifact") }}</span>
-      <input
-        :value="stringField('imageArtifactRef')"
-        maxlength="96"
-        :disabled="disabled"
-        @input="changeText('imageArtifactRef', $event)"
-      />
-    </label>
     <p v-if="!valid" class="field-error" role="alert">
       {{ $t("assistant.planEditor.environmentRevisionNotReady") }}
     </p>

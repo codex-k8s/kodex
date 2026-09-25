@@ -68,6 +68,21 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("!environmentFieldsTouched.value");
   });
 
+  it("при изменении среды выбирает образ штатным поиском, а не сырым ref", () => {
+    const revision = readFileSync(
+      new URL("./AssistantEnvironmentRevisionForm.vue", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain("PREPARE_RUNTIME_ENVIRONMENT_REVISION");
+    expect(source).toMatch(
+      /<AssistantEnvironmentRevisionForm[\s\S]*?<AsyncEntityPicker/,
+    );
+    expect(source).toContain("runtime.choosePromotedImage");
+    expect(revision).not.toContain(
+      "@input=\"changeText('imageArtifactRef', $event)\"",
+    );
+  });
+
   it("открывает защищённую форму секрета и после применения плана", () => {
     expect(source).toContain("parseAssistantSecretSuggestions");
     expect(source).toContain("emit('prepareSecret', suggestion)");
