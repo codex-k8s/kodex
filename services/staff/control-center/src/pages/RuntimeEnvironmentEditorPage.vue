@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import EnvironmentImpactDialog from "@/features/runtime/EnvironmentImpactDialog.vue";
+import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
 import PublicationImpactSelection from "@/features/runtime/PublicationImpactSelection.vue";
 import {
   readPublicationAttempt,
@@ -52,17 +53,14 @@ import {
   compactIdentifier,
   environmentReadiness,
   hasEnvironmentAction,
-  safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
 import {
   defaultRuntimeEnvironmentPolicy,
   editableRuntimeEnvironmentPolicy,
   editableSecretBindings,
   emptyRuntimeVolume,
-  emptySecretBinding,
   mandatoryRuntimeNetworkDestinations,
   normalizeRuntimeEnvironmentInput,
-  runtimeEnvironmentCollectionLimit,
   runtimeResourceBounds,
   runtimeVolumeBounds,
   setRuntimeKubernetesAccess,
@@ -87,11 +85,6 @@ import {
   consumeEnvironmentDraftReference,
   environmentDraftReauthKey,
 } from "@/features/runtime/environment-draft-reauth";
-import { loadRuntimeSecretPage } from "@/features/runtime-secrets/api";
-import {
-  maskedSecretHint,
-  type RuntimeSecret,
-} from "@/features/runtime-secrets/model";
 import { consumeRuntimeEnvironmentPolicyReauthCompletion } from "@/features/session/reauth";
 import { useSessionStore } from "@/features/session/store";
 import type {
@@ -100,8 +93,6 @@ import type {
   RuntimeEnvironmentInput,
   RuntimeEnvironmentSet,
   RuntimeKubernetesAccessKind,
-  RuntimeSecretBinding,
-  RuntimeSecretDescriptor,
   RuntimeEnvironmentDraft,
   RuntimeEnvironmentDraftSpecification,
   RevisionImpactPlan,
@@ -201,7 +192,6 @@ const localChanges = computed(
 );
 const reauthRestored = ref(false);
 const activeSection = ref<EditorSection>("GENERAL");
-const editorForm = ref<HTMLFormElement>();
 const input = reactive<RuntimeEnvironmentInput>({
   name: "",
   description: "",
@@ -211,7 +201,6 @@ const input = reactive<RuntimeEnvironmentInput>({
   secretBindings: [],
   policy: defaultRuntimeEnvironmentPolicy(),
 });
-const selectedSecrets = reactive<Record<string, AsyncEntityOption>>({});
 const selectedImage = ref<AsyncEntityOption>();
 const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
@@ -252,15 +241,6 @@ const canPublish = computed(
     (!environmentRef.value || !!current.value) &&
     (!current.value || hasEnvironmentAction(current.value, "UPDATE")),
 );
-const secretPickerLabels = computed(() => ({
-  label: t("runtime.chooseRuntimeSecret"),
-  searchPlaceholder: t("runtime.searchRuntimeSecret"),
-  loading: t("runtime.secretPicker.loading"),
-  loadingMore: t("runtime.secretPicker.loadingMore"),
-  empty: t("runtime.secretPicker.empty"),
-  error: t("runtime.secretPicker.error"),
-  retry: t("common.retry"),
-}));
 const versionDigest = computed(() =>
   current.value
     ? compactIdentifier(current.value.currentVersion.digest)
@@ -374,17 +354,6 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
     };
     imageArtifact.value = undefined;
   }
-  for (const key of Object.keys(selectedSecrets))
-    Reflect.deleteProperty(selectedSecrets, key);
-  for (const binding of value.secretBindings) {
-    if (binding.secretRef && !currentDescriptor(binding)) {
-      selectedSecrets[binding.secretRef] = {
-        ref: binding.secretRef,
-        title: binding.secretRef,
-        description: t("runtime.restoredSecretSelection"),
-      };
-    }
-  }
 }
 
 async function loadImageArtifact(
@@ -423,68 +392,6 @@ async function loadImageArtifact(
 
 function loadImagePage(query: string, cursor?: string) {
   return runtime.searchPromotedRoleImagePage(projectRef.value, query, cursor);
-}
-
-async function loadSecretPage(query: string, cursor?: string) {
-  const page = await loadRuntimeSecretPage(projectRef.value, query, cursor);
-  return {
-    items: page.items.map(runtimeSecretOption),
-    nextPageToken: page.nextPageToken || undefined,
-  };
-}
-
-function runtimeSecretOption(secret: RuntimeSecret): AsyncEntityOption {
-  return {
-    ref: secret.ref,
-    title: secret.name,
-    description: secret.description,
-    meta: `${maskedSecretHint(secret)} · rev ${String(secret.currentRevision)}`,
-    disabled: secret.state !== "ACTIVE",
-    disabledReason:
-      secret.state === "ACTIVE" ? undefined : t("runtime.secretRevoked"),
-  };
-}
-
-function currentDescriptor(
-  binding: RuntimeSecretBinding,
-): RuntimeSecretDescriptor | undefined {
-  return current.value?.currentVersion.secretDescriptors.find(
-    (descriptor) =>
-      descriptor.name === binding.name &&
-      descriptor.secretRef === binding.secretRef,
-  );
-}
-
-function safeCurrentDescriptor(binding: RuntimeSecretBinding) {
-  const descriptor = currentDescriptor(binding);
-  return descriptor ? safeSecretReference(descriptor) : undefined;
-}
-
-function selectedSecret(
-  binding: RuntimeSecretBinding,
-): AsyncEntityOption | undefined {
-  if (!binding.secretRef) return undefined;
-  const selected = selectedSecrets[binding.secretRef];
-  if (selected) return selected;
-  const descriptor = currentDescriptor(binding);
-  if (!descriptor) return undefined;
-  return {
-    ref: descriptor.secretRef,
-    title:
-      [descriptor.secretName, descriptor.secretKey]
-        .filter(Boolean)
-        .join(" / ") || binding.name,
-    description: t("runtime.currentPublishedSecret"),
-    meta: `rev ${descriptor.secretResourceVersion}`,
-  };
-}
-
-function selectSecret(
-  binding: RuntimeSecretBinding,
-  option: AsyncEntityOption,
-): void {
-  selectedSecrets[option.ref] = option;
-  binding.revision = 0;
 }
 
 async function selectImage(option: AsyncEntityOption): Promise<void> {
@@ -528,30 +435,6 @@ function updateSelectedTool(
     return;
   const tool = input.tools.find((item) => item.command === command);
   if (tool) tool[field] = target.value;
-}
-
-async function addValue(): Promise<void> {
-  if (busy.value || !canPublish.value || !draftEditable.value) return;
-  if (input.values.length >= runtimeEnvironmentCollectionLimit) return;
-  input.values.push({ name: "", value: "" });
-  await nextTick();
-  const names = editorForm.value?.querySelectorAll<HTMLInputElement>(
-    "[data-environment-variable-name]",
-  );
-  const target = names?.item(names.length - 1);
-  target?.focus();
-}
-
-async function addSecret(): Promise<void> {
-  if (busy.value || !canPublish.value || !draftEditable.value) return;
-  if (input.secretBindings.length >= runtimeEnvironmentCollectionLimit) return;
-  input.secretBindings.push(emptySecretBinding());
-  await nextTick();
-  const names = editorForm.value?.querySelectorAll<HTMLInputElement>(
-    "[data-environment-secret-name]",
-  );
-  const target = names?.item(names.length - 1);
-  target?.focus();
 }
 
 function addVolume(): void {
@@ -1361,7 +1244,6 @@ onBeforeUnmount(() => {
 
         <div class="environment-editor-layout">
           <form
-            ref="editorForm"
             class="panel environment-editor"
             novalidate
             @submit.prevent="save"
@@ -1576,60 +1458,14 @@ onBeforeUnmount(() => {
                 role="tabpanel"
                 :aria-labelledby="sectionTabId('VALUES')"
               >
-                <div class="section-header">
-                  <div>
-                    <h2>{{ $t("runtime.variables") }}</h2>
-                    <p>{{ $t("runtime.variablesHelp") }}</p>
-                  </div>
-                  <button
-                    class="button"
-                    type="button"
-                    :disabled="
-                      busy ||
-                      !canPublish ||
-                      !draftEditable ||
-                      input.values.length >= runtimeEnvironmentCollectionLimit
-                    "
-                    :title="
-                      input.values.length >= runtimeEnvironmentCollectionLimit
-                        ? $t('runtime.errors.collectionLimit')
-                        : undefined
-                    "
-                    @click="addValue"
-                  >
-                    <Plus :size="15" aria-hidden="true" />
-                    {{ $t("runtime.addVariable") }}
-                  </button>
-                </div>
-                <div v-if="input.values.length" class="environment-fields">
-                  <div
-                    v-for="(item, index) in input.values"
-                    :key="index"
-                    class="environment-field-row"
-                  >
-                    <label class="field">
-                      <span>{{ $t("runtime.variableName") }}</span>
-                      <input
-                        v-model="item.name"
-                        data-environment-variable-name
-                        placeholder="VAR_NAME"
-                      />
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.nonSecretValue") }}</span>
-                      <input v-model="item.value" maxlength="8192" />
-                    </label>
-                    <button
-                      class="icon-button icon-button--danger"
-                      type="button"
-                      :aria-label="$t('common.delete')"
-                      @click="input.values.splice(index, 1)"
-                    >
-                      <Trash2 :size="16" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-                <p v-else class="secondary-text">{{ $t("common.empty") }}</p>
+                <RuntimeEnvironmentFieldListsEditor
+                  mode="VALUES"
+                  :values="input.values"
+                  :secret-bindings="input.secretBindings"
+                  :project-ref="projectRef"
+                  :disabled="busy || !canPublish || !draftEditable"
+                  @update:values="input.values = $event"
+                />
               </section>
 
               <section
@@ -1639,123 +1475,15 @@ onBeforeUnmount(() => {
                 role="tabpanel"
                 :aria-labelledby="sectionTabId('SECRETS')"
               >
-                <div class="section-header">
-                  <div>
-                    <h2>{{ $t("runtime.secretReferences") }}</h2>
-                    <p>{{ $t("runtime.secretBindingsHelp") }}</p>
-                  </div>
-                  <button
-                    class="button"
-                    type="button"
-                    :disabled="
-                      busy ||
-                      !canPublish ||
-                      !draftEditable ||
-                      input.secretBindings.length >=
-                        runtimeEnvironmentCollectionLimit
-                    "
-                    :title="
-                      input.secretBindings.length >=
-                      runtimeEnvironmentCollectionLimit
-                        ? $t('runtime.errors.collectionLimit')
-                        : undefined
-                    "
-                    @click="addSecret"
-                  >
-                    <KeyRound :size="15" aria-hidden="true" />
-                    {{ $t("runtime.addSecretBinding") }}
-                  </button>
-                </div>
-                <div class="secret-warning" role="note">
-                  <ShieldCheck :size="18" aria-hidden="true" />
-                  {{ $t("runtime.secretValuesForbidden") }}
-                </div>
-                <article
-                  v-for="(item, index) in input.secretBindings"
-                  :key="index"
-                  class="secret-descriptor"
-                >
-                  <div class="section-header">
-                    <div>
-                      <strong>
-                        {{
-                          item.name ||
-                          $t("runtime.secretBinding", { number: index + 1 })
-                        }}
-                      </strong>
-                      <p>
-                        {{
-                          selectedSecret(item)?.title ||
-                          $t("runtime.secretNotSelected")
-                        }}
-                      </p>
-                    </div>
-                    <button
-                      class="icon-button icon-button--danger"
-                      type="button"
-                      :aria-label="$t('common.delete')"
-                      @click="input.secretBindings.splice(index, 1)"
-                    >
-                      <Trash2 :size="16" aria-hidden="true" />
-                    </button>
-                  </div>
-                  <div class="secret-binding-fields">
-                    <label class="field">
-                      <span>{{ $t("runtime.variableName") }}</span>
-                      <input
-                        v-model="item.name"
-                        data-environment-secret-name
-                        placeholder="SECRET_NAME"
-                      />
-                    </label>
-                    <div class="field">
-                      <span>{{ $t("runtime.runtimeSecret") }}</span>
-                      <AsyncEntityPicker
-                        v-model="item.secretRef"
-                        :selected="selectedSecret(item)"
-                        :load-page="loadSecretPage"
-                        :labels="secretPickerLabels"
-                        :placeholder="$t('runtime.chooseRuntimeSecret')"
-                        :search-placeholder="$t('runtime.searchRuntimeSecret')"
-                        @select="selectSecret(item, $event)"
-                      />
-                    </div>
-                  </div>
-                  <dl
-                    v-if="currentDescriptor(item)"
-                    class="secret-safe-meta"
-                    :aria-label="$t('runtime.currentImmutableDescriptor')"
-                  >
-                    <div>
-                      <dt>{{ $t("runtime.secretTarget") }}</dt>
-                      <dd>{{ safeCurrentDescriptor(item)?.target }}</dd>
-                    </div>
-                    <div>
-                      <dt>{{ $t("runtime.secretResourceVersion") }}</dt>
-                      <dd>{{ safeCurrentDescriptor(item)?.revision }}</dd>
-                    </div>
-                    <div>
-                      <dt>UID</dt>
-                      <dd>
-                        <code>{{ safeCurrentDescriptor(item)?.uidHint }}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>SHA-256</dt>
-                      <dd>
-                        <code>{{
-                          safeCurrentDescriptor(item)?.digestHint
-                        }}</code>
-                      </dd>
-                    </div>
-                  </dl>
-                  <p v-else class="secondary-text">
-                    {{ $t("runtime.descriptorGeneratedOnPublish") }}
-                  </p>
-                </article>
-                <p v-if="!input.secretBindings.length" class="secondary-text">
-                  {{ $t("runtime.noSecretReferences") }}
-                </p>
+                <RuntimeEnvironmentFieldListsEditor
+                  mode="SECRETS"
+                  :values="input.values"
+                  :secret-bindings="input.secretBindings"
+                  :descriptors="current?.currentVersion.secretDescriptors"
+                  :project-ref="projectRef"
+                  :disabled="busy || !canPublish || !draftEditable"
+                  @update:secret-bindings="input.secretBindings = $event"
+                />
               </section>
 
               <section
