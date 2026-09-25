@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
   ProviderAccount,
@@ -22,6 +22,7 @@ import {
   type ProviderLifecycleResult,
 } from "./lifecycle";
 const props = defineProps<{ account: ProviderAccount }>();
+const fieldPrefix = `provider-lifecycle-${useId()}`;
 const emit = defineEmits<{
   updated: [account: ProviderAccount];
   unavailable: [ref: string];
@@ -322,7 +323,12 @@ onBeforeUnmount(() => {
       <div class="provider-lifecycle__filters">
         <label
           >{{ t("providerLifecycle.kind")
-          }}<select v-model="kind" :disabled="busy">
+          }}<select
+            v-model="kind"
+            :id="`${fieldPrefix}-kind`"
+            :name="`${fieldPrefix}-kind`"
+            :disabled="busy"
+          >
             <option value="">{{ t("providerLifecycle.all") }}</option>
             <option
               v-for="value in providerBlockerKinds"
@@ -337,6 +343,8 @@ onBeforeUnmount(() => {
           >{{ t("providerLifecycle.search")
           }}<input
             v-model="query"
+            :id="`${fieldPrefix}-search`"
+            :name="`${fieldPrefix}-search`"
             type="search"
             maxlength="128"
             :disabled="busy"
@@ -350,10 +358,12 @@ onBeforeUnmount(() => {
         </p>
         <p v-if="!items.length">{{ t("providerLifecycle.empty") }}</p>
         <ul class="provider-lifecycle__items">
-          <li v-for="item in items" :key="`${item.kind}:${item.ref}`">
+          <li v-for="(item, index) in items" :key="`${item.kind}:${item.ref}`">
             <input
               v-if="item.kind === 'QUEUED_TURN'"
               v-model="selected"
+              :id="`${fieldPrefix}-item-${index}`"
+              :name="`${fieldPrefix}-item-${index}`"
               :value="item.ref"
               type="checkbox"
               :aria-label="`${t('providerLifecycle.select')}: ${item.name}`"

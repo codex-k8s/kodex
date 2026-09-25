@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { PromptTemplatePreview } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -20,6 +20,7 @@ const props = defineProps<{
   template?: string;
   disabledReason?: string;
 }>();
+const fieldName = `${useId()}-full-prompt`;
 const { t } = useI18n();
 const emit = defineEmits<{ checked: [value: boolean] }>();
 const full = ref(false);
@@ -97,6 +98,8 @@ defineExpose({ refresh });
     <label class="checkbox-label">
       <input
         v-model="full"
+        :id="fieldName"
+        :name="fieldName"
         type="checkbox"
         :disabled="disabled || busy || !target"
       />

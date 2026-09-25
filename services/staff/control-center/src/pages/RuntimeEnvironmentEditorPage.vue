@@ -1354,9 +1354,12 @@ onBeforeUnmount(() => {
                 :aria-labelledby="sectionTabId('POLICY')"
               >
                 <label class="policy-selection"
-                  ><input v-model="policySelected" type="checkbox" />{{
-                    $t("runtime.includePolicy")
-                  }}</label
+                  ><input
+                    v-model="policySelected"
+                    id="runtime-environment-policy-selected"
+                    name="runtime-environment-policy-selected"
+                    type="checkbox"
+                  />{{ $t("runtime.includePolicy") }}</label
                 >
                 <div class="section-header">
                   <div>

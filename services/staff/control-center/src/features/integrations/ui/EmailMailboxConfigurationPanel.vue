@@ -5,6 +5,7 @@ import {
   onMounted,
   reactive,
   ref,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -32,6 +33,7 @@ const props = defineProps<{
   initialConfigurationRef?: string;
   initialRevisionRef?: string;
 }>();
+const fieldPrefix = `mailbox-configuration-${useId()}`;
 const emit = defineEmits<{
   busy: [value: boolean];
   saved: [];
@@ -232,6 +234,8 @@ onBeforeUnmount(() => {
         ><span>{{ t("mailbox.search") }}</span
         ><input
           v-model="editor.query"
+          :id="`${fieldPrefix}-search`"
+          :name="`${fieldPrefix}-search`"
           type="search"
           :disabled="locked || editor.uncertain"
           @input="search"
@@ -324,6 +328,8 @@ onBeforeUnmount(() => {
       ><span>{{ t("common.name") }}</span
       ><input
         v-model="editor.name"
+        :id="`${fieldPrefix}-name`"
+        :name="`${fieldPrefix}-name`"
         :disabled="
           locked || editor.uncertain || Boolean(editor.view) || !editor.writable
         "
@@ -377,6 +383,8 @@ onBeforeUnmount(() => {
         ><span>{{ t("mailboxCredential.kind") }}</span
         ><select
           v-model="credentialKind"
+          :id="`${fieldPrefix}-credential-kind`"
+          :name="`${fieldPrefix}-credential-kind`"
           :disabled="locked || editor.uncertain"
           @change="loadCredentials()"
         >
@@ -431,7 +439,11 @@ onBeforeUnmount(() => {
     <p>{{ t("mailbox.authorityHelp") }}</p>
     <label v-if="editor.allowed('COPY')" class="field"
       ><span>{{ t("mailbox.copyName") }}</span
-      ><input v-model="editor.copyName" :disabled="locked || editor.uncertain"
+      ><input
+        v-model="editor.copyName"
+        :id="`${fieldPrefix}-copy-name`"
+        :name="`${fieldPrefix}-copy-name`"
+        :disabled="locked || editor.uncertain"
     /></label>
     <div class="mailbox-panel__actions">
       <button

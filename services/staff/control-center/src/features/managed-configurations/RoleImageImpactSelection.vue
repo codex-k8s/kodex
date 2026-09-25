@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   RoleImageImpactPlan,
   RoleImageImpactPage,
@@ -10,6 +10,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { roleImagePlanIdentity, readImageImpact } from "./role-image-impact";
 
 const props = defineProps<{ plan: RoleImageImpactPlan; busy?: boolean }>();
+const fieldPrefix = `role-image-impact-${useId()}`;
 const emit = defineEmits<{ apply: [selectedItemRefs: string[]] }>();
 const page = ref<RoleImageImpactPage>();
 const selected = ref(new Set<string>());
@@ -138,7 +139,14 @@ onBeforeUnmount(() => {
     <p>{{ $t("publicationImpact.snapshotTotal", { count: plan.total }) }}</p>
     <label>
       {{ $t("common.search") }}
-      <input v-model="query" type="search" maxlength="200" :disabled="busy" />
+      <input
+        v-model="query"
+        :id="`${fieldPrefix}-search`"
+        :name="`${fieldPrefix}-search`"
+        type="search"
+        maxlength="200"
+        :disabled="busy"
+      />
     </label>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
@@ -154,12 +162,14 @@ onBeforeUnmount(() => {
       <StatusBadge :state="page.plan.state" />
       <div class="publication-impact__items">
         <label
-          v-for="item in page.items"
+          v-for="(item, index) in page.items"
           :key="item.ref"
           class="publication-impact__item"
         >
           <input
             type="checkbox"
+            :id="`${fieldPrefix}-item-${index}`"
+            :name="`${fieldPrefix}-item-${index}`"
             :checked="selected.has(item.ref)"
             :disabled="!editable || item.outcome !== 'PENDING'"
             :aria-label="item.consumer?.agentRef ?? item.environmentRef"

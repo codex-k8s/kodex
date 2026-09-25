@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from "vue";
+import { onBeforeUnmount, ref, useId } from "vue";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
@@ -9,6 +9,7 @@ import { copyConfiguration } from "./lifecycle";
 import type { ConfigurationCopySource } from "./copy-source";
 
 const props = defineProps<{ source: ConfigurationCopySource }>();
+const nameField = `configuration-copy-${useId()}`;
 const emit = defineEmits<{
   close: [];
   created: [configuration: ManagedConfiguration];
@@ -62,7 +63,12 @@ async function submit(): Promise<void> {
     </dl>
     <label
       >{{ $t("common.name")
-      }}<input v-model="name" maxlength="160" :disabled="submitted"
+      }}<input
+        v-model="name"
+        :id="nameField"
+        :name="nameField"
+        maxlength="160"
+        :disabled="submitted"
     /></label>
     <ProblemNotice v-if="problem" :problem="problem" />
     <p v-if="unknown" role="status">{{ $t("managed.outcomeUnknown") }}</p>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, useId } from "vue";
 import {
   FilePlus2,
   FolderOpen,
@@ -27,6 +27,7 @@ import {
   skillExtensions,
 } from "./skill-import";
 const props = defineProps<{ projectRef: string; existingPaths: string[] }>();
+const fieldPrefix = `skill-import-${useId()}`;
 const emit = defineEmits<{
   close: [];
   imported: [files: SkillBundleFileInput[]];
@@ -183,6 +184,8 @@ onBeforeUnmount(() => {
     <div v-if="mode === 'FILES'" class="skill-import-actions">
       <input
         ref="filesInput"
+        :id="`${fieldPrefix}-files`"
+        :name="`${fieldPrefix}-files`"
         type="file"
         multiple
         hidden
@@ -191,6 +194,8 @@ onBeforeUnmount(() => {
       />
       <input
         ref="directoryInput"
+        :id="`${fieldPrefix}-directory`"
+        :name="`${fieldPrefix}-directory`"
         type="file"
         multiple
         webkitdirectory

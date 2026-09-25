@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Plus, RefreshCw, ShieldX } from "@lucide/vue";
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { listAccessSubjects } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -22,6 +22,7 @@ import {
 } from "../interaction-identities";
 
 const props = defineProps<{ connection: IntegrationConnection }>();
+const fieldPrefix = `interaction-identity-${useId()}`;
 const { t } = useI18n();
 const items = ref<InteractionIdentity[]>([]);
 const cursor = ref("");
@@ -256,6 +257,8 @@ onBeforeUnmount(() => {
         >{{ t("identity.team")
         }}<input
           v-model="input.externalTeamRef"
+          :id="`${fieldPrefix}-team`"
+          :name="`${fieldPrefix}-team`"
           maxlength="128"
           :disabled="busy"
       /></label>
@@ -263,6 +266,8 @@ onBeforeUnmount(() => {
         >{{ t("identity.channel")
         }}<input
           v-model="input.externalChannelRef"
+          :id="`${fieldPrefix}-channel`"
+          :name="`${fieldPrefix}-channel`"
           maxlength="128"
           :disabled="busy"
       /></label>
@@ -270,6 +275,8 @@ onBeforeUnmount(() => {
         >{{ t("identity.digest")
         }}<input
           v-model="input.externalUserDigest"
+          :id="`${fieldPrefix}-digest`"
+          :name="`${fieldPrefix}-digest`"
           maxlength="64"
           :disabled="busy"
           autocomplete="off"

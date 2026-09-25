@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
   Artifact,
@@ -44,6 +44,7 @@ const props = defineProps<{
   projectRef?: string;
   agentRef?: string;
 }>();
+const fieldPrefix = `context-editor-${useId()}`;
 const emit = defineEmits<{ created: [ref: string, projectRef: string] }>();
 const { t } = useI18n();
 const skill = ref<SkillBundle>();
@@ -473,6 +474,8 @@ onBeforeUnmount(() => {
           >{{ $t("common.name")
           }}<input
             v-model="specification.name"
+            :id="`${fieldPrefix}-skill-name`"
+            :name="`${fieldPrefix}-skill-name`"
             maxlength="320"
             required
             :aria-label="$t('common.name')"
@@ -510,7 +513,11 @@ onBeforeUnmount(() => {
       <template v-else>
         <label
           >{{ $t("common.name")
-          }}<input v-model="memoryInput.title" maxlength="320"
+          }}<input
+            v-model="memoryInput.title"
+            :id="`${fieldPrefix}-memory-title`"
+            :name="`${fieldPrefix}-memory-title`"
+            maxlength="320"
         /></label>
         <CodeEditor
           v-if="
@@ -538,7 +545,12 @@ onBeforeUnmount(() => {
         </label>
         <label
           >{{ $t("contextResources.retention")
-          }}<input v-model="retention" type="datetime-local" required
+          }}<input
+            v-model="retention"
+            :id="`${fieldPrefix}-retention`"
+            :name="`${fieldPrefix}-retention`"
+            type="datetime-local"
+            required
         /></label>
       </template>
     </fieldset>
@@ -663,6 +675,8 @@ onBeforeUnmount(() => {
     <template v-if="action === 'review'"
       ><select
         v-model="decision"
+        :id="`${fieldPrefix}-review-decision`"
+        :name="`${fieldPrefix}-review-decision`"
         :disabled="busy"
         :aria-label="$t('contextResources.decision')"
       >

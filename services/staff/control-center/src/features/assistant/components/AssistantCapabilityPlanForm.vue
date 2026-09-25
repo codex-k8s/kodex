@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 
 import {
   operationParameter,
@@ -21,6 +21,7 @@ const props = defineProps<{
   projectRef?: string;
   disabled: boolean;
 }>();
+const fieldPrefix = `assistant-capability-${useId()}`;
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
@@ -146,6 +147,8 @@ function changed(key: string, value: string | boolean): void {
         <span>{{ $t("assistant.planEditor.capabilityName") }}</span>
         <select
           :value="capabilityKey"
+          :id="`${fieldPrefix}-capability`"
+          :name="`${fieldPrefix}-capability`"
           :disabled="disabled || !versionMatches"
           @change="
             changed('capabilityKey', ($event.target as HTMLSelectElement).value)
@@ -170,6 +173,8 @@ function changed(key: string, value: string | boolean): void {
       <label class="assistant-capability-form__enabled">
         <input
           type="checkbox"
+          :id="`${fieldPrefix}-enabled`"
+          :name="`${fieldPrefix}-enabled`"
           :checked="enabled === true"
           :disabled="disabled || !versionMatches || !selectedCapability"
           @change="

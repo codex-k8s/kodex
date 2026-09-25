@@ -7,7 +7,7 @@ import {
   workflowEditorInput,
   workflowStagePromptTarget,
 } from "@/features/platform/workflow-editor";
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
@@ -29,6 +29,11 @@ import WorkflowOverviewFields from "@/features/workflows/WorkflowOverviewFields.
 import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
 const platform = usePlatformStore();
 const route = useRoute();
+const editorId = useId();
+const inputControlName = (index: number, control: string) =>
+  `${editorId}-input-${String(index)}-${control}`;
+const stepControlName = (index: number, control: string) =>
+  `${editorId}-step-${String(index)}-${control}`;
 const assistantForm = computed(() => route.query.assistantForm === "1");
 const { t } = useI18n();
 const projectRef = computed(() => String(route.params.projectRef));
@@ -387,11 +392,17 @@ onBeforeUnmount(() => {
                     ><span>{{ $t("workflows.inputLabel") }}</span
                     ><input
                       v-model.trim="field.label"
+                      :id="inputControlName(index, 'label')"
+                      :name="inputControlName(index, 'label')"
                       required
                       maxlength="160" /></label
                   ><label class="field"
                     ><span>{{ $t("workflows.inputType") }}</span
-                    ><select v-model="field.valueType">
+                    ><select
+                      v-model="field.valueType"
+                      :id="inputControlName(index, 'type')"
+                      :name="inputControlName(index, 'type')"
+                    >
                       <option value="TEXT">
                         {{ $t("workflows.inputTypes.TEXT") }}
                       </option>
@@ -415,6 +426,8 @@ onBeforeUnmount(() => {
                     ><span>{{ $t("workflows.inputDescription") }}</span
                     ><input
                       v-model.trim="field.description"
+                      :id="inputControlName(index, 'description')"
+                      :name="inputControlName(index, 'description')"
                       maxlength="500" /></label
                   ><label
                     v-if="field.valueType === 'SELECT'"
@@ -426,9 +439,12 @@ onBeforeUnmount(() => {
                       required
                       @input="updateFieldOptions(field, $event)" /></label
                   ><label class="check-field"
-                    ><input v-model="field.required" type="checkbox" />{{
-                      $t("workflows.inputRequired")
-                    }}</label
+                    ><input
+                      v-model="field.required"
+                      :id="inputControlName(index, 'required')"
+                      :name="inputControlName(index, 'required')"
+                      type="checkbox"
+                    />{{ $t("workflows.inputRequired") }}</label
                   ><button
                     v-if="canEdit"
                     class="button button--danger input-field-remove"
@@ -463,7 +479,11 @@ onBeforeUnmount(() => {
               <div class="form-grid">
                 <label class="field"
                   ><span>{{ $t("workflows.stepName") }}</span
-                  ><input v-model.trim="step.name" required
+                  ><input
+                    v-model.trim="step.name"
+                    :id="stepControlName(index, 'name')"
+                    :name="stepControlName(index, 'name')"
+                    required
                 /></label>
                 <div class="field">
                   <span>{{ $t("workflows.stepAgent") }}</span
@@ -492,13 +512,19 @@ onBeforeUnmount(() => {
                   :disabled-reason="$t('promptContext.saveStage')"
                 />
                 <label class="check-field"
-                  ><input v-model="step.parallel" type="checkbox" />{{
-                    $t("workflows.parallel")
-                  }}</label
+                  ><input
+                    v-model="step.parallel"
+                    :id="stepControlName(index, 'parallel')"
+                    :name="stepControlName(index, 'parallel')"
+                    type="checkbox"
+                  />{{ $t("workflows.parallel") }}</label
                 ><label class="check-field"
-                  ><input v-model="step.humanGate" type="checkbox" />{{
-                    $t("workflows.humanGate")
-                  }}</label
+                  ><input
+                    v-model="step.humanGate"
+                    :id="stepControlName(index, 'human-gate')"
+                    :name="stepControlName(index, 'human-gate')"
+                    type="checkbox"
+                  />{{ $t("workflows.humanGate") }}</label
                 >
                 <details class="field--wide step-advanced">
                   <summary>{{ $t("common.advanced") }}</summary>
@@ -507,6 +533,8 @@ onBeforeUnmount(() => {
                       ><span>{{ $t("workflows.parallelGroup") }}</span
                       ><input
                         v-model.number="step.parallelGroup"
+                        :id="stepControlName(index, 'parallel-group')"
+                        :name="stepControlName(index, 'parallel-group')"
                         type="number"
                         min="0"
                         max="50"
@@ -515,6 +543,8 @@ onBeforeUnmount(() => {
                       ><span>{{ $t("workflows.stepTimeout") }}</span
                       ><input
                         v-model.number="step.timeoutSeconds"
+                        :id="stepControlName(index, 'timeout-seconds')"
+                        :name="stepControlName(index, 'timeout-seconds')"
                         type="number"
                         min="1"
                         max="86400"
@@ -547,6 +577,8 @@ onBeforeUnmount(() => {
                       >
                         <input
                           type="checkbox"
+                          :id="stepControlName(index, `gate-${decision}`)"
+                          :name="stepControlName(index, `gate-${decision}`)"
                           :checked="step.gateDecisions.includes(decision)"
                           @change="toggleDecision(step, decision)"
                         />{{ $t(`workflows.gateDecision.${decision}`) }}

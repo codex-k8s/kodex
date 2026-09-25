@@ -8,7 +8,7 @@ import {
   UserRound,
   Wrench,
 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -40,6 +40,7 @@ const props = withDefaults(
     initialNodeRef: undefined,
   },
 );
+const contextField = `run-activity-context-${useId()}`;
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale } = useI18n();
 const selectedNodeRef = ref("");
@@ -116,7 +117,11 @@ function formatBytes(value: number): string {
     <div class="run-activity-drawer__tools">
       <label>
         <span class="sr-only">{{ $t("runs.context") }}</span>
-        <select v-model="selectedNodeRef">
+        <select
+          v-model="selectedNodeRef"
+          :id="contextField"
+          :name="contextField"
+        >
           <option value="">{{ $t("common.all") }}</option>
           <option
             v-for="node in sessionNodes"

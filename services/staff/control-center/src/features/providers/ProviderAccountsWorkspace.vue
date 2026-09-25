@@ -71,6 +71,8 @@ const {
 const search = ref("");
 const searchId = useId();
 const expandedSearchId = useId();
+const createNameId = useId();
+const apiKeyId = useId();
 const expanded = ref(false);
 const createOpen = ref(false);
 const authorizationAccount = ref<ProviderAccount>();
@@ -708,7 +710,13 @@ onBeforeUnmount(() => {
       <div class="provider-form">
         <label class="field">
           <span>{{ $t("common.name") }}</span>
-          <input v-model="createForm.name" maxlength="160" autocomplete="off" />
+          <input
+            :id="createNameId"
+            v-model="createForm.name"
+            name="provider-account-name"
+            maxlength="160"
+            autocomplete="off"
+          />
         </label>
         <div class="field">
           <span>{{ $t("providers.definition") }}</span>
@@ -969,7 +977,9 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span>{{ $t("providers.apiKey") }}</span>
                 <input
+                  :id="apiKeyId"
                   v-model="apiKey"
+                  name="provider-account-api-key"
                   type="password"
                   maxlength="16384"
                   autocomplete="off"

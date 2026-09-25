@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 
 import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
 import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
@@ -24,6 +24,11 @@ const props = defineProps<{
   projectRef?: string;
   disabled: boolean;
 }>();
+const fieldPrefix = `assistant-workflow-${useId()}`;
+const inputName = (index: number, field: string) =>
+  `${fieldPrefix}-input-${String(index)}-${field}`;
+const stepName = (index: number, field: string) =>
+  `${fieldPrefix}-step-${String(index)}-${field}`;
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
@@ -68,7 +73,9 @@ const stepKeys = new Set([
 ]);
 const agentReadback = ref<Record<string, Agent | null>>({});
 const selectableAgents = new Map<string, Agent>();
-const isUpdate = computed(() => props.operation.value.type === "UPDATE_WORKFLOW");
+const isUpdate = computed(
+  () => props.operation.value.type === "UPDATE_WORKFLOW",
+);
 
 function parameter(key: string): unknown {
   try {
@@ -307,9 +314,12 @@ function addField(): void {
 function validField(field: Item): boolean {
   const options = field.options;
   return (
-    Object.keys(field).every((key) => fieldKeys.has(key) && (key !== "key" || isUpdate.value)) &&
+    Object.keys(field).every(
+      (key) => fieldKeys.has(key) && (key !== "key" || isUpdate.value),
+    ) &&
     (field.key === undefined ||
-      (typeof field.key === "string" && /^[a-z][a-z0-9_-]{0,79}$/.test(field.key))) &&
+      (typeof field.key === "string" &&
+        /^[a-z][a-z0-9_-]{0,79}$/.test(field.key))) &&
     text(field.label).trim().length > 0 &&
     text(field.label).length <= 160 &&
     text(field.description).length <= 500 &&
@@ -330,9 +340,13 @@ function validStep(step: Item): boolean {
   const decisions = step.gateDecisions;
   const capabilities = step.requiredCapabilityKeys;
   return (
-    Object.keys(step).every((key) => stepKeys.has(key) && (key !== "key" || isUpdate.value)) &&
+    Object.keys(step).every(
+      (key) => stepKeys.has(key) && (key !== "key" || isUpdate.value),
+    ) &&
     (step.key === undefined ||
-      (typeof step.key === "string" && step.key.length > 0 && step.key.length <= 96)) &&
+      (typeof step.key === "string" &&
+        step.key.length > 0 &&
+        step.key.length <= 96)) &&
     text(step.name).trim().length > 0 &&
     text(step.name).length <= 160 &&
     text(step.purpose).trim().length > 0 &&
@@ -472,6 +486,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
           ><span>{{ $t("workflows.inputLabel") }}</span
           ><input
             :value="text(field.label)"
+            :id="inputName(index, 'label')"
+            :name="inputName(index, 'label')"
             maxlength="160"
             :disabled="disabled"
             @input="
@@ -486,6 +502,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
           ><span>{{ $t("workflows.inputType") }}</span
           ><select
             :value="text(field.valueType)"
+            :id="inputName(index, 'type')"
+            :name="inputName(index, 'type')"
             :disabled="disabled"
             @change="
               changeFieldType(index, ($event.target as HTMLSelectElement).value)
@@ -504,6 +522,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
           ><span>{{ $t("workflows.inputDescription") }}</span
           ><input
             :value="text(field.description)"
+            :id="inputName(index, 'description')"
+            :name="inputName(index, 'description')"
             maxlength="500"
             :disabled="disabled"
             @input="
@@ -520,6 +540,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
             :value="
               Array.isArray(field.options) ? field.options.join('\n') : ''
             "
+            :id="inputName(index, 'options')"
+            :name="inputName(index, 'options')"
             rows="3"
             :disabled="disabled"
             @input="
@@ -537,6 +559,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
         <label class="check-field"
           ><input
             :checked="field.required === true"
+            :id="inputName(index, 'required')"
+            :name="inputName(index, 'required')"
             type="checkbox"
             :disabled="disabled"
             @change="
@@ -586,6 +610,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
           ><span>{{ $t("workflows.stepName") }}</span
           ><input
             :value="text(step.name)"
+            :id="stepName(index, 'name')"
+            :name="stepName(index, 'name')"
             maxlength="160"
             :disabled="disabled"
             @input="
@@ -622,6 +648,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
           <label class="check-field"
             ><input
               :checked="step.parallel === true"
+              :id="stepName(index, 'parallel')"
+              :name="stepName(index, 'parallel')"
               type="checkbox"
               :disabled="disabled"
               @change="
@@ -635,6 +663,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
           ><label class="check-field"
             ><input
               :checked="step.humanGate === true"
+              :id="stepName(index, 'human-gate')"
+              :name="stepName(index, 'human-gate')"
               type="checkbox"
               :disabled="disabled"
               @change="
@@ -654,6 +684,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
               ><span>{{ $t("workflows.parallelGroup") }}</span
               ><input
                 :value="step.parallelGroup ?? 0"
+                :id="stepName(index, 'parallel-group')"
+                :name="stepName(index, 'parallel-group')"
                 :disabled="disabled || step.parallel !== true"
                 @input="
                   changeStep(
@@ -667,6 +699,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
               ><span>{{ $t("workflows.stepTimeout") }}</span
               ><input
                 :value="step.timeoutSeconds ?? 1800"
+                :id="stepName(index, 'timeout-seconds')"
+                :name="stepName(index, 'timeout-seconds')"
                 type="number"
                 min="1"
                 max="86400"
@@ -701,6 +735,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
                   Array.isArray(step.gateDecisions) &&
                   step.gateDecisions.includes(decision)
                 "
+                :id="stepName(index, `gate-${decision}`)"
+                :name="stepName(index, `gate-${decision}`)"
                 type="checkbox"
                 :disabled="disabled"
                 @change="toggleDecision(index, decision)"
@@ -744,7 +780,13 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
       {{ $t("assistant.planEditor.workflowNotReady") }}
     </p>
     <p class="assistant-plan-friendly__hint">
-      {{ $t(isUpdate ? "assistant.planEditor.workflowUpdateNextSteps" : "assistant.planEditor.workflowNextSteps") }}
+      {{
+        $t(
+          isUpdate
+            ? "assistant.planEditor.workflowUpdateNextSteps"
+            : "assistant.planEditor.workflowNextSteps",
+        )
+      }}
     </p>
   </div>
 </template>

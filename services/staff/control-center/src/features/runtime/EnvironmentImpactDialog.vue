@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link2, RefreshCw } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   RuntimeEnvironmentImpact,
   RuntimeEnvironmentRebindResult,
@@ -14,6 +14,7 @@ import {
   readEnvironmentImpact,
 } from "./revision-impact";
 const props = defineProps<{ environmentRef: string; versionRef: string }>();
+const fieldPrefix = `environment-impact-${useId()}`;
 const emit = defineEmits<{ close: []; applied: [] }>();
 const impact = ref<RuntimeEnvironmentImpact>();
 const selected = ref(new Set<string>());
@@ -160,6 +161,8 @@ onBeforeUnmount(() => {
     </div>
     <input
       v-model="query"
+      :id="`${fieldPrefix}-search`"
+      :name="`${fieldPrefix}-search`"
       type="search"
       :aria-label="$t('common.search')"
       :placeholder="$t('common.search')"
@@ -176,12 +179,14 @@ onBeforeUnmount(() => {
       <code class="impact-digest">{{ impact.targetDigest }}</code>
       <div class="impact-list">
         <label
-          v-for="consumer in impact.consumers"
+          v-for="(consumer, index) in impact.consumers"
           :key="consumer.agentRef"
           class="impact-consumer"
         >
           <input
             type="checkbox"
+            :id="`${fieldPrefix}-consumer-${index}`"
+            :name="`${fieldPrefix}-consumer-${index}`"
             :checked="selected.has(consumerKey(consumer))"
             :disabled="
               busy ||

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, useId } from "vue";
 import { Maximize2, X } from "@lucide/vue";
 import type { SkillBundleFileInput } from "@/shared/api/generated/openapi/types.gen";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -8,6 +8,7 @@ const props = defineProps<{
   modelValue: SkillBundleFileInput[];
   disabled?: boolean;
 }>();
+const fieldPrefix = `skill-manifest-${useId()}`;
 const emit = defineEmits<{
   "update:modelValue": [value: SkillBundleFileInput[]];
 }>();
@@ -60,6 +61,8 @@ function remove(index: number): void {
         >{{ $t("contextResources.path") }}
         <input
           :value="file.path"
+          :id="`${fieldPrefix}-path-${index}`"
+          :name="`${fieldPrefix}-path-${index}`"
           :aria-label="$t('contextResources.path')"
           maxlength="240"
           :disabled="disabled"

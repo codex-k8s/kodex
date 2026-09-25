@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 
 import {
   operationParameter,
@@ -29,6 +29,7 @@ const props = defineProps<{
   projectRef?: string;
   disabled: boolean;
 }>();
+const fieldPrefix = `assistant-integration-grant-${useId()}`;
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
@@ -301,6 +302,8 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
         <span>{{ $t("assistant.planEditor.grantCapability") }}</span>
         <select
           :value="capabilityKey"
+          :id="`${fieldPrefix}-capability`"
+          :name="`${fieldPrefix}-capability`"
           :disabled="disabled || !versionMatches"
           @change="chooseCapability(($event.target as HTMLSelectElement).value)"
         >
@@ -326,6 +329,8 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
       <label class="assistant-grant-form__enabled">
         <input
           type="checkbox"
+          :id="`${fieldPrefix}-enabled`"
+          :name="`${fieldPrefix}-enabled`"
           :checked="enabled === true"
           :disabled="disabled || !versionMatches || !selectedCapability"
           @change="setEnabled(($event.target as HTMLInputElement).checked)"
@@ -349,12 +354,14 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
           {{ $t("integrations.approvalScopeUnavailable") }}
         </p>
         <label
-          v-for="path in availableApprovalScopePaths"
+          v-for="(path, index) in availableApprovalScopePaths"
           :key="path"
           class="assistant-grant-form__scope-option"
         >
           <input
             type="checkbox"
+            :id="`${fieldPrefix}-scope-${index}`"
+            :name="`${fieldPrefix}-scope-${index}`"
             :checked="approvalScopePaths.includes(path)"
             :disabled="
               disabled ||

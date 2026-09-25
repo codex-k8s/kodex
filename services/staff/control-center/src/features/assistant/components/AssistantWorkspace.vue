@@ -19,6 +19,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -133,6 +134,7 @@ const route = useRoute();
 const router = useRouter();
 const assistantFormActive = computed(() => route.query.assistantForm === "1");
 const store = useAssistantStore();
+const titleFieldName = `assistant-conversation-title-${useId()}`;
 const platform = usePlatformStore();
 const open = ref(
   restoreAssistantWorkspaceOpen() || route.query.assistantForm === "1",
@@ -1067,6 +1069,8 @@ onBeforeUnmount(() => {
               <form v-if="titleEditing" @submit.prevent="saveTitle">
                 <input
                   v-model="titleDraft"
+                  :id="titleFieldName"
+                  :name="titleFieldName"
                   maxlength="160"
                   :disabled="store.busy"
                   :aria-label="$t('assistant.conversationTitle')"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useId } from "vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import type {
   RoleImageArtifactTool,
@@ -12,6 +13,7 @@ const props = defineProps<{
   disabled: boolean;
   loading?: boolean;
 }>();
+const fieldPrefix = `environment-tools-${useId()}`;
 const emit = defineEmits<{
   "update:tools": [value: RuntimeEnvironmentTool[]];
 }>();
@@ -82,10 +84,16 @@ function update(
       {{ $t("common.loading") }}
     </div>
     <div v-else-if="catalog.length" class="tool-catalog">
-      <article v-for="tool in catalog" :key="tool.name" class="tool-option">
+      <article
+        v-for="(tool, index) in catalog"
+        :key="tool.name"
+        class="tool-option"
+      >
         <label>
           <input
             type="checkbox"
+            :id="`${fieldPrefix}-${index}-enabled`"
+            :name="`${fieldPrefix}-${index}-enabled`"
             :checked="!!selected(tool.name)"
             :disabled="disabled"
             @change="toggle(tool)"
@@ -102,6 +110,8 @@ function update(
             <span>{{ $t("runtime.toolDisplayName") }}</span>
             <input
               :value="selected(tool.name)?.name"
+              :id="`${fieldPrefix}-${index}-name`"
+              :name="`${fieldPrefix}-${index}-name`"
               maxlength="160"
               :disabled="disabled"
               @input="update(tool.name, 'name', $event)"
@@ -109,7 +119,12 @@ function update(
           </label>
           <label class="field">
             <span>{{ $t("runtime.toolCommand") }}</span>
-            <input :value="tool.name" readonly />
+            <input
+              :value="tool.name"
+              :id="`${fieldPrefix}-${index}-command`"
+              :name="`${fieldPrefix}-${index}-command`"
+              readonly
+            />
           </label>
           <label class="field field--wide">
             <span>{{ $t("common.description") }}</span>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Maximize2 } from "@lucide/vue";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
 import { usePlatformStore } from "@/features/platform/store";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -8,6 +8,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import HomeGateRows from "./HomeGateRows.vue";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
 const catalog = useGateCatalog();
+const fieldPrefix = `home-gates-${useId()}`;
 const platform = usePlatformStore();
 const emit = defineEmits<{ settled: [] }>();
 const expanded = ref(false);
@@ -72,7 +73,12 @@ onBeforeUnmount(() => {
     </header>
     <label class="gate-search"
       ><span>{{ $t("common.search") }}</span
-      ><input v-model="query" type="search" maxlength="200"
+      ><input
+        v-model="query"
+        :id="`${fieldPrefix}-inline-search`"
+        :name="`${fieldPrefix}-inline-search`"
+        type="search"
+        maxlength="200"
     /></label>
     <ProblemNotice
       v-if="catalog.problem.value"
@@ -98,7 +104,12 @@ onBeforeUnmount(() => {
     >
       <label class="gate-search"
         ><span>{{ $t("common.search") }}</span
-        ><input v-model="query" type="search" maxlength="200"
+        ><input
+          v-model="query"
+          :id="`${fieldPrefix}-modal-search`"
+          :name="`${fieldPrefix}-modal-search`"
+          type="search"
+          maxlength="200"
       /></label>
       <p v-if="catalog.total.value !== undefined">
         {{ $t("decisions.pendingCount", { count: catalog.total.value }) }}

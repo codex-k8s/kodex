@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, useId, watch } from "vue";
 
 import {
   operationParameter,
@@ -10,6 +10,7 @@ const props = defineProps<{
   operation: EditablePlanOperation;
   disabled: boolean;
 }>();
+const fieldPrefix = `assistant-environment-${useId()}`;
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
@@ -52,6 +53,8 @@ function changeText(key: string, event: Event): void {
       <span>{{ $t("assistant.planEditor.entityName") }}</span>
       <input
         :value="stringField('name')"
+        :id="`${fieldPrefix}-name`"
+        :name="`${fieldPrefix}-name`"
         maxlength="120"
         :disabled="disabled"
         @input="changeText('name', $event)"
@@ -61,6 +64,8 @@ function changeText(key: string, event: Event): void {
       <span>{{ $t("assistant.planEditor.environmentDescription") }}</span>
       <textarea
         :value="stringField('description')"
+        :id="`${fieldPrefix}-description`"
+        :name="`${fieldPrefix}-description`"
         rows="3"
         maxlength="1000"
         :disabled="disabled"

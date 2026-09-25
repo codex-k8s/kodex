@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Maximize2, Plus, RefreshCw, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type { ContextResourceState } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -13,6 +13,7 @@ const props = defineProps<{
   projectRef?: string;
   agentRef?: string;
 }>();
+const fieldPrefix = `context-catalog-${useId()}`;
 const items = ref<ContextItem[]>([]);
 const query = ref("");
 const state = ref<ContextResourceState>("ACTIVE");
@@ -126,11 +127,18 @@ onBeforeUnmount(() => {
       <label class="context-search"
         ><Search :size="18" /><input
           v-model="query"
+          :id="`${fieldPrefix}-search`"
+          :name="`${fieldPrefix}-search`"
           type="search"
           :aria-label="$t('common.search')"
           maxlength="500"
       /></label>
-      <select v-model="state" :aria-label="$t('contextResources.state')">
+      <select
+        v-model="state"
+        :id="`${fieldPrefix}-state`"
+        :name="`${fieldPrefix}-state`"
+        :aria-label="$t('contextResources.state')"
+      >
         <option
           v-for="value in ['ACTIVE', 'ARCHIVED', 'EXPIRED', 'PURGED']"
           :key="value"

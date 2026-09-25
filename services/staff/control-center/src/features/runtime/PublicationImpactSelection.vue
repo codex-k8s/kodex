@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   RevisionImpactPlan,
   RevisionImpactPage,
@@ -14,6 +14,7 @@ import {
 } from "./publication-impact";
 
 const props = defineProps<{ plan: RevisionImpactPlan; busy?: boolean }>();
+const fieldPrefix = `publication-impact-${useId()}`;
 const emit = defineEmits<{ publish: [selectedItemRefs: string[]] }>();
 const page = ref<RevisionImpactPage>();
 const selected = ref(new Set<string>());
@@ -187,12 +188,14 @@ onBeforeUnmount(() => {
       <StatusBadge :state="page.plan.state" />
       <div class="publication-impact__items">
         <label
-          v-for="item in page.items"
+          v-for="(item, index) in page.items"
           :key="item.ref"
           class="publication-impact__item"
         >
           <input
             type="checkbox"
+            :id="`${fieldPrefix}-item-${index}`"
+            :name="`${fieldPrefix}-item-${index}`"
             :checked="selected.has(item.ref)"
             :disabled="!editable || item.outcome !== 'PENDING'"
             :aria-label="item.consumerRef"

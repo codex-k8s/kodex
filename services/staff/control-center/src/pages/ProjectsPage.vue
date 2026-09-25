@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -23,6 +23,7 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const platform = usePlatformStore();
+const purgeConfirmationField = `project-purge-${useId()}`;
 const route = useRoute();
 const router = useRouter();
 const trashMode = computed(() => route.query.trash === "1");
@@ -308,6 +309,8 @@ onBeforeUnmount(() => {
         <span>{{ $t("projects.purgeConfirmName") }}</span>
         <input
           v-model="purgeConfirmation"
+          :id="purgeConfirmationField"
+          :name="purgeConfirmationField"
           autocomplete="off"
           data-dialog-initial-focus
         />

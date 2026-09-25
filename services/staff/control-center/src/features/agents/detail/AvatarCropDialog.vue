@@ -6,6 +6,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -20,6 +21,7 @@ import { agentDetailCopy } from "@/features/agents/detail/copy";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 
 const props = defineProps<{ file: File; busy: boolean }>();
+const zoomField = `avatar-crop-zoom-${useId()}`;
 const emit = defineEmits<{ close: []; confirm: [file: File] }>();
 const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value).avatar);
@@ -191,6 +193,8 @@ onBeforeUnmount(() => {
           <span>{{ copy.zoom }}</span>
           <input
             v-model.number="zoom"
+            :id="zoomField"
+            :name="zoomField"
             type="range"
             min="1"
             max="3"

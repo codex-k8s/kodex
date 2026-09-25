@@ -451,6 +451,8 @@ watch(
       ><input
         ref="searchInput"
         v-model="query"
+        :id="`${pickerId}-search`"
+        :name="`${pickerId}-search`"
         type="search"
         :placeholder="copy.searchPlaceholder"
         :disabled="disabled"
@@ -666,6 +668,8 @@ watch(
           ><input
             ref="searchInput"
             v-model="query"
+            :id="`${pickerId}-search`"
+            :name="`${pickerId}-search`"
             type="search"
             :placeholder="searchPlaceholder"
             role="combobox"

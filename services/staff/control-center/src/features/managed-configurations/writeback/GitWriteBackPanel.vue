@@ -5,6 +5,7 @@ import {
   ref,
   shallowRef,
   shallowReactive,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -33,6 +34,7 @@ const props = defineProps<{
   configuration: ManagedConfiguration;
   disabled?: boolean;
 }>();
+const fieldPrefix = `git-writeback-${useId()}`;
 const emit = defineEmits<{ changed: []; busy: [boolean] }>();
 const { t, locale } = useI18n({
   useScope: "local",
@@ -372,6 +374,8 @@ async function adopt(): Promise<void> {
         <label
           ><input
             v-model="adopted"
+            :id="`${fieldPrefix}-adopted`"
+            :name="`${fieldPrefix}-adopted`"
             type="checkbox"
             :disabled="blocked || !matchesPreparation(pending, proposal)"
           />{{ t("wb.adoptConfirm") }}</label
@@ -411,6 +415,8 @@ async function adopt(): Promise<void> {
       <label v-if="!actionReason(proposal, 'APPROVE', now)"
         ><input
           v-model="approved"
+          :id="`${fieldPrefix}-approved`"
+          :name="`${fieldPrefix}-approved`"
           type="checkbox"
           :disabled="blocked || !!pending || !!state?.stale"
         />{{ t("wb.confirmed") }}</label

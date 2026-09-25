@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 
 import {
   operationParameter,
@@ -32,6 +32,8 @@ const props = defineProps<{
   projectRef?: string;
   disabled: boolean;
 }>();
+const fieldPrefix = `assistant-launch-${useId()}`;
+const workflowInputName = (key: string) => `${fieldPrefix}-input-${key}`;
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
@@ -285,6 +287,8 @@ function setWorkflowInput(field: WorkflowInputField, value: string): void {
       <span>{{ $t("assistant.planEditor.runTitle") }}</span>
       <input
         :value="stringParameter('title')"
+        :id="`${fieldPrefix}-title`"
+        :name="`${fieldPrefix}-title`"
         maxlength="240"
         :disabled="disabled"
         @input="changed('title', ($event.target as HTMLInputElement).value)"
@@ -292,7 +296,13 @@ function setWorkflowInput(field: WorkflowInputField, value: string): void {
     </label>
     <label class="field">
       <span>{{ $t("assistant.planEditor.runTargetType") }}</span>
-      <select :value="targetType" :disabled="disabled" @change="setTargetType">
+      <select
+        :value="targetType"
+        :id="`${fieldPrefix}-target-type`"
+        :name="`${fieldPrefix}-target-type`"
+        :disabled="disabled"
+        @change="setTargetType"
+      >
         <option value="AGENT">{{ $t("assistant.planEditor.runAgent") }}</option>
         <option value="WORKFLOW">
           {{ $t("assistant.planEditor.runWorkflow") }}
@@ -322,6 +332,8 @@ function setWorkflowInput(field: WorkflowInputField, value: string): void {
       <span>{{ $t("assistant.planEditor.runTask") }}</span>
       <textarea
         :value="stringParameter('task')"
+        :id="`${fieldPrefix}-task`"
+        :name="`${fieldPrefix}-task`"
         rows="5"
         maxlength="32768"
         :disabled="disabled"
@@ -339,6 +351,8 @@ function setWorkflowInput(field: WorkflowInputField, value: string): void {
         <select
           v-if="field.valueType === 'SELECT'"
           :value="rawInput[field.key] ?? ''"
+          :id="workflowInputName(field.key)"
+          :name="workflowInputName(field.key)"
           :disabled="disabled"
           @change="
             setWorkflowInput(field, ($event.target as HTMLSelectElement).value)
@@ -351,6 +365,8 @@ function setWorkflowInput(field: WorkflowInputField, value: string): void {
         </select>
         <input
           v-else-if="field.valueType === 'BOOLEAN'"
+          :id="workflowInputName(field.key)"
+          :name="workflowInputName(field.key)"
           type="checkbox"
           :checked="rawInput[field.key] === 'true'"
           :disabled="disabled"
@@ -364,6 +380,8 @@ function setWorkflowInput(field: WorkflowInputField, value: string): void {
         <textarea
           v-else-if="field.valueType === 'LONG_TEXT'"
           :value="rawInput[field.key] ?? ''"
+          :id="workflowInputName(field.key)"
+          :name="workflowInputName(field.key)"
           rows="4"
           maxlength="32768"
           :disabled="disabled"
@@ -377,6 +395,8 @@ function setWorkflowInput(field: WorkflowInputField, value: string): void {
         <input
           v-else
           :value="rawInput[field.key] ?? ''"
+          :id="workflowInputName(field.key)"
+          :name="workflowInputName(field.key)"
           :type="
             field.valueType === 'NUMBER'
               ? 'number'

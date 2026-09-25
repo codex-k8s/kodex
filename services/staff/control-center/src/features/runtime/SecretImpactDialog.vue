@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link2, RefreshCw } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   RuntimeSecretImpact,
   RuntimeSecretRebindResult,
@@ -15,6 +15,7 @@ import {
   readSecretImpact,
 } from "./revision-impact";
 const props = defineProps<{ secretRef: string; revision: number }>();
+const fieldPrefix = `secret-impact-${useId()}`;
 const emit = defineEmits<{ close: []; applied: [] }>();
 const impact = ref<RuntimeSecretImpact>();
 const receipt = ref<RuntimeSecretRebindResult>();
@@ -237,6 +238,8 @@ onBeforeUnmount(() => {
     </header>
     <input
       v-model="query"
+      :id="`${fieldPrefix}-search`"
+      :name="`${fieldPrefix}-search`"
       type="search"
       :aria-label="$t('common.search')"
       :placeholder="$t('common.search')"
@@ -251,10 +254,16 @@ onBeforeUnmount(() => {
         }}
       </p>
       <div class="impact-groups">
-        <section v-for="group in groups" :key="group.key" class="impact-group">
+        <section
+          v-for="(group, groupIndex) in groups"
+          :key="group.key"
+          class="impact-group"
+        >
           <label class="impact-row"
             ><input
               type="checkbox"
+              :id="`${fieldPrefix}-group-${groupIndex}`"
+              :name="`${fieldPrefix}-group-${groupIndex}`"
               :checked="!!selection(group)"
               :disabled="
                 busy ||
@@ -274,11 +283,13 @@ onBeforeUnmount(() => {
           >
           <div class="impact-agents">
             <label
-              v-for="consumer in group.consumers"
+              v-for="(consumer, consumerIndex) in group.consumers"
               :key="consumer.agentRef"
               class="impact-row"
               ><input
                 type="checkbox"
+                :id="`${fieldPrefix}-group-${groupIndex}-consumer-${consumerIndex}`"
+                :name="`${fieldPrefix}-group-${groupIndex}-consumer-${consumerIndex}`"
                 :checked="
                   selection(group)?.consumers.some(
                     (item) => consumerKey(item) === consumerKey(consumer),

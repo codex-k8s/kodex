@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Maximize2 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { loadHomeResultPage, type HomeResultItem } from "../result-catalog";
 import type { RunFilter } from "@/features/workboard/model";
 import { usePlatformStore } from "@/features/platform/store";
@@ -21,6 +21,7 @@ const props = withDefaults(
   }>(),
   { ready: true },
 );
+const fieldPrefix = `home-results-${useId()}`;
 const emit = defineEmits<{ total: [value: number | undefined]; settled: [] }>();
 const platform = usePlatformStore();
 const items = ref<HomeResultItem[]>([]);
@@ -244,14 +245,23 @@ onBeforeUnmount(() => {
     </header>
     <label v-if="!dashboard" class="home-result-search"
       ><span>{{ $t("common.search") }}</span
-      ><input v-model="query" type="search" maxlength="200"
+      ><input
+        v-model="query"
+        :id="`${fieldPrefix}-inline-search`"
+        :name="`${fieldPrefix}-inline-search`"
+        type="search"
+        maxlength="200"
     /></label>
     <GateProjectFilter v-if="!dashboard" v-model="projectRef" />
     <label
       v-if="!dashboard && kind === 'RUN' && !fixedFilter"
       class="home-result-search"
       ><span>{{ $t("home.stateFilter") }}</span
-      ><select v-model="runFilter">
+      ><select
+        v-model="runFilter"
+        :id="`${fieldPrefix}-inline-state`"
+        :name="`${fieldPrefix}-inline-state`"
+      >
         <option value="ACTIVE">{{ $t("home.activeFilter") }}</option>
         <option value="TERMINAL">{{ $t("home.terminalFilter") }}</option>
         <option value="ALL">{{ $t("common.all") }}</option>
@@ -278,12 +288,21 @@ onBeforeUnmount(() => {
     >
       <label class="home-result-search"
         ><span>{{ $t("common.search") }}</span
-        ><input v-model="query" type="search" maxlength="200"
+        ><input
+          v-model="query"
+          :id="`${fieldPrefix}-modal-search`"
+          :name="`${fieldPrefix}-modal-search`"
+          type="search"
+          maxlength="200"
       /></label>
       <GateProjectFilter v-model="projectRef" />
       <label v-if="kind === 'RUN' && !fixedFilter" class="home-result-search"
         ><span>{{ $t("home.stateFilter") }}</span
-        ><select v-model="runFilter">
+        ><select
+          v-model="runFilter"
+          :id="`${fieldPrefix}-modal-state`"
+          :name="`${fieldPrefix}-modal-state`"
+        >
           <option value="ACTIVE">{{ $t("home.activeFilter") }}</option>
           <option value="TERMINAL">{{ $t("home.terminalFilter") }}</option>
           <option value="ALL">{{ $t("common.all") }}</option>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ChevronDown, X } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import type { ProviderAccountUsageContext } from "@/shared/api/generated/openapi/types.gen";
 import { hasCurrentUsage, usageContextKey } from "./usage";
 import ProviderUsageDetails from "./ProviderUsageDetails.vue";
@@ -33,6 +33,7 @@ const props = defineProps<{
   usageContext: ProviderAccountUsageContext;
   disabled?: boolean;
 }>();
+const fieldPrefix = `provider-selector-${useId()}`;
 type ProviderAccountEligibilityState = "CONNECTING" | "READY" | "UNAVAILABLE";
 const emit = defineEmits<{
   "update:modelValue": [value: ProviderAccountCandidate[]];
@@ -372,7 +373,7 @@ function changeWeight(accountRef: string, event: Event): void {
     </p>
     <div v-if="selectedAccounts.length" class="provider-selector__selected">
       <article
-        v-for="item in selectedAccounts"
+        v-for="(item, index) in selectedAccounts"
         :key="item.candidate.accountRef"
         class="provider-selector__selected-row"
       >
@@ -389,6 +390,8 @@ function changeWeight(accountRef: string, event: Event): void {
           ><span>{{ $t("runtime.weight") }}</span
           ><input
             type="number"
+            :id="`${fieldPrefix}-weight-${index}`"
+            :name="`${fieldPrefix}-weight-${index}`"
             min="1"
             max="10000"
             :value="item.candidate.weight"

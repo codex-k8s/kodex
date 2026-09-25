@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Eye, EyeOff, LogIn, ShieldAlert } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 
 import { revealRuntimeSecret } from "./api";
 import type { RuntimeSecret, RuntimeSecretValueType } from "./model";
@@ -15,6 +15,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 const plaintextLifetimeMs = 60_000;
 
 const props = defineProps<{ secret: RuntimeSecret }>();
+const valueField = `runtime-secret-reveal-${useId()}`;
 const emit = defineEmits<{ close: [] }>();
 const session = useSessionStore();
 const busy = ref(false);
@@ -122,6 +123,8 @@ onBeforeUnmount(clearPlaintext);
         <span>{{ $t("runtimeSecrets.revealedValue") }}</span>
         <textarea
           :value="value"
+          :id="valueField"
+          :name="valueField"
           readonly
           rows="8"
           autocomplete="off"

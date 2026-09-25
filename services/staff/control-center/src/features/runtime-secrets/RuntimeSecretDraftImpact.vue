@@ -5,6 +5,7 @@ import {
   onMounted,
   ref,
   shallowRef,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -33,6 +34,7 @@ const props = defineProps<{
   draft: RuntimeSecretDraft;
   initialPlanRef?: string;
 }>();
+const fieldPrefix = `runtime-secret-draft-impact-${useId()}`;
 const emit = defineEmits<{
   published: [draft: RuntimeSecretDraft, secret: RuntimeSecret];
   working: [busy: boolean];
@@ -458,7 +460,12 @@ onMounted(() => void restore());
       </button>
       <label class="field"
         ><span>{{ t("runtimeSecrets.draft.searchConsumers") }}</span
-        ><input v-model="query" type="search" :disabled="busy || pending"
+        ><input
+          v-model="query"
+          :id="`${fieldPrefix}-search`"
+          :name="`${fieldPrefix}-search`"
+          type="search"
+          :disabled="busy || pending"
       /></label>
       <button class="button" :disabled="busy" @click="refresh()">
         {{ t("common.refresh") }}
@@ -467,10 +474,12 @@ onMounted(() => void restore());
         {{ t("runtimeSecrets.draft.visibleTotal", { total: page.total }) }}
       </p>
       <ul v-if="page" class="draft-impact__items">
-        <li v-for="item in page.items" :key="item.ref">
+        <li v-for="(item, index) in page.items" :key="item.ref">
           <label>
             <input
               v-if="plan.state === 'PREPARED'"
+              :id="`${fieldPrefix}-item-${index}`"
+              :name="`${fieldPrefix}-item-${index}`"
               type="checkbox"
               :checked="selected.includes(item.ref)"
               :disabled="busy || pending"
