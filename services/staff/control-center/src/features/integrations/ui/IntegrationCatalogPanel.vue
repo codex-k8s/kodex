@@ -7,7 +7,7 @@ import {
   Search,
   ShieldCheck,
 } from "@lucide/vue";
-import { ref } from "vue";
+import { ref, useId } from "vue";
 import IntegrationIntegerBounds from "./IntegrationIntegerBounds.vue";
 import { useI18n } from "vue-i18n";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
@@ -45,6 +45,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const fieldPrefix = `integration-catalog-${useId()}`;
 const expandedKey = ref("");
 const copySource = ref<ConfigurationCopySource>();
 function copied(configuration: ManagedConfiguration): void {
@@ -97,6 +98,8 @@ function fieldType(field: IntegrationConfigurationField): string {
         }}</span>
         <input
           type="search"
+          :id="`${fieldPrefix}-search`"
+          :name="`${fieldPrefix}-search`"
           :value="search"
           :placeholder="t('integrationsRedesign.searchPackages')"
           @input="
@@ -107,6 +110,8 @@ function fieldType(field: IntegrationConfigurationField): string {
       <label class="category-field">
         <span>{{ t("integrationsRedesign.category") }}</span>
         <select
+          :id="`${fieldPrefix}-category`"
+          :name="`${fieldPrefix}-category`"
           :value="category"
           @change="
             emit('update:category', ($event.target as HTMLSelectElement).value)

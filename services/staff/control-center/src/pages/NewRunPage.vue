@@ -12,7 +12,7 @@ import {
   Play,
   Workflow as WorkflowIcon,
 } from "@lucide/vue";
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -68,6 +68,7 @@ const realtime = useRealtimeStore();
 const route = useRoute();
 const router = useRouter();
 const { locale, t } = useI18n();
+const fieldNamePrefix = `new-run-${useId()}`;
 
 const projectRef = computed(() => String(route.params.projectRef));
 const project = computed(() => platform.projects[projectRef.value]);
@@ -639,6 +640,8 @@ watch(
                 </span>
                 <input
                   v-model="form.title"
+                  :id="`${fieldNamePrefix}-title`"
+                  :name="`${fieldNamePrefix}-title`"
                   required
                   maxlength="240"
                   :placeholder="$t('runs.newRun.titlePlaceholder')"
@@ -685,6 +688,7 @@ watch(
                 <span>{{ field.label }}</span>
                 <VoiceTextarea
                   v-model="inputValues[field.key]"
+                  :name="`${fieldNamePrefix}-workflow-${field.key}`"
                   :required="field.required"
                   maxlength="32768"
                   :aria-describedby="
@@ -699,6 +703,7 @@ watch(
                 <span>{{ field.label }}</span>
                 <select
                   v-model="inputValues[field.key]"
+                  :name="`${fieldNamePrefix}-workflow-${field.key}`"
                   :required="field.required"
                 >
                   <option value="" :disabled="field.required">
@@ -720,6 +725,7 @@ watch(
               >
                 <input
                   v-model="booleanInputValues[field.key]"
+                  :name="`${fieldNamePrefix}-workflow-${field.key}`"
                   type="checkbox"
                 />
                 <span>
@@ -733,6 +739,7 @@ watch(
                 <span>{{ field.label }}</span>
                 <input
                   v-model="inputValues[field.key]"
+                  :name="`${fieldNamePrefix}-workflow-${field.key}`"
                   :type="inputComponentType(field)"
                   :required="field.required"
                   :maxlength="field.valueType === 'TEXT' ? 4000 : undefined"

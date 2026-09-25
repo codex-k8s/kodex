@@ -11,7 +11,7 @@ import {
   Square,
   TerminalSquare,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -43,6 +43,7 @@ const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const store = useRoleImagesStore();
+const fieldNamePrefix = `role-image-${useId()}`;
 const name = ref("");
 const roleDefinitionRef = ref("");
 const environmentKey = ref("");
@@ -547,6 +548,8 @@ onBeforeUnmount(() => {
                 <span>{{ t("common.name") }}</span>
                 <input
                   v-model="name"
+                  :id="`${fieldNamePrefix}-name`"
+                  :name="`${fieldNamePrefix}-name`"
                   maxlength="120"
                   :readonly="!!recipe && !recipe.nextActions.includes('UPDATE')"
                 />
@@ -555,6 +558,8 @@ onBeforeUnmount(() => {
                 <span>{{ t("roleImages.role") }}</span>
                 <select
                   v-model="roleDefinitionRef"
+                  :id="`${fieldNamePrefix}-role`"
+                  :name="`${fieldNamePrefix}-role`"
                   :disabled="!!recipe || !store.roleDefinitions.length"
                 >
                   <option value="" disabled>
@@ -575,6 +580,8 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span>{{ t("roleImages.environment") }}</span>
                 <select
+                  :id="`${fieldNamePrefix}-environment`"
+                  :name="`${fieldNamePrefix}-environment`"
                   :value="environmentKey"
                   :disabled="
                     !store.environments.length ||

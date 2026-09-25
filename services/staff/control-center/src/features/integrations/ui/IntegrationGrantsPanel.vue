@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { LockKeyhole, Plus, ShieldCheck, Trash2 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -54,6 +54,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const fieldPrefix = `integration-grants-${useId()}`;
 const chosenProject = ref<AsyncEntityOption>();
 const chosenTarget = ref<AsyncEntityOption>();
 const chosenCapability = ref<AsyncEntityOption>();
@@ -535,6 +536,8 @@ const canManageSelected = computed(
           <label class="field">
             <span>{{ t("integrations.targetType") }}</span>
             <select
+              :id="`${fieldPrefix}-target-kind`"
+              :name="`${fieldPrefix}-target-kind`"
               :value="targetKind"
               :disabled="!canManageSelected"
               @change="
@@ -626,6 +629,8 @@ const canManageSelected = computed(
             >
               <input
                 type="checkbox"
+                :name="`${fieldPrefix}-approval-scope`"
+                :value="path"
                 :checked="approvalScopePaths.includes(path)"
                 :disabled="
                   busy ||

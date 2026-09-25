@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, useId, watch } from "vue";
 
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 
@@ -19,6 +19,7 @@ const emit = defineEmits<{
   "update:language": [value: "ru" | "en"];
   valid: [value: boolean];
 }>();
+const fieldPrefix = `project-form-${useId()}`;
 const valid = computed(
   () =>
     props.name.trim().length > 0 &&
@@ -35,6 +36,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
     <label class="field field--wide">
       <span>{{ $t("common.name") }}</span>
       <input
+        :id="`${fieldPrefix}-name`"
+        :name="`${fieldPrefix}-name`"
         :value="name"
         :disabled="disabled"
         required
@@ -58,6 +61,8 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
     <label class="field">
       <span>{{ $t("projects.language") }}</span>
       <select
+        :id="`${fieldPrefix}-language`"
+        :name="`${fieldPrefix}-language`"
         :value="language"
         :disabled="disabled"
         @change="

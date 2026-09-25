@@ -186,7 +186,11 @@ watch(mode, () => emit("clear"));
       <form class="effective-form panel" @submit.prevent="submit">
         <label class="field">
           <span>{{ $t("access.effective.subject") }}</span>
-          <select v-model="form.subjectRef" required>
+          <select
+            v-model="form.subjectRef"
+            name="access-effective-subject"
+            required
+          >
             <option value="" disabled>
               {{ $t("access.effective.chooseSubject") }}
             </option>
@@ -202,7 +206,11 @@ watch(mode, () => emit("clear"));
         </label>
         <label class="field">
           <span>{{ $t("access.effective.permission") }}</span>
-          <select v-model="form.permissionKey" required>
+          <select
+            v-model="form.permissionKey"
+            name="access-effective-permission"
+            required
+          >
             <option value="" disabled>
               {{ $t("access.effective.choosePermission") }}
             </option>
@@ -219,7 +227,7 @@ watch(mode, () => emit("clear"));
         </label>
         <label v-if="mode === 'SIMULATE'" class="field">
           <span>{{ $t("access.effective.role") }}</span>
-          <select v-model="form.roleRef" required>
+          <select v-model="form.roleRef" name="access-effective-role" required>
             <option value="" disabled>
               {{ $t("access.effective.chooseRole") }}
             </option>

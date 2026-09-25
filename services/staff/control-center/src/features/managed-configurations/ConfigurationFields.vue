@@ -5,6 +5,7 @@ import {
   onScopeDispose,
   ref,
   shallowRef,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -39,6 +40,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 const { t } = useI18n();
+const fieldPrefix = `configuration-fields-${useId()}`;
 const catalog = shallowRef<SttModelCatalog>();
 const catalogFailed = ref(false);
 const catalogScope = new AbortController();
@@ -319,6 +321,8 @@ function update(key: string, event: Event, group?: "stt"): void {
     <label v-if="kind !== 'INTEGRATION_DEFINITION'"
       >{{ $t("common.description")
       }}<VoiceTextarea
+        :id="`${fieldPrefix}-description`"
+        :name="`${fieldPrefix}-description`"
         :disabled="disabled"
         :model-value="text(parsed.value.description)"
         @update:model-value="write({ ...parsed.value, description: $event })"
@@ -327,12 +331,16 @@ function update(key: string, event: Event, group?: "stt"): void {
       <label
         >{{ $t("managed.baseImage")
         }}<input
+          :id="`${fieldPrefix}-base-image`"
+          :name="`${fieldPrefix}-base-image`"
           :value="text(parsed.value.baseImage)"
           @input="update('baseImage', $event)"
       /></label>
       <label
         >{{ $t("managed.packages")
         }}<VoiceTextarea
+          :id="`${fieldPrefix}-packages`"
+          :name="`${fieldPrefix}-packages`"
           :disabled="disabled"
           :model-value="packages"
           @update:model-value="
@@ -357,6 +365,8 @@ function update(key: string, event: Event, group?: "stt"): void {
     <template v-if="kind === 'SYSTEM_STT'">
       <label class="configuration-fields__toggle">
         <input
+          :id="`${fieldPrefix}-stt-enabled`"
+          :name="`${fieldPrefix}-stt-enabled`"
           type="checkbox"
           :checked="stt.enabled === true"
           @change="toggleEnabled"
@@ -412,6 +422,8 @@ function update(key: string, event: Event, group?: "stt"): void {
       <label
         >{{ $t("managed.fields.language")
         }}<input
+          :id="`${fieldPrefix}-language`"
+          :name="`${fieldPrefix}-language`"
           :value="text(stt.language)"
           @input="update('language', $event, 'stt')"
       /></label>
@@ -427,6 +439,8 @@ function update(key: string, event: Event, group?: "stt"): void {
           })
         }}</small>
         <VoiceTextarea
+          :id="`${fieldPrefix}-${key}`"
+          :name="`${fieldPrefix}-${key}`"
           :model-value="sttList(key)"
           :disabled="disabled"
           rows="3"
@@ -443,6 +457,8 @@ function update(key: string, event: Event, group?: "stt"): void {
           })
         }}</small>
         <VoiceTextarea
+          :id="`${fieldPrefix}-prompt`"
+          :name="`${fieldPrefix}-prompt`"
           :model-value="text(sttParameters.prompt)"
           :disabled="disabled"
           rows="4"
@@ -452,6 +468,8 @@ function update(key: string, event: Event, group?: "stt"): void {
       <label
         >{{ $t("managed.sttParameters.temperature") }}
         <input
+          :id="`${fieldPrefix}-temperature`"
+          :name="`${fieldPrefix}-temperature`"
           type="number"
           :min="Math.max(0, modelProfile?.minimumTemperature ?? 0)"
           :max="Math.min(1, modelProfile?.maximumTemperature ?? 1)"
@@ -463,6 +481,8 @@ function update(key: string, event: Event, group?: "stt"): void {
       <label
         >{{ $t("managed.sttParameters.chunkingStrategy") }}
         <select
+          :id="`${fieldPrefix}-chunking-strategy`"
+          :name="`${fieldPrefix}-chunking-strategy`"
           :value="text(sttParameters.chunkingStrategy)"
           @change="
             updateSttParameter(
@@ -494,6 +514,8 @@ function update(key: string, event: Event, group?: "stt"): void {
       </label>
       <label class="configuration-fields__toggle"
         ><input
+          :id="`${fieldPrefix}-stream`"
+          :name="`${fieldPrefix}-stream`"
           type="checkbox"
           :checked="sttParameters.stream === true"
           disabled
@@ -502,6 +524,8 @@ function update(key: string, event: Event, group?: "stt"): void {
       <label v-for="limit in sttFormLimits" :key="limit.key">
         {{ $t(`managed.sttParameters.${limit.key}`) }}
         <input
+          :id="`${fieldPrefix}-${limit.key}`"
+          :name="`${fieldPrefix}-${limit.key}`"
           type="number"
           :min="limit.min"
           :max="limit.max"

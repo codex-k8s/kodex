@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import IntegrationIntegerBounds from "@/features/integrations/ui/IntegrationIntegerBounds.vue";
 import type { IntegrationConfigurationField } from "@/shared/api/generated/openapi/types.gen";
+import { useId } from "vue";
 
 withDefaults(
   defineProps<{
@@ -13,6 +14,7 @@ withDefaults(
   { problems: () => ({}), submitted: false, disabled: false },
 );
 const emit = defineEmits<{ change: [key: string, value: string] }>();
+const fieldPrefix = `integration-configuration-${useId()}`;
 </script>
 
 <template>
@@ -20,6 +22,8 @@ const emit = defineEmits<{ change: [key: string, value: string] }>();
     <span>{{ field.label }}</span>
     <select
       v-if="field.allowedValues?.length"
+      :id="`${fieldPrefix}-${field.key}`"
+      :name="`${fieldPrefix}-${field.key}`"
       :value="values[field.key] ?? ''"
       :required="field.required"
       :disabled="disabled"
@@ -36,6 +40,8 @@ const emit = defineEmits<{ change: [key: string, value: string] }>();
     <input
       v-else-if="field.valueType === 'BOOLEAN'"
       type="checkbox"
+      :id="`${fieldPrefix}-${field.key}`"
+      :name="`${fieldPrefix}-${field.key}`"
       :checked="values[field.key] === 'true'"
       :disabled="disabled"
       @change="
@@ -48,6 +54,8 @@ const emit = defineEmits<{ change: [key: string, value: string] }>();
     />
     <input
       v-else
+      :id="`${fieldPrefix}-${field.key}`"
+      :name="`${fieldPrefix}-${field.key}`"
       :value="values[field.key] ?? ''"
       :type="field.valueType === 'URL' ? 'url' : 'text'"
       :inputmode="field.valueType === 'INTEGER' ? 'numeric' : undefined"

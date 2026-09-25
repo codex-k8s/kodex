@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Eye, EyeOff, KeyRound, RotateCw } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
@@ -36,6 +36,7 @@ const emit = defineEmits<{
 
 const name = ref("");
 const { t } = useI18n();
+const fieldPrefix = `runtime-secret-${useId()}`;
 const description = ref("");
 const valueType = ref<RuntimeSecretValueType>("STRING");
 const value = ref("");
@@ -156,6 +157,8 @@ onBeforeUnmount(clearPlaintext);
       <label v-if="!rotating" class="field">
         <span>{{ $t("common.name") }}</span>
         <input
+          :id="`${fieldPrefix}-name`"
+          :name="`${fieldPrefix}-name`"
           v-model="name"
           :disabled="busy || locked"
           maxlength="120"
@@ -180,6 +183,8 @@ onBeforeUnmount(clearPlaintext);
       <label v-if="!rotating" class="field">
         <span>{{ $t("runtimeSecrets.valueType") }}</span>
         <select
+          :id="`${fieldPrefix}-value-type`"
+          :name="`${fieldPrefix}-value-type`"
           :value="valueType"
           :aria-label="$t('runtimeSecrets.valueType')"
           :disabled="busy || locked"
@@ -208,6 +213,8 @@ onBeforeUnmount(clearPlaintext);
           />
           <textarea
             v-else
+            :id="`${fieldPrefix}-value`"
+            :name="`${fieldPrefix}-value`"
             v-model="value"
             :class="{ 'secret-form__masked': !showValue }"
             :aria-label="$t('runtimeSecrets.value')"

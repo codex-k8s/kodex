@@ -51,6 +51,7 @@ function mappings(group: OidcGroup): AccessBinding[] {
       <input
         v-model="query"
         class="group-search"
+        name="access-oidc-group-search"
         type="search"
         autocomplete="off"
         :placeholder="$t('access.groups.searchPlaceholder')"

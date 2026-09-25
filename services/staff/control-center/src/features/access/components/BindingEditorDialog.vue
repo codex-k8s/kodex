@@ -169,6 +169,7 @@ watch(ownerConditionSupported, (supported) => {
           <span>{{ $t("access.bindingEditor.subjectKind") }}</span>
           <select
             v-model="form.subjectKind"
+            name="access-binding-subject-kind"
             :disabled="busy || Boolean(binding)"
           >
             <option value="USER">{{ $t("access.subjectKinds.USER") }}</option>
@@ -184,6 +185,7 @@ watch(ownerConditionSupported, (supported) => {
           <span>{{ $t("access.bindingEditor.subject") }}</span>
           <select
             v-model="form.subjectRef"
+            name="access-binding-subject"
             required
             :disabled="busy || Boolean(binding)"
           >
@@ -201,7 +203,12 @@ watch(ownerConditionSupported, (supported) => {
         </label>
         <label class="field field--wide">
           <span>{{ $t("access.bindingEditor.role") }}</span>
-          <select v-model="form.roleVersionRef" required :disabled="busy">
+          <select
+            v-model="form.roleVersionRef"
+            name="access-binding-role-version"
+            required
+            :disabled="busy"
+          >
             <option value="" disabled>
               {{ $t("access.bindingEditor.chooseRole") }}
             </option>
@@ -281,6 +288,7 @@ watch(ownerConditionSupported, (supported) => {
           <span>{{ $t("access.bindingEditor.validFrom") }}</span>
           <input
             v-model="form.validFrom"
+            name="access-binding-valid-from"
             type="datetime-local"
             :disabled="busy"
           />
@@ -289,6 +297,7 @@ watch(ownerConditionSupported, (supported) => {
           <span>{{ $t("access.bindingEditor.validUntil") }}</span>
           <input
             v-model="form.validUntil"
+            name="access-binding-valid-until"
             type="datetime-local"
             :disabled="busy"
           />
@@ -296,6 +305,7 @@ watch(ownerConditionSupported, (supported) => {
         <label class="owner-condition">
           <input
             v-model="form.requireOwner"
+            name="access-binding-require-owner"
             type="checkbox"
             :disabled="busy || !ownerConditionSupported"
           />

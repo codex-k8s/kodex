@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   AgentEffectiveCapability,
   AgentEffectiveCapabilityPage,
@@ -29,6 +29,7 @@ const emit = defineEmits<{
   refresh: [];
 }>();
 const serverMessage = useServerMessage();
+const fieldPrefix = `effective-capabilities-${useId()}`;
 const items = ref<AgentEffectiveCapability[]>([]);
 const page = ref<AgentEffectiveCapabilityPage>();
 const query = ref("");
@@ -141,7 +142,13 @@ onBeforeUnmount(() => {
   <div class="effective-capabilities" :aria-busy="loading">
     <label class="effective-capabilities__search">
       <span>{{ $t("common.search") }}</span>
-      <input v-model="query" type="search" maxlength="200" />
+      <input
+        v-model="query"
+        type="search"
+        :id="`${fieldPrefix}-search`"
+        :name="`${fieldPrefix}-search`"
+        maxlength="200"
+      />
     </label>
     <p v-if="mode === 'REQUIREMENTS'" class="secondary-copy">
       {{ $t("capabilityAuthority.draftIntent") }}
@@ -180,6 +187,8 @@ onBeforeUnmount(() => {
             (mode === 'GRANTS' && item.source === 'PLATFORM')
           "
           type="checkbox"
+          :name="`${fieldPrefix}-capability`"
+          :value="effectiveCapabilityIdentity(item)"
           :checked="checked(item)"
           :disabled="!editable(item)"
           @change="toggle(item)"

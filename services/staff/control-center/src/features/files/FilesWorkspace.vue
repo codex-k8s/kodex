@@ -1280,6 +1280,7 @@ onBeforeUnmount(() => {
         <label class="trash-toolbar__select-all">
           <input
             type="checkbox"
+            :name="`${fieldId}-select-all`"
             :checked="allVisibleSelected"
             :disabled="selectableArtifacts.length === 0 || contentBusy"
             @change="toggleAllVisible"
@@ -1436,6 +1437,8 @@ onBeforeUnmount(() => {
               >
                 <input
                   type="checkbox"
+                  :name="`${fieldId}-artifact`"
+                  :value="artifact.ref"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
                     contentBusy ||
@@ -1579,6 +1582,8 @@ onBeforeUnmount(() => {
               >
                 <input
                   type="checkbox"
+                  :name="`${fieldId}-artifact`"
+                  :value="artifact.ref"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
                     contentBusy ||

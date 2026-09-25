@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import * as sdk from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -26,6 +26,7 @@ const emit = defineEmits<{
   valid: [value: boolean];
 }>();
 const { t } = useI18n();
+const fieldPrefix = `prompt-scope-${useId()}`;
 const kind = ref<"AGENT" | "WORKFLOW_STAGE">("AGENT");
 const selected = ref<Agent | Workflow>();
 const problem = ref<AppProblem>();
@@ -205,7 +206,12 @@ function selectTemplateKind(event: Event): void {
     <template v-else>
       <label
         >{{ t("integrations.targetType")
-        }}<select v-model="kind" :disabled="disabled || busy">
+        }}<select
+          v-model="kind"
+          :id="`${fieldPrefix}-target-kind`"
+          :name="`${fieldPrefix}-target-kind`"
+          :disabled="disabled || busy"
+        >
           <option value="AGENT">{{ t("promptContext.AGENT") }}</option>
           <option value="WORKFLOW_STAGE">
             {{ t("promptContext.WORKFLOW_STAGE") }}
@@ -231,6 +237,8 @@ function selectTemplateKind(event: Event): void {
       <label v-if="workflow && modelValue?.targetKind === 'WORKFLOW_STAGE'"
         >{{ t("promptContext.stage")
         }}<select
+          :id="`${fieldPrefix}-stage`"
+          :name="`${fieldPrefix}-stage`"
           :value="modelValue.workflowStageKey ?? ''"
           :disabled="disabled || busy"
           @change="selectStage"
@@ -244,6 +252,8 @@ function selectTemplateKind(event: Event): void {
       <label v-if="modelValue"
         >{{ t("promptContext.kind")
         }}<select
+          :id="`${fieldPrefix}-template-kind`"
+          :name="`${fieldPrefix}-template-kind`"
           :value="modelValue.templateKind"
           :disabled="disabled || busy"
           @change="selectTemplateKind"

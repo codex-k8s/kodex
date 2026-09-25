@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, reactive, ref, useId, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -11,6 +11,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
+const fieldPrefix = `workflow-create-${useId()}`;
 const projectRef = computed(() => String(route.params.projectRef));
 const project = computed(() => platform.projects[projectRef.value]);
 const canCreate = computed(() =>
@@ -89,7 +90,12 @@ watch(
       >
         <label class="field field--wide"
           ><span>{{ $t("common.name") }}</span
-          ><input v-model.trim="form.name" required maxlength="160" /></label
+          ><input
+            v-model.trim="form.name"
+            :id="`${fieldPrefix}-name`"
+            :name="`${fieldPrefix}-name`"
+            required
+            maxlength="160" /></label
         ><label class="field field--wide"
           ><span>{{ $t("common.purpose") }}</span
           ><VoiceTextarea
@@ -99,7 +105,12 @@ watch(
             maxlength="1000" /></label
         ><label class="field field--wide"
           ><span>{{ $t("workflows.coordinator") }}</span
-          ><select v-model="form.coordinatorAgentRef" required>
+          ><select
+            v-model="form.coordinatorAgentRef"
+            :id="`${fieldPrefix}-coordinator`"
+            :name="`${fieldPrefix}-coordinator`"
+            required
+          >
             <option value="" disabled>{{ $t("common.noData") }}</option>
             <option
               v-for="agent in agentList"

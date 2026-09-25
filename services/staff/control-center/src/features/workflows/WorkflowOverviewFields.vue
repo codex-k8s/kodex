@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import { useId } from "vue";
 import type {
   AsyncEntityOption,
   AsyncEntityOptionPage,
@@ -31,6 +32,7 @@ const emit = defineEmits<{
   "update:maxConcurrency": [value: number];
   "update:completionCriteria": [value: string];
 }>();
+const fieldPrefix = `workflow-overview-${useId()}`;
 </script>
 
 <template>
@@ -38,6 +40,8 @@ const emit = defineEmits<{
     <label class="field">
       <span>{{ $t("common.name") }}</span>
       <input
+        :id="`${fieldPrefix}-name`"
+        :name="`${fieldPrefix}-name`"
         :value="name"
         required
         maxlength="160"
@@ -73,6 +77,8 @@ const emit = defineEmits<{
     <label class="field">
       <span>{{ $t("workflows.timeout") }}</span>
       <input
+        :id="`${fieldPrefix}-timeout`"
+        :name="`${fieldPrefix}-timeout`"
         :value="timeoutSeconds"
         type="number"
         min="1"
@@ -99,6 +105,8 @@ const emit = defineEmits<{
     <label class="field">
       <span>{{ $t("workflows.concurrency") }}</span>
       <input
+        :id="`${fieldPrefix}-concurrency`"
+        :name="`${fieldPrefix}-concurrency`"
         :value="maxConcurrency"
         type="number"
         min="1"

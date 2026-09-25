@@ -8,7 +8,7 @@ import {
   Search,
   Maximize2,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import type {
@@ -40,6 +40,7 @@ const { locale } = useI18n();
 const props = defineProps<{ projectRef?: string }>();
 const route = useRoute();
 const router = useRouter();
+const fieldId = useId();
 const lifecycleState = ref<
   NonNullable<SearchVfsData["query"]["lifecycleState"]>
 >(availableStates.find((state) => state === route.query.vfsState) ?? "ACTIVE");
@@ -368,13 +369,20 @@ onBeforeUnmount(() => {
         <label class="vfs-search"
           ><Search :size="18" /><input
             v-model="query"
+            :id="`${fieldId}-query`"
+            :name="`${fieldId}-query`"
             type="search"
             :aria-label="$t('files.search')"
             :placeholder="$t('files.search')"
         /></label>
         <label class="vfs-filter">
           <span>{{ $t("vfs.lifecycle") }}</span>
-          <select v-model="lifecycleState" :disabled="actionBusy">
+          <select
+            v-model="lifecycleState"
+            :id="`${fieldId}-lifecycle`"
+            :name="`${fieldId}-lifecycle`"
+            :disabled="actionBusy"
+          >
             <option
               v-for="state in availableStates"
               :key="state"
@@ -393,9 +401,12 @@ onBeforeUnmount(() => {
           <fieldset :disabled="actionBusy">
             <legend>{{ $t("vfs.filterKinds") }}</legend>
             <label v-for="kind in availableKinds" :key="kind">
-              <input v-model="kinds" type="checkbox" :value="kind" />{{
-                $t(`vfs.kind.${kind}`)
-              }}
+              <input
+                v-model="kinds"
+                :name="`${fieldId}-kinds`"
+                type="checkbox"
+                :value="kind"
+              />{{ $t(`vfs.kind.${kind}`) }}
             </label>
             <button type="button" class="button" @click="kinds = []">
               {{ $t("vfs.allKinds") }}
@@ -496,7 +507,9 @@ onBeforeUnmount(() => {
         >
           <div v-for="node in nodes" :key="node.ref" class="vfs-entry">
             <input
+              :name="`${fieldId}-selection`"
               type="checkbox"
+              :value="node.ref"
               :checked="checked.some((item) => item.ref === node.ref)"
               :disabled="actionBusy || !selectable(node)"
               :aria-label="$t('vfs.selectNode', { name: node.name })"

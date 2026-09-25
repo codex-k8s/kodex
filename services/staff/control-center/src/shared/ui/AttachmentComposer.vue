@@ -304,6 +304,7 @@ defineExpose<AttachmentComposerHandle>({ clear, finalize });
       name="attachments"
       type="file"
       multiple
+      :aria-label="t('attachments.add')"
       :disabled="effectivelyDisabled"
       @change="handleInput"
     />

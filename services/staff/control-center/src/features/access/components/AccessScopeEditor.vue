@@ -123,6 +123,7 @@ watch(
     <label class="field">
       <span>{{ $t("access.scope.kind") }}</span>
       <select
+        name="access-scope-kind"
         :value="modelValue.kind"
         :disabled="busy"
         @change="
@@ -141,6 +142,7 @@ watch(
     <label v-if="modelValue.kind !== 'ORGANIZATION'" class="field">
       <span>{{ $t("access.scope.project") }}</span>
       <select
+        name="access-scope-project"
         :value="modelValue.projectRef"
         required
         :disabled="busy"
@@ -167,6 +169,7 @@ watch(
     >
       <span>{{ $t("access.scope.resourceKind") }}</span>
       <select
+        name="access-scope-resource-kind"
         :value="modelValue.resourceKind"
         :disabled="busy"
         @change="
@@ -185,6 +188,7 @@ watch(
     <label v-if="usesPicker" class="field">
       <span>{{ $t(`access.resourceKinds.${modelValue.resourceKind}`) }}</span>
       <select
+        name="access-scope-resource"
         :value="modelValue.resourceRef"
         required
         :disabled="busy || !modelValue.projectRef"
@@ -209,6 +213,7 @@ watch(
     <label v-else-if="modelValue.kind === 'RESOURCE_INSTANCE'" class="field">
       <span>{{ $t("access.scope.resourceRef") }}</span>
       <input
+        name="access-scope-resource-ref"
         :value="modelValue.resourceRef"
         required
         :disabled="busy"

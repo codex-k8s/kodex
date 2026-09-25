@@ -8,7 +8,8 @@ defineProps<{
   disabled?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
-const helpId = `credential-help-${useId()}`;
+const fieldPrefix = `integration-credential-${useId()}`;
+const helpId = `${fieldPrefix}-help`;
 </script>
 
 <template>
@@ -17,6 +18,8 @@ const helpId = `credential-help-${useId()}`;
     <code v-if="credentialSecretKey">{{ credentialSecretKey }}</code>
     <span>{{ $t("integrations.credentialValue") }}</span>
     <input
+      :id="fieldPrefix"
+      :name="fieldPrefix"
       :value="modelValue"
       type="password"
       required

@@ -11,7 +11,7 @@ import {
   Send,
   Trash2,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
   ManagedConfiguration,
@@ -88,6 +88,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ created: [configuration: ManagedConfiguration] }>();
 const { t } = useI18n();
+const fieldPrefix = `configuration-editor-${useId()}`;
 const configuration = ref<ManagedConfiguration>();
 const revision = ref<ManagedConfigurationRevision>();
 const revisions = ref<ManagedConfigurationRevision[]>([]);
@@ -1293,12 +1294,16 @@ watch(
         >{{ $t("common.name")
         }}<input
           v-model="name"
+          :id="`${fieldPrefix}-name`"
+          :name="`${fieldPrefix}-name`"
           maxlength="160"
           :disabled="busy || !!configuration || !sourceEditable"
       /></label>
       <label
         >{{ $t("managed.format")
         }}<select
+          :id="`${fieldPrefix}-format`"
+          :name="`${fieldPrefix}-format`"
           :value="format"
           @change="changeFormat"
           :disabled="
@@ -1523,6 +1528,8 @@ watch(
     >
       <input
         v-model="impactQuery"
+        :id="`${fieldPrefix}-impact-search`"
+        :name="`${fieldPrefix}-impact-search`"
         type="search"
         :aria-label="$t('common.search')"
         :placeholder="$t('common.search')"
@@ -1549,6 +1556,7 @@ watch(
           ><input
             v-model="selected"
             type="checkbox"
+            :name="`${fieldPrefix}-consumer`"
             :value="consumerKey(consumer)"
             :disabled="
               kind === 'SYSTEM_STT' ||
@@ -1632,7 +1640,11 @@ watch(
     >
       <label class="configuration-editor__comparison">
         {{ $t("managed.compareRevision") }}
-        <select v-model="compareRef">
+        <select
+          v-model="compareRef"
+          :id="`${fieldPrefix}-compare`"
+          :name="`${fieldPrefix}-compare`"
+        >
           <option value="">{{ $t("managed.currentRevision") }}</option>
           <option v-for="item in revisions" :key="item.ref" :value="item.ref">
             v{{ item.revision }} · {{ item.state }}
@@ -1662,7 +1674,12 @@ watch(
       @close="sourceAction = undefined"
     >
       <label v-if="sourceAction === 'copy'"
-        >{{ $t("common.name") }}<input v-model="copyName" maxlength="160"
+        >{{ $t("common.name")
+        }}<input
+          v-model="copyName"
+          :id="`${fieldPrefix}-copy-name`"
+          :name="`${fieldPrefix}-copy-name`"
+          maxlength="160"
       /></label>
       <p v-else>{{ $t("managed.detachConfirm") }}</p>
       <button

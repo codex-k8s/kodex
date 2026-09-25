@@ -158,14 +158,11 @@ async function loadPage(
   catalogSnapshot = page;
   catalogScope = scope;
   return {
-    items: page.items.map((model) => ({
-      ref: model.id,
-      title: model.id,
-      description: model.reasoningEfforts.join(" · "),
-      meta: model.readinessBlockers
+    items: page.items.map((model) => {
+      const blocker = model.readinessBlockers
         .map((code) => t(providerBlockerMessage(code)))
-        .join(" · "),
-      disabled:
+        .join(" · ");
+      const disabled =
         !page.catalogStatus ||
         !accountSnapshotAvailable({
           accountRef: accounts.value[0] ?? "",
@@ -174,12 +171,18 @@ async function loadPage(
           catalogStatus: page.catalogStatus,
           catalogRevision: page.catalogRevision,
           catalogDigest: page.catalogDigest,
-        }),
-      disabledReason:
-        model.readinessBlockers
-          .map((code) => t(providerBlockerMessage(code)))
-          .join(" · ") || t("providers.modelUnavailable"),
-    })),
+        });
+      return {
+        ref: model.id,
+        title: model.id,
+        description: model.reasoningEfforts.join(" · "),
+        meta: blocker,
+        disabled,
+        disabledReason: disabled
+          ? blocker || t("providers.modelUnavailable")
+          : undefined,
+      };
+    }),
     nextPageToken: page.nextPageToken || undefined,
   };
 }

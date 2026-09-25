@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import { Plus, Trash2, Maximize2 } from "@lucide/vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -15,6 +15,7 @@ const props = defineProps<{
   disabled?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
+const fieldId = `integration-package-${useId()}-${props.fieldKey}`;
 const field = computed(() => resolvePackageField(props.schema));
 const record = computed<Record<string, unknown>>(() =>
   props.modelValue &&
@@ -201,12 +202,16 @@ function updateInput(event: Event): void {
     <span>{{ $t(`managed.packageFields.${fieldKey}`) }}</span>
     <input
       v-if="field.const !== undefined"
+      :id="fieldId"
+      :name="fieldId"
       :value="scalar"
       readonly
       :disabled="disabled"
     />
     <select
       v-else-if="field.enum"
+      :id="fieldId"
+      :name="fieldId"
       :value="scalar"
       :disabled="disabled"
       @change="updateInput"
@@ -220,6 +225,8 @@ function updateInput(event: Event): void {
     </select>
     <input
       v-else-if="field.type === 'boolean'"
+      :id="fieldId"
+      :name="fieldId"
       type="checkbox"
       :checked="modelValue === true"
       :disabled="disabled"
@@ -227,6 +234,8 @@ function updateInput(event: Event): void {
     />
     <VoiceTextarea
       v-else-if="fieldKey === 'description'"
+      :id="fieldId"
+      :name="fieldId"
       :model-value="String(scalar)"
       :disabled="disabled"
       :maxlength="field.maxLength"
@@ -235,6 +244,8 @@ function updateInput(event: Event): void {
     />
     <input
       v-else
+      :id="fieldId"
+      :name="fieldId"
       :type="field.type === 'integer' ? 'number' : 'text'"
       :value="scalar"
       :disabled="disabled"

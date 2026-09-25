@@ -78,6 +78,7 @@ function assignmentKind(
       <div class="bindings-actions">
         <select
           v-model="stateFilter"
+          name="access-binding-state-filter"
           :aria-label="$t('access.bindingsWorkspace.filter')"
         >
           <option value="ACTIVE">{{ $t("common.active") }}</option>

@@ -8,6 +8,7 @@ import {
   onMounted,
   reactive,
   ref,
+  useId,
   watch,
 } from "vue";
 
@@ -65,6 +66,7 @@ import {
 } from "@/features/integrations/configuration-yaml";
 
 const serverMessage = useServerMessage();
+const fieldPrefix = `integration-connection-${useId()}`;
 const platform = usePlatformStore();
 const connectionSearch = ref("");
 const connectionEntries = ref<IntegrationConnection[]>([]);
@@ -1208,6 +1210,8 @@ onBeforeUnmount(() => {
           <label v-if="dialogMode !== 'CREDENTIAL'" class="field field--wide">
             <span>{{ $t("common.name") }}</span>
             <input
+              :id="`${fieldPrefix}-name`"
+              :name="`${fieldPrefix}-name`"
               v-model.trim="form.name"
               required
               maxlength="160"
