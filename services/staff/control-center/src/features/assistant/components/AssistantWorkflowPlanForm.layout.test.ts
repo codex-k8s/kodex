@@ -20,6 +20,16 @@ describe("форма процесса в плане помощника", () => {
     expect(source).not.toContain("props.operation.value.parameters =");
   });
 
+  it("использует штатные редакторы шаблона и каталог полномочий этапа", () => {
+    expect(source).toContain("<TemplateSourceField");
+    expect(source).toContain("<EffectiveCapabilityCatalog");
+    expect(source).toContain('mode="REQUIREMENTS"');
+    expect(source).toContain(
+      "step.agentRef === agentRef ? step.requiredCapabilityKeys : []",
+    );
+    expect(source).not.toContain("step.requiredCapabilityKeys.join('\\n')");
+  });
+
   it("блокирует сохранение и повторное применение старой ревизии", () => {
     expect(editor).toContain("<AssistantWorkflowPlanForm");
     expect(editor).toContain("workflowFormValidity.value[operation.value.ref]");

@@ -2,6 +2,8 @@
 import { computed, ref, watch } from "vue";
 
 import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
+import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
+import TemplateSourceField from "@/features/agents/detail/TemplateSourceField.vue";
 import WorkflowOverviewFields from "@/features/workflows/WorkflowOverviewFields.vue";
 import {
   operationParameter,
@@ -219,11 +221,42 @@ function chooseAgent(option: AsyncEntityOption, stepIndex?: number): void {
   const agent = selectableAgents.get(option.ref);
   if (!agent || agent.projectRef !== props.projectRef || agent.system) return;
   if (stepIndex === undefined) change("coordinatorAgentRef", option.ref);
-  else changeStep(stepIndex, "agentRef", option.ref);
+  else changeStepAgent(stepIndex, option.ref);
 }
 function clearAgent(stepIndex?: number): void {
   if (stepIndex === undefined) change("coordinatorAgentRef", "");
-  else changeStep(stepIndex, "agentRef", "");
+  else changeStepAgent(stepIndex, "");
+}
+function changeStepAgent(index: number, agentRef: string): void {
+  const current = steps.value;
+  if (!current?.[index]) return;
+  change(
+    "steps",
+    current.map((step, position) =>
+      position === index
+        ? {
+            ...step,
+            agentRef,
+            requiredCapabilityKeys:
+              step.agentRef === agentRef ? step.requiredCapabilityKeys : [],
+          }
+        : step,
+    ),
+  );
+}
+function toggleCapability(index: number, key: string, enabled: boolean): void {
+  const selected = steps.value?.[index]?.requiredCapabilityKeys;
+  if (!Array.isArray(selected) || typeof key !== "string") return;
+  const keys = selected.filter(
+    (value): value is string => typeof value === "string",
+  );
+  changeStep(
+    index,
+    "requiredCapabilityKeys",
+    enabled
+      ? [...new Set([...keys, key])]
+      : keys.filter((value) => value !== key),
+  );
 }
 function addStep(): void {
   if (!steps.value || steps.value.length >= 200) return;
@@ -552,22 +585,15 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
             @update:model-value="$event === null && clearAgent(index)"
           />
         </div>
-        <label class="field"
-          ><span>{{ $t("common.purpose") }}</span
-          ><textarea
-            :value="text(step.purpose)"
-            rows="3"
-            maxlength="1000"
+        <div class="field">
+          <span>{{ $t("common.purpose") }}</span>
+          <TemplateSourceField
+            :model-value="text(step.purpose)"
+            :label="$t('common.purpose')"
             :disabled="disabled"
-            @input="
-              changeStep(
-                index,
-                'purpose',
-                ($event.target as HTMLTextAreaElement).value,
-              )
-            "
+            @update:model-value="changeStep(index, 'purpose', $event)"
           />
-        </label>
+        </div>
         <div class="assistant-workflow-form__advanced">
           <label class="check-field"
             ><input
@@ -630,21 +656,16 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
                 "
             /></label>
           </div>
-          <label class="field"
-            ><span>{{ $t("workflows.expectedResult") }}</span
-            ><textarea
-              :value="text(step.expectedResult)"
-              maxlength="1000"
+          <div class="field">
+            <span>{{ $t("workflows.expectedResult") }}</span>
+            <TemplateSourceField
+              :model-value="text(step.expectedResult)"
+              :label="$t('workflows.expectedResult')"
               :disabled="disabled"
-              @input="
-                changeStep(
-                  index,
-                  'expectedResult',
-                  ($event.target as HTMLTextAreaElement).value,
-                )
-              "
+              @update:model-value="changeStep(index, 'expectedResult', $event)"
             />
-          </label>
+            <span>{{ text(step.expectedResult).length }} / 1000</span>
+          </div>
           <fieldset v-if="step.humanGate === true">
             <legend>{{ $t("workflows.gateDecisions") }}</legend>
             <label
@@ -662,28 +683,23 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
               />{{ $t(`workflows.gateDecision.${decision}`) }}</label
             >
           </fieldset>
-          <label class="field"
-            ><span>{{ $t("workflows.requiredCapabilities") }}</span
-            ><textarea
-              :value="
+          <fieldset class="field">
+            <legend>{{ $t("workflows.requiredCapabilities") }}</legend>
+            <EffectiveCapabilityCatalog
+              v-if="text(step.agentRef) && agentReadback[text(step.agentRef)]"
+              :agent-ref="text(step.agentRef)"
+              :project-ref="projectRef"
+              mode="REQUIREMENTS"
+              :selected-keys="
                 Array.isArray(step.requiredCapabilityKeys)
-                  ? step.requiredCapabilityKeys.join('\n')
-                  : ''
+                  ? (step.requiredCapabilityKeys as string[])
+                  : []
               "
-              rows="2"
-              :disabled="disabled"
-              @input="
-                changeStep(
-                  index,
-                  'requiredCapabilityKeys',
-                  ($event.target as HTMLTextAreaElement).value
-                    .split('\n')
-                    .map((value) => value.trim())
-                    .filter(Boolean),
-                )
-              "
+              :can-manage="!disabled"
+              :busy="disabled"
+              @toggle="(key, enabled) => toggleCapability(index, key, enabled)"
             />
-          </label>
+          </fieldset>
         </details>
         <button
           class="button button--danger"
