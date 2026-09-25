@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -13,6 +12,7 @@ import {
   searchProjects,
 } from "@/features/projects/api";
 import ProjectList from "@/features/projects/ProjectList.vue";
+import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import { catalogInvalidated } from "@/features/catalogs/api";
 import type {
   Project,
@@ -363,30 +363,16 @@ onBeforeUnmount(() => {
         :inert="busy"
         @submit.prevent="submit"
       >
-        <label class="field field--wide"
-          ><span>{{ $t("common.name") }}</span
-          ><input
-            v-model.trim="form.name"
-            required
-            maxlength="120"
-            data-dialog-initial-focus
-        /></label>
-        <label class="field field--wide"
-          ><span>{{ $t("common.purpose") }}</span
-          ><VoiceTextarea
-            v-model.trim="form.purpose"
-            :disabled="busy"
-            required
-            maxlength="1000"
-          />
-        </label>
-        <label class="field"
-          ><span>{{ $t("projects.language") }}</span
-          ><select v-model="form.language">
-            <option value="ru">{{ $t("common.russian") }}</option>
-            <option value="en">{{ $t("common.english") }}</option>
-          </select></label
-        >
+        <ProjectFormFields
+          :name="form.name"
+          :purpose="form.purpose"
+          :language="form.language"
+          :disabled="busy"
+          initial-focus
+          @update:name="form.name = $event"
+          @update:purpose="form.purpose = $event"
+          @update:language="form.language = $event"
+        />
         <ProblemNotice
           v-if="problem"
           class="field--wide"

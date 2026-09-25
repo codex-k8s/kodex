@@ -24,6 +24,7 @@ import AssistantAgentEnvironmentBindingForm from "@/features/assistant/component
 import { prepareConnectionConfiguration } from "@/features/integrations/connection-setup";
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
+import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
   editableOperations,
@@ -87,6 +88,7 @@ const environmentFormValidity = ref<Record<string, boolean>>({});
 const environmentFormTouched = ref(false);
 const environmentFieldsValidity = ref<Record<string, boolean>>({});
 const environmentFieldsTouched = ref(false);
+const projectFormValidity = ref<Record<string, boolean>>({});
 const bindingFormValidity = ref<Record<string, boolean>>({});
 const bindingFormTouched = ref(false);
 const scheduleFormValidity = ref<Record<string, boolean>>({});
@@ -155,6 +157,7 @@ function resetDraft(): void {
   environmentFormTouched.value = false;
   environmentFieldsValidity.value = {};
   environmentFieldsTouched.value = false;
+  projectFormValidity.value = {};
   bindingFormValidity.value = {};
   bindingFormTouched.value = false;
   scheduleFormValidity.value = {};
@@ -400,6 +403,9 @@ const friendlyInputsReady = computed(() =>
         ((operation.value.type !== "CREATE_RUNTIME_ENVIRONMENT_DRAFT" &&
           operation.value.type !== "PREPARE_RUNTIME_ENVIRONMENT_REVISION") ||
           environmentFieldsValidity.value[operation.value.ref] === true) &&
+        ((operation.value.type !== "CREATE_PROJECT" &&
+          operation.value.type !== "UPDATE_PROJECT") ||
+          projectFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "BIND_AGENT_RUNTIME_ENVIRONMENT" ||
           bindingFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_SCHEDULE" &&
@@ -1024,7 +1030,10 @@ function snapshot(value: string): Record<string, unknown> {
               </p>
             </div>
             <template v-else>
-              <label class="field">
+              <label
+                v-if="operation.value.target.kind !== 'PROJECT'"
+                class="field"
+              >
                 <span>{{ $t("assistant.planEditor.entityName") }}</span>
                 <input
                   :value="fieldValue(operation, 'name')"
@@ -1039,6 +1048,7 @@ function snapshot(value: string): Record<string, unknown> {
               </label>
               <label
                 v-if="
+                  operation.value.target.kind !== 'PROJECT' &&
                   operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION'
@@ -1055,17 +1065,22 @@ function snapshot(value: string): Record<string, unknown> {
                 />
               </label>
               <template v-if="operation.value.target.kind === 'PROJECT'">
-                <label class="field">
-                  <span>{{ $t("assistant.planEditor.projectLanguage") }}</span>
-                  <select
-                    :value="fieldValue(operation, 'language')"
-                    :disabled="!editable"
-                    @change="setField(operation, 'language', $event)"
-                  >
-                    <option value="ru">Русский</option>
-                    <option value="en">English</option>
-                  </select>
-                </label>
+                <ProjectFormFields
+                  :name="fieldValue(operation, 'name')"
+                  :purpose="fieldValue(operation, 'purpose')"
+                  :language="fieldValue(operation, 'language')"
+                  :disabled="!editable"
+                  @valid="projectFormValidity[operation.value.ref] = $event"
+                  @update:name="
+                    updateOperationParameter(operation, 'name', $event)
+                  "
+                  @update:purpose="
+                    updateOperationParameter(operation, 'purpose', $event)
+                  "
+                  @update:language="
+                    updateOperationParameter(operation, 'language', $event)
+                  "
+                />
               </template>
               <template
                 v-else-if="

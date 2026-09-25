@@ -244,7 +244,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	}
 	result := []map[string]any{
 		assistantOperationSchema("CREATE_PROJECT", objectSchema([]string{"name", "purpose", "language"}, map[string]any{
-			"name": stringSchema(1, 160), "purpose": stringSchema(1, 2000), "language": enumSchema("ru", "en"),
+			"name": stringSchema(1, 120), "purpose": stringSchema(1, 1000), "language": enumSchema("ru", "en"),
 		})),
 		assistantOperationSchema("UPDATE_PROJECT", projectUpdateInputSchema(projectRef)),
 		assistantOperationSchema("CREATE_AGENT", objectSchema([]string{"projectRef", "name", "purpose", "roleDescription", "instructions"}, map[string]any{
@@ -394,8 +394,8 @@ func scheduleUpdateInputSchema(scheduleRef string) map[string]any {
 func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"projectRef"}, map[string]any{
 		"projectRef": projectRef,
-		"name":       stringSchema(1, 160),
-		"purpose":    stringSchema(1, 2000),
+		"name":       stringSchema(1, 120),
+		"purpose":    stringSchema(1, 1000),
 		"language":   enumSchema("ru", "en"),
 	})
 	schema["anyOf"] = []map[string]any{
