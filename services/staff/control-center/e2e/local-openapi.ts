@@ -312,6 +312,34 @@ test("мобильный импорт OpenAPI доступен на англий
   ).toBeLessThanOrEqual(390);
 });
 
+test("одноразовая ссылка помощника не открывает импорт повторно после возврата", async ({
+  page,
+}) => {
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await gotoWithRetry(
+    page,
+    "/configurations/INTEGRATION_DEFINITION?assistantImportOpen=1",
+  );
+  const dialog = page.getByRole("dialog", {
+    name: "Импорт интеграции из OpenAPI",
+  });
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL(/\/configurations\/INTEGRATION_DEFINITION$/);
+  await dialog.getByRole("button", { name: "Закрыть" }).click();
+  await expect(dialog).toHaveCount(0);
+  await gotoWithRetry(page, "/projects");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/configurations\/INTEGRATION_DEFINITION$/);
+  await expect(dialog).toHaveCount(0);
+});
+
 test("помощник открывает защищённый импорт новой OpenAPI-интеграции", async ({
   page,
 }) => {
@@ -348,9 +376,7 @@ test("помощник открывает защищённый импорт но
   );
   await expect(importLink.last()).toBeVisible({ timeout: 180_000 });
   await importLink.last().click();
-  await expect(page).toHaveURL(
-    /\/configurations\/INTEGRATION_DEFINITION\?assistantImportOpen=1$/,
-  );
+  await expect(page).toHaveURL(/\/configurations\/INTEGRATION_DEFINITION$/);
   await expect(
     page.getByRole("dialog", { name: "Импорт интеграции из OpenAPI" }),
   ).toBeVisible();
