@@ -39,6 +39,7 @@ import {
 import { resolveShellRealtimeState } from "@/app/realtime-presentation";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
+import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { useRuntimeStore } from "@/features/runtime/store";
@@ -174,14 +175,25 @@ const breadcrumbs = computed(() => {
     labels,
   );
 });
-const assistantContext = computed(() =>
-  resolveAssistantContext(route, {
+const assistantStore = useAssistantStore();
+const assistantContext = computed(() => {
+  const resolved = resolveAssistantContext(route, {
     projects: platform.projects,
     agents: platform.agents,
     workflows: platform.workflows,
     runs: platform.runs,
-  }),
-);
+  });
+  if (
+    route.query.assistantForm === "1" &&
+    assistantStore.context &&
+    assistantStore.projectRef === resolved.projectRef
+  )
+    return {
+      descriptor: assistantStore.context,
+      projectRef: assistantStore.projectRef,
+    };
+  return resolved;
+});
 const assistantRunEvents = computed(() => {
   if (assistantContext.value.descriptor.entityKind !== "RUN") return [];
   const runRef = assistantContext.value.descriptor.entityRef;

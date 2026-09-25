@@ -66,6 +66,53 @@ describe("OIDC re-auth intents", () => {
       createRuntimeSecretDraftIntent("project_sales", "draft"),
     ).toThrow();
   });
+  it("возвращает защищённую форму внутрь помощника только в текущем проекте", () => {
+    const create = createRuntimeSecretDraftIntent(
+      "project_sales",
+      "create",
+      undefined,
+      1000,
+      "assistant",
+    );
+    expect(create.returnPath).toBe(
+      "/projects/project_sales?assistantCreateSecret=1",
+    );
+    expect(consumeOidcIntent(create, pendingStorage(create), 1100)).toEqual(
+      create,
+    );
+    const draft = createRuntimeSecretDraftIntent(
+      "project_sales",
+      "draft",
+      "draft_synthetic",
+      1000,
+      "assistant",
+    );
+    expect(draft.returnPath).toBe(
+      "/projects/project_sales?assistantSecretDraftRef=draft_synthetic",
+    );
+    expect(consumeOidcIntent(draft, pendingStorage(draft), 1100)).toEqual(
+      draft,
+    );
+    expect(() =>
+      parseRuntimeSecretDraftIntent(
+        {
+          ...draft,
+          returnPath:
+            "/projects/project_other?assistantSecretDraftRef=draft_synthetic",
+        },
+        1100,
+      ),
+    ).toThrow();
+    expect(() =>
+      createRuntimeSecretDraftIntent(
+        "project_sales",
+        "secret",
+        "secret_synthetic",
+        1000,
+        "assistant",
+      ),
+    ).toThrow();
+  });
   it("связывает email state с exact receipt без project и secret", () => {
     const intent = createEmailReconciliationIntent(
       {
@@ -150,6 +197,30 @@ describe("OIDC re-auth intents", () => {
       operation: "PUBLISH",
       returnPath: "/projects/project_sales/environments/environment_main",
     });
+  });
+  it("возвращает protected policy editor в чат только по точному маршруту", () => {
+    const intent = createRuntimeEnvironmentPolicyIntent(
+      "project_sales",
+      "PUBLISH",
+      "environment_main",
+      1_000,
+      "assistant",
+    );
+    expect(intent.returnPath).toBe(
+      "/projects/project_sales/environments/environment_main?assistantForm=1",
+    );
+    expect(consumeOidcIntent(intent, pendingStorage(intent), 1_100)).toEqual(
+      intent,
+    );
+    expect(() =>
+      parseRuntimeEnvironmentPolicyIntent(
+        {
+          ...intent,
+          returnPath: "/projects/project_sales/environments/environment_main",
+        },
+        1_100,
+      ),
+    ).toThrow();
   });
 
   it("закрыто отклоняет несовместимые operation и environmentRef", () => {
@@ -260,6 +331,41 @@ describe("OIDC re-auth intents", () => {
         1_000,
       ),
     ).toBe(false);
+  });
+  it("не переносит assistant completion в обычный редактор", () => {
+    const intent = createRuntimeEnvironmentPolicyIntent(
+      "project_sales",
+      "PUBLISH",
+      "environment_main",
+      1_000,
+      "assistant",
+    );
+    const stateStorage = storage();
+    recordRuntimeEnvironmentPolicyReauthCompletion(intent, stateStorage, 1_000);
+    expect(() =>
+      consumeRuntimeEnvironmentPolicyReauthCompletion(
+        stateStorage,
+        {
+          environmentRef: "environment_main",
+          operation: "PUBLISH",
+          projectRef: "project_sales",
+        },
+        1_000,
+      ),
+    ).toThrow();
+    recordRuntimeEnvironmentPolicyReauthCompletion(intent, stateStorage, 1_000);
+    expect(
+      consumeRuntimeEnvironmentPolicyReauthCompletion(
+        stateStorage,
+        {
+          environmentRef: "environment_main",
+          operation: "PUBLISH",
+          projectRef: "project_sales",
+          surface: "assistant",
+        },
+        1_000,
+      ),
+    ).toBe(true);
   });
 
   it("удаляет completion marker при route mismatch", () => {

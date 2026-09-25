@@ -32,6 +32,7 @@ const destination = computed(() => {
         projectRef: exact.projectRef,
         environmentRef: current.publishedEnvironmentRef,
       },
+      query: { assistantForm: "1" },
     };
   }
   if (current.environmentRef) {
@@ -41,13 +42,13 @@ const destination = computed(() => {
         projectRef: exact.projectRef,
         environmentRef: current.environmentRef,
       },
-      query: { draftRef: exact.draftRef },
+      query: { draftRef: exact.draftRef, assistantForm: "1" },
     };
   }
   return {
     name: "runtime-environment-new",
     params: { projectRef: exact.projectRef },
-    query: { draftRef: exact.draftRef },
+    query: { draftRef: exact.draftRef, assistantForm: "1" },
   };
 });
 let refresh: (() => Promise<void>) | undefined;

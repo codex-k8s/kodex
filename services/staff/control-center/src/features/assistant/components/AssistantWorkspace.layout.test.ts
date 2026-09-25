@@ -6,6 +6,18 @@ const source = readFileSync(
   new URL("./AssistantWorkspace.vue", import.meta.url),
   "utf8",
 );
+const appShell = readFileSync(
+  new URL("../../../app/AppShell.vue", import.meta.url),
+  "utf8",
+);
+const environmentPage = readFileSync(
+  new URL("../../../pages/RuntimeEnvironmentEditorPage.vue", import.meta.url),
+  "utf8",
+);
+const roleImagePage = readFileSync(
+  new URL("../../../pages/RoleImageEditorPage.vue", import.meta.url),
+  "utf8",
+);
 const template = source.slice(
   source.indexOf("<template>"),
   source.indexOf("<style scoped>"),
@@ -75,11 +87,35 @@ describe("AssistantWorkspace layout", () => {
       template.indexOf("</footer>"),
     );
     expect(composer).toContain('v-if="projectRef"');
-    expect(composer).toContain("name: 'runtime-secrets'");
-    expect(composer).toContain("params: { projectRef }");
-    expect(composer).toContain("assistantCreateSecret: '1'");
+    expect(composer).toContain("secretDialogOpen = true");
+    expect(template).toContain('<Teleport to="body">');
+    expect(template).toContain("<RuntimeSecretDraftDialog");
+    expect(template).toContain(':project-ref="projectRef"');
+    expect(template).toContain(':initial-draft-ref="secretInitialDraftRef"');
+    expect(template).toContain("assistant\n");
+    expect(template).toContain('v-if="open && secretDialogOpen && projectRef"');
+    expect(template).toContain(
+      ':inert="integrationImportOpen || secretDialogOpen"',
+    );
+    expect(composer).not.toContain("name: 'runtime-secrets'");
     expect(composer).not.toContain("credentialValue");
     expect(composer).not.toContain("secretValue");
+  });
+
+  it("показывает тот же ручной редактор окружения и образа рядом с чатом", () => {
+    expect(template).toContain('id="assistant-form-slot"');
+    expect(template).toContain(
+      "'assistant-drawer--with-form': assistantFormActive",
+    );
+    expect(source).toContain('route.query.assistantForm === "1"');
+    expect(template).toContain('@click="closeAssistantForm"');
+    expect(appShell).toContain("assistantStore.context");
+    expect(environmentPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    expect(roleImagePage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
   });
 
   it("открывает защищённый импорт OpenAPI поверх диалога без передачи документа модели", () => {

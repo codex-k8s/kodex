@@ -13,7 +13,7 @@ import {
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
@@ -41,6 +41,7 @@ const props = defineProps<{
 }>();
 const { t } = useI18n();
 const router = useRouter();
+const route = useRoute();
 const store = useRoleImagesStore();
 const name = ref("");
 const roleDefinitionRef = ref("");
@@ -93,7 +94,9 @@ const promotionReceipt = computed(() =>
 );
 const buildActive = computed(() =>
   currentBuild.value
-    ? !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(currentBuild.value.stage)
+    ? !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(
+        currentBuild.value.stage,
+      )
     : false,
 );
 const promotionPending = computed(
@@ -243,9 +246,11 @@ async function save(): Promise<void> {
       name: name.value.trim(),
       environment: selection,
     });
-    await router.replace(
-      `/projects/${encodeURIComponent(props.projectRef)}/role-images/${encodeURIComponent(created.ref)}`,
-    );
+    await router.replace({
+      name: "role-image",
+      params: { projectRef: props.projectRef, recipeRef: created.ref },
+      query: route.query.assistantForm === "1" ? { assistantForm: "1" } : {},
+    });
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
@@ -268,12 +273,23 @@ async function runCommand(
 
 async function cancelCurrentBuild(): Promise<void> {
   const current = currentBuild.value;
-  if (!recipe.value || !current || store.mutating || hasLocalChanges.value ||
-      !recipe.value.nextActions.includes("CANCEL_BUILD") ||
-      ["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(current.stage) ||
-      !window.confirm(t("roleImages.cancelBuildConfirm"))) return;
+  if (
+    !recipe.value ||
+    !current ||
+    store.mutating ||
+    hasLocalChanges.value ||
+    !recipe.value.nextActions.includes("CANCEL_BUILD") ||
+    ["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(current.stage) ||
+    !window.confirm(t("roleImages.cancelBuildConfirm"))
+  )
+    return;
   try {
-    await store.command(props.projectRef, recipe.value, "CANCEL_BUILD", current.ref);
+    await store.command(
+      props.projectRef,
+      recipe.value,
+      "CANCEL_BUILD",
+      current.ref,
+    );
     lifecyclePollAttempts = 0;
     sync();
     scheduleBuildPolling();
@@ -402,7 +418,13 @@ onBeforeUnmount(() => {
             {{ t("roleImages.requestBuild") }}
           </button>
           <button
-            v-if="recipe.nextActions.includes('CANCEL_BUILD') && currentBuild && !['COMPLETED', 'CANCELLED', 'DEAD_LETTER'].includes(currentBuild.stage)"
+            v-if="
+              recipe.nextActions.includes('CANCEL_BUILD') &&
+              currentBuild &&
+              !['COMPLETED', 'CANCELLED', 'DEAD_LETTER'].includes(
+                currentBuild.stage,
+              )
+            "
             class="button"
             type="button"
             :disabled="store.mutating || hasLocalChanges"

@@ -22,7 +22,7 @@ import {
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
@@ -60,6 +60,7 @@ import {
   restoreAssistantWorkspaceOpen,
 } from "@/features/assistant/workspace-state";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
+import RuntimeSecretDraftDialog from "@/features/runtime-secrets/RuntimeSecretDraftDialog.vue";
 import type {
   AssistantContextDescriptor,
   AssistantPlan,
@@ -95,13 +96,19 @@ const props = withDefaults(
   { live: false, runEvents: () => [], refreshRevision: "" },
 );
 const { t } = useI18n();
+const route = useRoute();
 const router = useRouter();
+const assistantFormActive = computed(() => route.query.assistantForm === "1");
 const store = useAssistantStore();
 const platform = usePlatformStore();
-const open = ref(restoreAssistantWorkspaceOpen());
+const open = ref(
+  restoreAssistantWorkspaceOpen() || route.query.assistantForm === "1",
+);
 const historyOpen = ref(false);
 const contextOpen = ref(false);
 const integrationImportOpen = ref(false);
+const secretDialogOpen = ref(false);
+const secretInitialDraftRef = ref<string>();
 const createdDefinitionRef = ref<string>();
 const desktopHistory = ref<HTMLElement>();
 const desktopHistorySentinel = ref<HTMLElement>();
@@ -132,6 +139,7 @@ const attachmentState = ref<AttachmentComposerState>({
   ready: true,
 });
 const panel = ref<HTMLElement>();
+const formSlot = ref<HTMLElement>();
 const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
 const historyMenu = ref<HTMLElement>();
@@ -286,6 +294,11 @@ async function show(): Promise<void> {
 
 function close(): void {
   if (store.busy) return;
+  if (secretDialogOpen.value) return;
+  if (assistantFormActive.value) {
+    void closeAssistantForm();
+    return;
+  }
   if (
     (message.value.trim() ||
       attachmentState.value.count > 0 ||
@@ -305,8 +318,48 @@ function close(): void {
   void nextTick(() => fab.value?.focus());
 }
 
+async function closeAssistantForm(): Promise<void> {
+  if (store.busy) return;
+  const origin = store.context?.route;
+  if (origin?.startsWith("/") && !origin.startsWith("//")) {
+    const resolved = router.resolve(origin);
+    if (
+      resolved.params.projectRef === props.projectRef &&
+      resolved.query.assistantForm !== "1"
+    ) {
+      await router.replace(origin);
+      return;
+    }
+  }
+  await router.replace({ query: { ...route.query, assistantForm: undefined } });
+}
+
+async function resumeAssistantSecretForm(): Promise<void> {
+  if (!props.projectRef || route.params.projectRef !== props.projectRef) return;
+  const creating = route.query.assistantCreateSecret === "1";
+  const draftRef = route.query.assistantSecretDraftRef;
+  const resuming =
+    typeof draftRef === "string" && /^[-_A-Za-z0-9]{8,128}$/.test(draftRef);
+  if (!creating && !resuming) return;
+  await show();
+  secretInitialDraftRef.value = resuming ? draftRef : undefined;
+  secretDialogOpen.value = true;
+  await router.replace({
+    query: {
+      ...route.query,
+      assistantCreateSecret: undefined,
+      assistantSecretDraftRef: undefined,
+    },
+  });
+}
+
 function handleKeydown(event: KeyboardEvent): void {
+  if ((event.target as HTMLElement).closest(".modal")) return;
   if (event.key === "Escape") {
+    if (assistantFormActive.value) {
+      void closeAssistantForm();
+      return;
+    }
     if (historyOpen.value) historyOpen.value = false;
     else if (openPlanRef.value) void closePlan();
     else close();
@@ -314,7 +367,10 @@ function handleKeydown(event: KeyboardEvent): void {
   }
   if (event.key !== "Tab" || !panel.value) return;
   const target = trappedFocusTarget(
-    focusableElements(panel.value),
+    [
+      ...focusableElements(panel.value),
+      ...(formSlot.value ? focusableElements(formSlot.value) : []),
+    ],
     document.activeElement,
     event.shiftKey,
   );
@@ -615,6 +671,13 @@ watch(
   },
 );
 watch(
+  () => props.projectRef,
+  () => {
+    secretDialogOpen.value = false;
+    secretInitialDraftRef.value = undefined;
+  },
+);
+watch(
   () => store.selectedConversation?.turns.length,
   async () => {
     if (!open.value || openPlanRef.value) return;
@@ -627,7 +690,10 @@ onMounted(() => {
   historyMedia?.addEventListener("change", syncHistoryViewport);
   document.addEventListener("pointerdown", documentPointerDown);
   window.addEventListener(openAssistantEvent, handleOpenAssistant);
-  if (open.value) void show();
+  if (route.query.assistantCreateSecret || route.query.assistantSecretDraftRef)
+    void resumeAssistantSecretForm();
+  else if (assistantFormActive.value) void show();
+  else if (open.value) void show();
 });
 onBeforeUnmount(() => {
   historyMedia?.removeEventListener("change", syncHistoryViewport);
@@ -654,9 +720,12 @@ onBeforeUnmount(() => {
   <div
     v-if="open"
     class="assistant-overlay"
-    role="presentation"
-    :inert="integrationImportOpen"
-    :aria-hidden="integrationImportOpen || undefined"
+    :class="{ 'assistant-overlay--with-form': assistantFormActive }"
+    :role="assistantFormActive ? 'dialog' : 'presentation'"
+    :aria-modal="assistantFormActive || undefined"
+    :aria-label="assistantFormActive ? $t('assistant.title') : undefined"
+    :inert="integrationImportOpen || secretDialogOpen"
+    :aria-hidden="integrationImportOpen || secretDialogOpen || undefined"
   >
     <button
       class="assistant-overlay__backdrop"
@@ -670,9 +739,12 @@ onBeforeUnmount(() => {
       id="assistant-workspace"
       ref="panel"
       class="assistant-drawer"
-      :class="{ 'assistant-drawer--plan': currentPlan }"
-      role="dialog"
-      aria-modal="true"
+      :class="{
+        'assistant-drawer--plan': currentPlan,
+        'assistant-drawer--with-form': assistantFormActive,
+      }"
+      :role="assistantFormActive ? 'region' : 'dialog'"
+      :aria-modal="!assistantFormActive || undefined"
       :aria-label="$t('assistant.title')"
       :aria-busy="store.busy || store.loading"
       :data-conversation-ref="store.selectedConversation?.ref"
@@ -1134,7 +1206,6 @@ onBeforeUnmount(() => {
                     :key="`build-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
-                    @navigate="close"
                   />
                   <AssistantCreatedEntityCard
                     v-for="operation in turn.plan.operations.filter(
@@ -1156,7 +1227,6 @@ onBeforeUnmount(() => {
                     :key="`environment-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
-                    @navigate="close"
                   />
                   <AssistantAgentEnvironmentBindingCard
                     v-for="operation in turn.plan.operations.filter(
@@ -1272,32 +1342,71 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
               </div>
-              <RouterLink
+              <button
                 v-if="projectRef"
                 class="assistant-composer__protected-link"
-                :to="{
-                  name: 'runtime-secrets',
-                  params: { projectRef },
-                  query: { assistantCreateSecret: '1' },
-                }"
-                @click="close"
-                >{{ $t("assistant.openSecretForm") }}</RouterLink
+                type="button"
+                @click="secretDialogOpen = true"
               >
+                {{ $t("assistant.openSecretForm") }}
+              </button>
               <small>{{ $t("assistant.audit") }}</small>
             </footer>
           </div>
         </div>
       </template>
     </aside>
+    <section
+      v-if="assistantFormActive"
+      id="assistant-form-slot"
+      ref="formSlot"
+      class="assistant-form-slot"
+      :aria-label="$t('assistant.planEditor.parametersTitle')"
+      @keydown="handleKeydown"
+    >
+      <button
+        class="assistant-form-slot__close icon-button"
+        type="button"
+        :aria-label="$t('common.close')"
+        @click="closeAssistantForm"
+      >
+        <X :size="18" aria-hidden="true" />
+      </button>
+    </section>
   </div>
   <OpenAPIImportDialog
     v-if="open && integrationImportOpen"
     @close="integrationImportOpen = false"
     @created="integrationDraftCreated"
   />
+  <Teleport to="body">
+    <div
+      v-if="open && secretDialogOpen && projectRef"
+      class="assistant-secret-layer"
+    >
+      <RuntimeSecretDraftDialog
+        :project-ref="projectRef"
+        :initial-draft-ref="secretInitialDraftRef"
+        assistant
+        @close="
+          secretDialogOpen = false;
+          secretInitialDraftRef = undefined;
+        "
+      />
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
+.assistant-secret-layer {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  pointer-events: none;
+}
+.assistant-secret-layer :deep(.modal-backdrop) {
+  pointer-events: auto;
+}
 .assistant-fab {
   position: fixed;
   z-index: 42;
@@ -1973,6 +2082,61 @@ onBeforeUnmount(() => {
   .assistant-history__toggle svg:last-child,
   .assistant-drawer__header > :deep(.status-badge) {
     display: none;
+  }
+}
+.assistant-drawer.assistant-drawer--with-form {
+  right: auto;
+  width: min(35vw, 620px);
+  max-width: none;
+}
+@media (min-width: 1001px) {
+  .assistant-drawer.assistant-drawer--with-form {
+    padding-left: 0;
+  }
+  .assistant-drawer--with-form .assistant-conversation-sidebar {
+    display: none;
+  }
+  .assistant-drawer--with-form .assistant-new-conversation span,
+  .assistant-drawer--with-form .assistant-history__toggle span,
+  .assistant-drawer--with-form .assistant-history__toggle svg:last-child,
+  .assistant-drawer--with-form
+    .assistant-drawer__header
+    > :deep(.status-badge) {
+    display: none;
+  }
+}
+.assistant-form-slot {
+  position: fixed;
+  z-index: 1;
+  top: 4dvh;
+  right: 4vw;
+  bottom: 4dvh;
+  left: min(calc(4vw + min(35vw, 620px) + 12px), 48vw);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.assistant-form-slot__close {
+  position: sticky;
+  z-index: 2;
+  top: 8px;
+  left: calc(100% - 44px);
+  margin: 8px 8px -44px auto;
+  background: var(--surface);
+}
+@media (max-width: 1000px) {
+  .assistant-drawer.assistant-drawer--with-form {
+    inset: 0 0 auto;
+    width: 100%;
+    height: 42dvh;
+  }
+  .assistant-form-slot {
+    top: 42dvh;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: 0;
   }
 }
 </style>

@@ -29,6 +29,7 @@ const props = defineProps<{
   secret?: RuntimeSecret;
   initialDraftRef?: string;
   initialPlanRef?: string;
+  assistant?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -48,6 +49,7 @@ async function reauthenticate(): Promise<void> {
       projectRef: props.projectRef,
       target: draft.value ? "draft" : props.secret ? "secret" : "create",
       targetRef: draft.value?.ref ?? props.secret?.ref,
+      ...(props.assistant ? { surface: "assistant" as const } : {}),
     });
   } catch (error) {
     problem.value = safeDraftProblem(error);

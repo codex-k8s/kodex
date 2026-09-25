@@ -349,6 +349,7 @@ async function promoteCandidate(): Promise<void> {
             projectRef: target.projectRef,
             recipeRef: target.recipeRef,
           },
+          query: { assistantForm: '1' },
         }"
         @click="emit('navigate')"
       >

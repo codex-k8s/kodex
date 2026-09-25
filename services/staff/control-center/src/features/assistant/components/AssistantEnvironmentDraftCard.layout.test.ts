@@ -23,7 +23,9 @@ describe("AssistantEnvironmentDraftCard", () => {
     expect(source).toContain('name: "runtime-environment-new"');
     expect(source).toContain('name: "runtime-environment"');
     expect(source).toContain("environmentRef: current.environmentRef");
-    expect(source).toContain("query: { draftRef: exact.draftRef }");
+    expect(source).toContain(
+      'query: { draftRef: exact.draftRef, assistantForm: "1" }',
+    );
     expect(source).toContain("emit('navigate')");
   });
 

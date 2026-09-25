@@ -450,11 +450,14 @@ export const useSessionStore = defineStore("session", () => {
     projectRef: string;
     target: "create" | "draft" | "secret";
     targetRef?: string;
+    surface?: "assistant";
   }): Promise<void> {
     const intent = createRuntimeSecretDraftIntent(
       input.projectRef,
       input.target,
       input.targetRef,
+      Date.now(),
+      input.surface,
     );
     window.sessionStorage.setItem(
       oidcReauthIntentStorageKey,
@@ -472,11 +475,14 @@ export const useSessionStore = defineStore("session", () => {
     environmentRef?: string;
     operation: RuntimeEnvironmentPolicyOperation;
     projectRef: string;
+    surface?: "assistant";
   }): Promise<void> {
     const intent = createRuntimeEnvironmentPolicyIntent(
       input.projectRef,
       input.operation,
       input.environmentRef,
+      Date.now(),
+      input.surface,
     );
     pendingRuntimeSecretRevealState.value = undefined;
     window.sessionStorage.removeItem(

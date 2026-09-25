@@ -6,6 +6,7 @@ import RoleImageEditor from "@/features/role-images/RoleImageEditor.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 
 const route = useRoute();
+const assistantForm = computed(() => route.query.assistantForm === "1");
 const projectRef = computed(() => String(route.params.projectRef));
 const recipeRef = computed(() => {
   const value = route.params.recipeRef;
@@ -14,18 +15,20 @@ const recipeRef = computed(() => {
 </script>
 
 <template>
-  <PageFrame
-    :title="recipeRef ? $t('roleImages.editorTitle') : $t('roleImages.new')"
-    :subtitle="$t('roleImages.editorSubtitle')"
-  >
-    <template #actions>
-      <RouterLink
-        class="button"
-        :to="`/projects/${encodeURIComponent(projectRef)}/role-images`"
-      >
-        {{ $t("roleImages.backToCatalog") }}
-      </RouterLink>
-    </template>
-    <RoleImageEditor :project-ref="projectRef" :recipe-ref="recipeRef" />
-  </PageFrame>
+  <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
+    <PageFrame
+      :title="recipeRef ? $t('roleImages.editorTitle') : $t('roleImages.new')"
+      :subtitle="$t('roleImages.editorSubtitle')"
+    >
+      <template #actions>
+        <RouterLink
+          class="button"
+          :to="`/projects/${encodeURIComponent(projectRef)}/role-images`"
+        >
+          {{ $t("roleImages.backToCatalog") }}
+        </RouterLink>
+      </template>
+      <RoleImageEditor :project-ref="projectRef" :recipe-ref="recipeRef" />
+    </PageFrame>
+  </Teleport>
 </template>
