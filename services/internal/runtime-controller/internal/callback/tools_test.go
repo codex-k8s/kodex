@@ -190,12 +190,12 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	}
 	imageProperties := byType["CREATE_ROLE_IMAGE_RECIPE"]["properties"].(map[string]any)
 	if imageProperties["projectRef"].(map[string]any)["enum"].([]string)[0] != input.ProjectRef ||
-		imageProperties["agentRef"] == nil || imageProperties["name"] == nil ||
+		imageProperties["agentRef"] == nil || imageProperties["name"] == nil || imageProperties["dockerfile"] == nil ||
 		imageProperties["agentVersion"] != nil || imageProperties["secretValue"] != nil {
 		t.Fatalf("role image schema exposed owner fields or lost project binding: %#v", imageProperties)
 	}
 	updateImageProperties := byType["UPDATE_ROLE_IMAGE_RECIPE"]["properties"].(map[string]any)
-	if updateImageProperties["recipeRef"] == nil || updateImageProperties["name"] == nil ||
+	if updateImageProperties["recipeRef"] == nil || updateImageProperties["name"] == nil || updateImageProperties["dockerfile"] == nil ||
 		updateImageProperties["agentRef"] != nil || updateImageProperties["secretValue"] != nil {
 		t.Fatalf("role image update schema exposed owner fields: %#v", updateImageProperties)
 	}

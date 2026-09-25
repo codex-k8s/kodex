@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v28" {
+	if CorePromptRevision != "system-assistant-core-v30" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -28,26 +28,37 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"BIND_AGENT_RUNTIME_ENVIRONMENT",
 		"UPDATE_ROLE_IMAGE_RECIPE",
 		"[импорт OpenAPI](/configurations/INTEGRATION_DEFINITION)",
-		"Создание черновика не публикует определение",
+		"Импорт создаёт только черновик",
 		"PUBLISH_INTEGRATION_DEFINITION",
 		"только `configurationRef` и `revisionRef`",
-		"Для исполнения создай отдельное подключение по поставленному шаблону `openapi-mcp`",
-		"Новые типы адаптеров вне поставленного реестра остаются недоступными",
-		"Карточка образа показывает сборку, отдельный результат допуска и публикацию",
-		"не отправляй повторную команду при неопределённом результате",
+		"отдельное подключение по поставленному шаблону `openapi-mcp`",
+		"Новые типы адаптеров вне поставленного реестра недоступны",
+		"карточка показывает сборку, допуск и публикацию",
+		"не повторяй команду при неопределённом результате",
 		"`publicValues`",
 		"`secretBindings`",
-		"только заполняют черновик",
+		"создаёт только редактируемый черновик",
 		"полный желаемый список",
-		"обычную форму окружения в чате",
-		"`secretSuggestions` — не команда создания и не привязка",
+		"обычной форме окружения, которая открывается рядом с чатом",
+		"сам `secretSuggestions` не создаёт Secret и не является привязкой",
 		"`CREATE_INSTRUCTION_DRAFT` только сохраняет черновик",
-		"предыдущая инструкция о неизменности графа устарела",
 		"Не составляй полный список `steps` или `inputFields` по памяти",
-		"После импорта предложи владельцу просмотреть созданное определение",
+		"предложи владельцу просмотреть его в штатной форме",
+		"Не переписывай его по памяти",
+		"полный Dockerfile в том же редакторе",
 	} {
 		if !strings.Contains(CorePrompt(), required) {
 			t.Fatalf("system assistant prompt does not contain required guidance %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"Граф этапов, назначенные сотрудники, входные поля и опубликованная версия остаются прежними",
+		"Пользовательский Dockerfile и Git-owned рецепт помощник не перезаписывает",
+		"Операция меняет только название, описание и ссылку на проверенный образ",
+		"Уточнение к",
+	} {
+		if strings.Contains(CorePrompt(), forbidden) {
+			t.Fatalf("system assistant prompt contains stale guidance %q", forbidden)
 		}
 	}
 }

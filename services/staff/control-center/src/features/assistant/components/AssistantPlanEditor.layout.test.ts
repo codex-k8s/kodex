@@ -82,6 +82,11 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("loadRoleEnvironmentCatalog");
     expect(source).toContain("assistant.planEditor.roleImageAgentFixed");
     expect(source).toContain("assistant.planEditor.roleImageNextSteps");
+    expect(source).toContain("<RoleImageDockerfileEditor");
+    expect(source).toContain(
+      "validateDockerfile(fieldValue(operation, 'dockerfile'))",
+    );
+    expect(source).toContain("roleImageReady(operation)");
   });
 
   it("проверяет схему подключения и не показывает ввод секрета в плане", () => {

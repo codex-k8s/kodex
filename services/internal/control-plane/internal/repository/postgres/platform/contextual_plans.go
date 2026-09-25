@@ -475,7 +475,7 @@ func (repository *Repository) assistantConnectionUpdateSnapshotMatches(ctx conte
 func rehydrateEditedAssistantRoleImage(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if original.Type != "CREATE_ROLE_IMAGE_RECIPE" || original.Key != edited.Key ||
 		original.Target.Kind != "ROLE_IMAGE_RECIPE" || edited.Parameters == nil ||
-		!onlyAssistantFields(edited.Parameters, "projectRef", "agentRef", "agentVersion", "name", "environmentKey") ||
+		!onlyAssistantFields(edited.Parameters, "projectRef", "agentRef", "agentVersion", "name", "environmentKey", "dockerfile") ||
 		assistantString(edited.Parameters, "projectRef") != assistantString(original.Parameters, "projectRef") ||
 		assistantString(edited.Parameters, "agentRef") != assistantString(original.Parameters, "agentRef") {
 		return entity.AssistantPlanOperation{}, errs.ErrForbidden
@@ -487,11 +487,12 @@ func rehydrateEditedAssistantRoleImage(original, edited entity.AssistantPlanOper
 	}
 	name := assistantString(edited.Parameters, "name")
 	environmentKey := assistantString(edited.Parameters, "environmentKey")
-	if name == "" || environmentKey == "" {
+	dockerfile, dockerfileOK := edited.Parameters["dockerfile"].(string)
+	if name == "" || environmentKey == "" || !dockerfileOK || dockerfile == "" || len(dockerfile) > 64<<10 {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	parameters := cloneAssistantFields(original.Parameters)
-	parameters["name"], parameters["environmentKey"] = name, environmentKey
+	parameters["name"], parameters["environmentKey"], parameters["dockerfile"] = name, environmentKey, dockerfile
 	edited.Parameters = parameters
 	edited.Action = "CREATE"
 	edited.Target = entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Name: name}

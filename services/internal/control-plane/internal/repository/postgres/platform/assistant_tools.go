@@ -245,7 +245,7 @@ func (repository *Repository) hydrateAssistantRoleImage(
 	ctx context.Context, tx pgx.Tx, actorScope scope, projectRef string,
 	operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
-	if projectRef == "" || !onlyAssistantFields(operation.Parameters, "projectRef", "agentRef", "name", "environmentKey") {
+	if projectRef == "" || !onlyAssistantFields(operation.Parameters, "projectRef", "agentRef", "name", "environmentKey", "dockerfile") {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	requestedProject := assistantString(operation.Parameters, "projectRef")
@@ -271,14 +271,25 @@ func (repository *Repository) hydrateAssistantRoleImage(
 		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
 	}
 	selection := entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Parameters, "environmentKey")}
+	if raw, supplied := operation.Parameters["dockerfile"]; supplied {
+		value, valid := raw.(string)
+		if !valid || len(value) > 64<<10 {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		selection.Dockerfile = value
+	}
 	if selection.EnvironmentKey == "" {
 		if repository.roleImageRecommendedSelection == nil {
 			return entity.AssistantPlanOperation{}, errs.ErrUnavailable
 		}
 		var err error
+		proposedDockerfile := selection.Dockerfile
 		selection, err = repository.roleImageRecommendedSelection()
 		if err != nil {
 			return entity.AssistantPlanOperation{}, err
+		}
+		if proposedDockerfile != "" {
+			selection.Dockerfile = proposedDockerfile
 		}
 	}
 	if repository.roleImageCatalogResolver == nil {
@@ -289,7 +300,7 @@ func (repository *Repository) hydrateAssistantRoleImage(
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	parameters := map[string]any{"projectRef": projectRef, "agentRef": agentRef, "agentVersion": agentVersion,
-		"name": name, "environmentKey": selection.EnvironmentKey}
+		"name": name, "environmentKey": selection.EnvironmentKey, "dockerfile": recipe.Dockerfile}
 	operation.Parameters = parameters
 	operation.Action = "CREATE"
 	operation.Target = entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Name: name}
@@ -741,35 +752,41 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 	case "BIND_AGENT_RUNTIME_ENVIRONMENT":
 		return assistantAgentEnvironmentBindingCommand(operation)
 	case "CREATE_ROLE_IMAGE_RECIPE":
-		if !onlyAssistantFields(operation.Input, "projectRef", "agentRef", "name", "environmentKey", "agentVersion") ||
-			!hasAssistantFields(operation.Input, "projectRef", "agentRef", "name", "environmentKey", "agentVersion") {
+		if !onlyAssistantFields(operation.Input, "projectRef", "agentRef", "name", "environmentKey", "dockerfile", "agentVersion") ||
+			!hasAssistantFields(operation.Input, "projectRef", "agentRef", "name", "environmentKey", "dockerfile", "agentVersion") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		version, versionOK := assistantInt64(operation.Input, "agentVersion")
+		dockerfile, dockerfileOK := operation.Input["dockerfile"].(string)
 		payload := command.AssistantRoleImageRecipeInput{
 			ProjectRef:   assistantString(operation.Input, "projectRef"),
 			AgentRef:     assistantString(operation.Input, "agentRef"),
 			Name:         assistantString(operation.Input, "name"),
 			AgentVersion: version,
-			Environment:  entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey")},
+			Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey"),
+				Dockerfile: dockerfile},
 		}
-		if !versionOK || version < 1 || payload.ProjectRef == "" || payload.AgentRef == "" ||
-			payload.Name == "" || len(payload.Name) > 160 || payload.Environment.EnvironmentKey == "" || len(payload.Environment.EnvironmentKey) > 96 {
+		if !versionOK || version < 1 || !dockerfileOK || dockerfile == "" || len(dockerfile) > 64<<10 ||
+			payload.ProjectRef == "" || payload.AgentRef == "" || payload.Name == "" || len(payload.Name) > 160 ||
+			payload.Environment.EnvironmentKey == "" || len(payload.Environment.EnvironmentKey) > 96 {
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateAssistantRoleImageRecipe, payload
 	case "UPDATE_ROLE_IMAGE_RECIPE":
-		if !onlyAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "expectedVersion") ||
-			!hasAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "expectedVersion") {
+		if !onlyAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "dockerfile", "expectedVersion") ||
+			!hasAssistantFields(operation.Input, "projectRef", "recipeRef", "name", "environmentKey", "dockerfile", "expectedVersion") {
 			return command.Command{}, errs.ErrInvalid
 		}
 		expected, valid := assistantInt64(operation.Input, "expectedVersion")
+		dockerfile, dockerfileOK := operation.Input["dockerfile"].(string)
 		payload := command.AssistantRoleImageUpdateInput{
 			ProjectRef: assistantString(operation.Input, "projectRef"), RecipeRef: assistantString(operation.Input, "recipeRef"),
-			Name:        assistantString(operation.Input, "name"),
-			Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey")},
+			Name: assistantString(operation.Input, "name"),
+			Environment: entity.RoleEnvironmentSelection{EnvironmentKey: assistantString(operation.Input, "environmentKey"),
+				Dockerfile: dockerfile},
 		}
-		if !valid || expected < 1 || payload.ProjectRef == "" || payload.RecipeRef == "" ||
+		if !valid || expected < 1 || !dockerfileOK || dockerfile == "" || len(dockerfile) > 64<<10 ||
+			payload.ProjectRef == "" || payload.RecipeRef == "" ||
 			payload.Name == "" || len(payload.Name) > 160 || payload.Environment.EnvironmentKey == "" || len(payload.Environment.EnvironmentKey) > 96 {
 			return command.Command{}, errs.ErrInvalid
 		}

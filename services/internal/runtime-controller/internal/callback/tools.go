@@ -272,11 +272,11 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		})),
 		assistantOperationSchema("CREATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"projectRef", "agentRef", "name"}, map[string]any{
 			"projectRef": projectRef, "agentRef": opaqueRefSchema(), "name": stringSchema(1, 160),
-			"environmentKey": stringSchema(1, 96),
+			"environmentKey": stringSchema(1, 96), "dockerfile": stringSchema(1, 65536),
 		})),
 		assistantOperationSchema("UPDATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"recipeRef"}, map[string]any{
 			"recipeRef": opaqueRefSchema(), "name": stringSchema(1, 160),
-			"environmentKey": stringSchema(1, 96),
+			"environmentKey": stringSchema(1, 96), "dockerfile": stringSchema(1, 65536),
 		})),
 		assistantOperationSchema("ARCHIVE_AGENT", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),

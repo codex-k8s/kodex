@@ -544,6 +544,11 @@ cluster_mode=readback
   --tls-mode "$tls_mode" --acme-email "$acme_email" \
   --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer"
 
+if [[ "$cluster_mode" == apply && "$tls_mode" == local-ca &&
+  "$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')" == 'https://127.0.0.1:6443' ]]; then
+  bash "$repository_root/tools/dev/reconcile-local-ingress.sh" --context "$context" --mode apply
+fi
+
 if [[ ( "$command_name" == up || "$command_name" == identity ) && "$tls_mode" == public-acme ]]; then
   "$repository_root/tools/dev/preflight-public-hosts.sh" \
     --hosts "${KODEX_DEV_PUBLIC_TLS_HOSTS:-$public_host,$oidc_host}" \

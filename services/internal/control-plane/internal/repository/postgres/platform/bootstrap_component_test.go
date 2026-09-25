@@ -823,9 +823,13 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	roleCatalog, _ := promotionComponentCatalog(t)
 	repository.ConfigureRoleImageCatalog(roleCatalog)
 	roleAgent := createLifecycleAgent(t, ctx, service, owner, environmentProjectRef, "managed-role-image-agent", "Managed image role")
+	roleTemplate, err := roleCatalog.Resolve(entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"})
+	if err != nil {
+		t.Fatalf("resolve assistant image environment: %v", err)
+	}
 	assistantRecipeInput := command.AssistantRoleImageRecipeInput{ProjectRef: environmentProjectRef,
 		AgentRef: roleAgent.Ref, AgentVersion: roleAgent.Version, Name: "Assistant-managed image",
-		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"}}
+		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion", Dockerfile: roleTemplate.Dockerfile + "\n# assistant create\n"}}
 	staleRecipeInput := assistantRecipeInput
 	staleRecipeInput.AgentVersion++
 	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
@@ -858,7 +862,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	}
 	imageUpdate := command.AssistantRoleImageUpdateInput{ProjectRef: environmentProjectRef,
 		RecipeRef: assistantRecipe.CreatedRefs[0], Name: "Assistant-managed image updated",
-		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"}}
+		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion", Dockerfile: roleTemplate.Dockerfile + "\n# assistant update\n"}}
 	imageTx, err := pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		t.Fatalf("open assistant image plan snapshot: %v", err)
@@ -867,7 +871,7 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 		entity.AssistantPlanOperation{Type: "UPDATE_ROLE_IMAGE_RECIPE", Key: "image-update", Title: "Update image",
 			Summary: "Update image", Parameters: map[string]any{"recipeRef": assistantRecipe.CreatedRefs[0], "name": imageUpdate.Name}})
 	if err != nil || imageOperation.Target.Ref != assistantRecipe.CreatedRefs[0] || imageOperation.ExpectedVersion == nil ||
-		*imageOperation.ExpectedVersion != imageVersion {
+		*imageOperation.ExpectedVersion != imageVersion || assistantRoleImageDockerfile(imageOperation.Before) != assistantRecipeInput.Environment.Dockerfile {
 		_ = imageTx.Rollback(ctx)
 		t.Fatalf("hydrate assistant image update plan: operation=%#v err=%v", imageOperation, err)
 	}

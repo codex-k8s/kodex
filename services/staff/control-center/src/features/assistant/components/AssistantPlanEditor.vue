@@ -24,6 +24,8 @@ import { prepareConnectionConfiguration } from "@/features/integrations/connecti
 import { loadExactIntegrationDefinition } from "@/features/integrations/definition-lookup";
 import IntegrationPublicConfigurationFields from "@/features/integrations/ui/IntegrationPublicConfigurationFields.vue";
 import { loadRoleEnvironmentCatalog } from "@/features/role-images/api";
+import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
+import { validateDockerfile } from "@/features/role-images/model";
 import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import AgentFormFields from "@/features/platform/AgentFormFields.vue";
 import AgentProfileFields from "@/features/agents/detail/AgentProfileFields.vue";
@@ -90,6 +92,26 @@ const selectedImages = ref<Record<string, AsyncEntityOption>>({});
 const roleImageAgentNames = ref<Record<string, string>>({});
 const roleImageEnvironments = ref<RoleEnvironment[]>([]);
 const roleImageCatalogProblem = ref(false);
+function roleImageReady(operation: EditablePlanOperation): boolean {
+  if (roleImageCatalogProblem.value) return false;
+  if (
+    operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" &&
+    !roleImageAgentNames.value[fieldValue(operation, "agentRef")]
+  )
+    return false;
+  const environment = roleImageEnvironments.value.find(
+    (item) => item.key === fieldValue(operation, "environmentKey"),
+  );
+  const name = fieldValue(operation, "name").trim();
+  const dockerfile = fieldValue(operation, "dockerfile");
+  return Boolean(
+    environment?.available &&
+    name.length > 0 &&
+    name.length <= 160 &&
+    new TextEncoder().encode(dockerfile).length <= 65536 &&
+    validateDockerfile(dockerfile).length === 0,
+  );
+}
 const connectionDefinitions = ref<Record<string, IntegrationDefinition>>({});
 const connectionCatalogProblem = ref(false);
 const connectionInputs = ref<Record<string, Record<string, string>>>({});
@@ -477,7 +499,10 @@ const friendlyInputsReady = computed(() =>
         (operation.value.type !== "CHANGE_CAPABILITY" ||
           capabilityFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CHANGE_INTEGRATION_GRANT" ||
-          integrationGrantValidity.value[operation.value.ref] === true)),
+          integrationGrantValidity.value[operation.value.ref] === true) &&
+        ((operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
+          operation.value.type !== "UPDATE_ROLE_IMAGE_RECIPE") ||
+          roleImageReady(operation))),
   ),
 );
 const canSave = computed(
@@ -632,6 +657,23 @@ function setField(
     operation,
     key,
     (event.target as HTMLInputElement | HTMLTextAreaElement).value,
+  );
+}
+
+function setRoleImageEnvironment(
+  operation: EditablePlanOperation,
+  event: Event,
+): void {
+  const key = (event.target as HTMLSelectElement).value;
+  const environment = roleImageEnvironments.value.find(
+    (item) => item.key === key,
+  );
+  if (!environment?.available) return;
+  updateOperationParameter(operation, "environmentKey", key);
+  updateOperationParameter(
+    operation,
+    "dockerfile",
+    environment.dockerfileTemplate,
   );
 }
 
@@ -985,7 +1027,10 @@ function snapshot(value: string): Record<string, unknown> {
               @target="setRunTarget(operation, $event)"
             />
             <AssistantWorkflowPlanForm
-              v-else-if="operation.value.type === 'CREATE_WORKFLOW' || operation.value.type === 'UPDATE_WORKFLOW'"
+              v-else-if="
+                operation.value.type === 'CREATE_WORKFLOW' ||
+                operation.value.type === 'UPDATE_WORKFLOW'
+              "
               :operation="operation"
               :project-ref="plan.projectRef"
               :disabled="!editable"
@@ -1102,6 +1147,7 @@ function snapshot(value: string): Record<string, unknown> {
               <label
                 v-if="
                   operation.value.target.kind !== 'PROJECT' &&
+                  operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
                   operation.value.type !== 'CREATE_INSTRUCTION_DRAFT'
@@ -1336,7 +1382,7 @@ function snapshot(value: string): Record<string, unknown> {
                     $t("assistant.planEditor.roleImageAgentFixed")
                   }}</small>
                 </div>
-                <label v-else class="field">
+                <label class="field">
                   <span>{{ $t("assistant.planEditor.roleImageName") }}</span>
                   <input
                     :value="fieldValue(operation, 'name')"
@@ -1356,7 +1402,7 @@ function snapshot(value: string): Record<string, unknown> {
                       roleImageCatalogProblem ||
                       !roleImageEnvironments.length
                     "
-                    @change="setField(operation, 'environmentKey', $event)"
+                    @change="setRoleImageEnvironment(operation, $event)"
                   >
                     <option
                       v-if="
@@ -1385,6 +1431,19 @@ function snapshot(value: string): Record<string, unknown> {
                     </option>
                   </select>
                 </label>
+                <RoleImageDockerfileEditor
+                  :model-value="fieldValue(operation, 'dockerfile')"
+                  :label="$t('roleImages.dockerfile')"
+                  :validation-messages="
+                    validateDockerfile(fieldValue(operation, 'dockerfile')).map(
+                      (key) => $t(key),
+                    )
+                  "
+                  :readonly="!editable"
+                  @update:model-value="
+                    updateOperationParameter(operation, 'dockerfile', $event)
+                  "
+                />
                 <p
                   v-if="roleImageCatalogProblem"
                   class="field-error"

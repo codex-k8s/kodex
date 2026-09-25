@@ -303,7 +303,7 @@ func TestAssistantEnvironmentDraftUsesProjectBoundSpecializedCommand(t *testing.
 func TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields(t *testing.T) {
 	t.Parallel()
 	parameters := map[string]any{"projectRef": "prj_example", "agentRef": "agt_example", "agentVersion": int64(3),
-		"name": "Developer image", "environmentKey": "standard"}
+		"name": "Developer image", "environmentKey": "standard", "dockerfile": "FROM example@sha256:abc\n"}
 	operation := entity.AssistantPlanOperation{Type: "CREATE_ROLE_IMAGE_RECIPE", Key: "image-1", Title: "Developer image",
 		Summary: "Create image", Action: "CREATE", Target: entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Name: "Developer image"},
 		Parameters: parameters, Before: map[string]any{}, After: cloneAssistantFields(parameters), Selected: true}
@@ -320,7 +320,7 @@ func TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields(t *testing.T) 
 		t.Fatalf("map role image: kind=%q err=%v", mapped.Kind, err)
 	}
 	payload := mapped.Payload.(command.AssistantRoleImageRecipeInput)
-	if payload.AgentRef != "agt_example" || payload.AgentVersion != 3 || payload.Environment.EnvironmentKey != "standard" {
+	if payload.AgentRef != "agt_example" || payload.AgentVersion != 3 || payload.Environment.EnvironmentKey != "standard" || payload.Environment.Dockerfile != "FROM example@sha256:abc\n" {
 		t.Fatalf("role image lost agent snapshot: %#v", payload)
 	}
 	edited := operation
@@ -349,7 +349,7 @@ func TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields(t *testing.T) 
 func TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields(t *testing.T) {
 	t.Parallel()
 	version := int64(4)
-	before := map[string]any{"projectRef": "prj_example", "recipeRef": "imgrec_exact", "name": "Old image", "environmentKey": "standard"}
+	before := map[string]any{"projectRef": "prj_example", "recipeRef": "imgrec_exact", "name": "Old image", "environmentKey": "standard", "dockerfile": "FROM example@sha256:abc\n"}
 	after := cloneAssistantFields(before)
 	after["name"] = "New image"
 	operation := entity.AssistantPlanOperation{Type: "UPDATE_ROLE_IMAGE_RECIPE", Key: "image-update", Title: "New image",
@@ -364,7 +364,7 @@ func TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields(t *testing.T) {
 		t.Fatalf("map image update: kind=%q err=%v", mapped.Kind, err)
 	}
 	payload := mapped.Payload.(command.AssistantRoleImageUpdateInput)
-	if payload.ProjectRef != "prj_example" || payload.RecipeRef != "imgrec_exact" || payload.Name != "New image" || *mapped.Mutation.ExpectedVersion != version {
+	if payload.ProjectRef != "prj_example" || payload.RecipeRef != "imgrec_exact" || payload.Name != "New image" || payload.Environment.Dockerfile != "FROM example@sha256:abc\n" || *mapped.Mutation.ExpectedVersion != version {
 		t.Fatalf("image update lost trusted target: %#v", payload)
 	}
 	edited := operation
