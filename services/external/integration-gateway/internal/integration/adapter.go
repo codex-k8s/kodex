@@ -70,6 +70,7 @@ type Result struct {
 type SafeError struct {
 	Code          string
 	HealthSummary string
+	Transient     bool
 }
 
 func (err *SafeError) Error() string { return err.Code }
@@ -278,6 +279,12 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	request.Input, request.EffectKey = map[string]any{}, "health-check"
 	result, err := adapter.Execute(ctx, request)
 	var safe *SafeError
+	if definition.Spec.Adapter == string(integrationpackage.AdapterOpenAPIMCP) &&
+		errors.As(err, &safe) && safe.Code == "INTEGRATION_CREDENTIAL_UNAVAILABLE" && safe.Transient {
+		// Монтирование нового Kubernetes Secret может отстать от owner-команды.
+		// Повторяется только READ health-test, без внешнего WRITE-эффекта.
+		return "", &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+	}
 	if errors.As(err, &safe) && safe.Code == emailapi.HealthNotReadyCode {
 		return safe.HealthSummary, err
 	}
@@ -710,7 +717,7 @@ func (adapter *Adapter) readCredential(ctx context.Context, credential *Credenti
 			if !timer.Stop() {
 				<-timer.C
 			}
-			return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
+			return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE", Transient: true}
 		case <-timer.C:
 		}
 	}

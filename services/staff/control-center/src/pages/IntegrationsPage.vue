@@ -470,7 +470,9 @@ const requiresCredential = computed(() =>
   definitionRequiresCredential(selectedDefinition.value),
 );
 const showsCredentialInput = computed(
-  () => dialogMode.value !== "EDIT" && requiresCredential.value,
+  () =>
+    dialogMode.value === "CREDENTIAL" ||
+    (dialogMode.value !== "EDIT" && requiresCredential.value),
 );
 const preparedConfiguration = computed(() =>
   prepareConnectionConfiguration(
@@ -751,7 +753,7 @@ async function submit(): Promise<void> {
             : {}),
         },
         credentialValue: oneTimeCredential,
-        requiresCredential: requiresCredential.value,
+        requiresCredential: showsCredentialInput.value,
         ...(pendingCredential.value
           ? { pending: pendingCredential.value }
           : {}),

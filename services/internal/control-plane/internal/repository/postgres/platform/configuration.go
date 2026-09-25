@@ -455,15 +455,23 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	var item entity.IntegrationConnection
 	if input.Kind == command.ConfigureConnectionCredential {
 		credential := payload.CredentialRevision
-		var connectionID, credentialSecretKey string
+		var connectionID string
 		if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionSelectCredentialTarget,
 			scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion,
-		).Scan(&connectionID, &credentialSecretKey); errors.Is(err, pgx.ErrNoRows) {
+		).Scan(&connectionID); errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		} else if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if credentialSecretKey == "" || payload.MaterializationRef == "" || len(payload.MaterializationRef) > 128 ||
+		locked, err := repository.lockIntegrationConnection(ctx, tx, scope.organizationID, payload.Ref)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if !definition.RequiresConnectionCredential() || payload.MaterializationRef == "" || len(payload.MaterializationRef) > 128 ||
 			!validIntegrationCredentialInput(true, credential) {
 			return commandOutcome{}, errs.ErrInvalid
 		}

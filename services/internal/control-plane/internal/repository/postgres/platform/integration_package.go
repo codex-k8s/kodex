@@ -48,7 +48,7 @@ func (repository *Repository) bindIntegrationPackage(ctx context.Context, tx pgx
 			return errs.ErrUnavailable
 		}
 	}
-	tag, err := tx.Exec(ctx, queryIntegrationPackageBindConnection, current.organizationID, connectionRef, definition.Metadata.Version, definition.Digest)
+	tag, err := tx.Exec(ctx, queryIntegrationPackageBindConnection, current.organizationID, connectionRef, definition.Metadata.Version, definition.Digest, definition.RequiresConnectionCredential())
 	if err != nil || tag.RowsAffected() != 1 {
 		return errs.ErrConflict
 	}
@@ -69,6 +69,10 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 		return errs.ErrUnavailable
 	}
 	item.DefinitionName = definition.Spec.Name
+	item.CredentialSecretKey = ""
+	if definition.RequiresConnectionCredential() {
+		item.CredentialSecretKey = definition.Spec.Credential.SecretKey
+	}
 	item.Capabilities = make([]entity.IntegrationCapability, 0, len(definition.Spec.Capabilities))
 	for _, capability := range definition.Spec.Capabilities {
 		schema, err := capability.InputSchema()

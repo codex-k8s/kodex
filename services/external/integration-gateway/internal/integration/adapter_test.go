@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -168,6 +169,29 @@ func TestCredentialRevisionDigestMismatchFailsClosed(t *testing.T) {
 	credential.ContentSHA256 = strings.Repeat("0", 64)
 	if _, _, err := adapter.githubClient(t.Context(), credential); err == nil {
 		t.Fatal("githubClient() accepted credential content digest mismatch")
+	} else {
+		var safe *SafeError
+		if !errors.As(err, &safe) || safe.Transient {
+			t.Fatalf("digest mismatch was classified as transient: %v", err)
+		}
+	}
+}
+
+func TestMissingProjectedCredentialIsTransientOnlyUntilReadDeadline(t *testing.T) {
+	t.Parallel()
+	adapter := testAdapter(t)
+	credential := &CredentialRevision{
+		Ref: "icr_projected", Revision: 1,
+		SecretRef: "kodex-system/kodex-integration-credentials#not-yet-projected",
+		SecretUID: "3f18ba8c-8829-4c7f-8350-b8ed65f80d41", SecretResourceVersion: "18",
+		ContentSHA256: strings.Repeat("a", 64),
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
+	defer cancel()
+	_, err := adapter.readCredential(ctx, credential)
+	var safe *SafeError
+	if !errors.As(err, &safe) || safe.Code != "INTEGRATION_CREDENTIAL_UNAVAILABLE" || !safe.Transient {
+		t.Fatalf("projection lag was not isolated from invalid credential: %v", err)
 	}
 }
 

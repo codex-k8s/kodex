@@ -164,7 +164,6 @@ export function canConfigureCredential(
   const nextActions = connection.nextActions as readonly string[];
   return (
     definition?.available === true &&
-    definitionRequiresCredential(definition) &&
     !connection.credentialsConfigured &&
     nextActions.includes("CONFIGURE_CREDENTIAL")
   );

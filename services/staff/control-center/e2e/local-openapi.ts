@@ -36,6 +36,19 @@ paths:
       responses:
         '201': {description: Created}
 `;
+const credentialSource = source.replace(
+  "paths:\n",
+  `components:
+  securitySchemes:
+    token:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+security:
+  - token: []
+paths:
+`,
+);
 
 interface ConfigurationResult {
   configuration: { ref: string; version: number; kind: string };
@@ -91,25 +104,40 @@ interface AgentRuntimeView {
 }
 
 test.afterEach(async ({ page }) => {
-  if (process.env.KODEX_E2E_GATE_READ_REF || process.env.KODEX_E2E_OPENAPI_CANCEL_RUN_REF) return;
+  if (
+    process.env.KODEX_E2E_GATE_READ_REF ||
+    process.env.KODEX_E2E_OPENAPI_CANCEL_RUN_REF
+  )
+    return;
   if (page.url().startsWith(environment.baseURL)) {
     for (const ref of testRunRefs) {
       const run = await read<Run>(page, `/api/v1/runs/${ref}`);
       if (!["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state))
-        await mutate(page, `/api/v1/runs/${ref}/commands`, { action: "CANCEL" }, run.version);
+        await mutate(
+          page,
+          `/api/v1/runs/${ref}/commands`,
+          { action: "CANCEL" },
+          run.version,
+        );
     }
     await disablePreviousLocalOpenAPIFixtures(page);
   }
 });
 
-test("локально отменяется только собственный незавершённый OpenAPI запуск", async ({ page }) => {
+test("локально отменяется только собственный незавершённый OpenAPI запуск", async ({
+  page,
+}) => {
   const runRef = process.env.KODEX_E2E_OPENAPI_CANCEL_RUN_REF;
   test.skip(!runRef, "Нужен ref только тестового OpenAPI запуска");
   if (!runRef) throw new Error("Local OpenAPI run ref is missing");
-  await authenticateOwner(page, {
-    username: environment.ownerUsername,
-    password: environment.ownerPassword,
-  }, { mode: "local" });
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
   const run = await read<Run>(page, `/api/v1/runs/${runRef}`);
   expect(run.state).toBe("WAITING_HUMAN");
   const cancelled = await mutate<{ run: Run }>(
@@ -121,33 +149,47 @@ test("локально отменяется только собственный 
   expect(cancelled.run.state).toBe("CANCELLED");
 });
 
-test("локальное чтение OpenAPI Human Gate сохраняет выбранные параметры", async ({ page }) => {
+test("локальное чтение OpenAPI Human Gate сохраняет выбранные параметры", async ({
+  page,
+}) => {
   const gateRef = process.env.KODEX_E2E_GATE_READ_REF;
   test.skip(!gateRef, "Нужен ref только тестового открытого Human Gate");
   if (!gateRef) throw new Error("Local OpenAPI gate ref is missing");
-  await authenticateOwner(page, {
-    username: environment.ownerUsername,
-    password: environment.ownerPassword,
-  }, { mode: "local" });
-  const gate = await read<OwnerGate & {
-    integrationIntent?: {
-      resourceScope?: { kind: string };
-      effectPreview?: {
-        approvalScope?: { selected?: Array<{ path: string; type: string }> };
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  const gate = await read<
+    OwnerGate & {
+      integrationIntent?: {
+        resourceScope?: { kind: string };
+        effectPreview?: {
+          approvalScope?: { selected?: Array<{ path: string; type: string }> };
+        };
       };
-    };
-  }>(page, `/api/v1/owner-gates/${gateRef}`);
+    }
+  >(page, `/api/v1/owner-gates/${gateRef}`);
   expect(gate.state).toBe("OPEN");
   expect(gate.integrationIntent?.resourceScope?.kind).toBe("HTTPS_RESOURCE");
-  expect(gate.integrationIntent?.effectPreview?.approvalScope?.selected).toEqual(
-    expect.arrayContaining([expect.objectContaining({ path: "/body/marker", type: "string" })]),
+  expect(
+    gate.integrationIntent?.effectPreview?.approvalScope?.selected,
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ path: "/body/marker", type: "string" }),
+    ]),
   );
 });
 
 test("локальный OpenAPI импорт, первая привязка и HTTPS test", async ({
   page,
 }) => {
-  test.setTimeout(process.env.KODEX_E2E_OPENAPI_INVOKE === "1" ? 600_000 : 240_000);
+  test.setTimeout(
+    process.env.KODEX_E2E_OPENAPI_INVOKE === "1" ? 600_000 : 240_000,
+  );
   const browserFailures: string[] = [];
   page.on("pageerror", (error) => browserFailures.push(error.name));
   page.on("response", (response) => {
@@ -309,24 +351,200 @@ test("локальный OpenAPI импорт, первая привязка и 
       };
     };
     const readKey = executable.spec.capabilities.find(
-      (item) => item.openapi?.operationId === "getHealth" && item.risk === "READ",
+      (item) =>
+        item.openapi?.operationId === "getHealth" && item.risk === "READ",
     )?.key;
     const writeKey = executable.spec.capabilities.find(
-      (item) => item.openapi?.operationId === "echoWrite" && item.risk === "WRITE",
+      (item) =>
+        item.openapi?.operationId === "echoWrite" && item.risk === "WRITE",
     )?.key;
     expect(readKey).toMatch(/^op\.[a-f0-9]{16}$/);
     expect(writeKey).toMatch(/^op\.[a-f0-9]{16}$/);
-    if (!readKey || !writeKey) throw new Error("Imported OpenAPI capabilities are missing");
+    if (!readKey || !writeKey)
+      throw new Error("Imported OpenAPI capabilities are missing");
     await verifyImportedMCPInvocation(page, connection.ref, readKey, writeKey);
   }
   expect(browserFailures).toEqual([]);
+});
+
+test("помощник ведёт к credential-форме OpenAPI без утечки синтетического ключа", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.KODEX_E2E_OPENAPI_CREDENTIAL !== "1",
+    "Синтетический ключ на локальной установке используется только явно",
+  );
+  test.setTimeout(300_000);
+  const credentialValue = `local-fixture-${randomUUID()}`;
+  const connectionName = `Локальный OpenAPI ${randomUUID().slice(0, 8)}`;
+  const leakedURLs: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes(credentialValue))
+      leakedURLs.push(new URL(request.url()).pathname);
+  });
+  await authenticateOwner(
+    page,
+    {
+      username: environment.ownerUsername,
+      password: environment.ownerPassword,
+    },
+    { mode: "local" },
+  );
+  await gotoWithRetry(
+    page,
+    "/configurations/INTEGRATION_DEFINITION?assistantImportOpen=1",
+  );
+  const importDialog = page.getByRole("dialog", {
+    name: "Импорт интеграции из OpenAPI",
+  });
+  await expect(importDialog).toBeVisible();
+  await importDialog
+    .getByLabel("Контракт OpenAPI JSON или YAML")
+    .fill(credentialSource);
+  await importDialog
+    .getByRole("button", { name: "Проверить контракт" })
+    .click();
+  const readOperation = importDialog
+    .locator(".openapi-operation")
+    .filter({ hasText: "GET /posts/1" });
+  await expect(readOperation).toBeVisible();
+  await readOperation.locator('input[type="checkbox"]').check();
+  await importDialog.locator("select").last().selectOption("getHealth");
+  await importDialog
+    .getByLabel("Название интеграции")
+    .fill(`Локальная интеграция с ключом ${randomUUID().slice(0, 8)}`);
+  const createdResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        "/api/v1/integration-definition-configurations/drafts",
+  );
+  await importDialog.getByRole("button", { name: "Создать черновик" }).click();
+  const created = await createdResponse;
+  expect(created.status()).toBe(201);
+  const draft = (await created.json()) as ConfigurationResult;
+  const validated = await mutate<ConfigurationResult>(
+    page,
+    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/validation`,
+    undefined,
+    draft.configuration.version,
+  );
+  expect(validated.revision.state).toBe("VALID");
+  const published = await mutate<ConfigurationResult>(
+    page,
+    `/api/v1/integration-definition-configurations/${draft.configuration.ref}/revisions/${draft.revision.ref}/publication`,
+    undefined,
+    validated.configuration.version,
+  );
+  expect(published.revision.state).toBe("PUBLISHED");
+  const executable = JSON.parse(published.revision.content) as {
+    spec: { credential?: { secretKey: string } };
+  };
+  expect(executable.spec.credential?.secretKey).toBe("token");
+
+  const connection = await mutate<Connection>(
+    page,
+    "/api/v1/integration-connections",
+    {
+      definitionKey: "openapi-mcp",
+      name: connectionName,
+      publicConfiguration: {
+        base_url: "https://jsonplaceholder.typicode.com",
+      },
+    },
+  );
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Влияние ревизии" }).click();
+  const impactDialog = page.getByRole("dialog", { name: "Влияние ревизии" });
+  await impactDialog.getByRole("button", { name: "Новое подключение" }).click();
+  await impactDialog
+    .getByRole("option", { name: new RegExp(connectionName) })
+    .click();
+  await impactDialog
+    .getByRole("button", { name: "Привязать подключение" })
+    .click();
+  await expect(impactDialog).toHaveCount(0);
+
+  await gotoWithRetry(
+    page,
+    `/integrations?assistantCredentialRef=${connection.ref}`,
+  );
+  const credentialDialog = page
+    .getByRole("dialog")
+    .filter({ has: page.locator('input[type="password"]') });
+  await expect(credentialDialog).toBeVisible();
+  await credentialDialog
+    .locator('input[type="password"]')
+    .fill(credentialValue);
+  const configuredResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PUT" &&
+      new URL(response.url()).pathname ===
+        `/api/v1/integration-connections/${connection.ref}/credential`,
+  );
+  await credentialDialog
+    .locator('button[form="integration-form"][type="submit"]')
+    .click();
+  const configured = await configuredResponse;
+  if (configured.status() !== 200) {
+    const failure = (await configured.json()) as {
+      code?: string;
+      error?: { code?: string };
+      problem?: { code?: string };
+    };
+    throw new Error(
+      `Credential configuration failed: ${String(configured.status())} ${failure.code ?? failure.error?.code ?? failure.problem?.code ?? "UNKNOWN"}`,
+    );
+  }
+  expect(
+    JSON.stringify(await configured.json()).includes(credentialValue),
+  ).toBe(false);
+  await expect(credentialDialog).toBeHidden();
+  const metadata = await read<Connection & { credentialsConfigured: boolean }>(
+    page,
+    `/api/v1/integration-connections/${connection.ref}`,
+  );
+  expect(metadata.credentialsConfigured).toBe(true);
+  expect(JSON.stringify(metadata).includes(credentialValue)).toBe(false);
+  expect(leakedURLs).toEqual([]);
+  const stored = await page.evaluate((value) => {
+    for (const storage of [window.localStorage, window.sessionStorage]) {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key && storage.getItem(key)?.includes(value)) return true;
+      }
+    }
+    return false;
+  }, credentialValue);
+  expect(stored).toBe(false);
+  const tested = await mutate<Connection>(
+    page,
+    `/api/v1/integration-connections/${connection.ref}/commands`,
+    { action: "TEST" },
+    metadata.version,
+  );
+  expect(["TESTING", "CONNECTED"]).toContain(tested.state);
+  await expect
+    .poll(
+      async () =>
+        (
+          await read<Connection>(
+            page,
+            `/api/v1/integration-connections/${connection.ref}`,
+          )
+        ).state,
+      { timeout: 100_000, intervals: [500, 2_000, 5_000] },
+    )
+    .toBe("CONNECTED");
 });
 
 async function read<T>(page: Page, path: string): Promise<T> {
   return page.evaluate(async (url) => {
     const response = await fetch(url);
     if (!response.ok)
-      throw new Error(`API read failed: ${String(response.status)} ${new URL(url, location.origin).pathname}`);
+      throw new Error(
+        `API read failed: ${String(response.status)} ${new URL(url, location.origin).pathname}`,
+      );
     return (await response.json()) as T;
   }, path);
 }
@@ -434,10 +652,16 @@ async function verifyImportedMCPInvocation(
           capability_key: capabilityKey,
           input,
         }),
-        ...(secondInput ? [
-          "После результата первого вызова выполни второй invoke_integration для:",
-          JSON.stringify({ connection_ref: connectionRef, capability_key: capabilityKey, input: secondInput }),
-        ] : []),
+        ...(secondInput
+          ? [
+              "После результата первого вызова выполни второй invoke_integration для:",
+              JSON.stringify({
+                connection_ref: connectionRef,
+                capability_key: capabilityKey,
+                input: secondInput,
+              }),
+            ]
+          : []),
         "Не меняй эти значения, скопируй обязательные version/digest/schema из каталога и заверши ответ.",
       ].join("\n"),
     });
@@ -448,18 +672,25 @@ async function verifyImportedMCPInvocation(
   await waitForRun(page, readRun.ref, "SUCCEEDED");
   await expectToolCalls(page, readRun.ref, 1);
 
-  const writeRun = await run(`Локальный OpenAPI WRITE ${suffix}`, writeKey, {
-    body: { marker: `kodex-local-${suffix}`, note: "first" },
-  }, {
-    body: { marker: `kodex-local-${suffix}`, note: "second" },
-  });
+  const writeRun = await run(
+    `Локальный OpenAPI WRITE ${suffix}`,
+    writeKey,
+    {
+      body: { marker: `kodex-local-${suffix}`, note: "first" },
+    },
+    {
+      body: { marker: `kodex-local-${suffix}`, note: "second" },
+    },
+  );
   let gate: OwnerGate | undefined;
   await expect
     .poll(
       async () => {
         const current = await read<Run>(page, `/api/v1/runs/${writeRun.ref}`);
         if (["FAILED", "CANCELLED"].includes(current.state))
-          throw new Error(`Run ended before Human Gate: ${current.safeErrorCode ?? current.state}`);
+          throw new Error(
+            `Run ended before Human Gate: ${current.safeErrorCode ?? current.state}`,
+          );
         for (const gateRef of current.gateRefs) {
           const candidate = await read<OwnerGate>(
             page,
@@ -489,7 +720,10 @@ async function verifyImportedMCPInvocation(
   expect(finalRun.gateRefs).toEqual([gate.ref]);
 }
 
-async function pinExecutableTestModel(page: Page, agentRef: string): Promise<void> {
+async function pinExecutableTestModel(
+  page: Page,
+  agentRef: string,
+): Promise<void> {
   const model = "gpt-5.6-sol";
   const accounts = await read<{ items: Array<{ ref: string; state: string }> }>(
     page,
@@ -505,7 +739,10 @@ async function pinExecutableTestModel(page: Page, agentRef: string): Promise<voi
       `/api/v1/model-capabilities?providerAccountRef=${encodeURIComponent(account.ref)}&query=${encodeURIComponent(model)}&pageSize=100`,
     );
     const capability = candidate.items.find(
-      (item) => item.id === model && item.available && item.eligibleProviderAccountRefs.includes(account.ref),
+      (item) =>
+        item.id === model &&
+        item.available &&
+        item.eligibleProviderAccountRefs.includes(account.ref),
     );
     if (candidate.catalogStatus?.state !== "READY" || !capability) continue;
     accountRef = account.ref;
@@ -513,9 +750,12 @@ async function pinExecutableTestModel(page: Page, agentRef: string): Promise<voi
     providerDefinitionKey = capability.providerDefinitionKey;
     break;
   }
-  if (!accountRef || !exact) throw new Error("No authorized account offers the local test model");
+  if (!accountRef || !exact)
+    throw new Error("No authorized account offers the local test model");
   expect(exact.catalogStatus?.state).toBe("READY");
-  expect(Date.parse(exact.catalogStatus?.expiresAt ?? "")).toBeGreaterThan(Date.now());
+  expect(Date.parse(exact.catalogStatus?.expiresAt ?? "")).toBeGreaterThan(
+    Date.now(),
+  );
   expect(exact.catalogRevision).toMatch(/^mcat_[a-f0-9]{64}$/);
   expect(exact.catalogDigest).toMatch(/^[a-f0-9]{64}$/);
   const path = `/api/v1/agents/${encodeURIComponent(agentRef)}/runtime-configuration`;
@@ -527,13 +767,15 @@ async function pinExecutableTestModel(page: Page, agentRef: string): Promise<voi
       runtimeProfileRef: current.configuration.runtimeProfileRef,
       model,
       providerPolicyMode: "FIXED",
-      providerAccounts: [{
-        accountRef,
-        weight: 1,
-        catalogRevision: exact.catalogRevision,
-        catalogDigest: exact.catalogDigest,
-        providerDefinitionKey,
-      }],
+      providerAccounts: [
+        {
+          accountRef,
+          weight: 1,
+          catalogRevision: exact.catalogRevision,
+          catalogDigest: exact.catalogDigest,
+          providerDefinitionKey,
+        },
+      ],
     },
     current.agentVersion,
     "PUT",
@@ -550,7 +792,10 @@ async function waitForRun(
     .poll(
       async () => {
         const run = await read<Run>(page, `/api/v1/runs/${runRef}`);
-        if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state) && run.state !== expected)
+        if (
+          ["SUCCEEDED", "FAILED", "CANCELLED"].includes(run.state) &&
+          run.state !== expected
+        )
           throw new Error(`Run ended with ${run.safeErrorCode ?? run.state}`);
         return run.state;
       },
@@ -559,11 +804,20 @@ async function waitForRun(
     .toBe(expected);
 }
 
-async function expectToolCalls(page: Page, runRef: string, count: number): Promise<void> {
+async function expectToolCalls(
+  page: Page,
+  runRef: string,
+  count: number,
+): Promise<void> {
   const events = await read<{
     items: Array<{
       messageKind?: string;
-      toolCall?: { tool: string; state: string; auditRef: string; safeResult?: string };
+      toolCall?: {
+        tool: string;
+        state: string;
+        auditRef: string;
+        safeResult?: string;
+      };
     }>;
   }>(page, `/api/v1/runs/${runRef}/events?afterSequence=0&limit=500`);
   const calls = events.items.filter(

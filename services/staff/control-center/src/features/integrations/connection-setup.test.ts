@@ -209,7 +209,8 @@ describe("двухфазная настройка подключения", () =>
     expect(canConfigureCredential(definition("github-token"), pending)).toBe(
       true,
     );
-    expect(canConfigureCredential(definition(), pending)).toBe(false);
+    // OpenAPI-пакет может требовать ключ, хотя поставленный шаблон его не требует.
+    expect(canConfigureCredential(definition(), pending)).toBe(true);
     expect(
       canConfigureCredential(definition("github-token"), {
         ...pending,
