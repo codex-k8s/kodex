@@ -133,6 +133,9 @@ bootstrap. Job получает суффикс digest своего манифе�
 входа ожидает существующую Job, не удаляя её. Изменившийся вход создаёт
 новую Job, forward-only миграции повторно проверяют текущее состояние БД.
 Runtime DB bootstrap в `trusted-cluster` не ожидает authority roles/schema.
+Для последующей миграции только Control Plane можно добавить
+`--workload control-plane-migrate`: остальные bootstrap Jobs и ConfigMap не
+применяются повторно. Selector допустим только с `--stage migrate`.
 
 `--stage network --mode apply` применяет только NetworkPolicy из проверенного
 render и не перезапускает StatefulSet. Это позволяет доставить точную

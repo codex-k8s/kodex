@@ -11,7 +11,7 @@ usage() {
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
     '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress]' \
-    '  [--workload <exact-core-deployment|stt-tts-service>]' >&2
+    '  [--workload <exact-core-deployment|stt-tts-service|control-plane-migrate>]' >&2
 }
 
 context=""
@@ -45,8 +45,13 @@ case "$stage" in full|data|network|migrate|supply-chain|builder-runtime|core|int
 [[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
-  [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge|stt-tts-service)$ ]] ||
-    fail 'workload selection requires an exact core deployment'
+  if [[ "$stage" == migrate ]]; then
+    [[ "$selected_workload" == control-plane-migrate ]] ||
+      fail 'migration workload selection requires control-plane-migrate'
+  else
+    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge|stt-tts-service)$ ]] ||
+      fail 'workload selection requires an exact core deployment'
+  fi
 fi
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && -d "$state_directory" &&
@@ -1381,13 +1386,14 @@ PY
     apply_render network-policies 'select(.kind == "NetworkPolicy")'
   fi
   if [[ "$stage" == migrate ]]; then
-    if [[ "$mode" == apply ]]; then
+    if [[ "$mode" == apply && -z "$selected_workload" ]]; then
       apply_render migration-configuration '
         select(.kind == "ConfigMap" and .metadata.name == "kodex-postgresql-runtime-credentials")
       '
     fi
     for job in seaweedfs-bucket-bootstrap control-plane-migrate email-bridge-migration \
       kodex-postgresql-runtime-credentials control-plane-broker-bootstrap; do
+      [[ -z "$selected_workload" || "$job" == "$selected_workload" ]] || continue
       if [[ "$mode" == apply ]]; then
         apply_job "$job"
       else
