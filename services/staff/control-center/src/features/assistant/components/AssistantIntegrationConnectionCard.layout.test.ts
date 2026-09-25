@@ -16,9 +16,8 @@ describe("AssistantIntegrationConnectionCard", () => {
   });
 
   it("передаёт только ref в защищённую форму учётных данных", () => {
-    expect(source).toContain(
-      "assistantCredentialRef: target.value.connectionRef",
-    );
+    expect(source).toContain("emit('prepareCredential', connection.ref)");
+    expect(source).toContain("refreshToken");
     expect(source).not.toContain("credentialValue");
   });
 });

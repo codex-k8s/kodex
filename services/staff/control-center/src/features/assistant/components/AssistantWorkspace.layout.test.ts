@@ -101,12 +101,39 @@ describe("AssistantWorkspace layout", () => {
     expect(template).toContain(':initial-draft-ref="secretInitialDraftRef"');
     expect(template).toContain("assistant\n");
     expect(template).toContain('v-if="open && secretDialogOpen && projectRef"');
-    expect(template).toContain(
-      ':inert="integrationImportOpen || secretDialogOpen"',
+    expect(template).toMatch(
+      /:inert="\s*integrationImportOpen\s*\|\|\s*secretDialogOpen/,
     );
     expect(composer).not.toContain("name: 'runtime-secrets'");
     expect(composer).not.toContain("credentialValue");
     expect(composer).not.toContain("secretValue");
+  });
+
+  it("не закрывает чат при защищённом вводе credential подключения", () => {
+    const credentialDialog = readFileSync(
+      new URL("./AssistantIntegrationCredentialDialog.vue", import.meta.url),
+      "utf8",
+    );
+    const manual = readFileSync(
+      new URL("../../../pages/IntegrationsPage.vue", import.meta.url),
+      "utf8",
+    );
+    expect(template).toContain(
+      '@prepare-credential="credentialConnectionRef = $event"',
+    );
+    expect(template).toContain("<AssistantIntegrationCredentialDialog");
+    expect(template).toMatch(
+      /:inert="\s*integrationImportOpen\s*\|\|\s*secretDialogOpen\s*\|\|\s*Boolean\(credentialConnectionRef\)/,
+    );
+    expect(credentialDialog).toContain("getIntegrationConnection");
+    expect(credentialDialog).toContain("canConfigureCredential");
+    expect(credentialDialog).toContain(
+      "fresh.version !== connection.value.version",
+    );
+    expect(credentialDialog).toContain('credentialValue.value = ""');
+    expect(credentialDialog).toContain("<IntegrationCredentialField");
+    expect(manual).toContain("<IntegrationCredentialField");
+    expect(credentialDialog).not.toContain("assistantCredentialRef");
   });
 
   it("показывает ручные редакторы окружения, образа и процесса рядом с чатом", () => {

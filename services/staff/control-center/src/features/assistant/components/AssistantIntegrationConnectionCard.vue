@@ -14,8 +14,15 @@ import type {
 import { unwrap } from "@/shared/api/problem";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
-const emit = defineEmits<{ navigate: [] }>();
+const props = defineProps<{
+  plan: AssistantPlan;
+  operationRef: string;
+  refreshToken?: number;
+}>();
+const emit = defineEmits<{
+  navigate: [];
+  prepareCredential: [connectionRef: string];
+}>();
 const target = computed(() =>
   assistantIntegrationConnectionTarget(props.plan, props.operationRef),
 );
@@ -27,9 +34,6 @@ const needsCredential = computed(() =>
 );
 const destination = computed(() => ({
   name: "integrations",
-  ...(needsCredential.value && target.value
-    ? { query: { assistantCredentialRef: target.value.connectionRef } }
-    : {}),
 }));
 let refresh: (() => Promise<void>) | undefined;
 
@@ -86,6 +90,10 @@ watch(
   },
   { immediate: true },
 );
+watch(
+  () => props.refreshToken,
+  () => void refresh?.(),
+);
 </script>
 
 <template>
@@ -120,20 +128,22 @@ watch(
       >
         {{ $t("common.refresh") }}
       </button>
+      <button
+        v-if="connection && needsCredential"
+        class="button button--primary"
+        type="button"
+        :disabled="loading"
+        @click="emit('prepareCredential', connection.ref)"
+      >
+        {{ $t("assistant.connection.openCredential") }}
+      </button>
       <RouterLink
-        v-if="connection"
+        v-else-if="connection"
         class="button button--primary"
         :to="destination"
         @click="emit('navigate')"
+        >{{ $t("assistant.connection.open") }}</RouterLink
       >
-        {{
-          $t(
-            needsCredential
-              ? "assistant.connection.openCredential"
-              : "assistant.connection.open",
-          )
-        }}
-      </RouterLink>
     </div>
   </section>
 </template>

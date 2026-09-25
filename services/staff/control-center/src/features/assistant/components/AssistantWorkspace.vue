@@ -31,6 +31,7 @@ import AssistantAgentEnvironmentBindingCard from "@/features/assistant/component
 import AssistantCreatedWorkflowCard from "@/features/assistant/components/AssistantCreatedWorkflowCard.vue";
 import AssistantEnvironmentDraftCard from "@/features/assistant/components/AssistantEnvironmentDraftCard.vue";
 import AssistantIntegrationConnectionCard from "@/features/assistant/components/AssistantIntegrationConnectionCard.vue";
+import AssistantIntegrationCredentialDialog from "@/features/assistant/components/AssistantIntegrationCredentialDialog.vue";
 import AssistantLaunchedRunCard from "@/features/assistant/components/AssistantLaunchedRunCard.vue";
 import AssistantRoleImageBuildCard from "@/features/assistant/components/AssistantRoleImageBuildCard.vue";
 import { OpenAPIImportDialog } from "@/features/managed-configurations";
@@ -109,6 +110,8 @@ const historyOpen = ref(false);
 const contextOpen = ref(false);
 const integrationImportOpen = ref(false);
 const secretDialogOpen = ref(false);
+const credentialConnectionRef = ref("");
+const connectionRefreshToken = ref(0);
 const secretInitialDraftRef = ref<string>();
 const secretSuggestion = ref<RuntimeSecretDraftSuggestion>();
 const createdDefinitionRef = ref<string>();
@@ -297,6 +300,7 @@ async function show(): Promise<void> {
 function close(): void {
   if (store.busy) return;
   if (secretDialogOpen.value) return;
+  if (credentialConnectionRef.value) return;
   if (assistantFormActive.value) {
     void closeAssistantForm();
     return;
@@ -744,8 +748,17 @@ onBeforeUnmount(() => {
     :role="assistantFormActive ? 'dialog' : 'presentation'"
     :aria-modal="assistantFormActive || undefined"
     :aria-label="assistantFormActive ? $t('assistant.title') : undefined"
-    :inert="integrationImportOpen || secretDialogOpen"
-    :aria-hidden="integrationImportOpen || secretDialogOpen || undefined"
+    :inert="
+      integrationImportOpen ||
+      secretDialogOpen ||
+      Boolean(credentialConnectionRef)
+    "
+    :aria-hidden="
+      integrationImportOpen ||
+      secretDialogOpen ||
+      Boolean(credentialConnectionRef) ||
+      undefined
+    "
   >
     <button
       class="assistant-overlay__backdrop"
@@ -1265,7 +1278,9 @@ onBeforeUnmount(() => {
                     :key="`connection-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
+                    :refresh-token="connectionRefreshToken"
                     @navigate="close"
+                    @prepare-credential="credentialConnectionRef = $event"
                   />
                   <AssistantCreatedScheduleCard
                     v-for="operation in turn.plan.operations.filter(
@@ -1401,6 +1416,18 @@ onBeforeUnmount(() => {
   />
   <Teleport to="body">
     <div
+      v-if="open && credentialConnectionRef"
+      class="assistant-credential-layer"
+    >
+      <AssistantIntegrationCredentialDialog
+        :connection-ref="credentialConnectionRef"
+        @close="credentialConnectionRef = ''"
+        @configured="connectionRefreshToken += 1"
+      />
+    </div>
+  </Teleport>
+  <Teleport to="body">
+    <div
       v-if="open && secretDialogOpen && projectRef"
       class="assistant-secret-layer"
     >
@@ -1425,6 +1452,15 @@ onBeforeUnmount(() => {
   z-index: 90;
   inset: 0;
   pointer-events: none;
+}
+.assistant-credential-layer {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  pointer-events: none;
+}
+.assistant-credential-layer :deep(.modal-backdrop) {
+  pointer-events: auto;
 }
 .assistant-secret-layer :deep(.modal-backdrop) {
   pointer-events: auto;

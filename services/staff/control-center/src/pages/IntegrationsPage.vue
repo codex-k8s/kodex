@@ -22,6 +22,7 @@ import { loadExactIntegrationDefinition } from "@/features/integrations/definiti
 import IntegrationApprovalPanel from "@/features/integrations/ui/IntegrationApprovalPanel.vue";
 import IntegrationCatalogPanel from "@/features/integrations/ui/IntegrationCatalogPanel.vue";
 import IntegrationPublicConfigurationFields from "@/features/integrations/ui/IntegrationPublicConfigurationFields.vue";
+import IntegrationCredentialField from "@/features/integrations/ui/IntegrationCredentialField.vue";
 import IntegrationConnectionsPanel from "@/features/integrations/ui/IntegrationConnectionsPanel.vue";
 import IntegrationGrantsPanel from "@/features/integrations/ui/IntegrationGrantsPanel.vue";
 import type { IntegrationGrantSelection } from "@/features/integrations/grant-candidates";
@@ -1265,34 +1266,17 @@ onBeforeUnmount(() => {
           <strong>{{ form.name }}</strong>
           <p>{{ $t("integrations.metadataAlreadyCreated") }}</p>
         </section>
-        <label
+        <IntegrationCredentialField
           v-if="showsCredentialInput"
-          class="field field--wide card credential-boundary"
-        >
-          <strong>{{ $t("integrations.credentials") }}</strong>
-          <code v-if="selectedDefinition.credentialSecretKey">
-            {{ selectedDefinition.credentialSecretKey }}
-          </code>
-          <span>{{ $t("integrations.credentialValue") }}</span>
-          <input
-            v-model="credentialValue"
-            type="password"
-            required
-            maxlength="16384"
-            autocomplete="new-password"
-            autocapitalize="none"
-            spellcheck="false"
-            :aria-invalid="credentialRequired"
-            aria-describedby="credential-help"
-            @input="credentialChanged"
-          />
-          <small id="credential-help">
-            {{ $t("integrations.credentialValueHelp") }}
-          </small>
-          <small v-if="credentialRequired" class="field-error">
-            {{ $t("integrations.credentialRequired") }}
-          </small>
-        </label>
+          :model-value="credentialValue"
+          :credential-secret-key="selectedDefinition.credentialSecretKey"
+          :invalid="credentialRequired"
+          :disabled="busy"
+          @update:model-value="
+            credentialValue = $event;
+            credentialChanged();
+          "
+        />
         <section
           v-else-if="dialogMode === 'EDIT'"
           class="field field--wide card credential-boundary"
