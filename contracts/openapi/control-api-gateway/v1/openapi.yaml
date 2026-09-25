@@ -7984,12 +7984,13 @@ components:
     RoleImageArtifact:
       type: object
       additionalProperties: false
-      required: [ref, version, recipeRef, recipeGeneration, manifestDigest, provenanceSha256, admissionVerdict, tools]
+      required: [ref, version, recipeRef, recipeGeneration, buildRef, manifestDigest, provenanceSha256, admissionVerdict, tools]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
         recipeRef: { $ref: '#/components/schemas/OpaqueRef' }
         recipeGeneration: { type: integer, format: int64, minimum: 1 }
+        buildRef: { $ref: '#/components/schemas/OpaqueRef' }
         manifestDigest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
         provenanceSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         promotedReference: { type: string, minLength: 1, maxLength: 1000 }

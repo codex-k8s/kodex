@@ -127,6 +127,7 @@ export async function installEnvironmentFixture(
       version: 1,
       recipeRef: "recipe_synthetic_image",
       recipeGeneration: 1,
+      buildRef: "build_synthetic_image",
       manifestDigest: digest,
       provenanceSha256: digest,
       admissionVerdict: "ACCEPTED",

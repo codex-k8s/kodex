@@ -3060,7 +3060,18 @@ const ru = {
       progress: "Сборка: {progress}%",
       loadFailed: "Не удалось получить состояние образа. Повторите обновление.",
       awaitingPromotion:
-        "Сборка завершена. Проверьте допуск и публикацию образа на его странице.",
+        "Сборка завершена. Проверьте допуск и подтвердите публикацию образа.",
+      admissionRejected:
+        "Допуск отклонён. Откройте страницу образа для подробностей.",
+      admissionUnknown:
+        "Допуск не подтверждён вовремя. Обновите состояние или откройте страницу образа.",
+      promotionPending:
+        "Публикация выполняется. Состояние обновляется автоматически.",
+      promotionUnknown:
+        "Результат публикации не подтверждён. Обновите состояние или откройте страницу образа; не повторяйте действие вслепую.",
+      promote: "Опубликовать образ",
+      promoteConfirm:
+        "Опубликовать этот допущенный образ? Он станет доступен для новых запусков.",
       ready: "Образ опубликован и готов к использованию.",
       noBuild: "Сборка не найдена. Проверьте состояние на странице образа.",
       open: "Открыть образ",
@@ -6476,7 +6487,18 @@ const en = {
       progress: "Build: {progress}%",
       loadFailed: "Could not load image status. Refresh to try again.",
       awaitingPromotion:
-        "The build is complete. Check admission and promotion on the image page.",
+        "The build is complete. Check admission and confirm image promotion.",
+      admissionRejected:
+        "Admission was rejected. Open the image page for details.",
+      admissionUnknown:
+        "Admission was not confirmed in time. Refresh status or open the image page.",
+      promotionPending:
+        "Promotion is in progress. Status updates automatically.",
+      promotionUnknown:
+        "Promotion is not confirmed. Refresh status or open the image page; do not retry blindly.",
+      promote: "Promote image",
+      promoteConfirm:
+        "Promote this admitted image? It will become available for new runs.",
       ready: "The image is promoted and ready to use.",
       noBuild: "Build not found. Check the image page for its state.",
       open: "Open image",

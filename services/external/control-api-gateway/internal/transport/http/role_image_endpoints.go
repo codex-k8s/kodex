@@ -367,7 +367,7 @@ func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageB
 func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.RoleImageArtifact {
 	result := generated.RoleImageArtifact{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
-		RecipeGeneration: int64(input.GetRecipeGeneration()), ManifestDigest: input.GetManifestDigest(),
+		RecipeGeneration: int64(input.GetRecipeGeneration()), BuildRef: input.GetBuildRef(), ManifestDigest: input.GetManifestDigest(),
 		ProvenanceSha256: input.GetProvenanceSha256(),
 		AdmissionVerdict: generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
 		Tools:            make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),

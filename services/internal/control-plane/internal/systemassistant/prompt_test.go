@@ -6,7 +6,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v21" {
+	if CorePromptRevision != "system-assistant-core-v22" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -31,6 +31,8 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"Создание черновика не публикует определение",
 		"Для исполнения создай отдельное подключение по поставленному шаблону `openapi-mcp`",
 		"Новые типы адаптеров вне поставленного реестра остаются недоступными",
+		"Карточка образа показывает сборку, отдельный результат допуска и публикацию",
+		"не отправляй повторную команду при неопределённом результате",
 	} {
 		if !strings.Contains(CorePrompt(), required) {
 			t.Fatalf("system assistant prompt does not contain required guidance %q", required)

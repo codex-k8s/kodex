@@ -213,7 +213,7 @@ func TestPublicRoleImageArtifactPreservesPromotionIdentity(t *testing.T) {
 			promotedAt := time.Date(2026, 9, 8, 13, 5, 22, 0, time.UTC)
 			artifact := &controlplanev1.ImageArtifact{
 				Ref: "imgart_12345678", Version: 1, RecipeRef: "imgrec_fixture01",
-				RecipeGeneration: 3, ManifestDigest: manifest, ProvenanceSha256: provenance,
+				RecipeGeneration: 3, BuildRef: "imgbuild_fixture01", ManifestDigest: manifest, ProvenanceSha256: provenance,
 				AdmissionVerdict: controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_ACCEPTED,
 			}
 			response := &controlplanev1.GetRoleImageRecipeResponse{Recipe: roleImageRecipeFixture()}
@@ -235,7 +235,7 @@ func TestPublicRoleImageArtifactPreservesPromotionIdentity(t *testing.T) {
 			if json.Unmarshal(detail[name], &fields) != nil {
 				t.Fatal("artifact JSON is missing")
 			}
-			expected := map[string]string{"provenanceSha256": provenance, "manifestDigest": manifest, "admissionVerdict": "ACCEPTED"}
+			expected := map[string]string{"buildRef": artifact.BuildRef, "provenanceSha256": provenance, "manifestDigest": manifest, "admissionVerdict": "ACCEPTED"}
 			if promoted {
 				expected["promotionReceiptSha256"] = receipt
 				expected["promotedReference"] = artifact.PromotedReference

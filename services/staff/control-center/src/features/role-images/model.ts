@@ -25,8 +25,10 @@ export function latestBuild(
   builds: readonly RoleImageBuild[],
 ): RoleImageBuild | undefined {
   return [...builds].sort((left, right) => {
-    const time = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+    const time = Date.parse(right.createdAt) - Date.parse(left.createdAt);
     if (time !== 0) return time;
+    const update = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+    if (update !== 0) return update;
     if (right.attempt !== left.attempt) return right.attempt - left.attempt;
     return buildStageOrder[right.stage] - buildStageOrder[left.stage];
   })[0];

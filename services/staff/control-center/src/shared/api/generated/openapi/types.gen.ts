@@ -2345,6 +2345,7 @@ export type RoleImageArtifact = {
     version: number;
     recipeRef: OpaqueRef;
     recipeGeneration: number;
+    buildRef: OpaqueRef;
     manifestDigest: string;
     provenanceSha256: string;
     promotedReference?: string;

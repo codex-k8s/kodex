@@ -26,4 +26,20 @@ describe("AssistantRoleImageBuildCard", () => {
     expect(source).toContain("assistant.roleImageBuild.stopConfirm");
     expect(source).toContain("onCleanup");
   });
+
+  it("показывает допуск и публикует только текущий допущенный артефакт один раз", () => {
+    expect(source).toContain("artifact?.buildRef === build.value.ref");
+    expect(source).toContain(
+      "artifact.recipeGeneration === build.value.recipeGeneration",
+    );
+    expect(source).toContain("candidate?.admissionVerdict");
+    expect(source).toContain("canPromoteRoleImage(recipe, artifact)");
+    expect(source).toContain("awaitingAdmission.value");
+    expect(source).toContain("admissionPolls >= 120");
+    expect(source).toContain("promotionPolls >= 120");
+    expect(source).toContain("attemptedArtifactRef.value = artifact.ref");
+    expect(source).toContain("promoteRoleImageArtifact(");
+    expect(source).toContain("receipt.imageArtifactRef !== artifact.ref");
+    expect(source).toContain("assistant.roleImageBuild.promotionUnknown");
+  });
 });

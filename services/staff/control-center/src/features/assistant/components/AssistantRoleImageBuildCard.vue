@@ -9,10 +9,12 @@ import {
 import {
   commandRoleImage,
   loadRoleImageDetail,
+  promoteRoleImageArtifact,
 } from "@/features/role-images/api";
-import { latestBuild } from "@/features/role-images/model";
+import { canPromoteRoleImage, latestBuild } from "@/features/role-images/model";
 import type {
   AssistantPlan,
+  RoleImagePromotionReceipt,
   RoleImageRecipeDetail,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -26,8 +28,50 @@ const target = computed(() =>
 const detail = ref<RoleImageRecipeDetail>();
 const loading = ref(false);
 const stopping = ref(false);
+const promoting = ref(false);
 const problem = ref(false);
+const admissionTimedOut = ref(false);
+const promotionTimedOut = ref(false);
+const promotionProblem = ref(false);
+const promotionReceipt = ref<RoleImagePromotionReceipt>();
+const attemptedArtifactRef = ref<string>();
 const build = computed(() => latestBuild(detail.value?.builds ?? []));
+const candidate = computed(() => {
+  const artifact = detail.value?.promotionCandidate;
+  return build.value?.stage === "COMPLETED" &&
+    artifact?.buildRef === build.value.ref &&
+    artifact.recipeGeneration === build.value.recipeGeneration
+    ? artifact
+    : undefined;
+});
+const currentBuildPromoted = computed(
+  () =>
+    build.value?.stage === "COMPLETED" &&
+    detail.value?.recipe.promotedImageReady === true &&
+    detail.value.activeArtifact?.buildRef === build.value.ref &&
+    detail.value.activeArtifact.recipeGeneration ===
+      build.value.recipeGeneration &&
+    (!detail.value.promotionCandidate ||
+      detail.value.promotionCandidate.ref === detail.value.activeArtifact.ref),
+);
+const promotionPending = computed(
+  () =>
+    !currentBuildPromoted.value &&
+    !promotionTimedOut.value &&
+    ["QUEUED", "PROMOTING"].includes(promotionReceipt.value?.state ?? ""),
+);
+const promotionState = computed(() =>
+  currentBuildPromoted.value
+    ? "PROMOTED"
+    : (promotionReceipt.value?.state ?? "PENDING"),
+);
+const awaitingAdmission = computed(
+  () =>
+    build.value?.stage === "COMPLETED" &&
+    !candidate.value &&
+    !currentBuildPromoted.value &&
+    !admissionTimedOut.value,
+);
 const cancellable = computed(
   () =>
     build.value &&
@@ -40,10 +84,17 @@ watch(
   (value, _previous, onCleanup) => {
     detail.value = undefined;
     problem.value = false;
+    admissionTimedOut.value = false;
+    promotionTimedOut.value = false;
+    promotionProblem.value = false;
+    promotionReceipt.value = undefined;
+    attemptedArtifactRef.value = undefined;
     if (!value) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;
+    let admissionPolls = 0;
+    let promotionPolls = 0;
     onCleanup(() => {
       controller.abort();
       if (timer) clearTimeout(timer);
@@ -76,7 +127,24 @@ watch(
         if (!controller.signal.aborted) {
           loading.value = false;
           attempts += 1;
-          if (problem.value || cancellable.value)
+          if (awaitingAdmission.value) {
+            admissionPolls += 1;
+            if (admissionPolls >= 120) admissionTimedOut.value = true;
+          } else {
+            admissionPolls = 0;
+          }
+          if (promotionPending.value) {
+            promotionPolls += 1;
+            if (promotionPolls >= 120) promotionTimedOut.value = true;
+          } else {
+            promotionPolls = 0;
+          }
+          if (
+            problem.value ||
+            cancellable.value ||
+            awaitingAdmission.value ||
+            promotionPending.value
+          )
             timer = setTimeout(
               () => void refresh?.(),
               assistantPollDelay(attempts),
@@ -117,6 +185,48 @@ async function stopBuild(): Promise<void> {
     stopping.value = false;
   }
 }
+
+async function promoteCandidate(): Promise<void> {
+  const exact = target.value;
+  const recipe = detail.value?.recipe;
+  const artifact = candidate.value;
+  if (
+    !exact ||
+    !recipe ||
+    !artifact ||
+    !canPromoteRoleImage(recipe, artifact) ||
+    promoting.value ||
+    loading.value ||
+    attemptedArtifactRef.value === artifact.ref ||
+    !window.confirm(t("assistant.roleImageBuild.promoteConfirm"))
+  )
+    return;
+  // После неопределённого ответа нельзя повторять state-changing command.
+  attemptedArtifactRef.value = artifact.ref;
+  promoting.value = true;
+  promotionProblem.value = false;
+  try {
+    const receipt = await promoteRoleImageArtifact(
+      exact.projectRef,
+      recipe,
+      artifact.ref,
+      artifact.provenanceSha256,
+    );
+    if (target.value !== exact) return;
+    if (
+      receipt.recipeRef !== recipe.ref ||
+      receipt.imageArtifactRef !== artifact.ref ||
+      receipt.provenanceSha256 !== artifact.provenanceSha256
+    )
+      throw new Error("Role image promotion receipt mismatch");
+    promotionReceipt.value = receipt;
+    await refresh?.();
+  } catch {
+    if (target.value === exact) promotionProblem.value = true;
+  } finally {
+    promoting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -143,15 +253,51 @@ async function stopBuild(): Promise<void> {
         <p v-if="build.safeErrorCode" class="assistant-build-card__problem">
           {{ build.safeErrorCode }}
         </p>
-        <p
-          v-if="
-            build.stage === 'COMPLETED' && !detail.recipe.promotedImageReady
-          "
-        >
+        <p v-if="build.stage === 'COMPLETED' && !currentBuildPromoted">
           {{ $t("assistant.roleImageBuild.awaitingPromotion") }}
         </p>
-        <p v-if="detail.recipe.promotedImageReady">
+        <p v-if="currentBuildPromoted">
           {{ $t("assistant.roleImageBuild.ready") }}
+        </p>
+        <div class="assistant-build-card__state">
+          <span>{{ $t("roleImages.admissionVerdict") }}</span>
+          <StatusBadge
+            :state="
+              candidate?.admissionVerdict ??
+              (currentBuildPromoted
+                ? detail.activeArtifact?.admissionVerdict
+                : undefined) ??
+              'PENDING'
+            "
+          />
+        </div>
+        <p
+          v-if="admissionTimedOut && !candidate && !currentBuildPromoted"
+          class="assistant-build-card__problem"
+          role="alert"
+        >
+          {{ $t("assistant.roleImageBuild.admissionUnknown") }}
+        </p>
+        <div class="assistant-build-card__state">
+          <span>{{ $t("roleImages.promotion") }}</span>
+          <StatusBadge :state="promotionState" />
+        </div>
+        <p v-if="candidate?.admissionVerdict === 'REJECTED'">
+          {{ $t("assistant.roleImageBuild.admissionRejected") }}
+        </p>
+        <p v-if="promotionPending">
+          {{ $t("assistant.roleImageBuild.promotionPending") }}
+        </p>
+        <p
+          v-if="
+            promotionProblem ||
+            promotionTimedOut ||
+            promotionReceipt?.state === 'FAILED'
+          "
+          class="assistant-build-card__problem"
+          role="alert"
+        >
+          {{ $t("assistant.roleImageBuild.promotionUnknown") }}
         </p>
       </template>
       <p v-else>{{ $t("assistant.roleImageBuild.noBuild") }}</p>
@@ -180,6 +326,21 @@ async function stopBuild(): Promise<void> {
       </RouterLink>
       <button
         v-if="
+          candidate &&
+          detail &&
+          canPromoteRoleImage(detail.recipe, candidate) &&
+          !currentBuildPromoted &&
+          attemptedArtifactRef !== candidate.ref
+        "
+        class="button button--primary"
+        type="button"
+        :disabled="promoting || loading || stopping"
+        @click="promoteCandidate"
+      >
+        {{ $t("assistant.roleImageBuild.promote") }}
+      </button>
+      <button
+        v-if="
           cancellable && detail?.recipe.nextActions.includes('CANCEL_BUILD')
         "
         class="button button--danger"
@@ -205,7 +366,8 @@ async function stopBuild(): Promise<void> {
   background: var(--panel);
 }
 .assistant-build-card header,
-.assistant-build-card__actions {
+.assistant-build-card__actions,
+.assistant-build-card__state {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

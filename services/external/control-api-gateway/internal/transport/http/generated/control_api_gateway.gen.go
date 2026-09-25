@@ -11205,6 +11205,7 @@ type RoleEnvironmentView struct {
 // RoleImageArtifact defines model for RoleImageArtifact.
 type RoleImageArtifact struct {
 	AdmissionVerdict            RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
+	BuildRef                    OpaqueRef                         `json:"buildRef"`
 	ManifestDigest              string                            `json:"manifestDigest"`
 	PromotedAt                  *Timestamp                        `json:"promotedAt,omitempty"`
 	PromotedReference           *string                           `json:"promotedReference,omitempty"`

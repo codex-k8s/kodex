@@ -162,14 +162,14 @@ test("помощник создаёт рецепт образа и показы�
       .poll(
         async () => {
           const detail = await read<RoleImageRecipeDetail>(page, path);
-          return detail.builds.at(-1)?.stage ?? "NO_BUILD";
+          return detail.builds[0]?.stage ?? "NO_BUILD";
         },
         { timeout: 60_000, intervals: [500, 1_000, 2_000] },
       )
       .toBe("CANCELLED");
     await page.waitForTimeout(2_000);
     const cancelled = await read<RoleImageRecipeDetail>(page, path);
-    expect(cancelled.builds.at(-1)?.stage).toBe("CANCELLED");
+    expect(cancelled.builds[0]?.stage).toBe("CANCELLED");
     expect(cancelled.recipe.promotedImageReady).toBe(false);
     expect(browserFailures).toEqual([]);
     return;
@@ -199,7 +199,7 @@ test("помощник создаёт рецепт образа и показы�
       async () => {
         const detail = await read<RoleImageRecipeDetail>(page, path);
         expect(detail.recipe).toMatchObject({ ref: recipeRef, projectRef });
-        const build = detail.builds.at(-1);
+        const build = detail.builds[0];
         if (!build) return "NO_BUILD";
         if (
           ["FAILED", "CANCELLED", "EXPIRED", "DEAD_LETTER"].includes(
@@ -221,12 +221,16 @@ test("помощник создаёт рецепт образа и показы�
       { timeout: 360_000, intervals: [1_000, 2_000, 5_000] },
     )
     .toBe("READY_TO_PROMOTE");
-  await recipeLink.click();
-  await expect(page).toHaveURL(
-    new RegExp(`/projects/${projectRef}/role-images/${recipeRef}$`),
-  );
-  await expect(assistant).toBeHidden({ timeout: 10_000 });
-  await (await promotionButton(page)).click({ timeout: 10_000 });
+  const promoteInChat = card.getByRole("button", {
+    name: "Опубликовать образ",
+  });
+  await expect(
+    card.locator('.assistant-build-card__state [data-state="ACCEPTED"]'),
+  ).toBeVisible();
+  await expect(promoteInChat).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  await promoteInChat.click();
+  await expect(promoteInChat).toHaveCount(0);
   await expect
     .poll(
       async () =>
@@ -235,6 +239,12 @@ test("помощник создаёт рецепт образа и показы�
       { timeout: 180_000, intervals: [1_000, 2_000, 5_000] },
     )
     .toBe(true);
+  await expect(card).toContainText(
+    "Образ опубликован и готов к использованию.",
+  );
+  await expect(
+    card.locator('.assistant-build-card__state [data-state="PROMOTED"]'),
+  ).toBeVisible();
   expect(browserFailures).toEqual([]);
 });
 

@@ -54,13 +54,14 @@ function build(overrides: Partial<RoleImageBuild> = {}): RoleImageBuild {
 }
 
 describe("role image model", () => {
-  it("выбирает последнюю попытку по readback timestamp", () => {
+  it("выбирает последнюю созданную сборку, даже если прежняя обновилась позже", () => {
     expect(
       latestBuild([
-        build(),
+        build({ updatedAt: "2026-08-29T10:05:00Z" }),
         build({
           ref: "build_2",
           attempt: 2,
+          createdAt: "2026-08-29T10:03:00Z",
           updatedAt: "2026-08-29T10:03:00Z",
         }),
       ])?.ref,
@@ -96,6 +97,7 @@ describe("role image model", () => {
       version: 1,
       recipeRef: "image_1",
       recipeGeneration: 2,
+      buildRef: "build_1",
       manifestDigest: `sha256:${"a".repeat(64)}`,
       provenanceSha256: "b".repeat(64),
       admissionVerdict: "ACCEPTED" as const,
