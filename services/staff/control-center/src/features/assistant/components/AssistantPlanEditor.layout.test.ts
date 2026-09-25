@@ -41,6 +41,30 @@ describe("AssistantPlanEditor layout", () => {
     );
   });
 
+  it("задаёт стабильные имена полям большой формы для браузерной диагностики", () => {
+    const environmentFields = readFileSync(
+      new URL(
+        "../../runtime/RuntimeEnvironmentFieldListsEditor.vue",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const environmentPolicy = readFileSync(
+      new URL(
+        "../../runtime/RuntimeEnvironmentPolicyFields.vue",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    expect(source).toContain('name="assistant-plan-summary"');
+    expect(source).toContain("assistant-operation-selected-${index}");
+    expect(source).toContain("assistant-environment-description-${index}");
+    expect(environmentFields).toContain("runtime-public-value-name-${index}");
+    expect(environmentFields).toContain("runtime-secret-binding-name-${index}");
+    expect(environmentPolicy).toContain("runtime-resource-${field.key}");
+    expect(environmentPolicy).toContain('name="runtime-read-own-execution"');
+  });
+
   it("повторно использует ручную форму профиля для изменения сотрудника", () => {
     const profile = readFileSync(
       new URL("../../agents/detail/AgentProfileFields.vue", import.meta.url),

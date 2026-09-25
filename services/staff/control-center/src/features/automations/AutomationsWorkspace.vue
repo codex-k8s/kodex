@@ -542,11 +542,20 @@ onBeforeUnmount(() => {
       <label class="automations-workspace__search">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ custom.search }}</span>
-        <input v-model="search" type="search" :placeholder="custom.search" />
+        <input
+          v-model="search"
+          name="automation-search"
+          type="search"
+          :placeholder="custom.search"
+        />
       </label>
       <label>
         <span class="sr-only">{{ $t("common.status") }}</span>
-        <select v-model="state" :aria-label="$t('common.status')">
+        <select
+          v-model="state"
+          name="automation-state"
+          :aria-label="$t('common.status')"
+        >
           <option value="CURRENT">{{ custom.currentStates }}</option>
           <option value="ALL">{{ custom.allStates }}</option>
           <option value="ACTIVE">{{ $t("states.ACTIVE") }}</option>

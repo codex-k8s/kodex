@@ -301,6 +301,7 @@ defineExpose<AttachmentComposerHandle>({ clear, finalize });
     <input
       ref="input"
       class="sr-only"
+      name="attachments"
       type="file"
       multiple
       :disabled="effectivelyDisabled"

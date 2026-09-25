@@ -904,6 +904,7 @@ function snapshot(value: string): Record<string, unknown> {
         </span>
         <VoiceTextarea
           v-model="summary"
+          name="assistant-plan-summary"
           :disabled="!editable"
           rows="3"
           maxlength="2000"
@@ -922,6 +923,7 @@ function snapshot(value: string): Record<string, unknown> {
             <label class="assistant-plan-operation__select">
               <input
                 v-model="operation.value.selected"
+                :name="`assistant-operation-selected-${index}`"
                 type="checkbox"
                 :disabled="!editable || !operation.value.permitted"
               />
@@ -971,6 +973,7 @@ function snapshot(value: string): Record<string, unknown> {
             <span>{{ $t("assistant.planEditor.operationTitle") }}</span>
             <input
               v-model="operation.value.title"
+              :name="`assistant-operation-title-${index}`"
               maxlength="300"
               :disabled="!editable"
             />
@@ -998,6 +1001,7 @@ function snapshot(value: string): Record<string, unknown> {
             </span>
             <VoiceTextarea
               v-model="operation.value.summary"
+              :name="`assistant-operation-summary-${index}`"
               rows="2"
               maxlength="2000"
               :disabled="!editable"
@@ -1027,6 +1031,7 @@ function snapshot(value: string): Record<string, unknown> {
               <span>{{ $t("assistant.planEditor.targetKind") }}</span>
               <input
                 v-model="operation.value.target.kind"
+                :name="`assistant-operation-target-kind-${index}`"
                 maxlength="120"
                 :disabled="!editable"
               />
@@ -1035,6 +1040,7 @@ function snapshot(value: string): Record<string, unknown> {
               <span>{{ $t("assistant.planEditor.targetName") }}</span>
               <input
                 v-model="operation.value.target.name"
+                :name="`assistant-operation-target-name-${index}`"
                 maxlength="300"
                 :disabled="!editable"
               />
@@ -1043,6 +1049,7 @@ function snapshot(value: string): Record<string, unknown> {
               <span>{{ $t("assistant.planEditor.targetRef") }}</span>
               <input
                 v-model="operation.value.target.ref"
+                :name="`assistant-operation-target-ref-${index}`"
                 maxlength="300"
                 :disabled="!editable"
               />
@@ -1051,6 +1058,7 @@ function snapshot(value: string): Record<string, unknown> {
               <span>{{ $t("assistant.planEditor.targetVersion") }}</span>
               <input
                 type="number"
+                :name="`assistant-operation-target-version-${index}`"
                 min="0"
                 step="1"
                 :value="operation.value.target.version"
@@ -1062,6 +1070,7 @@ function snapshot(value: string): Record<string, unknown> {
               <span>{{ $t("assistant.planEditor.expectedVersion") }}</span>
               <input
                 type="number"
+                :name="`assistant-operation-expected-version-${index}`"
                 min="0"
                 step="1"
                 :value="operation.value.expectedVersion"
@@ -1259,6 +1268,7 @@ function snapshot(value: string): Record<string, unknown> {
                 <span>{{ $t("assistant.planEditor.entityName") }}</span>
                 <input
                   :value="fieldValue(operation, 'name')"
+                  :name="`assistant-operation-name-${index}`"
                   :maxlength="
                     operation.value.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT'
                       ? 120
@@ -1283,6 +1293,7 @@ function snapshot(value: string): Record<string, unknown> {
                 <span>{{ $t("assistant.planEditor.entityPurpose") }}</span>
                 <textarea
                   :value="fieldValue(operation, 'purpose')"
+                  :name="`assistant-operation-purpose-${index}`"
                   rows="3"
                   maxlength="2000"
                   :disabled="!editable"
@@ -1318,6 +1329,7 @@ function snapshot(value: string): Record<string, unknown> {
                   }}</span>
                   <textarea
                     :value="fieldValue(operation, 'description')"
+                    :name="`assistant-environment-description-${index}`"
                     rows="3"
                     maxlength="1000"
                     :disabled="!editable"
@@ -1514,6 +1526,7 @@ function snapshot(value: string): Record<string, unknown> {
                   <span>{{ $t("assistant.planEditor.roleImageName") }}</span>
                   <input
                     :value="fieldValue(operation, 'name')"
+                    :name="`assistant-role-image-name-${index}`"
                     maxlength="160"
                     :disabled="!editable"
                     @input="setField(operation, 'name', $event)"
@@ -1525,6 +1538,7 @@ function snapshot(value: string): Record<string, unknown> {
                   }}</span>
                   <select
                     :value="fieldValue(operation, 'environmentKey')"
+                    :name="`assistant-role-image-environment-${index}`"
                     :disabled="
                       !editable ||
                       roleImageCatalogProblem ||
@@ -1626,6 +1640,7 @@ function snapshot(value: string): Record<string, unknown> {
                   <label v-for="key in initialCapabilities" :key="key">
                     <input
                       type="checkbox"
+                      :name="`assistant-agent-capability-${index}-${key}`"
                       :checked="capabilityChecked(operation, key)"
                       :disabled="!editable"
                       @change="setCapability(operation, key, $event)"
@@ -1716,6 +1731,7 @@ function snapshot(value: string): Record<string, unknown> {
             </span>
             <VoiceTextarea
               v-model="operation.parametersText"
+              :name="`assistant-operation-parameters-${index}`"
               rows="4"
               spellcheck="false"
               :disabled="!editable"
@@ -1744,6 +1760,7 @@ function snapshot(value: string): Record<string, unknown> {
               </span>
               <VoiceTextarea
                 v-model="operation.beforeText"
+                :name="`assistant-operation-before-${index}`"
                 rows="5"
                 spellcheck="false"
                 :disabled="!editable"
@@ -1767,6 +1784,7 @@ function snapshot(value: string): Record<string, unknown> {
               </span>
               <VoiceTextarea
                 v-model="operation.afterText"
+                :name="`assistant-operation-after-${index}`"
                 rows="4"
                 spellcheck="false"
                 :disabled="!editable"

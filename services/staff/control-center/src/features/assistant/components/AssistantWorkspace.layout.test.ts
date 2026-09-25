@@ -30,6 +30,14 @@ const integrationsPage = readFileSync(
   new URL("../../../pages/IntegrationsPage.vue", import.meta.url),
   "utf8",
 );
+const historyFilter = readFileSync(
+  new URL("./AssistantHistoryFilter.vue", import.meta.url),
+  "utf8",
+);
+const attachmentComposer = readFileSync(
+  new URL("../../../shared/ui/AttachmentComposer.vue", import.meta.url),
+  "utf8",
+);
 const template = source.slice(
   source.indexOf("<template>"),
   source.indexOf("<style scoped>"),
@@ -51,6 +59,13 @@ describe("AssistantWorkspace layout", () => {
     );
     expect(headerMarkup).toContain(":aria-label=\"$t('assistant.history')\"");
     expect(headerMarkup).toContain(":aria-label=\"$t('common.close')\"");
+  });
+
+  it("именует поля диалога для браузерной диагностики", () => {
+    expect(historyFilter).toContain('name="assistant-history-search"');
+    expect(historyFilter).toContain('name="assistant-history-state"');
+    expect(template).toContain('name="assistant-message"');
+    expect(attachmentComposer).toContain('name="attachments"');
   });
 
   it("открывает большую desktop модалку с отдельной колонкой истории", () => {

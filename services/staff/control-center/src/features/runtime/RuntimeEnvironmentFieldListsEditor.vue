@@ -229,6 +229,7 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
             ><span>{{ $t("runtime.variableName") }}</span
             ><input
               :value="item.name"
+              :name="`runtime-public-value-name-${index}`"
               data-environment-variable-name
               placeholder="VAR_NAME"
               :disabled="disabled"
@@ -244,6 +245,7 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
             ><span>{{ $t("runtime.nonSecretValue") }}</span
             ><input
               :value="item.value"
+              :name="`runtime-public-value-${index}`"
               maxlength="8192"
               :disabled="disabled"
               @input="
@@ -331,6 +333,7 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
             ><span>{{ $t("runtime.variableName") }}</span
             ><input
               :value="item.name"
+              :name="`runtime-secret-binding-name-${index}`"
               data-environment-secret-name
               placeholder="SECRET_NAME"
               :disabled="disabled"

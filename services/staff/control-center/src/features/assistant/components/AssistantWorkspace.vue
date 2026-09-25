@@ -1356,6 +1356,7 @@ onBeforeUnmount(() => {
                 <VoiceTextarea
                   ref="composer"
                   v-model="message"
+                  name="assistant-message"
                   rows="2"
                   maxlength="32768"
                   :aria-label="$t('assistant.message')"

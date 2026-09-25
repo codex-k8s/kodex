@@ -67,4 +67,9 @@ describe("AutomationsWorkspace lifecycle contract", () => {
     expect(source).toContain('"currentRevision" in value');
     expect(source).toContain("value.currentRevision.automationText");
   });
+
+  it("именует поля серверного фильтра для браузерной диагностики", () => {
+    expect(source).toContain('name="automation-search"');
+    expect(source).toContain('name="automation-state"');
+  });
 });

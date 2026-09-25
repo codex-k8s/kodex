@@ -156,6 +156,7 @@ function changeAccess(event: Event): void {
           <span>{{ $t(field.label) }}</span>
           <input
             type="number"
+            :name="`runtime-resource-${field.key}`"
             :value="policy.resources[field.key]"
             :min="runtimeResourceBounds[field.key].min"
             :max="runtimeResourceBounds[field.key].max"
@@ -196,6 +197,7 @@ function changeAccess(event: Event): void {
             <span>{{ $t("common.name") }}</span>
             <input
               :value="volume.name"
+              :name="`runtime-volume-name-${index}`"
               :disabled="disabled"
               placeholder="workspace-cache"
               @input="changeVolume(index, 'name', $event)"
@@ -205,6 +207,7 @@ function changeAccess(event: Event): void {
             <span>{{ $t("runtime.volumeKind") }}</span>
             <select
               :value="volume.kind"
+              :name="`runtime-volume-kind-${index}`"
               :disabled="disabled"
               @change="changeVolume(index, 'kind', $event)"
             >
@@ -220,6 +223,7 @@ function changeAccess(event: Event): void {
             <span>{{ $t("runtime.volumeSize") }}</span>
             <input
               type="number"
+              :name="`runtime-volume-size-${index}`"
               :value="volume.sizeMib"
               :min="runtimeVolumeBounds.minSizeMib"
               :max="runtimeVolumeBounds.maxSizeMib"
@@ -309,6 +313,7 @@ function changeAccess(event: Event): void {
       <label class="access-toggle">
         <input
           type="checkbox"
+          name="runtime-read-own-execution"
           :checked="policy.kubernetesAccess === 'READ_OWN_EXECUTION'"
           :disabled="disabled"
           @change="changeAccess"
@@ -369,10 +374,9 @@ function changeAccess(event: Event): void {
 }
 .volume-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(150px, 0.72fr) minmax(
-      120px,
-      0.5fr
-    ) minmax(210px, 1fr) 36px;
+  grid-template-columns:
+    minmax(160px, 1fr) minmax(150px, 0.72fr) minmax(120px, 0.5fr)
+    minmax(210px, 1fr) 36px;
   gap: 10px;
   align-items: end;
   padding: 12px;
