@@ -1656,8 +1656,15 @@ const ru = {
       targetHint: "Выберите ИИ-сотрудника или опубликованный Процесс.",
       targetTypeLabel: "Тип цели",
       titlePlaceholder: "Краткое понятное название",
-      titleRequiredHint:
-        "Название обязательно и будет видно в списке запусков.",
+      titleOptionalHint:
+        "Если оставить пустым, Kodex предложит название по цели запуска.",
+      titleWillBeSuggested: "Kodex предложит по цели запуска",
+      initiatorAndSource: "Инициатор и источник",
+      manualSource: "Control Center",
+      initiatorHint: "Полномочия будут повторно проверены при запуске.",
+      externalChannel: "Дополнительно во внешний канал",
+      externalChannelUnavailable:
+        "В Проекте нет подключённого канала уведомлений. Он настраивается как необязательная интеграция.",
       taskPlaceholder: "Опишите результат, ограничения и критерии готовности",
       taskHint:
         "Задание получит выбранный ИИ-сотрудник или координатор Процесса.",
@@ -5196,7 +5203,15 @@ const en = {
       targetHint: "Choose an AI employee or a published Process.",
       targetTypeLabel: "Target type",
       titlePlaceholder: "A short, clear title",
-      titleRequiredHint: "A title is required and will appear in the run list.",
+      titleOptionalHint:
+        "Leave this empty and Kodex will suggest a title from the run target.",
+      titleWillBeSuggested: "Kodex will suggest one from the run target",
+      initiatorAndSource: "Initiator and source",
+      manualSource: "Control Center",
+      initiatorHint: "Permissions are checked again when the run starts.",
+      externalChannel: "Also notify an external channel",
+      externalChannelUnavailable:
+        "This Project has no notification channel. It can be configured as an optional integration.",
       taskPlaceholder:
         "Describe the result, constraints, and completion criteria",
       taskHint:

@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.40
+version: 1.0.41
 updated: 2026-09-26
 ---
 
@@ -741,6 +741,20 @@ console, network и layout после reload проверены отдельно
 `PLATFORM_RESYNC_REQUIRED`, `PLATFORM_READY`, `SESSION_READY` и heartbeat, после
 чего индикатор перешёл в «Подключено»; ticket, CSRF и payload не записывались.
 
+Форма нового запуска сверена с
+`docs/design/mvp-redesign/new-run-desktop.html`. Публичный `RunInput`, gateway и
+control-plane уже допускали пустой title и назначали ему `SERVER_DEFAULT`, но
+frontend ошибочно требовал название и блокировал кнопку. Название теперь
+необязательно, summary заранее сообщает об автоматическом предложении Kodex;
+форма также показывает проверяемые сервером инициатора и источник Control
+Center, а неподключённый внешний канал остаётся видимым disabled-вариантом с
+объяснением. В live-форме выбран сотрудник и заполнена только задача: кнопка
+«Запустить» стала доступна при пустом title, но не нажималась и Run не создавался.
+Screenshot формы сохранён локально; overflow 0, console пуста, завершённых API
+4xx/5xx нет. Layout unit 4/4, typecheck, ESLint, production build и
+`git diff --check` — PASS; build сохраняет известное предупреждение о чанке
+больше 500 KiB.
+
 ## Журнал подтверждённых дефектов
 
 | Время UTC        | Экран и шаг                                                                        | Безопасный симптом / причина                                                                                                                     | Исправление и версия                                                                                                           | Адресная проверка                                                                                                               | Повтор владельца |
@@ -760,6 +774,7 @@ console, network и layout после reload проверены отдельно
 | 2026-09-25 21:36 | Runtime сотрудника → выбрать device-code аккаунт и модель                          | Разрешённые модели ошибочно сопровождались текстом «Модель недоступна»; сохранённый runtime оставался на API-key записи                          | PR #1781: причина блокировки только для disabled option; runtime v2 на `ewsdfsfsd`, `gpt-5.6-sol`, overlay v3 medium           | 6 model-catalog unit и typecheck PASS; browser save/publish/readback, console/network PASS                                      | ОЖИДАЕТ ПОВТОРА  |
 | 2026-09-25 22:18 | Process detail и все native поля общих/вложенных форм                              | Остаточные поля Process и переиспользуемых форм не имели стабильных `id/name`; статический аудит нашёл 102 системных аналога                     | PR #1781: единый `useId()`-контракт и имена динамических полей во всех Vue-шаблонах; повторный аудит `TOTAL=0`                 | 206 targeted unit и typecheck PASS; browser Process/Главная/чат/план, console/network PASS; full unit FAIL 6/1823               | ОЖИДАЕТ ПОВТОРА  |
 | 2026-09-25 22:31 | Решения → История → OpenAPI Human Gate                                             | Основной UI показывал raw operation/effect keys, JSON и digest; OpenAPI не знал фактически обслуживаемый `HTTPS_RESOURCE`                        | PR #1781: дружелюбное действие/риск/scope, техника под details; OpenAPI enum и generated Go/TS выровнены с Proto/gateway       | 2 Decisions unit, typecheck, ESLint, build, gateway tests PASS; live console/network/layout/realtime PASS; screenshot tool FAIL | ОЖИДАЕТ ПОВТОРА  |
+| 2026-09-25 22:51 | Новый запуск → сотрудник и задача без названия                                     | Frontend требовал title вопреки макету и уже действующему серверному `SERVER_DEFAULT`; источник и внешний канал не объяснялись                   | PR #1781: optional title с автопредложением, инициатор/Control Center и disabled внешний канал с причиной                      | New Run layout 4/4, typecheck, ESLint, build PASS; live empty-title enable, console/network/layout/screenshot PASS              | ОЖИДАЕТ ПОВТОРА  |
 
 При новом дефекте строка содержит ссылку на относящийся commit в PR, но не
 текст команды пользователя, секрет или полный ответ провайдера. Состояния
