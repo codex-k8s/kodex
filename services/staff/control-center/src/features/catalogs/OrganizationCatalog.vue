@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Expand, Search } from "@lucide/vue";
+import { Expand, PackageOpen, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
@@ -191,7 +191,26 @@ onBeforeUnmount(() => {
     <p v-if="loading && !items.length" role="status">
       {{ $t("common.loading") }}
     </p>
-    <p v-else-if="!items.length && !problem">{{ $t("common.empty") }}</p>
+    <div
+      v-else-if="!items.length && !problem"
+      class="organization-catalog__empty"
+    >
+      <PackageOpen :size="28" aria-hidden="true" />
+      <h2>
+        {{
+          query.trim()
+            ? $t("catalog.emptySearchTitle")
+            : $t(`catalog.emptyTitle.${kind}`)
+        }}
+      </h2>
+      <p>
+        {{
+          query.trim()
+            ? $t("catalog.emptySearchHelp")
+            : $t(`catalog.emptyHelp.${kind}`)
+        }}
+      </p>
+    </div>
     <section
       v-for="group in groups"
       :key="group.ref"
@@ -287,6 +306,34 @@ onBeforeUnmount(() => {
 }
 .organization-catalog__group {
   min-width: 0;
+}
+.organization-catalog__empty {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 28px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface);
+  text-align: center;
+}
+.organization-catalog__empty svg {
+  color: var(--accent-strong);
+}
+.organization-catalog__empty h2,
+.organization-catalog__empty p {
+  max-width: 560px;
+  margin: 0;
+}
+.organization-catalog__empty h2 {
+  color: var(--text);
+  font-size: 1rem;
+}
+.organization-catalog__empty p {
+  line-height: 1.5;
 }
 .organization-catalog__group > header {
   display: flex;

@@ -469,6 +469,30 @@ const ru = {
     secrets: "Секреты",
     members: "Участники",
     expand: "Развернуть список проекта",
+    emptySearchTitle: "Ничего не найдено",
+    emptySearchHelp: "Измените запрос или очистите поиск.",
+    emptyTitle: {
+      agents: "В Проекте пока нет ИИ-сотрудников",
+      workflows: "Создайте первый Процесс",
+      automations: "Автоматизаций пока нет",
+      environments: "Рабочих окружений пока нет",
+      secrets: "Секретов пока нет",
+      members: "Участники пока не добавлены",
+    },
+    emptyHelp: {
+      agents:
+        "Создайте сотрудника вручную или попросите Kodex подготовить заполненный план.",
+      workflows:
+        "Опишите Процесс вручную или попросите Kodex подготовить этапы и исполнителей.",
+      automations:
+        "Настройте расписание вручную или попросите Kodex подготовить автоматизацию.",
+      environments:
+        "Создайте окружение вручную или попросите Kodex подготовить образ, переменные и ограничения.",
+      secrets:
+        "Добавьте Secret через защищённую форму, когда он потребуется окружению или интеграции.",
+      members:
+        "Добавьте участника и назначьте ему минимально необходимые права.",
+    },
   },
   managed: {
     openapiImport: {
@@ -3784,6 +3808,29 @@ const en = {
     secrets: "Secrets",
     members: "Members",
     expand: "Expand project list",
+    emptySearchTitle: "Nothing found",
+    emptySearchHelp: "Change the query or clear the search field.",
+    emptyTitle: {
+      agents: "This Project has no AI employees yet",
+      workflows: "Create the first Process",
+      automations: "No automations yet",
+      environments: "No runtime environments yet",
+      secrets: "No secrets yet",
+      members: "No members have been added yet",
+    },
+    emptyHelp: {
+      agents:
+        "Create an employee manually or ask Kodex to prepare a filled plan.",
+      workflows:
+        "Describe the Process manually or ask Kodex to prepare stages and performers.",
+      automations:
+        "Configure a schedule manually or ask Kodex to prepare an automation.",
+      environments:
+        "Create an environment manually or ask Kodex to prepare its image, variables, and limits.",
+      secrets:
+        "Add a Secret through the protected form when an environment or integration needs it.",
+      members: "Add a member and assign only the required permissions.",
+    },
   },
   contextResources: {
     sourceRun: "Source run",
