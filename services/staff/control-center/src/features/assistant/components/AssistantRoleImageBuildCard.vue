@@ -92,7 +92,9 @@ const awaitingAdmission = computed(
 const cancellable = computed(
   () =>
     build.value &&
-    !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(build.value.stage),
+    !["COMPLETED", "FAILED", "CANCELLED", "EXPIRED", "DEAD_LETTER"].includes(
+      build.value.stage,
+    ),
 );
 const debuggableFailure = computed(
   () =>

@@ -244,6 +244,13 @@ describe("AssistantPlanEditor layout", () => {
     );
   });
 
+  it("объясняет причины отклонения плана, включая недоступный runtime", () => {
+    expect(source).toContain('v-if="plan.validationProblems.length"');
+    expect(source).toContain("validationProblemLabel(validationProblem)");
+    expect(source).toContain('"runtime-unavailable": "runtimeUnavailable"');
+    expect(source).toContain("assistant.planEditor.validationProblems");
+  });
+
   it("показывает тип, действие и authority результата без скрытых изменений", () => {
     expect(source).toContain("{{ operation.value.type }}");
     expect(source).toContain("{{ operation.value.action }}");

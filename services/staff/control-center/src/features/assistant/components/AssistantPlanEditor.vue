@@ -153,6 +153,14 @@ const integrationGrantValidity = ref<Record<string, boolean>>({});
 const integrationGrantTouched = ref(false);
 const inputProblem = ref("");
 const draftGeneration = ref(0);
+const validationProblemKeys: Record<string, string> = {
+  invalid: "invalid",
+  "not-permitted": "notPermitted",
+  "runtime-unavailable": "runtimeUnavailable",
+  "snapshot-conflict": "snapshotConflict",
+  "target-unavailable": "targetUnavailable",
+  "version-conflict": "versionConflict",
+};
 type EditorTarget =
   | { kind: "SUMMARY" }
   | {
@@ -794,6 +802,25 @@ function snapshot(value: string): Record<string, unknown> {
     return {};
   }
 }
+
+function validationProblemLabel(problem: string): string {
+  const match = /^operation-(\d+)-(.+)$/.exec(problem);
+  if (!match) {
+    return t("assistant.planEditor.validationProblems.unknown", {
+      code: problem,
+    });
+  }
+  const operation = match[1] ?? "?";
+  const reason = match[2] ?? "";
+  const key = validationProblemKeys[reason];
+  if (!key) {
+    return t("assistant.planEditor.validationProblems.unknownOperation", {
+      operation,
+      code: problem,
+    });
+  }
+  return t(`assistant.planEditor.validationProblems.${key}`, { operation });
+}
 </script>
 
 <template>
@@ -837,6 +864,24 @@ function snapshot(value: string): Record<string, unknown> {
       <p v-if="inputProblem" class="field-error" role="alert">
         {{ inputProblem }}
       </p>
+      <section
+        v-if="plan.validationProblems.length"
+        class="assistant-plan-validation"
+        role="alert"
+      >
+        <AlertTriangle :size="20" aria-hidden="true" />
+        <div>
+          <h3>{{ $t("assistant.planEditor.validationProblems.title") }}</h3>
+          <ul class="assistant-validation-list">
+            <li
+              v-for="validationProblem in plan.validationProblems"
+              :key="validationProblem"
+            >
+              {{ validationProblemLabel(validationProblem) }}
+            </li>
+          </ul>
+        </div>
+      </section>
 
       <section
         v-if="receipt?.outcome === 'CONFLICT'"
@@ -1864,7 +1909,7 @@ function snapshot(value: string): Record<string, unknown> {
               v-for="validationProblem in operation.value.validationProblems"
               :key="validationProblem"
             >
-              {{ validationProblem }}
+              {{ validationProblemLabel(validationProblem) }}
             </li>
           </ul>
         </article>
@@ -2268,6 +2313,23 @@ function snapshot(value: string): Record<string, unknown> {
 .field-error {
   margin: 0;
   color: var(--danger);
+}
+.assistant-plan-validation {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+  color: var(--danger);
+}
+.assistant-plan-validation h3 {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+}
+.assistant-plan-validation .assistant-validation-list {
+  padding-left: 20px;
 }
 .assistant-plan-editor__footer {
   justify-content: space-between;

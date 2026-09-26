@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.77
+version: 1.0.78
 updated: 2026-09-26
 ---
 
@@ -1423,3 +1423,18 @@ GitHub checks не считается `PASS`.
   событие «Решение принято», console errors/warnings и HTTP 4xx/5xx отсутствуют.
   Screenshot: `/tmp/kodex-human-gate-final.png`. Визуальная приёмка владельцем
   — NOT RUN.
+- Локальный негативный сценарий сборки образа доведён до terminal
+  `DEAD_LETTER` после третьей попытки с безопасными кодами
+  `INSTALLATION_FAILED`/`INSTALL_COMMAND_REJECTED`. Карточка больше не
+  предлагает отменить уже завершившуюся с ошибкой сборку и позволяет передать
+  точный безопасный журнал на диагностику без Pod logs, registry credentials и
+  Secret values. Помощник сохранил текущий диалог, предложил подходящего
+  сотрудника и подготовил отдельный `LAUNCH_RUN`, но сервер закрыто отклонил
+  запуск из-за отсутствия готового runtime. Форма плана теперь локализует все
+  серверные plan-level причины и для `runtime-unavailable` прямо предлагает
+  сначала подготовить образ и окружение либо выбрать готового исполнителя.
+  Адресные frontend unit 27/27, typecheck и `git diff --check` — PASS; после
+  reload без кэша console errors/warnings и актуальные HTTP 4xx/5xx
+  отсутствуют. Screenshots: `/tmp/kodex-build-diagnostic-plan.png`,
+  `/tmp/kodex-plan-runtime-unavailable-localized.png`. Сам диагностический
+  запуск не применён; визуальная приёмка владельцем — NOT RUN.

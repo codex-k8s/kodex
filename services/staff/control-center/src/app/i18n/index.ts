@@ -3329,6 +3329,24 @@ const ru = {
       targetVersion: "Версия объекта",
       friendlyHint:
         "Проверьте данные перед сохранением. Изменение плана требует новой проверки перед применением.",
+      validationProblems: {
+        title: "План пока нельзя применить",
+        invalid:
+          "Операция №{operation} содержит некорректные данные. Вернитесь в диалог и попросите помощника подготовить новый вариант.",
+        notPermitted:
+          "Операция №{operation} недоступна с вашими текущими полномочиями.",
+        runtimeUnavailable:
+          "Для исполнителя в операции №{operation} нет готового runtime. Сначала подготовьте и опубликуйте образ и окружение либо выберите другого готового исполнителя.",
+        snapshotConflict:
+          "Объект в операции №{operation} изменился после подготовки плана. Вернитесь в диалог и попросите новый вариант.",
+        targetUnavailable:
+          "Объект операции №{operation} больше недоступен. Выберите другой объект или попросите помощника обновить план.",
+        versionConflict:
+          "Версия объекта в операции №{operation} изменилась. Вернитесь в диалог и попросите новый вариант.",
+        unknownOperation:
+          "Операцию №{operation} пока нельзя применить. Код проверки: {code}.",
+        unknown: "План пока нельзя применить. Код проверки: {code}.",
+      },
       integrationPublicationBoundary:
         "Будет опубликована проверенная ревизия определения интеграции. Содержимое OpenAPI и секреты не передаются помощнику и не редактируются в этом плане.",
       integrationPublicationName: "Интеграция",
@@ -6928,6 +6946,24 @@ const en = {
       targetVersion: "Target version",
       friendlyHint:
         "Review the details before saving. Changes to the plan require a new validation before applying.",
+      validationProblems: {
+        title: "This plan cannot be applied yet",
+        invalid:
+          "Operation {operation} contains invalid data. Return to the conversation and ask the assistant for a new variant.",
+        notPermitted:
+          "Operation {operation} is unavailable with your current permissions.",
+        runtimeUnavailable:
+          "The executor in operation {operation} has no ready runtime. Prepare and publish an image and environment first, or choose another ready executor.",
+        snapshotConflict:
+          "The target in operation {operation} changed after this plan was prepared. Return to the conversation and request a new variant.",
+        targetUnavailable:
+          "The target for operation {operation} is no longer available. Choose another target or ask the assistant to revise the plan.",
+        versionConflict:
+          "The target version for operation {operation} changed. Return to the conversation and request a new variant.",
+        unknownOperation:
+          "Operation {operation} cannot be applied yet. Validation code: {code}.",
+        unknown: "This plan cannot be applied yet. Validation code: {code}.",
+      },
       integrationPublicationBoundary:
         "A validated integration definition revision will be published. OpenAPI content and secrets are not sent to the assistant or edited in this plan.",
       integrationPublicationName: "Integration",
