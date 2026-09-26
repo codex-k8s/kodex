@@ -2,7 +2,6 @@
 import {
   Eye,
   Link2,
-  Maximize2,
   Plus,
   RotateCw,
   Search,
@@ -57,7 +56,6 @@ const search = ref("");
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const createOpen = ref(false);
-const expanded = ref(false);
 const rotateTarget = ref<RuntimeSecret>();
 const revealTarget = ref<RuntimeSecret>();
 const revokeTarget = ref<RuntimeSecret>();
@@ -171,7 +169,6 @@ watch(
     rotateTarget.value = undefined;
     revealTarget.value = undefined;
     revokeTarget.value = undefined;
-    expanded.value = false;
     if (searchTimer) clearTimeout(searchTimer);
     search.value = "";
     void store.load(value, "", pageSize.value);
@@ -190,14 +187,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component
-    :is="expanded ? ModalDialog : 'section'"
-    class="runtime-secrets"
-    :class="{ 'runtime-secrets--expanded': expanded }"
-    :title="expanded ? $t('runtimeSecrets.secret') : undefined"
-    size="full"
-    @close="expanded = false"
-  >
+  <section class="runtime-secrets">
     <header class="runtime-secrets__toolbar">
       <label class="runtime-secrets__search" :for="searchId">
         <Search :size="17" aria-hidden="true" />
@@ -211,16 +201,6 @@ onBeforeUnmount(() => {
         />
       </label>
       <div class="runtime-secrets__toolbar-meta">
-        <button
-          v-if="!expanded && store.items.length > 0"
-          class="icon-button"
-          type="button"
-          :title="$t('catalog.expand')"
-          :aria-label="$t('catalog.expand')"
-          @click="expanded = true"
-        >
-          <Maximize2 :size="17" />
-        </button>
         <span>{{
           $t("runtimeSecrets.shown", { count: store.items.length })
         }}</span>
@@ -366,7 +346,7 @@ onBeforeUnmount(() => {
         <div v-if="store.hasMore" ref="sentinel" class="cursor-sentinel" />
       </div>
     </AsyncState>
-  </component>
+  </section>
   <ModalDialog
     v-if="details"
     :title="details.name"
@@ -533,11 +513,8 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 .runtime-secrets__scroll {
-  max-height: 526px;
+  max-height: calc(100dvh - 260px);
   overflow: auto;
-}
-.runtime-secrets--expanded .runtime-secrets__scroll {
-  max-height: calc(100dvh - 220px);
 }
 .runtime-secrets__table tbody tr {
   height: 80px;

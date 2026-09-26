@@ -102,6 +102,6 @@ describe("RuntimeSecretsWorkspace", () => {
     expect(buttonTag("Ротировать секрет CRM_TOKEN")).not.toContain("disabled");
     expect(buttonTag("Отозвать секрет CRM_TOKEN")).not.toContain("disabled");
     expect(html).not.toContain("nextAction");
-    expect(html).toContain("catalog.expand");
+    expect(html).not.toContain("catalog.expand");
   });
 });

@@ -1237,11 +1237,11 @@ const ru = {
       READINESS: "Готовность",
     },
     notPublished: "Ещё не опубликовано",
-    versionDigest: "Digest ревизии окружения",
+    versionDigest: "Хеш ревизии окружения",
     imageAndTools: "Образ и проверенные инструменты",
     imageAndToolsHelp:
       "Окружение должно закреплять exact promoted image digest и разрешать только проверенные executable.",
-    exactImage: "Точная ревизия и digest образа",
+    exactImage: "Точная ревизия и хеш образа",
     choosePromotedImage: "Выберите собранный и promoted образ",
     searchPromotedImage: "Найти promoted образ",
     promotedAndVerified: "Promoted и проверен",
@@ -1273,7 +1273,7 @@ const ru = {
     resourcesAndAccess: "Ресурсы, сеть и Kubernetes RBAC",
     resourcesAndAccessHelp:
       "Effective policy должен вычисляться сервером в пределах полномочий пользователя и admission policy.",
-    resources: "Requests и limits",
+    resources: "Запрошенные ресурсы и лимиты",
     resourcesHelp:
       "Значения задаются целыми millicores и MiB в пределах admission policy платформы.",
     cpuRequest: "CPU request, millicores",
@@ -1324,7 +1324,11 @@ const ru = {
     scopedAccessEnabled: "Scoped доступ",
     networkPolicyUnavailable:
       "API не предоставляет typed destinations и итоговый NetworkPolicy preview.",
-    kubernetesRbac: "Scoped Kubernetes RBAC",
+    kubernetesRbac: "Ограниченные права Kubernetes (RBAC)",
+    kubernetesAccessLabel: {
+      NONE: "Нет доступа к Kubernetes API",
+      READ_OWN_EXECUTION: "Чтение собственного запуска",
+    },
     kubernetesRbacHelp:
       "Профиль не выдаёт произвольный доступ и ограничен объектами текущего execution.",
     readOwnExecution: "Разрешить чтение собственного execution",
@@ -1341,7 +1345,7 @@ const ru = {
     afterPublish: "После публикации",
     effectivePolicyAfterPublish:
       "Digest-ы, точные egress rules и mount paths появятся после первой публикации.",
-    denyByDefault: "Deny-by-default",
+    denyByDefault: "Запрещено всё, кроме разрешённого",
     kubernetesNamespace: "Runtime namespace",
     effectiveEgressRules: "Egress rules",
     effectiveVolumes: "Тома",
@@ -1357,16 +1361,16 @@ const ru = {
       "Каталог показывает exact image и инструменты. Resources, network и RBAC появятся после materialization соответствующего API.",
     readiness: "Готовность окружения",
     readinessHelp:
-      "Локальные проверки отделены от server-side readiness выбранного image digest и effective policy.",
+      "Локальная проверка формы и параметров отделена от серверной проверки выбранного образа и итоговых правил доступа.",
     readinessCheck: {
-      FORM: "Основные параметры и env values",
-      SECRET_REFS: "Immutable Secret references",
-      IMAGE: "Exact promoted image",
-      TOOLS: "Разрешённые verified tools",
-      POLICY: "Typed resource, volume, network и RBAC policy",
-      REVISION: "Опубликованная immutable revision",
-      EFFECTIVE_POLICY: "Авторитетная effective policy",
-      SERVER_READINESS: "Server-side readiness",
+      FORM: "Основные параметры и переменные окружения",
+      SECRET_REFS: "Ссылки на версии секретов",
+      IMAGE: "Точный допущенный образ",
+      TOOLS: "Разрешённые проверенные инструменты",
+      POLICY: "Ресурсы, тома, сеть и права RBAC",
+      REVISION: "Опубликованная ревизия",
+      EFFECTIVE_POLICY: "Итоговые правила доступа, рассчитанные сервером",
+      SERVER_READINESS: "Серверная проверка готовности",
     },
     readinessState: {
       READY: "Готово",
@@ -1375,7 +1379,7 @@ const ru = {
     },
     safeEffectivePreview: "Безопасное представление текущей ревизии",
     safeEffectivePreviewHelp:
-      "Показывает только доступные API метаданные и никогда не включает plaintext секретов.",
+      "Показывает только доступные метаданные API и никогда не раскрывает значения секретов.",
     revisionHistoryHelp:
       "Возврат публикует новую ревизию и не изменяет старую.",
     revisionHistoryEmpty: "Опубликованных ревизий пока нет.",
@@ -5063,6 +5067,10 @@ const en = {
     networkPolicyUnavailable:
       "The API does not expose typed destinations or final NetworkPolicy preview.",
     kubernetesRbac: "Scoped Kubernetes RBAC",
+    kubernetesAccessLabel: {
+      NONE: "No Kubernetes API access",
+      READ_OWN_EXECUTION: "Read own execution",
+    },
     kubernetesRbacHelp:
       "The profile grants no arbitrary access and is limited to current execution objects.",
     readOwnExecution: "Allow reading the current execution",

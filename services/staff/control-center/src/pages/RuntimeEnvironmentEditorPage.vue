@@ -1625,7 +1625,13 @@ onBeforeUnmount(() => {
                     </div>
                     <div>
                       <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
-                      <dd>{{ input.policy.kubernetesAccess }}</dd>
+                      <dd>
+                        {{
+                          $t(
+                            `runtime.kubernetesAccessLabel.${input.policy.kubernetesAccess}`,
+                          )
+                        }}
+                      </dd>
                     </div>
                   </dl>
                   <p v-if="!publishedPolicy" class="boundary-note" role="note">
@@ -1662,9 +1668,6 @@ onBeforeUnmount(() => {
                 <h2>{{ $t("runtime.revisionHistory") }}</h2>
                 <p>{{ $t("runtime.revisionHistoryHelp") }}</p>
               </div>
-              <span v-if="current"
-                >rev {{ current.currentVersion.revision }}</span
-              >
             </div>
             <div
               v-if="versions.length"
