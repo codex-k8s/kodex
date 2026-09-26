@@ -29,8 +29,9 @@ describe("AppShell navigation", () => {
     expect(source).toContain("selectProjectRef(projectRef.value)");
     expect(source).toContain("realtime.openPlatform()");
     expect(source.indexOf("realtime.openPlatform()")).toBeLessThan(
-      source.indexOf("platform.loadGates()"),
+      source.indexOf("platform.loadPendingGateCount()"),
     );
+    expect(source).not.toContain("platform.loadGates()");
     expect(source).not.toContain("platform.loadProjects()");
     expect(source).not.toContain("]).finally(() => {");
     expect(source).not.toContain("offline-banner");

@@ -179,6 +179,7 @@ type QueryKey =
   | "runs"
   | "run"
   | "gates"
+  | "gateCount"
   | "artifacts"
   | "schedules"
   | "integrations"
@@ -233,6 +234,8 @@ export const usePlatformStore = defineStore("platform", () => {
   const graphs = reactive<Record<string, RunGraph>>({});
   const events = reactive<Record<string, Record<number, RunEvent>>>({});
   const gates = reactive<Record<string, OwnerGate>>({});
+  const pendingGateCount = ref<number>();
+  const gateCatalogRevision = ref(0);
   const artifacts = reactive<Record<string, Artifact>>({});
   const schedules = reactive<Record<string, Schedule>>({});
   const definitions = reactive<Record<string, IntegrationDefinition>>({});
@@ -816,6 +819,34 @@ export const usePlatformStore = defineStore("platform", () => {
         else replace(gates, values);
       },
     );
+  }
+
+  async function loadPendingGateCount(): Promise<void> {
+    await query(
+      "gateCount",
+      async () =>
+        (
+          await unwrap(
+            listOwnerGates({
+              query: { states: ["OPEN"], pageSize: 1 },
+              signal: requestSignal(),
+              cache: "no-store",
+            }),
+          )
+        ).data,
+      (page) => {
+        if (
+          !Number.isSafeInteger(page.total) ||
+          page.total < 0 ||
+          page.items.length !== Math.min(page.total, 1) ||
+          page.items.some((gate) => gate.state !== "OPEN")
+        )
+          throw new Error("Invalid owner gate count page");
+        pendingGateCount.value = page.total;
+        gateCatalogRevision.value += 1;
+      },
+    );
+    if (problems.gateCount) pendingGateCount.value = undefined;
   }
 
   async function loadArtifacts(projectRef: string): Promise<void> {
@@ -1660,6 +1691,8 @@ export const usePlatformStore = defineStore("platform", () => {
     gates[result.data.gate.ref] = result.data.gate;
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
+    gateCatalogRevision.value += 1;
+    void loadPendingGateCount();
     return result.data.gate;
   }
 
@@ -1864,6 +1897,7 @@ export const usePlatformStore = defineStore("platform", () => {
     switch (kind) {
       case "PROJECT":
         add("overview", () => loadOverview(projectRef));
+        add("gateCount", loadPendingGateCount);
         if (projectRef) add("project", () => loadProject(projectRef));
         break;
       case "AGENT":
@@ -1886,12 +1920,16 @@ export const usePlatformStore = defineStore("platform", () => {
         add("integrations", loadIntegrations);
         break;
       case "MEMBERSHIP":
+        pendingGateCount.value = undefined;
         add("projects", loadProjects);
+        add("gateCount", loadPendingGateCount);
         if (projectRef) add("members", () => loadMembers(projectRef));
         break;
       case "PLATFORM_MEMBERSHIP":
+        pendingGateCount.value = undefined;
         add("platformMembers", loadPlatformMembers);
         add("projects", loadProjects);
+        add("gateCount", loadPendingGateCount);
         if (projectRef) add("members", () => loadMembers(projectRef));
         break;
       case "SYSTEM_ASSISTANT":
@@ -1904,7 +1942,7 @@ export const usePlatformStore = defineStore("platform", () => {
         break;
       case "RUN":
         add("runs", () => loadRuns(projectRef));
-        add("gates", () => loadGates(projectRef));
+        add("gateCount", loadPendingGateCount);
         add("overview", () => loadOverview(projectRef));
         break;
       default:
@@ -1920,12 +1958,13 @@ export const usePlatformStore = defineStore("platform", () => {
       return platformReloadPromise;
     platformReloadScope = ownerRequestSignal();
     const reload = async (): Promise<void> => {
+      pendingGateCount.value = undefined;
       const projectRef = selectedProjectRef();
       const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
         { key: "bootstrap", run: loadBootstrap },
         { key: "overview", run: () => loadOverview(projectRef) },
         { key: "runs", run: () => loadRuns(projectRef) },
-        { key: "gates", run: () => loadGates(projectRef) },
+        { key: "gateCount", run: loadPendingGateCount },
         { key: "integrations", run: loadIntegrations },
         { key: "assistant", run: loadAssistant },
       ];
@@ -2004,6 +2043,8 @@ export const usePlatformStore = defineStore("platform", () => {
     projectCollectionActions.value = [];
     integrationDefinitionActions.value = [];
     integrationCoreReady.value = undefined;
+    pendingGateCount.value = undefined;
+    gateCatalogRevision.value = 0;
     assistant.value = undefined;
     auditEvents.value = [];
     auditNextPageToken.value = undefined;
@@ -2036,6 +2077,8 @@ export const usePlatformStore = defineStore("platform", () => {
     graphs,
     events,
     gates,
+    pendingGateCount,
+    gateCatalogRevision,
     artifacts,
     schedules,
     definitions,
@@ -2076,6 +2119,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadRuns,
     loadRun,
     loadGates,
+    loadPendingGateCount,
     loadArtifacts,
     uploadProjectArtifact,
     uploadAttachmentArtifact,

@@ -122,9 +122,7 @@ const fullBleedRunWorkspace = computed(
 const project = computed(() =>
   projectRef.value ? platform.projects[projectRef.value] : undefined,
 );
-const pendingCount = computed(
-  () => platform.gateList.filter((item) => item.state === "OPEN").length,
-);
+const pendingCount = computed(() => platform.pendingGateCount ?? 0);
 const realtimeState = computed(() =>
   resolveShellRealtimeState({
     online: online.value,
@@ -482,7 +480,7 @@ onMounted(() => {
     realtimeStarted.value = true;
     realtime.openPlatform();
     return Promise.all([
-      platform.loadGates(),
+      platform.loadPendingGateCount(),
       platform.loadBootstrap(),
     ]);
   });

@@ -429,10 +429,12 @@ watch(view, () => {
 });
 watch(
   () =>
-    platform.gateList
-      .map((gate) => `${gate.ref}:${String(gate.version)}`)
-      .sort()
-      .join("|"),
+    [
+      platform.gateCatalogRevision,
+      ...platform.gateList
+        .map((gate) => `${gate.ref}:${String(gate.version)}`)
+        .sort(),
+    ].join("|"),
   () => {
     catalog.invalidate({
       projectRef: projectFilter.value || undefined,

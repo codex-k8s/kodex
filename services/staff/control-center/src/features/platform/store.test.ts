@@ -6,6 +6,7 @@ import type {
   AuditEvent,
   IntegrationConnection,
   IntegrationDefinition,
+  OwnerGate,
   Project,
   ProjectPage,
   Run,
@@ -20,6 +21,7 @@ import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 const listProjectsMock = vi.hoisted(() => vi.fn());
 const getOverviewMock = vi.hoisted(() => vi.fn());
+const listOwnerGatesMock = vi.hoisted(() => vi.fn());
 const searchPlatformMock = vi.hoisted(() => vi.fn());
 const listAuditEventsMock = vi.hoisted(() => vi.fn());
 const getRunGraphMock = vi.hoisted(() => vi.fn());
@@ -83,6 +85,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
   >()),
   listProjects: listProjectsMock,
   getOverview: getOverviewMock,
+  listOwnerGates: listOwnerGatesMock,
   searchPlatform: searchPlatformMock,
   listAuditEvents: listAuditEventsMock,
   getRunGraph: getRunGraphMock,
@@ -128,6 +131,25 @@ function project(ref: string, version = 1): Project {
     activeRunCount: 0,
     pendingGateCount: 0,
     updatedAt: "2026-08-23T00:00:00Z",
+    nextActions: [],
+  };
+}
+
+function ownerGate(): OwnerGate {
+  return {
+    ref: "gate_synthetic",
+    version: 1,
+    projectRef: "project_synthetic",
+    runRef: "run_synthetic",
+    nodeRef: "node_synthetic",
+    title: "Проверка",
+    contextSummary: "Тестовое решение",
+    consequencesSummary: "Последствия проверяются отдельно",
+    requestedBy: { ref: "user_synthetic", displayName: "Тестовый владелец" },
+    state: "OPEN",
+    allowedDecisions: ["APPROVE"],
+    openedAt: "2026-09-26T00:00:00Z",
+    decisionConsequences: [],
     nextActions: [],
   };
 }
@@ -340,6 +362,10 @@ describe("platform store", () => {
     setActivePinia(createPinia());
     listProjectsMock.mockReset();
     getOverviewMock.mockReset();
+    listOwnerGatesMock.mockReset().mockResolvedValue({
+      data: { items: [], total: 0 },
+      response: new Response(null, { status: 200 }),
+    });
     searchPlatformMock.mockReset();
     listAuditEventsMock.mockReset();
     getRunGraphMock.mockReset();
@@ -415,6 +441,47 @@ describe("platform store", () => {
 
     expect(getOverviewMock).toHaveBeenCalledTimes(1);
     expect(listProjectsMock).not.toHaveBeenCalled();
+    expect(listOwnerGatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ query: { states: ["OPEN"], pageSize: 1 } }),
+    );
+  });
+
+  it("читает точный счётчик решений без материализации первой сотни", async () => {
+    listOwnerGatesMock.mockResolvedValueOnce({
+      data: { items: [ownerGate()], total: 17 },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadPendingGateCount();
+
+    expect(store.pendingGateCount).toBe(17);
+    expect(store.gateList).toEqual([]);
+    expect(store.gateCatalogRevision).toBe(1);
+    expect(listOwnerGatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ query: { states: ["OPEN"], pageSize: 1 } }),
+    );
+  });
+
+  it("отвергает противоречивую страницу счётчика решений", async () => {
+    listOwnerGatesMock
+      .mockResolvedValueOnce({
+        data: { items: [ownerGate()], total: 17 },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [], total: 17 },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadPendingGateCount();
+    expect(store.pendingGateCount).toBe(17);
+    await store.loadPendingGateCount();
+
+    expect(store.pendingGateCount).toBeUndefined();
+    expect(store.gateCatalogRevision).toBe(1);
+    expect(store.problems.gateCount).toBeDefined();
   });
 
   it("не позволяет старому HTTP response перезаписать новый", async () => {

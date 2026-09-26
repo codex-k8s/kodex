@@ -38,10 +38,12 @@ watch(projectRef, () => {
 onMounted(() => void load().finally(() => emit("settled")));
 watch(
   () =>
-    platform.gateList
-      .map((gate) => `${gate.ref}:${String(gate.version)}`)
-      .sort()
-      .join("|"),
+    [
+      platform.gateCatalogRevision,
+      ...platform.gateList
+        .map((gate) => `${gate.ref}:${String(gate.version)}`)
+        .sort(),
+    ].join("|"),
   () => {
     catalog.invalidate({
       projectRef: projectRef.value || undefined,
