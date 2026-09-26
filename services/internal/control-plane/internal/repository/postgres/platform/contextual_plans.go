@@ -264,6 +264,12 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 			problems = append(problems, fmt.Sprintf("operation-%d-not-permitted", index+1))
 			continue
 		}
+		if operation.Type == "LAUNCH_RUN" {
+			if readinessErr := repository.validateAssistantLaunchReadiness(ctx, tx, scope, operation); readinessErr != nil {
+				problems = append(problems, fmt.Sprintf("operation-%d-runtime-unavailable", index+1))
+				continue
+			}
+		}
 		if operation.Type == "UPDATE_AGENT" {
 			matching, snapshotErr := repository.assistantAgentUpdateSnapshotMatches(ctx, tx, scope, projectRef, operation)
 			if snapshotErr != nil || !matching {
@@ -355,6 +361,79 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 	return commandOutcome{result: command.Result{Plan: &plan}, projectID: mustProjectID(ctx, tx, scope.organizationID, projectRef),
 		projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef,
 		summary: "i18n:ASSISTANT_PLAN_VALIDATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+}
+
+func (repository *Repository) validateAssistantLaunchReadiness(
+	ctx context.Context,
+	tx pgx.Tx,
+	scope scope,
+	operation entity.AssistantPlanOperation,
+) error {
+	payload, err := assistantRun(operation.Input)
+	if err != nil {
+		return err
+	}
+	projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
+	if projectID == "" {
+		return errs.ErrNotFound
+	}
+	targetAgentRefs := []string{}
+	switch payload.Target.Type {
+	case "AGENT":
+		var targetName string
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef,
+			scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName); err != nil {
+			return errs.ErrConflict
+		}
+		targetAgentRefs = append(targetAgentRefs, payload.Target.Ref)
+	case "WORKFLOW":
+		var targetName, workflowVersionID, workflowVersionRef, workflowVersionDigest string
+		var coordinatorRef, coordinatorName string
+		var workflowSpec []byte
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"project_id":      projectID,
+			"workflow_ref":    payload.Target.Ref,
+		}).Scan(&targetName, &workflowVersionID, &workflowVersionRef, &workflowSpec,
+			&workflowVersionDigest, &coordinatorRef, &coordinatorName); err != nil {
+			return errs.ErrConflict
+		}
+		var workflowVersion entity.WorkflowVersion
+		if json.Unmarshal(workflowSpec, &workflowVersion) != nil || !validWorkflowVersion(workflowVersion) ||
+			workflowVersion.CoordinatorAgentRef != coordinatorRef {
+			return errs.ErrConflict
+		}
+		targetAgentRefs = append(targetAgentRefs, coordinatorRef)
+		for _, step := range workflowVersion.Steps {
+			targetAgentRefs = append(targetAgentRefs, step.AgentRef)
+		}
+	default:
+		return errs.ErrInvalid
+	}
+	var runtimeContractReady bool
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateAgentRuntimeContract, pgx.StrictNamedArgs{
+		"organization_id":                scope.organizationID,
+		"project_id":                     projectID,
+		"agent_refs":                     targetAgentRefs,
+		"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
+		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
+		"default_role_image_digest":      repository.roleImages.DefaultImageDigest,
+	}).Scan(&runtimeContractReady); err != nil {
+		return errs.ErrUnavailable
+	}
+	if !runtimeContractReady {
+		return errs.ErrConflict
+	}
+	if _, err = repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0]); err != nil {
+		return err
+	}
+	configuration, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, targetAgentRefs[0], "")
+	if err != nil {
+		return err
+	}
+	_, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model,
+		overlay, configuration.ProviderPolicy.AccountCandidates, false)
+	return err
 }
 
 func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx.Tx, scope scope, operation entity.AssistantPlanOperation) (int64, bool, error) {

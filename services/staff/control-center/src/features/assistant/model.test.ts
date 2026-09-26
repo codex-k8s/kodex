@@ -1170,13 +1170,17 @@ describe("assistant plan editor model", () => {
     expect(friendlyPlanOperationType(first)).toBeUndefined();
   });
 
-  it("показывает запуск процесса как форму без доверия к свободному target kind", () => {
+  it("показывает запуск процесса как форму только при совпадении target и параметров", () => {
     const editable = editableOperations([
       {
         ...operation(),
         type: "LAUNCH_RUN",
         action: "EXECUTE",
-        target: { kind: "EXECUTION", name: "Недельная сводка" },
+        target: {
+          kind: "WORKFLOW",
+          ref: "wfl_weekly",
+          name: "Недельная сводка",
+        },
         parameters: {
           projectRef: "prj_market",
           targetType: "WORKFLOW",
@@ -1196,9 +1200,33 @@ describe("assistant plan editor model", () => {
     const changed = operationInputs(editable)[0];
     expect(changed?.parameters.targetRef).toBe("wfl_weekly");
     expect(changed?.parameters.task).toBe("Проверь неделю и дай сводку");
-    expect(changed?.target.kind).toBe("EXECUTION");
+    expect(changed?.target.kind).toBe("WORKFLOW");
     first.value.target.kind = "AGENT";
     expect(friendlyPlanOperationType(first)).toBeUndefined();
+    first.value.target.kind = "WORKFLOW";
+    first.value.target.ref = "wfl_other";
+    expect(friendlyPlanOperationType(first)).toBeUndefined();
+  });
+
+  it("сохраняет дружелюбное чтение старого плана запуска с target EXECUTION", () => {
+    const [first] = editableOperations([
+      {
+        ...operation(),
+        type: "LAUNCH_RUN",
+        action: "EXECUTE",
+        target: { kind: "EXECUTION", name: "Недельная сводка" },
+        parameters: {
+          projectRef: "prj_market",
+          targetType: "AGENT",
+          targetRef: "agt_manager",
+          title: "Недельная сводка",
+          task: "Составь сводку за неделю",
+          input: {},
+        },
+        after: { state: "QUEUED" },
+      },
+    ]);
+    expect(first && friendlyPlanOperationType(first)).toBe("LAUNCH_RUN");
   });
 
   it.each([

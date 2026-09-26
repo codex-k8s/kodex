@@ -142,6 +142,7 @@ type RuntimeEnvironmentImage struct {
 	RecipeGeneration            int64  `json:"recipe_generation"`
 	RoleRuntimeContractSHA256   string `json:"-"`
 	RoleRuntimeContractRevision int64  `json:"-"`
+	PlatformOwnedBootstrap      bool   `json:"-"`
 }
 
 type RuntimeEnvironmentVersion struct {

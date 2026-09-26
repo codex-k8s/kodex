@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.73
+version: 1.0.74
 updated: 2026-09-26
 ---
 
@@ -1356,4 +1356,22 @@ GitHub checks не считается `PASS`.
   Адресные frontend unit 41/41 и typecheck — PASS; console errors/warnings и
   HTTP 4xx/5xx отсутствуют. Screenshot:
   `/tmp/kodex-assistant-role-image-update-validated.png`. Визуальная приёмка
+  владельцем — NOT RUN.
+- План запуска сотрудника или Процесса теперь открывается в дружелюбной
+  типизированной форме и проверяет совпадение точных типа и ссылки цели;
+  сохранённые планы со старым техническим `EXECUTION` остаются читаемыми.
+  Серверная проверка плана до подтверждения владельцем сверяет актуальность
+  runtime-контракта, platform-owned bootstrap image и доступность выбранного
+  каталога модели. Устаревший базовый образ выводится отдельным blocker
+  `DEFAULT_ROLE_IMAGE_STALE`, а конкурентная потеря готовности при применении
+  возвращается как runtime conflict, а не ложный version conflict. На локальном
+  стенде план запуска Project Manager применён после явного подтверждения:
+  создан запуск `run_52NoUS0YWjsFUQ1wvXTRI40V`, карточка в сохранённом чате
+  прошла состояния «Выполняется» и «Завершён», показала итог и убрала действие
+  отмены; результат доступен по штатной ссылке запуска. Адресные frontend unit
+  73/73, typecheck, ESLint, Prettier, свежие Go unit с `-count=1` и
+  `git diff --check` — PASS. После reload без кэша console errors/warnings и
+  HTTP 4xx/5xx отсутствуют; два отменённых браузером запроса относятся к
+  навигации. Screenshot:
+  `/tmp/kodex-assistant-launch-run-succeeded.png`. Визуальная приёмка
   владельцем — NOT RUN.

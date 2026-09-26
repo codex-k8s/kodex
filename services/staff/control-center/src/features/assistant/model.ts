@@ -292,34 +292,54 @@ export function friendlyPlanOperationType(
   operation: EditablePlanOperation,
 ): FriendlyPlanOperationType | undefined {
   const operationType: FriendlyPlanOperationType = operation.value.type;
+  let parameters: Record<string, unknown>;
+  try {
+    parameters = parseObject(operation.parametersText);
+    parseObject(operation.beforeText);
+    parseObject(operation.afterText);
+  } catch {
+    return undefined;
+  }
+  if (operation.value.type === "LAUNCH_RUN") {
+    const targetType = parameters.targetType;
+    const targetRef = parameters.targetRef;
+    if (
+      (targetType !== "AGENT" && targetType !== "WORKFLOW") ||
+      typeof targetRef !== "string" ||
+      !targetRef ||
+      (operation.value.target.kind !== "EXECUTION" &&
+        operation.value.target.kind !== targetType) ||
+      (operation.value.target.ref !== undefined &&
+        operation.value.target.ref !== targetRef)
+    )
+      return undefined;
+    return operation.value.action === "EXECUTE" ? operationType : undefined;
+  }
   const expectedKind =
     operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
     operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
       ? "ROLE_IMAGE_RECIPE"
       : operation.value.type === "PUBLISH_INTEGRATION_DEFINITION"
         ? "INTEGRATION_DEFINITION"
-        : operation.value.type === "LAUNCH_RUN"
-          ? "EXECUTION"
-          : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
-              operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
-              operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
-              operation.value.type === "CHANGE_INTEGRATION_GRANT"
-            ? "INTEGRATION_CONNECTION"
-            : operation.value.type === "CREATE_WORKFLOW" ||
-                operation.value.type === "UPDATE_WORKFLOW" ||
-                operation.value.type === "ARCHIVE_WORKFLOW"
-              ? "WORKFLOW"
-              : operation.value.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-                ? "ENVIRONMENT"
-                : operation.value.type === "CREATE_SCHEDULE" ||
-                    operation.value.type === "UPDATE_SCHEDULE"
-                  ? "SCHEDULE"
-                  : operation.value.type.endsWith("PROJECT")
-                    ? "PROJECT"
-                    : operation.value.type ===
-                        "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-                      ? "RUNTIME_ENVIRONMENT_DRAFT"
-                      : "AGENT";
+        : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+            operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
+            operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
+            operation.value.type === "CHANGE_INTEGRATION_GRANT"
+          ? "INTEGRATION_CONNECTION"
+          : operation.value.type === "CREATE_WORKFLOW" ||
+              operation.value.type === "UPDATE_WORKFLOW" ||
+              operation.value.type === "ARCHIVE_WORKFLOW"
+            ? "WORKFLOW"
+            : operation.value.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+              ? "ENVIRONMENT"
+              : operation.value.type === "CREATE_SCHEDULE" ||
+                  operation.value.type === "UPDATE_SCHEDULE"
+                ? "SCHEDULE"
+                : operation.value.type.endsWith("PROJECT")
+                  ? "PROJECT"
+                  : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                    ? "RUNTIME_ENVIRONMENT_DRAFT"
+                    : "AGENT";
   const expectedAction =
     operation.value.type === "CREATE_INSTRUCTION_DRAFT"
       ? "UPDATE"
@@ -328,8 +348,7 @@ export function friendlyPlanOperationType(
         ? "ARCHIVE"
         : operation.value.type.startsWith("CREATE_")
           ? "CREATE"
-          : operation.value.type === "LAUNCH_RUN" ||
-              operation.value.type === "TEST_INTEGRATION_CONNECTION"
+          : operation.value.type === "TEST_INTEGRATION_CONNECTION"
             ? "EXECUTE"
             : "UPDATE";
   if (
@@ -337,14 +356,7 @@ export function friendlyPlanOperationType(
     operation.value.action !== expectedAction
   )
     return undefined;
-  try {
-    parseObject(operation.parametersText);
-    parseObject(operation.beforeText);
-    parseObject(operation.afterText);
-    return operationType;
-  } catch {
-    return undefined;
-  }
+  return operationType;
 }
 
 export function operationParameter(

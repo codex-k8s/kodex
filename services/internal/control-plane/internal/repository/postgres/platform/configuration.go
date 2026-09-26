@@ -1250,9 +1250,9 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 					_ = effectTx.Rollback(ctx)
 					return commandOutcome{}, fmt.Errorf("rollback assistant plan operation effects: %w", errs.ErrUnavailable)
 				}
-				conflicts := []entity.AssistantPlanConflict{{OperationRef: operation.Key, TargetRef: operation.Target.Ref,
-					Field: "version", Expected: valueOrNil(operation.ExpectedVersion), Actual: "CHANGED"}}
-				if _, updateErr := effectTx.Exec(ctx, queryConfigurationMarkAssistantPlanStale, planID, []string{"operation-version-conflict"}); updateErr != nil {
+				conflict, problem := assistantOperationConflict(operation)
+				conflicts := []entity.AssistantPlanConflict{conflict}
+				if _, updateErr := effectTx.Exec(ctx, queryConfigurationMarkAssistantPlanStale, planID, []string{problem}); updateErr != nil {
 					_ = effectTx.Rollback(ctx)
 					return commandOutcome{}, errs.ErrUnavailable
 				}
@@ -1267,7 +1267,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				}
 				plan := entity.AssistantPlan{Ref: payload.PlanRef, ConversationRef: conversationRef, ProjectRef: conversationProjectRef,
 					Summary: summary, State: "STALE", Version: version + 1, Revision: revision, ValidatedRevision: validatedRevision,
-					ContentDigest: digest, ValidationProblems: []string{"operation-version-conflict"}, Operations: operations}
+					ContentDigest: digest, ValidationProblems: []string{problem}, Operations: operations}
 				conversation := entity.AssistantConversation{Ref: conversationRef}
 				return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt},
 					resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_CONFLICT",
@@ -1326,6 +1326,15 @@ func valueOrNil(value *int64) any {
 		return nil
 	}
 	return *value
+}
+
+func assistantOperationConflict(operation entity.AssistantPlanOperation) (entity.AssistantPlanConflict, string) {
+	if operation.Type == "LAUNCH_RUN" {
+		return entity.AssistantPlanConflict{OperationRef: operation.Key, TargetRef: operation.Target.Ref,
+			Field: "runtime", Expected: "READY", Actual: "UNAVAILABLE"}, "operation-runtime-unavailable"
+	}
+	return entity.AssistantPlanConflict{OperationRef: operation.Key, TargetRef: operation.Target.Ref,
+		Field: "version", Expected: valueOrNil(operation.ExpectedVersion), Actual: "CHANGED"}, "operation-version-conflict"
 }
 
 func (repository *Repository) auditAssistantOperation(ctx context.Context, tx pgx.Tx, scope scope, outcome commandOutcome, action string) (string, error) {

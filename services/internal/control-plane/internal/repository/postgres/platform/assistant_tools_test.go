@@ -581,6 +581,17 @@ func TestAssistantOperationCommandBuildsWorkflowAndSystemAssistantRun(t *testing
 	}
 }
 
+func TestAssistantOperationConflictClassifiesLaunchReadiness(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{Key: "launch", Type: "LAUNCH_RUN",
+		Target: entity.AssistantPlanTarget{Kind: "AGENT", Ref: "agt_exact"}}
+	conflict, problem := assistantOperationConflict(operation)
+	if problem != "operation-runtime-unavailable" || conflict.Field != "runtime" ||
+		conflict.Expected != "READY" || conflict.Actual != "UNAVAILABLE" || conflict.TargetRef != "agt_exact" {
+		t.Fatalf("unexpected launch conflict: problem=%q conflict=%#v", problem, conflict)
+	}
+}
+
 func TestAssistantOperationCommandNormalizesNamedParallelGroups(t *testing.T) {
 	t.Parallel()
 	workflow := entity.AssistantPlanOperation{Type: "CREATE_WORKFLOW", Summary: "Create workflow", Input: map[string]any{
