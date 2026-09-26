@@ -720,7 +720,7 @@ onBeforeUnmount(() => {
                 <p>{{ t("roleImages.buildHistoryHelp") }}</p>
               </div>
               <button
-                v-if="!buildsExpanded"
+                v-if="!buildsExpanded && builds.length > 5"
                 class="icon-button"
                 type="button"
                 :title="t('catalog.expand')"
@@ -815,7 +815,11 @@ onBeforeUnmount(() => {
                 <p>{{ t("roleImages.immutableRevisionHelp") }}</p>
               </div>
               <button
-                v-if="!revisionsExpanded"
+                v-if="
+                  !revisionsExpanded &&
+                  (revisions.length > 5 ||
+                    store.revisionNextPageToken[recipe.ref])
+                "
                 class="icon-button"
                 type="button"
                 :title="t('catalog.expand')"

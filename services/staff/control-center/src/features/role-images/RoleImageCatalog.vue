@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { Box, Maximize2, Plus, Search } from "@lucide/vue";
+import { Box, Plus, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useRoleImagesStore } from "@/features/role-images/store";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
@@ -18,7 +17,6 @@ const localizeServerMessage = useServerMessage();
 const fieldId = useId();
 const store = useRoleImagesStore();
 const query = ref("");
-const expanded = ref(false);
 const state = ref<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
 const items = computed(() => store.catalog(props.projectRef));
 const scrollRoot = ref<HTMLElement>();
@@ -27,7 +25,7 @@ const pageSize = useAdaptiveCursorPageSize({
   container: scrollRoot,
   itemSelector: ".image-card",
   itemCount: () => items.value.length,
-  estimatedItemHeight: 360,
+  estimatedItemHeight: 290,
   estimatedColumns: 3,
 });
 useCursorInfiniteScroll({
@@ -69,14 +67,7 @@ onBeforeUnmount(() => store.dispose());
 </script>
 
 <template>
-  <component
-    :is="expanded ? ModalDialog : 'section'"
-    class="role-image-catalog"
-    :class="{ 'role-image-catalog--expanded': expanded }"
-    :title="expanded ? t('roleImages.title') : undefined"
-    size="full"
-    @close="expanded = false"
-  >
+  <section class="role-image-catalog">
     <header class="role-image-catalog__toolbar">
       <label class="catalog-search" :for="`${fieldId}-search`">
         <Search :size="16" aria-hidden="true" />
@@ -108,20 +99,6 @@ onBeforeUnmount(() => store.dispose());
       >
         {{ t("roleImages.total", { count: store.projectTotal[projectRef] }) }}
       </span>
-      <button
-        v-if="
-          !expanded &&
-          ((store.projectTotal[projectRef] ?? items.length) > 6 ||
-            store.projectNextPageToken[projectRef])
-        "
-        type="button"
-        class="icon-button"
-        :title="t('catalog.expand')"
-        :aria-label="t('catalog.expand')"
-        @click="expanded = true"
-      >
-        <Maximize2 :size="18" />
-      </button>
       <RouterLink
         v-if="store.createAllowed[projectRef]"
         class="button button--primary"
@@ -230,7 +207,7 @@ onBeforeUnmount(() => store.dispose());
         class="cursor-sentinel"
       />
     </div>
-  </component>
+  </section>
 </template>
 
 <style scoped>
@@ -277,22 +254,20 @@ onBeforeUnmount(() => store.dispose());
   font-size: 0.78rem;
 }
 .role-image-catalog__scroll {
-  max-height: 1696px;
+  max-height: calc(100dvh - 250px);
   padding: 14px;
   overflow: auto;
-}
-.role-image-catalog--expanded .role-image-catalog__scroll {
-  max-height: calc(100dvh - 240px);
 }
 .role-image-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-  grid-auto-rows: minmax(340px, auto);
+  grid-auto-rows: minmax(270px, auto);
   gap: 12px;
 }
 .image-card {
-  display: grid;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -352,6 +327,7 @@ onBeforeUnmount(() => store.dispose());
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  margin-top: auto;
 }
 .catalog-state {
   display: grid;
@@ -388,7 +364,7 @@ onBeforeUnmount(() => store.dispose());
 @media (max-width: 520px) {
   .role-image-grid {
     grid-template-columns: minmax(0, 1fr);
-    grid-auto-rows: minmax(440px, auto);
+    grid-auto-rows: minmax(320px, auto);
   }
   .image-card dl {
     grid-template-columns: 1fr;

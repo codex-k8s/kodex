@@ -11,13 +11,21 @@ defineProps<{ lineage?: RoleImageManagedLineage; collapsible?: boolean }>();
     <summary v-if="collapsible">
       <strong
         >{{ $t("roleImages.lineage") }}:
-        {{ lineage?.managedBy ?? $t("common.unavailable") }}</strong
+        {{
+          lineage
+            ? $t(`roleImages.managedBy.${lineage.managedBy}`)
+            : $t("common.unavailable")
+        }}</strong
       >
       <span>{{ $t("roleImages.technicalDetails") }}</span>
     </summary>
     <strong v-else
       >{{ $t("roleImages.lineage") }}:
-      {{ lineage?.managedBy ?? $t("common.unavailable") }}</strong
+      {{
+        lineage
+          ? $t(`roleImages.managedBy.${lineage.managedBy}`)
+          : $t("common.unavailable")
+      }}</strong
     >
     <div v-if="lineage" class="role-image-lineage__details">
       <span

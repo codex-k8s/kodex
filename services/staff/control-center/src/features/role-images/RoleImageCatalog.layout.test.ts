@@ -23,6 +23,8 @@ describe("каталог образов ИИ-сотрудников", () => {
     expect(lineage).toContain("roleImages.technicalDetails");
     expect(lineage).toContain("lineage.configurationRef");
     expect(lineage).toContain("lineage.revisionRef");
+    expect(lineage).toContain("roleImages.managedBy.${lineage.managedBy}");
+    expect(lineage).not.toContain("{{ lineage?.managedBy ??");
   });
 
   it("до выбора роли показывает действие, а не ошибку недоступности", () => {
@@ -30,11 +32,17 @@ describe("каталог образов ИИ-сотрудников", () => {
     expect(editor).toContain('t("roleImages.unknownRole")');
   });
 
-  it("не предлагает полноэкранный каталог для короткого списка", () => {
-    expect(catalog).toContain(
-      "(store.projectTotal[projectRef] ?? items.length) > 6",
-    );
-    expect(catalog).toContain("store.projectNextPageToken[projectRef]");
+  it("не дублирует каталог образов в полноэкранной модалке", () => {
+    expect(catalog).not.toContain("catalog.expand");
+    expect(catalog).not.toContain("Maximize2");
+    expect(catalog).toContain("useCursorInfiniteScroll");
+    expect(catalog).toContain("useAdaptiveCursorPageSize");
+  });
+
+  it("не предлагает разворот пустой или короткой истории образа", () => {
+    expect(editor).toContain('v-if="!buildsExpanded && builds.length > 5"');
+    expect(editor).toContain("revisions.length > 5 ||");
+    expect(editor).toContain("store.revisionNextPageToken[recipe.ref]");
   });
 
   it("после reload показывает persisted promotion, а не отсутствие artifact", () => {
