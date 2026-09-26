@@ -1554,26 +1554,32 @@ onBeforeUnmount(() => {
       :aria-label="$t('common.close')"
       @click="closeAssistantForm"
     />
-    <section
-      v-if="assistantFormActive"
-      id="assistant-form-slot"
-      ref="formSlot"
-      class="assistant-form-slot"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="$t('assistant.planEditor.parametersTitle')"
-      @keydown="handleKeydown"
-    >
-      <button
-        class="assistant-form-slot__close icon-button"
-        type="button"
-        :aria-label="$t('common.close')"
-        @click="closeAssistantForm"
-      >
-        <X :size="18" aria-hidden="true" />
-      </button>
-    </section>
   </div>
+  <section
+    v-show="open && assistantFormActive"
+    id="assistant-form-slot"
+    ref="formSlot"
+    class="assistant-form-slot"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="$t('assistant.planEditor.parametersTitle')"
+    :inert="
+      integrationImportOpen ||
+      secretDialogOpen ||
+      Boolean(credentialConnectionRef) ||
+      undefined
+    "
+    @keydown="handleKeydown"
+  >
+    <button
+      class="assistant-form-slot__close icon-button"
+      type="button"
+      :aria-label="$t('common.close')"
+      @click="closeAssistantForm"
+    >
+      <X :size="18" aria-hidden="true" />
+    </button>
+  </section>
   <OpenAPIImportDialog
     v-if="open && integrationImportOpen"
     @close="integrationImportOpen = false"
@@ -2349,6 +2355,10 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background: var(--surface);
   box-shadow: 0 24px 64px rgb(15 23 42 / 28%);
+}
+.assistant-form-slot {
+  /* Слот постоянно смонтирован вне overlay для повторного Teleport. */
+  z-index: 72;
 }
 .assistant-plan-dialog {
   top: 50%;

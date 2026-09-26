@@ -619,6 +619,30 @@ func TestAssistantPlanInputErrorsKeepAClosedFailureClass(t *testing.T) {
 	}
 }
 
+func TestAssistantEnvironmentVariableNamesRejectReservedPrefixes(t *testing.T) {
+	t.Parallel()
+	for _, field := range []string{"publicValues", "publicValueUpdates", "secretBindings"} {
+		input := map[string]any{field: []any{map[string]any{"name": "KODEX_TEST_MODE"}}}
+		if assistantEnvironmentVariableNamesValid(input) {
+			t.Fatalf("reserved variable was accepted in %s", field)
+		}
+	}
+	if assistantEnvironmentVariableNamesValid(map[string]any{"publicValueRemovals": []any{"KODEX_TEST_MODE"}}) {
+		t.Fatal("reserved removal name was accepted")
+	}
+	if !assistantEnvironmentVariableNamesValid(map[string]any{"publicValues": []any{map[string]any{"name": "APP_TEST_MODE"}}}) {
+		t.Fatal("ordinary application variable was rejected")
+	}
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"type":       "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+		"parameters": map[string]any{"name": "Test", "publicValues": []any{map[string]any{"name": "KODEX_TEST_MODE", "value": "linked-chat"}}},
+	}, "Test environment", "prj_12345678", "Test")
+	var inputErr *assistantPlanInputError
+	if operation != nil || !errors.As(err, &inputErr) || inputErr.reason != "environment_variable_name" {
+		t.Fatalf("reserved variable did not produce a safe typed error: operation=%#v err=%v", operation, err)
+	}
+}
+
 func TestAssistantOperationSchemaAndParserUseSameServerHydrationRegistry(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{

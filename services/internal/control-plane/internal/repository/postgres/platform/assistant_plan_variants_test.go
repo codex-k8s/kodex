@@ -29,6 +29,38 @@ func TestAssistantPlanVariantsRemainIndependentAcrossTurns(t *testing.T) {
 	}
 }
 
+func TestAssistantPlanPromotesOnlySingleSelectedProject(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		operations []entity.AssistantPlanOperation
+		want       bool
+	}{
+		{name: "single project", operations: []entity.AssistantPlanOperation{{Type: "CREATE_PROJECT", Selected: true}}, want: true},
+		{name: "unselected project", operations: []entity.AssistantPlanOperation{{Type: "CREATE_PROJECT"}}},
+		{name: "project with other operation", operations: []entity.AssistantPlanOperation{{Type: "CREATE_PROJECT", Selected: true}, {Type: "CREATE_AGENT", Selected: true}}},
+		{name: "two projects", operations: []entity.AssistantPlanOperation{{Type: "CREATE_PROJECT", Selected: true}, {Type: "CREATE_PROJECT", Selected: true}}},
+		{name: "unselected alternative", operations: []entity.AssistantPlanOperation{{Type: "CREATE_PROJECT", Selected: true}, {Type: "CREATE_PROJECT"}}, want: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := assistantPlanCreatesSingleProject(test.operations); got != test.want {
+				t.Fatalf("single project promotion = %t, want %t", got, test.want)
+			}
+		})
+	}
+	for name, query := range map[string]string{
+		"session":      queryConfigurationApplyassistantplancommandPromoteSessionProject,
+		"conversation": queryConfigurationApplyassistantplancommandPromoteConversationProject,
+	} {
+		for _, guard := range []string{"organization_id", "created_by", "project_id IS NULL", "state = 'ACTIVE'"} {
+			if !strings.Contains(query, guard) {
+				t.Errorf("%s promotion query lacks %q", name, guard)
+			}
+		}
+	}
+}
+
 func TestAssistantTurnContextIsSnapshottedPerRun(t *testing.T) {
 	t.Parallel()
 

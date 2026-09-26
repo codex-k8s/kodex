@@ -34,6 +34,9 @@ describe("привязка окружения через план помощни
     expect(form).toContain("item.ready");
     expect(form).toContain("getRuntimeEnvironmentSet");
     expect(form).toContain("getAgent");
+    expect(form).toContain(
+      'v-if="!disabled && agent && agent.version !== operation.value.expectedVersion"',
+    );
     expect(form).not.toContain("secretValue");
   });
 });

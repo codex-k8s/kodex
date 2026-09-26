@@ -210,7 +210,7 @@ func assistantSchemaType(schema map[string]any) string {
 
 func environmentPublicValuesSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 128,
-		"description": "Non-secret environment values only. Credentials and tokens must use a protected Secret form and secretBindings.",
+		"description": "Non-secret environment values only. Names must not start with KODEX_, CODEX_, OPENAI_, OTEL_, AWS_, AZURE_, GOOGLE_, or KUBERNETES_. Credentials and tokens must use a protected Secret form and secretBindings.",
 		"items": objectSchema([]string{"name", "value"}, map[string]any{
 			"name":  map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
 			"value": stringSchema(0, 8192),
@@ -220,7 +220,7 @@ func environmentPublicValuesSchema() map[string]any {
 
 func environmentPublicValueUpdatesSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 128,
-		"description": "Sparse upserts for non-secret environment values. Use this when the current complete value list is not exposed; the server merges entries into its authoritative snapshot.",
+		"description": "Sparse upserts for non-secret environment values. Names must not start with KODEX_, CODEX_, OPENAI_, OTEL_, AWS_, AZURE_, GOOGLE_, or KUBERNETES_. Use this when the current complete value list is not exposed; the server merges entries into its authoritative snapshot.",
 		"items": objectSchema([]string{"name", "value"}, map[string]any{
 			"name":  map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
 			"value": stringSchema(0, 8192),

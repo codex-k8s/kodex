@@ -1370,6 +1370,60 @@ func TestSessionPVCRejectsCrossTenantAndProjectReuse(t *testing.T) {
 	}
 }
 
+func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", SystemAssistant: true}
+	if err := manager.ensureSessionPVC(t.Context(), global); err != nil {
+		t.Fatalf("create global assistant volume: %v", err)
+	}
+	project := global
+	project.ProjectRef = "prj_abcdefgh"
+	if err := manager.ensureSessionPVC(t.Context(), project); err != nil {
+		t.Fatalf("promote assistant volume: %v", err)
+	}
+	if err := manager.ensureSessionPVC(t.Context(), project); err != nil {
+		t.Fatalf("repeat exact project binding: %v", err)
+	}
+	name, _ := runtimecontract.SessionPVCName(global.SessionRef)
+	volume, err := client.CoreV1().PersistentVolumeClaims("kodex-runtime").Get(t.Context(), name, metav1.GetOptions{})
+	if err != nil || volume.Annotations[projectHashAnnotation] != shortHash(project.ProjectRef) {
+		t.Fatal("assistant volume project readback did not match promoted project")
+	}
+	for name, mutate := range map[string]func(*runtimecontract.RunnerInput){
+		"other project":      func(value *runtimecontract.RunnerInput) { value.ProjectRef = "prj_ijklmnop" },
+		"other organization": func(value *runtimecontract.RunnerInput) { value.OrganizationRef = "org_ijklmnop" },
+		"reverse migration":  func(value *runtimecontract.RunnerInput) { value.ProjectRef = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := project
+			mutate(&candidate)
+			if err := manager.ensureSessionPVC(t.Context(), candidate); err == nil {
+				t.Fatal("foreign or reverse assistant volume binding accepted")
+			}
+		})
+	}
+
+	busy := global
+	busy.SessionRef = "session_ijklmnop"
+	if err := manager.ensureSessionPVC(t.Context(), busy); err != nil {
+		t.Fatal(err)
+	}
+	busyName, _ := runtimecontract.SessionPVCName(busy.SessionRef)
+	_, err = client.CoreV1().Pods("kodex-runtime").Create(t.Context(), &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "assistant-old-turn", Namespace: "kodex-runtime"},
+		Spec:       corev1.PodSpec{Volumes: []corev1.Volume{{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: busyName}}}}},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	busy.ProjectRef = "prj_abcdefgh"
+	if err := manager.ensureSessionPVC(t.Context(), busy); err == nil || !strings.Contains(err.Error(), "active consumer") {
+		t.Fatalf("active global consumer was not fenced: %v", err)
+	}
+}
+
 func TestRetryMaterializesNewRevisionAndCleanupKeepsNewAttempt(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	manager := newTestManager(t, client)

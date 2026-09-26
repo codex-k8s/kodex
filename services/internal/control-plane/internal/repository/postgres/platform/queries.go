@@ -276,8 +276,22 @@ func (repository *Repository) resourceVisible(
 	if err != nil {
 		return false, err
 	}
+	// Окружение читается через право просмотра его проекта, как и в обычном
+	// каталоге. Сначала разрешаем exact окружение и его project binding, чтобы
+	// locator другого проекта не мог превратиться в разрешённый project read.
+	if resourceKind == "RUNTIME_ENVIRONMENT" {
+		target, err = repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{
+			Kind: "RESOURCE_INSTANCE", ProjectRef: projectRef, ResourceKind: "PROJECT", ResourceRef: projectRef,
+		})
+		if errors.Is(err, errs.ErrNotFound) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+	}
 	resourceBindings := bindings
-	if resourceKind != "PROJECT" {
+	if resourceKind != "PROJECT" && resourceKind != "RUNTIME_ENVIRONMENT" {
 		resourceBindings = make([]entity.AccessBinding, 0, len(bindings))
 		for _, binding := range bindings {
 			if binding.PresentationKind != "PROJECT_MEMBERSHIP" {

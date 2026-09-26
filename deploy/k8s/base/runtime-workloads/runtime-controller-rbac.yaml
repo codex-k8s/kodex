@@ -17,7 +17,7 @@ rules:
     verbs: [get, list, create, delete]
   - apiGroups: [""]
     resources: [persistentvolumeclaims]
-    verbs: [get, create]
+    verbs: [get, create, update]
   - apiGroups: [""]
     resources: [serviceaccounts]
     verbs: [get, list, create, delete]

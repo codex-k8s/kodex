@@ -181,6 +181,7 @@ describe("AssistantWorkspace layout", () => {
 
   it("показывает штатные редакторы поверх полного чата", () => {
     expect(template).toContain('id="assistant-form-slot"');
+    expect(template).toContain('v-show="open && assistantFormActive"');
     expect(template).toContain('class="assistant-detail-backdrop"');
     expect(template).toContain('class="assistant-plan-dialog"');
     expect(template).toContain(
@@ -195,6 +196,7 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toMatch(
       /\.assistant-plan-dialog,\s*\.assistant-form-slot\s*{[^}]*position: fixed;[^}]*inset: 6dvh 6vw;[^}]*border: 1px solid var\(--border\);[^}]*box-shadow:/s,
     );
+    expect(source).toMatch(/\.assistant-form-slot\s*{[^}]*z-index: 72;/s);
     expect(source).toContain("max-height: 88dvh;");
     expect(source).toContain("transform: translateY(-50%);");
     expect(source).toContain("max-height: calc(88dvh - 124px);");

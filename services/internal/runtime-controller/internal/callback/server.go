@@ -688,10 +688,14 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
+			guidance := "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names."
+			if planInputErr.reason == "environment_variable_name" {
+				guidance = "Environment variable names cannot use reserved platform prefixes such as KODEX_. Do not rename a user-requested variable silently; explain the restriction and ask for a non-reserved name."
+			}
 			structured = map[string]any{
 				"error_code": "PLAN_INPUT_INVALID",
 				"retryable":  true,
-				"guidance":   "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names.",
+				"guidance":   guidance,
 			}
 		}
 		var catalogInputErr *integrationCatalogInputError
@@ -896,6 +900,10 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	if err != nil {
 		return nil, invalidAssistantPlan("operation_parameter_alias")
 	}
+	if (kind == "CREATE_RUNTIME_ENVIRONMENT_DRAFT" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION") &&
+		!assistantEnvironmentVariableNamesValid(normalizedParameters) {
+		return nil, invalidAssistantPlan("environment_variable_name")
+	}
 	if assistantProjectScopedOperation(kind) && strings.TrimSpace(projectRef) != "" {
 		normalizedParameters["projectRef"] = strings.TrimSpace(projectRef)
 	}
@@ -915,6 +923,38 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 		normalized["summary"] = assistantProjectUpdateSummary(normalizedParameters, projectName)
 	}
 	return normalized, nil
+}
+
+func assistantEnvironmentVariableNamesValid(parameters map[string]any) bool {
+	for _, field := range []string{"publicValues", "publicValueUpdates", "secretBindings"} {
+		entries, supplied := parameters[field]
+		if !supplied {
+			continue
+		}
+		list, ok := entries.([]any)
+		if !ok {
+			continue
+		}
+		for _, entry := range list {
+			item, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, ok := item["name"].(string)
+			if ok && !runtimecontract.ValidRuntimeEnvironmentName(name) {
+				return false
+			}
+		}
+	}
+	if entries, ok := parameters["publicValueRemovals"].([]any); ok {
+		for _, entry := range entries {
+			name, ok := entry.(string)
+			if ok && !runtimecontract.ValidRuntimeEnvironmentName(name) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func assistantProjectScopedOperation(kind string) bool {

@@ -1770,8 +1770,14 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontr
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
 	existing, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
-		if !sessionPVCMatches(existing, pvc, manager.config.StorageClass) {
+		if sessionPVCMatches(existing, pvc, manager.config.StorageClass) {
+			return nil
+		}
+		if !assistantSessionPVCNeedsPromotion(existing, pvc, input, manager.config.StorageClass) {
 			return errors.New("existing runtime session volume conflicts with exact session binding")
+		}
+		if err := manager.promoteAssistantSessionPVC(ctx, existing, pvc); err != nil {
+			return err
 		}
 		return nil
 	}
@@ -1789,6 +1795,42 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontr
 	}
 	if err != nil {
 		return errors.New("create runtime session volume")
+	}
+	return nil
+}
+
+func assistantSessionPVCNeedsPromotion(existing, desired *corev1.PersistentVolumeClaim, input runtimecontract.RunnerInput, storageClass string) bool {
+	if !input.SystemAssistant || input.ProjectRef == "" || existing == nil || desired == nil {
+		return false
+	}
+	global := desired.DeepCopy()
+	global.Annotations[projectHashAnnotation] = shortHash("")
+	return sessionPVCMatches(existing, global, storageClass)
+}
+
+func (manager *Manager) promoteAssistantSessionPVC(ctx context.Context, existing, desired *corev1.PersistentVolumeClaim) error {
+	pods, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return errors.New("inspect assistant session volume consumers")
+	}
+	for _, pod := range pods.Items {
+		if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+			continue
+		}
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.ClaimName == desired.Name {
+				return errors.New("assistant session volume still has an active consumer")
+			}
+		}
+	}
+	updated := existing.DeepCopy()
+	updated.Annotations[projectHashAnnotation] = desired.Annotations[projectHashAnnotation]
+	if _, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
+		return errors.New("promote assistant session volume project binding")
+	}
+	readback, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
+	if err != nil || !sessionPVCMatches(readback, desired, manager.config.StorageClass) {
+		return errors.New("assistant session volume project binding readback failed")
 	}
 	return nil
 }

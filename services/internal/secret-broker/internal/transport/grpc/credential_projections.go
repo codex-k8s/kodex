@@ -25,26 +25,28 @@ import (
 )
 
 const (
-	credentialProjectionAudience = "urn:kodex:internal-rpc:secret-broker"
-	secretBrokerWorkloadID       = "secret-broker"
-	secretBrokerSPIFFEID         = "spiffe://kodex.local/ns/kodex-system/sa/secret-broker"
-	runtimeControllerWorkloadID  = "runtime-controller"
-	runtimeControllerSPIFFEID    = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
-	sttWorkloadID                = "stt-tts-service"
-	sttSPIFFEID                  = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
-	runtimeProjectionOperation   = "platform.runtime.credentials.materialize"
-	assistantProjectionOperation = "platform.runtime.credentials.system-assistant.materialize"
-	runtimeReadinessOperation    = "platform.runtime.credentials.readiness.check"
-	sttCredentialOperation       = "platform.stt.credential.project"
-	maximumAuthorityRevision     = uint64(1<<53 - 1)
-	maximumProjectedAPIKeyBytes  = 16 << 10
-	minimumProjectedAPIKeyBytes  = 8
+	runtimeProjectionFailureMessage = "runtime credential projection failed"
+	credentialProjectionAudience    = "urn:kodex:internal-rpc:secret-broker"
+	secretBrokerWorkloadID          = "secret-broker"
+	secretBrokerSPIFFEID            = "spiffe://kodex.local/ns/kodex-system/sa/secret-broker"
+	runtimeControllerWorkloadID     = "runtime-controller"
+	runtimeControllerSPIFFEID       = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
+	sttWorkloadID                   = "stt-tts-service"
+	sttSPIFFEID                     = "spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service"
+	runtimeProjectionOperation      = "platform.runtime.credentials.materialize"
+	assistantProjectionOperation    = "platform.runtime.credentials.system-assistant.materialize"
+	runtimeReadinessOperation       = "platform.runtime.credentials.readiness.check"
+	sttCredentialOperation          = "platform.stt.credential.project"
+	maximumAuthorityRevision        = uint64(1<<53 - 1)
+	maximumProjectedAPIKeyBytes     = 16 << 10
+	minimumProjectedAPIKeyBytes     = 8
 )
 
 func (server *Server) MaterializeRuntimeCredentials(ctx context.Context, request *secretbrokerv1.MaterializeRuntimeCredentialsRequest) (*secretbrokerv1.MaterializeRuntimeCredentialsResponse, error) {
 	authority, err := runtimeProjectionAuthority(ctx,
 		secretbrokerv1.RuntimeCredentialProjectionService_MaterializeRuntimeCredentials_FullMethodName, runtimeProjectionOperation)
 	if err != nil {
+		server.logRuntimeProjectionFailure(ctx, "authority", err)
 		return nil, err
 	}
 	return server.materializeRuntimeCredentials(ctx, request, authority)
@@ -74,14 +76,17 @@ func (server *Server) materializeRuntimeCredentials(ctx context.Context, request
 		Attempt: request.GetAttempt(), InputDigest: request.GetInputDigest(),
 	})
 	if err != nil {
+		server.logRuntimeProjectionFailure(ctx, "owner", err)
 		return nil, preserveOwnerError(err)
 	}
 	manifest, err := runtimeProjectionManifest(authority, request, resolved)
 	if err != nil {
+		server.logRuntimeProjectionFailure(ctx, "manifest", err)
 		return nil, err
 	}
 	projection, err := server.store.MaterializeRuntimeCredentialProjection(ctx, manifest)
 	if err != nil {
+		server.logRuntimeProjectionFailure(ctx, "storage", err)
 		return nil, projectionStorageError(err)
 	}
 	descriptor := &secretbrokerv1.RuntimeCredentialProjectionDescriptor{
@@ -98,6 +103,12 @@ func (server *Server) materializeRuntimeCredentials(ctx context.Context, request
 		})
 	}
 	return &secretbrokerv1.MaterializeRuntimeCredentialsResponse{Projection: descriptor}, nil
+}
+
+func (server *Server) logRuntimeProjectionFailure(ctx context.Context, stage string, err error) {
+	if server.catalogLogger != nil {
+		server.catalogLogger.WarnContext(ctx, runtimeProjectionFailureMessage, "stage", stage, "grpc_code", status.Code(err).String())
+	}
 }
 
 func (server *Server) CheckRuntimeCredentialProjectionReadiness(ctx context.Context, _ *secretbrokerv1.CheckRuntimeCredentialProjectionReadinessRequest) (*secretbrokerv1.CheckRuntimeCredentialProjectionReadinessResponse, error) {

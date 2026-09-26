@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -252,7 +253,9 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 			projectionContext, cancelProjection := context.WithTimeout(ctx, runtime.config.RequestTimeout)
 			projection, projectionErr := runtime.credentials.Materialize(projectionContext, input)
 			cancelProjection()
+			failureStage := "credential_projection"
 			if projectionErr == nil {
+				failureStage = "ensure_turn"
 				projectionErr = runtime.manager.EnsureTurn(ctx, input, providerBinding, workload.CredentialProjection{
 					Namespace: projection.Namespace, SecretName: projection.SecretName, SecretUID: projection.SecretUID,
 					SecretResourceVersion: projection.SecretResourceVersion, ContentSHA256: projection.ContentSHA256,
@@ -260,7 +263,13 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 				})
 			}
 			if projectionErr != nil {
-				attributes := []any{"error_class", "dependency", "error", boundedRPCFailure(turnMaterializationFailure, projectionErr)}
+				attributes := []any{"error_class", "dependency", "stage", failureStage, "error", boundedRPCFailure(turnMaterializationFailure, projectionErr)}
+				if failureStage == "ensure_turn" {
+					attributes = append(attributes, "ensure_turn_reason", boundedEnsureTurnReason(projectionErr))
+				}
+				if input.Validate() != nil {
+					attributes = append(attributes, "input_valid", false)
+				}
 				if requestDigest, digestErr := credentialprojection.MaterializationRequestDigest(input); digestErr == nil {
 					attributes = append(attributes, "request_digest_sha256", requestDigest)
 				}
@@ -277,6 +286,24 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		}()
 	}
 	return len(response.GetExecutions()), nil
+}
+
+func boundedEnsureTurnReason(err error) string {
+	message := err.Error()
+	for _, match := range []struct{ text, reason string }{
+		{"existing runtime session volume conflicts with exact session binding", "session_binding_conflict"},
+		{"assistant session volume still has an active consumer", "active_session_consumer"},
+		{"promote assistant session volume project binding", "session_promotion_update"},
+		{"assistant session volume project binding readback failed", "session_promotion_readback"},
+		{"runtime turn input is invalid", "turn_input_invalid"},
+		{"runtime revision digest mismatch", "revision_digest_mismatch"},
+		{"runtime credential projection binding is invalid", "projection_binding_invalid"},
+	} {
+		if strings.Contains(message, match.text) {
+			return match.reason
+		}
+	}
+	return "other"
 }
 
 func warmFileProjectionEligible(input runtimecontract.RunnerInput) bool {

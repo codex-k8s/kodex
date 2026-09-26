@@ -1309,6 +1309,12 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		_ = effectTx.Rollback(ctx)
 		return commandOutcome{}, fmt.Errorf("commit assistant plan operation effects: %w", errs.ErrConflict)
 	}
+	if conversationProjectRef == "" && assistantPlanCreatesSingleProject(operations) && projectID != "" && projectRef != "" {
+		if err := repository.promoteAssistantConversationProject(ctx, effectTx, scope, conversationRef, projectID, projectRef); err != nil {
+			_ = effectTx.Rollback(ctx)
+			return commandOutcome{}, err
+		}
+	}
 	if _, err := effectTx.Exec(ctx, queryConfigurationApplyassistantplancommandUpdateAssistantPlansStateVersionAppliedAt, planID); err != nil {
 		_ = effectTx.Rollback(ctx)
 		return commandOutcome{}, fmt.Errorf("mark assistant plan applied: %w", errs.ErrUnavailable)
@@ -1325,8 +1331,45 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	plan := entity.AssistantPlan{Ref: payload.PlanRef, ConversationRef: conversationRef, ProjectRef: conversationProjectRef,
 		Summary: summary, State: "APPLIED", Version: version + 1, Revision: revision, ValidatedRevision: validatedRevision,
 		ContentDigest: digest, Operations: operations, AppliedAt: timePointer(time.Now().UTC())}
-	conversation := entity.AssistantConversation{Ref: conversationRef}
+	conversation := entity.AssistantConversation{Ref: conversationRef, ProjectRef: projectRef}
 	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt, CreatedRefs: created}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_APPLIED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+}
+
+func assistantPlanCreatesSingleProject(operations []entity.AssistantPlanOperation) bool {
+	selected := 0
+	for _, operation := range operations {
+		if !operation.Selected {
+			continue
+		}
+		selected++
+		if operation.Type != "CREATE_PROJECT" {
+			return false
+		}
+	}
+	return selected == 1
+}
+
+func (repository *Repository) promoteAssistantConversationProject(ctx context.Context, tx pgx.Tx, scope scope,
+	conversationRef, projectID, projectRef string,
+) error {
+	var sessionID string
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandPromoteSessionProject,
+		projectID, projectRef, scope.organizationID, scope.actorID, conversationRef,
+	).Scan(&sessionID); err != nil {
+		return fmt.Errorf("promote assistant session project: %w", errs.ErrConflict)
+	}
+	if _, err := tx.Exec(ctx, queryConfigurationApplyassistantplancommandPromoteSessionStorageProject,
+		projectID, sessionID, scope.organizationID,
+	); err != nil {
+		return fmt.Errorf("promote assistant session storage project: %w", errs.ErrUnavailable)
+	}
+	var promotedRef string
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandPromoteConversationProject,
+		scope.organizationID, scope.actorID, projectID, projectRef, conversationRef,
+	).Scan(&promotedRef); err != nil || promotedRef != conversationRef {
+		return fmt.Errorf("promote assistant conversation project: %w", errs.ErrConflict)
+	}
+	return nil
 }
 
 func valueOrNil(value *int64) any {

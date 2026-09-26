@@ -10,7 +10,7 @@ usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
-    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress]' \
+    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress|runtime-rbac]' \
     '  [--workload <exact-core-deployment|stt-tts-service|control-plane-migrate>]' >&2
 }
 
@@ -41,7 +41,7 @@ done
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
-case "$stage" in full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress) ;; *) fail 'deployment stage is invalid' ;; esac
+case "$stage" in full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress|runtime-rbac) ;; *) fail 'deployment stage is invalid' ;; esac
 [[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
@@ -1327,6 +1327,22 @@ PY
       fail "local StatefulSet is unavailable: $workload"
   done
   readback_local_object_storage_secret
+  if [[ "$stage" == runtime-rbac ]]; then
+    if [[ "$mode" == apply ]]; then
+      apply_render runtime-controller-workload-rbac '
+        select(.kind == "Role" and .metadata.name == "runtime-controller" and
+          .metadata.namespace == "kodex-runtime")
+      '
+    fi
+    kubectl -n "$runtime_namespace" get role/runtime-controller -o json | jq -e '
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+      .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+      any(.rules[]; .apiGroups == [""] and
+        .resources == ["persistentvolumeclaims"] and
+        .verbs == ["get", "create", "update"])
+    ' >/dev/null || fail 'runtime-controller PVC promotion RBAC readback failed'
+  fi
   if [[ "$stage" == integration-egress ]]; then
     if [[ "$mode" == apply ]]; then
       # Только объекты этой проекции: остальные живые policy/workload не меняем.

@@ -100,6 +100,7 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 
 type EditorSection =
   | "GENERAL"
@@ -112,6 +113,7 @@ type EditorSection =
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const localizeServerMessage = useServerMessage();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
 const assistantForm = computed(() => route.query.assistantForm === "1");
@@ -423,19 +425,26 @@ async function loadImageArtifact(
   }
 }
 
-function loadImagePage(
+async function loadImagePage(
   query: string,
   cursor?: string,
   signal?: AbortSignal,
   pageSize = 30,
 ) {
-  return runtime.searchPromotedRoleImagePage(
+  const page = await runtime.searchPromotedRoleImagePage(
     projectRef.value,
     query,
     cursor,
     signal,
     pageSize,
   );
+  return {
+    ...page,
+    items: page.items.map((item) => ({
+      ...item,
+      title: localizeServerMessage(item.title),
+    })),
+  };
 }
 
 async function selectImage(option: AsyncEntityOption): Promise<void> {
