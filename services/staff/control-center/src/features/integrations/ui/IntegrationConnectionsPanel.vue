@@ -2,7 +2,6 @@
 import {
   FlaskConical,
   Info,
-  Maximize2,
   Search,
   KeyRound,
   LoaderCircle,
@@ -15,7 +14,6 @@ import {
 import { useServerMessage } from "@/shared/ui/server-message";
 import { useI18n } from "vue-i18n";
 import { ref, useId } from "vue";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
 
 import { canConfigureCredential } from "@/features/integrations/connection-setup";
 import {
@@ -57,7 +55,6 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const serverMessage = useServerMessage();
 const capabilityPreviewLimit = 3;
-const expanded = ref(false);
 const searchId = useId();
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
@@ -70,14 +67,7 @@ useCursorInfiniteScroll({
 </script>
 
 <template>
-  <component
-    :is="expanded ? ModalDialog : 'section'"
-    :title="t('integrationsRedesign.connectionsTitle')"
-    size="full"
-    class="connections-panel"
-    aria-labelledby="connections-title"
-    @close="expanded = false"
-  >
+  <section class="connections-panel" aria-labelledby="connections-title">
     <header class="panel-heading">
       <div>
         <h2 id="connections-title">
@@ -85,19 +75,15 @@ useCursorInfiniteScroll({
         </h2>
       </div>
       <span class="result-count">{{
-        t("integrationsRedesign.connectionCount", {
-          count: hasMore ? `${connections.length}+` : connections.length,
-        })
+        t(
+          hasMore
+            ? "integrationsRedesign.connectionsLoadedCount"
+            : "integrationsRedesign.connectionCount",
+          {
+            count: connections.length,
+          },
+        )
       }}</span>
-      <button
-        v-if="!expanded"
-        class="icon-button"
-        :title="t('contextResources.expand')"
-        :aria-label="t('contextResources.expand')"
-        @click="expanded = true"
-      >
-        <Maximize2 :size="18" />
-      </button>
     </header>
     <label class="connection-search" :for="searchId"
       ><Search :size="18" /><input
@@ -106,12 +92,17 @@ useCursorInfiniteScroll({
         type="search"
         :value="search"
         :aria-label="t('common.search')"
+        :placeholder="t('integrationsRedesign.searchConnections')"
         maxlength="500"
         @input="
           emit('update:search', ($event.target as HTMLInputElement).value)
         "
     /></label>
-    <div v-if="coreReady" class="core-readiness" role="status">
+    <div
+      v-if="coreReady && !connections.length && !search?.trim()"
+      class="core-readiness"
+      role="status"
+    >
       <ShieldCheck :size="20" aria-hidden="true" />
       <div>
         <h3>{{ t("integrations.noConnectionsTitle") }}</h3>
@@ -122,7 +113,6 @@ useCursorInfiniteScroll({
       v-if="connections.length"
       ref="scrollRoot"
       class="connection-grid"
-      :class="{ 'connection-grid--expanded': expanded }"
       role="list"
       :aria-busy="loading"
     >
@@ -376,10 +366,26 @@ useCursorInfiniteScroll({
     <p v-else-if="loading" role="status">{{ t("common.loading") }}</p>
     <div v-else class="connection-empty">
       <PowerOff :size="28" aria-hidden="true" />
-      <h3>{{ t("integrationsRedesign.noConnectionsYet") }}</h3>
-      <p>{{ t("integrations.noConnections") }}</p>
+      <h3>
+        {{
+          t(
+            search?.trim()
+              ? "integrationsRedesign.noConnectionMatches"
+              : "integrationsRedesign.noConnectionsYet",
+          )
+        }}
+      </h3>
+      <p>
+        {{
+          t(
+            search?.trim()
+              ? "integrationsRedesign.tryAnotherSearch"
+              : "integrations.noConnections",
+          )
+        }}
+      </p>
     </div>
-  </component>
+  </section>
 </template>
 
 <style scoped>
@@ -463,11 +469,8 @@ useCursorInfiniteScroll({
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
   gap: 12px;
-  max-height: 2220px;
+  max-height: clamp(420px, 67dvh, 840px);
   overflow: auto;
-}
-.connection-grid--expanded {
-  max-height: none;
 }
 .connection-sentinel {
   grid-column: 1 / -1;

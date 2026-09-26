@@ -98,6 +98,10 @@ const messages = {
       connectionsTitle: "Рабочие подключения",
       connectionsDescription: "Описание",
       connectionCount: "Подключений: {count}",
+      connectionsLoadedCount: "Показано подключений: {count}",
+      searchConnections: "Найти подключение по названию",
+      noConnectionMatches: "Подключения не найдены",
+      tryAnotherSearch: "Измените поисковый запрос.",
       noConnectionsYet: "Подключений пока нет",
       activeGrants: "разрешений",
       capabilitiesShort: "возможностей",
@@ -109,6 +113,7 @@ async function renderPanel(
   values: readonly IntegrationConnection[],
   coreReady: boolean,
   hasMore = false,
+  search = "",
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -118,6 +123,7 @@ async function renderPanel(
         coreReady,
         busyRef: "",
         hasMore,
+        search,
       }),
   });
   app.use(
@@ -129,15 +135,15 @@ async function renderPanel(
 describe("IntegrationConnectionsPanel", () => {
   it("не выдаёт число загруженных строк за точное общее количество", async () => {
     expect(await renderPanel([connection], true, true)).toContain(
-      "Подключений: 1+",
+      "Показано подключений: 1",
     );
     expect(await renderPanel([connection], true)).toContain("Подключений: 1");
   });
   it("показывает только разрешённые server-owned lifecycle действия", async () => {
     const html = await renderPanel([connection], true);
 
-    expect(html).toContain("Платформа работает без интеграций");
-    expect(html).toContain("Подключения необязательны");
+    expect(html).not.toContain("Платформа работает без интеграций");
+    expect(html).not.toContain("Подключения необязательны");
     expect(html).toContain("Synthetic lifecycle");
     expect(html).toContain("ui-lifecycle");
     expect(html).toContain("SYNTHETIC_JOURNAL");
@@ -157,6 +163,16 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).not.toContain("Платформа работает без интеграций");
     expect(html).not.toContain("Подключения необязательны");
   });
+  it("не показывает плашку про отсутствие интеграций для пустого поиска", async () => {
+    const html = await renderPanel([], true, false, "неизвестное");
+    expect(html).toContain("Подключения не найдены");
+    expect(html).not.toContain("Платформа работает без интеграций");
+  });
+  it("поясняет необязательность интеграций только в пустом каталоге", async () => {
+    const html = await renderPanel([], true);
+    expect(html).toContain("Платформа работает без интеграций");
+    expect(html).toContain("Подключения необязательны");
+  });
 
   it("оставляет полный набор возможностей в счётчике, но не растягивает карточку", async () => {
     const capability = definition.capabilities[0];
@@ -174,6 +190,6 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Возможность 3");
     expect(html).not.toContain("Возможность 4");
     expect(html).toContain("+1");
-    expect(html).toContain("<strong>4</strong>");
+    expect(html).toMatch(/<strong[^>]*>4<\/strong>/);
   });
 });
