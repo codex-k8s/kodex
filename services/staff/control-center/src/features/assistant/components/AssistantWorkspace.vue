@@ -201,6 +201,7 @@ const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
 const historyMenu = ref<HTMLElement>();
 const fab = ref<HTMLButtonElement>();
+const planTrigger = ref<HTMLButtonElement>();
 
 const checkedContext = computed(() => {
   const conversation = store.selectedConversation;
@@ -595,8 +596,9 @@ function handleComposerKeydown(event: KeyboardEvent): void {
   void send();
 }
 
-function openPlan(plan: AssistantPlan): void {
+function openPlan(plan: AssistantPlan, event: MouseEvent): void {
   store.clearReceipt();
+  planTrigger.value = event.currentTarget as HTMLButtonElement;
   openPlanRef.value = plan.ref;
 }
 
@@ -610,13 +612,16 @@ function planVariantNumber(planRef: string): number {
 
 async function closePlan(): Promise<void> {
   if (store.busy) return;
+  const trigger = planTrigger.value;
   const refresh = ["APPLIED", "REJECTED"].includes(
     currentPlan.value?.state ?? "",
   );
   openPlanRef.value = undefined;
+  planTrigger.value = undefined;
   store.clearReceipt();
   await nextTick();
   scrollToLatest();
+  if (trigger?.isConnected) trigger.focus();
   if (refresh && open.value) await store.load(props.context, props.projectRef);
 }
 
@@ -1358,7 +1363,7 @@ onBeforeUnmount(() => {
                   <button
                     class="button button--primary"
                     type="button"
-                    @click="openPlan(turn.plan)"
+                    @click="openPlan(turn.plan, $event)"
                   >
                     {{ $t("assistant.openPlan") }}
                   </button>

@@ -205,6 +205,14 @@ describe("AssistantWorkspace layout", () => {
     );
   });
 
+  it("возвращает фокус к карточке варианта после закрытия редактора", () => {
+    expect(template).toContain('@click="openPlan(turn.plan, $event)"');
+    expect(source).toContain(
+      "planTrigger.value = event.currentTarget as HTMLButtonElement",
+    );
+    expect(source).toContain("if (trigger?.isConnected) trigger.focus()");
+  });
+
   it("открывает защищённый импорт OpenAPI поверх диалога без передачи документа модели", () => {
     expect(template).toContain('@click.capture="handleAssistantLink"');
     expect(source).toContain('"/configurations/INTEGRATION_DEFINITION"');

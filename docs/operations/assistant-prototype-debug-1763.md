@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.61
+version: 1.0.62
 updated: 2026-09-26
 ---
 
@@ -1151,3 +1151,13 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-org-workflows-grid.png`, `/tmp/kodex-org-members-final.png`,
   `/tmp/kodex-org-secrets.png`, `/tmp/kodex-org-automations-hard-reload.png`.
   Визуальная приёмка владельцем — NOT RUN.
+- Вложенная штатная форма варианта корректно возвращалась в сохранённый чат,
+  но после кнопки «Вернуться к диалогу» клавиатурный фокус терялся на корне
+  страницы. `AssistantWorkspace` теперь запоминает точную кнопку
+  «Просмотреть и изменить» и после размонтирования формы возвращает фокус к ней,
+  если карточка всё ещё существует. Адресный unit 24/24, typecheck, ESLint,
+  Prettier и `git diff --check` — PASS. Vite применил diff через HMR. В Chrome
+  1920×1080 повтор подтвердил переход двух dialog в один и активный `BUTTON`
+  с текстом «Просмотреть и изменить»; console errors/warnings и HTTP 4xx/5xx
+  отсутствуют. Screenshot: `/tmp/kodex-plan-focus-restored.png`. Визуальная
+  приёмка владельцем — NOT RUN.
