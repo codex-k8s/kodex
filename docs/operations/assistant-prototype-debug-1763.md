@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.42
+version: 1.0.43
 updated: 2026-09-26
 ---
 
@@ -768,6 +768,19 @@ Chrome DevTools завис из-за страницы с VueFlow canvas и от�
 Адресные RunPage/RunActivityDrawer unit 5/5, typecheck, ESLint и
 `git diff --check` — PASS.
 
+Список разрешений интеграций проверен как системный аналог Human Gate. В
+основном слое карточек отображались внутренние `op.*`, `HUMAN_SCOPED`,
+`HTTPS_RESOURCE` и JSON Pointer, хотя макет оставляет технический ключ только
+вторичным сведением. Карточки теперь показывают локализованные риск, вид
+ресурса и порядок согласования; пути параметров представлены читаемо, а точные
+ключи, enum и capability key перенесены в раскрываемые «Технические сведения».
+После Vite HMR и reload без кэша 39 разрешений не показывают внутренние значения
+до раскрытия, технический блок сохраняет точный readback, overflow 0, console
+пуста, 31 завершённый XHR/fetch без 4xx/5xx. Screenshot сохранён локально.
+Адресные unit 12/12, typecheck, ESLint, Prettier и `git diff --check` — PASS.
+Через Context7 проверена актуальная документация Vue 3 по доступности
+top-level функций `<script setup>` в шаблоне.
+
 ## Журнал подтверждённых дефектов
 
 | Время UTC        | Экран и шаг                                                                        | Безопасный симптом / причина                                                                                                                     | Исправление и версия                                                                                                           | Адресная проверка                                                                                                               | Повтор владельца |
@@ -789,6 +802,7 @@ Chrome DevTools завис из-за страницы с VueFlow canvas и от�
 | 2026-09-25 22:31 | Решения → История → OpenAPI Human Gate                                             | Основной UI показывал raw operation/effect keys, JSON и digest; OpenAPI не знал фактически обслуживаемый `HTTPS_RESOURCE`                        | PR #1781: дружелюбное действие/риск/scope, техника под details; OpenAPI enum и generated Go/TS выровнены с Proto/gateway       | 2 Decisions unit, typecheck, ESLint, build, gateway tests PASS; live console/network/layout/realtime PASS; screenshot tool FAIL | ОЖИДАЕТ ПОВТОРА  |
 | 2026-09-25 22:51 | Новый запуск → сотрудник и задача без названия                                     | Frontend требовал title вопреки макету и уже действующему серверному `SERVER_DEFAULT`; источник и внешний канал не объяснялись                   | PR #1781: optional title с автопредложением, инициатор/Control Center и disabled внешний канал с причиной                      | New Run layout 4/4, typecheck, ESLint, build PASS; live empty-title enable, console/network/layout/screenshot PASS              | ОЖИДАЕТ ПОВТОРА  |
 | 2026-09-25 23:01 | Завершённый запуск → открыть «Ход работы»                                          | Полноэкранная модалка скрывала граф вопреки desktop-макету немодальной правой панели                                                             | PR #1781: правая панель поверх inspector, граф остаётся видимым; крестик/Escape и возврат фокуса                               | Run unit 5/5, typecheck, ESLint PASS; live DOM/focus/console/network/layout PASS; screenshot tool FAIL                          | ОЖИДАЕТ ПОВТОРА  |
+| 2026-09-25 23:12 | Интеграции → Разрешения                                                           | Основной слой карточек показывал служебные capability key, enum и JSON Pointer вместо понятной границы разрешения                                | PR #1781: локализованные риск/ресурс/согласование; точные ключи доступны в раскрываемых технических сведениях                  | Integration unit 12/12, typecheck, ESLint PASS; live console/network/layout/screenshot PASS                                    | ОЖИДАЕТ ПОВТОРА  |
 
 При новом дефекте строка содержит ссылку на относящийся commit в PR, но не
 текст команды пользователя, секрет или полный ответ провайдера. Состояния

@@ -80,6 +80,21 @@ function scopeLabel(candidate: IntegrationGrantConnectionCandidate): string {
     .map(([key, value]) => `${key}=${value.slice(0, 160)}`)
     .join(" · ");
 }
+function approvalPolicyLabel(value: string): string {
+  const key = `integrations.approvalPolicies.${value}`;
+  return t(key);
+}
+function resourceKindLabel(value: string): string {
+  const key = `integrations.integrationResourceKinds.${value}`;
+  return t(key);
+}
+function approvalPathLabel(path: string): string {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
+    .join(".");
+}
 const projectRows = new Map<string, IntegrationGrantProjectCandidate>();
 const recipientRows = new Map<string, IntegrationGrantRecipientCandidate>();
 const capabilityRows = new Map<string, IntegrationGrantCapabilityCandidate>();
@@ -362,10 +377,9 @@ async function loadCapabilities(
       title: item.capability.name,
       description: item.capability.description,
       meta: [
-        item.capability.operation,
         t(`integrations.risk.${item.capability.risk}`),
-        item.capability.resourceKind,
-        item.capability.approvalPolicy,
+        resourceKindLabel(item.capability.resourceKind),
+        approvalPolicyLabel(item.capability.approvalPolicy),
       ].join(" · "),
       disabled: !item.grantable,
       disabledReason: item.grantable
@@ -459,26 +473,31 @@ const canManageSelected = computed(
             </div>
             <div class="grant-capability">
               <strong>{{ item.capabilityName }}</strong>
-              <span class="mono">{{ item.capabilityKey }}</span>
               <span>
                 {{ t("integrations.risk." + item.grant.risk) }} ·
-                {{ item.grant.approvalPolicy }}
+                {{ approvalPolicyLabel(item.grant.approvalPolicy) }}
               </span>
-              <span class="mono">{{ item.resourceKind }}</span>
+              <span>{{ resourceKindLabel(item.resourceKind) }}</span>
               <span
                 v-for="path in item.grant.approvalScopePaths"
                 :key="path"
                 class="mono resource-value"
-                >{{ path }}</span
+                >{{ approvalPathLabel(path) }}</span
               >
               <span
                 v-for="entry in item.resourceValues"
                 :key="entry.key"
-                class="mono resource-value"
-                :title="entry.value"
+                class="resource-value"
+                :title="`${entry.key}=${entry.value}`"
               >
-                {{ entry.key }}={{ entry.value }}
+                {{ entry.value }}
               </span>
+              <details class="grant-technical-details">
+                <summary>{{ t("integrations.technicalDetails") }}</summary>
+                <code>{{ item.capabilityKey }}</code>
+                <code>{{ item.resourceKind }}</code>
+                <code>{{ item.grant.approvalPolicy }}</code>
+              </details>
             </div>
             <StatusBadge :state="item.enabled ? 'ENABLED' : 'REVOKED'" />
             <button
@@ -602,12 +621,14 @@ const canManageSelected = computed(
               </div>
               <div>
                 <dt>{{ t("integrations.resourceKind") }}</dt>
-                <dd class="mono">{{ selectedCapability.resourceKind }}</dd>
+                <dd>
+                  {{ resourceKindLabel(selectedCapability.resourceKind) }}
+                </dd>
               </div>
               <div>
                 <dt>{{ t("integrations.approvalPolicy") }}</dt>
-                <dd class="mono">
-                  {{ selectedCapability.approvalPolicy }}
+                <dd>
+                  {{ approvalPolicyLabel(selectedCapability.approvalPolicy) }}
                 </dd>
               </div>
             </dl>
@@ -645,7 +666,7 @@ const canManageSelected = computed(
                   )
                 "
               />
-              <code>{{ path }}</code>
+              <code>{{ approvalPathLabel(path) }}</code>
             </label>
           </fieldset>
 
@@ -737,6 +758,18 @@ const canManageSelected = computed(
   font-size: 0.8rem;
 }
 .approval-scope-option code {
+  overflow-wrap: anywhere;
+}
+.grant-technical-details {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.grant-technical-details summary {
+  cursor: pointer;
+}
+.grant-technical-details code {
+  display: block;
+  margin-top: 4px;
   overflow-wrap: anywhere;
 }
 .panel-heading,
