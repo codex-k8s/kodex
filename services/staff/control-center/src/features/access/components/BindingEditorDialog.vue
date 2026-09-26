@@ -4,6 +4,10 @@ import { useI18n } from "vue-i18n";
 
 import AccessScopeEditor from "@/features/access/components/AccessScopeEditor.vue";
 import {
+  accessRoleOptions,
+  accessSubjectOptions,
+} from "@/features/access/entity-pickers";
+import {
   emptyBindingDraft,
   scopeToDraft,
   toBindingInput,
@@ -24,6 +28,11 @@ import type {
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
@@ -52,11 +61,35 @@ const permissionMessages = computed(() =>
 );
 
 const form = reactive<BindingDraft>(emptyBindingDraft());
-const selectedRole = computed(() =>
-  props.roles.find((role) => role.currentVersion.ref === form.roleVersionRef),
+const subjectRows = new Map<string, AccessSubject>();
+const roleRows = new Map<string, AccessRole>();
+const selectedRole = computed(
+  () =>
+    roleRows.get(form.roleVersionRef) ??
+    props.roles.find((role) => role.currentVersion.ref === form.roleVersionRef),
 );
-const availableSubjects = computed(() =>
-  props.subjects.filter((subject) => subject.kind === form.subjectKind),
+const selectedSubject = computed(
+  () =>
+    subjectRows.get(form.subjectRef) ??
+    props.subjects.find((subject) => subject.ref === form.subjectRef),
+);
+const selectedSubjectOption = computed<AsyncEntityOption | undefined>(() =>
+  selectedSubject.value
+    ? {
+        ref: selectedSubject.value.ref,
+        title: selectedSubject.value.displayName,
+      }
+    : undefined,
+);
+const selectedRoleOption = computed<AsyncEntityOption | undefined>(() =>
+  selectedRole.value
+    ? {
+        ref: selectedRole.value.currentVersion.ref,
+        title: selectedRole.value.currentVersion.name,
+        description: selectedRole.value.currentVersion.description,
+        meta: `v${String(selectedRole.value.currentVersion.revision)}`,
+      }
+    : undefined,
 );
 const rolePermissions = computed(() =>
   props.permissions.filter((permission) =>
@@ -132,6 +165,55 @@ function submit(): void {
   } else emit("save", input);
 }
 
+function selection(value: string | null | readonly string[]): string {
+  return typeof value === "string" ? value : "";
+}
+
+function pickerLabels(label: string, searchPlaceholder: string) {
+  return {
+    label,
+    searchPlaceholder,
+    loading: i18n.t("common.loading"),
+    loadingMore: i18n.t("common.loading"),
+    empty: i18n.t("common.empty"),
+    error: i18n.t("errors.default"),
+    retry: i18n.t("common.retry"),
+  };
+}
+
+function loadSubjects(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize?: number,
+): Promise<AsyncEntityOptionPage> {
+  return accessSubjectOptions(
+    form.subjectKind,
+    query,
+    cursor,
+    signal,
+    pageSize,
+    (items) => items.forEach((item) => subjectRows.set(item.ref, item)),
+  );
+}
+
+function loadRoles(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize?: number,
+): Promise<AsyncEntityOptionPage> {
+  return accessRoleOptions(
+    query,
+    cursor,
+    signal,
+    pageSize,
+    (items) =>
+      items.forEach((item) => roleRows.set(item.currentVersion.ref, item)),
+    "VERSION",
+  );
+}
+
 watch(
   () => [props.binding, props.initialSubject, props.defaultProjectRef],
   reset,
@@ -140,6 +222,13 @@ watch(
 watch(ownerConditionSupported, (supported) => {
   if (!supported) form.requireOwner = false;
 });
+watch(
+  () => form.subjectKind,
+  (kind) => {
+    if (selectedSubject.value && selectedSubject.value.kind !== kind)
+      form.subjectRef = "";
+  },
+);
 </script>
 
 <template>
@@ -181,51 +270,46 @@ watch(ownerConditionSupported, (supported) => {
             </option>
           </select>
         </label>
-        <label class="field">
+        <div class="field">
           <span>{{ $t("access.bindingEditor.subject") }}</span>
-          <select
-            v-model="form.subjectRef"
-            name="access-binding-subject"
-            required
+          <AsyncEntityPicker
+            :model-value="form.subjectRef"
+            :selected="selectedSubjectOption"
+            :load-page="loadSubjects"
+            :labels="
+              pickerLabels(
+                $t('access.bindingEditor.subject'),
+                $t('access.bindingEditor.chooseSubject'),
+              )
+            "
+            :context-key="form.subjectKind"
+            :placeholder="$t('access.bindingEditor.chooseSubject')"
+            :trigger-label="$t('access.bindingEditor.subject')"
+            :clearable="false"
             :disabled="busy || Boolean(binding)"
-          >
-            <option value="" disabled>
-              {{ $t("access.bindingEditor.chooseSubject") }}
-            </option>
-            <option
-              v-for="subject in availableSubjects"
-              :key="subject.ref"
-              :value="subject.ref"
-            >
-              {{ subject.displayName }}
-            </option>
-          </select>
-        </label>
-        <label class="field field--wide">
+            @update:model-value="form.subjectRef = selection($event)"
+          />
+        </div>
+        <div class="field field--wide">
           <span>{{ $t("access.bindingEditor.role") }}</span>
-          <select
-            v-model="form.roleVersionRef"
-            name="access-binding-role-version"
-            required
+          <AsyncEntityPicker
+            :model-value="form.roleVersionRef"
+            :selected="selectedRoleOption"
+            :load-page="loadRoles"
+            :labels="
+              pickerLabels(
+                $t('access.bindingEditor.role'),
+                $t('access.bindingEditor.chooseRole'),
+              )
+            "
+            :placeholder="$t('access.bindingEditor.chooseRole')"
+            :trigger-label="$t('access.bindingEditor.role')"
+            :clearable="false"
             :disabled="busy"
-          >
-            <option value="" disabled>
-              {{ $t("access.bindingEditor.chooseRole") }}
-            </option>
-            <option
-              v-for="role in roles.filter((item) => item.state === 'ACTIVE')"
-              :key="role.currentVersion.ref"
-              :value="role.currentVersion.ref"
-            >
-              {{ role.currentVersion.name }} · v{{
-                role.currentVersion.revision
-              }}
-              ·
-              {{ $t(`access.roleKinds.${role.kind}`) }}
-            </option>
-          </select>
+            @update:model-value="form.roleVersionRef = selection($event)"
+          />
           <small>{{ $t("access.bindingEditor.pinnedVersion") }}</small>
-        </label>
+        </div>
       </div>
 
       <div>
