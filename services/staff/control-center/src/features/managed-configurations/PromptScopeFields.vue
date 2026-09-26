@@ -135,11 +135,12 @@ async function load(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!props.projectRef) return { items: [] };
   const options = {
     path: { projectRef: props.projectRef },
-    query: { query, pageToken, pageSize: 40 },
+    query: { query, pageToken, pageSize },
     signal: requestSignal(signal),
   };
   const page =

@@ -935,6 +935,7 @@ async function connectionCandidates(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
   const key = impactDefinitionKey.value;
   if (!key) throw new Error("Integration definition key is unavailable");
@@ -943,6 +944,7 @@ async function connectionCandidates(
     query,
     cursor,
     signal,
+    pageSize,
   );
   const bound = new Set(
     (impactValue.value?.consumers ?? [])

@@ -321,6 +321,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     search: string,
     pageToken?: string,
     signal?: AbortSignal,
+    pageSize = 30,
   ): Promise<AsyncEntityOptionPage> {
     const needle = search.trim().toLocaleLowerCase();
     const visitedTokens = new Set<string>();
@@ -331,7 +332,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           listRoleImageRecipes({
             path: { projectRef },
             query: {
-              pageSize: 30,
+              pageSize,
               ...(cursor ? { pageToken: cursor } : {}),
             },
             signal: signal ?? requestSignal(),
@@ -449,6 +450,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     environmentRef: string,
     reset = true,
     signal?: AbortSignal,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = reset
       ? undefined
@@ -462,7 +464,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             listRuntimeEnvironmentAgents({
               path: { environmentRef },
               query: {
-                pageSize: 30,
+                pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
                 ...(pageToken ? { pageToken } : {}),
               },
               signal: requestSignal(signal),

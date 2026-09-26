@@ -38,6 +38,7 @@ import AssistantLaunchedRunCard from "@/features/assistant/components/AssistantL
 import AssistantRoleImageBuildCard from "@/features/assistant/components/AssistantRoleImageBuildCard.vue";
 import { OpenAPIImportDialog } from "@/features/managed-configurations";
 import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   assistantContextIdentity,
   assistantContextTitle,
@@ -152,6 +153,24 @@ const desktopHistory = ref<HTMLElement>();
 const desktopHistorySentinel = ref<HTMLElement>();
 const mobileHistory = ref<HTMLElement>();
 const mobileHistorySentinel = ref<HTMLElement>();
+const desktopHistoryPageSize = useAdaptiveCursorPageSize({
+  container: desktopHistory,
+  itemSelector: ".assistant-conversation-entry",
+  itemCount: () => store.sortedConversations.length,
+  estimatedViewportHeight: 720,
+  estimatedItemHeight: 58,
+  minimum: 8,
+  maximum: 100,
+});
+const mobileHistoryPageSize = useAdaptiveCursorPageSize({
+  container: mobileHistory,
+  itemSelector: ".assistant-history__menu > button",
+  itemCount: () => store.sortedConversations.length,
+  estimatedViewportHeight: 420,
+  estimatedItemHeight: 58,
+  minimum: 6,
+  maximum: 100,
+});
 const desktopHistoryVisible = ref(false);
 const historyMedia =
   typeof window === "undefined"
@@ -284,9 +303,21 @@ for (const [root, sentinel, visible] of [
       !store.loadingMore &&
       !store.busy &&
       !store.historyProblem,
-    loadMore: () => store.loadMoreHistory(),
+    loadMore: () =>
+      store.loadMoreHistory(
+        desktopHistoryVisible.value
+          ? desktopHistoryPageSize.value
+          : mobileHistoryPageSize.value,
+      ),
   });
 }
+
+watch(
+  [desktopHistoryPageSize, mobileHistoryPageSize, desktopHistoryVisible],
+  ([desktopSize, mobileSize, desktopVisible]) =>
+    store.setHistoryPageSize(desktopVisible ? desktopSize : mobileSize),
+  { immediate: true },
+);
 
 const contextIdentity = computed(() =>
   assistantContextIdentity(props.context, props.projectRef),

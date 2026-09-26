@@ -275,10 +275,11 @@ async function loadProjects(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!props.selectedConnection) return { items: [] };
   const generation = projectGeneration;
-  const page = await projectLoader.value(query, cursor, signal);
+  const page = await projectLoader.value(query, cursor, signal, pageSize);
   if (signal.aborted || generation !== projectGeneration) return { items: [] };
   if (page.pins.connectionVersion !== props.selectedConnection.version)
     throw new Error("Integration connection version changed");
@@ -302,10 +303,11 @@ async function loadRecipients(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!props.projectRef || !props.selectedConnection) return { items: [] };
   const generation = recipientGeneration;
-  const page = await recipientLoader.value(query, cursor, signal);
+  const page = await recipientLoader.value(query, cursor, signal, pageSize);
   if (signal.aborted || generation !== recipientGeneration)
     return { items: [] };
   if (!cursor) recipientRows.clear();
@@ -329,8 +331,9 @@ async function loadConnections(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await connectionLoader(query, cursor, signal);
+  const page = await connectionLoader(query, cursor, signal, pageSize);
   if (signal.aborted) return { items: [] };
   if (!cursor) connectionRows.value.clear();
   page.items.forEach((item) =>
@@ -362,11 +365,12 @@ async function loadCapabilities(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!recipientCandidate.value || !props.selectedConnection)
     return { items: [] };
   const generation = capabilityGeneration;
-  const page = await capabilityLoader.value(query, cursor, signal);
+  const page = await capabilityLoader.value(query, cursor, signal, pageSize);
   if (signal.aborted || generation !== capabilityGeneration)
     return { items: [] };
   if (!cursor) capabilityRows.clear();

@@ -140,6 +140,7 @@ async function loadPage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   const scope = JSON.stringify([scopeKey.value, query.trim()]);
   if (cursor && catalogScope !== scope)
@@ -151,6 +152,7 @@ async function loadPage(
     cursor,
     signal,
     cursor ? catalogSnapshot : undefined,
+    pageSize,
   );
   signal.throwIfAborted();
   if (scope !== JSON.stringify([scopeKey.value, query.trim()]))

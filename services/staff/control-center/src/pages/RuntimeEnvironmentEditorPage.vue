@@ -236,6 +236,33 @@ const boundAgents = computed(() =>
     ? (runtime.environmentAgents[environmentRef.value] ?? [])
     : [],
 );
+const boundAgentList = ref<HTMLElement>();
+const boundAgentSentinel = ref<HTMLElement>();
+const boundAgentPageSize = useAdaptiveCursorPageSize({
+  container: boundAgentList,
+  itemSelector: ".chip-list > span:not(.cursor-sentinel)",
+  itemCount: () => boundAgents.value.length,
+  estimatedViewportHeight: 240,
+  estimatedItemHeight: 36,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: boundAgentList,
+  sentinel: boundAgentSentinel,
+  enabled: () =>
+    Boolean(
+      current.value && runtime.environmentAgentCursors[current.value.ref],
+    ) && !runtime.loading[`environment-agents:${current.value?.ref ?? ""}`],
+  loadMore: () =>
+    current.value &&
+    runtime.loadEnvironmentAgents(
+      current.value.ref,
+      false,
+      undefined,
+      boundAgentPageSize.value,
+    ),
+});
 const readiness = computed(() =>
   environmentReadiness(input, current.value, serverReadiness.value),
 );
@@ -396,8 +423,19 @@ async function loadImageArtifact(
   }
 }
 
-function loadImagePage(query: string, cursor?: string) {
-  return runtime.searchPromotedRoleImagePage(projectRef.value, query, cursor);
+function loadImagePage(
+  query: string,
+  cursor?: string,
+  signal?: AbortSignal,
+  pageSize = 30,
+) {
+  return runtime.searchPromotedRoleImagePage(
+    projectRef.value,
+    query,
+    cursor,
+    signal,
+    pageSize,
+  );
 }
 
 async function selectImage(option: AsyncEntityOption): Promise<void> {
@@ -432,7 +470,12 @@ async function load(): Promise<void> {
         current.value.currentVersion.image.artifactRef,
       ),
       runtime.loadEnvironmentReadiness(current.value.ref),
-      runtime.loadEnvironmentAgents(current.value.ref),
+      runtime.loadEnvironmentAgents(
+        current.value.ref,
+        true,
+        undefined,
+        boundAgentPageSize.value,
+      ),
     ]);
 }
 
@@ -1502,23 +1545,22 @@ onBeforeUnmount(() => {
                 </div>
                 <section v-if="current" class="effective-preview">
                   <h3>{{ $t("agents.title") }} · {{ boundAgents.length }}</h3>
-                  <div v-if="boundAgents.length" class="chip-list">
+                  <div
+                    v-if="boundAgents.length"
+                    ref="boundAgentList"
+                    class="chip-list chip-list--cursor"
+                  >
                     <span v-for="agent in boundAgents" :key="agent.ref">
                       {{ agent.name }}
                     </span>
+                    <span
+                      v-if="runtime.environmentAgentCursors[current.ref]"
+                      ref="boundAgentSentinel"
+                      class="cursor-sentinel"
+                      aria-hidden="true"
+                    />
                   </div>
                   <p v-else class="secondary-text">{{ $t("common.empty") }}</p>
-                  <button
-                    v-if="runtime.environmentAgentCursors[current.ref]"
-                    class="button"
-                    type="button"
-                    :disabled="
-                      runtime.loading[`environment-agents:${current.ref}`]
-                    "
-                    @click="runtime.loadEnvironmentAgents(current.ref, false)"
-                  >
-                    {{ $t("roleImages.loadMore") }}
-                  </button>
                 </section>
                 <section class="effective-preview">
                   <h3>{{ $t("runtime.safeEffectivePreview") }}</h3>
@@ -2099,6 +2141,15 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+.chip-list--cursor {
+  max-height: 240px;
+  overflow: auto;
+}
+.chip-list .cursor-sentinel {
+  min-height: 1px;
+  padding: 0;
+  border: 0;
 }
 .chip-list span {
   padding: 4px 7px;

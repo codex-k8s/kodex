@@ -119,12 +119,14 @@ async function loadSecretPage(
   query: string,
   cursor?: string,
   signal?: AbortSignal,
+  pageSize = 20,
 ) {
   const page = await loadRuntimeSecretPage(
     props.projectRef,
     query,
     cursor,
     signal,
+    pageSize,
   );
   return {
     items: page.items.map(

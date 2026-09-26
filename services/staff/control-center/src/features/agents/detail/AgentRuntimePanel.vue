@@ -318,6 +318,7 @@ function localOptionPage(
   options: readonly AsyncEntityOption[],
   query: string,
   cursor?: string,
+  pageSize = 20,
 ): AsyncEntityOptionPage {
   const normalized = query.trim().toLocaleLowerCase();
   const filtered = normalized
@@ -329,7 +330,7 @@ function localOptionPage(
     : [...options];
   const offset = Number.parseInt(cursor ?? "0", 10);
   const safeOffset = Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
-  const items = filtered.slice(safeOffset, safeOffset + 20);
+  const items = filtered.slice(safeOffset, safeOffset + pageSize);
   const nextOffset = safeOffset + items.length;
   return {
     items,
@@ -342,15 +343,23 @@ function localOptionPage(
 function loadProviderPage(
   query: string,
   cursor?: string,
+  _signal?: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  return Promise.resolve(localOptionPage(providerOptions.value, query, cursor));
+  return Promise.resolve(
+    localOptionPage(providerOptions.value, query, cursor, pageSize),
+  );
 }
 
 function loadRuntimePage(
   query: string,
   cursor?: string,
+  _signal?: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  return Promise.resolve(localOptionPage(runtimeOptions.value, query, cursor));
+  return Promise.resolve(
+    localOptionPage(runtimeOptions.value, query, cursor, pageSize),
+  );
 }
 
 function pickerValue(

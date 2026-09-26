@@ -167,6 +167,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     projectRef: string,
     recipeRef: string,
     showLoading = true,
+    revisionPageSize = 20,
   ): Promise<void> {
     const current = ++detailGeneration;
     loadingDetail.value = showLoading;
@@ -191,7 +192,12 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         detail.activeArtifact
           ? loadRoleImageDependencies(projectRef, detail.activeArtifact.ref)
           : Promise.resolve([]),
-        loadRoleImageRevisionPage(projectRef, recipeRef),
+        loadRoleImageRevisionPage(
+          projectRef,
+          recipeRef,
+          undefined,
+          revisionPageSize,
+        ),
       ]);
       if (current !== detailGeneration) return;
       recipes[detail.recipe.ref] = detail.recipe;
@@ -215,6 +221,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   async function loadMoreRevisions(
     projectRef: string,
     recipeRef: string,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = revisionNextPageToken[recipeRef];
     if (!pageToken || loadingDetail.value) return;
@@ -226,6 +233,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         projectRef,
         recipeRef,
         pageToken,
+        pageSize,
       );
       if (current !== detailGeneration) return;
       const merged = new Map(

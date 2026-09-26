@@ -41,12 +41,13 @@ export async function listProposals(
   signal: AbortSignal,
   pageToken?: string,
   previous: Proposal[] = [],
+  pageSize = 30,
 ) {
   const page = (
     await unwrap(
       sdk.listManagedConfigurationGitWriteBacks({
         path: { configurationRef },
-        query: { pageSize: 30, pageToken },
+        query: { pageSize, pageToken },
         signal: requestSignal(signal),
         cache: "no-store",
       }),

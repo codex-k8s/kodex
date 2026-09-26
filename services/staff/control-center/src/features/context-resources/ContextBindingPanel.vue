@@ -49,8 +49,15 @@ async function loadAgents(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await bindingAgents(props.projectRef, query, cursor, signal);
+  const page = await bindingAgents(
+    props.projectRef,
+    query,
+    cursor,
+    signal,
+    pageSize,
+  );
   return {
     ...page,
     items: page.items.map((item) => ({

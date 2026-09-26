@@ -178,8 +178,9 @@ async function searchDefinitions(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await loadProviderDefinitions(query, cursor, signal);
+  const page = await loadProviderDefinitions(query, cursor, signal, pageSize);
   if (!Array.isArray(page.items) || typeof page.nextPageToken !== "string")
     throw new Error("Invalid provider definition catalog");
   return {

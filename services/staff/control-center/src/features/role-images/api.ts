@@ -149,13 +149,14 @@ export async function loadRoleImageRevisionPage(
   projectRef: string,
   recipeRef: string,
   pageToken?: string,
+  pageSize = 40,
 ): Promise<RoleImageRecipeRevisionPage> {
   return (
     await unwrap(
       listRoleImageRecipeRevisions({
         path: { projectRef, recipeRef },
         query: {
-          pageSize: 40,
+          pageSize,
           ...(pageToken ? { pageToken } : {}),
         },
         signal: requestSignal(),

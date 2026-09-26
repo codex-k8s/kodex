@@ -112,6 +112,7 @@ async function loadAccounts(
     request.signal,
     key,
     props.usageContext,
+    request.pageSize,
   );
   if (request.signal.aborted || expectedContext !== contextKey.value)
     return { items: [], nextCursor: null };

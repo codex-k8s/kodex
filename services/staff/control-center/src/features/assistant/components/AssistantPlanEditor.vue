@@ -734,6 +734,7 @@ function loadImagePage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
   if (!props.plan.projectRef) return Promise.resolve({ items: [] });
   return runtime.searchPromotedRoleImagePage(
@@ -741,6 +742,7 @@ function loadImagePage(
     query,
     cursor,
     signal,
+    pageSize,
   );
 }
 

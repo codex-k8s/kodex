@@ -68,13 +68,14 @@ export async function readDraftImpact(
   signal: AbortSignal,
   query = "",
   pageToken?: string,
+  pageSize = 40,
 ): Promise<RuntimeSecretDraftImpactPage> {
   const result = (
     await unwrap(
       getRuntimeSecretDraftImpact({
         path: { planRef: plan.ref },
         query: {
-          pageSize: 40,
+          pageSize,
           ...(query.trim() ? { query: query.trim() } : {}),
           ...(pageToken ? { pageToken } : {}),
         },

@@ -56,6 +56,17 @@ const selectedReadiness = computed(() =>
 const selectedAgents = computed(() =>
   selected.value ? (runtime.environmentAgents[selected.value.ref] ?? []) : [],
 );
+const agentList = ref<HTMLElement>();
+const agentSentinel = ref<HTMLElement>();
+const agentPageSize = useAdaptiveCursorPageSize({
+  container: agentList,
+  itemSelector: ".chip-list > span:not(.cursor-sentinel)",
+  itemCount: () => selectedAgents.value.length,
+  estimatedViewportHeight: 240,
+  estimatedItemHeight: 36,
+  minimum: 6,
+  maximum: 100,
+});
 const actionRef = ref("");
 const deleteTarget = ref<RuntimeEnvironmentSet>();
 let generation = 0;
@@ -75,6 +86,22 @@ useCursorInfiniteScroll({
   sentinel,
   enabled: () => Boolean(cursor.value) && !loading.value && !loadingMore.value,
   loadMore: () => load(false),
+});
+useCursorInfiniteScroll({
+  root: agentList,
+  sentinel: agentSentinel,
+  enabled: () =>
+    Boolean(
+      selected.value && runtime.environmentAgentCursors[selected.value.ref],
+    ) && !runtime.loading[`environment-agents:${selected.value?.ref ?? ""}`],
+  loadMore: () =>
+    selected.value &&
+    runtime.loadEnvironmentAgents(
+      selected.value.ref,
+      false,
+      inspectorController?.signal,
+      agentPageSize.value,
+    ),
 });
 
 async function load(reset = true): Promise<void> {
@@ -151,7 +178,12 @@ async function loadOperationalState(
 ): Promise<void> {
   await Promise.all([
     runtime.loadEnvironmentReadiness(environmentRef, signal),
-    runtime.loadEnvironmentAgents(environmentRef, true, signal),
+    runtime.loadEnvironmentAgents(
+      environmentRef,
+      true,
+      signal,
+      agentPageSize.value,
+    ),
   ]);
 }
 
@@ -597,10 +629,20 @@ onBeforeUnmount(() => {
                 {{ environmentReadinessMessage(blocker, t) }}
               </li>
             </ul>
-            <div v-if="selectedAgents.length" class="chip-list">
+            <div
+              v-if="selectedAgents.length"
+              ref="agentList"
+              class="chip-list chip-list--cursor"
+            >
               <span v-for="agent in selectedAgents" :key="agent.ref">
                 {{ agent.name }}
               </span>
+              <span
+                v-if="runtime.environmentAgentCursors[selected.ref]"
+                ref="agentSentinel"
+                class="cursor-sentinel"
+                aria-hidden="true"
+              />
             </div>
             <ProblemNotice
               v-if="runtime.problems[`environment-agents:${selected.ref}`]"
@@ -610,24 +652,10 @@ onBeforeUnmount(() => {
                   selected.ref,
                   true,
                   inspectorController?.signal,
+                  agentPageSize,
                 )
               "
             />
-            <button
-              v-if="runtime.environmentAgentCursors[selected.ref]"
-              class="button"
-              type="button"
-              :disabled="runtime.loading[`environment-agents:${selected.ref}`]"
-              @click="
-                runtime.loadEnvironmentAgents(
-                  selected.ref,
-                  false,
-                  inspectorController?.signal,
-                )
-              "
-            >
-              {{ $t("roleImages.loadMore") }}
-            </button>
           </section>
           <section>
             <h3>{{ $t("runtime.secretDescriptorNames") }}</h3>
@@ -851,6 +879,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+.chip-list--cursor {
+  max-height: 240px;
+  overflow: auto;
+}
+.chip-list .cursor-sentinel {
+  min-height: 1px;
+  padding: 0;
+  border: 0;
 }
 .chip-list span {
   padding: 4px 7px;

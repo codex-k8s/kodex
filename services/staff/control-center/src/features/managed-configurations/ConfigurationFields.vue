@@ -66,8 +66,9 @@ function supported(key: string): boolean {
 }
 async function loadModels(
   query: string,
-  _cursor: string | undefined,
+  cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
   const generation = ++catalogGeneration;
   const combined = AbortSignal.any([signal, catalogScope.signal]);
@@ -108,23 +109,32 @@ async function loadModels(
         });
       }
     }
+    const filtered = result.models.filter((item) =>
+      item.model.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+    );
+    const parsedOffset = Number.parseInt(cursor ?? "0", 10);
+    const offset =
+      Number.isSafeInteger(parsedOffset) && parsedOffset >= 0
+        ? parsedOffset
+        : 0;
+    const items = filtered.slice(offset, offset + pageSize);
+    const nextOffset = offset + items.length;
     return {
-      items: result.models
-        .filter((item) =>
-          item.model.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
-        )
-        .map((item) => ({
-          ref: item.model,
-          title: item.model,
-          meta: [
-            item.model === result.recommendedModel
-              ? t("managed.sttCatalog.recommended")
-              : "",
-            item.legacy ? t("managed.sttCatalog.legacy") : "",
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        })),
+      items: items.map((item) => ({
+        ref: item.model,
+        title: item.model,
+        meta: [
+          item.model === result.recommendedModel
+            ? t("managed.sttCatalog.recommended")
+            : "",
+          item.legacy ? t("managed.sttCatalog.legacy") : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+      ...(nextOffset < filtered.length
+        ? { nextPageToken: String(nextOffset) }
+        : {}),
     };
   } catch (error) {
     if (!combined.aborted && generation === catalogGeneration)
@@ -238,8 +248,9 @@ async function loadAccounts(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await providerAccounts(query, cursor, signal);
+  const page = await providerAccounts(query, cursor, signal, pageSize);
   return {
     items: page.items.map((item) => ({
       ref: item.ref,

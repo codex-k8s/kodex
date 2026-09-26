@@ -15,6 +15,8 @@ import type { RuntimeSecret } from "./model";
 import { readRuntimeSecret } from "./api";
 import type { AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   readSecretDraft,
   safeDraftProblem,
@@ -58,6 +60,8 @@ const page = shallowRef<RuntimeSecretDraftImpactPage>();
 const busy = ref(false);
 const problem = shallowRef<AppProblem>();
 const query = ref("");
+const impactList = ref<HTMLElement>();
+const impactSentinel = ref<HTMLElement>();
 const selected = ref<string[]>([]);
 const selectionReady = ref(false);
 const pending = ref(false);
@@ -75,6 +79,15 @@ let disposed = false;
 const isActive = () => !disposed;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const cursors = new Set<string>();
+const impactPageSize = useAdaptiveCursorPageSize({
+  container: impactList,
+  itemSelector: ".draft-impact__item",
+  itemCount: () => page.value?.items.length ?? 0,
+  estimatedViewportHeight: 360,
+  estimatedItemHeight: 84,
+  minimum: 6,
+  maximum: 100,
+});
 const canPublish = computed(
   () =>
     !busy.value &&
@@ -143,6 +156,7 @@ async function load(more = false): Promise<void> {
     controller.signal,
     query.value,
     more ? before?.nextPageToken : undefined,
+    impactPageSize.value,
   );
   if (disposed) return;
   if (more && before) {
@@ -244,6 +258,14 @@ async function refresh(more = false): Promise<void> {
     if (!disposed) working(false);
   }
 }
+
+useCursorInfiniteScroll({
+  root: impactList,
+  sentinel: impactSentinel,
+  enabled: () =>
+    Boolean(page.value?.nextPageToken) && !busy.value && !problem.value,
+  loadMore: () => refresh(true),
+});
 
 async function publish(replace = true): Promise<void> {
   if (!canPublish.value || !plan.value) return;
@@ -473,8 +495,12 @@ onMounted(() => void restore());
       <p v-if="page">
         {{ t("runtimeSecrets.draft.visibleTotal", { total: page.total }) }}
       </p>
-      <ul v-if="page" class="draft-impact__items">
-        <li v-for="(item, index) in page.items" :key="item.ref">
+      <ul v-if="page" ref="impactList" class="draft-impact__items">
+        <li
+          v-for="(item, index) in page.items"
+          :key="item.ref"
+          class="draft-impact__item"
+        >
           <label>
             <input
               v-if="plan.state === 'PREPARED'"
@@ -502,15 +528,13 @@ onMounted(() => void restore());
             {{ item.resultBindingVersion }}</small
           >
         </li>
+        <li
+          v-if="page.nextPageToken"
+          ref="impactSentinel"
+          class="draft-impact__sentinel"
+          aria-hidden="true"
+        />
       </ul>
-      <button
-        v-if="page?.nextPageToken"
-        class="button"
-        :disabled="busy"
-        @click="refresh(true)"
-      >
-        {{ t("runtimeSecrets.loadMore") }}
-      </button>
       <button
         v-if="plan.state === 'PREPARED' || pending"
         class="button button--primary"
@@ -558,6 +582,11 @@ onMounted(() => void restore());
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow-wrap: anywhere;
+}
+.draft-impact__items .draft-impact__sentinel {
+  min-height: 1px;
+  padding: 0;
+  border: 0;
 }
 .draft-impact__items label {
   display: flex;

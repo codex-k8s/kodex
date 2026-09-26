@@ -42,6 +42,7 @@ export async function readConversations(
   pageToken?: string,
   signal?: AbortSignal,
   filter: { query?: string; state?: AssistantConversation["state"] } = {},
+  pageSize = 40,
 ): Promise<ListAssistantConversationsResponse> {
   return readWithRetry(
     async () =>
@@ -49,7 +50,7 @@ export async function readConversations(
         await unwrap(
           listAssistantConversations({
             query: {
-              pageSize: 40,
+              pageSize,
               ...(projectRef ? { projectRef } : {}),
               ...(pageToken ? { pageToken } : {}),
               ...(filter.query?.trim() ? { query: filter.query.trim() } : {}),

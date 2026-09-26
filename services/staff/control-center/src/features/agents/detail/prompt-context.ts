@@ -63,6 +63,7 @@ export async function readPromptVariables(
   pageToken: string | undefined,
   expectedContextDigest: string | undefined,
   signal: AbortSignal,
+  pageSize = 50,
 ) {
   const page = (
     await unwrap(
@@ -70,7 +71,7 @@ export async function readPromptVariables(
         body: {
           ...target,
           query,
-          pageSize: 50,
+          pageSize,
           pageToken,
           expectedContextDigest,
         },
@@ -95,7 +96,7 @@ export function createPromptVariableLoader(
   onPin?: (pin: PromptContextPin) => void,
 ): AsyncEntityLoader<TemplateVariablePickerItem> {
   let snapshot: { digest: string; query: string; cursor?: string } | undefined;
-  return async ({ query, cursor, signal }) => {
+  return async ({ query, cursor, signal, pageSize = 50 }) => {
     if (
       cursor &&
       (!snapshot || snapshot.query !== query || snapshot.cursor !== cursor)
@@ -109,6 +110,7 @@ export function createPromptVariableLoader(
       cursor,
       cursor ? snapshot?.digest : undefined,
       signal,
+      pageSize,
     );
     signal.throwIfAborted();
     snapshot = {

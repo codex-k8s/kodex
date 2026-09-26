@@ -89,6 +89,31 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       b.updatedAt.localeCompare(a.updatedAt),
     ),
   );
+  const historyPageSize = ref<number>();
+
+  function setHistoryPageSize(value: number): void {
+    historyPageSize.value = Math.min(100, Math.max(1, Math.floor(value)));
+  }
+
+  function readHistory(
+    nextProjectRef: string | undefined,
+    pageToken: string | undefined,
+    signal: AbortSignal,
+  ) {
+    const filter = {
+      query: historyQuery.value,
+      state: historyState.value,
+    };
+    return historyPageSize.value
+      ? readConversations(
+          nextProjectRef,
+          pageToken,
+          signal,
+          filter,
+          historyPageSize.value,
+        )
+      : readConversations(nextProjectRef, pageToken, signal, filter);
+  }
 
   function selectMatchingConversation(): void {
     const currentContext = context.value;
@@ -133,10 +158,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     try {
       const [assistantValue, firstPage] = await Promise.all([
         readAssistant(signal),
-        readConversations(nextProjectRef, undefined, signal, {
-          query: historyQuery.value,
-          state: historyState.value,
-        }),
+        readHistory(nextProjectRef, undefined, signal),
       ]);
       if (current !== generation) return;
       checkPage(firstPage, nextProjectRef);
@@ -151,12 +173,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         if (count++ >= 30)
           throw new Error("Assistant history readback page limit exceeded");
         historyCursors.add(page.nextPageToken);
-        page = await readConversations(
-          nextProjectRef,
-          page.nextPageToken,
-          signal,
-          { query: historyQuery.value, state: historyState.value },
-        );
+        page = await readHistory(nextProjectRef, page.nextPageToken, signal);
         if (current !== generation) return;
         checkPage(page, nextProjectRef);
         conversationValues.push(...page.items);
@@ -197,19 +214,19 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     }
   }
 
-  async function loadMoreHistory(): Promise<void> {
+  async function loadMoreHistory(pageSize?: number): Promise<void> {
     const cursor = nextPageToken.value;
     if (!cursor || loading.value || loadingMore.value || busy.value) return;
     const current = generation;
     controller ??= new AbortController();
     loadingMore.value = true;
     historyProblem.value = undefined;
+    if (pageSize !== undefined) setHistoryPageSize(pageSize);
     try {
-      const page = await readConversations(
+      const page = await readHistory(
         projectRef.value,
         cursor,
         controller.signal,
-        { query: historyQuery.value, state: historyState.value },
       );
       if (current !== generation) return;
       historyCursors.add(cursor);
@@ -485,6 +502,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     filterHistory,
     archiveSelected,
     loadMoreHistory,
+    setHistoryPageSize,
     cancelReads,
     load,
     setContext,

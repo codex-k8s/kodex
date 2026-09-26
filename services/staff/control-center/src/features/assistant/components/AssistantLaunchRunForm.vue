@@ -260,6 +260,7 @@ function loadPage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!props.projectRef || !targetType.value)
     return Promise.resolve({ items: [] });
@@ -267,6 +268,7 @@ function loadPage(
     query,
     cursor,
     signal,
+    pageSize,
   );
 }
 function setWorkflowInput(field: WorkflowInputField, value: string): void {

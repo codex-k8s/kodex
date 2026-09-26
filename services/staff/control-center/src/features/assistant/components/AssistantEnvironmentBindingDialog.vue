@@ -88,9 +88,10 @@ async function loadAgents(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ): Promise<AsyncEntityOptionPage> {
   const page = await loadAgentCatalogPage(
-    { projectRef: props.projectRef, query, pageToken: cursor, pageSize: 30 },
+    { projectRef: props.projectRef, query, pageToken: cursor, pageSize },
     signal,
   );
   return {

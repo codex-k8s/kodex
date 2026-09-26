@@ -27,12 +27,13 @@ export async function loadOverlayHistory(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
   const page = (
     await unwrap(
       listConfigOverlayRevisions({
         path: { agentRef },
-        query: { query, pageToken, pageSize: 30 },
+        query: { query, pageToken, pageSize },
         signal: requestSignal(signal),
       }),
     )

@@ -86,6 +86,10 @@ const runsLoading = ref(false);
 const runsProblem = ref<AppProblem>();
 const listSentinel = ref<HTMLElement>();
 const listRoot = ref<HTMLElement>();
+const revisionRoot = ref<HTMLElement>();
+const revisionSentinel = ref<HTMLElement>();
+const runRoot = ref<HTMLElement>();
+const runSentinel = ref<HTMLElement>();
 
 let listController: AbortController | undefined;
 let historyController: AbortController | undefined;
@@ -118,6 +122,36 @@ const pageSize = useAdaptiveCursorPageSize({
   itemSelector: ".automation-row",
   itemCount: () => filteredSchedules.value.length,
   estimatedItemHeight: 76,
+});
+const revisionPageSize = useAdaptiveCursorPageSize({
+  container: revisionRoot,
+  itemSelector: ".automation-details__revision",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 180,
+  minimum: 4,
+  maximum: 100,
+});
+const runPageSize = useAdaptiveCursorPageSize({
+  container: runRoot,
+  itemSelector: ".automation-details__run",
+  itemCount: () => runOccurrences.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 190,
+  minimum: 4,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: revisionRoot,
+  sentinel: revisionSentinel,
+  enabled: () => Boolean(revisionsToken.value) && !revisionsLoading.value,
+  loadMore: () => loadRevisions(false),
+});
+useCursorInfiniteScroll({
+  root: runRoot,
+  sentinel: runSentinel,
+  enabled: () => Boolean(runsToken.value) && !runsLoading.value,
+  loadMore: () => loadRuns(false),
 });
 const selectedSchedule = computed(() => scopedSchedule(selectedRef.value));
 const selectedCapabilities = computed(() =>
@@ -350,6 +384,7 @@ async function loadRevisions(reset = false): Promise<void> {
       scheduleRef,
       reset ? undefined : revisionsToken.value,
       controller.signal,
+      revisionPageSize.value,
     );
     if (controller.signal.aborted || scheduleRef !== selectedRef.value) return;
     revisions.value = reset
@@ -379,6 +414,7 @@ async function loadRuns(reset = false): Promise<void> {
       scheduleRef,
       reset ? undefined : runsToken.value,
       controller.signal,
+      runPageSize.value,
     );
     if (controller.signal.aborted || scheduleRef !== selectedRef.value) return;
     runOccurrences.value = reset
@@ -746,6 +782,7 @@ onBeforeUnmount(() => {
 
           <section
             v-else-if="selectedSection === 'VERSIONS'"
+            ref="revisionRoot"
             class="automation-details__history"
           >
             <div class="automation-details__history-heading">
@@ -803,18 +840,15 @@ onBeforeUnmount(() => {
                 </div>
               </dl>
             </article>
-            <button
+            <div
               v-if="revisionsToken"
-              class="button"
-              type="button"
-              :disabled="revisionsLoading"
-              @click="loadRevisions(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
+              ref="revisionSentinel"
+              class="cursor-sentinel"
+              aria-hidden="true"
+            />
           </section>
 
-          <section v-else class="automation-details__history">
+          <section v-else ref="runRoot" class="automation-details__history">
             <div class="automation-details__history-heading">
               <History :size="18" aria-hidden="true" />
               <h3>{{ $t("automations.runHistory") }}</h3>
@@ -876,15 +910,12 @@ onBeforeUnmount(() => {
                 >{{ $t("common.open") }}</RouterLink
               >
             </article>
-            <button
+            <div
               v-if="runsToken"
-              class="button"
-              type="button"
-              :disabled="runsLoading"
-              @click="loadRuns(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
+              ref="runSentinel"
+              class="cursor-sentinel"
+              aria-hidden="true"
+            />
           </section>
 
           <div class="automation-details__actions" :aria-label="custom.actions">
@@ -1180,6 +1211,8 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
   padding-top: 14px;
+  max-height: min(520px, calc(100dvh - 280px));
+  overflow: auto;
 }
 .automation-details__history-heading {
   justify-content: flex-start;

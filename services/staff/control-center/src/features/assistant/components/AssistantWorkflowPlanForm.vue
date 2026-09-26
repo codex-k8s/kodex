@@ -173,10 +173,11 @@ async function loadAgents(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!props.projectRef) return { items: [] };
   const page = await loadAgentCatalogPage(
-    { projectRef: props.projectRef, query, pageToken, pageSize: 40 },
+    { projectRef: props.projectRef, query, pageToken, pageSize },
     signal,
   );
   if (page.items.some((agent) => agent.projectRef !== props.projectRef))

@@ -321,9 +321,10 @@ async function loadArtifacts(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!project.value) return { items: [] };
-  const page = await artifacts(project.value, query, cursor, signal);
+  const page = await artifacts(project.value, query, cursor, signal, pageSize);
   for (const artifact of page.items)
     artifactValues.set(
       `${artifact.ref}:${String(artifact.revision)}`,
@@ -344,9 +345,10 @@ async function loadRuns(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   return project.value
-    ? runs(project.value, query, cursor, signal)
+    ? runs(project.value, query, cursor, signal, pageSize)
     : { items: [] };
 }
 function addArtifact(value: unknown): void {

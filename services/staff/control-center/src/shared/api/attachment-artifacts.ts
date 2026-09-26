@@ -11,8 +11,6 @@ import type {
   AsyncEntityPickerItem,
 } from "@/shared/ui/async-entity-picker";
 
-const artifactPageSize = 40;
-
 export interface AttachmentArtifactPickerItem extends AsyncEntityPickerItem {
   artifact: Artifact;
 }
@@ -42,7 +40,7 @@ function toPickerItem(artifact: Artifact): AttachmentArtifactPickerItem {
 export function createAttachmentArtifactLoader(
   projectRef?: string,
 ): AsyncEntityLoader<AttachmentArtifactPickerItem> {
-  return async ({ cursor, query, signal }) => {
+  return async ({ cursor, query, signal, pageSize = 40 }) => {
     const visitedPageTokens = new Set(cursor ? [cursor] : []);
     const searchQuery = optionalQuery(query);
 
@@ -51,7 +49,7 @@ export function createAttachmentArtifactLoader(
     ): Promise<AsyncEntityPage<AttachmentArtifactPickerItem>> {
       const query = {
         lifecycleState: "ACTIVE" as const,
-        pageSize: artifactPageSize,
+        pageSize,
         ...(pageToken ? { pageToken } : {}),
         ...(searchQuery ? { query: searchQuery } : {}),
       };

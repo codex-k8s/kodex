@@ -116,8 +116,9 @@ async function connections(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
-  const result = await gitSourceConnections(query, cursor, signal);
+  const result = await gitSourceConnections(query, cursor, signal, pageSize);
   return {
     items: result.items.map((item) => ({
       ref: item.ref,

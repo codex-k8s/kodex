@@ -844,3 +844,15 @@ GitHub checks не считается `PASS`.
   оба ответа `200`; главная использует порции `8` для результатов, запусков и
   сессий. После reload без кэша console без warnings/errors, 4xx/5xx нет;
   screenshots сохранены локально.
+- Последний слой selector-каталогов больше не теряет рассчитанный размер в
+  адаптерах: проекты, сотрудники, аккаунты и модели провайдеров, окружения,
+  образы, артефакты, сессии, integration grants, Git-источники и переменные
+  prompt template передают `pageSize` до серверного endpoint. История чатов,
+  blocker lifecycle провайдера, привязанные к окружению сотрудники, история
+  автоматизаций, ревизии образов, secret-impact и Git write-back также
+  переведены с ручной кнопки на измеряемый sentinel. В Chrome проектный picker
+  запросил `pageSize=6`, история помощника — `pageSize=17`; оба ответа `200`,
+  console без warnings/errors, завершённых XHR/fetch 4xx/5xx нет. Screenshot:
+  `/tmp/kodex-dynamic-project-picker.png`. Адресные frontend unit: 133/133
+  PASS после корректировки нового контракта; typecheck, ESLint и
+  `git diff --check` — PASS.

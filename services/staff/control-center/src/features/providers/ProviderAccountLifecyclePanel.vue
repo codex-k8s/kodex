@@ -11,6 +11,8 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { KnownMutationRejection } from "@/shared/api/mutation-rejection";
 import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import ProviderLifecycleRecovery from "./ProviderLifecycleRecovery.vue";
 import { loadProviderAccount } from "./api";
 import {
@@ -43,6 +45,23 @@ const confirmation = ref<"DELETE" | "CANCEL_QUEUED">();
 const blocked = computed(
   () => loading.value || busy.value || recoveryPending.value,
 );
+const blockerList = ref<HTMLElement>();
+const blockerSentinel = ref<HTMLElement>();
+const blockerPageSize = useAdaptiveCursorPageSize({
+  container: blockerList,
+  itemSelector: ".provider-lifecycle__items > li:not(.cursor-sentinel)",
+  itemCount: () => items.value.length,
+  estimatedViewportHeight: 420,
+  estimatedItemHeight: 72,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: blockerList,
+  sentinel: blockerSentinel,
+  enabled: () => Boolean(page.value?.nextPageToken) && !blocked.value,
+  loadMore: () => load(false),
+});
 let generation = 0;
 let controller = new AbortController();
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -162,6 +181,7 @@ async function load(reset: boolean): Promise<void> {
           : {}),
       },
       controller.signal,
+      blockerPageSize.value,
     );
     if (current !== generation) return;
     checkedProviderBlockerPage(next, fresh.version, previous);
@@ -357,7 +377,7 @@ onBeforeUnmount(() => {
           {{ t("providerLifecycle.hidden", { count: page.hiddenCount }) }}
         </p>
         <p v-if="!items.length">{{ t("providerLifecycle.empty") }}</p>
-        <ul class="provider-lifecycle__items">
+        <ul ref="blockerList" class="provider-lifecycle__items">
           <li v-for="(item, index) in items" :key="`${item.kind}:${item.ref}`">
             <input
               v-if="item.kind === 'QUEUED_TURN'"
@@ -385,16 +405,13 @@ onBeforeUnmount(() => {
               </p>
             </div>
           </li>
+          <li
+            v-if="page.nextPageToken"
+            ref="blockerSentinel"
+            class="cursor-sentinel"
+            aria-hidden="true"
+          />
         </ul>
-        <button
-          v-if="page.nextPageToken"
-          type="button"
-          class="button"
-          :disabled="blocked"
-          @click="load(false)"
-        >
-          {{ t("providerLifecycle.more") }}
-        </button>
         <p>{{ t("providerLifecycle.selected", { count: selected.length }) }}</p>
         <button
           v-if="
@@ -486,6 +503,11 @@ onBeforeUnmount(() => {
   padding: 0;
   display: grid;
   gap: 12px;
+  max-height: 420px;
+  overflow: auto;
+}
+.provider-lifecycle__items .cursor-sentinel {
+  min-height: 1px;
 }
 .provider-lifecycle__items li {
   display: flex;

@@ -34,6 +34,8 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
@@ -51,6 +53,8 @@ const dockerfile = ref("");
 const diffOpen = ref(false);
 const buildsExpanded = ref(false);
 const revisionsExpanded = ref(false);
+const revisionRoot = ref<HTMLElement>();
+const revisionSentinel = ref<HTMLElement>();
 const openedBuildSources = ref(new Set<string>());
 function toggleBuildSource(ref: string, event: Event): void {
   const details = event.currentTarget;
@@ -90,6 +94,29 @@ const artifact = computed(() =>
 const revisions = computed(() =>
   props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
 );
+const revisionPageSize = useAdaptiveCursorPageSize({
+  container: revisionRoot,
+  itemSelector: ".revision-row",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 96,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: revisionRoot,
+  sentinel: revisionSentinel,
+  enabled: () =>
+    Boolean(recipe.value && store.revisionNextPageToken[recipe.value.ref]) &&
+    !store.loadingDetail,
+  loadMore: () =>
+    recipe.value &&
+    store.loadMoreRevisions(
+      props.projectRef,
+      recipe.value.ref,
+      revisionPageSize.value,
+    ),
+});
 const promotionReceipt = computed(() =>
   props.recipeRef ? store.promotionReceipts[props.recipeRef] : undefined,
 );
@@ -196,7 +223,14 @@ async function load(): Promise<void> {
     store.loadSupportingCatalogs(props.projectRef),
   ];
   if (props.recipeRef)
-    tasks.push(store.loadDetail(props.projectRef, props.recipeRef));
+    tasks.push(
+      store.loadDetail(
+        props.projectRef,
+        props.recipeRef,
+        true,
+        revisionPageSize.value,
+      ),
+    );
   await Promise.all(tasks);
   if (disposed || current !== loadGeneration) return;
   if (!props.recipeRef && !environmentKey.value) {
@@ -785,7 +819,10 @@ onBeforeUnmount(() => {
                 <Maximize2 :size="20" />
               </button>
             </header>
-            <div class="build-history__scroll build-history__scroll--revisions">
+            <div
+              ref="revisionRoot"
+              class="build-history__scroll build-history__scroll--revisions"
+            >
               <div v-if="!revisions.length" class="empty-section">
                 {{ t("common.empty") }}
               </div>
@@ -815,15 +852,12 @@ onBeforeUnmount(() => {
                   new Date(revision.createdAt).toLocaleString()
                 }}</small>
               </article>
-              <button
+              <div
                 v-if="store.revisionNextPageToken[recipe.ref]"
-                class="button"
-                type="button"
-                :disabled="store.loadingDetail"
-                @click="store.loadMoreRevisions(projectRef, recipe.ref)"
-              >
-                {{ t("roleImages.loadMore") }}
-              </button>
+                ref="revisionSentinel"
+                class="cursor-sentinel"
+                aria-hidden="true"
+              />
             </div>
           </component>
         </main>

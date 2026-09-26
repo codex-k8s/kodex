@@ -92,11 +92,12 @@ export async function providerAccounts(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
   return (
     await unwrap(
       sdk.listProviderAccounts({
-        query: { query, pageToken, pageSize: 30 },
+        query: { query, pageToken, pageSize },
         signal: AbortSignal.any([signal, requestSignal()]),
       }),
     )
@@ -121,6 +122,7 @@ export async function listDefinitionConnectionCandidates(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
   if (
     definitionKey.length > 120 ||
@@ -130,7 +132,7 @@ export async function listDefinitionConnectionCandidates(
   const page = (
     await unwrap(
       sdk.listIntegrationConnections({
-        query: { definitionKey, query: query.trim(), pageToken, pageSize: 30 },
+        query: { definitionKey, query: query.trim(), pageToken, pageSize },
         signal: AbortSignal.any([signal, requestSignal()]),
         cache: "no-store",
       }),
