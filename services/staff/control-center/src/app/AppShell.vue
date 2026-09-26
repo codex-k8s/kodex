@@ -42,6 +42,7 @@ import { resolveAssistantContext } from "@/features/assistant/context";
 import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { useRoleImagesStore } from "@/features/role-images/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
   canonicalSearchRoute,
@@ -72,6 +73,7 @@ const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
 const realtime = useRealtimeStore();
+const roleImages = useRoleImagesStore();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
 useSpeechInput();
@@ -222,6 +224,7 @@ const assistantContext = computed(() => {
     agents: platform.agents,
     workflows: platform.workflows,
     runs: platform.runs,
+    roleImages: roleImages.recipes,
   });
   if (
     route.query.assistantForm === "1" &&

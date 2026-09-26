@@ -182,7 +182,8 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toMatch(/fieldValue\(operation,\s*"agentRef"\)/);
     expect(source).toContain("loadRoleEnvironmentCatalog");
     expect(source).toContain("assistant.planEditor.roleImageAgentFixed");
-    expect(source).toContain("assistant.planEditor.roleImageNextSteps");
+    expect(source).toContain("assistant.planEditor.roleImageCreateNextSteps");
+    expect(source).toContain("assistant.planEditor.roleImageUpdateNextSteps");
     expect(source).toContain("<RoleImageDockerfileEditor");
     expect(source).toContain(
       "validateDockerfile(fieldValue(operation, 'dockerfile'))",

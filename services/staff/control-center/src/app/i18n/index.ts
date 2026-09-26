@@ -3428,8 +3428,10 @@ const ru = {
       roleImageEnvironment: "Тип рабочего окружения",
       roleImageCatalogUnavailable:
         "Не удалось загрузить каталог сотрудников и окружений. Обновите страницу и проверьте план снова.",
-      roleImageNextSteps:
+      roleImageCreateNextSteps:
         "После подтверждения платформа создаст рецепт и поставит первую сборку в очередь. Образ станет доступен сотруднику только после успешной проверки и публикации.",
+      roleImageUpdateNextSteps:
+        "После подтверждения платформа создаст новое поколение рецепта и поставит его сборку в очередь. Текущее опубликованное поколение останется доступным до успешной проверки и отдельной публикации нового.",
       roleImageHistoricalSource:
         "В сохранённом плане нет исходника Dockerfile. Если образ создан, откройте его рецепт, чтобы посмотреть текущий исходник.",
       connectionDefinition: "Тип интеграции",
@@ -7025,8 +7027,10 @@ const en = {
       roleImageEnvironment: "Work environment type",
       roleImageCatalogUnavailable:
         "Could not load the employee and environment catalog. Reload the page and validate the plan again.",
-      roleImageNextSteps:
+      roleImageCreateNextSteps:
         "After confirmation, the platform creates a recipe and queues its first build. The employee can use the image only after successful verification and promotion.",
+      roleImageUpdateNextSteps:
+        "After confirmation, the platform creates a new recipe generation and queues its build. The current promoted generation remains available until the new one is verified and promoted separately.",
       roleImageHistoricalSource:
         "This saved plan does not contain the Dockerfile source. If the image was created, open its recipe to inspect the current source.",
       connectionDefinition: "Integration type",

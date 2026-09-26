@@ -11,6 +11,7 @@ import {
 import type {
   Agent,
   Project,
+  RoleImageRecipe,
   Run,
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -47,6 +48,14 @@ const sources = {
       title: "Квалификация заявки",
       version: 9,
     } as Run,
+  },
+  roleImages: {
+    imgrec_1: {
+      ref: "imgrec_1",
+      projectRef: "prj_sales",
+      name: "Проверка образа",
+      version: 5,
+    } as RoleImageRecipe,
   },
 };
 
@@ -197,6 +206,21 @@ describe("assistant route context", () => {
     expect(value.descriptor.entityKind).toBe("ENVIRONMENT");
     expect(value.descriptor.entityRef).toBe("env_1");
     expect(value.descriptor.entityVersion).toBeUndefined();
+  });
+
+  it("связывает рецепт образа с точным resource context и принимает авторитетное имя", () => {
+    const current = route("/projects/prj_sales/role-images/imgrec_1", {
+      projectRef: "prj_sales",
+      recipeRef: "imgrec_1",
+    });
+    current.name = "role-image";
+    const value = resolveAssistantContext(current, sources);
+    expect(value.projectRef).toBe("prj_sales");
+    expect(value.descriptor.entityKind).toBe("ROLE_IMAGE_RECIPE");
+    expect(value.descriptor.entityRef).toBe("imgrec_1");
+    expect(value.descriptor.entityName).toBe("Проверка образа");
+    expect(value.descriptor.entityVersion).toBe(5);
+    expect(assistantContextTitle(value.descriptor)).toBe("Проверка образа");
   });
 
   it("связывает выбранную автоматизацию с точным project context", () => {

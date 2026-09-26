@@ -1652,7 +1652,13 @@ function snapshot(value: string): Record<string, unknown> {
                   {{ $t("assistant.planEditor.roleImageCatalogUnavailable") }}
                 </p>
                 <p v-if="editable" class="assistant-plan-friendly__hint">
-                  {{ $t("assistant.planEditor.roleImageNextSteps") }}
+                  {{
+                    $t(
+                      operation.value.type === "CREATE_ROLE_IMAGE_RECIPE"
+                        ? "assistant.planEditor.roleImageCreateNextSteps"
+                        : "assistant.planEditor.roleImageUpdateNextSteps",
+                    )
+                  }}
                 </p>
               </template>
               <template v-else-if="operation.value.type === 'CREATE_AGENT'">

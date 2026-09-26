@@ -120,6 +120,11 @@ useCursorInfiniteScroll({
 const promotionReceipt = computed(() =>
   props.recipeRef ? store.promotionReceipts[props.recipeRef] : undefined,
 );
+const promotionEvidenceState = computed(() => {
+  if (recipe.value?.promotedImageReady)
+    return artifact.value?.promotionState ?? "PROMOTED";
+  return promotionReceipt.value?.state;
+});
 const buildActive = computed(() =>
   currentBuild.value
     ? !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(
@@ -942,8 +947,8 @@ onBeforeUnmount(() => {
               </div>
             </dl>
             <StatusBadge
-              v-if="promotionReceipt"
-              :state="promotionReceipt.state"
+              v-if="promotionEvidenceState"
+              :state="promotionEvidenceState"
             />
             <p v-else>{{ t("roleImages.noPromotedArtifact") }}</p>
           </section>

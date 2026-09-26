@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.72
+version: 1.0.73
 updated: 2026-09-26
 ---
 
@@ -1330,4 +1330,30 @@ GitHub checks не считается `PASS`.
   Адресные Go unit и `git diff --check` — PASS; console errors/warnings и HTTP
   4xx/5xx после чистого reload отсутствуют. Screenshot:
   `/tmp/kodex-assistant-environment-update-validated.png`. Визуальная приёмка
+  владельцем — NOT RUN.
+- На экране существующего сотрудника помощник подготовил, но не применил
+  изменение описания роли. Native-форма сохранила имя, назначение и остальные
+  поля, серверная проверка перевела вариант в `VALID`, reload без кэша сохранил
+  диалог и план. Console errors/warnings и HTTP 4xx/5xx отсутствуют.
+  Screenshot: `/tmp/kodex-assistant-agent-update-validated.png`. Визуальная
+  приёмка владельцем — NOT RUN.
+- План создания процесса «Проверка процесса помощника» применён на локальном
+  стенде; созданный процесс затем открылся в своём route и стал авторитетным
+  контекстом нового диалога. Помощник подготовил, но не применил вторую
+  ревизию с изменением назначения; native-форма сохранила граф, координатора,
+  исполнителя, таймаут и отсутствие Human Gate. Console errors/warnings и HTTP
+  4xx/5xx отсутствуют. Screenshot:
+  `/tmp/kodex-assistant-workflow-update-validated.png`. Визуальная приёмка
+  владельцем — NOT RUN.
+- Экран существующего рецепта образа теперь передаёт помощнику точный
+  `ROLE_IMAGE_RECIPE` с авторитетными именем и версией вместо технического
+  route. После reload опубликованный artifact определяется из сохранённого
+  состояния рецепта, а не только из receipt текущей вкладки. Помощник
+  подготовил, но не применил переименование: native-форма сохранила Dockerfile,
+  окружение и сотрудника, отдельно объяснила создание нового поколения и
+  сохранение текущего опубликованного поколения до проверки и promotion.
+  Серверная проверка перевела вариант в `VALID`; новую сборку не запускали.
+  Адресные frontend unit 41/41 и typecheck — PASS; console errors/warnings и
+  HTTP 4xx/5xx отсутствуют. Screenshot:
+  `/tmp/kodex-assistant-role-image-update-validated.png`. Визуальная приёмка
   владельцем — NOT RUN.

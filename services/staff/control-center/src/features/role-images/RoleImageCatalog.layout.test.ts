@@ -36,4 +36,10 @@ describe("каталог образов ИИ-сотрудников", () => {
     );
     expect(catalog).toContain("store.projectNextPageToken[projectRef]");
   });
+
+  it("после reload показывает persisted promotion, а не отсутствие artifact", () => {
+    expect(editor).toContain("const promotionEvidenceState = computed");
+    expect(editor).toContain("recipe.value?.promotedImageReady");
+    expect(editor).toContain(':state="promotionEvidenceState"');
+  });
 });
