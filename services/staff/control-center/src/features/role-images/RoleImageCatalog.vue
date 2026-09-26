@@ -199,7 +199,7 @@ onBeforeUnmount(() => store.dispose());
               </dd>
             </div>
           </dl>
-          <RoleImageLineage :lineage="recipe.managedLineage" />
+          <RoleImageLineage :lineage="recipe.managedLineage" collapsible />
           <footer>
             <span>
               {{
