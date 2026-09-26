@@ -11,6 +11,10 @@ const bootstrapSource = readFileSync(
 describe("AppShell navigation", () => {
   it("даёт глобальному поиску стабильное имя поля", () => {
     expect(source).toContain('name="global-search"');
+    expect(source).toContain("useAdaptiveCursorPageSize");
+    expect(source).toContain("useCursorInfiniteScroll");
+    expect(source).toContain("platform.searchNextPageToken");
+    expect(source).toContain("platform.loadMoreSearch(searchPageSize.value)");
   });
 
   it("оставляет Kodex только глобальным FAB и drawer", () => {

@@ -125,6 +125,7 @@ import type {
   ScheduleCommand,
   ScheduleInput,
   SearchResult,
+  SearchResultPage,
   SystemAssistant,
   TurnInput,
   UserSummary,
@@ -172,6 +173,7 @@ type QueryKey =
   | "roleImages"
   | "runtimes"
   | "search"
+  | "searchMore"
   | "workflows"
   | "workflow"
   | "runs"
@@ -215,6 +217,9 @@ export const usePlatformStore = defineStore("platform", () => {
   const capabilities = ref<PlatformCapability[]>([]);
   const runtimes = reactive<Record<string, RuntimeSelection>>({});
   const searchResults = ref<SearchResult[]>([]);
+  const searchNextPageToken = ref<string>();
+  const searchTotal = ref(0);
+  const activeSearchQuery = ref("");
   const projects = reactive<Record<string, Project>>({});
   const agents = reactive<Record<string, Agent>>({});
   const instructionVersions = reactive<Record<string, InstructionVersion[]>>(
@@ -251,6 +256,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const loading = reactive<Partial<Record<QueryKey, boolean>>>({});
   const problems = reactive<Partial<Record<QueryKey, AppProblem>>>({});
   const generation = new Map<QueryKey, number>();
+  const consumedSearchPageTokens = new Set<string>();
   const consumedAuditPageTokens = new Set<string>();
   let platformReloadPromise: Promise<void> | undefined;
   let platformReloadScope: AbortSignal | undefined;
@@ -394,18 +400,51 @@ export const usePlatformStore = defineStore("platform", () => {
     searchController?.abort();
     searchController = undefined;
     generation.set("search", (generation.get("search") ?? 0) + 1);
+    generation.set("searchMore", (generation.get("searchMore") ?? 0) + 1);
     loading.search = false;
+    loading.searchMore = false;
     searchResults.value = [];
+    searchNextPageToken.value = undefined;
+    searchTotal.value = 0;
+    activeSearchQuery.value = "";
+    consumedSearchPageTokens.clear();
     Reflect.deleteProperty(problems, "search");
+    Reflect.deleteProperty(problems, "searchMore");
   }
 
-  async function search(term: string): Promise<void> {
+  function searchLimit(value?: number): number {
+    return Math.min(50, Math.max(1, Math.floor(value ?? 20)));
+  }
+
+  function validateSearchPage(
+    value: SearchResultPage,
+    requestedCursor?: string,
+  ): void {
+    if (!Array.isArray(value.items) || !value.items.every(isSearchResult))
+      throw invalidSearchResult();
+    const identities = new Set(
+      value.items.map((item) => `${item.kind}:${item.ref}`),
+    );
+    if (
+      !Number.isSafeInteger(value.total) ||
+      value.total < value.items.length ||
+      identities.size !== value.items.length ||
+      (value.nextPageToken !== undefined &&
+        (value.nextPageToken.length === 0 ||
+          value.nextPageToken.length > 512 ||
+          value.nextPageToken === requestedCursor))
+    )
+      throw invalidSearchResult();
+  }
+
+  async function search(term: string, pageSize?: number): Promise<void> {
     cancelSearch();
     const normalized = term.trim();
     if (normalized.length < 2) {
       searchResults.value = [];
       return;
     }
+    activeSearchQuery.value = normalized;
     const controller = new AbortController();
     searchController = controller;
     await query(
@@ -414,15 +453,63 @@ export const usePlatformStore = defineStore("platform", () => {
         (
           await unwrap(
             searchPlatform({
-              query: { query: normalized, limit: 20 },
+              query: { query: normalized, limit: searchLimit(pageSize) },
               signal: requestSignal(controller.signal),
             }),
           )
         ).data,
       (value) => {
-        if (!Array.isArray(value.items) || !value.items.every(isSearchResult))
-          throw invalidSearchResult();
+        validateSearchPage(value);
         searchResults.value = value.items;
+        searchNextPageToken.value = value.nextPageToken;
+        searchTotal.value = value.total;
+      },
+    );
+  }
+
+  async function loadMoreSearch(pageSize?: number): Promise<void> {
+    const cursor = searchNextPageToken.value;
+    const queryValue = activeSearchQuery.value;
+    if (!cursor || !queryValue || loading.search || loading.searchMore) return;
+    searchController ??= new AbortController();
+    const controller = searchController;
+    await query(
+      "searchMore",
+      async () =>
+        (
+          await unwrap(
+            searchPlatform({
+              query: {
+                query: queryValue,
+                limit: searchLimit(pageSize),
+                pageToken: cursor,
+              },
+              signal: requestSignal(controller.signal),
+            }),
+          )
+        ).data,
+      (value) => {
+        if (activeSearchQuery.value !== queryValue) return;
+        validateSearchPage(value, cursor);
+        if (
+          value.total !== searchTotal.value ||
+          (value.nextPageToken !== undefined &&
+            consumedSearchPageTokens.has(value.nextPageToken))
+        )
+          throw invalidSearchResult();
+        const unique = new Map(
+          searchResults.value.map((item) => [`${item.kind}:${item.ref}`, item]),
+        );
+        for (const item of value.items) {
+          const identity = `${item.kind}:${item.ref}`;
+          if (unique.has(identity)) throw invalidSearchResult();
+          unique.set(identity, item);
+        }
+        if (unique.size > value.total) throw invalidSearchResult();
+        consumedSearchPageTokens.add(cursor);
+        searchResults.value = [...unique.values()];
+        searchNextPageToken.value = value.nextPageToken;
+        searchTotal.value = value.total;
       },
     );
   }
@@ -1906,6 +1993,10 @@ export const usePlatformStore = defineStore("platform", () => {
     administration.value = undefined;
     capabilities.value = [];
     searchResults.value = [];
+    searchNextPageToken.value = undefined;
+    searchTotal.value = 0;
+    activeSearchQuery.value = "";
+    consumedSearchPageTokens.clear();
     platformMembershipActions.value = [];
     projectMembershipActions.value = [];
     projectCollectionActions.value = [];
@@ -1930,6 +2021,8 @@ export const usePlatformStore = defineStore("platform", () => {
     capabilities,
     runtimes,
     searchResults,
+    searchNextPageToken,
+    searchTotal,
     projects,
     agents,
     instructionVersions,
@@ -1966,6 +2059,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadBootstrap,
     loadOverview,
     search,
+    loadMoreSearch,
     cancelSearch,
     loadProjects,
     loadProject,

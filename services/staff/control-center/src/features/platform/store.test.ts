@@ -154,12 +154,16 @@ function deferred<T>(): {
   return { promise, resolve };
 }
 
-function searchResponse(items: SearchResult[]): {
+function searchResponse(
+  items: SearchResult[],
+  nextPageToken?: string,
+  total = items.length,
+): {
   data: SearchResultPage;
   response: Response;
 } {
   return {
-    data: { items, total: items.length },
+    data: { items, total, ...(nextPageToken ? { nextPageToken } : {}) },
     response: new Response(null, { status: 200 }),
   };
 }
@@ -426,6 +430,49 @@ describe("platform store", () => {
       "project_new",
     ]);
     expect(store.loading.search).toBe(false);
+  });
+
+  it("дозагружает глобальный поиск по cursor с новым измеренным размером", async () => {
+    searchPlatformMock
+      .mockResolvedValueOnce(
+        searchResponse([searchResult("project_first")], "cursor_next", 3),
+      )
+      .mockResolvedValueOnce(
+        searchResponse(
+          [searchResult("project_second"), searchResult("project_third")],
+          undefined,
+          3,
+        ),
+      );
+    const store = usePlatformStore();
+
+    await store.search("marketplace", 7);
+    expect(store.searchNextPageToken).toBe("cursor_next");
+    expect(store.searchTotal).toBe(3);
+    expect(searchPlatformMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        query: { query: "marketplace", limit: 7 },
+      }),
+    );
+
+    await store.loadMoreSearch(13);
+    expect(searchPlatformMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        query: {
+          query: "marketplace",
+          limit: 13,
+          pageToken: "cursor_next",
+        },
+      }),
+    );
+    expect(store.searchResults.map((item) => item.ref)).toEqual([
+      "project_first",
+      "project_second",
+      "project_third",
+    ]);
+    expect(store.searchNextPageToken).toBeUndefined();
   });
 
   it("заменяет authoritative collection и удаляет исчезнувший ресурс", async () => {

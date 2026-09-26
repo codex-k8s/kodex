@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.48
+version: 1.0.49
 updated: 2026-09-26
 ---
 
@@ -978,3 +978,13 @@ GitHub checks не считается `PASS`.
   TypeScript compile-time типом. Адресные frontend unit 70/70, typecheck,
   ESLint, Prettier и `git diff --check` — PASS. Chrome-повтор — NOT RUN из-за
   ранее закрытого transport `chrome-devtools-mcp`.
+- Общий поиск в шапке оставался исключением из утверждённого cursor-контракта:
+  всегда запрашивал 20 строк и игнорировал `nextPageToken`. Выпадающий список
+  теперь измеряет доступную высоту и строки, передаёт динамический размер первой
+  и следующей порции и автоматически догружает продолжение при приближении к
+  sentinel. Resize меняет только размер следующего запроса и не очищает уже
+  загруженные результаты или cursor. Повтор cursor, дубли между страницами и
+  противоречивый `total` закрыто отклоняются; ошибка продолжения предлагает
+  явный повтор без сброса первой страницы. Адресные frontend unit 36/36,
+  typecheck, ESLint, Prettier и `git diff --check` — PASS. Chrome-повтор —
+  NOT RUN из-за закрытого transport `chrome-devtools-mcp`.

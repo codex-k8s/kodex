@@ -60,6 +60,8 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
 import RealtimeStatus from "@/shared/ui/RealtimeStatus.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import type { RealtimeStatusLabels } from "@/shared/ui/realtime-status";
 import {
   useDismissibleLayer,
@@ -84,8 +86,31 @@ const preloadFailed = ref(
   document.documentElement.dataset.kodexPreload === "failed",
 );
 const searchRoot = ref<HTMLElement>();
+const searchResultsRoot = ref<HTMLElement>();
+const searchSentinel = ref<HTMLElement>();
+const searchPageSize = useAdaptiveCursorPageSize({
+  container: searchResultsRoot,
+  itemSelector: ".search-result",
+  itemCount: () => platform.searchResults.length,
+  estimatedViewportHeight: 620,
+  estimatedItemHeight: 62,
+  minimum: 5,
+  maximum: 50,
+});
 const realtimeStarted = ref(false);
 const searchCoordinator = new SearchCoordinator();
+
+useCursorInfiniteScroll({
+  root: searchResultsRoot,
+  sentinel: searchSentinel,
+  enabled: () =>
+    searchOpen.value &&
+    Boolean(platform.searchNextPageToken) &&
+    !platform.loading.search &&
+    !platform.loading.searchMore &&
+    !platform.problems.searchMore,
+  loadMore: () => platform.loadMoreSearch(searchPageSize.value),
+});
 
 const projectRef = computed(() => routeProjectRef(route.params));
 const activeSection = computed(() => activeNavigationSection(route.name));
@@ -343,14 +368,14 @@ function changeProject(ref: string): void {
 function submitSearch(): void {
   if (search.value.trim().length < 2) {
     searchOpen.value = true;
-    void platform.search(search.value);
+    void platform.search(search.value, searchPageSize.value);
     searchCoordinator.cancel();
     return;
   }
   searchOpen.value = true;
   mobileOpen.value = false;
   searchCoordinator.flush(search.value, (normalized) => {
-    void platform.search(normalized);
+    void platform.search(normalized, searchPageSize.value);
   });
 }
 
@@ -393,12 +418,12 @@ watch(search, (value) => {
   platform.cancelSearch();
   searchOpen.value = value.trim().length > 0;
   if (value.trim().length < 2) {
-    void platform.search(value);
+    void platform.search(value, searchPageSize.value);
     searchCoordinator.cancel();
     return;
   }
   searchCoordinator.schedule(value, (normalized) => {
-    void platform.search(normalized);
+    void platform.search(normalized, searchPageSize.value);
   });
 });
 watch(
@@ -512,6 +537,7 @@ onBeforeUnmount(() => {
         <section
           v-if="searchOpen"
           id="global-search-results"
+          ref="searchResultsRoot"
           class="global-search-results"
           :aria-label="$t('app.searchResults')"
           aria-live="polite"
@@ -556,6 +582,28 @@ onBeforeUnmount(() => {
               </span>
               <StatusBadge :state="result.state" />
             </RouterLink>
+            <div
+              v-if="
+                platform.searchNextPageToken ||
+                platform.loading.searchMore ||
+                platform.problems.searchMore
+              "
+              ref="searchSentinel"
+              class="search-results-sentinel"
+              role="status"
+            >
+              <span v-if="platform.loading.searchMore">{{
+                $t("common.loading")
+              }}</span>
+              <button
+                v-else-if="platform.problems.searchMore"
+                class="button"
+                type="button"
+                @click="platform.loadMoreSearch(searchPageSize)"
+              >
+                {{ $t("common.retry") }}
+              </button>
+            </div>
           </div>
         </section>
       </div>
