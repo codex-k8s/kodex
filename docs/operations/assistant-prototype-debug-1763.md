@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.60
+version: 1.0.61
 updated: 2026-09-26
 ---
 
@@ -1131,3 +1131,23 @@ GitHub checks не считается `PASS`.
   транзитным. Screenshot:
   `/tmp/kodex-integrations-grants-cursor.png`. Визуальная приёмка владельцем —
   NOT RUN.
+- Глобальные каталоги сотрудников и Процессов больше не создают вложенный
+  вертикальный скролл и не растягивают каждую карточку до фиксированных
+  `360 px`. Проектные группы занимают адаптивную сетку, а карточки используют
+  свою фактическую высоту (`242 px` для проверенных сотрудников и `300 px` для
+  Процессов); один scroll root управляет cursor-дозагрузкой. Клиент сохраняет
+  порядок первого появления групп в серверных страницах и больше не
+  пересортировывает уже показанные проекты после append. Адресный unit 7/7,
+  typecheck, production build, ESLint, Prettier и `git diff --check` — PASS;
+  build сохраняет известное предупреждение о чанке больше 500 KiB. SHA двух
+  изменённых frontend-файлов на host и в read-only `/workspace` Pod совпадают,
+  Deployment готов `1/1`. В Chrome 1920×1080
+  первая порция сотрудников разложилась в четыре колонки; cursor append увеличил
+  список с 23 до 43 карточек, сохранив первые четыре группы и текущую позицию.
+  Каталоги Процессов, окружений, секретов и участников используют ту же сетку;
+  пустое состояние автоматизаций не создаёт лишний scroll root. После итогового
+  reload без кэша console errors/warnings, HTTP 4xx/5xx и горизонтальное
+  переполнение отсутствуют. Screenshots: `/tmp/kodex-org-agents-grid.png`,
+  `/tmp/kodex-org-workflows-grid.png`, `/tmp/kodex-org-members-final.png`,
+  `/tmp/kodex-org-secrets.png`, `/tmp/kodex-org-automations-hard-reload.png`.
+  Визуальная приёмка владельцем — NOT RUN.

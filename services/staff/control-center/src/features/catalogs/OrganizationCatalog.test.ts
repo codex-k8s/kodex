@@ -1,4 +1,9 @@
-import { defineComponent, type Ref, type SetupContext } from "vue";
+import {
+  defineComponent,
+  type ComputedRef,
+  type Ref,
+  type SetupContext,
+} from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import type { AppProblem } from "@/shared/api/problem";
@@ -46,9 +51,11 @@ const entry: CatalogEntry = {
 };
 interface State {
   items: Ref<CatalogEntry[]>;
+  groups: ComputedRef<Array<{ ref: string }>>;
   pageToken: Ref<string | undefined>;
   problem: Ref<AppProblem | undefined>;
   loading: Ref<boolean>;
+  load(more?: boolean): Promise<void>;
 }
 async function catalog(): Promise<State> {
   const source = OrganizationCatalog as unknown as {
@@ -169,6 +176,38 @@ describe("OrganizationCatalog realtime", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(state.items.value[0]?.version).toBe(2);
     expect(dependencies.load.mock.calls[1]?.[3]).toBeUndefined();
+  });
+  it("добавляет cursor-страницу без пересортировки уже показанных проектов", async () => {
+    const laterByName = {
+      ...entry,
+      ref: "agent_z",
+      projectRef: "project_z",
+    };
+    const earlierByName = {
+      ...entry,
+      ref: "agent_a",
+      projectRef: "project_a",
+    };
+    dependencies.load
+      .mockResolvedValueOnce({
+        items: [laterByName],
+        nextPageToken: "cursor_next",
+      })
+      .mockResolvedValueOnce({ items: [earlierByName] });
+    dependencies.project.mockImplementation((ref: string) =>
+      Promise.resolve({
+        ref,
+        name: ref === "project_z" ? "Янтарь" : "Альфа",
+      }),
+    );
+    const state = await catalog();
+    await vi.advanceTimersByTimeAsync(500);
+    await state.load(true);
+    expect(state.groups.value.map((group) => group.ref)).toEqual([
+      "project_z",
+      "project_a",
+    ]);
+    expect(dependencies.load.mock.calls[1]?.[3]).toBe("cursor_next");
   });
   it("не выдумывает отсутствующие ENVIRONMENT/SECRET event kinds", () => {
     expect(catalogInvalidated("agents", "AGENT")).toBe(true);
