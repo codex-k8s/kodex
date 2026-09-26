@@ -182,6 +182,21 @@ onMounted(() => void load());
             <code>{{ view.environment.ref }}</code>
           </div>
         </div>
+        <div
+          v-if="view.environment.readinessBlockers.length"
+          class="environment-current__blockers"
+          role="status"
+        >
+          <StatusBadge state="UNAVAILABLE" />
+          <ul>
+            <li
+              v-for="blocker in view.environment.readinessBlockers"
+              :key="blocker"
+            >
+              {{ environmentReadinessMessage(blocker, t) }}
+            </li>
+          </ul>
+        </div>
         <dl class="environment-current__meta">
           <div>
             <dt>
@@ -382,6 +397,23 @@ onMounted(() => void load());
   font-family: var(--font-mono);
   font-size: 0.72rem;
   overflow-wrap: anywhere;
+}
+.environment-current__blockers {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border, var(--border));
+  border-radius: 8px;
+  background: var(--warning-soft, var(--panel));
+}
+.environment-current__blockers ul {
+  min-width: 0;
+  margin: 0;
+  padding-left: 17px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 .environment-current__meta {
   display: grid;

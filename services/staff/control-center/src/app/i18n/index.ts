@@ -150,9 +150,11 @@ const ru = {
   },
   contextResources: {
     sourceRun: "Запуск-источник",
-    importSkill: "Импорт Skill",
+    importSkill: "Импортировать навык",
     importFiles: "Файлы",
-    skillFiles: "Файлы Skill",
+    skillFiles: "Файлы навыка",
+    skillManifestHint:
+      "Для сохранения нужен файл SKILL.md. Импортируйте его или добавьте уже проверенный файл Проекта.",
     agentBinding: "Привязка к ИИ-сотруднику",
     bind: "Привязать ревизию",
     unbind: "Отвязать",
@@ -162,10 +164,16 @@ const ru = {
     selectDirectory: "Выбрать папку",
     addManifest: "Добавить SKILL.md",
     upload: "Загрузить",
-    attachFiles: "Добавить в manifest",
+    attachFiles: "Добавить в файлы навыка",
     removeImport: "Убрать из списка",
     skills: "Навыки",
     memory: "Память Kodex",
+    emptySkills:
+      "В этом Проекте пока нет навыков. Создайте первый навык, чтобы сотрудники могли им пользоваться.",
+    emptyMemory:
+      "В этом Проекте пока нет записей памяти Kodex. Создайте первую запись для повторного использования знаний.",
+    emptySearch: "По вашему запросу ничего не найдено.",
+    clearSearch: "Очистить поиск",
     state: "Состояние",
     project: "Проект",
     expand: "Развернуть список",
@@ -173,6 +181,8 @@ const ru = {
     path: "Путь файла",
     summary: "Содержание памяти",
     retention: "Хранить до",
+    retentionHint:
+      "Обязательный срок хранения. После него содержимое памяти станет недоступным.",
     archive: "Архивировать",
     restore: "Восстановить",
     purge: "Удалить безвозвратно",
@@ -1029,6 +1039,7 @@ const ru = {
     title: "ИИ-сотрудники",
     subtitle: "Роли, инструкции, возможности и доступ к знаниям",
     new: "Новый сотрудник",
+    createWithAssistant: "Создать с Kodex",
     emptyTitle: "В Проекте пока нет ИИ-сотрудников",
     profile: "Профиль сотрудника",
     role: "Роль и описание",
@@ -1094,6 +1105,8 @@ const ru = {
     environmentPromotedMissing: "Нет допущенного образа для окружения.",
     environmentContractStale:
       "Образ использует устаревший контракт исполнения. Требуется обновление образа.",
+    environmentDefaultImageStale:
+      "Закреплённый базовый образ платформы устарел. Выберите готовое окружение или обратитесь к администратору для обновления образа.",
     environmentReadinessUnknown:
       "Сервер вернул неизвестную причину неготовности окружения. Обновите данные или обратитесь к администратору.",
     localChanges: "Есть несохранённые изменения",
@@ -3990,6 +4003,8 @@ const en = {
     importSkill: "Import Skill",
     importFiles: "Files",
     skillFiles: "Skill files",
+    skillManifestHint:
+      "A SKILL.md file is required before saving. Import it or add an already verified project file.",
     agentBinding: "Agent binding",
     bind: "Bind revision",
     unbind: "Unbind",
@@ -4003,6 +4018,12 @@ const en = {
     removeImport: "Remove from list",
     skills: "Skills",
     memory: "Kodex Memory",
+    emptySkills:
+      "This project has no skills yet. Create the first skill for agents to use.",
+    emptyMemory:
+      "This project has no Kodex memory entries yet. Create the first entry to reuse knowledge.",
+    emptySearch: "No results match your search.",
+    clearSearch: "Clear search",
     state: "State",
     project: "Project",
     expand: "Expand list",
@@ -4010,6 +4031,8 @@ const en = {
     path: "File path",
     summary: "Memory content",
     retention: "Retain until",
+    retentionHint:
+      "Required retention deadline. After it, the memory content becomes unavailable.",
     archive: "Archive",
     restore: "Restore",
     purge: "Delete permanently",
@@ -4835,6 +4858,7 @@ const en = {
     title: "AI employees",
     subtitle: "Roles, instructions, capabilities and knowledge access",
     new: "New employee",
+    createWithAssistant: "Create with Kodex",
     emptyTitle: "This Project has no AI employees",
     profile: "Employee profile",
     role: "Role and description",
@@ -4901,6 +4925,8 @@ const en = {
     environmentPromotedMissing: "The environment has no admitted image.",
     environmentContractStale:
       "The image uses an outdated runtime contract. Update the image.",
+    environmentDefaultImageStale:
+      "The pinned platform base image is outdated. Choose a ready environment or ask an administrator to update the image.",
     environmentReadinessUnknown:
       "The server returned an unknown environment readiness reason. Refresh the data or contact an administrator.",
     localChanges: "Unsaved changes",

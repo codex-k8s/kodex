@@ -28,8 +28,15 @@ const { t } = useI18n();
       </div>
     </div>
 
-    <div v-if="item.role || item.runtimeModel" class="agent-card__tags">
-      <span v-if="item.role" class="agent-card__tag">{{ item.role }}</span>
+    <div
+      v-if="(item.role && item.role !== item.name) || item.runtimeModel"
+      class="agent-card__tags"
+    >
+      <span
+        v-if="item.role && item.role !== item.name"
+        class="agent-card__tag"
+        >{{ item.role }}</span
+      >
       <span
         v-if="item.runtimeModel"
         class="agent-card__tag agent-card__tag--mono"

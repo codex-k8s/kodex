@@ -40,6 +40,7 @@ import ContextBindingPanel from "./ContextBindingPanel.vue";
 import { memoryContentAvailable } from "./retention";
 import { validSkillSpecification } from "./skill-import";
 import { artifacts, projects, runs, sourceRun } from "./selectors";
+import { loadCatalogProject } from "@/features/catalogs/api";
 const props = defineProps<{
   kind: api.ContextKind;
   resourceRef?: string;
@@ -54,6 +55,29 @@ const memory = ref<KodexMemoryRecord>();
 const memoryClock = ref(Date.now());
 const expiredReads = new Set<string>();
 const project = ref(props.projectRef ?? "");
+const selectedProject = ref<AsyncEntityOption>();
+watch(
+  project,
+  async (reference, _previous, onCleanup) => {
+    selectedProject.value = undefined;
+    if (!reference) return;
+    const request = new AbortController();
+    onCleanup(() => request.abort());
+    try {
+      const value = await loadCatalogProject(reference, request.signal);
+      if (!request.signal.aborted)
+        selectedProject.value = {
+          ref: value.ref,
+          title: value.name,
+          description: value.purpose,
+          meta: value.lifecycle,
+        };
+    } catch {
+      /* Недоступный Проект не заменяется чужим объектом. */
+    }
+  },
+  { immediate: true },
+);
 const specification = ref<SkillBundleSpecification>({
   name: "",
   description: "",
@@ -480,17 +504,20 @@ onBeforeUnmount(() => {
       </button>
     </header>
     <AsyncEntityPicker
-      v-if="!item"
+      v-if="!item && !projectRef"
       :model-value="project || null"
+      :selected="selectedProject"
       :load-page="projects"
       :disabled="!editable"
       :trigger-label="$t('contextResources.project')"
       @update:model-value="chooseProject"
     />
     <RouterLink
-      v-else
-      :to="`/projects/${encodeURIComponent(item.projectRef)}`"
-      >{{ item.projectRef }}</RouterLink
+      v-else-if="project"
+      class="context-editor__project"
+      :to="`/projects/${encodeURIComponent(project)}`"
+      >{{ $t("contextResources.project") }}:
+      {{ selectedProject?.title ?? project }}</RouterLink
     >
     <fieldset :disabled="!editable" class="context-form">
       <template v-if="kind === 'skills'">
@@ -543,15 +570,20 @@ onBeforeUnmount(() => {
             :name="`${fieldPrefix}-memory-title`"
             maxlength="320"
         /></label>
-        <CodeEditor
+        <div
           v-if="
             !memory ||
             memoryContentAvailable(memory.currentRevision, memoryClock)
           "
-          v-model="memoryInput.summary"
-          :label="$t('contextResources.summary')"
-          :disabled="!editable"
-        />
+          class="context-form__editor"
+        >
+          <strong>{{ $t("contextResources.summary") }}</strong>
+          <CodeEditor
+            v-model="memoryInput.summary"
+            :label="$t('contextResources.summary')"
+            :disabled="!editable"
+          />
+        </div>
         <p v-else>{{ $t("contextResources.redacted") }}</p>
         <label
           >{{ $t("contextResources.sourceRun") }}
@@ -575,7 +607,8 @@ onBeforeUnmount(() => {
             :name="`${fieldPrefix}-retention`"
             type="datetime-local"
             required
-        /></label>
+          /><small>{{ $t("contextResources.retentionHint") }}</small></label
+        >
       </template>
     </fieldset>
     <SkillManifestFiles
@@ -583,6 +616,12 @@ onBeforeUnmount(() => {
       v-model="specification.files"
       :disabled="!editable"
     />
+    <p
+      v-if="kind === 'skills' && !specification.files.length"
+      class="context-editor__hint"
+    >
+      {{ $t("contextResources.skillManifestHint") }}
+    </p>
     <ContextBindingPanel
       v-if="item?.currentRevision"
       :kind="kind"
@@ -803,14 +842,30 @@ onBeforeUnmount(() => {
 <style scoped>
 .context-editor {
   min-width: 0;
+  width: min(100%, 1120px);
   display: grid;
-  gap: 20px;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
 }
 .context-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+  justify-content: flex-end;
+}
+.context-editor__project {
+  width: fit-content;
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.context-editor__hint {
+  margin: -12px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .context-form {
   border: 0;
@@ -824,6 +879,15 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 6px;
   min-width: 0;
+}
+.context-form__editor {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+.context-form small {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .context-provenance {
   display: grid;

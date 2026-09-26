@@ -8,7 +8,8 @@ const source = readFileSync(
 );
 
 describe("каталог контекстных ресурсов", () => {
-  it("не предлагает полноэкранный режим для короткого списка", () => {
-    expect(source).toContain('v-if="!expanded && (total > 6 || cursor)"');
+  it("держит каталог в той же панели без бесполезного полноэкранного режима", () => {
+    expect(source).toContain('class="context-catalog panel"');
+    expect(source).not.toContain("Maximize2");
   });
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus } from "@lucide/vue";
+import { Plus, Sparkles } from "@lucide/vue";
 import {
   computed,
   onBeforeUnmount,
@@ -11,6 +11,7 @@ import {
 import { useRoute, useRouter } from "vue-router";
 
 import AgentCatalog from "@/features/agents/catalog/AgentCatalog.vue";
+import { openAssistantWorkspace } from "@/features/assistant/events";
 import {
   parseAgentCatalogView,
   type AgentCatalogView,
@@ -172,8 +173,17 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
 
 <template>
   <PageFrame :title="$t('agents.title')" :subtitle="$t('agents.subtitle')">
-    <template #actions
-      ><button
+    <template #actions>
+      <button
+        v-if="canCreate"
+        class="button"
+        type="button"
+        @click="openAssistantWorkspace"
+      >
+        <Sparkles :size="17" aria-hidden="true" />
+        {{ $t("agents.createWithAssistant") }}
+      </button>
+      <button
         v-if="canCreate"
         class="button button--primary"
         type="button"
@@ -181,8 +191,8 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
       >
         <Plus :size="17" aria-hidden="true" />
         {{ $t("agents.new") }}
-      </button></template
-    >
+      </button>
+    </template>
     <AsyncState
       :loading="catalog.loading && list.length === 0"
       :problem="catalog.problem"

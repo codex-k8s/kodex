@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { Maximize2, Plus, RefreshCw, Search } from "@lucide/vue";
+import { Plus, RefreshCw, Search, X } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type { ContextResourceState } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -33,7 +32,6 @@ const state = ref<ContextResourceState>("ACTIVE");
 const total = ref(0);
 const cursor = ref("");
 const loading = ref(false);
-const expanded = ref(false);
 const problem = ref<AppProblem>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let controller: AbortController | undefined;
@@ -136,23 +134,28 @@ useCursorInfiniteScroll({
 });
 </script>
 <template>
-  <component
-    :is="expanded ? ModalDialog : 'section'"
-    :title="$t(`contextResources.${kind}`)"
-    size="full"
-    class="context-catalog"
-    @close="expanded = false"
+  <section
+    class="context-catalog panel"
+    :aria-label="$t(`contextResources.${kind}`)"
   >
     <header class="context-toolbar">
       <label class="context-search"
-        ><Search :size="18" /><input
+        ><Search :size="18" aria-hidden="true" /><input
           v-model="query"
           :id="`${fieldPrefix}-search`"
           :name="`${fieldPrefix}-search`"
           type="search"
           :aria-label="$t('common.search')"
-          maxlength="500"
-      /></label>
+          :placeholder="$t('common.search')"
+          maxlength="500" /><button
+          v-if="query"
+          type="button"
+          :title="$t('contextResources.clearSearch')"
+          :aria-label="$t('contextResources.clearSearch')"
+          @click="query = ''"
+        >
+          <X :size="15" aria-hidden="true" /></button
+      ></label>
       <select
         v-model="state"
         :id="`${fieldPrefix}-state`"
@@ -167,7 +170,9 @@ useCursorInfiniteScroll({
           {{ $t(`contextResources.states.${value}`) }}
         </option>
       </select>
-      <span>{{ total }}</span>
+      <span class="context-toolbar__count">{{
+        $t("files.loadedOfTotal", { loaded: items.length, total })
+      }}</span>
       <button
         class="icon-button"
         :disabled="loading"
@@ -177,32 +182,23 @@ useCursorInfiniteScroll({
       >
         <RefreshCw :size="18" />
       </button>
-      <button
-        v-if="!expanded && (total > 6 || cursor)"
-        class="icon-button"
-        :title="$t('contextResources.expand')"
-        :aria-label="$t('contextResources.expand')"
-        @click="expanded = true"
-      >
-        <Maximize2 :size="18" />
-      </button>
       <RouterLink
         class="button button--primary"
         :to="{
-          name: 'context-resource',
-          params: { kind, resourceRef: 'new' },
-          query: { projectRef, agentRef },
+          name: projectRef ? 'project-context-resource' : 'context-resource',
+          params: {
+            kind,
+            resourceRef: 'new',
+            ...(projectRef ? { projectRef } : {}),
+          },
+          query: agentRef ? { agentRef } : {},
         }"
         ><Plus :size="18" />{{ $t("common.create") }}</RouterLink
       >
     </header>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
-    <div
-      ref="scrollRoot"
-      class="context-catalog__scroll"
-      :class="{ 'context-catalog__scroll--expanded': expanded }"
-    >
+    <div ref="scrollRoot" class="context-catalog__scroll">
       <section
         v-for="group in groups"
         :key="group.projectRef"
@@ -239,8 +235,19 @@ useCursorInfiniteScroll({
           </RouterLink>
         </div>
       </section>
-      <p v-if="!loading && !problem && !items.length">
-        {{ $t("common.empty") }}
+      <p
+        v-if="!loading && !problem && !items.length"
+        class="context-catalog__empty"
+      >
+        {{
+          $t(
+            query
+              ? "contextResources.emptySearch"
+              : kind === "skills"
+                ? "contextResources.emptySkills"
+                : "contextResources.emptyMemory",
+          )
+        }}
       </p>
       <div
         v-if="cursor"
@@ -251,29 +258,62 @@ useCursorInfiniteScroll({
         <span v-if="loading">{{ $t("common.loading") }}</span>
       </div>
     </div>
-  </component>
+  </section>
 </template>
 <style scoped>
 .context-catalog {
   min-width: 0;
+  padding: 0;
+  overflow: hidden;
 }
 .context-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  min-height: 58px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.context-toolbar select {
+  width: 160px;
+  min-height: 36px;
+  flex: 0 0 160px;
+}
+.context-toolbar__count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 .context-search {
   display: flex;
+  min-width: 210px;
+  flex: 1 1 320px;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 220px;
-  min-width: 0;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
 }
 .context-search input {
   width: 100%;
   min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+}
+.context-search button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
 }
 .context-group {
   min-width: 0;
@@ -283,8 +323,11 @@ useCursorInfiniteScroll({
   max-height: 576px;
   overflow: auto;
 }
-.context-catalog__scroll--expanded {
-  max-height: 65vh;
+.context-catalog__empty {
+  margin: 0;
+  padding: 44px 20px;
+  color: var(--muted);
+  text-align: center;
 }
 .context-catalog__sentinel {
   min-height: 1px;
@@ -316,11 +359,12 @@ h3 {
   .context-row span {
     grid-column: 1 / -1;
   }
-  .context-rows {
-    max-height: 864px;
+  .context-toolbar {
+    flex-wrap: wrap;
   }
-  .context-rows--expanded {
-    max-height: none;
+  .context-toolbar select {
+    width: auto;
+    flex: 1 1 160px;
   }
 }
 </style>

@@ -11,6 +11,8 @@ export function environmentReadinessMessage(
       return t("runtime.environmentPromotedMissing");
     case "ROLE_RUNTIME_CONTRACT_STALE":
       return t("runtime.environmentContractStale");
+    case "DEFAULT_ROLE_IMAGE_STALE":
+      return t("runtime.environmentDefaultImageStale");
     default:
       return t("runtime.environmentReadinessUnknown");
   }
