@@ -774,8 +774,12 @@ const serverMessage = useServerMessage();
       :empty-text="
         $t(
           view === 'PENDING'
-            ? 'decisions.emptyText'
-            : 'decisions.historyEmptyText',
+            ? projectFilter
+              ? 'decisions.emptyText'
+              : 'decisions.emptyTextAll'
+            : projectFilter
+              ? 'decisions.historyEmptyText'
+              : 'decisions.historyEmptyTextAll',
         )
       "
       @retry="loadCatalog()"

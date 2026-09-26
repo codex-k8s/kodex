@@ -2191,6 +2191,7 @@ const ru = {
     emptyTitle: "Нет ожидающих решений",
     emptyText:
       "В выбранном Проекте сейчас нет вопросов, ожидающих вашего ответа.",
+    emptyTextAll: "Сейчас нет вопросов, ожидающих вашего ответа.",
     projectFilter: "Проект",
     allProjects: "Все Проекты",
     pendingCount: "Ожидают ответа: {count}",
@@ -2200,6 +2201,7 @@ const ru = {
     history: "История",
     historyEmpty: "История решений пуста",
     historyEmptyText: "В выбранном Проекте ещё нет завершённых решений.",
+    historyEmptyTextAll: "Пока нет завершённых решений.",
     question: "Решение человека",
     fullQuestion: "Что нужно решить",
     questionUnavailable:
@@ -5847,6 +5849,7 @@ const en = {
     subtitle: "Questions that block work until you answer",
     emptyTitle: "No pending decisions",
     emptyText: "The selected Project has no questions awaiting your answer.",
+    emptyTextAll: "There are no questions awaiting your answer now.",
     projectFilter: "Project",
     allProjects: "All Projects",
     pendingCount: "Awaiting answer: {count}",
@@ -5856,6 +5859,7 @@ const en = {
     history: "History",
     historyEmpty: "Decision history is empty",
     historyEmptyText: "The selected Project has no completed decisions yet.",
+    historyEmptyTextAll: "There are no completed decisions yet.",
     question: "Human decision",
     fullQuestion: "What needs to be decided",
     questionUnavailable:
