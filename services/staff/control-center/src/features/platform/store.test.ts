@@ -495,14 +495,14 @@ describe("platform store", () => {
     });
     const store = usePlatformStore();
 
-    await store.loadAudit("project_sales", "Квартальный отчёт");
+    await store.loadAudit("project_sales", "Квартальный отчёт", 20);
 
     expect(listAuditEventsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         query: {
           projectRef: "project_sales",
           query: "Квартальный отчёт",
-          pageSize: 100,
+          pageSize: 20,
         },
       }),
     );
@@ -522,10 +522,10 @@ describe("platform store", () => {
       });
     const store = usePlatformStore();
 
-    await store.loadAudit("project_sales", " Квартальный отчёт ");
+    await store.loadAudit("project_sales", " Квартальный отчёт ", 10);
     await Promise.all([
-      store.loadMoreAudit("project_sales", " Квартальный отчёт "),
-      store.loadMoreAudit("project_sales", " Квартальный отчёт "),
+      store.loadMoreAudit("project_sales", " Квартальный отчёт ", 10),
+      store.loadMoreAudit("project_sales", " Квартальный отчёт ", 10),
     ]);
 
     expect(listAuditEventsMock).toHaveBeenCalledTimes(2);
@@ -534,7 +534,7 @@ describe("platform store", () => {
         query: {
           projectRef: "project_sales",
           query: "Квартальный отчёт",
-          pageSize: 100,
+          pageSize: 10,
           pageToken: "audit-page-2",
         },
       }),

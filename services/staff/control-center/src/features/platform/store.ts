@@ -1173,9 +1173,13 @@ export const usePlatformStore = defineStore("platform", () => {
     );
   }
 
-  async function loadAudit(projectRef?: string, search = ""): Promise<void> {
+  async function loadAudit(
+    projectRef?: string,
+    search = "",
+    pageSize: 10 | 20 | 50 = 20,
+  ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}`;
     auditScopeKey.value = scopeKey;
     auditNextPageToken.value = undefined;
     consumedAuditPageTokens.clear();
@@ -1191,7 +1195,7 @@ export const usePlatformStore = defineStore("platform", () => {
               query: {
                 ...(projectRef ? { projectRef } : {}),
                 ...(normalizedSearch ? { query: normalizedSearch } : {}),
-                pageSize: 100,
+                pageSize,
               },
               signal: requestSignal(),
             }),
@@ -1208,9 +1212,10 @@ export const usePlatformStore = defineStore("platform", () => {
   async function loadMoreAudit(
     projectRef?: string,
     search = "",
+    pageSize: 10 | 20 | 50 = 20,
   ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}`;
     const pageToken = auditNextPageToken.value;
     if (
       !pageToken ||
@@ -1228,7 +1233,7 @@ export const usePlatformStore = defineStore("platform", () => {
               query: {
                 ...(projectRef ? { projectRef } : {}),
                 ...(normalizedSearch ? { query: normalizedSearch } : {}),
-                pageSize: 100,
+                pageSize,
                 pageToken,
               },
               signal: requestSignal(),

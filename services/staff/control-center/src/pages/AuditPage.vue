@@ -6,6 +6,7 @@ import { useRoute } from "vue-router";
 import { usePlatformStore } from "@/features/platform/store";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import CursorBatchSize from "@/shared/ui/CursorBatchSize.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
@@ -13,6 +14,7 @@ const platform = usePlatformStore();
 const route = useRoute();
 const i18n = useI18n();
 const query = ref("");
+const pageSize = ref<10 | 20 | 50>(20);
 const searchId = useId();
 const projectRef = computed(() =>
   typeof route.query.projectRef === "string"
@@ -35,13 +37,11 @@ function auditLabel(
 }
 
 async function load(): Promise<void> {
-  await platform.loadAudit(projectRef.value, query.value);
-  if (platform.auditNextPageToken)
-    await platform.loadMoreAudit(projectRef.value, query.value);
+  await platform.loadAudit(projectRef.value, query.value, pageSize.value);
 }
 
 function loadMore(): Promise<void> {
-  return platform.loadMoreAudit(projectRef.value, query.value);
+  return platform.loadMoreAudit(projectRef.value, query.value, pageSize.value);
 }
 
 useCursorInfiniteScroll({
@@ -55,6 +55,7 @@ watch(query, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => void load(), 250);
 });
+watch(pageSize, () => void load());
 watch(projectRef, () => void load());
 onMounted(() => void load());
 onUnmounted(() => {
@@ -64,16 +65,19 @@ onUnmounted(() => {
 
 <template>
   <PageFrame :title="$t('audit.title')" :subtitle="$t('audit.subtitle')">
-    <label class="field audit-search" :for="searchId"
-      ><span>{{ $t("audit.search") }}</span
-      ><input
-        :id="searchId"
-        v-model="query"
-        name="audit-search"
-        type="search"
-        :placeholder="$t('audit.searchPlaceholder')"
-        autocomplete="off"
-    /></label>
+    <div class="audit-toolbar">
+      <label class="field audit-search" :for="searchId"
+        ><span>{{ $t("audit.search") }}</span
+        ><input
+          :id="searchId"
+          v-model="query"
+          name="audit-search"
+          type="search"
+          :placeholder="$t('audit.searchPlaceholder')"
+          autocomplete="off"
+      /></label>
+      <CursorBatchSize v-model="pageSize" :loaded="list.length" />
+    </div>
     <AsyncState
       :loading="platform.loading.audit"
       :problem="platform.problems.audit"
@@ -140,6 +144,13 @@ onUnmounted(() => {
 <style scoped>
 .audit-search {
   max-width: 520px;
+  flex: 1 1 360px;
+}
+.audit-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 18px;
 }
 .audit-table {
