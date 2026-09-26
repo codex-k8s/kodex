@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -56,7 +57,7 @@ func projectRefByID(ctx context.Context, tx pgx.Tx, projectID string) string {
 
 func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantPlanDraftInput)
-	if !ok || payload.PlanRef == "" || strings.TrimSpace(payload.Summary) == "" || len(payload.Summary) > 2000 ||
+	if !ok || payload.PlanRef == "" || strings.TrimSpace(payload.Summary) == "" || utf8.RuneCountInString(payload.Summary) > 2000 ||
 		input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -164,6 +165,20 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			}
 			payload.Operations[index] = updated
 		}
+		// STALE означает, что владелец уже увидел конфликт с авторитетным
+		// состоянием. Новая immutable revision должна заново снять server-owned
+		// snapshot, сохранив только разрешённые пользовательские поля формы.
+		// Для обычного DRAFT прежний snapshot остаётся неизменным: скрытый rebase
+		// без явного конфликта владельцу не допускается.
+		if state == "STALE" && payload.Operations[index].ExpectedVersion != nil {
+			selected := payload.Operations[index].Selected
+			refreshed, refreshErr := repository.hydrateAssistantOperation(ctx, tx, scope, projectRef, payload.Operations[index])
+			if refreshErr != nil {
+				return commandOutcome{}, refreshErr
+			}
+			refreshed.Selected = selected
+			payload.Operations[index] = refreshed
+		}
 	}
 	operations, err := normalizeAssistantOperations(payload.Operations, projectRef)
 	if err != nil {
@@ -192,6 +207,28 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	return commandOutcome{result: command.Result{Plan: &plan}, projectID: mustProjectID(ctx, tx, scope.organizationID, projectRef),
 		projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef,
 		summary: "i18n:ASSISTANT_PLAN_DRAFT_UPDATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+}
+
+func assistantPlanAgentVersionKey(operation entity.AssistantPlanOperation) string {
+	switch operation.Type {
+	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
+		if operation.Target.Kind == "AGENT" && operation.Target.Ref != "" {
+			return operation.Target.Ref
+		}
+	}
+	return ""
+}
+
+func rebaseAssistantPlanAgentVersion(operation entity.AssistantPlanOperation, version int64) entity.AssistantPlanOperation {
+	if version < 1 || assistantPlanAgentVersionKey(operation) == "" {
+		return operation
+	}
+	expectedVersion, targetVersion := version, version
+	operation.ExpectedVersion = &expectedVersion
+	operation.Target.Version = &targetVersion
+	operation.Input = cloneAssistantFields(operation.Input)
+	operation.Input["expectedVersion"] = version
+	return operation
 }
 
 func normalizeAssistantOperations(input []entity.AssistantPlanOperation, projectRef string) ([]entity.AssistantPlanOperation, error) {

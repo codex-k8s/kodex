@@ -29,6 +29,35 @@ func TestAssistantOperationCommandUsesClosedSpecializedRegistry(t *testing.T) {
 	}
 }
 
+func TestAssistantOperationTextLimitsCountUnicodeCharacters(t *testing.T) {
+	t.Parallel()
+
+	parameters := map[string]any{"name": "Проект", "purpose": "Проверка", "language": "ru"}
+	operation := entity.AssistantPlanOperation{
+		Type:       "CREATE_PROJECT",
+		Key:        "operation-unicode",
+		Title:      strings.Repeat("я", 200),
+		Summary:    strings.Repeat("ё", 1000),
+		Action:     "CREATE",
+		Target:     entity.AssistantPlanTarget{Kind: "PROJECT", Name: "Проект"},
+		Parameters: parameters,
+		Before:     map[string]any{},
+		After:      cloneAssistantFields(parameters),
+		Selected:   true,
+	}
+	normalized, err := normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatalf("unicode text within OpenAPI maxLength was rejected: %v", err)
+	}
+	if _, err := assistantOperationCommand(normalized); err != nil {
+		t.Fatalf("unicode summary within OpenAPI maxLength was rejected by command mapping: %v", err)
+	}
+	operation.Title = strings.Repeat("я", 201)
+	if _, err := normalizeAssistantOperation(operation); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("title beyond OpenAPI maxLength was accepted: %v", err)
+	}
+}
+
 func TestAssistantIntegrationDefinitionPublicationRequiresPinnedMetadata(t *testing.T) {
 	t.Parallel()
 	version := int64(4)

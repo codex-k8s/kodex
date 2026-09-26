@@ -26,6 +26,7 @@ describe("форма права сотрудника в плане помощн�
       'operationParameter(props.operation, "expectedVersion")',
     );
     expect(source).toContain("versionMatches.value");
+    expect(source).toContain('v-if="!disabled && !versionMatches"');
     expect(source).toContain("selectedCapability.value");
     expect(editor).toContain("<AssistantCapabilityPlanForm");
     expect(editor).toContain(

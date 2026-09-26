@@ -1171,10 +1171,15 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	}
 	created := []string{}
 	operationReceipts := []entity.AssistantPlanOperationReceipt{}
+	appliedAgentVersions := map[string]int64{}
 	var projectID, projectRef string
 	for _, operation := range operations {
 		if !operation.Selected {
 			continue
+		}
+		agentVersionKey := assistantPlanAgentVersionKey(operation)
+		if version, carried := appliedAgentVersions[agentVersionKey]; carried {
+			operation = rebaseAssistantPlanAgentVersion(operation, version)
 		}
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
@@ -1278,6 +1283,9 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			return commandOutcome{}, fmt.Errorf("apply assistant plan operation: %w", err)
 		}
 		created = append(created, outcome.resourceRef)
+		if agentVersionKey != "" && outcome.result.Agent != nil && outcome.result.Agent.Ref == agentVersionKey && outcome.result.Agent.Version > 0 {
+			appliedAgentVersions[agentVersionKey] = outcome.result.Agent.Version
+		}
 		if outcome.projectID != "" {
 			projectID, projectRef = outcome.projectID, outcome.projectRef
 		}

@@ -132,7 +132,7 @@ function changed(key: string, value: string | boolean): void {
         {{ $t("assistant.planEditor.capabilityAgent") }}:
         <strong>{{ agent.name }}</strong>
       </p>
-      <p v-if="!versionMatches" class="field-error" role="alert">
+      <p v-if="!disabled && !versionMatches" class="field-error" role="alert">
         {{ $t("assistant.planEditor.capabilityStale") }}
       </p>
       <label class="field">

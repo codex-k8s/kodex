@@ -3,6 +3,8 @@ package platform
 import (
 	"strings"
 	"testing"
+
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 func TestAssistantPlanVariantsRemainIndependentAcrossTurns(t *testing.T) {
@@ -67,5 +69,34 @@ func TestAssistantTurnContextIsSnapshottedPerRun(t *testing.T) {
 		if !strings.Contains(queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt, required) {
 			t.Errorf("conversation context refresh query lacks %q", required)
 		}
+	}
+}
+
+func TestAssistantPlanCarriesAgentVersionWithinAtomicApply(t *testing.T) {
+	t.Parallel()
+
+	base := int64(7)
+	operation := entity.AssistantPlanOperation{
+		Type:            "CHANGE_CAPABILITY",
+		Target:          entity.AssistantPlanTarget{Kind: "AGENT", Ref: "agt_current", Version: &base},
+		ExpectedVersion: &base,
+		Input: map[string]any{
+			"agentRef":        "agt_current",
+			"capabilityKey":   "platform.run.launch",
+			"enabled":         true,
+			"expectedVersion": base,
+		},
+	}
+	rebased := rebaseAssistantPlanAgentVersion(operation, 8)
+	if assistantPlanAgentVersionKey(rebased) != "agt_current" || rebased.ExpectedVersion == nil || *rebased.ExpectedVersion != 8 ||
+		rebased.Target.Version == nil || *rebased.Target.Version != 8 || rebased.Input["expectedVersion"] != int64(8) {
+		t.Fatalf("agent version was not carried to the next operation: %#v", rebased)
+	}
+	if *operation.ExpectedVersion != 7 || *operation.Target.Version != 7 || operation.Input["expectedVersion"] != int64(7) {
+		t.Fatalf("plan snapshot was mutated while preparing an operation: %#v", operation)
+	}
+	other := entity.AssistantPlanOperation{Type: "UPDATE_PROJECT", Target: entity.AssistantPlanTarget{Kind: "PROJECT", Ref: "prj_current"}}
+	if assistantPlanAgentVersionKey(other) != "" || rebaseAssistantPlanAgentVersion(other, 8).ExpectedVersion != nil {
+		t.Fatal("non-agent operation unexpectedly entered agent version carry")
 	}
 }

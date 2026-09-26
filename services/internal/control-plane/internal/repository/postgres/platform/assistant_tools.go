@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
@@ -22,7 +23,7 @@ const maximumAssistantPlanOperations = 32
 
 func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ProposeAssistantPlanInput)
-	if !ok || strings.TrimSpace(payload.Summary) == "" || len(payload.Summary) > 2000 ||
+	if !ok || strings.TrimSpace(payload.Summary) == "" || utf8.RuneCountInString(payload.Summary) > 2000 ||
 		len(payload.Operations) == 0 || len(payload.Operations) > maximumAssistantPlanOperations {
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -759,7 +760,8 @@ func assistantJSONEqual(left, right any) bool {
 
 func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if !assistantOperationType(operation.Type) || strings.TrimSpace(operation.Key) == "" ||
-		strings.TrimSpace(operation.Title) == "" || len(operation.Title) > 200 {
+		strings.TrimSpace(operation.Title) == "" || utf8.RuneCountInString(operation.Title) > 200 ||
+		utf8.RuneCountInString(operation.Summary) > 1000 {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	if operation.Parameters == nil {
@@ -884,7 +886,7 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 }
 
 func assistantOperationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
-	if strings.TrimSpace(operation.Summary) == "" || len(operation.Summary) > 500 || operation.Input == nil {
+	if strings.TrimSpace(operation.Summary) == "" || utf8.RuneCountInString(operation.Summary) > 1000 || operation.Input == nil {
 		return command.Command{}, errs.ErrInvalid
 	}
 	result := command.Command{}

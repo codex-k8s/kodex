@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.79
+version: 1.0.80
 updated: 2026-09-26
 ---
 
@@ -1454,4 +1454,24 @@ GitHub checks не считается `PASS`.
   errors/warnings и актуальные HTTP 4xx/5xx отсутствуют. Screenshots:
   `/tmp/kodex-build-recovery-variant-3.png`,
   `/tmp/kodex-integration-grant-applied-clean.png`. Визуальная приёмка
+  владельцем — NOT RUN.
+- Сохранённый вариант с двумя правами сотрудника и черновиком инструкций сначала
+  корректно перешёл в `STALE`: первая операция прежней ревизии увеличивала
+  версию сотрудника, а вторая конфликтовала внутри той же транзакции; ни одно
+  изменение не сохранилось. Штатная кнопка новой ревизии дополнительно
+  возвращала `400`, потому что backend сравнивал русское название длиной 147
+  символов как 276 UTF-8 байт с OpenAPI `maxLength: 200`. Ограничения текста
+  плана приведены к Unicode-символам, а новая revision после явного конфликта
+  заново получает server-owned snapshot. Внутри одного атомарного применения
+  новая версия сотрудника переносится только к следующей выбранной операции
+  того же плана. В браузере вариант сохранился как ревизия 2, прошёл проверку и
+  применил 3/3 операции; readback `GET /agents/{ref}` показал версию 5, права
+  `platform.artifact.manage`, `platform.run.delegate`, `platform.run.launch` и
+  отдельный instruction draft версии 2 длиной 2213 символов. Terminal-формы
+  прав больше не показывают ложное устаревание после собственного применения.
+  Адресные Go unit 3/3, Go vet изменённого пакета, frontend unit 1/1, typecheck
+  и Prettier — PASS; Air/Vite применили исходники без image rebuild. После reload без кэша console
+  errors/warnings и HTTP 4xx/5xx отсутствуют. Screenshot:
+  `/tmp/kodex-agent-capabilities-instructions-applied.png`. Публикация
+  instruction draft оставлена отдельным явным действием; визуальная приёмка
   владельцем — NOT RUN.
