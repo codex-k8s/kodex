@@ -178,7 +178,7 @@ useCursorInfiniteScroll({
         <RefreshCw :size="18" />
       </button>
       <button
-        v-if="!expanded"
+        v-if="!expanded && (total > 6 || cursor)"
         class="icon-button"
         :title="$t('contextResources.expand')"
         :aria-label="$t('contextResources.expand')"

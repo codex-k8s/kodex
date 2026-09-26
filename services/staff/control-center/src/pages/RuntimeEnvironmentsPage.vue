@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
         </label>
         <span>{{ $t("runtime.pickerShown", { count: items.length }) }}</span>
         <button
-          v-if="!expanded"
+          v-if="!expanded && (items.length > 6 || cursor)"
           class="icon-button"
           :title="$t('catalog.expand')"
           :aria-label="$t('catalog.expand')"

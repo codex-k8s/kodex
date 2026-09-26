@@ -6,6 +6,10 @@ const environmentSource = readFileSync(
   new URL("./RuntimeEnvironmentEditorPage.vue", import.meta.url),
   "utf8",
 );
+const environmentCatalogSource = readFileSync(
+  new URL("./RuntimeEnvironmentsPage.vue", import.meta.url),
+  "utf8",
+);
 const runtimeSource = readFileSync(
   new URL("../features/agents/detail/AgentRuntimePanel.vue", import.meta.url),
   "utf8",
@@ -73,6 +77,12 @@ describe("runtime editors layout", () => {
     expect(navigate).toBeGreaterThan(close);
     expect(publicationImpactSource).toContain(
       'name="publication-impact-search"',
+    );
+  });
+
+  it("не предлагает полноэкранный каталог окружений для короткого списка", () => {
+    expect(environmentCatalogSource).toContain(
+      'v-if="!expanded && (items.length > 6 || cursor)"',
     );
   });
 });

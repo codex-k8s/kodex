@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.66
+version: 1.0.67
 updated: 2026-09-26
 ---
 
@@ -1200,3 +1200,16 @@ GitHub checks не считается `PASS`.
   errors/warnings, HTTP 4xx/5xx и горизонтальное переполнение отсутствуют.
   Screenshot: `/tmp/kodex-assistant-secret-return-clean.png`. Визуальная
   приёмка владельцем — NOT RUN.
+- Короткие каталоги окружений, образов ИИ-сотрудников, навыков и памяти
+  предлагали полноэкранное разворачивание даже при нуле или двух строках.
+  Действие теперь появляется только после компактного лимита шести элементов
+  либо при наличии следующего server cursor; поиск и автоматическая
+  дозагрузка длинных списков сохранены. Три адресных layout-unit, всего 8/8,
+  typecheck, ESLint, Prettier и `git diff --check` — PASS. После HMR и reload
+  без кэша Chrome 1920×1080 подтвердил отсутствие лишнего действия для двух
+  окружений, двух образов, пустых Skills и памяти; console errors/warnings,
+  HTTP 4xx/5xx и горизонтальное переполнение отсутствуют. Screenshots:
+  `/tmp/kodex-environments-short-list.png`,
+  `/tmp/kodex-role-images-short-list.png`,
+  `/tmp/kodex-context-short-lists.png`. Визуальная приёмка владельцем —
+  NOT RUN.

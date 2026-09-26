@@ -109,7 +109,11 @@ onBeforeUnmount(() => store.dispose());
         {{ t("roleImages.total", { count: store.projectTotal[projectRef] }) }}
       </span>
       <button
-        v-if="!expanded"
+        v-if="
+          !expanded &&
+          ((store.projectTotal[projectRef] ?? items.length) > 6 ||
+            store.projectNextPageToken[projectRef])
+        "
         type="button"
         class="icon-button"
         :title="t('catalog.expand')"

@@ -29,4 +29,11 @@ describe("каталог образов ИИ-сотрудников", () => {
     expect(editor).toContain('if (!ref) return t("roleImages.chooseRole")');
     expect(editor).toContain('t("roleImages.unknownRole")');
   });
+
+  it("не предлагает полноэкранный каталог для короткого списка", () => {
+    expect(catalog).toContain(
+      "(store.projectTotal[projectRef] ?? items.length) > 6",
+    );
+    expect(catalog).toContain("store.projectNextPageToken[projectRef]");
+  });
 });
