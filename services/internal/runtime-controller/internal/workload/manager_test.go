@@ -28,6 +28,39 @@ const testContractDigest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 const testProviderDigest = "004ab004093ba6916de2d7fa718d1e1539157f24f04e747d0346e86e0a87556c"
 const testArtifactDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 
+func TestAssistantRunContextPreservesEmptyAllowedOperationsInRevisionDigest(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	execution := testExecution(true)
+	baseline, binding, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput(baseline) error = %v", err)
+	}
+	baseline.AssistantContext = &runtimecontract.RunnerAssistantContext{
+		Route: "/projects/prj_abcdefgh/runs/run_abcdefgh", EntityKind: "RUN",
+		EntityRef: execution.Run.Ref, EntityName: "Test run", AllowedOperations: []string{},
+	}
+	digest, err := runtimecontract.RuntimeRevisionDigest(baseline, runtimecontract.RuntimeRevisionCredentialSource{
+		SecretName: binding.Name, SecretUID: binding.UID, SecretResourceVersion: binding.ResourceVersion,
+	})
+	if err != nil {
+		t.Fatalf("RuntimeRevisionDigest() error = %v", err)
+	}
+	execution.Revision.RevisionDigest = digest
+	execution.Revision.AssistantContext = &controlplanev1.AssistantContextDescriptor{
+		Route: baseline.AssistantContext.Route, EntityKind: baseline.AssistantContext.EntityKind,
+		EntityRef: baseline.AssistantContext.EntityRef, EntityName: baseline.AssistantContext.EntityName,
+		AllowedOperations: []controlplanev1.AssistantPlanOperation_Type{},
+	}
+	input, _, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput(RUN context) error = %v", err)
+	}
+	if input.AssistantContext == nil || input.AssistantContext.AllowedOperations == nil || len(input.AssistantContext.AllowedOperations) != 0 {
+		t.Fatalf("empty allowed operations lost from RUN context: %#v", input.AssistantContext)
+	}
+}
+
 func TestRunAsLeaderHasCompleteClientGoCallbacks(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())

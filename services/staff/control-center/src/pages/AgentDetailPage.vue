@@ -69,8 +69,12 @@ const { locale, t } = useI18n();
 const route = useRoute();
 const assistantForm = computed(() => route.query.assistantForm === "1");
 const router = useRouter();
-const agentRef = computed(() => String(route.params.agentRef));
-const projectRef = computed(() => String(route.params.projectRef));
+const agentRef = computed(() =>
+  typeof route.params.agentRef === "string" ? route.params.agentRef : "",
+);
+const projectRef = computed(() =>
+  typeof route.params.projectRef === "string" ? route.params.projectRef : "",
+);
 const agent = computed(() => platform.agents[agentRef.value]);
 const canEdit = computed(
   () => agent.value?.nextActions.includes("EDIT") ?? false,
@@ -307,6 +311,7 @@ function syncInstructions(): void {
 }
 
 async function load(): Promise<void> {
+  if (!projectRef.value || !agentRef.value) return;
   const active = captureScope();
   await Promise.all([
     platform.loadProject(projectRef.value),
@@ -854,7 +859,7 @@ watch(
   [projectRef, agentRef],
   () => {
     resetContext();
-    void load();
+    if (projectRef.value && agentRef.value) void load();
   },
   { flush: "sync" },
 );

@@ -228,6 +228,12 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 	for _, execution := range response.GetExecutions() {
 		input, providerBinding, buildErr := runtime.manager.BuildTurnInput(execution)
 		if buildErr != nil {
+			stage := "unknown"
+			var inputFailure *workload.TurnInputBuildError
+			if errors.As(buildErr, &inputFailure) {
+				stage = inputFailure.Stage
+			}
+			runtime.logger.WarnContext(ctx, "runtime turn input rejected", "stage", stage)
 			runtime.failClaim(ctx, input, execution, "RUNTIME_REVISION_INVALID")
 			continue
 		}

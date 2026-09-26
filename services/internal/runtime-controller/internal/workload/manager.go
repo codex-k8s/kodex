@@ -443,15 +443,29 @@ func (manager *Manager) orphanedExecutionPolicyHashes(ctx context.Context, selec
 	return orphaned, nil
 }
 
+// TurnInputBuildError открывает диагностике только закрытый этап сборки.
+// Причина доступна локальным вызывающим, но не записывается в runtime-логи.
+type TurnInputBuildError struct {
+	Stage string
+	Cause error
+}
+
+func (failure *TurnInputBuildError) Error() string { return "runtime turn input build failed" }
+func (failure *TurnInputBuildError) Unwrap() error { return failure.Cause }
+
+func turnInputBuildError(stage string, cause error) error {
+	return &TurnInputBuildError{Stage: stage, Cause: cause}
+}
+
 func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecution) (runtimecontract.RunnerInput, ProviderSecretBinding, error) {
 	if execution == nil || execution.GetRun() == nil || execution.GetNode() == nil || execution.GetRevision() == nil ||
 		execution.GetRevision().GetRuntime() == nil || execution.GetLease() == nil {
-		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, errors.New("claimed execution is incomplete")
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, turnInputBuildError("claim", errors.New("claimed execution is incomplete"))
 	}
 	revision := execution.GetRevision()
 	input, err := manager.baseInput(revision, runtimecontract.RunnerModeTurn)
 	if err != nil {
-		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, turnInputBuildError("base", err)
 	}
 	input.RunRef, input.NodeRef, input.SessionRef, input.TurnRef = execution.GetRun().GetRef(), execution.GetNode().GetRef(), revision.GetSessionRef(), revision.GetTurnRef()
 	input.ProjectRef = execution.GetRun().GetProjectRef()
@@ -464,7 +478,8 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 	}
 	if context := revision.GetAssistantContext(); context != nil {
 		input.AssistantContext = &runtimecontract.RunnerAssistantContext{Route: context.GetRoute(), EntityKind: context.GetEntityKind(),
-			EntityRef: context.GetEntityRef(), EntityName: context.GetEntityName(), EntityVersion: context.EntityVersion}
+			EntityRef: context.GetEntityRef(), EntityName: context.GetEntityName(), EntityVersion: context.EntityVersion,
+			AllowedOperations: make([]string, 0, len(context.GetAllowedOperations()))}
 		for _, operation := range context.GetAllowedOperations() {
 			if operation != controlplanev1.AssistantPlanOperation_TYPE_UNSPECIFIED {
 				input.AssistantContext.AllowedOperations = append(input.AssistantContext.AllowedOperations, strings.TrimPrefix(operation.String(), "TYPE_"))
@@ -473,20 +488,23 @@ func (manager *Manager) BuildTurnInput(execution *controlplanev1.ClaimedExecutio
 	}
 	manager.addCatalog(&input, revision)
 	if err := hydrateRuntimeContext(&input, revision); err != nil {
-		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, turnInputBuildError("context", err)
 	}
 	binding, err := providerSecretBinding(revision)
 	if err != nil {
-		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, turnInputBuildError("credential", err)
 	}
 	if err := validateRuntimeRevisionDigest(input, binding); err != nil {
-		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, turnInputBuildError("revision_digest", err)
 	}
 	input.ExecutionBindingDigest, input.MCPBindingDigest, err = runtimecontract.RuntimeExecutionBindingDigests(input)
 	if err != nil {
-		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, err
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, turnInputBuildError("execution_digest", err)
 	}
-	return input, binding, validateRunnerInput(input)
+	if err := validateRunnerInput(input); err != nil {
+		return runtimecontract.RunnerInput{}, ProviderSecretBinding{}, turnInputBuildError("validation", err)
+	}
+	return input, binding, nil
 }
 
 func (manager *Manager) BuildWarmInput(revision *controlplanev1.RuntimeRevisionSnapshot) (runtimecontract.RunnerInput, ProviderSecretBinding, error) {
