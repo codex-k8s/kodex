@@ -495,6 +495,7 @@ const ru = {
     },
   },
   managed: {
+    expandCatalog: "Развернуть каталог",
     openapiImport: {
       open: "Импорт OpenAPI",
       title: "Импорт интеграции из OpenAPI",
@@ -3907,6 +3908,7 @@ const en = {
     },
   },
   managed: {
+    expandCatalog: "Expand catalog",
     openapiImport: {
       open: "Import OpenAPI",
       title: "Import integration from OpenAPI",

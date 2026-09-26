@@ -41,6 +41,7 @@ export interface BreadcrumbContext {
   workflowName?: string;
   runName?: string;
   environmentName?: string;
+  configurationKindName?: string;
 }
 
 function current(label: string): Breadcrumb {
@@ -89,6 +90,12 @@ export function buildBreadcrumbs(
       return [current(labels.members)];
     case "organization-files":
       return [current(labels.files)];
+    case "configuration-catalog":
+    case "configuration":
+      return [
+        { label: labels.administration, path: "/administration" },
+        current(context.configurationKindName ?? labels.administration),
+      ];
     case "project":
       return project.map((item, index) =>
         index === project.length - 1 ? current(item.label) : item,

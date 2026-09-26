@@ -181,8 +181,8 @@ function created(configurationRef: string): void {
       <button
         v-if="!props.expanded && (total > 6 || nextPageToken)"
         class="icon-button"
-        :title="$t('catalog.expand')"
-        :aria-label="$t('catalog.expand')"
+        :title="$t('managed.expandCatalog')"
+        :aria-label="$t('managed.expandCatalog')"
         @click="expansionOpen = true"
       >
         <Expand :size="18" />

@@ -46,6 +46,21 @@ describe("breadcrumbs", () => {
     expect(buildBreadcrumbs({ routeName }, labels)).toEqual([{ label }]);
   });
 
+  it.each(["configuration-catalog", "configuration"])(
+    "связывает %s с администрированием без технического kind",
+    (routeName) => {
+      expect(
+        buildBreadcrumbs(
+          { routeName, configurationKindName: "Определение интеграции" },
+          labels,
+        ),
+      ).toEqual([
+        { label: "Администрирование", path: "/administration" },
+        { label: "Определение интеграции" },
+      ]);
+    },
+  );
+
   it("показывает полный путь к сотруднику без технического locator", () => {
     expect(
       buildBreadcrumbs(

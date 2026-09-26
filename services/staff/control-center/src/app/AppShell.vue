@@ -152,6 +152,8 @@ const breadcrumbs = computed(() => {
     typeof route.params.environmentRef === "string"
       ? route.params.environmentRef
       : undefined;
+  const configurationKind =
+    typeof route.params.kind === "string" ? route.params.kind : undefined;
   const labels: BreadcrumbLabels = {
     home: t("nav.home"),
     onboarding: t("nav.onboarding"),
@@ -199,6 +201,15 @@ const breadcrumbs = computed(() => {
         : {}),
       ...(environmentRef && runtime.environments[environmentRef]
         ? { environmentName: runtime.environments[environmentRef].name }
+        : {}),
+      ...(configurationKind &&
+      [
+        "PROMPT_TEMPLATE",
+        "ROLE_IMAGE",
+        "INTEGRATION_DEFINITION",
+        "SYSTEM_STT",
+      ].includes(configurationKind)
+        ? { configurationKindName: t(`managed.kinds.${configurationKind}`) }
         : {}),
     },
     labels,
