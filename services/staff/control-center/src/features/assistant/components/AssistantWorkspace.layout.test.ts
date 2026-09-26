@@ -195,6 +195,9 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toMatch(
       /\.assistant-plan-dialog,\s*\.assistant-form-slot\s*{[^}]*position: fixed;[^}]*inset: 6dvh 6vw;[^}]*border: 1px solid var\(--border\);[^}]*box-shadow:/s,
     );
+    expect(source).toContain("max-height: 88dvh;");
+    expect(source).toContain("transform: translateY(-50%);");
+    expect(source).toContain("max-height: calc(88dvh - 124px);");
     expect(source).toContain('route.query.assistantForm === "1"');
     expect(template).toContain('@click="closeAssistantForm"');
     expect(appShell).toContain("assistantStore.context");

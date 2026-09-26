@@ -2329,6 +2329,20 @@ onBeforeUnmount(() => {
   background: var(--surface);
   box-shadow: 0 24px 64px rgb(15 23 42 / 28%);
 }
+.assistant-plan-dialog {
+  top: 50%;
+  bottom: auto;
+  max-height: 88dvh;
+  overflow: hidden;
+  transform: translateY(-50%);
+}
+.assistant-plan-dialog :deep(.assistant-plan-editor) {
+  height: auto;
+  max-height: 88dvh;
+}
+.assistant-plan-dialog :deep(.assistant-plan-editor__body) {
+  max-height: calc(88dvh - 124px);
+}
 .assistant-form-slot__close {
   position: sticky;
   z-index: 2;
@@ -2344,6 +2358,11 @@ onBeforeUnmount(() => {
     width: 100%;
     height: 100dvh;
     border-radius: 0;
+  }
+  .assistant-plan-dialog {
+    top: 0;
+    bottom: 0;
+    transform: none;
   }
 }
 </style>
