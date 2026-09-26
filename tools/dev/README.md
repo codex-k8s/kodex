@@ -4,7 +4,7 @@ title: Локальный запуск Kodex
 type: guide
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-16
 ---
 
@@ -76,6 +76,28 @@ readback доступен через `sudo -n tools/dev/configure-provider-sandb
 до развёртывания backend Control Center может отвечать HTTP 404.
 Документация cert-manager по SelfSigned/CA issuer, Certificate и Ingress
 проверена через Context7; публичный ключ CA доверяется только локально.
+
+Если при смене адреса хоста после перезагрузки ServiceLB сохраняет старый
+`DEST_IPS`, repo-owned `reconcile-local-ingress.sh` проверяет local context,
+единственный узел и владение Traefik, после чего заменяет только устаревший
+ServiceLB Pod. Для автоматического повтора при запуске пользовательского
+systemd и раз в две минуты:
+
+```bash
+bash tools/dev/configure-local-ingress-timer.sh \
+  --context default --kubeconfig /home/s/.kube/kodex-dev-local --mode apply
+bash tools/dev/configure-local-ingress-timer.sh \
+  --context default --kubeconfig /home/s/.kube/kodex-dev-local --mode readback
+```
+
+Installer не пишет в кластер напрямую: он создаёт только два точных user-unit,
+не перезаписывает чужие unit и требует kubeconfig владельца mode `0600` с
+loopback API. Сам service запускает узкий reconcile; если API ещё не поднялся,
+следующее срабатывание timer повторит проверку. Автозапуск относится к
+пользовательской сессии, а не к system-level boot без входа пользователя.
+После установки отдельно проверяют `systemctl --user list-timers
+kodex-local-ingress-reconcile.timer`, readback `reconcile-local-ingress.sh` и
+HTTPS без `-k`. Фактический reboot-тест остаётся отдельной проверкой.
 
 ## Исходники hot reload
 
