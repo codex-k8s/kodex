@@ -633,7 +633,7 @@ describe("runtime store", () => {
     expect(listRuntimeEnvironmentAgentsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { environmentRef: environment.ref },
-        query: { pageSize: 30 },
+        query: { pageSize: 20 },
       }),
     );
     expect(deleteRuntimeEnvironmentMock).toHaveBeenCalledWith(

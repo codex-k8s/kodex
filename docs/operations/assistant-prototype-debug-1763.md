@@ -925,3 +925,13 @@ GitHub checks не считается `PASS`.
   сохраняет ACK. Terminal-ветка отдельно закрывает cleanup для точного
   `COMPLETED/PUBLISHED` без staging и с подтверждённой retained materialization;
   рабочий Secret не удаляется.
+- Полный frontend unit baseline после накопленного пакета снова зелёный:
+  `293/293` файлов и `1837/1837` тестов. Устранены устаревшие ожидания
+  адаптивного page size, неполные store fixtures, ошибочный запуск вложенного
+  Playwright CLI и SSR-разрешение `RouterLink`; VueFlow изолирован в unit
+  harness без изменения браузерного canvas. Typecheck, адресный ESLint,
+  Prettier и `git diff --check` — PASS. После этого локальный
+  `chrome-devtools-mcp` перестал отвечать даже на `list_pages`; его отдельный
+  transport завершён без перезапуска Chrome или приложения. Повтор UI,
+  console/network и screenshot для этого пакета — NOT RUN до восстановления
+  MCP-подключения.

@@ -1,7 +1,55 @@
 import { renderToString } from "@vue/server-renderer";
 import { createSSRApp, h } from "vue";
 import { createI18n } from "vue-i18n";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@vue-flow/core", async () => {
+  const { defineComponent, h } = await import("vue");
+  return {
+    BaseEdge: defineComponent({
+      setup() {
+        return () => h("path");
+      },
+    }),
+    MarkerType: { ArrowClosed: "arrowclosed" },
+    Position: { Left: "left", Right: "right" },
+    VueFlow: defineComponent({
+      setup(_props, { slots }) {
+        return () => h("div", { class: "vue-flow" }, slots.default?.());
+      },
+    }),
+    getBezierPath: () => ["M0 0"],
+    useVueFlow: () => ({
+      fitView: vi.fn().mockResolvedValue(undefined),
+      getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
+      onInit: vi.fn(),
+      setViewport: vi.fn().mockResolvedValue(undefined),
+      zoomIn: vi.fn().mockResolvedValue(undefined),
+      zoomOut: vi.fn().mockResolvedValue(undefined),
+    }),
+  };
+});
+vi.mock("@vue-flow/background", async () => {
+  const { defineComponent, h } = await import("vue");
+  return {
+    Background: defineComponent({
+      setup() {
+        return () => h("div", { class: "vue-flow__background" });
+      },
+    }),
+  };
+});
+vi.mock("@vue-flow/minimap", async () => {
+  const { defineComponent, h } = await import("vue");
+  return {
+    MiniMap: defineComponent({
+      inheritAttrs: false,
+      setup(_props, { attrs }) {
+        return () => h("div", { ...attrs, class: "vue-flow__minimap" });
+      },
+    }),
+  };
+});
 
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import {

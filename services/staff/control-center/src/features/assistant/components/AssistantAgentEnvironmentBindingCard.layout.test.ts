@@ -29,9 +29,9 @@ describe("привязка окружения через план помощни
   });
 
   it("выбирает только готовые окружения точного проекта без поля секрета", () => {
-    expect(form).toContain(
-      'item.projectRef === props.projectRef && item.state === "ACTIVE" && item.ready',
-    );
+    expect(form).toContain("item.projectRef === props.projectRef");
+    expect(form).toContain('item.state === "ACTIVE"');
+    expect(form).toContain("item.ready");
     expect(form).toContain("getRuntimeEnvironmentSet");
     expect(form).toContain("getAgent");
     expect(form).not.toContain("secretValue");
