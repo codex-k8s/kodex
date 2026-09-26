@@ -425,9 +425,15 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         );
         upsertConversation(conversation);
       }
+      if (!context.value) throw new Error("Assistant context is unavailable");
       const appended = attachmentSetRef
-        ? await appendTurn(conversation, normalized, attachmentSetRef)
-        : await appendTurn(conversation, normalized);
+        ? await appendTurn(
+            conversation,
+            normalized,
+            context.value,
+            attachmentSetRef,
+          )
+        : await appendTurn(conversation, normalized, context.value);
       upsertConversation(appended);
     });
   }

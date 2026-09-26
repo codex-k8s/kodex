@@ -292,8 +292,8 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_AGENT", objectSchema([]string{"projectRef", "name", "purpose", "roleDescription", "instructions"}, map[string]any{
 			"projectRef": projectRef, "roleDefinitionRef": opaqueRefSchema(), "name": stringSchema(1, 120),
 			"purpose": stringSchema(1, 1000), "roleDescription": stringSchema(1, 1000), "avatarUrl": stringSchema(0, 500),
-			"runtimeRef": opaqueRefSchema(), "instructions": stringSchema(20, 65536),
-			"capabilities": map[string]any{"type": "array", "maxItems": 3, "uniqueItems": true, "items": enumSchema("platform.artifact.manage", "platform.run.delegate", "platform.run.launch")},
+			"runtimeRef": opaqueRefSchema(), "instructions": assistantAgentInstructionsSchema(),
+			"capabilities": map[string]any{"type": "array", "maxItems": 3, "uniqueItems": true, "items": assistantAgentCapabilitySchema()},
 		})),
 		assistantOperationSchema("CREATE_RUNTIME_ENVIRONMENT_DRAFT", objectSchema([]string{"projectRef", "name"}, map[string]any{
 			"projectRef": projectRef, "name": stringSchema(1, 120), "description": stringSchema(0, 1000),
@@ -316,9 +316,9 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("ARCHIVE_WORKFLOW", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CHANGE_CAPABILITY", objectSchema([]string{"agentRef", "capabilityKey", "enabled"}, map[string]any{
-			"agentRef": agentRef, "capabilityKey": capabilityKeySchema(), "enabled": map[string]any{"type": "boolean"},
+			"agentRef": agentRef, "capabilityKey": assistantAgentCapabilitySchema(), "enabled": map[string]any{"type": "boolean"},
 		})),
-		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", integrationGrantInputSchema()),
+		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", integrationGrantInputSchema(input.AssistantContext)),
 		assistantOperationSchema("CREATE_INTEGRATION_CONNECTION", objectSchema([]string{"definitionKey", "name", "publicConfiguration"}, map[string]any{
 			"definitionKey": capabilityKeySchema(), "name": stringSchema(1, 160),
 			"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
@@ -339,7 +339,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		result = append(result, assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(enumSchema(input.AssistantContext.EntityRef))))
 		result = append(result, assistantOperationSchema("CREATE_INSTRUCTION_DRAFT", objectSchema(
 			[]string{"agentRef", "instructions"}, map[string]any{
-				"agentRef": enumSchema(input.AssistantContext.EntityRef), "instructions": stringSchema(20, 65536),
+				"agentRef": enumSchema(input.AssistantContext.EntityRef), "instructions": assistantAgentInstructionsSchema(),
 			})))
 		result = append(result, assistantOperationSchema("BIND_AGENT_RUNTIME_ENVIRONMENT", objectSchema(
 			[]string{"agentRef", "environmentRef"}, map[string]any{
@@ -385,6 +385,16 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		}
 	}
 	return filtered
+}
+
+func assistantAgentCapabilitySchema() map[string]any {
+	return enumSchema("platform.artifact.manage", "platform.run.delegate", "platform.run.launch")
+}
+
+func assistantAgentInstructionsSchema() map[string]any {
+	schema := stringSchema(20, 65536)
+	schema["description"] = "Go template instructions. Stable scalar variables: {{ .organization.name }}, {{ .project.name }}, {{ .agent.name }}. Dynamic integrations: {{ range .integrations.items }} with .name, .description and .capability; include {{ else }} for the empty list and {{ end }}. Do not use i18n keys or index expressions."
+	return schema
 }
 
 func agentUpdateInputSchema(agentRef map[string]any) map[string]any {
@@ -468,11 +478,25 @@ func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
 	return schema
 }
 
-func integrationGrantInputSchema() map[string]any {
-	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled"}, map[string]any{
+func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext) map[string]any {
+	properties := map[string]any{
 		"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "agentRef": opaqueRefSchema(), "workflowRef": opaqueRefSchema(),
-		"enabled": map[string]any{"type": "boolean"},
-	})
+		"enabled":            map[string]any{"type": "boolean"},
+		"approvalScopePaths": map[string]any{"type": "array", "maxItems": 16, "uniqueItems": true, "items": stringSchema(1, 200)},
+	}
+	if context != nil && context.EntityRef != "" {
+		switch context.EntityKind {
+		case "AGENT":
+			properties["agentRef"] = enumSchema(context.EntityRef)
+			delete(properties, "workflowRef")
+			return objectSchema([]string{"connectionRef", "capabilityKey", "agentRef", "enabled"}, properties)
+		case "WORKFLOW":
+			properties["workflowRef"] = enumSchema(context.EntityRef)
+			delete(properties, "agentRef")
+			return objectSchema([]string{"connectionRef", "capabilityKey", "workflowRef", "enabled"}, properties)
+		}
+	}
+	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled"}, properties)
 	schema["oneOf"] = []map[string]any{
 		{"required": []string{"agentRef"}, "not": map[string]any{"required": []string{"workflowRef"}}},
 		{"required": []string{"workflowRef"}, "not": map[string]any{"required": []string{"agentRef"}}},
@@ -508,7 +532,7 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		before = objectSchema(nil, map[string]any{})
 		after = parameters
 	}
-	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE"
+	serverHydrated := assistantServerHydratedOperation(kind)
 	if !serverHydrated {
 		required = append(required, "before", "after")
 	}

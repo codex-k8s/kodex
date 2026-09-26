@@ -3432,6 +3432,7 @@ paths:
               properties:
                 content: { type: string, minLength: 1, maxLength: 32768 }
                 attachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
+                context: { $ref: '#/components/schemas/AssistantContextDescriptor' }
       responses:
         '202':
           description: Turn поставлен в последовательную очередь warm session

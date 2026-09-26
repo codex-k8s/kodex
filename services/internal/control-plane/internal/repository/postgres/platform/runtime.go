@@ -138,17 +138,21 @@ func (repository *Repository) proposeAssistantMetadata(ctx context.Context, tx p
 	}
 	var conversationID, conversationRef, projectID, projectRef string
 	var assistantRef string
+	var contextKind, contextRef string
 	var allowedOperations []string
 	var conversationVersion int64
 	actorScope := scope{correlationRef: machineScope.correlationRef}
 	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantplanSelectContext,
 		machineScope.organizationID, lease["runID"],
-	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations, &assistantRef,
+	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations,
+		&contextKind, &contextRef, &assistantRef,
 		&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.role,
 		&actorScope.organizationRef); err != nil {
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	_ = allowedOperations
+	_ = contextKind
+	_ = contextRef
 	_ = assistantRef
 	var conversation entity.AssistantConversation
 	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantmetadataUpdateConversation, conversationID, title).Scan(
@@ -628,7 +632,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			}
 			eligibilityStage = "assistant_context"
 			var rawAssistantContext []byte
-			if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectAssistantContext, scope.organizationID, sessionID).Scan(&rawAssistantContext); err != nil {
+			if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectAssistantContext, scope.organizationID, rootRunID).Scan(&rawAssistantContext); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 			var assistantContext map[string]any

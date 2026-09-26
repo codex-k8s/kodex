@@ -113,7 +113,7 @@ func (server *Server) AddAssistantTurn(w http.ResponseWriter, r *http.Request, r
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Assistant.AddAssistantTurn(r.Context(), &controlplanev1.AddAssistantTurnRequest{Mutation: m, ConversationRef: ref, Content: body.Content, AttachmentSetRef: stringValue(body.AttachmentSetRef)})
+	response, err := server.control.Assistant.AddAssistantTurn(r.Context(), &controlplanev1.AddAssistantTurnRequest{Mutation: m, ConversationRef: ref, Content: body.Content, AttachmentSetRef: stringValue(body.AttachmentSetRef), Context: assistantContextInput(body.Context)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

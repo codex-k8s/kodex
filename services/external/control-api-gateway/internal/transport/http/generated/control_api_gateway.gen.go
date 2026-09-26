@@ -14022,8 +14022,9 @@ type UpdateAssistantConversationTitleParams struct {
 
 // AddAssistantTurnJSONBody defines parameters for AddAssistantTurn.
 type AddAssistantTurnJSONBody struct {
-	AttachmentSetRef *OpaqueRef `json:"attachmentSetRef,omitempty"`
-	Content          string     `json:"content"`
+	AttachmentSetRef *OpaqueRef                  `json:"attachmentSetRef,omitempty"`
+	Content          string                      `json:"content"`
+	Context          *AssistantContextDescriptor `json:"context,omitempty"`
 }
 
 // AddAssistantTurnParams defines parameters for AddAssistantTurn.

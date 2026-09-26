@@ -10684,6 +10684,7 @@ export type AddAssistantTurnData = {
     body: {
         content: string;
         attachmentSetRef?: OpaqueRef;
+        context?: AssistantContextDescriptor;
     };
     headers: {
         'Idempotency-Key': string;

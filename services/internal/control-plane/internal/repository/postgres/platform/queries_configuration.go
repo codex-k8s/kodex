@@ -83,6 +83,10 @@ var (
 	queryConfigurationHydrateassistantoperationSelectProject string
 	//go:embed sql/configuration_hydrateassistantoperation_select_agent.sql
 	queryConfigurationHydrateassistantoperationSelectAgent string
+	//go:embed sql/configuration_hydrateassistantoperation_select_agent_capability.sql
+	queryConfigurationHydrateassistantoperationSelectAgentCapability string
+	//go:embed sql/configuration_hydrateassistantoperation_select_integration_grant.sql
+	queryConfigurationHydrateassistantoperationSelectIntegrationGrant string
 	//go:embed sql/configuration_assistant_schedule_snapshot.sql
 	queryConfigurationAssistantScheduleSnapshot string
 	//go:embed sql/configuration_assistant_role_image_agent.sql

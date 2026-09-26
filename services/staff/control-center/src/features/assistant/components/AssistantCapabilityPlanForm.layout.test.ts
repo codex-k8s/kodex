@@ -19,6 +19,12 @@ describe("форма права сотрудника в плане помощн�
     expect(source).toContain(
       "props.operation.value.target.ref === agentRef.value",
     );
+    expect(source).toContain(
+      "agent.value.version === props.operation.value.expectedVersion",
+    );
+    expect(source).not.toContain(
+      'operationParameter(props.operation, "expectedVersion")',
+    );
     expect(source).toContain("versionMatches.value");
     expect(source).toContain("selectedCapability.value");
     expect(editor).toContain("<AssistantCapabilityPlanForm");

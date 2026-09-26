@@ -99,7 +99,6 @@ const approvalScopeValid = computed(() =>
 const versionMatches = computed(
   () =>
     connection.value?.version === props.operation.value.expectedVersion &&
-    connection.value?.version === parameter("expectedVersion") &&
     (props.operation.value.target.version === undefined ||
       connection.value?.version === props.operation.value.target.version),
 );

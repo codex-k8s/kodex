@@ -384,6 +384,7 @@ type EmailCredentialInput struct {
 }
 type AssistantTurnInput struct {
 	ConversationRef, Content, AttachmentSetRef string
+	Context                                    *entity.AssistantContextDescriptor
 }
 type AssistantPlanInput struct {
 	PlanRef  string

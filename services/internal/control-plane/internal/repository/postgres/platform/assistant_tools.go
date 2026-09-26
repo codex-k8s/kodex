@@ -64,6 +64,9 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		}
 		operation, err = repository.hydrateAssistantOperation(ctx, tx, actorScope, projectRef, operation)
 		if err != nil {
+			if (operation.Type == "CHANGE_CAPABILITY" || operation.Type == "CHANGE_INTEGRATION_GRANT") && errors.Is(err, errs.ErrConflict) {
+				continue
+			}
 			return commandOutcome{}, err
 		}
 		operation, err = normalizeAssistantOperation(operation)
@@ -82,6 +85,9 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 			return commandOutcome{}, err
 		}
 		normalizedOperations = append(normalizedOperations, operation)
+	}
+	if len(normalizedOperations) == 0 {
+		return commandOutcome{}, errs.ErrConflict
 	}
 	planRef, err := newRef("pln")
 	if err != nil {
@@ -157,6 +163,17 @@ func assistantOperationMatchesContext(contextKind, contextRef string, operation 
 		return contextKind == "ENVIRONMENT" && contextRef != "" && assistantString(operation.Parameters, "environmentRef") == contextRef
 	case "UPDATE_INTEGRATION_CONNECTION":
 		return contextKind == "INTEGRATION_CONNECTION" && contextRef != "" && assistantString(operation.Parameters, "connectionRef") == contextRef
+	case "CHANGE_INTEGRATION_GRANT":
+		switch contextKind {
+		case "AGENT":
+			return contextRef != "" && assistantString(operation.Parameters, "agentRef") == contextRef && assistantString(operation.Parameters, "workflowRef") == ""
+		case "WORKFLOW":
+			return contextRef != "" && assistantString(operation.Parameters, "workflowRef") == contextRef && assistantString(operation.Parameters, "agentRef") == ""
+		case "INTEGRATION_CONNECTION":
+			return contextRef != "" && assistantString(operation.Parameters, "connectionRef") == contextRef
+		default:
+			return false
+		}
 	case "UPDATE_SCHEDULE":
 		return contextKind == "SCHEDULE" && contextRef != "" && assistantString(operation.Parameters, "scheduleRef") == contextRef
 	default:
@@ -206,6 +223,12 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
 		return repository.hydrateAssistantAgentEnvironmentBinding(ctx, tx, actorScope, projectRef, operation)
+	}
+	if operation.Type == "CHANGE_CAPABILITY" {
+		return repository.hydrateAssistantAgentCapability(ctx, tx, actorScope, projectRef, operation)
+	}
+	if operation.Type == "CHANGE_INTEGRATION_GRANT" {
+		return repository.hydrateAssistantIntegrationGrant(ctx, tx, actorScope, projectRef, operation)
 	}
 	if operation.Type == "UPDATE_WORKFLOW" {
 		return repository.hydrateAssistantWorkflowOperation(ctx, tx, actorScope, projectRef, operation)
@@ -367,6 +390,179 @@ func hydrateAssistantAgentFields(
 	operation.Parameters = after
 	operation.Before = before
 	operation.After = cloneAssistantFields(after)
+	operation.ExpectedVersion = &version
+	operation.Selected = true
+	return operation, nil
+}
+
+func (repository *Repository) hydrateAssistantAgentCapability(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorScope scope,
+	projectRef string,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if projectRef == "" || !onlyAssistantFields(operation.Parameters, "agentRef", "capabilityKey", "enabled") {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	agentRef, capabilityKey := assistantString(operation.Parameters, "agentRef"), assistantString(operation.Parameters, "capabilityKey")
+	enabled, enabledOK := assistantBoolValue(operation.Parameters, "enabled")
+	if agentRef == "" || !enabledOK || !validInitialAgentCapabilities([]string{capabilityKey}) {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	var name string
+	var version int64
+	var capabilities []string
+	var capabilityExists bool
+	if err := tx.QueryRow(ctx, queryConfigurationHydrateassistantoperationSelectAgentCapability,
+		actorScope.organizationID, projectRef, agentRef, capabilityKey,
+	).Scan(&name, &version, &capabilities, &capabilityExists); errors.Is(err, pgx.ErrNoRows) {
+		return entity.AssistantPlanOperation{}, errs.ErrNotFound
+	} else if err != nil {
+		return entity.AssistantPlanOperation{}, errs.ErrUnavailable
+	}
+	if !capabilityExists {
+		return entity.AssistantPlanOperation{}, errs.ErrNotFound
+	}
+	currentlyEnabled := contains(capabilities, capabilityKey)
+	if currentlyEnabled == enabled {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	return hydrateAssistantAgentCapabilityFields(agentRef, name, capabilityKey, currentlyEnabled, enabled, version, operation)
+}
+
+func hydrateAssistantAgentCapabilityFields(agentRef, name, capabilityKey string, currentlyEnabled, enabled bool, version int64,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if agentRef == "" || name == "" || version < 1 || !validInitialAgentCapabilities([]string{capabilityKey}) || currentlyEnabled == enabled {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	before := map[string]any{"agentRef": agentRef, "name": name, "capabilityKey": capabilityKey, "enabled": currentlyEnabled}
+	after := cloneAssistantFields(before)
+	after["enabled"] = enabled
+	operation.Action = "UPDATE"
+	operation.Target = entity.AssistantPlanTarget{Kind: "AGENT", Ref: agentRef, Name: name, Version: &version}
+	operation.Parameters = map[string]any{"agentRef": agentRef, "capabilityKey": capabilityKey, "enabled": enabled}
+	operation.Before = before
+	operation.After = after
+	operation.ExpectedVersion = &version
+	operation.Selected = true
+	return operation, nil
+}
+
+type assistantIntegrationGrantSnapshot struct {
+	connectionName, recipientName, reason string
+	connectionVersion, recipientVersion   int64
+	enabled                               bool
+	approvalScopePaths                    []string
+}
+
+func (repository *Repository) hydrateAssistantIntegrationGrant(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorScope scope,
+	projectRef string,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if projectRef == "" || !onlyAssistantFields(operation.Parameters, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "approvalScopePaths") {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	connectionRef := assistantString(operation.Parameters, "connectionRef")
+	capabilityKey := assistantString(operation.Parameters, "capabilityKey")
+	agentRef, workflowRef := assistantString(operation.Parameters, "agentRef"), assistantString(operation.Parameters, "workflowRef")
+	enabled, enabledOK := assistantBoolValue(operation.Parameters, "enabled")
+	if connectionRef == "" || !validCapabilityKey(capabilityKey) || !enabledOK || (agentRef == "") == (workflowRef == "") {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	recipientKind, recipientRef := "AGENT", agentRef
+	if workflowRef != "" {
+		recipientKind, recipientRef = "WORKFLOW", workflowRef
+	}
+	snapshot, err := repository.readAssistantIntegrationGrantSnapshot(ctx, tx, actorScope, projectRef,
+		connectionRef, capabilityKey, recipientKind, recipientRef)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	if enabled && snapshot.reason != "READY" {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	scopePaths := []string{}
+	if _, supplied := operation.Parameters["approvalScopePaths"]; supplied {
+		var ok bool
+		scopePaths, ok = assistantStringsValue(operation.Parameters, "approvalScopePaths")
+		if !ok || len(scopePaths) > 16 || !enabled && len(scopePaths) != 0 {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+	} else if enabled && snapshot.enabled {
+		scopePaths = append(scopePaths, snapshot.approvalScopePaths...)
+	}
+	if snapshot.enabled == enabled && reflect.DeepEqual(snapshot.approvalScopePaths, scopePaths) {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	return hydrateAssistantIntegrationGrantFields(connectionRef, capabilityKey, agentRef, workflowRef,
+		snapshot, enabled, scopePaths, operation)
+}
+
+func (repository *Repository) readAssistantIntegrationGrantSnapshot(
+	ctx context.Context,
+	tx pgx.Tx,
+	actorScope scope,
+	projectRef, connectionRef, capabilityKey, recipientKind, recipientRef string,
+) (assistantIntegrationGrantSnapshot, error) {
+	result := assistantIntegrationGrantSnapshot{}
+	err := tx.QueryRow(ctx, queryConfigurationHydrateassistantoperationSelectIntegrationGrant,
+		actorScope.organizationID, actorScope.actorID, actorScope.authorityProjectID,
+		connectionRef, projectRef, recipientKind, recipientRef, capabilityKey,
+	).Scan(&result.connectionName, &result.connectionVersion, &result.recipientName, &result.recipientVersion,
+		&result.reason, &result.enabled, &result.approvalScopePaths)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return result, errs.ErrNotFound
+	}
+	if err != nil {
+		return result, errs.ErrUnavailable
+	}
+	if result.connectionName == "" || result.recipientName == "" || result.connectionVersion < 1 || result.recipientVersion < 1 {
+		return result, errs.ErrUnavailable
+	}
+	if result.approvalScopePaths == nil {
+		result.approvalScopePaths = []string{}
+	}
+	return result, nil
+}
+
+func hydrateAssistantIntegrationGrantFields(
+	connectionRef, capabilityKey, agentRef, workflowRef string,
+	snapshot assistantIntegrationGrantSnapshot,
+	enabled bool,
+	approvalScopePaths []string,
+	operation entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if connectionRef == "" || !validCapabilityKey(capabilityKey) || snapshot.connectionName == "" || snapshot.recipientName == "" ||
+		snapshot.connectionVersion < 1 || snapshot.recipientVersion < 1 || (agentRef == "") == (workflowRef == "") ||
+		len(approvalScopePaths) > 16 || !enabled && len(approvalScopePaths) != 0 {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	parameters := map[string]any{"connectionRef": connectionRef, "capabilityKey": capabilityKey,
+		"enabled": enabled, "approvalScopePaths": append([]string{}, approvalScopePaths...)}
+	if agentRef != "" {
+		parameters["agentRef"] = agentRef
+	} else {
+		parameters["workflowRef"] = workflowRef
+	}
+	before := cloneAssistantFields(parameters)
+	before["enabled"] = snapshot.enabled
+	before["approvalScopePaths"] = append([]string{}, snapshot.approvalScopePaths...)
+	before["recipientName"] = snapshot.recipientName
+	before["recipientVersion"] = snapshot.recipientVersion
+	after := cloneAssistantFields(parameters)
+	after["recipientName"] = snapshot.recipientName
+	after["recipientVersion"] = snapshot.recipientVersion
+	version := snapshot.connectionVersion
+	operation.Action = "UPDATE"
+	operation.Target = entity.AssistantPlanTarget{Kind: "INTEGRATION_CONNECTION", Ref: connectionRef, Name: snapshot.connectionName, Version: &version}
+	operation.Parameters = parameters
+	operation.Before = before
+	operation.After = after
 	operation.ExpectedVersion = &version
 	operation.Selected = true
 	return operation, nil
@@ -1171,7 +1367,22 @@ func assistantStrings(input map[string]any, key string) []string {
 }
 
 func assistantStringsValue(input map[string]any, key string) ([]string, bool) {
-	raw, ok := input[key].([]any)
+	value, exists := input[key]
+	if !exists {
+		return nil, false
+	}
+	if raw, ok := value.([]string); ok {
+		result := make([]string, 0, len(raw))
+		for _, item := range raw {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				return nil, false
+			}
+			result = append(result, item)
+		}
+		return result, true
+	}
+	raw, ok := value.([]any)
 	if !ok {
 		return nil, false
 	}

@@ -1035,7 +1035,11 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	var conversationID, sessionID, sessionRef string
 	var projectID, projectRef string
 	var version int64
-	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantConversationsOrganizationIdRefState, scope.organizationID, payload.ConversationRef).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &version); err != nil {
+	storedContext := entity.AssistantContextDescriptor{}
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantConversationsOrganizationIdRefState, scope.organizationID, payload.ConversationRef).Scan(
+		&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &version,
+		&storedContext.Route, &storedContext.EntityKind, &storedContext.EntityRef,
+	); err != nil {
 		return commandOutcome{}, fmt.Errorf("lock system assistant conversation: %w", errs.ErrNotFound)
 	}
 	if input.Mutation.ExpectedVersion != nil && *input.Mutation.ExpectedVersion != version {
@@ -1046,6 +1050,14 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		return commandOutcome{}, err
 	}
 	if err := validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, assistant.Ref); err != nil {
+		return commandOutcome{}, err
+	}
+	requestedContext := storedContext
+	if payload.Context != nil {
+		requestedContext = *payload.Context
+	}
+	resolvedContext, err := repository.resolveAssistantContext(ctx, tx, scope, requestedContext, projectRef)
+	if err != nil {
 		return commandOutcome{}, err
 	}
 	turnRef, _ := newRef("trn")
@@ -1059,7 +1071,10 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	}
 	runRef, _ := newRef("run")
 	var runID string
-	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID).Scan(&runID); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertRunsRefProjectIdTargetType,
+		runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID,
+		resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
+	).Scan(&runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert system assistant run: %w", errs.ErrUnavailable)
 	}
 	if err := repository.attachSetToRun(ctx, tx, scope, projectID, attachmentSet, runID, "RUN_INPUT"); err != nil {
@@ -1090,7 +1105,8 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if err := tx.QueryRow(
 		ctx,
 		queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt,
-		conversationID,
+		conversationID, resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
+		resolvedContext.EntityName, resolvedContext.EntityVersion, resolvedContext.AllowedOperations,
 	).Scan(
 		&conversation.Title,
 		&conversation.TitleSource,

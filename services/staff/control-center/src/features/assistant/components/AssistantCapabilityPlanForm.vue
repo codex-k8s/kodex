@@ -59,15 +59,7 @@ const selectedCapability = computed(() =>
 );
 const versionMatches = computed(() => {
   if (!agent.value) return false;
-  try {
-    return (
-      agent.value.version === props.operation.value.expectedVersion &&
-      agent.value.version ===
-        operationParameter(props.operation, "expectedVersion")
-    );
-  } catch {
-    return false;
-  }
+  return agent.value.version === props.operation.value.expectedVersion;
 });
 const valid = computed(() =>
   Boolean(

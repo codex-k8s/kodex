@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.54
+version: 1.0.56
 updated: 2026-09-26
 ---
 
@@ -1037,3 +1037,36 @@ GitHub checks не считается `PASS`.
   новый обработчик. Все актуальные Deployment и StatefulSet локального контура
   Ready; старые terminal Pods не выданы за текущую доступность. Chrome-повтор —
   NOT RUN: `list_pages` по-прежнему отвечает `Transport closed`.
+- После восстановления Chrome DevTools живой диалог сотрудника сохранил полную
+  историю и два независимых варианта плана. Для нового запроса серверный каталог
+  и parser выровнены по одному закрытому реестру операций; в контексте `AGENT`
+  помощник подготовил `CHANGE_CAPABILITY` для `platform.run.delegate` и
+  `platform.run.launch`, а также `CREATE_INSTRUCTION_DRAFT`. Control-plane
+  гидратирует цель, текущую версию и снимок права из авторитетного состояния и
+  не включает уже выданное право как ложное изменение. Отдельный frontend-дефект
+  сравнивал версию сотрудника с отсутствующим дублирующим полем параметров и
+  показывал ложный конфликт. Форма теперь сравнивает readback с верхнеуровневым
+  `expectedVersion`, которым владеет сервер. После hard reload обе формы прав
+  валидны, ложного предупреждения нет, кнопка проверки доступна, а переход назад
+  возвращает в тот же диалог. API readback подтверждает черновик из трёх
+  операций, версию `2`, разрешённые переменные идентичности и цикл
+  `{{ range .integrations.items }}` с `{{ else }}`; ничего не применено.
+  Console errors/warnings отсутствуют, свежих HTTP 4xx/5xx нет; два abort при
+  reload не являются HTTP-ошибками. Адресный frontend unit и полный typecheck —
+  PASS. Визуальная ручная приёмка владельцем и применение варианта — NOT RUN.
+- Разрешение интеграции из контекста сотрудника или процесса теперь создаётся
+  только для exact получателя открытого экрана. Модель выбирает подключение,
+  capability, требуемое состояние и необязательные пути параметризованного
+  согласования; control-plane заново разрешает организацию, проект,
+  подключение, получателя, текущее состояние и версии через авторитетный
+  `integration_grant_admission`. Подмена получателя, connection, capability,
+  версии или снимка при редактировании и применении закрыто отклоняется.
+  Runtime-controller и control-plane targeted tests, 27 frontend unit,
+  Control Center typecheck, gateway и generated contract compile, а также
+  `git diff --check` — PASS. Forward-only migrations
+  `20260926000100_assistant_turn_context_snapshot.sql` и
+  `20260926000200_assistant_recipient_integration_grant.sql` применены к
+  локальной БД штатной migrate-stage; Job
+  `control-plane-migrate-c375e9fc5af4` завершилась `1/1`, goose readback —
+  версия `20260926000200`. Применение пользовательского плана разрешения и
+  визуальная проверка формы владельцем — NOT RUN.

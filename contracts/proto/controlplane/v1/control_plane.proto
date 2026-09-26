@@ -2814,6 +2814,7 @@ message AddAssistantTurnRequest {
   reserved 4;
   reserved "artifact_refs";
   string attachment_set_ref = 5;
+  AssistantContextDescriptor context = 6;
 }
 message AddAssistantTurnResponse {
   AssistantConversation conversation = 1;

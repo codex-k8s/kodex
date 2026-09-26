@@ -2,6 +2,12 @@
 UPDATE control_plane.assistant_conversations
 SET version = version + 1,
     latest_plan_id = NULL,
+    context_route = $2,
+    context_entity_kind = $3,
+    context_entity_ref = $4,
+    context_entity_name = $5,
+    context_entity_version = $6,
+    allowed_operations = $7,
     updated_at = clock_timestamp()
 WHERE id = $1::uuid
 RETURNING title,

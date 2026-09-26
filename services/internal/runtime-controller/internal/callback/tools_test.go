@@ -378,6 +378,29 @@ func TestAgentEnvironmentBindingSchemaIsExact(t *testing.T) {
 	}
 }
 
+func TestIntegrationGrantSchemaBindsRecipientToCurrentContext(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_12345678",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{EntityKind: "AGENT", EntityRef: "agt_12345678",
+			AllowedOperations: []string{"CHANGE_INTEGRATION_GRANT"}}}
+	schemas := assistantPlanOperationSchemas(input)
+	if len(schemas) != 1 {
+		t.Fatalf("unexpected integration grant schemas: %#v", schemas)
+	}
+	properties := schemas[0]["properties"].(map[string]any)
+	parameters := properties["parameters"].(map[string]any)
+	fields := parameters["properties"].(map[string]any)
+	if properties["action"].(map[string]any)["const"] != "UPDATE" ||
+		fields["agentRef"].(map[string]any)["enum"].([]string)[0] != "agt_12345678" ||
+		fields["workflowRef"] != nil || fields["approvalScopePaths"] == nil || parameters["oneOf"] != nil {
+		t.Fatalf("integration grant schema is not bound to the current agent: %#v", parameters)
+	}
+	generic := integrationGrantInputSchema(nil)
+	if len(generic["oneOf"].([]map[string]any)) != 2 {
+		t.Fatalf("generic integration grant schema lost recipient exclusivity: %#v", generic)
+	}
+}
+
 func TestConfigurationCatalogPagesAgentsWithoutExhaustingContext(t *testing.T) {
 	t.Parallel()
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current"}
@@ -592,6 +615,31 @@ func TestAssistantPlanInputErrorsKeepAClosedFailureClass(t *testing.T) {
 	}
 	if inputErr.reason != "operation_type" {
 		t.Fatalf("unexpected safe failure class: %q", inputErr.reason)
+	}
+}
+
+func TestAssistantOperationSchemaAndParserUseSameServerHydrationRegistry(t *testing.T) {
+	t.Parallel()
+	input := runtimecontract.RunnerInput{
+		ProjectRef: "prj_12345678",
+		AssistantContext: &runtimecontract.RunnerAssistantContext{
+			EntityKind: "AGENT", EntityRef: "agt_12345678", EntityName: "Analyst",
+			AllowedOperations: []string{"CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY"},
+		},
+	}
+	for _, schema := range assistantPlanOperationSchemas(input) {
+		kind := assistantSchemaType(schema)
+		required := schema["required"].([]string)
+		if len(required) != 4 || required[0] != "type" || required[3] != "parameters" {
+			t.Fatalf("%s schema is not compact: %#v", kind, required)
+		}
+		if !assistantServerHydratedOperation(kind) || assistantServerAction(kind) != "UPDATE" {
+			t.Fatalf("%s compact schema is not accepted by the parser", kind)
+		}
+		target := assistantServerTarget(kind, map[string]any{"agentRef": "agt_12345678"}, input.AssistantContext)
+		if target == nil || target["kind"] != "AGENT" || target["name"] != "Analyst" {
+			t.Fatalf("%s server target is unavailable: %#v", kind, target)
+		}
 	}
 }
 

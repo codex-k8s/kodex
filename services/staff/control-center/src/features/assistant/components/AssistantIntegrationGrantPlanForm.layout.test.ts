@@ -20,6 +20,10 @@ describe("форма разрешения интеграции в плане п�
     expect(source).toContain("capabilityCandidates");
     expect(source).toContain("candidate.value.grantable");
     expect(source).toContain("candidate.value.pins.connectionVersion");
+    expect(source).toContain(
+      "connection.value?.version === props.operation.value.expectedVersion",
+    );
+    expect(source).not.toContain('parameter("expectedVersion")');
     expect(source).toContain("existingGrant.value");
     expect(source).toContain("approvalScopeOptions");
     expect(source).toContain("validApprovalScopeSelection");

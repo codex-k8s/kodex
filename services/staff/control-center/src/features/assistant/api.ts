@@ -136,13 +136,18 @@ export async function renameConversation(
 export async function appendTurn(
   conversation: AssistantConversation,
   content: string,
+  context: AssistantContextDescriptor,
   attachmentSetRef?: string,
 ): Promise<AssistantConversation> {
   return (
     await mutateWithRetry((headers) =>
       addAssistantTurn({
         path: { conversationRef: conversation.ref },
-        body: { content, ...(attachmentSetRef ? { attachmentSetRef } : {}) },
+        body: {
+          content,
+          context,
+          ...(attachmentSetRef ? { attachmentSetRef } : {}),
+        },
         headers: {
           "Idempotency-Key": headers["Idempotency-Key"],
           "X-CSRF-Token": headers["X-CSRF-Token"],

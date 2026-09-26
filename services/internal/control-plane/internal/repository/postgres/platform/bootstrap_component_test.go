@@ -6601,10 +6601,12 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("resolve owner scope readback: %v", err)
 	}
 	var conversationID, sessionID, sessionRef, projectID, projectRef string
+	var contextRoute, contextKind, contextRef string
 	var conversationVersion int64
 	if err := repository.pool.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantConversationsOrganizationIdRefState,
 		ownerScope.organizationID, created.Conversation.Ref,
-	).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &conversationVersion); err != nil {
+	).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &conversationVersion,
+		&contextRoute, &contextKind, &contextRef); err != nil {
 		t.Fatalf("read assistant conversation before turn: %v", err)
 	}
 	turn, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,

@@ -185,6 +185,30 @@ func TestAssistantInstructionDraftRequiresExactAgentAndSeparatePublication(t *te
 	}
 }
 
+func TestHydrateAssistantAgentCapabilityFields(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{
+		Type: "CHANGE_CAPABILITY", Key: "capability-1", Title: "Разрешить работу с файлами",
+		Summary: "Сотрудник сможет читать и изменять файлы проекта.",
+	}
+	hydrated, err := hydrateAssistantAgentCapabilityFields(
+		"agt_12345678", "Analyst", "platform.artifact.manage", false, true, 7, operation,
+	)
+	if err != nil {
+		t.Fatalf("hydrate capability: %v", err)
+	}
+	if hydrated.Action != "UPDATE" || hydrated.Target.Ref != "agt_12345678" || hydrated.Target.Version == nil ||
+		*hydrated.Target.Version != 7 || hydrated.ExpectedVersion == nil || *hydrated.ExpectedVersion != 7 ||
+		hydrated.Before["enabled"] != false || hydrated.After["enabled"] != true {
+		t.Fatalf("unexpected hydrated capability: %#v", hydrated)
+	}
+	if _, err := hydrateAssistantAgentCapabilityFields(
+		"agt_12345678", "Analyst", "platform.artifact.manage", true, true, 7, operation,
+	); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("no-op capability change was accepted: %v", err)
+	}
+}
+
 func TestAssistantEditedAgentUpdateRehydratesAuthorityEnvelope(t *testing.T) {
 	t.Parallel()
 	original, err := hydrateAssistantAgentFields("agt_current", "Coordinator", "Coordinate work", "Manage agents", "avatar-ref", 7,
@@ -638,6 +662,51 @@ func TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC(t *testing.
 	grant.Input["workflowRef"] = "wfl_12345678"
 	if _, err := assistantOperationCommand(grant); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("grant with competing targets must be rejected, got %v", err)
+	}
+}
+
+func TestHydrateAssistantIntegrationGrantFieldsUsesAuthoritySnapshot(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{
+		Type: "CHANGE_INTEGRATION_GRANT", Key: "grant-github", Title: "Разрешить чтение GitHub",
+		Summary: "Сотрудник сможет читать данные через подключение GitHub.",
+	}
+	snapshot := assistantIntegrationGrantSnapshot{
+		connectionName: "GitHub", recipientName: "Разработчик", reason: "READY",
+		connectionVersion: 7, recipientVersion: 3, enabled: false, approvalScopePaths: []string{},
+	}
+	hydrated, err := hydrateAssistantIntegrationGrantFields(
+		"con_12345678", "github.read", "agt_12345678", "", snapshot, true,
+		[]string{"/repository", "/pull_request/number"}, operation,
+	)
+	if err != nil {
+		t.Fatalf("hydrate integration grant: %v", err)
+	}
+	if hydrated.Action != "UPDATE" || hydrated.Target.Kind != "INTEGRATION_CONNECTION" ||
+		hydrated.Target.Ref != "con_12345678" || hydrated.Target.Name != "GitHub" ||
+		hydrated.ExpectedVersion == nil || *hydrated.ExpectedVersion != 7 ||
+		hydrated.Before["enabled"] != false || hydrated.After["enabled"] != true ||
+		hydrated.Before["recipientVersion"] != int64(3) || hydrated.After["recipientName"] != "Разработчик" {
+		t.Fatalf("unexpected hydrated integration grant: %#v", hydrated)
+	}
+	if !assistantOperationMatchesContext("AGENT", "agt_12345678", hydrated) ||
+		assistantOperationMatchesContext("AGENT", "agt_other", hydrated) ||
+		assistantOperationMatchesContext("WORKFLOW", "agt_12345678", hydrated) {
+		t.Fatalf("integration grant escaped its recipient context: %#v", hydrated.Parameters)
+	}
+	normalized, err := normalizeAssistantOperation(hydrated)
+	if err != nil {
+		t.Fatalf("normalize integration grant: %v", err)
+	}
+	mapped, err := assistantOperationCommand(normalized)
+	if err != nil || mapped.Kind != command.ChangeIntegrationGrant || mapped.Mutation.ExpectedVersion == nil ||
+		*mapped.Mutation.ExpectedVersion != 7 {
+		t.Fatalf("map hydrated integration grant: command=%#v err=%v", mapped, err)
+	}
+	payload := mapped.Payload.(command.IntegrationGrantInput)
+	if payload.AgentRef != "agt_12345678" || payload.WorkflowRef != "" || !payload.Enabled ||
+		len(payload.ApprovalScopePaths) != 2 {
+		t.Fatalf("unexpected integration grant command payload: %#v", payload)
 	}
 }
 
