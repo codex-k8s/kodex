@@ -229,6 +229,60 @@ describe("assistant workspace store", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("после перезагрузки возвращает выбранный диалог со следующей страницы истории", async () => {
+    const selected = conversation();
+    const newer = {
+      ...conversation(),
+      ref: "cnv_newer",
+      updatedAt: "2026-09-26T00:00:00Z",
+    };
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.conversation.prj_sales"
+            ? selected.ref
+            : null,
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock
+      .mockResolvedValueOnce({ items: [newer], nextPageToken: "next" })
+      .mockResolvedValueOnce({ items: [selected] });
+
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+
+    expect(readConversationsMock).toHaveBeenCalledTimes(2);
+    expect(store.selectedRef).toBe(selected.ref);
+    expect(store.selectedConversation?.title).toBe(selected.title);
+  });
+
+  it("не ломает историю, если сохранённый диалог исчез из длинного списка", async () => {
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: () => "cnv_missing",
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    let page = 0;
+    readConversationsMock.mockImplementation(() => {
+      page += 1;
+      return Promise.resolve({
+        items: page === 1 ? [conversation()] : [],
+        nextPageToken: `next-${String(page)}`,
+      });
+    });
+
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+
+    expect(readConversationsMock).toHaveBeenCalledTimes(30);
+    expect(store.problem).toBeUndefined();
+    expect(store.selectedRef).toBe("cnv_sales");
+    expect(store.nextPageToken).toBe("next-30");
   });
 
   it("добавляет cursor-страницу без потери выбранного диалога и понижения версии", async () => {

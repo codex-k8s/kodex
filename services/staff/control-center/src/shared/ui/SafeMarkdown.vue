@@ -49,7 +49,7 @@ function linkTarget(href: string | undefined): "_self" | "_blank" {
 function parseInline(source: string): InlineToken[] {
   const tokens: InlineToken[] = [];
   const pattern =
-    /(!?)\[([^\]]+)]\(([^)\s]+)(?:\s+"[^"]*")?\)|`([^`]+)`|\*\*([^*]+)\*\*|__([^_]+)__|(?<!\*)\*([^*]+)\*(?!\*)|(?<!_)_([^_]+)_(?!_)/g;
+    /(!?)\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)|`([^`]+)`|\*\*([^*]+)\*\*|(?<![\p{L}\p{N}_])__([^_]+)__(?![\p{L}\p{N}_])|(?<!\*)\*([^*]+)\*(?!\*)|(?<![\p{L}\p{N}_])_([^_]+)_(?![\p{L}\p{N}_])/gu;
   let cursor = 0;
   for (const match of source.matchAll(pattern)) {
     const index = match.index;
@@ -351,7 +351,7 @@ const serverMessage = useServerMessage();
                       v-else-if="token.type === 'link'"
                       :href="token.href"
                       rel="noopener noreferrer"
-                        :target="linkTarget(token.href)"
+                      :target="linkTarget(token.href)"
                       >{{ token.text }}</a
                     >
                     <span v-else>{{ token.text }}</span>

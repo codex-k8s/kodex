@@ -33,6 +33,15 @@ async function render(content: string): Promise<string> {
 }
 
 describe("SafeMarkdown", () => {
+  it("сохраняет подчёркивания внутри имён переменных и обычное выделение", async () => {
+    const html = await render(
+      "Добавить ASSISTANT_REVISION_TEST=draft и _проверить_ результат.",
+    );
+
+    expect(html).toContain("ASSISTANT_REVISION_TEST=draft");
+    expect(html).toMatch(/<em[^>]*>проверить<\/em>/);
+  });
+
   it("рендерит пользовательский markdown без исполнения HTML и изображений", async () => {
     const html = await render(`# Итог
 
@@ -83,8 +92,12 @@ describe("SafeMarkdown", () => {
     );
 
     expect(html).toContain('href="/projects/prj_marketplace123"');
-    expect(html).toMatch(/href="\/projects\/prj_marketplace123"[^>]*target="_self"/);
-    expect(html).toMatch(/href="https:\/\/example.com\/help"[^>]*target="_blank"/);
+    expect(html).toMatch(
+      /href="\/projects\/prj_marketplace123"[^>]*target="_self"/,
+    );
+    expect(html).toMatch(
+      /href="https:\/\/example.com\/help"[^>]*target="_blank"/,
+    );
     expect(html).not.toContain('href="//evil.example/project"');
   });
 });

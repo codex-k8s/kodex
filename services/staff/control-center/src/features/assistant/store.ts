@@ -14,6 +14,7 @@ import {
   validatePlanDraft,
 } from "@/features/assistant/api";
 import { conversationMatchesContext } from "@/features/assistant/context";
+import { restoreAssistantConversationRef } from "@/features/assistant/workspace-state";
 import type {
   AssistantContextDescriptor,
   AssistantConversation,
@@ -138,10 +139,16 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   ): Promise<void> {
     cancelReads();
     const current = ++generation;
-    const retained =
-      projectRef.value === nextProjectRef && selectedConversation.value
-        ? selectedRef.value
-        : undefined;
+    const retained = select
+      ? (projectRef.value === nextProjectRef && selectedConversation.value
+          ? selectedRef.value
+          : undefined) ||
+        (typeof window !== "undefined" &&
+        !historyQuery.value &&
+        historyState.value === "ACTIVE"
+          ? restoreAssistantConversationRef(nextProjectRef)
+          : undefined)
+      : undefined;
     if (projectRef.value !== nextProjectRef) {
       conversations.value = [];
       selectedRef.value = undefined;
@@ -170,8 +177,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         !conversationValues.some((item) => item.ref === retained) &&
         page.nextPageToken
       ) {
-        if (count++ >= 30)
-          throw new Error("Assistant history readback page limit exceeded");
+        if (count++ >= 30) break;
         historyCursors.add(page.nextPageToken);
         page = await readHistory(nextProjectRef, page.nextPageToken, signal);
         if (current !== generation) return;
@@ -199,7 +205,14 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           true,
         ),
       );
-      if (select) selectMatchingConversation();
+      if (select) {
+        if (
+          retained &&
+          conversations.value.some((item) => item.ref === retained)
+        )
+          selectedRef.value = retained;
+        selectMatchingConversation();
+      }
     } catch (error) {
       if (current === generation) {
         problem.value = asProblem(error);

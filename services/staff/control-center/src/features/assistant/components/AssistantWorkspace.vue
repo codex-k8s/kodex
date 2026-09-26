@@ -56,11 +56,13 @@ import {
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
   operationActionLabel,
+  operationSupportingTitle,
   operationTargetLabel,
 } from "@/features/assistant/model";
 import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
 import {
+  persistAssistantConversationRef,
   persistAssistantWorkspaceOpen,
   restoreAssistantWorkspaceOpen,
 } from "@/features/assistant/workspace-state";
@@ -71,7 +73,6 @@ import { consumeRuntimeSecretReauthSuggestion } from "@/features/runtime-secrets
 import type {
   AssistantContextDescriptor,
   AssistantPlan,
-  AssistantPlanOperation,
   AssistantPlanReceipt,
   RunEvent,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -124,14 +125,6 @@ function operationTargetKindLabel(kind: string): string {
   return key ? t(key) : kind;
 }
 
-function operationSupportingTitle(
-  operation: AssistantPlanOperation,
-): string | undefined {
-  const title = operation.title.trim();
-  return title && title !== operationTargetLabel(operation.target)
-    ? title
-    : undefined;
-}
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -788,6 +781,11 @@ watch(
 watch(
   () => store.selectedConversation?.ref,
   async () => {
+    if (store.selectedConversation?.ref)
+      persistAssistantConversationRef(
+        props.projectRef,
+        store.selectedConversation.ref,
+      );
     titleEditing.value = false;
     openPlanRef.value = undefined;
     store.clearReceipt();
@@ -1284,7 +1282,10 @@ onBeforeUnmount(() => {
                     </div>
                     <StatusBadge :state="turn.plan.state" />
                   </header>
-                  <SafeMarkdown :content="turn.plan.auditSummary" />
+                  <SafeMarkdown
+                    v-if="turn.plan.auditSummary.trim() !== turn.content.trim()"
+                    :content="turn.plan.auditSummary"
+                  />
                   <ol class="assistant-plan-card__operations">
                     <li
                       v-for="operation in turn.plan.operations"

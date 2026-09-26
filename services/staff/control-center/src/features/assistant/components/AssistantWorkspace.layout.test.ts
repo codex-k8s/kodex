@@ -367,6 +367,9 @@ describe("AssistantWorkspace layout", () => {
       'PROJECT: "assistant.planEditor.targetKinds.PROJECT"',
     );
     expect(template).not.toContain("operation.parameters");
+    expect(template).toContain(
+      "turn.plan.auditSummary.trim() !== turn.content.trim()",
+    );
   });
 
   it("экспонирует стабильную последовательность turn для realtime и E2E", () => {

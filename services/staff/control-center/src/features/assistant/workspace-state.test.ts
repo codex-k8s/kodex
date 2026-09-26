@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  persistAssistantConversationRef,
   persistAssistantWorkspaceOpen,
+  restoreAssistantConversationRef,
   restoreAssistantWorkspaceOpen,
 } from "./workspace-state";
 
@@ -23,6 +25,27 @@ function memoryStorage(
 }
 
 describe("assistant workspace state", () => {
+  it("хранит последний выбранный диалог отдельно для общего и проектного контекста", () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => {
+        values.set(key, value);
+      },
+    };
+
+    persistAssistantConversationRef(undefined, "cnv_all", storage);
+    persistAssistantConversationRef("prj_sales", "cnv_sales", storage);
+    expect(restoreAssistantConversationRef(undefined, storage)).toBe("cnv_all");
+    expect(restoreAssistantConversationRef("prj_sales", storage)).toBe(
+      "cnv_sales",
+    );
+    expect(
+      restoreAssistantConversationRef("prj_other", storage),
+    ).toBeUndefined();
+  });
+
   it("восстанавливает только явно открытый workspace", () => {
     expect(restoreAssistantWorkspaceOpen(memoryStorage("1"))).toBe(true);
     expect(restoreAssistantWorkspaceOpen(memoryStorage("0"))).toBe(false);
@@ -54,5 +77,9 @@ describe("assistant workspace state", () => {
 
     expect(restoreAssistantWorkspaceOpen(storage)).toBe(false);
     expect(() => persistAssistantWorkspaceOpen(true, storage)).not.toThrow();
+    expect(restoreAssistantConversationRef(undefined, storage)).toBeUndefined();
+    expect(() =>
+      persistAssistantConversationRef(undefined, "cnv_selected", storage),
+    ).not.toThrow();
   });
 });

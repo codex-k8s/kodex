@@ -462,6 +462,19 @@ export function operationTargetLabel(target: AssistantPlanTarget): string {
   return target.name.trim() || target.kind.trim() || "—";
 }
 
+export function operationSupportingTitle(
+  operation: AssistantPlanOperation,
+): string | undefined {
+  const title = operation.title.trim();
+  const summary = operation.summary.trim();
+  const titlePrefix = title.replace(/\s*(?:…|\.\.\.)$/, "").trim();
+  return title &&
+    title !== operationTargetLabel(operation.target) &&
+    (!titlePrefix || !summary || !summary.startsWith(titlePrefix))
+    ? title
+    : undefined;
+}
+
 export function assistantEffectiveRuntimeState(
   assistant: SystemAssistant,
 ): SystemAssistant["runtimeState"] {

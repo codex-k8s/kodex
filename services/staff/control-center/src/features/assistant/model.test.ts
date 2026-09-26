@@ -18,6 +18,7 @@ import {
   friendlyPlanOperationType,
   operationActionLabel,
   operationInputs,
+  operationSupportingTitle,
   operationTargetLabel,
   updateOperationParameter,
 } from "@/features/assistant/model";
@@ -713,6 +714,26 @@ function operation(): AssistantPlanOperation {
     validationProblems: [],
   };
 }
+
+describe("assistant plan card", () => {
+  it("не повторяет сокращённый заголовок перед тем же описанием", () => {
+    const item = operation();
+    expect(
+      operationSupportingTitle({
+        ...item,
+        title: "Подготовить новую ревизию…",
+        summary: "Подготовить новую ревизию окружения без изменения секретов",
+      }),
+    ).toBeUndefined();
+    expect(
+      operationSupportingTitle({ ...item, title: "Продажи" }),
+    ).toBeUndefined();
+  });
+
+  it("сохраняет отдельный информативный заголовок", () => {
+    expect(operationSupportingTitle(operation())).toBe("Создать проект");
+  });
+});
 
 describe("assistant plan editor model", () => {
   it("сохраняет согласованные параметры и итог при изменении формы проекта", () => {
