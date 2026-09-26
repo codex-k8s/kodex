@@ -21,6 +21,8 @@ describe("AppShell navigation", () => {
 
   it("запускает одну realtime-индикацию до независимых каталожных readback", () => {
     expect(source).toContain("<RealtimeStatus");
+    expect(source).toContain("router.isReady().then");
+    expect(source).toContain("selectProjectRef(projectRef.value)");
     expect(source).toContain("realtime.openPlatform()");
     expect(source.indexOf("realtime.openPlatform()")).toBeLessThan(
       source.indexOf("platform.loadProjects()"),

@@ -856,3 +856,8 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-dynamic-project-picker.png`. Адресные frontend unit: 133/133
   PASS после корректировки нового контракта; typecheck, ESLint и
   `git diff --check` — PASS.
+- При hard reload project-scoped маршрута realtime resync стартовал до
+  завершения асинхронной initial navigation, не видел `projectRef` и делал
+  глобальные readback Главной. Shell по-прежнему монтируется немедленно и
+  показывает состояние сессии, но realtime и owner readback теперь стартуют
+  после `router.isReady()` с заново закреплённым точным project scope.

@@ -433,16 +433,20 @@ onMounted(() => {
   window.addEventListener("online", setOnline);
   window.addEventListener("offline", setOnline);
   window.addEventListener("kodex:preload-error", markPreloadFailed);
-  // Realtime не зависит от каталожных readback. Запускаем handshake сразу:
-  // накопленный staging или временно медленный каталог не должен оставлять
-  // уже отрисованную страницу в состоянии CONNECTING до HTTP timeout.
-  realtimeStarted.value = true;
-  realtime.openPlatform();
-  void Promise.all([
-    platform.loadProjects(),
-    platform.loadGates(),
-    platform.loadBootstrap(),
-  ]);
+  // Shell монтируется сразу, чтобы состояние сессии оставалось наблюдаемым.
+  // Realtime и owner readback запускаем после initial navigation: так resync
+  // получает точный project scope и не загружает глобальные данные за экран,
+  // который был виден только до завершения асинхронного route guard.
+  void router.isReady().then(() => {
+    selectProjectRef(projectRef.value);
+    realtimeStarted.value = true;
+    realtime.openPlatform();
+    return Promise.all([
+      platform.loadProjects(),
+      platform.loadGates(),
+      platform.loadBootstrap(),
+    ]);
+  });
 });
 onBeforeUnmount(() => {
   platform.cancelSearch();
