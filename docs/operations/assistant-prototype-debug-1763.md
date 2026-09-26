@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.51
+version: 1.0.52
 updated: 2026-09-26
 ---
 
@@ -1007,3 +1007,14 @@ GitHub checks не считается `PASS`.
   ReplicaSet и остановкам хоста; текущие Pod готовы, последний restart
   trust-manager был более суток назад. Chrome-проверка повторно NOT RUN:
   `list_pages` отвечает `Transport closed`; браузер не перезапускался.
+- Предупреждения о потерянной авторизации provider account на главной были
+  последним видимым списком с фиксированной первой порцией: запрос ограничивал
+  результат 20 строками и игнорировал `nextPageToken`. Главная теперь хранит
+  opaque cursor, дозагружает следующую порцию по измеренной высоте контейнера и
+  строки, не сбрасывает уже загруженное при resize и закрыто отклоняет дубли или
+  циклический cursor. Ошибка продолжения сохраняет первую страницу и предлагает
+  повтор точного cursor. Typecheck, ESLint, Prettier, `git diff --check` и 7
+  адресных frontend unit — PASS. Host/Pod SHA совпадают, live Vite-модуль
+  содержит новый marker, Deployment Control Center готов `1/1`; browser —
+  NOT RUN, потому что повторный `list_pages` всё ещё отвечает
+  `Transport closed`.

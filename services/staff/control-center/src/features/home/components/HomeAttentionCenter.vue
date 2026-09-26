@@ -6,7 +6,7 @@ import {
   KeyRound,
   ShieldQuestion,
 } from "@lucide/vue";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type {
@@ -20,12 +20,15 @@ import { runPath } from "@/shared/routes";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   gates: OwnerGate[];
   gatesCount?: number;
   failedRuns: Run[];
   providerAccounts: ProviderAccount[];
+  providerNextPageToken?: string;
   failedRunsCount?: number;
   projects: Project[];
   gatesReady: boolean;
@@ -34,15 +37,19 @@ const props = defineProps<{
   gatesLoading?: boolean;
   runsLoading?: boolean;
   providerLoading?: boolean;
+  providerLoadingMore?: boolean;
   gatesProblem?: AppProblem;
   runsProblem?: AppProblem;
   providerProblem?: AppProblem;
+  providerMoreProblem?: AppProblem;
   refreshing?: boolean;
 }>();
 const emit = defineEmits<{
   retryGates: [];
   retryRuns: [];
   retryProviders: [];
+  moreProviders: [pageSize: number];
+  retryMoreProviders: [pageSize: number];
 }>();
 const { locale, t } = useI18n();
 
@@ -77,6 +84,26 @@ function formatDate(value?: string): string {
   }).format(new Date(value));
 }
 const serverMessage = useServerMessage();
+const providerRoot = ref<HTMLElement>();
+const providerSentinel = ref<HTMLElement>();
+const providerPageSize = useAdaptiveCursorPageSize({
+  container: providerRoot,
+  itemSelector: ".home-attention__provider-item",
+  itemCount: () => props.providerAccounts.length,
+  estimatedViewportHeight: 420,
+  estimatedItemHeight: 84,
+  minimum: 5,
+  maximum: 50,
+});
+useCursorInfiniteScroll({
+  root: providerRoot,
+  sentinel: providerSentinel,
+  enabled: () =>
+    Boolean(props.providerNextPageToken) &&
+    !props.providerLoadingMore &&
+    !props.providerMoreProblem,
+  loadMore: () => emit("moreProviders", providerPageSize.value),
+});
 </script>
 
 <template>
@@ -221,12 +248,16 @@ const serverMessage = useServerMessage();
           </RouterLink>
         </div>
       </slot>
-      <div v-if="providerAccounts.length" class="home-attention__group">
+      <div
+        v-if="providerAccounts.length"
+        ref="providerRoot"
+        class="home-attention__group home-attention__provider-group"
+      >
         <RouterLink
           v-for="account in providerAccounts"
           :key="account.ref"
           to="/administration/providers"
-          class="home-attention__item"
+          class="home-attention__item home-attention__provider-item"
         >
           <span class="home-attention__lead home-attention__lead--gate">
             <KeyRound :size="17" aria-hidden="true" />
@@ -242,6 +273,24 @@ const serverMessage = useServerMessage();
             $t("home.renewAuthorization")
           }}</span>
         </RouterLink>
+        <div
+          v-if="
+            providerNextPageToken || providerLoadingMore || providerMoreProblem
+          "
+          ref="providerSentinel"
+          class="home-attention__provider-sentinel"
+          role="status"
+        >
+          <span v-if="providerLoadingMore">{{ $t("common.loading") }}</span>
+          <button
+            v-else-if="providerMoreProblem"
+            class="button"
+            type="button"
+            @click="emit('retryMoreProviders', providerPageSize)"
+          >
+            {{ $t("common.retry") }}
+          </button>
+        </div>
       </div>
       <p
         v-if="
@@ -302,6 +351,18 @@ const serverMessage = useServerMessage();
   margin-left: auto;
   color: var(--accent-strong);
   font-size: 0.8rem;
+}
+.home-attention__provider-group {
+  max-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.home-attention__provider-sentinel {
+  display: flex;
+  min-height: 1px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
 }
 .home-attention__count,
 .home-attention__group-head > span {

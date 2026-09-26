@@ -38,9 +38,13 @@ const projectLoading = ref(false);
 const projectProblem = ref<AppProblem>();
 let projectController: AbortController | undefined;
 const providerAccountsNeedingAuthorization = ref<ProviderAccount[]>([]);
+const providerNextPageToken = ref<string>();
 const providerProblem = ref<AppProblem>();
+const providerMoreProblem = ref<AppProblem>();
 const providerReady = ref(false);
 const providerLoading = ref(false);
+const providerLoadingMore = ref(false);
+const consumedProviderCursors = new Set<string>();
 let providerController: AbortController | undefined;
 const runsReady = ref(platform.runList.length > 0);
 
@@ -68,7 +72,9 @@ const refreshing = computed(
   () =>
     (platform.loading.overview && overviewReady.value) ||
     (projectLoading.value && projectsReady.value) ||
-    (platform.loading.runs && runsReady.value),
+    (platform.loading.runs && runsReady.value) ||
+    (providerLoading.value && providerReady.value) ||
+    providerLoadingMore.value,
 );
 const showRuns = computed(() => runCatalogTotal.value !== 0);
 const showSessions = computed(() => sessionCatalogTotal.value !== 0);
@@ -133,40 +139,119 @@ async function refreshRuns(): Promise<void> {
   }
 }
 
-async function refreshProviderAttention(): Promise<void> {
+function validateProviderAttentionPage(
+  items: ProviderAccount[],
+  existingRefs: ReadonlySet<string>,
+  requestedCursor?: string,
+  nextCursor?: string,
+): void {
+  const refs = items.map((item) => item.ref);
+  if (
+    items.some((item) => item.state !== "REAUTHORIZATION_REQUIRED") ||
+    new Set(refs).size !== refs.length ||
+    refs.some((ref) => existingRefs.has(ref)) ||
+    (nextCursor !== undefined &&
+      (nextCursor === requestedCursor ||
+        consumedProviderCursors.has(nextCursor)))
+  )
+    throw invalidSearchResult();
+}
+
+async function refreshProviderAttention(pageSize = 6): Promise<void> {
   const role = platform.bootstrap?.platformRole;
   if (role !== "OWNER" && role !== "ADMINISTRATOR") {
     providerController?.abort();
     providerAccountsNeedingAuthorization.value = [];
+    providerNextPageToken.value = undefined;
     providerProblem.value = undefined;
+    providerMoreProblem.value = undefined;
     providerLoading.value = false;
+    providerLoadingMore.value = false;
     providerReady.value = true;
+    consumedProviderCursors.clear();
     return;
   }
   providerController?.abort();
   const controller = new AbortController();
   providerController = controller;
   providerLoading.value = true;
+  providerLoadingMore.value = false;
   providerProblem.value = undefined;
+  providerMoreProblem.value = undefined;
+  consumedProviderCursors.clear();
   try {
     const page = (
       await unwrap(
         listProviderAccounts({
-          query: { state: "REAUTHORIZATION_REQUIRED", pageSize: 20 },
+          query: { state: "REAUTHORIZATION_REQUIRED", pageSize },
           signal: requestSignal(controller.signal),
         }),
       )
     ).data;
     if (controller.signal.aborted) return;
-    if (page.items.some((item) => item.state !== "REAUTHORIZATION_REQUIRED"))
-      throw invalidSearchResult();
+    const nextCursor = page.nextPageToken || undefined;
+    validateProviderAttentionPage(page.items, new Set(), undefined, nextCursor);
     providerAccountsNeedingAuthorization.value = page.items;
+    providerNextPageToken.value = nextCursor;
     providerReady.value = true;
   } catch (error) {
     if (!controller.signal.aborted) providerProblem.value = asProblem(error);
   } finally {
     if (providerController === controller) providerLoading.value = false;
   }
+}
+
+async function loadMoreProviderAttention(pageSize: number): Promise<void> {
+  const pageToken = providerNextPageToken.value;
+  if (!pageToken || providerLoadingMore.value || providerMoreProblem.value)
+    return;
+  const controller = new AbortController();
+  providerController = controller;
+  providerLoadingMore.value = true;
+  providerMoreProblem.value = undefined;
+  try {
+    const page = (
+      await unwrap(
+        listProviderAccounts({
+          query: {
+            state: "REAUTHORIZATION_REQUIRED",
+            pageSize,
+            pageToken,
+          },
+          signal: requestSignal(controller.signal),
+        }),
+      )
+    ).data;
+    if (controller.signal.aborted || providerNextPageToken.value !== pageToken)
+      return;
+    const nextCursor = page.nextPageToken || undefined;
+    validateProviderAttentionPage(
+      page.items,
+      new Set(
+        providerAccountsNeedingAuthorization.value.map(
+          (account) => account.ref,
+        ),
+      ),
+      pageToken,
+      nextCursor,
+    );
+    consumedProviderCursors.add(pageToken);
+    providerAccountsNeedingAuthorization.value = [
+      ...providerAccountsNeedingAuthorization.value,
+      ...page.items,
+    ];
+    providerNextPageToken.value = nextCursor;
+  } catch (error) {
+    if (!controller.signal.aborted)
+      providerMoreProblem.value = asProblem(error);
+  } finally {
+    if (providerController === controller) providerLoadingMore.value = false;
+  }
+}
+
+function retryMoreProviderAttention(pageSize: number): void {
+  providerMoreProblem.value = undefined;
+  void loadMoreProviderAttention(pageSize);
 }
 
 async function refresh(): Promise<void> {
@@ -226,6 +311,7 @@ onBeforeUnmount(() => {
       :gates-count="platform.overview?.pendingGateCount"
       :failed-runs="failedRuns"
       :provider-accounts="providerAccountsNeedingAuthorization"
+      :provider-next-page-token="providerNextPageToken"
       :projects="visibleProjects"
       :gates-ready="overviewReady"
       :runs-ready="runsReady"
@@ -233,13 +319,17 @@ onBeforeUnmount(() => {
       :gates-loading="platform.loading.overview"
       :runs-loading="platform.loading.runs"
       :provider-loading="providerLoading"
+      :provider-loading-more="providerLoadingMore"
       :gates-problem="platform.problems.overview"
       :runs-problem="platform.problems.runs"
       :provider-problem="providerProblem"
+      :provider-more-problem="providerMoreProblem"
       :refreshing="refreshing"
       @retry-gates="refreshOverview"
       @retry-runs="refreshRuns"
       @retry-providers="refreshProviderAttention"
+      @more-providers="loadMoreProviderAttention"
+      @retry-more-providers="retryMoreProviderAttention"
     />
 
     <div

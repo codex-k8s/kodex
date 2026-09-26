@@ -28,6 +28,14 @@ describe("HomePage layout", () => {
     expect(template).not.toContain("CapabilityCoverageList");
     expect(template).not.toContain("PROVIDER_AUTH_EXPIRY");
     expect(source).toContain('state: "REAUTHORIZATION_REQUIRED"');
+    expect(source).toContain("pageToken,");
+    expect(template).toContain(
+      ':provider-next-page-token="providerNextPageToken"',
+    );
+    expect(template).toContain('@more-providers="loadMoreProviderAttention"');
+    expect(template).toContain(
+      '@retry-more-providers="retryMoreProviderAttention"',
+    );
     expect(template).toContain('class="home-dashboard"');
     expect(template).toContain("dashboard");
     expect(template).not.toContain("HomeGateCatalog");
