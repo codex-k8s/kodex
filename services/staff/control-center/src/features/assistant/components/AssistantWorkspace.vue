@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   History,
+  KeyRound,
   ListChecks,
   Pencil,
   Plus,
@@ -19,12 +20,26 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute, useRouter } from "vue-router";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
+import AssistantCreatedEntityCard from "@/features/assistant/components/AssistantCreatedEntityCard.vue";
+import AssistantInstructionDraftCard from "@/features/assistant/components/AssistantInstructionDraftCard.vue";
+import AssistantAgentEnvironmentBindingCard from "@/features/assistant/components/AssistantAgentEnvironmentBindingCard.vue";
+import AssistantCreatedWorkflowCard from "@/features/assistant/components/AssistantCreatedWorkflowCard.vue";
+import AssistantEnvironmentDraftCard from "@/features/assistant/components/AssistantEnvironmentDraftCard.vue";
+import AssistantIntegrationConnectionCard from "@/features/assistant/components/AssistantIntegrationConnectionCard.vue";
+import AssistantIntegrationCredentialDialog from "@/features/assistant/components/AssistantIntegrationCredentialDialog.vue";
+import AssistantLaunchedRunCard from "@/features/assistant/components/AssistantLaunchedRunCard.vue";
+import AssistantRoleImageBuildCard from "@/features/assistant/components/AssistantRoleImageBuildCard.vue";
+import { OpenAPIImportDialog } from "@/features/managed-configurations";
 import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   assistantContextIdentity,
   assistantContextTitle,
@@ -32,7 +47,10 @@ import {
   readableContextOperations,
   readableContextKind,
 } from "@/features/assistant/context";
-import { openAssistantEvent } from "@/features/assistant/events";
+import {
+  openAssistantEvent,
+  type AssistantIntegrationPublicationRequest,
+} from "@/features/assistant/events";
 import {
   assistantAwaitingReply,
   assistantEffectiveRuntimeState,
@@ -41,14 +59,20 @@ import {
   operationTargetLabel,
 } from "@/features/assistant/model";
 import { useAssistantStore } from "@/features/assistant/store";
+import { usePlatformStore } from "@/features/platform/store";
 import {
   persistAssistantWorkspaceOpen,
   restoreAssistantWorkspaceOpen,
 } from "@/features/assistant/workspace-state";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
+import RuntimeSecretDraftDialog from "@/features/runtime-secrets/RuntimeSecretDraftDialog.vue";
+import type { RuntimeSecretDraftSuggestion } from "@/features/runtime-secrets/model";
+import { consumeRuntimeSecretReauthSuggestion } from "@/features/runtime-secrets/reauth-suggestion";
 import type {
   AssistantContextDescriptor,
   AssistantPlan,
+  AssistantPlanOperation,
+  AssistantPlanReceipt,
   RunEvent,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
@@ -65,7 +89,6 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import OverlayPanel from "@/shared/ui/OverlayPanel.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
-import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 
@@ -79,15 +102,79 @@ const props = withDefaults(
   }>(),
   { live: false, runEvents: () => [], refreshRevision: "" },
 );
+
+const planTargetKindTranslationKeys: Readonly<Record<string, string>> = {
+  PROJECT: "assistant.planEditor.targetKinds.PROJECT",
+  AGENT: "assistant.planEditor.targetKinds.AGENT",
+  WORKFLOW: "assistant.planEditor.targetKinds.WORKFLOW",
+  SCHEDULE: "assistant.planEditor.targetKinds.SCHEDULE",
+  EXECUTION: "assistant.planEditor.targetKinds.EXECUTION",
+  ENVIRONMENT: "assistant.planEditor.targetKinds.ENVIRONMENT",
+  RUNTIME_ENVIRONMENT_DRAFT:
+    "assistant.planEditor.targetKinds.RUNTIME_ENVIRONMENT_DRAFT",
+  ROLE_IMAGE_RECIPE: "assistant.planEditor.targetKinds.ROLE_IMAGE_RECIPE",
+  INTEGRATION_CONNECTION:
+    "assistant.planEditor.targetKinds.INTEGRATION_CONNECTION",
+  INTEGRATION_DEFINITION:
+    "assistant.planEditor.targetKinds.INTEGRATION_DEFINITION",
+};
+
+function operationTargetKindLabel(kind: string): string {
+  const key = planTargetKindTranslationKeys[kind];
+  return key ? t(key) : kind;
+}
+
+function operationSupportingTitle(
+  operation: AssistantPlanOperation,
+): string | undefined {
+  const title = operation.title.trim();
+  return title && title !== operationTargetLabel(operation.target)
+    ? title
+    : undefined;
+}
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
+const assistantFormActive = computed(() => route.query.assistantForm === "1");
 const store = useAssistantStore();
-const open = ref(restoreAssistantWorkspaceOpen());
+const titleFieldName = `assistant-conversation-title-${useId()}`;
+const platform = usePlatformStore();
+const open = ref(
+  restoreAssistantWorkspaceOpen() || route.query.assistantForm === "1",
+);
 const historyOpen = ref(false);
 const contextOpen = ref(false);
+const integrationImportOpen = ref(false);
+const secretDialogOpen = ref(false);
+const credentialConnectionRef = ref("");
+const connectionRefreshToken = ref(0);
+const secretInitialDraftRef = ref<string>();
+const secretSuggestion = ref<RuntimeSecretDraftSuggestion>();
+let workspaceMounted = false;
+let secretResumePending = false;
+const createdDefinitionRef = ref<string>();
 const desktopHistory = ref<HTMLElement>();
 const desktopHistorySentinel = ref<HTMLElement>();
 const mobileHistory = ref<HTMLElement>();
 const mobileHistorySentinel = ref<HTMLElement>();
+const desktopHistoryPageSize = useAdaptiveCursorPageSize({
+  container: desktopHistory,
+  itemSelector: ".assistant-conversation-entry",
+  itemCount: () => store.sortedConversations.length,
+  estimatedViewportHeight: 720,
+  estimatedItemHeight: 58,
+  minimum: 8,
+  maximum: 100,
+});
+const mobileHistoryPageSize = useAdaptiveCursorPageSize({
+  container: mobileHistory,
+  itemSelector: ".assistant-history__menu > button",
+  itemCount: () => store.sortedConversations.length,
+  estimatedViewportHeight: 420,
+  estimatedItemHeight: 58,
+  minimum: 6,
+  maximum: 100,
+});
 const desktopHistoryVisible = ref(false);
 const historyMedia =
   typeof window === "undefined"
@@ -113,10 +200,13 @@ const attachmentState = ref<AttachmentComposerState>({
   ready: true,
 });
 const panel = ref<HTMLElement>();
+const planDialog = ref<HTMLElement>();
+const formSlot = ref<HTMLElement>();
 const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
 const historyMenu = ref<HTMLElement>();
 const fab = ref<HTMLButtonElement>();
+const planTrigger = ref<HTMLButtonElement>();
 
 const checkedContext = computed(() => {
   const conversation = store.selectedConversation;
@@ -159,6 +249,16 @@ const providerAccountRequired = computed(
   () =>
     store.assistant !== undefined &&
     assistantRequiresProviderAccount(store.assistant),
+);
+const setupSuggestions = computed(() =>
+  (props.projectRef
+    ? ["agent", "environment", "integration", "launch"]
+    : ["project"]
+  ).map((step) => ({
+    step,
+    title: t(`assistant.setup.${step}.title`),
+    prompt: t(`assistant.setup.${step}.prompt`),
+  })),
 );
 const assistantReadinessLabel = computed(() =>
   providerAccountRequired.value
@@ -209,16 +309,51 @@ for (const [root, sentinel, visible] of [
       !store.loadingMore &&
       !store.busy &&
       !store.historyProblem,
-    loadMore: () => store.loadMoreHistory(),
+    loadMore: () =>
+      store.loadMoreHistory(
+        desktopHistoryVisible.value
+          ? desktopHistoryPageSize.value
+          : mobileHistoryPageSize.value,
+      ),
   });
 }
+
+watch(
+  [desktopHistoryPageSize, mobileHistoryPageSize, desktopHistoryVisible],
+  ([desktopSize, mobileSize, desktopVisible]) =>
+    store.setHistoryPageSize(desktopVisible ? desktopSize : mobileSize),
+  { immediate: true },
+);
 
 const contextIdentity = computed(() =>
   assistantContextIdentity(props.context, props.projectRef),
 );
 
-function handleOpenAssistant(): void {
-  void show();
+function handleOpenAssistant(event: Event): void {
+  void (async () => {
+    const request =
+      event instanceof CustomEvent
+        ? (event.detail as AssistantIntegrationPublicationRequest | undefined)
+        : undefined;
+    await show();
+    if (
+      !request ||
+      !/^mcfg_[A-Za-z0-9_-]{1,91}$/.test(request.configurationRef) ||
+      !/^mrev_[A-Za-z0-9_-]{1,91}$/.test(request.revisionRef)
+    )
+      return;
+    if (
+      message.value.trim() &&
+      !window.confirm(t("assistant.replaceDraftConfirm"))
+    )
+      return;
+    message.value = t("assistant.publishIntegrationRequest", {
+      configurationRef: request.configurationRef,
+      revisionRef: request.revisionRef,
+    });
+    await nextTick();
+    composer.value?.focus();
+  })();
 }
 
 async function show(): Promise<void> {
@@ -234,6 +369,12 @@ async function show(): Promise<void> {
 
 function close(): void {
   if (store.busy) return;
+  if (secretDialogOpen.value) return;
+  if (credentialConnectionRef.value) return;
+  if (assistantFormActive.value) {
+    void closeAssistantForm();
+    return;
+  }
   if (
     (message.value.trim() ||
       attachmentState.value.count > 0 ||
@@ -242,6 +383,8 @@ function close(): void {
   )
     return;
   store.cancelReads();
+  integrationImportOpen.value = false;
+  createdDefinitionRef.value = undefined;
   open.value = false;
   persistAssistantWorkspaceOpen(false);
   historyOpen.value = false;
@@ -251,8 +394,80 @@ function close(): void {
   void nextTick(() => fab.value?.focus());
 }
 
+async function closeAssistantForm(): Promise<void> {
+  if (store.busy) return;
+  const origin = store.context?.route;
+  if (origin?.startsWith("/") && !origin.startsWith("//")) {
+    const resolved = router.resolve(origin);
+    if (
+      resolved.params.projectRef === props.projectRef &&
+      resolved.query.assistantForm !== "1"
+    ) {
+      await router.replace(origin);
+      return;
+    }
+  }
+  await router.replace({ query: { ...route.query, assistantForm: undefined } });
+}
+
+async function resumeAssistantSecretForm(): Promise<void> {
+  if (
+    secretResumePending ||
+    !props.projectRef ||
+    route.params.projectRef !== props.projectRef
+  )
+    return;
+  const creating = route.query.assistantCreateSecret === "1";
+  const draftRef = route.query.assistantSecretDraftRef;
+  const resuming =
+    typeof draftRef === "string" && /^[-_A-Za-z0-9]{8,128}$/.test(draftRef);
+  if (!creating && !resuming) return;
+  secretResumePending = true;
+  try {
+    await show();
+    secretInitialDraftRef.value = resuming ? draftRef : undefined;
+    secretSuggestion.value = creating
+      ? consumeRuntimeSecretReauthSuggestion(window.sessionStorage, {
+          projectRef: props.projectRef,
+          surface: "assistant",
+        })
+      : undefined;
+    secretDialogOpen.value = true;
+    await router.replace({
+      query: {
+        ...route.query,
+        assistantCreateSecret: undefined,
+        assistantSecretDraftRef: undefined,
+      },
+    });
+  } finally {
+    secretResumePending = false;
+  }
+}
+
+function openPlainSecretForm(): void {
+  secretInitialDraftRef.value = undefined;
+  secretSuggestion.value = undefined;
+  secretDialogOpen.value = true;
+}
+
+function openSuggestedSecretForm(
+  suggestion: RuntimeSecretDraftSuggestion,
+): void {
+  if (!props.projectRef || currentPlan.value?.projectRef !== props.projectRef)
+    return;
+  secretInitialDraftRef.value = undefined;
+  secretSuggestion.value = suggestion;
+  secretDialogOpen.value = true;
+}
+
 function handleKeydown(event: KeyboardEvent): void {
+  if ((event.target as HTMLElement).closest(".modal")) return;
   if (event.key === "Escape") {
+    if (assistantFormActive.value) {
+      void closeAssistantForm();
+      return;
+    }
     if (historyOpen.value) historyOpen.value = false;
     else if (openPlanRef.value) void closePlan();
     else close();
@@ -260,7 +475,10 @@ function handleKeydown(event: KeyboardEvent): void {
   }
   if (event.key !== "Tab" || !panel.value) return;
   const target = trappedFocusTarget(
-    focusableElements(panel.value),
+    [
+      ...focusableElements(panel.value),
+      ...(formSlot.value ? focusableElements(formSlot.value) : []),
+    ],
     document.activeElement,
     event.shiftKey,
   );
@@ -354,25 +572,81 @@ function scrollToLatest(): void {
   chatLog.value?.scrollTo({ top: chatLog.value.scrollHeight });
 }
 
+function suggestSetup(prompt: string): void {
+  if (!canSend.value || message.value.trim()) return;
+  message.value = prompt;
+  void nextTick(() => composer.value?.focus());
+}
+
+function handleAssistantLink(event: MouseEvent): void {
+  if (
+    event.button !== 0 ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    !(event.target instanceof Element)
+  )
+    return;
+  const link = event.target.closest("a[href]");
+  if (link?.getAttribute("href") !== "/configurations/INTEGRATION_DEFINITION")
+    return;
+  event.preventDefault();
+  integrationImportOpen.value = true;
+}
+
+function integrationDraftCreated(configurationRef: string): void {
+  integrationImportOpen.value = false;
+  createdDefinitionRef.value = configurationRef;
+}
+
+function openCreatedDefinition(): void {
+  if (!createdDefinitionRef.value) return;
+  const configurationRef = createdDefinitionRef.value;
+  void router.push({
+    name: "configuration",
+    params: { kind: "INTEGRATION_DEFINITION", configurationRef },
+    query: { assistantForm: "1" },
+  });
+}
+
 function handleComposerKeydown(event: KeyboardEvent): void {
   if (event.key !== "Enter" || event.shiftKey) return;
   event.preventDefault();
   void send();
 }
 
-function openPlan(plan: AssistantPlan): void {
+async function openPlan(plan: AssistantPlan, event: MouseEvent): Promise<void> {
   store.clearReceipt();
+  planTrigger.value = event.currentTarget as HTMLButtonElement;
   openPlanRef.value = plan.ref;
+  await nextTick();
+  const initialTarget = planDialog.value
+    ? focusableElements(planDialog.value)[0]
+    : undefined;
+  (initialTarget ?? planDialog.value)?.focus();
+}
+
+function planVariantNumber(planRef: string): number {
+  const variants = (store.selectedConversation?.turns ?? []).flatMap((turn) =>
+    turn.plan ? [turn.plan.ref] : [],
+  );
+  const index = variants.indexOf(planRef);
+  return index >= 0 ? index + 1 : 1;
 }
 
 async function closePlan(): Promise<void> {
+  if (store.busy) return;
+  const trigger = planTrigger.value;
   const refresh = ["APPLIED", "REJECTED"].includes(
     currentPlan.value?.state ?? "",
   );
   openPlanRef.value = undefined;
+  planTrigger.value = undefined;
   store.clearReceipt();
   await nextTick();
   scrollToLatest();
+  if (trigger?.isConnected) trigger.focus();
   if (refresh && open.value) await store.load(props.context, props.projectRef);
 }
 
@@ -392,12 +666,86 @@ async function validatePlan(): Promise<void> {
 
 async function applyPlan(): Promise<void> {
   const plan = currentPlan.value;
-  if (plan) await handleStoreMutation(() => store.apply(plan));
+  if (!plan) return;
+  let receipt: AssistantPlanReceipt | undefined;
+  if (
+    !(await handleStoreMutation(async () => {
+      receipt = await store.apply(plan);
+    })) ||
+    receipt?.outcome !== "APPLIED"
+  )
+    return;
+  const applied = new Set(
+    receipt.operationReceipts.map((item) => item.operationRef),
+  );
+  const kinds = new Set<string>();
+  for (const operation of plan.operations) {
+    if (!applied.has(operation.ref)) continue;
+    switch (operation.type) {
+      case "CREATE_PROJECT":
+      case "UPDATE_PROJECT":
+        kinds.add("PROJECT");
+        break;
+      case "CREATE_AGENT":
+      case "UPDATE_AGENT":
+      case "ARCHIVE_AGENT":
+      case "CHANGE_CAPABILITY":
+      case "BIND_AGENT_RUNTIME_ENVIRONMENT":
+        kinds.add("AGENT");
+        break;
+      case "CREATE_WORKFLOW":
+      case "UPDATE_WORKFLOW":
+      case "ARCHIVE_WORKFLOW":
+        kinds.add("WORKFLOW");
+        break;
+      case "CREATE_ROLE_IMAGE_RECIPE":
+      case "UPDATE_ROLE_IMAGE_RECIPE":
+        kinds.add("ROLE_IMAGE_RECIPE");
+        break;
+      case "CREATE_SCHEDULE":
+      case "UPDATE_SCHEDULE":
+        kinds.add("SCHEDULE");
+        break;
+      case "LAUNCH_RUN":
+        kinds.add("RUN");
+        break;
+      case "CREATE_INTEGRATION_CONNECTION":
+      case "UPDATE_INTEGRATION_CONNECTION":
+      case "TEST_INTEGRATION_CONNECTION":
+        kinds.add("INTEGRATION_CONNECTION");
+        break;
+      case "PUBLISH_INTEGRATION_DEFINITION":
+        kinds.add("INTEGRATION_DEFINITION");
+        break;
+      case "CHANGE_INTEGRATION_GRANT":
+        kinds.add("INTEGRATION_GRANT");
+        break;
+    }
+  }
+  // Квитанция уже применена; ошибка вторичного чтения не меняет её исход.
+  await Promise.allSettled(
+    [...kinds].map((kind) => platform.reloadPlatformKind(kind)),
+  );
 }
 
 async function rejectPlan(): Promise<void> {
   const plan = currentPlan.value;
   if (plan) await handleStoreMutation(() => store.reject(plan));
+}
+
+async function requestPlanChanges(): Promise<void> {
+  const plan = currentPlan.value;
+  if (!plan || store.busy || store.selectedConversation?.state !== "ACTIVE")
+    return;
+  await closePlan();
+  if (!message.value.trim())
+    message.value = t("assistant.planEditor.revisionRequest", {
+      variant: planVariantNumber(plan.ref),
+      revision: plan.revision,
+      summary: plan.auditSummary.slice(0, 160),
+    });
+  await nextTick();
+  composer.value?.focus();
 }
 
 function documentPointerDown(event: PointerEvent): void {
@@ -411,6 +759,8 @@ function documentPointerDown(event: PointerEvent): void {
 
 watch(contextIdentity, () => {
   contextOpen.value = false;
+  integrationImportOpen.value = false;
+  createdDefinitionRef.value = undefined;
   store.setContext(props.context, props.projectRef);
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
@@ -446,6 +796,14 @@ watch(
   },
 );
 watch(
+  () => props.projectRef,
+  () => {
+    secretDialogOpen.value = false;
+    secretInitialDraftRef.value = undefined;
+    secretSuggestion.value = undefined;
+  },
+);
+watch(
   () => store.selectedConversation?.turns.length,
   async () => {
     if (!open.value || openPlanRef.value) return;
@@ -453,14 +811,34 @@ watch(
     scrollToLatest();
   },
 );
+watch(
+  [
+    () => props.projectRef,
+    () => route.params.projectRef,
+    () => route.query.assistantCreateSecret,
+    () => route.query.assistantSecretDraftRef,
+  ],
+  () => {
+    if (
+      workspaceMounted &&
+      (route.query.assistantCreateSecret || route.query.assistantSecretDraftRef)
+    )
+      void resumeAssistantSecretForm();
+  },
+);
 
 onMounted(() => {
+  workspaceMounted = true;
   historyMedia?.addEventListener("change", syncHistoryViewport);
   document.addEventListener("pointerdown", documentPointerDown);
   window.addEventListener(openAssistantEvent, handleOpenAssistant);
-  if (open.value) void show();
+  if (route.query.assistantCreateSecret || route.query.assistantSecretDraftRef)
+    void resumeAssistantSecretForm();
+  else if (assistantFormActive.value) void show();
+  else if (open.value) void show();
 });
 onBeforeUnmount(() => {
+  workspaceMounted = false;
   historyMedia?.removeEventListener("change", syncHistoryViewport);
   store.cancelReads();
   document.removeEventListener("pointerdown", documentPointerDown);
@@ -482,7 +860,16 @@ onBeforeUnmount(() => {
     <Sparkles :size="24" aria-hidden="true" />
   </button>
 
-  <div v-if="open" class="assistant-overlay" role="presentation">
+  <div
+    v-if="open"
+    class="assistant-overlay"
+    role="presentation"
+    :inert="
+      integrationImportOpen ||
+      secretDialogOpen ||
+      Boolean(credentialConnectionRef)
+    "
+  >
     <button
       class="assistant-overlay__backdrop"
       type="button"
@@ -491,14 +878,15 @@ onBeforeUnmount(() => {
       @click="close"
     />
     <aside
+      key="CHAT"
       id="assistant-workspace"
       ref="panel"
       class="assistant-drawer"
-      :class="{ 'assistant-drawer--plan': currentPlan }"
       role="dialog"
-      aria-modal="true"
+      :aria-modal="!currentPlan && !assistantFormActive ? true : undefined"
       :aria-label="$t('assistant.title')"
       :aria-busy="store.busy || store.loading"
+      :inert="Boolean(currentPlan) || assistantFormActive || undefined"
       :data-conversation-ref="store.selectedConversation?.ref"
       tabindex="-1"
       @keydown="handleKeydown"
@@ -587,16 +975,9 @@ onBeforeUnmount(() => {
               class="assistant-history-sentinel"
               aria-hidden="true"
             />
-            <button
-              v-if="store.nextPageToken"
-              type="button"
-              :disabled="store.loading || store.loadingMore || store.busy"
-              @click="store.loadMoreHistory"
-            >
-              <ChevronDown :size="16" />{{
-                store.loadingMore ? $t("common.loading") : $t("common.loadMore")
-              }}
-            </button>
+            <span v-if="store.loadingMore" role="status">{{
+              $t("common.loading")
+            }}</span>
           </section>
         </div>
         <button
@@ -611,7 +992,6 @@ onBeforeUnmount(() => {
       </header>
 
       <nav
-        v-if="!currentPlan"
         ref="desktopHistory"
         class="assistant-conversation-sidebar"
         :aria-label="$t('assistant.history')"
@@ -654,33 +1034,12 @@ onBeforeUnmount(() => {
           class="assistant-history-sentinel"
           aria-hidden="true"
         />
-        <button
-          v-if="store.nextPageToken"
-          class="button"
-          type="button"
-          :disabled="store.loading || store.loadingMore || store.busy"
-          @click="store.loadMoreHistory"
-        >
-          <ChevronDown :size="16" />{{
-            store.loadingMore ? $t("common.loading") : $t("common.loadMore")
-          }}
-        </button>
+        <span v-if="store.loadingMore" role="status">{{
+          $t("common.loading")
+        }}</span>
       </nav>
 
-      <AssistantPlanEditor
-        v-if="currentPlan"
-        :plan="currentPlan"
-        :receipt="store.receipt"
-        :busy="store.busy"
-        :readonly="store.selectedConversation?.state === 'ARCHIVED'"
-        :problem="store.problem"
-        @close="closePlan"
-        @save="savePlan"
-        @validate="validatePlan"
-        @apply="applyPlan"
-        @reject="rejectPlan"
-      />
-      <template v-else>
+      <div class="assistant-workspace-content">
         <nav v-if="isRunContext" class="assistant-drawer__tabs">
           <button
             type="button"
@@ -717,6 +1076,20 @@ onBeforeUnmount(() => {
               <strong>{{ contextTitle }}</strong>
               <small>{{ context.route }}</small>
             </button>
+            <section
+              v-if="createdDefinitionRef"
+              class="assistant-integration-draft"
+              role="status"
+            >
+              <span>{{ $t("assistant.integrationDraftCreated") }}</span>
+              <button
+                class="button button--primary"
+                type="button"
+                @click="openCreatedDefinition"
+              >
+                {{ $t("assistant.openIntegrationDraft") }}
+              </button>
+            </section>
             <OverlayPanel
               v-if="contextOpen"
               v-model:open="contextOpen"
@@ -759,6 +1132,8 @@ onBeforeUnmount(() => {
               <form v-if="titleEditing" @submit.prevent="saveTitle">
                 <input
                   v-model="titleDraft"
+                  :id="titleFieldName"
+                  :name="titleFieldName"
                   maxlength="160"
                   :disabled="store.busy"
                   :aria-label="$t('assistant.conversationTitle')"
@@ -846,6 +1221,25 @@ onBeforeUnmount(() => {
                 <template v-else>
                   <h2>{{ $t("assistant.ready") }}</h2>
                   <p>{{ $t("assistant.contextHelp") }}</p>
+                  <div class="assistant-setup-guide">
+                    <strong>{{ $t("assistant.setup.title") }}</strong>
+                    <p>{{ $t("assistant.setup.help") }}</p>
+                    <ol>
+                      <li
+                        v-for="suggestion in setupSuggestions"
+                        :key="suggestion.step"
+                      >
+                        <button
+                          class="button"
+                          type="button"
+                          :disabled="!canSend || !!message.trim()"
+                          @click="suggestSetup(suggestion.prompt)"
+                        >
+                          {{ suggestion.title }}
+                        </button>
+                      </li>
+                    </ol>
+                  </div>
                 </template>
               </div>
               <article
@@ -853,9 +1247,13 @@ onBeforeUnmount(() => {
                 v-else
                 :key="turn.ref"
                 class="assistant-message"
-                :class="`assistant-message--${turn.role.toLowerCase()}`"
+                :class="[
+                  `assistant-message--${turn.role.toLowerCase()}`,
+                  { 'assistant-message--with-plan': Boolean(turn.plan) },
+                ]"
                 :data-turn-ref="turn.ref"
                 :data-turn-sequence="turn.sequence"
+                @click.capture="handleAssistantLink"
               >
                 <header>
                   <strong>{{
@@ -872,7 +1270,11 @@ onBeforeUnmount(() => {
                   <header>
                     <ListChecks :size="19" aria-hidden="true" />
                     <div>
-                      <strong>{{ $t("assistant.plan") }}</strong>
+                      <strong>{{
+                        $t("assistant.planVariant", {
+                          variant: planVariantNumber(turn.plan.ref),
+                        })
+                      }}</strong>
                       <span>{{
                         $t("assistant.planEditor.revision", {
                           revision: turn.plan.revision,
@@ -896,27 +1298,120 @@ onBeforeUnmount(() => {
                             )
                           }}
                         </span>
-                        <small>{{ operation.target.kind }}</small>
+                        <small>{{
+                          operationTargetKindLabel(operation.target.kind)
+                        }}</small>
                       </header>
                       <strong class="assistant-plan-card__target">
                         {{ operationTargetLabel(operation.target) }}
                       </strong>
-                      <span>{{ operation.title }}</span>
+                      <span v-if="operationSupportingTitle(operation)">{{
+                        operationSupportingTitle(operation)
+                      }}</span>
                       <p>{{ operation.summary }}</p>
-                      <section class="assistant-plan-card__parameters">
-                        <strong>{{
-                          $t("assistant.planEditor.parametersTitle")
-                        }}</strong>
-                        <SafeStructuredData :value="operation.parameters" />
-                      </section>
                     </li>
                   </ol>
+                  <AssistantRoleImageBuildCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) =>
+                        item.type === 'CREATE_ROLE_IMAGE_RECIPE' ||
+                        item.type === 'UPDATE_ROLE_IMAGE_RECIPE',
+                    )"
+                    :key="`build-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                    @debug="suggestSetup"
+                  />
+                  <AssistantCreatedEntityCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) =>
+                        item.type === 'CREATE_PROJECT' ||
+                        item.type === 'UPDATE_PROJECT' ||
+                        item.type === 'CREATE_AGENT' ||
+                        item.type === 'UPDATE_AGENT',
+                    )"
+                    :key="`entity-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
+                  <AssistantInstructionDraftCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) => item.type === 'CREATE_INSTRUCTION_DRAFT',
+                    )"
+                    :key="`instruction-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
+                  <AssistantEnvironmentDraftCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) =>
+                        item.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' ||
+                        item.type === 'PREPARE_RUNTIME_ENVIRONMENT_REVISION',
+                    )"
+                    :key="`environment-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
+                  <AssistantAgentEnvironmentBindingCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) => item.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT',
+                    )"
+                    :key="`binding-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
+                  <AssistantIntegrationConnectionCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) =>
+                        item.type === 'CREATE_INTEGRATION_CONNECTION' ||
+                        item.type === 'UPDATE_INTEGRATION_CONNECTION' ||
+                        item.type === 'TEST_INTEGRATION_CONNECTION',
+                    )"
+                    :key="`connection-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                    :refresh-token="connectionRefreshToken"
+                    @prepare-credential="credentialConnectionRef = $event"
+                  />
+                  <AssistantCreatedScheduleCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) =>
+                        item.type === 'CREATE_SCHEDULE' ||
+                        item.type === 'UPDATE_SCHEDULE',
+                    )"
+                    :key="`schedule-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
+                  <AssistantCreatedWorkflowCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) =>
+                        item.type === 'CREATE_WORKFLOW' ||
+                        item.type === 'UPDATE_WORKFLOW',
+                    )"
+                    :key="`workflow-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
+                  <AssistantLaunchedRunCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) => item.type === 'LAUNCH_RUN',
+                    )"
+                    :key="`run-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                    @navigate="close"
+                  />
                   <button
                     class="button button--primary"
                     type="button"
-                    @click="openPlan(turn.plan)"
+                    @click="openPlan(turn.plan, $event)"
                   >
-                    {{ $t("assistant.openPlan") }}
+                    {{
+                      ["APPLIED", "REJECTED"].includes(turn.plan.state)
+                        ? $t("assistant.viewPlan")
+                        : $t("assistant.openPlan")
+                    }}
                   </button>
                 </section>
               </article>
@@ -951,6 +1446,7 @@ onBeforeUnmount(() => {
                 <VoiceTextarea
                   ref="composer"
                   v-model="message"
+                  name="assistant-message"
                   rows="2"
                   maxlength="32768"
                   :aria-label="$t('assistant.message')"
@@ -976,16 +1472,143 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
               </div>
-              <small>{{ $t("assistant.audit") }}</small>
+              <div class="assistant-composer__meta">
+                <button
+                  v-if="projectRef"
+                  class="assistant-composer__protected-link"
+                  type="button"
+                  @click="openPlainSecretForm"
+                >
+                  <KeyRound :size="15" aria-hidden="true" />
+                  {{ $t("assistant.openSecretForm") }}
+                </button>
+                <small>{{ $t("assistant.audit") }}</small>
+              </div>
             </footer>
           </div>
         </div>
-      </template>
+      </div>
     </aside>
+    <button
+      v-if="currentPlan && !assistantFormActive"
+      class="assistant-detail-backdrop"
+      type="button"
+      :aria-label="$t('assistant.planEditor.back')"
+      :disabled="store.busy"
+      @click="closePlan"
+    />
+    <section
+      v-if="currentPlan && !assistantFormActive"
+      ref="planDialog"
+      class="assistant-plan-dialog"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="$t('assistant.plan')"
+      tabindex="-1"
+    >
+      <AssistantPlanEditor
+        :plan="currentPlan"
+        :variant="planVariantNumber(currentPlan.ref)"
+        :receipt="store.receipt"
+        :busy="store.busy"
+        :readonly="store.selectedConversation?.state === 'ARCHIVED'"
+        :can-request-changes="
+          props.live && store.selectedConversation?.state === 'ACTIVE'
+        "
+        :problem="store.problem"
+        @close="closePlan"
+        @save="savePlan"
+        @validate="validatePlan"
+        @apply="applyPlan"
+        @reject="rejectPlan"
+        @request-changes="requestPlanChanges"
+        @prepare-secret="openSuggestedSecretForm"
+      />
+    </section>
+    <button
+      v-if="assistantFormActive"
+      class="assistant-detail-backdrop"
+      type="button"
+      :aria-label="$t('common.close')"
+      @click="closeAssistantForm"
+    />
+    <section
+      v-if="assistantFormActive"
+      id="assistant-form-slot"
+      ref="formSlot"
+      class="assistant-form-slot"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="$t('assistant.planEditor.parametersTitle')"
+      @keydown="handleKeydown"
+    >
+      <button
+        class="assistant-form-slot__close icon-button"
+        type="button"
+        :aria-label="$t('common.close')"
+        @click="closeAssistantForm"
+      >
+        <X :size="18" aria-hidden="true" />
+      </button>
+    </section>
   </div>
+  <OpenAPIImportDialog
+    v-if="open && integrationImportOpen"
+    @close="integrationImportOpen = false"
+    @created="integrationDraftCreated"
+  />
+  <Teleport to="body">
+    <div
+      v-if="open && credentialConnectionRef"
+      class="assistant-credential-layer"
+    >
+      <AssistantIntegrationCredentialDialog
+        :connection-ref="credentialConnectionRef"
+        @close="credentialConnectionRef = ''"
+        @configured="connectionRefreshToken += 1"
+      />
+    </div>
+  </Teleport>
+  <Teleport to="body">
+    <div
+      v-if="open && secretDialogOpen && projectRef"
+      class="assistant-secret-layer"
+    >
+      <RuntimeSecretDraftDialog
+        :project-ref="projectRef"
+        :initial-draft-ref="secretInitialDraftRef"
+        :suggestion="secretSuggestion"
+        :assistant-return-path="route.fullPath"
+        assistant
+        @close="
+          secretDialogOpen = false;
+          secretInitialDraftRef = undefined;
+          secretSuggestion = undefined;
+        "
+      />
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
+.assistant-secret-layer {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  pointer-events: none;
+}
+.assistant-credential-layer {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  pointer-events: none;
+}
+.assistant-credential-layer :deep(.modal-backdrop) {
+  pointer-events: auto;
+}
+.assistant-secret-layer :deep(.modal-backdrop) {
+  pointer-events: auto;
+}
 .assistant-fab {
   position: fixed;
   z-index: 42;
@@ -1011,6 +1634,21 @@ onBeforeUnmount(() => {
   z-index: 70;
   inset: 0;
 }
+.assistant-integration-draft {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+}
+@media (max-width: 720px) {
+  .assistant-integration-draft {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
 .assistant-overlay__backdrop {
   position: absolute;
   inset: 0;
@@ -1034,12 +1672,6 @@ onBeforeUnmount(() => {
   background: var(--surface);
   box-shadow: 0 18px 48px rgb(15 23 42 / 20%);
   outline: 0;
-}
-.assistant-drawer--plan {
-  inset: 4dvh 4vw;
-  width: 92vw;
-  max-width: 92vw;
-  height: 92dvh;
 }
 .assistant-conversation-sidebar {
   display: none;
@@ -1095,11 +1727,17 @@ onBeforeUnmount(() => {
   }
 }
 .assistant-drawer > .assistant-plan-editor,
+.assistant-workspace-content,
 .assistant-drawer__view,
 .assistant-chat-view {
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
+}
+.assistant-workspace-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .assistant-drawer__view,
 .assistant-chat-view {
@@ -1334,6 +1972,31 @@ onBeforeUnmount(() => {
 .assistant-empty-state p {
   margin: 0;
 }
+.assistant-setup-guide {
+  display: grid;
+  width: min(100%, 640px);
+  gap: 8px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+.assistant-setup-guide ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.assistant-setup-guide li,
+.assistant-setup-guide button {
+  min-width: 0;
+  width: 100%;
+}
 .assistant-message {
   width: min(86%, 760px);
   margin-bottom: 14px;
@@ -1350,6 +2013,9 @@ onBeforeUnmount(() => {
 .assistant-message--system_receipt {
   width: 100%;
   background: var(--panel);
+}
+.assistant-message--with-plan {
+  width: min(96%, 1180px);
 }
 .assistant-message--typing {
   display: flex;
@@ -1459,16 +2125,6 @@ onBeforeUnmount(() => {
 .assistant-plan-card__operations p {
   margin: 0;
 }
-.assistant-plan-card__parameters {
-  display: grid;
-  gap: 6px;
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-.assistant-plan-card__parameters > strong {
-  font-size: 0.78rem;
-}
 .assistant-plan-card .button {
   justify-self: start;
 }
@@ -1527,10 +2183,45 @@ onBeforeUnmount(() => {
   color: var(--subtle);
   cursor: not-allowed;
 }
-.assistant-composer > small {
+.assistant-composer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  min-width: 0;
+}
+.assistant-composer__meta > small {
   color: var(--subtle);
 }
+.assistant-composer__protected-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+.assistant-composer__protected-link:hover {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+.assistant-composer__protected-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 @media (max-width: 720px) {
+  .assistant-setup-guide ol {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .assistant-fab {
     right: 16px;
     bottom: calc(76px + env(safe-area-inset-bottom));
@@ -1613,6 +2304,45 @@ onBeforeUnmount(() => {
   .assistant-history__toggle svg:last-child,
   .assistant-drawer__header > :deep(.status-badge) {
     display: none;
+  }
+}
+.assistant-detail-backdrop {
+  position: fixed;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgb(17 24 39 / 28%);
+}
+.assistant-plan-dialog,
+.assistant-form-slot {
+  position: fixed;
+  z-index: 2;
+  inset: 6dvh 6vw;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 24px 64px rgb(15 23 42 / 28%);
+}
+.assistant-form-slot__close {
+  position: sticky;
+  z-index: 2;
+  top: 8px;
+  left: calc(100% - 44px);
+  margin: 8px 8px -44px auto;
+  background: var(--surface);
+}
+@media (max-width: 1000px) {
+  .assistant-plan-dialog,
+  .assistant-form-slot {
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
   }
 }
 </style>

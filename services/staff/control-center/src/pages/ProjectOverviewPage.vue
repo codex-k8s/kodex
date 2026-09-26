@@ -24,6 +24,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 const platform = usePlatformStore();
 const runtime = useRuntimeStore();
 const route = useRoute();
+const assistantForm = computed(() => route.query.assistantForm === "1");
 const projectRef = computed(() => String(route.params.projectRef));
 const project = computed(() => platform.projects[projectRef.value]);
 const projectReady = ref(Boolean(project.value));
@@ -163,133 +164,135 @@ watch(
 </script>
 
 <template>
-  <PageFrame
-    :title="project?.name ?? $t('app.project')"
-    :subtitle="project?.purpose ?? $t('project.subtitle')"
-    :eyebrow="$t('app.project')"
-  >
-    <template v-if="canCreateRun" #actions>
-      <RouterLink
-        class="button button--primary"
-        :to="`/projects/${projectRef}/runs/new`"
-      >
-        {{ $t("runs.new") }}
-      </RouterLink>
-    </template>
-
-    <ProblemNotice
-      v-if="platform.problems.project && !projectReady"
-      :problem="platform.problems.project"
-      @retry="refreshProject"
-    />
-
-    <div class="project-workboard">
-      <div class="project-workboard__main">
-        <WorkboardSection
-          :title="$t('workboard.attention')"
-          :count="attention.length"
-          :loading="platform.loading.overview || platform.loading.runs"
-          :refreshing="refreshing"
-          :ready="overviewReady || runsReady"
-          :problem="platform.problems.overview ?? platform.problems.runs"
-          :empty="attention.length === 0"
-          :empty-text="$t('workboard.noAttention')"
-          @retry="refresh"
+  <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
+    <PageFrame
+      :title="project?.name ?? $t('app.project')"
+      :subtitle="project?.purpose ?? $t('project.subtitle')"
+      :eyebrow="$t('app.project')"
+    >
+      <template v-if="canCreateRun" #actions>
+        <RouterLink
+          class="button button--primary"
+          :to="`/projects/${projectRef}/runs/new`"
         >
-          <template #action>
-            <RouterLink
-              :to="`/decisions?projectRef=${encodeURIComponent(projectRef)}`"
-              >{{ $t("common.all") }}</RouterLink
-            >
-          </template>
-          <AttentionList :items="attention" preserve-project />
-        </WorkboardSection>
+          {{ $t("runs.new") }}
+        </RouterLink>
+      </template>
 
-        <WorkboardSection
-          :title="$t('workboard.runningNow')"
-          :count="activeRuns.length"
-          :loading="platform.loading.runs"
-          :refreshing="refreshing"
-          :ready="runsReady"
-          :problem="platform.problems.runs"
-          :empty="activeRuns.length === 0"
-          :empty-text="$t('workboard.noActiveRuns')"
-          @retry="refreshRuns"
+      <ProblemNotice
+        v-if="platform.problems.project && !projectReady"
+        :problem="platform.problems.project"
+        @retry="refreshProject"
+      />
+
+      <div class="project-workboard">
+        <div class="project-workboard__main">
+          <WorkboardSection
+            :title="$t('workboard.attention')"
+            :count="attention.length"
+            :loading="platform.loading.overview || platform.loading.runs"
+            :refreshing="refreshing"
+            :ready="overviewReady || runsReady"
+            :problem="platform.problems.overview ?? platform.problems.runs"
+            :empty="attention.length === 0"
+            :empty-text="$t('workboard.noAttention')"
+            @retry="refresh"
+          >
+            <template #action>
+              <RouterLink
+                :to="`/decisions?projectRef=${encodeURIComponent(projectRef)}`"
+                >{{ $t("common.all") }}</RouterLink
+              >
+            </template>
+            <AttentionList :items="attention" preserve-project />
+          </WorkboardSection>
+
+          <WorkboardSection
+            :title="$t('workboard.runningNow')"
+            :count="activeRuns.length"
+            :loading="platform.loading.runs"
+            :refreshing="refreshing"
+            :ready="runsReady"
+            :problem="platform.problems.runs"
+            :empty="activeRuns.length === 0"
+            :empty-text="$t('workboard.noActiveRuns')"
+            @retry="refreshRuns"
+          >
+            <template #action>
+              <RouterLink :to="`/projects/${projectRef}/runs`">{{
+                $t("workboard.allProjectRuns")
+              }}</RouterLink>
+            </template>
+            <RunWorkItem
+              v-for="run in activeRuns.slice(0, 8)"
+              :key="run.ref"
+              :run="run"
+              preserve-project
+            />
+          </WorkboardSection>
+
+          <WorkboardSection
+            :title="$t('workboard.recentResults')"
+            :count="recentArtifacts.length"
+            :loading="platform.loading.overview"
+            :refreshing="refreshing"
+            :ready="overviewReady"
+            :problem="platform.problems.overview"
+            :empty="recentArtifacts.length === 0"
+            :empty-text="$t('workboard.noRecentResults')"
+            @retry="refreshOverview"
+          >
+            <template #action>
+              <RouterLink :to="`/projects/${projectRef}/files`">{{
+                $t("workboard.allProjectFiles")
+              }}</RouterLink>
+            </template>
+            <ArtifactList :artifacts="recentArtifacts" />
+          </WorkboardSection>
+
+          <WorkboardSection
+            :title="$t('agents.title')"
+            :count="projectAgents.length"
+            :loading="platform.loading.agents"
+            :refreshing="refreshing"
+            :ready="agentsReady"
+            :problem="platform.problems.agents"
+            :empty="projectAgents.length === 0"
+            :empty-text="$t('agents.emptyTitle')"
+            @retry="refreshAgents"
+          >
+            <template #action>
+              <RouterLink :to="`/projects/${projectRef}/agents`">{{
+                $t("common.all")
+              }}</RouterLink>
+            </template>
+            <ProjectAgentList :agents="projectAgents.slice(0, 8)" />
+          </WorkboardSection>
+        </div>
+
+        <aside
+          v-if="project"
+          class="project-workboard__resources"
+          :aria-label="$t('workboard.resources')"
         >
-          <template #action>
-            <RouterLink :to="`/projects/${projectRef}/runs`">{{
-              $t("workboard.allProjectRuns")
-            }}</RouterLink>
-          </template>
-          <RunWorkItem
-            v-for="run in activeRuns.slice(0, 8)"
-            :key="run.ref"
-            :run="run"
-            preserve-project
+          <ProjectResources
+            :project="project"
+            :schedules="schedules"
+            :environments="environments"
+            :schedules-ready="schedulesReady"
+            :environments-ready="environmentsReady"
+            :schedules-loading="platform.loading.schedules"
+            :environments-loading="environmentsLoading"
+            :schedules-unavailable="Boolean(platform.problems.schedules)"
+            :environments-unavailable="Boolean(environmentProblem)"
+            :environments-truncated="Boolean(environmentNextPageToken)"
+            @retry-schedules="refreshSchedules"
+            @retry-environments="refreshEnvironments"
           />
-        </WorkboardSection>
-
-        <WorkboardSection
-          :title="$t('workboard.recentResults')"
-          :count="recentArtifacts.length"
-          :loading="platform.loading.overview"
-          :refreshing="refreshing"
-          :ready="overviewReady"
-          :problem="platform.problems.overview"
-          :empty="recentArtifacts.length === 0"
-          :empty-text="$t('workboard.noRecentResults')"
-          @retry="refreshOverview"
-        >
-          <template #action>
-            <RouterLink :to="`/projects/${projectRef}/files`">{{
-              $t("workboard.allProjectFiles")
-            }}</RouterLink>
-          </template>
-          <ArtifactList :artifacts="recentArtifacts" />
-        </WorkboardSection>
-
-        <WorkboardSection
-          :title="$t('agents.title')"
-          :count="projectAgents.length"
-          :loading="platform.loading.agents"
-          :refreshing="refreshing"
-          :ready="agentsReady"
-          :problem="platform.problems.agents"
-          :empty="projectAgents.length === 0"
-          :empty-text="$t('agents.emptyTitle')"
-          @retry="refreshAgents"
-        >
-          <template #action>
-            <RouterLink :to="`/projects/${projectRef}/agents`">{{
-              $t("common.all")
-            }}</RouterLink>
-          </template>
-          <ProjectAgentList :agents="projectAgents.slice(0, 8)" />
-        </WorkboardSection>
+        </aside>
       </div>
-
-      <aside
-        v-if="project"
-        class="project-workboard__resources"
-        :aria-label="$t('workboard.resources')"
-      >
-        <ProjectResources
-          :project="project"
-          :schedules="schedules"
-          :environments="environments"
-          :schedules-ready="schedulesReady"
-          :environments-ready="environmentsReady"
-          :schedules-loading="platform.loading.schedules"
-          :environments-loading="environmentsLoading"
-          :schedules-unavailable="Boolean(platform.problems.schedules)"
-          :environments-unavailable="Boolean(environmentProblem)"
-          :environments-truncated="Boolean(environmentNextPageToken)"
-          @retry-schedules="refreshSchedules"
-          @retry-environments="refreshEnvironments"
-        />
-      </aside>
-    </div>
-  </PageFrame>
+    </PageFrame>
+  </Teleport>
 </template>
 
 <style scoped>

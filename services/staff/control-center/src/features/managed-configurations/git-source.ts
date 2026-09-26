@@ -181,11 +181,12 @@ export async function gitSourceConnections(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
   return (
     await unwrap(
       sdk.listIntegrationConnections({
-        query: { query, pageToken, pageSize: 30 },
+        query: { query, pageToken, pageSize },
         signal: requestSignal(signal),
         cache: "no-store",
       }),

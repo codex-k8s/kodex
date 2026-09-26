@@ -138,17 +138,21 @@ func (repository *Repository) proposeAssistantMetadata(ctx context.Context, tx p
 	}
 	var conversationID, conversationRef, projectID, projectRef string
 	var assistantRef string
+	var contextKind, contextRef string
 	var allowedOperations []string
 	var conversationVersion int64
 	actorScope := scope{correlationRef: machineScope.correlationRef}
 	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantplanSelectContext,
 		machineScope.organizationID, lease["runID"],
-	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations, &assistantRef,
+	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations,
+		&contextKind, &contextRef, &assistantRef,
 		&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.role,
 		&actorScope.organizationRef); err != nil {
 		return commandOutcome{}, errs.ErrForbidden
 	}
 	_ = allowedOperations
+	_ = contextKind
+	_ = contextRef
 	_ = assistantRef
 	var conversation entity.AssistantConversation
 	if err := tx.QueryRow(ctx, queryRuntimeProposeassistantmetadataUpdateConversation, conversationID, title).Scan(
@@ -308,12 +312,14 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 	}
 	expected := map[string]string{
 		"get_configuration_catalog":  "platform.configuration.read",
+		"get_integration_catalog":    "platform.integration.catalog",
+		"find_platform_resources":    "platform.resources.search",
 		"propose_configuration_plan": "platform.configuration.plan",
 		"propose_assistant_metadata": "platform.presentation.propose",
 		"propose_run_metadata":       "platform.presentation.propose",
 		"delegate_agent":             "platform.run.delegate",
 	}
-	if (tool == "get_configuration_catalog" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !systemAssistant {
+	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !systemAssistant {
 		return false
 	}
 	return expected[tool] != "" && expected[tool] == capability
@@ -626,7 +632,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			}
 			eligibilityStage = "assistant_context"
 			var rawAssistantContext []byte
-			if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectAssistantContext, scope.organizationID, sessionID).Scan(&rawAssistantContext); err != nil {
+			if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionSelectAssistantContext, scope.organizationID, rootRunID).Scan(&rawAssistantContext); err != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 			var assistantContext map[string]any
@@ -1576,20 +1582,10 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 	}
 	if targetType == "SYSTEM_ASSISTANT" {
-		turnRef, _ := newRef("trn")
-		var next int64
-		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectSessionsId, sessionID).Scan(&next); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertSessionTurnsRefSessionIdTurnNumber, turnRef, scope.organizationID, sessionID, lease["runID"], next, nonEmptyResult(payload), map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
-		}
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt,
-			sessionID, assistantConversationTitle(payload)); err != nil {
-			return commandOutcome{}, errs.ErrUnavailable
+		if err := repository.recordSystemAssistantTerminalTurn(ctx, tx, scope,
+			sessionID, stringMap(lease, "runID"), nonEmptyResult(payload),
+			map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success], assistantConversationTitle(payload)); err != nil {
+			return commandOutcome{}, err
 		}
 	}
 	if payload.Success && humanGateAfter && !rootAlreadyTerminal {

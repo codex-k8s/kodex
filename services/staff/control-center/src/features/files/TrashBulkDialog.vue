@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AlertTriangle, RotateCcw, Trash2 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 
 import {
   trashBulkConfirmed,
@@ -24,6 +24,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ close: []; confirm: [] }>();
+const confirmationField = `trash-confirmation-${useId()}`;
 const confirmation = ref("");
 const destructive = computed(
   () => props.action === "PURGE" || props.action === "EMPTY",
@@ -74,6 +75,8 @@ watch(
           <span class="mono">{{ labels.confirmationPhrase }}</span>
           <input
             v-model="confirmation"
+            :id="confirmationField"
+            :name="confirmationField"
             type="text"
             autocomplete="off"
             spellcheck="false"

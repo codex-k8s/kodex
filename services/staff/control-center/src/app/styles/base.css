@@ -384,6 +384,12 @@ p {
 .search-results-list {
   display: grid;
 }
+.search-results-sentinel {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  color: var(--muted);
+}
 .search-result {
   display: flex;
   align-items: center;

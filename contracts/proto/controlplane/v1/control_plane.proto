@@ -359,6 +359,9 @@ service RuntimeWorkService {
   // bounded chunks после owner resolution exact input/Skill/catalog grant.
   rpc StreamExecutionArtifact(StreamExecutionArtifactRequest) returns (stream StreamExecutionArtifactResponse);
   rpc SearchExecutionFiles(SearchExecutionFilesRequest) returns (SearchExecutionFilesResponse);
+  // Поиск разрешает инициатора из действующей fenced lease системного помощника;
+  // caller не передаёт actor или tenant в payload.
+  rpc SearchAssistantResources(SearchAssistantResourcesRequest) returns (SearchAssistantResourcesResponse);
   rpc GetExecutionFileMetadata(GetExecutionFileMetadataRequest) returns (GetExecutionFileMetadataResponse);
   rpc PreviewExecutionFile(PreviewExecutionFileRequest) returns (PreviewExecutionFileResponse);
   rpc GetExecutionFileManifest(GetExecutionFileManifestRequest) returns (GetExecutionFileManifestResponse);
@@ -511,6 +514,7 @@ enum NextAction {
   NEXT_ACTION_RESTORE = 39;
   NEXT_ACTION_REQUEST_BUILD = 40;
   NEXT_ACTION_PURGE = 41;
+  NEXT_ACTION_CANCEL_BUILD = 42;
 }
 
 enum EntityLifecycle {
@@ -749,6 +753,7 @@ enum IntegrationApprovalPolicy {
   INTEGRATION_APPROVAL_POLICY_UNSPECIFIED = 0;
   INTEGRATION_APPROVAL_POLICY_NONE = 1;
   INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT = 2;
+  INTEGRATION_APPROVAL_POLICY_HUMAN_SCOPED = 3;
 }
 
 // IntegrationResourceKind ограничивает provider resource одной typed boundary.
@@ -761,6 +766,7 @@ enum IntegrationResourceKind {
   INTEGRATION_RESOURCE_KIND_JIRA_PROJECT = 5;
   INTEGRATION_RESOURCE_KIND_CONFLUENCE_SPACE = 6;
   INTEGRATION_RESOURCE_KIND_EMAIL_SENDER = 7;
+  INTEGRATION_RESOURCE_KIND_HTTPS_RESOURCE = 8;
 }
 
 // IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
@@ -1371,6 +1377,8 @@ message IntegrationDefinition {
   string adapter_readiness = 17;
   int64 version = 18;
   repeated string next_actions = 19;
+  int64 connection_count = 20;
+  int64 healthy_connection_count = 21;
 }
 
 // IntegrationResourceScope содержит только server-derived exact resource values.
@@ -1414,6 +1422,7 @@ message IntegrationGrant {
   string operation = 20;
   string input_schema = 21;
   string input_schema_sha256 = 22;
+  repeated string approval_scope_paths = 23;
 }
 
 message IntegrationConnection {
@@ -1465,6 +1474,28 @@ message AssistantPlanOperation {
     TYPE_ARCHIVE_WORKFLOW = 11;
     // Изменить Проект по exact version с авторитетным before/after snapshot.
     TYPE_UPDATE_PROJECT = 12;
+    // Изменить профиль обычного ИИ-сотрудника по exact version и owner snapshot.
+    TYPE_UPDATE_AGENT = 13;
+    // Создать черновик среды выполнения; публикация требует проверенного образа.
+    TYPE_CREATE_RUNTIME_ENVIRONMENT_DRAFT = 14;
+    // Создать рецепт образа для выбранного сотрудника и поставить первую сборку в очередь.
+    TYPE_CREATE_ROLE_IMAGE_RECIPE = 15;
+    // Подготовить черновую ревизию существующей среды по exact version; публикация отдельно.
+    TYPE_PREPARE_RUNTIME_ENVIRONMENT_REVISION = 16;
+    // Привязать текущую проверенную версию окружения к обычному сотруднику по exact version.
+    TYPE_BIND_AGENT_RUNTIME_ENVIRONMENT = 17;
+    // Изменить существующий каталожный рецепт образа по точной версии и поставить новую сборку.
+    TYPE_UPDATE_ROLE_IMAGE_RECIPE = 18;
+    // Опубликовать уже проверенную ревизию определения интеграции после подтверждения владельца.
+    TYPE_PUBLISH_INTEGRATION_DEFINITION = 19;
+    // Сохранить новую черновую ревизию инструкций существующего сотрудника.
+    TYPE_CREATE_INSTRUCTION_DRAFT = 20;
+    // Изменить публичную конфигурацию существующего подключения по exact version.
+    TYPE_UPDATE_INTEGRATION_CONNECTION = 21;
+    // Изменить черновик существующего Процесса по exact version.
+    TYPE_UPDATE_WORKFLOW = 22;
+    // Изменить существующее расписание по exact version.
+    TYPE_UPDATE_SCHEDULE = 23;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -1490,6 +1521,7 @@ message AssistantPlanOperation {
   google.protobuf.Struct after = 15;
   bool selected = 16;
   repeated string validation_problems = 17;
+  optional int64 target_version = 18;
 }
 
 enum AssistantPlanState {
@@ -1518,6 +1550,7 @@ message AssistantPlan {
   repeated string validation_problems = 13;
   google.protobuf.Timestamp validated_at = 14;
   google.protobuf.Timestamp applied_at = 15;
+  AssistantPlanReceipt receipt = 16;
 }
 
 message AssistantContextDescriptor {
@@ -1701,6 +1734,11 @@ enum SearchResultKind {
   SEARCH_RESULT_KIND_AGENT = 2;
   SEARCH_RESULT_KIND_WORKFLOW = 3;
   SEARCH_RESULT_KIND_RUN = 4;
+  SEARCH_RESULT_KIND_ROLE_IMAGE = 5;
+  SEARCH_RESULT_KIND_RUNTIME_ENVIRONMENT = 6;
+  SEARCH_RESULT_KIND_SCHEDULE = 7;
+  SEARCH_RESULT_KIND_INTEGRATION = 8;
+  SEARCH_RESULT_KIND_SECRET = 9;
 }
 
 message SearchResult {
@@ -1723,6 +1761,23 @@ message SearchPlatformResponse {
   repeated SearchResult results = 1;
   int64 total = 2;
   PageInfo page = 3;
+}
+
+message SearchAssistantResourcesRequest {
+  string lease_ref = 1;
+  string fence = 2;
+  int64 generation = 3;
+  string query = 4;
+  // Взаимоисключающий read-only режим каталога: actor разрешается той же lease.
+  bool integration_definition_catalog = 5;
+  string definition_query = 6;
+  int32 definition_offset = 7;
+}
+message SearchAssistantResourcesResponse {
+  repeated SearchResult results = 1;
+  bool truncated = 2;
+  repeated AssistantIntegrationDefinition definitions = 3;
+  int32 next_definition_offset = 4;
 }
 
 enum VFSNodeKind {
@@ -2709,6 +2764,7 @@ message ChangeIntegrationGrantRequest {
   string agent_ref = 4;
   string workflow_ref = 5;
   bool enabled = 6;
+  repeated string approval_scope_paths = 7;
 }
 message ChangeIntegrationGrantResponse {
   IntegrationConnection connection = 1;
@@ -2761,6 +2817,7 @@ message AddAssistantTurnRequest {
   reserved 4;
   reserved "artifact_refs";
   string attachment_set_ref = 5;
+  AssistantContextDescriptor context = 6;
 }
 message AddAssistantTurnResponse {
   AssistantConversation conversation = 1;
@@ -2833,6 +2890,7 @@ message ListAuditEventsRequest {
   string action = 3;
   string outcome = 4;
   string query = 5;
+  string resource_ref = 6;
 }
 message ListAuditEventsResponse {
   repeated AuditEvent events = 1;
@@ -4172,6 +4230,7 @@ message ListTemplateVariablesRequest {
   string target_ref = 7;
   PromptPreviewContext context = 8;
   string expected_context_digest = 9;
+  string source = 10;
 }
 message ListTemplateVariablesResponse {
   repeated TemplateVariable variables = 1;
@@ -7904,4 +7963,17 @@ message FailManagedConfigurationGitWriteBackWorkRequest {
 }
 message FailManagedConfigurationGitWriteBackWorkResponse {
   ManagedConfigurationGitWriteBack proposal = 1;
+}
+
+// Только публичная проекция definition для этапного поиска помощником.
+message AssistantIntegrationDefinition {
+  string key = 1;
+  string name = 2;
+  string description = 3;
+  string category = 4;
+  string adapter = 5;
+  string credential_secret_key = 6;
+  repeated IntegrationConfigurationField configuration_fields = 7;
+  repeated string capability_keys = 8;
+  string origin = 9;
 }

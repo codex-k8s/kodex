@@ -22,11 +22,12 @@ func (repository *Repository) ListPromptContextVariables(ctx context.Context, pr
 		return entity.PromptVariableCatalog{Variables: items, Total: total, NextPageToken: next}, err
 	}
 	filter.Query = strings.TrimSpace(filter.Query)
+	filter.SourceKind = strings.TrimSpace(filter.SourceKind)
 	expectedAgent := selection.Preview.AgentRef
 	if expectedAgent == "" && selection.TargetKind == "AGENT" {
 		expectedAgent = selection.TargetRef
 	}
-	if !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) || selection.RuntimeRevisionRef != "" ||
+	if !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) || !validTemplateVariableSourceKind(filter.SourceKind) || selection.RuntimeRevisionRef != "" ||
 		selection.AgentRef != "" && selection.AgentRef != expectedAgent {
 		return entity.PromptVariableCatalog{}, errs.ErrInvalid
 	}
@@ -80,7 +81,7 @@ func (repository *Repository) ListPromptContextVariables(ctx context.Context, pr
 			item.Reason = reason
 			item.Available = false
 		}
-		if needle == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), needle) {
+		if templateVariableMatchesFilter(item, needle, filter.SourceKind) {
 			items = append(items, item)
 		}
 	}

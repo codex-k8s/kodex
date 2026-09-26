@@ -331,6 +331,45 @@ func (server *Server) ReadExecutionArtifact(ctx context.Context, request *contro
 	return &controlplanev1.ReadExecutionArtifactResponse{Artifact: castArtifact(download.Artifact), Content: content}, nil
 }
 
+func (server *Server) SearchAssistantResources(ctx context.Context, request *controlplanev1.SearchAssistantResourcesRequest) (*controlplanev1.SearchAssistantResourcesResponse, error) {
+	p, err := principal(ctx, controlplanev1.RuntimeWorkService_SearchAssistantResources_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	if request.GetIntegrationDefinitionCatalog() {
+		if request.GetQuery() != "" {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		definitions, next, err := server.service.ListAssistantIntegrationDefinitions(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), request.GetDefinitionQuery(), request.GetDefinitionOffset())
+		if err != nil {
+			return nil, transportError(err)
+		}
+		response := &controlplanev1.SearchAssistantResourcesResponse{NextDefinitionOffset: next}
+		for _, item := range definitions {
+			definition := &controlplanev1.AssistantIntegrationDefinition{Key: item.Key, Name: item.Name,
+				Description: item.Description, Category: item.Category, Adapter: item.Adapter,
+				CredentialSecretKey: item.CredentialSecretKey, CapabilityKeys: item.CapabilityKeys, Origin: item.Origin}
+			for _, field := range item.ConfigurationFields {
+				definition.ConfigurationFields = append(definition.ConfigurationFields, castIntegrationField(field))
+			}
+			response.Definitions = append(response.Definitions, definition)
+		}
+		return response, nil
+	}
+	if request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
+		return nil, transportError(errs.ErrInvalid)
+	}
+	items, truncated, err := server.service.SearchAssistantResources(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), request.GetQuery())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.SearchAssistantResourcesResponse{Truncated: truncated}
+	for _, item := range items {
+		response.Results = append(response.Results, castSearchResult(item))
+	}
+	return response, nil
+}
+
 func (server *Server) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest) (*controlplanev1.RenewExecutionResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName, command.RenewExecution, nil, payload)
@@ -472,7 +511,7 @@ func assistantOperation(item *controlplanev1.AssistantPlanOperation) entity.Assi
 	return entity.AssistantPlanOperation{
 		Key: item.GetRef(), Type: enumSuffix(item.GetType(), "TYPE_"), Action: enumSuffix(item.GetAction(), "ACTION_"),
 		Title: item.GetTitle(), Summary: item.GetSummary(), Parameters: parameters, Before: asMap(item.GetBefore()), After: asMap(item.GetAfter()),
-		Target:          entity.AssistantPlanTarget{Kind: item.GetTargetKind(), Ref: item.GetTargetRef(), Name: item.GetTargetName(), Version: item.ExpectedVersion},
+		Target:          entity.AssistantPlanTarget{Kind: item.GetTargetKind(), Ref: item.GetTargetRef(), Name: item.GetTargetName(), Version: item.TargetVersion},
 		ExpectedVersion: item.ExpectedVersion, Selected: item.GetSelected(),
 	}
 }

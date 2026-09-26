@@ -47,7 +47,7 @@ docker run "${common[@]}" --user 10001:10001 \
     pid=$!
     trap "kill $pid 2>/dev/null || true; wait $pid 2>/dev/null || true" EXIT
     remaining=180
-    while test ! -x /tmp/kodex-dev-email-bridge/build/main; do
+    while test ! -x /go/build-cache/runtime-email-bridge/build/main; do
       kill -0 "$pid"
       remaining=$((remaining - 1))
       test "$remaining" -gt 0

@@ -459,6 +459,8 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if field.Kind() == protoreflect.Int64Kind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.IntegrationDefinition":
+			return float64(0), field.JSONName() == "connectionCount" || field.JSONName() == "healthyConnectionCount"
 		case "controlplane.v1.ProviderAccountBlockerCount":
 			return float64(0), field.JSONName() == "total"
 		case "controlplane.v1.ProviderAccountDeletion":
@@ -491,6 +493,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if field.Kind() == protoreflect.StringKind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.RuntimeEnvironmentSet", "controlplane.v1.RuntimeEnvironmentDraftSpecification":
+			return "", field.JSONName() == "description"
+		case "controlplane.v1.RuntimeEnvironmentTool":
+			return "", field.JSONName() == "description" || field.JSONName() == "usageHint"
+		case "controlplane.v1.RuntimeEnvironmentValue":
+			return "", field.JSONName() == "value"
 		case "controlplane.v1.OwnerGateDecisionConsequence":
 			return "", field.JSONName() == "safeSummary"
 		case "controlplane.v1.IntegrationIntent":
@@ -824,10 +832,14 @@ func normalizeAssistantShape(value map[string]any) {
 	if targetRef, exists := value["targetRef"]; exists && targetRef != "" {
 		target["ref"] = targetRef
 	}
+	if targetVersion, exists := value["targetVersion"]; exists {
+		target["version"] = targetVersion
+	}
 	value["target"] = target
 	delete(value, "targetKind")
 	delete(value, "targetRef")
 	delete(value, "targetName")
+	delete(value, "targetVersion")
 	for _, key := range []string{"parameters", "before", "after"} {
 		if _, exists := value[key]; !exists {
 			value[key] = map[string]any{}

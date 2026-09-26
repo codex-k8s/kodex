@@ -187,6 +187,8 @@ const (
 	PublishPromptTemplateDraft         Kind = "PUBLISH_PROMPT_TEMPLATE_DRAFT"
 	RebindPromptTemplate               Kind = "REBIND_PROMPT_TEMPLATE_CONSUMERS"
 	CreateRoleImageRevisionDraft       Kind = "CREATE_ROLE_IMAGE_REVISION_DRAFT"
+	CreateAssistantRoleImageRecipe     Kind = "CREATE_ASSISTANT_ROLE_IMAGE_RECIPE"
+	UpdateAssistantRoleImageRecipe     Kind = "UPDATE_ASSISTANT_ROLE_IMAGE_RECIPE"
 	ValidateRoleImageRevision          Kind = "VALIDATE_ROLE_IMAGE_REVISION_DRAFT"
 	PublishRoleImageRevision           Kind = "PUBLISH_ROLE_IMAGE_REVISION_DRAFT"
 	RebindRoleImage                    Kind = "REBIND_ROLE_IMAGE_CONSUMERS"
@@ -238,6 +240,15 @@ type AgentInput struct {
 	InitialCapabilities                                                                                     []string
 	Ref, ProjectRef, RoleDefinitionRef, Name, Purpose, RoleDescription, AvatarURL, RuntimeRef, Instructions string
 	Enabled                                                                                                 bool
+}
+type AssistantRoleImageRecipeInput struct {
+	ProjectRef, AgentRef, Name string
+	AgentVersion               int64
+	Environment                entity.RoleEnvironmentSelection
+}
+type AssistantRoleImageUpdateInput struct {
+	ProjectRef, RecipeRef, Name string
+	Environment                 entity.RoleEnvironmentSelection
 }
 type AgentBindingInput struct {
 	AgentRef, BindingRef string
@@ -356,6 +367,7 @@ type ConnectionInput struct {
 }
 type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string
+	ApprovalScopePaths                                  []string
 	Enabled                                             bool
 }
 type AssistantConversationInput struct {
@@ -372,6 +384,7 @@ type EmailCredentialInput struct {
 }
 type AssistantTurnInput struct {
 	ConversationRef, Content, AttachmentSetRef string
+	Context                                    *entity.AssistantContextDescriptor
 }
 type AssistantPlanInput struct {
 	PlanRef  string

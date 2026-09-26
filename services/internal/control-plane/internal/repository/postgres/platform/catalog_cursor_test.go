@@ -2,12 +2,19 @@ package platform
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
+
+func TestListProjectsQueryDoesNotMixNamedAndPositionalArguments(t *testing.T) {
+	if regexp.MustCompile(`\$[0-9]+`).MatchString(queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId) {
+		t.Fatal("project list query mixes named and positional arguments")
+	}
+}
 
 func TestCatalogCursorBindsTenantActorKindAndFilter(t *testing.T) {
 	current := scope{organizationID: "organization-a", actorID: "actor-a"}

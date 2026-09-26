@@ -127,6 +127,32 @@ func TestIntegrationTerminalWireAndOwnerProjection(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegrationCatalogInvalidInputReturnsRetryableMCPError(t *testing.T) {
+	client := &integrationResultClient{}
+	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{integrationGrantFixture()}}
+	params, _ := json.Marshal(map[string]any{"name": "get_integration_catalog", "arguments": map[string]any{
+		"query": "test", "connection_ref": input.IntegrationGrants[0].ConnectionRef,
+	}})
+	writer := httptest.NewRecorder()
+	server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
+	var wire struct {
+		Result struct {
+			StructuredContent map[string]any `json:"structuredContent"`
+			IsError           bool           `json:"isError"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError ||
+		wire.Result.StructuredContent["error_code"] != "CATALOG_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true {
+		t.Fatalf("invalid catalog input did not return retry guidance: %s", writer.Body.String())
+	}
+	if client.projection == nil || client.projection.GetCapabilityRef() != "platform.integration.catalog" ||
+		client.projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED || client.projection.GetSafeResult() != "TOOL_UNAVAILABLE" {
+		t.Fatalf("invalid catalog input lost safe owner projection: %#v", client.projection)
+	}
+}
 func TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt(t *testing.T) {
 	for _, invalid := range []string{"", "short", "inv/foreign", "inv\nprivate", strings.Repeat("x", 129)} {
 		t.Run("invalid-ref", func(t *testing.T) {

@@ -4,6 +4,10 @@ import { useI18n } from "vue-i18n";
 
 import AccessScopeEditor from "@/features/access/components/AccessScopeEditor.vue";
 import {
+  accessRoleOptions,
+  accessSubjectOptions,
+} from "@/features/access/entity-pickers";
+import {
   emptyScopeDraft,
   toAccessScope,
   validScope,
@@ -25,6 +29,11 @@ import type {
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
@@ -91,11 +100,35 @@ const form = reactive({
   roleRef: "",
   scope: emptyScopeDraft(),
 });
-const selectedSubject = computed(() =>
-  props.subjects.find((subject) => subject.ref === form.subjectRef),
+const subjectRows = new Map<string, AccessSubject>();
+const roleRows = new Map<string, AccessRole>();
+const selectedSubject = computed(
+  () =>
+    subjectRows.get(form.subjectRef) ??
+    props.subjects.find((subject) => subject.ref === form.subjectRef),
 );
-const selectedRole = computed(() =>
-  props.roles.find((role) => role.ref === form.roleRef),
+const selectedRole = computed(
+  () =>
+    roleRows.get(form.roleRef) ??
+    props.roles.find((role) => role.ref === form.roleRef),
+);
+const selectedSubjectOption = computed<AsyncEntityOption | undefined>(() =>
+  selectedSubject.value
+    ? {
+        ref: selectedSubject.value.ref,
+        title: selectedSubject.value.displayName,
+      }
+    : undefined,
+);
+const selectedRoleOption = computed<AsyncEntityOption | undefined>(() =>
+  selectedRole.value
+    ? {
+        ref: selectedRole.value.ref,
+        title: selectedRole.value.currentVersion.name,
+        description: selectedRole.value.currentVersion.description,
+        meta: `v${String(selectedRole.value.currentVersion.revision)}`,
+      }
+    : undefined,
 );
 const selectedPermission = computed(() =>
   props.permissions.find((permission) => permission.key === form.permissionKey),
@@ -154,6 +187,49 @@ function submit(): void {
   });
 }
 
+function selection(value: string | null | readonly string[]): string {
+  return typeof value === "string" ? value : "";
+}
+
+function pickerLabels(label: string, searchPlaceholder: string) {
+  return {
+    label,
+    searchPlaceholder,
+    loading: i18n.t("common.loading"),
+    loadingMore: i18n.t("common.loading"),
+    empty: i18n.t("common.empty"),
+    error: i18n.t("errors.default"),
+    retry: i18n.t("common.retry"),
+  };
+}
+
+function loadSubjects(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize?: number,
+): Promise<AsyncEntityOptionPage> {
+  return accessSubjectOptions(
+    undefined,
+    query,
+    cursor,
+    signal,
+    pageSize,
+    (items) => items.forEach((item) => subjectRows.set(item.ref, item)),
+  );
+}
+
+function loadRoles(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize?: number,
+): Promise<AsyncEntityOptionPage> {
+  return accessRoleOptions(query, cursor, signal, pageSize, (items) =>
+    items.forEach((item) => roleRows.set(item.ref, item)),
+  );
+}
+
 watch(mode, () => emit("clear"));
 </script>
 
@@ -184,25 +260,31 @@ watch(mode, () => emit("clear"));
 
     <div class="effective-layout">
       <form class="effective-form panel" @submit.prevent="submit">
-        <label class="field">
+        <div class="field">
           <span>{{ $t("access.effective.subject") }}</span>
-          <select v-model="form.subjectRef" required>
-            <option value="" disabled>
-              {{ $t("access.effective.chooseSubject") }}
-            </option>
-            <option
-              v-for="subject in subjects"
-              :key="subject.ref"
-              :value="subject.ref"
-            >
-              {{ subject.displayName }} ·
-              {{ $t(`access.subjectKinds.${subject.kind}`) }}
-            </option>
-          </select>
-        </label>
+          <AsyncEntityPicker
+            :model-value="form.subjectRef"
+            :selected="selectedSubjectOption"
+            :load-page="loadSubjects"
+            :labels="
+              pickerLabels(
+                $t('access.effective.subject'),
+                $t('access.effective.chooseSubject'),
+              )
+            "
+            :placeholder="$t('access.effective.chooseSubject')"
+            :trigger-label="$t('access.effective.subject')"
+            :clearable="false"
+            @update:model-value="form.subjectRef = selection($event)"
+          />
+        </div>
         <label class="field">
           <span>{{ $t("access.effective.permission") }}</span>
-          <select v-model="form.permissionKey" required>
+          <select
+            v-model="form.permissionKey"
+            name="access-effective-permission"
+            required
+          >
             <option value="" disabled>
               {{ $t("access.effective.choosePermission") }}
             </option>
@@ -217,23 +299,24 @@ watch(mode, () => emit("clear"));
             </option>
           </select>
         </label>
-        <label v-if="mode === 'SIMULATE'" class="field">
+        <div v-if="mode === 'SIMULATE'" class="field">
           <span>{{ $t("access.effective.role") }}</span>
-          <select v-model="form.roleRef" required>
-            <option value="" disabled>
-              {{ $t("access.effective.chooseRole") }}
-            </option>
-            <option
-              v-for="role in roles.filter((item) => item.state === 'ACTIVE')"
-              :key="role.ref"
-              :value="role.ref"
-            >
-              {{ role.currentVersion.name }} · v{{
-                role.currentVersion.revision
-              }}
-            </option>
-          </select>
-        </label>
+          <AsyncEntityPicker
+            :model-value="form.roleRef"
+            :selected="selectedRoleOption"
+            :load-page="loadRoles"
+            :labels="
+              pickerLabels(
+                $t('access.effective.role'),
+                $t('access.effective.chooseRole'),
+              )
+            "
+            :placeholder="$t('access.effective.chooseRole')"
+            :trigger-label="$t('access.effective.role')"
+            :clearable="false"
+            @update:model-value="form.roleRef = selection($event)"
+          />
+        </div>
         <AccessScopeEditor
           v-model="form.scope"
           :projects="projects"

@@ -39,8 +39,10 @@ import {
 import { resolveShellRealtimeState } from "@/app/realtime-presentation";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
+import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { useRoleImagesStore } from "@/features/role-images/store";
 import { useRuntimeStore } from "@/features/runtime/store";
 import {
   canonicalSearchRoute,
@@ -59,6 +61,8 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
 import RealtimeStatus from "@/shared/ui/RealtimeStatus.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import type { RealtimeStatusLabels } from "@/shared/ui/realtime-status";
 import {
   useDismissibleLayer,
@@ -69,6 +73,7 @@ const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
 const realtime = useRealtimeStore();
+const roleImages = useRoleImagesStore();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
 useSpeechInput();
@@ -83,8 +88,31 @@ const preloadFailed = ref(
   document.documentElement.dataset.kodexPreload === "failed",
 );
 const searchRoot = ref<HTMLElement>();
+const searchResultsRoot = ref<HTMLElement>();
+const searchSentinel = ref<HTMLElement>();
+const searchPageSize = useAdaptiveCursorPageSize({
+  container: searchResultsRoot,
+  itemSelector: ".search-result",
+  itemCount: () => platform.searchResults.length,
+  estimatedViewportHeight: 620,
+  estimatedItemHeight: 62,
+  minimum: 5,
+  maximum: 50,
+});
 const realtimeStarted = ref(false);
 const searchCoordinator = new SearchCoordinator();
+
+useCursorInfiniteScroll({
+  root: searchResultsRoot,
+  sentinel: searchSentinel,
+  enabled: () =>
+    searchOpen.value &&
+    Boolean(platform.searchNextPageToken) &&
+    !platform.loading.search &&
+    !platform.loading.searchMore &&
+    !platform.problems.searchMore,
+  loadMore: () => platform.loadMoreSearch(searchPageSize.value),
+});
 
 const projectRef = computed(() => routeProjectRef(route.params));
 const activeSection = computed(() => activeNavigationSection(route.name));
@@ -94,9 +122,7 @@ const fullBleedRunWorkspace = computed(
 const project = computed(() =>
   projectRef.value ? platform.projects[projectRef.value] : undefined,
 );
-const pendingCount = computed(
-  () => platform.gateList.filter((item) => item.state === "OPEN").length,
-);
+const pendingCount = computed(() => platform.pendingGateCount ?? 0);
 const realtimeState = computed(() =>
   resolveShellRealtimeState({
     online: online.value,
@@ -126,6 +152,8 @@ const breadcrumbs = computed(() => {
     typeof route.params.environmentRef === "string"
       ? route.params.environmentRef
       : undefined;
+  const configurationKind =
+    typeof route.params.kind === "string" ? route.params.kind : undefined;
   const labels: BreadcrumbLabels = {
     home: t("nav.home"),
     onboarding: t("nav.onboarding"),
@@ -145,6 +173,10 @@ const breadcrumbs = computed(() => {
     environment: t("nav.environment"),
     newEnvironment: t("nav.newEnvironment"),
     secrets: t("nav.secrets"),
+    members: t("nav.members"),
+    roleImages: t("roleImages.title"),
+    roleImage: t("roleImages.entity"),
+    newRoleImage: t("roleImages.new"),
     integrations: t("nav.integrations"),
     decisions: t("nav.decisions"),
     administration: t("nav.administration"),
@@ -170,18 +202,43 @@ const breadcrumbs = computed(() => {
       ...(environmentRef && runtime.environments[environmentRef]
         ? { environmentName: runtime.environments[environmentRef].name }
         : {}),
+      ...(configurationKind &&
+      [
+        "PROMPT_TEMPLATE",
+        "ROLE_IMAGE",
+        "INTEGRATION_DEFINITION",
+        "SYSTEM_STT",
+      ].includes(configurationKind)
+        ? { configurationKindName: t(`managed.kinds.${configurationKind}`) }
+        : {}),
     },
     labels,
   );
 });
-const assistantContext = computed(() =>
-  resolveAssistantContext(route, {
+const assistantStore = useAssistantStore();
+const assistantContext = computed(() => {
+  const resolved = resolveAssistantContext(route, {
     projects: platform.projects,
     agents: platform.agents,
     workflows: platform.workflows,
     runs: platform.runs,
-  }),
-);
+    roleImages: roleImages.recipes,
+  });
+  if (
+    route.query.assistantForm === "1" &&
+    assistantStore.context &&
+    (assistantStore.projectRef === resolved.projectRef ||
+      (((route.name === "configuration" &&
+        route.params.kind === "INTEGRATION_DEFINITION") ||
+        route.name === "integrations") &&
+        !resolved.projectRef))
+  )
+    return {
+      descriptor: assistantStore.context,
+      projectRef: assistantStore.projectRef,
+    };
+  return resolved;
+});
 const assistantRunEvents = computed(() => {
   if (assistantContext.value.descriptor.entityKind !== "RUN") return [];
   const runRef = assistantContext.value.descriptor.entityRef;
@@ -324,14 +381,14 @@ function changeProject(ref: string): void {
 function submitSearch(): void {
   if (search.value.trim().length < 2) {
     searchOpen.value = true;
-    void platform.search(search.value);
+    void platform.search(search.value, searchPageSize.value);
     searchCoordinator.cancel();
     return;
   }
   searchOpen.value = true;
   mobileOpen.value = false;
   searchCoordinator.flush(search.value, (normalized) => {
-    void platform.search(normalized);
+    void platform.search(normalized, searchPageSize.value);
   });
 }
 
@@ -374,12 +431,12 @@ watch(search, (value) => {
   platform.cancelSearch();
   searchOpen.value = value.trim().length > 0;
   if (value.trim().length < 2) {
-    void platform.search(value);
+    void platform.search(value, searchPageSize.value);
     searchCoordinator.cancel();
     return;
   }
   searchCoordinator.schedule(value, (normalized) => {
-    void platform.search(normalized);
+    void platform.search(normalized, searchPageSize.value);
   });
 });
 watch(
@@ -414,16 +471,19 @@ onMounted(() => {
   window.addEventListener("online", setOnline);
   window.addEventListener("offline", setOnline);
   window.addEventListener("kodex:preload-error", markPreloadFailed);
-  // Realtime не зависит от каталожных readback. Запускаем handshake сразу:
-  // накопленный staging или временно медленный каталог не должен оставлять
-  // уже отрисованную страницу в состоянии CONNECTING до HTTP timeout.
-  realtimeStarted.value = true;
-  realtime.openPlatform();
-  void Promise.all([
-    platform.loadProjects(),
-    platform.loadGates(),
-    platform.loadBootstrap(),
-  ]);
+  // Shell монтируется сразу, чтобы состояние сессии оставалось наблюдаемым.
+  // Realtime и owner readback запускаем после initial navigation: так resync
+  // получает точный project scope и не загружает глобальные данные за экран,
+  // который был виден только до завершения асинхронного route guard.
+  void router.isReady().then(() => {
+    selectProjectRef(projectRef.value);
+    realtimeStarted.value = true;
+    realtime.openPlatform();
+    return Promise.all([
+      platform.loadPendingGateCount(),
+      platform.loadBootstrap(),
+    ]);
+  });
 });
 onBeforeUnmount(() => {
   platform.cancelSearch();
@@ -479,6 +539,7 @@ onBeforeUnmount(() => {
             id="global-search"
             ref="searchInput"
             v-model="search"
+            name="global-search"
             type="search"
             :placeholder="$t('app.search')"
             aria-controls="global-search-results"
@@ -488,6 +549,7 @@ onBeforeUnmount(() => {
         <section
           v-if="searchOpen"
           id="global-search-results"
+          ref="searchResultsRoot"
           class="global-search-results"
           :aria-label="$t('app.searchResults')"
           aria-live="polite"
@@ -532,6 +594,28 @@ onBeforeUnmount(() => {
               </span>
               <StatusBadge :state="result.state" />
             </RouterLink>
+            <div
+              v-if="
+                platform.searchNextPageToken ||
+                platform.loading.searchMore ||
+                platform.problems.searchMore
+              "
+              ref="searchSentinel"
+              class="search-results-sentinel"
+              role="status"
+            >
+              <span v-if="platform.loading.searchMore">{{
+                $t("common.loading")
+              }}</span>
+              <button
+                v-else-if="platform.problems.searchMore"
+                class="button"
+                type="button"
+                @click="platform.loadMoreSearch(searchPageSize)"
+              >
+                {{ $t("common.retry") }}
+              </button>
+            </div>
           </div>
         </section>
       </div>

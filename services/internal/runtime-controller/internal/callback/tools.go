@@ -3,25 +3,36 @@ package callback
 import (
 	"errors"
 	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 const maximumAssistantDiscoveredSchemas = 4
+const maximumAssistantCatalogAgents = 20
 
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover server-owned context and permitted operation types. Pass operation_types=[] for a compact index, then request up to four exact schemas needed for the current task. An omitted operation_types field keeps the legacy full catalog. Names are display data; use only exact opaque refs in plans.",
+		"description": "Discover server-owned context and permitted operation types. Omit operation_types or pass [] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target. For integration setup, request definition_query (empty string lists the first page) and optional definition_offset; definitions are read from control-plane in pages of at most 10. Names are display data; use only exact opaque refs in plans.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
+			"agent_query":       stringSchema(0, 80),
+			"agent_offset":      map[string]any{"type": "integer", "minimum": 0, "maximum": 128},
+			"definition_query":  stringSchema(0, 80),
+			"definition_offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 10000},
 		}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "agents"}, map[string]any{
-			"current_project_ref": map[string]any{"type": "string"}, "agents": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
-			"context":           map[string]any{"type": "object"},
-			"operation_types":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"operation_schemas": map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+			"current_project_ref": map[string]any{"type": "string"}, "agents": map[string]any{"type": "array", "maxItems": maximumAssistantCatalogAgents, "items": map[string]any{"type": "object"}},
+			"agent_total":             map[string]any{"type": "integer", "minimum": 0},
+			"agent_next_offset":       map[string]any{"type": "integer", "minimum": 0},
+			"context":                 map[string]any{"type": "object"},
+			"operation_types":         map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"operation_schemas":       map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+			"integration_definitions": map[string]any{"type": "array", "maxItems": 10, "items": map[string]any{"type": "object"}},
+			"definition_next_offset":  map[string]any{"type": "integer", "minimum": 0},
 		}),
 	}
 }
@@ -47,11 +58,37 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.SystemAssistant || len(arguments) > 1 {
+	if !input.SystemAssistant || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset") {
 		return nil, errors.New("configuration catalog is not available")
 	}
-	schemas := assistantPlanOperationSchemas(input)
-	operationTypes := assistantOperationTypesFromSchemas(schemas)
+	agentQuery := ""
+	if raw, supplied := arguments["agent_query"]; supplied {
+		query, ok := raw.(string)
+		if !ok || utf8.RuneCountInString(query) > 80 {
+			return nil, errors.New("configuration catalog agent query is invalid")
+		}
+		agentQuery = strings.ToLower(strings.TrimSpace(query))
+	}
+	agentOffset := 0
+	if raw, supplied := arguments["agent_offset"]; supplied {
+		switch value := raw.(type) {
+		case int:
+			agentOffset = value
+		case float64:
+			if value < 0 || value > 128 || value != float64(int(value)) {
+				return nil, errors.New("configuration catalog agent offset is invalid")
+			}
+			agentOffset = int(value)
+		default:
+			return nil, errors.New("configuration catalog agent offset is invalid")
+		}
+		if agentOffset < 0 || agentOffset > 128 {
+			return nil, errors.New("configuration catalog agent offset is invalid")
+		}
+	}
+	allSchemas := assistantPlanOperationSchemas(input)
+	operationTypes := assistantOperationTypesFromSchemas(allSchemas)
+	schemas := make([]map[string]any, 0, maximumAssistantDiscoveredSchemas)
 	if raw, selected := arguments["operation_types"]; selected {
 		requested, ok := raw.([]any)
 		if !ok || len(requested) > maximumAssistantDiscoveredSchemas {
@@ -75,16 +112,12 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 			}
 			selectedTypes[kind] = struct{}{}
 		}
-		filtered := make([]map[string]any, 0, len(selectedTypes))
-		for _, schema := range schemas {
+		for _, schema := range allSchemas {
 			kind := assistantSchemaType(schema)
 			if _, requested := selectedTypes[kind]; requested {
-				filtered = append(filtered, schema)
+				schemas = append(schemas, schema)
 			}
 		}
-		schemas = filtered
-	} else if len(arguments) != 0 {
-		return nil, errors.New("configuration catalog selection is invalid")
 	}
 	targets := append([]runtimecontract.RunnerDelegationTarget(nil), input.DelegationTargets...)
 	sort.Slice(targets, func(left, right int) bool {
@@ -93,12 +126,25 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		}
 		return targets[left].Name < targets[right].Name
 	})
-	agents := make([]map[string]string, 0, len(targets))
+	matching := make([]runtimecontract.RunnerDelegationTarget, 0, len(targets))
 	for _, target := range targets {
-		agents = append(agents, map[string]string{
-			"ref": target.Ref, "name": target.Name, "purpose": target.Purpose,
-			"role_description": target.RoleDescription,
-		})
+		if agentQuery != "" && !strings.Contains(strings.ToLower(target.Name+" "+target.Purpose+" "+target.RoleDescription), agentQuery) {
+			continue
+		}
+		matching = append(matching, target)
+	}
+	end := agentOffset + maximumAssistantCatalogAgents
+	if end > len(matching) {
+		end = len(matching)
+	}
+	agents := make([]map[string]string, 0, maximumAssistantCatalogAgents)
+	if agentOffset < len(matching) {
+		for _, target := range matching[agentOffset:end] {
+			agents = append(agents, map[string]string{
+				"ref": target.Ref, "name": target.Name, "purpose": truncateRunes(target.Purpose, 240),
+				"role_description": truncateRunes(target.RoleDescription, 240),
+			})
+		}
 	}
 	context := map[string]any{"route": "", "entity_kind": "", "entity_ref": "", "entity_name": "", "allowed_operations": []string{}}
 	if input.AssistantContext != nil {
@@ -106,13 +152,18 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 			"entity_ref": input.AssistantContext.EntityRef, "entity_name": input.AssistantContext.EntityName,
 			"entity_version": input.AssistantContext.EntityVersion, "allowed_operations": input.AssistantContext.AllowedOperations}
 	}
-	return map[string]any{
+	result := map[string]any{
 		"current_project_ref": input.ProjectRef,
 		"agents":              agents,
+		"agent_total":         len(matching),
 		"context":             context,
 		"operation_types":     operationTypes,
 		"operation_schemas":   schemas,
-	}, nil
+	}
+	if end < len(matching) {
+		result["agent_next_offset"] = end
+	}
+	return result, nil
 }
 
 func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
@@ -157,6 +208,86 @@ func assistantSchemaType(schema map[string]any) string {
 	return schema["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
 }
 
+func environmentPublicValuesSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 128,
+		"description": "Non-secret environment values only. Credentials and tokens must use a protected Secret form and secretBindings.",
+		"items": objectSchema([]string{"name", "value"}, map[string]any{
+			"name":  map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
+			"value": stringSchema(0, 8192),
+		}),
+	}
+}
+
+func environmentPublicValueUpdatesSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 128,
+		"description": "Sparse upserts for non-secret environment values. Use this when the current complete value list is not exposed; the server merges entries into its authoritative snapshot.",
+		"items": objectSchema([]string{"name", "value"}, map[string]any{
+			"name":  map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
+			"value": stringSchema(0, 8192),
+		}),
+	}
+}
+
+func environmentPublicValueRemovalsSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 128, "uniqueItems": true,
+		"description": "Names of non-secret environment values to remove from the server-owned current list.",
+		"items":       map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
+	}
+}
+
+func environmentSecretBindingsSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 128,
+		"description": "References to already created project Secrets; never include plaintext values.",
+		"items": objectSchema([]string{"name", "secretRef"}, map[string]any{
+			"name":      map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
+			"secretRef": map[string]any{"type": "string", "pattern": "^sec_[A-Za-z0-9_-]{4,92}$"},
+			"revision":  map[string]any{"type": "integer", "minimum": 0},
+		}),
+	}
+}
+
+func environmentToolsSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 128,
+		"description": "Complete selected tool list from the exact promoted image. The owner reviews each command before publishing the environment draft.",
+		"items": objectSchema([]string{"name", "command", "description"}, map[string]any{
+			"name":        stringSchema(1, 160),
+			"command":     map[string]any{"type": "string", "maxLength": 160, "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"},
+			"description": stringSchema(1, 500), "usageHint": stringSchema(0, 500),
+		}),
+	}
+}
+
+func environmentPolicySchema() map[string]any {
+	resources := objectSchema([]string{"cpuRequestMilli", "cpuLimitMilli", "memoryRequestMib", "memoryLimitMib", "ephemeralStorageRequestMib", "ephemeralStorageLimitMib"}, map[string]any{
+		"cpuRequestMilli":            map[string]any{"type": "integer", "minimum": 100, "maximum": 8000},
+		"cpuLimitMilli":              map[string]any{"type": "integer", "minimum": 100, "maximum": 16000},
+		"memoryRequestMib":           map[string]any{"type": "integer", "minimum": 128, "maximum": 32768},
+		"memoryLimitMib":             map[string]any{"type": "integer", "minimum": 128, "maximum": 65536},
+		"ephemeralStorageRequestMib": map[string]any{"type": "integer", "minimum": 256, "maximum": 20480},
+		"ephemeralStorageLimitMib":   map[string]any{"type": "integer", "minimum": 256, "maximum": 102400},
+	})
+	return objectSchema([]string{"resources", "volumes", "networkDestinations", "kubernetesAccess"}, map[string]any{
+		"resources": resources,
+		"volumes": map[string]any{"type": "array", "maxItems": 16, "items": objectSchema([]string{"name", "kind", "sizeMib"}, map[string]any{
+			"name": stringSchema(1, 32), "kind": enumSchema("EPHEMERAL_DISK", "EPHEMERAL_MEMORY"),
+			"sizeMib": map[string]any{"type": "integer", "minimum": 16, "maximum": 10240},
+		})},
+		"networkDestinations": map[string]any{"type": "array", "minItems": 3, "maxItems": 4, "uniqueItems": true,
+			"items": enumSchema("DNS", "PROVIDER_PROXY", "RUNTIME_CALLBACK", "KUBERNETES_API")},
+		"kubernetesAccess": enumSchema("NONE", "READ_OWN_EXECUTION"),
+	})
+}
+
+func environmentSecretSuggestionsSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 8,
+		"description": "Safe metadata for owner-only Secret forms. Never include credential values or pretend that the Secret already exists.",
+		"items": objectSchema([]string{"name", "valueType", "sourceHelp"}, map[string]any{
+			"name": stringSchema(1, 120), "description": stringSchema(0, 1000),
+			"valueType": enumSchema("STRING", "JSON", "BINARY"), "sourceHelp": stringSchema(1, 1000),
+		}),
+	}
+}
+
 func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[string]any {
 	projectRef := opaqueRefSchema()
 	agentRef := opaqueRefSchema()
@@ -172,25 +303,45 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	}
 	result := []map[string]any{
 		assistantOperationSchema("CREATE_PROJECT", objectSchema([]string{"name", "purpose", "language"}, map[string]any{
-			"name": stringSchema(1, 160), "purpose": stringSchema(1, 2000), "language": enumSchema("ru", "en"),
+			"name": stringSchema(1, 120), "purpose": stringSchema(1, 1000), "language": enumSchema("ru", "en"),
 		})),
 		assistantOperationSchema("UPDATE_PROJECT", projectUpdateInputSchema(projectRef)),
 		assistantOperationSchema("CREATE_AGENT", objectSchema([]string{"projectRef", "name", "purpose", "roleDescription", "instructions"}, map[string]any{
-			"projectRef": projectRef, "roleDefinitionRef": opaqueRefSchema(), "name": stringSchema(1, 160),
-			"purpose": stringSchema(1, 2000), "roleDescription": stringSchema(1, 2000), "avatarUrl": stringSchema(0, 500),
-			"runtimeRef": opaqueRefSchema(), "instructions": stringSchema(20, 65536),
-			"capabilities": map[string]any{"type": "array", "maxItems": 3, "uniqueItems": true, "items": enumSchema("platform.artifact.manage", "platform.run.delegate", "platform.run.launch")},
+			"projectRef": projectRef, "roleDefinitionRef": opaqueRefSchema(), "name": stringSchema(1, 120),
+			"purpose": stringSchema(1, 1000), "roleDescription": stringSchema(1, 1000), "avatarUrl": stringSchema(0, 500),
+			"runtimeRef": opaqueRefSchema(), "instructions": assistantAgentInstructionsSchema(),
+			"capabilities": map[string]any{"type": "array", "maxItems": 3, "uniqueItems": true, "items": assistantAgentCapabilitySchema()},
+		})),
+		assistantOperationSchema("CREATE_RUNTIME_ENVIRONMENT_DRAFT", objectSchema([]string{"projectRef", "name"}, map[string]any{
+			"projectRef": projectRef, "name": stringSchema(1, 120), "description": stringSchema(0, 1000),
+			"imageArtifactRef":  opaqueRefSchema(),
+			"publicValues":      environmentPublicValuesSchema(),
+			"secretBindings":    environmentSecretBindingsSchema(),
+			"secretSuggestions": environmentSecretSuggestionsSchema(),
+			"tools":             environmentToolsSchema(),
+			"policy":            environmentPolicySchema(),
+		})),
+		assistantOperationSchema("CREATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"projectRef", "agentRef", "name"}, map[string]any{
+			"projectRef": projectRef, "agentRef": opaqueRefSchema(), "name": stringSchema(1, 160),
+			"environmentKey": stringSchema(1, 96), "dockerfile": stringSchema(1, 65536),
+		})),
+		assistantOperationSchema("UPDATE_ROLE_IMAGE_RECIPE", objectSchema([]string{"recipeRef"}, map[string]any{
+			"recipeRef": opaqueRefSchema(), "name": stringSchema(1, 160),
+			"environmentKey": stringSchema(1, 96), "dockerfile": stringSchema(1, 65536),
 		})),
 		assistantOperationSchema("ARCHIVE_AGENT", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("ARCHIVE_WORKFLOW", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CHANGE_CAPABILITY", objectSchema([]string{"agentRef", "capabilityKey", "enabled"}, map[string]any{
-			"agentRef": agentRef, "capabilityKey": capabilityKeySchema(), "enabled": map[string]any{"type": "boolean"},
+			"agentRef": agentRef, "capabilityKey": assistantAgentCapabilitySchema(), "enabled": map[string]any{"type": "boolean"},
 		})),
-		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", integrationGrantInputSchema()),
+		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", integrationGrantInputSchema(input.AssistantContext)),
 		assistantOperationSchema("CREATE_INTEGRATION_CONNECTION", objectSchema([]string{"definitionKey", "name", "publicConfiguration"}, map[string]any{
 			"definitionKey": capabilityKeySchema(), "name": stringSchema(1, 160),
 			"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+		})),
+		assistantOperationSchema("PUBLISH_INTEGRATION_DEFINITION", objectSchema([]string{"configurationRef", "revisionRef"}, map[string]any{
+			"configurationRef": opaqueRefSchema(), "revisionRef": opaqueRefSchema(),
 		})),
 		assistantOperationSchema("TEST_INTEGRATION_CONNECTION", objectSchema([]string{"connectionRef"}, map[string]any{
 			"connectionRef": opaqueRefSchema(),
@@ -198,8 +349,48 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_SCHEDULE", scheduleInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
-	if input.AssistantContext == nil || len(input.AssistantContext.AllowedOperations) == 0 {
+	if input.AssistantContext == nil {
 		return result
+	}
+	if input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef != "" {
+		result = append(result, assistantOperationSchema("UPDATE_AGENT", agentUpdateInputSchema(enumSchema(input.AssistantContext.EntityRef))))
+		result = append(result, assistantOperationSchema("CREATE_INSTRUCTION_DRAFT", objectSchema(
+			[]string{"agentRef", "instructions"}, map[string]any{
+				"agentRef": enumSchema(input.AssistantContext.EntityRef), "instructions": assistantAgentInstructionsSchema(),
+			})))
+		result = append(result, assistantOperationSchema("BIND_AGENT_RUNTIME_ENVIRONMENT", objectSchema(
+			[]string{"agentRef", "environmentRef"}, map[string]any{
+				"agentRef": enumSchema(input.AssistantContext.EntityRef), "environmentRef": opaqueRefSchema(),
+			})))
+	}
+	if input.AssistantContext.EntityKind == "WORKFLOW" && input.AssistantContext.EntityRef != "" {
+		result = append(result, assistantOperationSchema("UPDATE_WORKFLOW", workflowUpdateInputSchema(input.AssistantContext.EntityRef)))
+	}
+	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" {
+		schema := objectSchema([]string{"environmentRef"}, map[string]any{
+			"environmentRef": enumSchema(input.AssistantContext.EntityRef), "name": stringSchema(1, 120),
+			"description": stringSchema(0, 1000), "imageArtifactRef": stringSchema(0, 96),
+			"publicValues": environmentPublicValuesSchema(), "publicValueUpdates": environmentPublicValueUpdatesSchema(),
+			"publicValueRemovals": environmentPublicValueRemovalsSchema(), "secretBindings": environmentSecretBindingsSchema(),
+			"tools":  environmentToolsSchema(),
+			"policy": environmentPolicySchema(),
+		})
+		schema["anyOf"] = []map[string]any{
+			{"required": []string{"name"}}, {"required": []string{"description"}},
+			{"required": []string{"imageArtifactRef"}}, {"required": []string{"publicValues"}},
+			{"required": []string{"publicValueUpdates"}}, {"required": []string{"publicValueRemovals"}},
+			{"required": []string{"secretBindings"}}, {"required": []string{"tools"}}, {"required": []string{"policy"}},
+		}
+		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION", schema))
+	}
+	if input.AssistantContext.EntityKind == "INTEGRATION_CONNECTION" && input.AssistantContext.EntityRef != "" {
+		result = append(result, assistantOperationSchema("UPDATE_INTEGRATION_CONNECTION", connectionUpdateInputSchema(input.AssistantContext.EntityRef)))
+	}
+	if input.AssistantContext.EntityKind == "SCHEDULE" && input.AssistantContext.EntityRef != "" {
+		result = append(result, assistantOperationSchema("UPDATE_SCHEDULE", scheduleUpdateInputSchema(input.AssistantContext.EntityRef)))
+	}
+	if len(input.AssistantContext.AllowedOperations) == 0 {
+		return nil
 	}
 	allowed := make(map[string]struct{}, len(input.AssistantContext.AllowedOperations))
 	for _, operation := range input.AssistantContext.AllowedOperations {
@@ -215,11 +406,87 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	return filtered
 }
 
+func assistantAgentCapabilitySchema() map[string]any {
+	return enumSchema("platform.artifact.manage", "platform.run.delegate", "platform.run.launch")
+}
+
+func assistantAgentInstructionsSchema() map[string]any {
+	schema := stringSchema(20, 65536)
+	schema["description"] = "Go template instructions. Stable scalar variables: {{ .organization.name }}, {{ .project.name }}, {{ .agent.name }}. Dynamic integrations: {{ range .integrations.items }} with .name, .description and .capability; include {{ else }} for the empty list and {{ end }}. Do not use i18n keys or index expressions."
+	return schema
+}
+
+func agentUpdateInputSchema(agentRef map[string]any) map[string]any {
+	schema := objectSchema([]string{"agentRef"}, map[string]any{
+		"agentRef": agentRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 2000),
+		"roleDescription": stringSchema(1, 2000),
+	})
+	schema["anyOf"] = []map[string]any{
+		{"required": []string{"name"}}, {"required": []string{"purpose"}}, {"required": []string{"roleDescription"}},
+	}
+	return schema
+}
+
+func connectionUpdateInputSchema(connectionRef string) map[string]any {
+	schema := objectSchema([]string{"connectionRef"}, map[string]any{
+		"connectionRef": enumSchema(connectionRef), "name": stringSchema(1, 160),
+		"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+	})
+	schema["anyOf"] = []map[string]any{{"required": []string{"name"}}, {"required": []string{"publicConfiguration"}}}
+	return schema
+}
+
+func workflowUpdateInputSchema(workflowRef string) map[string]any {
+	graph := workflowInputSchema(opaqueRefSchema(), opaqueRefSchema())["properties"].(map[string]any)
+	fields := graph["inputFields"].(map[string]any)
+	field := fields["items"].(map[string]any)
+	field["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,79}$",
+		"description": "Preserve the existing field key from the workflow readback; omit only for a new field."}
+	steps := graph["steps"].(map[string]any)
+	step := steps["items"].(map[string]any)
+	step["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 96,
+		"description": "Preserve the existing step key from the workflow readback; omit only for a new step."}
+	schema := objectSchema([]string{"workflowRef"}, map[string]any{
+		"workflowRef": enumSchema(workflowRef), "name": stringSchema(1, 160),
+		"purpose": stringSchema(0, 2000), "coordinatorAgentRef": opaqueRefSchema(),
+		"instructions":       stringSchema(0, 65536),
+		"completionCriteria": stringSchema(0, 65536),
+		"maxConcurrency":     map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
+		"timeoutSeconds":     map[string]any{"type": "integer", "minimum": 1, "maximum": 604800},
+		"inputFields":        fields, "steps": steps,
+	})
+	branches := make([]map[string]any, 0, 9)
+	for _, field := range []string{"name", "purpose", "coordinatorAgentRef", "instructions", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps"} {
+		branches = append(branches, map[string]any{"required": []string{field}})
+	}
+	schema["anyOf"] = branches
+	return schema
+}
+
+func scheduleUpdateInputSchema(scheduleRef string) map[string]any {
+	schema := objectSchema([]string{"scheduleRef"}, map[string]any{
+		"scheduleRef": enumSchema(scheduleRef), "name": stringSchema(1, 160),
+		"targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
+		"preset":         enumSchema("HOURLY", "DAILY", "WEEKDAYS", "WEEKLY", "CUSTOM"),
+		"cronExpression": stringSchema(0, 120), "timeOfDay": stringSchema(0, 5),
+		"dayOfWeek": enumSchema("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"),
+		"timezone":  stringSchema(1, 80), "input": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+		"automationText": stringSchema(1, 32768), "sessionPolicy": enumSchema("NEW_EACH_RUN", "CONTINUE_ONE"),
+		"notificationPolicy": enumSchema("CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"),
+	})
+	branches := make([]map[string]any, 0, 12)
+	for _, field := range []string{"name", "targetType", "targetRef", "preset", "cronExpression", "timeOfDay", "dayOfWeek", "timezone", "input", "automationText", "sessionPolicy", "notificationPolicy"} {
+		branches = append(branches, map[string]any{"required": []string{field}})
+	}
+	schema["anyOf"] = branches
+	return schema
+}
+
 func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"projectRef"}, map[string]any{
 		"projectRef": projectRef,
-		"name":       stringSchema(1, 160),
-		"purpose":    stringSchema(1, 2000),
+		"name":       stringSchema(1, 120),
+		"purpose":    stringSchema(1, 1000),
 		"language":   enumSchema("ru", "en"),
 	})
 	schema["anyOf"] = []map[string]any{
@@ -230,11 +497,25 @@ func projectUpdateInputSchema(projectRef map[string]any) map[string]any {
 	return schema
 }
 
-func integrationGrantInputSchema() map[string]any {
-	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled"}, map[string]any{
+func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext) map[string]any {
+	properties := map[string]any{
 		"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "agentRef": opaqueRefSchema(), "workflowRef": opaqueRefSchema(),
-		"enabled": map[string]any{"type": "boolean"},
-	})
+		"enabled":            map[string]any{"type": "boolean"},
+		"approvalScopePaths": map[string]any{"type": "array", "maxItems": 16, "uniqueItems": true, "items": stringSchema(1, 200)},
+	}
+	if context != nil && context.EntityRef != "" {
+		switch context.EntityKind {
+		case "AGENT":
+			properties["agentRef"] = enumSchema(context.EntityRef)
+			delete(properties, "workflowRef")
+			return objectSchema([]string{"connectionRef", "capabilityKey", "agentRef", "enabled"}, properties)
+		case "WORKFLOW":
+			properties["workflowRef"] = enumSchema(context.EntityRef)
+			delete(properties, "agentRef")
+			return objectSchema([]string{"connectionRef", "capabilityKey", "workflowRef", "enabled"}, properties)
+		}
+	}
+	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled"}, properties)
 	schema["oneOf"] = []map[string]any{
 		{"required": []string{"agentRef"}, "not": map[string]any{"required": []string{"workflowRef"}}},
 		{"required": []string{"workflowRef"}, "not": map[string]any{"required": []string{"agentRef"}}},
@@ -245,7 +526,7 @@ func integrationGrantInputSchema() map[string]any {
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
 	action := "CREATE"
 	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" {
 		action, requiresVersion = "UPDATE", true
 	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true
@@ -270,7 +551,7 @@ func assistantOperationSchema(kind string, parameters map[string]any) map[string
 		before = objectSchema(nil, map[string]any{})
 		after = parameters
 	}
-	serverHydrated := action == "CREATE" || kind == "UPDATE_PROJECT"
+	serverHydrated := assistantServerHydratedOperation(kind)
 	if !serverHydrated {
 		required = append(required, "before", "after")
 	}
@@ -314,22 +595,35 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 }
 
 func scheduleInputSchema(projectRef, targetRef map[string]any) map[string]any {
-	return objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "sessionPolicy", "notificationPolicy"}, map[string]any{
-		"projectRef": projectRef, "name": stringSchema(1, 160), "targetType": enumSchema("AGENT"), "targetRef": targetRef,
-		"preset": stringSchema(1, 120), "timeOfDay": stringSchema(0, 5), "dayOfWeek": stringSchema(0, 9), "timezone": stringSchema(1, 80),
+	schema := objectSchema([]string{"projectRef", "name", "targetType", "targetRef", "preset", "timeOfDay", "timezone", "input", "automationText", "sessionPolicy", "notificationPolicy"}, map[string]any{
+		"projectRef": projectRef, "name": stringSchema(1, 160), "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
+		"preset": enumSchema("HOURLY", "DAILY", "WEEKDAYS", "WEEKLY", "CUSTOM"), "cronExpression": stringSchema(0, 120), "timeOfDay": stringSchema(0, 5),
+		"dayOfWeek": enumSchema("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"), "timezone": stringSchema(1, 80),
 		"input":              map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+		"automationText":     stringSchema(1, 32768),
 		"sessionPolicy":      enumSchema("NEW_EACH_RUN", "CONTINUE_ONE"),
 		"notificationPolicy": enumSchema("CONTROL_CENTER_ONLY", "CONTROL_CENTER_AND_OPTIONAL_CHANNELS"),
 	})
+	schema["oneOf"] = assistantExecutionTargetBranches(targetRef)
+	return schema
 }
 
 func runInputSchema(projectRef, targetRef map[string]any) map[string]any {
-	return objectSchema([]string{"projectRef", "targetType", "targetRef", "title", "task", "input"}, map[string]any{
-		"projectRef": projectRef, "targetType": enumSchema("AGENT"), "targetRef": targetRef,
+	schema := objectSchema([]string{"projectRef", "targetType", "targetRef", "title", "task", "input"}, map[string]any{
+		"projectRef": projectRef, "targetType": enumSchema("AGENT", "WORKFLOW"), "targetRef": opaqueRefSchema(),
 		"title": stringSchema(1, 240), "task": stringSchema(1, 32768), "sessionRef": opaqueRefSchema(),
-		"input":        map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
-		"artifactRefs": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": opaqueRefSchema()},
+		"input":            map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": true},
+		"attachmentSetRef": opaqueRefSchema(),
 	})
+	schema["oneOf"] = assistantExecutionTargetBranches(targetRef)
+	return schema
+}
+
+func assistantExecutionTargetBranches(agentRef map[string]any) []map[string]any {
+	return []map[string]any{
+		{"properties": map[string]any{"targetType": map[string]any{"const": "AGENT"}, "targetRef": agentRef}},
+		{"properties": map[string]any{"targetType": map[string]any{"const": "WORKFLOW"}, "targetRef": opaqueRefSchema()}},
+	}
 }
 
 func objectSchema(required []string, properties map[string]any) map[string]any {

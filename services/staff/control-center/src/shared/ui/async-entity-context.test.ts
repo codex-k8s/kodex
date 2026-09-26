@@ -91,13 +91,18 @@ describe("смена контекста async selector", () => {
   });
   it("наблюдает уже установленный sentinel и не читает скрытую историю", async () => {
     const callbacks: IntersectionObserverCallback[] = [];
+    const roots: (Element | Document | null)[] = [];
     const observe = vi.fn();
     const disconnect = vi.fn();
     vi.stubGlobal(
       "IntersectionObserver",
       class {
-        constructor(callback: IntersectionObserverCallback) {
+        constructor(
+          callback: IntersectionObserverCallback,
+          init?: IntersectionObserverInit,
+        ) {
           callbacks.push(callback);
+          roots.push(init?.root ?? null);
         }
         observe = observe;
         disconnect = disconnect;
@@ -112,6 +117,7 @@ describe("смена контекста async selector", () => {
       useCursorInfiniteScroll({ root, sentinel, enabled, loadMore: more }),
     );
     expect(observe).toHaveBeenCalledOnce();
+    expect(roots).toEqual([null]);
     enabled.value = false;
     await nextTick();
     callbacks[0]?.(
@@ -122,7 +128,39 @@ describe("смена контекста async selector", () => {
     enabled.value = true;
     await nextTick();
     expect(observe).toHaveBeenCalledTimes(2);
+    expect(roots).toEqual([null, null]);
     scope.stop();
     expect(disconnect).toHaveBeenCalledTimes(2);
+  });
+  it("сохраняет локальный root, только когда sentinel находится внутри него", () => {
+    const roots: (Element | Document | null)[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(
+          _callback: IntersectionObserverCallback,
+          init?: IntersectionObserverInit,
+        ) {
+          roots.push(init?.root ?? null);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const sentinel = {} as Element;
+    const containedRoot = {
+      contains: (target: Node) => target === sentinel,
+    } as HTMLElement;
+    const scope = effectScope();
+    scope.run(() =>
+      useCursorInfiniteScroll({
+        root: shallowRef(containedRoot),
+        sentinel: shallowRef(sentinel),
+        enabled: true,
+        loadMore: vi.fn(),
+      }),
+    );
+    expect(roots).toEqual([containedRoot]);
+    scope.stop();
   });
 });

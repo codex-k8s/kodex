@@ -87,8 +87,34 @@ describe("agent catalog store", () => {
       projectRef: "project_sales",
       query: "аналитик",
       pageToken: "page_2",
+      pageSize: 20,
     });
     expect(store.hasMore).toBe(false);
+  });
+
+  it("применяет новый адаптивный размер только к следующей cursor-странице", async () => {
+    api.loadAgentCatalogPage
+      .mockResolvedValueOnce({
+        items: [agent("agent_first")],
+        nextPageToken: "page_2",
+      })
+      .mockResolvedValueOnce({ items: [agent("agent_second")] });
+    const store = useAgentCatalogStore();
+
+    await store.load("project_sales", "", false, 12);
+    await store.loadMore(37);
+
+    expect(store.items.map((item) => item.ref)).toEqual([
+      "agent_first",
+      "agent_second",
+    ]);
+    expect(api.loadAgentCatalogPage).toHaveBeenLastCalledWith({
+      projectRef: "project_sales",
+      query: "",
+      pageToken: "page_2",
+      pageSize: 37,
+    });
+    expect(store.pageSize).toBe(37);
   });
 
   it("не зацикливается на повторённом server cursor", async () => {

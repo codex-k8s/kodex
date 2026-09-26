@@ -26,7 +26,7 @@ describe("IntegrationPackage canonical schema", () => {
       }
     }
     visit(packageSchema);
-    expect(patterns).toHaveLength(3);
+    expect(patterns).toHaveLength(4);
     const samples = [
       "a",
       "a-b",

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
@@ -13,6 +14,7 @@ const platform = usePlatformStore();
 const route = useRoute();
 const i18n = useI18n();
 const query = ref("");
+const searchId = useId();
 const projectRef = computed(() =>
   typeof route.query.projectRef === "string"
     ? route.query.projectRef
@@ -22,7 +24,14 @@ const list = computed(() => platform.auditEvents);
 const hasMore = computed(() => Boolean(platform.auditNextPageToken));
 const loadingMore = computed(() => Boolean(platform.loading.auditMore));
 const scrollRoot = ref<HTMLElement>();
+const listRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".audit-table__row",
+  itemCount: () => list.value.length,
+  estimatedItemHeight: 62,
+});
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 function auditLabel(
@@ -34,13 +43,11 @@ function auditLabel(
 }
 
 async function load(): Promise<void> {
-  await platform.loadAudit(projectRef.value, query.value);
-  if (platform.auditNextPageToken)
-    await platform.loadMoreAudit(projectRef.value, query.value);
+  await platform.loadAudit(projectRef.value, query.value, pageSize.value);
 }
 
 function loadMore(): Promise<void> {
-  return platform.loadMoreAudit(projectRef.value, query.value);
+  return platform.loadMoreAudit(projectRef.value, query.value, pageSize.value);
 }
 
 useCursorInfiniteScroll({
@@ -63,10 +70,12 @@ onUnmounted(() => {
 
 <template>
   <PageFrame :title="$t('audit.title')" :subtitle="$t('audit.subtitle')">
-    <label class="field audit-search"
+    <label class="field audit-search" :for="searchId"
       ><span>{{ $t("audit.search") }}</span
       ><input
+        :id="searchId"
         v-model="query"
+        name="audit-search"
         type="search"
         :placeholder="$t('audit.searchPlaceholder')"
         autocomplete="off"
@@ -78,7 +87,12 @@ onUnmounted(() => {
       :empty-title="$t('audit.emptyTitle')"
       @retry="load"
     >
-      <div class="audit-table" role="table" :aria-label="$t('audit.title')">
+      <div
+        ref="listRoot"
+        class="audit-table"
+        role="table"
+        :aria-label="$t('audit.title')"
+      >
         <div class="audit-table__header" role="row">
           <strong role="columnheader">{{ $t("audit.time") }}</strong
           ><strong role="columnheader">{{ $t("audit.initiator") }}</strong
@@ -122,12 +136,13 @@ onUnmounted(() => {
         aria-live="polite"
       >
         <span v-if="loadingMore">{{ $t("audit.loadingMore") }}</span>
-        <button v-else class="button" type="button" @click="loadMore">
-          {{
-            platform.problems.auditMore
-              ? $t("common.retry")
-              : $t("audit.loadMore")
-          }}
+        <button
+          v-else-if="platform.problems.auditMore"
+          class="button"
+          type="button"
+          @click="loadMore"
+        >
+          {{ $t("common.retry") }}
         </button>
       </div>
     </AsyncState>

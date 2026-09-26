@@ -1,6 +1,7 @@
 import { renderToString } from "@vue/server-renderer";
 import { createSSRApp, defineComponent, h } from "vue";
 import { createI18n } from "vue-i18n";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/shared/ui/ProblemNotice.vue", () => ({
@@ -12,20 +13,28 @@ import ConfigurationCatalog from "./ConfigurationCatalog.vue";
 async function render(
   kind: "PROMPT_TEMPLATE" | "ROLE_IMAGE" | "INTEGRATION_DEFINITION",
   projectRef?: string,
+  autoOpenImport = false,
 ) {
   const app = createSSRApp({
-    render: () => h(ConfigurationCatalog, { kind, projectRef }),
+    render: () => h(ConfigurationCatalog, { kind, projectRef, autoOpenImport }),
   });
-  app.component(
-    "RouterLink",
-    defineComponent({
-      props: { to: { type: Object, required: true } },
-      setup:
-        (_props, { slots }) =>
-        () =>
-          h("a", slots.default?.()),
-    }),
-  );
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      {
+        path: "/configurations/:kind/:configurationRef",
+        name: "configuration",
+        component: defineComponent({ render: () => h("div") }),
+      },
+      {
+        path: "/:pathMatch(.*)*",
+        component: defineComponent({ render: () => h("div") }),
+      },
+    ],
+  });
+  await router.push("/");
+  await router.isReady();
+  app.use(router);
   app.use(
     createI18n({
       legacy: false,
@@ -34,7 +43,11 @@ async function render(
       messages: {
         ru: {
           common: { create: "Создать", search: "Поиск" },
-          managed: { projectRequired: "Выберите проект", more: "Ещё" },
+          managed: {
+            projectRequired: "Выберите проект",
+            more: "Ещё",
+            openapiImport: { title: "Импорт интеграции из OpenAPI" },
+          },
           catalog: { expand: "Развернуть" },
         },
       },
@@ -61,6 +74,12 @@ describe("Project scope configuration catalog", () => {
     const html = await render("INTEGRATION_DEFINITION");
     expect(html).toContain("<a");
     expect(html).not.toContain("managed-catalog-project-required");
+  });
+
+  it("открывает форму OpenAPI по переходу из помощника", async () => {
+    const html = await render("INTEGRATION_DEFINITION", undefined, true);
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain("Импорт интеграции из OpenAPI");
   });
 
   it("открывает project-scoped create после точного выбора", async () => {

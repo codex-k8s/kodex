@@ -15,6 +15,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 const route = useRoute();
 const router = useRouter();
+const assistantForm = computed(() => route.query.assistantForm === "1");
 const kinds: readonly ConfigurationKind[] = [
   "PROMPT_TEMPLATE",
   "ROLE_IMAGE",
@@ -56,32 +57,41 @@ watch(
   { immediate: true },
 );
 function changeProject(value: string): void {
-  void router.replace({ query: value ? { projectRef: value } : {} });
+  void router.replace({
+    query: { ...route.query, projectRef: value || undefined },
+  });
 }
 function created(configuration: ManagedConfiguration): void {
   void router.replace({
     name: "configuration",
     params: { kind: configuration.kind, configurationRef: configuration.ref },
-    query: configuration.projectRef
-      ? { projectRef: configuration.projectRef }
-      : {},
+    query: {
+      ...(configuration.projectRef
+        ? { projectRef: configuration.projectRef }
+        : {}),
+      ...(assistantForm.value ? { assistantForm: "1" } : {}),
+    },
   });
 }
 </script>
 <template>
-  <PageFrame :title="kind ? $t(`managed.kinds.${kind}`) : $t('managed.title')">
-    <template v-if="projectScoped && !configurationRef" #actions>
-      <ProjectPicker :project="project" @select="changeProject" />
-    </template>
-    <ProblemNotice v-if="problem" :problem="problem" compact />
-    <ConfigurationEditor
-      v-if="kind"
-      :key="route.fullPath"
-      :kind="kind"
-      :configuration-ref="configurationRef"
-      :project-ref="projectRef"
-      @created="created"
-    />
-    <p v-else role="alert">{{ $t("errors.NOT_FOUND") }}</p>
-  </PageFrame>
+  <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
+    <PageFrame
+      :title="kind ? $t(`managed.kinds.${kind}`) : $t('managed.title')"
+    >
+      <template v-if="projectScoped && !configurationRef" #actions>
+        <ProjectPicker :project="project" @select="changeProject" />
+      </template>
+      <ProblemNotice v-if="problem" :problem="problem" compact />
+      <ConfigurationEditor
+        v-if="kind"
+        :key="route.fullPath"
+        :kind="kind"
+        :configuration-ref="configurationRef"
+        :project-ref="projectRef"
+        @created="created"
+      />
+      <p v-else role="alert">{{ $t("errors.NOT_FOUND") }}</p>
+    </PageFrame>
+  </Teleport>
 </template>

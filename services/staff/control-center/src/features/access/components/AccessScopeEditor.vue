@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
+import {
+  accessAgentOptions,
+  accessIntegrationOptions,
+  accessProjectOptions,
+  accessWorkflowOptions,
+} from "@/features/access/entity-pickers";
 import {
   accessResourceKinds,
   accessScopeKinds,
@@ -14,6 +21,11 @@ import type {
   Project,
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
 
 const props = defineProps<{
   modelValue: ScopeDraft;
@@ -29,6 +41,9 @@ const emit = defineEmits<{
   "update:modelValue": [value: ScopeDraft];
   "load-project-resources": [projectRef: string];
 }>();
+const i18n = useI18n();
+const chosenProject = ref<AsyncEntityOption>();
+const chosenResource = ref<AsyncEntityOption>();
 
 const scopes = computed(() =>
   accessScopeKinds.filter(
@@ -51,30 +66,101 @@ const usesPicker = computed(
     props.modelValue.kind === "RESOURCE_INSTANCE" &&
     pickerResourceKinds.includes(props.modelValue.resourceKind),
 );
-const resourceOptions = computed(() => {
+const selectedProjectOption = computed<AsyncEntityOption | undefined>(() => {
+  const project = props.projects.find(
+    (item) => item.ref === props.modelValue.projectRef,
+  );
+  if (project)
+    return {
+      ref: project.ref,
+      title: project.name,
+      description: project.purpose,
+    };
+  return chosenProject.value?.ref === props.modelValue.projectRef
+    ? chosenProject.value
+    : undefined;
+});
+const selectedResourceOption = computed<AsyncEntityOption | undefined>(() => {
   if (props.modelValue.resourceKind === "AGENT") {
-    return props.agents.map((agent) => ({
-      ref: agent.ref,
-      name: agent.name,
-      description: agent.roleDescription,
-    }));
+    const agent = props.agents.find(
+      (item) => item.ref === props.modelValue.resourceRef,
+    );
+    if (agent)
+      return {
+        ref: agent.ref,
+        title: agent.name,
+        description: agent.roleDescription,
+      };
   }
   if (props.modelValue.resourceKind === "WORKFLOW") {
-    return props.workflows.map((workflow) => ({
-      ref: workflow.ref,
-      name: workflow.name,
-      description: workflow.purpose,
-    }));
+    const workflow = props.workflows.find(
+      (item) => item.ref === props.modelValue.resourceRef,
+    );
+    if (workflow)
+      return {
+        ref: workflow.ref,
+        title: workflow.name,
+        description: workflow.purpose,
+      };
   }
   if (props.modelValue.resourceKind === "INTEGRATION") {
-    return props.integrations.map((integration) => ({
-      ref: integration.ref,
-      name: integration.name,
-      description: integration.definitionKey,
-    }));
+    const integration = props.integrations.find(
+      (item) => item.ref === props.modelValue.resourceRef,
+    );
+    if (integration)
+      return {
+        ref: integration.ref,
+        title: integration.name,
+        description: integration.definitionKey,
+      };
   }
-  return [];
+  return chosenResource.value?.ref === props.modelValue.resourceRef
+    ? chosenResource.value
+    : undefined;
 });
+
+function selection(value: string | null | readonly string[]): string {
+  return typeof value === "string" ? value : "";
+}
+
+function pickerLabels(label: string, searchPlaceholder: string) {
+  return {
+    label,
+    searchPlaceholder,
+    loading: i18n.t("common.loading"),
+    loadingMore: i18n.t("common.loading"),
+    empty: i18n.t("common.empty"),
+    error: i18n.t("errors.default"),
+    retry: i18n.t("common.retry"),
+  };
+}
+
+function loadResources(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize?: number,
+): Promise<AsyncEntityOptionPage> {
+  if (props.modelValue.resourceKind === "AGENT")
+    return accessAgentOptions(
+      props.modelValue.projectRef,
+      query,
+      cursor,
+      signal,
+      pageSize,
+    );
+  if (props.modelValue.resourceKind === "WORKFLOW")
+    return accessWorkflowOptions(
+      props.modelValue.projectRef,
+      query,
+      cursor,
+      signal,
+      pageSize,
+    );
+  if (props.modelValue.resourceKind === "INTEGRATION")
+    return accessIntegrationOptions(query, cursor, signal, pageSize);
+  return Promise.resolve({ items: [] });
+}
 
 function update(patch: Partial<ScopeDraft>): void {
   const next = { ...props.modelValue, ...patch };
@@ -89,11 +175,14 @@ function update(patch: Partial<ScopeDraft>): void {
   }
   if (patch.kind === "RESOURCE_KIND") next.resourceRef = "";
   if (patch.projectRef !== undefined) {
+    chosenProject.value = undefined;
+    chosenResource.value = undefined;
     next.resourceRef = "";
     if (patch.projectRef && ["AGENT", "WORKFLOW"].includes(next.resourceKind))
       emit("load-project-resources", patch.projectRef);
   }
   if (patch.resourceKind !== undefined) {
+    chosenResource.value = undefined;
     next.resourceRef = "";
     if (["AGENT", "WORKFLOW"].includes(patch.resourceKind) && next.projectRef)
       emit("load-project-resources", next.projectRef);
@@ -123,6 +212,7 @@ watch(
     <label class="field">
       <span>{{ $t("access.scope.kind") }}</span>
       <select
+        name="access-scope-kind"
         :value="modelValue.kind"
         :disabled="busy"
         @change="
@@ -138,28 +228,26 @@ watch(
       </select>
     </label>
 
-    <label v-if="modelValue.kind !== 'ORGANIZATION'" class="field">
+    <div v-if="modelValue.kind !== 'ORGANIZATION'" class="field">
       <span>{{ $t("access.scope.project") }}</span>
-      <select
-        :value="modelValue.projectRef"
-        required
-        :disabled="busy"
-        @change="
-          update({ projectRef: ($event.target as HTMLSelectElement).value })
+      <AsyncEntityPicker
+        :model-value="modelValue.projectRef"
+        :selected="selectedProjectOption"
+        :load-page="accessProjectOptions"
+        :labels="
+          pickerLabels(
+            $t('access.scope.project'),
+            $t('access.scope.chooseProject'),
+          )
         "
-      >
-        <option value="" disabled>
-          {{ $t("access.scope.chooseProject") }}
-        </option>
-        <option
-          v-for="project in projects"
-          :key="project.ref"
-          :value="project.ref"
-        >
-          {{ project.name }}
-        </option>
-      </select>
-    </label>
+        :placeholder="$t('access.scope.chooseProject')"
+        :trigger-label="$t('access.scope.project')"
+        :clearable="false"
+        :disabled="busy"
+        @select="chosenProject = $event"
+        @update:model-value="update({ projectRef: selection($event) })"
+      />
+    </div>
 
     <label
       v-if="['RESOURCE_KIND', 'RESOURCE_INSTANCE'].includes(modelValue.kind)"
@@ -167,6 +255,7 @@ watch(
     >
       <span>{{ $t("access.scope.resourceKind") }}</span>
       <select
+        name="access-scope-resource-kind"
         :value="modelValue.resourceKind"
         :disabled="busy"
         @change="
@@ -182,33 +271,33 @@ watch(
       </select>
     </label>
 
-    <label v-if="usesPicker" class="field">
+    <div v-if="usesPicker" class="field">
       <span>{{ $t(`access.resourceKinds.${modelValue.resourceKind}`) }}</span>
-      <select
-        :value="modelValue.resourceRef"
-        required
-        :disabled="busy || !modelValue.projectRef"
-        @change="
-          update({ resourceRef: ($event.target as HTMLSelectElement).value })
+      <AsyncEntityPicker
+        :model-value="modelValue.resourceRef"
+        :selected="selectedResourceOption"
+        :load-page="loadResources"
+        :labels="
+          pickerLabels(
+            $t(`access.resourceKinds.${modelValue.resourceKind}`),
+            $t('access.scope.chooseResource'),
+          )
         "
-      >
-        <option value="" disabled>
-          {{ $t("access.scope.chooseResource") }}
-        </option>
-        <option
-          v-for="resource in resourceOptions"
-          :key="resource.ref"
-          :value="resource.ref"
-        >
-          {{ resource.name }} · {{ resource.description }}
-        </option>
-      </select>
+        :context-key="`${modelValue.projectRef}:${modelValue.resourceKind}`"
+        :placeholder="$t('access.scope.chooseResource')"
+        :trigger-label="$t(`access.resourceKinds.${modelValue.resourceKind}`)"
+        :clearable="false"
+        :disabled="busy || !modelValue.projectRef"
+        @select="chosenResource = $event"
+        @update:model-value="update({ resourceRef: selection($event) })"
+      />
       <small>{{ $t("access.scope.exactResourceHint") }}</small>
-    </label>
+    </div>
 
     <label v-else-if="modelValue.kind === 'RESOURCE_INSTANCE'" class="field">
       <span>{{ $t("access.scope.resourceRef") }}</span>
       <input
+        name="access-scope-resource-ref"
         :value="modelValue.resourceRef"
         required
         :disabled="busy"

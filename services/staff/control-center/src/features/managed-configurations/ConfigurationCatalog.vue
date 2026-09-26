@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { Expand, Plus, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { RouterLink } from "vue-router";
 import type { ManagedConfigurationSummary } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import OpenAPIImportDialog from "./OpenAPIImportDialog.vue";
 import {
   configurationProjectScopeValid,
   configurationRequiresProject,
@@ -17,13 +20,29 @@ const props = defineProps<{
   kind: ConfigurationKind;
   projectRef?: string;
   expanded?: boolean;
+  autoOpenImport?: boolean;
 }>();
+const emit = defineEmits<{ created: [configurationRef: string] }>();
 const query = ref("");
+const searchId = useId();
 const items = ref<ManagedConfigurationSummary[]>([]);
+const list = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: list,
+  itemSelector: ".configuration-catalog__row",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 96,
+  minimum: 8,
+  maximum: 100,
+});
 const nextPageToken = ref<string>();
 const total = ref(0);
 const loading = ref(false);
 const expansionOpen = ref(false);
+const importOpen = ref(
+  props.kind === "INTEGRATION_DEFINITION" && props.autoOpenImport,
+);
 const problem = ref<AppProblem>();
 const cursors = new Set<string>();
 const projectRequired = computed(
@@ -49,6 +68,7 @@ async function load(more = false): Promise<void> {
       projectRef: props.projectRef,
       query: query.value.trim(),
       pageToken: token,
+      pageSize: pageSize.value,
       signal: request.signal,
     });
     if (request.signal.aborted || generation !== current) return;
@@ -96,26 +116,38 @@ watch(
   },
   { immediate: true, flush: "sync" },
 );
+watch(
+  () => [props.kind, props.autoOpenImport],
+  () => {
+    if (props.kind === "INTEGRATION_DEFINITION" && props.autoOpenImport)
+      importOpen.value = true;
+  },
+);
 onBeforeUnmount(() => {
   controller?.abort();
   if (timer) clearTimeout(timer);
   generation += 1;
 });
-function scroll(event: Event): void {
-  if (
-    event.currentTarget instanceof HTMLElement &&
-    nearScrollEnd(event.currentTarget) &&
-    !problem.value
-  )
-    void load(true);
+useCursorInfiniteScroll({
+  root: list,
+  sentinel,
+  enabled: () =>
+    Boolean(nextPageToken.value) && !loading.value && !problem.value,
+  loadMore: () => load(true),
+});
+function created(configurationRef: string): void {
+  importOpen.value = false;
+  emit("created", configurationRef);
 }
 </script>
 <template>
   <section class="configuration-catalog">
     <header>
-      <label
+      <label :for="searchId"
         ><Search :size="18" /><input
+          :id="searchId"
           v-model="query"
+          name="managed-configuration-search"
           type="search"
           :placeholder="$t('common.search')"
           :aria-label="$t('common.search')"
@@ -139,10 +171,18 @@ function scroll(event: Event): void {
         <Plus :size="18" />{{ $t("common.create") }}
       </button>
       <button
+        v-if="kind === 'INTEGRATION_DEFINITION'"
+        class="button"
+        type="button"
+        @click="importOpen = true"
+      >
+        {{ $t("managed.openapiImport.open") }}
+      </button>
+      <button
         v-if="!props.expanded && (total > 6 || nextPageToken)"
         class="icon-button"
-        :title="$t('catalog.expand')"
-        :aria-label="$t('catalog.expand')"
+        :title="$t('managed.expandCatalog')"
+        :aria-label="$t('managed.expandCatalog')"
         @click="expansionOpen = true"
       >
         <Expand :size="18" />
@@ -161,9 +201,9 @@ function scroll(event: Event): void {
     </p>
     <p v-else-if="!items.length && !problem">{{ $t("common.empty") }}</p>
     <div
+      ref="list"
       class="configuration-catalog__list"
       :class="{ 'configuration-catalog__list--expanded': props.expanded }"
-      @scroll.passive="scroll"
     >
       <RouterLink
         v-for="item in items"
@@ -192,22 +232,32 @@ function scroll(event: Event): void {
           "
         /><span>v{{ item.currentRevision?.revision ?? item.version }}</span>
       </RouterLink>
-      <button
+      <div
         v-if="nextPageToken"
-        class="button"
-        :disabled="loading"
-        @click="load(true)"
+        ref="sentinel"
+        class="configuration-catalog__sentinel"
+        role="status"
       >
-        {{ $t("managed.more") }} ({{ items.length }}/{{ total }})
-      </button>
+        <span v-if="loading">{{ $t("common.loading") }}</span>
+        <span class="sr-only">{{ items.length }}/{{ total }}</span>
+      </div>
     </div>
     <ModalDialog
       v-if="expansionOpen"
       :title="$t(`managed.kinds.${kind}`)"
       size="xl"
       @close="expansionOpen = false"
-      ><ConfigurationCatalog :kind="kind" :project-ref="projectRef" expanded
+      ><ConfigurationCatalog
+        :kind="kind"
+        :project-ref="projectRef"
+        expanded
+        @created="emit('created', $event)"
     /></ModalDialog>
+    <OpenAPIImportDialog
+      v-if="importOpen"
+      @close="importOpen = false"
+      @created="created"
+    />
   </section>
 </template>
 <style scoped>
@@ -250,6 +300,9 @@ function scroll(event: Event): void {
   color: inherit;
   text-decoration: none;
   border-bottom: 1px solid var(--border);
+}
+.configuration-catalog__sentinel {
+  min-height: 1px;
 }
 .configuration-catalog__row > div {
   min-width: 0;

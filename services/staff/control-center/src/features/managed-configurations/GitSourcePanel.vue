@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -22,6 +22,7 @@ const props = defineProps<{
   configuration: ManagedConfiguration;
   disabled?: boolean;
 }>();
+const fieldPrefix = `git-source-${useId()}`;
 const emit = defineEmits<{ changed: []; busy: [value: boolean] }>();
 const { t } = useI18n();
 const open = ref(false);
@@ -115,8 +116,9 @@ async function connections(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
-  const result = await gitSourceConnections(query, cursor, signal);
+  const result = await gitSourceConnections(query, cursor, signal, pageSize);
   return {
     items: result.items.map((item) => ({
       ref: item.ref,
@@ -281,6 +283,8 @@ async function run(configure = false): Promise<void> {
           >{{ t("gitSource.repository")
           }}<input
             v-model="repository"
+            :id="`${fieldPrefix}-repository`"
+            :name="`${fieldPrefix}-repository`"
             required
             maxlength="256"
             :disabled="locked"
@@ -289,17 +293,30 @@ async function run(configure = false): Promise<void> {
           >{{ t("gitSource.ref")
           }}<input
             v-model="refName"
+            :id="`${fieldPrefix}-ref`"
+            :name="`${fieldPrefix}-ref`"
             required
             maxlength="256"
             :disabled="locked"
         /></label>
         <label
           >{{ t("gitSource.path")
-          }}<input v-model="path" required maxlength="512" :disabled="locked"
+          }}<input
+            v-model="path"
+            :id="`${fieldPrefix}-path`"
+            :name="`${fieldPrefix}-path`"
+            required
+            maxlength="512"
+            :disabled="locked"
         /></label>
         <label
           >{{ t("managed.format")
-          }}<select v-model="format" :disabled="locked">
+          }}<select
+            v-model="format"
+            :id="`${fieldPrefix}-format`"
+            :name="`${fieldPrefix}-format`"
+            :disabled="locked"
+          >
             <option>JSON</option>
             <option>YAML</option>
           </select></label

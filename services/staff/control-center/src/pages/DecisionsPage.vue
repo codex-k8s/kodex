@@ -13,16 +13,17 @@ import {
   ShieldQuestion,
   UserRound,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import {
   gateSelection,
   readAddressedGate,
 } from "@/features/workboard/gate-navigation";
 import { useI18n } from "vue-i18n";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
+import { useGateProjects } from "@/features/workboard/gate-projects";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
 import {
   decisionActionLayout,
@@ -49,6 +50,8 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 
 const platform = usePlatformStore();
 const route = useRoute();
@@ -60,24 +63,50 @@ let preferredGateRef =
   typeof route.query.gateRef === "string" ? route.query.gateRef : "";
 const view = ref<"PENDING" | "HISTORY">("PENDING");
 const search = ref("");
+const searchId = useId();
 const catalog = useGateCatalog();
+const gateProjects = useGateProjects();
+const decisionProjects = computed(() =>
+  Object.values(gateProjects.projects.value),
+);
+const decisionListRoot = ref<HTMLElement>();
+const decisionListSentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: decisionListRoot,
+  itemSelector: ".decision-row",
+  itemCount: () => catalog.items.value.length,
+  estimatedItemHeight: 112,
+});
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const addressedGate = ref<OwnerGate>();
+watch(
+  () => [
+    ...catalog.items.value.map((gate) => gate.projectRef),
+    addressedGate.value?.projectRef ?? "",
+  ],
+  (refs) => void gateProjects.ensure(refs),
+  { immediate: true },
+);
 function loadCatalog(more = false): Promise<void> {
   return catalog.load(
     {
       projectRef: projectFilter.value || undefined,
       query: search.value,
       view: view.value,
+      pageSize: pageSize.value,
     },
     more,
   );
 }
-function scrollCatalog(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    void loadCatalog(true);
-}
+useCursorInfiniteScroll({
+  root: decisionListRoot,
+  sentinel: decisionListSentinel,
+  enabled: () =>
+    Boolean(catalog.pageToken.value) &&
+    !catalog.loading.value &&
+    !catalog.problem.value,
+  loadMore: () => loadCatalog(true),
+});
 const selectedRef = ref(preferredGateRef);
 const comments = ref<Record<string, string>>({});
 const decisionDrafts = ref<Record<string, DecisionAction>>({});
@@ -91,6 +120,26 @@ const problem = ref<AppProblem>();
 const successMessage = ref("");
 let pageMounted = false;
 let routingProject = false;
+const unsubscribeProjectReadback = platform.$onAction(
+  ({ name, args, after }) => {
+    if (
+      name !== "reloadPlatformState" &&
+      !(
+        name === "reloadPlatformKind" &&
+        ["PROJECT", "MEMBERSHIP", "PLATFORM_MEMBERSHIP"].includes(args[0])
+      )
+    )
+      return;
+    gateProjects.invalidate();
+    after(() => {
+      if (!pageMounted) return;
+      void gateProjects.ensure([
+        ...catalog.items.value.map((gate) => gate.projectRef),
+        addressedGate.value?.projectRef ?? "",
+      ]);
+    });
+  },
+);
 const addressedGateLoading = ref(false);
 const addressedGateProblem = ref<AppProblem>();
 let addressedGateController: AbortController | undefined;
@@ -158,7 +207,7 @@ function selectView(value: "PENDING" | "HISTORY"): void {
 const inbox = computed(() =>
   decisionInbox(
     catalog.items.value,
-    platform.projectList,
+    decisionProjects.value,
     projectFilter.value || undefined,
     new Date(),
     platform.runList,
@@ -167,7 +216,7 @@ const inbox = computed(() =>
 const history = computed(() =>
   decisionHistory(
     catalog.items.value,
-    platform.projectList,
+    decisionProjects.value,
     projectFilter.value || undefined,
     platform.runList,
   ),
@@ -210,20 +259,93 @@ const selected = computed(() => {
     return gate.state === "OPEN"
       ? decisionInbox(
           [gate],
-          platform.projectList,
+          decisionProjects.value,
           undefined,
           new Date(),
           platform.runList,
         )[0]
       : decisionHistory(
           [gate],
-          platform.projectList,
+          decisionProjects.value,
           undefined,
           platform.runList,
         )[0];
   }
   return visibleItems.value.find((item) => item.gate.ref === selectedRef.value);
 });
+type ApprovalScopePreview = {
+  selected: Array<{ path: string; type: string; value: unknown }>;
+  mutablePaths: string[];
+};
+type IntegrationEffectField = ApprovalScopePreview["selected"][number];
+const integrationTechnicalPreviewKeys = new Set([
+  "approvalPolicy",
+  "contentComplete",
+  "fields",
+  "inputBytes",
+  "inputDigest",
+]);
+function isApprovalScopeField(
+  value: unknown,
+): value is ApprovalScopePreview["selected"][number] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const field = value as Record<string, unknown>;
+  return (
+    typeof field.path === "string" &&
+    typeof field.type === "string" &&
+    "value" in field
+  );
+}
+const selectedApprovalScope = computed<ApprovalScopePreview | undefined>(() => {
+  const candidate =
+    selected.value?.gate.integrationIntent?.effectPreview.approvalScope;
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate))
+    return undefined;
+  const scope = candidate as Record<string, unknown>;
+  if (
+    !Array.isArray(scope.selected) ||
+    !scope.selected.every(isApprovalScopeField) ||
+    !Array.isArray(scope.mutablePaths) ||
+    !scope.mutablePaths.every((path) => typeof path === "string")
+  )
+    return undefined;
+  return scope as ApprovalScopePreview;
+});
+const selectedEffectFields = computed<IntegrationEffectField[]>(() => {
+  const fields = selected.value?.gate.integrationIntent?.effectPreview.fields;
+  return Array.isArray(fields) && fields.every(isApprovalScopeField)
+    ? fields
+    : [];
+});
+const selectedEffectPreview = computed(() => {
+  const preview = selected.value?.gate.integrationIntent?.effectPreview;
+  return preview
+    ? Object.fromEntries(
+        Object.entries(preview).filter(
+          ([key]) =>
+            key !== "approvalScope" &&
+            key !== "risk" &&
+            !integrationTechnicalPreviewKeys.has(key),
+        ),
+      )
+    : undefined;
+});
+const selectedTechnicalPreview = computed(() => {
+  const preview = selected.value?.gate.integrationIntent?.effectPreview;
+  return preview
+    ? Object.fromEntries(
+        Object.entries(preview).filter(([key]) =>
+          integrationTechnicalPreviewKeys.has(key),
+        ),
+      )
+    : undefined;
+});
+const selectedHasEffectPreview = computed(
+  () => Object.keys(selectedEffectPreview.value ?? {}).length > 0,
+);
+const selectedHasTechnicalPreview = computed(
+  () => Object.keys(selectedTechnicalPreview.value ?? {}).length > 0,
+);
 const selectedActions = computed(() =>
   selected.value
     ? decisionActionLayout(selected.value.gate)
@@ -298,6 +420,8 @@ onBeforeUnmount(() => {
   addressedGateController?.abort();
   clearTimeout(searchTimer);
   catalog.reset();
+  unsubscribeProjectReadback();
+  gateProjects.dispose();
   attachmentLoadGeneration += 1;
 });
 watch(view, () => {
@@ -305,15 +429,18 @@ watch(view, () => {
 });
 watch(
   () =>
-    platform.gateList
-      .map((gate) => `${gate.ref}:${String(gate.version)}`)
-      .sort()
-      .join("|"),
+    [
+      platform.gateCatalogRevision,
+      ...platform.gateList
+        .map((gate) => `${gate.ref}:${String(gate.version)}`)
+        .sort(),
+    ].join("|"),
   () => {
     catalog.invalidate({
       projectRef: projectFilter.value || undefined,
       query: search.value,
       view: view.value,
+      pageSize: pageSize.value,
     });
   },
 );
@@ -332,6 +459,47 @@ function formatDate(value?: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function integrationRisk(gate: OwnerGate): string {
+  const risk = gate.integrationIntent?.effectPreview.risk;
+  return risk === "READ" ||
+    risk === "WRITE" ||
+    risk === "SENSITIVE" ||
+    risk === "DESTRUCTIVE"
+    ? risk
+    : "UNKNOWN";
+}
+
+function decisionTitle(gate: OwnerGate): string {
+  if (!gate.integrationIntent) return serverMessage(gate.title);
+  const risk = integrationRisk(gate);
+  const key =
+    risk === "READ"
+      ? "decisions.integrationReadTitle"
+      : risk === "WRITE"
+        ? "decisions.integrationWriteTitle"
+        : "decisions.integrationActionTitle";
+  return t(key, { connection: gate.integrationIntent.connectionName });
+}
+
+function decisionQuestion(item: DecisionInboxItem): string {
+  if (!item.gate.integrationIntent)
+    return item.hasQuestion
+      ? serverMessage(item.gate.contextSummary)
+      : t("decisions.questionUnavailable");
+  return t("decisions.integrationQuestion", {
+    connection: item.gate.integrationIntent.connectionName,
+    risk: t(`decisions.integrationRisk.${integrationRisk(item.gate)}`),
+  });
+}
+
+function approvalPathLabel(path: string): string {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
+    .join(".");
 }
 
 function projectPath(item: DecisionInboxItem): string {
@@ -371,7 +539,7 @@ async function loadDecisionAttachments(gate?: OwnerGate): Promise<void> {
 
 async function loadGateAudit(gate?: OwnerGate): Promise<void> {
   if (!gate) return;
-  await platform.loadAudit(gate.projectRef, gate.ref);
+  await platform.loadAudit(gate.projectRef, "", 20, gate.ref);
 }
 
 function decisionOutcomeState(decision: DecisionAction): OwnerGate["state"] {
@@ -512,11 +680,7 @@ function submitActionClass(decision?: DecisionAction): string[] {
 
 onMounted(() => {
   pageMounted = true;
-  void Promise.all([
-    loadCatalog(),
-    platform.loadProjects(),
-    platform.loadRuns(),
-  ]).then(async () => {
+  void Promise.all([loadCatalog(), platform.loadRuns()]).then(async () => {
     if (!pageMounted) return;
     await loadAddressedGate();
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onBeforeUnmount меняет флаг во время await.
@@ -557,9 +721,15 @@ const serverMessage = useServerMessage();
         </div>
         <GateProjectFilter v-model="projectFilter" />
       </div>
-      <label
+      <label :for="searchId"
         ><span>{{ $t("common.search") }}</span
-        ><input v-model="search" type="search" maxlength="200"
+        ><input
+          :id="searchId"
+          v-model="search"
+          name="decision-search"
+          type="search"
+          :placeholder="$t('common.search')"
+          maxlength="200"
       /></label>
       <span
         v-if="catalog.total.value !== undefined"
@@ -590,7 +760,6 @@ const serverMessage = useServerMessage();
     <AsyncState
       :loading="
         (catalog.loading.value && !catalog.items.value.length && !selected) ||
-        platform.loading.projects ||
         platform.loading.runs
       "
       :problem="catalog.problem.value"
@@ -605,14 +774,18 @@ const serverMessage = useServerMessage();
       :empty-text="
         $t(
           view === 'PENDING'
-            ? 'decisions.emptyText'
-            : 'decisions.historyEmptyText',
+            ? projectFilter
+              ? 'decisions.emptyText'
+              : 'decisions.emptyTextAll'
+            : projectFilter
+              ? 'decisions.historyEmptyText'
+              : 'decisions.historyEmptyTextAll',
         )
       "
       @retry="loadCatalog()"
     >
       <div class="decision-inbox">
-        <div class="decision-list" @scroll="scrollCatalog">
+        <div ref="decisionListRoot" class="decision-list">
           <section v-for="group in groups" :key="group.key">
             <header class="decision-group-header">
               <span
@@ -645,12 +818,8 @@ const serverMessage = useServerMessage();
                   <ShieldQuestion :size="18" aria-hidden="true" />
                 </span>
                 <span class="decision-row__copy">
-                  <strong>{{ serverMessage(item.gate.title) }}</strong>
-                  <span>{{
-                    item.hasQuestion
-                      ? item.gate.contextSummary
-                      : $t("decisions.questionUnavailable")
-                  }}</span>
+                  <strong>{{ decisionTitle(item.gate) }}</strong>
+                  <span>{{ decisionQuestion(item) }}</span>
                   <small
                     v-if="item.hasConsequences"
                     class="decision-row__impact"
@@ -674,8 +843,11 @@ const serverMessage = useServerMessage();
                     </template>
                   </small>
                   <small class="decision-row__route">
-                    {{ item.run?.target.displayName }} ·
-                    {{ item.run?.title ?? $t("decisions.runUnavailable") }}
+                    <template v-if="item.run">
+                      {{ item.run.target.displayName }} ·
+                      {{ item.run.title || $t("decisions.openRun") }}
+                    </template>
+                    <template v-else>{{ $t("decisions.openRun") }}</template>
                   </small>
                 </span>
                 <span class="decision-row__status">
@@ -684,22 +856,21 @@ const serverMessage = useServerMessage();
               </button>
             </div>
           </section>
-          <button
+          <div
             v-if="catalog.pageToken.value"
-            class="button"
-            type="button"
-            :disabled="catalog.loading.value"
-            @click="loadCatalog(true)"
+            ref="decisionListSentinel"
+            class="decision-list__sentinel"
+            role="status"
           >
-            {{ $t("common.loadMore") }}
-          </button>
+            <span v-if="catalog.loading.value">{{ $t("common.loading") }}</span>
+          </div>
         </div>
 
         <aside v-if="selected" class="decision-detail">
           <header class="decision-detail__header">
             <div>
               <p class="eyebrow">{{ $t("decisions.question") }}</p>
-              <h2>{{ serverMessage(selected.gate.title) }}</h2>
+              <h2>{{ decisionTitle(selected.gate) }}</h2>
             </div>
             <StatusBadge :state="selected.gate.state" />
           </header>
@@ -730,7 +901,7 @@ const serverMessage = useServerMessage();
                   {{ selected.run.target.displayName }}
                 </span>
                 <RouterLink :to="runNodePath(selected)">
-                  {{ selected.run?.title ?? $t("decisions.runUnavailable") }}
+                  {{ selected.run?.title ?? $t("decisions.openRun") }}
                 </RouterLink>
               </dd>
             </div>
@@ -842,11 +1013,7 @@ const serverMessage = useServerMessage();
           <section class="decision-copy">
             <h3>{{ $t("decisions.fullQuestion") }}</h3>
             <p>
-              {{
-                selected.hasQuestion
-                  ? selected.gate.contextSummary
-                  : $t("decisions.questionUnavailable")
-              }}
+              {{ decisionQuestion(selected) }}
             </p>
           </section>
           <section class="decision-copy decision-copy--consequences">
@@ -871,24 +1038,96 @@ const serverMessage = useServerMessage();
                 <dd>{{ selected.gate.integrationIntent.connectionName }}</dd>
               </div>
               <div>
-                <dt>{{ $t("common.actions") }}</dt>
+                <dt>{{ $t("decisions.integrationRiskLabel") }}</dt>
                 <dd>
-                  {{ selected.gate.integrationIntent.operation }} ·
-                  {{ selected.gate.integrationIntent.capabilityKey }}
+                  {{
+                    $t(
+                      `decisions.integrationRisk.${integrationRisk(selected.gate)}`,
+                    )
+                  }}
                 </dd>
               </div>
             </dl>
             <SafeStructuredData
-              :value="selected.gate.integrationIntent.resourceScope"
+              v-if="selectedHasEffectPreview"
+              :value="selectedEffectPreview"
               literal
             />
-            <p>
-              <code>{{ selected.gate.integrationIntent.effectKey }}</code>
-            </p>
-            <SafeStructuredData
-              :value="selected.gate.integrationIntent.effectPreview"
-              literal
-            />
+            <section
+              v-if="selectedEffectFields.length"
+              class="decision-effect-fields"
+            >
+              <h4>{{ $t("decisions.integrationParameters") }}</h4>
+              <dl>
+                <div v-for="field in selectedEffectFields" :key="field.path">
+                  <dt>
+                    <code>{{ approvalPathLabel(field.path) }}</code>
+                  </dt>
+                  <dd><SafeStructuredData :value="field.value" literal /></dd>
+                </div>
+              </dl>
+            </section>
+            <section
+              v-if="selectedApprovalScope"
+              class="decision-approval-scope"
+            >
+              <h4>{{ $t("decisions.approvalScopeTitle") }}</h4>
+              <p>{{ $t("decisions.approvalScopeExplanation") }}</p>
+              <dl>
+                <div
+                  v-for="field in selectedApprovalScope.selected"
+                  :key="field.path"
+                >
+                  <dt>
+                    <code>{{ approvalPathLabel(field.path) }}</code>
+                  </dt>
+                  <dd><SafeStructuredData :value="field.value" literal /></dd>
+                </div>
+              </dl>
+              <p>{{ $t("decisions.approvalScopeMutable") }}</p>
+              <ul>
+                <li
+                  v-for="path in selectedApprovalScope.mutablePaths"
+                  :key="path"
+                >
+                  <code>{{ approvalPathLabel(path) }}</code>
+                </li>
+              </ul>
+            </section>
+            <details class="decision-technical-details">
+              <summary>{{ $t("decisions.technicalDetails") }}</summary>
+              <dl>
+                <div>
+                  <dt>{{ $t("decisions.integrationOperation") }}</dt>
+                  <dd>
+                    <code>{{ selected.gate.integrationIntent.operation }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("decisions.integrationCapability") }}</dt>
+                  <dd>
+                    <code>{{
+                      selected.gate.integrationIntent.capabilityKey
+                    }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ $t("decisions.integrationEffectKey") }}</dt>
+                  <dd>
+                    <code>{{ selected.gate.integrationIntent.effectKey }}</code>
+                  </dd>
+                </div>
+              </dl>
+              <SafeStructuredData
+                :value="selected.gate.integrationIntent.resourceScope"
+                literal
+              />
+              <SafeStructuredData
+                v-if="selectedHasTechnicalPreview"
+                :value="selectedTechnicalPreview"
+                literal
+              />
+            </details>
           </section>
 
           <section
@@ -1060,7 +1299,7 @@ const serverMessage = useServerMessage();
 .decision-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
@@ -1068,16 +1307,33 @@ const serverMessage = useServerMessage();
 .decision-toolbar__filters {
   display: flex;
   min-width: 0;
-  align-items: end;
+  align-items: center;
   gap: 12px;
 }
 .decision-toolbar label {
-  display: grid;
-  gap: 5px;
+  position: relative;
+  display: block;
   min-width: 0;
   max-width: 100%;
+  width: 240px;
   font-size: 0.78rem;
   font-weight: 600;
+}
+.decision-toolbar label > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.decision-toolbar label input {
+  width: 100%;
+}
+.decision-toolbar__filters :deep(.async-picker__trigger) {
+  min-height: 32px;
+  height: 32px;
+  padding: 5px 11px;
 }
 .decision-view-switch {
   display: flex;
@@ -1132,6 +1388,9 @@ const serverMessage = useServerMessage();
   max-height: 72vh;
   overflow: auto;
   border-right: 1px solid var(--border);
+}
+.decision-list__sentinel {
+  min-height: 1px;
 }
 .decision-list > section + section {
   border-top: 1px solid var(--border-strong);
@@ -1245,6 +1504,47 @@ const serverMessage = useServerMessage();
   margin-top: 4px;
   font-size: 1.2rem;
 }
+.decision-technical-details {
+  padding-top: 4px;
+  border-top: 1px solid var(--hairline);
+  color: var(--muted);
+}
+.decision-technical-details summary {
+  width: fit-content;
+  cursor: pointer;
+  font-weight: 600;
+}
+.decision-technical-details > dl {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+.decision-technical-details > dl > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.decision-technical-details dt,
+.decision-technical-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.decision-effect-fields > dl {
+  display: grid;
+  gap: 6px;
+}
+.decision-effect-fields > dl > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.decision-effect-fields dt,
+.decision-effect-fields dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .decision-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1323,6 +1623,21 @@ const serverMessage = useServerMessage();
 .decision-integration-intent dd {
   margin: 4px 0 0;
   overflow-wrap: anywhere;
+}
+.decision-approval-scope {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.decision-approval-scope h4,
+.decision-approval-scope p,
+.decision-approval-scope ul {
+  margin: 0;
+}
+.decision-approval-scope ul {
+  padding-left: 20px;
 }
 .decision-audit {
   display: grid;

@@ -61,7 +61,7 @@ describe("независимые серверные колонки Kanban", () =
     expect(sdk.listRuns.mock.lastCall?.[0].query).toMatchObject({
       states: ["RUNNING", "CANCELLING"],
       pageToken: "cursor_RUNNING",
-      pageSize: 40,
+      pageSize: 20,
       query: "задача",
       projectRef: "project_one",
     });

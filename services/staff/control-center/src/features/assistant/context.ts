@@ -4,6 +4,7 @@ import type {
   Agent,
   AssistantContextDescriptor,
   Project,
+  RoleImageRecipe,
   Run,
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -13,6 +14,7 @@ export interface AssistantContextSources {
   agents: Readonly<Record<string, Agent>>;
   workflows: Readonly<Record<string, Workflow>>;
   runs: Readonly<Record<string, Run>>;
+  roleImages: Readonly<Record<string, RoleImageRecipe>>;
 }
 
 export interface ResolvedAssistantContext {
@@ -23,13 +25,23 @@ export interface ResolvedAssistantContext {
 export const assistantContextOperations = [
   "CREATE_PROJECT",
   "UPDATE_PROJECT",
+  "UPDATE_AGENT",
   "CREATE_AGENT",
+  "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+  "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+  "BIND_AGENT_RUNTIME_ENVIRONMENT",
+  "CREATE_ROLE_IMAGE_RECIPE",
+  "UPDATE_ROLE_IMAGE_RECIPE",
   "CREATE_WORKFLOW",
+  "UPDATE_WORKFLOW",
   "CHANGE_CAPABILITY",
   "CHANGE_INTEGRATION_GRANT",
   "CREATE_SCHEDULE",
+  "UPDATE_SCHEDULE",
   "LAUNCH_RUN",
   "CREATE_INTEGRATION_CONNECTION",
+  "PUBLISH_INTEGRATION_DEFINITION",
+  "UPDATE_INTEGRATION_CONNECTION",
   "TEST_INTEGRATION_CONNECTION",
   "ARCHIVE_AGENT",
   "ARCHIVE_WORKFLOW",
@@ -44,7 +56,9 @@ export function readableContextKind(kind: string) {
       "RUN",
       "FILE",
       "ENVIRONMENT",
+      "ROLE_IMAGE_RECIPE",
       "INTEGRATION_CONNECTION",
+      "SCHEDULE",
     ] as const
   ).find((known) => known === kind);
 }
@@ -102,17 +116,29 @@ export function resolveAssistantContext(
   const agentRef = routeParameter(route, "agentRef");
   const workflowRef = routeParameter(route, "workflowRef");
   const runRef = routeParameter(route, "runRef");
+  const recipeRef = routeParameter(route, "recipeRef");
   const routePath = route.fullPath.slice(0, 500);
   const selectedResource =
-    route.name === "runtime-environment"
-      ? { kind: "ENVIRONMENT", ref: routeParameter(route, "environmentRef") }
-      : route.name === "integrations"
-        ? { kind: "INTEGRATION_CONNECTION", ref: route.query.connectionRef }
-        : ["files", "files-trash", "organization-files"].includes(
-              String(route.name),
-            )
-          ? { kind: "FILE", ref: route.query.artifactRef }
-          : undefined;
+    route.name === "role-image"
+      ? {
+          kind: "ROLE_IMAGE_RECIPE",
+          ref: recipeRef,
+          name: recipeRef ? sources.roleImages[recipeRef]?.name : undefined,
+          version: recipeRef
+            ? sources.roleImages[recipeRef]?.version
+            : undefined,
+        }
+      : route.name === "runtime-environment"
+        ? { kind: "ENVIRONMENT", ref: routeParameter(route, "environmentRef") }
+        : route.name === "integrations"
+          ? { kind: "INTEGRATION_CONNECTION", ref: route.query.connectionRef }
+          : route.name === "automations"
+            ? { kind: "SCHEDULE", ref: route.query.scheduleRef }
+            : ["files", "files-trash", "organization-files"].includes(
+                  String(route.name),
+                )
+              ? { kind: "FILE", ref: route.query.artifactRef }
+              : undefined;
 
   if (typeof selectedResource?.ref === "string" && selectedResource.ref) {
     return {
@@ -120,7 +146,10 @@ export function resolveAssistantContext(
         route: routePath,
         entityKind: selectedResource.kind,
         entityRef: selectedResource.ref,
-        entityName: "",
+        entityName: selectedResource.name ?? "",
+        ...(selectedResource.version
+          ? { entityVersion: selectedResource.version }
+          : {}),
         allowedOperations: [],
       },
       ...(projectRef ? { projectRef } : {}),

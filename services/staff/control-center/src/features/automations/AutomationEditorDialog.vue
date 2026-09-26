@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { CalendarClock, Save } from "@lucide/vue";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { scheduleInput } from "@/features/automations/model";
 import { loadSchedulePreview } from "@/features/automations/api";
 import AutomationPromptPreview from "./AutomationPromptPreview.vue";
-import { scheduleTimePreview } from "./prompt-preview";
+import {
+  automationTimezoneOptions,
+  scheduleTimePreview,
+} from "./prompt-preview";
 import {
   createExecutionTargetPickerLoader,
   targetRefAfterTypeChange,
@@ -35,6 +38,7 @@ const emit = defineEmits<{
   submit: [input: ScheduleInput, current?: Schedule];
 }>();
 const { locale } = useI18n();
+const fieldPrefix = `automation-editor-${useId()}`;
 const initial = props.schedule ? scheduleInput(props.schedule) : undefined;
 const baseInput = { ...(initial?.input ?? {}) };
 const selectedTarget = ref<ExecutionTargetPickerOption>();
@@ -90,20 +94,8 @@ const custom = computed(() =>
         workflow: "Процесс",
       },
 );
-const timezoneOptions = Array.from(
-  new Set([
-    form.timezone,
-    "UTC",
-    "Europe/Saratov",
-    "Europe/Moscow",
-    "Europe/Berlin",
-    "Asia/Dubai",
-    "Asia/Almaty",
-    "Asia/Tokyo",
-    "America/New_York",
-    "America/Chicago",
-    "America/Los_Angeles",
-  ]),
+const timezoneOptions = computed(() =>
+  automationTimezoneOptions(form.timezone),
 );
 const preview = ref<SchedulePreview>();
 const previewProblem = ref<AppProblem>();
@@ -254,6 +246,8 @@ function submit(): void {
         <label class="field">
           <span>{{ $t("common.name") }}</span>
           <input
+            :id="`${fieldPrefix}-name`"
+            :name="`${fieldPrefix}-name`"
             v-model="form.name"
             required
             maxlength="160"
@@ -263,7 +257,12 @@ function submit(): void {
         <div class="automation-editor__target-grid">
           <label class="field">
             <span>{{ custom.targetType }}</span>
-            <select :value="form.targetType" @change="handleTargetTypeChange">
+            <select
+              :value="form.targetType"
+              :id="`${fieldPrefix}-target-type`"
+              :name="`${fieldPrefix}-target-type`"
+              @change="handleTargetTypeChange"
+            >
               <option value="AGENT">{{ custom.agent }}</option>
               <option value="WORKFLOW">{{ custom.workflow }}</option>
             </select>
@@ -289,7 +288,11 @@ function submit(): void {
         <div class="automation-editor__schedule-grid">
           <label class="field">
             <span>{{ $t("automations.preset") }}</span>
-            <select v-model="form.preset">
+            <select
+              v-model="form.preset"
+              :id="`${fieldPrefix}-preset`"
+              :name="`${fieldPrefix}-preset`"
+            >
               <option value="HOURLY">{{ $t("automations.hourly") }}</option>
               <option value="DAILY">{{ $t("automations.daily") }}</option>
               <option value="WEEKDAYS">{{ $t("automations.weekdays") }}</option>
@@ -302,6 +305,8 @@ function submit(): void {
             <label class="field"
               ><span>Cron</span
               ><input
+                :id="`${fieldPrefix}-cron`"
+                :name="`${fieldPrefix}-cron`"
                 v-model="form.cronExpression"
                 class="automation-editor__cron"
                 required
@@ -314,11 +319,21 @@ function submit(): void {
             class="field"
           >
             <span>{{ $t("automations.timeOfDay") }}</span>
-            <input v-model="form.timeOfDay" type="time" required />
+            <input
+              v-model="form.timeOfDay"
+              :id="`${fieldPrefix}-time`"
+              :name="`${fieldPrefix}-time`"
+              type="time"
+              required
+            />
           </label>
           <label v-if="form.preset === 'WEEKLY'" class="field">
             <span>{{ $t("automations.dayOfWeek") }}</span>
-            <select v-model="form.dayOfWeek">
+            <select
+              v-model="form.dayOfWeek"
+              :id="`${fieldPrefix}-day`"
+              :name="`${fieldPrefix}-day`"
+            >
               <option
                 v-for="day in [
                   'MONDAY',
@@ -338,7 +353,12 @@ function submit(): void {
           </label>
           <label class="field">
             <span>{{ $t("automations.timezone") }}</span>
-            <select v-model="form.timezone" required>
+            <select
+              v-model="form.timezone"
+              :id="`${fieldPrefix}-timezone`"
+              :name="`${fieldPrefix}-timezone`"
+              required
+            >
               <option
                 v-for="timezone in timezoneOptions"
                 :key="timezone"
@@ -352,7 +372,11 @@ function submit(): void {
         <div class="automation-editor__schedule-grid">
           <label class="field"
             ><span>{{ $t("automations.misfire") }}</span
-            ><select v-model="form.misfirePolicy">
+            ><select
+              v-model="form.misfirePolicy"
+              :id="`${fieldPrefix}-misfire`"
+              :name="`${fieldPrefix}-misfire`"
+            >
               <option
                 v-for="value in ['COALESCE', 'CATCH_UP_ONE', 'SKIP']"
                 :key="value"
@@ -364,7 +388,11 @@ function submit(): void {
           >
           <label class="field"
             ><span>{{ $t("automations.overlap") }}</span
-            ><select v-model="form.overlapPolicy">
+            ><select
+              v-model="form.overlapPolicy"
+              :id="`${fieldPrefix}-overlap`"
+              :name="`${fieldPrefix}-overlap`"
+            >
               <option value="FORBID">
                 {{ $t("automations.policies.FORBID") }}
               </option>
@@ -404,7 +432,11 @@ function submit(): void {
         <div class="automation-editor__policy-grid">
           <label class="field">
             <span>{{ $t("automations.sessionPolicy") }}</span>
-            <select v-model="form.sessionPolicy">
+            <select
+              v-model="form.sessionPolicy"
+              :id="`${fieldPrefix}-session-policy`"
+              :name="`${fieldPrefix}-session-policy`"
+            >
               <option value="NEW_EACH_RUN">
                 {{ $t("automations.newSession") }}
               </option>
@@ -415,7 +447,11 @@ function submit(): void {
           </label>
           <label class="field">
             <span>{{ $t("automations.notifications") }}</span>
-            <select v-model="form.notificationPolicy">
+            <select
+              v-model="form.notificationPolicy"
+              :id="`${fieldPrefix}-notification-policy`"
+              :name="`${fieldPrefix}-notification-policy`"
+            >
               <option value="CONTROL_CENTER_ONLY">
                 {{ $t("automations.controlCenterOnly") }}
               </option>

@@ -21,9 +21,8 @@ export type ExecutionTargetPickerLoader = (
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize?: number,
 ) => Promise<AsyncEntityOptionPage>;
-
-const targetPageSize = 40;
 
 function combinedSignal(signal: AbortSignal): AbortSignal {
   return AbortSignal.any([signal, requestSignal()]);
@@ -81,7 +80,7 @@ export function createExecutionTargetPickerLoader(
   projectRef: string,
   targetType: ExecutionTargetType,
 ): ExecutionTargetPickerLoader {
-  return async (query, cursor, signal) => {
+  return async (query, cursor, signal, pageSize = 40) => {
     const searchQuery = optionalQuery(query);
     const visited = new Set(cursor ? [cursor] : []);
 
@@ -94,7 +93,7 @@ export function createExecutionTargetPickerLoader(
               listAgents({
                 path: { projectRef },
                 query: {
-                  pageSize: targetPageSize,
+                  pageSize,
                   ...(pageToken ? { pageToken } : {}),
                   ...(searchQuery ? { query: searchQuery } : {}),
                 },
@@ -105,13 +104,15 @@ export function createExecutionTargetPickerLoader(
               listWorkflows({
                 path: { projectRef },
                 query: {
-                  pageSize: targetPageSize,
+                  pageSize,
                   ...(pageToken ? { pageToken } : {}),
                   ...(searchQuery ? { query: searchQuery } : {}),
                 },
                 signal: combinedSignal(signal),
               }),
             );
+      if (response.data.items.some((item) => item.projectRef !== projectRef))
+        throw new Error("Execution target catalog project mismatch");
       const items = response.data.items.filter((item) =>
         targetType === "AGENT"
           ? isEligibleAgent(item as Agent)

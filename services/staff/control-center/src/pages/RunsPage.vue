@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { Search, RefreshCw, Plus } from "@lucide/vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -15,8 +15,10 @@ import {
 import { useRunBoardStore } from "@/features/workboard/run-board";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const platform = usePlatformStore();
+const searchId = useId();
 const route = useRoute();
 const projectRef = computed(() =>
   typeof route.params.projectRef === "string"
@@ -40,6 +42,13 @@ const {
 } = storeToRefs(catalog);
 const projectReady = ref(!projectRef.value || Boolean(project.value));
 const search = ref("");
+const listRoot = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".runs-lane:first-child .run-work-item",
+  itemCount: () => scopedRuns.value.length,
+  estimatedItemHeight: 104,
+});
 const query = ref("");
 let timer: ReturnType<typeof setTimeout> | undefined;
 const list = computed(() =>
@@ -61,7 +70,12 @@ async function refreshRuns(): Promise<void> {
 }
 async function loadRuns(more = false, lane?: RunLane): Promise<void> {
   await catalog.load(
-    { projectRef: projectRef.value, query: query.value, filter: filter.value },
+    {
+      projectRef: projectRef.value,
+      query: query.value,
+      filter: filter.value,
+      pageSize: pageSize.value,
+    },
     more,
     lane,
   );
@@ -113,6 +127,7 @@ watch(
       projectRef: projectRef.value,
       query: query.value,
       filter: filter.value,
+      pageSize: pageSize.value,
     }),
 );
 onBeforeUnmount(() => {
@@ -145,9 +160,11 @@ onBeforeUnmount(() => {
     />
 
     <div class="runs-controls" role="group" :aria-label="$t('common.status')">
-      <label class="runs-search"
+      <label class="runs-search" :for="searchId"
         ><Search :size="18" /><input
+          :id="searchId"
           v-model="search"
+          :name="searchId"
           :aria-label="$t('runs.search')"
           :placeholder="$t('runs.search')"
       /></label>
@@ -184,23 +201,17 @@ onBeforeUnmount(() => {
       :empty-text="$t('workboard.noRuns')"
       @retry="refreshRuns"
     >
-      <RunsBoard
-        :runs="list"
-        :columns="catalog.columns"
-        :has-more="Boolean(pageToken)"
-        :loading-more="loading"
-        @more="loadRuns(true, $event)"
-        :preserve-project="Boolean(projectRef)"
-      />
+      <div ref="listRoot">
+        <RunsBoard
+          :runs="list"
+          :columns="catalog.columns"
+          :has-more="Boolean(pageToken)"
+          :loading-more="loading"
+          @more="loadRuns(true, $event)"
+          :preserve-project="Boolean(projectRef)"
+        />
+      </div>
     </WorkboardSection>
-    <button
-      v-if="pageToken"
-      class="button"
-      :disabled="loading"
-      @click="loadRuns(true)"
-    >
-      {{ $t("common.loadMore") }}
-    </button>
   </PageFrame>
 </template>
 

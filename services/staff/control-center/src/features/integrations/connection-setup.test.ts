@@ -19,6 +19,8 @@ function definition(credentialSecretKey?: string): IntegrationDefinition {
     builtIn: true,
     version: 1,
     nextActions: [],
+    connectionCount: 0,
+    healthyConnectionCount: 0,
     available: true,
     capabilities: [],
     configurationFields: [],
@@ -100,6 +102,36 @@ describe("двухфазная настройка подключения", () =>
     });
   });
 
+  it("проверяет закреплённый HTTPS-путь до создания подключения", () => {
+    const fields: IntegrationDefinition["configurationFields"] = [
+      {
+        key: "resource_path",
+        label: "Путь JSON-ресурса",
+        help: "Путь без query",
+        valueType: "TEXT",
+        format: "HTTPS_PATH",
+        required: true,
+        maximumLength: 512,
+      },
+    ];
+    expect(
+      prepareConnectionConfiguration(fields, { resource_path: "/v1/status" }),
+    ).toEqual({ value: { resource_path: "/v1/status" }, problems: {} });
+    for (const path of [
+      "//other",
+      "/v1/../status",
+      "/v1/%2e",
+      "/v1/status?token=x",
+    ]) {
+      expect(
+        prepareConnectionConfiguration(fields, { resource_path: path }),
+      ).toEqual({
+        value: {},
+        problems: { resource_path: "INVALID_RESOURCE_PATH" },
+      });
+    }
+  });
+
   it("создаёт metadata один раз и повторяет только credential с тем же ключом", async () => {
     const rawCredential = "test-only-secret-value";
     const created = connection(4);
@@ -179,7 +211,8 @@ describe("двухфазная настройка подключения", () =>
     expect(canConfigureCredential(definition("github-token"), pending)).toBe(
       true,
     );
-    expect(canConfigureCredential(definition(), pending)).toBe(false);
+    // OpenAPI-пакет может требовать ключ, хотя поставленный шаблон его не требует.
+    expect(canConfigureCredential(definition(), pending)).toBe(true);
     expect(
       canConfigureCredential(definition("github-token"), {
         ...pending,

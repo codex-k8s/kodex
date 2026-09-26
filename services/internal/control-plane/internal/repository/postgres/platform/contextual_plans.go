@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -55,14 +57,15 @@ func projectRefByID(ctx context.Context, tx pgx.Tx, projectID string) string {
 
 func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantPlanDraftInput)
-	if !ok || payload.PlanRef == "" || strings.TrimSpace(payload.Summary) == "" || len(payload.Summary) > 2000 ||
+	if !ok || payload.PlanRef == "" || strings.TrimSpace(payload.Summary) == "" || utf8.RuneCountInString(payload.Summary) > 2000 ||
 		input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	var planID, conversationRef, state, projectRef string
 	var version, revision int64
+	var rawCurrent []byte
 	if err := tx.QueryRow(ctx, queryConfigurationUpdateassistantplandraftSelectPlan, scope.organizationID, payload.PlanRef).Scan(
-		&planID, &conversationRef, &state, &version, &revision, &projectRef,
+		&planID, &conversationRef, &state, &version, &revision, &projectRef, &rawCurrent,
 	); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
@@ -71,6 +74,111 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	}
 	if state == "APPLIED" || state == "REJECTED" {
 		return commandOutcome{}, errs.ErrAlreadyResolved
+	}
+	var current []entity.AssistantPlanOperation
+	if json.Unmarshal(rawCurrent, &current) != nil {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if len(payload.Operations) != len(current) {
+		return commandOutcome{}, errs.ErrForbidden
+	}
+	currentByKey := make(map[string]entity.AssistantPlanOperation, len(current))
+	for _, operation := range current {
+		currentByKey[operation.Key] = operation
+	}
+	for index, operation := range payload.Operations {
+		original, exists := currentByKey[operation.Key]
+		if !exists || original.Type != operation.Type {
+			return commandOutcome{}, errs.ErrForbidden
+		}
+		switch operation.Type {
+		case "BIND_AGENT_RUNTIME_ENVIRONMENT":
+			updated, err := repository.rehydrateEditedAssistantBinding(ctx, tx, scope, projectRef, original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "UPDATE_AGENT":
+			updated, err := rehydrateEditedAssistantAgent(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "CREATE_INSTRUCTION_DRAFT":
+			updated, err := rehydrateEditedAssistantInstructionDraft(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "CHANGE_CAPABILITY":
+			updated, err := rehydrateEditedAssistantAgentCapability(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "CHANGE_INTEGRATION_GRANT":
+			updated, err := repository.rehydrateEditedAssistantIntegrationGrant(ctx, tx, scope, projectRef, original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "UPDATE_WORKFLOW":
+			updated, err := rehydrateEditedAssistantWorkflow(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
+			updated, err := rehydrateEditedAssistantEnvironment(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "UPDATE_INTEGRATION_CONNECTION":
+			updated, err := rehydrateEditedAssistantConnection(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "UPDATE_SCHEDULE":
+			updated, err := rehydrateEditedAssistantSchedule(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "CREATE_ROLE_IMAGE_RECIPE":
+			updated, err := rehydrateEditedAssistantRoleImage(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "UPDATE_ROLE_IMAGE_RECIPE":
+			updated, err := rehydrateEditedAssistantRoleImageUpdate(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		case "PUBLISH_INTEGRATION_DEFINITION":
+			updated, err := rehydrateEditedAssistantIntegrationDefinitionPublication(original, operation)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			payload.Operations[index] = updated
+		}
+		// STALE означает, что владелец уже увидел конфликт с авторитетным
+		// состоянием. Новая immutable revision должна заново снять server-owned
+		// snapshot, сохранив только разрешённые пользовательские поля формы.
+		// Для обычного DRAFT прежний snapshot остаётся неизменным: скрытый rebase
+		// без явного конфликта владельцу не допускается.
+		if state == "STALE" && payload.Operations[index].ExpectedVersion != nil {
+			selected := payload.Operations[index].Selected
+			refreshed, refreshErr := repository.hydrateAssistantOperation(ctx, tx, scope, projectRef, payload.Operations[index])
+			if refreshErr != nil {
+				return commandOutcome{}, refreshErr
+			}
+			refreshed.Selected = selected
+			payload.Operations[index] = refreshed
+		}
 	}
 	operations, err := normalizeAssistantOperations(payload.Operations, projectRef)
 	if err != nil {
@@ -99,6 +207,28 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	return commandOutcome{result: command.Result{Plan: &plan}, projectID: mustProjectID(ctx, tx, scope.organizationID, projectRef),
 		projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef,
 		summary: "i18n:ASSISTANT_PLAN_DRAFT_UPDATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+}
+
+func assistantPlanAgentVersionKey(operation entity.AssistantPlanOperation) string {
+	switch operation.Type {
+	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
+		if operation.Target.Kind == "AGENT" && operation.Target.Ref != "" {
+			return operation.Target.Ref
+		}
+	}
+	return ""
+}
+
+func rebaseAssistantPlanAgentVersion(operation entity.AssistantPlanOperation, version int64) entity.AssistantPlanOperation {
+	if version < 1 || assistantPlanAgentVersionKey(operation) == "" {
+		return operation
+	}
+	expectedVersion, targetVersion := version, version
+	operation.ExpectedVersion = &expectedVersion
+	operation.Target.Version = &targetVersion
+	operation.Input = cloneAssistantFields(operation.Input)
+	operation.Input["expectedVersion"] = version
+	return operation
 }
 
 func normalizeAssistantOperations(input []entity.AssistantPlanOperation, projectRef string) ([]entity.AssistantPlanOperation, error) {
@@ -171,6 +301,82 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 			problems = append(problems, fmt.Sprintf("operation-%d-not-permitted", index+1))
 			continue
 		}
+		if operation.Type == "LAUNCH_RUN" {
+			if readinessErr := repository.validateAssistantLaunchReadiness(ctx, tx, scope, operation); readinessErr != nil {
+				problems = append(problems, fmt.Sprintf("operation-%d-runtime-unavailable", index+1))
+				continue
+			}
+		}
+		if operation.Type == "UPDATE_AGENT" {
+			matching, snapshotErr := repository.assistantAgentUpdateSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "CREATE_INSTRUCTION_DRAFT" {
+			matching, snapshotErr := repository.assistantInstructionDraftSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "UPDATE_WORKFLOW" {
+			matching, snapshotErr := repository.assistantWorkflowUpdateSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+			matching, snapshotErr := repository.assistantEnvironmentSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
+			matching, snapshotErr := repository.assistantAgentBindingSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "UPDATE_INTEGRATION_CONNECTION" {
+			matching, snapshotErr := repository.assistantConnectionUpdateSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "CHANGE_INTEGRATION_GRANT" {
+			matching, snapshotErr := repository.assistantIntegrationGrantSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "UPDATE_SCHEDULE" {
+			matching, snapshotErr := repository.assistantScheduleUpdateSnapshotMatches(ctx, tx, scope, projectRef, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "UPDATE_ROLE_IMAGE_RECIPE" {
+			matching, snapshotErr := repository.assistantRoleImageUpdateSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "PUBLISH_INTEGRATION_DEFINITION" {
+			matching, snapshotErr := repository.assistantIntegrationDefinitionPublicationSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
 		current, checked, versionErr := repository.assistantTargetVersion(ctx, tx, scope, operation)
 		if versionErr != nil {
 			problems = append(problems, fmt.Sprintf("operation-%d-target-unavailable", index+1))
@@ -194,6 +400,79 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		summary: "i18n:ASSISTANT_PLAN_VALIDATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
 }
 
+func (repository *Repository) validateAssistantLaunchReadiness(
+	ctx context.Context,
+	tx pgx.Tx,
+	scope scope,
+	operation entity.AssistantPlanOperation,
+) error {
+	payload, err := assistantRun(operation.Input)
+	if err != nil {
+		return err
+	}
+	projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
+	if projectID == "" {
+		return errs.ErrNotFound
+	}
+	targetAgentRefs := []string{}
+	switch payload.Target.Type {
+	case "AGENT":
+		var targetName string
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectAgentsOrganizationIdProjectIdRef,
+			scope.organizationID, projectID, payload.Target.Ref).Scan(&targetName); err != nil {
+			return errs.ErrConflict
+		}
+		targetAgentRefs = append(targetAgentRefs, payload.Target.Ref)
+	case "WORKFLOW":
+		var targetName, workflowVersionID, workflowVersionRef, workflowVersionDigest string
+		var coordinatorRef, coordinatorName string
+		var workflowSpec []byte
+		if err := tx.QueryRow(ctx, queryCommandsLaunchrunSelectWorkflowsOrganizationIdProjectIdRef, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID,
+			"project_id":      projectID,
+			"workflow_ref":    payload.Target.Ref,
+		}).Scan(&targetName, &workflowVersionID, &workflowVersionRef, &workflowSpec,
+			&workflowVersionDigest, &coordinatorRef, &coordinatorName); err != nil {
+			return errs.ErrConflict
+		}
+		var workflowVersion entity.WorkflowVersion
+		if json.Unmarshal(workflowSpec, &workflowVersion) != nil || !validWorkflowVersion(workflowVersion) ||
+			workflowVersion.CoordinatorAgentRef != coordinatorRef {
+			return errs.ErrConflict
+		}
+		targetAgentRefs = append(targetAgentRefs, coordinatorRef)
+		for _, step := range workflowVersion.Steps {
+			targetAgentRefs = append(targetAgentRefs, step.AgentRef)
+		}
+	default:
+		return errs.ErrInvalid
+	}
+	var runtimeContractReady bool
+	if err := tx.QueryRow(ctx, queryCommandsLaunchrunValidateAgentRuntimeContract, pgx.StrictNamedArgs{
+		"organization_id":                scope.organizationID,
+		"project_id":                     projectID,
+		"agent_refs":                     targetAgentRefs,
+		"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
+		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
+		"default_role_image_digest":      repository.roleImages.DefaultImageDigest,
+	}).Scan(&runtimeContractReady); err != nil {
+		return errs.ErrUnavailable
+	}
+	if !runtimeContractReady {
+		return errs.ErrConflict
+	}
+	if _, err = repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, targetAgentRefs[0]); err != nil {
+		return err
+	}
+	configuration, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, targetAgentRefs[0], "")
+	if err != nil {
+		return err
+	}
+	_, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model,
+		overlay, configuration.ProviderPolicy.AccountCandidates, false)
+	return err
+}
+
 func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx.Tx, scope scope, operation entity.AssistantPlanOperation) (int64, bool, error) {
 	if operation.ExpectedVersion == nil {
 		return 0, false, nil
@@ -202,15 +481,23 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 	switch operation.Type {
 	case "UPDATE_PROJECT":
 		kind, ref = "PROJECT", assistantString(operation.Input, "projectRef")
+	case "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT":
+		kind, ref = "AGENT", assistantString(operation.Input, "agentRef")
 	case "CHANGE_CAPABILITY", "ARCHIVE_AGENT":
 		kind, ref = "AGENT", assistantString(operation.Input, "agentRef")
 		if operation.Type == "ARCHIVE_AGENT" {
 			ref = operation.Target.Ref
 		}
-	case "ARCHIVE_WORKFLOW":
+	case "UPDATE_WORKFLOW", "ARCHIVE_WORKFLOW":
 		kind, ref = "WORKFLOW", operation.Target.Ref
-	case "CHANGE_INTEGRATION_GRANT", "TEST_INTEGRATION_CONNECTION":
+	case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
+		kind, ref = "ENVIRONMENT", operation.Target.Ref
+	case "CHANGE_INTEGRATION_GRANT", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION":
 		kind, ref = "INTEGRATION_CONNECTION", assistantString(operation.Input, "connectionRef")
+	case "UPDATE_SCHEDULE":
+		kind, ref = "SCHEDULE", assistantString(operation.Input, "scheduleRef")
+	case "UPDATE_ROLE_IMAGE_RECIPE":
+		kind, ref = "ROLE_IMAGE_RECIPE", assistantString(operation.Input, "recipeRef")
 	default:
 		return 0, false, nil
 	}
@@ -224,6 +511,236 @@ func (repository *Repository) assistantTargetVersion(ctx context.Context, tx pgx
 		return 0, true, errs.ErrUnavailable
 	}
 	return current, true, nil
+}
+
+func rehydrateEditedAssistantAgent(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	if original.Type != "UPDATE_AGENT" || original.Key != edited.Key || original.Target.Kind != "AGENT" ||
+		original.Target.Ref == "" || original.ExpectedVersion == nil || *original.ExpectedVersion < 1 ||
+		edited.Parameters == nil || !onlyAssistantFields(edited.Parameters, "agentRef", "name", "purpose", "roleDescription", "avatarUrl") ||
+		assistantString(edited.Parameters, "agentRef") != original.Target.Ref {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	if value, supplied := edited.Parameters["avatarUrl"]; supplied && value != original.Before["avatarUrl"] {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	parameters := map[string]any{"agentRef": original.Target.Ref}
+	for _, field := range []string{"name", "purpose", "roleDescription"} {
+		value, supplied := edited.Parameters[field]
+		if !supplied {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		parameters[field] = text
+	}
+	edited.Parameters = parameters
+	selected := edited.Selected
+	hydrated, err := hydrateAssistantAgentFields(original.Target.Ref,
+		assistantString(original.Before, "name"), assistantString(original.Before, "purpose"),
+		assistantString(original.Before, "roleDescription"), assistantString(original.Before, "avatarUrl"),
+		*original.ExpectedVersion, edited)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	if !reflect.DeepEqual(hydrated.Before, original.Before) {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	hydrated.Selected = selected
+	return hydrated, nil
+}
+
+func rehydrateEditedAssistantAgentCapability(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	if original.Type != "CHANGE_CAPABILITY" || original.Key != edited.Key || original.Target.Kind != "AGENT" ||
+		original.Target.Ref == "" || original.ExpectedVersion == nil || *original.ExpectedVersion < 1 || edited.Parameters == nil ||
+		!onlyAssistantFields(edited.Parameters, "agentRef", "capabilityKey", "enabled") ||
+		assistantString(edited.Parameters, "agentRef") != original.Target.Ref ||
+		assistantString(edited.Parameters, "capabilityKey") != assistantString(original.Before, "capabilityKey") {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	enabled, ok := assistantBoolValue(edited.Parameters, "enabled")
+	currentlyEnabled, currentOK := assistantBoolValue(original.Before, "enabled")
+	if !ok || !currentOK {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	selected := edited.Selected
+	hydrated, err := hydrateAssistantAgentCapabilityFields(original.Target.Ref, original.Target.Name,
+		assistantString(original.Before, "capabilityKey"), currentlyEnabled, enabled, *original.ExpectedVersion, edited)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	if !reflect.DeepEqual(hydrated.Before, original.Before) {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	hydrated.Selected = selected
+	return hydrated, nil
+}
+
+func (repository *Repository) rehydrateEditedAssistantIntegrationGrant(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	projectRef string,
+	original, edited entity.AssistantPlanOperation,
+) (entity.AssistantPlanOperation, error) {
+	if original.Type != "CHANGE_INTEGRATION_GRANT" || original.Key != edited.Key ||
+		original.Target.Kind != "INTEGRATION_CONNECTION" || original.Target.Ref == "" ||
+		original.ExpectedVersion == nil || *original.ExpectedVersion < 1 || edited.Parameters == nil ||
+		!onlyAssistantFields(edited.Parameters, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "approvalScopePaths") ||
+		assistantString(edited.Parameters, "connectionRef") != original.Target.Ref ||
+		assistantString(edited.Parameters, "agentRef") != assistantString(original.Before, "agentRef") ||
+		assistantString(edited.Parameters, "workflowRef") != assistantString(original.Before, "workflowRef") {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	selected := edited.Selected
+	hydrated, err := repository.hydrateAssistantIntegrationGrant(ctx, tx, current, projectRef, edited)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	hydrated.Selected = selected
+	return hydrated, nil
+}
+
+func rehydrateEditedAssistantConnection(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	if original.Type != "UPDATE_INTEGRATION_CONNECTION" || original.Key != edited.Key ||
+		original.Target.Kind != "INTEGRATION_CONNECTION" || original.Target.Ref == "" ||
+		original.ExpectedVersion == nil || *original.ExpectedVersion < 1 || edited.Parameters == nil ||
+		!onlyAssistantFields(edited.Parameters, "connectionRef", "definitionKey", "name", "publicConfiguration") ||
+		assistantString(edited.Parameters, "connectionRef") != original.Target.Ref ||
+		assistantString(edited.Parameters, "definitionKey") != assistantString(original.Before, "definitionKey") {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	parameters := map[string]any{"connectionRef": original.Target.Ref}
+	if name, supplied := edited.Parameters["name"]; supplied {
+		parameters["name"] = name
+	}
+	if configuration, supplied := edited.Parameters["publicConfiguration"]; supplied {
+		parameters["publicConfiguration"] = configuration
+	}
+	connection := entity.IntegrationConnection{Ref: original.Target.Ref,
+		DefinitionKey: assistantString(original.Before, "definitionKey"),
+		Name:          assistantString(original.Before, "name"), Version: *original.ExpectedVersion}
+	configuration, ok := assistantObjectValue(original.Before, "publicConfiguration")
+	if !ok {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	connection.PublicConfiguration = configuration
+	edited.Parameters = parameters
+	selected := edited.Selected
+	hydrated, err := hydrateAssistantConnectionFields(connection, edited)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	if !reflect.DeepEqual(hydrated.Before, original.Before) {
+		return entity.AssistantPlanOperation{}, errs.ErrConflict
+	}
+	hydrated.Selected = selected
+	return hydrated, nil
+}
+
+func (repository *Repository) assistantConnectionUpdateSnapshotMatches(ctx context.Context, tx pgx.Tx, actorScope scope,
+	operation entity.AssistantPlanOperation,
+) (bool, error) {
+	connection, err := readConnection(ctx, tx, actorScope, operation.Target.Ref)
+	if err != nil {
+		return false, err
+	}
+	before := map[string]any{"connectionRef": connection.Ref, "definitionKey": connection.DefinitionKey,
+		"name": connection.Name, "publicConfiguration": connection.PublicConfiguration}
+	if err := repository.validateAssistantConnectionConfiguration(ctx, tx, actorScope, connection, operation.After); err != nil {
+		return false, err
+	}
+	return operation.ExpectedVersion != nil && *operation.ExpectedVersion == connection.Version &&
+		operation.Target.Version != nil && *operation.Target.Version == connection.Version &&
+		operation.Target.Name == connection.Name && reflect.DeepEqual(operation.Before, before) &&
+		reflect.DeepEqual(operation.Parameters, operation.After) &&
+		assistantString(operation.Parameters, "definitionKey") == connection.DefinitionKey, nil
+}
+
+func (repository *Repository) assistantIntegrationGrantSnapshotMatches(
+	ctx context.Context,
+	tx pgx.Tx,
+	current scope,
+	projectRef string,
+	operation entity.AssistantPlanOperation,
+) (bool, error) {
+	agentRef, workflowRef := assistantString(operation.Parameters, "agentRef"), assistantString(operation.Parameters, "workflowRef")
+	recipientKind, recipientRef := "AGENT", agentRef
+	if workflowRef != "" {
+		recipientKind, recipientRef = "WORKFLOW", workflowRef
+	}
+	enabled, enabledOK := assistantBoolValue(operation.Parameters, "enabled")
+	scopePaths, scopeOK := assistantStringsValue(operation.Parameters, "approvalScopePaths")
+	if !enabledOK || !scopeOK || (agentRef == "") == (workflowRef == "") {
+		return false, errs.ErrInvalid
+	}
+	snapshot, err := repository.readAssistantIntegrationGrantSnapshot(ctx, tx, current, projectRef,
+		assistantString(operation.Parameters, "connectionRef"), assistantString(operation.Parameters, "capabilityKey"), recipientKind, recipientRef)
+	if err != nil {
+		return false, err
+	}
+	hydrated, err := hydrateAssistantIntegrationGrantFields(
+		assistantString(operation.Parameters, "connectionRef"), assistantString(operation.Parameters, "capabilityKey"),
+		agentRef, workflowRef, snapshot, enabled, scopePaths, operation,
+	)
+	if err != nil {
+		return false, err
+	}
+	return operation.ExpectedVersion != nil && hydrated.ExpectedVersion != nil &&
+		*operation.ExpectedVersion == *hydrated.ExpectedVersion && reflect.DeepEqual(operation.Target, hydrated.Target) &&
+		assistantJSONEqual(operation.Parameters, hydrated.Parameters) && assistantJSONEqual(operation.Before, hydrated.Before) &&
+		assistantJSONEqual(operation.After, hydrated.After), nil
+}
+
+func rehydrateEditedAssistantRoleImage(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
+	if original.Type != "CREATE_ROLE_IMAGE_RECIPE" || original.Key != edited.Key ||
+		original.Target.Kind != "ROLE_IMAGE_RECIPE" || edited.Parameters == nil ||
+		!onlyAssistantFields(edited.Parameters, "projectRef", "agentRef", "agentVersion", "name", "environmentKey", "dockerfile") ||
+		assistantString(edited.Parameters, "projectRef") != assistantString(original.Parameters, "projectRef") ||
+		assistantString(edited.Parameters, "agentRef") != assistantString(original.Parameters, "agentRef") {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	originalVersion, originalOK := assistantInt64(original.Parameters, "agentVersion")
+	editedVersion, editedOK := assistantInt64(edited.Parameters, "agentVersion")
+	if !originalOK || !editedOK || originalVersion != editedVersion {
+		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	name := assistantString(edited.Parameters, "name")
+	environmentKey := assistantString(edited.Parameters, "environmentKey")
+	dockerfile, dockerfileOK := edited.Parameters["dockerfile"].(string)
+	if name == "" || environmentKey == "" || !dockerfileOK || dockerfile == "" || len(dockerfile) > 64<<10 {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	parameters := cloneAssistantFields(original.Parameters)
+	parameters["name"], parameters["environmentKey"], parameters["dockerfile"] = name, environmentKey, dockerfile
+	edited.Parameters = parameters
+	edited.Action = "CREATE"
+	edited.Target = entity.AssistantPlanTarget{Kind: "ROLE_IMAGE_RECIPE", Name: name}
+	edited.Before = map[string]any{}
+	edited.After = cloneAssistantFields(parameters)
+	edited.ExpectedVersion = nil
+	return edited, nil
+}
+
+func (repository *Repository) assistantAgentUpdateSnapshotMatches(ctx context.Context, tx pgx.Tx, scope scope, projectRef string,
+	operation entity.AssistantPlanOperation,
+) (bool, error) {
+	var name, purpose, roleDescription, avatarURL string
+	var version int64
+	err := tx.QueryRow(ctx, queryConfigurationHydrateassistantoperationSelectAgent,
+		scope.organizationID, projectRef, operation.Target.Ref,
+	).Scan(&name, &purpose, &roleDescription, &avatarURL, &version)
+	if err != nil {
+		return false, err
+	}
+	before := map[string]any{"agentRef": operation.Target.Ref, "name": name, "purpose": purpose,
+		"roleDescription": roleDescription, "avatarUrl": avatarURL}
+	return operation.ExpectedVersion != nil && *operation.ExpectedVersion == version &&
+		operation.Target.Version != nil && *operation.Target.Version == version &&
+		operation.Target.Name == name && reflect.DeepEqual(operation.Before, before) &&
+		reflect.DeepEqual(operation.Parameters, operation.After) &&
+		assistantString(operation.Parameters, "avatarUrl") == avatarURL, nil
 }
 
 func (repository *Repository) rejectAssistantPlan(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

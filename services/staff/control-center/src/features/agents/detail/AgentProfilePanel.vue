@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Trash2, Upload } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AgentAvatar from "@/features/agents/detail/AgentAvatar.vue";
+import AgentProfileFields from "@/features/agents/detail/AgentProfileFields.vue";
 import { supportedAvatarFile } from "@/features/agents/detail/avatar";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import type {
@@ -30,6 +30,7 @@ const emit = defineEmits<{
 }>();
 const { locale } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value));
+const avatarInputId = useId();
 const fileInput = ref<HTMLInputElement>();
 const avatarProblem = ref("");
 const removeConfirmationOpen = ref(false);
@@ -40,18 +41,6 @@ const avatarUnavailableReason = computed(() =>
     ? props.avatarAsset.reason
     : undefined,
 );
-
-function updateField(key: keyof AgentProfileDraft, event: Event): void {
-  const target = event.currentTarget;
-  if (
-    !(
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement
-    )
-  )
-    return;
-  emit("update:modelValue", { ...props.modelValue, [key]: target.value });
-}
 
 function chooseAvatar(): void {
   if (!props.canEdit || props.busy || !avatarAvailable.value) return;
@@ -129,36 +118,11 @@ function confirmAvatarRemoval(): void {
     </div>
 
     <form class="profile-panel__form" @submit.prevent="emit('save')">
-      <label class="field">
-        <span>{{ $t("common.name") }}</span>
-        <input
-          :value="modelValue.name"
-          required
-          maxlength="120"
-          :disabled="!canEdit || busy"
-          @input="updateField('name', $event)"
-        />
-      </label>
-      <label class="field">
-        <span>{{ $t("common.purpose") }}</span>
-        <input
-          :value="modelValue.purpose"
-          required
-          maxlength="1000"
-          :disabled="!canEdit || busy"
-          @input="updateField('purpose', $event)"
-        />
-      </label>
-      <label class="field field--wide">
-        <span>{{ $t("agents.role") }}</span>
-        <VoiceTextarea
-          :value="modelValue.roleDescription"
-          required
-          maxlength="1000"
-          :disabled="!canEdit || busy"
-          @input="updateField('roleDescription', $event)"
-        />
-      </label>
+      <AgentProfileFields
+        :model-value="modelValue"
+        :disabled="!canEdit || busy"
+        @update:model-value="emit('update:modelValue', $event)"
+      />
       <section
         class="profile-panel__avatar-editor field--wide"
         :class="{
@@ -176,6 +140,8 @@ function confirmAvatarRemoval(): void {
         </div>
         <input
           ref="fileInput"
+          :id="avatarInputId"
+          :name="avatarInputId"
           class="sr-only"
           type="file"
           accept="image/png,image/jpeg,image/webp"

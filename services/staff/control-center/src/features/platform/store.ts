@@ -125,6 +125,7 @@ import type {
   ScheduleCommand,
   ScheduleInput,
   SearchResult,
+  SearchResultPage,
   SystemAssistant,
   TurnInput,
   UserSummary,
@@ -140,8 +141,8 @@ import {
   type MutationHeaders,
 } from "@/shared/api/mutation";
 import {
+  AppProblem,
   asProblem,
-  type AppProblem,
   normalizeProblem,
   unwrap,
 } from "@/shared/api/problem";
@@ -172,11 +173,13 @@ type QueryKey =
   | "roleImages"
   | "runtimes"
   | "search"
+  | "searchMore"
   | "workflows"
   | "workflow"
   | "runs"
   | "run"
   | "gates"
+  | "gateCount"
   | "artifacts"
   | "schedules"
   | "integrations"
@@ -215,6 +218,9 @@ export const usePlatformStore = defineStore("platform", () => {
   const capabilities = ref<PlatformCapability[]>([]);
   const runtimes = reactive<Record<string, RuntimeSelection>>({});
   const searchResults = ref<SearchResult[]>([]);
+  const searchNextPageToken = ref<string>();
+  const searchTotal = ref(0);
+  const activeSearchQuery = ref("");
   const projects = reactive<Record<string, Project>>({});
   const agents = reactive<Record<string, Agent>>({});
   const instructionVersions = reactive<Record<string, InstructionVersion[]>>(
@@ -228,6 +234,8 @@ export const usePlatformStore = defineStore("platform", () => {
   const graphs = reactive<Record<string, RunGraph>>({});
   const events = reactive<Record<string, Record<number, RunEvent>>>({});
   const gates = reactive<Record<string, OwnerGate>>({});
+  const pendingGateCount = ref<number>();
+  const gateCatalogRevision = ref(0);
   const artifacts = reactive<Record<string, Artifact>>({});
   const schedules = reactive<Record<string, Schedule>>({});
   const definitions = reactive<Record<string, IntegrationDefinition>>({});
@@ -251,6 +259,7 @@ export const usePlatformStore = defineStore("platform", () => {
   const loading = reactive<Partial<Record<QueryKey, boolean>>>({});
   const problems = reactive<Partial<Record<QueryKey, AppProblem>>>({});
   const generation = new Map<QueryKey, number>();
+  const consumedSearchPageTokens = new Set<string>();
   const consumedAuditPageTokens = new Set<string>();
   let platformReloadPromise: Promise<void> | undefined;
   let platformReloadScope: AbortSignal | undefined;
@@ -394,18 +403,51 @@ export const usePlatformStore = defineStore("platform", () => {
     searchController?.abort();
     searchController = undefined;
     generation.set("search", (generation.get("search") ?? 0) + 1);
+    generation.set("searchMore", (generation.get("searchMore") ?? 0) + 1);
     loading.search = false;
+    loading.searchMore = false;
     searchResults.value = [];
+    searchNextPageToken.value = undefined;
+    searchTotal.value = 0;
+    activeSearchQuery.value = "";
+    consumedSearchPageTokens.clear();
     Reflect.deleteProperty(problems, "search");
+    Reflect.deleteProperty(problems, "searchMore");
   }
 
-  async function search(term: string): Promise<void> {
+  function searchLimit(value?: number): number {
+    return Math.min(50, Math.max(1, Math.floor(value ?? 20)));
+  }
+
+  function validateSearchPage(
+    value: SearchResultPage,
+    requestedCursor?: string,
+  ): void {
+    if (!Array.isArray(value.items) || !value.items.every(isSearchResult))
+      throw invalidSearchResult();
+    const identities = new Set(
+      value.items.map((item) => `${item.kind}:${item.ref}`),
+    );
+    if (
+      !Number.isSafeInteger(value.total) ||
+      value.total < value.items.length ||
+      identities.size !== value.items.length ||
+      (value.nextPageToken !== undefined &&
+        (value.nextPageToken.length === 0 ||
+          value.nextPageToken.length > 512 ||
+          value.nextPageToken === requestedCursor))
+    )
+      throw invalidSearchResult();
+  }
+
+  async function search(term: string, pageSize?: number): Promise<void> {
     cancelSearch();
     const normalized = term.trim();
     if (normalized.length < 2) {
       searchResults.value = [];
       return;
     }
+    activeSearchQuery.value = normalized;
     const controller = new AbortController();
     searchController = controller;
     await query(
@@ -414,15 +456,63 @@ export const usePlatformStore = defineStore("platform", () => {
         (
           await unwrap(
             searchPlatform({
-              query: { query: normalized, limit: 20 },
+              query: { query: normalized, limit: searchLimit(pageSize) },
               signal: requestSignal(controller.signal),
             }),
           )
         ).data,
       (value) => {
-        if (!Array.isArray(value.items) || !value.items.every(isSearchResult))
-          throw invalidSearchResult();
+        validateSearchPage(value);
         searchResults.value = value.items;
+        searchNextPageToken.value = value.nextPageToken;
+        searchTotal.value = value.total;
+      },
+    );
+  }
+
+  async function loadMoreSearch(pageSize?: number): Promise<void> {
+    const cursor = searchNextPageToken.value;
+    const queryValue = activeSearchQuery.value;
+    if (!cursor || !queryValue || loading.search || loading.searchMore) return;
+    searchController ??= new AbortController();
+    const controller = searchController;
+    await query(
+      "searchMore",
+      async () =>
+        (
+          await unwrap(
+            searchPlatform({
+              query: {
+                query: queryValue,
+                limit: searchLimit(pageSize),
+                pageToken: cursor,
+              },
+              signal: requestSignal(controller.signal),
+            }),
+          )
+        ).data,
+      (value) => {
+        if (activeSearchQuery.value !== queryValue) return;
+        validateSearchPage(value, cursor);
+        if (
+          value.total !== searchTotal.value ||
+          (value.nextPageToken !== undefined &&
+            consumedSearchPageTokens.has(value.nextPageToken))
+        )
+          throw invalidSearchResult();
+        const unique = new Map(
+          searchResults.value.map((item) => [`${item.kind}:${item.ref}`, item]),
+        );
+        for (const item of value.items) {
+          const identity = `${item.kind}:${item.ref}`;
+          if (unique.has(identity)) throw invalidSearchResult();
+          unique.set(identity, item);
+        }
+        if (unique.size > value.total) throw invalidSearchResult();
+        consumedSearchPageTokens.add(cursor);
+        searchResults.value = [...unique.values()];
+        searchNextPageToken.value = value.nextPageToken;
+        searchTotal.value = value.total;
       },
     );
   }
@@ -704,19 +794,36 @@ export const usePlatformStore = defineStore("platform", () => {
   ): Promise<void> {
     await query(
       "gates",
-      async () =>
-        (
-          await unwrap(
+      async () => {
+        const values: OwnerGate[] = [];
+        const visited = new Set<string>();
+        let pageToken: string | undefined;
+        do {
+          const response = await unwrap(
             listOwnerGates({
               query: {
                 ...(projectRef ? { projectRef } : {}),
-                ...(runRef ? { runRef } : {}),
                 pageSize: 100,
+                ...(pageToken ? { pageToken } : {}),
               },
               signal: requestSignal(),
             }),
-          )
-        ).data.items,
+          );
+          values.push(...response.data.items);
+          pageToken = response.data.nextPageToken || undefined;
+          if (pageToken) {
+            if (visited.has(pageToken))
+              throw new AppProblem({
+                status: 502,
+                code: "OWNER_GATE_CURSOR_REPEATED",
+                retryable: false,
+                kind: "unavailable",
+              });
+            visited.add(pageToken);
+          }
+        } while (pageToken);
+        return values;
+      },
       (values) => {
         if (runRef)
           replaceScoped(gates, values, (gate) => gate.runRef === runRef);
@@ -729,6 +836,34 @@ export const usePlatformStore = defineStore("platform", () => {
         else replace(gates, values);
       },
     );
+  }
+
+  async function loadPendingGateCount(): Promise<void> {
+    await query(
+      "gateCount",
+      async () =>
+        (
+          await unwrap(
+            listOwnerGates({
+              query: { states: ["OPEN"], pageSize: 1 },
+              signal: requestSignal(),
+              cache: "no-store",
+            }),
+          )
+        ).data,
+      (page) => {
+        if (
+          !Number.isSafeInteger(page.total) ||
+          page.total < 0 ||
+          page.items.length !== Math.min(page.total, 1) ||
+          page.items.some((gate) => gate.state !== "OPEN")
+        )
+          throw new Error("Invalid owner gate count page");
+        pendingGateCount.value = page.total;
+        gateCatalogRevision.value += 1;
+      },
+    );
+    if (problems.gateCount) pendingGateCount.value = undefined;
   }
 
   async function loadArtifacts(projectRef: string): Promise<void> {
@@ -1173,9 +1308,14 @@ export const usePlatformStore = defineStore("platform", () => {
     );
   }
 
-  async function loadAudit(projectRef?: string, search = ""): Promise<void> {
+  async function loadAudit(
+    projectRef?: string,
+    search = "",
+    pageSize = 20,
+    resourceRef = "",
+  ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}\n${resourceRef}`;
     auditScopeKey.value = scopeKey;
     auditNextPageToken.value = undefined;
     consumedAuditPageTokens.clear();
@@ -1190,8 +1330,9 @@ export const usePlatformStore = defineStore("platform", () => {
             listAuditEvents({
               query: {
                 ...(projectRef ? { projectRef } : {}),
+                ...(resourceRef ? { resourceRef } : {}),
                 ...(normalizedSearch ? { query: normalizedSearch } : {}),
-                pageSize: 100,
+                pageSize,
               },
               signal: requestSignal(),
             }),
@@ -1208,9 +1349,11 @@ export const usePlatformStore = defineStore("platform", () => {
   async function loadMoreAudit(
     projectRef?: string,
     search = "",
+    pageSize = 20,
+    resourceRef = "",
   ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}\n${resourceRef}`;
     const pageToken = auditNextPageToken.value;
     if (
       !pageToken ||
@@ -1227,8 +1370,9 @@ export const usePlatformStore = defineStore("platform", () => {
             listAuditEvents({
               query: {
                 ...(projectRef ? { projectRef } : {}),
+                ...(resourceRef ? { resourceRef } : {}),
                 ...(normalizedSearch ? { query: normalizedSearch } : {}),
-                pageSize: 100,
+                pageSize,
                 pageToken,
               },
               signal: requestSignal(),
@@ -1564,6 +1708,8 @@ export const usePlatformStore = defineStore("platform", () => {
     gates[result.data.gate.ref] = result.data.gate;
     runs[result.data.run.ref] = result.data.run;
     graphs[result.data.graph.runRef] = result.data.graph;
+    gateCatalogRevision.value += 1;
+    void loadPendingGateCount();
     return result.data.gate;
   }
 
@@ -1767,8 +1913,8 @@ export const usePlatformStore = defineStore("platform", () => {
     };
     switch (kind) {
       case "PROJECT":
-        add("projects", loadProjects);
         add("overview", () => loadOverview(projectRef));
+        add("gateCount", loadPendingGateCount);
         if (projectRef) add("project", () => loadProject(projectRef));
         break;
       case "AGENT":
@@ -1791,12 +1937,16 @@ export const usePlatformStore = defineStore("platform", () => {
         add("integrations", loadIntegrations);
         break;
       case "MEMBERSHIP":
+        pendingGateCount.value = undefined;
         add("projects", loadProjects);
+        add("gateCount", loadPendingGateCount);
         if (projectRef) add("members", () => loadMembers(projectRef));
         break;
       case "PLATFORM_MEMBERSHIP":
+        pendingGateCount.value = undefined;
         add("platformMembers", loadPlatformMembers);
         add("projects", loadProjects);
+        add("gateCount", loadPendingGateCount);
         if (projectRef) add("members", () => loadMembers(projectRef));
         break;
       case "SYSTEM_ASSISTANT":
@@ -1809,7 +1959,7 @@ export const usePlatformStore = defineStore("platform", () => {
         break;
       case "RUN":
         add("runs", () => loadRuns(projectRef));
-        add("gates", () => loadGates(projectRef));
+        add("gateCount", loadPendingGateCount);
         add("overview", () => loadOverview(projectRef));
         break;
       default:
@@ -1825,13 +1975,13 @@ export const usePlatformStore = defineStore("platform", () => {
       return platformReloadPromise;
     platformReloadScope = ownerRequestSignal();
     const reload = async (): Promise<void> => {
+      pendingGateCount.value = undefined;
       const projectRef = selectedProjectRef();
       const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
         { key: "bootstrap", run: loadBootstrap },
-        { key: "projects", run: loadProjects },
         { key: "overview", run: () => loadOverview(projectRef) },
         { key: "runs", run: () => loadRuns(projectRef) },
-        { key: "gates", run: () => loadGates(projectRef) },
+        { key: "gateCount", run: loadPendingGateCount },
         { key: "integrations", run: loadIntegrations },
         { key: "assistant", run: loadAssistant },
       ];
@@ -1901,11 +2051,17 @@ export const usePlatformStore = defineStore("platform", () => {
     administration.value = undefined;
     capabilities.value = [];
     searchResults.value = [];
+    searchNextPageToken.value = undefined;
+    searchTotal.value = 0;
+    activeSearchQuery.value = "";
+    consumedSearchPageTokens.clear();
     platformMembershipActions.value = [];
     projectMembershipActions.value = [];
     projectCollectionActions.value = [];
     integrationDefinitionActions.value = [];
     integrationCoreReady.value = undefined;
+    pendingGateCount.value = undefined;
+    gateCatalogRevision.value = 0;
     assistant.value = undefined;
     auditEvents.value = [];
     auditNextPageToken.value = undefined;
@@ -1925,6 +2081,8 @@ export const usePlatformStore = defineStore("platform", () => {
     capabilities,
     runtimes,
     searchResults,
+    searchNextPageToken,
+    searchTotal,
     projects,
     agents,
     instructionVersions,
@@ -1936,6 +2094,8 @@ export const usePlatformStore = defineStore("platform", () => {
     graphs,
     events,
     gates,
+    pendingGateCount,
+    gateCatalogRevision,
     artifacts,
     schedules,
     definitions,
@@ -1961,6 +2121,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadBootstrap,
     loadOverview,
     search,
+    loadMoreSearch,
     cancelSearch,
     loadProjects,
     loadProject,
@@ -1975,6 +2136,7 @@ export const usePlatformStore = defineStore("platform", () => {
     loadRuns,
     loadRun,
     loadGates,
+    loadPendingGateCount,
     loadArtifacts,
     uploadProjectArtifact,
     uploadAttachmentArtifact,

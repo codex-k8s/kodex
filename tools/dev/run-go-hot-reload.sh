@@ -59,7 +59,12 @@ air_is_usable() {
 }
 air_is_usable || fail 'Air executable is unavailable'
 
-runtime_root="/tmp/kodex-dev-$name"
+# /tmp может быть отдельным небольшим scratch tmpfs сервиса. Исполняемый
+# Air binary хранится только в выделенном writable build cache этого workload.
+runtime_root="/go/build-cache/runtime-$name"
+mkdir -p -- "$runtime_root" || fail 'cannot create writable Air runtime path'
+test -w "$runtime_root" || fail 'Air runtime path is not writable'
+chmod 0700 -- "$runtime_root" || fail 'cannot secure Air runtime path'
 config="$runtime_root/air.toml"
 kill_delay=$(sh "$repository_root/tools/dev/go-shutdown-budget.sh" "$name")
 entrypoint="\"$runtime_root/build/main\""
@@ -85,11 +90,10 @@ poll_interval = 500
 stop_on_error = true
 send_interrupt = true
 kill_delay = "$kill_delay"
-# Локальные sidecar и service процессы могут стартовать раньше соседней
-# зависимости во время одновременного apply. Air повторяет только запуск уже
-# собранного бинаря; production lifecycle этим профилем не изменяется.
-rerun = true
-rerun_delay = 2000
+# Повторный запуск упавшего процесса принадлежит liveness probe Kubernetes.
+# Air с rerun=true может параллельно породить новые процессы до остановки
+# прежнего и вызвать гонки bootstrap и занятие gRPC-порта.
+rerun = false
 
 [log]
 time = true
@@ -99,4 +103,5 @@ clean_on_exit = true
 EOF
 
 cd "$repository_root"
+umask 0077
 exec "$air_binary" -c "$config"

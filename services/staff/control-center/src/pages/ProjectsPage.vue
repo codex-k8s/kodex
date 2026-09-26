@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -13,6 +12,7 @@ import {
   searchProjects,
 } from "@/features/projects/api";
 import ProjectList from "@/features/projects/ProjectList.vue";
+import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import { catalogInvalidated } from "@/features/catalogs/api";
 import type {
   Project,
@@ -21,8 +21,11 @@ import type {
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const platform = usePlatformStore();
+const purgeConfirmationField = `project-purge-${useId()}`;
 const route = useRoute();
 const router = useRouter();
 const trashMode = computed(() => route.query.trash === "1");
@@ -46,6 +49,9 @@ const items = ref<Project[]>([]);
 const loading = ref(false);
 const listProblem = ref<AppProblem>();
 const pageToken = ref<string>();
+const scrollRoot = ref<HTMLElement>();
+const listRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
 const query = computed(() =>
   typeof route.query.q === "string" ? route.query.q : "",
 );
@@ -53,6 +59,21 @@ let controller: AbortController | undefined;
 let generation = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const cursors = new Set<string>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".project-list__item",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 190,
+  estimatedColumns: 2,
+});
+
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () =>
+    Boolean(pageToken.value) && !loading.value && !listProblem.value,
+  loadMore: () => load(true),
+});
 
 async function submit(): Promise<void> {
   if (!canCreate.value) return;
@@ -83,11 +104,13 @@ async function load(more = false): Promise<void> {
       ? await loadProjectTrash(
           more ? pageToken.value : undefined,
           request.signal,
+          pageSize.value,
         )
       : await searchProjects(
           query.value.trim(),
           more ? pageToken.value : undefined,
           request.signal,
+          pageSize.value,
         );
     if (request.signal.aborted || current !== generation) return;
     const next = more ? [...items.value, ...page.items] : page.items;
@@ -113,9 +136,10 @@ async function load(more = false): Promise<void> {
     if (current === generation) loading.value = false;
   }
 }
+let firstProjectLoad = true;
 watch(
   [query, trashMode],
-  (_value, previous) => {
+  () => {
     controller?.abort();
     generation += 1;
     if (timer) clearTimeout(timer);
@@ -123,12 +147,15 @@ watch(
     pageToken.value = undefined;
     listProblem.value = undefined;
     loading.value = true;
-    timer = setTimeout(() => void load(), previous === undefined ? 0 : 150);
+    timer = setTimeout(() => void load(), firstProjectLoad ? 0 : 150);
+    firstProjectLoad = false;
   },
   { immediate: true },
 );
 watch(
-  () => trashMode.value && items.value.some((project) => project.lifecycle === "PURGE_PENDING"),
+  () =>
+    trashMode.value &&
+    items.value.some((project) => project.lifecycle === "PURGE_PENDING"),
   (pending, _previous, onCleanup) => {
     if (!pending) return;
     const refresh = setInterval(() => {
@@ -190,12 +217,17 @@ function toggleTrash(): void {
 async function confirmLifecycle(): Promise<void> {
   const target = lifecycleTarget.value;
   if (!target || lifecycleBusy.value) return;
-  if (lifecycleAction.value === "PURGE" && purgeConfirmation.value !== target.name) return;
+  if (
+    lifecycleAction.value === "PURGE" &&
+    purgeConfirmation.value !== target.name
+  )
+    return;
   lifecycleBusy.value = true;
   lifecycleProblem.value = undefined;
   try {
     if (lifecycleAction.value === "PURGE") await purgeProjectFromTrash(target);
-    else if (lifecycleAction.value === "RESTORE") await restoreProjectFromTrash(target);
+    else if (lifecycleAction.value === "RESTORE")
+      await restoreProjectFromTrash(target);
     else await moveProjectToTrash(target);
     lifecycleTarget.value = undefined;
     purgeConfirmation.value = "";
@@ -207,7 +239,10 @@ async function confirmLifecycle(): Promise<void> {
     lifecycleBusy.value = false;
   }
 }
-function openLifecycle(project: Project, action: "TRASH" | "RESTORE" | "PURGE"): void {
+function openLifecycle(
+  project: Project,
+  action: "TRASH" | "RESTORE" | "PURGE",
+): void {
   lifecycleAction.value = action;
   lifecycleTarget.value = project;
   lifecycleProblem.value = undefined;
@@ -248,24 +283,29 @@ onBeforeUnmount(() => {
     <p v-else-if="!items.length && !listProblem">
       {{ $t(trashMode ? "projects.trashEmpty" : "projects.emptyTitle") }}
     </p>
-    <ProjectList
-      :items="items"
-      :trashed="trashMode"
-      @trash="openLifecycle($event, 'TRASH')"
-      @restore="openLifecycle($event, 'RESTORE')"
-      @purge="openLifecycle($event, 'PURGE')"
-    />
-    <button
-      v-if="pageToken"
-      class="button"
-      :disabled="loading"
-      @click="load(true)"
-    >
-      {{ $t("managed.more") }}
-    </button>
+    <div ref="listRoot">
+      <ProjectList
+        :items="items"
+        :trashed="trashMode"
+        @trash="openLifecycle($event, 'TRASH')"
+        @restore="openLifecycle($event, 'RESTORE')"
+        @purge="openLifecycle($event, 'PURGE')"
+      />
+    </div>
+    <div class="projects-list-footer">
+      <span ref="sentinel" class="projects-list-sentinel" aria-hidden="true" />
+    </div>
     <ModalDialog
       v-if="lifecycleTarget"
-      :title="$t(lifecycleAction === 'PURGE' ? 'projects.purge' : lifecycleAction === 'RESTORE' ? 'projects.restore' : 'projects.trashProject')"
+      :title="
+        $t(
+          lifecycleAction === 'PURGE'
+            ? 'projects.purge'
+            : lifecycleAction === 'RESTORE'
+              ? 'projects.restore'
+              : 'projects.trashProject',
+        )
+      "
       :busy="lifecycleBusy"
       size="sm"
       @close="lifecycleTarget = undefined"
@@ -276,9 +316,9 @@ onBeforeUnmount(() => {
       <p>
         {{
           $t(
-            lifecycleAction === 'PURGE'
+            lifecycleAction === "PURGE"
               ? "projects.purgeDescription"
-              : lifecycleAction === 'RESTORE'
+              : lifecycleAction === "RESTORE"
                 ? "projects.restoreDescription"
                 : "projects.trashDescription",
           )
@@ -286,7 +326,13 @@ onBeforeUnmount(() => {
       </p>
       <label v-if="lifecycleAction === 'PURGE'" class="field">
         <span>{{ $t("projects.purgeConfirmName") }}</span>
-        <input v-model="purgeConfirmation" autocomplete="off" data-dialog-initial-focus />
+        <input
+          v-model="purgeConfirmation"
+          :id="purgeConfirmationField"
+          :name="purgeConfirmationField"
+          autocomplete="off"
+          data-dialog-initial-focus
+        />
       </label>
       <ProblemNotice
         v-if="lifecycleProblem"
@@ -304,12 +350,26 @@ onBeforeUnmount(() => {
         </button>
         <button
           class="button"
-          :class="lifecycleAction === 'RESTORE' ? 'button--primary' : 'button--danger'"
+          :class="
+            lifecycleAction === 'RESTORE' ? 'button--primary' : 'button--danger'
+          "
           type="button"
-          :disabled="lifecycleBusy || (lifecycleAction === 'PURGE' && purgeConfirmation !== lifecycleTarget.name)"
+          :disabled="
+            lifecycleBusy ||
+            (lifecycleAction === 'PURGE' &&
+              purgeConfirmation !== lifecycleTarget.name)
+          "
           @click="confirmLifecycle"
         >
-          {{ $t(lifecycleAction === 'PURGE' ? "projects.purge" : lifecycleAction === 'RESTORE' ? "projects.restore" : "projects.trashProject") }}
+          {{
+            $t(
+              lifecycleAction === "PURGE"
+                ? "projects.purge"
+                : lifecycleAction === "RESTORE"
+                  ? "projects.restore"
+                  : "projects.trashProject",
+            )
+          }}
         </button>
       </template>
     </ModalDialog>
@@ -325,30 +385,16 @@ onBeforeUnmount(() => {
         :inert="busy"
         @submit.prevent="submit"
       >
-        <label class="field field--wide"
-          ><span>{{ $t("common.name") }}</span
-          ><input
-            v-model.trim="form.name"
-            required
-            maxlength="120"
-            data-dialog-initial-focus
-        /></label>
-        <label class="field field--wide"
-          ><span>{{ $t("common.purpose") }}</span
-          ><VoiceTextarea
-            v-model.trim="form.purpose"
-            :disabled="busy"
-            required
-            maxlength="1000"
-          />
-        </label>
-        <label class="field"
-          ><span>{{ $t("projects.language") }}</span
-          ><select v-model="form.language">
-            <option value="ru">{{ $t("common.russian") }}</option>
-            <option value="en">{{ $t("common.english") }}</option>
-          </select></label
-        >
+        <ProjectFormFields
+          :name="form.name"
+          :purpose="form.purpose"
+          :language="form.language"
+          :disabled="busy"
+          initial-focus
+          @update:name="form.name = $event"
+          @update:purpose="form.purpose = $event"
+          @update:language="form.language = $event"
+        />
         <ProblemNotice
           v-if="problem"
           class="field--wide"
@@ -376,3 +422,16 @@ onBeforeUnmount(() => {
     </ModalDialog>
   </PageFrame>
 </template>
+
+<style scoped>
+.projects-list-footer {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.projects-list-sentinel {
+  width: 1px;
+  height: 1px;
+}
+</style>

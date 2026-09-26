@@ -1,19 +1,17 @@
 <script setup lang="ts">
-import { Expand, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { ChevronRight, Expand, PackageOpen, Search } from "@lucide/vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import WorkflowCard from "@/features/workflows/catalog/WorkflowCard.vue";
 import AgentCard from "@/features/agents/catalog/AgentCard.vue";
 import { toAgentCatalogItem } from "@/features/agents/catalog/model";
-import {
-  nearScrollEnd,
-  useCursorInfiniteScroll,
-} from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import {
   loadCatalog,
   catalogInvalidated,
@@ -27,6 +25,7 @@ const props = defineProps<{
   expanded?: boolean;
 }>();
 const platform = usePlatformStore();
+const searchId = useId();
 const query = ref("");
 const items = ref<CatalogEntry[]>([]);
 const projects = ref<Record<string, Project>>({});
@@ -36,6 +35,15 @@ const problem = ref<AppProblem>();
 const expandedProject = ref<string>();
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".organization-catalog__entry, .agent-card, .workflow-card",
+  itemCount: () => items.value.length,
+  estimatedItemHeight:
+    props.kind === "agents" ? 242 : props.kind === "workflows" ? 300 : 112,
+  estimatedColumns:
+    props.kind === "agents" || props.kind === "workflows" ? 3 : 1,
+});
 useCursorInfiniteScroll({
   root: scrollRoot,
   sentinel,
@@ -54,13 +62,11 @@ const groups = computed(() => {
     group.push(item);
     result.set(item.projectRef, group);
   }
-  return [...result]
-    .map(([ref, entries]) => ({
-      ref,
-      entries,
-      name: projects.value[ref]?.name,
-    }))
-    .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  return [...result].map(([ref, entries]) => ({
+    ref,
+    entries,
+    name: projects.value[ref]?.name,
+  }));
 });
 async function load(more = false): Promise<void> {
   if (more && (!pageToken.value || loading.value)) return;
@@ -78,6 +84,7 @@ async function load(more = false): Promise<void> {
       request.signal,
       token,
       props.projectRef,
+      pageSize.value,
     );
     if (request.signal.aborted || current !== generation) return;
     const next = more ? [...items.value, ...page.items] : page.items;
@@ -162,14 +169,6 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
     problem.value = asProblem(error);
   });
 });
-function scroll(event: Event): void {
-  if (
-    event.currentTarget instanceof HTMLElement &&
-    nearScrollEnd(event.currentTarget) &&
-    !problem.value
-  )
-    void load(true);
-}
 onBeforeUnmount(() => {
   disposed = true;
   unsubscribe();
@@ -179,14 +178,12 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section
-    ref="scrollRoot"
-    class="organization-catalog"
-    @scroll.passive="scroll"
-  >
-    <label class="organization-catalog__search"
+  <section ref="scrollRoot" class="organization-catalog">
+    <label class="organization-catalog__search" :for="searchId"
       ><Search :size="18" /><input
+        :id="searchId"
         v-model="query"
+        :name="searchId"
         type="search"
         :aria-label="$t('common.search')"
         :placeholder="$t('common.search')"
@@ -195,75 +192,117 @@ onBeforeUnmount(() => {
     <p v-if="loading && !items.length" role="status">
       {{ $t("common.loading") }}
     </p>
-    <p v-else-if="!items.length && !problem">{{ $t("common.empty") }}</p>
-    <section
-      v-for="group in groups"
-      :key="group.ref"
-      class="organization-catalog__group"
+    <div
+      v-else-if="!items.length && !problem"
+      class="organization-catalog__empty"
     >
-      <header v-if="!expanded">
-        <RouterLink :to="`/projects/${encodeURIComponent(group.ref)}`">{{
-          group.name ?? $t("app.project")
-        }}</RouterLink
-        ><button
-          class="icon-button"
-          :title="$t('catalog.expand')"
-          :aria-label="$t('catalog.expand')"
-          @click="expandedProject = group.ref"
-        >
-          <Expand :size="18" />
-        </button>
-      </header>
-      <div
-        class="organization-catalog__items"
-        :class="{
-          'organization-catalog__items--expanded': expanded,
-          'organization-catalog__items--cards':
-            kind === 'workflows' || kind === 'agents',
-        }"
-        @scroll.passive="scroll"
+      <PackageOpen :size="28" aria-hidden="true" />
+      <h2>
+        {{
+          query.trim()
+            ? $t("catalog.emptySearchTitle")
+            : $t(`catalog.emptyTitle.${kind}`)
+        }}
+      </h2>
+      <p>
+        {{
+          query.trim()
+            ? $t("catalog.emptySearchHelp")
+            : $t(`catalog.emptyHelp.${kind}`)
+        }}
+      </p>
+    </div>
+    <div
+      v-if="groups.length"
+      class="organization-catalog__groups"
+      :class="{
+        'organization-catalog__groups--expanded': expanded,
+        'organization-catalog__groups--members': kind === 'members',
+      }"
+    >
+      <section
+        v-for="group in groups"
+        :key="group.ref"
+        class="organization-catalog__group"
+        :class="{ 'organization-catalog__group--members': kind === 'members' }"
       >
-        <template v-for="entry in group.entries" :key="entry.ref">
-          <WorkflowCard v-if="entry.workflow" :workflow="entry.workflow" />
-          <AgentCard
-            v-else-if="entry.agent"
-            :item="toAgentCatalogItem(entry.agent)"
-            :to="entry.path"
-          />
+        <header v-if="!expanded">
           <RouterLink
+            :to="
+              kind === 'members'
+                ? { name: 'project-access', params: { projectRef: group.ref } }
+                : `/projects/${encodeURIComponent(group.ref)}`
+            "
+            >{{ group.name ?? $t("app.project") }}</RouterLink
+          ><RouterLink
+            v-if="kind === 'members'"
+            class="button organization-catalog__manage"
+            :to="{ name: 'project-access', params: { projectRef: group.ref } }"
+            >{{ $t("catalog.manageAccess") }}</RouterLink
+          ><button
             v-else
-            :to="entry.path"
-            class="organization-catalog__entry"
-            ><div>
-              <h3 :title="entry.title">{{ entry.title }}</h3>
-              <p :title="entry.description">{{ entry.description }}</p>
-              <small v-if="entry.role">{{
-                $t(`access.platformRoles.${entry.role}`)
-              }}</small>
-              <small :title="entry.meta.filter(Boolean).join(' · ')">{{
-                entry.meta.filter(Boolean).join(" · ")
-              }}</small>
-            </div>
-            <StatusBadge :state="entry.state" /><span
-              >v{{ entry.version }}</span
-            ></RouterLink
+            class="icon-button"
+            :title="$t('catalog.expand')"
+            :aria-label="$t('catalog.expand')"
+            @click="expandedProject = group.ref"
           >
-        </template>
-      </div>
-    </section>
+            <Expand :size="18" />
+          </button>
+        </header>
+        <div
+          class="organization-catalog__items"
+          :class="{
+            'organization-catalog__items--expanded': expanded,
+            'organization-catalog__items--cards':
+              kind === 'workflows' || kind === 'agents',
+          }"
+        >
+          <template v-for="entry in group.entries" :key="entry.ref">
+            <WorkflowCard v-if="entry.workflow" :workflow="entry.workflow" />
+            <AgentCard
+              v-else-if="entry.agent"
+              :item="toAgentCatalogItem(entry.agent)"
+              :to="entry.path"
+            />
+            <RouterLink
+              v-else
+              :to="
+                kind === 'members'
+                  ? {
+                      name: 'project-access',
+                      params: { projectRef: entry.projectRef },
+                      query: { memberRef: entry.subjectRef },
+                    }
+                  : entry.path
+              "
+              class="organization-catalog__entry"
+              :class="{
+                'organization-catalog__entry--member': kind === 'members',
+              }"
+              ><div>
+                <h3 :title="entry.title">{{ entry.title }}</h3>
+                <p :title="entry.description">{{ entry.description }}</p>
+                <small v-if="entry.role">{{
+                  $t(`access.platformRoles.${entry.role}`)
+                }}</small>
+                <small :title="entry.meta.filter(Boolean).join(' · ')">{{
+                  entry.meta.filter(Boolean).join(" · ")
+                }}</small>
+              </div>
+              <StatusBadge :state="entry.state" /><span
+                v-if="kind !== 'members'"
+                >v{{ entry.version }}</span
+              ><ChevronRight v-else :size="16" aria-hidden="true"
+            /></RouterLink>
+          </template>
+        </div>
+      </section>
+    </div>
     <div
       ref="sentinel"
       class="organization-catalog__sentinel"
       aria-hidden="true"
     />
-    <button
-      v-if="pageToken"
-      class="button"
-      :disabled="loading"
-      @click="load(true)"
-    >
-      {{ $t("managed.more") }}
-    </button>
     <ModalDialog
       v-if="expandedProject"
       :title="projects[expandedProject]?.name ?? $t('app.project')"
@@ -301,40 +340,106 @@ onBeforeUnmount(() => {
 .organization-catalog__group {
   min-width: 0;
 }
+.organization-catalog__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  align-items: start;
+  gap: 20px 12px;
+}
+.organization-catalog__groups--expanded {
+  display: block;
+}
+.organization-catalog__groups--members {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
+  gap: 14px;
+}
+.organization-catalog__group--members {
+  box-sizing: border-box;
+  padding: 12px 14px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.organization-catalog__empty {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 28px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface);
+  text-align: center;
+}
+.organization-catalog__empty svg {
+  color: var(--accent-strong);
+}
+.organization-catalog__empty h2,
+.organization-catalog__empty p {
+  max-width: 560px;
+  margin: 0;
+}
+.organization-catalog__empty h2 {
+  color: var(--text);
+  font-size: 1rem;
+}
+.organization-catalog__empty p {
+  line-height: 1.5;
+}
 .organization-catalog__group > header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
 }
-.organization-catalog__items {
-  max-height: 672px;
-  overflow-y: auto;
+.organization-catalog__group--members > header {
+  gap: 12px;
+  min-height: 32px;
+  margin-bottom: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
-.organization-catalog__items--expanded {
-  max-height: 65vh;
+.organization-catalog__group--members > header > a:first-child {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.organization-catalog__group--members > header > a:first-child:hover {
+  text-decoration: underline;
+}
+.organization-catalog__manage {
+  flex: none;
+  min-height: 30px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.organization-catalog__items {
+  min-width: 0;
 }
 .organization-catalog__items--cards {
-  --card-height: 360px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: var(--card-height);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 12px;
-  max-height: calc(3 * var(--card-height) + 24px);
+}
+.organization-catalog__groups:not(.organization-catalog__groups--expanded)
+  .organization-catalog__items--cards {
+  grid-template-columns: minmax(0, 1fr);
 }
 .organization-catalog__items--cards :deep(.agent-card),
 .organization-catalog__items--cards :deep(.workflow-card) {
   box-sizing: border-box;
   height: 100%;
 }
-.organization-catalog__items--cards.organization-catalog__items--expanded {
-  max-height: 65vh;
-}
 @media (max-width: 1000px) {
+  .organization-catalog__groups,
   .organization-catalog__items--cards {
-    --card-height: 400px;
     grid-template-columns: minmax(0, 1fr);
-    max-height: calc(6 * var(--card-height) + 60px);
   }
 }
 .organization-catalog__entry {
@@ -347,6 +452,19 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
   color: inherit;
   text-decoration: none;
+}
+.organization-catalog__entry--member {
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  height: auto;
+  min-height: 72px;
+  padding: 12px 0;
+}
+.organization-catalog__entry--member:last-child {
+  border-bottom: 0;
+}
+.organization-catalog__entry--member:hover h3 {
+  color: var(--accent-strong);
+  text-decoration: underline;
 }
 .organization-catalog__entry h3 {
   font-size: 15px;

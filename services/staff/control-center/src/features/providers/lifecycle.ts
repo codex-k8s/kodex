@@ -71,12 +71,13 @@ export async function loadProviderBlockers(
     pageToken?: string;
   },
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<ProviderAccountBlockerPage> {
   return (
     await unwrap(
       listProviderAccountBlockers({
         path: { providerAccountRef: accountRef },
-        query: { ...filter, pageSize: 40 },
+        query: { ...filter, pageSize },
         signal: requestSignal(signal),
       }),
     )

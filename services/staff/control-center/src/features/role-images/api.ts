@@ -111,6 +111,7 @@ export async function loadRoleImagePage(
     state?: "ACTIVE" | "ARCHIVED";
     roleDefinitionRef?: string;
   } = {},
+  pageSize = 20,
 ): Promise<RoleImageRecipePage> {
   if (new TextEncoder().encode(filter.query ?? "").length > 128)
     throw new Error("Role image query exceeds 128 UTF-8 bytes");
@@ -119,7 +120,7 @@ export async function loadRoleImagePage(
       listRoleImageRecipes({
         path: { projectRef },
         query: {
-          pageSize: 40,
+          pageSize,
           ...(pageToken ? { pageToken } : {}),
           ...filter,
         },
@@ -132,12 +133,13 @@ export async function loadRoleImagePage(
 export async function loadRoleImageDetail(
   projectRef: string,
   recipeRef: string,
+  signal: AbortSignal = requestSignal(),
 ): Promise<RoleImageRecipeDetail> {
   return (
     await unwrap(
       getRoleImageRecipe({
         path: { projectRef, recipeRef },
-        signal: requestSignal(),
+        signal,
       }),
     )
   ).data;
@@ -147,13 +149,14 @@ export async function loadRoleImageRevisionPage(
   projectRef: string,
   recipeRef: string,
   pageToken?: string,
+  pageSize = 40,
 ): Promise<RoleImageRecipeRevisionPage> {
   return (
     await unwrap(
       listRoleImageRecipeRevisions({
         path: { projectRef, recipeRef },
         query: {
-          pageSize: 40,
+          pageSize,
           ...(pageToken ? { pageToken } : {}),
         },
         signal: requestSignal(),
@@ -288,13 +291,14 @@ export async function commandRoleImage(
   projectRef: string,
   recipe: RoleImageRecipe,
   action: RoleImageRecipeCommand["action"],
+  buildRef?: string,
 ): Promise<RoleImageRecipeCommandReceipt> {
   return (
     await mutate(
       (headers) =>
         commandRoleImageRecipe({
           path: { projectRef, recipeRef: recipe.ref },
-          body: { action },
+          body: { action, ...(buildRef ? { buildRef } : {}) },
           headers: versionedHeaders(headers),
           signal: requestSignal(),
         }),

@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
@@ -47,7 +48,7 @@ func (repository *Repository) bindIntegrationPackage(ctx context.Context, tx pgx
 			return errs.ErrUnavailable
 		}
 	}
-	tag, err := tx.Exec(ctx, queryIntegrationPackageBindConnection, current.organizationID, connectionRef, definition.Metadata.Version, definition.Digest)
+	tag, err := tx.Exec(ctx, queryIntegrationPackageBindConnection, current.organizationID, connectionRef, definition.Metadata.Version, definition.Digest, definition.RequiresConnectionCredential())
 	if err != nil || tag.RowsAffected() != 1 {
 		return errs.ErrConflict
 	}
@@ -68,6 +69,10 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 		return errs.ErrUnavailable
 	}
 	item.DefinitionName = definition.Spec.Name
+	item.CredentialSecretKey = ""
+	if definition.RequiresConnectionCredential() {
+		item.CredentialSecretKey = definition.Spec.Credential.SecretKey
+	}
 	item.Capabilities = make([]entity.IntegrationCapability, 0, len(definition.Spec.Capabilities))
 	for _, capability := range definition.Spec.Capabilities {
 		schema, err := capability.InputSchema()
@@ -92,16 +97,21 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 }
 
 // Один owner read path для connection, grant, invocation и private worker claim.
-func (repository *Repository) integrationPackage(ctx context.Context, tx pgx.Tx, organizationID, connectionRef, key, version, digest string) (integrationpackage.Package, error) {
+func (repository *Repository) integrationPackage(ctx context.Context, runner queryRunner, organizationID, connectionRef, key, version, digest string) (integrationpackage.Package, error) {
 	shipped, ok := repository.integrationDefinitions[key]
 	if !ok {
 		return integrationpackage.Package{}, errs.ErrForbidden
 	}
 	if compatible, ok := integrationpackage.ResolveShippedRevision(shipped, version, digest); ok {
+		if key == "openapi-mcp" {
+			// Поставленный шаблон нужен только для создания подключения.
+			// Без опубликованной owner-ревизии его нельзя исполнять.
+			return integrationpackage.Package{}, errs.ErrForbidden
+		}
 		return compatible, nil
 	}
 	var format, content string
-	err := tx.QueryRow(ctx, queryIntegrationPackageBoundRevision, organizationID, connectionRef).Scan(&format, &content)
+	err := runner.QueryRow(ctx, queryIntegrationPackageBoundRevision, organizationID, connectionRef).Scan(&format, &content)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return integrationpackage.Package{}, errs.ErrForbidden
 	}
@@ -125,6 +135,25 @@ func (repository *Repository) normalizeIntegrationDraft(format, content, managed
 		return format, content
 	}
 	return "JSON", string(canonical)
+}
+
+func (repository *Repository) prepareIntegrationDraft(ctx context.Context, format, content, managedBy string) (string, string, error) {
+	if format == "OPENAPI_IMPORT" {
+		if managedBy != integrationpackage.OriginUI {
+			return "", "", errs.ErrConflict
+		}
+		definition, err := integrationpackage.DraftOpenAPIPackageFromJSON(ctx, []byte(content))
+		if err != nil {
+			return "", "", errs.ErrInvalid
+		}
+		canonical, err := json.Marshal(definition)
+		if err != nil {
+			return "", "", errs.ErrUnavailable
+		}
+		format, content = "JSON", string(canonical)
+	}
+	format, content = repository.normalizeIntegrationDraft(format, content, managedBy)
+	return format, content, nil
 }
 
 func (repository *Repository) executableIntegrationPackage(format, content string) (integrationpackage.Package, error) {

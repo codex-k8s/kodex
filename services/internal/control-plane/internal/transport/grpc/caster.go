@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -30,6 +31,24 @@ func structure(value map[string]any) *structpb.Struct {
 	result, _ := structpb.NewStruct(value)
 	if result == nil {
 		result = &structpb.Struct{}
+	}
+	return result
+}
+
+// Предпросмотр Gate может содержать типизированные Go-структуры. Через JSON
+// приводим их к protobuf Value без потери выбранных параметров согласования.
+func gatePreviewStructure(value map[string]any) *structpb.Struct {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	var normalized map[string]any
+	if json.Unmarshal(encoded, &normalized) != nil {
+		return nil
+	}
+	result, err := structpb.NewStruct(normalized)
+	if err != nil {
+		return nil
 	}
 	return result
 }
@@ -506,7 +525,7 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 		gate.DecisionConsequences = append(gate.DecisionConsequences, &controlplanev1.OwnerGateDecisionConsequence{Decision: gateDecision(consequence.Decision), SafeSummary: consequence.SafeSummary, ExecutesExternalEffect: consequence.ExecutesExternalEffect, TerminalForRun: consequence.TerminalForRun})
 	}
 	if intent := value.IntegrationIntent; intent != nil {
-		gate.IntegrationIntent = &controlplanev1.IntegrationIntent{ConnectionRef: intent.ConnectionRef, ConnectionName: intent.ConnectionName, DefinitionKey: intent.DefinitionKey, CapabilityKey: intent.CapabilityKey, Operation: intent.Operation, EffectKey: intent.EffectKey, EffectPreview: structure(intent.EffectPreview), ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(intent.ResourceKind), Values: intent.ResourceScope, Digest: intent.ResourceScopeDigest}}
+		gate.IntegrationIntent = &controlplanev1.IntegrationIntent{ConnectionRef: intent.ConnectionRef, ConnectionName: intent.ConnectionName, DefinitionKey: intent.DefinitionKey, CapabilityKey: intent.CapabilityKey, Operation: intent.Operation, EffectKey: intent.EffectKey, EffectPreview: gatePreviewStructure(intent.EffectPreview), ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(intent.ResourceKind), Values: intent.ResourceScope, Digest: intent.ResourceScopeDigest}}
 	}
 	return gate
 }
@@ -552,6 +571,7 @@ func castDefinition(value entity.IntegrationDefinition) *controlplanev1.Integrat
 		Origin: controlplanev1.IntegrationDefinitionOrigin_INTEGRATION_DEFINITION_ORIGIN_SHIPPED,
 		Digest: value.Digest, Adapter: value.Adapter, CredentialSecretKey: value.CredentialSecretKey,
 		AdapterOwner: value.AdapterOwner, ExecutionRoute: value.ExecutionRoute, AdapterReadiness: value.AdapterReadiness,
+		ConnectionCount: value.ConnectionCount, HealthyConnectionCount: value.HealthyConnectionCount,
 	}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))
@@ -565,7 +585,8 @@ func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
 	grant := &controlplanev1.IntegrationGrant{
 		Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
 		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
-		ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
+		ResourceScope:      &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
+		ApprovalScopePaths: append([]string(nil), value.ApprovalScopePaths...),
 	}
 	if value.TargetType == "AGENT" {
 		grant.AgentRef = value.TargetRef
@@ -609,7 +630,8 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 		ProjectRef: value.ProjectRef, AuditSummary: value.Summary, Applied: value.State == "APPLIED",
 		State: controlplanev1.AssistantPlanState(rawState), Revision: value.Revision, ValidatedRevision: value.ValidatedRevision,
 		ContentDigest: value.ContentDigest, ValidationProblems: append([]string(nil), value.ValidationProblems...),
-		ValidatedAt: optionalTimestamp(value.ValidatedAt), AppliedAt: optionalTimestamp(value.AppliedAt)}
+		ValidatedAt: optionalTimestamp(value.ValidatedAt), AppliedAt: optionalTimestamp(value.AppliedAt),
+		Receipt: castPlanReceipt(value.Receipt)}
 	for _, operation := range value.Operations {
 		raw := controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+operation.Type]
 		rawAction := controlplanev1.AssistantPlanOperation_Action_value["ACTION_"+operation.Action]
@@ -620,7 +642,7 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 		result.Operations = append(result.Operations, &controlplanev1.AssistantPlanOperation{
 			Ref: operation.Key, Type: controlplanev1.AssistantPlanOperation_Type(raw), Action: controlplanev1.AssistantPlanOperation_Action(rawAction),
 			Title: assistantPlanOperationTitle(operation), Summary: operation.Summary, TargetKind: operation.Target.Kind,
-			TargetRef: operation.Target.Ref, TargetName: operation.Target.Name, ExpectedVersion: operation.ExpectedVersion,
+			TargetRef: operation.Target.Ref, TargetName: operation.Target.Name, TargetVersion: operation.Target.Version, ExpectedVersion: operation.ExpectedVersion,
 			Parameters: structure(parameters), Before: structure(operation.Before), After: structure(operation.After), Selected: operation.Selected,
 			Permitted: operation.Permitted, UnavailableReason: operation.UnavailableReason,
 			ValidationProblems: append([]string(nil), operation.ValidationProblems...),
@@ -635,7 +657,7 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 func assistantPlanOperationTitle(operation entity.AssistantPlanOperation) string {
 	field := ""
 	switch operation.Type {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
 		field = "name"
 	case "LAUNCH_RUN":
 		field = "title"
@@ -672,14 +694,35 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		TitleSource: value.TitleSource, TitleRevision: value.TitleRevision, ProjectRef: value.ProjectRef,
 		Context: context, UpdatedAt: timestamp(value.UpdatedAt), State: controlplanev1.AssistantConversationState(controlplanev1.AssistantConversationState_value["ASSISTANT_CONVERSATION_STATE_"+value.State])}
 	nextSequence := int64(1)
+	plans := value.Plans
+	allPlansLoaded := len(plans) > 0
+	if !allPlansLoaded && value.LatestPlan != nil {
+		plans = []entity.AssistantPlan{*value.LatestPlan}
+	}
+	nextPlan := 0
+	appendPlan := func(plan *entity.AssistantPlan, sequence int64) {
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: plan.Ref, Sequence: sequence, Role: "ASSISTANT", Content: plan.Summary, State: "COMPLETED", Plan: castPlan(plan), CreatedAt: timestamp(plan.CreatedAt)})
+	}
 	for _, turn := range value.Turns {
 		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, CreatedAt: timestamp(turn.CreatedAt)})
 		if turn.Sequence >= nextSequence {
 			nextSequence = turn.Sequence + 1
 		}
+		// План создаётся во время tool-вызова, а итоговый текст ответа сохраняется
+		// несколькими мгновениями позже. Поэтому показываем каждый сохранённый
+		// вариант сразу после первого следующего ответа помощника, а не общей
+		// пачкой в конце истории.
+		if allPlansLoaded && publicAssistantTurnRole(turn.Actor) == "ASSISTANT" {
+			for nextPlan < len(plans) && !plans[nextPlan].CreatedAt.IsZero() && !plans[nextPlan].CreatedAt.After(turn.CreatedAt) {
+				appendPlan(&plans[nextPlan], turn.Sequence)
+				nextPlan++
+			}
+		}
 	}
-	if value.LatestPlan != nil {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: value.LatestPlan.Ref, Sequence: nextSequence, Role: "ASSISTANT", Content: value.LatestPlan.Summary, State: "COMPLETED", Plan: castPlan(value.LatestPlan), CreatedAt: timestamp(value.LatestPlan.CreatedAt)})
+	for nextPlan < len(plans) {
+		appendPlan(&plans[nextPlan], nextSequence)
+		nextSequence++
+		nextPlan++
 	}
 	return result
 }

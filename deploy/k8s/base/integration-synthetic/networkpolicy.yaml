@@ -30,4 +30,5 @@ spec:
               app.kubernetes.io/component: integration-worker
       ports:
         - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 8443}
   egress: []

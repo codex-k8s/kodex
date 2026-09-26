@@ -10,6 +10,10 @@ JOIN control_plane.subjects creator ON creator.id = rv.created_by
 LEFT JOIN control_plane.access_bindings b ON b.role_version_id = rv.id
 WHERE r.organization_id = @organization_id::uuid
   AND (@include_archived OR r.state = 'ACTIVE')
+  AND (@query = '' OR rv.name ILIKE '%' || @query || '%'
+                    OR rv.description ILIKE '%' || @query || '%'
+                    OR rv.name = ANY(@query_aliases::text[])
+                    OR rv.description = ANY(@query_aliases::text[]))
   AND (@cursor = '' OR r.ref > @cursor)
 GROUP BY r.id, rv.id, creator.id
 ORDER BY r.ref

@@ -22,12 +22,20 @@ export interface RuntimeSecretRevealIntent extends ReauthIntentBase {
   readonly secretRef: string;
 }
 
+export interface RuntimeSecretDraftIntent extends ReauthIntentBase {
+  readonly kind: "runtime-secret-draft";
+  readonly surface?: "assistant";
+  readonly target: "create" | "draft" | "secret";
+  readonly targetRef?: string;
+}
+
 export type RuntimeEnvironmentPolicyOperation = "CREATE" | "PUBLISH";
 
 export interface RuntimeEnvironmentPolicyIntent extends ReauthIntentBase {
   readonly environmentRef?: string;
   readonly kind: "runtime-environment-policy";
   readonly operation: RuntimeEnvironmentPolicyOperation;
+  readonly surface?: "assistant";
 }
 export interface EmailReconciliationIntent extends Omit<
   ReauthIntentBase,
@@ -119,6 +127,7 @@ export function parseEmailReconciliationIntent(
 
 export type ReauthIntent =
   | RuntimeSecretRevealIntent
+  | RuntimeSecretDraftIntent
   | RuntimeEnvironmentPolicyIntent
   | EmailReconciliationIntent;
 export type OidcIntent = { readonly kind: "login" } | ReauthIntent;
@@ -131,6 +140,7 @@ interface RuntimeEnvironmentPolicyReauthCompletion {
   readonly operation: RuntimeEnvironmentPolicyOperation;
   readonly projectRef: string;
   readonly returnPath: string;
+  readonly surface?: "assistant";
   readonly version: 1;
 }
 
@@ -141,11 +151,13 @@ function runtimeSecretsPath(projectRef: string): string {
 export function runtimeEnvironmentPolicyPath(
   projectRef: string,
   environmentRef?: string,
+  surface?: RuntimeEnvironmentPolicyIntent["surface"],
 ): string {
   const projectPath = `/projects/${encodeURIComponent(projectRef)}/environments`;
-  return environmentRef
+  const path = environmentRef
     ? `${projectPath}/${encodeURIComponent(environmentRef)}`
     : `${projectPath}/new`;
+  return surface === "assistant" ? `${path}?assistantForm=1` : path;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -195,13 +207,24 @@ function sameIntent(left: ReauthIntent, right: ReauthIntent): boolean {
       left.secretRef === right.secretRef && left.projectRef === right.projectRef
     );
   if (
+    left.kind === "runtime-secret-draft" &&
+    right.kind === "runtime-secret-draft"
+  )
+    return (
+      left.projectRef === right.projectRef &&
+      left.surface === right.surface &&
+      left.target === right.target &&
+      left.targetRef === right.targetRef
+    );
+  if (
     left.kind === "runtime-environment-policy" &&
     right.kind === "runtime-environment-policy"
   )
     return (
       left.environmentRef === right.environmentRef &&
       left.projectRef === right.projectRef &&
-      left.operation === right.operation
+      left.operation === right.operation &&
+      left.surface === right.surface
     );
   if (
     left.kind === "email-reconciliation" &&
@@ -238,11 +261,125 @@ export function createRuntimeSecretRevealIntent(
   };
 }
 
+function runtimeSecretDraftPath(
+  projectRef: string,
+  target: RuntimeSecretDraftIntent["target"],
+  targetRef?: string,
+  surface?: RuntimeSecretDraftIntent["surface"],
+  assistantReturnPath?: string,
+): string {
+  if (surface === "assistant") {
+    const projectPath = `/projects/${encodeURIComponent(projectRef)}`;
+    const candidate = assistantReturnPath ?? projectPath;
+    if (!candidate.startsWith("/") || candidate.startsWith("//"))
+      throw new Error("OIDC re-auth assistant return path is invalid");
+    const parsed = new URL(candidate, "https://kodex.invalid");
+    if (
+      parsed.origin !== "https://kodex.invalid" ||
+      (parsed.pathname !== projectPath &&
+        !parsed.pathname.startsWith(`${projectPath}/`))
+    )
+      throw new Error("OIDC re-auth assistant return path is invalid");
+    parsed.hash = "";
+    parsed.searchParams.delete("assistantForm");
+    parsed.searchParams.delete("assistantCreateSecret");
+    parsed.searchParams.delete("assistantSecretDraftRef");
+    if (target === "create")
+      parsed.searchParams.set("assistantCreateSecret", "1");
+    else parsed.searchParams.set("assistantSecretDraftRef", targetRef ?? "");
+    return `${parsed.pathname}${parsed.search}`;
+  }
+  const path = runtimeSecretsPath(projectRef);
+  if (target === "create") return `${path}?assistantCreateSecret=1`;
+  return `${path}?${target === "draft" ? "draftRef" : "secretRef"}=${encodeURIComponent(targetRef ?? "")}`;
+}
+
+export function createRuntimeSecretDraftIntent(
+  projectRef: string,
+  target: RuntimeSecretDraftIntent["target"],
+  targetRef?: string,
+  now = Date.now(),
+  surface?: RuntimeSecretDraftIntent["surface"],
+  assistantReturnPath?: string,
+): RuntimeSecretDraftIntent {
+  if (
+    !opaqueReferencePattern.test(projectRef) ||
+    (target === "create" && targetRef !== undefined) ||
+    (surface !== "assistant" && assistantReturnPath !== undefined) ||
+    (surface === "assistant" && target === "secret") ||
+    (target !== "create" &&
+      (typeof targetRef !== "string" ||
+        !opaqueReferencePattern.test(targetRef)))
+  )
+    throw new Error("OIDC re-auth secret draft target is invalid");
+  return {
+    challengeRef: globalThis.crypto.randomUUID(),
+    issuedAt: now,
+    kind: "runtime-secret-draft",
+    projectRef,
+    returnPath: runtimeSecretDraftPath(
+      projectRef,
+      target,
+      targetRef,
+      surface,
+      assistantReturnPath,
+    ),
+    ...(surface ? { surface } : {}),
+    target,
+    ...(targetRef ? { targetRef } : {}),
+    version: 1,
+  };
+}
+
+export function parseRuntimeSecretDraftIntent(
+  value: unknown,
+  now = Date.now(),
+): RuntimeSecretDraftIntent {
+  if (!isRecord(value)) throw new Error("OIDC re-auth state shape is invalid");
+  const hasRef = Object.hasOwn(value, "targetRef");
+  const hasSurface = Object.hasOwn(value, "surface");
+  if (
+    !hasExactKeys(value, [
+      "challengeRef",
+      "issuedAt",
+      "kind",
+      "projectRef",
+      "returnPath",
+      ...(hasSurface ? ["surface"] : []),
+      "target",
+      ...(hasRef ? ["targetRef"] : []),
+      "version",
+    ]) ||
+    !validBase(value, now) ||
+    value.kind !== "runtime-secret-draft" ||
+    (value.target !== "create" &&
+      value.target !== "draft" &&
+      value.target !== "secret") ||
+    (value.target === "create" && hasRef) ||
+    (hasSurface && value.surface !== "assistant") ||
+    (value.surface === "assistant" && value.target === "secret") ||
+    (value.target !== "create" &&
+      (typeof value.targetRef !== "string" ||
+        !opaqueReferencePattern.test(value.targetRef))) ||
+    value.returnPath !==
+      runtimeSecretDraftPath(
+        value.projectRef,
+        value.target,
+        typeof value.targetRef === "string" ? value.targetRef : undefined,
+        value.surface === "assistant" ? "assistant" : undefined,
+        value.surface === "assistant" ? value.returnPath : undefined,
+      )
+  )
+    throw new Error("OIDC re-auth state is invalid or expired");
+  return value as unknown as RuntimeSecretDraftIntent;
+}
+
 export function createRuntimeEnvironmentPolicyIntent(
   projectRef: string,
   operation: RuntimeEnvironmentPolicyOperation,
   environmentRef?: string,
   now = Date.now(),
+  surface?: RuntimeEnvironmentPolicyIntent["surface"],
 ): RuntimeEnvironmentPolicyIntent {
   if (!opaqueReferencePattern.test(projectRef))
     throw new Error("OIDC re-auth project reference is invalid");
@@ -260,7 +397,12 @@ export function createRuntimeEnvironmentPolicyIntent(
     kind: "runtime-environment-policy",
     operation,
     projectRef,
-    returnPath: runtimeEnvironmentPolicyPath(projectRef, environmentRef),
+    returnPath: runtimeEnvironmentPolicyPath(
+      projectRef,
+      environmentRef,
+      surface,
+    ),
+    ...(surface ? { surface } : {}),
     version: 1,
   };
 }
@@ -299,6 +441,7 @@ export function parseRuntimeEnvironmentPolicyIntent(
 ): RuntimeEnvironmentPolicyIntent {
   if (!isRecord(value)) throw new Error("OIDC re-auth state shape is invalid");
   const hasEnvironment = Object.hasOwn(value, "environmentRef");
+  const hasSurface = Object.hasOwn(value, "surface");
   const expectedKeys = [
     "challengeRef",
     ...(hasEnvironment ? ["environmentRef"] : []),
@@ -307,6 +450,7 @@ export function parseRuntimeEnvironmentPolicyIntent(
     "operation",
     "projectRef",
     "returnPath",
+    ...(hasSurface ? ["surface"] : []),
     "version",
   ] as const;
   if (!hasExactKeys(value, expectedKeys))
@@ -321,10 +465,12 @@ export function parseRuntimeEnvironmentPolicyIntent(
     (operation === "PUBLISH" &&
       (typeof environmentRef !== "string" ||
         !opaqueReferencePattern.test(environmentRef))) ||
+    (hasSurface && value.surface !== "assistant") ||
     value.returnPath !==
       runtimeEnvironmentPolicyPath(
         value.projectRef,
         operation === "PUBLISH" ? String(environmentRef) : undefined,
+        value.surface === "assistant" ? "assistant" : undefined,
       )
   )
     throw new Error("OIDC re-auth state is invalid or expired");
@@ -335,6 +481,8 @@ function parseReauthIntent(value: unknown, now: number): ReauthIntent {
   if (!isRecord(value)) throw new Error("OIDC re-auth state shape is invalid");
   if (value.kind === "runtime-secret")
     return parseRuntimeSecretRevealIntent(value, now);
+  if (value.kind === "runtime-secret-draft")
+    return parseRuntimeSecretDraftIntent(value, now);
   if (value.kind === "runtime-environment-policy")
     return parseRuntimeEnvironmentPolicyIntent(value, now);
   if (value.kind === "email-reconciliation")
@@ -398,6 +546,7 @@ export function recordRuntimeEnvironmentPolicyReauthCompletion(
     operation: intent.operation,
     projectRef: intent.projectRef,
     returnPath: intent.returnPath,
+    ...(intent.surface ? { surface: intent.surface } : {}),
     version: 1,
   };
   storage.setItem(
@@ -412,6 +561,7 @@ export function consumeRuntimeEnvironmentPolicyReauthCompletion(
     readonly environmentRef?: string;
     readonly operation: RuntimeEnvironmentPolicyOperation;
     readonly projectRef: string;
+    readonly surface?: "assistant";
   },
   now = Date.now(),
 ): boolean {
@@ -429,6 +579,7 @@ export function consumeRuntimeEnvironmentPolicyReauthCompletion(
   }
   if (!isRecord(value)) throw new Error("OIDC re-auth completion is invalid");
   const hasEnvironment = Object.hasOwn(value, "environmentRef");
+  const hasSurface = Object.hasOwn(value, "surface");
   const expectedKeys = [
     "challengeRef",
     ...(hasEnvironment ? ["environmentRef"] : []),
@@ -437,6 +588,7 @@ export function consumeRuntimeEnvironmentPolicyReauthCompletion(
     "operation",
     "projectRef",
     "returnPath",
+    ...(hasSurface ? ["surface"] : []),
     "version",
   ] as const;
   if (
@@ -452,8 +604,13 @@ export function consumeRuntimeEnvironmentPolicyReauthCompletion(
     value.projectRef !== expected.projectRef ||
     value.operation !== expected.operation ||
     value.environmentRef !== expected.environmentRef ||
+    value.surface !== expected.surface ||
     value.returnPath !==
-      runtimeEnvironmentPolicyPath(expected.projectRef, expected.environmentRef)
+      runtimeEnvironmentPolicyPath(
+        expected.projectRef,
+        expected.environmentRef,
+        expected.surface,
+      )
   )
     throw new Error("OIDC re-auth completion does not match current editor");
   return true;

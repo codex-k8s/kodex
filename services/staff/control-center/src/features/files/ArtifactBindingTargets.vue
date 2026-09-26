@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   Artifact,
   ArtifactBindingTarget,
@@ -9,10 +9,12 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { bindingTargetEditable, loadBindingTargets } from "./binding-targets";
 
 const props = defineProps<{ artifact: Artifact; busy: boolean }>();
+const fieldPrefix = `artifact-bindings-${useId()}`;
 const emit = defineEmits<{
   change: [target: ArtifactBindingTarget, artifactVersion: number];
   refresh: [];
@@ -21,6 +23,16 @@ const query = ref("");
 const expanded = ref(false);
 const page = ref<ArtifactBindingTargetPage>();
 const items = ref<ArtifactBindingTarget[]>([]);
+const rows = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: rows,
+  itemSelector: ".binding-targets__row",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 72,
+  minimum: 8,
+  maximum: 100,
+});
 const loading = ref(false);
 const problem = ref<AppProblem>();
 const hasMore = computed(() => Boolean(page.value?.nextPageToken));
@@ -51,6 +63,7 @@ async function load(more = false) {
       token,
       digest,
       active.signal,
+      pageSize.value,
     );
     if (current !== generation || active.signal.aborted) return;
     const next = more ? [...items.value, ...result.items] : result.items;
@@ -105,13 +118,12 @@ function change(item: ArtifactBindingTarget) {
     return;
   emit("change", item, page.value.artifactVersion);
 }
-function scroll(event: Event) {
-  if (
-    event.currentTarget instanceof HTMLElement &&
-    nearScrollEnd(event.currentTarget)
-  )
-    void load(true);
-}
+useCursorInfiniteScroll({
+  root: rows,
+  sentinel,
+  enabled: () => hasMore.value && !loading.value && !props.busy,
+  loadMore: () => load(true),
+});
 watch(
   () => [
     props.artifact.ref,
@@ -158,7 +170,14 @@ onBeforeUnmount(() => {
       <p>{{ $t("files.bindingHint") }}</p>
       <label class="binding-targets__search">
         <span>{{ $t("common.search") }}</span>
-        <input v-model="query" type="search" maxlength="200" :disabled="busy" />
+        <input
+          v-model="query"
+          :id="`${fieldPrefix}-search`"
+          :name="`${fieldPrefix}-search`"
+          type="search"
+          maxlength="200"
+          :disabled="busy"
+        />
       </label>
       <p v-if="page">
         {{ $t("files.bindingTargetTotal", { count: page.total }) }}
@@ -168,14 +187,16 @@ onBeforeUnmount(() => {
         {{ $t("common.loading") }}
       </p>
       <p v-else-if="page && !items.length">{{ $t("common.empty") }}</p>
-      <div class="binding-targets__rows" @scroll="scroll">
+      <div ref="rows" class="binding-targets__rows">
         <label
-          v-for="item in items"
+          v-for="(item, index) in items"
           :key="item.agentRef"
           class="binding-targets__row"
         >
           <input
             type="checkbox"
+            :id="`${fieldPrefix}-target-${index}`"
+            :name="`${fieldPrefix}-target-${index}`"
             :aria-label="item.name"
             :checked="item.bound"
             :disabled="busy || loading || !bindingTargetEditable(item)"
@@ -190,15 +211,14 @@ onBeforeUnmount(() => {
             }}</small></span
           >
         </label>
-        <button
+        <div
           v-if="hasMore"
-          type="button"
-          class="button"
-          :disabled="loading || busy"
-          @click="load(true)"
+          ref="sentinel"
+          class="binding-targets__sentinel"
+          role="status"
         >
-          {{ $t("common.loadMore") }}
-        </button>
+          <span v-if="loading">{{ $t("common.loading") }}</span>
+        </div>
       </div>
     </div>
   </component>
@@ -245,5 +265,8 @@ onBeforeUnmount(() => {
 }
 .binding-targets__row input {
   flex: 0 0 auto;
+}
+.binding-targets__sentinel {
+  min-height: 1px;
 }
 </style>

@@ -28,13 +28,18 @@ export async function loadHomeResultPage(
   scope: HomeResultScope,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 8,
 ) {
-  const query = { query: scope.query.trim(), pageToken, pageSize: 30 };
+  const query = {
+    query: scope.query.trim(),
+    pageToken,
+    pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+  };
   let items: HomeResultItem[];
   let total: number;
   let nextPageToken: string | undefined;
   if (scope.kind === "SESSION") {
-    const page = await loadSessionCatalog(scope, pageToken, signal);
+    const page = await loadSessionCatalog(scope, pageToken, signal, pageSize);
     items = page.items.map((item) => ({
       ref: item.ref,
       sessionRef: item.sessionRef,
@@ -73,7 +78,12 @@ export async function loadHomeResultPage(
     items = page.items.map((item) => ({
       ref: item.ref,
       title: item.title,
-      description: item.projectRef,
+      description: [
+        item.target.displayName,
+        item.currentActivity || item.activitySummary,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       state: item.state,
       to: `/runs/${encodeURIComponent(item.ref)}`,
     }));

@@ -14,7 +14,9 @@ SELECT COALESCE(source.ref,''),
        COALESCE(invocation.effect_key,''),COALESCE(invocation.resource_kind,''),
        COALESCE(invocation.resource_scope,'{}'::jsonb),COALESCE(invocation.resource_scope_digest,''),
        COALESCE(invocation.bounded_input,'{}'::jsonb),COALESCE(invocation.input_digest,''),
-       COALESCE(invocation.risk,''),COALESCE(invocation.approval_policy,'')
+       COALESCE(invocation.risk,''),COALESCE(invocation.approval_policy,''),
+       COALESCE(invocation.definition_version,''),COALESCE(invocation.definition_digest,''),
+       COALESCE(invocation.approval_scope_paths,'{}'::text[])
 FROM control_plane.owner_gates gate
 JOIN control_plane.runs root ON root.id=gate.root_run_id AND root.organization_id=gate.organization_id
 JOIN control_plane.run_nodes node ON node.id=gate.node_id AND node.organization_id=gate.organization_id

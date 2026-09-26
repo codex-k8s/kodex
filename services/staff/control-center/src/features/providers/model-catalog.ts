@@ -41,6 +41,7 @@ export async function loadModelCatalog(
   cursor: string | undefined,
   signal: AbortSignal,
   snapshot?: ModelCatalogSnapshot,
+  pageSize = 40,
 ): Promise<ModelCapabilityPage> {
   if (cursor && !snapshot)
     throw new Error("Model catalog cursor requires a pinned snapshot");
@@ -58,7 +59,7 @@ export async function loadModelCatalog(
                 expectedCatalogDigest: snapshot.catalogDigest,
               }
             : {}),
-          pageSize: 40,
+          pageSize,
         },
         signal: requestSignal(signal),
       }),

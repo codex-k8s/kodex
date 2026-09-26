@@ -142,6 +142,7 @@ type RuntimeEnvironmentImage struct {
 	RecipeGeneration            int64  `json:"recipe_generation"`
 	RoleRuntimeContractSHA256   string `json:"-"`
 	RoleRuntimeContractRevision int64  `json:"-"`
+	PlatformOwnedBootstrap      bool   `json:"-"`
 }
 
 type RuntimeEnvironmentVersion struct {
@@ -701,13 +702,21 @@ type IntegrationConfigurationField struct {
 
 type IntegrationDefinition struct {
 	NextActions                                                        []string
-	Version                                                            int64
+	Version, ConnectionCount, HealthyConnectionCount                   int64
 	Key, Name, Description, Category, SchemaVersion, DefinitionVersion string
 	Origin, Digest, Adapter, CredentialSecretKey                       string
 	AdapterOwner, ExecutionRoute, AdapterReadiness                     string
 	Optional, Enabled                                                  bool
 	Capabilities                                                       []IntegrationCapability
 	ConfigurationFields                                                []IntegrationConfigurationField
+}
+
+// AssistantIntegrationDefinition содержит только публичные поля для этапного
+// выбора подключения. Значения credential и connection сюда не входят.
+type AssistantIntegrationDefinition struct {
+	Key, Name, Description, Category, Adapter, CredentialSecretKey, Origin string
+	ConfigurationFields                                                    []IntegrationConfigurationField
+	CapabilityKeys                                                         []string
 }
 
 type IntegrationCredentialRevision struct {
@@ -720,6 +729,7 @@ type IntegrationGrant struct {
 	Ref, CapabilityKey, TargetType, TargetRef, TargetName, ApprovalPolicy string
 	Risk, ResourceKind, ResourceScopeDigest                               string
 	ResourceScope                                                         map[string]string
+	ApprovalScopePaths                                                    []string
 	Enabled                                                               bool
 	Version                                                               int64
 }
@@ -785,6 +795,7 @@ type AssistantPlan struct {
 	ValidationProblems                                              []string
 	CreatedAt                                                       time.Time
 	ValidatedAt, AppliedAt                                          *time.Time
+	Receipt                                                         *AssistantPlanReceipt
 }
 
 type AssistantPlanOperationReceipt struct {
@@ -818,6 +829,7 @@ type AssistantConversation struct {
 	Version, TitleRevision                    int64
 	Context                                   AssistantContextDescriptor
 	Turns                                     []AssistantTurn
+	Plans                                     []AssistantPlan
 	LatestPlan                                *AssistantPlan
 	CreatedAt, UpdatedAt                      time.Time
 }

@@ -160,6 +160,7 @@ func TestRuntimeEnvironmentReadinessRequiresCurrentRoleRuntimeContract(t *testin
 	repository := &Repository{roleImages: RoleImageConfig{
 		RoleRuntimeContractRevision: currentContractRevision,
 		RoleRuntimeContractSHA256:   currentContractSHA256,
+		DefaultImageDigest:          "sha256:" + strings.Repeat("c", 64),
 	}}
 	base := entity.RuntimeEnvironmentSet{
 		Ref: "renv_readiness", Version: 3, State: "ACTIVE",
@@ -189,6 +190,14 @@ func TestRuntimeEnvironmentReadinessRequiresCurrentRoleRuntimeContract(t *testin
 			item.CurrentVersion.Image.Reference = ""
 			item.CurrentVersion.Image.Digest = ""
 		}, blocker: "PROMOTED_IMAGE_MISSING"},
+		{name: "current platform bootstrap", mutate: func(item *entity.RuntimeEnvironmentSet) {
+			item.CurrentVersion.Image.PlatformOwnedBootstrap = true
+			item.CurrentVersion.Image.Digest = repository.roleImages.DefaultImageDigest
+		}, ready: true},
+		{name: "stale platform bootstrap", mutate: func(item *entity.RuntimeEnvironmentSet) {
+			item.CurrentVersion.Image.PlatformOwnedBootstrap = true
+			item.CurrentVersion.Image.Digest = "sha256:" + strings.Repeat("e", 64)
+		}, blocker: "DEFAULT_ROLE_IMAGE_STALE"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

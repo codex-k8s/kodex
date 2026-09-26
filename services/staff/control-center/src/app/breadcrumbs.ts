@@ -22,6 +22,10 @@ export interface BreadcrumbLabels {
   environment: string;
   newEnvironment: string;
   secrets: string;
+  members: string;
+  roleImages: string;
+  roleImage: string;
+  newRoleImage: string;
   integrations: string;
   decisions: string;
   administration: string;
@@ -37,6 +41,7 @@ export interface BreadcrumbContext {
   workflowName?: string;
   runName?: string;
   environmentName?: string;
+  configurationKindName?: string;
 }
 
 function current(label: string): Breadcrumb {
@@ -71,6 +76,26 @@ export function buildBreadcrumbs(
       return [current(labels.onboarding)];
     case "projects":
       return [current(labels.projects)];
+    case "organization-agents":
+      return [current(labels.agents)];
+    case "organization-workflows":
+      return [current(labels.workflows)];
+    case "organization-automations":
+      return [current(labels.automations)];
+    case "organization-environments":
+      return [current(labels.environments)];
+    case "organization-secrets":
+      return [current(labels.secrets)];
+    case "organization-members":
+      return [current(labels.members)];
+    case "organization-files":
+      return [current(labels.files)];
+    case "configuration-catalog":
+    case "configuration":
+      return [
+        { label: labels.administration, path: "/administration" },
+        current(context.configurationKindName ?? labels.administration),
+      ];
     case "project":
       return project.map((item, index) =>
         index === project.length - 1 ? current(item.label) : item,
@@ -173,6 +198,30 @@ export function buildBreadcrumbs(
       ];
     case "runtime-secrets":
       return [...project, current(labels.secrets)];
+    case "role-images":
+      return [...project, current(labels.roleImages)];
+    case "role-image-new":
+      return [
+        ...project,
+        {
+          label: labels.roleImages,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/role-images`
+            : "/projects",
+        },
+        current(labels.newRoleImage),
+      ];
+    case "role-image":
+      return [
+        ...project,
+        {
+          label: labels.roleImages,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/role-images`
+            : "/projects",
+        },
+        current(labels.roleImage),
+      ];
     case "integrations":
       return [current(labels.integrations)];
     case "decisions":

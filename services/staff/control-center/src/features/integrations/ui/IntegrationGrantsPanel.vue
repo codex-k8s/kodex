@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { LockKeyhole, Plus, ShieldCheck, Trash2 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { LockKeyhole, Plus, Search, ShieldCheck, Trash2 } from "@lucide/vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
   connectionAllows,
   type IntegrationGrantPresentation,
 } from "@/features/integrations/ui/model";
+import {
+  approvalScopeOptions,
+  validApprovalScopeSelection,
+} from "@/features/integrations/approval-scope-options";
 import type {
   IntegrationConnection,
   IntegrationGrantConnectionCandidate,
@@ -17,9 +21,10 @@ import type {
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
-import type {
-  AsyncEntityOption,
-  AsyncEntityOptionPage,
+import {
+  useCursorInfiniteScroll,
+  type AsyncEntityOption,
+  type AsyncEntityOptionPage,
 } from "@/shared/ui/async-entity-picker";
 import {
   connectionCandidates,
@@ -37,6 +42,9 @@ const props = defineProps<{
   targetRef: string;
   capabilityKey: string;
   busy: boolean;
+  search?: string;
+  loading?: boolean;
+  hasMore?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -47,15 +55,30 @@ const emit = defineEmits<{
   "update:capabilityKey": [value: string];
   save: [selection: IntegrationGrantSelection];
   revoke: [grant: IntegrationGrantPresentation];
+  "update:search": [value: string];
+  more: [];
 }>();
 
 const { t } = useI18n();
+const fieldPrefix = `integration-grants-${useId()}`;
 const chosenProject = ref<AsyncEntityOption>();
 const chosenTarget = ref<AsyncEntityOption>();
 const chosenCapability = ref<AsyncEntityOption>();
 const projectCandidate = ref<IntegrationGrantProjectCandidate>();
 const recipientCandidate = ref<IntegrationGrantRecipientCandidate>();
 const capabilityCandidate = ref<IntegrationGrantCapabilityCandidate>();
+const approvalScopePaths = ref<string[]>([]);
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more"),
+});
+const availableApprovalScopePaths = computed(() =>
+  approvalScopeOptions(capabilityCandidate.value?.capability.inputSchema),
+);
 const connectionRows = ref(
   new Map<string, IntegrationGrantConnectionCandidate>(),
 );
@@ -70,6 +93,21 @@ function scopeLabel(candidate: IntegrationGrantConnectionCandidate): string {
   return Object.entries(candidate.resourceScope)
     .map(([key, value]) => `${key}=${value.slice(0, 160)}`)
     .join(" · ");
+}
+function approvalPolicyLabel(value: string): string {
+  const key = `integrations.approvalPolicies.${value}`;
+  return t(key);
+}
+function resourceKindLabel(value: string): string {
+  const key = `integrations.integrationResourceKinds.${value}`;
+  return t(key);
+}
+function approvalPathLabel(path: string): string {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
+    .join(".");
 }
 const projectRows = new Map<string, IntegrationGrantProjectCandidate>();
 const recipientRows = new Map<string, IntegrationGrantRecipientCandidate>();
@@ -135,6 +173,14 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     capability.pins.connectionVersion !== connection.version
   )
     return undefined;
+  if (
+    capability.capability.approvalPolicy === "HUMAN_SCOPED" &&
+    !validApprovalScopeSelection(
+      approvalScopePaths.value,
+      availableApprovalScopePaths.value,
+    )
+  )
+    return undefined;
   return {
     connectionRef: connection.ref,
     connectionVersion: connection.version,
@@ -142,12 +188,22 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     recipientKind: recipient.recipientKind,
     recipientRef: recipient.recipientRef,
     capabilityKey: capability.capability.key,
+    ...(capability.capability.approvalPolicy === "HUMAN_SCOPED"
+      ? { approvalScopePaths: [...approvalScopePaths.value].sort() }
+      : {}),
   };
 });
+function toggleApprovalScopePath(path: string, checked: boolean): void {
+  if (!availableApprovalScopePaths.value.includes(path)) return;
+  approvalScopePaths.value = checked
+    ? [...new Set([...approvalScopePaths.value, path])].sort()
+    : approvalScopePaths.value.filter((candidate) => candidate !== path);
+}
 function submit(): void {
   if (selection.value && !props.busy) emit("save", selection.value);
 }
 function clearCapability(): void {
+  approvalScopePaths.value = [];
   capabilityGeneration += 1;
   capabilityCandidate.value = undefined;
   chosenCapability.value = undefined;
@@ -194,6 +250,7 @@ function chooseRecipient(option: AsyncEntityOption): void {
 function chooseCapability(option: AsyncEntityOption): void {
   const candidate = capabilityRows.get(option.ref);
   if (!candidate?.grantable) return;
+  approvalScopePaths.value = [];
   capabilityCandidate.value = candidate;
   chosenCapability.value = option;
   emit("update:capabilityKey", option.ref);
@@ -232,10 +289,11 @@ async function loadProjects(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!props.selectedConnection) return { items: [] };
   const generation = projectGeneration;
-  const page = await projectLoader.value(query, cursor, signal);
+  const page = await projectLoader.value(query, cursor, signal, pageSize);
   if (signal.aborted || generation !== projectGeneration) return { items: [] };
   if (page.pins.connectionVersion !== props.selectedConnection.version)
     throw new Error("Integration connection version changed");
@@ -259,10 +317,11 @@ async function loadRecipients(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!props.projectRef || !props.selectedConnection) return { items: [] };
   const generation = recipientGeneration;
-  const page = await recipientLoader.value(query, cursor, signal);
+  const page = await recipientLoader.value(query, cursor, signal, pageSize);
   if (signal.aborted || generation !== recipientGeneration)
     return { items: [] };
   if (!cursor) recipientRows.clear();
@@ -286,8 +345,9 @@ async function loadConnections(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await connectionLoader(query, cursor, signal);
+  const page = await connectionLoader(query, cursor, signal, pageSize);
   if (signal.aborted) return { items: [] };
   if (!cursor) connectionRows.value.clear();
   page.items.forEach((item) =>
@@ -319,11 +379,12 @@ async function loadCapabilities(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!recipientCandidate.value || !props.selectedConnection)
     return { items: [] };
   const generation = capabilityGeneration;
-  const page = await capabilityLoader.value(query, cursor, signal);
+  const page = await capabilityLoader.value(query, cursor, signal, pageSize);
   if (signal.aborted || generation !== capabilityGeneration)
     return { items: [] };
   if (!cursor) capabilityRows.clear();
@@ -334,10 +395,9 @@ async function loadCapabilities(
       title: item.capability.name,
       description: item.capability.description,
       meta: [
-        item.capability.operation,
         t(`integrations.risk.${item.capability.risk}`),
-        item.capability.resourceKind,
-        item.capability.approvalPolicy,
+        resourceKindLabel(item.capability.resourceKind),
+        approvalPolicyLabel(item.capability.approvalPolicy),
       ].join(" · "),
       disabled: !item.grantable,
       disabledReason: item.grantable
@@ -397,18 +457,34 @@ const canManageSelected = computed(
     </header>
 
     <div class="grant-workspace">
-      <div class="grant-list-column">
-        <label class="connection-picker">
-          <span>{{ t("integrationsRedesign.connectionPicker") }}</span>
-          <AsyncEntityPicker
-            :model-value="selectedConnection?.ref"
-            :selected="connectionOption"
-            :load-page="loadConnections"
-            :trigger-label="t('integrationsRedesign.connectionPicker')"
-            :placeholder="t('integrationsRedesign.allConnections')"
-            @update:model-value="changeConnection"
-          />
-        </label>
+      <div ref="scrollRoot" class="grant-list-column">
+        <div class="grant-list-toolbar">
+          <label class="grant-search">
+            <Search :size="16" aria-hidden="true" />
+            <span class="sr-only">{{
+              t("integrationsRedesign.searchGrantConnections")
+            }}</span>
+            <input
+              type="search"
+              :value="search ?? ''"
+              :placeholder="t('integrationsRedesign.searchGrantConnections')"
+              @input="
+                emit('update:search', ($event.target as HTMLInputElement).value)
+              "
+            />
+          </label>
+          <label class="connection-picker">
+            <span>{{ t("integrationsRedesign.connectionPicker") }}</span>
+            <AsyncEntityPicker
+              :model-value="selectedConnection?.ref"
+              :selected="connectionOption"
+              :load-page="loadConnections"
+              :trigger-label="t('integrationsRedesign.connectionPicker')"
+              :placeholder="t('integrationsRedesign.allConnections')"
+              @update:model-value="changeConnection"
+            />
+          </label>
+        </div>
 
         <div v-if="grants.length" class="grant-list" role="list">
           <article
@@ -431,20 +507,31 @@ const canManageSelected = computed(
             </div>
             <div class="grant-capability">
               <strong>{{ item.capabilityName }}</strong>
-              <span class="mono">{{ item.capabilityKey }}</span>
               <span>
                 {{ t("integrations.risk." + item.grant.risk) }} ·
-                {{ item.grant.approvalPolicy }}
+                {{ approvalPolicyLabel(item.grant.approvalPolicy) }}
               </span>
-              <span class="mono">{{ item.resourceKind }}</span>
+              <span>{{ resourceKindLabel(item.resourceKind) }}</span>
+              <span
+                v-for="path in item.grant.approvalScopePaths"
+                :key="path"
+                class="mono resource-value"
+                >{{ approvalPathLabel(path) }}</span
+              >
               <span
                 v-for="entry in item.resourceValues"
                 :key="entry.key"
-                class="mono resource-value"
-                :title="entry.value"
+                class="resource-value"
+                :title="`${entry.key}=${entry.value}`"
               >
-                {{ entry.key }}={{ entry.value }}
+                {{ entry.value }}
               </span>
+              <details class="grant-technical-details">
+                <summary>{{ t("integrations.technicalDetails") }}</summary>
+                <code>{{ item.capabilityKey }}</code>
+                <code>{{ item.resourceKind }}</code>
+                <code>{{ item.grant.approvalPolicy }}</code>
+              </details>
             </div>
             <StatusBadge :state="item.enabled ? 'ENABLED' : 'REVOKED'" />
             <button
@@ -467,6 +554,10 @@ const canManageSelected = computed(
           <h3>{{ t("integrations.noGrants") }}</h3>
           <p>{{ t("integrationsRedesign.noGrantsHint") }}</p>
         </div>
+        <p v-if="loading && grants.length" class="grant-loading" role="status">
+          {{ t("common.loading") }}
+        </p>
+        <span ref="sentinel" class="grant-sentinel" aria-hidden="true" />
       </div>
 
       <aside class="grant-editor" aria-labelledby="grant-editor-title">
@@ -502,6 +593,8 @@ const canManageSelected = computed(
           <label class="field">
             <span>{{ t("integrations.targetType") }}</span>
             <select
+              :id="`${fieldPrefix}-target-kind`"
+              :name="`${fieldPrefix}-target-kind`"
               :value="targetKind"
               :disabled="!canManageSelected"
               @change="
@@ -566,16 +659,54 @@ const canManageSelected = computed(
               </div>
               <div>
                 <dt>{{ t("integrations.resourceKind") }}</dt>
-                <dd class="mono">{{ selectedCapability.resourceKind }}</dd>
+                <dd>
+                  {{ resourceKindLabel(selectedCapability.resourceKind) }}
+                </dd>
               </div>
               <div>
                 <dt>{{ t("integrations.approvalPolicy") }}</dt>
-                <dd class="mono">
-                  {{ selectedCapability.approvalPolicy }}
+                <dd>
+                  {{ approvalPolicyLabel(selectedCapability.approvalPolicy) }}
                 </dd>
               </div>
             </dl>
           </section>
+
+          <fieldset
+            v-if="selectedCapability?.approvalPolicy === 'HUMAN_SCOPED'"
+            class="capability-boundary"
+          >
+            <legend>{{ t("integrations.approvalScopeTitle") }}</legend>
+            <p>{{ t("integrations.approvalScopeHelp") }}</p>
+            <p v-if="!availableApprovalScopePaths.length">
+              {{ t("integrations.approvalScopeUnavailable") }}
+            </p>
+            <label
+              v-for="path in availableApprovalScopePaths"
+              :key="path"
+              class="approval-scope-option"
+            >
+              <input
+                type="checkbox"
+                :name="`${fieldPrefix}-approval-scope`"
+                :value="path"
+                :checked="approvalScopePaths.includes(path)"
+                :disabled="
+                  busy ||
+                  !canManageSelected ||
+                  (!approvalScopePaths.includes(path) &&
+                    approvalScopePaths.length >= 16)
+                "
+                @change="
+                  toggleApprovalScopePath(
+                    path,
+                    ($event.target as HTMLInputElement).checked,
+                  )
+                "
+              />
+              <code>{{ approvalPathLabel(path) }}</code>
+            </label>
+          </fieldset>
 
           <SafeStructuredData
             v-if="connectionCandidate"
@@ -657,6 +788,28 @@ const canManageSelected = computed(
   margin: 0;
   font-size: 0.72rem;
 }
+.approval-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+.approval-scope-option code {
+  overflow-wrap: anywhere;
+}
+.grant-technical-details {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.grant-technical-details summary {
+  cursor: pointer;
+}
+.grant-technical-details code {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
 .panel-heading,
 .grant-editor > header {
   justify-content: space-between;
@@ -694,13 +847,41 @@ const canManageSelected = computed(
   border-radius: 8px;
   background: var(--surface);
 }
+.grant-list-column {
+  max-height: calc(100vh - 250px);
+  overflow: auto;
+}
+.grant-list-toolbar {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(300px, auto);
+  align-items: end;
+  gap: 10px;
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.grant-search {
+  position: relative;
+  min-width: 0;
+}
+.grant-search > svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  color: var(--subtle);
+  transform: translateY(-50%);
+}
+.grant-search input {
+  padding-left: 34px;
+}
 .connection-picker {
   display: grid;
   grid-template-columns: auto minmax(180px, 320px);
   align-items: center;
   gap: 10px;
-  padding: 12px 13px;
-  border-bottom: 1px solid var(--border);
 }
 .connection-picker > span {
   color: var(--muted);
@@ -781,6 +962,17 @@ const canManageSelected = computed(
   padding: 42px 18px;
   text-align: center;
 }
+.grant-loading {
+  margin: 0;
+  padding: 10px 13px;
+  color: var(--muted);
+  text-align: center;
+}
+.grant-sentinel {
+  display: block;
+  width: 1px;
+  height: 1px;
+}
 @media (max-width: 1060px) {
   .grant-workspace {
     grid-template-columns: 1fr;
@@ -788,9 +980,13 @@ const canManageSelected = computed(
   .grant-editor {
     position: static;
   }
+  .grant-list-column {
+    max-height: none;
+  }
 }
 @media (max-width: 720px) {
   .panel-heading,
+  .grant-list-toolbar,
   .connection-picker {
     align-items: stretch;
   }
@@ -798,6 +994,7 @@ const canManageSelected = computed(
     flex-direction: column;
   }
   .connection-picker,
+  .grant-list-toolbar,
   .grant-row {
     grid-template-columns: 1fr;
   }

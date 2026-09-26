@@ -25,7 +25,10 @@ import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
-import { presentRuntimeText } from "@/features/runs/runtime-text";
+import {
+  presentRuntimeText,
+  runtimeProgressKey,
+} from "@/features/runs/runtime-text";
 import {
   indexRunSessionOwnership,
   projectRunSessionGraph,
@@ -74,8 +77,13 @@ const graph = computed(
 const streamState = computed(
   () => realtime.state[graph.value?.runRef ?? runRef.value],
 );
-function safeRuntimeText(value?: string): string | undefined {
-  return presentRuntimeText(value, serverMessage);
+function safeRuntimeText(
+  value?: string,
+  messageKind?: RunEvent["messageKind"],
+): string | undefined {
+  const progressKey = runtimeProgressKey(value);
+  if (progressKey) return translator.t(progressKey);
+  return presentRuntimeText(value, serverMessage, messageKind);
 }
 
 const runSubtitle = computed(
@@ -169,13 +177,9 @@ const eventList = computed<PresentedRunEvent[]>(() =>
     .map((event) => ({
       ...event,
       displaySummary:
-        presentRuntimeText(event.summary, serverMessage, event.messageKind) ??
+        safeRuntimeText(event.summary, event.messageKind) ??
         eventFallback(event),
-      displayProgress: presentRuntimeText(
-        event.progress,
-        serverMessage,
-        event.messageKind,
-      ),
+      displayProgress: safeRuntimeText(event.progress, event.messageKind),
     })),
 );
 const gateList = computed(() =>
@@ -258,6 +262,7 @@ const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
 const activityOpen = ref(false);
 const activityNodeRef = ref<string>();
+const activityDrawer = ref<HTMLElement>();
 const nodeInspectorOpen = ref(false);
 const nodeDetailsOpen = ref(false);
 const gateDialogOpen = ref(false);
@@ -453,6 +458,7 @@ function openNodeDetails(node: RunNode): void {
 function openActivity(nodeRef?: string): void {
   activityNodeRef.value = nodeRef;
   activityOpen.value = true;
+  void nextTick(() => activityDrawer.value?.focus());
   // Terminal WS delta может прийти раньше авторитетного Run readback с
   // вычисленными nextActions. Drawer всегда освежает eligibility продолжения.
   void refreshScheduler.request(runRef.value);
@@ -786,11 +792,13 @@ onBeforeUnmount(() => {
             @details="openSelectedDetails"
           />
         </ModalDialog>
-        <ModalDialog
+        <aside
           v-if="activityOpen"
-          :title="$t('runs.activity')"
-          size="full"
-          @close="closeActivity"
+          ref="activityDrawer"
+          class="run-activity-overlay"
+          tabindex="-1"
+          :aria-label="$t('runs.activity')"
+          @keydown.esc.stop="closeActivity"
         >
           <RunActivityDrawer
             :open="true"
@@ -831,7 +839,7 @@ onBeforeUnmount(() => {
               </form>
             </template>
           </RunActivityDrawer>
-        </ModalDialog>
+        </aside>
         <RunSessionDetailsDialog
           v-if="selectedNode && nodeDetailsOpen"
           :run="selectedRun ?? run"
@@ -1093,6 +1101,21 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
 }
+.run-activity-overlay {
+  position: absolute;
+  z-index: 24;
+  inset-block: 0;
+  right: 0;
+  display: flex;
+  width: min(720px, 54%);
+  min-width: 520px;
+  min-height: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  outline: 0;
+  background: var(--surface);
+  box-shadow: -14px 0 36px rgba(16, 22, 30, 0.14);
+}
 .run-continuation {
   display: grid;
   gap: 9px;
@@ -1138,6 +1161,11 @@ onBeforeUnmount(() => {
     top: 8px;
     left: 8px;
     transform: none;
+  }
+  .run-activity-overlay {
+    left: 0;
+    width: 100%;
+    min-width: 0;
   }
 }
 </style>

@@ -30,4 +30,13 @@ describe("NewRunPage layout", () => {
     expect(source).toContain(".launch-summary__actions .button");
     expect(source).toContain("min-height: 46px");
   });
+
+  it("оставляет название необязательным и показывает источник запуска", () => {
+    expect(template).toContain("runs.newRun.titleOptionalHint");
+    expect(template).toContain("runs.newRun.titleWillBeSuggested");
+    expect(template).toContain("runs.newRun.initiatorAndSource");
+    expect(template).toContain("runs.newRun.manualSource");
+    expect(template).toContain("runs.newRun.externalChannelUnavailable");
+    expect(source).not.toContain("Boolean(form.title.trim())");
+  });
 });

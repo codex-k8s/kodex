@@ -91,7 +91,7 @@ describe("авторитетные возможности сотрудника",
       query: {
         query: "mail",
         pageToken: "cursor",
-        pageSize: 30,
+        pageSize: 20,
         workflowRef: undefined,
         stepKey: undefined,
       },

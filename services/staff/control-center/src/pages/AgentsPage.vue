@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { Plus } from "@lucide/vue";
 import {
   computed,
@@ -19,6 +18,7 @@ import {
 import { useAgentCatalogStore } from "@/features/agents/catalog/store";
 import { catalogInvalidated } from "@/features/catalogs/api";
 import { usePlatformStore } from "@/features/platform/store";
+import AgentFormFields from "@/features/platform/AgentFormFields.vue";
 import {
   isAgentDraftComplete,
   resolveAgentRuntimeRef,
@@ -46,6 +46,7 @@ const runtimes = computed(() =>
 );
 const catalogView = ref<AgentCatalogView>("grid");
 const catalogQuery = ref("");
+const pageSize = ref(20);
 const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -56,7 +57,11 @@ const form = reactive({
   initialInstructions: "",
   runtimeRef: "",
 });
-const formReady = computed(() => isAgentDraftComplete(form));
+const formReady = computed(
+  () =>
+    isAgentDraftComplete(form) &&
+    runtimes.value.some((runtime) => runtime.ref === form.runtimeRef),
+);
 let searchTimer: number | undefined;
 let catalogGeneration = 0;
 
@@ -83,7 +88,7 @@ async function submit(): Promise<void> {
 async function load(): Promise<void> {
   await Promise.all([
     platform.loadProject(projectRef.value),
-    catalog.load(projectRef.value, catalogQuery.value),
+    catalog.load(projectRef.value, catalogQuery.value, false, pageSize.value),
     platform.loadRuntimes(),
   ]);
   if (route.query.create === "1") openDialog();
@@ -123,7 +128,7 @@ watch(
 watch(catalogQuery, (value) => {
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(() => {
-    void catalog.load(projectRef.value, value);
+    void catalog.load(projectRef.value, value, false, pageSize.value);
   }, 500);
 });
 
@@ -154,7 +159,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
   const scope = projectRef.value;
   after(() => {
     if (catalogGeneration === expected && projectRef.value === scope)
-      void catalog.load(scope, catalogQuery.value, retain);
+      void catalog.load(scope, catalogQuery.value, retain, pageSize.value);
   });
   onError((error) => {
     if (catalogGeneration === expected) {
@@ -183,7 +188,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
       :problem="catalog.problem"
       :empty="list.length === 0"
       :empty-title="$t('agents.emptyTitle')"
-      @retry="catalog.load(projectRef, catalogQuery)"
+      @retry="catalog.load(projectRef, catalogQuery, false, pageSize)"
     >
       <template #empty-action
         ><button
@@ -198,12 +203,13 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
       >
       <AgentCatalog
         v-model:query="catalogQuery"
+        v-model:page-size="pageSize"
         v-model:view="catalogView"
         :agents="list"
         :project-ref="projectRef"
         :has-more="catalog.hasMore"
         :loading-more="catalog.loadingMore"
-        @load-more="catalog.loadMore"
+        @load-more="catalog.loadMore(pageSize)"
       />
     </AsyncState>
     <ModalDialog
@@ -217,52 +223,16 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
         :inert="busy"
         @submit.prevent="submit"
       >
-        <label class="field"
-          ><span>{{ $t("common.name") }}</span
-          ><input v-model.trim="form.name" required maxlength="120" /></label
-        ><label class="field"
-          ><span>{{ $t("common.purpose") }}</span
-          ><input
-            v-model.trim="form.purpose"
-            required
-            maxlength="1000" /></label
-        ><label class="field field--wide"
-          ><span>{{ $t("agents.role") }}</span
-          ><VoiceTextarea
-            v-model.trim="form.roleDescription"
-            :disabled="busy"
-            required
-            maxlength="1000" /></label
-        ><label class="field field--wide"
-          ><span>{{ $t("agents.instructions") }}</span
-          ><VoiceTextarea
-            v-model.trim="form.initialInstructions"
-            :disabled="busy"
-            required
-            maxlength="65536"
-          />
-        </label>
-        <details class="field--wide advanced-settings">
-          <summary>{{ $t("common.advanced") }}</summary>
-          <label class="field"
-            ><span>{{ $t("agents.runtime") }}</span
-            ><select v-model="form.runtimeRef" required>
-              <option
-                v-for="runtime in runtimes"
-                :key="runtime.ref"
-                :value="runtime.ref"
-              >
-                {{ runtime.name }}
-              </option>
-            </select>
-            <small>{{ $t("agents.runtimeHelp") }}</small></label
-          >
-          <ProblemNotice
-            v-if="platform.problems.runtimes"
-            :problem="platform.problems.runtimes"
-            compact
-          />
-        </details>
+        <AgentFormFields
+          v-model:name="form.name"
+          v-model:purpose="form.purpose"
+          v-model:role-description="form.roleDescription"
+          v-model:initial-instructions="form.initialInstructions"
+          v-model:runtime-ref="form.runtimeRef"
+          :runtimes="runtimes"
+          :runtime-problem="platform.problems.runtimes"
+          :disabled="busy"
+        />
         <ProblemNotice
           v-if="problem"
           class="field--wide"
@@ -291,16 +261,3 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
     >
   </PageFrame>
 </template>
-
-<style scoped>
-.advanced-settings {
-  display: grid;
-  gap: 12px;
-}
-.advanced-settings summary {
-  cursor: pointer;
-}
-.advanced-settings .field {
-  margin-top: 12px;
-}
-</style>

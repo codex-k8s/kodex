@@ -9,18 +9,30 @@ const bootstrapSource = readFileSync(
 );
 
 describe("AppShell navigation", () => {
+  it("даёт глобальному поиску стабильное имя поля", () => {
+    expect(source).toContain('name="global-search"');
+    expect(source).toContain("useAdaptiveCursorPageSize");
+    expect(source).toContain("useCursorInfiniteScroll");
+    expect(source).toContain("platform.searchNextPageToken");
+    expect(source).toContain("platform.loadMoreSearch(searchPageSize.value)");
+  });
+
   it("оставляет Kodex только глобальным FAB и drawer", () => {
     expect(source).not.toContain("assistant-entry");
     expect(source).toContain("<AssistantWorkspace");
     expect(source).not.toContain("openAssistantWorkspace");
   });
 
-  it("запускает одну realtime-индикацию до независимых каталожных readback", () => {
+  it("запускает realtime до readback и не загружает полный каталог Проектов в оболочке", () => {
     expect(source).toContain("<RealtimeStatus");
+    expect(source).toContain("router.isReady().then");
+    expect(source).toContain("selectProjectRef(projectRef.value)");
     expect(source).toContain("realtime.openPlatform()");
     expect(source.indexOf("realtime.openPlatform()")).toBeLessThan(
-      source.indexOf("platform.loadProjects()"),
+      source.indexOf("platform.loadPendingGateCount()"),
     );
+    expect(source).not.toContain("platform.loadGates()");
+    expect(source).not.toContain("platform.loadProjects()");
     expect(source).not.toContain("]).finally(() => {");
     expect(source).not.toContain("offline-banner");
     expect(source).not.toContain("location.reload");

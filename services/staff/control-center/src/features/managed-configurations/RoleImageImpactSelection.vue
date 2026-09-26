@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   RoleImageImpactPlan,
   RoleImageImpactPage,
@@ -7,11 +7,25 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { roleImagePlanIdentity, readImageImpact } from "./role-image-impact";
 
 const props = defineProps<{ plan: RoleImageImpactPlan; busy?: boolean }>();
+const fieldPrefix = `role-image-impact-${useId()}`;
 const emit = defineEmits<{ apply: [selectedItemRefs: string[]] }>();
 const page = ref<RoleImageImpactPage>();
+const itemList = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: itemList,
+  itemSelector: ".publication-impact__item",
+  itemCount: () => page.value?.items.length ?? 0,
+  estimatedViewportHeight: 420,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
 const selected = ref(new Set<string>());
 const query = ref("");
 const loading = ref(false);
@@ -55,6 +69,7 @@ async function load(more = false): Promise<void> {
       active.signal,
       query.value,
       more ? previous?.nextPageToken : undefined,
+      pageSize.value,
     );
     if (current !== generation) return;
     if (more && previous) {
@@ -127,6 +142,13 @@ onBeforeUnmount(() => {
   clearTimeout(debounce);
   clearInterval(clock);
 });
+useCursorInfiniteScroll({
+  root: itemList,
+  sentinel,
+  enabled: () =>
+    Boolean(page.value?.nextPageToken) && !loading.value && !props.busy,
+  loadMore: () => load(true),
+});
 </script>
 <template>
   <section
@@ -138,7 +160,14 @@ onBeforeUnmount(() => {
     <p>{{ $t("publicationImpact.snapshotTotal", { count: plan.total }) }}</p>
     <label>
       {{ $t("common.search") }}
-      <input v-model="query" type="search" maxlength="200" :disabled="busy" />
+      <input
+        v-model="query"
+        :id="`${fieldPrefix}-search`"
+        :name="`${fieldPrefix}-search`"
+        type="search"
+        maxlength="200"
+        :disabled="busy"
+      />
     </label>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
@@ -152,14 +181,16 @@ onBeforeUnmount(() => {
         }}
       </p>
       <StatusBadge :state="page.plan.state" />
-      <div class="publication-impact__items">
+      <div ref="itemList" class="publication-impact__items">
         <label
-          v-for="item in page.items"
+          v-for="(item, index) in page.items"
           :key="item.ref"
           class="publication-impact__item"
         >
           <input
             type="checkbox"
+            :id="`${fieldPrefix}-item-${index}`"
+            :name="`${fieldPrefix}-item-${index}`"
             :checked="selected.has(item.ref)"
             :disabled="!editable || item.outcome !== 'PENDING'"
             :aria-label="item.consumer?.agentRef ?? item.environmentRef"
@@ -178,16 +209,15 @@ onBeforeUnmount(() => {
           >
           <StatusBadge :state="item.outcome" />
         </label>
+        <div
+          v-if="page.nextPageToken"
+          ref="sentinel"
+          class="publication-impact__sentinel"
+          role="status"
+        >
+          <span v-if="loading">{{ $t("common.loading") }}</span>
+        </div>
       </div>
-      <button
-        v-if="page.nextPageToken"
-        type="button"
-        class="button"
-        :disabled="loading || busy"
-        @click="load(true)"
-      >
-        {{ $t("impact.more") }}
-      </button>
       <p
         v-if="
           page.plan.state === 'PREPARED' &&
@@ -233,5 +263,8 @@ onBeforeUnmount(() => {
 }
 .publication-impact__item input {
   flex: 0 0 auto;
+}
+.publication-impact__sentinel {
+  min-height: 1px;
 }
 </style>

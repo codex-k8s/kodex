@@ -15,7 +15,7 @@ func PublicationAdmissionResources() (map[string]any, map[string]any) {
 				"matchPolicy": "Equivalent", "namespaceSelector": map[string]any{}, "objectSelector": map[string]any{},
 				"resourceRules": []any{map[string]any{"apiGroups": []any{""}, "apiVersions": []any{"v1"}, "operations": []any{"CREATE"}, "resources": []any{"configmaps"}, "scope": "*"}},
 			},
-			"matchConditions": []any{map[string]any{"name": "control-plane-create", "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane'"}},
+			"matchConditions": []any{map[string]any{"name": "control-plane-mail-create", "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane' && object.metadata.name.startsWith('egress-gateway-mail-')"}},
 			"validations": []any{
 				map[string]any{"expression": "object.metadata.namespace == 'kodex-system' && object.metadata.name.matches('^egress-gateway-mail-[a-f0-9]{24}$')", "message": "control-plane may only create exact mail projection ConfigMaps", "reason": "Forbidden"},
 				map[string]any{"expression": "has(object.immutable) && object.immutable == true && (!has(object.binaryData) || size(object.binaryData) == 0)", "message": "mail projection ConfigMaps must be immutable and cannot contain binary data", "reason": "Forbidden"},

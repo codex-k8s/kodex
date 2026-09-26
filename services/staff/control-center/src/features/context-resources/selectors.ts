@@ -15,11 +15,12 @@ export async function projects(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   const page = (
     await unwrap(
       listProjects({
-        query: { query, pageToken, pageSize: 40 },
+        query: { query, pageToken, pageSize },
         signal: requestSignal(signal),
       }),
     )
@@ -39,12 +40,13 @@ export async function artifacts(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<{ items: Artifact[]; nextPageToken?: string }> {
   const page = (
     await unwrap(
       listArtifacts({
         path: { projectRef },
-        query: { query, pageToken, pageSize: 40, lifecycleState: "ACTIVE" },
+        query: { query, pageToken, pageSize, lifecycleState: "ACTIVE" },
         signal: requestSignal(signal),
       }),
     )
@@ -67,11 +69,12 @@ export async function runs(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   const page = (
     await unwrap(
       listRuns({
-        query: { projectRef, query, pageToken, pageSize: 40 },
+        query: { projectRef, query, pageToken, pageSize },
         signal: requestSignal(signal),
       }),
     )

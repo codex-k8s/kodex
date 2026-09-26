@@ -17,6 +17,8 @@ const definition: IntegrationDefinition = {
   builtIn: true,
   version: 1,
   nextActions: [],
+  connectionCount: 1,
+  healthyConnectionCount: 1,
   available: true,
   capabilities: [
     {
@@ -106,6 +108,7 @@ const messages = {
 async function renderPanel(
   values: readonly IntegrationConnection[],
   coreReady: boolean,
+  hasMore = false,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -114,6 +117,7 @@ async function renderPanel(
         definitions: { synthetic: definition },
         coreReady,
         busyRef: "",
+        hasMore,
       }),
   });
   app.use(
@@ -123,6 +127,12 @@ async function renderPanel(
 }
 
 describe("IntegrationConnectionsPanel", () => {
+  it("не выдаёт число загруженных строк за точное общее количество", async () => {
+    expect(await renderPanel([connection], true, true)).toContain(
+      "Подключений: 1+",
+    );
+    expect(await renderPanel([connection], true)).toContain("Подключений: 1");
+  });
   it("показывает только разрешённые server-owned lifecycle действия", async () => {
     const html = await renderPanel([connection], true);
 
@@ -146,5 +156,24 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Откройте каталог, чтобы настроить подключение.");
     expect(html).not.toContain("Платформа работает без интеграций");
     expect(html).not.toContain("Подключения необязательны");
+  });
+
+  it("оставляет полный набор возможностей в счётчике, но не растягивает карточку", async () => {
+    const capability = definition.capabilities[0];
+    if (!capability) {
+      throw new Error("fixture capability is required");
+    }
+    const capabilities = Array.from({ length: 4 }, (_, index) => ({
+      ...capability,
+      key: `synthetic.capability.${String(index + 1)}`,
+      name: `Возможность ${String(index + 1)}`,
+    }));
+    const html = await renderPanel([{ ...connection, capabilities }], true);
+
+    expect(html).toContain("Возможность 1");
+    expect(html).toContain("Возможность 3");
+    expect(html).not.toContain("Возможность 4");
+    expect(html).toContain("+1");
+    expect(html).toContain("<strong>4</strong>");
   });
 });

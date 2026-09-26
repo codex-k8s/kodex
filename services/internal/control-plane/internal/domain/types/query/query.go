@@ -19,6 +19,7 @@ type Filter struct {
 	ProjectRef, ResourceRef, Query, State, Category, DefinitionKey, Action, Outcome string
 	ArtifactType, ScanState, SourceKind                                             string
 	SourceKinds                                                                     []string `json:",omitempty"`
+	Aliases                                                                         []string `json:",omitempty"`
 	States                                                                          []string
 	AfterSequence                                                                   int64
 	Limit                                                                           int32

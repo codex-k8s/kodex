@@ -15,6 +15,7 @@ export async function loadVfsPage(options: {
   query: string;
   projectRef?: string;
   pageToken?: string;
+  pageSize?: number;
   lifecycleState?: SearchVfsData["query"]["lifecycleState"];
   kinds?: SearchVfsData["query"]["kinds"];
   signal: AbortSignal;
@@ -25,7 +26,7 @@ export async function loadVfsPage(options: {
   const pagination = {
     projectRef,
     pageToken,
-    pageSize: 30,
+    pageSize: Math.min(100, Math.max(1, Math.floor(options.pageSize ?? 20))),
     path: options.path,
     ...(options.lifecycleState
       ? { lifecycleState: options.lifecycleState }

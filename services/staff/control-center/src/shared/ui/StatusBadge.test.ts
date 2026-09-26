@@ -18,7 +18,12 @@ async function render(props: {
       messages: {
         ru: {
           common: { unknownStatus: "Статус недоступен" },
-          states: { SUCCEEDED: "Завершён", PUBLISHED: "Опубликован" },
+          states: {
+            SUCCEEDED: "Завершён",
+            PUBLISHED: "Опубликован",
+            ACCEPTED: "Допущен",
+            PREPARED: "Подготовлен",
+          },
         },
       },
     }),
@@ -56,5 +61,21 @@ describe("StatusBadge", () => {
 
     expect(html).toContain("Опубликован");
     expect(html).toContain("status-badge--accent");
+  });
+
+  it("показывает допуск артефакта как успешное состояние", async () => {
+    const html = await render({ state: "ACCEPTED" });
+
+    expect(html).toContain("Допущен");
+    expect(html).toContain("status-badge--success");
+    expect(html).not.toContain("Статус недоступен");
+  });
+
+  it("показывает подготовленный план нейтральным состоянием", async () => {
+    const html = await render({ state: "PREPARED" });
+
+    expect(html).toContain("Подготовлен");
+    expect(html).toContain("status-badge--neutral");
+    expect(html).not.toContain("Статус недоступен");
   });
 });

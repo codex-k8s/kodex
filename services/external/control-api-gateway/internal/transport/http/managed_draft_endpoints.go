@@ -1,13 +1,16 @@
 package httptransport
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
@@ -32,7 +35,7 @@ func (server *Server) SavePromptTemplateDraft(w http.ResponseWriter, r *http.Req
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
-	writeManagedDraftResult(w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE, &body)
+	writeManagedDraftResult(r.Context(), w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE, &body)
 }
 
 func (server *Server) DiscardPromptTemplateDraft(w http.ResponseWriter, r *http.Request, configurationRef generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.DiscardPromptTemplateDraftParams) {
@@ -47,7 +50,7 @@ func (server *Server) DiscardPromptTemplateDraft(w http.ResponseWriter, r *http.
 		writeRPCProblem(w, err)
 		return
 	}
-	writeManagedDraftResult(w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE, nil)
+	writeManagedDraftResult(r.Context(), w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE, nil)
 }
 
 func (server *Server) SaveRoleImageRevisionDraft(w http.ResponseWriter, r *http.Request, configurationRef generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.SaveRoleImageRevisionDraftParams) {
@@ -62,7 +65,7 @@ func (server *Server) SaveRoleImageRevisionDraft(w http.ResponseWriter, r *http.
 		writeRPCProblem(w, err)
 		return
 	}
-	writeManagedDraftResult(w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE, &body)
+	writeManagedDraftResult(r.Context(), w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE, &body)
 }
 
 func (server *Server) DiscardRoleImageRevisionDraft(w http.ResponseWriter, r *http.Request, configurationRef generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.DiscardRoleImageRevisionDraftParams) {
@@ -77,7 +80,7 @@ func (server *Server) DiscardRoleImageRevisionDraft(w http.ResponseWriter, r *ht
 		writeRPCProblem(w, err)
 		return
 	}
-	writeManagedDraftResult(w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE, nil)
+	writeManagedDraftResult(r.Context(), w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_ROLE_IMAGE, nil)
 }
 
 func (server *Server) SaveIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request, configurationRef generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.SaveIntegrationDefinitionDraftParams) {
@@ -92,7 +95,7 @@ func (server *Server) SaveIntegrationDefinitionDraft(w http.ResponseWriter, r *h
 		writeRPCProblem(w, err)
 		return
 	}
-	writeManagedDraftResult(w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION, &body)
+	writeManagedDraftResult(r.Context(), w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION, &body)
 }
 
 func (server *Server) DiscardIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request, configurationRef generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.DiscardIntegrationDefinitionDraftParams) {
@@ -107,7 +110,7 @@ func (server *Server) DiscardIntegrationDefinitionDraft(w http.ResponseWriter, r
 		writeRPCProblem(w, err)
 		return
 	}
-	writeManagedDraftResult(w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION, nil)
+	writeManagedDraftResult(r.Context(), w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION, nil)
 }
 
 func (server *Server) SaveSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request, configurationRef generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.SaveSystemSTTConfigurationDraftParams) {
@@ -122,7 +125,7 @@ func (server *Server) SaveSystemSTTConfigurationDraft(w http.ResponseWriter, r *
 		writeRPCProblem(w, err)
 		return
 	}
-	writeManagedDraftResult(w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT, &body)
+	writeManagedDraftResult(r.Context(), w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT, &body)
 }
 
 func (server *Server) DiscardSystemSTTConfigurationDraft(w http.ResponseWriter, r *http.Request, configurationRef generated.ConfigurationRef, revisionRef generated.ConfigurationRevisionRef, p generated.DiscardSystemSTTConfigurationDraftParams) {
@@ -137,7 +140,7 @@ func (server *Server) DiscardSystemSTTConfigurationDraft(w http.ResponseWriter, 
 		writeRPCProblem(w, err)
 		return
 	}
-	writeManagedDraftResult(w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT, nil)
+	writeManagedDraftResult(r.Context(), w, result, configurationRef, revisionRef, mutation.GetExpectedVersion(), controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT, nil)
 }
 
 func managedDraftMutation(w http.ResponseWriter, configurationRef, revisionRef, key, etag string) (*controlplanev1.MutationContext, bool) {
@@ -161,6 +164,9 @@ func readManagedDraftSave(w http.ResponseWriter, r *http.Request, configurationR
 	if kind == controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE {
 		validFormat = body.ContentFormat == "TEXT"
 	}
+	if kind == controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION {
+		validFormat = validFormat || body.ContentFormat == "OPENAPI_IMPORT"
+	}
 	if !validFormat || body.Content == nil || len(*body.Content) > 256<<10 || !utf8.ValidString(*body.Content) || strings.ContainsRune(*body.Content, 0) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return body, nil, false
@@ -169,7 +175,7 @@ func readManagedDraftSave(w http.ResponseWriter, r *http.Request, configurationR
 	return body, mutation, ok
 }
 
-func writeManagedDraftResult(w http.ResponseWriter, result managedConfigurationResponse, configurationRef, revisionRef string, version int64, kind controlplanev1.ManagedConfigurationKind, saved *generated.ManagedConfigurationDraftSaveInput) {
+func writeManagedDraftResult(ctx context.Context, w http.ResponseWriter, result managedConfigurationResponse, configurationRef, revisionRef string, version int64, kind controlplanev1.ManagedConfigurationKind, saved *generated.ManagedConfigurationDraftSaveInput) {
 	configuration, revision := result.GetConfiguration(), result.GetRevision()
 	valid := configuration.GetRef() == configurationRef && configuration.GetVersion() == version+1 &&
 		configuration.GetKind() == kind && configuration.GetManagedBy() == controlplanev1.ManagedConfigurationOwner_MANAGED_CONFIGURATION_OWNER_UI
@@ -180,14 +186,35 @@ func writeManagedDraftResult(w http.ResponseWriter, result managedConfigurationR
 		valid = valid && revision.GetRef() == revisionRef && revision.GetState() == controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DISCARDED
 	} else {
 		content := strings.TrimSpace(*saved.Content)
+		format := string(saved.ContentFormat)
+		if format == "OPENAPI_IMPORT" {
+			canonical, err := canonicalOpenAPIImport(ctx, content)
+			if err != nil {
+				writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+				return
+			}
+			content, format = canonical, "JSON"
+		}
 		digest := sha256.Sum256([]byte(content))
 		valid = valid && opaqueHTTPReference.MatchString(revision.GetRef()) && revision.GetRef() != revisionRef &&
 			revision.GetParentRevisionRef() == revisionRef && revision.GetState() == controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DRAFT &&
-			revision.GetContentFormat() == string(saved.ContentFormat) && revision.GetContent() == content && revision.GetDigest() == hex.EncodeToString(digest[:])
+			revision.GetContentFormat() == format && revision.GetContent() == content && revision.GetDigest() == hex.EncodeToString(digest[:])
 	}
 	if !valid {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
 	writeManagedResult(w, http.StatusOK, result)
+}
+
+func canonicalOpenAPIImport(ctx context.Context, content string) (string, error) {
+	definition, err := integrationpackage.DraftOpenAPIPackageFromJSON(ctx, []byte(strings.TrimSpace(content)))
+	if err != nil {
+		return "", err
+	}
+	encoded, err := json.Marshal(definition)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
 }

@@ -1069,7 +1069,7 @@ paths:
     get:
       tags: [Agents]
       operationId: listTemplateVariables
-      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/TemplateVariableSourceQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
       responses:
         '200':
           description: Server-owned cursor-каталог безопасных template variables
@@ -1366,7 +1366,7 @@ paths:
     get:
       tags: [Agents]
       operationId: listPromptTemplateVariables
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/TemplateVariableSourceQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
       responses:
         '200':
           description: Типизированный каталог разрешённых Go template namespaces без secrets
@@ -3432,6 +3432,7 @@ paths:
               properties:
                 content: { type: string, minLength: 1, maxLength: 32768 }
                 attachmentSetRef: { $ref: '#/components/schemas/OpaqueRef' }
+                context: { $ref: '#/components/schemas/AssistantContextDescriptor' }
       responses:
         '202':
           description: Turn поставлен в последовательную очередь warm session
@@ -3584,6 +3585,7 @@ paths:
       tags: [Access]
       operationId: listAccessRoles
       parameters:
+        - { $ref: '#/components/parameters/Query' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/PageToken' }
         - name: includeArchived
@@ -3663,6 +3665,7 @@ paths:
       tags: [Access]
       operationId: listAccessBindings
       parameters:
+        - { $ref: '#/components/parameters/Query' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/PageToken' }
         - name: subjectKind
@@ -3793,7 +3796,7 @@ paths:
     get:
       tags: [Administration]
       operationId: listAuditEvents
-      parameters: [{ $ref: '#/components/parameters/AuditOutcomeQuery' }, { $ref: '#/components/parameters/AuditActionQuery' }, { $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters: [{ $ref: '#/components/parameters/AuditOutcomeQuery' }, { $ref: '#/components/parameters/AuditActionQuery' }, { $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/AuditResourceRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
           description: Безопасный audit readback
@@ -4155,6 +4158,20 @@ paths:
           description: Авторитетная конфигурация и ревизия
           headers: { ETag: { $ref: '#/components/headers/ETag' } }
           content: { application/json: { schema: { $ref: '#/components/schemas/RoleImageRebindResult' } } }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/integration-definition-configurations/openapi-inspections:
+    post:
+      tags: [Administration]
+      operationId: inspectOpenAPIIntegration
+      description: Проверяет локально переданный OpenAPI 3.x без сетевых запросов и записи документа. Результат не даёт разрешения на публикацию или исполнение интеграции.
+      parameters: [{ $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OpenAPIInspectionInput' } } }
+      responses:
+        '200':
+          description: Ограниченный список операций-кандидатов; Cache-Control no-store
+          content: { application/json: { schema: { $ref: '#/components/schemas/OpenAPIInspectionResult' } } }
         default: { $ref: '#/components/responses/Problem' }
   /api/v1/integration-definition-configurations/drafts:
     post:
@@ -4873,6 +4890,11 @@ components:
       in: query
       required: false
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    AuditResourceRefQuery:
+      name: resourceRef
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
     MembershipRef:
       name: membershipRef
       in: path
@@ -5097,6 +5119,12 @@ components:
       name: runtimeRevisionRef
       in: query
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    TemplateVariableSourceQuery:
+      name: source
+      in: query
+      required: false
+      description: Точная server-owned область переменной шаблона.
+      schema: { type: string, enum: [AGENT, AUTOMATION, GATE, INPUT, ORGANIZATION, PROJECT, RUN, RUNTIME, SESSION, USER, WORKFLOW] }
     PageSize:
       name: pageSize
       in: query
@@ -5486,7 +5514,7 @@ components:
         evaluatedAt: { $ref: '#/components/schemas/Timestamp' }
     NextAction:
       type: string
-      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, REFRESH_AUTHORIZATION, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS, CREATE_PROJECT, CREATE_CONNECTION, CREATE_CONVERSATION, COMPLETE_ONBOARDING, CONFIGURE_CREDENTIAL, ROTATE, REVEAL, PROMOTE, DELETE, PURGE, COPY]
+      enum: [OPEN, EDIT, UPDATE, ARCHIVE, RESTORE, REQUEST_BUILD, CANCEL_BUILD, ENABLE, DISABLE, VALIDATE, PUBLISH, ROLLBACK, LAUNCH, ADD_TURN, CANCEL, RETRY, RESOLVE_GATE, DOWNLOAD, BIND, TEST, REVOKE, REFRESH_AUTHORIZATION, APPLY_PLAN, RECOVER, CREATE_AGENT, CREATE_WORKFLOW, CREATE_RUN, CREATE_SCHEDULE, MANAGE_INTEGRATIONS, MANAGE_MEMBERS, UPLOAD_ARTIFACT, MANAGE_CAPABILITIES, MANAGE_GRANTS, CREATE_PROJECT, CREATE_CONNECTION, CREATE_CONVERSATION, COMPLETE_ONBOARDING, CONFIGURE_CREDENTIAL, ROTATE, REVEAL, PROMOTE, DELETE, PURGE, COPY]
     Problem:
       type: object
       additionalProperties: false
@@ -5595,6 +5623,37 @@ components:
         available: { type: boolean }
         reason: { type: string, enum: [READY, STT_NOT_CONFIGURED, STT_DISABLED, STT_PERMISSION_DENIED, STT_PERMISSION_INVALID, STT_PROVIDER_ACCOUNT_INELIGIBLE, STT_PROVIDER_CREDENTIAL_UNSUPPORTED, STT_PROVIDER_DISABLED, STT_MODEL_UNSUPPORTED, STT_CONFIGURATION_UNAVAILABLE, STT_SERVICE_UNAVAILABLE, STT_CREDENTIAL_UNAVAILABLE, STT_EGRESS_UNAVAILABLE, STT_PROVIDER_UNAVAILABLE] }
         validUntil: { $ref: '#/components/schemas/Timestamp' }
+    OpenAPIInspectionInput:
+      type: object
+      additionalProperties: false
+      required: [source]
+      properties:
+        source: { type: string, minLength: 1, maxLength: 131072, description: OpenAPI 3.x JSON или YAML без внешних ссылок; передаётся только в локальный gateway, не сохраняется и не отправляется во внешнюю сеть. }
+    OpenAPIInspectionOperation:
+      type: object
+      additionalProperties: false
+      required: [operationId, method, path, summary, serverOrigin, candidate, healthCandidate, reason]
+      properties:
+        operationId: { type: string, maxLength: 128 }
+        method: { type: string, maxLength: 16 }
+        path: { type: string, maxLength: 2048 }
+        summary: { type: string, maxLength: 4096 }
+        serverOrigin: { type: string, maxLength: 2048 }
+        candidate: { type: boolean }
+        healthCandidate: { type: boolean, description: GET-операция не требует входных параметров и может быть проверкой соединения. }
+        reason: { type: string, maxLength: 128 }
+    OpenAPIInspectionResult:
+      type: object
+      additionalProperties: false
+      required: [digest, title, version, operations]
+      properties:
+        digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        title: { type: string, maxLength: 4096 }
+        version: { type: string, maxLength: 128 }
+        operations:
+          type: array
+          maxItems: 128
+          items: { $ref: '#/components/schemas/OpenAPIInspectionOperation' }
     ManagedConfigurationDraftInput:
       type: object
       additionalProperties: false
@@ -5603,7 +5662,10 @@ components:
         configurationRef: { $ref: '#/components/schemas/OpaqueRef' }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         name: { type: string, minLength: 1, maxLength: 160 }
-        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        contentFormat:
+          type: string
+          enum: [TEXT, JSON, YAML, TOML, OPENAPI_IMPORT]
+          description: OPENAPI_IMPORT разрешён только для черновика IntegrationDefinition; content содержит JSON с source и options, а сохранённая ревизия возвращается как канонический JSON.
         content: { type: string, minLength: 1, maxLength: 262144 }
         promptScope: { $ref: '#/components/schemas/PromptTemplateScopeInput' }
     ManagedConfigurationDraftSaveInput:
@@ -5611,7 +5673,10 @@ components:
       additionalProperties: false
       required: [contentFormat, content]
       properties:
-        contentFormat: { type: string, enum: [TEXT, JSON, YAML, TOML] }
+        contentFormat:
+          type: string
+          enum: [TEXT, JSON, YAML, TOML, OPENAPI_IMPORT]
+          description: OPENAPI_IMPORT разрешён только для IntegrationDefinition и нормализуется в JSON.
         promptScope: { $ref: '#/components/schemas/PromptTemplateScopeInput' }
         content:
           type: string
@@ -7581,6 +7646,7 @@ components:
         context: { $ref: '#/components/schemas/PromptPreviewContext' }
         expectedContextDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
         query: { type: string, maxLength: 200 }
+        source: { type: string, enum: [AGENT, AUTOMATION, GATE, INPUT, ORGANIZATION, PROJECT, RUN, RUNTIME, SESSION, USER, WORKFLOW] }
         pageSize: { type: integer, minimum: 1, maximum: 100 }
         pageToken: { type: string, maxLength: 512 }
     PromptTemplateScopeInput:
@@ -7904,7 +7970,8 @@ components:
       additionalProperties: false
       required: [action]
       properties:
-        action: { type: string, enum: [REQUEST_BUILD, ARCHIVE, RESTORE] }
+        action: { type: string, enum: [REQUEST_BUILD, CANCEL_BUILD, ARCHIVE, RESTORE] }
+        buildRef: { type: string, pattern: '^imgbld_[A-Za-z0-9_-]{8,89}$' }
     RoleImageRecipePage:
       type: object
       additionalProperties: false
@@ -7932,16 +7999,19 @@ components:
     RoleImageArtifact:
       type: object
       additionalProperties: false
-      required: [ref, version, recipeRef, recipeGeneration, manifestDigest, provenanceSha256, admissionVerdict, tools]
+      required: [ref, version, recipeRef, recipeGeneration, buildRef, manifestDigest, provenanceSha256, admissionVerdict, promotionState, promotionRequested, tools]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
         recipeRef: { $ref: '#/components/schemas/OpaqueRef' }
         recipeGeneration: { type: integer, format: int64, minimum: 1 }
+        buildRef: { $ref: '#/components/schemas/OpaqueRef' }
         manifestDigest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }
         provenanceSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         promotedReference: { type: string, minLength: 1, maxLength: 1000 }
         admissionVerdict: { type: string, enum: [ACCEPTED, REJECTED] }
+        promotionState: { type: string, enum: [PENDING, CLAIMED, AUTHORIZED, PROMOTED, REJECTED] }
+        promotionRequested: { type: boolean }
         sbomSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         vulnerabilityEvidenceSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         tools: { type: array, maxItems: 128, items: { $ref: '#/components/schemas/RoleImageArtifactTool' } }
@@ -9158,8 +9228,8 @@ components:
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
         approvalRequired: { type: boolean }
         operation: { type: string, minLength: 1, maxLength: 120 }
-        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
-        resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
+        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        resourceKind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER, HTTPS_RESOURCE] }
         inputFields: { type: array, maxItems: 16, items: { $ref: '#/components/schemas/IntegrationConfigurationField' } }
         inputSchema: { type: string, minLength: 2, maxLength: 262144 }
         inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
@@ -9187,7 +9257,7 @@ components:
     IntegrationDefinition:
       type: object
       additionalProperties: false
-      required: [key, name, description, category, builtIn, available, capabilities, configurationFields, schemaVersion, definitionVersion, origin, digest, adapter, adapterOwner, executionRoute, adapterReadiness, version, nextActions]
+      required: [key, name, description, category, builtIn, available, capabilities, configurationFields, schemaVersion, definitionVersion, origin, digest, adapter, adapterOwner, executionRoute, adapterReadiness, version, nextActions, connectionCount, healthyConnectionCount]
       properties:
         nextActions: { type: array, uniqueItems: true, items: { type: string, enum: [COPY] } }
         version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Авторитетная версия каталога для If-Match при SHIPPED copy. }
@@ -9208,12 +9278,14 @@ components:
         executionRoute: { type: string, enum: [MANAGED_MCP, INTERACTION] }
         adapterReadiness: { type: string, enum: [READY, NOT_READY] }
         credentialSecretKey: { type: string, maxLength: 120 }
+        connectionCount: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        healthyConnectionCount: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
     IntegrationResourceScope:
       type: object
       additionalProperties: false
       required: [kind, values, digest]
       properties:
-        kind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER] }
+        kind: { type: string, enum: [SYNTHETIC_JOURNAL, GITHUB_REPOSITORY, MATTERMOST_CHANNEL, GITLAB_PROJECT, JIRA_PROJECT, CONFLUENCE_SPACE, EMAIL_SENDER, HTTPS_RESOURCE] }
         values:
           type: object
           maxProperties: 8
@@ -9430,7 +9502,11 @@ components:
         targetName: { type: string, maxLength: 160 }
         enabled: { type: boolean }
         risk: { type: string, enum: [READ, WRITE, SENSITIVE, DESTRUCTIVE] }
-        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT] }
+        approvalPolicy: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        approvalScopePaths:
+          type: array
+          maxItems: 16
+          items: { type: string, minLength: 2, maxLength: 256 }
         resourceScope: { $ref: '#/components/schemas/IntegrationResourceScope' }
         inputSchema: { type: string, minLength: 2, maxLength: 262144 }
         inputSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
@@ -9485,13 +9561,17 @@ components:
         agentRef: { $ref: '#/components/schemas/OpaqueRef' }
         workflowRef: { $ref: '#/components/schemas/OpaqueRef' }
         enabled: { type: boolean }
+        approvalScopePaths:
+          type: array
+          maxItems: 16
+          items: { type: string, minLength: 2, maxLength: 256 }
     AssistantPlanOperation:
       type: object
       additionalProperties: false
       required: [ref, type, action, title, summary, target, parameters, before, after, selected, permitted, validationProblems]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
-        type: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, LAUNCH_RUN, CREATE_INTEGRATION_CONNECTION, TEST_INTEGRATION_CONNECTION, ARCHIVE_AGENT, ARCHIVE_WORKFLOW, UPDATE_PROJECT] }
+        type: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, UPDATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, UPDATE_SCHEDULE, LAUNCH_RUN, CREATE_INTEGRATION_CONNECTION, UPDATE_INTEGRATION_CONNECTION, TEST_INTEGRATION_CONNECTION, PUBLISH_INTEGRATION_DEFINITION, ARCHIVE_AGENT, ARCHIVE_WORKFLOW, UPDATE_PROJECT, UPDATE_AGENT, CREATE_INSTRUCTION_DRAFT, CREATE_RUNTIME_ENVIRONMENT_DRAFT, PREPARE_RUNTIME_ENVIRONMENT_REVISION, BIND_AGENT_RUNTIME_ENVIRONMENT, CREATE_ROLE_IMAGE_RECIPE, UPDATE_ROLE_IMAGE_RECIPE] }
         action: { type: string, enum: [CREATE, UPDATE, ARCHIVE, EXECUTE] }
         title: { type: string, maxLength: 200 }
         summary: { type: string, maxLength: 1000 }
@@ -9535,6 +9615,7 @@ components:
         validationProblems: { type: array, maxItems: 100, items: { type: string, maxLength: 500 } }
         validatedAt: { $ref: '#/components/schemas/Timestamp' }
         appliedAt: { $ref: '#/components/schemas/Timestamp' }
+        receipt: { $ref: '#/components/schemas/AssistantPlanReceipt' }
         nextActions: { type: array, items: { $ref: '#/components/schemas/NextAction' } }
     AssistantTurn:
       type: object
@@ -9580,7 +9661,7 @@ components:
         allowedOperations:
           type: array
           maxItems: 32
-          items: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, LAUNCH_RUN, CREATE_INTEGRATION_CONNECTION, TEST_INTEGRATION_CONNECTION, ARCHIVE_AGENT, ARCHIVE_WORKFLOW, UPDATE_PROJECT] }
+          items: { type: string, enum: [CREATE_PROJECT, CREATE_AGENT, CREATE_WORKFLOW, UPDATE_WORKFLOW, CHANGE_CAPABILITY, CHANGE_INTEGRATION_GRANT, CREATE_SCHEDULE, UPDATE_SCHEDULE, LAUNCH_RUN, CREATE_INTEGRATION_CONNECTION, UPDATE_INTEGRATION_CONNECTION, TEST_INTEGRATION_CONNECTION, PUBLISH_INTEGRATION_DEFINITION, ARCHIVE_AGENT, ARCHIVE_WORKFLOW, UPDATE_PROJECT, UPDATE_AGENT, CREATE_INSTRUCTION_DRAFT, CREATE_RUNTIME_ENVIRONMENT_DRAFT, PREPARE_RUNTIME_ENVIRONMENT_REVISION, BIND_AGENT_RUNTIME_ENVIRONMENT, CREATE_ROLE_IMAGE_RECIPE, UPDATE_ROLE_IMAGE_RECIPE] }
     AssistantPlanReceipt:
       type: object
       additionalProperties: false

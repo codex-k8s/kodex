@@ -588,18 +588,29 @@ func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
 
 // Defines values for AssistantContextDescriptorAllowedOperations.
 const (
-	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
-	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW             AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY            AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
-	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT      AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
-	AssistantContextDescriptorAllowedOperationsCREATEAGENT                 AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECT               AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
-	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE              AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
-	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW              AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                   AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
-	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION   AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT               AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                      AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
+	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW                   AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT       AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                  AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
+	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT            AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCREATEAGENT                       AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT            AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                     AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT     AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                    AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                    AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                         AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
+	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION      AssistantContextDescriptorAllowedOperations = "PUBLISH_INTEGRATION_DEFINITION"
+	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION         AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                       AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                     AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                    AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                    AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AssistantContextDescriptorAllowedOperations enum.
@@ -609,15 +620,23 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 		return true
 	case AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW:
 		return true
+	case AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT:
+		return true
 	case AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEAGENT:
 		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT:
+		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATESCHEDULE:
 		return true
@@ -625,9 +644,23 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 		return true
 	case AssistantContextDescriptorAllowedOperationsLAUNCHRUN:
 		return true
+	case AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION:
+		return true
+	case AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION:
+		return true
 	case AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION:
 		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATEAGENT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION:
+		return true
 	case AssistantContextDescriptorAllowedOperationsUPDATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE:
+		return true
+	case AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW:
 		return true
 	default:
 		return false
@@ -732,18 +765,29 @@ func (e AssistantPlanOperationAction) Valid() bool {
 
 // Defines values for AssistantPlanOperationType.
 const (
-	AssistantPlanOperationTypeARCHIVEAGENT                AssistantPlanOperationType = "ARCHIVE_AGENT"
-	AssistantPlanOperationTypeARCHIVEWORKFLOW             AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
-	AssistantPlanOperationTypeCHANGECAPABILITY            AssistantPlanOperationType = "CHANGE_CAPABILITY"
-	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT      AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
-	AssistantPlanOperationTypeCREATEAGENT                 AssistantPlanOperationType = "CREATE_AGENT"
-	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeCREATEPROJECT               AssistantPlanOperationType = "CREATE_PROJECT"
-	AssistantPlanOperationTypeCREATESCHEDULE              AssistantPlanOperationType = "CREATE_SCHEDULE"
-	AssistantPlanOperationTypeCREATEWORKFLOW              AssistantPlanOperationType = "CREATE_WORKFLOW"
-	AssistantPlanOperationTypeLAUNCHRUN                   AssistantPlanOperationType = "LAUNCH_RUN"
-	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION   AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeUPDATEPROJECT               AssistantPlanOperationType = "UPDATE_PROJECT"
+	AssistantPlanOperationTypeARCHIVEAGENT                      AssistantPlanOperationType = "ARCHIVE_AGENT"
+	AssistantPlanOperationTypeARCHIVEWORKFLOW                   AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
+	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT       AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	AssistantPlanOperationTypeCHANGECAPABILITY                  AssistantPlanOperationType = "CHANGE_CAPABILITY"
+	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT            AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCREATEAGENT                       AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT            AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
+	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeCREATEPROJECT                     AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE             AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT     AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantPlanOperationTypeCREATESCHEDULE                    AssistantPlanOperationType = "CREATE_SCHEDULE"
+	AssistantPlanOperationTypeCREATEWORKFLOW                    AssistantPlanOperationType = "CREATE_WORKFLOW"
+	AssistantPlanOperationTypeLAUNCHRUN                         AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION      AssistantPlanOperationType = "PUBLISH_INTEGRATION_DEFINITION"
+	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION         AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEAGENT                       AssistantPlanOperationType = "UPDATE_AGENT"
+	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEPROJECT                     AssistantPlanOperationType = "UPDATE_PROJECT"
+	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE             AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeUPDATESCHEDULE                    AssistantPlanOperationType = "UPDATE_SCHEDULE"
+	AssistantPlanOperationTypeUPDATEWORKFLOW                    AssistantPlanOperationType = "UPDATE_WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
@@ -753,15 +797,23 @@ func (e AssistantPlanOperationType) Valid() bool {
 		return true
 	case AssistantPlanOperationTypeARCHIVEWORKFLOW:
 		return true
+	case AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT:
+		return true
 	case AssistantPlanOperationTypeCHANGECAPABILITY:
 		return true
 	case AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT:
 		return true
 	case AssistantPlanOperationTypeCREATEAGENT:
 		return true
+	case AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT:
+		return true
 	case AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeCREATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeCREATEROLEIMAGERECIPE:
+		return true
+	case AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT:
 		return true
 	case AssistantPlanOperationTypeCREATESCHEDULE:
 		return true
@@ -769,9 +821,23 @@ func (e AssistantPlanOperationType) Valid() bool {
 		return true
 	case AssistantPlanOperationTypeLAUNCHRUN:
 		return true
+	case AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION:
+		return true
+	case AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION:
+		return true
 	case AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION:
 		return true
+	case AssistantPlanOperationTypeUPDATEAGENT:
+		return true
+	case AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION:
+		return true
 	case AssistantPlanOperationTypeUPDATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE:
+		return true
+	case AssistantPlanOperationTypeUPDATESCHEDULE:
+		return true
+	case AssistantPlanOperationTypeUPDATEWORKFLOW:
 		return true
 	default:
 		return false
@@ -1771,6 +1837,7 @@ func (e IntegrationCandidateReason) Valid() bool {
 // Defines values for IntegrationCapabilityApprovalPolicy.
 const (
 	IntegrationCapabilityApprovalPolicyHUMANEACHEFFECT IntegrationCapabilityApprovalPolicy = "HUMAN_EACH_EFFECT"
+	IntegrationCapabilityApprovalPolicyHUMANSCOPED     IntegrationCapabilityApprovalPolicy = "HUMAN_SCOPED"
 	IntegrationCapabilityApprovalPolicyNONE            IntegrationCapabilityApprovalPolicy = "NONE"
 )
 
@@ -1778,6 +1845,8 @@ const (
 func (e IntegrationCapabilityApprovalPolicy) Valid() bool {
 	switch e {
 	case IntegrationCapabilityApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case IntegrationCapabilityApprovalPolicyHUMANSCOPED:
 		return true
 	case IntegrationCapabilityApprovalPolicyNONE:
 		return true
@@ -1792,6 +1861,7 @@ const (
 	IntegrationCapabilityResourceKindEMAILSENDER       IntegrationCapabilityResourceKind = "EMAIL_SENDER"
 	IntegrationCapabilityResourceKindGITHUBREPOSITORY  IntegrationCapabilityResourceKind = "GITHUB_REPOSITORY"
 	IntegrationCapabilityResourceKindGITLABPROJECT     IntegrationCapabilityResourceKind = "GITLAB_PROJECT"
+	IntegrationCapabilityResourceKindHTTPSRESOURCE     IntegrationCapabilityResourceKind = "HTTPS_RESOURCE"
 	IntegrationCapabilityResourceKindJIRAPROJECT       IntegrationCapabilityResourceKind = "JIRA_PROJECT"
 	IntegrationCapabilityResourceKindMATTERMOSTCHANNEL IntegrationCapabilityResourceKind = "MATTERMOST_CHANNEL"
 	IntegrationCapabilityResourceKindSYNTHETICJOURNAL  IntegrationCapabilityResourceKind = "SYNTHETIC_JOURNAL"
@@ -1807,6 +1877,8 @@ func (e IntegrationCapabilityResourceKind) Valid() bool {
 	case IntegrationCapabilityResourceKindGITHUBREPOSITORY:
 		return true
 	case IntegrationCapabilityResourceKindGITLABPROJECT:
+		return true
+	case IntegrationCapabilityResourceKindHTTPSRESOURCE:
 		return true
 	case IntegrationCapabilityResourceKindJIRAPROJECT:
 		return true
@@ -2059,6 +2131,7 @@ func (e IntegrationDefinitionGitSourceInputContentFormat) Valid() bool {
 // Defines values for IntegrationGrantApprovalPolicy.
 const (
 	IntegrationGrantApprovalPolicyHUMANEACHEFFECT IntegrationGrantApprovalPolicy = "HUMAN_EACH_EFFECT"
+	IntegrationGrantApprovalPolicyHUMANSCOPED     IntegrationGrantApprovalPolicy = "HUMAN_SCOPED"
 	IntegrationGrantApprovalPolicyNONE            IntegrationGrantApprovalPolicy = "NONE"
 )
 
@@ -2066,6 +2139,8 @@ const (
 func (e IntegrationGrantApprovalPolicy) Valid() bool {
 	switch e {
 	case IntegrationGrantApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case IntegrationGrantApprovalPolicyHUMANSCOPED:
 		return true
 	case IntegrationGrantApprovalPolicyNONE:
 		return true
@@ -2158,6 +2233,7 @@ const (
 	IntegrationResourceScopeKindEMAILSENDER       IntegrationResourceScopeKind = "EMAIL_SENDER"
 	IntegrationResourceScopeKindGITHUBREPOSITORY  IntegrationResourceScopeKind = "GITHUB_REPOSITORY"
 	IntegrationResourceScopeKindGITLABPROJECT     IntegrationResourceScopeKind = "GITLAB_PROJECT"
+	IntegrationResourceScopeKindHTTPSRESOURCE     IntegrationResourceScopeKind = "HTTPS_RESOURCE"
 	IntegrationResourceScopeKindJIRAPROJECT       IntegrationResourceScopeKind = "JIRA_PROJECT"
 	IntegrationResourceScopeKindMATTERMOSTCHANNEL IntegrationResourceScopeKind = "MATTERMOST_CHANNEL"
 	IntegrationResourceScopeKindSYNTHETICJOURNAL  IntegrationResourceScopeKind = "SYNTHETIC_JOURNAL"
@@ -2173,6 +2249,8 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 	case IntegrationResourceScopeKindGITHUBREPOSITORY:
 		return true
 	case IntegrationResourceScopeKindGITLABPROJECT:
+		return true
+	case IntegrationResourceScopeKindHTTPSRESOURCE:
 		return true
 	case IntegrationResourceScopeKindJIRAPROJECT:
 		return true
@@ -2418,16 +2496,19 @@ func (e ManagedConfigurationCopyProvenanceOrigin) Valid() bool {
 
 // Defines values for ManagedConfigurationDraftInputContentFormat.
 const (
-	ManagedConfigurationDraftInputContentFormatJSON ManagedConfigurationDraftInputContentFormat = "JSON"
-	ManagedConfigurationDraftInputContentFormatTEXT ManagedConfigurationDraftInputContentFormat = "TEXT"
-	ManagedConfigurationDraftInputContentFormatTOML ManagedConfigurationDraftInputContentFormat = "TOML"
-	ManagedConfigurationDraftInputContentFormatYAML ManagedConfigurationDraftInputContentFormat = "YAML"
+	ManagedConfigurationDraftInputContentFormatJSON          ManagedConfigurationDraftInputContentFormat = "JSON"
+	ManagedConfigurationDraftInputContentFormatOPENAPIIMPORT ManagedConfigurationDraftInputContentFormat = "OPENAPI_IMPORT"
+	ManagedConfigurationDraftInputContentFormatTEXT          ManagedConfigurationDraftInputContentFormat = "TEXT"
+	ManagedConfigurationDraftInputContentFormatTOML          ManagedConfigurationDraftInputContentFormat = "TOML"
+	ManagedConfigurationDraftInputContentFormatYAML          ManagedConfigurationDraftInputContentFormat = "YAML"
 )
 
 // Valid indicates whether the value is a known member of the ManagedConfigurationDraftInputContentFormat enum.
 func (e ManagedConfigurationDraftInputContentFormat) Valid() bool {
 	switch e {
 	case ManagedConfigurationDraftInputContentFormatJSON:
+		return true
+	case ManagedConfigurationDraftInputContentFormatOPENAPIIMPORT:
 		return true
 	case ManagedConfigurationDraftInputContentFormatTEXT:
 		return true
@@ -2442,16 +2523,19 @@ func (e ManagedConfigurationDraftInputContentFormat) Valid() bool {
 
 // Defines values for ManagedConfigurationDraftSaveInputContentFormat.
 const (
-	ManagedConfigurationDraftSaveInputContentFormatJSON ManagedConfigurationDraftSaveInputContentFormat = "JSON"
-	ManagedConfigurationDraftSaveInputContentFormatTEXT ManagedConfigurationDraftSaveInputContentFormat = "TEXT"
-	ManagedConfigurationDraftSaveInputContentFormatTOML ManagedConfigurationDraftSaveInputContentFormat = "TOML"
-	ManagedConfigurationDraftSaveInputContentFormatYAML ManagedConfigurationDraftSaveInputContentFormat = "YAML"
+	ManagedConfigurationDraftSaveInputContentFormatJSON          ManagedConfigurationDraftSaveInputContentFormat = "JSON"
+	ManagedConfigurationDraftSaveInputContentFormatOPENAPIIMPORT ManagedConfigurationDraftSaveInputContentFormat = "OPENAPI_IMPORT"
+	ManagedConfigurationDraftSaveInputContentFormatTEXT          ManagedConfigurationDraftSaveInputContentFormat = "TEXT"
+	ManagedConfigurationDraftSaveInputContentFormatTOML          ManagedConfigurationDraftSaveInputContentFormat = "TOML"
+	ManagedConfigurationDraftSaveInputContentFormatYAML          ManagedConfigurationDraftSaveInputContentFormat = "YAML"
 )
 
 // Valid indicates whether the value is a known member of the ManagedConfigurationDraftSaveInputContentFormat enum.
 func (e ManagedConfigurationDraftSaveInputContentFormat) Valid() bool {
 	switch e {
 	case ManagedConfigurationDraftSaveInputContentFormatJSON:
+		return true
+	case ManagedConfigurationDraftSaveInputContentFormatOPENAPIIMPORT:
 		return true
 	case ManagedConfigurationDraftSaveInputContentFormatTEXT:
 		return true
@@ -2771,6 +2855,7 @@ const (
 	NextActionARCHIVE              NextAction = "ARCHIVE"
 	NextActionBIND                 NextAction = "BIND"
 	NextActionCANCEL               NextAction = "CANCEL"
+	NextActionCANCELBUILD          NextAction = "CANCEL_BUILD"
 	NextActionCOMPLETEONBOARDING   NextAction = "COMPLETE_ONBOARDING"
 	NextActionCONFIGURECREDENTIAL  NextAction = "CONFIGURE_CREDENTIAL"
 	NextActionCOPY                 NextAction = "COPY"
@@ -2823,6 +2908,8 @@ func (e NextAction) Valid() bool {
 	case NextActionBIND:
 		return true
 	case NextActionCANCEL:
+		return true
+	case NextActionCANCELBUILD:
 		return true
 	case NextActionCOMPLETEONBOARDING:
 		return true
@@ -3583,6 +3670,51 @@ func (e PromptTemplateScopeInputTemplateKind) Valid() bool {
 	case PromptTemplateScopeInputTemplateKindCONTINUATION:
 		return true
 	case PromptTemplateScopeInputTemplateKindINSTRUCTIONS:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PromptVariableCatalogInputSource.
+const (
+	PromptVariableCatalogInputSourceAGENT        PromptVariableCatalogInputSource = "AGENT"
+	PromptVariableCatalogInputSourceAUTOMATION   PromptVariableCatalogInputSource = "AUTOMATION"
+	PromptVariableCatalogInputSourceGATE         PromptVariableCatalogInputSource = "GATE"
+	PromptVariableCatalogInputSourceINPUT        PromptVariableCatalogInputSource = "INPUT"
+	PromptVariableCatalogInputSourceORGANIZATION PromptVariableCatalogInputSource = "ORGANIZATION"
+	PromptVariableCatalogInputSourcePROJECT      PromptVariableCatalogInputSource = "PROJECT"
+	PromptVariableCatalogInputSourceRUN          PromptVariableCatalogInputSource = "RUN"
+	PromptVariableCatalogInputSourceRUNTIME      PromptVariableCatalogInputSource = "RUNTIME"
+	PromptVariableCatalogInputSourceSESSION      PromptVariableCatalogInputSource = "SESSION"
+	PromptVariableCatalogInputSourceUSER         PromptVariableCatalogInputSource = "USER"
+	PromptVariableCatalogInputSourceWORKFLOW     PromptVariableCatalogInputSource = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the PromptVariableCatalogInputSource enum.
+func (e PromptVariableCatalogInputSource) Valid() bool {
+	switch e {
+	case PromptVariableCatalogInputSourceAGENT:
+		return true
+	case PromptVariableCatalogInputSourceAUTOMATION:
+		return true
+	case PromptVariableCatalogInputSourceGATE:
+		return true
+	case PromptVariableCatalogInputSourceINPUT:
+		return true
+	case PromptVariableCatalogInputSourceORGANIZATION:
+		return true
+	case PromptVariableCatalogInputSourcePROJECT:
+		return true
+	case PromptVariableCatalogInputSourceRUN:
+		return true
+	case PromptVariableCatalogInputSourceRUNTIME:
+		return true
+	case PromptVariableCatalogInputSourceSESSION:
+		return true
+	case PromptVariableCatalogInputSourceUSER:
+		return true
+	case PromptVariableCatalogInputSourceWORKFLOW:
 		return true
 	default:
 		return false
@@ -4396,6 +4528,33 @@ func (e RoleImageArtifactAdmissionVerdict) Valid() bool {
 	}
 }
 
+// Defines values for RoleImageArtifactPromotionState.
+const (
+	RoleImageArtifactPromotionStateAUTHORIZED RoleImageArtifactPromotionState = "AUTHORIZED"
+	RoleImageArtifactPromotionStateCLAIMED    RoleImageArtifactPromotionState = "CLAIMED"
+	RoleImageArtifactPromotionStatePENDING    RoleImageArtifactPromotionState = "PENDING"
+	RoleImageArtifactPromotionStatePROMOTED   RoleImageArtifactPromotionState = "PROMOTED"
+	RoleImageArtifactPromotionStateREJECTED   RoleImageArtifactPromotionState = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageArtifactPromotionState enum.
+func (e RoleImageArtifactPromotionState) Valid() bool {
+	switch e {
+	case RoleImageArtifactPromotionStateAUTHORIZED:
+		return true
+	case RoleImageArtifactPromotionStateCLAIMED:
+		return true
+	case RoleImageArtifactPromotionStatePENDING:
+		return true
+	case RoleImageArtifactPromotionStatePROMOTED:
+		return true
+	case RoleImageArtifactPromotionStateREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleImageBuildStage.
 const (
 	RoleImageBuildStageBASEPULL                   RoleImageBuildStage = "BASE_PULL"
@@ -4600,6 +4759,7 @@ func (e RoleImageRecipeState) Valid() bool {
 // Defines values for RoleImageRecipeCommandAction.
 const (
 	RoleImageRecipeCommandActionARCHIVE      RoleImageRecipeCommandAction = "ARCHIVE"
+	RoleImageRecipeCommandActionCANCELBUILD  RoleImageRecipeCommandAction = "CANCEL_BUILD"
 	RoleImageRecipeCommandActionREQUESTBUILD RoleImageRecipeCommandAction = "REQUEST_BUILD"
 	RoleImageRecipeCommandActionRESTORE      RoleImageRecipeCommandAction = "RESTORE"
 )
@@ -4608,6 +4768,8 @@ const (
 func (e RoleImageRecipeCommandAction) Valid() bool {
 	switch e {
 	case RoleImageRecipeCommandActionARCHIVE:
+		return true
+	case RoleImageRecipeCommandActionCANCELBUILD:
 		return true
 	case RoleImageRecipeCommandActionREQUESTBUILD:
 		return true
@@ -7354,6 +7516,51 @@ func (e ProviderUsagePurpose) Valid() bool {
 	}
 }
 
+// Defines values for TemplateVariableSourceQuery.
+const (
+	TemplateVariableSourceQueryAGENT        TemplateVariableSourceQuery = "AGENT"
+	TemplateVariableSourceQueryAUTOMATION   TemplateVariableSourceQuery = "AUTOMATION"
+	TemplateVariableSourceQueryGATE         TemplateVariableSourceQuery = "GATE"
+	TemplateVariableSourceQueryINPUT        TemplateVariableSourceQuery = "INPUT"
+	TemplateVariableSourceQueryORGANIZATION TemplateVariableSourceQuery = "ORGANIZATION"
+	TemplateVariableSourceQueryPROJECT      TemplateVariableSourceQuery = "PROJECT"
+	TemplateVariableSourceQueryRUN          TemplateVariableSourceQuery = "RUN"
+	TemplateVariableSourceQueryRUNTIME      TemplateVariableSourceQuery = "RUNTIME"
+	TemplateVariableSourceQuerySESSION      TemplateVariableSourceQuery = "SESSION"
+	TemplateVariableSourceQueryUSER         TemplateVariableSourceQuery = "USER"
+	TemplateVariableSourceQueryWORKFLOW     TemplateVariableSourceQuery = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the TemplateVariableSourceQuery enum.
+func (e TemplateVariableSourceQuery) Valid() bool {
+	switch e {
+	case TemplateVariableSourceQueryAGENT:
+		return true
+	case TemplateVariableSourceQueryAUTOMATION:
+		return true
+	case TemplateVariableSourceQueryGATE:
+		return true
+	case TemplateVariableSourceQueryINPUT:
+		return true
+	case TemplateVariableSourceQueryORGANIZATION:
+		return true
+	case TemplateVariableSourceQueryPROJECT:
+		return true
+	case TemplateVariableSourceQueryRUN:
+		return true
+	case TemplateVariableSourceQueryRUNTIME:
+		return true
+	case TemplateVariableSourceQuerySESSION:
+		return true
+	case TemplateVariableSourceQueryUSER:
+		return true
+	case TemplateVariableSourceQueryWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VFSLifecycleState.
 const (
 	VFSLifecycleStateACTIVE  VFSLifecycleState = "ACTIVE"
@@ -7933,6 +8140,51 @@ func (e GetRunAttachmentEligibilityParamsTargetType) Valid() bool {
 	}
 }
 
+// Defines values for ListTemplateVariablesParamsSource.
+const (
+	ListTemplateVariablesParamsSourceAGENT        ListTemplateVariablesParamsSource = "AGENT"
+	ListTemplateVariablesParamsSourceAUTOMATION   ListTemplateVariablesParamsSource = "AUTOMATION"
+	ListTemplateVariablesParamsSourceGATE         ListTemplateVariablesParamsSource = "GATE"
+	ListTemplateVariablesParamsSourceINPUT        ListTemplateVariablesParamsSource = "INPUT"
+	ListTemplateVariablesParamsSourceORGANIZATION ListTemplateVariablesParamsSource = "ORGANIZATION"
+	ListTemplateVariablesParamsSourcePROJECT      ListTemplateVariablesParamsSource = "PROJECT"
+	ListTemplateVariablesParamsSourceRUN          ListTemplateVariablesParamsSource = "RUN"
+	ListTemplateVariablesParamsSourceRUNTIME      ListTemplateVariablesParamsSource = "RUNTIME"
+	ListTemplateVariablesParamsSourceSESSION      ListTemplateVariablesParamsSource = "SESSION"
+	ListTemplateVariablesParamsSourceUSER         ListTemplateVariablesParamsSource = "USER"
+	ListTemplateVariablesParamsSourceWORKFLOW     ListTemplateVariablesParamsSource = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the ListTemplateVariablesParamsSource enum.
+func (e ListTemplateVariablesParamsSource) Valid() bool {
+	switch e {
+	case ListTemplateVariablesParamsSourceAGENT:
+		return true
+	case ListTemplateVariablesParamsSourceAUTOMATION:
+		return true
+	case ListTemplateVariablesParamsSourceGATE:
+		return true
+	case ListTemplateVariablesParamsSourceINPUT:
+		return true
+	case ListTemplateVariablesParamsSourceORGANIZATION:
+		return true
+	case ListTemplateVariablesParamsSourcePROJECT:
+		return true
+	case ListTemplateVariablesParamsSourceRUN:
+		return true
+	case ListTemplateVariablesParamsSourceRUNTIME:
+		return true
+	case ListTemplateVariablesParamsSourceSESSION:
+		return true
+	case ListTemplateVariablesParamsSourceUSER:
+		return true
+	case ListTemplateVariablesParamsSourceWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListWorkflowsParamsState.
 const (
 	ListWorkflowsParamsStateARCHIVED  ListWorkflowsParamsState = "ARCHIVED"
@@ -7951,6 +8203,51 @@ func (e ListWorkflowsParamsState) Valid() bool {
 	case ListWorkflowsParamsStatePUBLISHED:
 		return true
 	case ListWorkflowsParamsStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListPromptTemplateVariablesParamsSource.
+const (
+	ListPromptTemplateVariablesParamsSourceAGENT        ListPromptTemplateVariablesParamsSource = "AGENT"
+	ListPromptTemplateVariablesParamsSourceAUTOMATION   ListPromptTemplateVariablesParamsSource = "AUTOMATION"
+	ListPromptTemplateVariablesParamsSourceGATE         ListPromptTemplateVariablesParamsSource = "GATE"
+	ListPromptTemplateVariablesParamsSourceINPUT        ListPromptTemplateVariablesParamsSource = "INPUT"
+	ListPromptTemplateVariablesParamsSourceORGANIZATION ListPromptTemplateVariablesParamsSource = "ORGANIZATION"
+	ListPromptTemplateVariablesParamsSourcePROJECT      ListPromptTemplateVariablesParamsSource = "PROJECT"
+	ListPromptTemplateVariablesParamsSourceRUN          ListPromptTemplateVariablesParamsSource = "RUN"
+	ListPromptTemplateVariablesParamsSourceRUNTIME      ListPromptTemplateVariablesParamsSource = "RUNTIME"
+	ListPromptTemplateVariablesParamsSourceSESSION      ListPromptTemplateVariablesParamsSource = "SESSION"
+	ListPromptTemplateVariablesParamsSourceUSER         ListPromptTemplateVariablesParamsSource = "USER"
+	ListPromptTemplateVariablesParamsSourceWORKFLOW     ListPromptTemplateVariablesParamsSource = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the ListPromptTemplateVariablesParamsSource enum.
+func (e ListPromptTemplateVariablesParamsSource) Valid() bool {
+	switch e {
+	case ListPromptTemplateVariablesParamsSourceAGENT:
+		return true
+	case ListPromptTemplateVariablesParamsSourceAUTOMATION:
+		return true
+	case ListPromptTemplateVariablesParamsSourceGATE:
+		return true
+	case ListPromptTemplateVariablesParamsSourceINPUT:
+		return true
+	case ListPromptTemplateVariablesParamsSourceORGANIZATION:
+		return true
+	case ListPromptTemplateVariablesParamsSourcePROJECT:
+		return true
+	case ListPromptTemplateVariablesParamsSourceRUN:
+		return true
+	case ListPromptTemplateVariablesParamsSourceRUNTIME:
+		return true
+	case ListPromptTemplateVariablesParamsSourceSESSION:
+		return true
+	case ListPromptTemplateVariablesParamsSourceUSER:
+		return true
+	case ListPromptTemplateVariablesParamsSourceWORKFLOW:
 		return true
 	default:
 		return false
@@ -8127,16 +8424,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
+	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	DELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case SearchVFSParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case SearchVFSParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
 	default:
 		return false
@@ -8706,6 +9003,7 @@ type AssistantPlan struct {
 	NextActions        []NextAction             `json:"nextActions"`
 	Operations         []AssistantPlanOperation `json:"operations"`
 	ProjectRef         *OpaqueRef               `json:"projectRef,omitempty"`
+	Receipt            *AssistantPlanReceipt    `json:"receipt,omitempty"`
 	Ref                OpaqueRef                `json:"ref"`
 	Revision           int64                    `json:"revision"`
 	State              AssistantPlanState       `json:"state"`
@@ -9564,24 +9862,26 @@ type IntegrationCredentialInput struct {
 
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
-	Adapter             IntegrationDefinitionAdapter          `json:"adapter"`
-	AdapterOwner        IntegrationDefinitionAdapterOwner     `json:"adapterOwner"`
-	AdapterReadiness    IntegrationDefinitionAdapterReadiness `json:"adapterReadiness"`
-	Available           bool                                  `json:"available"`
-	BuiltIn             bool                                  `json:"builtIn"`
-	Capabilities        []IntegrationCapability               `json:"capabilities"`
-	Category            string                                `json:"category"`
-	ConfigurationFields []IntegrationConfigurationField       `json:"configurationFields"`
-	CredentialSecretKey *string                               `json:"credentialSecretKey,omitempty"`
-	DefinitionVersion   string                                `json:"definitionVersion"`
-	Description         string                                `json:"description"`
-	Digest              string                                `json:"digest"`
-	ExecutionRoute      IntegrationDefinitionExecutionRoute   `json:"executionRoute"`
-	Key                 string                                `json:"key"`
-	Name                string                                `json:"name"`
-	NextActions         []IntegrationDefinitionNextActions    `json:"nextActions"`
-	Origin              IntegrationDefinitionOrigin           `json:"origin"`
-	SchemaVersion       string                                `json:"schemaVersion"`
+	Adapter                IntegrationDefinitionAdapter          `json:"adapter"`
+	AdapterOwner           IntegrationDefinitionAdapterOwner     `json:"adapterOwner"`
+	AdapterReadiness       IntegrationDefinitionAdapterReadiness `json:"adapterReadiness"`
+	Available              bool                                  `json:"available"`
+	BuiltIn                bool                                  `json:"builtIn"`
+	Capabilities           []IntegrationCapability               `json:"capabilities"`
+	Category               string                                `json:"category"`
+	ConfigurationFields    []IntegrationConfigurationField       `json:"configurationFields"`
+	ConnectionCount        int64                                 `json:"connectionCount"`
+	CredentialSecretKey    *string                               `json:"credentialSecretKey,omitempty"`
+	DefinitionVersion      string                                `json:"definitionVersion"`
+	Description            string                                `json:"description"`
+	Digest                 string                                `json:"digest"`
+	ExecutionRoute         IntegrationDefinitionExecutionRoute   `json:"executionRoute"`
+	HealthyConnectionCount int64                                 `json:"healthyConnectionCount"`
+	Key                    string                                `json:"key"`
+	Name                   string                                `json:"name"`
+	NextActions            []IntegrationDefinitionNextActions    `json:"nextActions"`
+	Origin                 IntegrationDefinitionOrigin           `json:"origin"`
+	SchemaVersion          string                                `json:"schemaVersion"`
 
 	// Version Авторитетная версия каталога для If-Match при SHIPPED copy.
 	Version int64 `json:"version"`
@@ -9637,18 +9937,19 @@ type IntegrationDefinitionShippedCopyInput struct {
 
 // IntegrationGrant defines model for IntegrationGrant.
 type IntegrationGrant struct {
-	AgentRef          *OpaqueRef                     `json:"agentRef,omitempty"`
-	ApprovalPolicy    IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
-	CapabilityKey     string                         `json:"capabilityKey"`
-	Enabled           bool                           `json:"enabled"`
-	InputSchema       *string                        `json:"inputSchema,omitempty"`
-	InputSchemaSha256 *string                        `json:"inputSchemaSha256,omitempty"`
-	Ref               OpaqueRef                      `json:"ref"`
-	ResourceScope     IntegrationResourceScope       `json:"resourceScope"`
-	Risk              IntegrationGrantRisk           `json:"risk"`
-	TargetName        string                         `json:"targetName"`
-	Version           int64                          `json:"version"`
-	WorkflowRef       *OpaqueRef                     `json:"workflowRef,omitempty"`
+	AgentRef           *OpaqueRef                     `json:"agentRef,omitempty"`
+	ApprovalPolicy     IntegrationGrantApprovalPolicy `json:"approvalPolicy"`
+	ApprovalScopePaths *[]string                      `json:"approvalScopePaths,omitempty"`
+	CapabilityKey      string                         `json:"capabilityKey"`
+	Enabled            bool                           `json:"enabled"`
+	InputSchema        *string                        `json:"inputSchema,omitempty"`
+	InputSchemaSha256  *string                        `json:"inputSchemaSha256,omitempty"`
+	Ref                OpaqueRef                      `json:"ref"`
+	ResourceScope      IntegrationResourceScope       `json:"resourceScope"`
+	Risk               IntegrationGrantRisk           `json:"risk"`
+	TargetName         string                         `json:"targetName"`
+	Version            int64                          `json:"version"`
+	WorkflowRef        *OpaqueRef                     `json:"workflowRef,omitempty"`
 }
 
 // IntegrationGrantApprovalPolicy defines model for IntegrationGrant.ApprovalPolicy.
@@ -9732,10 +10033,11 @@ type IntegrationGrantConnectionCandidatePage struct {
 
 // IntegrationGrantInput defines model for IntegrationGrantInput.
 type IntegrationGrantInput struct {
-	AgentRef      *OpaqueRef `json:"agentRef,omitempty"`
-	CapabilityKey string     `json:"capabilityKey"`
-	Enabled       bool       `json:"enabled"`
-	WorkflowRef   *OpaqueRef `json:"workflowRef,omitempty"`
+	AgentRef           *OpaqueRef `json:"agentRef,omitempty"`
+	ApprovalScopePaths *[]string  `json:"approvalScopePaths,omitempty"`
+	CapabilityKey      string     `json:"capabilityKey"`
+	Enabled            bool       `json:"enabled"`
+	WorkflowRef        *OpaqueRef `json:"workflowRef,omitempty"`
 }
 
 // IntegrationGrantProjectCandidate defines model for IntegrationGrantProjectCandidate.
@@ -9956,26 +10258,30 @@ type ManagedConfigurationDetachment struct {
 
 // ManagedConfigurationDraftInput defines model for ManagedConfigurationDraftInput.
 type ManagedConfigurationDraftInput struct {
-	ConfigurationRef *OpaqueRef                                  `json:"configurationRef,omitempty"`
-	Content          string                                      `json:"content"`
-	ContentFormat    ManagedConfigurationDraftInputContentFormat `json:"contentFormat"`
-	Name             string                                      `json:"name"`
-	ProjectRef       *OpaqueRef                                  `json:"projectRef,omitempty"`
-	PromptScope      *PromptTemplateScopeInput                   `json:"promptScope,omitempty"`
+	ConfigurationRef *OpaqueRef `json:"configurationRef,omitempty"`
+	Content          string     `json:"content"`
+
+	// ContentFormat OPENAPI_IMPORT разрешён только для черновика IntegrationDefinition; content содержит JSON с source и options, а сохранённая ревизия возвращается как канонический JSON.
+	ContentFormat ManagedConfigurationDraftInputContentFormat `json:"contentFormat"`
+	Name          string                                      `json:"name"`
+	ProjectRef    *OpaqueRef                                  `json:"projectRef,omitempty"`
+	PromptScope   *PromptTemplateScopeInput                   `json:"promptScope,omitempty"`
 }
 
-// ManagedConfigurationDraftInputContentFormat defines model for ManagedConfigurationDraftInput.ContentFormat.
+// ManagedConfigurationDraftInputContentFormat OPENAPI_IMPORT разрешён только для черновика IntegrationDefinition; content содержит JSON с source и options, а сохранённая ревизия возвращается как канонический JSON.
 type ManagedConfigurationDraftInputContentFormat string
 
 // ManagedConfigurationDraftSaveInput defines model for ManagedConfigurationDraftSaveInput.
 type ManagedConfigurationDraftSaveInput struct {
 	// Content Неполный текст допустим; ограничение 256 KiB применяется к UTF-8 байтам. Пустая строка разрешена, отсутствие поля и null запрещены.
-	Content       *string                                         `json:"content"`
+	Content *string `json:"content"`
+
+	// ContentFormat OPENAPI_IMPORT разрешён только для IntegrationDefinition и нормализуется в JSON.
 	ContentFormat ManagedConfigurationDraftSaveInputContentFormat `json:"contentFormat"`
 	PromptScope   *PromptTemplateScopeInput                       `json:"promptScope,omitempty"`
 }
 
-// ManagedConfigurationDraftSaveInputContentFormat defines model for ManagedConfigurationDraftSaveInput.ContentFormat.
+// ManagedConfigurationDraftSaveInputContentFormat OPENAPI_IMPORT разрешён только для IntegrationDefinition и нормализуется в JSON.
 type ManagedConfigurationDraftSaveInputContentFormat string
 
 // ManagedConfigurationGitSource Безопасная owner-проекция без credential, SourceWork, package и lease. READY имеет полный accepted pin и syncedAt; refresh QUEUED/CLAIMED может сохранять прежний pin. SYNC_BLOCKED сохраняет прошлую published revision; DETACHED может оставаться у UI-managed объекта. failureCode присутствует только в SYNC_BLOCKED. Polling использует существующую managed history.
@@ -10221,6 +10527,34 @@ type OIDCGroupState string
 
 // OpaqueRef defines model for OpaqueRef.
 type OpaqueRef = string
+
+// OpenAPIInspectionInput defines model for OpenAPIInspectionInput.
+type OpenAPIInspectionInput struct {
+	// Source OpenAPI 3.x JSON или YAML без внешних ссылок; передаётся только в локальный gateway
+	Source string `json:"source"`
+}
+
+// OpenAPIInspectionOperation defines model for OpenAPIInspectionOperation.
+type OpenAPIInspectionOperation struct {
+	Candidate bool `json:"candidate"`
+
+	// HealthCandidate GET-операция не требует входных параметров и может быть проверкой соединения.
+	HealthCandidate bool   `json:"healthCandidate"`
+	Method          string `json:"method"`
+	OperationId     string `json:"operationId"`
+	Path            string `json:"path"`
+	Reason          string `json:"reason"`
+	ServerOrigin    string `json:"serverOrigin"`
+	Summary         string `json:"summary"`
+}
+
+// OpenAPIInspectionResult defines model for OpenAPIInspectionResult.
+type OpenAPIInspectionResult struct {
+	Digest     string                       `json:"digest"`
+	Operations []OpenAPIInspectionOperation `json:"operations"`
+	Title      string                       `json:"title"`
+	Version    string                       `json:"version"`
+}
 
 // Overview defines model for Overview.
 type Overview struct {
@@ -10664,9 +10998,13 @@ type PromptVariableCatalogInput struct {
 	PageToken             *string                              `json:"pageToken,omitempty"`
 	ProjectRef            *OpaqueRef                           `json:"projectRef,omitempty"`
 	Query                 *string                              `json:"query,omitempty"`
+	Source                *PromptVariableCatalogInputSource    `json:"source,omitempty"`
 	TargetKind            PromptVariableCatalogInputTargetKind `json:"targetKind"`
 	TargetRef             OpaqueRef                            `json:"targetRef"`
 }
+
+// PromptVariableCatalogInputSource defines model for PromptVariableCatalogInput.Source.
+type PromptVariableCatalogInputSource string
 
 // PromptVariableCatalogInputTargetKind defines model for PromptVariableCatalogInput.TargetKind.
 type PromptVariableCatalogInputTargetKind string
@@ -11098,10 +11436,13 @@ type RoleEnvironmentView struct {
 // RoleImageArtifact defines model for RoleImageArtifact.
 type RoleImageArtifact struct {
 	AdmissionVerdict            RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
+	BuildRef                    OpaqueRef                         `json:"buildRef"`
 	ManifestDigest              string                            `json:"manifestDigest"`
 	PromotedAt                  *Timestamp                        `json:"promotedAt,omitempty"`
 	PromotedReference           *string                           `json:"promotedReference,omitempty"`
 	PromotionReceiptSha256      *string                           `json:"promotionReceiptSha256,omitempty"`
+	PromotionRequested          bool                              `json:"promotionRequested"`
+	PromotionState              RoleImageArtifactPromotionState   `json:"promotionState"`
 	ProvenanceSha256            string                            `json:"provenanceSha256"`
 	RecipeGeneration            int64                             `json:"recipeGeneration"`
 	RecipeRef                   OpaqueRef                         `json:"recipeRef"`
@@ -11114,6 +11455,9 @@ type RoleImageArtifact struct {
 
 // RoleImageArtifactAdmissionVerdict defines model for RoleImageArtifact.AdmissionVerdict.
 type RoleImageArtifactAdmissionVerdict string
+
+// RoleImageArtifactPromotionState defines model for RoleImageArtifact.PromotionState.
+type RoleImageArtifactPromotionState string
 
 // RoleImageArtifactTool defines model for RoleImageArtifactTool.
 type RoleImageArtifactTool struct {
@@ -11307,7 +11651,8 @@ type RoleImageRecipeState string
 
 // RoleImageRecipeCommand defines model for RoleImageRecipeCommand.
 type RoleImageRecipeCommand struct {
-	Action RoleImageRecipeCommandAction `json:"action"`
+	Action   RoleImageRecipeCommandAction `json:"action"`
+	BuildRef *string                      `json:"buildRef,omitempty"`
 }
 
 // RoleImageRecipeCommandAction defines model for RoleImageRecipeCommand.Action.
@@ -13092,6 +13437,9 @@ type AuditActionQuery = string
 // AuditOutcomeQuery defines model for AuditOutcomeQuery.
 type AuditOutcomeQuery = string
 
+// AuditResourceRefQuery defines model for AuditResourceRefQuery.
+type AuditResourceRefQuery = OpaqueRef
+
 // ConfigurationRef defines model for ConfigurationRef.
 type ConfigurationRef = OpaqueRef
 
@@ -13233,6 +13581,9 @@ type TemplateAgentRef = OpaqueRef
 // TemplateRuntimeRevisionRef defines model for TemplateRuntimeRevisionRef.
 type TemplateRuntimeRevisionRef = OpaqueRef
 
+// TemplateVariableSourceQuery defines model for TemplateVariableSourceQuery.
+type TemplateVariableSourceQuery string
+
 // VFSKinds defines model for VFSKinds.
 type VFSKinds = []VFSKind
 
@@ -13262,6 +13613,7 @@ type sessionCookieContextKey string
 
 // ListAccessBindingsParams defines parameters for ListAccessBindings.
 type ListAccessBindingsParams struct {
+	Query          *Query             `form:"query,omitempty" json:"query,omitempty"`
 	PageSize       *PageSize          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken      *PageToken         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 	SubjectKind    *AccessSubjectKind `form:"subjectKind,omitempty" json:"subjectKind,omitempty"`
@@ -13300,6 +13652,7 @@ type ListOIDCGroupsParams struct {
 
 // ListAccessRolesParams defines parameters for ListAccessRoles.
 type ListAccessRolesParams struct {
+	Query           *Query     `form:"query,omitempty" json:"query,omitempty"`
 	PageSize        *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
 	PageToken       *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 	IncludeArchived *bool      `form:"includeArchived,omitempty" json:"includeArchived,omitempty"`
@@ -13674,8 +14027,9 @@ type UpdateAssistantConversationTitleParams struct {
 
 // AddAssistantTurnJSONBody defines parameters for AddAssistantTurn.
 type AddAssistantTurnJSONBody struct {
-	AttachmentSetRef *OpaqueRef `json:"attachmentSetRef,omitempty"`
-	Content          string     `json:"content"`
+	AttachmentSetRef *OpaqueRef                  `json:"attachmentSetRef,omitempty"`
+	Content          string                      `json:"content"`
+	Context          *AssistantContextDescriptor `json:"context,omitempty"`
 }
 
 // AddAssistantTurnParams defines parameters for AddAssistantTurn.
@@ -13768,12 +14122,13 @@ type RemoveAttachmentSetItemsParams struct {
 
 // ListAuditEventsParams defines parameters for ListAuditEvents.
 type ListAuditEventsParams struct {
-	Outcome    *AuditOutcomeQuery `form:"outcome,omitempty" json:"outcome,omitempty"`
-	Action     *AuditActionQuery  `form:"action,omitempty" json:"action,omitempty"`
-	ProjectRef *ProjectRefQuery   `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query      *Query             `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	Outcome     *AuditOutcomeQuery     `form:"outcome,omitempty" json:"outcome,omitempty"`
+	Action      *AuditActionQuery      `form:"action,omitempty" json:"action,omitempty"`
+	ProjectRef  *ProjectRefQuery       `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	ResourceRef *AuditResourceRefQuery `form:"resourceRef,omitempty" json:"resourceRef,omitempty"`
+	Query       *Query                 `form:"query,omitempty" json:"query,omitempty"`
+	PageSize    *PageSize              `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken   *PageToken             `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ReconcileEmailEffectParams defines parameters for ReconcileEmailEffect.
@@ -13943,6 +14298,11 @@ type CreateIntegrationDefinitionDraftParams struct {
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
 	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
+}
+
+// InspectOpenAPIIntegrationParams defines parameters for InspectOpenAPIIntegration.
+type InspectOpenAPIIntegrationParams struct {
+	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
 }
 
 // ArchiveIntegrationDefinitionConfigurationParams defines parameters for ArchiveIntegrationDefinitionConfiguration.
@@ -14534,12 +14894,18 @@ type TranscribeSpeechParams struct {
 
 // ListTemplateVariablesParams defines parameters for ListTemplateVariables.
 type ListTemplateVariablesParams struct {
-	Query              *Query                      `form:"query,omitempty" json:"query,omitempty"`
-	PageSize           *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken          *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	AgentRef           *TemplateAgentRef           `form:"agentRef,omitempty" json:"agentRef,omitempty"`
-	RuntimeRevisionRef *TemplateRuntimeRevisionRef `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
+	Query *Query `form:"query,omitempty" json:"query,omitempty"`
+
+	// Source Точная server-owned область переменной шаблона.
+	Source             *ListTemplateVariablesParamsSource `form:"source,omitempty" json:"source,omitempty"`
+	PageSize           *PageSize                          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken          *PageToken                         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	AgentRef           *TemplateAgentRef                  `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	RuntimeRevisionRef *TemplateRuntimeRevisionRef        `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
 }
+
+// ListTemplateVariablesParamsSource defines parameters for ListTemplateVariables.
+type ListTemplateVariablesParamsSource string
 
 // ListWorkflowsParams defines parameters for ListWorkflows.
 type ListWorkflowsParams struct {
@@ -14609,13 +14975,19 @@ type ValidatePromptTemplateDraftParams struct {
 
 // ListPromptTemplateVariablesParams defines parameters for ListPromptTemplateVariables.
 type ListPromptTemplateVariablesParams struct {
-	ProjectRef         *ProjectRefQuery            `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query              *Query                      `form:"query,omitempty" json:"query,omitempty"`
-	PageSize           *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken          *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	AgentRef           *TemplateAgentRef           `form:"agentRef,omitempty" json:"agentRef,omitempty"`
-	RuntimeRevisionRef *TemplateRuntimeRevisionRef `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+
+	// Source Точная server-owned область переменной шаблона.
+	Source             *ListPromptTemplateVariablesParamsSource `form:"source,omitempty" json:"source,omitempty"`
+	PageSize           *PageSize                                `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken          *PageToken                               `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	AgentRef           *TemplateAgentRef                        `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	RuntimeRevisionRef *TemplateRuntimeRevisionRef              `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
 }
+
+// ListPromptTemplateVariablesParamsSource defines parameters for ListPromptTemplateVariables.
+type ListPromptTemplateVariablesParamsSource string
 
 // QueryPromptTemplateVariablesParams defines parameters for QueryPromptTemplateVariables.
 type QueryPromptTemplateVariablesParams struct {
@@ -15526,6 +15898,9 @@ type CopyIntegrationDefinitionConfigurationJSONRequestBody = IntegrationDefiniti
 // CreateIntegrationDefinitionDraftJSONRequestBody defines body for CreateIntegrationDefinitionDraft for application/json ContentType.
 type CreateIntegrationDefinitionDraftJSONRequestBody = ManagedConfigurationDraftInput
 
+// InspectOpenAPIIntegrationJSONRequestBody defines body for InspectOpenAPIIntegration for application/json ContentType.
+type InspectOpenAPIIntegrationJSONRequestBody = OpenAPIInspectionInput
+
 // ConfigureIntegrationDefinitionGitSourceJSONRequestBody defines body for ConfigureIntegrationDefinitionGitSource for application/json ContentType.
 type ConfigureIntegrationDefinitionGitSourceJSONRequestBody = IntegrationDefinitionGitSourceInput
 
@@ -16370,6 +16745,9 @@ type ServerInterface interface {
 	// (POST /api/v1/integration-definition-configurations/drafts)
 	CreateIntegrationDefinitionDraft(w http.ResponseWriter, r *http.Request, params CreateIntegrationDefinitionDraftParams)
 
+	// (POST /api/v1/integration-definition-configurations/openapi-inspections)
+	InspectOpenAPIIntegration(w http.ResponseWriter, r *http.Request, params InspectOpenAPIIntegrationParams)
+
 	// (POST /api/v1/integration-definition-configurations/{configurationRef}/archive)
 	ArchiveIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request, configurationRef ConfigurationRef, params ArchiveIntegrationDefinitionConfigurationParams)
 
@@ -17039,6 +17417,19 @@ func (siw *ServerInterfaceWrapper) ListAccessBindings(w http.ResponseWriter, r *
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListAccessBindingsParams
 
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "pageSize" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -17586,6 +17977,19 @@ func (siw *ServerInterfaceWrapper) ListAccessRoles(w http.ResponseWriter, r *htt
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListAccessRolesParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "pageSize" -------------
 
@@ -23117,6 +23521,19 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// ------------- Optional query parameter "resourceRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceRef", r.URL.Query(), &params.ResourceRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "query" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -25561,6 +25978,57 @@ func (siw *ServerInterfaceWrapper) CreateIntegrationDefinitionDraft(w http.Respo
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateIntegrationDefinitionDraft(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InspectOpenAPIIntegration operation middleware
+func (siw *ServerInterfaceWrapper) InspectOpenAPIIntegration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params InspectOpenAPIIntegrationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InspectOpenAPIIntegration(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -32714,6 +33182,19 @@ func (siw *ServerInterfaceWrapper) ListTemplateVariables(w http.ResponseWriter, 
 		return
 	}
 
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "pageSize" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -33767,6 +34248,19 @@ func (siw *ServerInterfaceWrapper) ListPromptTemplateVariables(w http.ResponseWr
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
 		}
 		return
 	}
@@ -44151,6 +44645,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/copies", wrapper.CopyIntegrationDefinitionConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/drafts", wrapper.CreateIntegrationDefinitionDraft)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/openapi-inspections", wrapper.InspectOpenAPIIntegration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/archive", wrapper.ArchiveIntegrationDefinitionConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-source", wrapper.ConfigureIntegrationDefinitionGitSource)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/{configurationRef}/git-source/refresh", wrapper.RefreshIntegrationDefinitionGitSource)

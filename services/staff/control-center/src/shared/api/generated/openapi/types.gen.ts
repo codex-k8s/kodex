@@ -267,7 +267,7 @@ export type SimulateAccessResult = {
     evaluatedAt: Timestamp;
 };
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE' | 'COPY';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'CANCEL_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE' | 'COPY';
 
 export type Problem = {
     type: string;
@@ -359,17 +359,51 @@ export type SpeechTranscriptionAvailability = {
     validUntil?: Timestamp;
 };
 
+export type OpenApiInspectionInput = {
+    /**
+     * OpenAPI 3.x JSON или YAML без внешних ссылок; передаётся только в локальный gateway
+     */
+    source: string;
+};
+
+export type OpenApiInspectionOperation = {
+    operationId: string;
+    method: string;
+    path: string;
+    summary: string;
+    serverOrigin: string;
+    candidate: boolean;
+    /**
+     * GET-операция не требует входных параметров и может быть проверкой соединения.
+     */
+    healthCandidate: boolean;
+    reason: string;
+};
+
+export type OpenApiInspectionResult = {
+    digest: string;
+    title: string;
+    version: string;
+    operations: Array<OpenApiInspectionOperation>;
+};
+
 export type ManagedConfigurationDraftInput = {
     configurationRef?: OpaqueRef;
     projectRef?: OpaqueRef;
     name: string;
-    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    /**
+     * OPENAPI_IMPORT разрешён только для черновика IntegrationDefinition; content содержит JSON с source и options, а сохранённая ревизия возвращается как канонический JSON.
+     */
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML' | 'OPENAPI_IMPORT';
     content: string;
     promptScope?: PromptTemplateScopeInput;
 };
 
 export type ManagedConfigurationDraftSaveInput = {
-    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML';
+    /**
+     * OPENAPI_IMPORT разрешён только для IntegrationDefinition и нормализуется в JSON.
+     */
+    contentFormat: 'TEXT' | 'JSON' | 'YAML' | 'TOML' | 'OPENAPI_IMPORT';
     promptScope?: PromptTemplateScopeInput;
     /**
      * Неполный текст допустим; ограничение 256 KiB применяется к UTF-8 байтам. Пустая строка разрешена, отсутствие поля и null запрещены.
@@ -2025,6 +2059,7 @@ export type PromptVariableCatalogInput = {
     context?: PromptPreviewContext;
     expectedContextDigest?: string;
     query?: string;
+    source?: 'AGENT' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'ORGANIZATION' | 'PROJECT' | 'RUN' | 'RUNTIME' | 'SESSION' | 'USER' | 'WORKFLOW';
     pageSize?: number;
     pageToken?: string;
 };
@@ -2284,7 +2319,8 @@ export type RoleImageRecipeUpdateInput = {
 };
 
 export type RoleImageRecipeCommand = {
-    action: 'REQUEST_BUILD' | 'ARCHIVE' | 'RESTORE';
+    action: 'REQUEST_BUILD' | 'CANCEL_BUILD' | 'ARCHIVE' | 'RESTORE';
+    buildRef?: string;
 };
 
 export type RoleImageRecipePage = {
@@ -2310,10 +2346,13 @@ export type RoleImageArtifact = {
     version: number;
     recipeRef: OpaqueRef;
     recipeGeneration: number;
+    buildRef: OpaqueRef;
     manifestDigest: string;
     provenanceSha256: string;
     promotedReference?: string;
     admissionVerdict: 'ACCEPTED' | 'REJECTED';
+    promotionState: 'PENDING' | 'CLAIMED' | 'AUTHORIZED' | 'PROMOTED' | 'REJECTED';
+    promotionRequested: boolean;
     sbomSha256?: string;
     vulnerabilityEvidenceSha256?: string;
     tools: Array<RoleImageArtifactTool>;
@@ -3380,8 +3419,8 @@ export type IntegrationCapability = {
     risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
     approvalRequired: boolean;
     operation: string;
-    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
-    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
     inputSchemaSha256?: string;
@@ -3429,10 +3468,12 @@ export type IntegrationDefinition = {
     executionRoute: 'MANAGED_MCP' | 'INTERACTION';
     adapterReadiness: 'READY' | 'NOT_READY';
     credentialSecretKey?: string;
+    connectionCount: number;
+    healthyConnectionCount: number;
 };
 
 export type IntegrationResourceScope = {
-    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER';
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE';
     values: {
         [key: string]: string;
     };
@@ -3626,7 +3667,8 @@ export type IntegrationGrant = {
     targetName: string;
     enabled: boolean;
     risk: 'READ' | 'WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
-    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT';
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    approvalScopePaths?: Array<string>;
     resourceScope: IntegrationResourceScope;
     inputSchema?: string;
     inputSchemaSha256?: string;
@@ -3678,11 +3720,12 @@ export type IntegrationGrantInput = {
     agentRef?: OpaqueRef;
     workflowRef?: OpaqueRef;
     enabled: boolean;
+    approvalScopePaths?: Array<string>;
 };
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT';
+    type: 'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE';
     action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
@@ -3727,6 +3770,7 @@ export type AssistantPlan = {
     validationProblems: Array<string>;
     validatedAt?: Timestamp;
     appliedAt?: Timestamp;
+    receipt?: AssistantPlanReceipt;
     nextActions: Array<NextAction>;
 };
 
@@ -3762,7 +3806,7 @@ export type AssistantContextDescriptor = {
     entityRef: string;
     entityName: string;
     entityVersion?: number;
-    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT'>;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_AGENT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE'>;
 };
 
 export type AssistantPlanReceipt = {
@@ -3898,6 +3942,8 @@ export type ProjectRef = OpaqueRef;
 
 export type ProjectRefQuery = OpaqueRef;
 
+export type AuditResourceRefQuery = OpaqueRef;
+
 export type MembershipRef = OpaqueRef;
 
 export type AccessRoleRef = OpaqueRef;
@@ -3985,6 +4031,11 @@ export type Query = string;
 export type TemplateAgentRef = OpaqueRef;
 
 export type TemplateRuntimeRevisionRef = OpaqueRef;
+
+/**
+ * Точная server-owned область переменной шаблона.
+ */
+export type TemplateVariableSourceQuery = 'AGENT' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'ORGANIZATION' | 'PROJECT' | 'RUN' | 'RUNTIME' | 'SESSION' | 'USER' | 'WORKFLOW';
 
 export type PageSize = number;
 
@@ -5993,6 +6044,10 @@ export type ListTemplateVariablesData = {
     };
     query?: {
         query?: string;
+        /**
+         * Точная server-owned область переменной шаблона.
+         */
+        source?: 'AGENT' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'ORGANIZATION' | 'PROJECT' | 'RUN' | 'RUNTIME' | 'SESSION' | 'USER' | 'WORKFLOW';
         pageSize?: number;
         pageToken?: string;
         agentRef?: OpaqueRef;
@@ -6603,6 +6658,10 @@ export type ListPromptTemplateVariablesData = {
     query?: {
         projectRef?: OpaqueRef;
         query?: string;
+        /**
+         * Точная server-owned область переменной шаблона.
+         */
+        source?: 'AGENT' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'ORGANIZATION' | 'PROJECT' | 'RUN' | 'RUNTIME' | 'SESSION' | 'USER' | 'WORKFLOW';
         pageSize?: number;
         pageToken?: string;
         agentRef?: OpaqueRef;
@@ -10629,6 +10688,7 @@ export type AddAssistantTurnData = {
     body: {
         content: string;
         attachmentSetRef?: OpaqueRef;
+        context?: AssistantContextDescriptor;
     };
     headers: {
         'Idempotency-Key': string;
@@ -10909,6 +10969,7 @@ export type ListAccessRolesData = {
     body?: never;
     path?: never;
     query?: {
+        query?: string;
         pageSize?: number;
         pageToken?: string;
         includeArchived?: boolean;
@@ -11061,6 +11122,7 @@ export type ListAccessBindingsData = {
     body?: never;
     path?: never;
     query?: {
+        query?: string;
         pageSize?: number;
         pageToken?: string;
         subjectKind?: AccessSubjectKind;
@@ -11265,6 +11327,7 @@ export type ListAuditEventsData = {
         outcome?: string;
         action?: string;
         projectRef?: OpaqueRef;
+        resourceRef?: OpaqueRef;
         query?: string;
         pageSize?: number;
         pageToken?: string;
@@ -12124,6 +12187,34 @@ export type RebindRoleImageConsumersResponses = {
 };
 
 export type RebindRoleImageConsumersResponse = RebindRoleImageConsumersResponses[keyof RebindRoleImageConsumersResponses];
+
+export type InspectOpenApiIntegrationData = {
+    body: OpenApiInspectionInput;
+    headers: {
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/integration-definition-configurations/openapi-inspections';
+};
+
+export type InspectOpenApiIntegrationErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type InspectOpenApiIntegrationError = InspectOpenApiIntegrationErrors[keyof InspectOpenApiIntegrationErrors];
+
+export type InspectOpenApiIntegrationResponses = {
+    /**
+     * Ограниченный список операций-кандидатов; Cache-Control no-store
+     */
+    200: OpenApiInspectionResult;
+};
+
+export type InspectOpenApiIntegrationResponse = InspectOpenApiIntegrationResponses[keyof InspectOpenApiIntegrationResponses];
 
 export type CreateIntegrationDefinitionDraftData = {
     body: ManagedConfigurationDraftInput;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { computed, nextTick, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import ConfigurationCatalog from "@/features/managed-configurations/ConfigurationCatalog.vue";
 import {
   configurationRequiresProject,
@@ -12,7 +12,6 @@ import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
-import { useRouter } from "vue-router";
 const route = useRoute();
 const router = useRouter();
 const kinds: readonly ConfigurationKind[] = [
@@ -33,6 +32,19 @@ const projectRef = computed(() =>
 const project = ref<Project>();
 const problem = ref<AppProblem>();
 watch(
+  () => [kind.value, route.query.assistantImportOpen],
+  async ([, open]) => {
+    if (kind.value !== "INTEGRATION_DEFINITION" || open !== "1") return;
+    const currentPath = route.fullPath;
+    await nextTick();
+    if (route.fullPath !== currentPath) return;
+    const query = { ...route.query };
+    delete query.assistantImportOpen;
+    await router.replace({ query });
+  },
+  { immediate: true, flush: "post" },
+);
+watch(
   projectRef,
   async (ref, _previous, cleanup) => {
     project.value = undefined;
@@ -52,6 +64,12 @@ watch(
 function changeProject(value: string): void {
   void router.replace({ query: value ? { projectRef: value } : {} });
 }
+function openCreated(configurationRef: string): void {
+  void router.push({
+    name: "configuration",
+    params: { kind: "INTEGRATION_DEFINITION", configurationRef },
+  });
+}
 </script>
 <template>
   <PageFrame :title="kind ? $t(`managed.kinds.${kind}`) : $t('managed.title')">
@@ -66,6 +84,8 @@ function changeProject(value: string): void {
       v-if="kind"
       :kind="kind"
       :project-ref="projectRef || undefined"
+      :auto-open-import="route.query.assistantImportOpen === '1'"
+      @created="openCreated"
     />
     <p v-else role="alert">{{ $t("errors.NOT_FOUND") }}</p>
   </PageFrame>

@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { createTemplateVariableLoader } from "@/features/agents/detail/api";
@@ -50,6 +50,7 @@ const props = defineProps<{
   agentVersion?: number;
   runtimeRevisionRef?: string;
 }>();
+const fullPreviewField = `agent-instructions-full-preview-${useId()}`;
 const emit = defineEmits<{
   "update:modelValue": [value: string];
   save: [];
@@ -292,6 +293,8 @@ onBeforeUnmount(invalidatePreview);
           <label
             ><input
               v-model="fullPreview"
+              :id="fullPreviewField"
+              :name="fullPreviewField"
               type="checkbox"
               :disabled="materializedBusy"
             />{{ t("promptContext.full") }}</label

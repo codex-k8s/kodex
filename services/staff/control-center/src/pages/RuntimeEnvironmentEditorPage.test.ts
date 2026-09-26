@@ -7,8 +7,10 @@ import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen
 const runtime = vi.hoisted(() => ({
   environments: {},
   environmentVersions: {},
+  environmentVersionCursors: {},
   environmentReadiness: {},
   environmentAgents: {},
+  loading: {},
   loadPromotedRoleImageArtifact: vi.fn(),
   loadEnvironment: vi.fn(),
   loadEnvironmentVersions: vi.fn(),

@@ -8,11 +8,12 @@ import {
   PackageCheck,
   RotateCcw,
   ShieldCheck,
+  Square,
   TerminalSquare,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
@@ -20,7 +21,6 @@ import ConfigurationCopyDialog from "@/features/managed-configurations/Configura
 import { recipeCopySource } from "@/features/managed-configurations/copy-source";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import {
-  buildIsActive,
   buildRevisionIdentity,
   canPromoteRoleImage,
   canRequestBuild,
@@ -34,6 +34,8 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
@@ -41,7 +43,9 @@ const props = defineProps<{
 }>();
 const { t } = useI18n();
 const router = useRouter();
+const route = useRoute();
 const store = useRoleImagesStore();
+const fieldNamePrefix = `role-image-${useId()}`;
 const name = ref("");
 const roleDefinitionRef = ref("");
 const environmentKey = ref("");
@@ -49,6 +53,8 @@ const dockerfile = ref("");
 const diffOpen = ref(false);
 const buildsExpanded = ref(false);
 const revisionsExpanded = ref(false);
+const revisionRoot = ref<HTMLElement>();
+const revisionSentinel = ref<HTMLElement>();
 const openedBuildSources = ref(new Set<string>());
 function toggleBuildSource(ref: string, event: Event): void {
   const details = event.currentTarget;
@@ -88,11 +94,43 @@ const artifact = computed(() =>
 const revisions = computed(() =>
   props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
 );
+const revisionPageSize = useAdaptiveCursorPageSize({
+  container: revisionRoot,
+  itemSelector: ".revision-row",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 96,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: revisionRoot,
+  sentinel: revisionSentinel,
+  enabled: () =>
+    Boolean(recipe.value && store.revisionNextPageToken[recipe.value.ref]) &&
+    !store.loadingDetail,
+  loadMore: () =>
+    recipe.value &&
+    store.loadMoreRevisions(
+      props.projectRef,
+      recipe.value.ref,
+      revisionPageSize.value,
+    ),
+});
 const promotionReceipt = computed(() =>
   props.recipeRef ? store.promotionReceipts[props.recipeRef] : undefined,
 );
+const promotionEvidenceState = computed(() => {
+  if (recipe.value?.promotedImageReady)
+    return artifact.value?.promotionState ?? "PROMOTED";
+  return promotionReceipt.value?.state;
+});
 const buildActive = computed(() =>
-  currentBuild.value ? buildIsActive(currentBuild.value) : false,
+  currentBuild.value
+    ? !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(
+        currentBuild.value.stage,
+      )
+    : false,
 );
 const promotionPending = computed(
   () =>
@@ -131,12 +169,13 @@ const canSave = computed(
     dockerfileMessages.value.length === 0 &&
     (!recipe.value || recipe.value.nextActions.includes("UPDATE")),
 );
-const roleLabel = computed(
-  () =>
-    store.roleDefinitionByRef.get(
-      recipe.value?.roleDefinitionRef ?? roleDefinitionRef.value,
-    )?.label ?? t("roleImages.unknownRole"),
-);
+const roleLabel = computed(() => {
+  const ref = recipe.value?.roleDefinitionRef ?? roleDefinitionRef.value;
+  if (!ref) return t("roleImages.chooseRole");
+  return (
+    store.roleDefinitionByRef.get(ref)?.label ?? t("roleImages.unknownRole")
+  );
+});
 const environmentLabel = computed(() => {
   const key = environmentKey.value;
   if (!key) return t("common.noData");
@@ -190,7 +229,14 @@ async function load(): Promise<void> {
     store.loadSupportingCatalogs(props.projectRef),
   ];
   if (props.recipeRef)
-    tasks.push(store.loadDetail(props.projectRef, props.recipeRef));
+    tasks.push(
+      store.loadDetail(
+        props.projectRef,
+        props.recipeRef,
+        true,
+        revisionPageSize.value,
+      ),
+    );
   await Promise.all(tasks);
   if (disposed || current !== loadGeneration) return;
   if (!props.recipeRef && !environmentKey.value) {
@@ -241,9 +287,11 @@ async function save(): Promise<void> {
       name: name.value.trim(),
       environment: selection,
     });
-    await router.replace(
-      `/projects/${encodeURIComponent(props.projectRef)}/role-images/${encodeURIComponent(created.ref)}`,
-    );
+    await router.replace({
+      name: "role-image",
+      params: { projectRef: props.projectRef, recipeRef: created.ref },
+      query: route.query.assistantForm === "1" ? { assistantForm: "1" } : {},
+    });
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
@@ -257,6 +305,33 @@ async function runCommand(
     await store.command(props.projectRef, recipe.value, action);
     lifecyclePollAttempts = 0;
     confirmationAction.value = undefined;
+    sync();
+    scheduleBuildPolling();
+  } catch {
+    // Store сохраняет нормализованную problem-модель для видимого состояния.
+  }
+}
+
+async function cancelCurrentBuild(): Promise<void> {
+  const current = currentBuild.value;
+  if (
+    !recipe.value ||
+    !current ||
+    store.mutating ||
+    hasLocalChanges.value ||
+    !recipe.value.nextActions.includes("CANCEL_BUILD") ||
+    ["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(current.stage) ||
+    !window.confirm(t("roleImages.cancelBuildConfirm"))
+  )
+    return;
+  try {
+    await store.command(
+      props.projectRef,
+      recipe.value,
+      "CANCEL_BUILD",
+      current.ref,
+    );
+    lifecyclePollAttempts = 0;
     sync();
     scheduleBuildPolling();
   } catch {
@@ -384,6 +459,22 @@ onBeforeUnmount(() => {
             {{ t("roleImages.requestBuild") }}
           </button>
           <button
+            v-if="
+              recipe.nextActions.includes('CANCEL_BUILD') &&
+              currentBuild &&
+              !['COMPLETED', 'CANCELLED', 'DEAD_LETTER'].includes(
+                currentBuild.stage,
+              )
+            "
+            class="button"
+            type="button"
+            :disabled="store.mutating || hasLocalChanges"
+            @click="cancelCurrentBuild"
+          >
+            <Square :size="16" aria-hidden="true" />
+            {{ t("roleImages.cancelBuild") }}
+          </button>
+          <button
             v-if="recipe.nextActions.includes('ARCHIVE')"
             class="button"
             type="button"
@@ -497,6 +588,8 @@ onBeforeUnmount(() => {
                 <span>{{ t("common.name") }}</span>
                 <input
                   v-model="name"
+                  :id="`${fieldNamePrefix}-name`"
+                  :name="`${fieldNamePrefix}-name`"
                   maxlength="120"
                   :readonly="!!recipe && !recipe.nextActions.includes('UPDATE')"
                 />
@@ -505,6 +598,8 @@ onBeforeUnmount(() => {
                 <span>{{ t("roleImages.role") }}</span>
                 <select
                   v-model="roleDefinitionRef"
+                  :id="`${fieldNamePrefix}-role`"
+                  :name="`${fieldNamePrefix}-role`"
                   :disabled="!!recipe || !store.roleDefinitions.length"
                 >
                   <option value="" disabled>
@@ -525,6 +620,8 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span>{{ t("roleImages.environment") }}</span>
                 <select
+                  :id="`${fieldNamePrefix}-environment`"
+                  :name="`${fieldNamePrefix}-environment`"
                   :value="environmentKey"
                   :disabled="
                     !store.environments.length ||
@@ -728,7 +825,10 @@ onBeforeUnmount(() => {
                 <Maximize2 :size="20" />
               </button>
             </header>
-            <div class="build-history__scroll build-history__scroll--revisions">
+            <div
+              ref="revisionRoot"
+              class="build-history__scroll build-history__scroll--revisions"
+            >
               <div v-if="!revisions.length" class="empty-section">
                 {{ t("common.empty") }}
               </div>
@@ -758,15 +858,12 @@ onBeforeUnmount(() => {
                   new Date(revision.createdAt).toLocaleString()
                 }}</small>
               </article>
-              <button
+              <div
                 v-if="store.revisionNextPageToken[recipe.ref]"
-                class="button"
-                type="button"
-                :disabled="store.loadingDetail"
-                @click="store.loadMoreRevisions(projectRef, recipe.ref)"
-              >
-                {{ t("roleImages.loadMore") }}
-              </button>
+                ref="revisionSentinel"
+                class="cursor-sentinel"
+                aria-hidden="true"
+              />
             </div>
           </component>
         </main>
@@ -850,8 +947,8 @@ onBeforeUnmount(() => {
               </div>
             </dl>
             <StatusBadge
-              v-if="promotionReceipt"
-              :state="promotionReceipt.state"
+              v-if="promotionEvidenceState"
+              :state="promotionEvidenceState"
             />
             <p v-else>{{ t("roleImages.noPromotedArtifact") }}</p>
           </section>

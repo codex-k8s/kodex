@@ -127,27 +127,31 @@ func (service *Service) Manage(ctx context.Context, input repository.ManageInput
 		}
 	}
 	input.Mutation.Operation = "role-image-recipe." + strings.ToLower(input.Action)
-	input.Mutation.IntentDigest = digest(struct {
-		Action, RecipeRef, ProjectRef, RoleDefinitionRef, Name string
-		Recipe                                                 entity.RoleImageRecipeInput
-	}{input.Action, input.RecipeRef, input.ProjectRef, input.RoleDefinitionRef, input.Name, input.Recipe})
+	input.Mutation.IntentDigest = roleImageManageIntentDigest(input)
 	if err := input.Mutation.Validate(); err != nil {
 		return repository.ManageResult{}, errs.ErrInvalid
 	}
 	switch input.Action {
 	case "CREATE":
 		if !validRef(input.ProjectRef, "prj") || !validRef(input.RoleDefinitionRef, "role") ||
-			!validDisplayName(input.Name) || validateRecipe(input.Recipe) != nil || input.Mutation.ExpectedVersion != nil || input.RecipeRef != "" {
+			!validDisplayName(input.Name) || validateRecipe(input.Recipe) != nil || input.Mutation.ExpectedVersion != nil || input.RecipeRef != "" || input.BuildRef != "" {
 			return repository.ManageResult{}, errs.ErrInvalid
 		}
 	case "UPDATE":
 		if !validRef(input.ProjectRef, "prj") || !validRef(input.RecipeRef, "imgrec") || input.RoleDefinitionRef != "" ||
-			!validDisplayName(input.Name) || validateRecipe(input.Recipe) != nil || input.Mutation.ExpectedVersion == nil {
+			!validDisplayName(input.Name) || validateRecipe(input.Recipe) != nil || input.Mutation.ExpectedVersion == nil || input.BuildRef != "" {
 			return repository.ManageResult{}, errs.ErrInvalid
 		}
 	case "ARCHIVE", "RESTORE", "REQUEST_BUILD":
 		if !validRef(input.ProjectRef, "prj") || !validRef(input.RecipeRef, "imgrec") ||
-			input.Mutation.ExpectedVersion == nil || input.RoleDefinitionRef != "" ||
+			input.Mutation.ExpectedVersion == nil || input.RoleDefinitionRef != "" || input.BuildRef != "" ||
+			input.Environment.EnvironmentKey != "" || len(input.Environment.PackageKeys) != 0 ||
+			len(input.Environment.ToolKeys) != 0 || input.Environment.InstallationBlock != "" || input.Environment.Dockerfile != "" {
+			return repository.ManageResult{}, errs.ErrInvalid
+		}
+	case "CANCEL_BUILD":
+		if !validRef(input.ProjectRef, "prj") || !validRef(input.RecipeRef, "imgrec") || !validRef(input.BuildRef, "imgbld") ||
+			input.Mutation.ExpectedVersion == nil || input.RoleDefinitionRef != "" || input.Name != "" ||
 			input.Environment.EnvironmentKey != "" || len(input.Environment.PackageKeys) != 0 ||
 			len(input.Environment.ToolKeys) != 0 || input.Environment.InstallationBlock != "" || input.Environment.Dockerfile != "" {
 			return repository.ManageResult{}, errs.ErrInvalid
@@ -156,6 +160,20 @@ func (service *Service) Manage(ctx context.Context, input repository.ManageInput
 		return repository.ManageResult{}, errs.ErrInvalid
 	}
 	return service.repository.Manage(ctx, input)
+}
+
+func roleImageManageIntentDigest(input repository.ManageInput) string {
+	legacyIntent := struct {
+		Action, RecipeRef, ProjectRef, RoleDefinitionRef, Name string
+		Recipe                                                 entity.RoleImageRecipeInput
+	}{input.Action, input.RecipeRef, input.ProjectRef, input.RoleDefinitionRef, input.Name, input.Recipe}
+	if input.Action == "CANCEL_BUILD" {
+		return digest(struct {
+			LegacyIntent any
+			BuildRef     string
+		}{legacyIntent, input.BuildRef})
+	}
+	return digest(legacyIntent)
 }
 
 func (service *Service) ClaimBuild(ctx context.Context, principal value.Principal, key string) (entity.ImageBuildClaim, error) {

@@ -4,7 +4,7 @@ title: Локальный запуск Kodex
 type: guide
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-09-16
 ---
 
@@ -77,6 +77,28 @@ readback доступен через `sudo -n tools/dev/configure-provider-sandb
 Документация cert-manager по SelfSigned/CA issuer, Certificate и Ingress
 проверена через Context7; публичный ключ CA доверяется только локально.
 
+Если при смене адреса хоста после перезагрузки ServiceLB сохраняет старый
+`DEST_IPS`, repo-owned `reconcile-local-ingress.sh` проверяет local context,
+единственный узел и владение Traefik, после чего заменяет только устаревший
+ServiceLB Pod. Для автоматического повтора при запуске пользовательского
+systemd и раз в две минуты:
+
+```bash
+bash tools/dev/configure-local-ingress-timer.sh \
+  --context default --kubeconfig /home/s/.kube/kodex-dev-local --mode apply
+bash tools/dev/configure-local-ingress-timer.sh \
+  --context default --kubeconfig /home/s/.kube/kodex-dev-local --mode readback
+```
+
+Installer не пишет в кластер напрямую: он создаёт только два точных user-unit,
+не перезаписывает чужие unit и требует kubeconfig владельца mode `0600` с
+loopback API. Сам service запускает узкий reconcile; если API ещё не поднялся,
+следующее срабатывание timer повторит проверку. Автозапуск относится к
+пользовательской сессии, а не к system-level boot без входа пользователя.
+После установки отдельно проверяют `systemctl --user list-timers
+kodex-local-ingress-reconcile.timer`, readback `reconcile-local-ingress.sh` и
+HTTPS без `-k`. Фактический reboot-тест остаётся отдельной проверкой.
+
 ## Исходники hot reload
 
 `render-local.sh --security-profile trusted-cluster --host-uid … --host-gid …`
@@ -133,11 +155,29 @@ bootstrap. Job получает суффикс digest своего манифе�
 входа ожидает существующую Job, не удаляя её. Изменившийся вход создаёт
 новую Job, forward-only миграции повторно проверяют текущее состояние БД.
 Runtime DB bootstrap в `trusted-cluster` не ожидает authority roles/schema.
+Для последующей миграции только Control Plane можно добавить
+`--workload control-plane-migrate`: остальные bootstrap Jobs и ConfigMap не
+применяются повторно. Selector допустим только с `--stage migrate`.
 
 `--stage network --mode apply` применяет только NetworkPolicy из проверенного
 render и не перезапускает StatefulSet. Это позволяет доставить точную
 недостающую связь уже ожидающей Job. Сам по себе успешный apply не доказывает
 отрицательную сетевую проверку или готовность приложения.
+
+`--stage integration-egress` после `migrate` доставляет только admission
+policy и bindings публикации, исходную immutable ConfigMap, RBAC, Service
+`egress-gateway-openapi` с selector поколения и NetworkPolicy для
+OpenAPI-интеграций. Затем выбранные Control Plane,
+integration-gateway и egress-gateway обновляются через `--stage core
+--workload <имя>`. При отсутствии опубликованных подключений порт `8083`
+штатно отвечает `503`, не меняя общую готовность Pod. Положительный вызов
+проверяется отдельно с опубликованной definition и разрешённым origin;
+успешный apply стадии этого не доказывает.
+При повторном `core --workload egress-gateway` helper сохраняет только
+проверенные live-поля owner-проекции (поколение, digest, immutable ConfigMap)
+и не откатывает их к bootstrap-поколению из render. OpenAPI Service выбирает
+только Pod с этим поколением; во время смены policy старый Pod не получает
+новые OpenAPI CONNECT, а остальные listener остаются на прежнем Service.
 
 `--stage supply-chain` выполняется после `data`, `network` и `migrate`. Стадия
 разворачивает пять exact registry endpoints, импортирует закреплённые OCI
@@ -152,6 +192,16 @@ helper; если exact конфигурация изменилась, helper о�
 bounded ждёт восстановления API. Неизменная конфигурация restart не вызывает.
 Успех стадии доказывает готовность инфраструктуры supply chain, но не сам
 RoleImage build/admission/promotion и не model Run.
+
+Для локального исправления только версии toolchain в ConfigMap builder без
+замены его образа служит `--stage builder-runtime`. Стадия допускает изменение
+только `ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256`, проверяет владельца
+ресурсов и совпадение toolchain и policy SHA в render, immutable admission
+policy и Deployment control-plane. Затем она перезапускает только Deployment
+builder и сверяет переменную в новом Pod. Если policy SHA разошлись, сначала
+нужно согласовать control-plane с живой policy через новый render и `--stage
+core --workload control-plane`; ослаблять проверку admission или повторять
+неудачный claim нельзя.
 
 `--stage core` запускает восемь основных Deployments. STT подключается отдельно
 через `--stage core --workload stt-tts-service` после готовности Control Plane,

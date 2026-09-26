@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import EnvironmentImpactDialog from "@/features/runtime/EnvironmentImpactDialog.vue";
+import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
+import RuntimeEnvironmentToolsEditor from "@/features/runtime/RuntimeEnvironmentToolsEditor.vue";
+import RuntimeEnvironmentPolicyFields from "@/features/runtime/RuntimeEnvironmentPolicyFields.vue";
 import PublicationImpactSelection from "@/features/runtime/PublicationImpactSelection.vue";
 import {
   readPublicationAttempt,
@@ -20,8 +23,6 @@ import {
   CircleAlert,
   Cpu,
   KeyRound,
-  Network,
-  Plus,
   Power,
   PowerOff,
   ServerCog,
@@ -52,20 +53,12 @@ import {
   compactIdentifier,
   environmentReadiness,
   hasEnvironmentAction,
-  safeSecretReference,
 } from "@/features/runtime/environment-capabilities";
 import {
   defaultRuntimeEnvironmentPolicy,
   editableRuntimeEnvironmentPolicy,
   editableSecretBindings,
-  emptyRuntimeVolume,
-  emptySecretBinding,
-  mandatoryRuntimeNetworkDestinations,
   normalizeRuntimeEnvironmentInput,
-  runtimeEnvironmentCollectionLimit,
-  runtimeResourceBounds,
-  runtimeVolumeBounds,
-  setRuntimeKubernetesAccess,
   validateEnvironmentInput,
 } from "@/features/runtime/environment-form";
 import {
@@ -87,21 +80,12 @@ import {
   consumeEnvironmentDraftReference,
   environmentDraftReauthKey,
 } from "@/features/runtime/environment-draft-reauth";
-import { loadRuntimeSecretPage } from "@/features/runtime-secrets/api";
-import {
-  maskedSecretHint,
-  type RuntimeSecret,
-} from "@/features/runtime-secrets/model";
 import { consumeRuntimeEnvironmentPolicyReauthCompletion } from "@/features/session/reauth";
 import { useSessionStore } from "@/features/session/store";
 import type {
   RoleImageArtifact,
-  RoleImageArtifactTool,
   RuntimeEnvironmentInput,
   RuntimeEnvironmentSet,
-  RuntimeKubernetesAccessKind,
-  RuntimeSecretBinding,
-  RuntimeSecretDescriptor,
   RuntimeEnvironmentDraft,
   RuntimeEnvironmentDraftSpecification,
   RevisionImpactPlan,
@@ -109,6 +93,8 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -128,6 +114,7 @@ const router = useRouter();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
+const assistantForm = computed(() => route.query.assistantForm === "1");
 const projectRef = computed(() => String(route.params.projectRef));
 const environmentRef = computed(() => {
   const value = route.params.environmentRef;
@@ -141,6 +128,17 @@ const versions = computed(() =>
     ? (runtime.environmentVersions[environmentRef.value] ?? [])
     : [],
 );
+const versionList = ref<HTMLElement>();
+const versionSentinel = ref<HTMLElement>();
+const versionPageSize = useAdaptiveCursorPageSize({
+  container: versionList,
+  itemSelector: "article",
+  itemCount: () => versions.value.length,
+  estimatedViewportHeight: 640,
+  estimatedItemHeight: 112,
+  minimum: 6,
+  maximum: 100,
+});
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const deleteOpen = ref(false);
@@ -200,7 +198,6 @@ const localChanges = computed(
 );
 const reauthRestored = ref(false);
 const activeSection = ref<EditorSection>("GENERAL");
-const editorForm = ref<HTMLFormElement>();
 const input = reactive<RuntimeEnvironmentInput>({
   name: "",
   description: "",
@@ -210,7 +207,6 @@ const input = reactive<RuntimeEnvironmentInput>({
   secretBindings: [],
   policy: defaultRuntimeEnvironmentPolicy(),
 });
-const selectedSecrets = reactive<Record<string, AsyncEntityOption>>({});
 const selectedImage = ref<AsyncEntityOption>();
 const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
@@ -240,6 +236,33 @@ const boundAgents = computed(() =>
     ? (runtime.environmentAgents[environmentRef.value] ?? [])
     : [],
 );
+const boundAgentList = ref<HTMLElement>();
+const boundAgentSentinel = ref<HTMLElement>();
+const boundAgentPageSize = useAdaptiveCursorPageSize({
+  container: boundAgentList,
+  itemSelector: ".chip-list > span:not(.cursor-sentinel)",
+  itemCount: () => boundAgents.value.length,
+  estimatedViewportHeight: 240,
+  estimatedItemHeight: 36,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: boundAgentList,
+  sentinel: boundAgentSentinel,
+  enabled: () =>
+    Boolean(
+      current.value && runtime.environmentAgentCursors[current.value.ref],
+    ) && !runtime.loading[`environment-agents:${current.value?.ref ?? ""}`],
+  loadMore: () =>
+    current.value &&
+    runtime.loadEnvironmentAgents(
+      current.value.ref,
+      false,
+      undefined,
+      boundAgentPageSize.value,
+    ),
+});
 const readiness = computed(() =>
   environmentReadiness(input, current.value, serverReadiness.value),
 );
@@ -251,15 +274,6 @@ const canPublish = computed(
     (!environmentRef.value || !!current.value) &&
     (!current.value || hasEnvironmentAction(current.value, "UPDATE")),
 );
-const secretPickerLabels = computed(() => ({
-  label: t("runtime.chooseRuntimeSecret"),
-  searchPlaceholder: t("runtime.searchRuntimeSecret"),
-  loading: t("runtime.secretPicker.loading"),
-  loadingMore: t("runtime.secretPicker.loadingMore"),
-  empty: t("runtime.secretPicker.empty"),
-  error: t("runtime.secretPicker.error"),
-  retry: t("common.retry"),
-}));
 const versionDigest = computed(() =>
   current.value
     ? compactIdentifier(current.value.currentVersion.digest)
@@ -373,17 +387,6 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
     };
     imageArtifact.value = undefined;
   }
-  for (const key of Object.keys(selectedSecrets))
-    Reflect.deleteProperty(selectedSecrets, key);
-  for (const binding of value.secretBindings) {
-    if (binding.secretRef && !currentDescriptor(binding)) {
-      selectedSecrets[binding.secretRef] = {
-        ref: binding.secretRef,
-        title: binding.secretRef,
-        description: t("runtime.restoredSecretSelection"),
-      };
-    }
-  }
 }
 
 async function loadImageArtifact(
@@ -420,70 +423,19 @@ async function loadImageArtifact(
   }
 }
 
-function loadImagePage(query: string, cursor?: string) {
-  return runtime.searchPromotedRoleImagePage(projectRef.value, query, cursor);
-}
-
-async function loadSecretPage(query: string, cursor?: string) {
-  const page = await loadRuntimeSecretPage(projectRef.value, query, cursor);
-  return {
-    items: page.items.map(runtimeSecretOption),
-    nextPageToken: page.nextPageToken || undefined,
-  };
-}
-
-function runtimeSecretOption(secret: RuntimeSecret): AsyncEntityOption {
-  return {
-    ref: secret.ref,
-    title: secret.name,
-    description: secret.description,
-    meta: `${maskedSecretHint(secret)} · rev ${String(secret.currentRevision)}`,
-    disabled: secret.state !== "ACTIVE",
-    disabledReason:
-      secret.state === "ACTIVE" ? undefined : t("runtime.secretRevoked"),
-  };
-}
-
-function currentDescriptor(
-  binding: RuntimeSecretBinding,
-): RuntimeSecretDescriptor | undefined {
-  return current.value?.currentVersion.secretDescriptors.find(
-    (descriptor) =>
-      descriptor.name === binding.name &&
-      descriptor.secretRef === binding.secretRef,
+function loadImagePage(
+  query: string,
+  cursor?: string,
+  signal?: AbortSignal,
+  pageSize = 30,
+) {
+  return runtime.searchPromotedRoleImagePage(
+    projectRef.value,
+    query,
+    cursor,
+    signal,
+    pageSize,
   );
-}
-
-function safeCurrentDescriptor(binding: RuntimeSecretBinding) {
-  const descriptor = currentDescriptor(binding);
-  return descriptor ? safeSecretReference(descriptor) : undefined;
-}
-
-function selectedSecret(
-  binding: RuntimeSecretBinding,
-): AsyncEntityOption | undefined {
-  if (!binding.secretRef) return undefined;
-  const selected = selectedSecrets[binding.secretRef];
-  if (selected) return selected;
-  const descriptor = currentDescriptor(binding);
-  if (!descriptor) return undefined;
-  return {
-    ref: descriptor.secretRef,
-    title:
-      [descriptor.secretName, descriptor.secretKey]
-        .filter(Boolean)
-        .join(" / ") || binding.name,
-    description: t("runtime.currentPublishedSecret"),
-    meta: `rev ${descriptor.secretResourceVersion}`,
-  };
-}
-
-function selectSecret(
-  binding: RuntimeSecretBinding,
-  option: AsyncEntityOption,
-): void {
-  selectedSecrets[option.ref] = option;
-  binding.revision = 0;
 }
 
 async function selectImage(option: AsyncEntityOption): Promise<void> {
@@ -494,83 +446,6 @@ async function selectImage(option: AsyncEntityOption): Promise<void> {
   await loadImageArtifact(String(option.recipeRef), String(option.artifactRef));
 }
 
-function isToolSelected(tool: RoleImageArtifactTool): boolean {
-  return input.tools.some((item) => item.command === tool.name);
-}
-
-function toggleTool(tool: RoleImageArtifactTool): void {
-  const index = input.tools.findIndex((item) => item.command === tool.name);
-  if (index >= 0) {
-    input.tools.splice(index, 1);
-    return;
-  }
-  input.tools.push({
-    name: tool.name,
-    command: tool.name,
-    description: "",
-    usageHint: "",
-  });
-}
-
-function updateSelectedTool(
-  command: string,
-  field: "name" | "description" | "usageHint",
-  event: Event,
-): void {
-  const target = event.currentTarget;
-  if (
-    !(
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement
-    )
-  )
-    return;
-  const tool = input.tools.find((item) => item.command === command);
-  if (tool) tool[field] = target.value;
-}
-
-async function addValue(): Promise<void> {
-  if (busy.value || !canPublish.value || !draftEditable.value) return;
-  if (input.values.length >= runtimeEnvironmentCollectionLimit) return;
-  input.values.push({ name: "", value: "" });
-  await nextTick();
-  const names = editorForm.value?.querySelectorAll<HTMLInputElement>(
-    "[data-environment-variable-name]",
-  );
-  const target = names?.item(names.length - 1);
-  target?.focus();
-}
-
-async function addSecret(): Promise<void> {
-  if (busy.value || !canPublish.value || !draftEditable.value) return;
-  if (input.secretBindings.length >= runtimeEnvironmentCollectionLimit) return;
-  input.secretBindings.push(emptySecretBinding());
-  await nextTick();
-  const names = editorForm.value?.querySelectorAll<HTMLInputElement>(
-    "[data-environment-secret-name]",
-  );
-  const target = names?.item(names.length - 1);
-  target?.focus();
-}
-
-function addVolume(): void {
-  if (input.policy.volumes.length < runtimeVolumeBounds.maxItems)
-    input.policy.volumes.push(emptyRuntimeVolume());
-}
-
-function toggleKubernetesAccess(event: Event): void {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLInputElement)) return;
-  const access: RuntimeKubernetesAccessKind = target.checked
-    ? "READ_OWN_EXECUTION"
-    : "NONE";
-  setRuntimeKubernetesAccess(input.policy, access);
-}
-
-function volumeMountPath(name: string): string {
-  return name ? `/workspace/.kodex/volumes/${name}` : "—";
-}
-
 async function load(): Promise<void> {
   const environment = environmentRef.value;
   const project = projectRef.value;
@@ -578,7 +453,7 @@ async function load(): Promise<void> {
   if (!environment) return;
   await Promise.all([
     runtime.loadEnvironment(environment),
-    runtime.loadEnvironmentVersions(environment),
+    runtime.loadEnvironmentVersions(environment, true, versionPageSize.value),
   ]);
   if (
     disposed ||
@@ -595,7 +470,12 @@ async function load(): Promise<void> {
         current.value.currentVersion.image.artifactRef,
       ),
       runtime.loadEnvironmentReadiness(current.value.ref),
-      runtime.loadEnvironmentAgents(current.value.ref),
+      runtime.loadEnvironmentAgents(
+        current.value.ref,
+        true,
+        undefined,
+        boundAgentPageSize.value,
+      ),
     ]);
 }
 
@@ -611,6 +491,7 @@ async function restoreAfterFreshAuthentication(): Promise<void> {
       ...(current.value ? { expectedVersion: current.value.version } : {}),
       operation: currentOperation(),
       projectRef: projectRef.value,
+      ...(assistantForm.value ? { surface: "assistant" as const } : {}),
     },
   );
   if (!completed) return;
@@ -930,14 +811,19 @@ async function publish(selected: string[]): Promise<void> {
       window.sessionStorage,
     );
     publicationAttempt.value = undefined;
-    publicationPlan.value = result.plan;
     const published = result.draft;
     serverDraft.value = published;
     const ref = published.publishedEnvironmentRef;
     if (!ref) throw new Error("Published environment reference is missing");
-    await router.replace(
-      `/projects/${encodeURIComponent(projectRef.value)}/environments/${encodeURIComponent(ref)}`,
-    );
+    // Публикация уже подтверждена authoritative readback. Закрываем план до
+    // смены маршрута, чтобы terminal APPLIED не оставался поверх редактора и
+    // его watcher не показывал запоздалую сетевую ошибку после успеха.
+    publicationPlan.value = undefined;
+    await router.replace({
+      name: "runtime-environment",
+      params: { projectRef: projectRef.value, environmentRef: ref },
+      query: assistantForm.value ? { assistantForm: "1" } : {},
+    });
     await runtime.loadEnvironment(ref);
     if (draftController.signal.aborted) return;
     const saved = runtime.environments[ref];
@@ -945,7 +831,7 @@ async function publish(selected: string[]): Promise<void> {
       throw new Error("Published environment readback is unavailable");
     reauthRestored.value = false;
     sync(saved);
-    await runtime.loadEnvironmentVersions(ref);
+    await runtime.loadEnvironmentVersions(ref, true, versionPageSize.value);
   } catch (error) {
     if (disposed) return;
     const normalized = asProblem(error);
@@ -970,6 +856,7 @@ async function publish(selected: string[]): Promise<void> {
           : {}),
         operation: currentOperation(),
         projectRef: projectRef.value,
+        ...(assistantForm.value ? { surface: "assistant" as const } : {}),
       });
     } catch (reauthError) {
       window.sessionStorage.removeItem(environmentDraftReauthKey);
@@ -992,7 +879,11 @@ async function rollback(versionRef: string): Promise<void> {
   problem.value = undefined;
   try {
     const saved = await runtime.restoreEnvironment(current.value, versionRef);
-    await runtime.loadEnvironmentVersions(saved.ref);
+    await runtime.loadEnvironmentVersions(
+      saved.ref,
+      true,
+      versionPageSize.value,
+    );
     sync(saved);
   } catch (error) {
     problem.value = asProblem(error);
@@ -1033,22 +924,23 @@ async function remove(): Promise<void> {
   }
 }
 
-function onVersionScroll(event: Event): void {
-  if (!environmentRef.value) return;
-  const element = event.currentTarget as HTMLElement;
-  const hasMore = Boolean(
-    runtime.environmentVersionCursors[environmentRef.value],
-  );
-  const loading = Boolean(
-    runtime.loading[`environment-versions:${environmentRef.value}`],
-  );
-  if (
-    hasMore &&
-    !loading &&
-    element.scrollTop + element.clientHeight >= element.scrollHeight - 64
-  )
-    void runtime.loadEnvironmentVersions(environmentRef.value, false);
-}
+useCursorInfiniteScroll({
+  root: versionList,
+  sentinel: versionSentinel,
+  enabled: () => {
+    const ref = environmentRef.value;
+    return Boolean(
+      ref &&
+      runtime.environmentVersionCursors[ref] &&
+      !runtime.loading[`environment-versions:${ref}`],
+    );
+  },
+  loadMore: () => {
+    const ref = environmentRef.value;
+    if (ref)
+      return runtime.loadEnvironmentVersions(ref, false, versionPageSize.value);
+  },
+});
 
 function confirmLeave(target: string): boolean {
   if (approvedLeaveTarget === target) {
@@ -1120,1258 +1012,808 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <PageFrame :title="current?.name ?? $t('runtime.newEnvironment')">
-    <template #actions>
-      <button
-        v-if="current && hasEnvironmentAction(current, 'DISABLE')"
-        class="button"
-        type="button"
-        :disabled="busy || localChanges"
-        @click="setEnabled(false)"
-      >
-        <PowerOff :size="16" aria-hidden="true" />
-        {{ $t("common.disable") }}
-      </button>
-      <button
-        v-if="current && hasEnvironmentAction(current, 'ENABLE')"
-        class="button"
-        type="button"
-        :disabled="busy || localChanges"
-        @click="setEnabled(true)"
-      >
-        <Power :size="16" aria-hidden="true" />
-        {{ $t("common.enable") }}
-      </button>
-      <button
-        v-if="current && hasEnvironmentAction(current, 'DELETE')"
-        class="button button--danger"
-        type="button"
-        :disabled="busy"
-        @click="deleteOpen = true"
-      >
-        <Trash2 :size="16" aria-hidden="true" />
-        {{ $t("common.delete") }}
-      </button>
-      <RouterLink
-        class="button"
-        :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
-      >
-        {{ $t("common.cancel") }}
-      </RouterLink>
-      <button
-        class="button button--primary"
-        type="button"
-        :disabled="busy || !canPublish || !draftEditable || !draftDirty"
-        @click="save"
-      >
-        <Save :size="16" />{{ $t("managed.saveDraft") }}
-      </button>
-      <button
-        class="button"
-        type="button"
-        :disabled="busy || !serverDraft || !draftEditable || draftDirty"
-        @click="validateDraft"
-      >
-        <CheckCircle2 :size="16" />{{ $t("managed.validate") }}
-      </button>
-      <button
-        class="button button--primary"
-        type="button"
-        :disabled="
-          busy ||
-          !canPublish ||
-          serverDraft?.state !== 'VALID' ||
-          !serverDraft?.validationDigest ||
-          draftDirty
-        "
-        @click="preparePublication"
-      >
-        <Send :size="16" />{{ $t("managed.publish") }}
-      </button>
-      <button
-        v-if="serverDraft && draftEditable"
-        class="icon-button"
-        type="button"
-        :disabled="busy"
-        :aria-label="$t('runtime.discardDraft')"
-        :title="$t('runtime.discardDraft')"
-        @click="discardDraftOpen = true"
-      >
-        <Trash2 :size="16" />
-      </button>
-    </template>
-
-    <section class="environment-draft-state" role="status">
-      <strong v-if="localChanges">{{ $t("runtime.localChanges") }}</strong>
-      <StatusBadge v-else-if="serverDraft" :state="serverDraft.state" />
-      <StatusBadge v-else-if="current" state="PUBLISHED" />
-      <StatusBadge v-else state="DRAFT" />
-      <span v-if="serverDraft">{{
-        $t("managed.revision", { revision: serverDraft.version })
-      }}</span>
-      <p v-if="serverDraft">
-        {{ $t("runtimeOverlay.environmentBase") }}:
-        <template v-if="serverDraft.baseVersionRef && serverDraft.baseRevision">
-          {{ serverDraft.baseRevision }} ·
-          <code>{{ serverDraft.baseVersionRef }}</code>
-        </template>
-        <template v-else>{{
-          $t(
-            serverDraft.environmentRef
-              ? "runtimeOverlay.environmentBaseUnknown"
-              : "runtimeOverlay.environmentNew",
-          )
-        }}</template>
-      </p>
-      <p v-if="serverDraft">
-        {{ $t("runtimeOverlay.environmentSavedAt") }}:
-        <time v-if="serverDraft.savedAt" :datetime="serverDraft.savedAt">{{
-          serverDraft.savedAt
-        }}</time>
-        <span v-else>{{ $t("runtimeOverlay.environmentSavedUnknown") }}</span>
-      </p>
-      <code v-if="serverDraft?.validationDigest">{{
-        serverDraft.validationDigest
-      }}</code>
-      <p
-        v-for="diagnostic in serverDraft?.diagnostics"
-        :key="diagnostic"
-        role="alert"
-      >
-        {{
-          diagnostic === "ENVIRONMENT_VALIDATION_FAILED"
-            ? $t("runtime.draftInvalid")
-            : $t("runtime.draftValidationFailed")
-        }}
-      </p>
-      <RouterLink
-        v-if="serverDraft?.publishedEnvironmentRef"
-        :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(serverDraft.publishedEnvironmentRef)}`"
-        >{{ $t("common.open") }}</RouterLink
-      >
-      <button
-        v-if="serverDraft && !draftDirty"
-        class="button"
-        type="button"
-        :disabled="busy"
-        @click="preparePublication"
-      >
-        {{ $t("publicationImpact.restore") }}
-      </button>
-    </section>
-    <ModalDialog
-      v-if="leaveOpen"
-      :title="$t('runtime.localChanges')"
-      :busy="busy"
-      @close="finishLeave(false)"
-    >
-      <ProblemNotice v-if="problem" :problem="problem" />
+  <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
+    <PageFrame :title="current?.name ?? $t('runtime.newEnvironment')">
       <template #actions>
-        <button class="button" :disabled="busy" @click="finishLeave(false)">
-          {{ $t("runtime.stay") }}
+        <button
+          v-if="current && hasEnvironmentAction(current, 'DISABLE')"
+          class="button"
+          type="button"
+          :disabled="busy || localChanges"
+          @click="setEnabled(false)"
+        >
+          <PowerOff :size="16" aria-hidden="true" />
+          {{ $t("common.disable") }}
         </button>
-        <button class="button" :disabled="busy" @click="finishLeave(true)">
-          {{ $t("runtime.leaveWithoutSaving") }}
+        <button
+          v-if="current && hasEnvironmentAction(current, 'ENABLE')"
+          class="button"
+          type="button"
+          :disabled="busy || localChanges"
+          @click="setEnabled(true)"
+        >
+          <Power :size="16" aria-hidden="true" />
+          {{ $t("common.enable") }}
+        </button>
+        <button
+          v-if="current && hasEnvironmentAction(current, 'DELETE')"
+          class="button button--danger"
+          type="button"
+          :disabled="busy"
+          @click="deleteOpen = true"
+        >
+          <Trash2 :size="16" aria-hidden="true" />
+          {{ $t("common.delete") }}
+        </button>
+        <RouterLink
+          class="button"
+          :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
+        >
+          {{ $t("common.cancel") }}
+        </RouterLink>
+        <button
+          class="button button--primary"
+          type="button"
+          :disabled="busy || !canPublish || !draftEditable || !draftDirty"
+          @click="save"
+        >
+          <Save :size="16" />{{ $t("managed.saveDraft") }}
+        </button>
+        <button
+          class="button"
+          type="button"
+          :disabled="busy || !serverDraft || !draftEditable || draftDirty"
+          @click="validateDraft"
+        >
+          <CheckCircle2 :size="16" />{{ $t("managed.validate") }}
         </button>
         <button
           class="button button--primary"
-          :disabled="busy || !canPublish || !draftEditable"
-          @click="saveAndLeave"
+          type="button"
+          :disabled="
+            busy ||
+            !canPublish ||
+            serverDraft?.state !== 'VALID' ||
+            !serverDraft?.validationDigest ||
+            draftDirty
+          "
+          @click="preparePublication"
         >
-          <Save :size="16" />{{ $t("runtime.saveAndLeave") }}
+          <Send :size="16" />{{ $t("managed.publish") }}
+        </button>
+        <button
+          v-if="serverDraft && draftEditable"
+          class="icon-button"
+          type="button"
+          :disabled="busy"
+          :aria-label="$t('runtime.discardDraft')"
+          :title="$t('runtime.discardDraft')"
+          @click="discardDraftOpen = true"
+        >
+          <Trash2 :size="16" />
         </button>
       </template>
-    </ModalDialog>
-    <ModalDialog
-      v-if="discardDraftOpen"
-      :title="$t('runtime.discardDraft')"
-      :busy="busy"
-      @close="discardDraftOpen = false"
-    >
-      <p>{{ $t("runtime.discardDraftConfirm") }}</p>
-      <template #actions
-        ><button
-          class="button"
-          :disabled="busy"
-          @click="discardDraftOpen = false"
-        >
-          {{ $t("common.cancel") }}</button
-        ><button
-          class="button button--danger"
-          :disabled="busy"
-          @click="discardDraft"
-        >
-          {{ $t("runtime.discardDraft") }}
-        </button></template
-      >
-    </ModalDialog>
 
-    <aside v-if="reauthRestored" class="reauth-restored" role="status">
-      <ShieldCheck :size="18" aria-hidden="true" />
-      <div>
-        <strong>{{ $t("runtime.reauthCompleted") }}</strong>
-        <p>{{ $t("runtime.reauthExplicitSaveRequired") }}</p>
-      </div>
-    </aside>
-
-    <AsyncState
-      :loading="
-        environmentRef
-          ? runtime.loading[`environment:${environmentRef}`]
-          : false
-      "
-      :problem="
-        environmentRef
-          ? runtime.problems[`environment:${environmentRef}`]
-          : undefined
-      "
-      @retry="load"
-    >
-      <nav
-        class="environment-tabs"
-        role="tablist"
-        :aria-label="$t('runtime.editorSections')"
-      >
-        <button
-          v-for="(section, index) in sections"
-          :id="sectionTabId(section.id)"
-          :key="section.id"
-          class="environment-tab"
-          :class="{ 'environment-tab--active': activeSection === section.id }"
-          type="button"
-          role="tab"
-          :aria-selected="activeSection === section.id"
-          :aria-controls="sectionPanelId(section.id)"
-          :tabindex="activeSection === section.id ? 0 : -1"
-          @click="openSection(section.id)"
-          @keydown="moveSection($event, index)"
-        >
-          <component :is="section.icon" :size="16" aria-hidden="true" />
-          {{ $t(`runtime.section.${section.id}`) }}
-        </button>
-      </nav>
-
-      <div class="environment-editor-layout">
-        <form
-          ref="editorForm"
-          class="panel environment-editor"
-          novalidate
-          @submit.prevent="save"
-        >
-          <fieldset
-            class="environment-form-fields"
-            :disabled="busy || !draftEditable || !canPublish"
+      <section class="environment-draft-state" role="status">
+        <strong v-if="localChanges">{{ $t("runtime.localChanges") }}</strong>
+        <StatusBadge v-else-if="serverDraft" :state="serverDraft.state" />
+        <StatusBadge v-else-if="current" state="PUBLISHED" />
+        <StatusBadge v-else state="DRAFT" />
+        <span v-if="serverDraft">{{
+          $t("managed.revision", { revision: serverDraft.version })
+        }}</span>
+        <p v-if="serverDraft">
+          {{ $t("runtimeOverlay.environmentBase") }}:
+          <template
+            v-if="serverDraft.baseVersionRef && serverDraft.baseRevision"
           >
-            <section
-              v-if="activeSection === 'GENERAL'"
-              :id="sectionPanelId('GENERAL')"
-              class="editor-section"
-              role="tabpanel"
-              :aria-labelledby="sectionTabId('GENERAL')"
-            >
-              <div class="section-header">
-                <div>
-                  <h2>{{ $t("runtime.environmentGeneral") }}</h2>
-                </div>
-                <StatusBadge v-if="current" :state="current.state" />
-              </div>
-              <label class="field">
-                <span>{{ $t("common.name") }}</span>
-                <input v-model="input.name" required maxlength="120" />
-              </label>
-              <label class="field">
-                <span>{{ $t("common.description") }}</span>
-                <VoiceTextarea
-                  v-model="input.description"
-                  :disabled="busy || !draftEditable || !canPublish"
-                  maxlength="1000"
-                />
-              </label>
-              <div class="safe-summary">
-                <div>
-                  <span>{{ $t("runtime.revision") }}</span>
-                  <strong>
-                    {{
-                      current
-                        ? `rev ${String(current.currentVersion.revision)}`
-                        : $t("runtime.notPublished")
-                    }}
-                  </strong>
-                </div>
-                <div>
-                  <span>{{ $t("runtime.versionDigest") }}</span>
-                  <code>{{ versionDigest ?? "—" }}</code>
-                </div>
-                <div>
-                  <span>{{ $t("runtime.updatedAt") }}</span>
-                  <strong>
-                    {{
-                      current
-                        ? new Date(current.updatedAt).toLocaleString()
-                        : "—"
-                    }}
-                  </strong>
-                </div>
-              </div>
-            </section>
+            {{ serverDraft.baseRevision }} ·
+            <code>{{ serverDraft.baseVersionRef }}</code>
+          </template>
+          <template v-else>{{
+            $t(
+              serverDraft.environmentRef
+                ? "runtimeOverlay.environmentBaseUnknown"
+                : "runtimeOverlay.environmentNew",
+            )
+          }}</template>
+        </p>
+        <p v-if="serverDraft">
+          {{ $t("runtimeOverlay.environmentSavedAt") }}:
+          <time v-if="serverDraft.savedAt" :datetime="serverDraft.savedAt">{{
+            serverDraft.savedAt
+          }}</time>
+          <span v-else>{{ $t("runtimeOverlay.environmentSavedUnknown") }}</span>
+        </p>
+        <code v-if="serverDraft?.validationDigest">{{
+          serverDraft.validationDigest
+        }}</code>
+        <p
+          v-for="diagnostic in serverDraft?.diagnostics"
+          :key="diagnostic"
+          role="alert"
+        >
+          {{
+            diagnostic === "ENVIRONMENT_VALIDATION_FAILED"
+              ? $t("runtime.draftInvalid")
+              : $t("runtime.draftValidationFailed")
+          }}
+        </p>
+        <RouterLink
+          v-if="serverDraft?.publishedEnvironmentRef"
+          :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(serverDraft.publishedEnvironmentRef)}`"
+          >{{ $t("common.open") }}</RouterLink
+        >
+        <button
+          v-if="serverDraft && !draftDirty"
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="preparePublication"
+        >
+          {{ $t("publicationImpact.restore") }}
+        </button>
+      </section>
+      <ModalDialog
+        v-if="leaveOpen"
+        :title="$t('runtime.localChanges')"
+        :busy="busy"
+        @close="finishLeave(false)"
+      >
+        <ProblemNotice v-if="problem" :problem="problem" />
+        <template #actions>
+          <button class="button" :disabled="busy" @click="finishLeave(false)">
+            {{ $t("runtime.stay") }}
+          </button>
+          <button class="button" :disabled="busy" @click="finishLeave(true)">
+            {{ $t("runtime.leaveWithoutSaving") }}
+          </button>
+          <button
+            class="button button--primary"
+            :disabled="busy || !canPublish || !draftEditable"
+            @click="saveAndLeave"
+          >
+            <Save :size="16" />{{ $t("runtime.saveAndLeave") }}
+          </button>
+        </template>
+      </ModalDialog>
+      <ModalDialog
+        v-if="discardDraftOpen"
+        :title="$t('runtime.discardDraft')"
+        :busy="busy"
+        @close="discardDraftOpen = false"
+      >
+        <p>{{ $t("runtime.discardDraftConfirm") }}</p>
+        <template #actions
+          ><button
+            class="button"
+            :disabled="busy"
+            @click="discardDraftOpen = false"
+          >
+            {{ $t("common.cancel") }}</button
+          ><button
+            class="button button--danger"
+            :disabled="busy"
+            @click="discardDraft"
+          >
+            {{ $t("runtime.discardDraft") }}
+          </button></template
+        >
+      </ModalDialog>
 
-            <section
-              v-else-if="activeSection === 'IMAGE_TOOLS'"
-              :id="sectionPanelId('IMAGE_TOOLS')"
-              class="editor-section"
-              role="tabpanel"
-              :aria-labelledby="sectionTabId('IMAGE_TOOLS')"
-            >
-              <div class="section-header">
-                <div>
-                  <h2>{{ $t("runtime.imageAndTools") }}</h2>
-                  <p>{{ $t("runtime.imageAndToolsHelp") }}</p>
-                </div>
-              </div>
-              <label class="field">
-                <span>{{ $t("runtime.exactImage") }}</span>
-                <AsyncEntityPicker
-                  v-model="input.imageArtifactRef"
-                  :selected="selectedImage"
-                  :load-page="loadImagePage"
-                  :trigger-label="$t('runtime.exactImage')"
-                  :placeholder="$t('runtime.choosePromotedImage')"
-                  :search-placeholder="$t('runtime.searchPromotedImage')"
-                  @select="selectImage"
-                />
-              </label>
-              <ProblemNotice v-if="imageProblem" :problem="imageProblem" />
-              <article
-                v-if="selectedImage"
-                class="selected-image"
-                :aria-busy="imageLoading"
-              >
-                <Boxes :size="22" aria-hidden="true" />
-                <div>
-                  <strong>{{ selectedImage.title }}</strong>
-                  <p>{{ selectedImage.description }}</p>
-                  <code>{{ input.imageArtifactRef }}</code>
-                </div>
-                <StatusBadge
-                  :state="imageArtifact ? 'ACCEPTED' : 'PENDING'"
-                  :label="
-                    imageArtifact
-                      ? $t('runtime.promotedAndVerified')
-                      : $t('common.loading')
-                  "
-                />
-              </article>
+      <aside v-if="reauthRestored" class="reauth-restored" role="status">
+        <ShieldCheck :size="18" aria-hidden="true" />
+        <div>
+          <strong>{{ $t("runtime.reauthCompleted") }}</strong>
+          <p>{{ $t("runtime.reauthExplicitSaveRequired") }}</p>
+        </div>
+      </aside>
 
-              <div class="section-header tool-heading">
-                <div>
-                  <h3>{{ $t("runtime.verifiedTools") }}</h3>
-                  <p>{{ $t("runtime.verifiedToolsHelp") }}</p>
-                </div>
-                <span>
-                  {{
-                    $t("runtime.selectedToolsCount", {
-                      selected: input.tools.length,
-                      total: imageArtifact?.tools.length ?? 0,
-                    })
-                  }}
-                </span>
-              </div>
-              <div v-if="imageLoading" class="secondary-text" role="status">
-                {{ $t("common.loading") }}
-              </div>
-              <div v-else-if="imageArtifact?.tools.length" class="tool-catalog">
-                <article
-                  v-for="tool in imageArtifact.tools"
-                  :key="tool.name"
-                  class="tool-option"
-                >
-                  <label>
-                    <input
-                      type="checkbox"
-                      :checked="isToolSelected(tool)"
-                      @change="toggleTool(tool)"
-                    />
-                    <span>
-                      <strong
-                        ><code>{{ tool.name }}</code></strong
-                      >
-                      <small>{{ tool.version }}</small>
-                    </span>
-                  </label>
-                  <div v-if="isToolSelected(tool)" class="tool-fields">
-                    <label class="field">
-                      <span>{{ $t("runtime.toolDisplayName") }}</span>
-                      <input
-                        :value="
-                          input.tools.find((item) => item.command === tool.name)
-                            ?.name
-                        "
-                        maxlength="160"
-                        @input="updateSelectedTool(tool.name, 'name', $event)"
-                      />
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.toolCommand") }}</span>
-                      <input :value="tool.name" readonly />
-                    </label>
-                    <label class="field field--wide">
-                      <span>{{ $t("common.description") }}</span>
-                      <VoiceTextarea
-                        :disabled="busy || !draftEditable || !canPublish"
-                        :value="
-                          input.tools.find((item) => item.command === tool.name)
-                            ?.description
-                        "
-                        maxlength="500"
-                        required
-                        @input="
-                          updateSelectedTool(tool.name, 'description', $event)
-                        "
-                      />
-                    </label>
-                    <label class="field field--wide">
-                      <span>{{ $t("runtime.toolUsageHint") }}</span>
-                      <VoiceTextarea
-                        :disabled="busy || !draftEditable || !canPublish"
-                        :value="
-                          input.tools.find((item) => item.command === tool.name)
-                            ?.usageHint
-                        "
-                        maxlength="500"
-                        @input="
-                          updateSelectedTool(tool.name, 'usageHint', $event)
-                        "
-                      />
-                    </label>
-                  </div>
-                </article>
-              </div>
-              <p v-else class="secondary-text">
-                {{
-                  input.imageArtifactRef
-                    ? $t("runtime.noVerifiedTools")
-                    : $t("runtime.chooseImageFirst")
-                }}
-              </p>
-            </section>
+      <AsyncState
+        :loading="
+          environmentRef
+            ? runtime.loading[`environment:${environmentRef}`]
+            : false
+        "
+        :problem="
+          environmentRef
+            ? runtime.problems[`environment:${environmentRef}`]
+            : undefined
+        "
+        @retry="load"
+      >
+        <nav
+          class="environment-tabs"
+          role="tablist"
+          :aria-label="$t('runtime.editorSections')"
+        >
+          <button
+            v-for="(section, index) in sections"
+            :id="sectionTabId(section.id)"
+            :key="section.id"
+            class="environment-tab"
+            :class="{ 'environment-tab--active': activeSection === section.id }"
+            type="button"
+            role="tab"
+            :aria-selected="activeSection === section.id"
+            :aria-controls="sectionPanelId(section.id)"
+            :tabindex="activeSection === section.id ? 0 : -1"
+            @click="openSection(section.id)"
+            @keydown="moveSection($event, index)"
+          >
+            <component :is="section.icon" :size="16" aria-hidden="true" />
+            {{ $t(`runtime.section.${section.id}`) }}
+          </button>
+        </nav>
 
-            <section
-              v-else-if="activeSection === 'VALUES'"
-              :id="sectionPanelId('VALUES')"
-              class="editor-section"
-              role="tabpanel"
-              :aria-labelledby="sectionTabId('VALUES')"
+        <div class="environment-editor-layout">
+          <form
+            class="panel environment-editor"
+            novalidate
+            @submit.prevent="save"
+          >
+            <fieldset
+              class="environment-form-fields"
+              :disabled="busy || !draftEditable || !canPublish"
             >
-              <div class="section-header">
-                <div>
-                  <h2>{{ $t("runtime.variables") }}</h2>
-                  <p>{{ $t("runtime.variablesHelp") }}</p>
-                </div>
-                <button
-                  class="button"
-                  type="button"
-                  :disabled="
-                    busy ||
-                    !canPublish ||
-                    !draftEditable ||
-                    input.values.length >= runtimeEnvironmentCollectionLimit
-                  "
-                  :title="
-                    input.values.length >= runtimeEnvironmentCollectionLimit
-                      ? $t('runtime.errors.collectionLimit')
-                      : undefined
-                  "
-                  @click="addValue"
-                >
-                  <Plus :size="15" aria-hidden="true" />
-                  {{ $t("runtime.addVariable") }}
-                </button>
-              </div>
-              <div v-if="input.values.length" class="environment-fields">
-                <div
-                  v-for="(item, index) in input.values"
-                  :key="index"
-                  class="environment-field-row"
-                >
-                  <label class="field">
-                    <span>{{ $t("runtime.variableName") }}</span>
-                    <input
-                      v-model="item.name"
-                      data-environment-variable-name
-                      placeholder="VAR_NAME"
-                    />
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.nonSecretValue") }}</span>
-                    <input v-model="item.value" maxlength="8192" />
-                  </label>
-                  <button
-                    class="icon-button icon-button--danger"
-                    type="button"
-                    :aria-label="$t('common.delete')"
-                    @click="input.values.splice(index, 1)"
-                  >
-                    <Trash2 :size="16" aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-              <p v-else class="secondary-text">{{ $t("common.empty") }}</p>
-            </section>
-
-            <section
-              v-else-if="activeSection === 'SECRETS'"
-              :id="sectionPanelId('SECRETS')"
-              class="editor-section"
-              role="tabpanel"
-              :aria-labelledby="sectionTabId('SECRETS')"
-            >
-              <div class="section-header">
-                <div>
-                  <h2>{{ $t("runtime.secretReferences") }}</h2>
-                  <p>{{ $t("runtime.secretBindingsHelp") }}</p>
-                </div>
-                <button
-                  class="button"
-                  type="button"
-                  :disabled="
-                    busy ||
-                    !canPublish ||
-                    !draftEditable ||
-                    input.secretBindings.length >=
-                      runtimeEnvironmentCollectionLimit
-                  "
-                  :title="
-                    input.secretBindings.length >=
-                    runtimeEnvironmentCollectionLimit
-                      ? $t('runtime.errors.collectionLimit')
-                      : undefined
-                  "
-                  @click="addSecret"
-                >
-                  <KeyRound :size="15" aria-hidden="true" />
-                  {{ $t("runtime.addSecretBinding") }}
-                </button>
-              </div>
-              <div class="secret-warning" role="note">
-                <ShieldCheck :size="18" aria-hidden="true" />
-                {{ $t("runtime.secretValuesForbidden") }}
-              </div>
-              <article
-                v-for="(item, index) in input.secretBindings"
-                :key="index"
-                class="secret-descriptor"
+              <section
+                v-if="activeSection === 'GENERAL'"
+                :id="sectionPanelId('GENERAL')"
+                class="editor-section"
+                role="tabpanel"
+                :aria-labelledby="sectionTabId('GENERAL')"
               >
                 <div class="section-header">
                   <div>
-                    <strong>
-                      {{
-                        item.name ||
-                        $t("runtime.secretBinding", { number: index + 1 })
-                      }}
-                    </strong>
-                    <p>
-                      {{
-                        selectedSecret(item)?.title ||
-                        $t("runtime.secretNotSelected")
-                      }}
-                    </p>
+                    <h2>{{ $t("runtime.environmentGeneral") }}</h2>
                   </div>
-                  <button
-                    class="icon-button icon-button--danger"
-                    type="button"
-                    :aria-label="$t('common.delete')"
-                    @click="input.secretBindings.splice(index, 1)"
-                  >
-                    <Trash2 :size="16" aria-hidden="true" />
-                  </button>
+                  <StatusBadge v-if="current" :state="current.state" />
                 </div>
-                <div class="secret-binding-fields">
-                  <label class="field">
-                    <span>{{ $t("runtime.variableName") }}</span>
-                    <input
-                      v-model="item.name"
-                      data-environment-secret-name
-                      placeholder="SECRET_NAME"
-                    />
-                  </label>
-                  <div class="field">
-                    <span>{{ $t("runtime.runtimeSecret") }}</span>
-                    <AsyncEntityPicker
-                      v-model="item.secretRef"
-                      :selected="selectedSecret(item)"
-                      :load-page="loadSecretPage"
-                      :labels="secretPickerLabels"
-                      :placeholder="$t('runtime.chooseRuntimeSecret')"
-                      :search-placeholder="$t('runtime.searchRuntimeSecret')"
-                      @select="selectSecret(item, $event)"
-                    />
-                  </div>
-                </div>
-                <dl
-                  v-if="currentDescriptor(item)"
-                  class="secret-safe-meta"
-                  :aria-label="$t('runtime.currentImmutableDescriptor')"
-                >
-                  <div>
-                    <dt>{{ $t("runtime.secretTarget") }}</dt>
-                    <dd>{{ safeCurrentDescriptor(item)?.target }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("runtime.secretResourceVersion") }}</dt>
-                    <dd>{{ safeCurrentDescriptor(item)?.revision }}</dd>
-                  </div>
-                  <div>
-                    <dt>UID</dt>
-                    <dd>
-                      <code>{{ safeCurrentDescriptor(item)?.uidHint }}</code>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>SHA-256</dt>
-                    <dd>
-                      <code>{{ safeCurrentDescriptor(item)?.digestHint }}</code>
-                    </dd>
-                  </div>
-                </dl>
-                <p v-else class="secondary-text">
-                  {{ $t("runtime.descriptorGeneratedOnPublish") }}
-                </p>
-              </article>
-              <p v-if="!input.secretBindings.length" class="secondary-text">
-                {{ $t("runtime.noSecretReferences") }}
-              </p>
-            </section>
-
-            <section
-              v-else-if="activeSection === 'POLICY'"
-              :id="sectionPanelId('POLICY')"
-              class="editor-section"
-              role="tabpanel"
-              :aria-labelledby="sectionTabId('POLICY')"
-            >
-              <label class="policy-selection"
-                ><input v-model="policySelected" type="checkbox" />{{
-                  $t("runtime.includePolicy")
-                }}</label
-              >
-              <div class="section-header">
-                <div>
-                  <h2>{{ $t("runtime.resourcesAndAccess") }}</h2>
-                  <p>{{ $t("runtime.resourcesAndAccessHelp") }}</p>
-                </div>
-                <StatusBadge
-                  state="AVAILABLE"
-                  :label="$t('common.available')"
-                />
-              </div>
-
-              <section class="policy-group">
-                <div class="section-header">
-                  <div>
-                    <h3>{{ $t("runtime.resources") }}</h3>
-                    <p>{{ $t("runtime.resourcesHelp") }}</p>
-                  </div>
-                  <Cpu :size="20" aria-hidden="true" />
-                </div>
-                <div class="resource-grid">
-                  <label class="field">
-                    <span>{{ $t("runtime.cpuRequest") }}</span>
-                    <input
-                      v-model.number="input.policy.resources.cpuRequestMilli"
-                      type="number"
-                      :min="runtimeResourceBounds.cpuRequestMilli.min"
-                      :max="runtimeResourceBounds.cpuRequestMilli.max"
-                      step="100"
-                    />
-                    <small>{{ $t("runtime.cpuRequestRange") }}</small>
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.cpuLimit") }}</span>
-                    <input
-                      v-model.number="input.policy.resources.cpuLimitMilli"
-                      type="number"
-                      :min="runtimeResourceBounds.cpuLimitMilli.min"
-                      :max="runtimeResourceBounds.cpuLimitMilli.max"
-                      step="100"
-                    />
-                    <small>{{ $t("runtime.cpuLimitRange") }}</small>
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.memoryRequest") }}</span>
-                    <input
-                      v-model.number="input.policy.resources.memoryRequestMib"
-                      type="number"
-                      :min="runtimeResourceBounds.memoryRequestMib.min"
-                      :max="runtimeResourceBounds.memoryRequestMib.max"
-                      step="128"
-                    />
-                    <small>{{ $t("runtime.memoryRequestRange") }}</small>
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.memoryLimit") }}</span>
-                    <input
-                      v-model.number="input.policy.resources.memoryLimitMib"
-                      type="number"
-                      :min="runtimeResourceBounds.memoryLimitMib.min"
-                      :max="runtimeResourceBounds.memoryLimitMib.max"
-                      step="128"
-                    />
-                    <small>{{ $t("runtime.memoryLimitRange") }}</small>
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.ephemeralStorageRequest") }}</span>
-                    <input
-                      v-model.number="
-                        input.policy.resources.ephemeralStorageRequestMib
-                      "
-                      type="number"
-                      :min="
-                        runtimeResourceBounds.ephemeralStorageRequestMib.min
-                      "
-                      :max="
-                        runtimeResourceBounds.ephemeralStorageRequestMib.max
-                      "
-                      step="256"
-                    />
-                    <small>{{
-                      $t("runtime.ephemeralStorageRequestRange")
-                    }}</small>
-                  </label>
-                  <label class="field">
-                    <span>{{ $t("runtime.ephemeralStorageLimit") }}</span>
-                    <input
-                      v-model.number="
-                        input.policy.resources.ephemeralStorageLimitMib
-                      "
-                      type="number"
-                      :min="runtimeResourceBounds.ephemeralStorageLimitMib.min"
-                      :max="runtimeResourceBounds.ephemeralStorageLimitMib.max"
-                      step="256"
-                    />
-                    <small>{{
-                      $t("runtime.ephemeralStorageLimitRange")
-                    }}</small>
-                  </label>
-                </div>
-              </section>
-
-              <section class="policy-group">
-                <div class="section-header">
-                  <div>
-                    <h3>{{ $t("runtime.ephemeralVolumes") }}</h3>
-                    <p>{{ $t("runtime.ephemeralVolumesHelp") }}</p>
-                  </div>
-                  <button
-                    class="button"
-                    type="button"
-                    :disabled="
-                      input.policy.volumes.length >=
-                      runtimeVolumeBounds.maxItems
-                    "
-                    @click="addVolume"
-                  >
-                    <Plus :size="15" aria-hidden="true" />
-                    {{ $t("runtime.addVolume") }}
-                  </button>
-                </div>
-                <div v-if="input.policy.volumes.length" class="volume-list">
-                  <article
-                    v-for="(volume, index) in input.policy.volumes"
-                    :key="index"
-                    class="volume-row"
-                  >
-                    <label class="field">
-                      <span>{{ $t("common.name") }}</span>
-                      <input
-                        v-model="volume.name"
-                        placeholder="workspace-cache"
-                      />
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.volumeKind") }}</span>
-                      <select v-model="volume.kind">
-                        <option value="EPHEMERAL_DISK">
-                          {{ $t("runtime.volumeKindLabel.EPHEMERAL_DISK") }}
-                        </option>
-                        <option value="EPHEMERAL_MEMORY">
-                          {{ $t("runtime.volumeKindLabel.EPHEMERAL_MEMORY") }}
-                        </option>
-                      </select>
-                    </label>
-                    <label class="field">
-                      <span>{{ $t("runtime.volumeSize") }}</span>
-                      <input
-                        v-model.number="volume.sizeMib"
-                        type="number"
-                        :min="runtimeVolumeBounds.minSizeMib"
-                        :max="runtimeVolumeBounds.maxSizeMib"
-                        step="16"
-                      />
-                    </label>
-                    <div class="volume-mount">
-                      <span>{{ $t("runtime.mountPath") }}</span>
-                      <code>{{ volumeMountPath(volume.name) }}</code>
-                    </div>
-                    <button
-                      class="icon-button icon-button--danger"
-                      type="button"
-                      :aria-label="$t('common.delete')"
-                      @click="input.policy.volumes.splice(index, 1)"
-                    >
-                      <Trash2 :size="16" aria-hidden="true" />
-                    </button>
-                  </article>
-                </div>
-                <p v-else class="secondary-text">
-                  {{ $t("runtime.noEphemeralVolumes") }}
-                </p>
-              </section>
-
-              <section class="policy-group">
-                <div class="section-header">
-                  <div>
-                    <h3>{{ $t("runtime.networkPolicy") }}</h3>
-                    <p>{{ $t("runtime.networkPolicyHelp") }}</p>
-                  </div>
-                  <Network :size="20" aria-hidden="true" />
-                </div>
-                <div class="destination-list">
-                  <article
-                    v-for="destination in mandatoryRuntimeNetworkDestinations"
-                    :key="destination"
-                    class="destination-row"
-                  >
-                    <div>
-                      <strong>{{
-                        $t(`runtime.networkDestination.${destination}`)
-                      }}</strong>
-                      <p>
-                        {{
-                          $t(`runtime.networkDestinationHelp.${destination}`)
-                        }}
-                      </p>
-                    </div>
-                    <StatusBadge
-                      state="REQUIRED"
-                      :label="$t('runtime.mandatoryDestination')"
-                    />
-                  </article>
-                  <article class="destination-row">
-                    <div>
-                      <strong>{{
-                        $t("runtime.networkDestination.KUBERNETES_API")
-                      }}</strong>
-                      <p>
-                        {{
-                          $t("runtime.networkDestinationHelp.KUBERNETES_API")
-                        }}
-                      </p>
-                    </div>
-                    <StatusBadge
-                      :state="
-                        input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
-                          ? 'AVAILABLE'
-                          : 'DISABLED'
-                      "
-                      :label="
-                        input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
-                          ? $t('runtime.scopedAccessEnabled')
-                          : $t('common.disabled')
-                      "
-                    />
-                  </article>
-                </div>
-              </section>
-
-              <section class="policy-group">
-                <div class="section-header">
-                  <div>
-                    <h3>{{ $t("runtime.kubernetesRbac") }}</h3>
-                    <p>{{ $t("runtime.kubernetesRbacHelp") }}</p>
-                  </div>
-                  <ShieldCheck :size="20" aria-hidden="true" />
-                </div>
-                <label class="access-toggle">
+                <label class="field">
+                  <span>{{ $t("common.name") }}</span>
                   <input
-                    type="checkbox"
-                    :checked="
-                      input.policy.kubernetesAccess === 'READ_OWN_EXECUTION'
-                    "
-                    @change="toggleKubernetesAccess"
+                    v-model="input.name"
+                    name="runtime-environment-name"
+                    required
+                    maxlength="120"
                   />
-                  <span>
-                    <strong>{{ $t("runtime.readOwnExecution") }}</strong>
-                    <small>{{ $t("runtime.readOwnExecutionHelp") }}</small>
-                  </span>
                 </label>
-                <p class="boundary-note" role="note">
-                  <CircleAlert :size="17" aria-hidden="true" />
-                  {{ $t("runtime.kubernetesAccessBoundary") }}
-                </p>
-              </section>
-
-              <div class="effective-preview">
-                <div class="section-header">
+                <label class="field">
+                  <span>{{ $t("common.description") }}</span>
+                  <VoiceTextarea
+                    v-model="input.description"
+                    name="runtime-environment-description"
+                    :disabled="busy || !draftEditable || !canPublish"
+                    maxlength="1000"
+                  />
+                </label>
+                <div class="safe-summary">
                   <div>
-                    <h3>{{ $t("runtime.effectivePolicyPreview") }}</h3>
-                    <p>{{ $t("runtime.effectivePolicyPreviewHelp") }}</p>
-                  </div>
-                  <StatusBadge
-                    :state="publishedPolicy ? 'PUBLISHED' : 'DRAFT'"
-                    :label="
-                      publishedPolicy
-                        ? $t('runtime.serverCalculated')
-                        : $t('runtime.afterPublish')
-                    "
-                  />
-                </div>
-                <template v-if="publishedPolicy">
-                  <dl class="policy-summary">
-                    <div>
-                      <dt>{{ $t("runtime.denyByDefault") }}</dt>
-                      <dd>{{ $t("common.yes") }}</dd>
-                    </div>
-                    <div>
-                      <dt>{{ $t("runtime.kubernetesNamespace") }}</dt>
-                      <dd><code>kodex-runtime</code></dd>
-                    </div>
-                    <div>
-                      <dt>{{ $t("runtime.effectiveEgressRules") }}</dt>
-                      <dd>{{ publishedPolicy.network.egress.length }}</dd>
-                    </div>
-                    <div>
-                      <dt>{{ $t("runtime.effectiveVolumes") }}</dt>
-                      <dd>{{ publishedPolicy.volumes.length }}</dd>
-                    </div>
-                  </dl>
-                  <div class="digest-grid">
-                    <div
-                      v-for="(digest, key) in {
-                        resources: publishedPolicy.resourcesDigest,
-                        volumes: publishedPolicy.volumesDigest,
-                        network: publishedPolicy.networkDigest,
-                        rbac: publishedPolicy.rbacDigest,
-                      }"
-                      :key="key"
-                    >
-                      <span>{{ $t(`runtime.policyDigest.${key}`) }}</span>
-                      <code>{{ compactIdentifier(digest) }}</code>
-                    </div>
-                  </div>
-                </template>
-                <p v-else class="secondary-text">
-                  {{ $t("runtime.effectivePolicyAfterPublish") }}
-                </p>
-              </div>
-            </section>
-
-            <section
-              v-else
-              :id="sectionPanelId('READINESS')"
-              class="editor-section"
-              role="tabpanel"
-              :aria-labelledby="sectionTabId('READINESS')"
-            >
-              <div class="section-header">
-                <div>
-                  <h2>{{ $t("runtime.readiness") }}</h2>
-                  <p>{{ $t("runtime.readinessHelp") }}</p>
-                </div>
-              </div>
-              <div class="readiness-list">
-                <article
-                  v-for="check in readiness"
-                  :key="check.key"
-                  class="readiness-check"
-                >
-                  <CheckCircle2
-                    v-if="check.state === 'READY'"
-                    :size="19"
-                    class="readiness-icon readiness-icon--ready"
-                    aria-hidden="true"
-                  />
-                  <CircleAlert
-                    v-else
-                    :size="19"
-                    class="readiness-icon"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <strong>{{
-                      $t(`runtime.readinessCheck.${check.key}`)
-                    }}</strong>
-                    <p>{{ $t(`runtime.readinessState.${check.state}`) }}</p>
-                  </div>
-                  <StatusBadge
-                    :state="
-                      check.state === 'READY'
-                        ? 'READY'
-                        : check.state === 'UNAVAILABLE'
-                          ? 'UNAVAILABLE'
-                          : 'NEEDS_ATTENTION'
-                    "
-                    :label="$t(`runtime.readinessState.${check.state}`)"
-                  />
-                </article>
-              </div>
-              <section v-if="current" class="effective-preview">
-                <h3>{{ $t("agents.title") }} · {{ boundAgents.length }}</h3>
-                <div v-if="boundAgents.length" class="chip-list">
-                  <span v-for="agent in boundAgents" :key="agent.ref">
-                    {{ agent.name }}
-                  </span>
-                </div>
-                <p v-else class="secondary-text">{{ $t("common.empty") }}</p>
-                <button
-                  v-if="runtime.environmentAgentCursors[current.ref]"
-                  class="button"
-                  type="button"
-                  :disabled="
-                    runtime.loading[`environment-agents:${current.ref}`]
-                  "
-                  @click="runtime.loadEnvironmentAgents(current.ref, false)"
-                >
-                  {{ $t("roleImages.loadMore") }}
-                </button>
-              </section>
-              <section class="effective-preview">
-                <h3>{{ $t("runtime.safeEffectivePreview") }}</h3>
-                <p>{{ $t("runtime.safeEffectivePreviewHelp") }}</p>
-                <dl>
-                  <div>
-                    <dt>{{ $t("runtime.revision") }}</dt>
-                    <dd>
+                    <span>{{ $t("runtime.revision") }}</span>
+                    <strong>
                       {{
                         current
                           ? `rev ${String(current.currentVersion.revision)}`
                           : $t("runtime.notPublished")
                       }}
-                    </dd>
+                    </strong>
                   </div>
                   <div>
-                    <dt>{{ $t("runtime.versionDigest") }}</dt>
-                    <dd>
-                      <code>{{ versionDigest ?? "—" }}</code>
-                    </dd>
+                    <span>{{ $t("runtime.versionDigest") }}</span>
+                    <code>{{ versionDigest ?? "—" }}</code>
                   </div>
                   <div>
-                    <dt>{{ $t("runtime.variables") }}</dt>
-                    <dd>{{ input.values.length }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("runtime.secretReferences") }}</dt>
-                    <dd>{{ input.secretBindings.length }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("runtime.exactImage") }}</dt>
-                    <dd>
-                      <code>{{ input.imageArtifactRef || "—" }}</code>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("runtime.verifiedTools") }}</dt>
-                    <dd>{{ input.tools.length }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("runtime.resources") }}</dt>
-                    <dd>
-                      {{ input.policy.resources.cpuRequestMilli }}/{{
-                        input.policy.resources.cpuLimitMilli
-                      }}m CPU · {{ input.policy.resources.memoryRequestMib }}/{{
-                        input.policy.resources.memoryLimitMib
+                    <span>{{ $t("runtime.updatedAt") }}</span>
+                    <strong>
+                      {{
+                        current
+                          ? new Date(current.updatedAt).toLocaleString()
+                          : "—"
                       }}
-                      MiB
-                    </dd>
+                    </strong>
                   </div>
-                  <div>
-                    <dt>{{ $t("runtime.ephemeralVolumes") }}</dt>
-                    <dd>{{ input.policy.volumes.length }}</dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("runtime.networkPolicy") }}</dt>
-                    <dd>
-                      {{ $t("runtime.denyByDefault") }} ·
-                      {{ input.policy.networkDestinations.length }}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
-                    <dd>{{ input.policy.kubernetesAccess }}</dd>
-                  </div>
-                </dl>
-                <p v-if="!publishedPolicy" class="boundary-note" role="note">
-                  <CircleAlert :size="17" aria-hidden="true" />
-                  {{ $t("runtime.effectivePolicyAfterPublish") }}
-                </p>
+                </div>
               </section>
-            </section>
 
-            <ul v-if="validation.length" class="validation-list" role="alert">
-              <li
-                v-for="item in validation"
-                :key="`${item.field}:${item.message}`"
+              <section
+                v-else-if="activeSection === 'IMAGE_TOOLS'"
+                :id="sectionPanelId('IMAGE_TOOLS')"
+                class="editor-section"
+                role="tabpanel"
+                :aria-labelledby="sectionTabId('IMAGE_TOOLS')"
               >
-                {{ $t(item.message) }}
-              </li>
-            </ul>
-            <ProblemNotice v-if="problem" :problem="problem" />
-            <section v-if="problem?.kind === 'conflict'" class="conflict-panel">
-              <p>{{ $t("runtime.environmentConflict") }}</p>
-              <button class="button" type="button" @click="load">
-                {{ $t("runtime.reload") }}
-              </button>
-            </section>
-          </fieldset>
-        </form>
+                <div class="section-header">
+                  <div>
+                    <h2>{{ $t("runtime.imageAndTools") }}</h2>
+                    <p>{{ $t("runtime.imageAndToolsHelp") }}</p>
+                  </div>
+                </div>
+                <label class="field">
+                  <span>{{ $t("runtime.exactImage") }}</span>
+                  <AsyncEntityPicker
+                    v-model="input.imageArtifactRef"
+                    :selected="selectedImage"
+                    :load-page="loadImagePage"
+                    :trigger-label="$t('runtime.exactImage')"
+                    :placeholder="$t('runtime.choosePromotedImage')"
+                    :search-placeholder="$t('runtime.searchPromotedImage')"
+                    @select="selectImage"
+                  />
+                </label>
+                <ProblemNotice v-if="imageProblem" :problem="imageProblem" />
+                <article
+                  v-if="selectedImage"
+                  class="selected-image"
+                  :aria-busy="imageLoading"
+                >
+                  <Boxes :size="22" aria-hidden="true" />
+                  <div>
+                    <strong>{{ selectedImage.title }}</strong>
+                    <p>{{ selectedImage.description }}</p>
+                    <code>{{ input.imageArtifactRef }}</code>
+                  </div>
+                  <StatusBadge
+                    :state="imageArtifact ? 'ACCEPTED' : 'PENDING'"
+                    :label="
+                      imageArtifact
+                        ? $t('runtime.promotedAndVerified')
+                        : $t('common.loading')
+                    "
+                  />
+                </article>
 
-        <aside class="panel revision-panel">
-          <div class="section-header">
-            <div>
-              <h2>{{ $t("runtime.revisionHistory") }}</h2>
-              <p>{{ $t("runtime.revisionHistoryHelp") }}</p>
-            </div>
-            <span v-if="current"
-              >rev {{ current.currentVersion.revision }}</span
-            >
-          </div>
-          <div
-            v-if="versions.length"
-            class="revision-scroll"
-            :aria-busy="
-              environmentRef
-                ? runtime.loading[`environment-versions:${environmentRef}`]
-                : false
-            "
-            @scroll="onVersionScroll"
-          >
-            <article v-for="version in versions" :key="version.ref">
+                <RuntimeEnvironmentToolsEditor
+                  :tools="input.tools"
+                  :catalog="imageArtifact?.tools ?? []"
+                  :image-selected="!!input.imageArtifactRef"
+                  :loading="imageLoading"
+                  :disabled="busy || !draftEditable || !canPublish"
+                  @update:tools="input.tools = $event"
+                />
+              </section>
+
+              <section
+                v-else-if="activeSection === 'VALUES'"
+                :id="sectionPanelId('VALUES')"
+                class="editor-section"
+                role="tabpanel"
+                :aria-labelledby="sectionTabId('VALUES')"
+              >
+                <RuntimeEnvironmentFieldListsEditor
+                  mode="VALUES"
+                  :values="input.values"
+                  :secret-bindings="input.secretBindings"
+                  :project-ref="projectRef"
+                  :disabled="busy || !canPublish || !draftEditable"
+                  @update:values="input.values = $event"
+                />
+              </section>
+
+              <section
+                v-else-if="activeSection === 'SECRETS'"
+                :id="sectionPanelId('SECRETS')"
+                class="editor-section"
+                role="tabpanel"
+                :aria-labelledby="sectionTabId('SECRETS')"
+              >
+                <RuntimeEnvironmentFieldListsEditor
+                  mode="SECRETS"
+                  :values="input.values"
+                  :secret-bindings="input.secretBindings"
+                  :descriptors="current?.currentVersion.secretDescriptors"
+                  :project-ref="projectRef"
+                  :disabled="busy || !canPublish || !draftEditable"
+                  @update:secret-bindings="input.secretBindings = $event"
+                />
+              </section>
+
+              <section
+                v-else-if="activeSection === 'POLICY'"
+                :id="sectionPanelId('POLICY')"
+                class="editor-section"
+                role="tabpanel"
+                :aria-labelledby="sectionTabId('POLICY')"
+              >
+                <label class="policy-selection"
+                  ><input
+                    v-model="policySelected"
+                    id="runtime-environment-policy-selected"
+                    name="runtime-environment-policy-selected"
+                    type="checkbox"
+                  />{{ $t("runtime.includePolicy") }}</label
+                >
+                <div class="section-header">
+                  <div>
+                    <h2>{{ $t("runtime.resourcesAndAccess") }}</h2>
+                    <p>{{ $t("runtime.resourcesAndAccessHelp") }}</p>
+                  </div>
+                  <StatusBadge
+                    state="AVAILABLE"
+                    :label="$t('common.available')"
+                  />
+                </div>
+
+                <RuntimeEnvironmentPolicyFields
+                  :policy="input.policy"
+                  :disabled="busy || !draftEditable || !canPublish"
+                  @update:policy="input.policy = $event"
+                />
+
+                <div class="effective-preview">
+                  <div class="section-header">
+                    <div>
+                      <h3>{{ $t("runtime.effectivePolicyPreview") }}</h3>
+                      <p>{{ $t("runtime.effectivePolicyPreviewHelp") }}</p>
+                    </div>
+                    <StatusBadge
+                      :state="publishedPolicy ? 'PUBLISHED' : 'DRAFT'"
+                      :label="
+                        publishedPolicy
+                          ? $t('runtime.serverCalculated')
+                          : $t('runtime.afterPublish')
+                      "
+                    />
+                  </div>
+                  <template v-if="publishedPolicy">
+                    <dl class="policy-summary">
+                      <div>
+                        <dt>{{ $t("runtime.denyByDefault") }}</dt>
+                        <dd>{{ $t("common.yes") }}</dd>
+                      </div>
+                      <div>
+                        <dt>{{ $t("runtime.kubernetesNamespace") }}</dt>
+                        <dd><code>kodex-runtime</code></dd>
+                      </div>
+                      <div>
+                        <dt>{{ $t("runtime.effectiveEgressRules") }}</dt>
+                        <dd>{{ publishedPolicy.network.egress.length }}</dd>
+                      </div>
+                      <div>
+                        <dt>{{ $t("runtime.effectiveVolumes") }}</dt>
+                        <dd>{{ publishedPolicy.volumes.length }}</dd>
+                      </div>
+                    </dl>
+                    <div class="digest-grid">
+                      <div
+                        v-for="(digest, key) in {
+                          resources: publishedPolicy.resourcesDigest,
+                          volumes: publishedPolicy.volumesDigest,
+                          network: publishedPolicy.networkDigest,
+                          rbac: publishedPolicy.rbacDigest,
+                        }"
+                        :key="key"
+                      >
+                        <span>{{ $t(`runtime.policyDigest.${key}`) }}</span>
+                        <code>{{ compactIdentifier(digest) }}</code>
+                      </div>
+                    </div>
+                  </template>
+                  <p v-else class="secondary-text">
+                    {{ $t("runtime.effectivePolicyAfterPublish") }}
+                  </p>
+                </div>
+              </section>
+
+              <section
+                v-else
+                :id="sectionPanelId('READINESS')"
+                class="editor-section"
+                role="tabpanel"
+                :aria-labelledby="sectionTabId('READINESS')"
+              >
+                <div class="section-header">
+                  <div>
+                    <h2>{{ $t("runtime.readiness") }}</h2>
+                    <p>{{ $t("runtime.readinessHelp") }}</p>
+                  </div>
+                </div>
+                <div class="readiness-list">
+                  <article
+                    v-for="check in readiness"
+                    :key="check.key"
+                    class="readiness-check"
+                  >
+                    <CheckCircle2
+                      v-if="check.state === 'READY'"
+                      :size="19"
+                      class="readiness-icon readiness-icon--ready"
+                      aria-hidden="true"
+                    />
+                    <CircleAlert
+                      v-else
+                      :size="19"
+                      class="readiness-icon"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <strong>{{
+                        $t(`runtime.readinessCheck.${check.key}`)
+                      }}</strong>
+                      <p>{{ $t(`runtime.readinessState.${check.state}`) }}</p>
+                    </div>
+                    <StatusBadge
+                      :state="
+                        check.state === 'READY'
+                          ? 'READY'
+                          : check.state === 'UNAVAILABLE'
+                            ? 'UNAVAILABLE'
+                            : 'NEEDS_ATTENTION'
+                      "
+                      :label="$t(`runtime.readinessState.${check.state}`)"
+                    />
+                  </article>
+                </div>
+                <section v-if="current" class="effective-preview">
+                  <h3>{{ $t("agents.title") }} · {{ boundAgents.length }}</h3>
+                  <div
+                    v-if="boundAgents.length"
+                    ref="boundAgentList"
+                    class="chip-list chip-list--cursor"
+                  >
+                    <span v-for="agent in boundAgents" :key="agent.ref">
+                      {{ agent.name }}
+                    </span>
+                    <span
+                      v-if="runtime.environmentAgentCursors[current.ref]"
+                      ref="boundAgentSentinel"
+                      class="cursor-sentinel"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <p v-else class="secondary-text">{{ $t("common.empty") }}</p>
+                </section>
+                <section class="effective-preview">
+                  <h3>{{ $t("runtime.safeEffectivePreview") }}</h3>
+                  <p>{{ $t("runtime.safeEffectivePreviewHelp") }}</p>
+                  <dl>
+                    <div>
+                      <dt>{{ $t("runtime.revision") }}</dt>
+                      <dd>
+                        {{
+                          current
+                            ? `rev ${String(current.currentVersion.revision)}`
+                            : $t("runtime.notPublished")
+                        }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.versionDigest") }}</dt>
+                      <dd>
+                        <code>{{ versionDigest ?? "—" }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.variables") }}</dt>
+                      <dd>{{ input.values.length }}</dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.secretReferences") }}</dt>
+                      <dd>{{ input.secretBindings.length }}</dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.exactImage") }}</dt>
+                      <dd>
+                        <code>{{ input.imageArtifactRef || "—" }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.verifiedTools") }}</dt>
+                      <dd>{{ input.tools.length }}</dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.resources") }}</dt>
+                      <dd>
+                        {{ input.policy.resources.cpuRequestMilli }}/{{
+                          input.policy.resources.cpuLimitMilli
+                        }}m CPU ·
+                        {{ input.policy.resources.memoryRequestMib }}/{{
+                          input.policy.resources.memoryLimitMib
+                        }}
+                        MiB
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.ephemeralVolumes") }}</dt>
+                      <dd>{{ input.policy.volumes.length }}</dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.networkPolicy") }}</dt>
+                      <dd>
+                        {{ $t("runtime.denyByDefault") }} ·
+                        {{ input.policy.networkDestinations.length }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
+                      <dd>{{ input.policy.kubernetesAccess }}</dd>
+                    </div>
+                  </dl>
+                  <p v-if="!publishedPolicy" class="boundary-note" role="note">
+                    <CircleAlert :size="17" aria-hidden="true" />
+                    {{ $t("runtime.effectivePolicyAfterPublish") }}
+                  </p>
+                </section>
+              </section>
+
+              <ul v-if="validation.length" class="validation-list" role="alert">
+                <li
+                  v-for="item in validation"
+                  :key="`${item.field}:${item.message}`"
+                >
+                  {{ $t(item.message) }}
+                </li>
+              </ul>
+              <ProblemNotice v-if="problem" :problem="problem" />
+              <section
+                v-if="problem?.kind === 'conflict'"
+                class="conflict-panel"
+              >
+                <p>{{ $t("runtime.environmentConflict") }}</p>
+                <button class="button" type="button" @click="load">
+                  {{ $t("runtime.reload") }}
+                </button>
+              </section>
+            </fieldset>
+          </form>
+
+          <aside class="panel revision-panel">
+            <div class="section-header">
               <div>
-                <strong>rev {{ version.revision }}</strong>
-                <small>{{
-                  new Date(version.createdAt).toLocaleString()
-                }}</small>
-                <code>{{ compactIdentifier(version.digest) }}</code>
+                <h2>{{ $t("runtime.revisionHistory") }}</h2>
+                <p>{{ $t("runtime.revisionHistoryHelp") }}</p>
               </div>
-              <button
-                v-if="
-                  version.ref !== current?.currentVersion.ref &&
-                  current &&
-                  hasEnvironmentAction(current, 'ROLLBACK')
-                "
-                class="button"
-                type="button"
-                :disabled="busy || localChanges"
-                @click="rollback(version.ref)"
+              <span v-if="current"
+                >rev {{ current.currentVersion.revision }}</span
               >
-                {{ $t("runtime.rollback") }}
-              </button>
-              <StatusBadge
-                v-else-if="version.ref === current?.currentVersion.ref"
-                state="ACTIVE"
-              />
-              <button
-                class="icon-button"
-                type="button"
-                :disabled="busy"
-                :title="$t('impact.inspect')"
-                :aria-label="$t('impact.inspect')"
-                @click="impactVersionRef = version.ref"
-              >
-                <Link2 :size="18" />
-              </button>
-            </article>
-            <p
-              v-if="
-                environmentRef &&
-                runtime.loading[`environment-versions:${environmentRef}`]
+            </div>
+            <div
+              v-if="versions.length"
+              ref="versionList"
+              class="revision-scroll"
+              :aria-busy="
+                environmentRef
+                  ? runtime.loading[`environment-versions:${environmentRef}`]
+                  : false
               "
-              class="secondary-text revision-loading"
-              role="status"
             >
-              {{ $t("common.loading") }}
+              <article v-for="version in versions" :key="version.ref">
+                <div>
+                  <strong>rev {{ version.revision }}</strong>
+                  <small>{{
+                    new Date(version.createdAt).toLocaleString()
+                  }}</small>
+                  <code>{{ compactIdentifier(version.digest) }}</code>
+                </div>
+                <button
+                  v-if="
+                    version.ref !== current?.currentVersion.ref &&
+                    current &&
+                    hasEnvironmentAction(current, 'ROLLBACK')
+                  "
+                  class="button"
+                  type="button"
+                  :disabled="busy || localChanges"
+                  @click="rollback(version.ref)"
+                >
+                  {{ $t("runtime.rollback") }}
+                </button>
+                <StatusBadge
+                  v-else-if="version.ref === current?.currentVersion.ref"
+                  state="ACTIVE"
+                />
+                <button
+                  class="icon-button"
+                  type="button"
+                  :disabled="busy"
+                  :title="$t('impact.inspect')"
+                  :aria-label="$t('impact.inspect')"
+                  @click="impactVersionRef = version.ref"
+                >
+                  <Link2 :size="18" />
+                </button>
+              </article>
+              <div
+                v-if="
+                  environmentRef &&
+                  runtime.environmentVersionCursors[environmentRef]
+                "
+                ref="versionSentinel"
+                class="revision-sentinel"
+                aria-hidden="true"
+              />
+              <p
+                v-if="
+                  environmentRef &&
+                  runtime.loading[`environment-versions:${environmentRef}`]
+                "
+                class="secondary-text revision-loading"
+                role="status"
+              >
+                {{ $t("common.loading") }}
+              </p>
+            </div>
+            <p v-else class="secondary-text">
+              {{ $t("runtime.revisionHistoryEmpty") }}
             </p>
-          </div>
-          <p v-else class="secondary-text">
-            {{ $t("runtime.revisionHistoryEmpty") }}
-          </p>
-        </aside>
-      </div>
-    </AsyncState>
-  </PageFrame>
-  <ModalDialog
-    v-if="publicationPlan"
-    :title="$t('publicationImpact.title')"
-    size="lg"
-    :busy="busy"
-    @close="publicationPlan = undefined"
-  >
-    <ProblemNotice v-if="problem" :problem="problem" />
-    <button
-      v-if="publicationUnknown"
-      type="button"
-      class="button"
-      :disabled="busy"
-      @click="recoverPublication"
+          </aside>
+        </div>
+      </AsyncState>
+    </PageFrame>
+    <ModalDialog
+      v-if="publicationPlan"
+      :title="$t('publicationImpact.title')"
+      size="lg"
+      :busy="busy"
+      @close="publicationPlan = undefined"
     >
-      {{ $t("common.refresh") }}
-    </button>
-    <button
-      v-if="publicationUnknown && publicationAttempt"
-      type="button"
-      class="button"
-      :disabled="busy"
-      @click="retryPublication"
-    >
-      {{ $t("publicationImpact.retryOriginal") }}
-    </button>
-    <PublicationImpactSelection
-      :plan="publicationPlan"
-      :busy="busy || publicationUnknown"
-      @publish="publish"
-    />
-  </ModalDialog>
-  <EnvironmentImpactDialog
-    v-if="impactVersionRef && environmentRef"
-    :key="`${environmentRef}:${impactVersionRef}`"
-    :environment-ref="environmentRef"
-    :version-ref="impactVersionRef"
-    @close="impactVersionRef = undefined"
-  />
-  <ModalDialog
-    v-if="deleteOpen && current"
-    :title="`${t('common.delete')} «${current.name}»?`"
-    :busy="busy"
-    size="md"
-    @close="deleteOpen = false"
-  >
-    <div class="environment-delete-confirmation">
-      <Trash2 :size="24" aria-hidden="true" />
-      <div>
-        <strong>{{ current.name }}</strong>
-        <p>{{ current.description }}</p>
-        <StatusBadge :state="current.state" />
-      </div>
-    </div>
-    <template #actions>
+      <ProblemNotice v-if="problem" :problem="problem" />
       <button
+        v-if="publicationUnknown"
+        type="button"
         class="button"
-        type="button"
         :disabled="busy"
-        @click="deleteOpen = false"
+        @click="recoverPublication"
       >
-        {{ t("common.cancel") }}
+        {{ $t("common.refresh") }}
       </button>
       <button
-        class="button button--danger"
+        v-if="publicationUnknown && publicationAttempt"
         type="button"
+        class="button"
         :disabled="busy"
-        @click="remove"
+        @click="retryPublication"
       >
-        <Trash2 :size="16" aria-hidden="true" />
-        {{ t("common.delete") }}
+        {{ $t("publicationImpact.retryOriginal") }}
       </button>
-    </template>
-  </ModalDialog>
+      <PublicationImpactSelection
+        :plan="publicationPlan"
+        :busy="busy || publicationUnknown"
+        @publish="publish"
+      />
+    </ModalDialog>
+    <EnvironmentImpactDialog
+      v-if="impactVersionRef && environmentRef"
+      :key="`${environmentRef}:${impactVersionRef}`"
+      :environment-ref="environmentRef"
+      :version-ref="impactVersionRef"
+      @close="impactVersionRef = undefined"
+    />
+    <ModalDialog
+      v-if="deleteOpen && current"
+      :title="`${t('common.delete')} «${current.name}»?`"
+      :busy="busy"
+      size="md"
+      @close="deleteOpen = false"
+    >
+      <div class="environment-delete-confirmation">
+        <Trash2 :size="24" aria-hidden="true" />
+        <div>
+          <strong>{{ current.name }}</strong>
+          <p>{{ current.description }}</p>
+          <StatusBadge :state="current.state" />
+        </div>
+      </div>
+      <template #actions>
+        <button
+          class="button"
+          type="button"
+          :disabled="busy"
+          @click="deleteOpen = false"
+        >
+          {{ t("common.cancel") }}
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="busy"
+          @click="remove"
+        >
+          <Trash2 :size="16" aria-hidden="true" />
+          {{ t("common.delete") }}
+        </button>
+      </template>
+    </ModalDialog>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -2628,8 +2070,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: var(--surface);
 }
-.selected-image p,
-.tool-heading p {
+.selected-image p {
   margin: 3px 0 0;
   color: var(--text-secondary);
 }
@@ -2640,48 +2081,6 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.tool-heading {
-  padding-top: 6px;
-  border-top: 1px solid var(--hairline);
-}
-.tool-heading > span {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-}
-.tool-catalog {
-  display: grid;
-  gap: 10px;
-}
-.tool-option {
-  display: grid;
-  gap: 12px;
-  padding: 13px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-.tool-option > label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-}
-.tool-option > label > span {
-  display: grid;
-  gap: 2px;
-}
-.tool-option small {
-  color: var(--text-secondary);
-}
-.tool-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding-left: 26px;
-}
-.tool-fields .field--wide {
-  grid-column: 1 / -1;
 }
 .capability-row > svg,
 .readiness-icon {
@@ -2743,6 +2142,15 @@ code {
   flex-wrap: wrap;
   gap: 6px;
 }
+.chip-list--cursor {
+  max-height: 240px;
+  overflow: auto;
+}
+.chip-list .cursor-sentinel {
+  min-height: 1px;
+  padding: 0;
+  border: 0;
+}
 .chip-list span {
   padding: 4px 7px;
   border-radius: 5px;
@@ -2768,6 +2176,9 @@ code {
 .revision-scroll {
   max-height: min(560px, calc(100vh - 270px));
   overflow-y: auto;
+}
+.revision-sentinel {
+  min-height: 1px;
 }
 .revision-scroll > article {
   display: grid;
@@ -2811,15 +2222,11 @@ code {
   .safe-summary,
   .secret-safe-meta,
   .effective-preview dl,
-  .tool-fields,
   .resource-grid,
   .volume-row,
   .policy-summary,
   .digest-grid {
     grid-template-columns: 1fr;
-  }
-  .tool-fields .field--wide {
-    grid-column: auto;
   }
   .capability-row,
   .readiness-check {

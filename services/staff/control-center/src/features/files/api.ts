@@ -55,8 +55,6 @@ interface GeneratedResponse<T> {
   response?: Response;
 }
 
-const artifactPageSize = 40;
-
 function responseHeaders(xhr: XMLHttpRequest): Headers {
   const headers = new Headers();
   for (const line of xhr
@@ -203,7 +201,10 @@ export async function loadArtifactPage(
           path: { projectRef },
           query: {
             lifecycleState: filters.lifecycleState ?? "ACTIVE",
-            pageSize: artifactPageSize,
+            pageSize: Math.min(
+              100,
+              Math.max(1, Math.floor(request.pageSize ?? 20)),
+            ),
             ...(sourceKinds ? { sourceKinds } : {}),
             ...(filters.type ? { type: filters.type } : {}),
             ...(filters.scanState ? { scanState: filters.scanState } : {}),

@@ -223,6 +223,10 @@ func (server *Server) CommandRoleImageRecipe(writer http.ResponseWriter, request
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
+	buildRef := ""
+	if body.BuildRef != nil {
+		buildRef = *body.BuildRef
+	}
 	request, ok = withProjectReference(writer, request, projectRef)
 	if !ok {
 		return
@@ -233,6 +237,7 @@ func (server *Server) CommandRoleImageRecipe(writer http.ResponseWriter, request
 	}
 	response, err := server.control.RoleImages.ManageRoleImageRecipe(request.Context(), &controlplanev1.ManageRoleImageRecipeRequest{
 		Mutation: mutation, Action: action, ProjectRef: projectRef, RecipeRef: recipeRef,
+		BuildRef: buildRef,
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
@@ -362,10 +367,12 @@ func publicRoleImageBuild(input *controlplanev1.ImageBuild) generated.RoleImageB
 func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.RoleImageArtifact {
 	result := generated.RoleImageArtifact{
 		Ref: input.GetRef(), Version: int64(input.GetVersion()), RecipeRef: input.GetRecipeRef(),
-		RecipeGeneration: int64(input.GetRecipeGeneration()), ManifestDigest: input.GetManifestDigest(),
-		ProvenanceSha256: input.GetProvenanceSha256(),
-		AdmissionVerdict: generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
-		Tools:            make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),
+		RecipeGeneration: int64(input.GetRecipeGeneration()), BuildRef: input.GetBuildRef(), ManifestDigest: input.GetManifestDigest(),
+		ProvenanceSha256:   input.GetProvenanceSha256(),
+		AdmissionVerdict:   generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
+		PromotionState:     generated.RoleImageArtifactPromotionState(strings.TrimPrefix(input.GetPromotionState().String(), "IMAGE_PROMOTION_STATE_")),
+		PromotionRequested: input.GetPromotionRequested(),
+		Tools:              make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),
 	}
 	if value := input.GetPromotedReference(); value != "" {
 		result.PromotedReference = &value

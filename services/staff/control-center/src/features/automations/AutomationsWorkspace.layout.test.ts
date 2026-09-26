@@ -6,6 +6,10 @@ const source = readFileSync(
   new URL("./AutomationsWorkspace.vue", import.meta.url),
   "utf8",
 );
+const promptPreview = readFileSync(
+  new URL("./AutomationPromptPreview.vue", import.meta.url),
+  "utf8",
+);
 
 describe("AutomationsWorkspace lifecycle contract", () => {
   it("загружает списки, revisions и runs через server cursor", () => {
@@ -13,7 +17,8 @@ describe("AutomationsWorkspace lifecycle contract", () => {
     expect(source).toContain("loadScheduleRevisionPage(");
     expect(source).toContain("loadScheduleRunPage(");
     expect(source).toContain("nextPageToken");
-    expect(source).toContain("IntersectionObserver");
+    expect(source).toContain("useCursorInfiniteScroll");
+    expect(source).toContain("useAdaptiveCursorPageSize");
     expect(source).toContain('v-if="nextPageToken"');
   });
 
@@ -66,5 +71,13 @@ describe("AutomationsWorkspace lifecycle contract", () => {
   it("показывает task из точной текущей revision", () => {
     expect(source).toContain('"currentRevision" in value');
     expect(source).toContain("value.currentRevision.automationText");
+  });
+
+  it("именует поля серверного фильтра для браузерной диагностики", () => {
+    expect(source).toContain('name="automation-search"');
+    expect(source).toContain('name="automation-state"');
+    expect(promptPreview).toContain("useId");
+    expect(promptPreview).toContain("`${fieldNamePrefix}-revision`");
+    expect(promptPreview).toContain("`${fieldNamePrefix}-full`");
   });
 });

@@ -56,12 +56,12 @@ func TestTemplateVariablesOwnerContext(t *testing.T) {
 			v.Reason, v.Available = cp.TemplateVariableAvailabilityReason(reason), reason == 1
 			client := &catalogRPCRecorder{response: &cp.ListTemplateVariablesResponse{Variables: []*cp.TemplateVariable{v}, Total: 3, Page: &cp.PageInfo{NextPageToken: "next"}}}
 			w := httptest.NewRecorder()
-			catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest("GET", path+"agentRef=agt_fixture01&runtimeRevisionRef=rrv_fixture01&query=agent&pageSize=10&pageToken=first", nil))
+			catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest("GET", path+"agentRef=agt_fixture01&runtimeRevisionRef=rrv_fixture01&query=agent&source=AGENT&pageSize=10&pageToken=first", nil))
 			if w.Code != 200 {
 				t.Fatalf("status %d: %s", w.Code, w.Body.String())
 			}
 			q := client.request.(*cp.ListTemplateVariablesRequest)
-			if q.ProjectRef != "prj_fixture01" || q.AgentRef != "agt_fixture01" || q.RuntimeRevisionRef != "rrv_fixture01" || q.Query != "agent" || q.Page.PageSize != 10 || q.Page.PageToken != "first" {
+			if q.ProjectRef != "prj_fixture01" || q.AgentRef != "agt_fixture01" || q.RuntimeRevisionRef != "rrv_fixture01" || q.Query != "agent" || q.Source != "AGENT" || q.Page.PageSize != 10 || q.Page.PageToken != "first" {
 				t.Fatalf("wrong context: %v", q)
 			}
 			var body struct {
@@ -87,7 +87,7 @@ func TestTemplateVariablesOwnerContext(t *testing.T) {
 
 func TestTemplateVariablesRejectMalformed(t *testing.T) {
 	for _, path := range []string{"/api/v1/projects/prj_fixture01/template-variables", "/api/v1/prompt-templates/catalog"} {
-		for _, query := range []string{"agentRef=bad!", "runtimeRevisionRef=bad!", "query=%00", "pageSize=101", "pageSize=0", "pageToken=" + strings.Repeat("x", 513)} {
+		for _, query := range []string{"agentRef=bad!", "runtimeRevisionRef=bad!", "query=%00", "source=UNKNOWN", "pageSize=101", "pageSize=0", "pageToken=" + strings.Repeat("x", 513)} {
 			client := &catalogRPCRecorder{}
 			w := httptest.NewRecorder()
 			catalogTestHandler(client).ServeHTTP(w, httptest.NewRequest("GET", path+"?"+query, nil))

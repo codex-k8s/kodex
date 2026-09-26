@@ -299,6 +299,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     search: string,
     pageToken?: string,
     signal?: AbortSignal,
+    pageSize = 20,
   ): Promise<RuntimeEnvironmentPage> {
     return (
       await unwrap(
@@ -307,7 +308,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           query: {
             ...(search.trim() ? { query: search.trim() } : {}),
             ...(pageToken ? { pageToken } : {}),
-            pageSize: 30,
+            pageSize,
           },
           signal: requestSignal(signal),
         }),
@@ -320,6 +321,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     search: string,
     pageToken?: string,
     signal?: AbortSignal,
+    pageSize = 30,
   ): Promise<AsyncEntityOptionPage> {
     const needle = search.trim().toLocaleLowerCase();
     const visitedTokens = new Set<string>();
@@ -330,7 +332,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           listRoleImageRecipes({
             path: { projectRef },
             query: {
-              pageSize: 30,
+              pageSize,
               ...(cursor ? { pageToken: cursor } : {}),
             },
             signal: signal ?? requestSignal(),
@@ -448,6 +450,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     environmentRef: string,
     reset = true,
     signal?: AbortSignal,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = reset
       ? undefined
@@ -461,7 +464,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             listRuntimeEnvironmentAgents({
               path: { environmentRef },
               query: {
-                pageSize: 30,
+                pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
                 ...(pageToken ? { pageToken } : {}),
               },
               signal: requestSignal(signal),
@@ -509,6 +512,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
   async function loadEnvironmentVersions(
     environmentRef: string,
     reset = true,
+    pageSize = 30,
   ): Promise<void> {
     const pageToken = reset
       ? undefined
@@ -522,7 +526,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             listRuntimeEnvironmentVersions({
               path: { environmentRef },
               query: {
-                pageSize: 30,
+                pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
                 ...(pageToken ? { pageToken } : {}),
               },
               signal: requestSignal(),

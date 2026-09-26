@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Maximize2 } from "@lucide/vue";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
 import { usePlatformStore } from "@/features/platform/store";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -8,18 +8,20 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import HomeGateRows from "./HomeGateRows.vue";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
 const catalog = useGateCatalog();
+const fieldPrefix = `home-gates-${useId()}`;
 const platform = usePlatformStore();
 const emit = defineEmits<{ settled: [] }>();
 const expanded = ref(false);
 const query = ref("");
 const projectRef = ref("");
 let timer: ReturnType<typeof setTimeout> | undefined;
-function load(more = false): Promise<void> {
+function load(more = false, pageSize = 8): Promise<void> {
   return catalog.load(
     {
       projectRef: projectRef.value || undefined,
       query: query.value,
       view: "PENDING",
+      pageSize,
     },
     more,
   );
@@ -36,10 +38,12 @@ watch(projectRef, () => {
 onMounted(() => void load().finally(() => emit("settled")));
 watch(
   () =>
-    platform.gateList
-      .map((gate) => `${gate.ref}:${String(gate.version)}`)
-      .sort()
-      .join("|"),
+    [
+      platform.gateCatalogRevision,
+      ...platform.gateList
+        .map((gate) => `${gate.ref}:${String(gate.version)}`)
+        .sort(),
+    ].join("|"),
   () => {
     catalog.invalidate({
       projectRef: projectRef.value || undefined,
@@ -72,7 +76,12 @@ onBeforeUnmount(() => {
     </header>
     <label class="gate-search"
       ><span>{{ $t("common.search") }}</span
-      ><input v-model="query" type="search" maxlength="200"
+      ><input
+        v-model="query"
+        :id="`${fieldPrefix}-inline-search`"
+        :name="`${fieldPrefix}-inline-search`"
+        type="search"
+        maxlength="200"
     /></label>
     <ProblemNotice
       v-if="catalog.problem.value"
@@ -88,7 +97,7 @@ onBeforeUnmount(() => {
       :items="catalog.items.value"
       :more="catalog.pageToken.value"
       :loading="catalog.loading.value"
-      @more="load(true)"
+      @more="load(true, $event)"
     />
     <ModalDialog
       v-if="expanded"
@@ -98,7 +107,12 @@ onBeforeUnmount(() => {
     >
       <label class="gate-search"
         ><span>{{ $t("common.search") }}</span
-        ><input v-model="query" type="search" maxlength="200"
+        ><input
+          v-model="query"
+          :id="`${fieldPrefix}-modal-search`"
+          :name="`${fieldPrefix}-modal-search`"
+          type="search"
+          maxlength="200"
       /></label>
       <p v-if="catalog.total.value !== undefined">
         {{ $t("decisions.pendingCount", { count: catalog.total.value }) }}
@@ -119,7 +133,7 @@ onBeforeUnmount(() => {
         :items="catalog.items.value"
         :more="catalog.pageToken.value"
         :loading="catalog.loading.value"
-        @more="load(true)"
+        @more="load(true, $event)"
       />
     </ModalDialog>
   </section>

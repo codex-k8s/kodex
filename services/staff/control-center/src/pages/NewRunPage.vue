@@ -12,7 +12,7 @@ import {
   Play,
   Workflow as WorkflowIcon,
 } from "@lucide/vue";
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -68,9 +68,13 @@ const realtime = useRealtimeStore();
 const route = useRoute();
 const router = useRouter();
 const { locale, t } = useI18n();
+const fieldNamePrefix = `new-run-${useId()}`;
 
 const projectRef = computed(() => String(route.params.projectRef));
 const project = computed(() => platform.projects[projectRef.value]);
+const currentUserName = computed(
+  () => platform.bootstrap?.currentUser.displayName ?? t("common.noData"),
+);
 const canLaunch = computed(() =>
   project.value?.nextActions.includes("CREATE_RUN"),
 );
@@ -266,7 +270,6 @@ const canSubmit = computed(
     Boolean(canLaunch.value) &&
     realtime.platformState.state === "live" &&
     Boolean(selectedTarget.value) &&
-    (sessionMode.value === "CONTINUE" || Boolean(form.title.trim())) &&
     Boolean(form.task.trim()) &&
     workflowInputValid.value &&
     attachmentState.value.ready &&
@@ -635,18 +638,34 @@ watch(
               <label v-if="sessionMode === 'NEW'" class="field">
                 <span>
                   {{ $t("runs.runTitle") }}
-                  <span class="required-mark" aria-hidden="true">*</span>
+                  <span class="field-optional">{{
+                    $t("common.optional")
+                  }}</span>
                 </span>
                 <input
                   v-model="form.title"
-                  required
+                  :id="`${fieldNamePrefix}-title`"
+                  :name="`${fieldNamePrefix}-title`"
                   maxlength="240"
                   :placeholder="$t('runs.newRun.titlePlaceholder')"
                 />
-                <small>{{ $t("runs.newRun.titleRequiredHint") }}</small>
+                <small>{{ $t("runs.newRun.titleOptionalHint") }}</small>
               </label>
 
-              <label class="field">
+              <div v-if="sessionMode === 'NEW'" class="field">
+                <span>{{ $t("runs.newRun.initiatorAndSource") }}</span>
+                <div class="run-identity">
+                  <span class="run-identity__avatar" aria-hidden="true">
+                    {{ currentUserName.slice(0, 1).toUpperCase() }}
+                  </span>
+                  <strong>{{ currentUserName }}</strong>
+                  <span aria-hidden="true">·</span>
+                  <span>{{ $t("runs.newRun.manualSource") }}</span>
+                </div>
+                <small>{{ $t("runs.newRun.initiatorHint") }}</small>
+              </div>
+
+              <label class="field field--wide">
                 <span>
                   {{ $t("runs.task") }}
                   <span class="required-mark" aria-hidden="true">*</span>
@@ -685,6 +704,7 @@ watch(
                 <span>{{ field.label }}</span>
                 <VoiceTextarea
                   v-model="inputValues[field.key]"
+                  :name="`${fieldNamePrefix}-workflow-${field.key}`"
                   :required="field.required"
                   maxlength="32768"
                   :aria-describedby="
@@ -699,6 +719,7 @@ watch(
                 <span>{{ field.label }}</span>
                 <select
                   v-model="inputValues[field.key]"
+                  :name="`${fieldNamePrefix}-workflow-${field.key}`"
                   :required="field.required"
                 >
                   <option value="" :disabled="field.required">
@@ -720,6 +741,7 @@ watch(
               >
                 <input
                   v-model="booleanInputValues[field.key]"
+                  :name="`${fieldNamePrefix}-workflow-${field.key}`"
                   type="checkbox"
                 />
                 <span>
@@ -733,6 +755,7 @@ watch(
                 <span>{{ field.label }}</span>
                 <input
                   v-model="inputValues[field.key]"
+                  :name="`${fieldNamePrefix}-workflow-${field.key}`"
                   :type="inputComponentType(field)"
                   :required="field.required"
                   :maxlength="field.valueType === 'TEXT' ? 4000 : undefined"
@@ -810,6 +833,21 @@ watch(
                 <span>
                   <strong>{{ $t("runs.controlCenterOnly") }}</strong>
                   <small>{{ $t("runs.optionalChannelsHint") }}</small>
+                </span>
+              </label>
+              <label class="notification-choice notification-choice--disabled">
+                <input
+                  type="radio"
+                  name="new-run-notification"
+                  value="EXTERNAL"
+                  disabled
+                />
+                <span class="notification-choice__mark" aria-hidden="true" />
+                <span>
+                  <strong>{{ $t("runs.newRun.externalChannel") }}</strong>
+                  <small>{{
+                    $t("runs.newRun.externalChannelUnavailable")
+                  }}</small>
                 </span>
               </label>
             </section>
@@ -926,7 +964,9 @@ watch(
             </div>
             <div v-if="sessionMode === 'NEW'">
               <dt>{{ $t("runs.runTitle") }}</dt>
-              <dd>{{ form.title || $t("common.noData") }}</dd>
+              <dd>
+                {{ form.title || $t("runs.newRun.titleWillBeSuggested") }}
+              </dd>
             </div>
             <div>
               <dt>{{ $t("runs.inputFiles") }}</dt>
@@ -1107,6 +1147,33 @@ watch(
 .required-mark {
   color: var(--danger);
 }
+.field-optional {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.run-identity {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  font-weight: 400;
+}
+.run-identity__avatar {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
 .new-run-two-column {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1195,6 +1262,16 @@ watch(
   color: var(--text-secondary);
   font-weight: 400;
   line-height: 1.4;
+}
+.notification-choice--disabled {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+.notification-choice--disabled .notification-choice__mark {
+  border: 1px solid var(--border-strong);
+  background: transparent;
 }
 .workflow-checkbox {
   display: flex;

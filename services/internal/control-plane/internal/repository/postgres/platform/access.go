@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -252,16 +253,21 @@ func (repository *Repository) ListOIDCGroups(ctx context.Context, principal valu
 	return result, next, tx.Commit(ctx)
 }
 
-func (repository *Repository) ListAccessRoles(ctx context.Context, principal value.Principal, page query.Page, includeArchived bool) ([]entity.AccessRole, string, error) {
+func (repository *Repository) ListAccessRoles(ctx context.Context, principal value.Principal, filter query.Filter, includeArchived bool) ([]entity.AccessRole, string, error) {
+	filter.Query = strings.TrimSpace(filter.Query)
+	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) || !validAccessRoleQueryAliases(filter.Aliases) {
+		return nil, "", errs.ErrInvalid
+	}
 	current, tx, err := repository.accessReadTransaction(ctx, principal)
 	if err != nil {
 		return nil, "", err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	limit := boundedPage(page) + 1
+	limit := boundedPage(filter.Page) + 1
 	rows, err := tx.Query(ctx, queryAccessListRoles, pgx.NamedArgs{
 		"organization_id": current.organizationID, "include_archived": includeArchived,
-		"cursor": page.Token, "limit": limit,
+		"query": filter.Query, "query_aliases": filter.Aliases,
+		"cursor": filter.Page.Token, "limit": limit,
 	})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
@@ -279,11 +285,29 @@ func (repository *Repository) ListAccessRoles(ctx context.Context, principal val
 		return nil, "", errs.ErrUnavailable
 	}
 	next := ""
-	if int32(len(result)) > boundedPage(page) {
-		next = result[boundedPage(page)-1].Ref
-		result = result[:boundedPage(page)]
+	if int32(len(result)) > boundedPage(filter.Page) {
+		next = result[boundedPage(filter.Page)-1].Ref
+		result = result[:boundedPage(filter.Page)]
 	}
 	return result, next, tx.Commit(ctx)
+}
+
+func validAccessRoleQueryAliases(aliases []string) bool {
+	if len(aliases) > 10 {
+		return false
+	}
+	for _, alias := range aliases {
+		switch alias {
+		case "i18n:SYSTEM_ROLE_OWNER", "i18n:SYSTEM_ROLE_OWNER_DESCRIPTION",
+			"i18n:SYSTEM_ROLE_ADMINISTRATOR", "i18n:SYSTEM_ROLE_ADMINISTRATOR_DESCRIPTION",
+			"i18n:SYSTEM_ROLE_OPERATOR", "i18n:SYSTEM_ROLE_OPERATOR_DESCRIPTION",
+			"i18n:SYSTEM_ROLE_MEMBER", "i18n:SYSTEM_ROLE_MEMBER_DESCRIPTION",
+			"i18n:SYSTEM_ROLE_AUDITOR", "i18n:SYSTEM_ROLE_AUDITOR_DESCRIPTION":
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (repository *Repository) ListAccessRoleVersions(ctx context.Context, principal value.Principal, roleRef string, page query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error) {
@@ -331,6 +355,10 @@ func (repository *Repository) ListAccessRoleVersions(ctx context.Context, princi
 }
 
 func (repository *Repository) ListAccessBindings(ctx context.Context, principal value.Principal, filter query.AccessBindingFilter) ([]entity.AccessBinding, string, error) {
+	filter.Query = strings.TrimSpace(filter.Query)
+	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) || !validAccessRoleQueryAliases(filter.Aliases) {
+		return nil, "", errs.ErrInvalid
+	}
 	current, tx, err := repository.accessReadTransaction(ctx, principal)
 	if err != nil {
 		return nil, "", err
@@ -340,7 +368,8 @@ func (repository *Repository) ListAccessBindings(ctx context.Context, principal 
 	rows, err := tx.Query(ctx, queryAccessListBindings, pgx.NamedArgs{
 		"organization_id": current.organizationID, "include_revoked": filter.IncludeRevoked,
 		"subject_kind": filter.SubjectKind, "subject_ref": filter.SubjectRef, "role_ref": filter.RoleRef,
-		"project_ref": filter.ProjectRef, "cursor": filter.Token, "limit": limit,
+		"project_ref": filter.ProjectRef, "query": filter.Query, "query_aliases": filter.Aliases,
+		"cursor": filter.Token, "limit": limit,
 	})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
@@ -638,6 +667,8 @@ func organizationTarget(ref string) entity.AccessScope {
 func visibilityPermission(kind string) string {
 	switch kind {
 	case "RUNTIME_ENVIRONMENT":
+		return "project.view"
+	case "ROLE_IMAGE":
 		return "project.view"
 	case "MEMBERSHIP":
 		return "access.manage"

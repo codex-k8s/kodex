@@ -577,40 +577,26 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
 	result = append(result, runtimeFileTools(input)...)
 	if input.SystemAssistant {
-		result = append(result, configurationCatalogTool(input), assistantPlanTool(input), assistantMetadataTool())
+		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
 	}
 	if len(input.IntegrationGrants) != 0 {
-		result = append(result, integrationTool(input.IntegrationGrants))
+		result = append(result, integrationCatalogTool(), integrationTool())
 	}
 	return result
 }
 
-func integrationTool(grants []runtimecontract.RunnerIntegrationGrant) map[string]any {
-	variants := make([]any, 0, len(grants))
-	for _, grant := range grants {
-		var inputSchema map[string]any
-		if json.Unmarshal([]byte(grant.InputSchema), &inputSchema) != nil {
-			continue
-		}
-		variants = append(variants, map[string]any{
-			"type": "object", "additionalProperties": false,
-			"required": []string{"connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input"},
-			"properties": map[string]any{
-				"connection_ref":      map[string]any{"type": "string", "const": grant.ConnectionRef},
-				"capability_key":      map[string]any{"type": "string", "const": grant.CapabilityKey},
-				"definition_version":  map[string]any{"type": "string", "const": grant.DefinitionVersion},
-				"definition_digest":   map[string]any{"type": "string", "const": grant.DefinitionDigest},
-				"input_schema_sha256": map[string]any{"type": "string", "const": grant.InputSchemaSHA256},
-				"input":               inputSchema,
-			},
-		})
-	}
+func integrationTool() map[string]any {
 	return map[string]any{
-		"name": "invoke_integration", "description": "Invoke one exact typed integration grant from this RuntimeRevision.",
-		"inputSchema": map[string]any{"oneOf": variants},
+		"name": "invoke_integration", "description": "Invoke one exact typed integration grant from this RuntimeRevision. First use get_integration_catalog with the exact connection_ref and capability_key to read its input schema; the server revalidates this binding and input.",
+		"inputSchema": objectSchema([]string{"connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input"}, map[string]any{
+			"connection_ref": opaqueRefSchema(), "capability_key": stringSchema(1, 255),
+			"definition_version": stringSchema(1, 128), "definition_digest": stringSchema(64, 64),
+			"input_schema_sha256": stringSchema(64, 64),
+			"input":               map[string]any{"type": "object"},
+		}),
 	}
 }
 
@@ -653,7 +639,11 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	err = nil
 	switch params.Name {
 	case "get_configuration_catalog":
-		result, err = configurationCatalog(input, params.Arguments)
+		result, err = server.configurationCatalog(request.Context(), input, params.Arguments)
+	case "get_integration_catalog":
+		result, err = integrationCatalog(input, params.Arguments)
+	case "find_platform_resources":
+		result, err = server.findPlatformResources(request.Context(), input, params.Arguments)
 	case "propose_configuration_plan":
 		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
 	case "propose_assistant_metadata":
@@ -675,6 +665,10 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
 			failureClass = "assistant_plan_" + planInputErr.reason
+		}
+		var catalogInputErr *integrationCatalogInputError
+		if errors.As(err, &catalogInputErr) {
+			failureClass = "integration_catalog_" + catalogInputErr.reason
 		}
 		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed",
 			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(),
@@ -698,6 +692,14 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 				"error_code": "PLAN_INPUT_INVALID",
 				"retryable":  true,
 				"guidance":   "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names.",
+			}
+		}
+		var catalogInputErr *integrationCatalogInputError
+		if errors.As(err, &catalogInputErr) {
+			structured = map[string]any{
+				"error_code": "CATALOG_INPUT_INVALID",
+				"retryable":  true,
+				"guidance":   "Retry once using either query and offset, or exact connection_ref and capability_key, but never both.",
 			}
 		}
 		encoded, _ = json.Marshal(structured)
@@ -755,20 +757,20 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	}
 	summary, _ := arguments["summary"].(string)
 	rawOperations, _ := arguments["operations"].([]any)
-	if strings.TrimSpace(summary) == "" || len(summary) > 2000 || len(rawOperations) == 0 || len(rawOperations) > 32 {
+	if !assistantPlanTextWithinLimit(summary, 2000) || len(rawOperations) == 0 || len(rawOperations) > 32 {
 		return nil, invalidAssistantPlan("summary_or_count")
 	}
 	operations := make([]*controlplanev1.AssistantPlanOperation, 0, len(rawOperations))
-	currentProjectName := ""
-	if input.AssistantContext != nil && input.AssistantContext.EntityKind == "PROJECT" && input.AssistantContext.EntityRef == input.ProjectRef {
-		currentProjectName = input.AssistantContext.EntityName
+	currentEntityName := ""
+	if input.AssistantContext != nil {
+		currentEntityName = input.AssistantContext.EntityName
 	}
 	for index, raw := range rawOperations {
 		operation, ok := raw.(map[string]any)
 		if !ok || !onlyKeys(operation, "type", "action", "title", "summary", "target", "parameters", "expectedVersion", "before", "after", "selected") {
 			return nil, invalidAssistantPlan("operation_shape")
 		}
-		operation, normalizeErr := normalizeServerHydratedAssistantOperation(operation, summary, input.ProjectRef, currentProjectName)
+		operation, normalizeErr := normalizeServerHydratedAssistantOperation(operation, summary, input.ProjectRef, currentEntityName)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -792,7 +794,7 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		selected, selectedOK := operation["selected"].(bool)
 		if serverHydrated {
 			action = assistantServerAction(kind)
-			target = assistantServerTarget(kind, parameters)
+			target = assistantServerTarget(kind, parameters, input.AssistantContext)
 			targetOK = target != nil
 			selected, selectedOK = true, true
 		}
@@ -804,10 +806,10 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		if !actionExists || actionValue == 0 {
 			return nil, invalidAssistantPlan("operation_action")
 		}
-		if strings.TrimSpace(title) == "" || len(title) > 200 {
+		if !assistantPlanTextWithinLimit(title, 200) {
 			return nil, invalidAssistantPlan("operation_title")
 		}
-		if strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 {
+		if !assistantPlanTextWithinLimit(operationSummary, 500) {
 			return nil, invalidAssistantPlan("operation_summary")
 		}
 		if parameters == nil {
@@ -903,7 +905,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	}
 	normalized["type"] = kind
 	normalized["parameters"] = normalizedParameters
-	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" {
+	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" {
 		normalized["title"] = assistantOperationTitle(kind, normalizedParameters, projectName)
 	}
 	if operationSummary, _ := normalized["summary"].(string); strings.TrimSpace(operationSummary) == "" {
@@ -917,7 +919,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 
 func assistantProjectScopedOperation(kind string) bool {
 	switch kind {
-	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE":
+	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
 		return true
 	default:
 		return false
@@ -930,8 +932,14 @@ var assistantParameterAliases = map[string]string{
 	"connection_ref": "connectionRef", "coordinator_agent_ref": "coordinatorAgentRef",
 	"day_of_week": "dayOfWeek", "definition_key": "definitionKey", "gate_decisions": "gateDecisions",
 	"human_gate": "humanGate", "input_fields": "inputFields", "max_concurrency": "maxConcurrency",
-	"notification_policy": "notificationPolicy", "parallel_group": "parallelGroup",
+	"image_artifact_ref": "imageArtifactRef", "environment_key": "environmentKey",
+	"recipe_ref":            "recipeRef",
+	"environment_ref":       "environmentRef",
+	"public_value_updates":  "publicValueUpdates",
+	"public_value_removals": "publicValueRemovals",
+	"notification_policy":   "notificationPolicy", "parallel_group": "parallelGroup",
 	"project_ref": "projectRef", "public_configuration": "publicConfiguration",
+	"schedule_ref": "scheduleRef", "cron_expression": "cronExpression", "automation_text": "automationText",
 	"required_capability_keys": "requiredCapabilityKeys", "role_definition_ref": "roleDefinitionRef",
 	"role_description": "roleDescription", "runtime_ref": "runtimeRef", "session_policy": "sessionPolicy",
 	"session_ref": "sessionRef", "target_ref": "targetRef", "target_type": "targetType",
@@ -977,21 +985,30 @@ func normalizeAssistantParameterValue(value any) (any, error) {
 	}
 }
 
-func assistantOperationTitle(kind string, parameters map[string]any, projectName string) string {
+func assistantOperationTitle(kind string, parameters map[string]any, entityName string) string {
 	name, _ := parameters["name"].(string)
-	if kind == "UPDATE_PROJECT" && strings.TrimSpace(projectName) != "" {
-		name = projectName
+	if (kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE") && strings.TrimSpace(entityName) != "" {
+		name = entityName
 	}
-	if strings.TrimSpace(name) == "" {
+	if strings.TrimSpace(name) == "" && kind != "UPDATE_ROLE_IMAGE_RECIPE" {
 		name, _ = parameters["projectRef"].(string)
 	}
 	labels := map[string]string{
-		"CREATE_PROJECT":                "Создать Проект",
-		"UPDATE_PROJECT":                "Изменить Проект",
-		"CREATE_AGENT":                  "Создать ИИ-сотрудника",
-		"CREATE_WORKFLOW":               "Создать Процесс",
-		"CREATE_INTEGRATION_CONNECTION": "Создать подключение",
-		"CREATE_SCHEDULE":               "Создать автоматизацию",
+		"CREATE_PROJECT":                       "Создать Проект",
+		"UPDATE_PROJECT":                       "Изменить Проект",
+		"CREATE_AGENT":                         "Создать ИИ-сотрудника",
+		"UPDATE_AGENT":                         "Изменить ИИ-сотрудника",
+		"CREATE_WORKFLOW":                      "Создать Процесс",
+		"CREATE_INTEGRATION_CONNECTION":        "Создать подключение",
+		"UPDATE_INTEGRATION_CONNECTION":        "Изменить подключение",
+		"CREATE_SCHEDULE":                      "Создать автоматизацию",
+		"UPDATE_WORKFLOW":                      "Изменить процесс",
+		"UPDATE_SCHEDULE":                      "Изменить автоматизацию",
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT":     "Создать черновик среды",
+		"PREPARE_RUNTIME_ENVIRONMENT_REVISION": "Подготовить новую ревизию среды",
+		"CREATE_ROLE_IMAGE_RECIPE":             "Создать рецепт образа",
+		"UPDATE_ROLE_IMAGE_RECIPE":             "Изменить рецепт образа",
+		"PUBLISH_INTEGRATION_DEFINITION":       "Опубликовать интеграцию",
 	}
 	label := labels[kind]
 	if strings.TrimSpace(name) == "" {
@@ -1022,7 +1039,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "UPDATE_PROJECT":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION":
 		return true
 	default:
 		return false
@@ -1030,19 +1047,72 @@ func assistantServerHydratedOperation(kind string) bool {
 }
 
 func assistantServerAction(kind string) string {
-	if kind == "UPDATE_PROJECT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" {
 		return "UPDATE"
 	}
 	return "CREATE"
 }
 
-func assistantServerTarget(kind string, parameters map[string]any) map[string]any {
+func assistantServerTarget(kind string, parameters map[string]any, context *runtimecontract.RunnerAssistantContext) map[string]any {
 	if parameters == nil {
 		return nil
 	}
 	targetKind := strings.TrimPrefix(kind, "CREATE_")
 	if kind == "UPDATE_PROJECT" {
 		targetKind = "PROJECT"
+	} else if kind == "UPDATE_ROLE_IMAGE_RECIPE" {
+		ref, _ := parameters["recipeRef"].(string)
+		if strings.TrimSpace(ref) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "ROLE_IMAGE_RECIPE", "name": strings.TrimSpace(ref)}
+	} else if kind == "PUBLISH_INTEGRATION_DEFINITION" {
+		ref, _ := parameters["configurationRef"].(string)
+		if strings.TrimSpace(ref) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "INTEGRATION_DEFINITION", "name": strings.TrimSpace(ref)}
+	} else if kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" {
+		requestedRef, _ := parameters["agentRef"].(string)
+		if context == nil || context.EntityKind != "AGENT" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "AGENT", "name": context.EntityName}
+	} else if kind == "UPDATE_INTEGRATION_CONNECTION" {
+		requestedRef, _ := parameters["connectionRef"].(string)
+		if context == nil || context.EntityKind != "INTEGRATION_CONNECTION" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "INTEGRATION_CONNECTION", "name": context.EntityName}
+	} else if kind == "CHANGE_INTEGRATION_GRANT" {
+		connectionRef, _ := parameters["connectionRef"].(string)
+		if strings.TrimSpace(connectionRef) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "INTEGRATION_CONNECTION", "name": strings.TrimSpace(connectionRef)}
+	} else if kind == "UPDATE_SCHEDULE" {
+		requestedRef, _ := parameters["scheduleRef"].(string)
+		if context == nil || context.EntityKind != "SCHEDULE" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "SCHEDULE", "name": context.EntityName}
+	} else if kind == "UPDATE_WORKFLOW" {
+		requestedRef, _ := parameters["workflowRef"].(string)
+		if context == nil || context.EntityKind != "WORKFLOW" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "WORKFLOW", "name": context.EntityName}
+	} else if kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+		requestedRef, _ := parameters["environmentRef"].(string)
+		if context == nil || context.EntityKind != "ENVIRONMENT" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "ENVIRONMENT", "name": context.EntityName}
 	}
 	name, _ := parameters["name"].(string)
 	if strings.TrimSpace(name) == "" {
@@ -1165,6 +1235,10 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	switch tool {
 	case "get_configuration_catalog":
 		return map[string]any{}, "platform.configuration.read", "", input.SystemAssistant
+	case "get_integration_catalog":
+		return map[string]any{}, "platform.integration.catalog", "", len(input.IntegrationGrants) != 0
+	case "find_platform_resources":
+		return map[string]any{}, "platform.resources.search", "", input.SystemAssistant
 	case "propose_configuration_plan":
 		operations, _ := arguments["operations"].([]any)
 		return map[string]any{"operation_count": len(operations)}, "platform.configuration.plan", "", input.SystemAssistant
@@ -1266,6 +1340,10 @@ func truncateRunes(value string, maximum int) string {
 		return string(runes)
 	}
 	return string(runes[:maximum])
+}
+
+func assistantPlanTextWithinLimit(value string, maximum int) bool {
+	return strings.TrimSpace(value) != "" && len([]rune(value)) <= maximum
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {

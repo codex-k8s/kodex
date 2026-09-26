@@ -9,7 +9,7 @@ import {
   Upload,
   X,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 
@@ -60,10 +60,10 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ViewModeToggle from "@/shared/ui/ViewModeToggle.vue";
 import {
-  nearScrollEnd,
   useAsyncEntityCollection,
   useCursorInfiniteScroll,
 } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import type { ViewMode } from "@/shared/ui/view-mode-toggle";
 
 const props = defineProps<{
@@ -76,10 +76,20 @@ const maximumUploadBytes = 512 << 20;
 const maximumTextPreviewBytes = 256 << 10;
 const viewPreferenceKey = "kodex.files.view";
 const platform = usePlatformStore();
+const fieldId = useId();
 const { locale, t } = useI18n();
 const fileInput = ref<HTMLInputElement>();
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const loadedItemCount = ref(0);
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".file-collection-item",
+  itemCount: loadedItemCount,
+  estimatedItemHeight: 72,
+  minimum: 8,
+  maximum: 100,
+});
 const activeTab = ref<Exclude<FileTab, "TRASH">>("FILES");
 const kind = ref<FileKind>("ALL");
 const scanState = ref<"ALL" | Artifact["scanState"]>("ALL");
@@ -146,7 +156,7 @@ const collection = useAsyncEntityCollection(
       ...(kind.value === "ALL" ? {} : { type: kind.value }),
       ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
     }),
-  { debounceMs: 500 },
+  { debounceMs: 500, pageSize },
 );
 const {
   error: loadError,
@@ -159,6 +169,13 @@ const {
   total,
   refresh,
 } = collection;
+watch(
+  () => items.value.length,
+  (count) => {
+    loadedItemCount.value = count;
+  },
+  { immediate: true },
+);
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canUpload = computed(() =>
@@ -486,12 +503,6 @@ useCursorInfiniteScroll({
   enabled: hasMore,
   loadMore,
 });
-
-function handleScroll(event: Event): void {
-  const target = event.currentTarget;
-  if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
-    void loadMore();
-}
 
 function formatBytes(value: number): string {
   const units = ["BYTE", "KILOBYTE", "MEGABYTE", "GIGABYTE"] as const;
@@ -1061,7 +1072,9 @@ onBeforeUnmount(() => {
     @drop="handleDrop"
   >
     <input
+      :id="`${fieldId}-upload`"
       ref="fileInput"
+      :name="`${fieldId}-upload`"
       class="sr-only"
       type="file"
       multiple
@@ -1075,11 +1088,13 @@ onBeforeUnmount(() => {
       <strong>{{ custom.dropFiles }}</strong>
     </div>
     <div class="files-workspace__toolbar">
-      <label class="files-workspace__search">
+      <label class="files-workspace__search" :for="`${fieldId}-search`">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ $t("files.search") }}</span>
         <input
+          :id="`${fieldId}-search`"
           v-model="query"
+          :name="`${fieldId}-search`"
           type="search"
           :placeholder="$t('files.search')"
         />
@@ -1093,9 +1108,14 @@ onBeforeUnmount(() => {
           <X :size="15" aria-hidden="true" />
         </button>
       </label>
-      <label v-if="!trashMode">
+      <label v-if="!trashMode" :for="`${fieldId}-tab`">
         <span class="sr-only">{{ custom.viewFilter }}</span>
-        <select v-model="activeTab" :aria-label="custom.viewFilter">
+        <select
+          :id="`${fieldId}-tab`"
+          v-model="activeTab"
+          :name="`${fieldId}-tab`"
+          :aria-label="custom.viewFilter"
+        >
           <option value="FILES">{{ $t("files.tab.FILES") }}</option>
           <option value="KNOWLEDGE">{{ custom.knowledgeSources }}</option>
           <option value="RESULTS">{{ $t("files.tab.RESULTS") }}</option>
@@ -1109,18 +1129,28 @@ onBeforeUnmount(() => {
         <Trash2 v-else :size="16" aria-hidden="true" />
         {{ trashMode ? custom.allFiles : custom.trash }}
       </RouterLink>
-      <label>
+      <label :for="`${fieldId}-kind`">
         <span class="sr-only">{{ $t("files.typeFilter") }}</span>
-        <select v-model="kind" :aria-label="$t('files.typeFilter')">
+        <select
+          :id="`${fieldId}-kind`"
+          v-model="kind"
+          :name="`${fieldId}-kind`"
+          :aria-label="$t('files.typeFilter')"
+        >
           <option value="ALL">{{ $t("files.kind.ALL") }}</option>
           <option value="TEXT">{{ $t("files.kind.TEXT") }}</option>
           <option value="DOCUMENT">{{ $t("files.kind.DOCUMENT") }}</option>
           <option value="IMAGE">{{ $t("files.kind.IMAGE") }}</option>
         </select>
       </label>
-      <label>
+      <label :for="`${fieldId}-state`">
         <span class="sr-only">{{ $t("files.stateFilter") }}</span>
-        <select v-model="scanState" :aria-label="$t('files.stateFilter')">
+        <select
+          :id="`${fieldId}-state`"
+          v-model="scanState"
+          :name="`${fieldId}-state`"
+          :aria-label="$t('files.stateFilter')"
+        >
           <option value="ALL">{{ $t("files.allStates") }}</option>
           <option value="PENDING">{{ $t("states.PENDING") }}</option>
           <option value="SCANNING">{{ $t("states.SCANNING") }}</option>
@@ -1129,9 +1159,14 @@ onBeforeUnmount(() => {
           <option value="FAILED">{{ $t("states.FAILED") }}</option>
         </select>
       </label>
-      <label class="desktop-only">
+      <label class="desktop-only" :for="`${fieldId}-source`">
         <span class="sr-only">{{ $t("files.sourceFilter") }}</span>
-        <select v-model="source" :aria-label="$t('files.sourceFilter')">
+        <select
+          :id="`${fieldId}-source`"
+          v-model="source"
+          :name="`${fieldId}-source`"
+          :aria-label="$t('files.sourceFilter')"
+        >
           <option value="ALL">{{ $t("files.allSources") }}</option>
           <option
             v-for="sourceOption in sourceOptions"
@@ -1255,6 +1290,7 @@ onBeforeUnmount(() => {
         <label class="trash-toolbar__select-all">
           <input
             type="checkbox"
+            :name="`${fieldId}-select-all`"
             :checked="allVisibleSelected"
             :disabled="selectableArtifacts.length === 0 || contentBusy"
             @change="toggleAllVisible"
@@ -1380,11 +1416,7 @@ onBeforeUnmount(() => {
           'files-workspace__layout--details': Boolean(selectedArtifact),
         }"
       >
-        <div
-          ref="scrollRoot"
-          class="files-workspace__scroll"
-          @scroll.passive="handleScroll"
-        >
+        <div ref="scrollRoot" class="files-workspace__scroll">
           <section
             v-if="filteredArtifacts.length === 0"
             class="empty-state files-workspace__filtered-empty"
@@ -1411,6 +1443,8 @@ onBeforeUnmount(() => {
               >
                 <input
                   type="checkbox"
+                  :name="`${fieldId}-artifact`"
+                  :value="artifact.ref"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
                     contentBusy ||
@@ -1554,6 +1588,8 @@ onBeforeUnmount(() => {
               >
                 <input
                   type="checkbox"
+                  :name="`${fieldId}-artifact`"
+                  :value="artifact.ref"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
                     contentBusy ||

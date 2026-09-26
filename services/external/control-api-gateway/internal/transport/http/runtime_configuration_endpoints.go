@@ -271,7 +271,7 @@ func (server *Server) RollbackRuntimeEnvironment(writer http.ResponseWriter, req
 }
 
 func (server *Server) ListTemplateVariables(writer http.ResponseWriter, request *http.Request, projectRef generated.ProjectRef, parameters generated.ListTemplateVariablesParams) {
-	server.listTemplateVariables(writer, request, projectRef, stringValue(parameters.AgentRef), stringValue(parameters.RuntimeRevisionRef), stringValue(parameters.Query), parameters.PageSize, parameters.PageToken)
+	server.listTemplateVariables(writer, request, projectRef, stringValue(parameters.AgentRef), stringValue(parameters.RuntimeRevisionRef), stringValue(parameters.Query), stringValue(parameters.Source), parameters.PageSize, parameters.PageToken)
 }
 
 func providerAccountCandidates(input []generated.ProviderAccountCandidateInput) ([]*controlplanev1.ProviderAccountCandidate, bool) {

@@ -352,12 +352,10 @@ func (r *Repository) recoverSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 	if _, err := tx.Exec(ctx, querySecretDraftCleanupIntent, pgx.StrictNamedArgs{"operation_id": o.id, "encrypted": encrypted, "materialization": materialization}); err != nil {
 		return result, errs.ErrUnavailable
 	}
-	// Отсутствие обоих эффектов подтверждено broker lookup и сохранённым
-	// намерением владельца. KEEP существующего объекта сюда не попадает.
-	if o.state == "FAILED" && input.Encrypted == nil && input.Materialization == nil &&
-		o.recoveryEncrypted == nil && o.recoveryMaterialization == nil &&
-		(len(o.encryptedCleanup) == 0 || string(o.encryptedCleanup) == "null") &&
-		(len(o.materializationCleanup) == 0 || string(o.materializationCleanup) == "null") {
+	// Отсутствие временного эффекта подтверждено broker lookup. Для успешно
+	// опубликованного Secret точная retained materialization остаётся рабочим
+	// объектом, поэтому её KEEP также завершает cleanup без повторного удаления.
+	if secretDraftRecoverySettled(*d, *o, input, result) {
 		if _, err := tx.Exec(ctx, querySecretDraftCleanupComplete, pgx.StrictNamedArgs{"operation_id": o.id}); err != nil {
 			return result, errs.ErrUnavailable
 		}
@@ -367,6 +365,19 @@ func (r *Repository) recoverSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 		return result, err
 	}
 	return result, nil
+}
+
+func secretDraftRecoverySettled(d secretDraftRow, o secretDraftOperationRow, input repoport.RuntimeSecretDraftWorkInput, result entity.RuntimeSecretDraftResult) bool {
+	noPersistedCleanup := o.recoveryEncrypted == nil && o.recoveryMaterialization == nil &&
+		(len(o.encryptedCleanup) == 0 || string(o.encryptedCleanup) == "null") &&
+		(len(o.materializationCleanup) == 0 || string(o.materializationCleanup) == "null")
+	if !noPersistedCleanup || input.Encrypted != nil {
+		return false
+	}
+	failedWithoutEffects := o.state == "FAILED" && input.Materialization == nil
+	publishedWithRetainedMaterialization := o.state == "COMPLETED" && d.public.State == "PUBLISHED" && d.encrypted == nil &&
+		input.Materialization != nil && result.EncryptedAction == "KEEP" && result.MaterializationAction == "KEEP"
+	return failedWithoutEffects || publishedWithRetainedMaterialization
 }
 
 func errorsIsNotFound(err error) bool { return errors.Is(err, errs.ErrNotFound) }

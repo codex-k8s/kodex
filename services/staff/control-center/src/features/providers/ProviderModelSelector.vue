@@ -140,6 +140,7 @@ async function loadPage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   const scope = JSON.stringify([scopeKey.value, query.trim()]);
   if (cursor && catalogScope !== scope)
@@ -151,6 +152,7 @@ async function loadPage(
     cursor,
     signal,
     cursor ? catalogSnapshot : undefined,
+    pageSize,
   );
   signal.throwIfAborted();
   if (scope !== JSON.stringify([scopeKey.value, query.trim()]))
@@ -158,14 +160,11 @@ async function loadPage(
   catalogSnapshot = page;
   catalogScope = scope;
   return {
-    items: page.items.map((model) => ({
-      ref: model.id,
-      title: model.id,
-      description: model.reasoningEfforts.join(" · "),
-      meta: model.readinessBlockers
+    items: page.items.map((model) => {
+      const blocker = model.readinessBlockers
         .map((code) => t(providerBlockerMessage(code)))
-        .join(" · "),
-      disabled:
+        .join(" · ");
+      const disabled =
         !page.catalogStatus ||
         !accountSnapshotAvailable({
           accountRef: accounts.value[0] ?? "",
@@ -174,12 +173,18 @@ async function loadPage(
           catalogStatus: page.catalogStatus,
           catalogRevision: page.catalogRevision,
           catalogDigest: page.catalogDigest,
-        }),
-      disabledReason:
-        model.readinessBlockers
-          .map((code) => t(providerBlockerMessage(code)))
-          .join(" · ") || t("providers.modelUnavailable"),
-    })),
+        });
+      return {
+        ref: model.id,
+        title: model.id,
+        description: model.reasoningEfforts.join(" · "),
+        meta: blocker,
+        disabled,
+        disabledReason: disabled
+          ? blocker || t("providers.modelUnavailable")
+          : undefined,
+      };
+    }),
     nextPageToken: page.nextPageToken || undefined,
   };
 }

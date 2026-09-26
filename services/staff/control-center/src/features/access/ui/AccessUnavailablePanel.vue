@@ -49,6 +49,7 @@ const sectionIcon = computed(() => {
         <label class="disabled-search">
           <Search :size="16" aria-hidden="true" />
           <input
+            name="access-unavailable-group-search"
             type="search"
             :placeholder="t('accessRedesign.groupsSearch')"
             disabled
@@ -75,19 +76,19 @@ const sectionIcon = computed(() => {
       <div class="surface-toolbar effective-toolbar">
         <label>
           <span>{{ t("accessRedesign.subject") }}</span>
-          <select disabled>
+          <select disabled name="access-unavailable-effective-subject">
             <option>—</option>
           </select>
         </label>
         <label>
           <span>{{ t("accessRedesign.resource") }}</span>
-          <select disabled>
+          <select disabled name="access-unavailable-effective-resource">
             <option>—</option>
           </select>
         </label>
         <label>
           <span>{{ t("accessRedesign.action") }}</span>
-          <select disabled>
+          <select disabled name="access-unavailable-effective-action">
             <option>—</option>
           </select>
         </label>
@@ -115,19 +116,23 @@ const sectionIcon = computed(() => {
         <div class="scope-builder">
           <label>
             <span>{{ t("accessRedesign.projectSelector") }}</span>
-            <select disabled>
+            <select disabled name="access-unavailable-agent-project">
               <option>—</option>
             </select>
           </label>
           <label>
             <span>{{ t("accessRedesign.agentSelector") }}</span>
-            <select disabled>
+            <select disabled name="access-unavailable-agent">
               <option>—</option>
             </select>
           </label>
           <div class="action-matrix">
             <label v-for="index in 6" :key="index">
-              <input type="checkbox" disabled />
+              <input
+                name="access-unavailable-agent-actions"
+                type="checkbox"
+                disabled
+              />
               <span aria-hidden="true"></span>
             </label>
           </div>

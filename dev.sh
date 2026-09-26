@@ -512,7 +512,9 @@ cluster_issuer=${KODEX_DEV_CLUSTER_ISSUER:-kodex-local}
 acme_email=${KODEX_DEV_ACME_EMAIL:-}
 oidc_ca_file="$state_directory/kodex-local-ca.crt"
 node_extra_ca_file="$state_directory/kodex-local-ca.crt"
-provider_apparmor_profile=${KODEX_DEV_PROVIDER_APPARMOR_PROFILE:-}
+# Локальный bootstrap устанавливает и проверяет этот профиль до render.
+# Пустой профиль оставил бы provider-runtime без разрешённого userns sandbox.
+provider_apparmor_profile=${KODEX_DEV_PROVIDER_APPARMOR_PROFILE:-kodex-provider-runtime}
 [[ -z "$provider_apparmor_profile" || "$provider_apparmor_profile" == kodex-provider-runtime ]] ||
   fail 'KODEX_DEV_PROVIDER_APPARMOR_PROFILE is not approved'
 if [[ "$tls_mode" == public-acme ]]; then
@@ -541,6 +543,11 @@ cluster_mode=readback
   --mode "$cluster_mode" --state-directory "$state_directory" \
   --tls-mode "$tls_mode" --acme-email "$acme_email" \
   --ingress-class "$ingress_class" --cluster-issuer "$cluster_issuer"
+
+if [[ "$cluster_mode" == apply && "$tls_mode" == local-ca &&
+  "$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')" == 'https://127.0.0.1:6443' ]]; then
+  bash "$repository_root/tools/dev/reconcile-local-ingress.sh" --context "$context" --mode apply
+fi
 
 if [[ ( "$command_name" == up || "$command_name" == identity ) && "$tls_mode" == public-acme ]]; then
   "$repository_root/tools/dev/preflight-public-hosts.sh" \
@@ -841,8 +848,11 @@ api_endpoint_port=$(jq -er '
   if length != 1 then error("one Kubernetes API TCP port is required") else .[0] end
 ' <<<"$api_endpoint_slices") || fail 'Kubernetes API endpoint port is ambiguous'
 bash "$repository_root/tools/dev/read-local-mail-configuration.sh" "$state_directory/mail-source.json"
+bash "$repository_root/tools/dev/prepare-local-integration-fixture.sh" \
+  --state-directory "$state_directory"
 "$repository_root/tools/dev/render-local.sh" --source-root "$repository_root" \
   --mail-configuration "$state_directory/mail-source.json" \
+  --integration-fixture-bearer-token-file "$state_directory/integration-fixture-bearer-token" \
   --profile "$deployment_profile" \
   --security-profile "$security_profile" --host-uid "$(id -u)" --host-gid "$(id -g)" \
   --cache-root "$state_directory/cache" --output "$state_directory/render.yaml" \

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   homeFailedRuns,
   homeOpenGates,
+  homePriorityProjectRefs,
   prioritizeHomeProjects,
 } from "@/features/home/model";
 import type {
@@ -79,6 +80,25 @@ function gate(
 }
 
 describe("home attention model", () => {
+  it("включает Проекты с решениями вне первой порции каталога", () => {
+    const refs = homePriorityProjectRefs(
+      [
+        gate("one", "OPEN", { projectRef: "older" }),
+        gate("two", "OPEN", { projectRef: "older" }),
+        gate("three", "OPEN", { projectRef: "another" }),
+        gate("closed", "APPROVED", { projectRef: "closed" }),
+      ],
+      [run("active", "RUNNING", { projectRef: "running" })],
+      [run("failed", "FAILED", { projectRef: "failed" })],
+    );
+
+    expect(refs).toEqual(["older", "another", "running", "failed"]);
+    expect(homePriorityProjectRefs([], [], [], 4)).toEqual([]);
+    expect(
+      homePriorityProjectRefs([], [run("active", "RUNNING")], [], 0),
+    ).toEqual([]);
+  });
+
   it("поднимает Проекты с решениями и активной работой выше просто недавних", () => {
     const project = (
       ref: string,

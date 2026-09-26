@@ -24,8 +24,9 @@ async function loadPage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await searchProjects(query, cursor, signal);
+  const page = await searchProjects(query, cursor, signal, pageSize);
   return {
     items: [
       ...(!cursor && !query

@@ -275,7 +275,8 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 		}
 	}
 	filter.Query = strings.TrimSpace(filter.Query)
-	if !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) {
+	filter.SourceKind = strings.TrimSpace(filter.SourceKind)
+	if !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) || !validTemplateVariableSourceKind(filter.SourceKind) {
 		return nil, 0, "", errs.ErrInvalid
 	}
 	cursor, err := decodeCatalogCursor(current, "TEMPLATE_VARIABLE", filter)
@@ -292,7 +293,7 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	for _, item := range catalog {
 		item.Available = availability[item.Name]
 		item.Reason = variableAvailabilityReason(item, availability, materialized)
-		if needle == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), needle) {
+		if templateVariableMatchesFilter(item, needle, filter.SourceKind) {
 			filtered = append(filtered, item)
 		}
 	}
@@ -320,6 +321,20 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 		}
 	}
 	return items, total, next, nil
+}
+
+func templateVariableMatchesFilter(item entity.TemplateVariable, normalizedQuery, source string) bool {
+	return (source == "" || item.Source == source) &&
+		(normalizedQuery == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), normalizedQuery))
+}
+
+func validTemplateVariableSourceKind(source string) bool {
+	switch source {
+	case "", "AGENT", "AUTOMATION", "GATE", "INPUT", "ORGANIZATION", "PROJECT", "RUN", "RUNTIME", "SESSION", "USER", "WORKFLOW":
+		return true
+	default:
+		return false
+	}
 }
 
 func templateVariableCatalog() []entity.TemplateVariable {
@@ -448,7 +463,8 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 		&view.Environment.CurrentVersion.Image.ArtifactRef, &view.Environment.CurrentVersion.Image.RecipeRef,
 		&view.Environment.CurrentVersion.Image.RecipeGeneration, &view.Environment.CurrentVersion.Image.Reference,
 		&view.Environment.CurrentVersion.Image.Digest, &view.Environment.CurrentVersion.Image.RoleRuntimeContractRevision,
-		&view.Environment.CurrentVersion.Image.RoleRuntimeContractSHA256, &rawTools, &coreDigest,
+		&view.Environment.CurrentVersion.Image.RoleRuntimeContractSHA256,
+		&view.Environment.CurrentVersion.Image.PlatformOwnedBootstrap, &rawTools, &coreDigest,
 		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&view.Environment.CurrentVersion.Policy.ResourcesDigest, &view.Environment.CurrentVersion.Policy.VolumesDigest,
 		&view.Environment.CurrentVersion.Policy.NetworkDigest, &view.Environment.CurrentVersion.Policy.RBACDigest,
@@ -524,7 +540,8 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 		&item.CurrentVersion.Image.ArtifactRef, &item.CurrentVersion.Image.RecipeRef,
 		&item.CurrentVersion.Image.RecipeGeneration, &item.CurrentVersion.Image.Reference,
 		&item.CurrentVersion.Image.Digest, &item.CurrentVersion.Image.RoleRuntimeContractRevision,
-		&item.CurrentVersion.Image.RoleRuntimeContractSHA256, &rawTools,
+		&item.CurrentVersion.Image.RoleRuntimeContractSHA256,
+		&item.CurrentVersion.Image.PlatformOwnedBootstrap, &rawTools,
 		&coreDigest, &rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&item.CurrentVersion.Policy.ResourcesDigest, &item.CurrentVersion.Policy.VolumesDigest,
 		&item.CurrentVersion.Policy.NetworkDigest, &item.CurrentVersion.Policy.RBACDigest,

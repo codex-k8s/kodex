@@ -329,13 +329,33 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 	if err != nil {
 		return nil, "", nil, err
 	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	cursor, err := decodeCatalogCursor(scope, "PROJECT", filter)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	cursorAt, cursorRef := "", ""
+	if cursor != "" {
+		var found bool
+		cursorAt, cursorRef, found = strings.Cut(cursor, "|")
+		if !found || !strings.HasPrefix(cursorRef, "prj_") {
+			return nil, "", nil, errs.ErrInvalid
+		}
+		if _, err := time.Parse(time.RFC3339Nano, cursorAt); err != nil {
+			return nil, "", nil, errs.ErrInvalid
+		}
+	}
+	limit := boundedPage(filter.Page)
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	rows, err := tx.Query(ctx, queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId,
-		scope.organizationID, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page), scope.authorityProjectID)
+	rows, err := tx.Query(ctx, queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "actor_id": scope.actorID, "query": filter.Query,
+		"authority_project": scope.authorityProjectID, "cursor_at": cursorAt, "cursor_ref": cursorRef,
+		"page_size": limit + 1,
+	})
 	if err != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
@@ -362,6 +382,12 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 		return nil, "", nil, errs.ErrUnavailable
 	}
 	rows.Close()
+	next := ""
+	if len(result) > int(limit) {
+		result = result[:limit]
+		last := result[len(result)-1]
+		next = encodeCatalogCursor(scope, "PROJECT", filter, last.UpdatedAt.UTC().Format(time.RFC3339Nano)+"|"+last.Ref)
+	}
 	selected := make([]*entity.Project, len(result))
 	for index := range result {
 		selected[index] = &result[index]
@@ -372,7 +398,7 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 	if tx.Commit(ctx) != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
-	return result, "", actions, nil
+	return result, next, actions, nil
 }
 
 func (repository *Repository) GetProject(ctx context.Context, principal value.Principal, ref string) (entity.Project, error) {
@@ -568,6 +594,9 @@ func platformMembershipActions(scope scope, item entity.Membership) []string {
 	if scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
 		return []string{}
 	}
+	if item.User.Ref == scope.actorRef {
+		return []string{}
+	}
 	if scope.role != "OWNER" && item.Role == "OWNER" {
 		return []string{}
 	}
@@ -579,7 +608,7 @@ func platformMembershipActions(scope scope, item entity.Membership) []string {
 }
 
 func projectMembershipActions(scope scope, item entity.Membership) []string {
-	if item.User.Ref == scope.actorRef && scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
+	if item.User.Ref == scope.actorRef {
 		return []string{}
 	}
 	actions := []string{"EDIT"}
@@ -1833,7 +1862,7 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 	}
 	canCopy := authorization.allowed("organization.manage", resolvedAccessTarget{scope: organizationTarget(scope.organizationRef)})
 	rows, err := tx.Query(ctx, queryQueriesListintegrationdefinitionsSelectIntegrationDefinitionsCategory,
-		strings.TrimSpace(filter.Category), strings.TrimSpace(filter.Query), cursor, limit+1)
+		scope.organizationID, strings.TrimSpace(filter.Category), strings.TrimSpace(filter.Query), cursor, limit+1)
 	if err != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
@@ -1847,6 +1876,7 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 			&capabilities, &schema, &item.SchemaVersion, &item.DefinitionVersion, &item.Origin,
 			&item.Digest, &item.Adapter, &item.CredentialSecretKey,
 			&item.AdapterOwner, &item.ExecutionRoute, &item.AdapterReadiness, &item.Version,
+			&item.ConnectionCount, &item.HealthyConnectionCount,
 		); err != nil {
 			return nil, "", nil, errs.ErrUnavailable
 		}
@@ -2024,7 +2054,7 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 		if err := rows.Scan(
 			&grant.Ref, &grant.CapabilityKey, &grant.TargetType, &grant.TargetRef, &grant.TargetName,
 			&grant.Enabled, &grant.ApprovalPolicy, &grant.Version, &grant.Risk, &grant.ResourceKind,
-			&resourceScope, &grant.ResourceScopeDigest,
+			&resourceScope, &grant.ResourceScopeDigest, &grant.ApprovalScopePaths,
 		); err != nil {
 			return err
 		}
@@ -2192,23 +2222,57 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		return errs.ErrUnavailable
 	}
 	rows.Close()
-	var raw []byte
-	var plan entity.AssistantPlan
-	err = tx.QueryRow(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref).Scan(
-		&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &plan.Revision, &plan.ValidatedRevision,
-		&plan.ContentDigest, &plan.ValidationProblems, &raw, &plan.CreatedAt, &plan.ValidatedAt, &plan.AppliedAt,
-	)
-	if err == nil {
+	planRows, err := tx.Query(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref)
+	if err != nil {
+		return errs.ErrUnavailable
+	}
+	defer planRows.Close()
+	for planRows.Next() {
+		var raw, rawReceiptOperations, rawReceiptConflicts []byte
+		var plan entity.AssistantPlan
+		var receiptRef, receiptOutcome string
+		var receiptRevision int64
+		var receiptAuditRefs, receiptCreatedRefs []string
+		var receiptCreatedAt *time.Time
+		if err := planRows.Scan(
+			&plan.Ref, &plan.Summary, &plan.State, &plan.Version, &plan.Revision, &plan.ValidatedRevision,
+			&plan.ContentDigest, &plan.ValidationProblems, &raw, &plan.CreatedAt, &plan.ValidatedAt, &plan.AppliedAt,
+			&receiptRef, &receiptRevision, &receiptOutcome, &rawReceiptOperations, &rawReceiptConflicts,
+			&receiptAuditRefs, &receiptCreatedRefs, &receiptCreatedAt,
+		); err != nil {
+			return errs.ErrUnavailable
+		}
 		if json.Unmarshal(raw, &plan.Operations) != nil {
 			return errs.ErrUnavailable
 		}
+		if receiptRef != "" && receiptRevision == plan.Revision {
+			if receiptCreatedAt == nil ||
+				!((plan.State == "APPLIED" && receiptOutcome == "APPLIED") ||
+					(plan.State == "REJECTED" && receiptOutcome == "REJECTED") ||
+					(plan.State == "STALE" && receiptOutcome == "CONFLICT")) {
+				return errs.ErrUnavailable
+			}
+			receipt := entity.AssistantPlanReceipt{Ref: receiptRef, PlanRef: plan.Ref,
+				PlanRevision: receiptRevision, Outcome: receiptOutcome, AuditRefs: receiptAuditRefs,
+				CreatedResourceRefs: receiptCreatedRefs, CreatedAt: *receiptCreatedAt}
+			if json.Unmarshal(rawReceiptOperations, &receipt.Operations) != nil ||
+				json.Unmarshal(rawReceiptConflicts, &receipt.Conflicts) != nil {
+				return errs.ErrUnavailable
+			}
+			plan.Receipt = &receipt
+		}
 		plan.ConversationRef = item.Ref
 		plan.ProjectRef = item.ProjectRef
-		item.LatestPlan = &plan
-	} else if !errors.Is(err, pgx.ErrNoRows) {
+		item.Plans = append(item.Plans, plan)
+	}
+	if planRows.Err() != nil {
 		return errs.ErrUnavailable
 	}
-	return rows.Err()
+	if len(item.Plans) > 0 {
+		latest := item.Plans[len(item.Plans)-1]
+		item.LatestPlan = &latest
+	}
+	return nil
 }
 
 func (repository *Repository) GetAdministration(ctx context.Context, principal value.Principal) (platformrepo.Administration, error) {
@@ -2268,7 +2332,7 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 	}
 	limit := boundedPage(filter.Page)
 	rows, err := repository.pool.Query(ctx, queryQueriesListauditeventsSelectAuditEventsOrganizationIdRefAction,
-		scope.organizationID, filter.ProjectRef, filter.Action, filter.Outcome, filter.Query,
+		scope.organizationID, filter.ProjectRef, filter.ResourceRef, filter.Action, filter.Outcome, filter.Query,
 		scope.role, scope.actorID, cursorOccurredAt, cursorRef, limit+1,
 	)
 	if err != nil {

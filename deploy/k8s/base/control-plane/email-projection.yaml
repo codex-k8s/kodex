@@ -23,9 +23,13 @@ rules:
     resources: ["deployments"]
     resourceNames: ["email-bridge", "egress-gateway"]
     verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["services"]
+    resourceNames: ["egress-gateway-openapi"]
+    verbs: ["get", "update"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]
-    resourceNames: ["egress-gateway-mail-destinations"]
+    resourceNames: ["egress-gateway-mail-destinations", "egress-gateway-integration-destinations"]
     verbs: ["get", "update"]
   # CREATE ограничен обязательной ValidatingAdmissionPolicy до первой записи.
   - apiGroups: [""]
@@ -52,7 +56,7 @@ metadata:
 rules:
   - apiGroups: ["admissionregistration.k8s.io"]
     resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
-    resourceNames: ["egress-mail-configmap-publication"]
+    resourceNames: ["egress-mail-configmap-publication", "egress-integration-configmap-publication", "control-plane-egress-configmap-boundary"]
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

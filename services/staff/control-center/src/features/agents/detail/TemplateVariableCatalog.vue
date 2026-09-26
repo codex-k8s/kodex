@@ -3,35 +3,60 @@ import { Braces, LoaderCircle, Plus, RefreshCw, Search } from "@lucide/vue";
 import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
-import { createTemplateVariableLoader } from "@/features/agents/detail/api";
+import {
+  createTemplateVariableLoader,
+  type TemplateVariableLoader,
+} from "@/features/agents/detail/api";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import type { TemplateVariablePickerItem } from "@/features/agents/detail/model";
+import type { TemplateVariableSourceQuery } from "@/shared/api/generated/openapi/types.gen";
 import {
-  nearScrollEnd,
   useAsyncEntityCollection,
-  type AsyncEntityLoader,
+  useCursorInfiniteScroll,
 } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
   agentRef?: string;
   runtimeRevisionRef?: string;
   disabled: boolean;
-  loadItems?: AsyncEntityLoader<TemplateVariablePickerItem>;
+  loadItems?: TemplateVariableLoader;
   contextKey?: string;
 }>();
 const emit = defineEmits<{ select: [item: TemplateVariablePickerItem] }>();
 const { locale, t } = useI18n();
 const copy = computed(() => agentDetailCopy(locale.value).instructions);
-const listboxId = `template-variable-catalog-${useId()}`;
-const activeScope = ref("ALL");
+const catalogId = useId();
+const listboxId = `template-variable-catalog-${catalogId}`;
+const searchId = `template-variable-search-${catalogId}`;
+const scopeId = `template-variable-scope-${catalogId}`;
+const activeScope = ref<"ALL" | TemplateVariableSourceQuery>("ALL");
+const list = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const loadedItemCount = ref(0);
+const pageSize = useAdaptiveCursorPageSize({
+  container: list,
+  itemSelector: ".variable-catalog__option",
+  itemCount: loadedItemCount,
+  estimatedViewportHeight: 430,
+  estimatedItemHeight: 88,
+  minimum: 6,
+  maximum: 100,
+});
 const loader: ReturnType<typeof createTemplateVariableLoader> = (request) =>
   props.loadItems
-    ? props.loadItems(request)
+    ? props.loadItems({
+        ...request,
+        source: activeScope.value === "ALL" ? undefined : activeScope.value,
+      })
     : createTemplateVariableLoader(props.projectRef, {
         agentRef: props.agentRef,
         runtimeRevisionRef: props.runtimeRevisionRef,
-      })(request);
+      })({
+        ...request,
+        source: activeScope.value === "ALL" ? undefined : activeScope.value,
+      });
 const {
   hasMore,
   items,
@@ -41,7 +66,14 @@ const {
   phase,
   query,
   refresh,
-} = useAsyncEntityCollection(loader, { debounceMs: 500 });
+} = useAsyncEntityCollection(loader, { debounceMs: 500, pageSize });
+watch(
+  () => items.value.length,
+  (count) => {
+    loadedItemCount.value = count;
+  },
+  { immediate: true },
+);
 watch(
   () => [
     props.projectRef,
@@ -54,36 +86,23 @@ watch(
 );
 
 const scopeOrder = [
-  "SYSTEM",
-  "USER",
+  "AGENT",
+  "AUTOMATION",
+  "GATE",
+  "INPUT",
   "ORGANIZATION",
   "PROJECT",
-  "AGENT",
-  "ENVIRONMENT",
+  "RUN",
   "RUNTIME",
-  "TOOLS",
-  "INPUT_FILES",
-  "SESSION_FILES",
-  "RUN_FILES",
-  "WORKFLOW_FILES",
-  "PROJECT_FILES",
-] as const;
+  "SESSION",
+  "USER",
+  "WORKFLOW",
+] as const satisfies readonly TemplateVariableSourceQuery[];
 
-const scopes = computed(() => {
-  const present = new Set(items.value.map((item) => item.scope));
-  const ordered = scopeOrder.filter((scope) => present.has(scope));
-  const additional = [...present]
-    .filter((scope) => !scopeOrder.some((known) => known === scope))
-    .sort();
-  return [...ordered, ...additional];
-});
-const visibleItems = computed(() =>
-  activeScope.value === "ALL"
-    ? items.value
-    : items.value.filter((item) => item.scope === activeScope.value),
-);
+const scopes = scopeOrder;
+const visibleItems = computed(() => items.value);
 const groups = computed(() =>
-  scopes.value
+  scopeOrder
     .map((scope) => ({
       scope,
       items: visibleItems.value.filter((item) => item.scope === scope),
@@ -91,16 +110,14 @@ const groups = computed(() =>
     .filter((group) => group.items.length > 0),
 );
 
-watch(scopes, (values) => {
-  if (activeScope.value !== "ALL" && !values.includes(activeScope.value))
-    activeScope.value = "ALL";
-});
+watch(activeScope, () => refresh(), { flush: "sync" });
 
-function handleScroll(event: Event): void {
-  const target = event.currentTarget;
-  if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
-    void loadMore();
-}
+useCursorInfiniteScroll({
+  root: list,
+  sentinel,
+  enabled: () => hasMore.value && !loadingMore.value && !loadMoreError.value,
+  loadMore,
+});
 </script>
 
 <template>
@@ -110,10 +127,12 @@ function handleScroll(event: Event): void {
     :aria-busy="phase === 'initial-loading' || loadingMore"
   >
     <div class="variable-catalog__toolbar">
-      <label class="variable-catalog__search">
+      <label class="variable-catalog__search" :for="searchId">
         <Search :size="15" aria-hidden="true" />
         <span class="sr-only">{{ copy.variableSearch }}</span>
         <input
+          :id="searchId"
+          :name="searchId"
           v-model="query"
           type="search"
           :placeholder="copy.variableSearch"
@@ -125,9 +144,14 @@ function handleScroll(event: Event): void {
           aria-autocomplete="list"
         />
       </label>
-      <label class="variable-catalog__scope">
+      <label class="variable-catalog__scope" :for="scopeId">
         <span class="sr-only">{{ copy.variableScope }}</span>
-        <select v-model="activeScope" :disabled="disabled">
+        <select
+          :id="scopeId"
+          v-model="activeScope"
+          :name="scopeId"
+          :disabled="disabled"
+        >
           <option value="ALL">{{ copy.allScopes }}</option>
           <option v-for="scope in scopes" :key="scope" :value="scope">
             {{ scope }}
@@ -143,9 +167,9 @@ function handleScroll(event: Event): void {
 
     <div
       :id="listboxId"
+      ref="list"
       class="variable-catalog__list"
       role="listbox"
-      @scroll.passive="handleScroll"
     >
       <div
         v-if="phase === 'initial-loading'"
@@ -228,6 +252,12 @@ function handleScroll(event: Event): void {
           </button>
         </section>
         <div
+          v-if="hasMore"
+          ref="sentinel"
+          class="variable-catalog__sentinel"
+          aria-hidden="true"
+        />
+        <div
           v-if="loadingMore"
           class="variable-catalog__state variable-catalog__state--more"
           role="status"
@@ -302,6 +332,9 @@ function handleScroll(event: Event): void {
   max-height: 430px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.variable-catalog__sentinel {
+  min-height: 1px;
 }
 .variable-catalog__group h4 {
   position: sticky;

@@ -22,7 +22,7 @@ JOIN control_plane.memberships platform_membership
  AND platform_membership.project_id IS NULL
 WHERE project.organization_id = @organization_id::uuid
   AND (@project_ref = '' OR project.ref = @project_ref)
-  AND (@query = '' OR subject.display_name ILIKE '%' || @query || '%' OR subject.email_masked ILIKE '%' || @query || '%')
+  AND (@query = '' OR subject.ref = @query OR subject.display_name ILIKE '%' || @query || '%' OR subject.email_masked ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR project_membership.ref > @cursor_ref)
   AND (@authority_project = '' OR project.id = NULLIF(@authority_project,'')::uuid)
   AND control_plane.catalog_resource_visible(project.organization_id, @actor_id::uuid, 'access.manage', 'PROJECT',

@@ -3,6 +3,8 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/configuration_lock_assistant_binding_environment.sql
+	queryConfigurationLockAssistantBindingEnvironment string
 	//go:embed sql/configuration_changeschedule_insert_schedules_ref_project_id_target_type.sql
 	queryConfigurationChangescheduleInsertSchedulesRefProjectIdTargetType string
 	//go:embed sql/configuration_changeschedule_insert_schedule_revision.sql
@@ -79,6 +81,16 @@ var (
 	queryConfigurationResolveassistantcontextSelectResource string
 	//go:embed sql/configuration_hydrateassistantoperation_select_project.sql
 	queryConfigurationHydrateassistantoperationSelectProject string
+	//go:embed sql/configuration_hydrateassistantoperation_select_agent.sql
+	queryConfigurationHydrateassistantoperationSelectAgent string
+	//go:embed sql/configuration_hydrateassistantoperation_select_agent_capability.sql
+	queryConfigurationHydrateassistantoperationSelectAgentCapability string
+	//go:embed sql/configuration_hydrateassistantoperation_select_integration_grant.sql
+	queryConfigurationHydrateassistantoperationSelectIntegrationGrant string
+	//go:embed sql/configuration_assistant_schedule_snapshot.sql
+	queryConfigurationAssistantScheduleSnapshot string
+	//go:embed sql/configuration_assistant_role_image_agent.sql
+	queryConfigurationAssistantRoleImageAgent string
 	//go:embed sql/configuration_addassistantturncommand_select_assistant_runtime_organization_id.sql
 	queryConfigurationAddassistantturncommandSelectAssistantRuntimeOrganizationId string
 	//go:embed sql/configuration_addassistantturncommand_select_assistant_conversations_organization_id_ref_state.sql

@@ -42,6 +42,7 @@ export async function readConversations(
   pageToken?: string,
   signal?: AbortSignal,
   filter: { query?: string; state?: AssistantConversation["state"] } = {},
+  pageSize = 40,
 ): Promise<ListAssistantConversationsResponse> {
   return readWithRetry(
     async () =>
@@ -49,7 +50,7 @@ export async function readConversations(
         await unwrap(
           listAssistantConversations({
             query: {
-              pageSize: 40,
+              pageSize,
               ...(projectRef ? { projectRef } : {}),
               ...(pageToken ? { pageToken } : {}),
               ...(filter.query?.trim() ? { query: filter.query.trim() } : {}),
@@ -135,13 +136,18 @@ export async function renameConversation(
 export async function appendTurn(
   conversation: AssistantConversation,
   content: string,
+  context: AssistantContextDescriptor,
   attachmentSetRef?: string,
 ): Promise<AssistantConversation> {
   return (
     await mutateWithRetry((headers) =>
       addAssistantTurn({
         path: { conversationRef: conversation.ref },
-        body: { content, ...(attachmentSetRef ? { attachmentSetRef } : {}) },
+        body: {
+          content,
+          context,
+          ...(attachmentSetRef ? { attachmentSetRef } : {}),
+        },
         headers: {
           "Idempotency-Key": headers["Idempotency-Key"],
           "X-CSRF-Token": headers["X-CSRF-Token"],

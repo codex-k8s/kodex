@@ -7,8 +7,9 @@ import {
   FileText,
   UserRound,
   Wrench,
+  X,
 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -40,9 +41,11 @@ const props = withDefaults(
     initialNodeRef: undefined,
   },
 );
+const contextField = `run-activity-context-${useId()}`;
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale } = useI18n();
 const selectedNodeRef = ref("");
+const expandedMessages = ref<Record<string, boolean>>({});
 const sessionNodes = computed(() => props.nodes.filter(isRunSessionNode));
 
 const artifactsByRef = computed(
@@ -113,10 +116,28 @@ function formatBytes(value: number): string {
     role="region"
     :aria-label="$t('runs.activity')"
   >
+    <header class="run-activity-drawer__header">
+      <div>
+        <h2>{{ $t("runs.activity") }}</h2>
+        <p>{{ run.title }} · {{ events.length }}</p>
+      </div>
+      <button
+        class="icon-button"
+        type="button"
+        :aria-label="$t('common.close')"
+        @click="emit('close')"
+      >
+        <X :size="19" aria-hidden="true" />
+      </button>
+    </header>
     <div class="run-activity-drawer__tools">
       <label>
         <span class="sr-only">{{ $t("runs.context") }}</span>
-        <select v-model="selectedNodeRef">
+        <select
+          v-model="selectedNodeRef"
+          :id="contextField"
+          :name="contextField"
+        >
           <option value="">{{ $t("common.all") }}</option>
           <option
             v-for="node in sessionNodes"
@@ -239,7 +260,7 @@ function formatBytes(value: number): string {
                   {{ $t("common.noData") }}
                 </p>
               </details>
-              <small>
+              <small v-if="item.toolCall.durationMs !== undefined">
                 {{
                   $t("runs.toolDuration", {
                     duration: item.toolCall.durationMs,
@@ -252,9 +273,36 @@ function formatBytes(value: number): string {
               <SafeMarkdown
                 v-if="item.summary"
                 :content="item.summary"
-                class="run-activity-item__message"
+                :class="[
+                  'run-activity-item__message',
+                  {
+                    'run-activity-item__message--collapsed':
+                      item.kind === 'initiator' &&
+                      item.summary.length > 360 &&
+                      !expandedMessages[item.id],
+                  },
+                ]"
               />
-              <p v-else class="run-activity-item__empty">
+              <button
+                v-if="
+                  item.kind === 'initiator' &&
+                  item.summary &&
+                  item.summary.length > 360
+                "
+                type="button"
+                class="run-activity-item__expand"
+                :aria-expanded="Boolean(expandedMessages[item.id])"
+                @click="expandedMessages[item.id] = !expandedMessages[item.id]"
+              >
+                {{
+                  $t(
+                    expandedMessages[item.id]
+                      ? "runs.collapseMessage"
+                      : "runs.expandMessage",
+                  )
+                }}
+              </button>
+              <p v-if="!item.summary" class="run-activity-item__empty">
                 {{ $t("common.noData") }}
               </p>
               <SafeMarkdown
@@ -293,6 +341,36 @@ function formatBytes(value: number): string {
   flex-direction: column;
   overflow: hidden;
   background: var(--surface);
+}
+.run-activity-drawer__header {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.run-activity-drawer__header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.run-activity-drawer__header h2,
+.run-activity-drawer__header p {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-activity-drawer__header h2 {
+  font-size: 1rem;
+}
+.run-activity-drawer__header p {
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 .run-activity-drawer__tools {
   display: flex;
@@ -469,6 +547,26 @@ function formatBytes(value: number): string {
 .run-activity-item__progress :deep(p),
 .run-activity-item__empty {
   margin: 0;
+}
+.run-activity-item__message--collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.run-activity-item__expand {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.run-activity-item__expand:hover {
+  text-decoration: underline;
 }
 .run-activity-item__progress {
   margin-top: 7px;

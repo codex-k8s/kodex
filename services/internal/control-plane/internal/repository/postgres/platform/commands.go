@@ -276,6 +276,14 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeMembership(ctx, tx, scope, input)
 	case command.CreateAgent:
 		return repository.createAgent(ctx, tx, scope, input.Payload)
+	case command.CreateAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
+		if !ok {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		return repository.createAssistantRoleImage(ctx, tx, scope, payload)
+	case command.UpdateAssistantRoleImageRecipe:
+		return repository.updateAssistantRoleImage(ctx, tx, scope, input)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
 	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
@@ -517,7 +525,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if item.Version != *input.Mutation.ExpectedVersion {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
-		if subjectID == scope.actorID && scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
+		if subjectID == scope.actorID {
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		err = tx.QueryRow(ctx, queryProjectMembershipUpdate, pgx.StrictNamedArgs{
@@ -638,7 +646,7 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 		if scope.role != "OWNER" && item.Role == "OWNER" {
 			return commandOutcome{}, errs.ErrForbidden
 		}
-		if subjectID == scope.actorID && !payload.Active {
+		if subjectID == scope.actorID && (!payload.Active || payload.Role != item.Role) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		if err := repository.protectLastOwner(ctx, tx, scope.organizationID, membershipID, item, payload.Role, payload.Active); err != nil {
@@ -822,6 +830,9 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	}
 	bindingRef, bindingVersion, err := assignInstructionBinding(ctx, tx, scope.organizationID, agentID, instructionRef)
 	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.validateAgentPromptContextTx(ctx, tx, scope, item.Ref, input.Instructions, false); err != nil {
 		return commandOutcome{}, err
 	}
 	item.InstructionBinding = &entity.AgentInstructionsBinding{Ref: bindingRef, Version: bindingVersion, RevisionRef: instructionRef, Effective: true}
@@ -2403,13 +2414,13 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return outcome, err
 	}
 	var gateID, nodeID, rootRunID, projectID, projectRef, gateNodeRef string
-	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID string
+	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID, integrationApprovalPolicy string
 	var version int64
 	var allowed []string
 	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(
 		&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed, &gateNodeRef,
 		&predecessorNodeID, &predecessorNodeRef, &predecessorRunID, &sessionID,
-		&integrationInvocationID,
+		&integrationInvocationID, &integrationApprovalPolicy,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrAlreadyResolved
@@ -2428,6 +2439,11 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, err
 	}
 	if integrationInvocationID != "" {
+		if integrationApprovalPolicy == "HUMAN_SCOPED" && payload.Decision == "APPROVE" {
+			if err := repository.approveIntegrationScope(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		invocationState, safeErrorCode := "READY", ""
 		if payload.Decision == "REJECT" {
 			invocationState, safeErrorCode = "REJECTED", "INTEGRATION_REJECTED_BY_OWNER"

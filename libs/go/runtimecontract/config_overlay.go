@@ -384,3 +384,8 @@ func validRuntimeEnvironmentName(value string) bool {
 		return true
 	}
 }
+
+// ValidRuntimeEnvironmentName проверяет имя переменной для обычного значения и Secret binding.
+func ValidRuntimeEnvironmentName(value string) bool {
+	return validRuntimeEnvironmentName(value)
+}

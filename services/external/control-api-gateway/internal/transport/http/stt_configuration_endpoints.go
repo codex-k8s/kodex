@@ -39,7 +39,7 @@ func (server *Server) CreateTypedSystemSTTConfigurationDraft(w http.ResponseWrit
 		return
 	}
 	draft := generated.ManagedConfigurationDraftInput{ConfigurationRef: body.ConfigurationRef, Name: body.Name, ContentFormat: generated.ManagedConfigurationDraftInputContentFormat("JSON"), Content: string(content)}
-	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), draft)
+	mutation, ok := requireManagedDraftMutation(w, p.IdempotencyKey, stringValue(p.IfMatch), draft, controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_SYSTEM_STT)
 	if !ok {
 		return
 	}

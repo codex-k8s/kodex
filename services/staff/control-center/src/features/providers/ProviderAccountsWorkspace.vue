@@ -21,6 +21,7 @@ import {
   onMounted,
   reactive,
   ref,
+  useId,
   watch,
 } from "vue";
 
@@ -32,6 +33,8 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { loadProviderAccount, loadProviderDefinitions } from "./api";
 import ProviderUsageDetails from "./ProviderUsageDetails.vue";
 import ProviderAccountLifecyclePanel from "./ProviderAccountLifecyclePanel.vue";
@@ -68,6 +71,10 @@ const {
   problem,
 } = storeToRefs(store);
 const search = ref("");
+const searchId = useId();
+const expandedSearchId = useId();
+const createNameId = useId();
+const apiKeyId = useId();
 const expanded = ref(false);
 const createOpen = ref(false);
 const authorizationAccount = ref<ProviderAccount>();
@@ -83,6 +90,38 @@ const createForm = reactive({
   definitionKey: "" as ProviderDefinitionKey | "",
 });
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+const definitionsRoot = ref<HTMLElement>();
+const definitionsSentinel = ref<HTMLElement>();
+const definitionsPageSize = useAdaptiveCursorPageSize({
+  container: definitionsRoot,
+  itemSelector: ":scope > article",
+  itemCount: () => definitions.value.length,
+  estimatedItemHeight: 108,
+});
+const accountsRoot = ref<HTMLElement>();
+const accountsSentinel = ref<HTMLElement>();
+const accountsPageSize = useAdaptiveCursorPageSize({
+  container: accountsRoot,
+  itemSelector: ".provider-account-card",
+  itemCount: () => accounts.value.length,
+  estimatedItemHeight: 210,
+});
+useCursorInfiniteScroll({
+  root: definitionsRoot,
+  sentinel: definitionsSentinel,
+  enabled: () =>
+    Boolean(definitionsNextPageToken.value) && !definitionsLoadingMore.value,
+  loadMore: () => store.loadMoreDefinitions(definitionsPageSize.value),
+});
+useCursorInfiniteScroll({
+  root: accountsRoot,
+  sentinel: accountsSentinel,
+  enabled: () =>
+    Boolean(accountsNextPageToken.value) &&
+    !loading.value &&
+    !loadingMore.value,
+  loadMore: () => store.loadMore(accountsPageSize.value),
+});
 
 const canCreate = computed(() =>
   pageAllowsAccountCreation(pageNextActions.value),
@@ -114,7 +153,8 @@ watch(
             availability.reason === "STT_NOT_CONFIGURED";
       })
       .catch(() => {
-        if (!controller.signal.aborted) speechConfigurationMissing.value = false;
+        if (!controller.signal.aborted)
+          speechConfigurationMissing.value = false;
       });
   },
   { immediate: true },
@@ -138,8 +178,9 @@ async function searchDefinitions(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await loadProviderDefinitions(query, cursor, signal);
+  const page = await loadProviderDefinitions(query, cursor, signal, pageSize);
   if (!Array.isArray(page.items) || typeof page.nextPageToken !== "string")
     throw new Error("Invalid provider definition catalog");
   return {
@@ -182,7 +223,23 @@ function blockerLabel(code: string): string {
 
 function scheduleSearch(): void {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void store.load(search.value), 500);
+  searchTimer = setTimeout(
+    () =>
+      void store.load(
+        search.value,
+        accountsPageSize.value,
+        definitionsPageSize.value,
+      ),
+    500,
+  );
+}
+
+function reload(): Promise<void> {
+  return store.load(
+    search.value,
+    accountsPageSize.value,
+    definitionsPageSize.value,
+  );
 }
 
 function openCreate(): void {
@@ -419,13 +476,14 @@ async function copyUserCode(): Promise<void> {
   }
 }
 
-function scrollAccounts(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    void store.loadMore();
-}
-
-onMounted(() => void store.load());
+onMounted(
+  () =>
+    void store.load(
+      undefined,
+      accountsPageSize.value,
+      definitionsPageSize.value,
+    ),
+);
 watch(accounts, (items) => {
   const currentRef = authorizationAccount.value?.ref;
   if (!currentRef) return;
@@ -448,11 +506,13 @@ onBeforeUnmount(() => {
 <template>
   <section class="providers-workspace">
     <header class="providers-toolbar">
-      <label class="providers-toolbar__search">
+      <label class="providers-toolbar__search" :for="searchId">
         <Search :size="17" aria-hidden="true" />
         <span class="sr-only">{{ $t("providers.search") }}</span>
         <input
+          :id="searchId"
           v-model="search"
+          name="provider-account-search"
           type="search"
           :placeholder="$t('providers.searchPlaceholder')"
           @input="scheduleSearch"
@@ -462,7 +522,7 @@ onBeforeUnmount(() => {
         class="icon-button"
         type="button"
         :aria-label="$t('common.retry')"
-        @click="store.load(search)"
+        @click="reload"
       >
         <RefreshCw :size="17" aria-hidden="true" />
       </button>
@@ -475,6 +535,7 @@ onBeforeUnmount(() => {
         <Plus :size="17" aria-hidden="true" />{{ $t("providers.create") }}
       </button>
       <button
+        v-if="accounts.length > 6 || accountsNextPageToken"
         class="icon-button"
         :aria-label="$t('catalog.expand')"
         :title="$t('catalog.expand')"
@@ -484,7 +545,11 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
-    <aside v-if="speechConfigurationMissing" class="provider-speech-setup" role="status">
+    <aside
+      v-if="speechConfigurationMissing"
+      class="provider-speech-setup"
+      role="status"
+    >
       <p>{{ $t("providers.speechSetupRequired") }}</p>
       <RouterLink class="button" to="/configurations/SYSTEM_STT">
         {{ $t("providers.configureSpeech") }}
@@ -492,6 +557,7 @@ onBeforeUnmount(() => {
     </aside>
 
     <section
+      ref="definitionsRoot"
       class="provider-readiness"
       :aria-label="$t('providers.definitions')"
     >
@@ -507,12 +573,10 @@ onBeforeUnmount(() => {
           </li>
         </ul>
       </article>
-      <button
+      <div
         v-if="definitionsNextPageToken"
-        class="button provider-readiness__more"
-        type="button"
-        :disabled="definitionsLoadingMore"
-        @click="store.loadMoreDefinitions"
+        ref="definitionsSentinel"
+        class="provider-readiness__more"
       >
         <LoaderCircle
           v-if="definitionsLoadingMore"
@@ -520,14 +584,13 @@ onBeforeUnmount(() => {
           :size="16"
           aria-hidden="true"
         />
-        {{ $t("providers.loadMoreProviders") }}
-      </button>
+      </div>
     </section>
 
     <AsyncState
       :loading="loading && !accounts.length"
       :problem="accounts.length ? undefined : problem"
-      @retry="store.load(search)"
+      @retry="reload"
     >
       <component
         :is="expanded ? ModalDialog : 'div'"
@@ -535,12 +598,18 @@ onBeforeUnmount(() => {
         size="full"
         @close="expanded = false"
       >
-        <label v-if="expanded" class="providers-toolbar__search">
+        <label
+          v-if="expanded"
+          class="providers-toolbar__search"
+          :for="expandedSearchId"
+        >
           <Search :size="17" /><span class="sr-only">{{
             $t("providers.search")
           }}</span>
           <input
+            :id="expandedSearchId"
             v-model="search"
+            name="provider-account-expanded-search"
             type="search"
             :placeholder="$t('providers.searchPlaceholder')"
             @input="scheduleSearch"
@@ -557,9 +626,9 @@ onBeforeUnmount(() => {
         />
         <div
           v-if="accounts.length"
+          ref="accountsRoot"
           class="provider-account-list"
           :class="{ 'provider-account-list--expanded': expanded }"
-          @scroll="scrollAccounts"
         >
           <article
             v-for="account in accounts"
@@ -624,7 +693,13 @@ onBeforeUnmount(() => {
                 :disabled="busyRefs.includes(account.ref)"
                 @click="openAuthorization(account)"
               >
-                {{ $t("providers.authorize") }}
+                {{
+                  $t(
+                    account.state === "AUTHORIZED"
+                      ? "providers.reauthorize"
+                      : "providers.authorize",
+                  )
+                }}
               </button>
               <button
                 v-if="
@@ -650,12 +725,10 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </article>
-          <button
+          <div
             v-if="accountsNextPageToken"
-            class="button providers-load-more"
-            type="button"
-            :disabled="loadingMore"
-            @click="store.loadMore"
+            ref="accountsSentinel"
+            class="providers-load-more"
           >
             <LoaderCircle
               v-if="loadingMore"
@@ -663,8 +736,7 @@ onBeforeUnmount(() => {
               :size="16"
               aria-hidden="true"
             />
-            {{ $t("providers.loadMore") }}
-          </button>
+          </div>
         </div>
         <section v-else class="empty-state">
           <KeyRound :size="28" aria-hidden="true" />
@@ -692,7 +764,13 @@ onBeforeUnmount(() => {
       <div class="provider-form">
         <label class="field">
           <span>{{ $t("common.name") }}</span>
-          <input v-model="createForm.name" maxlength="160" autocomplete="off" />
+          <input
+            :id="createNameId"
+            v-model="createForm.name"
+            name="provider-account-name"
+            maxlength="160"
+            autocomplete="off"
+          />
         </label>
         <div class="field">
           <span>{{ $t("providers.definition") }}</span>
@@ -953,7 +1031,9 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span>{{ $t("providers.apiKey") }}</span>
                 <input
+                  :id="apiKeyId"
                   v-model="apiKey"
+                  name="provider-account-api-key"
                   type="password"
                   maxlength="16384"
                   autocomplete="off"

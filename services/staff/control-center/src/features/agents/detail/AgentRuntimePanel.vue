@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Save, ShieldCheck } from "@lucide/vue";
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
@@ -90,6 +90,8 @@ const form = reactive<RuntimeForm>({
 });
 const providerPolicyModes = ["FIXED", "LEAST_USED", "WEIGHTED"] as const;
 type ProviderPolicyMode = (typeof providerPolicyModes)[number];
+const reasoningEffortId = useId();
+const providerPolicyModeId = useId();
 
 function isProviderPolicyMode(value: string): value is ProviderPolicyMode {
   return providerPolicyModes.some((mode) => mode === value);
@@ -316,6 +318,7 @@ function localOptionPage(
   options: readonly AsyncEntityOption[],
   query: string,
   cursor?: string,
+  pageSize = 20,
 ): AsyncEntityOptionPage {
   const normalized = query.trim().toLocaleLowerCase();
   const filtered = normalized
@@ -327,7 +330,7 @@ function localOptionPage(
     : [...options];
   const offset = Number.parseInt(cursor ?? "0", 10);
   const safeOffset = Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
-  const items = filtered.slice(safeOffset, safeOffset + 20);
+  const items = filtered.slice(safeOffset, safeOffset + pageSize);
   const nextOffset = safeOffset + items.length;
   return {
     items,
@@ -340,15 +343,23 @@ function localOptionPage(
 function loadProviderPage(
   query: string,
   cursor?: string,
+  _signal?: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  return Promise.resolve(localOptionPage(providerOptions.value, query, cursor));
+  return Promise.resolve(
+    localOptionPage(providerOptions.value, query, cursor, pageSize),
+  );
 }
 
 function loadRuntimePage(
   query: string,
   cursor?: string,
+  _signal?: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  return Promise.resolve(localOptionPage(runtimeOptions.value, query, cursor));
+  return Promise.resolve(
+    localOptionPage(runtimeOptions.value, query, cursor, pageSize),
+  );
 }
 
 function pickerValue(
@@ -570,7 +581,7 @@ onBeforeUnmount(reset);
               @update:model-value="chooseProvider"
             />
           </label>
-          <label class="field">
+          <div class="field">
             <span>{{ $t("agents.model") }}</span>
             <ProviderModelSelector
               :model-value="form.model"
@@ -583,9 +594,11 @@ onBeforeUnmount(reset);
               @availability-change="modelAvailable = $event"
               @selection-change="modelSelection = $event"
             />
-            <label class="field">
+            <label class="field" :for="reasoningEffortId">
               <span>{{ $t("runtimeOverlay.effort") }}</span>
               <select
+                :id="reasoningEffortId"
+                name="agent-runtime-reasoning-effort"
                 :aria-label="$t('runtimeOverlay.effort')"
                 :value="selectedEffort"
                 :disabled="
@@ -630,7 +643,7 @@ onBeforeUnmount(reset);
                 $t("runtimeOverlay.repairBeforeEffort")
               }}</small>
             </label>
-          </label>
+          </div>
           <label class="field">
             <span>{{ copy.runtime.profile }}</span>
             <AsyncEntityPicker
@@ -643,9 +656,11 @@ onBeforeUnmount(reset);
               @update:model-value="chooseRuntime"
             />
           </label>
-          <label class="field">
+          <label class="field" :for="providerPolicyModeId">
             <span>{{ $t("runtime.accountPolicy") }}</span>
             <select
+              :id="providerPolicyModeId"
+              name="agent-runtime-provider-policy"
               :value="form.providerPolicyMode"
               :disabled="!canEdit || busy"
               @change="chooseProviderPolicy"

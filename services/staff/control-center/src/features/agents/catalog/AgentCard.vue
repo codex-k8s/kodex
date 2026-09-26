@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Activity, ArrowRight } from "@lucide/vue";
 import { useI18n } from "vue-i18n";
+import { RouterLink } from "vue-router";
 
 import AgentAvatar from "@/features/agents/catalog/AgentAvatar.vue";
 import type { AgentCatalogItem } from "@/features/agents/catalog/model";

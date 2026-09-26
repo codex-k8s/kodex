@@ -27,7 +27,11 @@ function safeText(value: string): string {
 
 function safeHref(raw: string): string | undefined {
   const href = raw.trim();
-  if (href.startsWith("/") || href.startsWith("#")) return href;
+  if (
+    (href.startsWith("/") && !href.startsWith("//") && !href.includes("\\")) ||
+    href.startsWith("#")
+  )
+    return href;
   try {
     const parsed = new URL(href);
     return ["https:", "http:", "mailto:"].includes(parsed.protocol)
@@ -36,6 +40,10 @@ function safeHref(raw: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function linkTarget(href: string | undefined): "_self" | "_blank" {
+  return href?.startsWith("/") || href?.startsWith("#") ? "_self" : "_blank";
 }
 
 function parseInline(source: string): InlineToken[] {
@@ -244,7 +252,7 @@ const serverMessage = useServerMessage();
               v-else-if="token.type === 'link'"
               :href="token.href"
               rel="noopener noreferrer"
-              target="_blank"
+              :target="linkTarget(token.href)"
               >{{ token.text }}</a
             >
             <span v-else>{{ token.text }}</span>
@@ -270,7 +278,7 @@ const serverMessage = useServerMessage();
                 v-else-if="token.type === 'link'"
                 :href="token.href"
                 rel="noopener noreferrer"
-                target="_blank"
+                :target="linkTarget(token.href)"
                 >{{ token.text }}</a
               >
               <span v-else>{{ token.text }}</span>
@@ -291,7 +299,7 @@ const serverMessage = useServerMessage();
               v-else-if="token.type === 'link'"
               :href="token.href"
               rel="noopener noreferrer"
-              target="_blank"
+              :target="linkTarget(token.href)"
               >{{ token.text }}</a
             >
             <span v-else>{{ token.text }}</span>
@@ -317,7 +325,7 @@ const serverMessage = useServerMessage();
                       v-else-if="token.type === 'link'"
                       :href="token.href"
                       rel="noopener noreferrer"
-                      target="_blank"
+                      :target="linkTarget(token.href)"
                       >{{ token.text }}</a
                     >
                     <span v-else>{{ token.text }}</span>
@@ -343,7 +351,7 @@ const serverMessage = useServerMessage();
                       v-else-if="token.type === 'link'"
                       :href="token.href"
                       rel="noopener noreferrer"
-                      target="_blank"
+                        :target="linkTarget(token.href)"
                       >{{ token.text }}</a
                     >
                     <span v-else>{{ token.text }}</span>
@@ -367,7 +375,7 @@ const serverMessage = useServerMessage();
               v-else-if="token.type === 'link'"
               :href="token.href"
               rel="noopener noreferrer"
-              target="_blank"
+              :target="linkTarget(token.href)"
               >{{ token.text }}</a
             >
             <span v-else>{{ token.text }}</span>

@@ -11,12 +11,14 @@ SELECT g.id::text,
        predecessor.ref,
        predecessor.run_id::text,
        run.session_id::text,
-       COALESCE(g.integration_invocation_id::text,'')
+       COALESCE(g.integration_invocation_id::text,''),COALESCE(invocation.approval_policy,'')
 FROM control_plane.owner_gates g
 JOIN control_plane.projects project ON project.id=g.project_id
 JOIN control_plane.run_nodes gate_node ON gate_node.id=g.node_id
 JOIN control_plane.run_nodes predecessor ON predecessor.id=gate_node.parent_node_id
 JOIN control_plane.runs run ON run.id=predecessor.run_id
+LEFT JOIN control_plane.integration_invocations invocation
+  ON invocation.id=g.integration_invocation_id AND invocation.organization_id=g.organization_id
 WHERE g.organization_id=$1::uuid
   AND g.ref=$2
   AND g.state='OPEN'

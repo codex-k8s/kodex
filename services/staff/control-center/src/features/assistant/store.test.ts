@@ -332,7 +332,11 @@ describe("assistant workspace store", () => {
     await store.send("Создай сотрудника");
 
     expect(createConversationMock).toHaveBeenCalledWith(context, "prj_sales");
-    expect(appendTurnMock).toHaveBeenCalledWith(created, "Создай сотрудника");
+    expect(appendTurnMock).toHaveBeenCalledWith(
+      created,
+      "Создай сотрудника",
+      context,
+    );
     expect(store.selectedConversation?.turns).toHaveLength(1);
   });
 
@@ -461,6 +465,7 @@ describe("assistant workspace store", () => {
     expect(appendTurnMock).toHaveBeenCalledWith(
       initial,
       "Изучи вложения",
+      context,
       "aset_contracts",
     );
   });
@@ -497,7 +502,7 @@ describe("assistant workspace store", () => {
     await store.send("Создай сотрудника");
     expect(
       store.selectedConversation?.turns.some((turn) => Boolean(turn.plan)),
-    ).toBe(false);
+    ).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
     expect(readConversationsMock).not.toHaveBeenCalled();
 
@@ -507,6 +512,44 @@ describe("assistant workspace store", () => {
     expect(store.selectedConversation?.turns.at(-1)?.content).toBe(
       "План готов",
     );
+  });
+
+  it("не сбрасывает вручную выбранный диалог при realtime из другого контекста проекта", () => {
+    const selected = conversation();
+    const environmentContext: AssistantContextDescriptor = {
+      ...context,
+      route: "/projects/prj_sales/environments/renv_test",
+      entityKind: "ENVIRONMENT",
+      entityRef: "renv_test",
+      entityName: "Тестовая среда",
+    };
+    const store = useAssistantStore();
+    store.setContext(environmentContext, "prj_sales");
+    store.conversations = [selected];
+    store.selectedRef = selected.ref;
+
+    store.applyRealtimeSnapshot(systemAssistant(), [selected], "prj_sales");
+
+    expect(store.selectedRef).toBe(selected.ref);
+    expect(store.selectedConversation?.context.route).toBe(context.route);
+  });
+
+  it("после загрузки показывает последний диалог проекта, если контекст экрана не совпал", async () => {
+    const source = conversation();
+    const environmentContext: AssistantContextDescriptor = {
+      ...context,
+      route: "/projects/prj_sales/environments/renv_test",
+      entityKind: "ENVIRONMENT",
+      entityRef: "renv_test",
+      entityName: "Тестовая среда",
+    };
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValue({ items: [source] });
+    const store = useAssistantStore();
+
+    await store.load(environmentContext, "prj_sales");
+
+    expect(store.selectedRef).toBe(source.ref);
   });
 
   it("сохраняет conflict receipt и авторитетный STALE plan без частичного успеха", async () => {

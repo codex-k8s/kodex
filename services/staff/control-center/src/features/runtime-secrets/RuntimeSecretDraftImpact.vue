@@ -5,14 +5,18 @@ import {
   onMounted,
   ref,
   shallowRef,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
+import { useSessionStore } from "@/features/session/store";
 import { idempotencyKey } from "@/shared/api/mutation";
 import type { RuntimeSecret } from "./model";
 import { readRuntimeSecret } from "./api";
 import type { AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   readSecretDraft,
   safeDraftProblem,
@@ -32,6 +36,7 @@ const props = defineProps<{
   draft: RuntimeSecretDraft;
   initialPlanRef?: string;
 }>();
+const fieldPrefix = `runtime-secret-draft-impact-${useId()}`;
 const emit = defineEmits<{
   published: [draft: RuntimeSecretDraft, secret: RuntimeSecret];
   working: [busy: boolean];
@@ -39,11 +44,24 @@ const emit = defineEmits<{
   prepared: [planRef: string];
 }>();
 const { t } = useI18n();
+async function reauthenticate(): Promise<void> {
+  try {
+    await useSessionStore().beginRuntimeSecretDraftReauth({
+      projectRef: props.draft.projectRef,
+      target: "draft",
+      targetRef: props.draft.ref,
+    });
+  } catch (error) {
+    problem.value = safeDraftProblem(error);
+  }
+}
 const plan = shallowRef<RuntimeSecretDraftImpactPlan>();
 const page = shallowRef<RuntimeSecretDraftImpactPage>();
 const busy = ref(false);
 const problem = shallowRef<AppProblem>();
 const query = ref("");
+const impactList = ref<HTMLElement>();
+const impactSentinel = ref<HTMLElement>();
 const selected = ref<string[]>([]);
 const selectionReady = ref(false);
 const pending = ref(false);
@@ -61,6 +79,15 @@ let disposed = false;
 const isActive = () => !disposed;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const cursors = new Set<string>();
+const impactPageSize = useAdaptiveCursorPageSize({
+  container: impactList,
+  itemSelector: ".draft-impact__item",
+  itemCount: () => page.value?.items.length ?? 0,
+  estimatedViewportHeight: 360,
+  estimatedItemHeight: 84,
+  minimum: 6,
+  maximum: 100,
+});
 const canPublish = computed(
   () =>
     !busy.value &&
@@ -129,6 +156,7 @@ async function load(more = false): Promise<void> {
     controller.signal,
     query.value,
     more ? before?.nextPageToken : undefined,
+    impactPageSize.value,
   );
   if (disposed) return;
   if (more && before) {
@@ -231,6 +259,14 @@ async function refresh(more = false): Promise<void> {
   }
 }
 
+useCursorInfiniteScroll({
+  root: impactList,
+  sentinel: impactSentinel,
+  enabled: () =>
+    Boolean(page.value?.nextPageToken) && !busy.value && !problem.value,
+  loadMore: () => refresh(true),
+});
+
 async function publish(replace = true): Promise<void> {
   if (!canPublish.value || !plan.value) return;
   const retrying = Boolean(publishAttempt);
@@ -280,10 +316,50 @@ async function publish(replace = true): Promise<void> {
     await load();
   } catch (error) {
     if (!disposed) {
-      problem.value = safeDraftProblem(error);
+      const publicationProblem = safeDraftProblem(error);
+      problem.value = publicationProblem;
+      if (
+        publishAttempt &&
+        ![400, 401, 403, 404, 412, 422].includes(publicationProblem.status)
+      ) {
+        try {
+          const current = await readSecretDraft(
+            props.draft.projectRef,
+            props.draft.ref,
+            new AbortController().signal,
+          );
+          if (
+            current.state === "PUBLISHED" &&
+            current.ref === publishAttempt.draft.ref &&
+            current.secretRef === publishAttempt.draft.secretRef &&
+            current.publishedRevision > 0
+          ) {
+            const secret = await readRuntimeSecret(
+              current.secretRef,
+              current.projectRef,
+              new AbortController().signal,
+            );
+            if (isActive()) {
+              publishAttempt = undefined;
+              pending.value = false;
+              problem.value = undefined;
+              emit("uncertain", false);
+              emit("published", current, secret);
+              try {
+                await load();
+              } catch (refreshError) {
+                if (isActive()) problem.value = safeDraftProblem(refreshError);
+              }
+            }
+            return;
+          }
+        } catch {
+          // При неопределённом исходе остаётся только read-only восстановление.
+        }
+      }
       if (
         !retrying &&
-        [400, 401, 403, 404, 412, 422].includes(problem.value.status)
+        [400, 401, 403, 404, 412, 422].includes(publicationProblem.status)
       ) {
         publishAttempt = undefined;
         plan.value = undefined;
@@ -346,6 +422,14 @@ onMounted(() => void restore());
     <h3>{{ t("runtimeSecrets.draft.impactTitle") }}</h3>
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <button
+      v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"
+      class="button"
+      type="button"
+      @click="reauthenticate"
+    >
+      {{ t("runtimeSecrets.draft.reauthenticate") }}
+    </button>
+    <button
       v-if="initialPlanRef && !plan"
       class="button"
       :disabled="busy"
@@ -398,7 +482,12 @@ onMounted(() => void restore());
       </button>
       <label class="field"
         ><span>{{ t("runtimeSecrets.draft.searchConsumers") }}</span
-        ><input v-model="query" type="search" :disabled="busy || pending"
+        ><input
+          v-model="query"
+          :id="`${fieldPrefix}-search`"
+          :name="`${fieldPrefix}-search`"
+          type="search"
+          :disabled="busy || pending"
       /></label>
       <button class="button" :disabled="busy" @click="refresh()">
         {{ t("common.refresh") }}
@@ -406,11 +495,17 @@ onMounted(() => void restore());
       <p v-if="page">
         {{ t("runtimeSecrets.draft.visibleTotal", { total: page.total }) }}
       </p>
-      <ul v-if="page" class="draft-impact__items">
-        <li v-for="item in page.items" :key="item.ref">
+      <ul v-if="page" ref="impactList" class="draft-impact__items">
+        <li
+          v-for="(item, index) in page.items"
+          :key="item.ref"
+          class="draft-impact__item"
+        >
           <label>
             <input
               v-if="plan.state === 'PREPARED'"
+              :id="`${fieldPrefix}-item-${index}`"
+              :name="`${fieldPrefix}-item-${index}`"
               type="checkbox"
               :checked="selected.includes(item.ref)"
               :disabled="busy || pending"
@@ -433,15 +528,13 @@ onMounted(() => void restore());
             {{ item.resultBindingVersion }}</small
           >
         </li>
+        <li
+          v-if="page.nextPageToken"
+          ref="impactSentinel"
+          class="draft-impact__sentinel"
+          aria-hidden="true"
+        />
       </ul>
-      <button
-        v-if="page?.nextPageToken"
-        class="button"
-        :disabled="busy"
-        @click="refresh(true)"
-      >
-        {{ t("runtimeSecrets.loadMore") }}
-      </button>
       <button
         v-if="plan.state === 'PREPARED' || pending"
         class="button button--primary"
@@ -489,6 +582,11 @@ onMounted(() => void restore());
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow-wrap: anywhere;
+}
+.draft-impact__items .draft-impact__sentinel {
+  min-height: 1px;
+  padding: 0;
+  border: 0;
 }
 .draft-impact__items label {
   display: flex;

@@ -349,7 +349,7 @@ describe("runtime store", () => {
         path: { projectRef: "project_sales" },
         query: {
           query: "pdf",
-          pageSize: 30,
+          pageSize: 20,
           pageToken: "cursor-current",
         },
       }),
@@ -417,6 +417,8 @@ describe("runtime store", () => {
           manifestDigest: "f".repeat(64),
           promotedReference: runtimeImage.reference,
           admissionVerdict: "ACCEPTED",
+          promotionState: "PROMOTED",
+          promotionRequested: true,
           tools: [{ name: "gh", version: "2.80.0" }],
           promotedAt: "2026-08-29T11:00:00Z",
         },
@@ -631,7 +633,7 @@ describe("runtime store", () => {
     expect(listRuntimeEnvironmentAgentsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { environmentRef: environment.ref },
-        query: { pageSize: 30 },
+        query: { pageSize: 20 },
       }),
     );
     expect(deleteRuntimeEnvironmentMock).toHaveBeenCalledWith(

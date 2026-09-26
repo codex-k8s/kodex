@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { KeyRound, Save } from "@lucide/vue";
 import type {
   EmailMailboxCredential,
@@ -27,6 +27,7 @@ const props = defineProps<{
   connection: IntegrationConnection;
   disabled?: boolean;
 }>();
+const fieldPrefix = `mailbox-credential-${useId()}`;
 const emit = defineEmits<{ saved: []; busy: [value: boolean] }>();
 const kind = ref<EmailMailboxCredentialKind>("AUTH_SECRET");
 const value = ref("");
@@ -201,7 +202,12 @@ async function recover(): Promise<void> {
     >
       <label class="field">
         <span>{{ $t("mailboxCredential.kind") }}</span>
-        <select v-model="kind" :disabled="busy || disabled || !!pending">
+        <select
+          v-model="kind"
+          :id="`${fieldPrefix}-kind`"
+          :name="`${fieldPrefix}-kind`"
+          :disabled="busy || disabled || !!pending"
+        >
           <option
             v-for="(_, entry) in mailboxCredentialLimits"
             :key="entry"
@@ -216,6 +222,8 @@ async function recover(): Promise<void> {
         <textarea
           v-if="kind === 'CA_CERTIFICATE'"
           v-model="value"
+          :id="`${fieldPrefix}-value`"
+          :name="`${fieldPrefix}-value`"
           :disabled="busy || disabled"
           rows="6"
           autocomplete="off"
@@ -226,6 +234,8 @@ async function recover(): Promise<void> {
         <input
           v-else
           v-model="value"
+          :id="`${fieldPrefix}-value`"
+          :name="`${fieldPrefix}-value`"
           type="password"
           :disabled="busy || disabled"
           autocomplete="new-password"

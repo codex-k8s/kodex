@@ -38,7 +38,11 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   );
   const hasMore = computed(() => nextPageToken.value.length > 0);
 
-  async function load(nextProjectRef: string, nextQuery = ""): Promise<void> {
+  async function load(
+    nextProjectRef: string,
+    nextQuery = "",
+    pageSize = 20,
+  ): Promise<void> {
     const current = ++generation;
     controller?.abort();
     const currentController = new AbortController();
@@ -59,6 +63,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
           nextQuery,
           undefined,
           AbortSignal.any([currentController.signal, requestSignal()]),
+          pageSize,
         ),
       );
       if (current !== generation) return;
@@ -74,7 +79,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     }
   }
 
-  async function loadMore(): Promise<void> {
+  async function loadMore(pageSize = 20): Promise<void> {
     if (!hasMore.value || loading.value || loadingMore.value) return;
     const current = generation;
     const cursor = nextPageToken.value;
@@ -89,6 +94,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
           query.value,
           cursor,
           AbortSignal.any([currentController.signal, requestSignal()]),
+          pageSize,
         ),
       );
       if (current !== generation) return;

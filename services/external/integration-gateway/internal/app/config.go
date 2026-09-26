@@ -30,7 +30,10 @@ type Config struct {
 	InstanceID                  string        `env:"INTEGRATION_GATEWAY_INSTANCE_ID"`
 	CredentialDirectory         string        `env:"INTEGRATION_GATEWAY_CREDENTIAL_DIRECTORY"`
 	EgressProxyURL              string        `env:"INTEGRATION_GATEWAY_EGRESS_PROXY_URL"`
+	OpenAPIProxyURL             string        `env:"INTEGRATION_GATEWAY_OPENAPI_PROXY_URL"`
 	SyntheticBaseURL            string        `env:"INTEGRATION_GATEWAY_SYNTHETIC_BASE_URL"`
+	LocalOpenAPIBaseURL         string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_BASE_URL"`
+	LocalOpenAPICAFile          string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_CA_FILE"`
 	StartupTimeout              time.Duration `env:"INTEGRATION_GATEWAY_STARTUP_TIMEOUT"`
 	ShutdownTimeout             time.Duration `env:"INTEGRATION_GATEWAY_SHUTDOWN_TIMEOUT"`
 	RequestTimeout              time.Duration `env:"INTEGRATION_GATEWAY_REQUEST_TIMEOUT"`
@@ -50,6 +53,7 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/integration-gateway/application-grant/application-grant.jws",
 		InstanceID:                  "integration-gateway-0", CredentialDirectory: "/var/run/secrets/kodex/integration-connections",
 		EgressProxyURL:   "http://egress-gateway.kodex-system.svc.cluster.local:8080",
+		OpenAPIProxyURL:  "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083",
 		SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080",
 		StartupTimeout:   30 * time.Second, ShutdownTimeout: 20 * time.Second, RequestTimeout: 3 * time.Second,
 		OperationTimeout: 20 * time.Second, PollInterval: 500 * time.Millisecond, ReadinessInterval: 10 * time.Second, ClaimLimit: 1,
@@ -82,10 +86,28 @@ func (config Config) validate() error {
 	if err != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8080" || proxy.Path != "" || proxy.User != nil || proxy.RawQuery != "" {
 		return errors.New("integration-gateway egress proxy is invalid")
 	}
+	openAPIProxy, err := url.Parse(config.OpenAPIProxyURL)
+	if err != nil || openAPIProxy.Scheme != "http" || openAPIProxy.Host != "egress-gateway-openapi.kodex-system.svc.cluster.local:8083" || openAPIProxy.Path != "" || openAPIProxy.User != nil || openAPIProxy.RawQuery != "" {
+		return errors.New("integration-gateway OpenAPI proxy is invalid")
+	}
 	synthetic, err := url.Parse(config.SyntheticBaseURL)
 	if err != nil || synthetic.Scheme != "http" || synthetic.Host != "integration-synthetic.kodex-system.svc.cluster.local:8080" ||
 		synthetic.Path != "" || synthetic.User != nil || synthetic.RawQuery != "" {
 		return errors.New("integration-gateway synthetic endpoint is invalid")
+	}
+	if (config.LocalOpenAPIBaseURL == "") != (config.LocalOpenAPICAFile == "") {
+		return errors.New("integration-gateway local OpenAPI configuration is incomplete")
+	}
+	if config.LocalOpenAPIBaseURL != "" {
+		localOpenAPI, localErr := url.Parse(config.LocalOpenAPIBaseURL)
+		if config.RPCProfile != transportprofile.TrustedCluster || localErr != nil || localOpenAPI.Scheme != "https" ||
+			localOpenAPI.Host != "integration-synthetic.kodex-system.svc.cluster.local" || localOpenAPI.Path != "" ||
+			localOpenAPI.User != nil || localOpenAPI.RawQuery != "" || localOpenAPI.Fragment != "" {
+			return errors.New("integration-gateway local OpenAPI endpoint is invalid")
+		}
+		if !filepath.IsAbs(config.LocalOpenAPICAFile) || filepath.Clean(config.LocalOpenAPICAFile) != config.LocalOpenAPICAFile {
+			return errors.New("integration-gateway local OpenAPI CA path is invalid")
+		}
 	}
 	if strings.TrimSpace(config.ControlPlaneTLSServerName) == "" || strings.ContainsAny(config.ControlPlaneTLSServerName, "*/") {
 		return errors.New("integration-gateway control-plane TLS name is invalid")

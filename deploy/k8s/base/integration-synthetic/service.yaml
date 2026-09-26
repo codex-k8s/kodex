@@ -12,3 +12,4 @@ spec:
     app.kubernetes.io/component: integration-fixture
   ports:
     - {name: http, port: 8080, targetPort: http, protocol: TCP}
+    - {name: https-openapi, port: 443, targetPort: https-openapi, protocol: TCP}

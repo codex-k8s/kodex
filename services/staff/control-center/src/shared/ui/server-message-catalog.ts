@@ -473,6 +473,10 @@ export const serverTokenTranslations = {
     "Проверка подключения завершена",
     "Connection test completed",
   ],
+  INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED: [
+    "Повторная проверка подключения назначена",
+    "Connection test retry scheduled",
+  ],
   INTEGRATION_CONNECTION_UPDATED: [
     "Подключение обновлено",
     "Connection updated",

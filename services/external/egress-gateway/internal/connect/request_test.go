@@ -16,9 +16,11 @@ func TestParseAcceptsOnlyExactBodylessConnect(t *testing.T) {
 }
 
 func TestParseAcceptsOnlyExactBodylessCompatibilityReadiness(t *testing.T) {
-	request, _, err := parseRequest(t, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:8080\r\nConnection: close\r\n\r\n", 4096)
-	if err != nil || request.Kind != KindReadiness {
-		t.Fatalf("unexpected readiness request: %+v, %v", request, err)
+	for _, port := range []string{"8080", "8081", "8082", "8083"} {
+		request, _, err := parseRequest(t, "GET /readyz HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:"+port+"\r\nConnection: close\r\n\r\n", 4096)
+		if err != nil || request.Kind != KindReadiness {
+			t.Fatalf("unexpected readiness request on %s: %+v, %v", port, request, err)
+		}
 	}
 	for _, value := range []string{
 		"GET /readyz?detail=1 HTTP/1.1\r\nHost: egress-gateway.kodex-system.svc.cluster.local:8080\r\n\r\n",

@@ -21,6 +21,38 @@ export function prioritizeHomeProjects(
     .slice(0, Math.max(0, limit));
 }
 
+export function homePriorityProjectRefs(
+  gates: readonly OwnerGate[],
+  activeRuns: readonly Run[],
+  failedRuns: readonly Run[],
+  limit = 12,
+): string[] {
+  const projects = new Map<
+    string,
+    { gates: number; runs: number; failures: number }
+  >();
+  const count = (ref: string, kind: "gates" | "runs" | "failures") => {
+    if (!ref) return;
+    const current = projects.get(ref) ?? { gates: 0, runs: 0, failures: 0 };
+    current[kind] += 1;
+    projects.set(ref, current);
+  };
+  for (const gate of gates)
+    if (gate.state === "OPEN") count(gate.projectRef, "gates");
+  for (const run of activeRuns) count(run.projectRef, "runs");
+  for (const run of failedRuns) count(run.projectRef, "failures");
+  return [...projects]
+    .sort(
+      ([leftRef, left], [rightRef, right]) =>
+        right.gates - left.gates ||
+        right.runs - left.runs ||
+        right.failures - left.failures ||
+        leftRef.localeCompare(rightRef),
+    )
+    .slice(0, Math.max(0, limit))
+    .map(([ref]) => ref);
+}
+
 function runActivityAt(run: Run): string {
   return run.finishedAt ?? run.startedAt ?? run.createdAt;
 }

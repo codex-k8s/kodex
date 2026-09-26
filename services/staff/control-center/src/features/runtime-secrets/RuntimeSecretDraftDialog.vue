@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { useI18n } from "vue-i18n";
+import { useSessionStore } from "@/features/session/store";
 import { idempotencyKey } from "@/shared/api/mutation";
 import type { AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -9,10 +10,15 @@ import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import type {
   RuntimeSecret,
   RuntimeSecretCreateInput,
+  RuntimeSecretDraftSuggestion,
   RuntimeSecretRotateInput,
 } from "./model";
 import RuntimeSecretValueDialog from "./RuntimeSecretValueDialog.vue";
 import RuntimeSecretDraftImpact from "./RuntimeSecretDraftImpact.vue";
+import {
+  consumeRuntimeSecretReauthSuggestion,
+  rememberRuntimeSecretReauthSuggestion,
+} from "./reauth-suggestion";
 import { readRuntimeSecret } from "./api";
 import {
   createSecretDraft,
@@ -28,6 +34,9 @@ const props = defineProps<{
   secret?: RuntimeSecret;
   initialDraftRef?: string;
   initialPlanRef?: string;
+  assistant?: boolean;
+  assistantReturnPath?: string;
+  suggestion?: RuntimeSecretDraftSuggestion;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -41,6 +50,35 @@ function published(value: RuntimeSecretDraft, secret: RuntimeSecret): void {
   emit("published", secret);
 }
 const { t } = useI18n();
+const reauthSuggestion = shallowRef<RuntimeSecretDraftSuggestion | undefined>(
+  props.suggestion,
+);
+async function reauthenticate(): Promise<void> {
+  try {
+    if (!draft.value && !props.secret && reauthSuggestion.value)
+      rememberRuntimeSecretReauthSuggestion(
+        window.sessionStorage,
+        props.projectRef,
+        reauthSuggestion.value,
+        props.assistant ? "assistant" : undefined,
+      );
+    await useSessionStore().beginRuntimeSecretDraftReauth({
+      ...(props.assistantReturnPath
+        ? { assistantReturnPath: props.assistantReturnPath }
+        : {}),
+      projectRef: props.projectRef,
+      target: draft.value ? "draft" : props.secret ? "secret" : "create",
+      targetRef: draft.value?.ref ?? props.secret?.ref,
+      ...(props.assistant ? { surface: "assistant" as const } : {}),
+    });
+  } catch (error) {
+    consumeRuntimeSecretReauthSuggestion(window.sessionStorage, {
+      projectRef: props.projectRef,
+      ...(props.assistant ? { surface: "assistant" as const } : {}),
+    });
+    problem.value = safeDraftProblem(error);
+  }
+}
 function prepared(planRef: string): void {
   if (draft.value) emit("planPrepared", draft.value.ref, planRef);
 }
@@ -244,12 +282,14 @@ onBeforeUnmount(() => {
     :busy="locked"
     :locked="uncertain"
     :problem="problem"
+    :suggestion="suggestion"
     :submit-label="
       t(uncertain ? 'runtimeSecrets.draft.retry' : 'runtimeSecrets.draft.save')
     "
     @create="save"
     @rotate="save"
     @close="close"
+    @safe-draft="reauthSuggestion = $event"
   >
     <p role="note">
       {{
@@ -260,6 +300,18 @@ onBeforeUnmount(() => {
         )
       }}
     </p>
+    <p v-if="suggestion?.sourceHelp" role="note">
+      {{ t("runtimeSecrets.draft.assistantSourceHelp") }}
+      {{ suggestion.sourceHelp }}
+    </p>
+    <button
+      v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"
+      class="button"
+      type="button"
+      @click="reauthenticate"
+    >
+      {{ t("runtimeSecrets.draft.reauthenticate") }}
+    </button>
   </RuntimeSecretValueDialog>
   <ModalDialog
     v-else-if="restoring"
@@ -278,6 +330,14 @@ onBeforeUnmount(() => {
   >
     <div class="secret-draft">
       <ProblemNotice v-if="problem" :problem="problem" compact />
+      <button
+        v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"
+        class="button"
+        type="button"
+        @click="reauthenticate"
+      >
+        {{ t("runtimeSecrets.draft.reauthenticate") }}
+      </button>
       <p v-if="uncertain" role="status">
         {{ t("runtimeSecrets.draft.unknown") }}
       </p>

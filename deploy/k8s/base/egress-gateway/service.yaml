@@ -18,6 +18,22 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: egress-gateway-openapi
+  labels:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: egress-gateway
+    app.kubernetes.io/component: platform-egress
+    kodex.dev/integration-egress-generation: "1"
+  ports:
+    - {name: openapi-connect, port: 8083, targetPort: openapi-connect, protocol: TCP}
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: egress-gateway-technical
   labels:
     app.kubernetes.io/name: egress-gateway

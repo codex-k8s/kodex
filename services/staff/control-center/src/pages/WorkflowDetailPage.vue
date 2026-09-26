@@ -7,7 +7,7 @@ import {
   workflowEditorInput,
   workflowStagePromptTarget,
 } from "@/features/platform/workflow-editor";
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
@@ -25,9 +25,16 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
+import WorkflowOverviewFields from "@/features/workflows/WorkflowOverviewFields.vue";
 import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
 const platform = usePlatformStore();
 const route = useRoute();
+const editorId = useId();
+const inputControlName = (index: number, control: string) =>
+  `${editorId}-input-${String(index)}-${control}`;
+const stepControlName = (index: number, control: string) =>
+  `${editorId}-step-${String(index)}-${control}`;
+const assistantForm = computed(() => route.query.assistantForm === "1");
 const { t } = useI18n();
 const projectRef = computed(() => String(route.params.projectRef));
 const workflowRef = computed(() => String(route.params.workflowRef));
@@ -59,10 +66,11 @@ async function searchAgents(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   const project = projectRef.value;
   const page = await loadAgentCatalogPage(
-    { projectRef: project, query, pageToken, pageSize: 40 },
+    { projectRef: project, query, pageToken, pageSize },
     signal,
   );
   if (page.items.some((agent) => agent.projectRef !== project))
@@ -275,372 +283,378 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <PageFrame
-    :title="workflow?.name ?? $t('workflows.title')"
-    :subtitle="workflow?.purpose"
-    ><template #actions
-      ><StatusBadge
-        v-if="workflow"
-        :state="dirty ? 'DRAFT' : workflow.state"
-        :label="dirty ? $t('runtime.localChanges') : undefined"
-      />
-      <RouterLink
-        v-if="canLaunch && !dirty && !busy"
-        class="button button--primary"
-        aria-describedby="workflow-launch-explanation"
-        :to="launchRoute()"
-        ><Play :size="16" />{{ $t("common.launch") }}</RouterLink
-      ><button
-        v-else-if="workflow"
-        class="button button--primary"
-        type="button"
-        disabled
-        :title="launchExplanation"
-        aria-describedby="workflow-launch-explanation"
-      >
-        <Play :size="16" />{{ $t("common.launch") }}</button
-      ><button
-        v-if="workflow?.nextActions.includes('VALIDATE')"
-        class="button"
-        type="button"
-        :disabled="busy || dirty"
-        @click="command('VALIDATE')"
-      >
-        <Check :size="16" />{{ $t("workflows.validate") }}</button
-      ><button
-        v-if="workflow?.nextActions.includes('PUBLISH')"
-        class="button button--primary"
-        type="button"
-        :disabled="busy || dirty"
-        @click="command('PUBLISH')"
-      >
-        <Upload :size="16" />{{ $t("workflows.publish") }}
-      </button></template
-    >
-    <p v-if="workflow" id="workflow-launch-explanation" role="status">
-      {{ launchExplanation }}
-    </p>
-    <AsyncState
-      :loading="platform.loading.workflow"
-      :problem="platform.problems.workflow"
-      @retry="load"
-      ><div v-if="workflow" class="workflow-layout">
-        <ul
-          v-if="(workflow.draft ?? workflow).validationMessages.length"
-          class="problem"
-          role="status"
+  <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
+    <PageFrame
+      :title="workflow?.name ?? $t('workflows.title')"
+      :subtitle="workflow?.purpose"
+      ><template #actions
+        ><StatusBadge
+          v-if="workflow"
+          :state="dirty ? 'DRAFT' : workflow.state"
+          :label="dirty ? $t('runtime.localChanges') : undefined"
+        />
+        <RouterLink
+          v-if="canLaunch && !dirty && !busy"
+          class="button button--primary"
+          aria-describedby="workflow-launch-explanation"
+          :to="launchRoute()"
+          ><Play :size="16" />{{ $t("common.launch") }}</RouterLink
+        ><button
+          v-else-if="workflow"
+          class="button button--primary"
+          type="button"
+          disabled
+          :title="launchExplanation"
+          aria-describedby="workflow-launch-explanation"
         >
-          <li
-            v-for="message in (workflow.draft ?? workflow).validationMessages"
-            :key="message"
+          <Play :size="16" />{{ $t("common.launch") }}</button
+        ><button
+          v-if="workflow?.nextActions.includes('VALIDATE')"
+          class="button"
+          type="button"
+          :disabled="busy || dirty"
+          @click="command('VALIDATE')"
+        >
+          <Check :size="16" />{{ $t("workflows.validate") }}</button
+        ><button
+          v-if="workflow?.nextActions.includes('PUBLISH')"
+          class="button button--primary"
+          type="button"
+          :disabled="busy || dirty"
+          @click="command('PUBLISH')"
+        >
+          <Upload :size="16" />{{ $t("workflows.publish") }}
+        </button></template
+      >
+      <p v-if="workflow" id="workflow-launch-explanation" role="status">
+        {{ launchExplanation }}
+      </p>
+      <AsyncState
+        :loading="platform.loading.workflow"
+        :problem="platform.problems.workflow"
+        @retry="load"
+        ><div v-if="workflow" class="workflow-layout">
+          <ul
+            v-if="(workflow.draft ?? workflow).validationMessages.length"
+            class="problem"
+            role="status"
           >
-            {{ message }}
-          </li>
-        </ul>
-        <fieldset
-          id="workflow-editor"
-          class="workflow-editor"
-          :disabled="!canEdit || busy"
-        >
-          <legend class="sr-only">{{ $t("workflows.steps") }}</legend>
-          <div class="form-grid">
-            <label class="field"
-              ><span>{{ $t("common.name") }}</span
-              ><input v-model.trim="form.name" required
-            /></label>
-            <div class="field">
-              <span>{{ $t("workflows.coordinator") }}</span
-              ><AsyncEntityPicker
-                :model-value="form.coordinatorAgentRef || null"
-                :selected="selectedAgent(form.coordinatorAgentRef)"
-                :load-page="searchAgents"
+            <li
+              v-for="message in (workflow.draft ?? workflow).validationMessages"
+              :key="message"
+            >
+              {{ message }}
+            </li>
+          </ul>
+          <fieldset
+            id="workflow-editor"
+            class="workflow-editor"
+            :disabled="!canEdit || busy"
+          >
+            <legend class="sr-only">{{ $t("workflows.steps") }}</legend>
+            <div class="form-grid">
+              <WorkflowOverviewFields
+                v-model:name="form.name"
+                v-model:purpose="form.purpose"
+                v-model:timeout-seconds="form.timeoutSeconds"
+                v-model:max-concurrency="form.maxConcurrency"
+                v-model:completion-criteria="form.completionCriteria"
+                :coordinator-agent-ref="form.coordinatorAgentRef"
+                :selected-coordinator="selectedAgent(form.coordinatorAgentRef)"
+                :load-agents="searchAgents"
+                :project-ref="projectRef"
                 :disabled="!canEdit || busy"
-                :trigger-label="$t('workflows.coordinator')"
-                @update:model-value="selectAgent($event)"
+                @select-coordinator="selectAgent($event.ref)"
+                @clear-coordinator="selectAgent('')"
               />
             </div>
-            <label class="field field--wide"
-              ><span>{{ $t("common.purpose") }}</span
-              ><VoiceTextarea
-                v-model.trim="form.purpose"
-                :disabled="!canEdit || busy" /></label
-            ><label class="field"
-              ><span>{{ $t("workflows.timeout") }}</span
-              ><input
-                v-model.number="form.timeoutSeconds"
-                type="number"
-                min="1"
-                max="604800" /></label
-            ><label class="field"
-              ><span>{{ $t("workflows.completion") }}</span
-              ><input v-model.trim="form.completionCriteria" /></label
-            ><label class="field"
-              ><span>{{ $t("workflows.concurrency") }}</span
-              ><input
-                v-model.number="form.maxConcurrency"
-                type="number"
-                min="1"
-                max="100"
-                required
-            /></label>
-          </div>
-          <section class="editor-section">
-            <div class="section-header">
-              <div>
-                <h2>{{ $t("workflows.inputFields") }}</h2>
-                <p>{{ $t("workflows.inputFieldsHint") }}</p>
+            <section class="editor-section">
+              <div class="section-header">
+                <div>
+                  <h2>{{ $t("workflows.inputFields") }}</h2>
+                  <p>{{ $t("workflows.inputFieldsHint") }}</p>
+                </div>
+                <button
+                  v-if="canEdit"
+                  class="button"
+                  type="button"
+                  @click="addInputField"
+                >
+                  {{ $t("workflows.addInputField") }}
+                </button>
               </div>
+              <div v-if="form.inputFields.length" class="input-field-list">
+                <article
+                  v-for="(field, index) in form.inputFields"
+                  :key="field.key ?? index"
+                  class="input-field-card panel form-grid"
+                >
+                  <label class="field"
+                    ><span>{{ $t("workflows.inputLabel") }}</span
+                    ><input
+                      v-model.trim="field.label"
+                      :id="inputControlName(index, 'label')"
+                      :name="inputControlName(index, 'label')"
+                      required
+                      maxlength="160" /></label
+                  ><label class="field"
+                    ><span>{{ $t("workflows.inputType") }}</span
+                    ><select
+                      v-model="field.valueType"
+                      :id="inputControlName(index, 'type')"
+                      :name="inputControlName(index, 'type')"
+                    >
+                      <option value="TEXT">
+                        {{ $t("workflows.inputTypes.TEXT") }}
+                      </option>
+                      <option value="LONG_TEXT">
+                        {{ $t("workflows.inputTypes.LONG_TEXT") }}
+                      </option>
+                      <option value="NUMBER">
+                        {{ $t("workflows.inputTypes.NUMBER") }}
+                      </option>
+                      <option value="BOOLEAN">
+                        {{ $t("workflows.inputTypes.BOOLEAN") }}
+                      </option>
+                      <option value="DATE">
+                        {{ $t("workflows.inputTypes.DATE") }}
+                      </option>
+                      <option value="SELECT">
+                        {{ $t("workflows.inputTypes.SELECT") }}
+                      </option>
+                    </select></label
+                  ><label class="field field--wide"
+                    ><span>{{ $t("workflows.inputDescription") }}</span
+                    ><input
+                      v-model.trim="field.description"
+                      :id="inputControlName(index, 'description')"
+                      :name="inputControlName(index, 'description')"
+                      maxlength="500" /></label
+                  ><label
+                    v-if="field.valueType === 'SELECT'"
+                    class="field field--wide"
+                    ><span>{{ $t("workflows.inputOptions") }}</span
+                    ><VoiceTextarea
+                      :disabled="!canEdit || busy"
+                      :value="field.options.join('\n')"
+                      required
+                      @input="updateFieldOptions(field, $event)" /></label
+                  ><label class="check-field"
+                    ><input
+                      v-model="field.required"
+                      :id="inputControlName(index, 'required')"
+                      :name="inputControlName(index, 'required')"
+                      type="checkbox"
+                    />{{ $t("workflows.inputRequired") }}</label
+                  ><button
+                    v-if="canEdit"
+                    class="button button--danger input-field-remove"
+                    type="button"
+                    @click="removeInputField(index)"
+                  >
+                    {{ $t("common.delete") }}
+                  </button>
+                </article>
+              </div>
+              <p v-else class="empty-inline">
+                {{ $t("workflows.noInputFields") }}
+              </p>
+            </section>
+            <div class="section-header">
+              <h2>{{ $t("workflows.steps") }}</h2>
               <button
                 v-if="canEdit"
                 class="button"
                 type="button"
-                @click="addInputField"
+                @click="addStep"
               >
-                {{ $t("workflows.addInputField") }}
+                <Plus :size="16" />{{ $t("common.create") }}
               </button>
             </div>
-            <div v-if="form.inputFields.length" class="input-field-list">
-              <article
-                v-for="(field, index) in form.inputFields"
-                :key="field.key ?? index"
-                class="input-field-card panel form-grid"
-              >
-                <label class="field"
-                  ><span>{{ $t("workflows.inputLabel") }}</span
-                  ><input
-                    v-model.trim="field.label"
-                    required
-                    maxlength="160" /></label
-                ><label class="field"
-                  ><span>{{ $t("workflows.inputType") }}</span
-                  ><select v-model="field.valueType">
-                    <option value="TEXT">
-                      {{ $t("workflows.inputTypes.TEXT") }}
-                    </option>
-                    <option value="LONG_TEXT">
-                      {{ $t("workflows.inputTypes.LONG_TEXT") }}
-                    </option>
-                    <option value="NUMBER">
-                      {{ $t("workflows.inputTypes.NUMBER") }}
-                    </option>
-                    <option value="BOOLEAN">
-                      {{ $t("workflows.inputTypes.BOOLEAN") }}
-                    </option>
-                    <option value="DATE">
-                      {{ $t("workflows.inputTypes.DATE") }}
-                    </option>
-                    <option value="SELECT">
-                      {{ $t("workflows.inputTypes.SELECT") }}
-                    </option>
-                  </select></label
-                ><label class="field field--wide"
-                  ><span>{{ $t("workflows.inputDescription") }}</span
-                  ><input
-                    v-model.trim="field.description"
-                    maxlength="500" /></label
-                ><label
-                  v-if="field.valueType === 'SELECT'"
-                  class="field field--wide"
-                  ><span>{{ $t("workflows.inputOptions") }}</span
-                  ><VoiceTextarea
-                    :disabled="!canEdit || busy"
-                    :value="field.options.join('\n')"
-                    required
-                    @input="updateFieldOptions(field, $event)" /></label
-                ><label class="check-field"
-                  ><input v-model="field.required" type="checkbox" />{{
-                    $t("workflows.inputRequired")
-                  }}</label
-                ><button
-                  v-if="canEdit"
-                  class="button button--danger input-field-remove"
-                  type="button"
-                  @click="removeInputField(index)"
-                >
-                  {{ $t("common.delete") }}
-                </button>
-              </article>
-            </div>
-            <p v-else class="empty-inline">
-              {{ $t("workflows.noInputFields") }}
-            </p>
-          </section>
-          <div class="section-header">
-            <h2>{{ $t("workflows.steps") }}</h2>
-            <button
-              v-if="canEdit"
-              class="button"
-              type="button"
-              @click="addStep"
+            <article
+              v-for="(step, index) in form.steps"
+              :key="index"
+              class="workflow-step panel"
             >
-              <Plus :size="16" />{{ $t("common.create") }}
-            </button>
-          </div>
-          <article
-            v-for="(step, index) in form.steps"
-            :key="index"
-            class="workflow-step panel"
-          >
-            <span class="step-number">{{ index + 1 }}</span>
-            <div class="form-grid">
-              <label class="field"
-                ><span>{{ $t("workflows.stepName") }}</span
-                ><input v-model.trim="step.name" required
-              /></label>
-              <div class="field">
-                <span>{{ $t("workflows.stepAgent") }}</span
-                ><AsyncEntityPicker
-                  :model-value="step.agentRef || null"
-                  :selected="selectedAgent(step.agentRef ?? '')"
-                  :load-page="searchAgents"
-                  :disabled="!canEdit || busy"
-                  :trigger-label="$t('workflows.stepAgent')"
-                  @update:model-value="selectAgent($event, step)"
+              <span class="step-number">{{ index + 1 }}</span>
+              <div class="form-grid">
+                <label class="field"
+                  ><span>{{ $t("workflows.stepName") }}</span
+                  ><input
+                    v-model.trim="step.name"
+                    :id="stepControlName(index, 'name')"
+                    :name="stepControlName(index, 'name')"
+                    required
+                /></label>
+                <div class="field">
+                  <span>{{ $t("workflows.stepAgent") }}</span
+                  ><AsyncEntityPicker
+                    :model-value="step.agentRef || null"
+                    :selected="selectedAgent(step.agentRef ?? '')"
+                    :load-page="searchAgents"
+                    :disabled="!canEdit || busy"
+                    :trigger-label="$t('workflows.stepAgent')"
+                    @update:model-value="selectAgent($event, step)"
+                  />
+                </div>
+                <div class="field field--wide">
+                  <span>{{ $t("common.purpose") }}</span
+                  ><TemplateSourceField
+                    v-model="step.purpose"
+                    :target="savedPromptTarget(step.position)"
+                    :label="$t('common.purpose')"
+                    :disabled="!canEdit || busy"
+                  />
+                </div>
+                <PromptTargetPreview
+                  class="field--wide"
+                  :target="promptTarget(step.position)"
+                  :disabled="busy || dirty"
+                  :disabled-reason="$t('promptContext.saveStage')"
                 />
-              </div>
-              <div class="field field--wide">
-                <span>{{ $t("common.purpose") }}</span
-                ><TemplateSourceField
-                  v-model="step.purpose"
-                  :target="savedPromptTarget(step.position)"
-                  :label="$t('common.purpose')"
-                  :disabled="!canEdit || busy"
-                />
-              </div>
-              <PromptTargetPreview
-                class="field--wide"
-                :target="promptTarget(step.position)"
-                :disabled="busy || dirty"
-                :disabled-reason="$t('promptContext.saveStage')"
-              />
-              <label class="check-field"
-                ><input v-model="step.parallel" type="checkbox" />{{
-                  $t("workflows.parallel")
-                }}</label
-              ><label class="check-field"
-                ><input v-model="step.humanGate" type="checkbox" />{{
-                  $t("workflows.humanGate")
-                }}</label
-              >
-              <details class="field--wide step-advanced">
-                <summary>{{ $t("common.advanced") }}</summary>
-                <div class="form-grid advanced-grid">
-                  <label v-if="step.parallel" class="field"
-                    ><span>{{ $t("workflows.parallelGroup") }}</span
-                    ><input
-                      v-model.number="step.parallelGroup"
-                      type="number"
-                      min="0"
-                      max="50"
-                  /></label>
-                  <label class="field"
-                    ><span>{{ $t("workflows.stepTimeout") }}</span
-                    ><input
-                      v-model.number="step.timeoutSeconds"
-                      type="number"
-                      min="1"
-                      max="86400"
-                      required
-                  /></label>
-                  <div class="field field--wide">
-                    <span>{{ $t("workflows.expectedResult") }}</span
-                    ><TemplateSourceField
-                      :disabled="!canEdit || busy"
-                      :target="savedPromptTarget(step.position)"
-                      v-model="step.expectedResult"
-                      :label="$t('workflows.expectedResult')"
-                    />
-                    <span
-                      :class="{
-                        'text-danger': step.expectedResult.length > 1000,
-                      }"
-                      >{{ step.expectedResult.length }} / 1000</span
+                <label class="check-field"
+                  ><input
+                    v-model="step.parallel"
+                    :id="stepControlName(index, 'parallel')"
+                    :name="stepControlName(index, 'parallel')"
+                    type="checkbox"
+                  />{{ $t("workflows.parallel") }}</label
+                ><label class="check-field"
+                  ><input
+                    v-model="step.humanGate"
+                    :id="stepControlName(index, 'human-gate')"
+                    :name="stepControlName(index, 'human-gate')"
+                    type="checkbox"
+                  />{{ $t("workflows.humanGate") }}</label
+                >
+                <details class="field--wide step-advanced">
+                  <summary>{{ $t("common.advanced") }}</summary>
+                  <div class="form-grid advanced-grid">
+                    <label v-if="step.parallel" class="field"
+                      ><span>{{ $t("workflows.parallelGroup") }}</span
+                      ><input
+                        v-model.number="step.parallelGroup"
+                        :id="stepControlName(index, 'parallel-group')"
+                        :name="stepControlName(index, 'parallel-group')"
+                        type="number"
+                        min="0"
+                        max="50"
+                    /></label>
+                    <label class="field"
+                      ><span>{{ $t("workflows.stepTimeout") }}</span
+                      ><input
+                        v-model.number="step.timeoutSeconds"
+                        :id="stepControlName(index, 'timeout-seconds')"
+                        :name="stepControlName(index, 'timeout-seconds')"
+                        type="number"
+                        min="1"
+                        max="86400"
+                        required
+                    /></label>
+                    <div class="field field--wide">
+                      <span>{{ $t("workflows.expectedResult") }}</span
+                      ><TemplateSourceField
+                        :disabled="!canEdit || busy"
+                        :target="savedPromptTarget(step.position)"
+                        v-model="step.expectedResult"
+                        :label="$t('workflows.expectedResult')"
+                      />
+                      <span
+                        :class="{
+                          'text-danger': step.expectedResult.length > 1000,
+                        }"
+                        >{{ step.expectedResult.length }} / 1000</span
+                      >
+                    </div>
+                    <fieldset
+                      v-if="step.humanGate"
+                      class="choice-field field--wide"
                     >
-                  </div>
-                  <fieldset
-                    v-if="step.humanGate"
-                    class="choice-field field--wide"
-                  >
-                    <legend>{{ $t("workflows.gateDecisions") }}</legend>
-                    <label
-                      v-for="decision in gateDecisionOptions"
-                      :key="decision"
-                      class="check-field"
-                    >
-                      <input
-                        type="checkbox"
-                        :checked="step.gateDecisions.includes(decision)"
-                        @change="toggleDecision(step, decision)"
-                      />{{ $t(`workflows.gateDecision.${decision}`) }}
-                    </label>
-                  </fieldset>
-                  <fieldset class="choice-field field--wide">
-                    <legend>{{ $t("workflows.requiredCapabilities") }}</legend>
-                    <div v-if="publishedStep(step.position)?.agentRef">
-                      <button
-                        type="button"
-                        class="button button--secondary"
-                        @click="
-                          publishedCapabilitiesStep =
+                      <legend>{{ $t("workflows.gateDecisions") }}</legend>
+                      <label
+                        v-for="decision in gateDecisionOptions"
+                        :key="decision"
+                        class="check-field"
+                      >
+                        <input
+                          type="checkbox"
+                          :id="stepControlName(index, `gate-${decision}`)"
+                          :name="stepControlName(index, `gate-${decision}`)"
+                          :checked="step.gateDecisions.includes(decision)"
+                          @change="toggleDecision(step, decision)"
+                        />{{ $t(`workflows.gateDecision.${decision}`) }}
+                      </label>
+                    </fieldset>
+                    <fieldset class="choice-field field--wide">
+                      <legend>
+                        {{ $t("workflows.requiredCapabilities") }}
+                      </legend>
+                      <div v-if="publishedStep(step.position)?.agentRef">
+                        <button
+                          type="button"
+                          class="button button--secondary"
+                          @click="
+                            publishedCapabilitiesStep =
+                              publishedCapabilitiesStep ===
+                              publishedStep(step.position)!.ref
+                                ? ''
+                                : publishedStep(step.position)!.ref
+                          "
+                        >
+                          {{ $t("capabilityAuthority.publishedStep") }}
+                        </button>
+                        <EffectiveCapabilityCatalog
+                          v-if="
                             publishedCapabilitiesStep ===
                             publishedStep(step.position)!.ref
-                              ? ''
-                              : publishedStep(step.position)!.ref
-                        "
-                      >
-                        {{ $t("capabilityAuthority.publishedStep") }}
-                      </button>
+                          "
+                          :agent-ref="publishedStep(step.position)!.agentRef!"
+                          :project-ref="projectRef"
+                          :workflow-ref="workflowRef"
+                          :step-key="publishedStep(step.position)!.ref"
+                          mode="READ"
+                        />
+                      </div>
                       <EffectiveCapabilityCatalog
-                        v-if="
-                          publishedCapabilitiesStep ===
-                          publishedStep(step.position)!.ref
-                        "
-                        :agent-ref="publishedStep(step.position)!.agentRef!"
+                        v-if="step.agentRef"
+                        :agent-ref="step.agentRef"
                         :project-ref="projectRef"
-                        :workflow-ref="workflowRef"
-                        :step-key="publishedStep(step.position)!.ref"
-                        mode="READ"
+                        mode="REQUIREMENTS"
+                        :selected-keys="step.requiredCapabilityKeys"
+                        :can-manage="Boolean(canEdit)"
+                        :busy="busy"
+                        @toggle="
+                          (key, enabled) => toggleCapability(step, key, enabled)
+                        "
                       />
-                    </div>
-                    <EffectiveCapabilityCatalog
-                      v-if="step.agentRef"
-                      :agent-ref="step.agentRef"
-                      :project-ref="projectRef"
-                      mode="REQUIREMENTS"
-                      :selected-keys="step.requiredCapabilityKeys"
-                      :can-manage="Boolean(canEdit)"
-                      :busy="busy"
-                      @toggle="
-                        (key, enabled) => toggleCapability(step, key, enabled)
-                      "
-                    />
-                  </fieldset>
-                </div>
-              </details>
-            </div>
-            <button
+                    </fieldset>
+                  </div>
+                </details>
+              </div>
+              <button
+                v-if="canEdit"
+                class="icon-button"
+                type="button"
+                :aria-label="$t('common.delete')"
+                @click="removeStep(index)"
+              >
+                <Trash2 :size="16" />
+              </button>
+            </article>
+            <ProblemNotice v-if="problem" :problem="problem" compact /><button
               v-if="canEdit"
-              class="icon-button"
+              class="button button--primary workflow-save"
               type="button"
-              :aria-label="$t('common.delete')"
-              @click="removeStep(index)"
+              :disabled="busy || !validStepText"
+              @click="save"
             >
-              <Trash2 :size="16" />
+              <Save :size="16" />{{ $t("common.save") }}
             </button>
-          </article>
-          <ProblemNotice v-if="problem" :problem="problem" compact /><button
-            v-if="canEdit"
-            class="button button--primary workflow-save"
-            type="button"
-            :disabled="busy || !validStepText"
-            @click="save"
-          >
-            <Save :size="16" />{{ $t("common.save") }}
-          </button>
-        </fieldset>
-      </div></AsyncState
-    ></PageFrame
-  >
+          </fieldset>
+        </div></AsyncState
+      ></PageFrame
+    >
+  </Teleport>
 </template>
 <style scoped>
 .text-danger {

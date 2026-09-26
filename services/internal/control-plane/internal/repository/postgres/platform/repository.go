@@ -27,6 +27,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -46,6 +47,7 @@ type Repository struct {
 	skillScanner                    skillpolicy.Scanner
 	integrationDefinitions          map[string]integrationpackage.Package
 	roleImageCatalogResolver        func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)
+	roleImageRecommendedSelection   func() (entity.RoleEnvironmentSelection, error)
 	roleImageBootstrapCopySelection func(entity.RoleImageRecipeInput) (entity.RoleEnvironmentSelection, error)
 	runtimeSecretNamespace          string
 	runtimeSecretStagingNamespace   string
@@ -163,9 +165,6 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	var draftsReady bool
 	if repository.pool.QueryRow(ctx, querySecretDraftReadiness).Scan(&draftsReady) != nil || !draftsReady {
 		return errors.New("runtime secret draft schema is unavailable")
-	}
-	if err := repository.objects.Check(ctx); err != nil {
-		return errors.New("artifact object storage is unavailable")
 	}
 	return nil
 }
@@ -379,6 +378,10 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 			definition.Metadata.Origin, definition.Digest, definition.Spec.Adapter, credentialKey,
 			definition.Spec.AdapterOwner, definition.Spec.ExecutionRoute, definition.Spec.Readiness,
 		); err != nil {
+			var databaseError *pgconn.PgError
+			if errors.As(err, &databaseError) {
+				return fmt.Errorf("reconcile integration definition: sqlstate=%s constraint=%s", databaseError.Code, databaseError.ConstraintName)
+			}
 			return errors.New("reconcile integration definition")
 		}
 		keys = append(keys, definition.Metadata.Key)

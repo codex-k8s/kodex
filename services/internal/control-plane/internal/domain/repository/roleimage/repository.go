@@ -20,6 +20,7 @@ type ManageInput struct {
 	Mutation                value.Mutation
 	Action                  string
 	RecipeRef, ProjectRef   string
+	BuildRef                string
 	RoleDefinitionRef, Name string
 	Recipe                  entity.RoleImageRecipeInput
 	Environment             entity.RoleEnvironmentSelection

@@ -11,6 +11,7 @@ import {
 import type {
   Agent,
   Project,
+  RoleImageRecipe,
   Run,
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -48,6 +49,14 @@ const sources = {
       version: 9,
     } as Run,
   },
+  roleImages: {
+    imgrec_1: {
+      ref: "imgrec_1",
+      projectRef: "prj_sales",
+      name: "Проверка образа",
+      version: 5,
+    } as RoleImageRecipe,
+  },
 };
 
 it("показывает поздно загруженное имя текущей сущности", () => {
@@ -67,6 +76,12 @@ it("показывает поздно загруженное имя текуще
 describe("assistant route context", () => {
   it("показывает только объявленные владельцем операции и не придумывает unknown", () => {
     expect(readableContextOperations(["LAUNCH_RUN"])).toEqual(["LAUNCH_RUN"]);
+    expect(
+      readableContextOperations(["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]),
+    ).toEqual(["CREATE_RUNTIME_ENVIRONMENT_DRAFT"]);
+    expect(readableContextOperations(["CREATE_ROLE_IMAGE_RECIPE"])).toEqual([
+      "CREATE_ROLE_IMAGE_RECIPE",
+    ]);
     expect(readableContextOperations([])).toEqual([]);
     expect(
       readableContextOperations(["LAUNCH_RUN", "UNKNOWN_COMMAND"]),
@@ -191,6 +206,36 @@ describe("assistant route context", () => {
     expect(value.descriptor.entityKind).toBe("ENVIRONMENT");
     expect(value.descriptor.entityRef).toBe("env_1");
     expect(value.descriptor.entityVersion).toBeUndefined();
+  });
+
+  it("связывает рецепт образа с точным resource context и принимает авторитетное имя", () => {
+    const current = route("/projects/prj_sales/role-images/imgrec_1", {
+      projectRef: "prj_sales",
+      recipeRef: "imgrec_1",
+    });
+    current.name = "role-image";
+    const value = resolveAssistantContext(current, sources);
+    expect(value.projectRef).toBe("prj_sales");
+    expect(value.descriptor.entityKind).toBe("ROLE_IMAGE_RECIPE");
+    expect(value.descriptor.entityRef).toBe("imgrec_1");
+    expect(value.descriptor.entityName).toBe("Проверка образа");
+    expect(value.descriptor.entityVersion).toBe(5);
+    expect(assistantContextTitle(value.descriptor)).toBe("Проверка образа");
+  });
+
+  it("связывает выбранную автоматизацию с точным project context", () => {
+    const current = route(
+      "/projects/prj_sales/automations?scheduleRef=sch_daily",
+      {
+        projectRef: "prj_sales",
+      },
+    );
+    current.name = "automations";
+    current.query = { scheduleRef: "sch_daily" };
+    const value = resolveAssistantContext(current, sources);
+    expect(value.projectRef).toBe("prj_sales");
+    expect(value.descriptor.entityKind).toBe("SCHEDULE");
+    expect(value.descriptor.entityRef).toBe("sch_daily");
   });
 
   it("не принимает неоднозначный query и не переносит выбор на другую страницу", () => {

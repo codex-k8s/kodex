@@ -1,2 +1,8 @@
 -- name: configuration_addassistantturncommand_insert_runs_ref_project_id_target_type :one
-INSERT INTO control_plane.runs(ref,organization_id,project_id,session_id,target_type,target_ref,source,title,task,input,state,initiated_by) VALUES($1,$2::uuid,NULLIF($3,'')::uuid,$4::uuid,'SYSTEM_ASSISTANT','system-assistant','SYSTEM_ASSISTANT','i18n:SYSTEM_ASSISTANT_COMMAND',$5,'{}','RUNNING',$6::uuid) RETURNING id::text
+INSERT INTO control_plane.runs(
+    ref,organization_id,project_id,session_id,target_type,target_ref,source,title,task,input,state,initiated_by,
+    assistant_context_route,assistant_context_entity_kind,assistant_context_entity_ref
+) VALUES(
+    $1,$2::uuid,NULLIF($3,'')::uuid,$4::uuid,'SYSTEM_ASSISTANT','system-assistant','SYSTEM_ASSISTANT',
+    'i18n:SYSTEM_ASSISTANT_COMMAND',$5,'{}','RUNNING',$6::uuid,$7,$8,$9
+) RETURNING id::text

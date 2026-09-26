@@ -6,6 +6,38 @@ const source = readFileSync(
   new URL("./AssistantWorkspace.vue", import.meta.url),
   "utf8",
 );
+const appShell = readFileSync(
+  new URL("../../../app/AppShell.vue", import.meta.url),
+  "utf8",
+);
+const environmentPage = readFileSync(
+  new URL("../../../pages/RuntimeEnvironmentEditorPage.vue", import.meta.url),
+  "utf8",
+);
+const roleImagePage = readFileSync(
+  new URL("../../../pages/RoleImageEditorPage.vue", import.meta.url),
+  "utf8",
+);
+const workflowPage = readFileSync(
+  new URL("../../../pages/WorkflowDetailPage.vue", import.meta.url),
+  "utf8",
+);
+const configurationPage = readFileSync(
+  new URL("../../../pages/ConfigurationPage.vue", import.meta.url),
+  "utf8",
+);
+const integrationsPage = readFileSync(
+  new URL("../../../pages/IntegrationsPage.vue", import.meta.url),
+  "utf8",
+);
+const historyFilter = readFileSync(
+  new URL("./AssistantHistoryFilter.vue", import.meta.url),
+  "utf8",
+);
+const attachmentComposer = readFileSync(
+  new URL("../../../shared/ui/AttachmentComposer.vue", import.meta.url),
+  "utf8",
+);
 const template = source.slice(
   source.indexOf("<template>"),
   source.indexOf("<style scoped>"),
@@ -29,14 +61,19 @@ describe("AssistantWorkspace layout", () => {
     expect(headerMarkup).toContain(":aria-label=\"$t('common.close')\"");
   });
 
+  it("именует поля диалога для браузерной диагностики", () => {
+    expect(historyFilter).toContain('name="assistant-history-search"');
+    expect(historyFilter).toContain('name="assistant-history-state"');
+    expect(template).toContain('name="assistant-message"');
+    expect(attachmentComposer).toContain('name="attachments"');
+  });
+
   it("открывает большую desktop модалку с отдельной колонкой истории", () => {
     expect(styles).toMatch(
       /\.assistant-drawer\s*\{[\s\S]*?inset:\s*4dvh 4vw[\s\S]*?width:\s*92vw[\s\S]*?height:\s*92dvh/,
     );
-    expect(template).toContain("'assistant-drawer--plan': currentPlan");
-    expect(styles).toMatch(
-      /\.assistant-drawer--plan\s*\{[\s\S]*?inset:\s*4dvh 4vw[\s\S]*?width:\s*92vw[\s\S]*?height:\s*92dvh/,
-    );
+    expect(template).not.toContain('v-if="!currentPlan"');
+    expect(template).toContain('class="assistant-conversation-sidebar"');
   });
 
   it("переключает modal в полноэкранный mobile", () => {
@@ -59,6 +96,19 @@ describe("AssistantWorkspace layout", () => {
     );
   });
 
+  it("расширяет карточку плана, не растягивая обычные реплики", () => {
+    expect(template).toContain(
+      "{ 'assistant-message--with-plan': Boolean(turn.plan) }",
+    );
+    expect(styles).toMatch(
+      /\.assistant-message--with-plan\s*\{[\s\S]*?width:\s*min\(96%, 1180px\)/,
+    );
+    expect(styles).toMatch(
+      /\.assistant-message\s*\{[\s\S]*?width:\s*min\(86%, 760px\)/,
+    );
+    expect(template).not.toContain("assistant-plan-card__parameters");
+  });
+
   it("передаёт точный Project context в файловый composer", () => {
     const attachmentComposer = template.slice(
       template.indexOf("<AttachmentComposer"),
@@ -67,6 +117,182 @@ describe("AssistantWorkspace layout", () => {
 
     expect(attachmentComposer).toContain(':project-ref="projectRef"');
     expect(attachmentComposer).toContain('purpose="ASSISTANT_MESSAGE"');
+  });
+
+  it("оставляет подготовку запуска диагностики в текущем чате", () => {
+    expect(template).toContain('@debug="suggestSetup"');
+    expect(source).toContain("function suggestSetup(prompt: string)");
+  });
+
+  it("открывает защищённую форму секрета только в текущем проекте", () => {
+    const composer = template.slice(
+      template.indexOf('<footer class="assistant-composer">'),
+      template.indexOf("</footer>"),
+    );
+    expect(composer).toContain('v-if="projectRef"');
+    expect(composer).toContain('@click="openPlainSecretForm"');
+    expect(source).toMatch(
+      /function openPlainSecretForm\(\): void \{[\s\S]*?secretDialogOpen\.value = true/,
+    );
+    expect(template).toContain('<Teleport to="body">');
+    expect(template).toContain("<RuntimeSecretDraftDialog");
+    expect(template).toContain(':assistant-return-path="route.fullPath"');
+    expect(source).toContain("consumeRuntimeSecretReauthSuggestion");
+    expect(source).toContain("workspaceMounted");
+    expect(source).toContain("secretResumePending");
+    expect(template).toContain(':project-ref="projectRef"');
+    expect(template).toContain(':initial-draft-ref="secretInitialDraftRef"');
+    expect(template).toContain("assistant\n");
+    expect(template).toContain('v-if="open && secretDialogOpen && projectRef"');
+    expect(template).toMatch(
+      /:inert="\s*integrationImportOpen\s*\|\|\s*secretDialogOpen/,
+    );
+    expect(composer).not.toContain("name: 'runtime-secrets'");
+    expect(composer).not.toContain("credentialValue");
+    expect(composer).not.toContain("secretValue");
+  });
+
+  it("не закрывает чат при защищённом вводе credential подключения", () => {
+    const credentialDialog = readFileSync(
+      new URL("./AssistantIntegrationCredentialDialog.vue", import.meta.url),
+      "utf8",
+    );
+    const manual = readFileSync(
+      new URL("../../../pages/IntegrationsPage.vue", import.meta.url),
+      "utf8",
+    );
+    expect(template).toContain(
+      '@prepare-credential="credentialConnectionRef = $event"',
+    );
+    expect(template).toContain("<AssistantIntegrationCredentialDialog");
+    expect(template).toMatch(
+      /:inert="\s*integrationImportOpen\s*\|\|\s*secretDialogOpen\s*\|\|\s*Boolean\(credentialConnectionRef\)/,
+    );
+    expect(credentialDialog).toContain("getIntegrationConnection");
+    expect(credentialDialog).toContain("canConfigureCredential");
+    expect(credentialDialog).toContain(
+      "fresh.version !== connection.value.version",
+    );
+    expect(credentialDialog).toContain('credentialValue.value = ""');
+    expect(credentialDialog).toContain("<IntegrationCredentialField");
+    expect(manual).toContain("<IntegrationCredentialField");
+    expect(credentialDialog).not.toContain("assistantCredentialRef");
+  });
+
+  it("показывает штатные редакторы поверх полного чата", () => {
+    expect(template).toContain('id="assistant-form-slot"');
+    expect(template).toContain('class="assistant-detail-backdrop"');
+    expect(template).toContain('class="assistant-plan-dialog"');
+    expect(template).toContain(
+      ':inert="Boolean(currentPlan) || assistantFormActive || undefined"',
+    );
+    expect(template).not.toContain(
+      ':aria-hidden="Boolean(currentPlan) || assistantFormActive || undefined"',
+    );
+    expect(source).toMatch(
+      /\.assistant-detail-backdrop\s*{[^}]*position: fixed;[^}]*inset: 0;[^}]*background:/s,
+    );
+    expect(source).toMatch(
+      /\.assistant-plan-dialog,\s*\.assistant-form-slot\s*{[^}]*position: fixed;[^}]*inset: 6dvh 6vw;[^}]*border: 1px solid var\(--border\);[^}]*box-shadow:/s,
+    );
+    expect(source).toContain('route.query.assistantForm === "1"');
+    expect(template).toContain('@click="closeAssistantForm"');
+    expect(appShell).toContain("assistantStore.context");
+    expect(environmentPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    expect(roleImagePage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    expect(workflowPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+  });
+
+  it("возвращает фокус к карточке варианта после закрытия редактора", () => {
+    expect(template).toContain('@click="openPlan(turn.plan, $event)"');
+    expect(source).toContain(
+      "planTrigger.value = event.currentTarget as HTMLButtonElement",
+    );
+    expect(template).toContain('ref="planDialog"');
+    expect(source).toContain("focusableElements(planDialog.value)[0]");
+    expect(source).toContain("if (trigger?.isConnected) trigger.focus()");
+    expect(template).toContain('["APPLIED", "REJECTED"].includes');
+    expect(template).toContain("assistant.viewPlan");
+  });
+
+  it("открывает защищённый импорт OpenAPI поверх диалога без передачи документа модели", () => {
+    expect(template).toContain('@click.capture="handleAssistantLink"');
+    expect(source).toContain('"/configurations/INTEGRATION_DEFINITION"');
+    expect(source).toContain("integrationImportOpen.value = true");
+    expect(template).toContain("<OpenAPIImportDialog");
+    expect(template).toContain('@created="integrationDraftCreated"');
+    expect(source).not.toContain("message.value = source");
+    expect(source).not.toContain("store.send(source");
+  });
+
+  it("после импорта предлагает проверить и опубликовать созданную ревизию", () => {
+    expect(template).toContain('v-if="createdDefinitionRef"');
+    expect(template).toContain("assistant.integrationDraftCreated");
+    expect(template).toContain("assistant.openIntegrationDraft");
+    expect(source).toContain('name: "configuration"');
+    expect(source).toContain('kind: "INTEGRATION_DEFINITION"');
+    expect(source).toContain('query: { assistantForm: "1" }');
+    expect(source).not.toContain("if (!open.value)");
+    expect(configurationPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    expect(configurationPage).toContain(
+      '...(assistantForm.value ? { assistantForm: "1" } : {})',
+    );
+    expect(appShell).toContain(
+      'route.params.kind === "INTEGRATION_DEFINITION"',
+    );
+  });
+
+  it("сохраняет помощника при просмотре образа и интеграционного подключения", () => {
+    expect(template).toContain("<AssistantRoleImageBuildCard");
+    expect(integrationsPage).toContain(
+      '<Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>',
+    );
+    expect(source).toContain("<AssistantIntegrationConnectionCard");
+    expect(source).not.toContain(
+      '<AssistantIntegrationConnectionCard @navigate="close"',
+    );
+    expect(template).toContain("item.type === 'UPDATE_INTEGRATION_CONNECTION'");
+    expect(template).toContain("item.type === 'TEST_INTEGRATION_CONNECTION'");
+    expect(template).toContain("item.type === 'UPDATE_PROJECT'");
+    expect(template).toContain("item.type === 'UPDATE_AGENT'");
+  });
+
+  it("после запроса доработки возвращает в диалог без отправки за пользователя", () => {
+    expect(source).toContain("async function requestPlanChanges()");
+    expect(source).toContain("await closePlan()");
+    expect(source).toContain("assistant.planEditor.revisionRequest");
+    expect(source).toContain("planVariantNumber(plan.ref)");
+    expect(template).toContain("assistant.planVariant");
+    expect(source).toContain("composer.value?.focus()");
+    expect(template).toContain('@request-changes="requestPlanChanges"');
+  });
+
+  it("сохраняет DOM чата под формой плана и не закрывает занятое применение", () => {
+    expect(template).toContain('<div class="assistant-workspace-content">');
+    expect(template).not.toContain(
+      '<template>\n        <nav v-if="isRunContext"',
+    );
+    expect(template).toContain('key="CHAT"');
+    expect(template).toContain('v-if="currentPlan && !assistantFormActive"');
+    expect(source).toContain("if (store.busy) return;");
+  });
+
+  it("показывает этапы настройки и только подставляет запрос в composer", () => {
+    expect(source).toContain(
+      '["agent", "environment", "integration", "launch"]',
+    );
+    expect(source).toContain('["project"]');
+    expect(source).toContain('class="assistant-setup-guide"');
+    expect(source).toContain("message.value = prompt");
+    expect(source).not.toContain("store.send(prompt");
   });
 
   it("держит новый диалог видимым действием, а не пунктом history menu", () => {
@@ -128,14 +354,19 @@ describe("AssistantWorkspace layout", () => {
     expect(template).toContain("assistant.openProviderAccounts");
   });
 
-  it("показывает в карточке плана действие, target и все явные параметры", () => {
+  it("показывает в краткой карточке плана действие и цель без технических параметров", () => {
     expect(template).toContain('class="assistant-plan-card__action"');
     expect(template).toContain("operationActionLabel(operation.action)");
     expect(template).toContain('class="assistant-plan-card__target"');
     expect(template).toContain("operationTargetLabel(operation.target)");
     expect(template).toContain(
-      '<SafeStructuredData :value="operation.parameters" />',
+      "operationTargetKindLabel(operation.target.kind)",
     );
+    expect(template).toContain("operationSupportingTitle(operation)");
+    expect(source).toContain(
+      'PROJECT: "assistant.planEditor.targetKinds.PROJECT"',
+    );
+    expect(template).not.toContain("operation.parameters");
   });
 
   it("экспонирует стабильную последовательность turn для realtime и E2E", () => {

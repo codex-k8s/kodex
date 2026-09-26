@@ -163,6 +163,107 @@ func TestShutdownCancelsPendingClientHelloAndJoins(t *testing.T) {
 	_ = client.Close()
 }
 
+func TestDrainPreservesEstablishedTunnelUntilEffectCompletes(t *testing.T) {
+	resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{
+		Addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}, ExpiresAt: time.Now().Add(time.Minute),
+	}}
+	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
+	server, err := New(context.Background(), "127.0.0.1:0", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
+	if err != nil || server.Listen() != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve() }()
+	client, err := net.Dial("tcp", server.Address().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if _, err := io.WriteString(client, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	response := make([]byte, len(connectEstablished))
+	if _, err := io.ReadFull(client, response); err != nil || string(response) != connectEstablished {
+		t.Fatalf("unexpected CONNECT response: %q, %v", response, err)
+	}
+	hello := gatewayClientHello("api.openai.com")
+	if _, err := client.Write(hello); err != nil {
+		t.Fatal(err)
+	}
+	upstream := <-dialer.peers
+	defer upstream.Close()
+	forwarded := make([]byte, len(hello))
+	if _, err := io.ReadFull(upstream, forwarded); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		server.mu.Lock()
+		established := false
+		for _, value := range server.active {
+			established = established || value
+		}
+		server.mu.Unlock()
+		if established {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("CONNECT tunnel did not become established")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	server.Drain()
+	if err := <-serveDone; err != nil {
+		t.Fatal(err)
+	}
+	_ = client.SetDeadline(time.Now().Add(time.Second))
+	_ = upstream.SetDeadline(time.Now().Add(time.Second))
+	if _, err := client.Write([]byte("effect")); err != nil {
+		t.Fatalf("drain closed an established effect: %v", err)
+	}
+	payload := make([]byte, len("effect"))
+	if _, err := io.ReadFull(upstream, payload); err != nil || string(payload) != "effect" {
+		t.Fatalf("effect was interrupted during drain: %q, %v", payload, err)
+	}
+	_ = client.Close()
+	_ = upstream.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestShutdownDeadlineForcesEstablishedTunnelClosed(t *testing.T) {
+	server, err := New(context.Background(), "unused", fakePolicy{}, &fakeResolver{}, &fakeDialer{}, readyStub(true), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned, peer := net.Pipe()
+	defer peer.Close()
+	if !server.acquire(owned) || !server.markEstablished(owned) {
+		t.Fatal("test tunnel was not established")
+	}
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		defer server.wait.Done()
+		defer server.release(owned)
+		buffer := make([]byte, 1)
+		_, _ = owned.Read(buffer)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := server.Shutdown(ctx); err == nil {
+		t.Fatal("stuck tunnel exceeded shutdown budget without an error")
+	}
+	select {
+	case <-joined:
+	case <-time.After(time.Second):
+		t.Fatal("forced tunnel close did not join")
+	}
+}
+
 func TestCompatibilityReadinessUsesEffectiveStateAndNeverDials(t *testing.T) {
 	for _, test := range []struct {
 		ready    bool
@@ -253,6 +354,20 @@ type readyStub bool
 
 func (value readyStub) Ready() (bool, string) { return bool(value), "test" }
 
+type scopedReadyStub struct{ hostname string }
+
+func (value scopedReadyStub) Ready() (bool, string) { return true, "ready" }
+func (value scopedReadyStub) ReadyFor(hostname string) (bool, string) {
+	return hostname == value.hostname, "destination readiness"
+}
+
+func TestConnectReadinessUsesExactDestination(t *testing.T) {
+	server := &Server{readiness: scopedReadyStub{hostname: "healthy.example.test"}}
+	if !server.readyFor("healthy.example.test") || server.readyFor("unhealthy.example.test") {
+		t.Fatal("CONNECT readiness escaped destination boundary")
+	}
+}
+
 func newTestMetrics(t *testing.T) *observability.Metrics {
 	t.Helper()
 	registry := prometheus.NewRegistry()
@@ -271,6 +386,75 @@ func newTestMetrics(t *testing.T) *observability.Metrics {
 }
 
 type fakePolicy struct{}
+
+type pinnedIntegrationPolicy struct {
+	fakePolicy
+	address netip.Addr
+}
+
+func (value pinnedIntegrationPolicy) AllowsLiteral(host string, port int, address netip.Addr) bool {
+	return host == "api.openai.com" && port == 443 && address == value.address
+}
+
+func (value pinnedIntegrationPolicy) TLSMode(host string, port int) string {
+	if host == "api.openai.com" && port == 443 {
+		return "implicit"
+	}
+	return ""
+}
+
+func TestIntegrationCONNECTDialsOnlyFreshPinnedDNSIntersection(t *testing.T) {
+	pin := netip.MustParseAddr("8.8.8.8")
+	newAddress := netip.MustParseAddr("9.9.9.9")
+	for _, test := range []struct {
+		name      string
+		addresses []netip.Addr
+		wantDial  bool
+	}{
+		{name: "overlap", addresses: []netip.Addr{pin, newAddress}, wantDial: true},
+		{name: "no overlap", addresses: []netip.Addr{newAddress}, wantDial: false},
+		{name: "private answer", addresses: []netip.Addr{pin, netip.MustParseAddr("10.0.0.1")}, wantDial: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{Addresses: test.addresses, ExpiresAt: time.Now().Add(time.Minute)}}
+			dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
+			server, err := New(context.Background(), "unused", pinnedIntegrationPolicy{address: pin}, resolver, dialer, readyStub(true), newTestMetrics(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			serverSide, clientSide := net.Pipe()
+			done := make(chan struct{})
+			go func() { server.handle(serverSide); close(done) }()
+			defer clientSide.Close()
+			_, _ = io.WriteString(clientSide, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n")
+			response := make([]byte, len(connectEstablished))
+			if _, err := io.ReadFull(clientSide, response); err != nil || string(response) != connectEstablished {
+				t.Fatal("CONNECT handshake failed", err)
+			}
+			go func() { _, _ = clientSide.Write(gatewayClientHello("api.openai.com")) }()
+			if test.wantDial {
+				select {
+				case peer := <-dialer.peers:
+					defer peer.Close()
+				case <-time.After(time.Second):
+					t.Fatal("pinned DNS intersection did not dial")
+				}
+				if len(dialer.targets) != 1 || dialer.targets[0].Addr() != pin {
+					t.Fatal("unpinned DNS address reached literal dial")
+				}
+			} else {
+				select {
+				case <-done:
+				case <-time.After(time.Second):
+					t.Fatal("empty pinned intersection did not close")
+				}
+				if len(dialer.targets) != 0 {
+					t.Fatal("fresh but unpinned address reached literal dial")
+				}
+			}
+		})
+	}
+}
 
 func (fakePolicy) Allows(hostname string, port int) bool {
 	return hostname == "api.openai.com" && port == 443

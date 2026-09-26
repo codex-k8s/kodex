@@ -27,8 +27,15 @@ async function loadPage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
-  const page = await loadOverlayHistory(props.agentRef, query, cursor, signal);
+  const page = await loadOverlayHistory(
+    props.agentRef,
+    query,
+    cursor,
+    signal,
+    pageSize,
+  );
   return {
     items: page.items.map((item) => ({
       ref: item.ref,

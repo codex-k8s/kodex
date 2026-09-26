@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Maximize2 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { loadHomeResultPage, type HomeResultItem } from "../result-catalog";
 import type { RunFilter } from "@/features/workboard/model";
 import { usePlatformStore } from "@/features/platform/store";
@@ -17,9 +17,11 @@ const props = withDefaults(
     kind: "RUN" | "ARTIFACT" | "SESSION";
     fixedFilter?: "FAILED";
     ready?: boolean;
+    dashboard?: boolean;
   }>(),
   { ready: true },
 );
+const fieldPrefix = `home-results-${useId()}`;
 const emit = defineEmits<{ total: [value: number | undefined]; settled: [] }>();
 const platform = usePlatformStore();
 const items = ref<HomeResultItem[]>([]);
@@ -38,12 +40,23 @@ const title = computed(() =>
   props.fixedFilter
     ? "home.failedRuns"
     : props.kind === "SESSION"
-      ? "common.continue"
+      ? "home.recentWork"
       : props.kind === "RUN"
         ? runFilter.value === "ACTIVE"
           ? "workboard.runningNow"
           : "runs.title"
         : "workboard.recentResults",
+);
+const emptyMessage = computed(() =>
+  props.kind === "RUN" && runFilter.value === "ACTIVE"
+    ? "workboard.noActiveRuns"
+    : "common.empty",
+);
+const dashboardItems = computed(() =>
+  props.dashboard ? items.value.slice(0, 3) : items.value,
+);
+const catalogPath = computed(() =>
+  props.kind === "ARTIFACT" ? "/files" : "/runs",
 );
 let controller: AbortController | undefined;
 let generation = 0;
@@ -51,7 +64,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let artifactController: AbortController | undefined;
 let artifactGeneration = 0;
 const seen = new Set<string>();
-async function load(more = false) {
+async function load(more = false, pageSize = 8) {
   if (!props.ready || (props.kind !== "ARTIFACT" && platform.loading.runs))
     return;
   if (more && (loading.value || !cursor.value)) return;
@@ -79,6 +92,7 @@ async function load(more = false) {
       },
       pageToken,
       active.signal,
+      pageSize,
     );
     if (current !== generation || active.signal.aborted) return;
     const next = more ? [...items.value, ...page.items] : page.items;
@@ -212,11 +226,20 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section class="home-result-catalog" :data-kind="kind">
+  <section
+    class="home-result-catalog"
+    :class="{ 'home-result-catalog--dashboard': dashboard }"
+    :data-kind="kind"
+  >
     <header>
       <h3>{{ $t(title) }}</h3>
       <span v-if="total !== undefined">{{ total }}</span
+      ><RouterLink v-if="dashboard" :to="catalogPath" class="home-result-all">
+        {{
+          kind === "ARTIFACT" ? $t("home.allFiles") : $t("home.allRuns")
+        }} </RouterLink
       ><button
+        v-if="!dashboard"
         type="button"
         class="button button--ghost"
         :title="$t('common.expand')"
@@ -226,14 +249,25 @@ onBeforeUnmount(() => {
         <Maximize2 :size="16" />
       </button>
     </header>
-    <label class="home-result-search"
+    <label v-if="!dashboard" class="home-result-search"
       ><span>{{ $t("common.search") }}</span
-      ><input v-model="query" type="search" maxlength="200"
+      ><input
+        v-model="query"
+        :id="`${fieldPrefix}-inline-search`"
+        :name="`${fieldPrefix}-inline-search`"
+        type="search"
+        maxlength="200"
     /></label>
-    <GateProjectFilter v-model="projectRef" />
-    <label v-if="kind === 'RUN' && !fixedFilter" class="home-result-search"
+    <GateProjectFilter v-if="!dashboard" v-model="projectRef" />
+    <label
+      v-if="!dashboard && kind === 'RUN' && !fixedFilter"
+      class="home-result-search"
       ><span>{{ $t("home.stateFilter") }}</span
-      ><select v-model="runFilter">
+      ><select
+        v-model="runFilter"
+        :id="`${fieldPrefix}-inline-state`"
+        :name="`${fieldPrefix}-inline-state`"
+      >
         <option value="ACTIVE">{{ $t("home.activeFilter") }}</option>
         <option value="TERMINAL">{{ $t("home.terminalFilter") }}</option>
         <option value="ALL">{{ $t("common.all") }}</option>
@@ -242,13 +276,14 @@ onBeforeUnmount(() => {
     <p v-if="loading || !ready" role="status">
       {{ $t("common.loading") }}
     </p>
-    <p v-else-if="total === 0">{{ $t("common.empty") }}</p>
+    <p v-else-if="total === 0">{{ $t(emptyMessage) }}</p>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <HomeResultRows
-      :items="items"
+      :items="dashboardItems"
       :loading="loading"
-      :more="cursor"
-      @more="load(true)"
+      :more="dashboard ? undefined : cursor"
+      :dashboard="dashboard"
+      @more="load(true, $event)"
       @open="open"
     />
     <ModalDialog
@@ -259,12 +294,21 @@ onBeforeUnmount(() => {
     >
       <label class="home-result-search"
         ><span>{{ $t("common.search") }}</span
-        ><input v-model="query" type="search" maxlength="200"
+        ><input
+          v-model="query"
+          :id="`${fieldPrefix}-modal-search`"
+          :name="`${fieldPrefix}-modal-search`"
+          type="search"
+          maxlength="200"
       /></label>
       <GateProjectFilter v-model="projectRef" />
       <label v-if="kind === 'RUN' && !fixedFilter" class="home-result-search"
         ><span>{{ $t("home.stateFilter") }}</span
-        ><select v-model="runFilter">
+        ><select
+          v-model="runFilter"
+          :id="`${fieldPrefix}-modal-state`"
+          :name="`${fieldPrefix}-modal-state`"
+        >
           <option value="ACTIVE">{{ $t("home.activeFilter") }}</option>
           <option value="TERMINAL">{{ $t("home.terminalFilter") }}</option>
           <option value="ALL">{{ $t("common.all") }}</option>
@@ -272,13 +316,13 @@ onBeforeUnmount(() => {
       >
       <p v-if="total !== undefined">{{ total }}</p>
       <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
-      <p v-else-if="total === 0">{{ $t("common.empty") }}</p>
+      <p v-else-if="total === 0">{{ $t(emptyMessage) }}</p>
       <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
       <HomeResultRows
         :items="items"
         :loading="loading"
         :more="cursor"
-        @more="load(true)"
+        @more="load(true, $event)"
         @open="open"
       />
     </ModalDialog>
@@ -326,6 +370,16 @@ header h3 {
 }
 header button {
   margin-left: auto;
+}
+.home-result-all {
+  margin-left: auto;
+  color: var(--accent-strong);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.home-result-catalog--dashboard header {
+  min-height: 52px;
+  border-bottom: 1px solid var(--hairline);
 }
 .home-result-search {
   display: grid;

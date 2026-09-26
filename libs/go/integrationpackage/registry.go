@@ -22,6 +22,8 @@ const (
 	AdapterJira          AdapterKey = "JIRA"
 	AdapterConfluence    AdapterKey = "CONFLUENCE"
 	AdapterEmailHTTPS    AdapterKey = "EMAIL_HTTPS"
+	AdapterHTTPSJSONRead AdapterKey = "HTTPS_JSON_READ"
+	AdapterOpenAPIMCP    AdapterKey = "OPENAPI_MCP"
 	AdapterMattermost    AdapterKey = "MATTERMOST_INTERACTION"
 
 	OwnerIntegrationGateway AdapterOwner = "integration-gateway"
@@ -44,10 +46,12 @@ const (
 
 	ApprovalNone            ApprovalPolicy = "NONE"
 	ApprovalHumanEachEffect ApprovalPolicy = "HUMAN_EACH_EFFECT"
+	ApprovalHumanScoped     ApprovalPolicy = "HUMAN_SCOPED"
 
 	IdempotencyReadOnly       IdempotencyMode = "READ_ONLY"
 	IdempotencyEffectKey      IdempotencyMode = "EFFECT_KEY"
 	IdempotencyProviderNative IdempotencyMode = "PROVIDER_NATIVE"
+	IdempotencyOneAttempt     IdempotencyMode = "ONE_ATTEMPT"
 )
 
 type AdapterDescriptor struct {
@@ -63,6 +67,8 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterJira:          {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterConfluence:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterEmailHTTPS:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterHTTPSJSONRead: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterOpenAPIMCP:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
 }
 
@@ -84,7 +90,8 @@ func ValidateAdapterBinding(definition Package) error {
 func (definition Package) ExecutableBy(owner AdapterOwner, route ExecutionRoute) bool {
 	descriptor, ok := Adapter(definition.Spec.Adapter)
 	return ok && descriptor.Owner == owner && descriptor.Route == route &&
-		descriptor.Readiness == ReadinessReady && ValidateAdapterBinding(definition) == nil
+		descriptor.Readiness == ReadinessReady && ValidateAdapterBinding(definition) == nil &&
+		!(definition.Spec.Adapter == string(AdapterOpenAPIMCP) && definition.Metadata.Origin == Origin)
 }
 
 // CallableByAgent отделяет пользовательскую команду MCP от подписки,
@@ -95,13 +102,13 @@ func (capability Capability) CallableByAgent() bool {
 
 var (
 	fieldFormats = map[FieldFormat]struct{}{
-		"": {}, "PLAIN": {}, "HTTPS_ORIGIN": {}, "HTTPS_URL": {},
+		"": {}, "PLAIN": {}, "HTTPS_ORIGIN": {}, "HTTPS_URL": {}, "HTTPS_PATH": {},
 		"EMAIL": {}, "HOST": {}, "IDENTIFIER": {},
 	}
 	resourceKinds = map[ResourceKind]struct{}{
 		"SYNTHETIC_JOURNAL": {}, "GITHUB_REPOSITORY": {}, "GITLAB_PROJECT": {},
 		"JIRA_PROJECT": {}, "CONFLUENCE_SPACE": {}, "EMAIL_SENDER": {},
-		"MATTERMOST_CHANNEL": {},
+		"MATTERMOST_CHANNEL": {}, "HTTPS_RESOURCE": {},
 	}
 )
 
@@ -120,9 +127,10 @@ func validRisk(value string) bool {
 	return value == string(RiskRead) || value == string(RiskWrite) || value == string(RiskSensitive) || value == string(RiskDestructive)
 }
 func validApprovalPolicy(value string) bool {
-	return value == string(ApprovalNone) || value == string(ApprovalHumanEachEffect)
+	return value == string(ApprovalNone) || value == string(ApprovalHumanEachEffect) || value == string(ApprovalHumanScoped)
 }
 func validResourceKind(value string) bool { _, ok := resourceKinds[ResourceKind(value)]; return ok }
 func validIdempotency(value string) bool {
-	return value == string(IdempotencyReadOnly) || value == string(IdempotencyEffectKey) || value == string(IdempotencyProviderNative)
+	return value == string(IdempotencyReadOnly) || value == string(IdempotencyEffectKey) ||
+		value == string(IdempotencyProviderNative) || value == string(IdempotencyOneAttempt)
 }

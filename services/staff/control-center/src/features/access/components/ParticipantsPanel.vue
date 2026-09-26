@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 
 import {
   membershipForSubject,
@@ -16,6 +16,8 @@ import type {
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   subjects: AccessSubject[];
@@ -24,20 +26,40 @@ const props = defineProps<{
   platformMemberships: Membership[];
   projectMemberships: Membership[];
   projectRef?: string;
+  initialQuery?: string;
+  selectedSubjectRef?: string;
   platformMembershipsUnavailable?: boolean;
   projectMembershipsUnavailable?: boolean;
   loading?: boolean;
   problem?: AppProblem;
   hasMore?: boolean;
+  mutationBusy?: boolean;
 }>();
 const emit = defineEmits<{
-  search: [query: string];
-  more: [query: string];
+  search: [query: string, pageSize: number];
+  more: [query: string, pageSize: number];
   bind: [subject: AccessSubject];
+  "edit-membership": [membership: Membership];
+  "revoke-membership": [membership: Membership];
   retry: [];
 }>();
-const query = ref("");
+const query = ref(props.initialQuery ?? "");
+const searchId = useId();
 let timer: ReturnType<typeof setTimeout> | undefined;
+const listRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".access-table__row",
+  itemCount: () => props.subjects.length,
+  estimatedItemHeight: 88,
+});
+useCursorInfiniteScroll({
+  root: listRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more", query.value.trim(), pageSize.value),
+});
 
 const groupNames = computed(
   () => new Map(props.groups.map((group) => [group.ref, group.displayName])),
@@ -84,9 +106,16 @@ function permissionCount(subject: AccessSubject): number {
 }
 
 watch(query, (value) => {
+  if (value === (props.initialQuery ?? "")) return;
   if (timer) clearTimeout(timer);
-  timer = setTimeout(() => emit("search", value.trim()), 250);
+  timer = setTimeout(() => emit("search", value.trim(), pageSize.value), 250);
 });
+watch(
+  () => props.initialQuery,
+  (value) => {
+    query.value = value ?? "";
+  },
+);
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
 });
@@ -107,10 +136,12 @@ onBeforeUnmount(() => {
           }}
         </p>
       </div>
-      <label class="search-field">
+      <label class="search-field" :for="searchId">
         <span class="sr-only">{{ $t("access.participants.search") }}</span>
         <input
+          :id="searchId"
           v-model="query"
+          :name="searchId"
           type="search"
           autocomplete="off"
           :placeholder="$t('access.participants.searchPlaceholder')"
@@ -126,7 +157,7 @@ onBeforeUnmount(() => {
       :empty-text="$t('access.participants.emptyHint')"
       @retry="emit('retry')"
     >
-      <div class="access-table" role="table">
+      <div ref="listRoot" class="access-table" role="table">
         <div class="access-table__head" role="row">
           <span>{{ $t("access.participants.participant") }}</span>
           <span>{{ $t("access.participants.identity") }}</span>
@@ -139,6 +170,9 @@ onBeforeUnmount(() => {
           v-for="subject in subjects"
           :key="subject.ref"
           class="access-table__row"
+          :class="{
+            'access-table__row--selected': subject.ref === selectedSubjectRef,
+          }"
           role="row"
         >
           <div>
@@ -194,30 +228,52 @@ onBeforeUnmount(() => {
             }}</span>
           </div>
           <StatusBadge :state="subject.active ? 'ACTIVE' : 'DISABLED'" />
-          <button
-            class="button"
-            type="button"
-            :disabled="!subject.active"
-            @click="emit('bind', subject)"
-          >
-            {{ $t("access.participants.createBinding") }}
-          </button>
+          <div class="access-table__actions">
+            <button
+              v-if="
+                projectRef &&
+                projectMembership(subject)?.nextActions.includes('EDIT')
+              "
+              class="button"
+              type="button"
+              :disabled="mutationBusy"
+              @click="emit('edit-membership', projectMembership(subject)!)"
+            >
+              {{ $t("access.projectMembershipEditor.edit") }}
+            </button>
+            <button
+              v-if="
+                projectRef &&
+                projectMembership(subject)?.nextActions.includes('REVOKE')
+              "
+              class="button button--danger"
+              type="button"
+              :disabled="mutationBusy"
+              @click="emit('revoke-membership', projectMembership(subject)!)"
+            >
+              {{ $t("access.projectMembershipEditor.revoke") }}
+            </button>
+            <button
+              class="button"
+              type="button"
+              :disabled="!subject.active || mutationBusy"
+              @click="emit('bind', subject)"
+            >
+              {{ $t("access.participants.createBinding") }}
+            </button>
+          </div>
         </article>
       </div>
-      <button
-        v-if="hasMore"
-        class="button load-more"
-        type="button"
-        :disabled="loading"
-        @click="emit('more', query.trim())"
-      >
-        {{ $t("access.loadMore") }}
-      </button>
+      <div v-if="hasMore" ref="sentinel" class="cursor-sentinel" />
     </AsyncState>
   </section>
 </template>
 
 <style scoped>
+.access-table__row--selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 var(--accent);
+}
 .section-toolbar {
   display: flex;
   align-items: end;
@@ -264,6 +320,12 @@ onBeforeUnmount(() => {
 }
 .access-table__row > div:first-child {
   min-width: 0;
+}
+.access-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
 }
 .access-table__row small {
   display: block;

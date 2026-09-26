@@ -73,7 +73,7 @@ describe("VFS", () => {
           path: "/projects",
           projectRef: "project_one",
           pageToken: "cursor",
-          pageSize: 30,
+          pageSize: 20,
         },
       }),
     );
@@ -88,7 +88,7 @@ describe("VFS", () => {
         query: {
           query: "Проект",
           projectRef: "project_one",
-          pageSize: 30,
+          pageSize: 20,
           path: "/projects",
         },
       }),

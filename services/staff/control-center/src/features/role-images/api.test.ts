@@ -226,7 +226,7 @@ describe("role image API adapter", () => {
       expect.objectContaining({
         path: { projectRef: "project_1" },
         query: {
-          pageSize: 40,
+          pageSize: 20,
           pageToken: "page_1",
           query: "Среда",
           state: "ACTIVE",
@@ -285,6 +285,18 @@ describe("role image API adapter", () => {
           "If-Match": '"3"',
           "X-CSRF-Token": "csrf_1",
         },
+      }),
+    );
+  });
+
+  it("передаёт точную попытку для отмены без ARCHIVE", async () => {
+    api.commandRoleImageRecipe.mockReturnValueOnce(
+      response({ recipe, reused: false }),
+    );
+    await commandRoleImage("project_1", recipe, "CANCEL_BUILD", "imgbld_12345678");
+    expect(api.commandRoleImageRecipe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { action: "CANCEL_BUILD", buildRef: "imgbld_12345678" },
       }),
     );
   });

@@ -8,7 +8,7 @@ import {
   Search,
   Maximize2,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import type {
@@ -18,6 +18,8 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { loadVfsPage, vfsEntityRoute } from "./vfs";
 import {
   parseVfsTrail,
@@ -40,6 +42,7 @@ const { locale } = useI18n();
 const props = defineProps<{ projectRef?: string }>();
 const route = useRoute();
 const router = useRouter();
+const fieldId = useId();
 const lifecycleState = ref<
   NonNullable<SearchVfsData["query"]["lifecycleState"]>
 >(availableStates.find((state) => state === route.query.vfsState) ?? "ACTIVE");
@@ -148,6 +151,16 @@ const query = ref(
     : "",
 );
 const nodes = ref<VfsNode[]>([]);
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".vfs-entry",
+  itemCount: () => nodes.value.length,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
 const selected = ref<VfsNode>();
 const entityRoute = computed(() =>
   selected.value ? vfsEntityRoute(selected.value) : undefined,
@@ -197,6 +210,7 @@ async function load(more = false): Promise<void> {
       query: query.value,
       projectRef: props.projectRef,
       pageToken: token,
+      pageSize: pageSize.value,
       lifecycleState: lifecycleState.value,
       kinds: kinds.value,
       signal: request.signal,
@@ -242,11 +256,12 @@ function open(node: VfsNode): void {
   else folders.value.push({ path: node.path, name: node.name });
   query.value = "";
 }
-function scroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    void load(true);
-}
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => Boolean(nextPageToken.value) && !loading.value,
+  loadMore: () => load(true),
+});
 watch(
   [folders, query, lifecycleState, kinds, selected],
   () => {
@@ -368,13 +383,20 @@ onBeforeUnmount(() => {
         <label class="vfs-search"
           ><Search :size="18" /><input
             v-model="query"
+            :id="`${fieldId}-query`"
+            :name="`${fieldId}-query`"
             type="search"
             :aria-label="$t('files.search')"
             :placeholder="$t('files.search')"
         /></label>
         <label class="vfs-filter">
           <span>{{ $t("vfs.lifecycle") }}</span>
-          <select v-model="lifecycleState" :disabled="actionBusy">
+          <select
+            v-model="lifecycleState"
+            :id="`${fieldId}-lifecycle`"
+            :name="`${fieldId}-lifecycle`"
+            :disabled="actionBusy"
+          >
             <option
               v-for="state in availableStates"
               :key="state"
@@ -393,9 +415,12 @@ onBeforeUnmount(() => {
           <fieldset :disabled="actionBusy">
             <legend>{{ $t("vfs.filterKinds") }}</legend>
             <label v-for="kind in availableKinds" :key="kind">
-              <input v-model="kinds" type="checkbox" :value="kind" />{{
-                $t(`vfs.kind.${kind}`)
-              }}
+              <input
+                v-model="kinds"
+                :name="`${fieldId}-kinds`"
+                type="checkbox"
+                :value="kind"
+              />{{ $t(`vfs.kind.${kind}`) }}
             </label>
             <button type="button" class="button" @click="kinds = []">
               {{ $t("vfs.allKinds") }}
@@ -489,14 +514,16 @@ onBeforeUnmount(() => {
       <p v-else-if="!nodes.length && !problem">{{ $t("common.empty") }}</p>
       <div class="vfs-content" :class="{ 'vfs-content--selected': selected }">
         <div
+          ref="scrollRoot"
           class="vfs-list"
           :class="{ 'vfs-list--expanded': expanded }"
           :aria-busy="loading"
-          @scroll="scroll"
         >
           <div v-for="node in nodes" :key="node.ref" class="vfs-entry">
             <input
+              :name="`${fieldId}-selection`"
               type="checkbox"
+              :value="node.ref"
               :checked="checked.some((item) => item.ref === node.ref)"
               :disabled="actionBusy || !selectable(node)"
               :aria-label="$t('vfs.selectNode', { name: node.name })"
@@ -524,14 +551,15 @@ onBeforeUnmount(() => {
               >
             </button>
           </div>
-          <button
+          <div
             v-if="nextPageToken"
-            class="button"
-            :disabled="loading"
-            @click="load(true)"
+            ref="sentinel"
+            class="vfs-sentinel"
+            role="status"
           >
-            {{ $t("managed.more") }} ({{ nodes.length }}/{{ total }})
-          </button>
+            <span v-if="loading">{{ $t("common.loading") }}</span>
+            <span class="sr-only">{{ nodes.length }}/{{ total }}</span>
+          </div>
         </div>
         <aside v-if="selected" class="vfs-inspector">
           <h2>{{ selected.name }}</h2>

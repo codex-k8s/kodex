@@ -4,8 +4,8 @@ title: Регламент эксплуатации Egress Gateway
 type: runbook
 status: approved
 owner: SRE
-version: 1.0.0
-updated: 2026-08-07
+version: 1.1.0
+updated: 2026-09-24
 ---
 
 # Egress Gateway Runbook
@@ -39,6 +39,14 @@ Readback не принимает hostname, policy, destination или credential
 HTTP CONNECT и узкую compatibility-проверку: только bodyless `GET /readyz` без
 query получает `204` при том же effective readiness либо `503`. Иные методы и
 пути на `8080` закрыто отклоняются; consumer не получает доступ к `9090`.
+
+Для опубликованных `OPENAPI_MCP` подключений используется отдельный listener
+`egress-gateway:8083`. Его policy поступает только из закреплённой проекции
+control-plane: набор точных HTTPS origin, проверенных DNS-адресов и поколения.
+Пустой набор origin является штатным до первой публикации: `GET /readyz` на
+`8083` возвращает `503`, при этом общая готовность Pod и остальные listener
+не зависят от наличия интеграций. Произвольный `CONNECT` вне проекции
+закрыто отклоняется. Проекция не содержит credential values.
 
 ## Alerts и первичная диагностика
 
@@ -100,6 +108,11 @@ tunnels. Alert означает устойчивые rejects с закрытой
   monitoring selector.
 - Gateway egress содержит только exact kube-dns `TCP/UDP 53` и отдельно
   документированное destination-less `TCP/443` L3/L4 exception.
+- Для `OPENAPI_MCP` дополнительная NetworkPolicy отражает разрешённые
+  destination CIDR для readback, но не сужает действующее L3/L4 исключение
+  `TCP/443`: Kubernetes объединяет разрешения нескольких policy. Фактический
+  точный допуск обеспечивается gateway проверкой hostname, SNI, IP и поколения
+  проекции до dial. Это ограничение важно учитывать при оценке риска профиля.
 - Consumer и другие application Pods не получают `0.0.0.0/0`, `::/0` либо
   destination-less внешний `443`.
 

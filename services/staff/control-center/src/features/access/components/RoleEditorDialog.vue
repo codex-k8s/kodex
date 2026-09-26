@@ -119,7 +119,13 @@ watch(() => props.role, reset, { immediate: true });
 
       <label class="field">
         <span>{{ $t("common.name") }}</span>
-        <input v-model="form.name" required maxlength="160" :disabled="busy" />
+        <input
+          v-model="form.name"
+          name="access-role-name"
+          required
+          maxlength="160"
+          :disabled="busy"
+        />
       </label>
       <label class="field">
         <span>{{ $t("access.roleEditor.description") }}</span>
@@ -141,6 +147,7 @@ watch(() => props.role, reset, { immediate: true });
             class="permission-option"
           >
             <input
+              name="access-role-permissions"
               type="checkbox"
               :checked="form.permissionKeys.includes(permission.key)"
               :disabled="busy"
@@ -173,6 +180,7 @@ watch(() => props.role, reset, { immediate: true });
         <div class="scope-options">
           <label v-for="scope in accessScopeKinds" :key="scope">
             <input
+              name="access-role-scopes"
               type="checkbox"
               :checked="form.allowedScopes.includes(scope)"
               :disabled="busy || !compatibleScopes.includes(scope)"
@@ -190,6 +198,7 @@ watch(() => props.role, reset, { immediate: true });
         <span>{{ $t("access.roleEditor.changeComment") }}</span>
         <input
           v-model="form.changeComment"
+          name="access-role-change-comment"
           maxlength="500"
           :disabled="busy"
           :placeholder="$t('access.roleEditor.changeCommentPlaceholder')"

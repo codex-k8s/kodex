@@ -33,6 +33,10 @@ func TestCatalogResolveKeepsSupplyChainValuesServerOwned(t *testing.T) {
 	if again.BaseImageReference != "registry.internal/role-base-documents" {
 		t.Fatal("catalog leaked mutable recipe state")
 	}
+	selection, err := catalog.RecommendedSelection()
+	if err != nil || selection.EnvironmentKey != "documents" || selection.Dockerfile != "" || len(selection.PackageKeys) != 0 {
+		t.Fatalf("unsafe recommended selection: selection=%#v err=%v", selection, err)
+	}
 }
 
 func TestCatalogRejectsUnavailableAndUnapprovedSelection(t *testing.T) {

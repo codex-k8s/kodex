@@ -301,8 +301,10 @@ defineExpose<AttachmentComposerHandle>({ clear, finalize });
     <input
       ref="input"
       class="sr-only"
+      name="attachments"
       type="file"
       multiple
+      :aria-label="t('attachments.add')"
       :disabled="effectivelyDisabled"
       @change="handleInput"
     />

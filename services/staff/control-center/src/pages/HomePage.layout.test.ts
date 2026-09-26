@@ -16,14 +16,31 @@ describe("HomePage layout", () => {
     expect(attention).toBeGreaterThan(-1);
     expect(running).toBeGreaterThan(attention);
     expect(template).not.toContain("home-focus-grid");
+    expect(template).toContain('kind="RUN"');
+    expect(template).not.toContain('v-show="showRuns"');
   });
 
-  it("разделяет доступные источники и не рисует недостоверные provider-карточки", () => {
+  it("разделяет доступные источники и использует реальный статус провайдера", () => {
     expect(template).toContain(':gates="openGates"');
     expect(template).toContain(':failed-runs="failedRuns"');
+    expect(template).toContain(
+      ':provider-accounts="providerAccountsNeedingAuthorization"',
+    );
     expect(template).toContain('kind="SESSION"');
     expect(template).not.toContain("CapabilityCoverageList");
     expect(template).not.toContain("PROVIDER_AUTH_EXPIRY");
+    expect(source).toContain('state: "REAUTHORIZATION_REQUIRED"');
+    expect(source).toContain("pageToken,");
+    expect(template).toContain(
+      ':provider-next-page-token="providerNextPageToken"',
+    );
+    expect(template).toContain('@more-providers="loadMoreProviderAttention"');
+    expect(template).toContain(
+      '@retry-more-providers="retryMoreProviderAttention"',
+    );
+    expect(template).toContain('class="home-dashboard"');
+    expect(template).toContain("dashboard");
+    expect(template).not.toContain("HomeGateCatalog");
   });
 
   it("обновляет данные через store без route reload", () => {

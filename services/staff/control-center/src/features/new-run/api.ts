@@ -11,8 +11,6 @@ import {
 } from "@/features/new-run/model";
 import { loadSessionCatalog } from "@/features/workboard/session-catalog";
 
-const artifactPageSize = 40;
-
 function combinedSignal(signal: AbortSignal): AbortSignal {
   return AbortSignal.any([signal, requestSignal()]);
 }
@@ -25,13 +23,13 @@ function optionalQuery(query: string): string | undefined {
 export function createArtifactPickerLoader(
   projectRef: string,
 ): AsyncEntityLoader<ArtifactPickerItem> {
-  return async ({ cursor, query, signal }) => {
+  return async ({ cursor, query, signal, pageSize = 40 }) => {
     const searchQuery = optionalQuery(query);
     const response = await unwrap(
       listArtifacts({
         path: { projectRef },
         query: {
-          pageSize: artifactPageSize,
+          pageSize,
           ...(cursor ? { pageToken: cursor } : {}),
           ...(searchQuery ? { query: searchQuery } : {}),
         },
@@ -50,8 +48,13 @@ export function createSessionPickerLoader(scope: {
   targetRef: string;
   targetType: NewRunTargetType;
 }): AsyncEntityLoader<SessionPickerItem> {
-  return async ({ cursor, query, signal }) => {
-    const page = await loadSessionCatalog({ ...scope, query }, cursor, signal);
+  return async ({ cursor, query, signal, pageSize = 30 }) => {
+    const page = await loadSessionCatalog(
+      { ...scope, query },
+      cursor,
+      signal,
+      pageSize,
+    );
     return {
       items: page.items.map(toSessionPickerItem),
       nextCursor: page.nextPageToken || null,

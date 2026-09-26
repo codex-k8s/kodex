@@ -13,14 +13,7 @@ import {
   Trash2,
   Workflow,
 } from "@lucide/vue";
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-  type WatchStopHandle,
-} from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
@@ -51,11 +44,14 @@ import { AppProblem, asProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
   initialScheduleRef?: string;
 }>();
+const emit = defineEmits<{ select: [scheduleRef: string] }>();
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
 
@@ -67,6 +63,10 @@ const listLoading = ref(false);
 const moreLoading = ref(false);
 const listProblem = ref<AppProblem>();
 const selectedRef = ref("");
+function selectSchedule(scheduleRef: string): void {
+  selectedRef.value = scheduleRef;
+  emit("select", scheduleRef);
+}
 const selectedSection = ref<"OVERVIEW" | "VERSIONS" | "RUNS">("OVERVIEW");
 const editorOpen = ref(false);
 const editorScheduleRef = ref("");
@@ -85,12 +85,22 @@ const runsToken = ref<string>();
 const runsLoading = ref(false);
 const runsProblem = ref<AppProblem>();
 const listSentinel = ref<HTMLElement>();
+const listRoot = ref<HTMLElement>();
+const revisionRoot = ref<HTMLElement>();
+const revisionSentinel = ref<HTMLElement>();
+const runRoot = ref<HTMLElement>();
+const runSentinel = ref<HTMLElement>();
 
 let listController: AbortController | undefined;
 let historyController: AbortController | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let listObserver: IntersectionObserver | undefined;
-let stopSentinelWatch: WatchStopHandle | undefined;
+useCursorInfiniteScroll({
+  root: listRoot,
+  sentinel: listSentinel,
+  enabled: () =>
+    Boolean(nextPageToken.value) && !listLoading.value && !moreLoading.value,
+  loadMore: () => loadList(false),
+});
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canCreate = computed(() =>
@@ -107,6 +117,42 @@ const filteredSchedules = computed(() =>
     scheduleMatchesFilter(schedule, state.value),
   ),
 );
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".automation-row",
+  itemCount: () => filteredSchedules.value.length,
+  estimatedItemHeight: 76,
+});
+const revisionPageSize = useAdaptiveCursorPageSize({
+  container: revisionRoot,
+  itemSelector: ".automation-details__revision",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 180,
+  minimum: 4,
+  maximum: 100,
+});
+const runPageSize = useAdaptiveCursorPageSize({
+  container: runRoot,
+  itemSelector: ".automation-details__run",
+  itemCount: () => runOccurrences.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 190,
+  minimum: 4,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: revisionRoot,
+  sentinel: revisionSentinel,
+  enabled: () => Boolean(revisionsToken.value) && !revisionsLoading.value,
+  loadMore: () => loadRevisions(false),
+});
+useCursorInfiniteScroll({
+  root: runRoot,
+  sentinel: runSentinel,
+  enabled: () => Boolean(runsToken.value) && !runsLoading.value,
+  loadMore: () => loadRuns(false),
+});
 const selectedSchedule = computed(() => scopedSchedule(selectedRef.value));
 const selectedCapabilities = computed(() =>
   selectedSchedule.value
@@ -260,6 +306,7 @@ async function loadList(reset = false): Promise<void> {
       search.value,
       reset ? undefined : nextPageToken.value,
       controller.signal,
+      pageSize.value,
     );
     if (controller.signal.aborted || requestedProject !== props.projectRef)
       return;
@@ -337,6 +384,7 @@ async function loadRevisions(reset = false): Promise<void> {
       scheduleRef,
       reset ? undefined : revisionsToken.value,
       controller.signal,
+      revisionPageSize.value,
     );
     if (controller.signal.aborted || scheduleRef !== selectedRef.value) return;
     revisions.value = reset
@@ -366,6 +414,7 @@ async function loadRuns(reset = false): Promise<void> {
       scheduleRef,
       reset ? undefined : runsToken.value,
       controller.signal,
+      runPageSize.value,
     );
     if (controller.signal.aborted || scheduleRef !== selectedRef.value) return;
     runOccurrences.value = reset
@@ -508,26 +557,14 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
-function observeSentinel(element: HTMLElement | undefined): void {
-  listObserver?.disconnect();
-  if (!element || typeof IntersectionObserver === "undefined") return;
-  listObserver = new IntersectionObserver((entries) => {
-    if (entries.some((entry) => entry.isIntersecting)) void loadList(false);
-  });
-  listObserver.observe(element);
-}
-
 onMounted(() => {
   void Promise.all([loadList(true), platform.loadProject(props.projectRef)]);
-  stopSentinelWatch = watch(listSentinel, observeSentinel, { immediate: true });
 });
 
 onBeforeUnmount(() => {
   listController?.abort();
   historyController?.abort();
   if (searchTimer) clearTimeout(searchTimer);
-  listObserver?.disconnect();
-  stopSentinelWatch?.();
 });
 </script>
 
@@ -537,11 +574,20 @@ onBeforeUnmount(() => {
       <label class="automations-workspace__search">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ custom.search }}</span>
-        <input v-model="search" type="search" :placeholder="custom.search" />
+        <input
+          v-model="search"
+          name="automation-search"
+          type="search"
+          :placeholder="custom.search"
+        />
       </label>
       <label>
         <span class="sr-only">{{ $t("common.status") }}</span>
-        <select v-model="state" :aria-label="$t('common.status')">
+        <select
+          v-model="state"
+          name="automation-state"
+          :aria-label="$t('common.status')"
+        >
           <option value="CURRENT">{{ custom.currentStates }}</option>
           <option value="ALL">{{ custom.allStates }}</option>
           <option value="ACTIVE">{{ $t("states.ACTIVE") }}</option>
@@ -582,18 +628,21 @@ onBeforeUnmount(() => {
       >
         <h2>{{ custom.noMatches }}</h2>
         <p>{{ custom.noMatchesText }}</p>
-        <button
+        <div
           v-if="nextPageToken"
-          class="button"
-          type="button"
-          :disabled="moreLoading"
-          @click="loadList(false)"
+          ref="listSentinel"
+          class="automation-list-sentinel"
         >
-          {{ custom.loadMore }}
-        </button>
+          <LoaderCircle
+            v-if="moreLoading"
+            class="spin"
+            :size="18"
+            aria-hidden="true"
+          />
+        </div>
       </section>
       <div v-else class="automations-workspace__layout">
-        <div class="automations-list" role="list">
+        <div ref="listRoot" class="automations-list" role="list">
           <div class="automations-list__head desktop-only" aria-hidden="true">
             <span>{{ $t("common.name") }} · {{ custom.target }}</span>
             <span>{{ custom.schedule }}</span>
@@ -610,7 +659,7 @@ onBeforeUnmount(() => {
             }"
             type="button"
             role="listitem"
-            @click="selectedRef = schedule.ref"
+            @click="selectSchedule(schedule.ref)"
             @dblclick="openEdit(schedule)"
           >
             <span class="automation-row__identity">
@@ -650,14 +699,6 @@ onBeforeUnmount(() => {
               :size="18"
               aria-hidden="true"
             />
-            <button
-              v-else-if="nextPageToken"
-              class="button"
-              type="button"
-              @click="loadList(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
           </div>
         </div>
 
@@ -741,6 +782,7 @@ onBeforeUnmount(() => {
 
           <section
             v-else-if="selectedSection === 'VERSIONS'"
+            ref="revisionRoot"
             class="automation-details__history"
           >
             <div class="automation-details__history-heading">
@@ -798,18 +840,15 @@ onBeforeUnmount(() => {
                 </div>
               </dl>
             </article>
-            <button
+            <div
               v-if="revisionsToken"
-              class="button"
-              type="button"
-              :disabled="revisionsLoading"
-              @click="loadRevisions(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
+              ref="revisionSentinel"
+              class="cursor-sentinel"
+              aria-hidden="true"
+            />
           </section>
 
-          <section v-else class="automation-details__history">
+          <section v-else ref="runRoot" class="automation-details__history">
             <div class="automation-details__history-heading">
               <History :size="18" aria-hidden="true" />
               <h3>{{ $t("automations.runHistory") }}</h3>
@@ -871,15 +910,12 @@ onBeforeUnmount(() => {
                 >{{ $t("common.open") }}</RouterLink
               >
             </article>
-            <button
+            <div
               v-if="runsToken"
-              class="button"
-              type="button"
-              :disabled="runsLoading"
-              @click="loadRuns(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
+              ref="runSentinel"
+              class="cursor-sentinel"
+              aria-hidden="true"
+            />
           </section>
 
           <div class="automation-details__actions" :aria-label="custom.actions">
@@ -1175,6 +1211,8 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
   padding-top: 14px;
+  max-height: min(520px, calc(100dvh - 280px));
+  overflow: auto;
 }
 .automation-details__history-heading {
   justify-content: flex-start;

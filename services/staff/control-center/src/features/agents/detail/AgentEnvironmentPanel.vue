@@ -113,8 +113,15 @@ async function load(): Promise<void> {
 async function loadEnvironmentPage(
   query: string,
   cursor?: string,
+  _signal?: AbortSignal,
+  pageSize = 30,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await searchRuntimeEnvironments(props.projectRef, query, cursor);
+  const page = await searchRuntimeEnvironments(
+    props.projectRef,
+    query,
+    cursor,
+    pageSize,
+  );
   return {
     items: page.items.map(environmentOption),
     ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}),

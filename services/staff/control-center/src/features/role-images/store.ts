@@ -79,6 +79,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     projectRef: string,
     reset = true,
     filter?: { query?: string; state?: "ACTIVE" | "ARCHIVED" },
+    pageSize = 20,
   ): Promise<void> {
     if (
       !reset &&
@@ -108,6 +109,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         cursor,
         controller.signal,
         activeFilter,
+        pageSize,
       );
       if (current !== catalogGeneration) return;
       if (
@@ -165,6 +167,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     projectRef: string,
     recipeRef: string,
     showLoading = true,
+    revisionPageSize = 20,
   ): Promise<void> {
     const current = ++detailGeneration;
     loadingDetail.value = showLoading;
@@ -189,7 +192,12 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         detail.activeArtifact
           ? loadRoleImageDependencies(projectRef, detail.activeArtifact.ref)
           : Promise.resolve([]),
-        loadRoleImageRevisionPage(projectRef, recipeRef),
+        loadRoleImageRevisionPage(
+          projectRef,
+          recipeRef,
+          undefined,
+          revisionPageSize,
+        ),
       ]);
       if (current !== detailGeneration) return;
       recipes[detail.recipe.ref] = detail.recipe;
@@ -213,6 +221,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   async function loadMoreRevisions(
     projectRef: string,
     recipeRef: string,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = revisionNextPageToken[recipeRef];
     if (!pageToken || loadingDetail.value) return;
@@ -224,6 +233,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         projectRef,
         recipeRef,
         pageToken,
+        pageSize,
       );
       if (current !== detailGeneration) return;
       const merged = new Map(
@@ -271,11 +281,17 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     projectRef: string,
     recipe: RoleImageRecipe,
     action: RoleImageRecipeCommand["action"],
+    buildRef?: string,
   ): Promise<void> {
     mutating.value = true;
     problem.value = undefined;
     try {
-      const receipt = await commandRoleImage(projectRef, recipe, action);
+      const receipt = await commandRoleImage(
+        projectRef,
+        recipe,
+        action,
+        buildRef,
+      );
       recipes[receipt.recipe.ref] = receipt.recipe;
       if (receipt.imageBuild) {
         const current = builds[receipt.recipe.ref] ?? [];

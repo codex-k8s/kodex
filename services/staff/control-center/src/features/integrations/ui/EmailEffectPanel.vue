@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { Search, Check, LogIn } from "@lucide/vue";
 import { useI18n } from "vue-i18n";
 import type {
@@ -26,6 +26,7 @@ const props = defineProps<{
   connection: IntegrationConnection;
   initialInvocationRef?: string;
 }>();
+const fieldPrefix = `email-effect-${useId()}`;
 const session = useSessionStore();
 const { t } = useI18n();
 const invocationRef = ref(props.initialInvocationRef ?? "");
@@ -194,7 +195,12 @@ async function reconcile(): Promise<void> {
     <form class="email-search" @submit.prevent="load">
       <label
         >{{ t("emailEffect.invocation")
-        }}<input v-model="invocationRef" :disabled="busy" maxlength="512"
+        }}<input
+          v-model="invocationRef"
+          :id="`${fieldPrefix}-invocation`"
+          :name="`${fieldPrefix}-invocation`"
+          :disabled="busy"
+          maxlength="512"
       /></label>
       <button
         type="submit"
@@ -259,7 +265,12 @@ async function reconcile(): Promise<void> {
         <template v-else>
           <label
             >{{ t("emailEffect.decision")
-            }}<select v-model="outcome" :disabled="busy">
+            }}<select
+              v-model="outcome"
+              :id="`${fieldPrefix}-decision`"
+              :name="`${fieldPrefix}-decision`"
+              :disabled="busy"
+            >
               <option value="" disabled>
                 {{ t("emailEffect.selectOutcome") }}
               </option>

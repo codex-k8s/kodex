@@ -6,6 +6,7 @@ import type {
   AuditEvent,
   IntegrationConnection,
   IntegrationDefinition,
+  OwnerGate,
   Project,
   ProjectPage,
   Run,
@@ -19,6 +20,8 @@ import type {
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 const listProjectsMock = vi.hoisted(() => vi.fn());
+const getOverviewMock = vi.hoisted(() => vi.fn());
+const listOwnerGatesMock = vi.hoisted(() => vi.fn());
 const searchPlatformMock = vi.hoisted(() => vi.fn());
 const listAuditEventsMock = vi.hoisted(() => vi.fn());
 const getRunGraphMock = vi.hoisted(() => vi.fn());
@@ -81,6 +84,8 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
     typeof import("@/shared/api/generated/openapi/sdk.gen")
   >()),
   listProjects: listProjectsMock,
+  getOverview: getOverviewMock,
+  listOwnerGates: listOwnerGatesMock,
   searchPlatform: searchPlatformMock,
   listAuditEvents: listAuditEventsMock,
   getRunGraph: getRunGraphMock,
@@ -130,6 +135,25 @@ function project(ref: string, version = 1): Project {
   };
 }
 
+function ownerGate(): OwnerGate {
+  return {
+    ref: "gate_synthetic",
+    version: 1,
+    projectRef: "project_synthetic",
+    runRef: "run_synthetic",
+    nodeRef: "node_synthetic",
+    title: "Проверка",
+    contextSummary: "Тестовое решение",
+    consequencesSummary: "Последствия проверяются отдельно",
+    requestedBy: { ref: "user_synthetic", displayName: "Тестовый владелец" },
+    state: "OPEN",
+    allowedDecisions: ["APPROVE"],
+    openedAt: "2026-09-26T00:00:00Z",
+    decisionConsequences: [],
+    nextActions: [],
+  };
+}
+
 function response(
   items: Project[],
   nextActions: ProjectPage["nextActions"] = [],
@@ -154,12 +178,16 @@ function deferred<T>(): {
   return { promise, resolve };
 }
 
-function searchResponse(items: SearchResult[]): {
+function searchResponse(
+  items: SearchResult[],
+  nextPageToken?: string,
+  total = items.length,
+): {
   data: SearchResultPage;
   response: Response;
 } {
   return {
-    data: { items, total: items.length },
+    data: { items, total, ...(nextPageToken ? { nextPageToken } : {}) },
     response: new Response(null, { status: 200 }),
   };
 }
@@ -276,6 +304,8 @@ function integrationDefinition(): IntegrationDefinition {
     builtIn: true,
     version: 1,
     nextActions: [],
+    connectionCount: 0,
+    healthyConnectionCount: 0,
     available: true,
     capabilities: [],
     configurationFields: [],
@@ -331,6 +361,11 @@ describe("platform store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     listProjectsMock.mockReset();
+    getOverviewMock.mockReset();
+    listOwnerGatesMock.mockReset().mockResolvedValue({
+      data: { items: [], total: 0 },
+      response: new Response(null, { status: 200 }),
+    });
     searchPlatformMock.mockReset();
     listAuditEventsMock.mockReset();
     getRunGraphMock.mockReset();
@@ -364,28 +399,139 @@ describe("platform store", () => {
   it("новый scope запускает отдельный resync, не ожидая старую отменённую очередь", async () => {
     vi.useFakeTimers();
     const { resetOwnerRequests } = await import("@/shared/api/owner-lifetime");
-    const old = deferred<ReturnType<typeof response>>();
-    const fresh = deferred<ReturnType<typeof response>>();
-    listProjectsMock
+    const old = deferred<{ data: RunPage; response: Response }>();
+    const fresh = deferred<{ data: RunPage; response: Response }>();
+    listRunsMock
       .mockReturnValueOnce(old.promise)
       .mockReturnValueOnce(fresh.promise);
     const store = usePlatformStore();
     const first = store.reloadPlatformState().catch(() => undefined);
     await vi.advanceTimersByTimeAsync(0);
-    expect(listProjectsMock).toHaveBeenCalledTimes(1);
+    expect(listRunsMock).toHaveBeenCalledTimes(1);
+    expect(listProjectsMock).not.toHaveBeenCalled();
     resetOwnerRequests();
     const second = store.reloadPlatformState().catch(() => undefined);
     await vi.advanceTimersByTimeAsync(0);
-    expect(listProjectsMock).toHaveBeenCalledTimes(2);
-    fresh.resolve(response([project("project_fresh")]));
+    expect(listRunsMock).toHaveBeenCalledTimes(2);
+    fresh.resolve({
+      data: { items: [{ ...run(2), ref: "run_fresh" }], total: 1 },
+      response: new Response(null, { status: 200 }),
+    });
     await vi.runAllTimersAsync();
     await second;
-    expect(store.projects.project_fresh).toBeDefined();
-    old.resolve(response([project("project_stale")]));
+    expect(store.runs.run_fresh).toBeDefined();
+    old.resolve({
+      data: { items: [{ ...run(1), ref: "run_stale" }], total: 1 },
+      response: new Response(null, { status: 200 }),
+    });
     await vi.runAllTimersAsync();
     await first;
-    expect(store.projects.project_fresh).toBeDefined();
-    expect(store.projects.project_stale).toBeUndefined();
+    expect(store.runs.run_fresh).toBeDefined();
+    expect(store.runs.run_stale).toBeUndefined();
+  });
+
+  it("обновляет проектное событие без предзагрузки первой сотни проектов", async () => {
+    getOverviewMock.mockResolvedValue({
+      data: { activeRuns: [], pendingGates: [], recentArtifacts: [] },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.reloadPlatformKind("PROJECT");
+
+    expect(getOverviewMock).toHaveBeenCalledTimes(1);
+    expect(listProjectsMock).not.toHaveBeenCalled();
+    expect(listOwnerGatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ query: { states: ["OPEN"], pageSize: 1 } }),
+    );
+  });
+
+  it("читает точный счётчик решений без материализации первой сотни", async () => {
+    listOwnerGatesMock.mockResolvedValueOnce({
+      data: { items: [ownerGate()], total: 17 },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadPendingGateCount();
+
+    expect(store.pendingGateCount).toBe(17);
+    expect(store.gateList).toEqual([]);
+    expect(store.gateCatalogRevision).toBe(1);
+    expect(listOwnerGatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ query: { states: ["OPEN"], pageSize: 1 } }),
+    );
+  });
+
+  it("отвергает противоречивую страницу счётчика решений", async () => {
+    listOwnerGatesMock
+      .mockResolvedValueOnce({
+        data: { items: [ownerGate()], total: 17 },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [], total: 17 },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadPendingGateCount();
+    expect(store.pendingGateCount).toBe(17);
+    await store.loadPendingGateCount();
+
+    expect(store.pendingGateCount).toBeUndefined();
+    expect(store.gateCatalogRevision).toBe(1);
+    expect(store.problems.gateCount).toBeDefined();
+  });
+
+  it("догружает решения запуска по курсору без неподдерживаемого runRef-фильтра", async () => {
+    const other = { ...ownerGate(), ref: "gate_other", runRef: "run_other" };
+    const target = ownerGate();
+    listOwnerGatesMock
+      .mockResolvedValueOnce({
+        data: { items: [other], total: 2, nextPageToken: "gate-page-2" },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [target], total: 2, nextPageToken: "" },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadGates("project_synthetic", "run_synthetic");
+
+    expect(store.gates.gate_synthetic).toEqual(target);
+    expect(store.problems.gates).toBeUndefined();
+    expect(listOwnerGatesMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        query: { projectRef: "project_synthetic", pageSize: 100 },
+      }),
+    );
+    expect(listOwnerGatesMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        query: {
+          projectRef: "project_synthetic",
+          pageSize: 100,
+          pageToken: "gate-page-2",
+        },
+      }),
+    );
+  });
+
+  it("не применяет неполный список при повторном курсоре решений", async () => {
+    listOwnerGatesMock.mockResolvedValue({
+      data: { items: [ownerGate()], total: 2, nextPageToken: "same-page" },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadGates("project_synthetic", "run_synthetic");
+
+    expect(listOwnerGatesMock).toHaveBeenCalledTimes(2);
+    expect(store.gateList).toEqual([]);
+    expect(store.problems.gates).toBeDefined();
   });
 
   it("не позволяет старому HTTP response перезаписать новый", async () => {
@@ -426,6 +572,49 @@ describe("platform store", () => {
       "project_new",
     ]);
     expect(store.loading.search).toBe(false);
+  });
+
+  it("дозагружает глобальный поиск по cursor с новым измеренным размером", async () => {
+    searchPlatformMock
+      .mockResolvedValueOnce(
+        searchResponse([searchResult("project_first")], "cursor_next", 3),
+      )
+      .mockResolvedValueOnce(
+        searchResponse(
+          [searchResult("project_second"), searchResult("project_third")],
+          undefined,
+          3,
+        ),
+      );
+    const store = usePlatformStore();
+
+    await store.search("marketplace", 7);
+    expect(store.searchNextPageToken).toBe("cursor_next");
+    expect(store.searchTotal).toBe(3);
+    expect(searchPlatformMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        query: { query: "marketplace", limit: 7 },
+      }),
+    );
+
+    await store.loadMoreSearch(13);
+    expect(searchPlatformMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        query: {
+          query: "marketplace",
+          limit: 13,
+          pageToken: "cursor_next",
+        },
+      }),
+    );
+    expect(store.searchResults.map((item) => item.ref)).toEqual([
+      "project_first",
+      "project_second",
+      "project_third",
+    ]);
+    expect(store.searchNextPageToken).toBeUndefined();
   });
 
   it("заменяет authoritative collection и удаляет исчезнувший ресурс", async () => {
@@ -495,14 +684,34 @@ describe("platform store", () => {
     });
     const store = usePlatformStore();
 
-    await store.loadAudit("project_sales", "Квартальный отчёт");
+    await store.loadAudit("project_sales", "Квартальный отчёт", 20);
 
     expect(listAuditEventsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         query: {
           projectRef: "project_sales",
           query: "Квартальный отчёт",
-          pageSize: 100,
+          pageSize: 20,
+        },
+      }),
+    );
+  });
+
+  it("передаёт точную ссылку ресурса для аудита решения", async () => {
+    listAuditEventsMock.mockResolvedValue({
+      data: { items: [], nextPageToken: "" },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadAudit("project_sales", "", 20, "gat_review01");
+
+    expect(listAuditEventsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          projectRef: "project_sales",
+          resourceRef: "gat_review01",
+          pageSize: 20,
         },
       }),
     );
@@ -522,10 +731,10 @@ describe("platform store", () => {
       });
     const store = usePlatformStore();
 
-    await store.loadAudit("project_sales", " Квартальный отчёт ");
+    await store.loadAudit("project_sales", " Квартальный отчёт ", 10);
     await Promise.all([
-      store.loadMoreAudit("project_sales", " Квартальный отчёт "),
-      store.loadMoreAudit("project_sales", " Квартальный отчёт "),
+      store.loadMoreAudit("project_sales", " Квартальный отчёт ", 10),
+      store.loadMoreAudit("project_sales", " Квартальный отчёт ", 10),
     ]);
 
     expect(listAuditEventsMock).toHaveBeenCalledTimes(2);
@@ -534,7 +743,7 @@ describe("platform store", () => {
         query: {
           projectRef: "project_sales",
           query: "Квартальный отчёт",
-          pageSize: 100,
+          pageSize: 10,
           pageToken: "audit-page-2",
         },
       }),

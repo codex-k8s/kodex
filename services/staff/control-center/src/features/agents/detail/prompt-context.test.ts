@@ -81,7 +81,7 @@ beforeEach(() => {
 it("запрашивает typed context в body, сохраняет disabled metadata и context pin следующих страниц", async () => {
   const load = createPromptVariableLoader(target);
   const signal = new AbortController().signal;
-  const first = await load({ query: "input", signal });
+  const first = await load({ query: "input", source: "INPUT", signal });
   expect(first.items[0]).toMatchObject({
     disabled: true,
     variable: { valueType: "OBJECT", reason: "PERMISSION_REQUIRED" },
@@ -91,11 +91,12 @@ it("запрашивает typed context в body, сохраняет disabled me
     data: { ...page, nextPageToken: undefined },
     response: new Response(null),
   });
-  await load({ query: "input", cursor: "next", signal });
+  await load({ query: "input", cursor: "next", source: "INPUT", signal });
   expect(sdk.catalog).toHaveBeenLastCalledWith({
     body: {
       ...target,
       query: "input",
+      source: "INPUT",
       pageSize: 50,
       pageToken: "next",
       expectedContextDigest: pin.digest,
@@ -104,6 +105,14 @@ it("запрашивает typed context в body, сохраняет disabled me
     signal,
     cache: "no-store",
   });
+});
+it("не переиспользует cursor после смены server-side области", async () => {
+  const load = createPromptVariableLoader(target);
+  const signal = new AbortController().signal;
+  await load({ query: "", source: "INPUT", signal });
+  await expect(
+    load({ query: "", cursor: "next", source: "PROJECT", signal }),
+  ).rejects.toThrow("snapshot");
 });
 it("не заменяет изменённый server context на следующей странице", async () => {
   const load = createPromptVariableLoader(target);

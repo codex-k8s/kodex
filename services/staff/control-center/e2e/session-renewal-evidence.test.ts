@@ -57,7 +57,7 @@ test("list reporter сохраняет JSON, mode0600 и exact digest после
       const child = spawn(
         process.execPath,
         [
-          join(controlCenter, "node_modules/playwright/cli.js"),
+          join(controlCenter, "node_modules/@playwright/test/cli.js"),
           "test",
           "--config",
           configPath,

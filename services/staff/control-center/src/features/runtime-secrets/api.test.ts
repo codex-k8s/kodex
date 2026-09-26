@@ -77,7 +77,7 @@ describe("runtime secrets API adapter", () => {
     expect(sdk.listRuntimeSecrets).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { projectRef: "project_sales" },
-        query: { pageSize: 40, query: "crm", pageToken: "page_1" },
+        query: { pageSize: 20, query: "crm", pageToken: "page_1" },
       }),
     );
   });

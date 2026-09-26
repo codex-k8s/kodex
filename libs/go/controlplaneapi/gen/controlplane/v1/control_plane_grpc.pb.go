@@ -11933,6 +11933,7 @@ const (
 	RuntimeWorkService_ReadExecutionArtifact_FullMethodName                           = "/controlplane.v1.RuntimeWorkService/ReadExecutionArtifact"
 	RuntimeWorkService_StreamExecutionArtifact_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/StreamExecutionArtifact"
 	RuntimeWorkService_SearchExecutionFiles_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/SearchExecutionFiles"
+	RuntimeWorkService_SearchAssistantResources_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/SearchAssistantResources"
 	RuntimeWorkService_GetExecutionFileMetadata_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/GetExecutionFileMetadata"
 	RuntimeWorkService_PreviewExecutionFile_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/PreviewExecutionFile"
 	RuntimeWorkService_GetExecutionFileManifest_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/GetExecutionFileManifest"
@@ -11977,6 +11978,9 @@ type RuntimeWorkServiceClient interface {
 	// bounded chunks после owner resolution exact input/Skill/catalog grant.
 	StreamExecutionArtifact(ctx context.Context, in *StreamExecutionArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StreamExecutionArtifactResponse], error)
 	SearchExecutionFiles(ctx context.Context, in *SearchExecutionFilesRequest, opts ...grpc.CallOption) (*SearchExecutionFilesResponse, error)
+	// Поиск разрешает инициатора из действующей fenced lease системного помощника;
+	// caller не передаёт actor или tenant в payload.
+	SearchAssistantResources(ctx context.Context, in *SearchAssistantResourcesRequest, opts ...grpc.CallOption) (*SearchAssistantResourcesResponse, error)
 	GetExecutionFileMetadata(ctx context.Context, in *GetExecutionFileMetadataRequest, opts ...grpc.CallOption) (*GetExecutionFileMetadataResponse, error)
 	PreviewExecutionFile(ctx context.Context, in *PreviewExecutionFileRequest, opts ...grpc.CallOption) (*PreviewExecutionFileResponse, error)
 	GetExecutionFileManifest(ctx context.Context, in *GetExecutionFileManifestRequest, opts ...grpc.CallOption) (*GetExecutionFileManifestResponse, error)
@@ -12107,6 +12111,16 @@ func (c *runtimeWorkServiceClient) SearchExecutionFiles(ctx context.Context, in 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SearchExecutionFilesResponse)
 	err := c.cc.Invoke(ctx, RuntimeWorkService_SearchExecutionFiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *runtimeWorkServiceClient) SearchAssistantResources(ctx context.Context, in *SearchAssistantResourcesRequest, opts ...grpc.CallOption) (*SearchAssistantResourcesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchAssistantResourcesResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_SearchAssistantResources_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -12380,6 +12394,9 @@ type RuntimeWorkServiceServer interface {
 	// bounded chunks после owner resolution exact input/Skill/catalog grant.
 	StreamExecutionArtifact(*StreamExecutionArtifactRequest, grpc.ServerStreamingServer[StreamExecutionArtifactResponse]) error
 	SearchExecutionFiles(context.Context, *SearchExecutionFilesRequest) (*SearchExecutionFilesResponse, error)
+	// Поиск разрешает инициатора из действующей fenced lease системного помощника;
+	// caller не передаёт actor или tenant в payload.
+	SearchAssistantResources(context.Context, *SearchAssistantResourcesRequest) (*SearchAssistantResourcesResponse, error)
 	GetExecutionFileMetadata(context.Context, *GetExecutionFileMetadataRequest) (*GetExecutionFileMetadataResponse, error)
 	PreviewExecutionFile(context.Context, *PreviewExecutionFileRequest) (*PreviewExecutionFileResponse, error)
 	GetExecutionFileManifest(context.Context, *GetExecutionFileManifestRequest) (*GetExecutionFileManifestResponse, error)
@@ -12443,6 +12460,9 @@ func (UnimplementedRuntimeWorkServiceServer) StreamExecutionArtifact(*StreamExec
 }
 func (UnimplementedRuntimeWorkServiceServer) SearchExecutionFiles(context.Context, *SearchExecutionFilesRequest) (*SearchExecutionFilesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SearchExecutionFiles not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) SearchAssistantResources(context.Context, *SearchAssistantResourcesRequest) (*SearchAssistantResourcesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchAssistantResources not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) GetExecutionFileMetadata(context.Context, *GetExecutionFileMetadataRequest) (*GetExecutionFileMetadataResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetExecutionFileMetadata not implemented")
@@ -12691,6 +12711,24 @@ func _RuntimeWorkService_SearchExecutionFiles_Handler(srv interface{}, ctx conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RuntimeWorkServiceServer).SearchExecutionFiles(ctx, req.(*SearchExecutionFilesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RuntimeWorkService_SearchAssistantResources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchAssistantResourcesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).SearchAssistantResources(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_SearchAssistantResources_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).SearchAssistantResources(ctx, req.(*SearchAssistantResourcesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -13183,6 +13221,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SearchExecutionFiles",
 			Handler:    _RuntimeWorkService_SearchExecutionFiles_Handler,
+		},
+		{
+			MethodName: "SearchAssistantResources",
+			Handler:    _RuntimeWorkService_SearchAssistantResources_Handler,
 		},
 		{
 			MethodName: "GetExecutionFileMetadata",

@@ -898,6 +898,30 @@ func (service *Service) DownloadArtifact(ctx context.Context, p value.Principal,
 func (service *Service) ReadExecutionArtifact(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {
 	return service.readExecutionArtifact(ctx, p, leaseRef, fence, generation, artifactRef, "platform.runtime.execution.artifact.read")
 }
+func (service *Service) SearchAssistantResources(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, search string) ([]entity.SearchResult, bool, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, false, err
+	}
+	if p.CallerWorkload != "runtime-controller" || p.Permission != "platform.runtime.assistant.resources.search" ||
+		strings.TrimSpace(leaseRef) == "" || strings.TrimSpace(fence) == "" || generation < 1 ||
+		len([]rune(strings.TrimSpace(search))) < 2 || len([]rune(search)) > 160 {
+		return nil, false, errs.ErrForbidden
+	}
+	return service.repository.SearchAssistantResources(ctx, p, leaseRef, fence, generation, strings.TrimSpace(search))
+}
+func (service *Service) ListAssistantIntegrationDefinitions(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, search string, offset int32) ([]entity.AssistantIntegrationDefinition, int32, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, 0, err
+	}
+	if p.CallerWorkload != "runtime-controller" || p.Permission != "platform.runtime.assistant.resources.search" ||
+		strings.TrimSpace(leaseRef) == "" || strings.TrimSpace(fence) == "" || generation < 1 ||
+		len([]rune(strings.TrimSpace(search))) > 80 || offset < 0 || offset > 10000 {
+		return nil, 0, errs.ErrForbidden
+	}
+	return service.repository.ListAssistantIntegrationDefinitions(ctx, p, leaseRef, fence, generation, strings.TrimSpace(search), offset)
+}
 func (service *Service) OpenExecutionArtifactTransfer(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {
 	return service.readExecutionArtifact(ctx, p, leaseRef, fence, generation, artifactRef, "platform.runtime.execution.artifact.stream")
 }
@@ -1017,12 +1041,12 @@ func (service *Service) ListOIDCGroups(ctx context.Context, p value.Principal, f
 	return service.repository.ListOIDCGroups(ctx, p, filter)
 }
 
-func (service *Service) ListAccessRoles(ctx context.Context, p value.Principal, page query.Page, includeArchived bool) ([]entity.AccessRole, string, error) {
+func (service *Service) ListAccessRoles(ctx context.Context, p value.Principal, filter query.Filter, includeArchived bool) ([]entity.AccessRole, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return nil, "", err
 	}
-	return service.repository.ListAccessRoles(ctx, p, page, includeArchived)
+	return service.repository.ListAccessRoles(ctx, p, filter, includeArchived)
 }
 
 func (service *Service) ListAccessRoleVersions(ctx context.Context, p value.Principal, roleRef string, page query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error) {
@@ -1298,6 +1322,7 @@ func knownCommand(kind command.Kind) bool {
 		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
+		command.CreateAssistantRoleImageRecipe, command.UpdateAssistantRoleImageRecipe,
 		command.SetAgentAvatar, command.RemoveAgentAvatar,
 		command.PrepareInstructionsImpact, command.PreparePromptTemplateImpact,
 		command.CreateInstructions, command.ValidateInstructions, command.PublishInstructions,

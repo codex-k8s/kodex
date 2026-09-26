@@ -51,12 +51,13 @@ export async function loadProviderDefinitions(
   query: string,
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
+  pageSize = 20,
 ): Promise<ProviderDefinitionPage> {
   return (
     await unwrap(
       listProviderDefinitions({
         query: {
-          pageSize: 50,
+          pageSize,
           ...(query.trim() ? { query: query.trim() } : {}),
           ...(pageToken ? { pageToken } : {}),
         },
@@ -72,12 +73,13 @@ export async function loadProviderAccounts(
   signal: AbortSignal = requestSignal(),
   definitionKey?: ProviderDefinitionKey,
   usageContext?: ProviderAccountUsageContext,
+  pageSize = 20,
 ): Promise<ProviderAccountPage> {
   return (
     await unwrap(
       listProviderAccounts({
         query: {
-          pageSize: 40,
+          pageSize,
           ...usageQuery(usageContext),
           ...(definitionKey ? { definitionKey } : {}),
           ...(query.trim() ? { query: query.trim() } : {}),

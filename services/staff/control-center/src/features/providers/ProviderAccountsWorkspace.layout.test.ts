@@ -36,6 +36,8 @@ describe("provider account layout", () => {
     expect(workspace).toContain("safeVerificationUri");
     expect(workspace).toContain("definitionsNextPageToken");
     expect(workspace).toContain("requestRevoke(account)");
+    expect(workspace).toContain('account.state === "AUTHORIZED"');
+    expect(workspace).toContain('"providers.reauthorize"');
   });
 
   it("подключает богатый selector к runtime без старой заглушки", () => {
@@ -51,6 +53,9 @@ describe("provider account layout", () => {
   });
 
   it("сохраняет стабильную responsive компоновку", () => {
+    expect(workspace).toContain(
+      'v-if="accounts.length > 6 || accountsNextPageToken"',
+    );
     expect(workspace).toContain(
       "grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.8fr) auto",
     );

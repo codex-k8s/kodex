@@ -9,7 +9,7 @@ import type {
   RevisionImpactPublicationInput,
   RoleImageRebindInput,
 } from "@/shared/api/generated/openapi/types.gen";
-import { mutate, etag } from "@/shared/api/mutation";
+import { mutate, etag, csrfToken } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
 import { requestSignal } from "@/shared/api/client";
 import { canChangeDraft } from "./model";
@@ -69,13 +69,20 @@ export async function listConfigurations(options: {
   query: string;
   projectRef?: string;
   pageToken?: string;
+  pageSize?: number;
   signal: AbortSignal;
 }) {
   const { signal, ...query } = options;
   return (
     await unwrap(
       sdk.listManagedConfigurations({
-        query: { ...query, pageSize: 30 },
+        query: {
+          ...query,
+          pageSize: Math.min(
+            100,
+            Math.max(1, Math.floor(query.pageSize ?? 20)),
+          ),
+        },
         signal: AbortSignal.any([signal, requestSignal()]),
       }),
     )
@@ -85,11 +92,12 @@ export async function providerAccounts(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ) {
   return (
     await unwrap(
       sdk.listProviderAccounts({
-        query: { query, pageToken, pageSize: 30 },
+        query: { query, pageToken, pageSize },
         signal: AbortSignal.any([signal, requestSignal()]),
       }),
     )
@@ -103,6 +111,46 @@ export async function providerAccount(
     await unwrap(
       sdk.getProviderAccount({
         path: { providerAccountRef },
+        signal: AbortSignal.any([signal, requestSignal()]),
+      }),
+    )
+  ).data;
+}
+
+export async function listDefinitionConnectionCandidates(
+  definitionKey: string,
+  query: string,
+  pageToken: string | undefined,
+  signal: AbortSignal,
+  pageSize = 30,
+) {
+  if (
+    definitionKey.length > 120 ||
+    !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(definitionKey)
+  )
+    throw new Error("Integration definition key is invalid");
+  const page = (
+    await unwrap(
+      sdk.listIntegrationConnections({
+        query: { definitionKey, query: query.trim(), pageToken, pageSize },
+        signal: AbortSignal.any([signal, requestSignal()]),
+        cache: "no-store",
+      }),
+    )
+  ).data;
+  if (page.items.some((item) => item.definitionKey !== definitionKey))
+    throw new Error("Integration connection catalog scope mismatch");
+  return page;
+}
+
+export async function inspectOpenAPI(source: string, signal: AbortSignal) {
+  if (!source || new TextEncoder().encode(source).length > 128 * 1024)
+    throw new Error("OpenAPI document size is invalid");
+  return (
+    await unwrap(
+      sdk.inspectOpenApiIntegration({
+        body: { source },
+        headers: { "X-CSRF-Token": csrfToken() },
         signal: AbortSignal.any([signal, requestSignal()]),
       }),
     )
@@ -159,12 +207,16 @@ export async function history(
   configurationRef: string,
   signal: AbortSignal,
   pageToken?: string,
+  pageSize = 30,
 ) {
   return (
     await unwrap(
       sdk.listManagedConfigurationHistory({
         path: { configurationRef },
-        query: { pageSize: 30, pageToken },
+        query: {
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+          pageToken,
+        },
         signal: AbortSignal.any([requestSignal(), signal]),
       }),
     )
@@ -176,6 +228,7 @@ export async function impact(
   signal: AbortSignal,
   query = "",
   pageToken?: string,
+  pageSize = 40,
 ) {
   return (
     await unwrap(
@@ -185,7 +238,7 @@ export async function impact(
           revisionRef: revision.ref,
         },
         query: {
-          pageSize: 40,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
           ...(pageToken ? { pageToken } : {}),
           ...(query.trim() ? { query: query.trim() } : {}),
         },
@@ -226,7 +279,11 @@ export async function changeDraft(
       body.content.includes("\0") ||
       (configuration.kind === "PROMPT_TEMPLATE"
         ? body.contentFormat !== "TEXT"
-        : !["JSON", "YAML", "TOML"].includes(body.contentFormat)))
+        : !["JSON", "YAML", "TOML"].includes(body.contentFormat) &&
+          !(
+            configuration.kind === "INTEGRATION_DEFINITION" &&
+            body.contentFormat === "OPENAPI_IMPORT"
+          )))
   )
     throw new Error("Invalid managed draft content");
   const result = await mutate((headers) => {
@@ -251,7 +308,10 @@ export async function changeDraft(
         next.revision.parentRevisionRef !== revision.ref ||
         next.revision.state !== "DRAFT" ||
         next.revision.revision <= revision.revision ||
-        next.revision.contentFormat !== body.contentFormat
+        next.revision.contentFormat !==
+          (body.contentFormat === "OPENAPI_IMPORT"
+            ? "JSON"
+            : body.contentFormat)
       : next.revision.ref !== revision.ref ||
         next.revision.state !== "DISCARDED" ||
         next.revision.revision !== revision.revision)

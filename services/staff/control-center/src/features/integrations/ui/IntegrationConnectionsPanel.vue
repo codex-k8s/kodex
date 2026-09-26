@@ -14,7 +14,7 @@ import {
 } from "@lucide/vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { useI18n } from "vue-i18n";
-import { ref } from "vue";
+import { ref, useId } from "vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 
 import { canConfigureCredential } from "@/features/integrations/connection-setup";
@@ -27,8 +27,9 @@ import type {
   IntegrationDefinition,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 
-defineProps<{
+const props = defineProps<{
   connections: readonly IntegrationConnection[];
   definitions: Readonly<Record<string, IntegrationDefinition>>;
   coreReady: boolean;
@@ -55,7 +56,17 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const serverMessage = useServerMessage();
+const capabilityPreviewLimit = 3;
 const expanded = ref(false);
+const searchId = useId();
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more"),
+});
 </script>
 
 <template>
@@ -75,7 +86,7 @@ const expanded = ref(false);
       </div>
       <span class="result-count">{{
         t("integrationsRedesign.connectionCount", {
-          count: connections.length,
+          count: hasMore ? `${connections.length}+` : connections.length,
         })
       }}</span>
       <button
@@ -88,8 +99,10 @@ const expanded = ref(false);
         <Maximize2 :size="18" />
       </button>
     </header>
-    <label class="connection-search"
+    <label class="connection-search" :for="searchId"
       ><Search :size="18" /><input
+        :id="searchId"
+        name="integration-connection-search"
         type="search"
         :value="search"
         :aria-label="t('common.search')"
@@ -107,6 +120,7 @@ const expanded = ref(false);
     </div>
     <div
       v-if="connections.length"
+      ref="scrollRoot"
       class="connection-grid"
       :class="{ 'connection-grid--expanded': expanded }"
       role="list"
@@ -199,7 +213,10 @@ const expanded = ref(false);
 
         <div class="connection-capabilities">
           <span
-            v-for="capability in connection.capabilities"
+            v-for="capability in connection.capabilities.slice(
+              0,
+              capabilityPreviewLimit,
+            )"
             :key="capability.key"
             :title="capability.description"
           >
@@ -211,6 +228,13 @@ const expanded = ref(false);
               :size="12"
               :aria-label="t('workflows.humanGate')"
             />
+          </span>
+          <span
+            v-if="connection.capabilities.length > capabilityPreviewLimit"
+            class="connection-capabilities__more"
+            :title="`${connection.capabilities.length - capabilityPreviewLimit} ${t('integrationsRedesign.capabilitiesShort')}`"
+          >
+            +{{ connection.capabilities.length - capabilityPreviewLimit }}
           </span>
         </div>
 
@@ -347,6 +371,7 @@ const expanded = ref(false);
           </button>
         </footer>
       </article>
+      <span ref="sentinel" class="connection-sentinel" aria-hidden="true" />
     </div>
     <p v-else-if="loading" role="status">{{ t("common.loading") }}</p>
     <div v-else class="connection-empty">
@@ -354,14 +379,6 @@ const expanded = ref(false);
       <h3>{{ t("integrationsRedesign.noConnectionsYet") }}</h3>
       <p>{{ t("integrations.noConnections") }}</p>
     </div>
-    <button
-      v-if="hasMore"
-      class="button"
-      :disabled="loading"
-      @click="emit('more')"
-    >
-      {{ t("impact.more") }}
-    </button>
   </component>
 </template>
 
@@ -452,9 +469,15 @@ const expanded = ref(false);
 .connection-grid--expanded {
   max-height: none;
 }
+.connection-sentinel {
+  grid-column: 1 / -1;
+  width: 1px;
+  height: 1px;
+}
 .connection-card {
   display: flex;
   flex-direction: column;
+  height: max-content;
   min-height: 360px;
   padding: 14px;
   border: 1px solid var(--border);
@@ -559,6 +582,11 @@ const expanded = ref(false);
 }
 .connection-capabilities code {
   font-size: 0.68rem;
+}
+.connection-capabilities .connection-capabilities__more {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: 700;
 }
 .connection-facts {
   align-items: stretch;

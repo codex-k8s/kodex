@@ -1,10 +1,248 @@
 import type {
   AssistantConversation,
+  AssistantPlan,
   AssistantPlanOperation,
   AssistantPlanOperationInput,
   AssistantPlanTarget,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+
+export function assistantPollDelay(attempts: number): number {
+  return attempts < 120 ? 5000 : 30000;
+}
+
+function assistantAppliedResourceRef(
+  plan: AssistantPlan,
+  operationRef: string,
+  operationType: string,
+  targetKinds?: string | readonly string[],
+): string | undefined {
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const receipt = plan.receipt;
+  if (
+    plan.state !== "APPLIED" ||
+    !operation?.selected ||
+    operation.type !== operationType ||
+    (targetKinds !== undefined &&
+      !(typeof targetKinds === "string"
+        ? operation.target.kind === targetKinds
+        : targetKinds.includes(operation.target.kind))) ||
+    !receipt ||
+    receipt.planRef !== plan.ref ||
+    receipt.planRevision !== plan.revision ||
+    receipt.outcome !== "APPLIED"
+  )
+    return undefined;
+  const matching = receipt.operationReceipts.filter(
+    (item) => item.operationRef === operationRef,
+  );
+  if (matching.length !== 1 || !matching[0]?.resourceRef) return undefined;
+  return matching[0].resourceRef;
+}
+
+export function assistantRoleImageBuildTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; recipeRef: string } | undefined {
+  const createdRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_ROLE_IMAGE_RECIPE",
+    "ROLE_IMAGE_RECIPE",
+  );
+  const updatedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "UPDATE_ROLE_IMAGE_RECIPE",
+    "ROLE_IMAGE_RECIPE",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const recipeRef =
+    createdRef ||
+    (updatedRef === operation?.target.ref ? updatedRef : undefined);
+  return plan.projectRef && recipeRef
+    ? { projectRef: plan.projectRef, recipeRef }
+    : undefined;
+}
+
+export function assistantEnvironmentDraftTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; draftRef: string } | undefined {
+  const createdRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
+    "RUNTIME_ENVIRONMENT_DRAFT",
+  );
+  const revisedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "PREPARE_RUNTIME_ENVIRONMENT_REVISION",
+    "ENVIRONMENT",
+  );
+  const draftRef = createdRef || revisedRef;
+  return plan.projectRef && draftRef
+    ? { projectRef: plan.projectRef, draftRef }
+    : undefined;
+}
+
+export function assistantAgentEnvironmentBindingTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+):
+  | {
+      projectRef: string;
+      agentRef: string;
+      environmentRef: string;
+      versionRef: string;
+    }
+  | undefined {
+  const agentRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "BIND_AGENT_RUNTIME_ENVIRONMENT",
+    "AGENT",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const environmentRef = operation?.after.environmentRef;
+  const versionRef = operation?.after.versionRef;
+  return plan.projectRef &&
+    agentRef &&
+    operation?.target.ref === agentRef &&
+    typeof environmentRef === "string" &&
+    typeof versionRef === "string"
+    ? { projectRef: plan.projectRef, agentRef, environmentRef, versionRef }
+    : undefined;
+}
+
+export function assistantIntegrationConnectionTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { connectionRef: string } | undefined {
+  const createdRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_INTEGRATION_CONNECTION",
+    "INTEGRATION_CONNECTION",
+  );
+  const updatedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "UPDATE_INTEGRATION_CONNECTION",
+    "INTEGRATION_CONNECTION",
+  );
+  const testedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "TEST_INTEGRATION_CONNECTION",
+    "INTEGRATION_CONNECTION",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const connectionRef =
+    createdRef ||
+    (updatedRef === operation?.target.ref ? updatedRef : undefined) ||
+    (testedRef === operation?.target.ref ? testedRef : undefined);
+  return connectionRef ? { connectionRef } : undefined;
+}
+
+export function assistantCreatedScheduleTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; scheduleRef: string } | undefined {
+  const createdRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_SCHEDULE",
+    "SCHEDULE",
+  );
+  const updatedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "UPDATE_SCHEDULE",
+    "SCHEDULE",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const scheduleRef =
+    createdRef ||
+    (updatedRef === operation?.target.ref ? updatedRef : undefined);
+  return plan.projectRef && scheduleRef
+    ? { projectRef: plan.projectRef, scheduleRef }
+    : undefined;
+}
+
+export function assistantCreatedWorkflowTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; workflowRef: string } | undefined {
+  const createdRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "CREATE_WORKFLOW",
+    "WORKFLOW",
+  );
+  const updatedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "UPDATE_WORKFLOW",
+    "WORKFLOW",
+  );
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  const workflowRef =
+    createdRef ||
+    (updatedRef === operation?.target.ref ? updatedRef : undefined);
+  return plan.projectRef && workflowRef
+    ? { projectRef: plan.projectRef, workflowRef }
+    : undefined;
+}
+
+export function assistantCreatedEntityTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+):
+  | { kind: "PROJECT" | "AGENT"; projectRef: string; resourceRef: string }
+  | undefined {
+  const operation = plan.operations.find((item) => item.ref === operationRef);
+  if (
+    operation?.type === "CREATE_PROJECT" ||
+    operation?.type === "UPDATE_PROJECT"
+  ) {
+    const projectRef = assistantAppliedResourceRef(
+      plan,
+      operationRef,
+      operation.type,
+      "PROJECT",
+    );
+    return projectRef
+      ? { kind: "PROJECT", projectRef, resourceRef: projectRef }
+      : undefined;
+  }
+  if (
+    operation?.type === "CREATE_AGENT" ||
+    operation?.type === "UPDATE_AGENT"
+  ) {
+    const agentRef = assistantAppliedResourceRef(
+      plan,
+      operationRef,
+      operation.type,
+      "AGENT",
+    );
+    return plan.projectRef && agentRef
+      ? { kind: "AGENT", projectRef: plan.projectRef, resourceRef: agentRef }
+      : undefined;
+  }
+  return undefined;
+}
+
+export function assistantLaunchedRunTarget(
+  plan: AssistantPlan,
+  operationRef: string,
+): { projectRef: string; runRef: string } | undefined {
+  const runRef = assistantAppliedResourceRef(plan, operationRef, "LAUNCH_RUN");
+  return plan.projectRef && runRef && /^[A-Za-z0-9_-]{8,96}$/.test(runRef)
+    ? { projectRef: plan.projectRef, runRef }
+    : undefined;
+}
 
 export function assistantAwaitingReply(
   conversation?: AssistantConversation,
@@ -23,6 +261,128 @@ export interface EditablePlanOperation {
   beforeText: string;
   parametersText: string;
   afterText: string;
+}
+
+export type FriendlyPlanOperationType =
+  | "CREATE_PROJECT"
+  | "UPDATE_PROJECT"
+  | "CREATE_AGENT"
+  | "UPDATE_AGENT"
+  | "CREATE_INSTRUCTION_DRAFT"
+  | "CHANGE_CAPABILITY"
+  | "CHANGE_INTEGRATION_GRANT"
+  | "CREATE_WORKFLOW"
+  | "UPDATE_WORKFLOW"
+  | "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+  | "BIND_AGENT_RUNTIME_ENVIRONMENT"
+  | "CREATE_SCHEDULE"
+  | "UPDATE_SCHEDULE"
+  | "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+  | "CREATE_ROLE_IMAGE_RECIPE"
+  | "UPDATE_ROLE_IMAGE_RECIPE"
+  | "CREATE_INTEGRATION_CONNECTION"
+  | "UPDATE_INTEGRATION_CONNECTION"
+  | "TEST_INTEGRATION_CONNECTION"
+  | "PUBLISH_INTEGRATION_DEFINITION"
+  | "ARCHIVE_AGENT"
+  | "ARCHIVE_WORKFLOW"
+  | "LAUNCH_RUN";
+
+export function friendlyPlanOperationType(
+  operation: EditablePlanOperation,
+): FriendlyPlanOperationType | undefined {
+  const operationType: FriendlyPlanOperationType = operation.value.type;
+  let parameters: Record<string, unknown>;
+  try {
+    parameters = parseObject(operation.parametersText);
+    parseObject(operation.beforeText);
+    parseObject(operation.afterText);
+  } catch {
+    return undefined;
+  }
+  if (operation.value.type === "LAUNCH_RUN") {
+    const targetType = parameters.targetType;
+    const targetRef = parameters.targetRef;
+    if (
+      (targetType !== "AGENT" && targetType !== "WORKFLOW") ||
+      typeof targetRef !== "string" ||
+      !targetRef ||
+      (operation.value.target.kind !== "EXECUTION" &&
+        operation.value.target.kind !== targetType) ||
+      (operation.value.target.ref !== undefined &&
+        operation.value.target.ref !== targetRef)
+    )
+      return undefined;
+    return operation.value.action === "EXECUTE" ? operationType : undefined;
+  }
+  const expectedKind =
+    operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
+    operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
+      ? "ROLE_IMAGE_RECIPE"
+      : operation.value.type === "PUBLISH_INTEGRATION_DEFINITION"
+        ? "INTEGRATION_DEFINITION"
+        : operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+            operation.value.type === "UPDATE_INTEGRATION_CONNECTION" ||
+            operation.value.type === "TEST_INTEGRATION_CONNECTION" ||
+            operation.value.type === "CHANGE_INTEGRATION_GRANT"
+          ? "INTEGRATION_CONNECTION"
+          : operation.value.type === "CREATE_WORKFLOW" ||
+              operation.value.type === "UPDATE_WORKFLOW" ||
+              operation.value.type === "ARCHIVE_WORKFLOW"
+            ? "WORKFLOW"
+            : operation.value.type === "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+              ? "ENVIRONMENT"
+              : operation.value.type === "CREATE_SCHEDULE" ||
+                  operation.value.type === "UPDATE_SCHEDULE"
+                ? "SCHEDULE"
+                : operation.value.type.endsWith("PROJECT")
+                  ? "PROJECT"
+                  : operation.value.type === "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+                    ? "RUNTIME_ENVIRONMENT_DRAFT"
+                    : "AGENT";
+  const expectedAction =
+    operation.value.type === "CREATE_INSTRUCTION_DRAFT"
+      ? "UPDATE"
+      : operation.value.type === "ARCHIVE_AGENT" ||
+          operation.value.type === "ARCHIVE_WORKFLOW"
+        ? "ARCHIVE"
+        : operation.value.type.startsWith("CREATE_")
+          ? "CREATE"
+          : operation.value.type === "TEST_INTEGRATION_CONNECTION"
+            ? "EXECUTE"
+            : "UPDATE";
+  if (
+    operation.value.target.kind !== expectedKind ||
+    operation.value.action !== expectedAction
+  )
+    return undefined;
+  return operationType;
+}
+
+export function operationParameter(
+  operation: EditablePlanOperation,
+  key: string,
+): unknown {
+  return parseObject(operation.parametersText)[key];
+}
+
+export function updateOperationParameter(
+  operation: EditablePlanOperation,
+  key: string,
+  value: unknown,
+): void {
+  const parameters = parseObject(operation.parametersText);
+  const after = parseObject(operation.afterText);
+  parameters[key] = value;
+  after[key] = value;
+  operation.parametersText = prettyJSON(parameters);
+  operation.afterText = prettyJSON(after);
+  if (
+    key === "name" &&
+    operation.value.action === "CREATE" &&
+    typeof value === "string"
+  )
+    operation.value.target.name = value;
 }
 
 function prettyJSON(value: Record<string, unknown>): string {
