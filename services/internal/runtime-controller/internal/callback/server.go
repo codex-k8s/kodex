@@ -745,7 +745,7 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	}
 	summary, _ := arguments["summary"].(string)
 	rawOperations, _ := arguments["operations"].([]any)
-	if strings.TrimSpace(summary) == "" || len(summary) > 2000 || len(rawOperations) == 0 || len(rawOperations) > 32 {
+	if !assistantPlanTextWithinLimit(summary, 2000) || len(rawOperations) == 0 || len(rawOperations) > 32 {
 		return nil, invalidAssistantPlan("summary_or_count")
 	}
 	operations := make([]*controlplanev1.AssistantPlanOperation, 0, len(rawOperations))
@@ -794,10 +794,10 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		if !actionExists || actionValue == 0 {
 			return nil, invalidAssistantPlan("operation_action")
 		}
-		if strings.TrimSpace(title) == "" || len(title) > 200 {
+		if !assistantPlanTextWithinLimit(title, 200) {
 			return nil, invalidAssistantPlan("operation_title")
 		}
-		if strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 {
+		if !assistantPlanTextWithinLimit(operationSummary, 500) {
 			return nil, invalidAssistantPlan("operation_summary")
 		}
 		if parameters == nil {
@@ -921,9 +921,11 @@ var assistantParameterAliases = map[string]string{
 	"day_of_week": "dayOfWeek", "definition_key": "definitionKey", "gate_decisions": "gateDecisions",
 	"human_gate": "humanGate", "input_fields": "inputFields", "max_concurrency": "maxConcurrency",
 	"image_artifact_ref": "imageArtifactRef", "environment_key": "environmentKey",
-	"recipe_ref":          "recipeRef",
-	"environment_ref":     "environmentRef",
-	"notification_policy": "notificationPolicy", "parallel_group": "parallelGroup",
+	"recipe_ref":            "recipeRef",
+	"environment_ref":       "environmentRef",
+	"public_value_updates":  "publicValueUpdates",
+	"public_value_removals": "publicValueRemovals",
+	"notification_policy":   "notificationPolicy", "parallel_group": "parallelGroup",
 	"project_ref": "projectRef", "public_configuration": "publicConfiguration",
 	"schedule_ref": "scheduleRef", "cron_expression": "cronExpression", "automation_text": "automationText",
 	"required_capability_keys": "requiredCapabilityKeys", "role_definition_ref": "roleDefinitionRef",
@@ -1326,6 +1328,10 @@ func truncateRunes(value string, maximum int) string {
 		return string(runes)
 	}
 	return string(runes[:maximum])
+}
+
+func assistantPlanTextWithinLimit(value string, maximum int) bool {
+	return strings.TrimSpace(value) != "" && len([]rune(value)) <= maximum
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {

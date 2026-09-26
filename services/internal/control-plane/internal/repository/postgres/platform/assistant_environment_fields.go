@@ -210,12 +210,8 @@ func assistantEnvironmentBindingsMatch(snapshot any, bindings []entity.RuntimeSe
 	return valid && reflect.DeepEqual(specification.SecretBindings, bindings)
 }
 
-func assistantEnvironmentExistingBindingsCompatible(snapshot any, input map[string]any) bool {
+func assistantEnvironmentSnapshotBindingsCompatible(snapshot any, values []entity.RuntimeEnvironmentValue) bool {
 	specification, valid := assistantEnvironmentSnapshotSpecification(snapshot)
-	if !valid {
-		return false
-	}
-	values, valid := assistantEnvironmentPublicValues(input)
 	return valid && assistantEnvironmentBindingsCompatible(values, specification.SecretBindings)
 }
 
@@ -290,6 +286,95 @@ func assistantEnvironmentPublicValues(input map[string]any) ([]entity.RuntimeEnv
 		return nil, false
 	}
 	return values, true
+}
+
+func assistantEnvironmentPatchedPublicValues(snapshot any, input map[string]any) ([]entity.RuntimeEnvironmentValue, bool) {
+	specification, valid := assistantEnvironmentSnapshotSpecification(snapshot)
+	if !valid {
+		return nil, false
+	}
+	updatesRaw, updatesSupplied := input["publicValueUpdates"]
+	removalsRaw, removalsSupplied := input["publicValueRemovals"]
+	if !updatesSupplied && !removalsSupplied {
+		return nil, false
+	}
+	updates := []entity.RuntimeEnvironmentValue{}
+	if updatesSupplied {
+		var updatesValid bool
+		updates, updatesValid = assistantEnvironmentPublicValues(map[string]any{"publicValues": updatesRaw})
+		if !updatesValid {
+			return nil, false
+		}
+	}
+	updateByName := make(map[string]entity.RuntimeEnvironmentValue, len(updates))
+	for _, update := range updates {
+		if _, duplicate := updateByName[update.Name]; duplicate {
+			return nil, false
+		}
+		updateByName[update.Name] = update
+	}
+	removals := make(map[string]struct{})
+	if removalsSupplied {
+		entries, ok := removalsRaw.([]any)
+		if !ok || len(entries) > 128 {
+			return nil, false
+		}
+		for _, entry := range entries {
+			name, ok := entry.(string)
+			if !ok || !runtimecontract.ValidRuntimeEnvironmentName(name) {
+				return nil, false
+			}
+			for _, sensitive := range assistantSensitiveVariableFragments {
+				if strings.Contains(name, sensitive) {
+					return nil, false
+				}
+			}
+			if _, duplicate := removals[name]; duplicate {
+				return nil, false
+			}
+			if _, conflicted := updateByName[name]; conflicted {
+				return nil, false
+			}
+			removals[name] = struct{}{}
+		}
+	}
+	result := make([]entity.RuntimeEnvironmentValue, 0, len(specification.Values)+len(updates))
+	consumedUpdates := make(map[string]struct{}, len(updates))
+	for _, current := range specification.Values {
+		if _, removed := removals[current.Name]; removed {
+			continue
+		}
+		if update, replaced := updateByName[current.Name]; replaced {
+			result = append(result, update)
+			consumedUpdates[current.Name] = struct{}{}
+			continue
+		}
+		result = append(result, current)
+	}
+	for _, update := range updates {
+		if _, consumed := consumedUpdates[update.Name]; !consumed {
+			result = append(result, update)
+		}
+	}
+	if len(result) > 128 {
+		return nil, false
+	}
+	contractValues := make([]runtimecontract.RuntimeEnvironmentValue, 0, len(result))
+	for _, value := range result {
+		contractValues = append(contractValues, runtimecontract.RuntimeEnvironmentValue{Name: value.Name, Value: value.Value})
+	}
+	if runtimecontract.ValidateRuntimeEnvironment(contractValues, nil) != nil {
+		return nil, false
+	}
+	return result, true
+}
+
+func assistantEnvironmentPublicValuesInput(values []entity.RuntimeEnvironmentValue) []any {
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		result = append(result, map[string]any{"name": value.Name, "value": value.Value})
+	}
+	return result
 }
 
 func assistantEnvironmentSecretBindings(input map[string]any, values []entity.RuntimeEnvironmentValue) ([]entity.RuntimeSecretBinding, bool) {

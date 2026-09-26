@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.71
+version: 1.0.72
 updated: 2026-09-26
 ---
 
@@ -1300,3 +1300,34 @@ GitHub checks не считается `PASS`.
   в консоли остался только прежний транзитный `ERR_NETWORK_CHANGED`.
   Screenshot: `/tmp/kodex-assistant-workflow-validated.png`. Визуальная
   приёмка владельцем — NOT RUN.
+- На экране Marketplace помощник подготовил, но не применил изменение описания
+  существующего Проекта. Native-форма сохранила название, назначение и язык;
+  серверная проверка перевела вариант в `VALID`, reload без кэша сохранил
+  диалог и план, а опубликованное описание Проекта не изменилось. Console
+  errors/warnings и HTTP 4xx/5xx отсутствуют. Screenshot:
+  `/tmp/kodex-assistant-project-update-validated.png`. Визуальная приёмка
+  владельцем — NOT RUN.
+- На экране существующей OpenAPI/MCP-интеграции помощник подготовил, но не
+  применил изменение названия. Native-форма сохранила точные definition,
+  HTTPS base URL и настроенную credential; серверная проверка перевела вариант
+  в `VALID`. Локальный synthetic adapter и его Service не пересоздавались.
+  HTTP 4xx/5xx и горизонтальное переполнение отсутствуют; наблюдавшиеся при
+  восстановлении сети `ERR_NETWORK_CHANGED` и
+  `ERR_DNS_NO_MATCHING_SUPPORTED_ALPN` не воспроизводятся после чистого reload.
+  Screenshot: `/tmp/kodex-assistant-integration-update-validated.png`.
+  Визуальная приёмка владельцем — NOT RUN.
+- Изменение существующей среды раньше требовало от модели повторить весь
+  скрытый текущий список публичных переменных, а серверная проверка затем
+  сравнивала JSON policy структурно и возвращала ложный `snapshot-conflict`.
+  Контракт теперь принимает закрытые sparse-upsert/remove только для
+  несекретных значений; control-plane объединяет их с авторитетной ревизией,
+  проверяет коллизии с Secret и отдаёт владельцу полный обычный список.
+  Snapshot связывается с точными environment version, version ref и digest,
+  а не с представлением JSON. В Chrome помощник подготовил, но не применил
+  новую ревизию: native-форма содержит прежнюю `APP_MODE=test` и новую
+  `ASSISTANT_REVISION_TEST=draft`, сохраняет прежний image artifact и policy;
+  после серверной проверки и reload без кэша доступно «Применить атомарно».
+  Адресные Go unit и `git diff --check` — PASS; console errors/warnings и HTTP
+  4xx/5xx после чистого reload отсутствуют. Screenshot:
+  `/tmp/kodex-assistant-environment-update-validated.png`. Визуальная приёмка
+  владельцем — NOT RUN.

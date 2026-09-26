@@ -218,6 +218,23 @@ func environmentPublicValuesSchema() map[string]any {
 	}
 }
 
+func environmentPublicValueUpdatesSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 128,
+		"description": "Sparse upserts for non-secret environment values. Use this when the current complete value list is not exposed; the server merges entries into its authoritative snapshot.",
+		"items": objectSchema([]string{"name", "value"}, map[string]any{
+			"name":  map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
+			"value": stringSchema(0, 8192),
+		}),
+	}
+}
+
+func environmentPublicValueRemovalsSchema() map[string]any {
+	return map[string]any{"type": "array", "maxItems": 128, "uniqueItems": true,
+		"description": "Names of non-secret environment values to remove from the server-owned current list.",
+		"items":       map[string]any{"type": "string", "pattern": "^[A-Z_][A-Z0-9_]{0,126}$"},
+	}
+}
+
 func environmentSecretBindingsSchema() map[string]any {
 	return map[string]any{"type": "array", "maxItems": 128,
 		"description": "References to already created project Secrets; never include plaintext values.",
@@ -353,13 +370,15 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		schema := objectSchema([]string{"environmentRef"}, map[string]any{
 			"environmentRef": enumSchema(input.AssistantContext.EntityRef), "name": stringSchema(1, 120),
 			"description": stringSchema(0, 1000), "imageArtifactRef": stringSchema(0, 96),
-			"publicValues": environmentPublicValuesSchema(), "secretBindings": environmentSecretBindingsSchema(),
+			"publicValues": environmentPublicValuesSchema(), "publicValueUpdates": environmentPublicValueUpdatesSchema(),
+			"publicValueRemovals": environmentPublicValueRemovalsSchema(), "secretBindings": environmentSecretBindingsSchema(),
 			"tools":  environmentToolsSchema(),
 			"policy": environmentPolicySchema(),
 		})
 		schema["anyOf"] = []map[string]any{
 			{"required": []string{"name"}}, {"required": []string{"description"}},
 			{"required": []string{"imageArtifactRef"}}, {"required": []string{"publicValues"}},
+			{"required": []string{"publicValueUpdates"}}, {"required": []string{"publicValueRemovals"}},
 			{"required": []string{"secretBindings"}}, {"required": []string{"tools"}}, {"required": []string{"policy"}},
 		}
 		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION", schema))

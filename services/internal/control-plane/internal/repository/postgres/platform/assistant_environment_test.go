@@ -32,6 +32,14 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 		"description": "Original description", "imageArtifactRef": "imgart_original",
 		"versionRef": "renvv_exact", "versionDigest": "digest-exact", "specification": safe,
 	}
+	if !assistantEnvironmentSnapshotIdentityMatches(before, cloneAssistantFields(before)) {
+		t.Fatal("exact environment revision identity did not match")
+	}
+	changedDigest := cloneAssistantFields(before)
+	changedDigest["versionDigest"] = "digest-other"
+	if assistantEnvironmentSnapshotIdentityMatches(before, changedDigest) {
+		t.Fatal("changed environment revision digest matched")
+	}
 	proposed := entity.AssistantPlanOperation{
 		Type: "PREPARE_RUNTIME_ENVIRONMENT_REVISION", Key: "environment-revision",
 		Title: "Prepare environment revision", Summary: "Prepare exact draft",
@@ -93,6 +101,38 @@ func TestAssistantEnvironmentRevisionPreservesProtectedSpecification(t *testing.
 		len(updated.SecretBindings) != 1 || updated.SecretBindings[0].Revision != 3 ||
 		len(updated.Tools) != 1 || updated.Tools[0].Name != "git" {
 		t.Fatalf("environment revision did not preserve immutable fields: %#v", updated)
+	}
+	patchProposal := proposed
+	patchProposal.Parameters = map[string]any{
+		"environmentRef": "renv_exact",
+		"publicValueUpdates": []any{
+			map[string]any{"name": "MODE", "value": "patched"},
+			map[string]any{"name": "ASSISTANT_REVISION_TEST", "value": "draft"},
+		},
+	}
+	patchResult, err := hydrateAssistantEnvironmentFields(before, 7, patchProposal)
+	if err != nil {
+		t.Fatalf("environment sparse value patch refused: %v", err)
+	}
+	if patchResult.Parameters["publicValueUpdates"] != nil || patchResult.Parameters["publicValueRemovals"] != nil {
+		t.Fatalf("environment sparse patch escaped hydration: %#v", patchResult.Parameters)
+	}
+	patchValues, valid := assistantEnvironmentPublicValues(patchResult.Parameters)
+	if !valid || len(patchValues) != 2 || patchValues[0].Name != "MODE" || patchValues[0].Value != "patched" ||
+		patchValues[1].Name != "ASSISTANT_REVISION_TEST" || patchValues[1].Value != "draft" {
+		t.Fatalf("environment sparse patch was not materialized: %#v", patchResult.Parameters)
+	}
+	removeProposal := proposed
+	removeProposal.Parameters = map[string]any{
+		"environmentRef": "renv_exact", "publicValueRemovals": []any{"MODE"},
+	}
+	removeResult, err := hydrateAssistantEnvironmentFields(before, 7, removeProposal)
+	if err != nil {
+		t.Fatalf("environment sparse value removal refused: %v", err)
+	}
+	removedValues, valid := assistantEnvironmentPublicValues(removeResult.Parameters)
+	if !valid || len(removedValues) != 0 {
+		t.Fatalf("environment sparse removal was not materialized: %#v", removeResult.Parameters)
 	}
 	toolsEdit := normalized
 	toolsEdit.Parameters = cloneAssistantFields(normalized.Parameters)

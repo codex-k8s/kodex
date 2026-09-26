@@ -15,6 +15,10 @@ import (
 
 var assistantEnvironmentTextFields = []string{"name", "description", "imageArtifactRef"}
 var assistantEnvironmentEditableFields = []string{"name", "description", "imageArtifactRef", "publicValues", "secretBindings", "tools", "policy"}
+var assistantEnvironmentProposalFields = []string{
+	"name", "description", "imageArtifactRef", "publicValues", "publicValueUpdates", "publicValueRemovals",
+	"secretBindings", "tools", "policy",
+}
 
 func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Context, tx pgx.Tx, actorScope scope,
 	projectRef, environmentRef string,
@@ -91,7 +95,7 @@ func (repository *Repository) hydrateAssistantEnvironmentOperation(ctx context.C
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
 	if projectRef == "" || !onlyAssistantFields(operation.Parameters,
-		append([]string{"environmentRef"}, assistantEnvironmentEditableFields...)...) {
+		append([]string{"environmentRef"}, assistantEnvironmentProposalFields...)...) {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
 	ref := assistantString(operation.Parameters, "environmentRef")
@@ -127,18 +131,35 @@ func hydrateAssistantEnvironmentFields(before map[string]any, version int64,
 		changed = changed || after[field] != text
 		after[field] = text
 	}
-	if _, valuesSupplied := operation.Parameters["publicValues"]; valuesSupplied {
-		values, valid := assistantEnvironmentPublicValues(operation.Parameters)
+	_, valuesSupplied := operation.Parameters["publicValues"]
+	_, updatesSupplied := operation.Parameters["publicValueUpdates"]
+	_, removalsSupplied := operation.Parameters["publicValueRemovals"]
+	if valuesSupplied && (updatesSupplied || removalsSupplied) {
+		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	var effectiveValues []entity.RuntimeEnvironmentValue
+	valuesChanged := valuesSupplied || updatesSupplied || removalsSupplied
+	if valuesChanged {
+		var valid bool
+		if valuesSupplied {
+			effectiveValues, valid = assistantEnvironmentPublicValues(operation.Parameters)
+		} else {
+			effectiveValues, valid = assistantEnvironmentPatchedPublicValues(before["specification"], operation.Parameters)
+		}
 		if !valid {
 			return entity.AssistantPlanOperation{}, errs.ErrInvalid
 		}
-		after["publicValues"] = operation.Parameters["publicValues"]
-		changed = changed || !assistantEnvironmentValuesMatch(before["specification"], values)
+		after["publicValues"] = assistantEnvironmentPublicValuesInput(effectiveValues)
+		changed = changed || !assistantEnvironmentValuesMatch(before["specification"], effectiveValues)
 	}
 	if _, bindingsSupplied := operation.Parameters["secretBindings"]; bindingsSupplied {
-		values, valid := assistantEnvironmentValuesForUpdate(before["specification"], operation.Parameters)
-		if !valid {
-			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		values := effectiveValues
+		if !valuesChanged {
+			var valid bool
+			values, valid = assistantEnvironmentValuesForUpdate(before["specification"], operation.Parameters)
+			if !valid {
+				return entity.AssistantPlanOperation{}, errs.ErrInvalid
+			}
 		}
 		bindings, valid := assistantEnvironmentSecretBindings(operation.Parameters, values)
 		if !valid {
@@ -163,9 +184,9 @@ func hydrateAssistantEnvironmentFields(before map[string]any, version int64,
 		after["policy"] = operation.Parameters["policy"]
 		changed = changed || !assistantEnvironmentPolicyMatch(before["specification"], policy)
 	}
-	if _, valuesSupplied := operation.Parameters["publicValues"]; valuesSupplied {
+	if valuesChanged {
 		if _, bindingsSupplied := operation.Parameters["secretBindings"]; !bindingsSupplied &&
-			!assistantEnvironmentExistingBindingsCompatible(before["specification"], operation.Parameters) {
+			!assistantEnvironmentSnapshotBindingsCompatible(before["specification"], effectiveValues) {
 			return entity.AssistantPlanOperation{}, errs.ErrInvalid
 		}
 	}
@@ -227,10 +248,25 @@ func (repository *Repository) assistantEnvironmentSnapshotMatches(ctx context.Co
 	return operation.ExpectedVersion != nil && *operation.ExpectedVersion == version &&
 		operation.Target.Version != nil && *operation.Target.Version == version &&
 		operation.Target.Name == assistantString(before, "name") &&
-		reflect.DeepEqual(operation.Before, before) &&
+		assistantEnvironmentSnapshotIdentityMatches(operation.Before, before) &&
 		reflect.DeepEqual(operation.Parameters, operation.After) &&
 		assistantString(operation.Parameters, "environmentRef") == operation.Target.Ref &&
 		assistantString(operation.Parameters, "projectRef") == projectRef, nil
+}
+
+func assistantEnvironmentSnapshotIdentityMatches(stored, current map[string]any) bool {
+	if !onlyAssistantFields(stored, "environmentRef", "projectRef", "name", "description", "imageArtifactRef",
+		"versionRef", "versionDigest", "specification", "policyInput") ||
+		!onlyAssistantFields(current, "environmentRef", "projectRef", "name", "description", "imageArtifactRef",
+			"versionRef", "versionDigest", "specification", "policyInput") {
+		return false
+	}
+	for _, field := range []string{"environmentRef", "projectRef", "name", "description", "imageArtifactRef", "versionRef", "versionDigest"} {
+		if assistantString(stored, field) != assistantString(current, field) {
+			return false
+		}
+	}
+	return assistantString(current, "versionRef") != "" && assistantString(current, "versionDigest") != ""
 }
 
 func assistantEnvironmentRevisionCommand(operation entity.AssistantPlanOperation) (command.Command, error) {

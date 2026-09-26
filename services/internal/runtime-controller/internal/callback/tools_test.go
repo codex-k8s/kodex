@@ -344,7 +344,8 @@ func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 	}
 	fields := properties["parameters"].(map[string]any)["properties"].(map[string]any)
 	if fields["environmentRef"].(map[string]any)["enum"].([]string)[0] != "renv_12345678" ||
-		fields["publicValues"] == nil || fields["secretBindings"] == nil || fields["tools"] == nil || fields["policy"] == nil ||
+		fields["publicValues"] == nil || fields["publicValueUpdates"] == nil || fields["publicValueRemovals"] == nil ||
+		fields["secretBindings"] == nil || fields["tools"] == nil || fields["policy"] == nil ||
 		fields["secretValue"] != nil || fields["values"] != nil || fields["projectRef"] != nil {
 		t.Fatalf("environment revision schema exposed protected fields: %#v", fields)
 	}
@@ -679,6 +680,25 @@ func TestNormalizeServerHydratedAssistantOperationAcceptsBoundedModelShorthand(t
 	}
 	if _, exists := normalized["project_ref"]; exists {
 		t.Fatalf("snake_case alias survived normalization: %#v", normalized)
+	}
+}
+
+func TestNormalizeServerHydratedAssistantOperationKeepsBoundedUnicodeSummary(t *testing.T) {
+	t.Parallel()
+	planSummary := strings.Repeat("я", 500)
+	operation, err := normalizeServerHydratedAssistantOperation(map[string]any{
+		"type":       "CREATE_PROJECT",
+		"parameters": map[string]any{"name": "Проект", "purpose": "Проверка", "language": "ru"},
+	}, planSummary, "", "")
+	if err != nil {
+		t.Fatalf("normalize unicode summary: %v", err)
+	}
+	if operation["summary"] != planSummary || len([]rune(operation["summary"].(string))) != 500 {
+		t.Fatalf("unicode summary was not preserved within the schema limit: %#v", operation["summary"])
+	}
+	if !assistantPlanTextWithinLimit(operation["summary"].(string), 500) ||
+		assistantPlanTextWithinLimit(strings.Repeat("я", 501), 500) {
+		t.Fatal("unicode summary limit does not match the tool schema")
 	}
 }
 
