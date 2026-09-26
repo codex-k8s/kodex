@@ -751,6 +751,12 @@ func cloneAssistantFields(input map[string]any) map[string]any {
 	return result
 }
 
+func assistantJSONEqual(left, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && string(leftJSON) == string(rightJSON)
+}
+
 func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {
 	if !assistantOperationType(operation.Type) || strings.TrimSpace(operation.Key) == "" ||
 		strings.TrimSpace(operation.Title) == "" || len(operation.Title) > 200 {

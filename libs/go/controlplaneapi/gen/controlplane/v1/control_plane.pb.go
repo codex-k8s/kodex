@@ -13104,6 +13104,7 @@ type AssistantPlanOperation struct {
 	After              *structpb.Struct              `protobuf:"bytes,15,opt,name=after,proto3" json:"after,omitempty"`
 	Selected           bool                          `protobuf:"varint,16,opt,name=selected,proto3" json:"selected,omitempty"`
 	ValidationProblems []string                      `protobuf:"bytes,17,rep,name=validation_problems,json=validationProblems,proto3" json:"validation_problems,omitempty"`
+	TargetVersion      *int64                        `protobuf:"varint,18,opt,name=target_version,json=targetVersion,proto3,oneof" json:"target_version,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -13256,6 +13257,13 @@ func (x *AssistantPlanOperation) GetValidationProblems() []string {
 		return x.ValidationProblems
 	}
 	return nil
+}
+
+func (x *AssistantPlanOperation) GetTargetVersion() int64 {
+	if x != nil && x.TargetVersion != nil {
+		return *x.TargetVersion
+	}
+	return 0
 }
 
 type AssistantPlan struct {
@@ -74932,7 +74940,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe8\f\n" +
+	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa7\r\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
 	"\x04type\x18\x02 \x01(\x0e2,.controlplane.v1.AssistantPlanOperation.TypeR\x04type\x12\x14\n" +
@@ -74956,7 +74964,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06before\x18\x0e \x01(\v2\x17.google.protobuf.StructR\x06before\x12-\n" +
 	"\x05after\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x05after\x12\x1a\n" +
 	"\bselected\x18\x10 \x01(\bR\bselected\x12/\n" +
-	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\"\xf6\x05\n" +
+	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\x12*\n" +
+	"\x0etarget_version\x18\x12 \x01(\x03H\x01R\rtargetVersion\x88\x01\x01\"\xf6\x05\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -74989,7 +74998,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\rACTION_UPDATE\x10\x02\x12\x12\n" +
 	"\x0eACTION_ARCHIVE\x10\x03\x12\x12\n" +
 	"\x0eACTION_EXECUTE\x10\x04B\x13\n" +
-	"\x11_expected_version\"\x84\x06\n" +
+	"\x11_expected_versionB\x11\n" +
+	"\x0f_target_version\"\x84\x06\n" +
 	"\rAssistantPlan\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12)\n" +

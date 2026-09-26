@@ -573,8 +573,8 @@ func (repository *Repository) assistantIntegrationGrantSnapshotMatches(
 	}
 	return operation.ExpectedVersion != nil && hydrated.ExpectedVersion != nil &&
 		*operation.ExpectedVersion == *hydrated.ExpectedVersion && reflect.DeepEqual(operation.Target, hydrated.Target) &&
-		reflect.DeepEqual(operation.Parameters, hydrated.Parameters) && reflect.DeepEqual(operation.Before, hydrated.Before) &&
-		reflect.DeepEqual(operation.After, hydrated.After), nil
+		assistantJSONEqual(operation.Parameters, hydrated.Parameters) && assistantJSONEqual(operation.Before, hydrated.Before) &&
+		assistantJSONEqual(operation.After, hydrated.After), nil
 }
 
 func rehydrateEditedAssistantRoleImage(original, edited entity.AssistantPlanOperation) (entity.AssistantPlanOperation, error) {

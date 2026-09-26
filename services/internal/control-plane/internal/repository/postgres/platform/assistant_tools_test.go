@@ -1,7 +1,9 @@
 package platform
 
 import (
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -707,6 +709,32 @@ func TestHydrateAssistantIntegrationGrantFieldsUsesAuthoritySnapshot(t *testing.
 	if payload.AgentRef != "agt_12345678" || payload.WorkflowRef != "" || !payload.Enabled ||
 		len(payload.ApprovalScopePaths) != 2 {
 		t.Fatalf("unexpected integration grant command payload: %#v", payload)
+	}
+}
+
+func TestAssistantJSONEqualPreservesStoredPlanSemantics(t *testing.T) {
+	t.Parallel()
+	original := map[string]any{
+		"approvalScopePaths": []string{},
+		"recipientVersion":   int64(3),
+	}
+	raw, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored map[string]any
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		t.Fatal(err)
+	}
+	if reflect.DeepEqual(original, stored) {
+		t.Fatal("fixture must exercise JSON-decoded numeric and collection types")
+	}
+	if !assistantJSONEqual(original, stored) {
+		t.Fatalf("semantically equal stored plan changed: original=%#v stored=%#v", original, stored)
+	}
+	stored["recipientVersion"] = float64(4)
+	if assistantJSONEqual(original, stored) {
+		t.Fatal("different authority version was accepted")
 	}
 }
 

@@ -1519,6 +1519,7 @@ message AssistantPlanOperation {
   google.protobuf.Struct after = 15;
   bool selected = 16;
   repeated string validation_problems = 17;
+  optional int64 target_version = 18;
 }
 
 enum AssistantPlanState {

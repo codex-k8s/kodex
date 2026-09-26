@@ -641,7 +641,7 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 		result.Operations = append(result.Operations, &controlplanev1.AssistantPlanOperation{
 			Ref: operation.Key, Type: controlplanev1.AssistantPlanOperation_Type(raw), Action: controlplanev1.AssistantPlanOperation_Action(rawAction),
 			Title: assistantPlanOperationTitle(operation), Summary: operation.Summary, TargetKind: operation.Target.Kind,
-			TargetRef: operation.Target.Ref, TargetName: operation.Target.Name, ExpectedVersion: operation.ExpectedVersion,
+			TargetRef: operation.Target.Ref, TargetName: operation.Target.Name, TargetVersion: operation.Target.Version, ExpectedVersion: operation.ExpectedVersion,
 			Parameters: structure(parameters), Before: structure(operation.Before), After: structure(operation.After), Selected: operation.Selected,
 			Permitted: operation.Permitted, UnavailableReason: operation.UnavailableReason,
 			ValidationProblems: append([]string(nil), operation.ValidationProblems...),

@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.56
+version: 1.0.57
 updated: 2026-09-26
 ---
 
@@ -1070,3 +1070,23 @@ GitHub checks не считается `PASS`.
   `control-plane-migrate-c375e9fc5af4` завершилась `1/1`, goose readback —
   версия `20260926000200`. Применение пользовательского плана разрешения и
   визуальная проверка формы владельцем — NOT RUN.
+- Первый живой план `CHANGE_INTEGRATION_GRANT` выявил два последовательных
+  ложных конфликта снимка. Proto раньше не передавал независимую версию цели:
+  добавлено `target_version`, gateway сохраняет её внутри `target.version`, а
+  control-plane не подменяет её `expectedVersion`. После этого одинаковые
+  JSON-снимки всё ещё сравнивались через Go-типы: PostgreSQL roundtrip менял
+  `int64` на `float64`, а `[]string` на `[]any`. Для карт этой операции теперь
+  используется точное сравнение канонического JSON; версии и типизированная
+  цель по-прежнему сверяются отдельно и закрыто. Адресные gateway/control-plane
+  unit, локальный `buf build`, `git diff --check` — PASS; удалённый Buf plugin
+  вернул `403`, поэтому generated Go обновлён закреплённым
+  `buf.gen.local.yaml`. Air пересобрал оба Go-сервиса без image rebuild. В
+  Chrome тот же неприменённый вариант с точными connection, сотрудником и
+  `github.repository.content.read` перешёл из «Есть ошибки» в «Проверен»;
+  validation POST и последующие readback-запросы завершились HTTP 200. После
+  reload без кэша сохранились выбранный диалог и проверенная карточка, ничего
+  не применено. Screenshot:
+  `/tmp/kodex-assistant-integration-grant-validated.png`. Один
+  `ERR_NETWORK_CHANGED` на первом bootstrap был транзитным: повторный bootstrap
+  и session readback завершились 200. Визуальная приёмка владельцем и
+  фактическая выдача разрешения — NOT RUN.

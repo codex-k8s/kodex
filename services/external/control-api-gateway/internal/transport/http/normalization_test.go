@@ -445,6 +445,7 @@ func TestMessageMapMaterializesNestedEmptyCollections(t *testing.T) {
 
 func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 	t.Parallel()
+	targetVersion := int64(7)
 
 	parameters, err := structpb.NewStruct(map[string]any{"name": "Продажи"})
 	if err != nil {
@@ -462,7 +463,7 @@ func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 				Operations: []*controlplanev1.AssistantPlanOperation{{
 					Ref: "operation-001", Type: controlplanev1.AssistantPlanOperation_TYPE_CREATE_PROJECT,
 					Action: controlplanev1.AssistantPlanOperation_ACTION_CREATE, TargetKind: "PROJECT", TargetName: "Продажи",
-					Parameters: parameters,
+					TargetVersion: &targetVersion, Parameters: parameters,
 				}},
 			},
 		}},
@@ -486,7 +487,7 @@ func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 		t.Fatalf("assistant operation enums are not public: %#v", operation)
 	}
 	target := operation["target"].(map[string]any)
-	if target["kind"] != "PROJECT" || target["name"] != "Продажи" {
+	if target["kind"] != "PROJECT" || target["name"] != "Продажи" || target["version"] != float64(7) {
 		t.Fatalf("assistant operation target is invalid: %#v", target)
 	}
 	if !reflect.DeepEqual(operation["parameters"], map[string]any{"name": "Продажи"}) {

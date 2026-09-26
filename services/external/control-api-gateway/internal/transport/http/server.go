@@ -830,10 +830,14 @@ func normalizeAssistantShape(value map[string]any) {
 	if targetRef, exists := value["targetRef"]; exists && targetRef != "" {
 		target["ref"] = targetRef
 	}
+	if targetVersion, exists := value["targetVersion"]; exists {
+		target["version"] = targetVersion
+	}
 	value["target"] = target
 	delete(value, "targetKind")
 	delete(value, "targetRef")
 	delete(value, "targetName")
+	delete(value, "targetVersion")
 	for _, key := range []string{"parameters", "before", "after"} {
 		if _, exists := value[key]; !exists {
 			value[key] = map[string]any{}

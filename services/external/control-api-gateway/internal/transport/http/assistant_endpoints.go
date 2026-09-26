@@ -208,11 +208,12 @@ func assistantPlanOperationsInput(items []generated.AssistantPlanOperationInput)
 		if item.Target.Ref != nil {
 			targetRef = string(*item.Target.Ref)
 		}
+		targetVersion := item.Target.Version
 		result = append(result, &controlplanev1.AssistantPlanOperation{Ref: string(item.Ref),
 			Type:   controlplanev1.AssistantPlanOperation_Type(controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+string(item.Type)]),
 			Action: controlplanev1.AssistantPlanOperation_Action(controlplanev1.AssistantPlanOperation_Action_value["ACTION_"+string(item.Action)]),
 			Title:  item.Title, Summary: item.Summary, TargetKind: item.Target.Kind, TargetRef: targetRef,
-			TargetName: item.Target.Name, ExpectedVersion: item.ExpectedVersion, Parameters: parameters, Before: before,
+			TargetName: item.Target.Name, TargetVersion: targetVersion, ExpectedVersion: item.ExpectedVersion, Parameters: parameters, Before: before,
 			After: after, Selected: item.Selected})
 	}
 	return result

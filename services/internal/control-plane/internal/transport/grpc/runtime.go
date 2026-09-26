@@ -511,7 +511,7 @@ func assistantOperation(item *controlplanev1.AssistantPlanOperation) entity.Assi
 	return entity.AssistantPlanOperation{
 		Key: item.GetRef(), Type: enumSuffix(item.GetType(), "TYPE_"), Action: enumSuffix(item.GetAction(), "ACTION_"),
 		Title: item.GetTitle(), Summary: item.GetSummary(), Parameters: parameters, Before: asMap(item.GetBefore()), After: asMap(item.GetAfter()),
-		Target:          entity.AssistantPlanTarget{Kind: item.GetTargetKind(), Ref: item.GetTargetRef(), Name: item.GetTargetName(), Version: item.ExpectedVersion},
+		Target:          entity.AssistantPlanTarget{Kind: item.GetTargetKind(), Ref: item.GetTargetRef(), Name: item.GetTargetName(), Version: item.TargetVersion},
 		ExpectedVersion: item.ExpectedVersion, Selected: item.GetSelected(),
 	}
 }
