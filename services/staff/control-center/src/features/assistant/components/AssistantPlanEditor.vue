@@ -1237,6 +1237,51 @@ function snapshot(value: string): Record<string, unknown> {
               "
             />
             <div
+              v-else-if="operation.value.type === 'TEST_INTEGRATION_CONNECTION'"
+              class="assistant-plan-confirmation"
+            >
+              <div class="assistant-plan-confirmation__heading">
+                <Check aria-hidden="true" :size="18" />
+                <h3>
+                  {{ $t("assistant.planEditor.integrationTestTitle") }}
+                </h3>
+              </div>
+              <dl>
+                <dt>{{ $t("assistant.planEditor.integrationTestTarget") }}</dt>
+                <dd>{{ operationTargetLabel(operation.value.target) }}</dd>
+                <dt>{{ $t("assistant.planEditor.expectedVersion") }}</dt>
+                <dd>{{ operation.value.expectedVersion }}</dd>
+              </dl>
+              <p>{{ $t("assistant.planEditor.integrationTestBoundary") }}</p>
+            </div>
+            <div
+              v-else-if="
+                operation.value.type === 'ARCHIVE_AGENT' ||
+                operation.value.type === 'ARCHIVE_WORKFLOW'
+              "
+              class="assistant-plan-confirmation assistant-plan-confirmation--warning"
+            >
+              <div class="assistant-plan-confirmation__heading">
+                <AlertTriangle aria-hidden="true" :size="18" />
+                <h3>
+                  {{
+                    $t(
+                      operation.value.type === "ARCHIVE_AGENT"
+                        ? "assistant.planEditor.archiveAgentTitle"
+                        : "assistant.planEditor.archiveWorkflowTitle",
+                    )
+                  }}
+                </h3>
+              </div>
+              <dl>
+                <dt>{{ $t("assistant.planEditor.archiveTarget") }}</dt>
+                <dd>{{ operationTargetLabel(operation.value.target) }}</dd>
+                <dt>{{ $t("assistant.planEditor.expectedVersion") }}</dt>
+                <dd>{{ operation.value.expectedVersion }}</dd>
+              </dl>
+              <p>{{ $t("assistant.planEditor.archiveBoundary") }}</p>
+            </div>
+            <div
               v-else-if="
                 operation.value.type === 'PUBLISH_INTEGRATION_DEFINITION'
               "
@@ -2135,18 +2180,40 @@ function snapshot(value: string): Record<string, unknown> {
   display: grid;
   gap: 10px;
 }
+.assistant-plan-confirmation {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.assistant-plan-confirmation--warning {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+}
+.assistant-plan-confirmation__heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.assistant-plan-confirmation__heading h3,
+.assistant-plan-confirmation p,
 .assistant-plan-publication p {
   margin: 0;
 }
+.assistant-plan-confirmation dl,
 .assistant-plan-publication dl {
   display: grid;
   grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
   gap: 8px 14px;
   margin: 0;
 }
+.assistant-plan-confirmation dt,
 .assistant-plan-publication dt {
   color: var(--muted);
 }
+.assistant-plan-confirmation dd,
 .assistant-plan-publication dd {
   min-width: 0;
   margin: 0;

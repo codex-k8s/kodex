@@ -1177,7 +1177,44 @@ describe("assistant plan editor model", () => {
     expect(changed?.parameters.targetRef).toBe("wfl_weekly");
     expect(changed?.parameters.task).toBe("Проверь неделю и дай сводку");
     expect(changed?.target.kind).toBe("EXECUTION");
+    first.value.target.kind = "AGENT";
+    expect(friendlyPlanOperationType(first)).toBeUndefined();
   });
+
+  it.each([
+    ["TEST_INTEGRATION_CONNECTION", "EXECUTE", "INTEGRATION_CONNECTION"],
+    ["ARCHIVE_AGENT", "ARCHIVE", "AGENT"],
+    ["ARCHIVE_WORKFLOW", "ARCHIVE", "WORKFLOW"],
+  ] as const)(
+    "показывает %s как дружелюбное подтверждение точного объекта",
+    (type, action, kind) => {
+      const editable = editableOperations([
+        {
+          ...operation(),
+          type,
+          action,
+          target: {
+            kind,
+            ref: "target_existing",
+            name: "Точный объект",
+            version: 8,
+          },
+          expectedVersion: 8,
+          parameters: {},
+          before: { state: "ACTIVE" },
+          after: {
+            state: type.startsWith("ARCHIVE_") ? "ARCHIVED" : "QUEUED",
+          },
+        },
+      ]);
+      const first = editable[0];
+      expect(first).toBeDefined();
+      if (!first) return;
+      expect(friendlyPlanOperationType(first)).toBe(type);
+      first.value.action = "UPDATE";
+      expect(friendlyPlanOperationType(first)).toBeUndefined();
+    },
+  );
 
   it("редактирует массив этапов процесса через обычную форму, сохраняя серверный target", () => {
     const editable = editableOperations([

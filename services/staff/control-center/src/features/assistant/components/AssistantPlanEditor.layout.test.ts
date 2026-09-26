@@ -205,6 +205,17 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain('v-if="!friendlyPlanOperationType(operation)"');
   });
 
+  it("показывает тест интеграции и архивирование как понятные подтверждения", () => {
+    expect(source).toContain(
+      "operation.value.type === 'TEST_INTEGRATION_CONNECTION'",
+    );
+    expect(source).toContain("assistant.planEditor.integrationTestBoundary");
+    expect(source).toContain("operation.value.type === 'ARCHIVE_AGENT'");
+    expect(source).toContain("operation.value.type === 'ARCHIVE_WORKFLOW'");
+    expect(source).toContain("assistant.planEditor.archiveBoundary");
+    expect(source).toContain("operationTargetLabel(operation.value.target)");
+  });
+
   it("не применяет проверенную старую ревизию при несохранённых изменениях", () => {
     expect(source).toContain("draftMatchesSavedPlan.value");
     expect(source).toContain("exactRevisionValidated.value");

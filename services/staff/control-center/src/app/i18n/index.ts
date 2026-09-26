@@ -3331,6 +3331,15 @@ const ru = {
       integrationPublicationRevision: "Проверенная ревизия",
       integrationPublicationNextSteps:
         "Если определение изменилось, вернитесь в диалог и попросите новый план. После публикации настройте подключение и выдайте нужные разрешения отдельно.",
+      integrationTestTitle: "Проверка подключения интеграции",
+      integrationTestTarget: "Подключение",
+      integrationTestBoundary:
+        "Платформа выполнит безопасную серверную проверку текущей версии подключения и обновит её состояние. Секреты в план и чат не передаются.",
+      archiveAgentTitle: "Архивирование ИИ-сотрудника",
+      archiveWorkflowTitle: "Архивирование процесса",
+      archiveTarget: "Объект",
+      archiveBoundary:
+        "Новые запуски этого объекта станут недоступны. Существующая история и результаты сохранятся; действие применяется только к указанной версии.",
       entityName: "Название",
       entityPurpose: "Назначение",
       projectLanguage: "Язык проекта",
@@ -6915,6 +6924,15 @@ const en = {
       integrationPublicationRevision: "Validated revision",
       integrationPublicationNextSteps:
         "If the definition changed, return to the conversation and request a new plan. Configure a connection and grant the required permissions after publication.",
+      integrationTestTitle: "Test integration connection",
+      integrationTestTarget: "Connection",
+      integrationTestBoundary:
+        "The platform will run a safe server-side check of the current connection version and refresh its state. Secrets are not sent to the plan or conversation.",
+      archiveAgentTitle: "Archive AI employee",
+      archiveWorkflowTitle: "Archive workflow",
+      archiveTarget: "Target",
+      archiveBoundary:
+        "New runs of this target will become unavailable. Existing history and results remain available; the action applies only to the specified version.",
       entityName: "Name",
       entityPurpose: "Purpose",
       projectLanguage: "Project language",
