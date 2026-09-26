@@ -356,7 +356,10 @@ export function useCursorInfiniteScroll(
       return;
     const requestedRoot = options.root.value;
     const observerRoot =
-      requestedRoot?.contains(sentinel) === true ? requestedRoot : null;
+      typeof requestedRoot?.contains === "function" &&
+      requestedRoot.contains(sentinel)
+        ? requestedRoot
+        : null;
     observer = new IntersectionObserver(
       createCursorIntersectionHandler(
         () => toValue(options.enabled),

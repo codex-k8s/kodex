@@ -114,7 +114,7 @@ async function loadSection(section = routeSection.value): Promise<void> {
       access.loadSubjects(),
       access.loadBindings({
         projectRef: projectRef.value || undefined,
-        includeRevoked: true,
+        includeRevoked: false,
       }),
     ]);
   } else {
@@ -395,10 +395,26 @@ onMounted(() => void loadBaseline());
       @create="createBinding()"
       @edit="editBinding"
       @revoke="revokeBinding"
-      @more="
-        (pageSize) =>
+      @search="
+        (query, includeRevoked, pageSize) =>
           access.loadBindings(
-            { projectRef: projectRef || undefined, includeRevoked: true },
+            {
+              query,
+              projectRef: projectRef || undefined,
+              includeRevoked,
+            },
+            false,
+            pageSize,
+          )
+      "
+      @more="
+        (query, includeRevoked, pageSize) =>
+          access.loadBindings(
+            {
+              query,
+              projectRef: projectRef || undefined,
+              includeRevoked,
+            },
             true,
             pageSize,
           )

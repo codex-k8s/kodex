@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 
 import type {
   AccessBinding,
@@ -26,10 +26,14 @@ const emit = defineEmits<{
   create: [];
   edit: [binding: AccessBinding];
   revoke: [binding: AccessBinding];
-  more: [pageSize: number];
+  search: [query: string, includeRevoked: boolean, pageSize: number];
+  more: [query: string, includeRevoked: boolean, pageSize: number];
   retry: [];
 }>();
 const stateFilter = ref<"ACTIVE" | "ALL">("ACTIVE");
+const query = ref("");
+const searchId = useId();
+let timer: ReturnType<typeof setTimeout> | undefined;
 const visible = computed(() =>
   stateFilter.value === "ALL"
     ? props.bindings
@@ -47,7 +51,23 @@ useCursorInfiniteScroll({
   root: listRoot,
   sentinel,
   enabled: () => props.hasMore && !props.loading,
-  loadMore: () => emit("more", pageSize.value),
+  loadMore: () =>
+    emit(
+      "more",
+      query.value.trim(),
+      stateFilter.value === "ALL",
+      pageSize.value,
+    ),
+});
+watch([query, stateFilter], ([value, state]) => {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(
+    () => emit("search", value.trim(), state === "ALL", pageSize.value),
+    250,
+  );
+});
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer);
 });
 
 function projectName(ref?: string): string {
@@ -92,6 +112,18 @@ function assignmentKind(
         <p>{{ $t("access.bindingsWorkspace.subtitle") }}</p>
       </div>
       <div class="bindings-actions">
+        <label class="sr-only" :for="searchId">
+          {{ $t("access.bindingsWorkspace.search") }}
+        </label>
+        <input
+          :id="searchId"
+          v-model="query"
+          class="bindings-search"
+          name="access-binding-search"
+          type="search"
+          autocomplete="off"
+          :placeholder="$t('access.bindingsWorkspace.searchPlaceholder')"
+        />
         <select
           v-model="stateFilter"
           name="access-binding-state-filter"
@@ -113,8 +145,20 @@ function assignmentKind(
       :loading="loading"
       :problem="problem"
       :empty="visible.length === 0"
-      :empty-title="$t('access.bindingsWorkspace.empty')"
-      :empty-text="$t('access.bindingsWorkspace.emptyHint')"
+      :empty-title="
+        $t(
+          query.trim()
+            ? 'access.bindingsWorkspace.searchEmpty'
+            : 'access.bindingsWorkspace.empty',
+        )
+      "
+      :empty-text="
+        $t(
+          query.trim()
+            ? 'access.bindingsWorkspace.searchEmptyHint'
+            : 'access.bindingsWorkspace.emptyHint',
+        )
+      "
       @retry="emit('retry')"
     >
       <div ref="listRoot" class="binding-list">
@@ -225,6 +269,9 @@ function assignmentKind(
 }
 .bindings-actions select {
   min-width: 140px;
+}
+.bindings-search {
+  width: min(340px, 28vw);
 }
 .binding-list {
   display: grid;

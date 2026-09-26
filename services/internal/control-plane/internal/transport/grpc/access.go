@@ -103,7 +103,7 @@ func (server *Server) ListAccessBindings(ctx context.Context, request *controlpl
 	items, next, err := server.service.ListAccessBindings(ctx, p, query.AccessBindingFilter{
 		Page: page(request.GetPage()), SubjectKind: accessSubjectKind(request.GetSubjectKind()),
 		SubjectRef: request.GetSubjectRef(), RoleRef: request.GetRoleRef(), ProjectRef: request.GetProjectRef(),
-		IncludeRevoked: request.GetIncludeRevoked(),
+		IncludeRevoked: request.GetIncludeRevoked(), Query: request.GetQuery(), Aliases: request.GetQueryAliases(),
 	})
 	if err != nil {
 		return nil, transportError(err)

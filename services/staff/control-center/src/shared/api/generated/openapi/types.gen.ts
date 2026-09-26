@@ -11103,6 +11103,7 @@ export type ListAccessBindingsData = {
     body?: never;
     path?: never;
     query?: {
+        query?: string;
         pageSize?: number;
         pageToken?: string;
         subjectKind?: AccessSubjectKind;

@@ -89,10 +89,11 @@ func (server *Server) ListAccessRoleVersions(writer http.ResponseWriter, request
 }
 
 func (server *Server) ListAccessBindings(writer http.ResponseWriter, request *http.Request, parameters generated.ListAccessBindingsParams) {
+	search := stringValue(parameters.Query)
 	response, err := server.control.Access.ListAccessBindings(request.Context(), &controlplanev1.ListAccessBindingsRequest{
 		Page: page(parameters.PageSize, parameters.PageToken), SubjectKind: protoSubjectKind(stringValue(parameters.SubjectKind)),
 		SubjectRef: stringValue(parameters.SubjectRef), RoleRef: stringValue(parameters.RoleRef), ProjectRef: stringValue(parameters.ProjectRef),
-		IncludeRevoked: boolValue(parameters.IncludeRevoked),
+		IncludeRevoked: boolValue(parameters.IncludeRevoked), Query: search, QueryAliases: accessRoleQueryAliases(writer, search),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)

@@ -3664,6 +3664,7 @@ paths:
       tags: [Access]
       operationId: listAccessBindings
       parameters:
+        - { $ref: '#/components/parameters/Query' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/PageToken' }
         - name: subjectKind

@@ -255,6 +255,8 @@ message ListAccessBindingsRequest {
   string role_ref = 4;
   string project_ref = 5;
   bool include_revoked = 6;
+  string query = 7;
+  repeated string query_aliases = 8;
 }
 message ListAccessBindingsResponse {
   repeated AccessBinding bindings = 1;

@@ -150,6 +150,7 @@ export async function fetchAccessRoleVersions(
 }
 
 export async function fetchAccessBindings(options: {
+  query?: string;
   pageToken?: string;
   subjectKind?: AccessSubjectKind;
   subjectRef?: string;
@@ -162,6 +163,7 @@ export async function fetchAccessBindings(options: {
     await unwrap(
       listAccessBindings({
         query: {
+          ...(options.query ? { query: options.query } : {}),
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
           ...(options.subjectKind ? { subjectKind: options.subjectKind } : {}),
           ...(options.subjectRef ? { subjectRef: options.subjectRef } : {}),

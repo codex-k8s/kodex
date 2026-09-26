@@ -355,6 +355,10 @@ func (repository *Repository) ListAccessRoleVersions(ctx context.Context, princi
 }
 
 func (repository *Repository) ListAccessBindings(ctx context.Context, principal value.Principal, filter query.AccessBindingFilter) ([]entity.AccessBinding, string, error) {
+	filter.Query = strings.TrimSpace(filter.Query)
+	if !utf8.ValidString(filter.Query) || utf8.RuneCountInString(filter.Query) > 200 || strings.ContainsRune(filter.Query, 0) || !validAccessRoleQueryAliases(filter.Aliases) {
+		return nil, "", errs.ErrInvalid
+	}
 	current, tx, err := repository.accessReadTransaction(ctx, principal)
 	if err != nil {
 		return nil, "", err
@@ -364,7 +368,8 @@ func (repository *Repository) ListAccessBindings(ctx context.Context, principal 
 	rows, err := tx.Query(ctx, queryAccessListBindings, pgx.NamedArgs{
 		"organization_id": current.organizationID, "include_revoked": filter.IncludeRevoked,
 		"subject_kind": filter.SubjectKind, "subject_ref": filter.SubjectRef, "role_ref": filter.RoleRef,
-		"project_ref": filter.ProjectRef, "cursor": filter.Token, "limit": limit,
+		"project_ref": filter.ProjectRef, "query": filter.Query, "query_aliases": filter.Aliases,
+		"cursor": filter.Token, "limit": limit,
 	})
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
