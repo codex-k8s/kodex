@@ -293,7 +293,7 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	for _, item := range catalog {
 		item.Available = availability[item.Name]
 		item.Reason = variableAvailabilityReason(item, availability, materialized)
-		if (filter.SourceKind == "" || item.Source == filter.SourceKind) && (needle == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), needle)) {
+		if templateVariableMatchesFilter(item, needle, filter.SourceKind) {
 			filtered = append(filtered, item)
 		}
 	}
@@ -321,6 +321,11 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 		}
 	}
 	return items, total, next, nil
+}
+
+func templateVariableMatchesFilter(item entity.TemplateVariable, normalizedQuery, source string) bool {
+	return (source == "" || item.Source == source) &&
+		(normalizedQuery == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), normalizedQuery))
 }
 
 func validTemplateVariableSourceKind(source string) bool {

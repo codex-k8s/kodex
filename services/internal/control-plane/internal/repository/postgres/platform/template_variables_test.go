@@ -129,6 +129,24 @@ func TestTemplateVariableSourceKindIsClosed(t *testing.T) {
 	}
 }
 
+func TestTemplateVariableFilterMatchesSearchAndSourceTogether(t *testing.T) {
+	item := entity.TemplateVariable{Name: "workflow.name", Description: "Название процесса", Source: "WORKFLOW"}
+	for _, test := range []struct {
+		query, source string
+		want          bool
+	}{
+		{"", "", true},
+		{"process", "", false},
+		{"процесса", "", true},
+		{"workflow", "WORKFLOW", true},
+		{"workflow", "PROJECT", false},
+	} {
+		if got := templateVariableMatchesFilter(item, test.query, test.source); got != test.want {
+			t.Fatalf("filter query=%q source=%q: got %t want %t", test.query, test.source, got, test.want)
+		}
+	}
+}
+
 func TestTemplateVariableAvailabilityUsesMaterializedValues(t *testing.T) {
 	snapshot := entity.PromptMaterializationSnapshot{RunRef: "run_example", SessionRef: "ses_example",
 		Variables:           map[string]string{"agent.ref": "agt_example", "workflow.ref": "", "organization.ref": "org_example"},

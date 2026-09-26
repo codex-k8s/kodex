@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.45
+version: 1.0.46
 updated: 2026-09-26
 ---
 
@@ -949,8 +949,10 @@ GitHub checks не считается `PASS`.
   Закрытый `source` добавлен сквозным контрактом OpenAPI → gateway → Proto →
   control-plane и для обычного GET, и для context-pinned POST каталога; смена
   области теперь запускает свежий server-owned cursor и не фильтрует случайный
-  клиентский фрагмент. Клиент дополнительно отклоняет продолжение cursor после
-  смены области. Generated Go/TypeScript-код обновлён штатно. Gateway и
+  клиентский фрагмент. Обе repository-ветки применяют один предикат области и
+  поиска до `total` и cursor; неизвестная область закрыто отклоняется также в
+  target-pinned snapshot. Клиент дополнительно отклоняет продолжение cursor
+  после смены области. Generated Go/TypeScript-код обновлён штатно. Gateway и
   control-plane unit, 13 frontend unit, typecheck,
   ESLint, `buf lint`, локально идемпотентные Proto/OpenAPI generators и
   `git diff --check` — PASS. Удалённый Buf codegen check — FAIL с `403`, поэтому
