@@ -294,7 +294,7 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
         {{ $t("assistant.planEditor.grantRecipient") }}:
         <strong>{{ recipient.name }}</strong>
       </p>
-      <p v-if="!versionMatches" class="field-error" role="alert">
+      <p v-if="!disabled && !versionMatches" class="field-error" role="alert">
         {{ $t("assistant.planEditor.grantStale") }}
       </p>
       <label class="field">
@@ -378,18 +378,20 @@ function toggleApprovalScopePath(path: string, checked: boolean): void {
           <code>{{ path }}</code>
         </label>
       </fieldset>
-      <p v-if="candidateProblem" class="field-error" role="alert">
+      <p v-if="!disabled && candidateProblem" class="field-error" role="alert">
         {{ $t("assistant.planEditor.grantCandidateFailed") }}
       </p>
       <p
-        v-else-if="enabled === true && candidate && !candidate.grantable"
+        v-else-if="
+          !disabled && enabled === true && candidate && !candidate.grantable
+        "
         class="field-error"
         role="alert"
       >
         {{ $t("assistant.planEditor.grantUnavailable") }}
       </p>
       <p
-        v-else-if="enabled === false && !existingGrant"
+        v-else-if="!disabled && enabled === false && !existingGrant"
         class="field-error"
         role="alert"
       >

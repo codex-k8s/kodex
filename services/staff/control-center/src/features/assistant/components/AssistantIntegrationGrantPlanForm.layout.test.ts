@@ -34,5 +34,7 @@ describe("форма разрешения интеграции в плане п�
       "integrationGrantValidity.value[operation.value.ref]",
     );
     expect(editor).toContain("!integrationGrantTouched.value");
+    expect(source).toContain('v-if="!disabled && !versionMatches"');
+    expect(source).toContain('v-if="!disabled && candidateProblem"');
   });
 });

@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.78
+version: 1.0.79
 updated: 2026-09-26
 ---
 
@@ -1438,3 +1438,20 @@ GitHub checks не считается `PASS`.
   отсутствуют. Screenshots: `/tmp/kodex-build-diagnostic-plan.png`,
   `/tmp/kodex-plan-runtime-unavailable-localized.png`. Сам диагностический
   запуск не применён; визуальная приёмка владельцем — NOT RUN.
+- После закрытого отказа запуска без готового runtime помощник сохранил тот же
+  диалог и все прежние варианты, затем подготовил новый последовательный план:
+  рецепт образа для точного сотрудника на стандартном окружении, сборка,
+  admission и публикация до отдельного создания окружения, привязки и повторного
+  запуска. Native-форма показала полный server-owned Dockerfile и точные ссылки;
+  план не применяли. В другом сохранённом варианте фактически выдано разрешение
+  `github.repository.content.read` сотруднику через подключение GitHub: атомарное
+  применение вернуло квитанцию с одной операцией, а после возврата сохранились
+  диалог, варианты и terminal-карточка. Исправлено ложное предупреждение об
+  устаревшей версии подключения после собственного успешного применения:
+  stale/candidate blockers теперь видны только в редактируемом плане, а
+  read-only результат показывает авторитетно применённые значения. Адресный
+  frontend unit 1/1, typecheck и Prettier — PASS; после reload без кэша console
+  errors/warnings и актуальные HTTP 4xx/5xx отсутствуют. Screenshots:
+  `/tmp/kodex-build-recovery-variant-3.png`,
+  `/tmp/kodex-integration-grant-applied-clean.png`. Визуальная приёмка
+  владельцем — NOT RUN.
