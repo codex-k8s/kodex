@@ -370,28 +370,35 @@ describe("platform store", () => {
   it("новый scope запускает отдельный resync, не ожидая старую отменённую очередь", async () => {
     vi.useFakeTimers();
     const { resetOwnerRequests } = await import("@/shared/api/owner-lifetime");
-    const old = deferred<ReturnType<typeof response>>();
-    const fresh = deferred<ReturnType<typeof response>>();
-    listProjectsMock
+    const old = deferred<{ data: RunPage; response: Response }>();
+    const fresh = deferred<{ data: RunPage; response: Response }>();
+    listRunsMock
       .mockReturnValueOnce(old.promise)
       .mockReturnValueOnce(fresh.promise);
     const store = usePlatformStore();
     const first = store.reloadPlatformState().catch(() => undefined);
     await vi.advanceTimersByTimeAsync(0);
-    expect(listProjectsMock).toHaveBeenCalledTimes(1);
+    expect(listRunsMock).toHaveBeenCalledTimes(1);
+    expect(listProjectsMock).not.toHaveBeenCalled();
     resetOwnerRequests();
     const second = store.reloadPlatformState().catch(() => undefined);
     await vi.advanceTimersByTimeAsync(0);
-    expect(listProjectsMock).toHaveBeenCalledTimes(2);
-    fresh.resolve(response([project("project_fresh")]));
+    expect(listRunsMock).toHaveBeenCalledTimes(2);
+    fresh.resolve({
+      data: { items: [{ ...run(2), ref: "run_fresh" }], total: 1 },
+      response: new Response(null, { status: 200 }),
+    });
     await vi.runAllTimersAsync();
     await second;
-    expect(store.projects.project_fresh).toBeDefined();
-    old.resolve(response([project("project_stale")]));
+    expect(store.runs.run_fresh).toBeDefined();
+    old.resolve({
+      data: { items: [{ ...run(1), ref: "run_stale" }], total: 1 },
+      response: new Response(null, { status: 200 }),
+    });
     await vi.runAllTimersAsync();
     await first;
-    expect(store.projects.project_fresh).toBeDefined();
-    expect(store.projects.project_stale).toBeUndefined();
+    expect(store.runs.run_fresh).toBeDefined();
+    expect(store.runs.run_stale).toBeUndefined();
   });
 
   it("не позволяет старому HTTP response перезаписать новый", async () => {

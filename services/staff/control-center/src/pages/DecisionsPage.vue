@@ -23,6 +23,7 @@ import { RouterLink, useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
 import { useGateCatalog } from "@/features/workboard/gate-catalog";
+import { useGateProjects } from "@/features/workboard/gate-projects";
 import GateProjectFilter from "@/features/workboard/components/GateProjectFilter.vue";
 import {
   decisionActionLayout,
@@ -64,6 +65,10 @@ const view = ref<"PENDING" | "HISTORY">("PENDING");
 const search = ref("");
 const searchId = useId();
 const catalog = useGateCatalog();
+const gateProjects = useGateProjects();
+const decisionProjects = computed(() =>
+  Object.values(gateProjects.projects.value),
+);
 const decisionListRoot = ref<HTMLElement>();
 const decisionListSentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
@@ -74,6 +79,14 @@ const pageSize = useAdaptiveCursorPageSize({
 });
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const addressedGate = ref<OwnerGate>();
+watch(
+  () => [
+    ...catalog.items.value.map((gate) => gate.projectRef),
+    addressedGate.value?.projectRef ?? "",
+  ],
+  (refs) => void gateProjects.ensure(refs),
+  { immediate: true },
+);
 function loadCatalog(more = false): Promise<void> {
   return catalog.load(
     {
@@ -107,6 +120,26 @@ const problem = ref<AppProblem>();
 const successMessage = ref("");
 let pageMounted = false;
 let routingProject = false;
+const unsubscribeProjectReadback = platform.$onAction(
+  ({ name, args, after }) => {
+    if (
+      name !== "reloadPlatformState" &&
+      !(
+        name === "reloadPlatformKind" &&
+        ["PROJECT", "MEMBERSHIP", "PLATFORM_MEMBERSHIP"].includes(args[0])
+      )
+    )
+      return;
+    gateProjects.invalidate();
+    after(() => {
+      if (!pageMounted) return;
+      void gateProjects.ensure([
+        ...catalog.items.value.map((gate) => gate.projectRef),
+        addressedGate.value?.projectRef ?? "",
+      ]);
+    });
+  },
+);
 const addressedGateLoading = ref(false);
 const addressedGateProblem = ref<AppProblem>();
 let addressedGateController: AbortController | undefined;
@@ -174,7 +207,7 @@ function selectView(value: "PENDING" | "HISTORY"): void {
 const inbox = computed(() =>
   decisionInbox(
     catalog.items.value,
-    platform.projectList,
+    decisionProjects.value,
     projectFilter.value || undefined,
     new Date(),
     platform.runList,
@@ -183,7 +216,7 @@ const inbox = computed(() =>
 const history = computed(() =>
   decisionHistory(
     catalog.items.value,
-    platform.projectList,
+    decisionProjects.value,
     projectFilter.value || undefined,
     platform.runList,
   ),
@@ -226,14 +259,14 @@ const selected = computed(() => {
     return gate.state === "OPEN"
       ? decisionInbox(
           [gate],
-          platform.projectList,
+          decisionProjects.value,
           undefined,
           new Date(),
           platform.runList,
         )[0]
       : decisionHistory(
           [gate],
-          platform.projectList,
+          decisionProjects.value,
           undefined,
           platform.runList,
         )[0];
@@ -387,6 +420,8 @@ onBeforeUnmount(() => {
   addressedGateController?.abort();
   clearTimeout(searchTimer);
   catalog.reset();
+  unsubscribeProjectReadback();
+  gateProjects.dispose();
   attachmentLoadGeneration += 1;
 });
 watch(view, () => {
@@ -643,11 +678,7 @@ function submitActionClass(decision?: DecisionAction): string[] {
 
 onMounted(() => {
   pageMounted = true;
-  void Promise.all([
-    loadCatalog(),
-    platform.loadProjects(),
-    platform.loadRuns(),
-  ]).then(async () => {
+  void Promise.all([loadCatalog(), platform.loadRuns()]).then(async () => {
     if (!pageMounted) return;
     await loadAddressedGate();
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onBeforeUnmount меняет флаг во время await.
@@ -695,6 +726,7 @@ const serverMessage = useServerMessage();
           v-model="search"
           name="decision-search"
           type="search"
+          :placeholder="$t('common.search')"
           maxlength="200"
       /></label>
       <span
@@ -726,7 +758,6 @@ const serverMessage = useServerMessage();
     <AsyncState
       :loading="
         (catalog.loading.value && !catalog.items.value.length && !selected) ||
-        platform.loading.projects ||
         platform.loading.runs
       "
       :problem="catalog.problem.value"
@@ -1262,7 +1293,7 @@ const serverMessage = useServerMessage();
 .decision-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
@@ -1270,16 +1301,33 @@ const serverMessage = useServerMessage();
 .decision-toolbar__filters {
   display: flex;
   min-width: 0;
-  align-items: end;
+  align-items: center;
   gap: 12px;
 }
 .decision-toolbar label {
-  display: grid;
-  gap: 5px;
+  position: relative;
+  display: block;
   min-width: 0;
   max-width: 100%;
+  width: 240px;
   font-size: 0.78rem;
   font-weight: 600;
+}
+.decision-toolbar label > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.decision-toolbar label input {
+  width: 100%;
+}
+.decision-toolbar__filters :deep(.async-picker__trigger) {
+  min-height: 32px;
+  height: 32px;
+  padding: 5px 11px;
 }
 .decision-view-switch {
   display: flex;

@@ -1924,7 +1924,6 @@ export const usePlatformStore = defineStore("platform", () => {
       const projectRef = selectedProjectRef();
       const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
         { key: "bootstrap", run: loadBootstrap },
-        { key: "projects", run: loadProjects },
         { key: "overview", run: () => loadOverview(projectRef) },
         { key: "runs", run: () => loadRuns(projectRef) },
         { key: "gates", run: () => loadGates(projectRef) },

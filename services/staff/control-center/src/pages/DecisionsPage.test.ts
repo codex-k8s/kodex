@@ -4,6 +4,7 @@ import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
+const gateProjectReadback = vi.hoisted(() => ({ available: true }));
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 vi.mock("@/features/workboard/gate-catalog", () => ({
   useGateCatalog: () => ({
@@ -15,6 +16,15 @@ vi.mock("@/features/workboard/gate-catalog", () => ({
     load: vi.fn(),
     invalidate: vi.fn(),
     reset: vi.fn(),
+  }),
+}));
+vi.mock("@/features/workboard/gate-projects", () => ({
+  useGateProjects: () => ({
+    projects: ref(
+      gateProjectReadback.available ? { [project.ref]: project } : {},
+    ),
+    ensure: vi.fn(),
+    dispose: vi.fn(),
   }),
 }));
 import { i18n as applicationI18n } from "@/app/i18n";
@@ -132,6 +142,30 @@ const auditEvent: AuditEvent = {
 };
 
 describe("DecisionsPage", () => {
+  it("не раскрывает имя из старого общего кэша после отказа адресного чтения", async () => {
+    gateProjectReadback.available = false;
+    try {
+      const pinia = createPinia();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: "/decisions", component: DecisionsPage }],
+      });
+      await router.push("/decisions");
+      await router.isReady();
+      const platform = usePlatformStore(pinia);
+      platform.projects[project.ref] = project;
+      const app = createSSRApp(DecisionsPage);
+      app.use(pinia);
+      app.use(router);
+      app.use(applicationI18n);
+      const html = await renderToString(app);
+      expect(html).toContain("Название Проекта недоступно");
+      expect(html).not.toContain(project.name);
+    } finally {
+      gateProjectReadback.available = true;
+    }
+  });
+
   it("показывает сгруппированный контекст и ведёт на точный узел запуска", async () => {
     const pinia = createPinia();
     const router = createRouter({
