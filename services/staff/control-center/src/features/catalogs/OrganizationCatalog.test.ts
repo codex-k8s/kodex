@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   defineComponent,
   type ComputedRef,
@@ -38,6 +39,11 @@ vi.mock("./api", async (importOriginal) => ({
 }));
 import OrganizationCatalog from "./OrganizationCatalog.vue";
 import { catalogInvalidated } from "./api";
+
+const catalogTemplate = readFileSync(
+  new URL("./OrganizationCatalog.vue", import.meta.url),
+  "utf8",
+);
 
 const entry: CatalogEntry = {
   ref: "agent_synthetic",
@@ -108,6 +114,13 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("OrganizationCatalog realtime", () => {
+  it("в общем пустом каталоге ведёт к выбору Проекта и не показывает пустой поиск", () => {
+    expect(catalogTemplate).toContain('v-if="items.length || query.trim()"');
+    expect(catalogTemplate).toContain('to="/projects"');
+    expect(catalogTemplate).toContain('"emptyGlobalTitle"');
+    expect(catalogTemplate).toContain('"catalog.emptyGlobalHelp"');
+  });
+
   it("отменяет in-flight страницу и не принимает её после membership invalidation", async () => {
     let resolve!: (page: CatalogPage) => void;
     dependencies.load.mockReturnValueOnce(

@@ -130,6 +130,7 @@ describe("AutomationEditorDialog", () => {
 
     const html = await renderToString(app);
 
+    expect(html).toContain("modal--lg");
     expect(html).toContain("Изменить автоматизацию");
     expect(html).toContain('value="Ежедневная сводка"');
     expect(html).not.toContain("Подготовить сводку</textarea>");

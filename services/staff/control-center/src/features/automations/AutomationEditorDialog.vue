@@ -229,6 +229,7 @@ function submit(): void {
   <ModalDialog
     :title="schedule ? custom.editTitle : $t('automations.new')"
     :busy="busy"
+    size="lg"
     @close="emit('close')"
   >
     <form
@@ -504,7 +505,7 @@ function submit(): void {
 }
 .automation-editor {
   display: grid;
-  width: min(760px, 76vw);
+  width: 100%;
   gap: 0;
 }
 .automation-editor__notice {
@@ -539,8 +540,11 @@ function submit(): void {
 }
 .automation-editor__schedule-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+.automation-editor__schedule-grid + .automation-editor__schedule-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .automation-editor .field {
   min-width: 0;
@@ -567,6 +571,9 @@ function submit(): void {
   .automation-editor__target-grid,
   .automation-editor__policy-grid,
   .automation-editor__schedule-grid {
+    grid-template-columns: 1fr;
+  }
+  .automation-editor__schedule-grid + .automation-editor__schedule-grid {
     grid-template-columns: 1fr;
   }
 }

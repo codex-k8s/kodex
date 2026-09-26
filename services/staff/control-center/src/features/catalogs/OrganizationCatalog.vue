@@ -179,7 +179,10 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <section ref="scrollRoot" class="organization-catalog">
-    <label class="organization-catalog__search" :for="searchId"
+    <label
+      v-if="items.length || query.trim()"
+      class="organization-catalog__search"
+      :for="searchId"
       ><Search :size="18" /><input
         :id="searchId"
         v-model="query"
@@ -201,16 +204,26 @@ onBeforeUnmount(() => {
         {{
           query.trim()
             ? $t("catalog.emptySearchTitle")
-            : $t(`catalog.emptyTitle.${kind}`)
+            : $t(
+                `catalog.${projectRef ? "emptyTitle" : "emptyGlobalTitle"}.${kind}`,
+              )
         }}
       </h2>
       <p>
         {{
           query.trim()
             ? $t("catalog.emptySearchHelp")
-            : $t(`catalog.emptyHelp.${kind}`)
+            : projectRef
+              ? $t(`catalog.emptyHelp.${kind}`)
+              : $t("catalog.emptyGlobalHelp")
         }}
       </p>
+      <RouterLink
+        v-if="!query.trim() && !projectRef"
+        class="button button--primary"
+        to="/projects"
+        >{{ $t("catalog.chooseProject") }}</RouterLink
+      >
     </div>
     <div
       v-if="groups.length"

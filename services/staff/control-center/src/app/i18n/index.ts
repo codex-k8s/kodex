@@ -472,6 +472,17 @@ const ru = {
     manageAccess: "Управлять доступом",
     emptySearchTitle: "Ничего не найдено",
     emptySearchHelp: "Измените запрос или очистите поиск.",
+    chooseProject: "Выбрать Проект",
+    emptyGlobalHelp:
+      "Создание и настройка доступны внутри Проекта. Выберите Проект, чтобы продолжить.",
+    emptyGlobalTitle: {
+      agents: "В доступных Проектах пока нет ИИ-сотрудников",
+      workflows: "В доступных Проектах пока нет Процессов",
+      automations: "В доступных Проектах пока нет автоматизаций",
+      environments: "В доступных Проектах пока нет окружений",
+      secrets: "В доступных Проектах пока нет секретов",
+      members: "В доступных Проектах пока нет участников",
+    },
     emptyTitle: {
       agents: "В Проекте пока нет ИИ-сотрудников",
       workflows: "Создайте первый Процесс",
@@ -3875,6 +3886,17 @@ const en = {
     manageAccess: "Manage access",
     emptySearchTitle: "Nothing found",
     emptySearchHelp: "Change the query or clear the search field.",
+    chooseProject: "Choose a Project",
+    emptyGlobalHelp:
+      "Create and manage these items inside a Project. Choose a Project to continue.",
+    emptyGlobalTitle: {
+      agents: "No AI employees in accessible Projects yet",
+      workflows: "No Workflows in accessible Projects yet",
+      automations: "No automations in accessible Projects yet",
+      environments: "No environments in accessible Projects yet",
+      secrets: "No secrets in accessible Projects yet",
+      members: "No members in accessible Projects yet",
+    },
     emptyTitle: {
       agents: "This Project has no AI employees yet",
       workflows: "Create the first Process",
