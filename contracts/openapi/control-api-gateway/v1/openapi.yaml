@@ -3584,6 +3584,7 @@ paths:
       tags: [Access]
       operationId: listAccessRoles
       parameters:
+        - { $ref: '#/components/parameters/Query' }
         - { $ref: '#/components/parameters/PageSize' }
         - { $ref: '#/components/parameters/PageToken' }
         - name: includeArchived

@@ -66,7 +66,9 @@ func (server *Server) ListAccessRoles(ctx context.Context, request *controlplane
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListAccessRoles(ctx, p, page(request.GetPage()), request.GetIncludeArchived())
+	items, next, err := server.service.ListAccessRoles(ctx, p, query.Filter{
+		Query: request.GetQuery(), Aliases: request.GetQueryAliases(), Page: page(request.GetPage()),
+	}, request.GetIncludeArchived())
 	if err != nil {
 		return nil, transportError(err)
 	}

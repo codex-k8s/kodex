@@ -2,15 +2,38 @@ package httptransport
 
 import (
 	"encoding/json"
-	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
-	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
-	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
-	"google.golang.org/protobuf/proto"
 	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
+
+	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
+	"google.golang.org/protobuf/proto"
 )
+
+type accessRoleSearchRecorder struct{ *httptest.ResponseRecorder }
+
+func (recorder *accessRoleSearchRecorder) Localize(messageID string) string {
+	return map[string]string{
+		"SYSTEM_ROLE_MEMBER":             "Участник",
+		"SYSTEM_ROLE_MEMBER_DESCRIPTION": "Использует назначенные проекты и ресурсы",
+	}[messageID]
+}
+
+func TestAccessRoleQueryAliasesUseLocalizedPresentation(t *testing.T) {
+	writer := &accessRoleSearchRecorder{ResponseRecorder: httptest.NewRecorder()}
+	if actual := accessRoleQueryAliases(writer, "участ"); !reflect.DeepEqual(actual, []string{"i18n:SYSTEM_ROLE_MEMBER"}) {
+		t.Fatalf("localized role name aliases=%v", actual)
+	}
+	if actual := accessRoleQueryAliases(writer, "назначенные проекты"); !reflect.DeepEqual(actual, []string{"i18n:SYSTEM_ROLE_MEMBER_DESCRIPTION"}) {
+		t.Fatalf("localized role description aliases=%v", actual)
+	}
+	if actual := accessRoleQueryAliases(writer, "другая роль"); len(actual) != 0 {
+		t.Fatalf("unrelated search aliases=%v", actual)
+	}
+}
 
 func TestPublicAccessQueryScopesAcrossEndpoints(t *testing.T) {
 	for _, target := range []string{`{"kind":"ORGANIZATION"}`, `{"kind":"PROJECT","projectRef":"prj_fixture"}`, `{"kind":"RESOURCE_KIND","projectRef":"prj_fixture","resourceKind":"ROLE_IMAGE"}`, `{"kind":"RESOURCE_INSTANCE","projectRef":"prj_fixture","resourceKind":"PROJECT","resourceRef":"prj_fixture"}`} {

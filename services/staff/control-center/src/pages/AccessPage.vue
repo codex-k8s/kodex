@@ -377,7 +377,10 @@ onMounted(() => void loadBaseline());
       @create="createRole"
       @edit="editRole"
       @archive="archiveRole"
-      @more="access.loadRoles(true, true, $event)"
+      @search="
+        (query, pageSize) => access.loadRoles(true, false, pageSize, query)
+      "
+      @more="(query, pageSize) => access.loadRoles(true, true, pageSize, query)"
       @retry="loadSection"
     />
     <BindingsPanel

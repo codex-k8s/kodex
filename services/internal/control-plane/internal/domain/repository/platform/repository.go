@@ -361,7 +361,7 @@ type Repository interface {
 	ListPermissionRegistry(context.Context, value.Principal) ([]entity.PermissionDefinition, error)
 	ListAccessSubjects(context.Context, value.Principal, query.Filter, string) ([]entity.AccessSubject, string, error)
 	ListOIDCGroups(context.Context, value.Principal, query.Filter) ([]entity.OIDCGroup, string, error)
-	ListAccessRoles(context.Context, value.Principal, query.Page, bool) ([]entity.AccessRole, string, error)
+	ListAccessRoles(context.Context, value.Principal, query.Filter, bool) ([]entity.AccessRole, string, error)
 	ListAccessRoleVersions(context.Context, value.Principal, string, query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error)
 	ListAccessBindings(context.Context, value.Principal, query.AccessBindingFilter) ([]entity.AccessBinding, string, error)
 	QueryEffectiveAccess(context.Context, value.Principal, string, entity.AccessScope, []string, time.Time) (entity.EffectiveAccess, error)

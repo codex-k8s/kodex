@@ -347,23 +347,27 @@ export function useCursorInfiniteScroll(
 
   function reconnect(): void {
     disconnect();
+    const sentinel = options.sentinel.value;
     if (
       typeof IntersectionObserver === "undefined" ||
-      !options.sentinel.value ||
+      !sentinel ||
       !toValue(options.enabled)
     )
       return;
+    const requestedRoot = options.root.value;
+    const observerRoot =
+      requestedRoot?.contains(sentinel) === true ? requestedRoot : null;
     observer = new IntersectionObserver(
       createCursorIntersectionHandler(
         () => toValue(options.enabled),
         options.loadMore,
       ),
       {
-        root: options.root.value ?? null,
+        root: observerRoot,
         rootMargin: options.rootMargin ?? "0px 0px 120px",
       },
     );
-    observer.observe(options.sentinel.value);
+    observer.observe(sentinel);
   }
 
   const stopWatch = watch(

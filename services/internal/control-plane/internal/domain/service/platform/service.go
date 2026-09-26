@@ -1041,12 +1041,12 @@ func (service *Service) ListOIDCGroups(ctx context.Context, p value.Principal, f
 	return service.repository.ListOIDCGroups(ctx, p, filter)
 }
 
-func (service *Service) ListAccessRoles(ctx context.Context, p value.Principal, page query.Page, includeArchived bool) ([]entity.AccessRole, string, error) {
+func (service *Service) ListAccessRoles(ctx context.Context, p value.Principal, filter query.Filter, includeArchived bool) ([]entity.AccessRole, string, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
 		return nil, "", err
 	}
-	return service.repository.ListAccessRoles(ctx, p, page, includeArchived)
+	return service.repository.ListAccessRoles(ctx, p, filter, includeArchived)
 }
 
 func (service *Service) ListAccessRoleVersions(ctx context.Context, p value.Principal, roleRef string, page query.Page) (entity.AccessRole, []entity.AccessRoleVersion, string, error) {

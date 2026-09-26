@@ -1795,6 +1795,8 @@ type ListAccessRolesRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Page            *PageRequest           `protobuf:"bytes,1,opt,name=page,proto3" json:"page,omitempty"`
 	IncludeArchived bool                   `protobuf:"varint,2,opt,name=include_archived,json=includeArchived,proto3" json:"include_archived,omitempty"`
+	Query           string                 `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
+	QueryAliases    []string               `protobuf:"bytes,4,rep,name=query_aliases,json=queryAliases,proto3" json:"query_aliases,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1841,6 +1843,20 @@ func (x *ListAccessRolesRequest) GetIncludeArchived() bool {
 		return x.IncludeArchived
 	}
 	return false
+}
+
+func (x *ListAccessRolesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *ListAccessRolesRequest) GetQueryAliases() []string {
+	if x != nil {
+		return x.QueryAliases
+	}
+	return nil
 }
 
 type ListAccessRolesResponse struct {
@@ -3361,10 +3377,12 @@ const file_controlplane_v1_access_proto_rawDesc = "" +
 	"\x05query\x18\x02 \x01(\tR\x05query\"{\n" +
 	"\x16ListOIDCGroupsResponse\x122\n" +
 	"\x06groups\x18\x01 \x03(\v2\x1a.controlplane.v1.OIDCGroupR\x06groups\x12-\n" +
-	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"u\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xb0\x01\n" +
 	"\x16ListAccessRolesRequest\x120\n" +
 	"\x04page\x18\x01 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12)\n" +
-	"\x10include_archived\x18\x02 \x01(\bR\x0fincludeArchived\"{\n" +
+	"\x10include_archived\x18\x02 \x01(\bR\x0fincludeArchived\x12\x14\n" +
+	"\x05query\x18\x03 \x01(\tR\x05query\x12#\n" +
+	"\rquery_aliases\x18\x04 \x03(\tR\fqueryAliases\"{\n" +
 	"\x17ListAccessRolesResponse\x121\n" +
 	"\x05roles\x18\x01 \x03(\v2\x1b.controlplane.v1.AccessRoleR\x05roles\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"l\n" +

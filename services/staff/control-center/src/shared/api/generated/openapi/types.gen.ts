@@ -10950,6 +10950,7 @@ export type ListAccessRolesData = {
     body?: never;
     path?: never;
     query?: {
+        query?: string;
         pageSize?: number;
         pageToken?: string;
         includeArchived?: boolean;

@@ -186,11 +186,18 @@ export const useAccessStore = defineStore("access", () => {
     includeArchived = false,
     append = false,
     pageSize = 20,
+    queryText = "",
   ): Promise<void> {
     const pageToken = append ? roleNextPageToken.value : undefined;
     await query(
       "roles",
-      () => api.fetchAccessRoles({ includeArchived, pageToken, pageSize }),
+      () =>
+        api.fetchAccessRoles({
+          includeArchived,
+          query: queryText,
+          pageToken,
+          pageSize,
+        }),
       (page) => {
         roles.value = append
           ? appendUnique(roles.value, page.items, (item) => item.ref)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { permissionMessage } from "@/features/access/presentation";
@@ -25,13 +25,17 @@ const emit = defineEmits<{
   create: [];
   edit: [role: AccessRole];
   archive: [role: AccessRole];
-  more: [pageSize: number];
+  search: [query: string, pageSize: number];
+  more: [query: string, pageSize: number];
   retry: [];
 }>();
 const i18n = useI18n();
 const permissionMessages = computed(() =>
   i18n.tm("access.permissionsRegistry"),
 );
+const query = ref("");
+const searchId = useId();
+let timer: ReturnType<typeof setTimeout> | undefined;
 const listRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
@@ -45,7 +49,14 @@ useCursorInfiniteScroll({
   root: listRoot,
   sentinel,
   enabled: () => props.hasMore && !props.loading,
-  loadMore: () => emit("more", pageSize.value),
+  loadMore: () => emit("more", query.value.trim(), pageSize.value),
+});
+watch(query, (value) => {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(() => emit("search", value.trim(), pageSize.value), 250);
+});
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer);
 });
 
 function permissionDefinition(key: string): PermissionDefinition | undefined {
@@ -60,21 +71,47 @@ function permissionDefinition(key: string): PermissionDefinition | undefined {
         <h2>{{ $t("access.rolesWorkspace.title") }}</h2>
         <p>{{ $t("access.rolesWorkspace.subtitle") }}</p>
       </div>
-      <button
-        class="button button--primary"
-        type="button"
-        :disabled="permissionRegistryUnavailable"
-        @click="emit('create')"
-      >
-        {{ $t("access.rolesWorkspace.create") }}
-      </button>
+      <div class="roles-actions">
+        <label class="sr-only" :for="searchId">
+          {{ $t("access.rolesWorkspace.search") }}
+        </label>
+        <input
+          :id="searchId"
+          v-model="query"
+          class="roles-search"
+          name="access-role-search"
+          type="search"
+          autocomplete="off"
+          :placeholder="$t('access.rolesWorkspace.searchPlaceholder')"
+        />
+        <button
+          class="button button--primary"
+          type="button"
+          :disabled="permissionRegistryUnavailable"
+          @click="emit('create')"
+        >
+          {{ $t("access.rolesWorkspace.create") }}
+        </button>
+      </div>
     </header>
     <AsyncState
       :loading="loading"
       :problem="problem"
       :empty="roles.length === 0"
-      :empty-title="$t('access.rolesWorkspace.empty')"
-      :empty-text="$t('access.rolesWorkspace.emptyHint')"
+      :empty-title="
+        $t(
+          query.trim()
+            ? 'access.rolesWorkspace.searchEmpty'
+            : 'access.rolesWorkspace.empty',
+        )
+      "
+      :empty-text="
+        $t(
+          query.trim()
+            ? 'access.rolesWorkspace.searchEmptyHint'
+            : 'access.rolesWorkspace.emptyHint',
+        )
+      "
       @retry="emit('retry')"
     >
       <div ref="listRoot" class="role-groups">
@@ -96,7 +133,7 @@ function permissionDefinition(key: string): PermissionDefinition | undefined {
                   <h3>{{ role.currentVersion.name }}</h3>
                   <small
                     >v{{ role.currentVersion.revision }} ·
-                    {{ role.bindingCount }}
+                    {{ role.bindingCount ?? 0 }}
                     {{ $t("access.rolesWorkspace.bindingsShort") }}</small
                   >
                 </div>
@@ -213,6 +250,14 @@ function permissionDefinition(key: string): PermissionDefinition | undefined {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+}
+.roles-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.roles-search {
+  width: min(360px, 32vw);
 }
 .permission-details summary {
   cursor: pointer;

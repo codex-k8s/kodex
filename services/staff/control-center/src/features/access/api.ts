@@ -115,6 +115,7 @@ export async function fetchOidcGroups(options: {
 }
 
 export async function fetchAccessRoles(options: {
+  query?: string;
   pageToken?: string;
   includeArchived?: boolean;
   pageSize?: number;
@@ -123,6 +124,7 @@ export async function fetchAccessRoles(options: {
     await unwrap(
       listAccessRoles({
         query: {
+          ...(options.query ? { query: options.query } : {}),
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
           pageSize: options.pageSize ?? 20,
           includeArchived: options.includeArchived ?? false,
