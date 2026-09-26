@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.91
+version: 1.0.92
 updated: 2026-09-26
 ---
 
@@ -1649,11 +1649,12 @@ GitHub checks не считается `PASS`.
   завершённых HTTP 4xx/5xx не было. Screenshots:
   `/tmp/kodex-decisions-compact-toolbar-20260926.png` и
   `/tmp/kodex-decisions-history-addressed-projects-20260926.jpeg`.
-  После последнего изменения защиты от старого кэша Chrome DevTools MCP
-  периодически зависает на операции screenshot и затем не отвечает даже на
-  список вкладок. Финальный reload без кэша и измерение высоты toolbar
-  прошли, но console/network readback и screenshot именно этого diff —
-  NOT RUN до восстановления устойчивого подключения.
+  После последнего изменения защиты от старого кэша финальный reload без
+  кэша подтвердил высоту toolbar 32 px, отсутствие запроса первой сотни
+  проектов, завершённых HTTP 4xx/5xx и сообщений console. Chrome DevTools
+  MCP периодически зависает именно на операции screenshot; снимок экрана
+  последнего diff — NOT RUN. Приведённые выше снимки сделаны до последнего
+  изменения защиты и подтверждают только предыдущее состояние вёрстки.
   Положительный browser-сценарий с доказанно доступным проектом за пределами
   первой сотни — NOT RUN: отдельная fixture не создавалась. Полная
   визуальная приёмка владельцем — NOT RUN.
