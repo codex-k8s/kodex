@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.46
+version: 1.0.47
 updated: 2026-09-26
 ---
 
@@ -961,3 +961,9 @@ GitHub checks не считается `PASS`.
   окна атомарной замены generated-файлов снова отдаёт приложение и изменённые
   модули без новых логов. Chrome UI/console/network/screenshot — NOT RUN из-за
   закрытого transport `chrome-devtools-mcp`.
+- Core prompt v36 явно разделяет контексты шаблонов сотрудника, Процесса,
+  Автоматизации и materialized Run/continuation. Сотруднику по умолчанию
+  предлагаются только стабильная идентичность и server-owned цикл фактически
+  выданных интеграций; runtime, file и workflow-переменные разрешены только по
+  точному target-specific каталогу, а структуры коллекций — по его
+  `rangeExample/itemFields`. Предыдущая ревизия не изменена.

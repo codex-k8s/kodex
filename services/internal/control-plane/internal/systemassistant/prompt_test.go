@@ -8,7 +8,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v35" {
+	if CorePromptRevision != "system-assistant-core-v36" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -60,6 +60,9 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"полный Dockerfile в том же редакторе",
 		"серверный динамический блок интеграций",
 		"`{{\"{{\"}} range .integrations.items {{\"}}\"}}`",
+		"Разделяй шаблонные контексты",
+		"`rangeExample` и поля `itemFields`",
+		"`.automation.*` — к предпросмотру и материализации Автоматизации",
 	} {
 		if !strings.Contains(CorePrompt(), required) {
 			t.Fatalf("system assistant prompt does not contain required guidance %q", required)
@@ -71,6 +74,7 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"Операция меняет только название, описание и ссылку на проверенный образ",
 		"`tools`, `policy` и сырые Secret не передавай в план",
 		"Уточнение к",
+		"еси их нет",
 	} {
 		if strings.Contains(CorePrompt(), forbidden) {
 			t.Fatalf("system assistant prompt contains stale guidance %q", forbidden)
