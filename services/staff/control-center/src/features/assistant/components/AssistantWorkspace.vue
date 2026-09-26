@@ -1371,7 +1371,11 @@ onBeforeUnmount(() => {
                     type="button"
                     @click="openPlan(turn.plan, $event)"
                   >
-                    {{ $t("assistant.openPlan") }}
+                    {{
+                      ["APPLIED", "REJECTED"].includes(turn.plan.state)
+                        ? $t("assistant.viewPlan")
+                        : $t("assistant.openPlan")
+                    }}
                   </button>
                 </section>
               </article>

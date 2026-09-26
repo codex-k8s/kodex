@@ -213,6 +213,8 @@ describe("AssistantWorkspace layout", () => {
     expect(template).toContain('ref="planDialog"');
     expect(source).toContain("focusableElements(planDialog.value)[0]");
     expect(source).toContain("if (trigger?.isConnected) trigger.focus()");
+    expect(template).toContain('["APPLIED", "REJECTED"].includes');
+    expect(template).toContain("assistant.viewPlan");
   });
 
   it("открывает защищённый импорт OpenAPI поверх диалога без передачи документа модели", () => {
