@@ -10,6 +10,7 @@ import HomeProjectsList from "@/features/home/components/HomeProjectsList.vue";
 import {
   homeFailedRuns,
   homeOpenGates,
+  homePriorityProjectRefs,
   prioritizeHomeProjects,
 } from "@/features/home/model";
 import { usePlatformStore } from "@/features/platform/store";
@@ -18,7 +19,7 @@ import WorkboardSection from "@/features/workboard/components/WorkboardSection.v
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
-import { searchProjects } from "@/features/projects/api";
+import { loadProject, searchProjects } from "@/features/projects/api";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import type { ProviderAccount } from "@/shared/api/generated/openapi/types.gen";
@@ -55,6 +56,13 @@ const pendingGates = computed(() => platform.overview?.pendingGates ?? []);
 const openGates = computed(() => homeOpenGates(pendingGates.value));
 const failedRuns = computed(() =>
   homeFailedRuns(platform.runList, platform.runList.length),
+);
+const priorityProjectRefs = computed(() =>
+  homePriorityProjectRefs(
+    openGates.value,
+    platform.overview?.activeRuns ?? [],
+    failedRuns.value,
+  ),
 );
 const dashboardProjects = computed(() =>
   prioritizeHomeProjects(visibleProjects.value, 4),
@@ -116,7 +124,21 @@ async function refreshProjects(): Promise<void> {
     if (controller.signal.aborted) return;
     if (new Set(page.items.map((item) => item.ref)).size !== page.items.length)
       throw invalidSearchResult();
-    visibleProjects.value = page.items;
+    const pageRefs = new Set(page.items.map((item) => item.ref));
+    const missingRefs = priorityProjectRefs.value.filter(
+      (ref) => !pageRefs.has(ref),
+    );
+    const priorityProjects = await Promise.all(
+      missingRefs.map((ref) => loadProject(ref, controller.signal)),
+    );
+    controller.signal.throwIfAborted();
+    if (
+      priorityProjects.some(
+        (project, index) => project.ref !== missingRefs[index],
+      )
+    )
+      throw invalidSearchResult();
+    visibleProjects.value = [...page.items, ...priorityProjects];
     projectsReady.value = true;
   } catch (error) {
     if (!controller.signal.aborted) projectProblem.value = asProblem(error);
@@ -275,6 +297,13 @@ watch(
   () => platform.bootstrap?.platformRole,
   (role, previous) => {
     if (role && role !== previous) void refreshProviderAttention();
+  },
+);
+watch(
+  () =>
+    `${priorityProjectRefs.value.join("|")}#${String(platform.overview?.pendingGateCount ?? 0)}#${String(platform.overview?.activeRunCount ?? 0)}`,
+  () => {
+    if (projectsReady.value) void refreshProjects();
   },
 );
 onBeforeUnmount(() => {
