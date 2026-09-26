@@ -66,6 +66,7 @@ import {
 import RunActivityView from "@/features/runs/RunActivityView.vue";
 import RuntimeSecretDraftDialog from "@/features/runtime-secrets/RuntimeSecretDraftDialog.vue";
 import type { RuntimeSecretDraftSuggestion } from "@/features/runtime-secrets/model";
+import { consumeRuntimeSecretReauthSuggestion } from "@/features/runtime-secrets/reauth-suggestion";
 import type {
   AssistantContextDescriptor,
   AssistantPlan,
@@ -148,6 +149,8 @@ const credentialConnectionRef = ref("");
 const connectionRefreshToken = ref(0);
 const secretInitialDraftRef = ref<string>();
 const secretSuggestion = ref<RuntimeSecretDraftSuggestion>();
+let workspaceMounted = false;
+let secretResumePending = false;
 const createdDefinitionRef = ref<string>();
 const desktopHistory = ref<HTMLElement>();
 const desktopHistorySentinel = ref<HTMLElement>();
@@ -407,23 +410,38 @@ async function closeAssistantForm(): Promise<void> {
 }
 
 async function resumeAssistantSecretForm(): Promise<void> {
-  if (!props.projectRef || route.params.projectRef !== props.projectRef) return;
+  if (
+    secretResumePending ||
+    !props.projectRef ||
+    route.params.projectRef !== props.projectRef
+  )
+    return;
   const creating = route.query.assistantCreateSecret === "1";
   const draftRef = route.query.assistantSecretDraftRef;
   const resuming =
     typeof draftRef === "string" && /^[-_A-Za-z0-9]{8,128}$/.test(draftRef);
   if (!creating && !resuming) return;
-  await show();
-  secretInitialDraftRef.value = resuming ? draftRef : undefined;
-  secretSuggestion.value = undefined;
-  secretDialogOpen.value = true;
-  await router.replace({
-    query: {
-      ...route.query,
-      assistantCreateSecret: undefined,
-      assistantSecretDraftRef: undefined,
-    },
-  });
+  secretResumePending = true;
+  try {
+    await show();
+    secretInitialDraftRef.value = resuming ? draftRef : undefined;
+    secretSuggestion.value = creating
+      ? consumeRuntimeSecretReauthSuggestion(window.sessionStorage, {
+          projectRef: props.projectRef,
+          surface: "assistant",
+        })
+      : undefined;
+    secretDialogOpen.value = true;
+    await router.replace({
+      query: {
+        ...route.query,
+        assistantCreateSecret: undefined,
+        assistantSecretDraftRef: undefined,
+      },
+    });
+  } finally {
+    secretResumePending = false;
+  }
 }
 
 function openPlainSecretForm(): void {
@@ -792,8 +810,24 @@ watch(
     scrollToLatest();
   },
 );
+watch(
+  [
+    () => props.projectRef,
+    () => route.params.projectRef,
+    () => route.query.assistantCreateSecret,
+    () => route.query.assistantSecretDraftRef,
+  ],
+  () => {
+    if (
+      workspaceMounted &&
+      (route.query.assistantCreateSecret || route.query.assistantSecretDraftRef)
+    )
+      void resumeAssistantSecretForm();
+  },
+);
 
 onMounted(() => {
+  workspaceMounted = true;
   historyMedia?.addEventListener("change", syncHistoryViewport);
   document.addEventListener("pointerdown", documentPointerDown);
   window.addEventListener(openAssistantEvent, handleOpenAssistant);
@@ -803,6 +837,7 @@ onMounted(() => {
   else if (open.value) void show();
 });
 onBeforeUnmount(() => {
+  workspaceMounted = false;
   historyMedia?.removeEventListener("change", syncHistoryViewport);
   store.cancelReads();
   document.removeEventListener("pointerdown", documentPointerDown);
@@ -1539,6 +1574,7 @@ onBeforeUnmount(() => {
         :project-ref="projectRef"
         :initial-draft-ref="secretInitialDraftRef"
         :suggestion="secretSuggestion"
+        :assistant-return-path="route.fullPath"
         assistant
         @close="
           secretDialogOpen = false;

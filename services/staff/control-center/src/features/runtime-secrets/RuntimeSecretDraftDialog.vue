@@ -15,6 +15,10 @@ import type {
 } from "./model";
 import RuntimeSecretValueDialog from "./RuntimeSecretValueDialog.vue";
 import RuntimeSecretDraftImpact from "./RuntimeSecretDraftImpact.vue";
+import {
+  consumeRuntimeSecretReauthSuggestion,
+  rememberRuntimeSecretReauthSuggestion,
+} from "./reauth-suggestion";
 import { readRuntimeSecret } from "./api";
 import {
   createSecretDraft,
@@ -31,6 +35,7 @@ const props = defineProps<{
   initialDraftRef?: string;
   initialPlanRef?: string;
   assistant?: boolean;
+  assistantReturnPath?: string;
   suggestion?: RuntimeSecretDraftSuggestion;
 }>();
 const emit = defineEmits<{
@@ -45,15 +50,32 @@ function published(value: RuntimeSecretDraft, secret: RuntimeSecret): void {
   emit("published", secret);
 }
 const { t } = useI18n();
+const reauthSuggestion = shallowRef<RuntimeSecretDraftSuggestion | undefined>(
+  props.suggestion,
+);
 async function reauthenticate(): Promise<void> {
   try {
+    if (!draft.value && !props.secret && reauthSuggestion.value)
+      rememberRuntimeSecretReauthSuggestion(
+        window.sessionStorage,
+        props.projectRef,
+        reauthSuggestion.value,
+        props.assistant ? "assistant" : undefined,
+      );
     await useSessionStore().beginRuntimeSecretDraftReauth({
+      ...(props.assistantReturnPath
+        ? { assistantReturnPath: props.assistantReturnPath }
+        : {}),
       projectRef: props.projectRef,
       target: draft.value ? "draft" : props.secret ? "secret" : "create",
       targetRef: draft.value?.ref ?? props.secret?.ref,
       ...(props.assistant ? { surface: "assistant" as const } : {}),
     });
   } catch (error) {
+    consumeRuntimeSecretReauthSuggestion(window.sessionStorage, {
+      projectRef: props.projectRef,
+      ...(props.assistant ? { surface: "assistant" as const } : {}),
+    });
     problem.value = safeDraftProblem(error);
   }
 }
@@ -267,6 +289,7 @@ onBeforeUnmount(() => {
     @create="save"
     @rotate="save"
     @close="close"
+    @safe-draft="reauthSuggestion = $event"
   >
     <p role="note">
       {{

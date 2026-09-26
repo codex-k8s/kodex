@@ -447,6 +447,7 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   async function beginRuntimeSecretDraftReauth(input: {
+    assistantReturnPath?: string;
     projectRef: string;
     target: "create" | "draft" | "secret";
     targetRef?: string;
@@ -458,6 +459,7 @@ export const useSessionStore = defineStore("session", () => {
       input.targetRef,
       Date.now(),
       input.surface,
+      input.assistantReturnPath,
     );
     window.sessionStorage.setItem(
       oidcReauthIntentStorageKey,

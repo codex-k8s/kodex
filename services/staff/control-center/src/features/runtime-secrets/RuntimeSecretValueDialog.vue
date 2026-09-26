@@ -32,6 +32,7 @@ const emit = defineEmits<{
   close: [];
   create: [input: RuntimeSecretCreateInput];
   rotate: [input: RuntimeSecretRotateInput];
+  safeDraft: [suggestion: RuntimeSecretDraftSuggestion];
 }>();
 
 const name = ref("");
@@ -117,16 +118,25 @@ watch(
 );
 
 watch(
-  () => props.secret,
-  (secret) => {
+  [() => props.secret, () => props.suggestion] as const,
+  ([secret, suggestion]) => {
     clearPlaintext();
     submitted.value = false;
-    name.value = secret?.name ?? props.suggestion?.name ?? "";
-    description.value =
-      secret?.description ?? props.suggestion?.description ?? "";
-    valueType.value =
-      secret?.valueType ?? props.suggestion?.valueType ?? "STRING";
+    name.value = secret?.name ?? suggestion?.name ?? "";
+    description.value = secret?.description ?? suggestion?.description ?? "";
+    valueType.value = secret?.valueType ?? suggestion?.valueType ?? "STRING";
   },
+  { immediate: true },
+);
+watch(
+  [name, description, valueType] as const,
+  ([nextName, nextDescription, nextValueType]) =>
+    emit("safeDraft", {
+      name: nextName,
+      description: nextDescription,
+      valueType: nextValueType,
+      sourceHelp: props.suggestion?.sourceHelp ?? "",
+    }),
   { immediate: true },
 );
 onBeforeUnmount(clearPlaintext);

@@ -23,8 +23,9 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { readRuntimeSecret } from "./api";
 
-import type { RuntimeSecret } from "./model";
+import type { RuntimeSecret, RuntimeSecretDraftSuggestion } from "./model";
 import { canRuntimeSecretAction, maskedSecretHint } from "./model";
+import { consumeRuntimeSecretReauthSuggestion } from "./reauth-suggestion";
 import RuntimeSecretRevealDialog from "./RuntimeSecretRevealDialog.vue";
 import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
 import RuntimeSecretDraftDialog from "./RuntimeSecretDraftDialog.vue";
@@ -58,6 +59,7 @@ const search = ref("");
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const createOpen = ref(false);
+const createSuggestion = ref<RuntimeSecretDraftSuggestion>();
 const expanded = ref(false);
 const rotateTarget = ref<RuntimeSecret>();
 const revealTarget = ref<RuntimeSecret>();
@@ -86,12 +88,20 @@ function prepareMutation(): void {
 
 function openCreate(): void {
   prepareMutation();
+  createSuggestion.value = undefined;
   createOpen.value = true;
 }
 watch(
   () => props.assistantCreateSecret,
   (requested) => {
-    if (requested && !createOpen.value) openCreate();
+    if (requested && !createOpen.value) {
+      prepareMutation();
+      createSuggestion.value = consumeRuntimeSecretReauthSuggestion(
+        window.sessionStorage,
+        { projectRef: props.projectRef },
+      );
+      createOpen.value = true;
+    }
   },
   { immediate: true },
 );
@@ -453,7 +463,11 @@ onBeforeUnmount(() => {
   <RuntimeSecretDraftDialog
     v-if="createOpen"
     :project-ref="projectRef"
-    @close="createOpen = false"
+    :suggestion="createSuggestion"
+    @close="
+      createOpen = false;
+      createSuggestion = undefined;
+    "
     @saved="draftSaved"
     @published="store.acceptPublication"
     @plan-prepared="planPrepared"

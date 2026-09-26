@@ -266,12 +266,28 @@ function runtimeSecretDraftPath(
   target: RuntimeSecretDraftIntent["target"],
   targetRef?: string,
   surface?: RuntimeSecretDraftIntent["surface"],
+  assistantReturnPath?: string,
 ): string {
   if (surface === "assistant") {
     const projectPath = `/projects/${encodeURIComponent(projectRef)}`;
-    return target === "create"
-      ? `${projectPath}?assistantCreateSecret=1`
-      : `${projectPath}?assistantSecretDraftRef=${encodeURIComponent(targetRef ?? "")}`;
+    const candidate = assistantReturnPath ?? projectPath;
+    if (!candidate.startsWith("/") || candidate.startsWith("//"))
+      throw new Error("OIDC re-auth assistant return path is invalid");
+    const parsed = new URL(candidate, "https://kodex.invalid");
+    if (
+      parsed.origin !== "https://kodex.invalid" ||
+      (parsed.pathname !== projectPath &&
+        !parsed.pathname.startsWith(`${projectPath}/`))
+    )
+      throw new Error("OIDC re-auth assistant return path is invalid");
+    parsed.hash = "";
+    parsed.searchParams.delete("assistantForm");
+    parsed.searchParams.delete("assistantCreateSecret");
+    parsed.searchParams.delete("assistantSecretDraftRef");
+    if (target === "create")
+      parsed.searchParams.set("assistantCreateSecret", "1");
+    else parsed.searchParams.set("assistantSecretDraftRef", targetRef ?? "");
+    return `${parsed.pathname}${parsed.search}`;
   }
   const path = runtimeSecretsPath(projectRef);
   if (target === "create") return `${path}?assistantCreateSecret=1`;
@@ -284,10 +300,12 @@ export function createRuntimeSecretDraftIntent(
   targetRef?: string,
   now = Date.now(),
   surface?: RuntimeSecretDraftIntent["surface"],
+  assistantReturnPath?: string,
 ): RuntimeSecretDraftIntent {
   if (
     !opaqueReferencePattern.test(projectRef) ||
     (target === "create" && targetRef !== undefined) ||
+    (surface !== "assistant" && assistantReturnPath !== undefined) ||
     (surface === "assistant" && target === "secret") ||
     (target !== "create" &&
       (typeof targetRef !== "string" ||
@@ -299,7 +317,13 @@ export function createRuntimeSecretDraftIntent(
     issuedAt: now,
     kind: "runtime-secret-draft",
     projectRef,
-    returnPath: runtimeSecretDraftPath(projectRef, target, targetRef, surface),
+    returnPath: runtimeSecretDraftPath(
+      projectRef,
+      target,
+      targetRef,
+      surface,
+      assistantReturnPath,
+    ),
     ...(surface ? { surface } : {}),
     target,
     ...(targetRef ? { targetRef } : {}),
@@ -343,6 +367,7 @@ export function parseRuntimeSecretDraftIntent(
         value.target,
         typeof value.targetRef === "string" ? value.targetRef : undefined,
         value.surface === "assistant" ? "assistant" : undefined,
+        value.surface === "assistant" ? value.returnPath : undefined,
       )
   )
     throw new Error("OIDC re-auth state is invalid or expired");

@@ -136,6 +136,10 @@ describe("AssistantWorkspace layout", () => {
     );
     expect(template).toContain('<Teleport to="body">');
     expect(template).toContain("<RuntimeSecretDraftDialog");
+    expect(template).toContain(':assistant-return-path="route.fullPath"');
+    expect(source).toContain("consumeRuntimeSecretReauthSuggestion");
+    expect(source).toContain("workspaceMounted");
+    expect(source).toContain("secretResumePending");
     expect(template).toContain(':project-ref="projectRef"');
     expect(template).toContain(':initial-draft-ref="secretInitialDraftRef"');
     expect(template).toContain("assistant\n");

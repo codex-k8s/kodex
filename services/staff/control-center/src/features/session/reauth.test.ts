@@ -112,6 +112,40 @@ describe("OIDC re-auth intents", () => {
         "assistant",
       ),
     ).toThrow();
+
+    const contextual = createRuntimeSecretDraftIntent(
+      "project_sales",
+      "create",
+      undefined,
+      1000,
+      "assistant",
+      "/projects/project_sales/agents/agent_main?tab=runtime&assistantForm=1",
+    );
+    expect(contextual.returnPath).toBe(
+      "/projects/project_sales/agents/agent_main?tab=runtime&assistantCreateSecret=1",
+    );
+    expect(
+      consumeOidcIntent(contextual, pendingStorage(contextual), 1100),
+    ).toEqual(contextual);
+    expect(() =>
+      createRuntimeSecretDraftIntent(
+        "project_sales",
+        "create",
+        undefined,
+        1000,
+        "assistant",
+        "/projects/project_other/agents/agent_main",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseRuntimeSecretDraftIntent(
+        {
+          ...contextual,
+          returnPath: "https://attacker.example/projects/project_sales",
+        },
+        1100,
+      ),
+    ).toThrow();
   });
   it("связывает email state с exact receipt без project и secret", () => {
     const intent = createEmailReconciliationIntent(
