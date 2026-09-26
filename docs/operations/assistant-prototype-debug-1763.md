@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.50
+version: 1.0.51
 updated: 2026-09-26
 ---
 
@@ -996,3 +996,14 @@ GitHub checks не считается `PASS`.
   state-changing command и не раскрывая credential. Адресные frontend unit
   74/74, typecheck, ESLint, Prettier и `git diff --check` — PASS; browser —
   NOT RUN из-за закрытого transport `chrome-devtools-mcp`.
+- На точном head `0f10e11d316fe90ad9d9b2a6ce89b9830db29a15` production-сборка
+  Control Center вместе с принудительным `vue-tsc` — PASS; сохранено только
+  известное предупреждение Vite о chunk больше 500 kB. Все обязательные
+  Deployment и StatefulSet локального контура имеют требуемые ready replicas,
+  `system-assistant-warm` готов `3/3` без рестартов. SHA двух изменённых Vue
+  модулей на host и в read-only `/workspace` Pod совпадают, свежих
+  `error/fatal/panic` за 20 минут в основных сервисах не найдено. Старые
+  terminal Pods cert-manager/trust-manager/traefik относятся к предыдущим
+  ReplicaSet и остановкам хоста; текущие Pod готовы, последний restart
+  trust-manager был более суток назад. Chrome-проверка повторно NOT RUN:
+  `list_pages` отвечает `Transport closed`; браузер не перезапускался.
