@@ -719,16 +719,16 @@ watch(
               class="async-picker__spin"
               :size="18"
               aria-hidden="true"
-            />{{ $t("common.loading") }}
+            />{{ copy.loading || $t("common.loading") }}
           </div>
           <div
             v-else-if="phase === 'error'"
             class="async-picker__state async-picker__state--error"
             role="alert"
           >
-            <span>{{ $t("errors.default") }}</span
+            <span>{{ copy.error || $t("errors.default") }}</span
             ><button class="button" type="button" @click="refresh">
-              {{ $t("common.retry") }}
+              {{ copy.retry || $t("common.retry") }}
             </button>
           </div>
           <div
@@ -736,7 +736,7 @@ watch(
             class="async-picker__state"
             role="status"
           >
-            {{ $t("common.empty") }}
+            {{ copy.empty || $t("common.empty") }}
           </div>
           <template v-else>
             <button
@@ -848,6 +848,7 @@ watch(
 }
 .async-picker__trigger-row {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 4px;
   min-width: 0;

@@ -9,6 +9,7 @@ import AccessPage from "@/pages/AccessPage.vue";
 import type {
   AccessBinding,
   AccessRole,
+  Membership,
 } from "@/shared/api/generated/openapi/types.gen";
 import { captureSetupState } from "@/test-utils/setup-harness";
 
@@ -61,13 +62,18 @@ const binding: AccessBinding = {
 };
 
 interface AccessSetup {
+  addPlatformMember: () => void;
+  editPlatformMember: (membership: Membership) => void;
+  revokePlatformMember: (membership: Membership) => void;
+  platformDialog: { value: boolean };
   archiveRole: (role: AccessRole) => void;
   bindingDialog: { value: boolean };
   confirmMutation: () => Promise<void>;
   confirmation: {
     value?:
       | { kind: "ARCHIVE_ROLE"; role: AccessRole }
-      | { kind: "REVOKE_BINDING"; binding: AccessBinding };
+      | { kind: "REVOKE_BINDING"; binding: AccessBinding }
+      | { kind: "REVOKE_PLATFORM_MEMBERSHIP"; membership: Membership };
   };
   createBinding: () => Promise<void>;
   revokeBinding: (binding: AccessBinding) => void;
@@ -172,5 +178,47 @@ describe("AccessPage lifecycle confirmations", () => {
     catalog.resolve();
     await open;
     expect(setup.bindingDialog.value).toBe(true);
+  });
+
+  it("не предлагает изменение или отзыв последнего владельца без server nextActions", async () => {
+    const { access, setup } = await setupPage();
+    const owner: Membership = {
+      ref: "membership_owner",
+      version: 1,
+      user: { ref: "user_owner", displayName: "Владелец" },
+      platformRole: "OWNER",
+      permissions: [],
+      active: true,
+      nextActions: [],
+    };
+    setup.editPlatformMember(owner);
+    setup.revokePlatformMember(owner);
+    setup.addPlatformMember();
+    expect(setup.platformDialog.value).toBe(false);
+    expect(setup.confirmation.value).toBeUndefined();
+
+    access.platformMembershipActions = ["MANAGE_MEMBERS"];
+    setup.addPlatformMember();
+    expect(setup.platformDialog.value).toBe(true);
+    setup.platformDialog.value = false;
+
+    const member = {
+      ...owner,
+      ref: "membership_other",
+      nextActions: ["EDIT", "REVOKE"] as Membership["nextActions"],
+    };
+    setup.editPlatformMember(member);
+    expect(setup.platformDialog.value).toBe(true);
+    setup.revokePlatformMember(member);
+    expect(setup.confirmation.value).toEqual({
+      kind: "REVOKE_PLATFORM_MEMBERSHIP",
+      membership: member,
+    });
+    const revoke = vi
+      .spyOn(access, "revokePlatformMembership")
+      .mockResolvedValue();
+    expect(revoke).not.toHaveBeenCalled();
+    await setup.confirmMutation();
+    expect(revoke).toHaveBeenCalledWith(member);
   });
 });

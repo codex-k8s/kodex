@@ -212,7 +212,10 @@ describe("access store", () => {
       ref: "membership_project",
       permissions: ["MANAGE_AGENTS" as const],
     };
-    fetchPlatformMemberships.mockResolvedValue([platformMembership]);
+    fetchPlatformMemberships.mockResolvedValue({
+      items: [platformMembership],
+      nextActions: ["MANAGE_MEMBERS"],
+    });
     fetchProjectMemberships.mockResolvedValue([projectMembership]);
     const store = useAccessStore();
 
@@ -221,6 +224,7 @@ describe("access store", () => {
     expect(fetchPlatformMemberships).toHaveBeenCalledOnce();
     expect(fetchProjectMemberships).toHaveBeenCalledWith("project_sales");
     expect(store.platformMemberships).toEqual([platformMembership]);
+    expect(store.platformMembershipActions).toEqual(["MANAGE_MEMBERS"]);
     expect(store.projectMemberships).toEqual([projectMembership]);
   });
 
@@ -240,7 +244,7 @@ describe("access store", () => {
       ref: "membership_selected",
       user: { ref: "subject_selected", displayName: "Выбранный" },
     };
-    fetchPlatformMemberships.mockResolvedValue([]);
+    fetchPlatformMemberships.mockResolvedValue({ items: [], nextActions: [] });
     fetchProjectMemberships
       .mockResolvedValueOnce([first])
       .mockResolvedValueOnce([selected]);
@@ -268,7 +272,7 @@ describe("access store", () => {
       active: true,
       nextActions: ["EDIT" as const, "REVOKE" as const],
     };
-    fetchPlatformMemberships.mockResolvedValue([]);
+    fetchPlatformMemberships.mockResolvedValue({ items: [], nextActions: [] });
     fetchProjectMemberships.mockResolvedValue([current]);
     const changed: Membership = {
       ...current,

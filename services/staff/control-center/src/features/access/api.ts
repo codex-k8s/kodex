@@ -1,6 +1,8 @@
 import { requestSignal } from "@/shared/api/client";
 import {
+  addPlatformMembership,
   archiveAccessRole,
+  changePlatformMembership,
   changeAccessBinding,
   changeProjectMembership,
   createAccessBinding,
@@ -16,12 +18,14 @@ import {
   listOidcGroups,
   listPermissionRegistry,
   listPlatformMemberships,
+  listPlatformMembershipCandidates,
   listProjectMemberships,
   listProjects,
   listWorkflows,
   queryEffectiveAccess,
   removeProjectMembership,
   revokeAccessBinding,
+  removePlatformMembership,
   simulateAccess,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -43,12 +47,16 @@ import type {
   OidcGroupPage,
   IntegrationConnection,
   Membership,
+  NextAction,
+  PlatformMembershipChangeInput,
+  PlatformMembershipCreateInput,
   ProjectMembershipChangeInput,
   PermissionDefinitionPage,
   ProjectPage,
   SimulateAccessInput,
   SimulateAccessResult,
   WorkflowPage,
+  UserSummary,
 } from "@/shared/api/generated/openapi/types.gen";
 import { csrfToken, mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
@@ -229,8 +237,12 @@ export async function fetchIntegrationConnections(): Promise<
     .data.items;
 }
 
-export async function fetchPlatformMemberships(): Promise<Membership[]> {
+export async function fetchPlatformMemberships(): Promise<{
+  items: Membership[];
+  nextActions: NextAction[];
+}> {
   const items: Membership[] = [];
+  let nextActions: NextAction[] = [];
   const seenPageTokens = new Set<string>();
   let pageToken: string | undefined;
   do {
@@ -243,13 +255,82 @@ export async function fetchPlatformMemberships(): Promise<Membership[]> {
       )
     ).data;
     items.push(...page.items);
+    if (!seenPageTokens.size) nextActions = page.nextActions;
     pageToken = page.nextPageToken;
     if (pageToken && seenPageTokens.has(pageToken)) {
       throw new Error("Platform membership pagination token was repeated");
     }
     if (pageToken) seenPageTokens.add(pageToken);
   } while (pageToken);
-  return items;
+  return { items, nextActions };
+}
+
+export async function fetchPlatformMembershipCandidates(options: {
+  query: string;
+  pageToken?: string;
+  pageSize?: number;
+  signal?: AbortSignal;
+}): Promise<{ items: UserSummary[]; nextPageToken?: string }> {
+  return (
+    await unwrap(
+      listPlatformMembershipCandidates({
+        query: {
+          query: options.query,
+          pageSize: options.pageSize ?? 20,
+          ...(options.pageToken ? { pageToken: options.pageToken } : {}),
+        },
+        signal: requestSignal(options.signal),
+      }),
+    )
+  ).data;
+}
+
+export async function createPlatformMembership(
+  input: PlatformMembershipCreateInput,
+): Promise<Membership> {
+  return (
+    await mutate((headers) =>
+      addPlatformMembership({
+        body: input,
+        headers: mutationHeaders(headers),
+        signal: requestSignal(),
+      }),
+    )
+  ).data;
+}
+
+export async function updatePlatformMembership(
+  membership: Membership,
+  input: PlatformMembershipChangeInput,
+): Promise<Membership> {
+  return (
+    await mutate(
+      (headers) =>
+        changePlatformMembership({
+          path: { membershipRef: membership.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
+    )
+  ).data;
+}
+
+export async function revokePlatformMembership(
+  membership: Membership,
+): Promise<Membership> {
+  return (
+    await mutate(
+      (headers) =>
+        removePlatformMembership({
+          path: { membershipRef: membership.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
+    )
+  ).data;
 }
 
 export async function fetchProjectMemberships(

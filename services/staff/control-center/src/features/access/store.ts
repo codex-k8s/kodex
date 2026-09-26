@@ -18,6 +18,9 @@ import type {
   ExplainAccessResult,
   IntegrationConnection,
   Membership,
+  NextAction,
+  PlatformMembershipChangeInput,
+  PlatformMembershipCreateInput,
   ProjectMembershipChangeInput,
   OidcGroup,
   PermissionDefinition,
@@ -69,6 +72,7 @@ export const useAccessStore = defineStore("access", () => {
   const workflows = reactive<Record<string, Workflow[]>>({});
   const integrations = ref<IntegrationConnection[]>([]);
   const platformMemberships = ref<Membership[]>([]);
+  const platformMembershipActions = ref<NextAction[]>([]);
   const projectMemberships = ref<Membership[]>([]);
   const roleVersions = reactive<Record<string, AccessRoleVersion[]>>({});
   const effective = ref<EffectiveAccessPage>();
@@ -308,13 +312,10 @@ export const useAccessStore = defineStore("access", () => {
     projectRef = "",
     selectedUserRef = "",
   ): Promise<void> {
-    await query(
-      "platformMemberships",
-      api.fetchPlatformMemberships,
-      (items) => {
-        platformMemberships.value = items;
-      },
-    );
+    await query("platformMemberships", api.fetchPlatformMemberships, (page) => {
+      platformMemberships.value = page.items;
+      platformMembershipActions.value = page.nextActions;
+    });
     if (!projectRef) {
       projectMemberships.value = [];
       delete problems.projectMemberships;
@@ -366,6 +367,30 @@ export const useAccessStore = defineStore("access", () => {
       (item) => item.ref,
     );
     return updated;
+  }
+
+  async function createPlatformMembership(
+    input: PlatformMembershipCreateInput,
+  ): Promise<Membership> {
+    const updated = await api.createPlatformMembership(input);
+    await loadMembershipPresentation();
+    return updated;
+  }
+
+  async function updatePlatformMembership(
+    membership: Membership,
+    input: PlatformMembershipChangeInput,
+  ): Promise<Membership> {
+    const updated = await api.updatePlatformMembership(membership, input);
+    await loadMembershipPresentation();
+    return updated;
+  }
+
+  async function revokePlatformMembership(
+    membership: Membership,
+  ): Promise<void> {
+    await api.revokePlatformMembership(membership);
+    await loadMembershipPresentation();
   }
 
   async function revokeProjectMembership(
@@ -474,6 +499,7 @@ export const useAccessStore = defineStore("access", () => {
     workflows,
     integrations,
     platformMemberships,
+    platformMembershipActions,
     projectMemberships,
     roleVersions,
     effective,
@@ -498,6 +524,9 @@ export const useAccessStore = defineStore("access", () => {
     loadIntegrations,
     loadMembershipPresentation,
     saveProjectMembership,
+    createPlatformMembership,
+    updatePlatformMembership,
+    revokePlatformMembership,
     revokeProjectMembership,
     saveRole,
     archiveRole,

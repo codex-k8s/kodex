@@ -9,6 +9,7 @@ import BindingsPanel from "@/features/access/components/BindingsPanel.vue";
 import EffectiveAccessPanel from "@/features/access/components/EffectiveAccessPanel.vue";
 import GroupsPanel from "@/features/access/components/GroupsPanel.vue";
 import ParticipantsPanel from "@/features/access/components/ParticipantsPanel.vue";
+import PlatformMembershipEditorDialog from "@/features/access/components/PlatformMembershipEditorDialog.vue";
 import ProjectMembershipEditorDialog from "@/features/access/components/ProjectMembershipEditorDialog.vue";
 import RoleEditorDialog from "@/features/access/components/RoleEditorDialog.vue";
 import RolesPanel from "@/features/access/components/RolesPanel.vue";
@@ -24,6 +25,8 @@ import type {
   AccessSubject,
   Membership,
   OidcGroup,
+  PlatformMembershipChangeInput,
+  PlatformMembershipCreateInput,
   ProjectMembershipChangeInput,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -87,6 +90,8 @@ const editorWorkflows = computed(
 );
 const roleDialog = ref(false);
 const bindingDialog = ref(false);
+const platformDialog = ref(false);
+const selectedPlatformMembership = ref<Membership>();
 const selectedRole = ref<AccessRole>();
 const selectedBinding = ref<AccessBinding>();
 const selectedMembership = ref<Membership>();
@@ -97,7 +102,84 @@ const confirmation = ref<
   | { kind: "ARCHIVE_ROLE"; role: AccessRole }
   | { kind: "REVOKE_BINDING"; binding: AccessBinding }
   | { kind: "REVOKE_MEMBERSHIP"; membership: Membership }
+  | { kind: "REVOKE_PLATFORM_MEMBERSHIP"; membership: Membership }
 >();
+
+function inspectEffective(subject: AccessSubject): void {
+  if (projectRef.value) {
+    void router.push({
+      name: "project-access",
+      params: { projectRef: projectRef.value },
+      query: { section: "effective", subjectRef: subject.ref },
+    });
+    return;
+  }
+  void router.push({
+    name: "access",
+    params: { section: "effective" },
+    query: { subjectRef: subject.ref },
+  });
+}
+
+function addPlatformMember(): void {
+  if (!access.platformMembershipActions.includes("MANAGE_MEMBERS")) return;
+  selectedPlatformMembership.value = undefined;
+  mutationProblem.value = undefined;
+  platformDialog.value = true;
+}
+
+function editPlatformMember(membership: Membership): void {
+  if (!membership.nextActions.includes("EDIT")) return;
+  selectedPlatformMembership.value = membership;
+  mutationProblem.value = undefined;
+  platformDialog.value = true;
+}
+
+async function savePlatformMember(
+  operation: () => Promise<Membership>,
+  membership?: Membership,
+): Promise<void> {
+  if (mutationBusy.value) return;
+  mutationBusy.value = true;
+  mutationProblem.value = undefined;
+  try {
+    await operation();
+    platformDialog.value = false;
+  } catch (error) {
+    mutationProblem.value = asProblem(error);
+    if (mutationProblem.value.kind === "conflict") {
+      await access.loadMembershipPresentation();
+      if (membership) {
+        selectedPlatformMembership.value = access.platformMemberships.find(
+          (item) => item.ref === membership.ref,
+        );
+        if (!selectedPlatformMembership.value) platformDialog.value = false;
+      }
+    }
+  } finally {
+    mutationBusy.value = false;
+  }
+}
+
+function createPlatformMember(input: PlatformMembershipCreateInput): void {
+  if (!access.platformMembershipActions.includes("MANAGE_MEMBERS")) return;
+  void savePlatformMember(() => access.createPlatformMembership(input));
+}
+
+function updatePlatformMember(input: PlatformMembershipChangeInput): void {
+  const membership = selectedPlatformMembership.value;
+  if (!membership?.nextActions.includes("EDIT")) return;
+  void savePlatformMember(
+    () => access.updatePlatformMembership(membership, input),
+    membership,
+  );
+}
+
+function revokePlatformMember(membership: Membership): void {
+  if (!membership.nextActions.includes("REVOKE")) return;
+  mutationProblem.value = undefined;
+  confirmation.value = { kind: "REVOKE_PLATFORM_MEMBERSHIP", membership };
+}
 
 function selectSection(section: AccessSection): void {
   if (route.name === "project-access") {
@@ -262,6 +344,8 @@ async function confirmMutation(): Promise<void> {
       await access.archiveRole(requested.role);
     } else if (requested.kind === "REVOKE_BINDING") {
       await access.revokeBinding(requested.binding);
+    } else if (requested.kind === "REVOKE_PLATFORM_MEMBERSHIP") {
+      await access.revokePlatformMembership(requested.membership);
     } else {
       await access.revokeProjectMembership(
         projectRef.value,
@@ -279,6 +363,17 @@ async function confirmMutation(): Promise<void> {
           projectRef: projectRef.value || undefined,
           includeRevoked: true,
         });
+      } else if (requested.kind === "REVOKE_PLATFORM_MEMBERSHIP") {
+        await access.loadMembershipPresentation();
+        const latest = access.platformMemberships.find(
+          (item) => item.ref === requested.membership.ref,
+        );
+        if (latest?.nextActions.includes("REVOKE"))
+          confirmation.value = {
+            kind: "REVOKE_PLATFORM_MEMBERSHIP",
+            membership: latest,
+          };
+        else confirmation.value = undefined;
       } else {
         await access.loadMembershipPresentation(
           projectRef.value,
@@ -412,10 +507,18 @@ onMounted(() => void loadBaseline());
         v-if="routeSection === 'participants'"
         class="button button--primary"
         type="button"
-        :disabled="mutationBusy"
-        @click="createBinding()"
+        :disabled="
+          mutationBusy ||
+          (!projectRef &&
+            !access.platformMembershipActions.includes('MANAGE_MEMBERS'))
+        "
+        @click="projectRef ? createBinding() : addPlatformMember()"
       >
-        {{ $t("access.participants.createBinding") }}
+        {{
+          projectRef
+            ? $t("access.participants.createBinding")
+            : "Добавить участника"
+        }}
       </button>
     </template>
     <AccessTabs :active="routeSection" @select="selectSection" />
@@ -465,6 +568,9 @@ onMounted(() => void loadBaseline());
           access.loadSubjects(query, undefined, true, pageSize)
       "
       @bind="createBinding"
+      @inspect-effective="inspectEffective"
+      @edit-platform-membership="editPlatformMember"
+      @revoke-platform-membership="revokePlatformMember"
       @retry="loadSection"
     />
     <GroupsPanel
@@ -537,6 +643,11 @@ onMounted(() => void loadBaseline());
     />
     <EffectiveAccessPanel
       v-else
+      :initial-subject-ref="
+        typeof route.query.subjectRef === 'string'
+          ? route.query.subjectRef
+          : undefined
+      "
       :subjects="bindingSubjects"
       :permissions="access.permissions"
       :roles="access.roles"
@@ -584,6 +695,15 @@ onMounted(() => void loadBaseline());
       @close="selectedMembership = undefined"
       @save="saveMembership"
     />
+    <PlatformMembershipEditorDialog
+      v-if="platformDialog"
+      :membership="selectedPlatformMembership"
+      :busy="mutationBusy"
+      :problem="mutationProblem"
+      @close="platformDialog = false"
+      @create="createPlatformMember"
+      @update="updatePlatformMember"
+    />
     <BindingEditorDialog
       v-if="bindingDialog"
       :binding="selectedBinding"
@@ -609,7 +729,9 @@ onMounted(() => void loadBaseline());
           ? 'Архивировать роль'
           : confirmation.kind === 'REVOKE_BINDING'
             ? 'Отозвать назначение'
-            : t('access.projectMembershipEditor.revoke')
+            : confirmation.kind === 'REVOKE_PLATFORM_MEMBERSHIP'
+              ? 'Удалить из организации'
+              : t('access.projectMembershipEditor.revoke')
       "
       :busy="mutationBusy"
       size="md"
@@ -623,9 +745,11 @@ onMounted(() => void loadBaseline());
               })
             : confirmation.kind === "REVOKE_BINDING"
               ? t("access.bindingsWorkspace.revokeConfirm")
-              : t("access.projectMembershipEditor.revokeConfirm", {
-                  name: confirmation.membership.user.displayName,
-                })
+              : confirmation.kind === "REVOKE_PLATFORM_MEMBERSHIP"
+                ? `Удалить ${confirmation.membership.user.displayName} из организации? Доступ Kodex будет отозван; учётная запись Keycloak останется.`
+                : t("access.projectMembershipEditor.revokeConfirm", {
+                    name: confirmation.membership.user.displayName,
+                  })
         }}
       </p>
       <ProblemNotice

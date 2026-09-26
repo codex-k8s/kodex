@@ -41,6 +41,9 @@ const emit = defineEmits<{
   search: [query: string, pageSize: number];
   more: [query: string, pageSize: number];
   bind: [subject: AccessSubject];
+  "inspect-effective": [subject: AccessSubject];
+  "edit-platform-membership": [membership: Membership];
+  "revoke-platform-membership": [membership: Membership];
   "edit-membership": [membership: Membership];
   "revoke-membership": [membership: Membership];
   retry: [];
@@ -113,6 +116,11 @@ const selectedSubject = computed(() =>
 );
 const selectedMembership = computed(() =>
   selectedSubject.value ? projectMembership(selectedSubject.value) : undefined,
+);
+const selectedPlatformMembership = computed(() =>
+  selectedSubject.value
+    ? membershipForSubject(selectedSubject.value, props.platformMemberships)
+    : undefined,
 );
 const selectedBindings = computed(() =>
   selectedSubject.value
@@ -292,14 +300,10 @@ onBeforeUnmount(() => {
               <button
                 class="button"
                 type="button"
-                :aria-label="
-                  $t('access.participants.selectSubject', {
-                    name: subject.displayName,
-                  })
-                "
-                @click="selectedRef = subject.ref"
+                :aria-label="`Эффективный доступ: ${subject.displayName}`"
+                @click.stop="emit('inspect-effective', subject)"
               >
-                {{ $t("access.participants.details") }}
+                Доступ
               </button>
             </div>
           </article>
@@ -381,6 +385,44 @@ onBeforeUnmount(() => {
               </p>
             </div>
             <footer class="participant-detail__actions">
+              <button
+                class="button"
+                type="button"
+                @click="emit('inspect-effective', selectedSubject)"
+              >
+                Эффективный доступ
+              </button>
+              <button
+                v-if="
+                  !projectRef &&
+                  selectedPlatformMembership?.nextActions.includes('EDIT')
+                "
+                class="button"
+                type="button"
+                :disabled="mutationBusy"
+                @click="
+                  emit('edit-platform-membership', selectedPlatformMembership!)
+                "
+              >
+                Изменить роль
+              </button>
+              <button
+                v-if="
+                  !projectRef &&
+                  selectedPlatformMembership?.nextActions.includes('REVOKE')
+                "
+                class="button button--danger"
+                type="button"
+                :disabled="mutationBusy"
+                @click="
+                  emit(
+                    'revoke-platform-membership',
+                    selectedPlatformMembership!,
+                  )
+                "
+              >
+                Удалить из организации
+              </button>
               <button
                 class="button button--primary"
                 type="button"

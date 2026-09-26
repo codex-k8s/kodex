@@ -40,6 +40,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 type Mode = "QUERY" | "EXPLAIN" | "SIMULATE";
 
 const props = defineProps<{
+  initialSubjectRef?: string;
   subjects: AccessSubject[];
   permissions: PermissionDefinition[];
   roles: AccessRole[];
@@ -100,6 +101,13 @@ const form = reactive({
   roleRef: "",
   scope: emptyScopeDraft(),
 });
+watch(
+  () => props.initialSubjectRef,
+  (ref) => {
+    if (ref) form.subjectRef = ref;
+  },
+  { immediate: true },
+);
 const subjectRows = new Map<string, AccessSubject>();
 const roleRows = new Map<string, AccessRole>();
 const selectedSubject = computed(

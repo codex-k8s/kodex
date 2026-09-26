@@ -90,18 +90,22 @@ describe("access decision API", () => {
     });
     sdk.listPlatformMemberships
       .mockResolvedValueOnce({
-        data: { items: [membership("first")], nextPageToken: "next-page" },
+        data: {
+          items: [membership("first")],
+          nextActions: ["MANAGE_MEMBERS"],
+          nextPageToken: "next-page",
+        },
         response: new Response(null, { status: 200 }),
       })
       .mockResolvedValueOnce({
-        data: { items: [membership("second")] },
+        data: { items: [membership("second")], nextActions: [] },
         response: new Response(null, { status: 200 }),
       });
 
-    await expect(fetchPlatformMemberships()).resolves.toEqual([
-      membership("first"),
-      membership("second"),
-    ]);
+    await expect(fetchPlatformMemberships()).resolves.toEqual({
+      items: [membership("first"), membership("second")],
+      nextActions: ["MANAGE_MEMBERS"],
+    });
     expect(sdk.listPlatformMemberships).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
