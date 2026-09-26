@@ -3416,6 +3416,7 @@ const ru = {
     },
     launchedRun: {
       title: "Запуск сотрудника или процесса",
+      result: "Результат запуска",
       loadFailed:
         "Не удалось прочитать состояние запуска. Повторите обновление.",
       awaitingDecision:
@@ -7162,6 +7163,7 @@ const en = {
     },
     launchedRun: {
       title: "Employee or workflow run",
+      result: "Run result",
       loadFailed: "Could not read run status. Refresh to try again.",
       awaitingDecision: "This run needs a human decision. Open it to continue.",
       open: "Open run",

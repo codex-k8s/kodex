@@ -152,7 +152,10 @@ async function stopRun(): Promise<void> {
       <p v-if="run.currentActivity || run.activitySummary">
         {{ run.currentActivity || run.activitySummary }}
       </p>
-      <p v-if="run.resultSummary">{{ run.resultSummary }}</p>
+      <section v-if="run.resultSummary" class="assistant-run-card__result">
+        <strong>{{ $t("assistant.launchedRun.result") }}</strong>
+        <p>{{ run.resultSummary }}</p>
+      </section>
       <p v-if="run.safeErrorCode" class="assistant-run-card__problem">
         {{ run.safeErrorCode }}
       </p>
@@ -213,6 +216,19 @@ async function stopRun(): Promise<void> {
 .assistant-run-card p {
   margin: 0;
   overflow-wrap: anywhere;
+}
+.assistant-run-card__result {
+  display: grid;
+  gap: 8px;
+  max-height: min(34vh, 320px);
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.assistant-run-card__result p {
+  white-space: pre-wrap;
 }
 .assistant-run-card__problem {
   color: var(--danger);
