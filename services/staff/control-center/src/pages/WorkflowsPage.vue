@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { computed, reactive, ref, useId, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import OrganizationCatalog from "@/features/catalogs/OrganizationCatalog.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -17,15 +23,50 @@ const project = computed(() => platform.projects[projectRef.value]);
 const canCreate = computed(() =>
   project.value?.nextActions.includes("CREATE_WORKFLOW"),
 );
-const agentList = computed(() =>
-  Object.values(platform.agents).filter(
-    (i) => i.projectRef === projectRef.value && !i.system,
-  ),
-);
 const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
+const selectedCoordinator = ref<AsyncEntityOption>();
 const form = reactive({ name: "", purpose: "", coordinatorAgentRef: "" });
+const canSubmit = computed(
+  () =>
+    Boolean(form.name.trim()) &&
+    Boolean(form.purpose.trim()) &&
+    Boolean(form.coordinatorAgentRef) &&
+    !busy.value,
+);
+
+async function loadCoordinatorAgents(
+  query: string,
+  pageToken: string | undefined,
+  signal: AbortSignal,
+  pageSize = 40,
+): Promise<AsyncEntityOptionPage> {
+  const page = await loadAgentCatalogPage(
+    { projectRef: projectRef.value, query, pageToken, pageSize },
+    signal,
+  );
+  return {
+    items: page.items
+      .filter((agent) => !agent.system)
+      .map((agent) => ({
+        ref: agent.ref,
+        title: agent.name,
+        description: agent.purpose,
+      })),
+    nextPageToken: page.nextPageToken,
+  };
+}
+
+function selectCoordinator(option: AsyncEntityOption): void {
+  form.coordinatorAgentRef = option.ref;
+  selectedCoordinator.value = option;
+}
+
+function clearCoordinator(): void {
+  form.coordinatorAgentRef = "";
+  selectedCoordinator.value = undefined;
+}
 async function submit() {
   if (!canCreate.value) return;
   busy.value = true;
@@ -43,16 +84,8 @@ async function submit() {
   }
 }
 async function load(): Promise<void> {
-  await Promise.all([
-    platform.loadAgents(projectRef.value),
-    platform.loadProject(projectRef.value),
-  ]);
-  if (
-    route.query.create === "1" &&
-    canCreate.value &&
-    agentList.value.length > 0
-  )
-    dialog.value = true;
+  await platform.loadProject(projectRef.value);
+  if (route.query.create === "1" && canCreate.value) dialog.value = true;
 }
 
 watch(
@@ -71,7 +104,6 @@ watch(
         v-if="canCreate"
         class="button button--primary"
         type="button"
-        :disabled="!agentList.length"
         @click="dialog = true"
       >
         {{ $t("workflows.new") }}
@@ -102,25 +134,24 @@ watch(
             v-model.trim="form.purpose"
             :disabled="busy"
             required
-            maxlength="1000" /></label
-        ><label class="field field--wide"
-          ><span>{{ $t("workflows.coordinator") }}</span
-          ><select
-            v-model="form.coordinatorAgentRef"
-            :id="`${fieldPrefix}-coordinator`"
-            :name="`${fieldPrefix}-coordinator`"
-            required
-          >
-            <option value="" disabled>{{ $t("common.noData") }}</option>
-            <option
-              v-for="agent in agentList"
-              :key="agent.ref"
-              :value="agent.ref"
-            >
-              {{ agent.name }}
-            </option>
-          </select></label
-        ><ProblemNotice
+            maxlength="1000"
+        /></label>
+        <div class="field field--wide">
+          <span>{{ $t("workflows.coordinator") }}</span>
+          <AsyncEntityPicker
+            :model-value="form.coordinatorAgentRef || null"
+            :selected="selectedCoordinator"
+            :load-page="loadCoordinatorAgents"
+            :context-key="projectRef"
+            :disabled="busy"
+            :trigger-label="$t('workflows.coordinator')"
+            :placeholder="$t('workflows.selectCoordinator')"
+            :search-placeholder="$t('workflows.searchCoordinator')"
+            @select="selectCoordinator($event)"
+            @update:model-value="$event === null && clearCoordinator()"
+          />
+        </div>
+        <ProblemNotice
           v-if="problem"
           class="field--wide"
           :problem="problem"
@@ -134,7 +165,7 @@ watch(
           class="button button--primary"
           form="workflow-form"
           type="submit"
-          :disabled="busy"
+          :disabled="!canSubmit"
         >
           {{ $t("common.create") }}
         </button></template

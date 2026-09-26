@@ -17,6 +17,10 @@ const shared = readFileSync(
   new URL("./WorkflowOverviewFields.vue", import.meta.url),
   "utf8",
 );
+const create = readFileSync(
+  new URL("../../pages/WorkflowsPage.vue", import.meta.url),
+  "utf8",
+);
 
 describe("основные поля процесса", () => {
   it("переиспользует редактор и проектный выбор координатора", () => {
@@ -25,5 +29,13 @@ describe("основные поля процесса", () => {
     expect(shared).toContain("<AsyncEntityPicker");
     expect(shared).toContain(':context-key="projectRef"');
     expect(shared).toContain("<VoiceTextarea");
+  });
+
+  it("не загружает весь список координаторов в форме создания", () => {
+    expect(create).toContain("<AsyncEntityPicker");
+    expect(create).toContain(':load-page="loadCoordinatorAgents"');
+    expect(create).toContain("loadAgentCatalogPage");
+    expect(create).not.toContain("platform.loadAgents(projectRef.value)");
+    expect(create).not.toContain("<select");
   });
 });
