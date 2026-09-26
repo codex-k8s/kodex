@@ -1925,3 +1925,16 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-env-readiness-final-20260926.png`,
   `/tmp/kodex-project-secrets-final-20260926.png`.
   Полный путь Secret и изменение окружения через помощника — `NOT RUN`.
+- 2026-09-26 17:41 UTC, проектный список окружений Marketplace: в таблице
+  название и описание одной записи слипались, потому что общее CSS-правило
+  первой ячейки переопределяло `display: grid` у кнопки окружения. Правило
+  удалено; название и описание снова стоят друг под другом при 1920×1080.
+  В инспекторе той же записи пользовательское «Effective policy preview»
+  и raw `NONE` заменены локализованным названием и состоянием Kubernetes
+  доступа. После reload без кэша список и инспектор открываются без console
+  warnings/errors и завершённых HTTP 4xx/5xx; API списка/готовности ответили
+  200. Снимки: `/tmp/kodex-project-environments-layout-final-20260926.png`,
+  `/tmp/kodex-project-environments-inspector-final-20260926.png`.
+  Адресные layout unit 5/5, Prettier, ESLint и typecheck — `PASS` на
+  незакоммиченном diff после `b4e241e54`; полная публикация/отключение
+  окружения — `NOT RUN`.

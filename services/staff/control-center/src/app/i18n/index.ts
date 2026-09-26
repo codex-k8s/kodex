@@ -1338,7 +1338,7 @@ const ru = {
       "ServiceAccount, resourceNames и namespace kodex-runtime назначает сервер. List, watch, exec и доступ к Secret не выдаются.",
     kubernetesRbacUnavailable:
       "API не возвращает workload identity, RBAC profile и effective grants.",
-    effectivePolicyPreview: "Effective policy preview",
+    effectivePolicyPreview: "Итоговые правила доступа",
     effectivePolicyPreviewHelp:
       "Черновик отправляется как typed policy; после публикации ниже показывается авторитетная нормализованная policy сервера.",
     serverCalculated: "Рассчитано сервером",

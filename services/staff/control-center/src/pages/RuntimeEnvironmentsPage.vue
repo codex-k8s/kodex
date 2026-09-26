@@ -576,7 +576,11 @@ onBeforeUnmount(() => {
               <div>
                 <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
                 <dd>
-                  {{ selected.currentVersion.policy.kubernetesAccess.kind }}
+                  {{
+                    $t(
+                      `runtime.kubernetesAccessLabel.${selected.currentVersion.policy.kubernetesAccess.kind}`,
+                    )
+                  }}
                 </dd>
               </div>
             </dl>
@@ -798,9 +802,6 @@ onBeforeUnmount(() => {
 }
 .environment-table td:first-child {
   min-width: 280px;
-}
-.environment-table td:first-child > * {
-  display: block;
 }
 .environment-table small {
   max-width: 520px;

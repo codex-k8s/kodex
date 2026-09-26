@@ -85,4 +85,16 @@ describe("runtime editors layout", () => {
       'v-if="!expanded && (items.length > 6 || cursor)"',
     );
   });
+
+  it("не сливает название окружения с описанием в строке таблицы", () => {
+    expect(environmentCatalogSource).toMatch(
+      /\.environment-name\s*\{\s*display:\s*grid;/,
+    );
+    expect(environmentCatalogSource).not.toContain(
+      ".environment-table td:first-child > *",
+    );
+    expect(environmentCatalogSource).not.toContain(
+      "{{ selected.currentVersion.policy.kubernetesAccess.kind }}",
+    );
+  });
 });
