@@ -14,6 +14,21 @@ function entries(value: unknown, prefix = ""): [string, string][] {
   );
 }
 describe("Control Center translations", () => {
+  it("переводит все состояния узла графа выполнения", () => {
+    for (const state of [
+      "PLANNED",
+      "QUEUED",
+      "RUNNING",
+      "WAITING",
+      "SUCCEEDED",
+      "FAILED",
+      "CANCELLED",
+      "SKIPPED",
+    ]) {
+      expect(i18n.global.te(`states.${state}`, "ru"), state).toBe(true);
+      expect(i18n.global.te(`states.${state}`, "en"), state).toBe(true);
+    }
+  });
   it("разрешает статические ключи из Vue и TypeScript без показа идентификаторов в UI", () => {
     const root = fileURLToPath(new URL("../../", import.meta.url));
     const keys = new Set(
