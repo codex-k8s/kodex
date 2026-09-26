@@ -23,9 +23,8 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { readRuntimeSecret } from "./api";
 
-import type { RuntimeSecret, RuntimeSecretDraftSuggestion } from "./model";
+import type { RuntimeSecret } from "./model";
 import { canRuntimeSecretAction, maskedSecretHint } from "./model";
-import { consumeRuntimeSecretReauthSuggestion } from "./reauth-suggestion";
 import RuntimeSecretRevealDialog from "./RuntimeSecretRevealDialog.vue";
 import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
 import RuntimeSecretDraftDialog from "./RuntimeSecretDraftDialog.vue";
@@ -37,7 +36,6 @@ const props = defineProps<{
   initialSecretRef?: string;
   initialDraftRef?: string;
   initialPlanRef?: string;
-  assistantCreateSecret?: boolean;
 }>();
 const emit = defineEmits<{
   draftSaved: [draftRef: string];
@@ -59,7 +57,6 @@ const search = ref("");
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const createOpen = ref(false);
-const createSuggestion = ref<RuntimeSecretDraftSuggestion>();
 const expanded = ref(false);
 const rotateTarget = ref<RuntimeSecret>();
 const revealTarget = ref<RuntimeSecret>();
@@ -88,23 +85,8 @@ function prepareMutation(): void {
 
 function openCreate(): void {
   prepareMutation();
-  createSuggestion.value = undefined;
   createOpen.value = true;
 }
-watch(
-  () => props.assistantCreateSecret,
-  (requested) => {
-    if (requested && !createOpen.value) {
-      prepareMutation();
-      createSuggestion.value = consumeRuntimeSecretReauthSuggestion(
-        window.sessionStorage,
-        { projectRef: props.projectRef },
-      );
-      createOpen.value = true;
-    }
-  },
-  { immediate: true },
-);
 
 function openRotate(secret: RuntimeSecret): void {
   if (!canRuntimeSecretAction(secret, "ROTATE")) return;
@@ -463,11 +445,7 @@ onBeforeUnmount(() => {
   <RuntimeSecretDraftDialog
     v-if="createOpen"
     :project-ref="projectRef"
-    :suggestion="createSuggestion"
-    @close="
-      createOpen = false;
-      createSuggestion = undefined;
-    "
+    @close="createOpen = false"
     @saved="draftSaved"
     @published="store.acceptPublication"
     @plan-prepared="planPrepared"

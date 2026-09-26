@@ -10,17 +10,26 @@ const workspace = readFileSync(
   new URL("./RuntimeSecretsWorkspace.vue", import.meta.url),
   "utf8",
 );
+const assistant = readFileSync(
+  new URL("../assistant/components/AssistantWorkspace.vue", import.meta.url),
+  "utf8",
+);
 
 describe("вход из помощника в защищённую форму секрета", () => {
-  it("использует только флаг открытия и текущий проект, не принимает значение из URL", () => {
-    expect(page).toContain('route.query.assistantCreateSecret === "1"');
+  it("отдаёт маршрут возврата только помощнику и не открывает второй диалог на странице", () => {
     expect(page).toContain(':project-ref="projectRef"');
-    expect(page).toContain(':assistant-create-secret="assistantCreateSecret"');
-    expect(workspace).toContain(
-      "if (requested && !createOpen.value) openCreate()",
-    );
+    expect(page).not.toContain("assistantCreateSecret");
+    expect(workspace).not.toContain("assistantCreateSecret");
+    expect(workspace).not.toContain("consumeRuntimeSecretReauthSuggestion");
     expect(workspace).toContain(
       '<RuntimeSecretDraftDialog\n    v-if="createOpen"',
+    );
+    expect(assistant).toContain(
+      'const creating = route.query.assistantCreateSecret === "1"',
+    );
+    expect(assistant).toContain('surface: "assistant"');
+    expect(assistant).toContain(
+      'v-if="open && secretDialogOpen && projectRef"',
     );
     expect(page).not.toContain("secretValue");
     expect(page).not.toContain("credentialValue");

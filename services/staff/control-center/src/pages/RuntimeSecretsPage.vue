@@ -29,9 +29,6 @@ const projectRef = computed(() => String(route.params.projectRef));
 const initialSecretRef = computed(() =>
   typeof route.query.secretRef === "string" ? route.query.secretRef : undefined,
 );
-const assistantCreateSecret = computed(
-  () => route.query.assistantCreateSecret === "1",
-);
 </script>
 
 <template>
@@ -42,7 +39,6 @@ const assistantCreateSecret = computed(
       :initial-secret-ref="initialSecretRef"
       :initial-draft-ref="initialDraftRef"
       :initial-plan-ref="initialPlanRef"
-      :assistant-create-secret="assistantCreateSecret"
       @draft-saved="rememberDraft"
       @plan-prepared="rememberPlan"
     />
