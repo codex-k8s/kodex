@@ -23,6 +23,9 @@ export async function loadVfsPage(options: {
   const { projectRef, pageToken } = options;
   const signal = AbortSignal.any([options.signal, requestSignal()]);
   const query = options.query.trim();
+  const queryLength = Array.from(query).length;
+  if (queryLength === 1 || queryLength > 200)
+    throw new Error("Invalid VFS search query length");
   const pagination = {
     projectRef,
     pageToken,

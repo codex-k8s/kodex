@@ -94,6 +94,15 @@ describe("VFS", () => {
       }),
     );
   });
+  it("не отправляет поиск с длиной вне контракта OpenAPI", async () => {
+    calls.search.mockClear();
+    const signal = new AbortController().signal;
+    for (const query of ["x", "а", "x".repeat(201)])
+      await expect(loadVfsPage({ ...scope, query, signal })).rejects.toThrow(
+        "Invalid VFS search query length",
+      );
+    expect(calls.search).not.toHaveBeenCalled();
+  });
   it("отклоняет чужой scope, неизвестный вид, неправильный путь, дубликаты и oversized cursor", () => {
     expect(() =>
       validateVfsPage(page, { ...scope, projectRef: "other" }),
