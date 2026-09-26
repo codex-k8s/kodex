@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useI18n } from "vue-i18n";
 import type { HomeResultItem } from "../result-catalog";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
@@ -16,6 +17,16 @@ const emit = defineEmits<{
   open: [item: HomeResultItem];
 }>();
 const serverMessage = useServerMessage();
+const { locale } = useI18n();
+
+function formatDate(value: string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "";
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(timestamp);
+}
 const root = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
@@ -52,7 +63,16 @@ useCursorInfiniteScroll({
       >
         {{ item.title }}
       </button>
-      <small>{{ item.description }}</small>
+      <small v-if="item.artifact" class="home-result-row__source">
+        <span>{{ $t(`files.source.${item.artifact.source}`) }}</span>
+        <template v-if="formatDate(item.artifact.createdAt)">
+          <span aria-hidden="true">·</span>
+          <time :datetime="item.artifact.createdAt">{{
+            formatDate(item.artifact.createdAt)
+          }}</time>
+        </template>
+      </small>
+      <small v-else>{{ item.description }}</small>
       <StatusBadge :state="item.state" />
     </div>
     <div
@@ -93,6 +113,17 @@ useCursorInfiniteScroll({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.home-result-row__source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.home-result-row__source > :first-child,
+.home-result-row__source time {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .home-result-rows__sentinel {
   min-height: 1px;

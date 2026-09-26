@@ -22,6 +22,8 @@ const artifact = {
   ref: "artifact-private",
   fileName: "report.txt",
   mediaType: "text/plain",
+  source: "AGENT_RESULT",
+  createdAt: "2026-09-26T09:00:00Z",
   scanState: "CLEAN",
   lifecycleState: "ACTIVE",
 };
@@ -88,5 +90,29 @@ describe("Home: authoritative totals и общий каталог", () => {
       query: { states: string[] };
     };
     expect(call.query.states).toEqual(["SUCCEEDED", "FAILED", "CANCELLED"]);
+  });
+  it("показывает исполнителя и работу вместо технической ссылки Проекта", async () => {
+    api.listRuns.mockResolvedValue({
+      data: {
+        items: [
+          {
+            ref: "run-one",
+            projectRef: "project-private",
+            title: "Подготовить сводку",
+            target: { displayName: "Аналитик" },
+            currentActivity: "Собирает результаты",
+            state: "RUNNING",
+          },
+        ],
+        total: 1,
+      },
+    });
+    const page = await loadHomeResultPage(
+      { ...scope, kind: "RUN" },
+      undefined,
+      new AbortController().signal,
+    );
+    expect(page.items[0]?.description).toBe("Аналитик · Собирает результаты");
+    expect(page.items[0]?.description).not.toContain("project-private");
   });
 });

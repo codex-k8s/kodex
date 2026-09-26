@@ -78,7 +78,12 @@ export async function loadHomeResultPage(
     items = page.items.map((item) => ({
       ref: item.ref,
       title: item.title,
-      description: item.projectRef,
+      description: [
+        item.target.displayName,
+        item.currentActivity || item.activitySummary,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       state: item.state,
       to: `/runs/${encodeURIComponent(item.ref)}`,
     }));
