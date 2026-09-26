@@ -535,6 +535,7 @@ onBeforeUnmount(() => {
         <Plus :size="17" aria-hidden="true" />{{ $t("providers.create") }}
       </button>
       <button
+        v-if="accounts.length > 6 || accountsNextPageToken"
         class="icon-button"
         :aria-label="$t('catalog.expand')"
         :title="$t('catalog.expand')"

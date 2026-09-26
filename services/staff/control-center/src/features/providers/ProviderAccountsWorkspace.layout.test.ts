@@ -52,6 +52,9 @@ describe("provider account layout", () => {
 
   it("сохраняет стабильную responsive компоновку", () => {
     expect(workspace).toContain(
+      'v-if="accounts.length > 6 || accountsNextPageToken"',
+    );
+    expect(workspace).toContain(
       "grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.8fr) auto",
     );
     expect(workspace).toContain("@media (max-width: 560px)");

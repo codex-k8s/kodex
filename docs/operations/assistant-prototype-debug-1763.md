@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.67
+version: 1.0.68
 updated: 2026-09-26
 ---
 
@@ -1213,3 +1213,12 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-role-images-short-list.png`,
   `/tmp/kodex-context-short-lists.png`. Визуальная приёмка владельцем —
   NOT RUN.
+- Каталог provider accounts имел тот же лишний полноэкранный переход при двух
+  строках. Он теперь появляется только для списка длиннее шести записей либо
+  при наличии server cursor; device-code/API-key lifecycle, серверный поиск и
+  автоматическая дозагрузка не менялись. Адресный layout-unit 4/4, typecheck,
+  ESLint, Prettier и `git diff --check` — PASS. После HMR и reload без кэша
+  Chrome 1920×1080 показывает обе авторизованные записи без лишней кнопки;
+  console errors/warnings, HTTP 4xx/5xx и горизонтальное переполнение
+  отсутствуют. Screenshot: `/tmp/kodex-provider-accounts-short-list.png`.
+  Визуальная приёмка владельцем — NOT RUN.
