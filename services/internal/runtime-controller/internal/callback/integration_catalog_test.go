@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestIntegrationCatalogIsPagedAndBoundToExactGrant(t *testing.T) {
@@ -44,14 +46,24 @@ func TestIntegrationCatalogIsPagedAndBoundToExactGrant(t *testing.T) {
 		{"connection_ref": "int_00000003"}, {"connection_ref": "int_00000003", "capability_key": "other"},
 		{"connection_ref": 123, "capability_key": "test.read"}, {"offset": 257}, {"offset": 1.5},
 		{"connection_ref": "int_00000003", "capability_key": "test.read", "offset": 1},
+		{"connection_ref": "int_00000003", "capability_key": "test.read", "offset": 0},
+		{"connection_ref": "int_00000003", "capability_key": "test.read", "query": ""},
 		{"query": strings.Repeat("x", 81)}, {"other": "untrusted"},
 	} {
-		if _, err := integrationCatalog(input, invalid); err == nil {
+		if _, err := integrationCatalog(input, invalid); err == nil || status.Code(err) != codes.InvalidArgument {
 			t.Fatalf("integration catalog accepted invalid selection: %#v", invalid)
 		}
 	}
 	if _, err := integrationCatalog(runtimecontract.RunnerInput{}, nil); err == nil {
 		t.Fatal("integration catalog accepted a runtime without grants")
+	}
+}
+
+func TestIntegrationCatalogSchemaSeparatesSearchAndExactSelection(t *testing.T) {
+	schema := integrationCatalogTool()["inputSchema"].(map[string]any)
+	branches, ok := schema["oneOf"].([]map[string]any)
+	if !ok || len(branches) != 2 || schema["additionalProperties"] != false {
+		t.Fatalf("integration catalog schema does not separate call modes: %#v", schema)
 	}
 }
 

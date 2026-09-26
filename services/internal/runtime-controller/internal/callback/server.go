@@ -666,6 +666,10 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		if errors.As(err, &planInputErr) {
 			failureClass = "assistant_plan_" + planInputErr.reason
 		}
+		var catalogInputErr *integrationCatalogInputError
+		if errors.As(err, &catalogInputErr) {
+			failureClass = "integration_catalog_" + catalogInputErr.reason
+		}
 		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed",
 			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(),
 			"failure_class", failureClass)
@@ -688,6 +692,14 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 				"error_code": "PLAN_INPUT_INVALID",
 				"retryable":  true,
 				"guidance":   "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names.",
+			}
+		}
+		var catalogInputErr *integrationCatalogInputError
+		if errors.As(err, &catalogInputErr) {
+			structured = map[string]any{
+				"error_code": "CATALOG_INPUT_INVALID",
+				"retryable":  true,
+				"guidance":   "Retry once using either query and offset, or exact connection_ref and capability_key, but never both.",
 			}
 		}
 		encoded, _ = json.Marshal(structured)

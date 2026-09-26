@@ -8,18 +8,25 @@ import (
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const maximumIntegrationCatalogPage = 8
 
 func integrationCatalogTool() map[string]any {
+	inputSchema := objectSchema(nil, map[string]any{
+		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 256},
+		"connection_ref": opaqueRefSchema(), "capability_key": stringSchema(1, 255),
+	})
+	inputSchema["oneOf"] = []map[string]any{
+		{"not": map[string]any{"anyOf": []map[string]any{{"required": []string{"connection_ref"}}, {"required": []string{"capability_key"}}}}},
+		{"required": []string{"connection_ref", "capability_key"}, "not": map[string]any{"anyOf": []map[string]any{{"required": []string{"query"}}, {"required": []string{"offset"}}}}},
+	}
 	return map[string]any{
 		"name":        "get_integration_catalog",
 		"description": "Discover only integration grants bound to this RuntimeRevision. Use query and offset for a compact index. Supply exact connection_ref and capability_key together to read one input schema before invoke_integration. Names are display data, not authority.",
-		"inputSchema": objectSchema(nil, map[string]any{
-			"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 256},
-			"connection_ref": opaqueRefSchema(), "capability_key": stringSchema(1, 255),
-		}),
+		"inputSchema": inputSchema,
 		"outputSchema": objectSchema([]string{"grants"}, map[string]any{
 			"grants":      map[string]any{"type": "array", "maxItems": maximumIntegrationCatalogPage, "items": map[string]any{"type": "object"}},
 			"next_offset": map[string]any{"type": "integer", "minimum": 1, "maximum": 256},
@@ -27,14 +34,31 @@ func integrationCatalogTool() map[string]any {
 	}
 }
 
+type integrationCatalogInputError struct{ reason string }
+
+func (catalogErr *integrationCatalogInputError) Error() string {
+	return "integration catalog input is invalid"
+}
+
+func (catalogErr *integrationCatalogInputError) GRPCStatus() *status.Status {
+	return status.New(codes.InvalidArgument, catalogErr.Error())
+}
+
+func invalidIntegrationCatalog(reason string) error {
+	return &integrationCatalogInputError{reason: reason}
+}
+
 func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if len(input.IntegrationGrants) == 0 || !onlyKeys(arguments, "query", "offset", "connection_ref", "capability_key") {
+	if len(input.IntegrationGrants) == 0 {
 		return nil, errors.New("integration catalog is not available")
+	}
+	if !onlyKeys(arguments, "query", "offset", "connection_ref", "capability_key") {
+		return nil, invalidIntegrationCatalog("top_level_shape")
 	}
 	query, _ := arguments["query"].(string)
 	if raw, exists := arguments["query"]; exists {
 		if _, ok := raw.(string); !ok || utf8.RuneCountInString(query) > 80 {
-			return nil, errors.New("integration catalog query is invalid")
+			return nil, invalidIntegrationCatalog("query")
 		}
 	}
 	query = strings.ToLower(strings.TrimSpace(query))
@@ -45,25 +69,27 @@ func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]
 			offset = value
 		case float64:
 			if value != float64(int(value)) {
-				return nil, errors.New("integration catalog offset is invalid")
+				return nil, invalidIntegrationCatalog("offset")
 			}
 			offset = int(value)
 		default:
-			return nil, errors.New("integration catalog offset is invalid")
+			return nil, invalidIntegrationCatalog("offset")
 		}
 		if offset < 0 || offset > 256 {
-			return nil, errors.New("integration catalog offset is invalid")
+			return nil, invalidIntegrationCatalog("offset")
 		}
 	}
 	connection, connectionValid := arguments["connection_ref"].(string)
 	capability, capabilityValid := arguments["capability_key"].(string)
+	_, querySelected := arguments["query"]
+	_, offsetSelected := arguments["offset"]
 	_, connectionSelected := arguments["connection_ref"]
 	_, capabilitySelected := arguments["capability_key"]
 	if connectionSelected && !connectionValid || capabilitySelected && !capabilityValid {
-		return nil, errors.New("integration catalog selection is invalid")
+		return nil, invalidIntegrationCatalog("selection_shape")
 	}
-	if connectionSelected != capabilitySelected || connectionSelected && (connection == "" || capability == "" || query != "" || offset != 0) {
-		return nil, errors.New("integration catalog selection is invalid")
+	if connectionSelected != capabilitySelected || connectionSelected && (connection == "" || capability == "" || querySelected || offsetSelected) {
+		return nil, invalidIntegrationCatalog("selection_shape")
 	}
 	grants := append([]runtimecontract.RunnerIntegrationGrant(nil), input.IntegrationGrants...)
 	sort.Slice(grants, func(left, right int) bool {
@@ -89,7 +115,7 @@ func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]
 			entry["input_schema"] = schema
 			return map[string]any{"grants": []map[string]any{entry}}, nil
 		}
-		return nil, errors.New("integration catalog selection is invalid")
+		return nil, invalidIntegrationCatalog("selection_missing")
 	}
 	matching := make([]runtimecontract.RunnerIntegrationGrant, 0, len(grants))
 	for _, grant := range grants {

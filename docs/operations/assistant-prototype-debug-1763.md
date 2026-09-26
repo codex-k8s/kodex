@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.74
+version: 1.0.75
 updated: 2026-09-26
 ---
 
@@ -1374,4 +1374,22 @@ GitHub checks не считается `PASS`.
   HTTP 4xx/5xx отсутствуют; два отменённых браузером запроса относятся к
   навигации. Screenshot:
   `/tmp/kodex-assistant-launch-run-succeeded.png`. Визуальная приёмка
+  владельцем — NOT RUN.
+- `get_integration_catalog` раньше описывал поиск и точный выбор одной плоской
+  схемой из четырёх необязательных полей. Несовместимое сочетание аргументов
+  возвращалось как gRPC `Unknown` и окончательный `TOOL_UNAVAILABLE`, поэтому
+  сотрудник не мог безопасно исправить вызов. MCP input schema теперь через
+  `oneOf` разделяет поиск (`query`/`offset`) и точный выбор
+  (`connection_ref`/`capability_key`). Ошибка входа имеет `InvalidArgument`,
+  закрытый диагностический класс и разрешает один повтор с безопасной
+  подсказкой; grant authority и аргументы в аудит не раскрываются. Через
+  Context7 проверена MCP specification 2025-11-25: tool input использует JSON
+  Schema 2020-12 и поддерживает `oneOf`. Адресные runtime-controller unit,
+  `go vet` и `git diff --check` — PASS; Air применил diff, SHA host/Pod совпал.
+  Новый подтверждённый Run `run_Fkb1TdbpxmEEvyg57NZGPJ-s` завершился
+  `SUCCEEDED`: единственный `get_integration_catalog` записан как `SUCCEEDED`,
+  сотрудник увидел разрешённые GitHub-возможности и не выполнял внешних
+  операций. После reload без кэша диалог, план и результат сохранились,
+  console errors/warnings и HTTP 4xx/5xx отсутствуют. Screenshot:
+  `/tmp/kodex-integration-catalog-run-success.png`. Визуальная приёмка
   владельцем — NOT RUN.
