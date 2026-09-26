@@ -1665,6 +1665,7 @@ function snapshot(value: string): Record<string, unknown> {
                   :runtimes="readyRuntimes"
                   :runtime-problem="platform.problems.runtimes"
                   runtime-expanded
+                  allow-default-runtime
                   :disabled="!editable"
                   @valid="agentFormValidity[operation.value.ref] = $event"
                   @update:name="

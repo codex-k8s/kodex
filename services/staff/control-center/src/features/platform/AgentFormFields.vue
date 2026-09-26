@@ -18,8 +18,13 @@ const props = withDefaults(
     runtimeProblem?: AppProblem;
     disabled?: boolean;
     runtimeExpanded?: boolean;
+    allowDefaultRuntime?: boolean;
   }>(),
-  { disabled: false, runtimeExpanded: false },
+  {
+    disabled: false,
+    runtimeExpanded: false,
+    allowDefaultRuntime: false,
+  },
 );
 const emit = defineEmits<{
   "update:name": [value: string];
@@ -36,10 +41,17 @@ const instructionsId = useId();
 const runtimeId = useId();
 const valid = computed(
   () =>
-    isAgentDraftComplete(props) &&
-    props.runtimes.some(
-      (runtime) => runtime.ready && runtime.ref === props.runtimeRef,
-    ),
+    isAgentDraftComplete({
+      ...props,
+      runtimeRef:
+        props.runtimeRef || (props.allowDefaultRuntime ? "DEFAULT" : ""),
+    }) &&
+    (props.runtimeRef
+      ? props.runtimes.some(
+          (runtime) => runtime.ready && runtime.ref === props.runtimeRef,
+        )
+      : props.allowDefaultRuntime &&
+        props.runtimes.some((runtime) => runtime.ready)),
 );
 watch(valid, (value) => emit("valid", value), { immediate: true });
 </script>
@@ -111,7 +123,7 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
           :name="runtimeId"
           :value="runtimeRef"
           :disabled="disabled"
-          required
+          :required="!allowDefaultRuntime"
           @change="
             emit(
               'update:runtimeRef',
@@ -119,7 +131,13 @@ watch(valid, (value) => emit("valid", value), { immediate: true });
             )
           "
         >
-          <option value="" disabled>{{ $t("agents.runtime") }}</option>
+          <option value="" :disabled="!allowDefaultRuntime">
+            {{
+              allowDefaultRuntime
+                ? $t("agents.runtimeDefault")
+                : $t("agents.runtime")
+            }}
+          </option>
           <option
             v-for="runtime in runtimes.filter((item) => item.ready)"
             :key="runtime.ref"

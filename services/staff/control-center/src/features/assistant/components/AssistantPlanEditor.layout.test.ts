@@ -36,9 +36,17 @@ describe("AssistantPlanEditor layout", () => {
     expect(source).toContain("capabilityChecked(operation, key)");
     expect(source).toContain("assistant.planEditor.agentNextSteps");
     expect(source).toContain("<AgentFormFields");
+    expect(source).toContain("allow-default-runtime");
     expect(source).toContain(
       "agentFormValidity.value[operation.value.ref] === true",
     );
+    const agentFields = readFileSync(
+      new URL("../../platform/AgentFormFields.vue", import.meta.url),
+      "utf8",
+    );
+    expect(agentFields).toContain("allowDefaultRuntime?: boolean");
+    expect(agentFields).toContain(':required="!allowDefaultRuntime"');
+    expect(agentFields).toContain("agents.runtimeDefault");
   });
 
   it("задаёт стабильные имена полям большой формы для браузерной диагностики", () => {

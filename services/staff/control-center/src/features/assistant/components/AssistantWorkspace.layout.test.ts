@@ -210,6 +210,8 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toContain(
       "planTrigger.value = event.currentTarget as HTMLButtonElement",
     );
+    expect(template).toContain('ref="planDialog"');
+    expect(source).toContain("focusableElements(planDialog.value)[0]");
     expect(source).toContain("if (trigger?.isConnected) trigger.focus()");
   });
 

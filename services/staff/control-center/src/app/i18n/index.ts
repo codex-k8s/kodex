@@ -1020,6 +1020,7 @@ const ru = {
     profile: "Профиль сотрудника",
     role: "Роль и описание",
     runtime: "Модель выполнения",
+    runtimeDefault: "Базовая среда (по умолчанию)",
     runtimeHelp:
       "Платформа выберет подготовленный профиль модели; изменить его можно позже.",
     provider: "Провайдер",
@@ -4703,6 +4704,7 @@ const en = {
     profile: "Employee profile",
     role: "Role and description",
     runtime: "Runtime model",
+    runtimeDefault: "Base runtime (default)",
     runtimeHelp:
       "The platform selects a prepared model profile; it can be changed later.",
     provider: "Provider",

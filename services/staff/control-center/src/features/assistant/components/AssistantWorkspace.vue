@@ -196,6 +196,7 @@ const attachmentState = ref<AttachmentComposerState>({
   ready: true,
 });
 const panel = ref<HTMLElement>();
+const planDialog = ref<HTMLElement>();
 const formSlot = ref<HTMLElement>();
 const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
@@ -596,10 +597,15 @@ function handleComposerKeydown(event: KeyboardEvent): void {
   void send();
 }
 
-function openPlan(plan: AssistantPlan, event: MouseEvent): void {
+async function openPlan(plan: AssistantPlan, event: MouseEvent): Promise<void> {
   store.clearReceipt();
   planTrigger.value = event.currentTarget as HTMLButtonElement;
   openPlanRef.value = plan.ref;
+  await nextTick();
+  const initialTarget = planDialog.value
+    ? focusableElements(planDialog.value)[0]
+    : undefined;
+  (initialTarget ?? planDialog.value)?.focus();
 }
 
 function planVariantNumber(planRef: string): number {
@@ -1450,10 +1456,12 @@ onBeforeUnmount(() => {
     />
     <section
       v-if="currentPlan && !assistantFormActive"
+      ref="planDialog"
       class="assistant-plan-dialog"
       role="dialog"
       aria-modal="true"
       :aria-label="$t('assistant.plan')"
+      tabindex="-1"
     >
       <AssistantPlanEditor
         :plan="currentPlan"
