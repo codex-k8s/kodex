@@ -7,6 +7,7 @@ import type { IntegrationsSection } from "@/features/integrations/ui/model";
 defineProps<{
   active: IntegrationsSection;
   connectionCount: number;
+  connectionsHasMore: boolean;
   packageCount: number;
   grantCount: number;
 }>();
@@ -47,9 +48,9 @@ const tabs: Array<{
     >
       <component :is="tab.icon" :size="16" aria-hidden="true" />
       <span>{{ t(`integrationsRedesign.tabs.${tab.key}`) }}</span>
-      <span v-if="tab.count === 'connections'" class="tab-count">{{
-        connectionCount
-      }}</span>
+      <span v-if="tab.count === 'connections'" class="tab-count"
+        >{{ connectionCount }}{{ connectionsHasMore ? "+" : "" }}</span
+      >
       <span v-else-if="tab.count === 'packages'" class="tab-count">{{
         packageCount
       }}</span>

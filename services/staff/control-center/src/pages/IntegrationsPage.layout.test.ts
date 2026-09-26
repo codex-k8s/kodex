@@ -19,6 +19,12 @@ const connectionsTemplate = connectionsSource.slice(
 );
 
 describe("IntegrationsPage layout", () => {
+  it("помечает неполный счётчик подключений при наличии курсора", () => {
+    expect(pageSource).toContain(':connections-has-more="!!connectionCursor"');
+    expect(connectionsSource).toContain(
+      "count: hasMore ? `${connections.length}+` : connections.length",
+    );
+  });
   it("показывает готовность core по авторитетному API-флагу", () => {
     expect(pageSource).toContain(
       ':core-ready="platform.integrationCoreReady === true"',
@@ -47,5 +53,10 @@ describe("IntegrationsPage layout", () => {
     expect(connectionsSource).toContain("align-items: flex-start");
     expect(connectionsSource).toContain(".core-readiness > svg");
     expect(connectionsSource).toContain("flex: 0 0 auto");
+  });
+
+  it("даёт карточке подключения вырасти по содержимому без наложения действий", () => {
+    expect(connectionsSource).toContain(".connection-card {");
+    expect(connectionsSource).toContain("height: max-content;");
   });
 });

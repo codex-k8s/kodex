@@ -108,6 +108,7 @@ const messages = {
 async function renderPanel(
   values: readonly IntegrationConnection[],
   coreReady: boolean,
+  hasMore = false,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -116,6 +117,7 @@ async function renderPanel(
         definitions: { synthetic: definition },
         coreReady,
         busyRef: "",
+        hasMore,
       }),
   });
   app.use(
@@ -125,6 +127,12 @@ async function renderPanel(
 }
 
 describe("IntegrationConnectionsPanel", () => {
+  it("не выдаёт число загруженных строк за точное общее количество", async () => {
+    expect(await renderPanel([connection], true, true)).toContain(
+      "Подключений: 1+",
+    );
+    expect(await renderPanel([connection], true)).toContain("Подключений: 1");
+  });
   it("показывает только разрешённые server-owned lifecycle действия", async () => {
     const html = await renderPanel([connection], true);
 

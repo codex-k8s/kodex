@@ -86,7 +86,7 @@ useCursorInfiniteScroll({
       </div>
       <span class="result-count">{{
         t("integrationsRedesign.connectionCount", {
-          count: connections.length,
+          count: hasMore ? `${connections.length}+` : connections.length,
         })
       }}</span>
       <button
@@ -477,6 +477,7 @@ useCursorInfiniteScroll({
 .connection-card {
   display: flex;
   flex-direction: column;
+  height: max-content;
   min-height: 360px;
   padding: 14px;
   border: 1px solid var(--border);

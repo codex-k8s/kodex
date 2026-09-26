@@ -1000,6 +1000,7 @@ onBeforeUnmount(() => {
         <IntegrationSectionTabs
           :active="activeSection"
           :connection-count="connections.length"
+          :connections-has-more="!!connectionCursor"
           :package-count="packages.length"
           :grant-count="allGrants.length"
           @select="selectSection"
