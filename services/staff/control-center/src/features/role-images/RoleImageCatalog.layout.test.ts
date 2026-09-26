@@ -10,6 +10,10 @@ const lineage = readFileSync(
   new URL("./RoleImageLineage.vue", import.meta.url),
   "utf8",
 );
+const editor = readFileSync(
+  new URL("./RoleImageEditor.vue", import.meta.url),
+  "utf8",
+);
 
 describe("каталог образов ИИ-сотрудников", () => {
   it("скрывает внутренние ссылки конфигурации в технических сведениях", () => {
@@ -19,5 +23,10 @@ describe("каталог образов ИИ-сотрудников", () => {
     expect(lineage).toContain("roleImages.technicalDetails");
     expect(lineage).toContain("lineage.configurationRef");
     expect(lineage).toContain("lineage.revisionRef");
+  });
+
+  it("до выбора роли показывает действие, а не ошибку недоступности", () => {
+    expect(editor).toContain('if (!ref) return t("roleImages.chooseRole")');
+    expect(editor).toContain('t("roleImages.unknownRole")');
   });
 });

@@ -164,12 +164,13 @@ const canSave = computed(
     dockerfileMessages.value.length === 0 &&
     (!recipe.value || recipe.value.nextActions.includes("UPDATE")),
 );
-const roleLabel = computed(
-  () =>
-    store.roleDefinitionByRef.get(
-      recipe.value?.roleDefinitionRef ?? roleDefinitionRef.value,
-    )?.label ?? t("roleImages.unknownRole"),
-);
+const roleLabel = computed(() => {
+  const ref = recipe.value?.roleDefinitionRef ?? roleDefinitionRef.value;
+  if (!ref) return t("roleImages.chooseRole");
+  return (
+    store.roleDefinitionByRef.get(ref)?.label ?? t("roleImages.unknownRole")
+  );
+});
 const environmentLabel = computed(() => {
   const key = environmentKey.value;
   if (!key) return t("common.noData");
