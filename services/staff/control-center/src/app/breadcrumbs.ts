@@ -22,6 +22,7 @@ export interface BreadcrumbLabels {
   environment: string;
   newEnvironment: string;
   secrets: string;
+  members: string;
   roleImages: string;
   roleImage: string;
   newRoleImage: string;
@@ -74,6 +75,20 @@ export function buildBreadcrumbs(
       return [current(labels.onboarding)];
     case "projects":
       return [current(labels.projects)];
+    case "organization-agents":
+      return [current(labels.agents)];
+    case "organization-workflows":
+      return [current(labels.workflows)];
+    case "organization-automations":
+      return [current(labels.automations)];
+    case "organization-environments":
+      return [current(labels.environments)];
+    case "organization-secrets":
+      return [current(labels.secrets)];
+    case "organization-members":
+      return [current(labels.members)];
+    case "organization-files":
+      return [current(labels.files)];
     case "project":
       return project.map((item, index) =>
         index === project.length - 1 ? current(item.label) : item,

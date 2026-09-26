@@ -21,6 +21,7 @@ const labels: BreadcrumbLabels = {
   environment: "Окружение",
   newEnvironment: "Новое окружение",
   secrets: "Секреты",
+  members: "Участники",
   roleImages: "Образы ИИ-сотрудников",
   roleImage: "Образ ИИ-сотрудника",
   newRoleImage: "Новый образ",
@@ -33,6 +34,18 @@ const labels: BreadcrumbLabels = {
 };
 
 describe("breadcrumbs", () => {
+  it.each([
+    ["organization-agents", "ИИ-сотрудники"],
+    ["organization-workflows", "Процессы"],
+    ["organization-files", "Файлы и знания"],
+    ["organization-automations", "Автоматизации"],
+    ["organization-environments", "Окружения"],
+    ["organization-secrets", "Секреты"],
+    ["organization-members", "Участники"],
+  ])("показывает глобальный каталог %s", (routeName, label) => {
+    expect(buildBreadcrumbs({ routeName }, labels)).toEqual([{ label }]);
+  });
+
   it("показывает полный путь к сотруднику без технического locator", () => {
     expect(
       buildBreadcrumbs(

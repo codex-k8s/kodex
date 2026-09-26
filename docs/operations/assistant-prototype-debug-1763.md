@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.62
+version: 1.0.63
 updated: 2026-09-26
 ---
 
@@ -1161,3 +1161,13 @@ GitHub checks не считается `PASS`.
   с текстом «Просмотреть и изменить»; console errors/warnings и HTTP 4xx/5xx
   отсутствуют. Screenshot: `/tmp/kodex-plan-focus-restored.png`. Визуальная
   приёмка владельцем — NOT RUN.
+- Глобальные каталоги сотрудников, Процессов, файлов, автоматизаций, окружений,
+  секретов и участников использовали новые route names, отсутствовавшие в общем
+  реестре breadcrumb, поэтому до загрузки и после перехода показывали ложную
+  «Главную». Все семь маршрутов теперь разрешаются в точный заголовок раздела;
+  неизвестный маршрут по-прежнему закрыто получает безопасный fallback.
+  Адресный unit 17/17, typecheck, ESLint, Prettier и `git diff --check` — PASS.
+  После HMR и reload без кэша `/workflows` показывает «Процессы», сохраняет
+  server-side cursor-список и не создаёт горизонтального переполнения;
+  console errors/warnings и HTTP 4xx/5xx отсутствуют. Визуальная приёмка
+  владельцем — NOT RUN.

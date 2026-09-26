@@ -171,6 +171,7 @@ const breadcrumbs = computed(() => {
     environment: t("nav.environment"),
     newEnvironment: t("nav.newEnvironment"),
     secrets: t("nav.secrets"),
+    members: t("nav.members"),
     roleImages: t("roleImages.title"),
     roleImage: t("roleImages.entity"),
     newRoleImage: t("roleImages.new"),
