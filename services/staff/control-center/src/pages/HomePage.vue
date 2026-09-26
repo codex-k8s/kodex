@@ -48,7 +48,6 @@ const consumedProviderCursors = new Set<string>();
 let providerController: AbortController | undefined;
 const runsReady = ref(platform.runList.length > 0);
 
-const runCatalogTotal = ref<number>();
 const sessionCatalogTotal = ref<number>();
 const runsSettled = ref(false);
 const artifactCatalogTotal = ref<number>();
@@ -76,12 +75,8 @@ const refreshing = computed(
     (providerLoading.value && providerReady.value) ||
     providerLoadingMore.value,
 );
-const showRuns = computed(() => runCatalogTotal.value !== 0);
 const showSessions = computed(() => sessionCatalogTotal.value !== 0);
 const showResults = computed(() => artifactCatalogTotal.value !== 0);
-const singleBlock = computed(
-  () => !showRuns.value && !showSessions.value && !showResults.value,
-);
 
 async function loadActionProjects(
   query: string,
@@ -332,18 +327,13 @@ onBeforeUnmount(() => {
       @retry-more-providers="retryMoreProviderAttention"
     />
 
-    <div
-      class="home-dashboard"
-      :class="{ 'home-dashboard--single': singleBlock }"
-    >
+    <div class="home-dashboard">
       <div class="home-dashboard__main">
         <HomeResultCatalog
-          v-show="showRuns"
           kind="RUN"
           dashboard
           class="home-running-section"
           :ready="runsSettled"
-          @total="runCatalogTotal = $event"
         />
 
         <HomeResultCatalog
@@ -421,9 +411,6 @@ onBeforeUnmount(() => {
   align-items: start;
   gap: 16px;
   margin-top: 16px;
-}
-.home-dashboard--single {
-  grid-template-columns: minmax(0, 1fr);
 }
 .home-dashboard__main,
 .home-dashboard__aside {

@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.83
+version: 1.0.84
 updated: 2026-09-26
 ---
 
@@ -1521,3 +1521,19 @@ GitHub checks не считается `PASS`.
   следующий пользователь той же вкладки не получил прежнюю подсказку.
   Адресные session/Secret unit 26/26, typecheck, Prettier и
   `git diff --check` — PASS; logout в живой вкладке не выполнялся.
+- После перезагрузки 2026-09-26 локальный HTTPS истекал по таймауту при Ready
+  приложении и Traefik. Repo-owned `reconcile-local-ingress.sh` обнаружил
+  устаревший `DEST_IPS` ServiceLB, проверил exact local context и ownership,
+  затем пересоздал только принадлежащий DaemonSet Pod. Повторный readback
+  подтвердил текущий адрес узла; Control Center отвечает HTTPS 200 с доверенной
+  CA, SSO — 302. Автоматический reconcile при старте хоста не установлен:
+  при следующей смене адреса этот отказ может повториться.
+- На главной при нуле активных запусков скрывалась вся секция «Выполняется
+  сейчас», оставляя пустое место вопреки макету `home-a-attention-center`.
+  Теперь секция остаётся на месте и честно показывает пустое состояние.
+  Frontend typecheck, ESLint, Prettier, адресные unit 3/3 и `git diff --check`
+  — PASS на незакоммиченном diff после `4da45abee`. Через Vite HMR и Chrome
+  после reload без кэша секция видна, console errors/warnings и завершённых
+  HTTP 4xx/5xx нет. Screenshot при 1920×1080:
+  `/tmp/kodex-home-no-active-runs-1920.png`.
+  Визуальная приёмка владельцем — NOT RUN.

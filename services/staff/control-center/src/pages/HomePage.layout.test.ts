@@ -16,6 +16,8 @@ describe("HomePage layout", () => {
     expect(attention).toBeGreaterThan(-1);
     expect(running).toBeGreaterThan(attention);
     expect(template).not.toContain("home-focus-grid");
+    expect(template).toContain('kind="RUN"');
+    expect(template).not.toContain('v-show="showRuns"');
   });
 
   it("разделяет доступные источники и использует реальный статус провайдера", () => {

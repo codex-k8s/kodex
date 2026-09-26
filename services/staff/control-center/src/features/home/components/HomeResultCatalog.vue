@@ -47,6 +47,11 @@ const title = computed(() =>
           : "runs.title"
         : "workboard.recentResults",
 );
+const emptyMessage = computed(() =>
+  props.kind === "RUN" && runFilter.value === "ACTIVE"
+    ? "workboard.noActiveRuns"
+    : "common.empty",
+);
 const dashboardItems = computed(() =>
   props.dashboard ? items.value.slice(0, 3) : items.value,
 );
@@ -271,7 +276,7 @@ onBeforeUnmount(() => {
     <p v-if="loading || !ready" role="status">
       {{ $t("common.loading") }}
     </p>
-    <p v-else-if="total === 0">{{ $t("common.empty") }}</p>
+    <p v-else-if="total === 0">{{ $t(emptyMessage) }}</p>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <HomeResultRows
       :items="dashboardItems"
@@ -311,7 +316,7 @@ onBeforeUnmount(() => {
       >
       <p v-if="total !== undefined">{{ total }}</p>
       <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
-      <p v-else-if="total === 0">{{ $t("common.empty") }}</p>
+      <p v-else-if="total === 0">{{ $t(emptyMessage) }}</p>
       <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
       <HomeResultRows
         :items="items"
