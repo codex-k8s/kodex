@@ -738,6 +738,9 @@ const canManageSelected = computed(
   display: grid;
   gap: 14px;
 }
+.grants-panel :deep(.async-picker__trigger-row) {
+  width: 100%;
+}
 .panel-heading,
 .grant-target,
 .grant-editor > header,

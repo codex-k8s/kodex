@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import type {
   AccessBinding,
@@ -22,6 +23,7 @@ const props = defineProps<{
   problem?: AppProblem;
   hasMore?: boolean;
 }>();
+const { t } = useI18n();
 const emit = defineEmits<{
   create: [];
   edit: [binding: AccessBinding];
@@ -78,7 +80,10 @@ function resourceName(binding: AccessBinding): string {
   if (scope.kind === "ORGANIZATION") return "";
   if (scope.kind === "PROJECT") return projectName(scope.projectRef);
   if (scope.kind === "RESOURCE_KIND") {
-    return [projectName(scope.projectRef), scope.resourceKind]
+    return [
+      projectName(scope.projectRef),
+      scope.resourceKind ? t(`access.resourceKinds.${scope.resourceKind}`) : "",
+    ]
       .filter(Boolean)
       .join(" · ");
   }
@@ -89,7 +94,9 @@ function resourceName(binding: AccessBinding): string {
       )?.name ?? ""
     );
   }
-  return scope.resourceKind ?? "";
+  return scope.resourceKind
+    ? t(`access.resourceKinds.${scope.resourceKind}`)
+    : "";
 }
 function assignmentKind(
   binding: AccessBinding,
@@ -196,11 +203,11 @@ function assignmentKind(
               )
             }}</span>
             <strong>{{
+              resourceName(binding) ||
               $t(`access.scope.values.${binding.scope.kind}`)
             }}</strong>
-            <small>{{
-              resourceName(binding) ||
-              $t("access.bindingsWorkspace.wholeOrganization")
+            <small v-if="binding.scope.kind !== 'ORGANIZATION'">{{
+              $t(`access.scope.values.${binding.scope.kind}`)
             }}</small>
           </div>
           <div class="binding-conditions">

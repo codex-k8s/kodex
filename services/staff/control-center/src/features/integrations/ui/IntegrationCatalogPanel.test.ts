@@ -26,6 +26,7 @@ const messages = {
       searchPackages: "Найти",
       category: "Категория",
       allCategories: "Все",
+      packageCategories: { "source-control": "Разработка" },
       firstParty: "first-party",
       customPackage: "пользовательский",
       connectionCount: "Подключений: {count}",
@@ -113,6 +114,8 @@ describe("IntegrationCatalogPanel", () => {
     const html = await renderToString(app);
 
     expect(html).toContain("GitHub");
+    expect(html).toContain("Разработка · v1.0.0 ·");
+    expect(html).not.toContain("source-control ·");
     for (const missing of ["GitLab", "Jira", "Confluence", "Email"]) {
       expect(html).not.toContain(missing);
     }

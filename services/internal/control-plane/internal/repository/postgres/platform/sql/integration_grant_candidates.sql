@@ -12,7 +12,13 @@ WITH admitted AS MATERIALIZED (
     JOIN control_plane.catalog_access_targets recipient
       ON recipient.organization_id=@organization_id::uuid AND recipient.kind=admission.recipient_kind
      AND recipient.ref=admission.recipient_ref AND recipient.project_id=project.id
-    WHERE (@purpose='GRANT' OR admission.reason='READY')
+    -- Поставленный OpenAPI-шаблон не исполняется без опубликованной owner-ревизии.
+    -- Исключаем его до подсчёта и пагинации, иначе одна такая запись ломает
+    -- весь каталог при последующей проверке integrationPackage.
+    WHERE NOT (admission.definition_key='openapi-mcp'
+      AND admission.definition_version=definition.definition_version
+      AND admission.definition_digest=definition.digest)
+      AND (@purpose='GRANT' OR admission.reason='READY')
       -- Уже выбранные exact ref прошли resolveAccessTarget + requireAccess в
       -- той же repeatable-read транзакции. На каждом этапе вычисляем только
       -- eligibility самого перечисляемого ресурса, а не повторяем проверки

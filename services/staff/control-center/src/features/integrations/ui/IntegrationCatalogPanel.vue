@@ -44,7 +44,8 @@ const emit = defineEmits<{
   retry: [];
 }>();
 
-const { t } = useI18n();
+const i18n = useI18n();
+const { t } = i18n;
 const fieldPrefix = `integration-catalog-${useId()}`;
 const expandedKey = ref("");
 const copySource = ref<ConfigurationCopySource>();
@@ -68,6 +69,10 @@ function fieldType(field: IntegrationConfigurationField): string {
   if (field.valueType === "URL") return "URL";
   if (field.valueType === "STRING_LIST") return "список строк";
   return "строка";
+}
+function categoryLabel(category: string): string {
+  const key = `integrationsRedesign.packageCategories.${category}`;
+  return i18n.te(key) ? t(key) : category;
 }
 </script>
 
@@ -121,7 +126,7 @@ function fieldType(field: IntegrationConfigurationField): string {
             {{ t("integrationsRedesign.allCategories") }}
           </option>
           <option v-for="item in categories" :key="item" :value="item">
-            {{ item }}
+            {{ categoryLabel(item) }}
           </option>
         </select>
       </label>
@@ -139,7 +144,10 @@ function fieldType(field: IntegrationConfigurationField): string {
           <div class="package-card__identity">
             <h3>{{ item.name }}</h3>
             <span class="package-meta">
-              {{ item.category }} ·
+              {{ categoryLabel(item.category) }} · v{{
+                item.definition.definitionVersion
+              }}
+              ·
               {{
                 t(
                   item.builtIn
@@ -450,10 +458,20 @@ function fieldType(field: IntegrationConfigurationField): string {
 }
 .package-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   max-height: calc(6 * 312px);
   overflow: auto;
+}
+@media (max-width: 1200px) {
+  .package-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .package-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .catalog-sentinel {
   grid-column: 1 / -1;

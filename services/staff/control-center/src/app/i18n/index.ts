@@ -2149,6 +2149,14 @@ const ru = {
     searchPackages: "Найти пакет или возможность",
     category: "Категория",
     allCategories: "Все категории",
+    packageCategories: {
+      communications: "Коммуникации",
+      data: "Данные",
+      knowledge: "Знания",
+      "source-control": "Разработка",
+      testing: "Проверка",
+      "work-management": "Задачи",
+    },
     firstParty: "first-party",
     customPackage: "пользовательский пакет",
     connectionCount: "Подключений: {count}",
@@ -2364,6 +2372,20 @@ const ru = {
     },
     participants: {
       title: "Участники",
+      authorityHint:
+        "Личность и группы поступают из Keycloak (OIDC). Здесь назначаются прикладные роли и доступ Kodex; доступ к работе внутри Проекта настраивается отдельно. Платформенная роль не заменяет проектные полномочия.",
+      oidcSource: "Keycloak",
+      loadedCount: "Загружено: {count}",
+      loadedBindings: "Загруженные назначения",
+      searchEmpty: "Подходящие участники не найдены",
+      searchEmptyHint: "Измените запрос или очистите поле поиска.",
+      selectedSubject: "Выбранный участник",
+      selectSubject: "Показать участника: {name}",
+      selectHint:
+        "Выберите участника в списке, чтобы увидеть его роли и назначения.",
+      details: "Подробнее",
+      directBinding: "Прямое назначение",
+      noBindings: "Активных назначений нет.",
       subtitle: "Пользователи и служебные субъекты с прикладными привязками",
       projectSubtitle:
         "Платформенная роль, членство и узкие назначения в выбранном Проекте",
@@ -2402,16 +2424,22 @@ const ru = {
     },
     groups: {
       title: "Группы OIDC",
+      loadedCount: "Загружено: {count}",
+      syncedAt: "Синхронизировано",
+      selectedGroup: "Выбранная группа OIDC",
+      selectGroup: "Показать группу: {name}",
+      searchEmpty: "Подходящие группы не найдены",
+      searchEmptyHint: "Измените запрос или очистите поле поиска.",
       subtitle: "Проверенный read model групп провайдера identity",
       search: "Поиск групп OIDC",
       searchPlaceholder: "Название группы",
       authorityTitle: "Группа не является ролью Kodex",
       authorityHint:
-        "OIDC сообщает членство, а прикладные полномочия появляются только после явной привязки к versioned-роли.",
-      oidcSource: "Источник: OIDC token snapshot",
+        "OIDC сообщает членство, а прикладные полномочия появляются только после явной привязки к зафиксированной версии роли.",
+      oidcSource: "Источник: подтверждённый вход OIDC",
       members: "Участники",
       bindings: "Привязки",
-      lastSeen: "Последний вход",
+      lastSeen: "Последнее наблюдение",
       roleMappings: "Прикладные назначения",
       noRoleMappings: "Роли Kodex группе не назначены.",
       bindingsUnavailable:
@@ -2423,6 +2451,13 @@ const ru = {
     },
     rolesWorkspace: {
       title: "Системные и пользовательские роли",
+      loadedCount: "Загружено: {count}",
+      roleColumn: "Роль",
+      descriptionColumn: "Назначение",
+      scopeColumn: "Область",
+      bindingsColumn: "Привязки",
+      selectedRole: "Выбранная роль",
+      selectRole: "Показать роль: {name}",
       subtitle:
         "Роль хранит закрытый набор полномочий; изменение создаёт новую неизменяемую версию",
       create: "Создать роль",
@@ -2443,6 +2478,11 @@ const ru = {
     },
     roleEditor: {
       createTitle: "Новая пользовательская роль",
+      unknownPermission: "Недоступное полномочие",
+      unavailablePermissions: "В этой версии роли есть устаревшие полномочия",
+      unavailablePermissionsHint:
+        "Они отсутствуют в текущем серверном реестре. Удалите их явно перед публикацией новой версии; старые привязки останутся закреплены за прежней версией.",
+      removeUnavailablePermission: "Исключить из новой версии",
       editTitle: "Новая версия роли",
       description: "Понятное назначение",
       descriptionPlaceholder:
@@ -2457,9 +2497,9 @@ const ru = {
       changeCommentPlaceholder: "Что изменилось и зачем",
       create: "Создать роль v1",
       publishVersion: "Опубликовать новую версию",
-      newVersion: "Будет создана новая immutable-версия",
+      newVersion: "Будет создана новая неизменяемая версия",
       newVersionHint:
-        "Действующие bindings останутся закреплены за прежней версией до явного переназначения.",
+        "Действующие привязки останутся закреплены за прежней версией до явного переназначения.",
       history: "История версий ({count})",
       revision: "Ревизия {revision}",
       noComment: "Причина не указана",
@@ -2521,7 +2561,18 @@ const ru = {
     effective: {
       title: "Эффективный доступ",
       subtitle:
-        "Проверка, объяснение и безопасная симуляция решения авторитетного permission engine",
+        "Проверка, объяснение и безопасная симуляция решения сервера доступа",
+      queryAllHint:
+        "Проверяются все доступные действия из серверного реестра: {count}. Результат ничего не меняет.",
+      matrixTitle: "Действия и результат проверки доступа",
+      matrixSummary: "Разрешено: {allowed} · запрещено: {denied}",
+      selectedDecision: "Объяснение выбранного результата",
+      explanationTitle: "Почему принято это решение",
+      evaluatedAt: "Рассчитано сервером",
+      risk: "Риск",
+      source: "Основание",
+      noSource: "Разрешающее назначение не найдено",
+      unknownRisk: "Неизвестно",
       mode: "Режим проверки доступа",
       modes: {
         QUERY: "Проверить",
@@ -2535,7 +2586,7 @@ const ru = {
       role: "Предлагаемая роль",
       chooseRole: "Выберите роль для read-only симуляции",
       actions: {
-        QUERY: "Проверить доступ",
+        QUERY: "Проверить все действия",
         EXPLAIN: "Объяснить решение",
         SIMULATE: "Сравнить без сохранения",
       },
@@ -2547,7 +2598,7 @@ const ru = {
         "Симуляция ничего не сохраняет и не выдаёт полномочия.",
       noResult: "Заполните параметры проверки",
       noResultHint:
-        "Результат и цепочка источников появятся после ответа control-plane.",
+        "Результат и цепочка оснований появятся после ответа сервера.",
       who: "Кто",
       what: "Какое действие",
       where: "Область",
@@ -5832,6 +5883,14 @@ const en = {
     searchPackages: "Find a package or capability",
     category: "Category",
     allCategories: "All categories",
+    packageCategories: {
+      communications: "Communications",
+      data: "Data",
+      knowledge: "Knowledge",
+      "source-control": "Source control",
+      testing: "Testing",
+      "work-management": "Work management",
+    },
     firstParty: "first-party",
     customPackage: "custom package",
     connectionCount: "Connections: {count}",
@@ -6047,6 +6106,19 @@ const en = {
     },
     participants: {
       title: "Participants",
+      authorityHint:
+        "Identity and groups come from Keycloak (OIDC). Kodex roles and access are assigned here; Project access is configured separately. A platform role does not replace Project permissions.",
+      oidcSource: "Keycloak",
+      loadedCount: "Loaded: {count}",
+      loadedBindings: "Loaded assignments",
+      searchEmpty: "No matching participants",
+      searchEmptyHint: "Change the query or clear the search field.",
+      selectedSubject: "Selected participant",
+      selectSubject: "Show participant: {name}",
+      selectHint: "Select a participant to inspect roles and assignments.",
+      details: "Details",
+      directBinding: "Direct assignment",
+      noBindings: "No active assignments.",
       subtitle: "Users and service subjects with application bindings",
       projectSubtitle:
         "Platform role, membership, and narrow assignments in the selected Project",
@@ -6085,6 +6157,12 @@ const en = {
     },
     groups: {
       title: "OIDC groups",
+      loadedCount: "Loaded: {count}",
+      syncedAt: "Synchronized",
+      selectedGroup: "Selected OIDC group",
+      selectGroup: "Show group: {name}",
+      searchEmpty: "No matching groups",
+      searchEmptyHint: "Change the query or clear the search field.",
       subtitle: "Verified group read model from the identity provider",
       search: "Search OIDC groups",
       searchPlaceholder: "Group name",
@@ -6094,7 +6172,7 @@ const en = {
       oidcSource: "Source: OIDC token snapshot",
       members: "Members",
       bindings: "Bindings",
-      lastSeen: "Last sign-in",
+      lastSeen: "Last observed",
       roleMappings: "Application assignments",
       noRoleMappings: "No Kodex role is assigned to this group.",
       bindingsUnavailable:
@@ -6106,6 +6184,13 @@ const en = {
     },
     rolesWorkspace: {
       title: "System and custom roles",
+      loadedCount: "Loaded: {count}",
+      roleColumn: "Role",
+      descriptionColumn: "Purpose",
+      scopeColumn: "Scope",
+      bindingsColumn: "Bindings",
+      selectedRole: "Selected role",
+      selectRole: "Show role: {name}",
       subtitle:
         "A role contains a closed permission set; each change creates a new immutable version",
       create: "Create role",
@@ -6126,6 +6211,11 @@ const en = {
     },
     roleEditor: {
       createTitle: "New custom role",
+      unknownPermission: "Unavailable permission",
+      unavailablePermissions: "This role version contains obsolete permissions",
+      unavailablePermissionsHint:
+        "They are absent from the current server registry. Remove them explicitly before publishing a new version; existing bindings remain pinned to the previous version.",
+      removeUnavailablePermission: "Remove from new version",
       editTitle: "New role version",
       description: "Purpose",
       descriptionPlaceholder:
@@ -6203,6 +6293,17 @@ const en = {
       title: "Effective access",
       subtitle:
         "Query, explanation and safe simulation from the authoritative permission engine",
+      queryAllHint:
+        "Checking all available actions from the server registry: {count}. This does not change access.",
+      matrixTitle: "Actions and access decisions",
+      matrixSummary: "Allowed: {allowed} · denied: {denied}",
+      selectedDecision: "Selected decision explanation",
+      explanationTitle: "Why this decision was made",
+      evaluatedAt: "Calculated by the server",
+      risk: "Risk",
+      source: "Source",
+      noSource: "No allowing assignment found",
+      unknownRisk: "Unknown",
       mode: "Access verification mode",
       modes: { QUERY: "Check", EXPLAIN: "Explain", SIMULATE: "Simulate" },
       subject: "Subject",
@@ -6212,7 +6313,7 @@ const en = {
       role: "Proposed role",
       chooseRole: "Choose a role for read-only simulation",
       actions: {
-        QUERY: "Check access",
+        QUERY: "Check all actions",
         EXPLAIN: "Explain decision",
         SIMULATE: "Compare without saving",
       },

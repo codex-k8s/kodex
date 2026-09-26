@@ -21,6 +21,13 @@ const messages = {
         searchEmpty: "Подходящие роли не найдены",
         searchEmptyHint: "Измените запрос.",
         bindingsShort: "привязок",
+        loadedCount: "Загружено: {count}",
+        roleColumn: "Роль",
+        descriptionColumn: "Назначение",
+        scopeColumn: "Область",
+        bindingsColumn: "Привязки",
+        selectedRole: "Выбранная роль",
+        selectRole: "Показать роль: {name}",
         permissionCount: "Полномочий: {count}",
         showPermissions: "Полномочия и риск ({count})",
         systemImmutable: "Системная роль",
@@ -33,7 +40,7 @@ const messages = {
 };
 
 describe("RolesPanel", () => {
-  it("показывает серверный поиск и ноль для отсутствующего bindingCount", async () => {
+  it("показывает серверный поиск, таблицу и ноль для отсутствующего bindingCount", async () => {
     const role = {
       ref: "role_editor",
       version: 1,
@@ -73,6 +80,9 @@ describe("RolesPanel", () => {
 
     expect(html).toContain('name="access-role-search"');
     expect(html).toContain("Найти роль по названию или назначению");
-    expect(html).toContain("v1 · 0 привязок");
+    expect(html).toContain("Загружено: 1");
+    expect(html).toContain('class="role-detail"');
+    expect(html).toContain('class="role-table__row');
+    expect(html).toMatch(/<dd[^>]*>0<\/dd>/);
   });
 });

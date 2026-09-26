@@ -4,7 +4,6 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import AccessTabs from "@/features/access/components/AccessTabs.vue";
-import AccessModelOverview from "@/features/access/components/AccessModelOverview.vue";
 import BindingEditorDialog from "@/features/access/components/BindingEditorDialog.vue";
 import BindingsPanel from "@/features/access/components/BindingsPanel.vue";
 import EffectiveAccessPanel from "@/features/access/components/EffectiveAccessPanel.vue";
@@ -75,13 +74,6 @@ const bindingSubjects = computed<AccessSubject[]>(() => [
     oidcGroupRefs: [],
   })),
 ]);
-const counts = computed(() => ({
-  participants: participantSubjects.value.length,
-  groups: access.groups.length,
-  roles: access.roles.length,
-  bindings: access.bindings.filter((binding) => binding.state === "ACTIVE")
-    .length,
-}));
 const editorAgentsProjectRef = ref("");
 const editorAgents = computed(
   () => access.agents[editorAgentsProjectRef.value] ?? [],
@@ -379,12 +371,20 @@ onMounted(() => void loadBaseline());
       )
     "
   >
-    <AccessModelOverview :project-context="Boolean(projectRef)" />
-    <AccessTabs
-      :active="routeSection"
-      :counts="counts"
-      @select="selectSection"
-    />
+    <template v-if="routeSection === 'participants'" #actions>
+      <button
+        class="button button--primary"
+        type="button"
+        :disabled="mutationBusy"
+        @click="createBinding()"
+      >
+        {{ $t("access.participants.createBinding") }}
+      </button>
+    </template>
+    <AccessTabs :active="routeSection" @select="selectSection" />
+    <p v-if="routeSection === 'participants'" class="access-identity-note">
+      {{ $t("access.participants.authorityHint") }}
+    </p>
     <ProblemNotice
       v-if="access.problems.permissions"
       :problem="access.problems.permissions"
@@ -402,6 +402,7 @@ onMounted(() => void loadBaseline());
       :selected-subject-ref="selectedSubjectRef"
       :subjects="participantSubjects"
       :groups="access.groups"
+      :projects="access.projects"
       :bindings="access.bindings"
       :platform-memberships="access.platformMemberships"
       :project-memberships="access.projectMemberships"
@@ -626,6 +627,16 @@ onMounted(() => void loadBaseline());
 </template>
 
 <style scoped>
+.access-identity-note {
+  margin: -4px 0 16px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--accent-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
 .confirmation-copy {
   margin: 0;
 }

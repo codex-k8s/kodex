@@ -36,6 +36,7 @@ const props = defineProps<{
   allowedScopes?: AccessScopeKind[];
   allowedResourceKinds?: AccessResourceKind[];
   busy?: boolean;
+  showContractBoundary?: boolean;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: ScopeDraft];
@@ -310,7 +311,7 @@ watch(
       <small>{{ $t("access.scope.resourceRefHint") }}</small>
     </label>
 
-    <aside class="contract-boundary">
+    <aside v-if="showContractBoundary !== false" class="contract-boundary">
       <strong>{{ $t("access.scope.contractBoundary") }}</strong>
       <ul>
         <li>
