@@ -1069,7 +1069,7 @@ paths:
     get:
       tags: [Agents]
       operationId: listTemplateVariables
-      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
+      parameters: [{ $ref: '#/components/parameters/ProjectRef' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/TemplateVariableSourceQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
       responses:
         '200':
           description: Server-owned cursor-каталог безопасных template variables
@@ -1366,7 +1366,7 @@ paths:
     get:
       tags: [Agents]
       operationId: listPromptTemplateVariables
-      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
+      parameters: [{ $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/TemplateVariableSourceQuery' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }, { $ref: '#/components/parameters/TemplateAgentRef' }, { $ref: '#/components/parameters/TemplateRuntimeRevisionRef' }]
       responses:
         '200':
           description: Типизированный каталог разрешённых Go template namespaces без secrets
@@ -5113,6 +5113,12 @@ components:
       name: runtimeRevisionRef
       in: query
       schema: { $ref: '#/components/schemas/OpaqueRef' }
+    TemplateVariableSourceQuery:
+      name: source
+      in: query
+      required: false
+      description: Точная server-owned область переменной шаблона.
+      schema: { type: string, enum: [AGENT, AUTOMATION, GATE, INPUT, ORGANIZATION, PROJECT, RUN, RUNTIME, SESSION, USER, WORKFLOW] }
     PageSize:
       name: pageSize
       in: query
@@ -7634,6 +7640,7 @@ components:
         context: { $ref: '#/components/schemas/PromptPreviewContext' }
         expectedContextDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
         query: { type: string, maxLength: 200 }
+        source: { type: string, enum: [AGENT, AUTOMATION, GATE, INPUT, ORGANIZATION, PROJECT, RUN, RUNTIME, SESSION, USER, WORKFLOW] }
         pageSize: { type: integer, minimum: 1, maximum: 100 }
         pageToken: { type: string, maxLength: 512 }
     PromptTemplateScopeInput:

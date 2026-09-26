@@ -40552,6 +40552,7 @@ type ListTemplateVariablesRequest struct {
 	TargetRef             string                 `protobuf:"bytes,7,opt,name=target_ref,json=targetRef,proto3" json:"target_ref,omitempty"`
 	Context               *PromptPreviewContext  `protobuf:"bytes,8,opt,name=context,proto3" json:"context,omitempty"`
 	ExpectedContextDigest string                 `protobuf:"bytes,9,opt,name=expected_context_digest,json=expectedContextDigest,proto3" json:"expected_context_digest,omitempty"`
+	Source                string                 `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -40645,6 +40646,13 @@ func (x *ListTemplateVariablesRequest) GetContext() *PromptPreviewContext {
 func (x *ListTemplateVariablesRequest) GetExpectedContextDigest() string {
 	if x != nil {
 		return x.ExpectedContextDigest
+	}
+	return ""
+}
+
+func (x *ListTemplateVariablesRequest) GetSource() string {
+	if x != nil {
+		return x.Source
 	}
 	return ""
 }
@@ -77245,7 +77253,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x04page\x18\x02 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\"\x9f\x01\n" +
 	"&ListRuntimeEnvironmentVersionsResponse\x12F\n" +
 	"\bversions\x18\x01 \x03(\v2*.controlplane.v1.RuntimeEnvironmentVersionR\bversions\x12-\n" +
-	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\x8f\x03\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xa7\x03\n" +
 	"\x1cListTemplateVariablesRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x12\x14\n" +
@@ -77258,7 +77266,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"target_ref\x18\a \x01(\tR\ttargetRef\x12?\n" +
 	"\acontext\x18\b \x01(\v2%.controlplane.v1.PromptPreviewContextR\acontext\x126\n" +
-	"\x17expected_context_digest\x18\t \x01(\tR\x15expectedContextDigest\"\xe9\x01\n" +
+	"\x17expected_context_digest\x18\t \x01(\tR\x15expectedContextDigest\x12\x16\n" +
+	"\x06source\x18\n" +
+	" \x01(\tR\x06source\"\xe9\x01\n" +
 	"\x1dListTemplateVariablesResponse\x12?\n" +
 	"\tvariables\x18\x01 \x03(\v2!.controlplane.v1.TemplateVariableR\tvariables\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\x12\x14\n" +

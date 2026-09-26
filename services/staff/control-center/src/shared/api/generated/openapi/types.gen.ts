@@ -2059,6 +2059,7 @@ export type PromptVariableCatalogInput = {
     context?: PromptPreviewContext;
     expectedContextDigest?: string;
     query?: string;
+    source?: 'AGENT' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'ORGANIZATION' | 'PROJECT' | 'RUN' | 'RUNTIME' | 'SESSION' | 'USER' | 'WORKFLOW';
     pageSize?: number;
     pageToken?: string;
 };
@@ -4026,6 +4027,11 @@ export type Query = string;
 export type TemplateAgentRef = OpaqueRef;
 
 export type TemplateRuntimeRevisionRef = OpaqueRef;
+
+/**
+ * Точная server-owned область переменной шаблона.
+ */
+export type TemplateVariableSourceQuery = 'AGENT' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'ORGANIZATION' | 'PROJECT' | 'RUN' | 'RUNTIME' | 'SESSION' | 'USER' | 'WORKFLOW';
 
 export type PageSize = number;
 
@@ -6034,6 +6040,10 @@ export type ListTemplateVariablesData = {
     };
     query?: {
         query?: string;
+        /**
+         * Точная server-owned область переменной шаблона.
+         */
+        source?: 'AGENT' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'ORGANIZATION' | 'PROJECT' | 'RUN' | 'RUNTIME' | 'SESSION' | 'USER' | 'WORKFLOW';
         pageSize?: number;
         pageToken?: string;
         agentRef?: OpaqueRef;
@@ -6644,6 +6654,10 @@ export type ListPromptTemplateVariablesData = {
     query?: {
         projectRef?: OpaqueRef;
         query?: string;
+        /**
+         * Точная server-owned область переменной шаблона.
+         */
+        source?: 'AGENT' | 'AUTOMATION' | 'GATE' | 'INPUT' | 'ORGANIZATION' | 'PROJECT' | 'RUN' | 'RUNTIME' | 'SESSION' | 'USER' | 'WORKFLOW';
         pageSize?: number;
         pageToken?: string;
         agentRef?: OpaqueRef;

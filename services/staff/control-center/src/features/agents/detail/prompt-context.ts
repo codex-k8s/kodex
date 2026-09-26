@@ -8,15 +8,13 @@ import type {
   PromptContextPin,
   PromptTemplatePreview,
   PromptTemplateValidation,
+  TemplateVariableSourceQuery,
 } from "@/shared/api/generated/openapi/types.gen";
 import { csrfToken } from "@/shared/api/mutation";
 import { requestSignal } from "@/shared/api/client";
 import { unwrap } from "@/shared/api/problem";
-import type { AsyncEntityLoader } from "@/shared/ui/async-entity-picker";
-import {
-  toTemplateVariablePickerItem,
-  type TemplateVariablePickerItem,
-} from "./model";
+import type { TemplateVariableLoader } from "./api";
+import { toTemplateVariablePickerItem } from "./model";
 
 export type PromptTarget = Pick<
   PromptVariableCatalogInput,
@@ -64,6 +62,7 @@ export async function readPromptVariables(
   expectedContextDigest: string | undefined,
   signal: AbortSignal,
   pageSize = 50,
+  source?: TemplateVariableSourceQuery,
 ) {
   const page = (
     await unwrap(
@@ -74,6 +73,7 @@ export async function readPromptVariables(
           pageSize,
           pageToken,
           expectedContextDigest,
+          source,
         },
         headers: { "X-CSRF-Token": csrfToken() },
         signal: requestSignal(signal),
@@ -94,12 +94,22 @@ export async function readPromptVariables(
 export function createPromptVariableLoader(
   target: PromptTarget,
   onPin?: (pin: PromptContextPin) => void,
-): AsyncEntityLoader<TemplateVariablePickerItem> {
-  let snapshot: { digest: string; query: string; cursor?: string } | undefined;
-  return async ({ query, cursor, signal, pageSize = 50 }) => {
+): TemplateVariableLoader {
+  let snapshot:
+    | {
+        digest: string;
+        query: string;
+        source?: TemplateVariableSourceQuery;
+        cursor?: string;
+      }
+    | undefined;
+  return async ({ query, cursor, signal, pageSize = 50, source }) => {
     if (
       cursor &&
-      (!snapshot || snapshot.query !== query || snapshot.cursor !== cursor)
+      (!snapshot ||
+        snapshot.query !== query ||
+        snapshot.source !== source ||
+        snapshot.cursor !== cursor)
     )
       throw new Error(
         "Prompt variable cursor does not match the selected snapshot",
@@ -111,11 +121,13 @@ export function createPromptVariableLoader(
       cursor ? snapshot?.digest : undefined,
       signal,
       pageSize,
+      source,
     );
     signal.throwIfAborted();
     snapshot = {
       digest: page.contextPin.digest,
       query,
+      source,
       cursor: page.nextPageToken,
     };
     onPin?.(page.contextPin);

@@ -76,13 +76,14 @@ describe("agent detail api", () => {
     await createTemplateVariableLoader("project_sales", {
       agentRef: "agent_sales",
       runtimeRevisionRef: "revision_exact",
-    })({ query: "", signal });
+    })({ query: "", source: "WORKFLOW", signal });
     expect(listTemplateVariables).toHaveBeenCalledWith({
       path: { projectRef: "project_sales" },
       query: {
         pageSize: 20,
         agentRef: "agent_sales",
         runtimeRevisionRef: "revision_exact",
+        source: "WORKFLOW",
       },
       signal,
     });

@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.44
+version: 1.0.45
 updated: 2026-09-26
 ---
 
@@ -802,12 +802,13 @@ top-level функций `<script setup>` в шаблоне.
 | 2026-09-25 22:31 | Решения → История → OpenAPI Human Gate                                             | Основной UI показывал raw operation/effect keys, JSON и digest; OpenAPI не знал фактически обслуживаемый `HTTPS_RESOURCE`                        | PR #1781: дружелюбное действие/риск/scope, техника под details; OpenAPI enum и generated Go/TS выровнены с Proto/gateway       | 2 Decisions unit, typecheck, ESLint, build, gateway tests PASS; live console/network/layout/realtime PASS; screenshot tool FAIL | ОЖИДАЕТ ПОВТОРА  |
 | 2026-09-25 22:51 | Новый запуск → сотрудник и задача без названия                                     | Frontend требовал title вопреки макету и уже действующему серверному `SERVER_DEFAULT`; источник и внешний канал не объяснялись                   | PR #1781: optional title с автопредложением, инициатор/Control Center и disabled внешний канал с причиной                      | New Run layout 4/4, typecheck, ESLint, build PASS; live empty-title enable, console/network/layout/screenshot PASS              | ОЖИДАЕТ ПОВТОРА  |
 | 2026-09-25 23:01 | Завершённый запуск → открыть «Ход работы»                                          | Полноэкранная модалка скрывала граф вопреки desktop-макету немодальной правой панели                                                             | PR #1781: правая панель поверх inspector, граф остаётся видимым; крестик/Escape и возврат фокуса                               | Run unit 5/5, typecheck, ESLint PASS; live DOM/focus/console/network/layout PASS; screenshot tool FAIL                          | ОЖИДАЕТ ПОВТОРА  |
-| 2026-09-25 23:12 | Интеграции → Разрешения                                                           | Основной слой карточек показывал служебные capability key, enum и JSON Pointer вместо понятной границы разрешения                                | PR #1781: локализованные риск/ресурс/согласование; точные ключи доступны в раскрываемых технических сведениях                  | Integration unit 12/12, typecheck, ESLint PASS; live console/network/layout/screenshot PASS                                    | ОЖИДАЕТ ПОВТОРА  |
+| 2026-09-25 23:12 | Интеграции → Разрешения                                                            | Основной слой карточек показывал служебные capability key, enum и JSON Pointer вместо понятной границы разрешения                                | PR #1781: локализованные риск/ресурс/согласование; точные ключи доступны в раскрываемых технических сведениях                  | Integration unit 12/12, typecheck, ESLint PASS; live console/network/layout/screenshot PASS                                     | ОЖИДАЕТ ПОВТОРА  |
 
 При новом дефекте строка содержит ссылку на относящийся commit в PR, но не
 текст команды пользователя, секрет или полный ответ провайдера. Состояния
 проверок записываются раздельно как `PASS`, `FAIL` и `NOT RUN`; отсутствие
 GitHub checks не считается `PASS`.
+
 # 2026-09-26 — единый контракт длинных списков
 
 - Владелец отказался от нумерованной пагинации: длинные списки используют
@@ -942,3 +943,19 @@ GitHub checks не считается `PASS`.
   загруженных карточек и cursor. Адресный unit 5/5, typecheck, ESLint и
   Prettier — PASS; Chrome-повтор остаётся NOT RUN из-за закрытого transport
   `chrome-devtools-mcp`, браузер и приложение не перезапускались.
+- В каталоге переменных шаблона поиск и cursor были серверными, но фильтр по
+  области применялся только к уже загруженной порции. На длинном каталоге это
+  могло показать пустую область при наличии совпадений за следующим cursor.
+  Закрытый `source` добавлен сквозным контрактом OpenAPI → gateway → Proto →
+  control-plane и для обычного GET, и для context-pinned POST каталога; смена
+  области теперь запускает свежий server-owned cursor и не фильтрует случайный
+  клиентский фрагмент. Клиент дополнительно отклоняет продолжение cursor после
+  смены области. Generated Go/TypeScript-код обновлён штатно. Gateway и
+  control-plane unit, 13 frontend unit, typecheck,
+  ESLint, `buf lint`, локально идемпотентные Proto/OpenAPI generators и
+  `git diff --check` — PASS. Удалённый Buf codegen check — FAIL с `403`, поэтому
+  использован проверенный `buf.gen.local.yaml`; это не выдано за remote PASS.
+  Air для control-plane и gateway собрал и запустил код, Vite после короткого
+  окна атомарной замены generated-файлов снова отдаёт приложение и изменённые
+  модули без новых логов. Chrome UI/console/network/screenshot — NOT RUN из-за
+  закрытого transport `chrome-devtools-mcp`.

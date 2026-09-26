@@ -46,10 +46,19 @@ func TestPromptPreviewPreservesExecutedSlotsAndExactContext(t *testing.T) {
 func TestPromptCatalogPostCarriesValuesOutsideURL(t *testing.T) {
 	client := &catalogRPCRecorder{response: &cp.ListTemplateVariablesResponse{ContextPin: promptPinFixture()}}
 	w := httptest.NewRecorder()
-	catalogTestHandler(client).ServeHTTP(w, managedTestRequest("POST", "/api/v1/prompt-templates/catalog/query", `{"targetKind":"AGENT","targetRef":"agent_fixture01","query":"input","pageSize":7,"context":{"task":"catalog task"}}`))
+	catalogTestHandler(client).ServeHTTP(w, managedTestRequest("POST", "/api/v1/prompt-templates/catalog/query", `{"targetKind":"AGENT","targetRef":"agent_fixture01","query":"input","source":"WORKFLOW","pageSize":7,"context":{"task":"catalog task"}}`))
 	request, ok := client.request.(*cp.ListTemplateVariablesRequest)
-	if w.Code != 200 || !ok || request.Query != "input" || request.GetPage().GetPageSize() != 7 || request.GetContext().GetTask() != "catalog task" || !strings.Contains(w.Body.String(), `"contextPin"`) {
+	if w.Code != 200 || !ok || request.Query != "input" || request.Source != "WORKFLOW" || request.GetPage().GetPageSize() != 7 || request.GetContext().GetTask() != "catalog task" || !strings.Contains(w.Body.String(), `"contextPin"`) {
 		t.Fatalf("catalog context: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPromptCatalogRejectsUnknownVariableSource(t *testing.T) {
+	client := &catalogRPCRecorder{response: &cp.ListTemplateVariablesResponse{ContextPin: promptPinFixture()}}
+	w := httptest.NewRecorder()
+	catalogTestHandler(client).ServeHTTP(w, managedTestRequest("POST", "/api/v1/prompt-templates/catalog/query", `{"targetKind":"AGENT","targetRef":"agent_fixture01","source":"UNKNOWN"}`))
+	if w.Code != 400 || client.request != nil {
+		t.Fatalf("unknown source accepted: %d %s", w.Code, w.Body.String())
 	}
 }
 

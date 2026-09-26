@@ -4225,6 +4225,7 @@ message ListTemplateVariablesRequest {
   string target_ref = 7;
   PromptPreviewContext context = 8;
   string expected_context_digest = 9;
+  string source = 10;
 }
 message ListTemplateVariablesResponse {
   repeated TemplateVariable variables = 1;

@@ -275,7 +275,8 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 		}
 	}
 	filter.Query = strings.TrimSpace(filter.Query)
-	if !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) {
+	filter.SourceKind = strings.TrimSpace(filter.SourceKind)
+	if !utf8.ValidString(filter.Query) || len([]rune(filter.Query)) > 200 || strings.ContainsRune(filter.Query, 0) || !validTemplateVariableSourceKind(filter.SourceKind) {
 		return nil, 0, "", errs.ErrInvalid
 	}
 	cursor, err := decodeCatalogCursor(current, "TEMPLATE_VARIABLE", filter)
@@ -292,7 +293,7 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 	for _, item := range catalog {
 		item.Available = availability[item.Name]
 		item.Reason = variableAvailabilityReason(item, availability, materialized)
-		if needle == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), needle) {
+		if (filter.SourceKind == "" || item.Source == filter.SourceKind) && (needle == "" || strings.Contains(strings.ToLower(item.Name+" "+item.Description), needle)) {
 			filtered = append(filtered, item)
 		}
 	}
@@ -320,6 +321,15 @@ func (repository *Repository) ListTemplateVariables(ctx context.Context, princip
 		}
 	}
 	return items, total, next, nil
+}
+
+func validTemplateVariableSourceKind(source string) bool {
+	switch source {
+	case "", "AGENT", "AUTOMATION", "GATE", "INPUT", "ORGANIZATION", "PROJECT", "RUN", "RUNTIME", "SESSION", "USER", "WORKFLOW":
+		return true
+	default:
+		return false
+	}
 }
 
 func templateVariableCatalog() []entity.TemplateVariable {

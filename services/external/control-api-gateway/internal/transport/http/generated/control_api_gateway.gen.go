@@ -3676,6 +3676,51 @@ func (e PromptTemplateScopeInputTemplateKind) Valid() bool {
 	}
 }
 
+// Defines values for PromptVariableCatalogInputSource.
+const (
+	PromptVariableCatalogInputSourceAGENT        PromptVariableCatalogInputSource = "AGENT"
+	PromptVariableCatalogInputSourceAUTOMATION   PromptVariableCatalogInputSource = "AUTOMATION"
+	PromptVariableCatalogInputSourceGATE         PromptVariableCatalogInputSource = "GATE"
+	PromptVariableCatalogInputSourceINPUT        PromptVariableCatalogInputSource = "INPUT"
+	PromptVariableCatalogInputSourceORGANIZATION PromptVariableCatalogInputSource = "ORGANIZATION"
+	PromptVariableCatalogInputSourcePROJECT      PromptVariableCatalogInputSource = "PROJECT"
+	PromptVariableCatalogInputSourceRUN          PromptVariableCatalogInputSource = "RUN"
+	PromptVariableCatalogInputSourceRUNTIME      PromptVariableCatalogInputSource = "RUNTIME"
+	PromptVariableCatalogInputSourceSESSION      PromptVariableCatalogInputSource = "SESSION"
+	PromptVariableCatalogInputSourceUSER         PromptVariableCatalogInputSource = "USER"
+	PromptVariableCatalogInputSourceWORKFLOW     PromptVariableCatalogInputSource = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the PromptVariableCatalogInputSource enum.
+func (e PromptVariableCatalogInputSource) Valid() bool {
+	switch e {
+	case PromptVariableCatalogInputSourceAGENT:
+		return true
+	case PromptVariableCatalogInputSourceAUTOMATION:
+		return true
+	case PromptVariableCatalogInputSourceGATE:
+		return true
+	case PromptVariableCatalogInputSourceINPUT:
+		return true
+	case PromptVariableCatalogInputSourceORGANIZATION:
+		return true
+	case PromptVariableCatalogInputSourcePROJECT:
+		return true
+	case PromptVariableCatalogInputSourceRUN:
+		return true
+	case PromptVariableCatalogInputSourceRUNTIME:
+		return true
+	case PromptVariableCatalogInputSourceSESSION:
+		return true
+	case PromptVariableCatalogInputSourceUSER:
+		return true
+	case PromptVariableCatalogInputSourceWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromptVariableCatalogInputTargetKind.
 const (
 	PromptVariableCatalogInputTargetKindAGENT               PromptVariableCatalogInputTargetKind = "AGENT"
@@ -7471,6 +7516,51 @@ func (e ProviderUsagePurpose) Valid() bool {
 	}
 }
 
+// Defines values for TemplateVariableSourceQuery.
+const (
+	TemplateVariableSourceQueryAGENT        TemplateVariableSourceQuery = "AGENT"
+	TemplateVariableSourceQueryAUTOMATION   TemplateVariableSourceQuery = "AUTOMATION"
+	TemplateVariableSourceQueryGATE         TemplateVariableSourceQuery = "GATE"
+	TemplateVariableSourceQueryINPUT        TemplateVariableSourceQuery = "INPUT"
+	TemplateVariableSourceQueryORGANIZATION TemplateVariableSourceQuery = "ORGANIZATION"
+	TemplateVariableSourceQueryPROJECT      TemplateVariableSourceQuery = "PROJECT"
+	TemplateVariableSourceQueryRUN          TemplateVariableSourceQuery = "RUN"
+	TemplateVariableSourceQueryRUNTIME      TemplateVariableSourceQuery = "RUNTIME"
+	TemplateVariableSourceQuerySESSION      TemplateVariableSourceQuery = "SESSION"
+	TemplateVariableSourceQueryUSER         TemplateVariableSourceQuery = "USER"
+	TemplateVariableSourceQueryWORKFLOW     TemplateVariableSourceQuery = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the TemplateVariableSourceQuery enum.
+func (e TemplateVariableSourceQuery) Valid() bool {
+	switch e {
+	case TemplateVariableSourceQueryAGENT:
+		return true
+	case TemplateVariableSourceQueryAUTOMATION:
+		return true
+	case TemplateVariableSourceQueryGATE:
+		return true
+	case TemplateVariableSourceQueryINPUT:
+		return true
+	case TemplateVariableSourceQueryORGANIZATION:
+		return true
+	case TemplateVariableSourceQueryPROJECT:
+		return true
+	case TemplateVariableSourceQueryRUN:
+		return true
+	case TemplateVariableSourceQueryRUNTIME:
+		return true
+	case TemplateVariableSourceQuerySESSION:
+		return true
+	case TemplateVariableSourceQueryUSER:
+		return true
+	case TemplateVariableSourceQueryWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VFSLifecycleState.
 const (
 	VFSLifecycleStateACTIVE  VFSLifecycleState = "ACTIVE"
@@ -8050,6 +8140,51 @@ func (e GetRunAttachmentEligibilityParamsTargetType) Valid() bool {
 	}
 }
 
+// Defines values for ListTemplateVariablesParamsSource.
+const (
+	ListTemplateVariablesParamsSourceAGENT        ListTemplateVariablesParamsSource = "AGENT"
+	ListTemplateVariablesParamsSourceAUTOMATION   ListTemplateVariablesParamsSource = "AUTOMATION"
+	ListTemplateVariablesParamsSourceGATE         ListTemplateVariablesParamsSource = "GATE"
+	ListTemplateVariablesParamsSourceINPUT        ListTemplateVariablesParamsSource = "INPUT"
+	ListTemplateVariablesParamsSourceORGANIZATION ListTemplateVariablesParamsSource = "ORGANIZATION"
+	ListTemplateVariablesParamsSourcePROJECT      ListTemplateVariablesParamsSource = "PROJECT"
+	ListTemplateVariablesParamsSourceRUN          ListTemplateVariablesParamsSource = "RUN"
+	ListTemplateVariablesParamsSourceRUNTIME      ListTemplateVariablesParamsSource = "RUNTIME"
+	ListTemplateVariablesParamsSourceSESSION      ListTemplateVariablesParamsSource = "SESSION"
+	ListTemplateVariablesParamsSourceUSER         ListTemplateVariablesParamsSource = "USER"
+	ListTemplateVariablesParamsSourceWORKFLOW     ListTemplateVariablesParamsSource = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the ListTemplateVariablesParamsSource enum.
+func (e ListTemplateVariablesParamsSource) Valid() bool {
+	switch e {
+	case ListTemplateVariablesParamsSourceAGENT:
+		return true
+	case ListTemplateVariablesParamsSourceAUTOMATION:
+		return true
+	case ListTemplateVariablesParamsSourceGATE:
+		return true
+	case ListTemplateVariablesParamsSourceINPUT:
+		return true
+	case ListTemplateVariablesParamsSourceORGANIZATION:
+		return true
+	case ListTemplateVariablesParamsSourcePROJECT:
+		return true
+	case ListTemplateVariablesParamsSourceRUN:
+		return true
+	case ListTemplateVariablesParamsSourceRUNTIME:
+		return true
+	case ListTemplateVariablesParamsSourceSESSION:
+		return true
+	case ListTemplateVariablesParamsSourceUSER:
+		return true
+	case ListTemplateVariablesParamsSourceWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListWorkflowsParamsState.
 const (
 	ListWorkflowsParamsStateARCHIVED  ListWorkflowsParamsState = "ARCHIVED"
@@ -8068,6 +8203,51 @@ func (e ListWorkflowsParamsState) Valid() bool {
 	case ListWorkflowsParamsStatePUBLISHED:
 		return true
 	case ListWorkflowsParamsStateVALID:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListPromptTemplateVariablesParamsSource.
+const (
+	ListPromptTemplateVariablesParamsSourceAGENT        ListPromptTemplateVariablesParamsSource = "AGENT"
+	ListPromptTemplateVariablesParamsSourceAUTOMATION   ListPromptTemplateVariablesParamsSource = "AUTOMATION"
+	ListPromptTemplateVariablesParamsSourceGATE         ListPromptTemplateVariablesParamsSource = "GATE"
+	ListPromptTemplateVariablesParamsSourceINPUT        ListPromptTemplateVariablesParamsSource = "INPUT"
+	ListPromptTemplateVariablesParamsSourceORGANIZATION ListPromptTemplateVariablesParamsSource = "ORGANIZATION"
+	ListPromptTemplateVariablesParamsSourcePROJECT      ListPromptTemplateVariablesParamsSource = "PROJECT"
+	ListPromptTemplateVariablesParamsSourceRUN          ListPromptTemplateVariablesParamsSource = "RUN"
+	ListPromptTemplateVariablesParamsSourceRUNTIME      ListPromptTemplateVariablesParamsSource = "RUNTIME"
+	ListPromptTemplateVariablesParamsSourceSESSION      ListPromptTemplateVariablesParamsSource = "SESSION"
+	ListPromptTemplateVariablesParamsSourceUSER         ListPromptTemplateVariablesParamsSource = "USER"
+	ListPromptTemplateVariablesParamsSourceWORKFLOW     ListPromptTemplateVariablesParamsSource = "WORKFLOW"
+)
+
+// Valid indicates whether the value is a known member of the ListPromptTemplateVariablesParamsSource enum.
+func (e ListPromptTemplateVariablesParamsSource) Valid() bool {
+	switch e {
+	case ListPromptTemplateVariablesParamsSourceAGENT:
+		return true
+	case ListPromptTemplateVariablesParamsSourceAUTOMATION:
+		return true
+	case ListPromptTemplateVariablesParamsSourceGATE:
+		return true
+	case ListPromptTemplateVariablesParamsSourceINPUT:
+		return true
+	case ListPromptTemplateVariablesParamsSourceORGANIZATION:
+		return true
+	case ListPromptTemplateVariablesParamsSourcePROJECT:
+		return true
+	case ListPromptTemplateVariablesParamsSourceRUN:
+		return true
+	case ListPromptTemplateVariablesParamsSourceRUNTIME:
+		return true
+	case ListPromptTemplateVariablesParamsSourceSESSION:
+		return true
+	case ListPromptTemplateVariablesParamsSourceUSER:
+		return true
+	case ListPromptTemplateVariablesParamsSourceWORKFLOW:
 		return true
 	default:
 		return false
@@ -10816,9 +10996,13 @@ type PromptVariableCatalogInput struct {
 	PageToken             *string                              `json:"pageToken,omitempty"`
 	ProjectRef            *OpaqueRef                           `json:"projectRef,omitempty"`
 	Query                 *string                              `json:"query,omitempty"`
+	Source                *PromptVariableCatalogInputSource    `json:"source,omitempty"`
 	TargetKind            PromptVariableCatalogInputTargetKind `json:"targetKind"`
 	TargetRef             OpaqueRef                            `json:"targetRef"`
 }
+
+// PromptVariableCatalogInputSource defines model for PromptVariableCatalogInput.Source.
+type PromptVariableCatalogInputSource string
 
 // PromptVariableCatalogInputTargetKind defines model for PromptVariableCatalogInput.TargetKind.
 type PromptVariableCatalogInputTargetKind string
@@ -13392,6 +13576,9 @@ type TemplateAgentRef = OpaqueRef
 // TemplateRuntimeRevisionRef defines model for TemplateRuntimeRevisionRef.
 type TemplateRuntimeRevisionRef = OpaqueRef
 
+// TemplateVariableSourceQuery defines model for TemplateVariableSourceQuery.
+type TemplateVariableSourceQuery string
+
 // VFSKinds defines model for VFSKinds.
 type VFSKinds = []VFSKind
 
@@ -14700,12 +14887,18 @@ type TranscribeSpeechParams struct {
 
 // ListTemplateVariablesParams defines parameters for ListTemplateVariables.
 type ListTemplateVariablesParams struct {
-	Query              *Query                      `form:"query,omitempty" json:"query,omitempty"`
-	PageSize           *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken          *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	AgentRef           *TemplateAgentRef           `form:"agentRef,omitempty" json:"agentRef,omitempty"`
-	RuntimeRevisionRef *TemplateRuntimeRevisionRef `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
+	Query *Query `form:"query,omitempty" json:"query,omitempty"`
+
+	// Source Точная server-owned область переменной шаблона.
+	Source             *ListTemplateVariablesParamsSource `form:"source,omitempty" json:"source,omitempty"`
+	PageSize           *PageSize                          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken          *PageToken                         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	AgentRef           *TemplateAgentRef                  `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	RuntimeRevisionRef *TemplateRuntimeRevisionRef        `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
 }
+
+// ListTemplateVariablesParamsSource defines parameters for ListTemplateVariables.
+type ListTemplateVariablesParamsSource string
 
 // ListWorkflowsParams defines parameters for ListWorkflows.
 type ListWorkflowsParams struct {
@@ -14775,13 +14968,19 @@ type ValidatePromptTemplateDraftParams struct {
 
 // ListPromptTemplateVariablesParams defines parameters for ListPromptTemplateVariables.
 type ListPromptTemplateVariablesParams struct {
-	ProjectRef         *ProjectRefQuery            `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query              *Query                      `form:"query,omitempty" json:"query,omitempty"`
-	PageSize           *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken          *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	AgentRef           *TemplateAgentRef           `form:"agentRef,omitempty" json:"agentRef,omitempty"`
-	RuntimeRevisionRef *TemplateRuntimeRevisionRef `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
+	ProjectRef *ProjectRefQuery `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	Query      *Query           `form:"query,omitempty" json:"query,omitempty"`
+
+	// Source Точная server-owned область переменной шаблона.
+	Source             *ListPromptTemplateVariablesParamsSource `form:"source,omitempty" json:"source,omitempty"`
+	PageSize           *PageSize                                `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken          *PageToken                               `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	AgentRef           *TemplateAgentRef                        `form:"agentRef,omitempty" json:"agentRef,omitempty"`
+	RuntimeRevisionRef *TemplateRuntimeRevisionRef              `form:"runtimeRevisionRef,omitempty" json:"runtimeRevisionRef,omitempty"`
 }
+
+// ListPromptTemplateVariablesParamsSource defines parameters for ListPromptTemplateVariables.
+type ListPromptTemplateVariablesParamsSource string
 
 // QueryPromptTemplateVariablesParams defines parameters for QueryPromptTemplateVariables.
 type QueryPromptTemplateVariablesParams struct {
@@ -32963,6 +33162,19 @@ func (siw *ServerInterfaceWrapper) ListTemplateVariables(w http.ResponseWriter, 
 		return
 	}
 
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "pageSize" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -34016,6 +34228,19 @@ func (siw *ServerInterfaceWrapper) ListPromptTemplateVariables(w http.ResponseWr
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
 		}
 		return
 	}
