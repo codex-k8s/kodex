@@ -6,6 +6,8 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { listContext, type ContextItem, type ContextKind } from "./api";
 import { loadCatalogProject } from "@/features/catalogs/api";
 const props = defineProps<{
@@ -15,6 +17,17 @@ const props = defineProps<{
 }>();
 const fieldPrefix = `context-catalog-${useId()}`;
 const items = ref<ContextItem[]>([]);
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".context-row",
+  itemCount: () => items.value.length,
+  estimatedViewportHeight: 576,
+  estimatedItemHeight: 96,
+  minimum: 8,
+  maximum: 100,
+});
 const query = ref("");
 const state = ref<ContextResourceState>("ACTIVE");
 const total = ref(0);
@@ -60,6 +73,7 @@ async function load(more = false): Promise<void> {
       query: query.value.trim(),
       state: state.value,
       pageToken: token,
+      pageSize: pageSize.value,
       signal: active.signal,
     });
     if (current !== generation) return;
@@ -113,6 +127,12 @@ onBeforeUnmount(() => {
   generation += 1;
   controller?.abort();
   if (timer) clearTimeout(timer);
+});
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => Boolean(cursor.value) && !loading.value && !problem.value,
+  loadMore: () => load(true),
 });
 </script>
 <template>
@@ -178,46 +198,59 @@ onBeforeUnmount(() => {
     </header>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
-    <section
-      v-for="group in groups"
-      :key="group.projectRef"
-      class="context-group"
+    <div
+      ref="scrollRoot"
+      class="context-catalog__scroll"
+      :class="{ 'context-catalog__scroll--expanded': expanded }"
     >
-      <h3>
-        <RouterLink :to="`/projects/${encodeURIComponent(group.projectRef)}`">{{
-          projectNames[group.projectRef] ?? group.projectRef
-        }}</RouterLink>
-      </h3>
-      <div class="context-rows" :class="{ 'context-rows--expanded': expanded }">
-        <RouterLink
-          v-for="item in group.entries"
-          :key="item.ref"
-          class="context-row"
-          :to="{
-            name: 'project-context-resource',
-            params: {
-              kind,
-              resourceRef: item.ref,
-              projectRef: item.projectRef,
-            },
-          }"
-        >
-          <span
-            ><strong>{{ title(item) }}</strong
-            ><code>{{ item.ref }}</code></span
-          ><StatusBadge :state="item.state" /><small>v{{ item.version }}</small>
-        </RouterLink>
+      <section
+        v-for="group in groups"
+        :key="group.projectRef"
+        class="context-group"
+      >
+        <h3>
+          <RouterLink
+            :to="`/projects/${encodeURIComponent(group.projectRef)}`"
+            >{{
+              projectNames[group.projectRef] ?? group.projectRef
+            }}</RouterLink
+          >
+        </h3>
+        <div class="context-rows">
+          <RouterLink
+            v-for="item in group.entries"
+            :key="item.ref"
+            class="context-row"
+            :to="{
+              name: 'project-context-resource',
+              params: {
+                kind,
+                resourceRef: item.ref,
+                projectRef: item.projectRef,
+              },
+            }"
+          >
+            <span
+              ><strong>{{ title(item) }}</strong
+              ><code>{{ item.ref }}</code></span
+            ><StatusBadge :state="item.state" /><small
+              >v{{ item.version }}</small
+            >
+          </RouterLink>
+        </div>
+      </section>
+      <p v-if="!loading && !problem && !items.length">
+        {{ $t("common.empty") }}
+      </p>
+      <div
+        v-if="cursor"
+        ref="sentinel"
+        class="context-catalog__sentinel"
+        role="status"
+      >
+        <span v-if="loading">{{ $t("common.loading") }}</span>
       </div>
-    </section>
-    <p v-if="!loading && !problem && !items.length">{{ $t("common.empty") }}</p>
-    <button
-      v-if="cursor"
-      class="button"
-      :disabled="loading"
-      @click="load(true)"
-    >
-      {{ $t("impact.more") }}
-    </button>
+    </div>
   </component>
 </template>
 <style scoped>
@@ -246,12 +279,15 @@ onBeforeUnmount(() => {
   min-width: 0;
   margin-block: 20px;
 }
-.context-rows {
+.context-catalog__scroll {
   max-height: 576px;
   overflow: auto;
 }
-.context-rows--expanded {
-  max-height: none;
+.context-catalog__scroll--expanded {
+  max-height: 65vh;
+}
+.context-catalog__sentinel {
+  min-height: 1px;
 }
 .context-row {
   display: grid;

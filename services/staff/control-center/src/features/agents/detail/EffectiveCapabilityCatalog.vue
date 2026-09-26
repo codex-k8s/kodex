@@ -7,6 +7,8 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   canChangePlatformCapability,
   effectiveCapabilityIdentity,
@@ -31,6 +33,17 @@ const emit = defineEmits<{
 const serverMessage = useServerMessage();
 const fieldPrefix = `effective-capabilities-${useId()}`;
 const items = ref<AgentEffectiveCapability[]>([]);
+const rows = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: rows,
+  itemSelector: ".effective-capabilities__row",
+  itemCount: () => items.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 116,
+  minimum: 6,
+  maximum: 100,
+});
 const page = ref<AgentEffectiveCapabilityPage>();
 const query = ref("");
 const loading = ref(false);
@@ -77,6 +90,7 @@ async function load(more = false) {
       token,
       digest,
       active.signal,
+      pageSize.value,
     );
     if (current !== generation || active.signal.aborted) return;
     const next = more ? [...items.value, ...result.items] : result.items;
@@ -136,6 +150,12 @@ onBeforeUnmount(() => {
   generation++;
   clearTimeout(timer);
 });
+useCursorInfiniteScroll({
+  root: rows,
+  sentinel,
+  enabled: () => Boolean(page.value?.nextPageToken) && !loading.value,
+  loadMore: () => load(true),
+});
 </script>
 
 <template>
@@ -175,7 +195,7 @@ onBeforeUnmount(() => {
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-else-if="loading && !page" role="status">{{ $t("common.loading") }}</p>
     <p v-else-if="page && !items.length">{{ $t("common.empty") }}</p>
-    <div class="effective-capabilities__rows">
+    <div ref="rows" class="effective-capabilities__rows">
       <label
         v-for="item in items"
         :key="effectiveCapabilityIdentity(item)"
@@ -222,16 +242,15 @@ onBeforeUnmount(() => {
           <small>{{ $t(`capabilityAuthority.reasons.${item.reason}`) }}</small>
         </span>
       </label>
+      <div
+        v-if="page?.nextPageToken"
+        ref="sentinel"
+        class="effective-capabilities__sentinel"
+        role="status"
+      >
+        <span v-if="loading">{{ $t("common.loading") }}</span>
+      </div>
     </div>
-    <button
-      v-if="page?.nextPageToken"
-      type="button"
-      class="button button--secondary"
-      :disabled="loading || busy"
-      @click="load(true)"
-    >
-      {{ $t("common.loadMore") }}
-    </button>
   </div>
 </template>
 
@@ -273,6 +292,9 @@ onBeforeUnmount(() => {
   width: 17px;
   min-height: 17px;
   margin-top: 3px;
+}
+.effective-capabilities__sentinel {
+  min-height: 1px;
 }
 .effective-capabilities__states {
   display: flex;

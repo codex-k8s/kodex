@@ -349,7 +349,7 @@ describe("runtime store", () => {
         path: { projectRef: "project_sales" },
         query: {
           query: "pdf",
-          pageSize: 30,
+          pageSize: 20,
           pageToken: "cursor-current",
         },
       }),

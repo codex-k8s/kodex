@@ -1,18 +1,37 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
 import SafeSummary from "@/shared/ui/SafeSummary.vue";
-defineProps<{ items: OwnerGate[]; more?: string; loading: boolean }>();
-const emit = defineEmits<{ more: [] }>();
-function scroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    emit("more");
-}
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+const props = defineProps<{
+  items: OwnerGate[];
+  more?: string;
+  loading: boolean;
+}>();
+const emit = defineEmits<{ more: [pageSize: number] }>();
+const root = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: root,
+  itemSelector: ".home-gate-row",
+  itemCount: () => props.items.length,
+  estimatedViewportHeight: 552,
+  estimatedItemHeight: 92,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root,
+  sentinel,
+  enabled: () => Boolean(props.more) && !props.loading,
+  loadMore: () => emit("more", pageSize.value),
+});
 const serverMessage = useServerMessage();
 </script>
 <template>
-  <div class="home-gate-rows" @scroll="scroll">
+  <div ref="root" class="home-gate-rows">
     <RouterLink
       v-for="gate in items"
       :key="gate.ref"
@@ -26,15 +45,14 @@ const serverMessage = useServerMessage();
       <SafeSummary :content="gate.contextSummary" />
       <small>{{ gate.requestedBy.displayName }}</small>
     </RouterLink>
-    <button
+    <div
       v-if="more"
-      type="button"
-      class="button"
-      :disabled="loading"
-      @click="emit('more')"
+      ref="sentinel"
+      class="home-gate-rows__sentinel"
+      role="status"
     >
-      {{ $t("common.loadMore") }}
-    </button>
+      <span v-if="loading">{{ $t("common.loading") }}</span>
+    </div>
   </div>
 </template>
 <style scoped>
@@ -53,6 +71,9 @@ const serverMessage = useServerMessage();
 }
 .home-gate-row:hover {
   background: var(--panel);
+}
+.home-gate-rows__sentinel {
+  min-height: 1px;
 }
 .home-gate-row strong,
 .home-gate-row small {

@@ -69,13 +69,20 @@ export async function listConfigurations(options: {
   query: string;
   projectRef?: string;
   pageToken?: string;
+  pageSize?: number;
   signal: AbortSignal;
 }) {
   const { signal, ...query } = options;
   return (
     await unwrap(
       sdk.listManagedConfigurations({
-        query: { ...query, pageSize: 30 },
+        query: {
+          ...query,
+          pageSize: Math.min(
+            100,
+            Math.max(1, Math.floor(query.pageSize ?? 20)),
+          ),
+        },
         signal: AbortSignal.any([signal, requestSignal()]),
       }),
     )
@@ -115,7 +122,10 @@ export async function listDefinitionConnectionCandidates(
   pageToken: string | undefined,
   signal: AbortSignal,
 ) {
-  if (definitionKey.length > 120 || !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(definitionKey))
+  if (
+    definitionKey.length > 120 ||
+    !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(definitionKey)
+  )
     throw new Error("Integration definition key is invalid");
   const page = (
     await unwrap(
@@ -195,12 +205,16 @@ export async function history(
   configurationRef: string,
   signal: AbortSignal,
   pageToken?: string,
+  pageSize = 30,
 ) {
   return (
     await unwrap(
       sdk.listManagedConfigurationHistory({
         path: { configurationRef },
-        query: { pageSize: 30, pageToken },
+        query: {
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+          pageToken,
+        },
         signal: AbortSignal.any([requestSignal(), signal]),
       }),
     )
@@ -212,6 +226,7 @@ export async function impact(
   signal: AbortSignal,
   query = "",
   pageToken?: string,
+  pageSize = 40,
 ) {
   return (
     await unwrap(
@@ -221,7 +236,7 @@ export async function impact(
           revisionRef: revision.ref,
         },
         query: {
-          pageSize: 40,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
           ...(pageToken ? { pageToken } : {}),
           ...(query.trim() ? { query: query.trim() } : {}),
         },

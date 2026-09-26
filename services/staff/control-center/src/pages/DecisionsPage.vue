@@ -50,6 +50,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 
 const platform = usePlatformStore();
 const route = useRoute();
@@ -64,6 +65,7 @@ const search = ref("");
 const searchId = useId();
 const catalog = useGateCatalog();
 const decisionListRoot = ref<HTMLElement>();
+const decisionListSentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
   container: decisionListRoot,
   itemSelector: ".decision-row",
@@ -83,11 +85,15 @@ function loadCatalog(more = false): Promise<void> {
     more,
   );
 }
-function scrollCatalog(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    void loadCatalog(true);
-}
+useCursorInfiniteScroll({
+  root: decisionListRoot,
+  sentinel: decisionListSentinel,
+  enabled: () =>
+    Boolean(catalog.pageToken.value) &&
+    !catalog.loading.value &&
+    !catalog.problem.value,
+  loadMore: () => loadCatalog(true),
+});
 const selectedRef = ref(preferredGateRef);
 const comments = ref<Record<string, string>>({});
 const decisionDrafts = ref<Record<string, DecisionAction>>({});
@@ -742,11 +748,7 @@ const serverMessage = useServerMessage();
       @retry="loadCatalog()"
     >
       <div class="decision-inbox">
-        <div
-          ref="decisionListRoot"
-          class="decision-list"
-          @scroll="scrollCatalog"
-        >
+        <div ref="decisionListRoot" class="decision-list">
           <section v-for="group in groups" :key="group.key">
             <header class="decision-group-header">
               <span
@@ -817,6 +819,14 @@ const serverMessage = useServerMessage();
               </button>
             </div>
           </section>
+          <div
+            v-if="catalog.pageToken.value"
+            ref="decisionListSentinel"
+            class="decision-list__sentinel"
+            role="status"
+          >
+            <span v-if="catalog.loading.value">{{ $t("common.loading") }}</span>
+          </div>
         </div>
 
         <aside v-if="selected" class="decision-detail">
@@ -1324,6 +1334,9 @@ const serverMessage = useServerMessage();
   max-height: 72vh;
   overflow: auto;
   border-right: 1px solid var(--border);
+}
+.decision-list__sentinel {
+  min-height: 1px;
 }
 .decision-list > section + section {
   border-top: 1px solid var(--border-strong);

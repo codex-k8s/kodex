@@ -11,12 +11,12 @@ export function createTemplateVariableLoader(
   projectRef: string,
   context: { agentRef?: string; runtimeRevisionRef?: string } = {},
 ): AsyncEntityLoader<TemplateVariablePickerItem> {
-  return async ({ cursor, query, signal }) => {
+  return async ({ cursor, query, pageSize, signal }) => {
     const result = await unwrap(
       listTemplateVariables({
         path: { projectRef },
         query: {
-          pageSize: 50,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize ?? 20))),
           ...(query.trim() ? { query: query.trim() } : {}),
           ...(cursor ? { pageToken: cursor } : {}),
           ...(context.agentRef ? { agentRef: context.agentRef } : {}),

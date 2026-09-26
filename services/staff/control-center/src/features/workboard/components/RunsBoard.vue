@@ -24,15 +24,6 @@ function canLoad(lane: RunLane): boolean {
     ? Boolean(column.pageToken) && !column.loading && !column.problem
     : props.hasMore && !props.loadingMore;
 }
-function onScroll(event: Event, lane: RunLane): void {
-  const element = event.currentTarget;
-  if (
-    canLoad(lane) &&
-    element instanceof HTMLElement &&
-    element.scrollHeight - element.scrollTop - element.clientHeight <= 40
-  )
-    emit("more", lane);
-}
 const lanes = computed(() => groupRuns(props.runs));
 const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
 const laneRoots = Object.fromEntries(
@@ -65,7 +56,6 @@ for (const lane of order)
           class="runs-lane__body"
           tabindex="0"
           :aria-label="$t(`workboard.lanes.${lane}`)"
-          @scroll="onScroll($event, lane)"
         >
           <RunWorkItem
             v-for="run in lanes[lane]"

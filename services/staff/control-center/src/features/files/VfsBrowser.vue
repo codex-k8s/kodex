@@ -18,6 +18,8 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { loadVfsPage, vfsEntityRoute } from "./vfs";
 import {
   parseVfsTrail,
@@ -149,6 +151,16 @@ const query = ref(
     : "",
 );
 const nodes = ref<VfsNode[]>([]);
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".vfs-entry",
+  itemCount: () => nodes.value.length,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
 const selected = ref<VfsNode>();
 const entityRoute = computed(() =>
   selected.value ? vfsEntityRoute(selected.value) : undefined,
@@ -198,6 +210,7 @@ async function load(more = false): Promise<void> {
       query: query.value,
       projectRef: props.projectRef,
       pageToken: token,
+      pageSize: pageSize.value,
       lifecycleState: lifecycleState.value,
       kinds: kinds.value,
       signal: request.signal,
@@ -243,11 +256,12 @@ function open(node: VfsNode): void {
   else folders.value.push({ path: node.path, name: node.name });
   query.value = "";
 }
-function scroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    void load(true);
-}
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => Boolean(nextPageToken.value) && !loading.value,
+  loadMore: () => load(true),
+});
 watch(
   [folders, query, lifecycleState, kinds, selected],
   () => {
@@ -500,10 +514,10 @@ onBeforeUnmount(() => {
       <p v-else-if="!nodes.length && !problem">{{ $t("common.empty") }}</p>
       <div class="vfs-content" :class="{ 'vfs-content--selected': selected }">
         <div
+          ref="scrollRoot"
           class="vfs-list"
           :class="{ 'vfs-list--expanded': expanded }"
           :aria-busy="loading"
-          @scroll="scroll"
         >
           <div v-for="node in nodes" :key="node.ref" class="vfs-entry">
             <input
@@ -537,14 +551,15 @@ onBeforeUnmount(() => {
               >
             </button>
           </div>
-          <button
+          <div
             v-if="nextPageToken"
-            class="button"
-            :disabled="loading"
-            @click="load(true)"
+            ref="sentinel"
+            class="vfs-sentinel"
+            role="status"
           >
-            {{ $t("managed.more") }} ({{ nodes.length }}/{{ total }})
-          </button>
+            <span v-if="loading">{{ $t("common.loading") }}</span>
+            <span class="sr-only">{{ nodes.length }}/{{ total }}</span>
+          </div>
         </div>
         <aside v-if="selected" class="vfs-inspector">
           <h2>{{ selected.name }}</h2>

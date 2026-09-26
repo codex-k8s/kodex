@@ -510,6 +510,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
   async function loadEnvironmentVersions(
     environmentRef: string,
     reset = true,
+    pageSize = 30,
   ): Promise<void> {
     const pageToken = reset
       ? undefined
@@ -523,7 +524,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             listRuntimeEnvironmentVersions({
               path: { environmentRef },
               query: {
-                pageSize: 30,
+                pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
                 ...(pageToken ? { pageToken } : {}),
               },
               signal: requestSignal(),

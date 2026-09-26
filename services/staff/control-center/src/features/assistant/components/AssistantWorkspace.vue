@@ -897,16 +897,9 @@ onBeforeUnmount(() => {
               class="assistant-history-sentinel"
               aria-hidden="true"
             />
-            <button
-              v-if="store.nextPageToken"
-              type="button"
-              :disabled="store.loading || store.loadingMore || store.busy"
-              @click="store.loadMoreHistory"
-            >
-              <ChevronDown :size="16" />{{
-                store.loadingMore ? $t("common.loading") : $t("common.loadMore")
-              }}
-            </button>
+            <span v-if="store.loadingMore" role="status">{{
+              $t("common.loading")
+            }}</span>
           </section>
         </div>
         <button
@@ -963,17 +956,9 @@ onBeforeUnmount(() => {
           class="assistant-history-sentinel"
           aria-hidden="true"
         />
-        <button
-          v-if="store.nextPageToken"
-          class="button"
-          type="button"
-          :disabled="store.loading || store.loadingMore || store.busy"
-          @click="store.loadMoreHistory"
-        >
-          <ChevronDown :size="16" />{{
-            store.loadingMore ? $t("common.loading") : $t("common.loadMore")
-          }}
-        </button>
+        <span v-if="store.loadingMore" role="status">{{
+          $t("common.loading")
+        }}</span>
       </nav>
 
       <div class="assistant-workspace-content">

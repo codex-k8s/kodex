@@ -11,10 +11,7 @@ import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import WorkflowCard from "@/features/workflows/catalog/WorkflowCard.vue";
 import AgentCard from "@/features/agents/catalog/AgentCard.vue";
 import { toAgentCatalogItem } from "@/features/agents/catalog/model";
-import {
-  nearScrollEnd,
-  useCursorInfiniteScroll,
-} from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import {
   loadCatalog,
   catalogInvalidated,
@@ -171,14 +168,6 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
     problem.value = asProblem(error);
   });
 });
-function scroll(event: Event): void {
-  if (
-    event.currentTarget instanceof HTMLElement &&
-    nearScrollEnd(event.currentTarget) &&
-    !problem.value
-  )
-    void load(true);
-}
 onBeforeUnmount(() => {
   disposed = true;
   unsubscribe();
@@ -188,11 +177,7 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section
-    ref="scrollRoot"
-    class="organization-catalog"
-    @scroll.passive="scroll"
-  >
+  <section ref="scrollRoot" class="organization-catalog">
     <label class="organization-catalog__search" :for="searchId"
       ><Search :size="18" /><input
         :id="searchId"
@@ -232,7 +217,6 @@ onBeforeUnmount(() => {
           'organization-catalog__items--cards':
             kind === 'workflows' || kind === 'agents',
         }"
-        @scroll.passive="scroll"
       >
         <template v-for="entry in group.entries" :key="entry.ref">
           <WorkflowCard v-if="entry.workflow" :workflow="entry.workflow" />

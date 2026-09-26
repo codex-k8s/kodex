@@ -30,6 +30,8 @@ import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import * as api from "./api";
 import { archiveConfiguration } from "./lifecycle";
@@ -92,6 +94,28 @@ const fieldPrefix = `configuration-editor-${useId()}`;
 const configuration = ref<ManagedConfiguration>();
 const revision = ref<ManagedConfigurationRevision>();
 const revisions = ref<ManagedConfigurationRevision[]>([]);
+const historyList = ref<HTMLElement>();
+const historySentinel = ref<HTMLElement>();
+const diffList = ref<HTMLElement>();
+const diffSentinel = ref<HTMLElement>();
+const historyPageSize = useAdaptiveCursorPageSize({
+  container: historyList,
+  itemSelector: ".configuration-editor__revision",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
+const diffPageSize = useAdaptiveCursorPageSize({
+  container: diffList,
+  itemSelector: "option",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 320,
+  estimatedItemHeight: 36,
+  minimum: 8,
+  maximum: 100,
+});
 const pageToken = ref<string>();
 const historyCursors = new Set<string>();
 const name = ref("");
@@ -151,6 +175,17 @@ const comparison = computed(() => {
   }
 });
 const impactValue = ref<ManagedConfigurationImpact>();
+const impactList = ref<HTMLElement>();
+const impactSentinel = ref<HTMLElement>();
+const impactPageSize = useAdaptiveCursorPageSize({
+  container: impactList,
+  itemSelector: ".configuration-editor__consumer",
+  itemCount: () => impactValue.value?.consumers.length ?? 0,
+  estimatedViewportHeight: 420,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
 const impactOpen = ref(false);
 const impactQuery = ref("");
 const impactLoading = ref(false);
@@ -385,6 +420,7 @@ async function load(more = false): Promise<void> {
       ref,
       controller.signal,
       more ? pageToken.value : undefined,
+      diffOpen.value ? diffPageSize.value : historyPageSize.value,
     );
     if (disposed) return;
     if (
@@ -443,6 +479,37 @@ async function load(more = false): Promise<void> {
     }
   });
 }
+useCursorInfiniteScroll({
+  root: historyList,
+  sentinel: historySentinel,
+  enabled: () =>
+    historyOpen.value &&
+    Boolean(pageToken.value) &&
+    !busy.value &&
+    !sourceBusy.value,
+  loadMore: () => load(true),
+});
+useCursorInfiniteScroll({
+  root: diffList,
+  sentinel: diffSentinel,
+  enabled: () =>
+    diffOpen.value &&
+    Boolean(pageToken.value) &&
+    !busy.value &&
+    !sourceBusy.value,
+  loadMore: () => load(true),
+});
+useCursorInfiniteScroll({
+  root: impactList,
+  sentinel: impactSentinel,
+  enabled: () =>
+    impactOpen.value &&
+    Boolean(impactValue.value?.nextPageToken) &&
+    !impactLoading.value &&
+    !busy.value,
+  loadMore: () => showImpact(true),
+});
+
 async function save(): Promise<void> {
   if (!canSave.value) return;
   await perform(async () => {
@@ -789,6 +856,7 @@ async function showImpact(more = false): Promise<void> {
       active.signal,
       impactQuery.value,
       previous?.nextPageToken,
+      impactPageSize.value,
     );
     if (disposed || generation !== impactGeneration) return;
     if (previous?.nextPageToken) impactCursors.add(previous.nextPageToken);
@@ -1498,7 +1566,7 @@ watch(
       :busy="busy"
       @close="historyOpen = false"
     >
-      <div class="configuration-editor__history">
+      <div ref="historyList" class="configuration-editor__history">
         <button
           v-for="item in revisions"
           :key="item.ref"
@@ -1509,15 +1577,15 @@ watch(
           <span>{{ $t("managed.revision", { revision: item.revision }) }}</span
           ><StatusBadge :state="item.state" /><time>{{ item.createdAt }}</time>
         </button>
+        <div
+          v-if="pageToken"
+          ref="historySentinel"
+          class="configuration-editor__sentinel"
+          role="status"
+        >
+          <span v-if="busy || sourceBusy">{{ $t("common.loading") }}</span>
+        </div>
       </div>
-      <button
-        v-if="pageToken"
-        class="button"
-        :disabled="busy || sourceBusy"
-        @click="load(true)"
-      >
-        {{ $t("managed.more") }}
-      </button>
     </ModalDialog>
     <ModalDialog
       v-if="impactOpen"
@@ -1548,7 +1616,7 @@ watch(
       <p v-if="impactValue && !impactValue.consumers.length">
         {{ $t("managed.noConsumers") }}
       </p>
-      <div class="configuration-editor__history">
+      <div ref="impactList" class="configuration-editor__history">
         <label
           v-for="consumer in impactValue?.consumers ?? []"
           :key="consumerKey(consumer)"
@@ -1571,6 +1639,14 @@ watch(
           ><code>{{ consumer.ref }}</code
           ><span>v{{ consumer.version }}</span></label
         >
+        <div
+          v-if="impactValue?.nextPageToken"
+          ref="impactSentinel"
+          class="configuration-editor__sentinel"
+          role="status"
+        >
+          <span v-if="impactLoading">{{ $t("common.loading") }}</span>
+        </div>
       </div>
       <div
         v-if="
@@ -1608,14 +1684,6 @@ watch(
         </button>
       </div>
       <button
-        v-if="impactValue?.nextPageToken"
-        class="button"
-        :disabled="busy || impactLoading"
-        @click="showImpact(true)"
-      >
-        {{ $t("impact.more") }}
-      </button>
-      <button
         v-if="kind !== 'SYSTEM_STT'"
         class="button button--primary"
         :disabled="
@@ -1638,34 +1706,36 @@ watch(
       size="xl"
       @close="diffOpen = false"
     >
-      <label class="configuration-editor__comparison">
-        {{ $t("managed.compareRevision") }}
-        <select
-          v-model="compareRef"
-          :id="`${fieldPrefix}-compare`"
-          :name="`${fieldPrefix}-compare`"
+      <div ref="diffList" class="configuration-editor__diff-list">
+        <label class="configuration-editor__comparison">
+          {{ $t("managed.compareRevision") }}
+          <select
+            v-model="compareRef"
+            :id="`${fieldPrefix}-compare`"
+            :name="`${fieldPrefix}-compare`"
+          >
+            <option value="">{{ $t("managed.currentRevision") }}</option>
+            <option v-for="item in revisions" :key="item.ref" :value="item.ref">
+              v{{ item.revision }} · {{ item.state }}
+            </option>
+          </select>
+        </label>
+        <CodeDiff
+          v-if="comparison"
+          :original="comparison.original"
+          :modified="comparison.modified"
+          :label="$t('managed.diff')"
+        />
+        <p v-else role="alert">{{ $t("managed.invalidDocument") }}</p>
+        <div
+          v-if="pageToken"
+          ref="diffSentinel"
+          class="configuration-editor__sentinel"
+          role="status"
         >
-          <option value="">{{ $t("managed.currentRevision") }}</option>
-          <option v-for="item in revisions" :key="item.ref" :value="item.ref">
-            v{{ item.revision }} · {{ item.state }}
-          </option>
-        </select>
-      </label>
-      <CodeDiff
-        v-if="comparison"
-        :original="comparison.original"
-        :modified="comparison.modified"
-        :label="$t('managed.diff')"
-      />
-      <p v-else role="alert">{{ $t("managed.invalidDocument") }}</p>
-      <button
-        v-if="pageToken"
-        class="button"
-        :disabled="busy || sourceBusy"
-        @click="load(true)"
-      >
-        {{ $t("managed.more") }}
-      </button>
+          <span v-if="busy || sourceBusy">{{ $t("common.loading") }}</span>
+        </div>
+      </div>
     </ModalDialog>
     <ModalDialog
       v-if="sourceAction"
@@ -1794,6 +1864,13 @@ watch(
   max-height: 420px;
   overflow: auto;
   margin-bottom: 16px;
+}
+.configuration-editor__diff-list {
+  max-height: 65vh;
+  overflow: auto;
+}
+.configuration-editor__sentinel {
+  min-height: 1px;
 }
 .configuration-editor__revision,
 .configuration-editor__consumer {

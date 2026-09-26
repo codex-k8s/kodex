@@ -56,7 +56,7 @@ describe("серверный каталог связей файла", () => {
     expect(bindingTargetEditable(result.items[0])).toBe(true);
     expect(calls.list).toHaveBeenCalledExactlyOnceWith({
       path: { artifactRef: scope.ref },
-      query: { query: "Архив", pageSize: 30, pageToken: "previous" },
+      query: { query: "Архив", pageSize: 20, pageToken: "previous" },
       signal,
     });
   });

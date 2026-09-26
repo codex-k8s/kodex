@@ -3,12 +3,6 @@ import { FolderKanban } from "@lucide/vue";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 defineProps<{ items: Project[]; expanded?: boolean; dashboard?: boolean }>();
-const emit = defineEmits<{ more: [] }>();
-function scroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    emit("more");
-}
 </script>
 <template>
   <div
@@ -17,7 +11,6 @@ function scroll(event: Event): void {
       'home-projects--expanded': expanded,
       'home-projects--dashboard': dashboard,
     }"
-    @scroll="scroll"
   >
     <RouterLink
       v-for="project in items"

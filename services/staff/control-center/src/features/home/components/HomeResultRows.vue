@@ -1,26 +1,44 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import type { HomeResultItem } from "../result-catalog";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
-defineProps<{
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+const props = defineProps<{
   items: HomeResultItem[];
   more?: string;
   loading: boolean;
   dashboard?: boolean;
 }>();
-const emit = defineEmits<{ more: []; open: [item: HomeResultItem] }>();
+const emit = defineEmits<{
+  more: [pageSize: number];
+  open: [item: HomeResultItem];
+}>();
 const serverMessage = useServerMessage();
-function scroll(event: Event) {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    emit("more");
-}
+const root = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: root,
+  itemSelector: ".home-result-row",
+  itemCount: () => props.items.length,
+  estimatedViewportHeight: 552,
+  estimatedItemHeight: 92,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root,
+  sentinel,
+  enabled: () => Boolean(props.more) && !props.loading,
+  loadMore: () => emit("more", pageSize.value),
+});
 </script>
 <template>
   <div
+    ref="root"
     class="home-result-rows"
     :class="{ 'home-result-rows--dashboard': dashboard }"
-    @scroll="scroll"
   >
     <div v-for="item in items" :key="item.ref" class="home-result-row">
       <RouterLink v-if="item.to" :to="item.to">{{
@@ -37,15 +55,14 @@ function scroll(event: Event) {
       <small>{{ item.description }}</small>
       <StatusBadge :state="item.state" />
     </div>
-    <button
+    <div
       v-if="more"
-      type="button"
-      class="button"
-      :disabled="loading"
-      @click="emit('more')"
+      ref="sentinel"
+      class="home-result-rows__sentinel"
+      role="status"
     >
-      {{ $t("common.loadMore") }}
-    </button>
+      <span v-if="loading">{{ $t("common.loading") }}</span>
+    </div>
   </div>
 </template>
 <style scoped>
@@ -76,6 +93,9 @@ function scroll(event: Event) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.home-result-rows__sentinel {
+  min-height: 1px;
 }
 .home-result-rows--dashboard {
   max-height: none;

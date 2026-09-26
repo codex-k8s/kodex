@@ -112,6 +112,7 @@ export async function readPublicationImpact(
   signal: AbortSignal,
   query = "",
   pageToken?: string,
+  pageSize = 40,
 ): Promise<RevisionImpactPage> {
   const page = (
     await readWithRetry(
@@ -119,7 +120,11 @@ export async function readPublicationImpact(
         unwrap(
           getRevisionImpactPlan({
             path: { planRef: plan.ref },
-            query: { query: query.trim(), pageSize: 40, pageToken },
+            query: {
+              query: query.trim(),
+              pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+              pageToken,
+            },
             signal: requestSignal(signal),
             cache: "no-store",
           }),

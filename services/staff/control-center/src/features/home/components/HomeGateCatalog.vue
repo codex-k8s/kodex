@@ -15,12 +15,13 @@ const expanded = ref(false);
 const query = ref("");
 const projectRef = ref("");
 let timer: ReturnType<typeof setTimeout> | undefined;
-function load(more = false): Promise<void> {
+function load(more = false, pageSize = 8): Promise<void> {
   return catalog.load(
     {
       projectRef: projectRef.value || undefined,
       query: query.value,
       view: "PENDING",
+      pageSize,
     },
     more,
   );
@@ -94,7 +95,7 @@ onBeforeUnmount(() => {
       :items="catalog.items.value"
       :more="catalog.pageToken.value"
       :loading="catalog.loading.value"
-      @more="load(true)"
+      @more="load(true, $event)"
     />
     <ModalDialog
       v-if="expanded"
@@ -130,7 +131,7 @@ onBeforeUnmount(() => {
         :items="catalog.items.value"
         :more="catalog.pageToken.value"
         :loading="catalog.loading.value"
-        @more="load(true)"
+        @more="load(true, $event)"
       />
     </ModalDialog>
   </section>

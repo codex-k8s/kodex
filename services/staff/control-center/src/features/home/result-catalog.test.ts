@@ -40,7 +40,7 @@ describe("Home: authoritative totals и общий каталог", () => {
       query: {
         query: "report",
         pageToken: undefined,
-        pageSize: 30,
+        pageSize: 8,
         lifecycleState: "ACTIVE",
       },
       signal,

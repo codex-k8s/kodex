@@ -60,10 +60,10 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ViewModeToggle from "@/shared/ui/ViewModeToggle.vue";
 import {
-  nearScrollEnd,
   useAsyncEntityCollection,
   useCursorInfiniteScroll,
 } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import type { ViewMode } from "@/shared/ui/view-mode-toggle";
 
 const props = defineProps<{
@@ -81,6 +81,15 @@ const { locale, t } = useI18n();
 const fileInput = ref<HTMLInputElement>();
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const loadedItemCount = ref(0);
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".file-collection-item",
+  itemCount: loadedItemCount,
+  estimatedItemHeight: 72,
+  minimum: 8,
+  maximum: 100,
+});
 const activeTab = ref<Exclude<FileTab, "TRASH">>("FILES");
 const kind = ref<FileKind>("ALL");
 const scanState = ref<"ALL" | Artifact["scanState"]>("ALL");
@@ -147,7 +156,7 @@ const collection = useAsyncEntityCollection(
       ...(kind.value === "ALL" ? {} : { type: kind.value }),
       ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
     }),
-  { debounceMs: 500 },
+  { debounceMs: 500, pageSize },
 );
 const {
   error: loadError,
@@ -160,6 +169,13 @@ const {
   total,
   refresh,
 } = collection;
+watch(
+  () => items.value.length,
+  (count) => {
+    loadedItemCount.value = count;
+  },
+  { immediate: true },
+);
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canUpload = computed(() =>
@@ -487,12 +503,6 @@ useCursorInfiniteScroll({
   enabled: hasMore,
   loadMore,
 });
-
-function handleScroll(event: Event): void {
-  const target = event.currentTarget;
-  if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
-    void loadMore();
-}
 
 function formatBytes(value: number): string {
   const units = ["BYTE", "KILOBYTE", "MEGABYTE", "GIGABYTE"] as const;
@@ -1406,11 +1416,7 @@ onBeforeUnmount(() => {
           'files-workspace__layout--details': Boolean(selectedArtifact),
         }"
       >
-        <div
-          ref="scrollRoot"
-          class="files-workspace__scroll"
-          @scroll.passive="handleScroll"
-        >
+        <div ref="scrollRoot" class="files-workspace__scroll">
           <section
             v-if="filteredArtifacts.length === 0"
             class="empty-state files-workspace__filtered-empty"

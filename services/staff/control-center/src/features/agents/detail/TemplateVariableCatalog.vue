@@ -7,10 +7,11 @@ import { createTemplateVariableLoader } from "@/features/agents/detail/api";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import type { TemplateVariablePickerItem } from "@/features/agents/detail/model";
 import {
-  nearScrollEnd,
   useAsyncEntityCollection,
+  useCursorInfiniteScroll,
   type AsyncEntityLoader,
 } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
@@ -28,6 +29,18 @@ const listboxId = `template-variable-catalog-${catalogId}`;
 const searchId = `template-variable-search-${catalogId}`;
 const scopeId = `template-variable-scope-${catalogId}`;
 const activeScope = ref("ALL");
+const list = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const loadedItemCount = ref(0);
+const pageSize = useAdaptiveCursorPageSize({
+  container: list,
+  itemSelector: ".variable-catalog__option",
+  itemCount: loadedItemCount,
+  estimatedViewportHeight: 430,
+  estimatedItemHeight: 88,
+  minimum: 6,
+  maximum: 100,
+});
 const loader: ReturnType<typeof createTemplateVariableLoader> = (request) =>
   props.loadItems
     ? props.loadItems(request)
@@ -44,7 +57,14 @@ const {
   phase,
   query,
   refresh,
-} = useAsyncEntityCollection(loader, { debounceMs: 500 });
+} = useAsyncEntityCollection(loader, { debounceMs: 500, pageSize });
+watch(
+  () => items.value.length,
+  (count) => {
+    loadedItemCount.value = count;
+  },
+  { immediate: true },
+);
 watch(
   () => [
     props.projectRef,
@@ -99,11 +119,12 @@ watch(scopes, (values) => {
     activeScope.value = "ALL";
 });
 
-function handleScroll(event: Event): void {
-  const target = event.currentTarget;
-  if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
-    void loadMore();
-}
+useCursorInfiniteScroll({
+  root: list,
+  sentinel,
+  enabled: () => hasMore.value && !loadingMore.value && !loadMoreError.value,
+  loadMore,
+});
 </script>
 
 <template>
@@ -153,9 +174,9 @@ function handleScroll(event: Event): void {
 
     <div
       :id="listboxId"
+      ref="list"
       class="variable-catalog__list"
       role="listbox"
-      @scroll.passive="handleScroll"
     >
       <div
         v-if="phase === 'initial-loading'"
@@ -238,6 +259,12 @@ function handleScroll(event: Event): void {
           </button>
         </section>
         <div
+          v-if="hasMore"
+          ref="sentinel"
+          class="variable-catalog__sentinel"
+          aria-hidden="true"
+        />
+        <div
           v-if="loadingMore"
           class="variable-catalog__state variable-catalog__state--more"
           role="status"
@@ -312,6 +339,9 @@ function handleScroll(event: Event): void {
   max-height: 430px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.variable-catalog__sentinel {
+  min-height: 1px;
 }
 .variable-catalog__group h4 {
   position: sticky;

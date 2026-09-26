@@ -14,6 +14,8 @@ import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   createInteractionIdentity,
   readInteractionIdentities,
@@ -25,6 +27,17 @@ const props = defineProps<{ connection: IntegrationConnection }>();
 const fieldPrefix = `interaction-identity-${useId()}`;
 const { t } = useI18n();
 const items = ref<InteractionIdentity[]>([]);
+const list = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: list,
+  itemSelector: ".identity-row",
+  itemCount: () => items.value.length,
+  estimatedViewportHeight: 720,
+  estimatedItemHeight: 180,
+  minimum: 6,
+  maximum: 100,
+});
 const cursor = ref("");
 const loading = ref(false);
 const loaded = ref(false);
@@ -56,6 +69,7 @@ async function load(more = false): Promise<void> {
       props.connection.ref,
       more ? cursor.value : undefined,
       active.signal,
+      pageSize.value,
     );
     if (current !== generation) return;
     if (
@@ -77,11 +91,12 @@ async function subjects(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 8,
 ): Promise<AsyncEntityOptionPage> {
   const page = (
     await unwrap(
       listAccessSubjects({
-        query: { kind: "USER", query, pageToken, pageSize: 40 },
+        query: { kind: "USER", query, pageToken, pageSize },
         signal: requestSignal(signal),
       }),
     )
@@ -171,6 +186,12 @@ onBeforeUnmount(() => {
   generation += 1;
   controller?.abort();
 });
+useCursorInfiniteScroll({
+  root: list,
+  sentinel,
+  enabled: () => Boolean(cursor.value) && !loading.value && !busy.value,
+  loadMore: () => load(true),
+});
 </script>
 <template>
   <section class="identity-panel">
@@ -197,7 +218,7 @@ onBeforeUnmount(() => {
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ t("common.loading") }}</p>
     <p v-else-if="loaded && !items.length">{{ t("common.empty") }}</p>
-    <div class="identity-list">
+    <div ref="list" class="identity-list">
       <article v-for="item in items" :key="item.ref" class="identity-row">
         <div>
           <strong>{{ item.subjectRef }}</strong
@@ -233,14 +254,14 @@ onBeforeUnmount(() => {
           <ShieldX :size="18" />
         </button>
       </article>
-      <button
+      <div
         v-if="cursor"
-        class="button"
-        :disabled="loading || busy"
-        @click="load(true)"
+        ref="sentinel"
+        class="identity-list__sentinel"
+        role="status"
       >
-        {{ t("identity.loadMore") }}
-      </button>
+        <span v-if="loading">{{ t("common.loading") }}</span>
+      </div>
     </div>
   </section>
   <ModalDialog
@@ -356,6 +377,9 @@ onBeforeUnmount(() => {
   padding: 12px 44px 12px 0;
   border-top: 1px solid var(--border);
   overflow-wrap: anywhere;
+}
+.identity-list__sentinel {
+  min-height: 1px;
 }
 .identity-row > button {
   position: absolute;

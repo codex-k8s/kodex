@@ -7,7 +7,8 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import OpenAPIImportDialog from "./OpenAPIImportDialog.vue";
 import {
   configurationProjectScopeValid,
@@ -25,6 +26,16 @@ const emit = defineEmits<{ created: [configurationRef: string] }>();
 const query = ref("");
 const searchId = useId();
 const items = ref<ManagedConfigurationSummary[]>([]);
+const list = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: list,
+  itemSelector: ".configuration-catalog__row",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 96,
+  minimum: 8,
+  maximum: 100,
+});
 const nextPageToken = ref<string>();
 const total = ref(0);
 const loading = ref(false);
@@ -57,6 +68,7 @@ async function load(more = false): Promise<void> {
       projectRef: props.projectRef,
       query: query.value.trim(),
       pageToken: token,
+      pageSize: pageSize.value,
       signal: request.signal,
     });
     if (request.signal.aborted || generation !== current) return;
@@ -116,14 +128,13 @@ onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
   generation += 1;
 });
-function scroll(event: Event): void {
-  if (
-    event.currentTarget instanceof HTMLElement &&
-    nearScrollEnd(event.currentTarget) &&
-    !problem.value
-  )
-    void load(true);
-}
+useCursorInfiniteScroll({
+  root: list,
+  sentinel,
+  enabled: () =>
+    Boolean(nextPageToken.value) && !loading.value && !problem.value,
+  loadMore: () => load(true),
+});
 function created(configurationRef: string): void {
   importOpen.value = false;
   emit("created", configurationRef);
@@ -190,9 +201,9 @@ function created(configurationRef: string): void {
     </p>
     <p v-else-if="!items.length && !problem">{{ $t("common.empty") }}</p>
     <div
+      ref="list"
       class="configuration-catalog__list"
       :class="{ 'configuration-catalog__list--expanded': props.expanded }"
-      @scroll.passive="scroll"
     >
       <RouterLink
         v-for="item in items"
@@ -221,14 +232,15 @@ function created(configurationRef: string): void {
           "
         /><span>v{{ item.currentRevision?.revision ?? item.version }}</span>
       </RouterLink>
-      <button
+      <div
         v-if="nextPageToken"
-        class="button"
-        :disabled="loading"
-        @click="load(true)"
+        ref="sentinel"
+        class="configuration-catalog__sentinel"
+        role="status"
       >
-        {{ $t("managed.more") }} ({{ items.length }}/{{ total }})
-      </button>
+        <span v-if="loading">{{ $t("common.loading") }}</span>
+        <span class="sr-only">{{ items.length }}/{{ total }}</span>
+      </div>
     </div>
     <ModalDialog
       v-if="expansionOpen"
@@ -288,6 +300,9 @@ function created(configurationRef: string): void {
   color: inherit;
   text-decoration: none;
   border-bottom: 1px solid var(--border);
+}
+.configuration-catalog__sentinel {
+  min-height: 1px;
 }
 .configuration-catalog__row > div {
   min-width: 0;

@@ -50,7 +50,7 @@ describe("agent detail api", () => {
     expect(listTemplateVariables).toHaveBeenCalledWith({
       path: { projectRef: "project_sales" },
       query: {
-        pageSize: 50,
+        pageSize: 20,
         query: "tools",
         pageToken: "agent.ref",
       },
@@ -80,7 +80,7 @@ describe("agent detail api", () => {
     expect(listTemplateVariables).toHaveBeenCalledWith({
       path: { projectRef: "project_sales" },
       query: {
-        pageSize: 50,
+        pageSize: 20,
         agentRef: "agent_sales",
         runtimeRevisionRef: "revision_exact",
       },

@@ -59,7 +59,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let artifactController: AbortController | undefined;
 let artifactGeneration = 0;
 const seen = new Set<string>();
-async function load(more = false) {
+async function load(more = false, pageSize = 8) {
   if (!props.ready || (props.kind !== "ARTIFACT" && platform.loading.runs))
     return;
   if (more && (loading.value || !cursor.value)) return;
@@ -87,6 +87,7 @@ async function load(more = false) {
       },
       pageToken,
       active.signal,
+      pageSize,
     );
     if (current !== generation || active.signal.aborted) return;
     const next = more ? [...items.value, ...page.items] : page.items;
@@ -277,7 +278,7 @@ onBeforeUnmount(() => {
       :loading="loading"
       :more="dashboard ? undefined : cursor"
       :dashboard="dashboard"
-      @more="load(true)"
+      @more="load(true, $event)"
       @open="open"
     />
     <ModalDialog
@@ -316,7 +317,7 @@ onBeforeUnmount(() => {
         :items="items"
         :loading="loading"
         :more="cursor"
-        @more="load(true)"
+        @more="load(true, $event)"
         @open="open"
       />
     </ModalDialog>

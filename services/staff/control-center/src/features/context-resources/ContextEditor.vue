@@ -31,6 +31,8 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import * as api from "./api";
 import SkillImportDialog from "./SkillImportDialog.vue";
 import SkillManifestFiles from "./SkillManifestFiles.vue";
@@ -83,6 +85,17 @@ const problem = ref<AppProblem>();
 const historyOpen = ref(false);
 const importOpen = ref(false);
 const revisions = ref<api.ContextRevision[]>([]);
+const historyList = ref<HTMLElement>();
+const historySentinel = ref<HTMLElement>();
+const historyPageSize = useAdaptiveCursorPageSize({
+  container: historyList,
+  itemSelector: "details",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
 const historyCursor = ref("");
 const historyLoading = ref(false);
 const historyProblem = ref<AppProblem>();
@@ -273,6 +286,7 @@ async function loadHistory(more = false): Promise<void> {
       item.value.ref,
       more ? historyCursor.value : undefined,
       controller.signal,
+      historyPageSize.value,
     );
     if (disposed || item.value.version !== version) return;
     const next = more ? [...revisions.value, ...page.items] : page.items;
@@ -295,6 +309,14 @@ async function loadHistory(more = false): Promise<void> {
     if (!disposed) historyLoading.value = false;
   }
 }
+useCursorInfiniteScroll({
+  root: historyList,
+  sentinel: historySentinel,
+  enabled: () =>
+    historyOpen.value && Boolean(historyCursor.value) && !historyLoading.value,
+  loadMore: () => loadHistory(true),
+});
+
 async function loadArtifacts(
   query: string,
   cursor: string | undefined,
@@ -713,7 +735,7 @@ onBeforeUnmount(() => {
       @retry="loadHistory()"
     />
     <p v-if="historyLoading" role="status">{{ $t("common.loading") }}</p>
-    <div class="context-history">
+    <div ref="historyList" class="context-history">
       <details
         v-for="entry in revisions"
         :key="entry.ref"
@@ -755,15 +777,15 @@ onBeforeUnmount(() => {
           </p></template
         >
       </details>
+      <div
+        v-if="historyCursor"
+        ref="historySentinel"
+        class="context-history__sentinel"
+        role="status"
+      >
+        <span v-if="historyLoading">{{ $t("common.loading") }}</span>
+      </div>
     </div>
-    <button
-      v-if="historyCursor"
-      class="button"
-      :disabled="historyLoading"
-      @click="loadHistory(true)"
-    >
-      {{ $t("impact.more") }}
-    </button>
   </ModalDialog>
   <SkillImportDialog
     v-if="importOpen && project"
@@ -817,6 +839,9 @@ li {
 .context-history {
   max-height: 432px;
   overflow: auto;
+}
+.context-history__sentinel {
+  min-height: 1px;
 }
 .context-history details {
   min-height: 72px;

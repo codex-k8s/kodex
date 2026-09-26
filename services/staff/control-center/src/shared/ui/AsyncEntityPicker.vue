@@ -18,7 +18,6 @@ import {
 import { computed, nextTick, onScopeDispose, ref, useId, watch } from "vue";
 
 import {
-  nearScrollEnd,
   useAsyncEntityCollection,
   useCursorInfiniteScroll,
   virtualWindow,
@@ -27,6 +26,7 @@ import {
   type AsyncEntityOptionPage,
   type AsyncEntityPickerItem,
 } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import DismissiblePopover from "@/shared/ui/DismissiblePopover.vue";
 
 export interface AsyncEntityPickerLabels {
@@ -63,6 +63,7 @@ const props = withDefaults(
       query: string,
       cursor: string | undefined,
       signal: AbortSignal,
+      pageSize?: number,
     ) => Promise<AsyncEntityOptionPage>;
     placeholder?: string;
     searchPlaceholder?: string;
@@ -89,6 +90,17 @@ const open = ref(false);
 const activeIndex = ref(-1);
 const scrollTop = ref(0);
 const viewportHeight = ref(360);
+const loadedItemCount = ref(0);
+const pageSize = useAdaptiveCursorPageSize({
+  container: list,
+  itemSelector: ".async-picker__option",
+  itemCount: loadedItemCount,
+  estimatedViewportHeight: 360,
+  estimatedItemHeight: props.virtualItemHeight ?? 64,
+  estimatedColumns: props.virtualColumns ?? 1,
+  minimum: 6,
+  maximum: 100,
+});
 let resizeObserver: ResizeObserver | undefined;
 
 const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
@@ -110,6 +122,7 @@ const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
     request.query.trim(),
     request.cursor,
     request.signal,
+    request.pageSize,
   );
   return {
     items: page.items.map((item) => ({
@@ -141,7 +154,15 @@ const {
 } = useAsyncEntityCollection(loader, {
   debounceMs: props.debounceMs ?? 500,
   immediate: inline && !props.disabled,
+  pageSize,
 });
+watch(
+  () => items.value.length,
+  (count) => {
+    loadedItemCount.value = count;
+  },
+  { immediate: true },
+);
 
 const copy = computed<AsyncEntityPickerLabels>(
   () =>
@@ -386,7 +407,6 @@ function handleScroll(event: Event): void {
   if (!(target instanceof HTMLElement)) return;
   scrollTop.value = target.scrollTop;
   viewportHeight.value = target.clientHeight || viewportHeight.value;
-  if (hasMore.value && nearScrollEnd(target)) void loadMore();
 }
 function close(): void {
   open.value = false;

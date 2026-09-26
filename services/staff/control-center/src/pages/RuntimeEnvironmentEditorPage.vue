@@ -93,6 +93,8 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -126,6 +128,17 @@ const versions = computed(() =>
     ? (runtime.environmentVersions[environmentRef.value] ?? [])
     : [],
 );
+const versionList = ref<HTMLElement>();
+const versionSentinel = ref<HTMLElement>();
+const versionPageSize = useAdaptiveCursorPageSize({
+  container: versionList,
+  itemSelector: "article",
+  itemCount: () => versions.value.length,
+  estimatedViewportHeight: 640,
+  estimatedItemHeight: 112,
+  minimum: 6,
+  maximum: 100,
+});
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const deleteOpen = ref(false);
@@ -402,7 +415,7 @@ async function load(): Promise<void> {
   if (!environment) return;
   await Promise.all([
     runtime.loadEnvironment(environment),
-    runtime.loadEnvironmentVersions(environment),
+    runtime.loadEnvironmentVersions(environment, true, versionPageSize.value),
   ]);
   if (
     disposed ||
@@ -775,7 +788,7 @@ async function publish(selected: string[]): Promise<void> {
       throw new Error("Published environment readback is unavailable");
     reauthRestored.value = false;
     sync(saved);
-    await runtime.loadEnvironmentVersions(ref);
+    await runtime.loadEnvironmentVersions(ref, true, versionPageSize.value);
   } catch (error) {
     if (disposed) return;
     const normalized = asProblem(error);
@@ -823,7 +836,11 @@ async function rollback(versionRef: string): Promise<void> {
   problem.value = undefined;
   try {
     const saved = await runtime.restoreEnvironment(current.value, versionRef);
-    await runtime.loadEnvironmentVersions(saved.ref);
+    await runtime.loadEnvironmentVersions(
+      saved.ref,
+      true,
+      versionPageSize.value,
+    );
     sync(saved);
   } catch (error) {
     problem.value = asProblem(error);
@@ -864,22 +881,23 @@ async function remove(): Promise<void> {
   }
 }
 
-function onVersionScroll(event: Event): void {
-  if (!environmentRef.value) return;
-  const element = event.currentTarget as HTMLElement;
-  const hasMore = Boolean(
-    runtime.environmentVersionCursors[environmentRef.value],
-  );
-  const loading = Boolean(
-    runtime.loading[`environment-versions:${environmentRef.value}`],
-  );
-  if (
-    hasMore &&
-    !loading &&
-    element.scrollTop + element.clientHeight >= element.scrollHeight - 64
-  )
-    void runtime.loadEnvironmentVersions(environmentRef.value, false);
-}
+useCursorInfiniteScroll({
+  root: versionList,
+  sentinel: versionSentinel,
+  enabled: () => {
+    const ref = environmentRef.value;
+    return Boolean(
+      ref &&
+      runtime.environmentVersionCursors[ref] &&
+      !runtime.loading[`environment-versions:${ref}`],
+    );
+  },
+  loadMore: () => {
+    const ref = environmentRef.value;
+    if (ref)
+      return runtime.loadEnvironmentVersions(ref, false, versionPageSize.value);
+  },
+});
 
 function confirmLeave(target: string): boolean {
   if (approvedLeaveTarget === target) {
@@ -1608,13 +1626,13 @@ onBeforeUnmount(() => {
             </div>
             <div
               v-if="versions.length"
+              ref="versionList"
               class="revision-scroll"
               :aria-busy="
                 environmentRef
                   ? runtime.loading[`environment-versions:${environmentRef}`]
                   : false
               "
-              @scroll="onVersionScroll"
             >
               <article v-for="version in versions" :key="version.ref">
                 <div>
@@ -1652,6 +1670,15 @@ onBeforeUnmount(() => {
                   <Link2 :size="18" />
                 </button>
               </article>
+              <div
+                v-if="
+                  environmentRef &&
+                  runtime.environmentVersionCursors[environmentRef]
+                "
+                ref="versionSentinel"
+                class="revision-sentinel"
+                aria-hidden="true"
+              />
               <p
                 v-if="
                   environmentRef &&
@@ -2098,6 +2125,9 @@ code {
 .revision-scroll {
   max-height: min(560px, calc(100vh - 270px));
   overflow-y: auto;
+}
+.revision-sentinel {
+  min-height: 1px;
 }
 .revision-scroll > article {
   display: grid;

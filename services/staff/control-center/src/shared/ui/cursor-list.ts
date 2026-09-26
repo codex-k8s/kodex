@@ -13,6 +13,7 @@ export interface AdaptiveCursorPageSizeOptions {
   container: Ref<HTMLElement | null | undefined>;
   itemSelector: string;
   itemCount: MaybeRefOrGetter<number>;
+  estimatedViewportHeight?: number;
   estimatedItemHeight: number;
   estimatedColumns?: number;
   minimum?: number;
@@ -41,7 +42,8 @@ export function useAdaptiveCursorPageSize(
 ): Ref<number> {
   const pageSize = ref(
     adaptiveCursorPageSize(
-      typeof window === "undefined" ? 720 : window.innerHeight,
+      options.estimatedViewportHeight ??
+        (typeof window === "undefined" ? 720 : window.innerHeight),
       options.estimatedItemHeight,
       options.estimatedColumns,
       options.minimum,
@@ -94,7 +96,8 @@ export function useAdaptiveCursorPageSize(
 
   onMounted(() => {
     scheduleMeasure();
-    window.addEventListener("resize", scheduleMeasure, { passive: true });
+    if (typeof window !== "undefined")
+      window.addEventListener("resize", scheduleMeasure, { passive: true });
     if (typeof ResizeObserver !== "undefined") {
       observer = new ResizeObserver(scheduleMeasure);
       if (options.container.value) observer.observe(options.container.value);

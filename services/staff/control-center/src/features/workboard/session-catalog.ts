@@ -13,6 +13,7 @@ export async function loadSessionCatalog(
   scope: SessionCatalogScope,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ) {
   if (Boolean(scope.targetType) !== Boolean(scope.targetRef))
     throw new Error("Incomplete session target scope");
@@ -26,7 +27,7 @@ export async function loadSessionCatalog(
           targetType: scope.targetType,
           targetRef: scope.targetRef,
           pageToken,
-          pageSize: 30,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
         },
         signal: requestSignal(signal),
       }),
