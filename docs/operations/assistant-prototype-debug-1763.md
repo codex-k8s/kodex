@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.52
+version: 1.0.53
 updated: 2026-09-26
 ---
 
@@ -1018,3 +1018,13 @@ GitHub checks не считается `PASS`.
   содержит новый marker, Deployment Control Center готов `1/1`; browser —
   NOT RUN, потому что повторный `list_pages` всё ещё отвечает
   `Transport closed`.
+- Полный поддерживаемый тест synthetic integration fixture снова исполняется
+  до конца. Black-box fixture раньше корректно открывал случайный loopback-порт,
+  но startup-log не сообщал фактически назначенный адрес, поэтому E2E ошибочно
+  завершался ожиданием readiness. Безопасный адрес слушателя теперь присутствует
+  в структурированном логе. Следом guard итоговой `NetworkPolicy` был приведён к
+  уже действующему exact-контракту двух портов fixture: HTTP `8080` и защищённый
+  HTTPS `8443`; source workload и полный запрет egress не расширены. Race-тесты
+  fixture и integration runtime, loopback CRUD/E2E и render/NetworkPolicy guards
+  — PASS. Chrome UI/console/network/screenshot остаются NOT RUN: после повторного
+  допуска владельца MCP всё ещё возвращает `Transport closed` на `list_pages`.

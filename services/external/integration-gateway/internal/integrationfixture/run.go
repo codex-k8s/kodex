@@ -77,7 +77,12 @@ func Run(lifecycleCtx, shutdownBaseCtx context.Context, output io.Writer) error 
 	for _, current := range handlers {
 		current.SetReady(true)
 	}
-	logger.InfoContext(lifecycleCtx, "integration synthetic fixture started", "listeners", len(listeners))
+	logger.InfoContext(
+		lifecycleCtx,
+		"integration synthetic fixture started",
+		"listeners", len(listeners),
+		"address", listener.Addr().String(),
+	)
 	serveResult := make(chan error, len(servers))
 	for index := range servers {
 		currentServer, currentListener := servers[index], listeners[index]
