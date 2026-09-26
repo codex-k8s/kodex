@@ -18,6 +18,7 @@ import type {
   ExplainAccessResult,
   IntegrationConnection,
   Membership,
+  ProjectMembershipChangeInput,
   OidcGroup,
   PermissionDefinition,
   Project,
@@ -303,7 +304,10 @@ export const useAccessStore = defineStore("access", () => {
     });
   }
 
-  async function loadMembershipPresentation(projectRef = ""): Promise<void> {
+  async function loadMembershipPresentation(
+    projectRef = "",
+    selectedUserRef = "",
+  ): Promise<void> {
     await query(
       "platformMemberships",
       api.fetchPlatformMemberships,
@@ -318,11 +322,63 @@ export const useAccessStore = defineStore("access", () => {
     }
     await query(
       "projectMemberships",
-      () => api.fetchProjectMemberships(projectRef),
+      async () => {
+        const firstPage = await api.fetchProjectMemberships(projectRef);
+        if (
+          !selectedUserRef ||
+          firstPage.some((item) => item.user.ref === selectedUserRef)
+        ) {
+          return firstPage;
+        }
+        const selected = await api.fetchProjectMemberships(
+          projectRef,
+          selectedUserRef,
+        );
+        return appendUnique(
+          firstPage,
+          selected.filter(
+            (item) =>
+              item.projectRef === projectRef &&
+              item.user.ref === selectedUserRef,
+          ),
+          (item) => item.ref,
+        );
+      },
       (items) => {
         projectMemberships.value = items;
       },
     );
+  }
+
+  async function saveProjectMembership(
+    projectRef: string,
+    membership: Membership,
+    input: ProjectMembershipChangeInput,
+  ): Promise<Membership> {
+    const updated = await api.updateProjectMembership(
+      projectRef,
+      membership,
+      input,
+    );
+    projectMemberships.value = appendUnique(
+      projectMemberships.value,
+      [updated],
+      (item) => item.ref,
+    );
+    return updated;
+  }
+
+  async function revokeProjectMembership(
+    projectRef: string,
+    membership: Membership,
+  ): Promise<Membership> {
+    const updated = await api.revokeProjectMembership(projectRef, membership);
+    projectMemberships.value = appendUnique(
+      projectMemberships.value,
+      [updated],
+      (item) => item.ref,
+    );
+    return updated;
   }
 
   async function saveRole(
@@ -441,6 +497,8 @@ export const useAccessStore = defineStore("access", () => {
     loadWorkflows,
     loadIntegrations,
     loadMembershipPresentation,
+    saveProjectMembership,
+    revokeProjectMembership,
     saveRole,
     archiveRole,
     saveBinding,

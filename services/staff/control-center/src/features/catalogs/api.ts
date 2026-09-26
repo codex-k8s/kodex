@@ -52,6 +52,7 @@ export interface CatalogEntry {
   path: string;
   meta: string[];
   role?: string;
+  subjectRef?: string;
   agent?: Agent;
   workflow?: Workflow;
 }
@@ -95,6 +96,7 @@ export async function loadCatalog(
             path: `${prefix(item.projectRef)}/members`,
             meta: [],
             role: item.platformRole,
+            subjectRef: item.user.ref,
           };
         }),
       };

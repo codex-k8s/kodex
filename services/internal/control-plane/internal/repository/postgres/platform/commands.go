@@ -525,7 +525,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if item.Version != *input.Mutation.ExpectedVersion {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
-		if subjectID == scope.actorID && scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
+		if subjectID == scope.actorID {
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		err = tx.QueryRow(ctx, queryProjectMembershipUpdate, pgx.StrictNamedArgs{
@@ -646,7 +646,7 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 		if scope.role != "OWNER" && item.Role == "OWNER" {
 			return commandOutcome{}, errs.ErrForbidden
 		}
-		if subjectID == scope.actorID && !payload.Active {
+		if subjectID == scope.actorID && (!payload.Active || payload.Role != item.Role) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		if err := repository.protectLastOwner(ctx, tx, scope.organizationID, membershipID, item, payload.Role, payload.Active); err != nil {

@@ -62,6 +62,7 @@ it.each([undefined, "project_synthetic"])(
       projectRef: membership.projectRef,
       title: membership.user.displayName,
       role: "MEMBER",
+      subjectRef: membership.user.ref,
       path: "/projects/project_synthetic/members",
     });
     owner.abort();

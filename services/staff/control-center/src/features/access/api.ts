@@ -2,6 +2,7 @@ import { requestSignal } from "@/shared/api/client";
 import {
   archiveAccessRole,
   changeAccessBinding,
+  changeProjectMembership,
   createAccessBinding,
   createAccessRole,
   createAccessRoleVersion,
@@ -19,6 +20,7 @@ import {
   listProjects,
   listWorkflows,
   queryEffectiveAccess,
+  removeProjectMembership,
   revokeAccessBinding,
   simulateAccess,
 } from "@/shared/api/generated/openapi/sdk.gen";
@@ -41,6 +43,7 @@ import type {
   OidcGroupPage,
   IntegrationConnection,
   Membership,
+  ProjectMembershipChangeInput,
   PermissionDefinitionPage,
   ProjectPage,
   SimulateAccessInput,
@@ -251,15 +254,53 @@ export async function fetchPlatformMemberships(): Promise<Membership[]> {
 
 export async function fetchProjectMemberships(
   projectRef: string,
+  userRef?: string,
 ): Promise<Membership[]> {
   return (
     await unwrap(
       listProjectMemberships({
         path: { projectRef },
+        query: userRef ? { query: userRef, pageSize: 1 } : undefined,
         signal: requestSignal(),
       }),
     )
   ).data.items;
+}
+
+export async function updateProjectMembership(
+  projectRef: string,
+  membership: Membership,
+  input: ProjectMembershipChangeInput,
+): Promise<Membership> {
+  return (
+    await mutate(
+      (headers) =>
+        changeProjectMembership({
+          path: { projectRef, membershipRef: membership.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
+    )
+  ).data;
+}
+
+export async function revokeProjectMembership(
+  projectRef: string,
+  membership: Membership,
+): Promise<Membership> {
+  return (
+    await mutate(
+      (headers) =>
+        removeProjectMembership({
+          path: { projectRef, membershipRef: membership.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
+    )
+  ).data;
 }
 
 export async function addAccessRole(

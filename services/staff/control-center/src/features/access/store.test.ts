@@ -1,13 +1,18 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AccessBinding } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  AccessBinding,
+  Membership,
+} from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
 
 const fetchAccessSubjects = vi.hoisted(() => vi.fn());
 const fetchAccessBindings = vi.hoisted(() => vi.fn());
 const fetchPlatformMemberships = vi.hoisted(() => vi.fn());
 const fetchProjectMemberships = vi.hoisted(() => vi.fn());
+const updateProjectMembership = vi.hoisted(() => vi.fn());
+const revokeProjectMembership = vi.hoisted(() => vi.fn());
 const fetchAccessRoles = vi.hoisted(() => vi.fn());
 const fetchAccessRoleVersions = vi.hoisted(() => vi.fn());
 const fetchPermissionRegistry = vi.hoisted(() => vi.fn());
@@ -20,6 +25,8 @@ vi.mock("@/features/access/api", async (importOriginal) => ({
   fetchAccessBindings,
   fetchPlatformMemberships,
   fetchProjectMemberships,
+  updateProjectMembership,
+  revokeProjectMembership,
   fetchAccessRoles,
   fetchAccessRoleVersions,
   fetchPermissionRegistry,
@@ -215,6 +222,87 @@ describe("access store", () => {
     expect(fetchProjectMemberships).toHaveBeenCalledWith("project_sales");
     expect(store.platformMemberships).toEqual([platformMembership]);
     expect(store.projectMemberships).toEqual([projectMembership]);
+  });
+
+  it("находит выбранного участника проекта за пределами первой страницы", async () => {
+    const first: Membership = {
+      ref: "membership_first",
+      projectRef: "project_sales",
+      version: 1,
+      user: { ref: "subject_first", displayName: "Первый" },
+      platformRole: "MEMBER",
+      permissions: ["VIEW"],
+      active: true,
+      nextActions: [],
+    };
+    const selected: Membership = {
+      ...first,
+      ref: "membership_selected",
+      user: { ref: "subject_selected", displayName: "Выбранный" },
+    };
+    fetchPlatformMemberships.mockResolvedValue([]);
+    fetchProjectMemberships
+      .mockResolvedValueOnce([first])
+      .mockResolvedValueOnce([selected]);
+    const store = useAccessStore();
+
+    await store.loadMembershipPresentation("project_sales", "subject_selected");
+
+    expect(fetchProjectMemberships).toHaveBeenNthCalledWith(1, "project_sales");
+    expect(fetchProjectMemberships).toHaveBeenNthCalledWith(
+      2,
+      "project_sales",
+      "subject_selected",
+    );
+    expect(store.projectMemberships).toEqual([first, selected]);
+  });
+
+  it("после изменения и отзыва членства сохраняет серверную версию в read model", async () => {
+    const current: Membership = {
+      ref: "membership_project",
+      projectRef: "project_sales",
+      version: 1,
+      user: { ref: "subject_owner", displayName: "Владелец" },
+      platformRole: "OWNER" as const,
+      permissions: ["VIEW" as const],
+      active: true,
+      nextActions: ["EDIT" as const, "REVOKE" as const],
+    };
+    fetchPlatformMemberships.mockResolvedValue([]);
+    fetchProjectMemberships.mockResolvedValue([current]);
+    const changed: Membership = {
+      ...current,
+      version: 2,
+      permissions: ["VIEW_AUDIT"],
+    };
+    const revoked: Membership = {
+      ...changed,
+      version: 3,
+      active: false,
+      nextActions: [],
+    };
+    updateProjectMembership.mockResolvedValue(changed);
+    revokeProjectMembership.mockResolvedValue(revoked);
+    const store = useAccessStore();
+    await store.loadMembershipPresentation("project_sales");
+
+    await store.saveProjectMembership("project_sales", current, {
+      active: true,
+      permissions: ["VIEW_AUDIT"],
+    });
+    expect(updateProjectMembership).toHaveBeenCalledWith(
+      "project_sales",
+      current,
+      { active: true, permissions: ["VIEW_AUDIT"] },
+    );
+    expect(store.projectMemberships).toEqual([changed]);
+
+    await store.revokeProjectMembership("project_sales", changed);
+    expect(revokeProjectMembership).toHaveBeenCalledWith(
+      "project_sales",
+      changed,
+    );
+    expect(store.projectMemberships).toEqual([revoked]);
   });
 
   it("оставляет созданную роль видимой, если первая страница readback её не содержит", async () => {

@@ -4174,6 +4174,32 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if ownerMembership.Ref == "" {
 		t.Fatal("installation owner membership missing")
 	}
+	ownerProjectMemberships, _, err := service.ListMemberships(ctx, owner, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil {
+		t.Fatalf("list owner project membership: %v", err)
+	}
+	ownerProjectMembershipFound := false
+	for _, membership := range ownerProjectMemberships {
+		if membership.User.Ref != ownerMembership.User.Ref {
+			continue
+		}
+		ownerProjectMembershipFound = true
+		if len(membership.NextActions) != 0 {
+			t.Fatalf("owner received self project membership actions: %v", membership.NextActions)
+		}
+		ownerProjectVersion := membership.Version
+		if _, err := service.Execute(ctx, command.Command{
+			Kind: command.ChangeMembership, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "project-owner-self-deactivate", ExpectedVersion: &ownerProjectVersion},
+			Payload:  command.MembershipInput{ProjectRef: projectRef, MembershipRef: membership.Ref, Permissions: membership.Permissions, Active: false},
+		}); !errors.Is(err, domainerrs.ErrForbidden) {
+			t.Fatalf("owner changed own project membership: %v", err)
+		}
+		break
+	}
+	if !ownerProjectMembershipFound {
+		t.Fatal("owner project membership missing")
+	}
 	administratorInput := platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000004", ExternalTenantID: ownerInput.ExternalTenantID,
 		ExternalDisplayName: "Jamie Rivera", ExternalEmailHint: "j***@example.test",

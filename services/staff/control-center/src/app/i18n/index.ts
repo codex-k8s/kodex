@@ -469,6 +469,7 @@ const ru = {
     secrets: "Секреты",
     members: "Участники",
     expand: "Развернуть список проекта",
+    manageAccess: "Управлять доступом",
     emptySearchTitle: "Ничего не найдено",
     emptySearchHelp: "Измените запрос или очистите поиск.",
     emptyTitle: {
@@ -2355,6 +2356,17 @@ const ru = {
       emptyHint:
         "Пользователь появится после первого входа через OIDC; до выдачи binding доступ закрыт.",
     },
+    projectMembershipEditor: {
+      title: "Доступ участника к Проекту",
+      scope:
+        "Эти полномочия действуют только в выбранном Проекте. Платформенная роль здесь не меняется.",
+      active: "Членство активно",
+      permissions: "Полномочия в Проекте",
+      edit: "Изменить членство",
+      revoke: "Отозвать членство",
+      revokeConfirm:
+        "Отозвать членство участника «{name}» в этом Проекте? Его доступ будет закрыт.",
+    },
     groups: {
       title: "Группы OIDC",
       subtitle: "Проверенный read model групп провайдера identity",
@@ -3852,6 +3864,7 @@ const en = {
     secrets: "Secrets",
     members: "Members",
     expand: "Expand project list",
+    manageAccess: "Manage access",
     emptySearchTitle: "Nothing found",
     emptySearchHelp: "Change the query or clear the search field.",
     emptyTitle: {
@@ -5992,6 +6005,17 @@ const en = {
       empty: "No participants found",
       emptyHint:
         "A user appears after the first OIDC sign-in; access remains denied until a binding is assigned.",
+    },
+    projectMembershipEditor: {
+      title: "Project member access",
+      scope:
+        "These permissions apply only to the selected Project. The platform role is not changed here.",
+      active: "Membership active",
+      permissions: "Project permissions",
+      edit: "Edit membership",
+      revoke: "Revoke membership",
+      revokeConfirm:
+        "Revoke {name}'s membership in this Project? Their access will be closed.",
     },
     groups: {
       title: "OIDC groups",

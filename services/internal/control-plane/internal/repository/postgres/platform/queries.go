@@ -594,6 +594,9 @@ func platformMembershipActions(scope scope, item entity.Membership) []string {
 	if scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
 		return []string{}
 	}
+	if item.User.Ref == scope.actorRef {
+		return []string{}
+	}
 	if scope.role != "OWNER" && item.Role == "OWNER" {
 		return []string{}
 	}
@@ -605,7 +608,7 @@ func platformMembershipActions(scope scope, item entity.Membership) []string {
 }
 
 func projectMembershipActions(scope scope, item entity.Membership) []string {
-	if item.User.Ref == scope.actorRef && scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
+	if item.User.Ref == scope.actorRef {
 		return []string{}
 	}
 	actions := []string{"EDIT"}

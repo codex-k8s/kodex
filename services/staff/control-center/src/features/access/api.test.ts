@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   explainAccess: vi.fn(),
   listPlatformMemberships: vi.fn(),
+  listProjectMemberships: vi.fn(),
   queryEffectiveAccess: vi.fn(),
   simulateAccess: vi.fn(),
 }));
@@ -21,6 +22,7 @@ import {
   fetchAccessSimulation,
   fetchEffectiveAccess,
   fetchPlatformMemberships,
+  fetchProjectMemberships,
 } from "@/features/access/api";
 
 const csrfHeaders = {
@@ -104,6 +106,22 @@ describe("access decision API", () => {
       2,
       expect.objectContaining({
         query: { pageSize: 100, pageToken: "next-page" },
+      }),
+    );
+  });
+
+  it("загружает проектное членство по точному userRef", async () => {
+    sdk.listProjectMemberships.mockResolvedValue({
+      data: { items: [] },
+      response: new Response(null, { status: 200 }),
+    });
+
+    await fetchProjectMemberships("project_sales", "subject_selected");
+
+    expect(sdk.listProjectMemberships).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { projectRef: "project_sales" },
+        query: { query: "subject_selected", pageSize: 1 },
       }),
     );
   });

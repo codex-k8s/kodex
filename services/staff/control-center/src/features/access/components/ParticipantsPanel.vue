@@ -26,19 +26,24 @@ const props = defineProps<{
   platformMemberships: Membership[];
   projectMemberships: Membership[];
   projectRef?: string;
+  initialQuery?: string;
+  selectedSubjectRef?: string;
   platformMembershipsUnavailable?: boolean;
   projectMembershipsUnavailable?: boolean;
   loading?: boolean;
   problem?: AppProblem;
   hasMore?: boolean;
+  mutationBusy?: boolean;
 }>();
 const emit = defineEmits<{
   search: [query: string, pageSize: number];
   more: [query: string, pageSize: number];
   bind: [subject: AccessSubject];
+  "edit-membership": [membership: Membership];
+  "revoke-membership": [membership: Membership];
   retry: [];
 }>();
-const query = ref("");
+const query = ref(props.initialQuery ?? "");
 const searchId = useId();
 let timer: ReturnType<typeof setTimeout> | undefined;
 const listRoot = ref<HTMLElement>();
@@ -101,9 +106,16 @@ function permissionCount(subject: AccessSubject): number {
 }
 
 watch(query, (value) => {
+  if (value === (props.initialQuery ?? "")) return;
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => emit("search", value.trim(), pageSize.value), 250);
 });
+watch(
+  () => props.initialQuery,
+  (value) => {
+    query.value = value ?? "";
+  },
+);
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
 });
@@ -158,6 +170,9 @@ onBeforeUnmount(() => {
           v-for="subject in subjects"
           :key="subject.ref"
           class="access-table__row"
+          :class="{
+            'access-table__row--selected': subject.ref === selectedSubjectRef,
+          }"
           role="row"
         >
           <div>
@@ -213,14 +228,40 @@ onBeforeUnmount(() => {
             }}</span>
           </div>
           <StatusBadge :state="subject.active ? 'ACTIVE' : 'DISABLED'" />
-          <button
-            class="button"
-            type="button"
-            :disabled="!subject.active"
-            @click="emit('bind', subject)"
-          >
-            {{ $t("access.participants.createBinding") }}
-          </button>
+          <div class="access-table__actions">
+            <button
+              v-if="
+                projectRef &&
+                projectMembership(subject)?.nextActions.includes('EDIT')
+              "
+              class="button"
+              type="button"
+              :disabled="mutationBusy"
+              @click="emit('edit-membership', projectMembership(subject)!)"
+            >
+              {{ $t("access.projectMembershipEditor.edit") }}
+            </button>
+            <button
+              v-if="
+                projectRef &&
+                projectMembership(subject)?.nextActions.includes('REVOKE')
+              "
+              class="button button--danger"
+              type="button"
+              :disabled="mutationBusy"
+              @click="emit('revoke-membership', projectMembership(subject)!)"
+            >
+              {{ $t("access.projectMembershipEditor.revoke") }}
+            </button>
+            <button
+              class="button"
+              type="button"
+              :disabled="!subject.active || mutationBusy"
+              @click="emit('bind', subject)"
+            >
+              {{ $t("access.participants.createBinding") }}
+            </button>
+          </div>
         </article>
       </div>
       <div v-if="hasMore" ref="sentinel" class="cursor-sentinel" />
@@ -229,6 +270,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.access-table__row--selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 var(--accent);
+}
 .section-toolbar {
   display: flex;
   align-items: end;
@@ -275,6 +320,12 @@ onBeforeUnmount(() => {
 }
 .access-table__row > div:first-child {
   min-width: 0;
+}
+.access-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
 }
 .access-table__row small {
   display: block;
