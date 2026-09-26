@@ -74,6 +74,8 @@ const custom = computed(() =>
         editTitle: "Edit automation",
         schedule: "Schedule",
         task: "Task",
+        nextTimes: "Next scheduled starts",
+        cronLabel: "Schedule expression",
         advancedSchedule: "Advanced schedule",
         targetType: "Target type",
         versionHint: props.schedule
@@ -86,6 +88,8 @@ const custom = computed(() =>
         editTitle: "Изменить автоматизацию",
         schedule: "Расписание",
         task: "Задача",
+        nextTimes: "Ближайшие запуски",
+        cronLabel: "Выражение расписания",
         advancedSchedule: "Расширенное расписание",
         targetType: "Тип цели",
         versionHint: props.schedule
@@ -101,6 +105,16 @@ const preview = ref<SchedulePreview>();
 const previewProblem = ref<AppProblem>();
 const previewBusy = ref(false);
 const schedulePreviewInput = computed(() => scheduleTimePreview(form));
+function formatOccurrence(time: string): string {
+  return new Intl.DateTimeFormat(locale.value, {
+    timeZone: form.timezone,
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(time));
+}
 onMounted(() =>
   watch(
     schedulePreviewInput,
@@ -406,16 +420,16 @@ function submit(): void {
         <ProblemNotice v-if="previewProblem" :problem="previewProblem" />
         <p v-if="previewBusy" role="status">{{ $t("common.loading") }}</p>
         <div v-else-if="preview" class="automation-editor__preview">
-          <code>{{ preview.normalizedCronExpression }}</code>
+          <p class="automation-editor__preview-label">{{ custom.nextTimes }}</p>
           <ol>
             <li v-for="time in preview.occurrences" :key="time">
-              <time>{{
-                new Date(time).toLocaleString(locale, {
-                  timeZone: form.timezone,
-                })
-              }}</time>
+              <time :datetime="time">{{ formatOccurrence(time) }}</time>
             </li>
           </ol>
+          <p class="automation-editor__preview-expression">
+            {{ custom.cronLabel }}:
+            <code>{{ preview.normalizedCronExpression }}</code>
+          </p>
         </div>
       </section>
 
@@ -537,6 +551,31 @@ function submit(): void {
   display: grid;
   grid-template-columns: minmax(160px, 0.7fr) minmax(240px, 1.3fr);
   gap: 12px;
+}
+.automation-editor__target-grid :deep(.async-picker__trigger-row) {
+  width: 100%;
+}
+.automation-editor__preview {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.automation-editor__preview-label {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+.automation-editor__preview ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  padding-left: 20px;
+}
+.automation-editor__preview-expression {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .automation-editor__schedule-grid {
   display: grid;
