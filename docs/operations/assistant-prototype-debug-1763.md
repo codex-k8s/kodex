@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.65
+version: 1.0.66
 updated: 2026-09-26
 ---
 
@@ -1188,3 +1188,15 @@ GitHub checks не считается `PASS`.
   После HMR и reload без кэша пустой Marketplace показывает только поиск,
   точный счётчик и «Создать секрет»; console errors/warnings и HTTP 4xx/5xx
   отсутствуют. Визуальная приёмка владельцем — NOT RUN.
+- Защищённые формы секрета регистрировали component route guards вне
+  `<router-view>`, поэтому каждое открытие из помощника создавало четыре
+  предупреждения Vue Router. Общая защита несохранённых изменений переведена
+  на снимаемый `router.beforeEach`: она действует и для route-экранов, и для
+  вложенных модалок, а при размонтировании удаляет guard и `beforeunload`
+  listener. Адресный unit 2/2, typecheck, ESLint, Prettier и
+  `git diff --check` — PASS. После HMR и reload без кэша в Chrome 1920×1080
+  защищённая форма открылась поверх сохранённого диалога и после закрытия
+  вернула тот же диалог с обоими независимыми вариантами плана; console
+  errors/warnings, HTTP 4xx/5xx и горизонтальное переполнение отсутствуют.
+  Screenshot: `/tmp/kodex-assistant-secret-return-clean.png`. Визуальная
+  приёмка владельцем — NOT RUN.
