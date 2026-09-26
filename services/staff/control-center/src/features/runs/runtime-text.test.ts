@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { presentRuntimeText } from "@/features/runs/runtime-text";
+import {
+  presentRuntimeText,
+  runtimeProgressKey,
+} from "@/features/runs/runtime-text";
 
 const identity = (value: string): string => value;
 
 describe("presentRuntimeText", () => {
+  it("распознаёт только известные статусы выполнения для локализации", () => {
+    expect(runtimeProgressKey("WORKLOAD_SCHEDULED")).toBe(
+      "runs.runtimeProgress.workloadScheduled",
+    );
+    expect(runtimeProgressKey("MODEL_REQUEST_RUNNING")).toBe(
+      "runs.runtimeProgress.modelRequestRunning",
+    );
+    expect(runtimeProgressKey("ARBITRARY_INTERNAL_STATUS")).toBeUndefined();
+  });
   it("скрывает служебные коды и внутренние ссылки runtime", () => {
     expect(
       presentRuntimeText(

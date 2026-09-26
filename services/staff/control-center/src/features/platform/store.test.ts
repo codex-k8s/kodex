@@ -484,6 +484,56 @@ describe("platform store", () => {
     expect(store.problems.gateCount).toBeDefined();
   });
 
+  it("догружает решения запуска по курсору без неподдерживаемого runRef-фильтра", async () => {
+    const other = { ...ownerGate(), ref: "gate_other", runRef: "run_other" };
+    const target = ownerGate();
+    listOwnerGatesMock
+      .mockResolvedValueOnce({
+        data: { items: [other], total: 2, nextPageToken: "gate-page-2" },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [target], total: 2, nextPageToken: "" },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadGates("project_synthetic", "run_synthetic");
+
+    expect(store.gates.gate_synthetic).toEqual(target);
+    expect(store.problems.gates).toBeUndefined();
+    expect(listOwnerGatesMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        query: { projectRef: "project_synthetic", pageSize: 100 },
+      }),
+    );
+    expect(listOwnerGatesMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        query: {
+          projectRef: "project_synthetic",
+          pageSize: 100,
+          pageToken: "gate-page-2",
+        },
+      }),
+    );
+  });
+
+  it("не применяет неполный список при повторном курсоре решений", async () => {
+    listOwnerGatesMock.mockResolvedValue({
+      data: { items: [ownerGate()], total: 2, nextPageToken: "same-page" },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadGates("project_synthetic", "run_synthetic");
+
+    expect(listOwnerGatesMock).toHaveBeenCalledTimes(2);
+    expect(store.gateList).toEqual([]);
+    expect(store.problems.gates).toBeDefined();
+  });
+
   it("не позволяет старому HTTP response перезаписать новый", async () => {
     const oldResponse = deferred<ReturnType<typeof response>>();
     const newResponse = deferred<ReturnType<typeof response>>();

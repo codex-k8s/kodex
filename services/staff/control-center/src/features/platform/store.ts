@@ -141,8 +141,8 @@ import {
   type MutationHeaders,
 } from "@/shared/api/mutation";
 import {
+  AppProblem,
   asProblem,
-  type AppProblem,
   normalizeProblem,
   unwrap,
 } from "@/shared/api/problem";
@@ -794,19 +794,36 @@ export const usePlatformStore = defineStore("platform", () => {
   ): Promise<void> {
     await query(
       "gates",
-      async () =>
-        (
-          await unwrap(
+      async () => {
+        const values: OwnerGate[] = [];
+        const visited = new Set<string>();
+        let pageToken: string | undefined;
+        do {
+          const response = await unwrap(
             listOwnerGates({
               query: {
                 ...(projectRef ? { projectRef } : {}),
-                ...(runRef ? { runRef } : {}),
                 pageSize: 100,
+                ...(pageToken ? { pageToken } : {}),
               },
               signal: requestSignal(),
             }),
-          )
-        ).data.items,
+          );
+          values.push(...response.data.items);
+          pageToken = response.data.nextPageToken || undefined;
+          if (pageToken) {
+            if (visited.has(pageToken))
+              throw new AppProblem({
+                status: 502,
+                code: "OWNER_GATE_CURSOR_REPEATED",
+                retryable: false,
+                kind: "unavailable",
+              });
+            visited.add(pageToken);
+          }
+        } while (pageToken);
+        return values;
+      },
       (values) => {
         if (runRef)
           replaceScoped(gates, values, (gate) => gate.runRef === runRef);

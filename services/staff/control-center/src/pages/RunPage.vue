@@ -25,7 +25,10 @@ import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
-import { presentRuntimeText } from "@/features/runs/runtime-text";
+import {
+  presentRuntimeText,
+  runtimeProgressKey,
+} from "@/features/runs/runtime-text";
 import {
   indexRunSessionOwnership,
   projectRunSessionGraph,
@@ -74,8 +77,13 @@ const graph = computed(
 const streamState = computed(
   () => realtime.state[graph.value?.runRef ?? runRef.value],
 );
-function safeRuntimeText(value?: string): string | undefined {
-  return presentRuntimeText(value, serverMessage);
+function safeRuntimeText(
+  value?: string,
+  messageKind?: RunEvent["messageKind"],
+): string | undefined {
+  const progressKey = runtimeProgressKey(value);
+  if (progressKey) return translator.t(progressKey);
+  return presentRuntimeText(value, serverMessage, messageKind);
 }
 
 const runSubtitle = computed(
@@ -169,13 +177,9 @@ const eventList = computed<PresentedRunEvent[]>(() =>
     .map((event) => ({
       ...event,
       displaySummary:
-        presentRuntimeText(event.summary, serverMessage, event.messageKind) ??
+        safeRuntimeText(event.summary, event.messageKind) ??
         eventFallback(event),
-      displayProgress: presentRuntimeText(
-        event.progress,
-        serverMessage,
-        event.messageKind,
-      ),
+      displayProgress: safeRuntimeText(event.progress, event.messageKind),
     })),
 );
 const gateList = computed(() =>

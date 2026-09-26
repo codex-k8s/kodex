@@ -45,6 +45,7 @@ const contextField = `run-activity-context-${useId()}`;
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale } = useI18n();
 const selectedNodeRef = ref("");
+const expandedMessages = ref<Record<string, boolean>>({});
 const sessionNodes = computed(() => props.nodes.filter(isRunSessionNode));
 
 const artifactsByRef = computed(
@@ -259,7 +260,7 @@ function formatBytes(value: number): string {
                   {{ $t("common.noData") }}
                 </p>
               </details>
-              <small>
+              <small v-if="item.toolCall.durationMs !== undefined">
                 {{
                   $t("runs.toolDuration", {
                     duration: item.toolCall.durationMs,
@@ -272,9 +273,36 @@ function formatBytes(value: number): string {
               <SafeMarkdown
                 v-if="item.summary"
                 :content="item.summary"
-                class="run-activity-item__message"
+                :class="[
+                  'run-activity-item__message',
+                  {
+                    'run-activity-item__message--collapsed':
+                      item.kind === 'initiator' &&
+                      item.summary.length > 360 &&
+                      !expandedMessages[item.id],
+                  },
+                ]"
               />
-              <p v-else class="run-activity-item__empty">
+              <button
+                v-if="
+                  item.kind === 'initiator' &&
+                  item.summary &&
+                  item.summary.length > 360
+                "
+                type="button"
+                class="run-activity-item__expand"
+                :aria-expanded="Boolean(expandedMessages[item.id])"
+                @click="expandedMessages[item.id] = !expandedMessages[item.id]"
+              >
+                {{
+                  $t(
+                    expandedMessages[item.id]
+                      ? "runs.collapseMessage"
+                      : "runs.expandMessage",
+                  )
+                }}
+              </button>
+              <p v-if="!item.summary" class="run-activity-item__empty">
                 {{ $t("common.noData") }}
               </p>
               <SafeMarkdown
@@ -519,6 +547,26 @@ function formatBytes(value: number): string {
 .run-activity-item__progress :deep(p),
 .run-activity-item__empty {
   margin: 0;
+}
+.run-activity-item__message--collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.run-activity-item__expand {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.run-activity-item__expand:hover {
+  text-decoration: underline;
 }
 .run-activity-item__progress {
   margin-top: 7px;

@@ -106,6 +106,7 @@ async function render(
   events: PresentedRunEvent[] = [event],
   artifacts: Artifact[] = [],
   initialNodeRef?: string,
+  initiatorSummary = run.inputSummary ?? "",
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -115,7 +116,7 @@ async function render(
         nodes,
         events,
         artifacts,
-        initiatorSummary: run.inputSummary ?? "",
+        initiatorSummary,
         initialNodeRef,
       }),
   });
@@ -141,6 +142,8 @@ async function render(
             toolResult: "Безопасный результат",
             artifactUnavailable: "Описание файла недоступно",
             toolDuration: "Длительность: {duration} мс",
+            expandMessage: "Показать полностью",
+            collapseMessage: "Свернуть",
             nodeTypes: { EXTERNAL_ACTION: "Внешнее действие" },
           },
           states: { RUNNING: "Выполняется", SUCCEEDED: "Завершено" },
@@ -203,6 +206,46 @@ describe("RunActivityDrawer", () => {
     expect(html).toContain("Найдено 4 фрагмента");
     expect(html).toContain("Безопасный результат");
     expect(html).toContain("Длительность: 240 мс");
+  });
+
+  it("не выводит пустую длительность неуспешного вызова инструмента", async () => {
+    const failedTool: PresentedRunEvent = {
+      ...event,
+      ref: "evt_failed_tool",
+      type: "TOOL_CALL_RECORDED",
+      toolCall: {
+        ref: "trn_failed_tool",
+        tool: "integration.read",
+        safeParameters: {},
+        state: "FAILED",
+        safeResult: "",
+        auditRef: "evt_failed_audit",
+        durationMs: 0,
+      },
+    };
+    if (!failedTool.toolCall) throw new Error("Test tool call is missing");
+    Reflect.deleteProperty(failedTool.toolCall, "durationMs");
+
+    const html = await render([node], [failedTool]);
+
+    expect(html).toContain("integration.read");
+    expect(html).not.toContain("Длительность:");
+  });
+
+  it("сворачивает длинное сообщение инициатора, сохраняя раскрытие", async () => {
+    const html = await render();
+    expect(html).not.toContain("Показать полностью");
+    expect(html).not.toContain("Нет данных");
+
+    const longHtml = await render(
+      [node],
+      [event],
+      [],
+      undefined,
+      "Проверить отчёт. ".repeat(30),
+    );
+    expect(longHtml).toContain("run-activity-item__message--collapsed");
+    expect(longHtml).toContain("Показать полностью");
   });
 
   it("показывает безопасное описание файла из события", async () => {

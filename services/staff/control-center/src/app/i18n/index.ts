@@ -1808,6 +1808,12 @@ const ru = {
     toolParameters: "Безопасные параметры",
     toolResult: "Безопасный результат",
     toolDuration: "Длительность: {duration} мс",
+    expandMessage: "Показать полностью",
+    collapseMessage: "Свернуть",
+    runtimeProgress: {
+      workloadScheduled: "Задание передано исполнителю",
+      modelRequestRunning: "Модель обрабатывает запрос",
+    },
     artifactUnavailable:
       "Событие файла получено, но его безопасное описание недоступно.",
     renderedPromptUnavailable:
@@ -5455,6 +5461,12 @@ const en = {
     toolParameters: "Safe parameters",
     toolResult: "Safe result",
     toolDuration: "Duration: {duration} ms",
+    expandMessage: "Show full message",
+    collapseMessage: "Collapse",
+    runtimeProgress: {
+      workloadScheduled: "Task handed to the worker",
+      modelRequestRunning: "Model is processing the request",
+    },
     artifactUnavailable:
       "A file event was received, but its safe descriptor is unavailable.",
     renderedPromptUnavailable:

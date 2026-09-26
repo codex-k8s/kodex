@@ -382,7 +382,10 @@ function eventKind(
                     />
                     <p v-else>{{ $t("common.noData") }}</p>
                   </details>
-                  <small class="session-details__tool-duration">
+                  <small
+                    v-if="event.toolCall.durationMs !== undefined"
+                    class="session-details__tool-duration"
+                  >
                     {{
                       $t("runs.toolDuration", {
                         duration: event.toolCall.durationMs,
