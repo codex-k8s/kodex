@@ -916,3 +916,12 @@ GitHub checks не считается `PASS`.
   рассчитывается по доступной области, а последующие страницы добавляются к
   текущему cursor. Обычные `select` сохранены только для коротких закрытых enum:
   вида субъекта, scope, вида ресурса и permission registry.
+- Два успешно опубликованных runtime Secret оставались в recovery-каталоге:
+  специализированный draft-reconciler подтверждал удаление временного
+  encrypted object, после чего общий scan той же итоговой materialization
+  повторно выполнял `RECOVER` и безусловно сбрасывал `cleanup_completed`.
+  Owner-транзакция теперь сбрасывает подтверждение только при первом появлении
+  нового exact DELETE-дескриптора, а повторный recovery того же намерения
+  сохраняет ACK. Terminal-ветка отдельно закрывает cleanup для точного
+  `COMPLETED/PUBLISHED` без staging и с подтверждённой retained materialization;
+  рабочий Secret не удаляется.
