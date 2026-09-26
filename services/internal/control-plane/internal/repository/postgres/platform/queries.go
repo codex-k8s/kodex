@@ -329,13 +329,33 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 	if err != nil {
 		return nil, "", nil, err
 	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	cursor, err := decodeCatalogCursor(scope, "PROJECT", filter)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	cursorAt, cursorRef := "", ""
+	if cursor != "" {
+		var found bool
+		cursorAt, cursorRef, found = strings.Cut(cursor, "|")
+		if !found || !strings.HasPrefix(cursorRef, "prj_") {
+			return nil, "", nil, errs.ErrInvalid
+		}
+		if _, err := time.Parse(time.RFC3339Nano, cursorAt); err != nil {
+			return nil, "", nil, errs.ErrInvalid
+		}
+	}
+	limit := boundedPage(filter.Page)
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	rows, err := tx.Query(ctx, queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId,
-		scope.organizationID, scope.actorID, strings.TrimSpace(filter.Query), boundedPage(filter.Page), scope.authorityProjectID)
+	rows, err := tx.Query(ctx, queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "actor_id": scope.actorID, "query": filter.Query,
+		"authority_project": scope.authorityProjectID, "cursor_at": cursorAt, "cursor_ref": cursorRef,
+		"page_size": limit + 1,
+	})
 	if err != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
@@ -362,6 +382,12 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 		return nil, "", nil, errs.ErrUnavailable
 	}
 	rows.Close()
+	next := ""
+	if len(result) > int(limit) {
+		result = result[:limit]
+		last := result[len(result)-1]
+		next = encodeCatalogCursor(scope, "PROJECT", filter, last.UpdatedAt.UTC().Format(time.RFC3339Nano)+"|"+last.Ref)
+	}
 	selected := make([]*entity.Project, len(result))
 	for index := range result {
 		selected[index] = &result[index]
@@ -372,7 +398,7 @@ func (repository *Repository) ListProjects(ctx context.Context, principal value.
 	if tx.Commit(ctx) != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
-	return result, "", actions, nil
+	return result, next, actions, nil
 }
 
 func (repository *Repository) GetProject(ctx context.Context, principal value.Principal, ref string) (entity.Project, error) {

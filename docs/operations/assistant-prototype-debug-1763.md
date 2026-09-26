@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.85
+version: 1.0.86
 updated: 2026-09-26
 ---
 
@@ -1553,3 +1553,16 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-secret-single-dialog-1920.png`. Значение Secret не вводилось
   и не отправлялось. SHA исходников на host и в read-only `/workspace`
   совпадают, frontend Pod Ready 1/1. Визуальная приёмка владельцем — NOT RUN.
+- Каталог проектов показывал только первую порцию: CP игнорировал курсор и
+  возвращал пустой `nextPageToken`, хотя frontend уже умел догружать элементы.
+  `ListProjects` теперь использует owner-scoped токен, привязанный к actor,
+  организации и поисковому фильтру; SQL читает `limit + 1` с детерминированным
+  порядком `updated_at, ref`. Read-only путь: browser session → gateway → CP
+  → project eligibility в PostgreSQL → страница и следующий курсор → UI.
+  Мутации и события отсутствуют. Первый hot reload выявил забытый позиционный
+  параметр в SQL и дал HTTP 503; параметр исправлен, добавлен адресный тест
+  запрета смешения аргументов. После второго Air reload Chrome загрузил все 45
+  проектов четырьмя порциями без дублей; два запроса с `pageSize=2` вернули по два
+  разных проекта, токен с другим поисковым фильтром закрыто отклонён HTTP 400.
+  Итоговый screenshot: `/tmp/kodex-projects-cursor-final-20260926.png`.
+  Это локальная browser-проверка на незакоммиченном дереве, не полная приёмка.
