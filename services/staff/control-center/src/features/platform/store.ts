@@ -1863,7 +1863,6 @@ export const usePlatformStore = defineStore("platform", () => {
     };
     switch (kind) {
       case "PROJECT":
-        add("projects", loadProjects);
         add("overview", () => loadOverview(projectRef));
         if (projectRef) add("project", () => loadProject(projectRef));
         break;

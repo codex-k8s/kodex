@@ -19,6 +19,7 @@ import type {
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 
 const listProjectsMock = vi.hoisted(() => vi.fn());
+const getOverviewMock = vi.hoisted(() => vi.fn());
 const searchPlatformMock = vi.hoisted(() => vi.fn());
 const listAuditEventsMock = vi.hoisted(() => vi.fn());
 const getRunGraphMock = vi.hoisted(() => vi.fn());
@@ -81,6 +82,7 @@ vi.mock("@/shared/api/generated/openapi/sdk.gen", async (importOriginal) => ({
     typeof import("@/shared/api/generated/openapi/sdk.gen")
   >()),
   listProjects: listProjectsMock,
+  getOverview: getOverviewMock,
   searchPlatform: searchPlatformMock,
   listAuditEvents: listAuditEventsMock,
   getRunGraph: getRunGraphMock,
@@ -337,6 +339,7 @@ describe("platform store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     listProjectsMock.mockReset();
+    getOverviewMock.mockReset();
     searchPlatformMock.mockReset();
     listAuditEventsMock.mockReset();
     getRunGraphMock.mockReset();
@@ -399,6 +402,19 @@ describe("platform store", () => {
     await first;
     expect(store.runs.run_fresh).toBeDefined();
     expect(store.runs.run_stale).toBeUndefined();
+  });
+
+  it("обновляет проектное событие без предзагрузки первой сотни проектов", async () => {
+    getOverviewMock.mockResolvedValue({
+      data: { activeRuns: [], pendingGates: [], recentArtifacts: [] },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.reloadPlatformKind("PROJECT");
+
+    expect(getOverviewMock).toHaveBeenCalledTimes(1);
+    expect(listProjectsMock).not.toHaveBeenCalled();
   });
 
   it("не позволяет старому HTTP response перезаписать новый", async () => {
