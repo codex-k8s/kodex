@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.68
+version: 1.0.69
 updated: 2026-09-26
 ---
 
@@ -1222,3 +1222,11 @@ GitHub checks не считается `PASS`.
   console errors/warnings, HTTP 4xx/5xx и горизонтальное переполнение
   отсутствуют. Screenshot: `/tmp/kodex-provider-accounts-short-list.png`.
   Визуальная приёмка владельцем — NOT RUN.
+- Уже подтверждённая device-code запись показывала первичное действие
+  «Авторизовать». Для состояния `AUTHORIZED` оно теперь точно называется
+  «Переавторизовать»; ещё не настроенная запись сохраняет первичную подпись.
+  Адресный layout-unit 4/4, typecheck, ESLint, Prettier и `git diff --check` —
+  PASS. После HMR и reload без кэша Chrome показал корректную подпись у
+  подписочной записи; console errors/warnings и HTTP 4xx/5xx отсутствуют.
+  Screenshot: `/tmp/kodex-provider-reauthorize-label.png`. Визуальная приёмка
+  владельцем — NOT RUN.

@@ -36,6 +36,8 @@ describe("provider account layout", () => {
     expect(workspace).toContain("safeVerificationUri");
     expect(workspace).toContain("definitionsNextPageToken");
     expect(workspace).toContain("requestRevoke(account)");
+    expect(workspace).toContain('account.state === "AUTHORIZED"');
+    expect(workspace).toContain('"providers.reauthorize"');
   });
 
   it("подключает богатый selector к runtime без старой заглушки", () => {

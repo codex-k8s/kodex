@@ -693,7 +693,13 @@ onBeforeUnmount(() => {
                 :disabled="busyRefs.includes(account.ref)"
                 @click="openAuthorization(account)"
               >
-                {{ $t("providers.authorize") }}
+                {{
+                  $t(
+                    account.state === "AUTHORIZED"
+                      ? "providers.reauthorize"
+                      : "providers.authorize",
+                  )
+                }}
               </button>
               <button
                 v-if="
