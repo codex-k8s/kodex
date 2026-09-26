@@ -956,7 +956,6 @@ onMounted(() => {
     integrationsLoaded.value = true;
     return loadConnections();
   });
-  void platform.loadProjects();
 });
 
 onBeforeUnmount(() => {

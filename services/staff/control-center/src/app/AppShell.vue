@@ -482,7 +482,6 @@ onMounted(() => {
     realtimeStarted.value = true;
     realtime.openPlatform();
     return Promise.all([
-      platform.loadProjects(),
       platform.loadGates(),
       platform.loadBootstrap(),
     ]);
