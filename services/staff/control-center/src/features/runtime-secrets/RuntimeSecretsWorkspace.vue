@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
       </label>
       <div class="runtime-secrets__toolbar-meta">
         <button
-          v-if="!expanded"
+          v-if="!expanded && store.items.length > 0"
           class="icon-button"
           type="button"
           :title="$t('catalog.expand')"
