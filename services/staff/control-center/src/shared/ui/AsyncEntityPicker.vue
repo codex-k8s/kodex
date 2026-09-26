@@ -184,7 +184,9 @@ const selectedIds = computed<readonly string[]>(() => {
     return props.modelValue.filter(
       (id): id is string => typeof id === "string",
     );
-  return typeof props.modelValue === "string" ? [props.modelValue] : [];
+  return typeof props.modelValue === "string" && props.modelValue
+    ? [props.modelValue]
+    : [];
 });
 const selectedOption = computed(() => {
   if (typeof props.modelValue !== "string" || !props.modelValue)
