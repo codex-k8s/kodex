@@ -125,4 +125,42 @@ describe("access decision API", () => {
       }),
     );
   });
+
+  it("читает все страницы проектного членства для таблицы участников", async () => {
+    const membership = (ref: string) => ({ ref, user: { ref: `user_${ref}` } });
+    sdk.listProjectMemberships
+      .mockResolvedValueOnce({
+        data: { items: [membership("first")], nextPageToken: "next-page" },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [membership("second")] },
+        response: new Response(null, { status: 200 }),
+      });
+
+    await expect(fetchProjectMemberships("project_sales")).resolves.toEqual([
+      membership("first"),
+      membership("second"),
+    ]);
+    expect(sdk.listProjectMemberships).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        path: { projectRef: "project_sales" },
+        query: { pageSize: 100, pageToken: "next-page" },
+      }),
+    );
+    expect(sdk.listProjectMemberships).toHaveBeenCalledTimes(2);
+  });
+
+  it("закрыто отклоняет повторный курсор проектного членства", async () => {
+    sdk.listProjectMemberships.mockResolvedValue({
+      data: { items: [], nextPageToken: "stuck" },
+      response: new Response(null, { status: 200 }),
+    });
+
+    await expect(fetchProjectMemberships("project_sales")).rejects.toThrow(
+      "Project membership pagination token was repeated",
+    );
+    expect(sdk.listProjectMemberships).toHaveBeenCalledTimes(2);
+  });
 });

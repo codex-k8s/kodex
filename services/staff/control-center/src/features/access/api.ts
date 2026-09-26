@@ -256,15 +256,30 @@ export async function fetchProjectMemberships(
   projectRef: string,
   userRef?: string,
 ): Promise<Membership[]> {
-  return (
-    await unwrap(
-      listProjectMemberships({
-        path: { projectRef },
-        query: userRef ? { query: userRef, pageSize: 1 } : undefined,
-        signal: requestSignal(),
-      }),
-    )
-  ).data.items;
+  const items: Membership[] = [];
+  const seenPageTokens = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const page = (
+      await unwrap(
+        listProjectMemberships({
+          path: { projectRef },
+          query: userRef
+            ? { query: userRef, pageSize: 1 }
+            : { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+    items.push(...page.items);
+    if (userRef) break;
+    pageToken = page.nextPageToken;
+    if (pageToken && seenPageTokens.has(pageToken)) {
+      throw new Error("Project membership pagination token was repeated");
+    }
+    if (pageToken) seenPageTokens.add(pageToken);
+  } while (pageToken);
+  return items;
 }
 
 export async function updateProjectMembership(
