@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.59
+version: 1.0.60
 updated: 2026-09-26
 ---
 
@@ -1115,3 +1115,19 @@ GitHub checks не считается `PASS`.
   горизонтального переполнения, console errors/warnings и HTTP 4xx/5xx.
   Screenshot: `/tmp/kodex-integrations-catalog-counts-final.png`. Визуальная
   приёмка владельцем — NOT RUN.
+- Список разрешений интеграций больше не ограничен случайной первой порцией
+  подключений. Он использует тот же server-side поиск подключений и cursor,
+  автоматически догружает следующую динамическую порцию внутри прокручиваемой
+  области и не сбрасывает уже загруженные строки при resize. На локальных
+  данных Chrome подтвердил последовательную дозагрузку `17 → 31 → 39 → 51`,
+  а поиск `GitHub` сузил авторитетный список до двух разрешений; очистка поиска
+  вернула общий cursor. Адресные frontend unit 10/10, typecheck, production
+  build, ESLint, Prettier и `git diff --check` — PASS; build сохраняет известное
+  предупреждение о чанке больше 500 KiB. SHA трёх изменённых frontend-файлов на
+  host и в read-only `/workspace` Pod совпадают, Deployment готов `1/1`. На
+  1920×1080 форма выдачи и список не пересекаются, горизонтального переполнения
+  нет. После итогового reload без кэша console errors/warnings и HTTP 4xx/5xx
+  отсутствуют; ранее наблюдавшийся `ERR_NETWORK_CHANGED` одного bootstrap был
+  транзитным. Screenshot:
+  `/tmp/kodex-integrations-grants-cursor.png`. Визуальная приёмка владельцем —
+  NOT RUN.

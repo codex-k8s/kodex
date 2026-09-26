@@ -2144,6 +2144,7 @@ const ru = {
     grantsDescription:
       "Каждое разрешение связывает одну capability с одним ИИ-сотрудником или Процессом.",
     grantCount: "Разрешений: {count}",
+    searchGrantConnections: "Найти разрешения по подключению",
     connectionPicker: "Подключение",
     allConnections: "Все подключения",
     targetKind: {
@@ -5758,6 +5759,7 @@ const en = {
     grantsDescription:
       "Each grant binds one capability to one AI employee or Process.",
     grantCount: "Grants: {count}",
+    searchGrantConnections: "Find grants by connection",
     connectionPicker: "Connection",
     allConnections: "All connections",
     targetKind: {

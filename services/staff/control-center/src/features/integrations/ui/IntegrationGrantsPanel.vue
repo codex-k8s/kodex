@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LockKeyhole, Plus, ShieldCheck, Trash2 } from "@lucide/vue";
+import { LockKeyhole, Plus, Search, ShieldCheck, Trash2 } from "@lucide/vue";
 import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -21,9 +21,10 @@ import type {
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
-import type {
-  AsyncEntityOption,
-  AsyncEntityOptionPage,
+import {
+  useCursorInfiniteScroll,
+  type AsyncEntityOption,
+  type AsyncEntityOptionPage,
 } from "@/shared/ui/async-entity-picker";
 import {
   connectionCandidates,
@@ -41,6 +42,9 @@ const props = defineProps<{
   targetRef: string;
   capabilityKey: string;
   busy: boolean;
+  search?: string;
+  loading?: boolean;
+  hasMore?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -51,6 +55,8 @@ const emit = defineEmits<{
   "update:capabilityKey": [value: string];
   save: [selection: IntegrationGrantSelection];
   revoke: [grant: IntegrationGrantPresentation];
+  "update:search": [value: string];
+  more: [];
 }>();
 
 const { t } = useI18n();
@@ -62,6 +68,14 @@ const projectCandidate = ref<IntegrationGrantProjectCandidate>();
 const recipientCandidate = ref<IntegrationGrantRecipientCandidate>();
 const capabilityCandidate = ref<IntegrationGrantCapabilityCandidate>();
 const approvalScopePaths = ref<string[]>([]);
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more"),
+});
 const availableApprovalScopePaths = computed(() =>
   approvalScopeOptions(capabilityCandidate.value?.capability.inputSchema),
 );
@@ -443,18 +457,34 @@ const canManageSelected = computed(
     </header>
 
     <div class="grant-workspace">
-      <div class="grant-list-column">
-        <label class="connection-picker">
-          <span>{{ t("integrationsRedesign.connectionPicker") }}</span>
-          <AsyncEntityPicker
-            :model-value="selectedConnection?.ref"
-            :selected="connectionOption"
-            :load-page="loadConnections"
-            :trigger-label="t('integrationsRedesign.connectionPicker')"
-            :placeholder="t('integrationsRedesign.allConnections')"
-            @update:model-value="changeConnection"
-          />
-        </label>
+      <div ref="scrollRoot" class="grant-list-column">
+        <div class="grant-list-toolbar">
+          <label class="grant-search">
+            <Search :size="16" aria-hidden="true" />
+            <span class="sr-only">{{
+              t("integrationsRedesign.searchGrantConnections")
+            }}</span>
+            <input
+              type="search"
+              :value="search ?? ''"
+              :placeholder="t('integrationsRedesign.searchGrantConnections')"
+              @input="
+                emit('update:search', ($event.target as HTMLInputElement).value)
+              "
+            />
+          </label>
+          <label class="connection-picker">
+            <span>{{ t("integrationsRedesign.connectionPicker") }}</span>
+            <AsyncEntityPicker
+              :model-value="selectedConnection?.ref"
+              :selected="connectionOption"
+              :load-page="loadConnections"
+              :trigger-label="t('integrationsRedesign.connectionPicker')"
+              :placeholder="t('integrationsRedesign.allConnections')"
+              @update:model-value="changeConnection"
+            />
+          </label>
+        </div>
 
         <div v-if="grants.length" class="grant-list" role="list">
           <article
@@ -524,6 +554,10 @@ const canManageSelected = computed(
           <h3>{{ t("integrations.noGrants") }}</h3>
           <p>{{ t("integrationsRedesign.noGrantsHint") }}</p>
         </div>
+        <p v-if="loading && grants.length" class="grant-loading" role="status">
+          {{ t("common.loading") }}
+        </p>
+        <span ref="sentinel" class="grant-sentinel" aria-hidden="true" />
       </div>
 
       <aside class="grant-editor" aria-labelledby="grant-editor-title">
@@ -813,13 +847,41 @@ const canManageSelected = computed(
   border-radius: 8px;
   background: var(--surface);
 }
+.grant-list-column {
+  max-height: calc(100vh - 250px);
+  overflow: auto;
+}
+.grant-list-toolbar {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(300px, auto);
+  align-items: end;
+  gap: 10px;
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.grant-search {
+  position: relative;
+  min-width: 0;
+}
+.grant-search > svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  color: var(--subtle);
+  transform: translateY(-50%);
+}
+.grant-search input {
+  padding-left: 34px;
+}
 .connection-picker {
   display: grid;
   grid-template-columns: auto minmax(180px, 320px);
   align-items: center;
   gap: 10px;
-  padding: 12px 13px;
-  border-bottom: 1px solid var(--border);
 }
 .connection-picker > span {
   color: var(--muted);
@@ -900,6 +962,17 @@ const canManageSelected = computed(
   padding: 42px 18px;
   text-align: center;
 }
+.grant-loading {
+  margin: 0;
+  padding: 10px 13px;
+  color: var(--muted);
+  text-align: center;
+}
+.grant-sentinel {
+  display: block;
+  width: 1px;
+  height: 1px;
+}
 @media (max-width: 1060px) {
   .grant-workspace {
     grid-template-columns: 1fr;
@@ -907,9 +980,13 @@ const canManageSelected = computed(
   .grant-editor {
     position: static;
   }
+  .grant-list-column {
+    max-height: none;
+  }
 }
 @media (max-width: 720px) {
   .panel-heading,
+  .grant-list-toolbar,
   .connection-picker {
     align-items: stretch;
   }
@@ -917,6 +994,7 @@ const canManageSelected = computed(
     flex-direction: column;
   }
   .connection-picker,
+  .grant-list-toolbar,
   .grant-row {
     grid-template-columns: 1fr;
   }
