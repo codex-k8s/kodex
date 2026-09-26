@@ -209,7 +209,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
         :project-ref="projectRef"
         :has-more="catalog.hasMore"
         :loading-more="catalog.loadingMore"
-        @load-more="catalog.loadMore"
+        @load-more="catalog.loadMore(pageSize)"
       />
     </AsyncState>
     <ModalDialog
