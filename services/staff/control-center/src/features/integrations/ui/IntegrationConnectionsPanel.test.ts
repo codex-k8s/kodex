@@ -147,4 +147,23 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).not.toContain("Платформа работает без интеграций");
     expect(html).not.toContain("Подключения необязательны");
   });
+
+  it("оставляет полный набор возможностей в счётчике, но не растягивает карточку", async () => {
+    const capability = definition.capabilities[0];
+    if (!capability) {
+      throw new Error("fixture capability is required");
+    }
+    const capabilities = Array.from({ length: 4 }, (_, index) => ({
+      ...capability,
+      key: `synthetic.capability.${String(index + 1)}`,
+      name: `Возможность ${String(index + 1)}`,
+    }));
+    const html = await renderPanel([{ ...connection, capabilities }], true);
+
+    expect(html).toContain("Возможность 1");
+    expect(html).toContain("Возможность 3");
+    expect(html).not.toContain("Возможность 4");
+    expect(html).toContain("+1");
+    expect(html).toContain("<strong>4</strong>");
+  });
 });

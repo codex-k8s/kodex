@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.57
+version: 1.0.58
 updated: 2026-09-26
 ---
 
@@ -1090,3 +1090,12 @@ GitHub checks не считается `PASS`.
   `ERR_NETWORK_CHANGED` на первом bootstrap был транзитным: повторный bootstrap
   и session readback завершились 200. Визуальная приёмка владельцем и
   фактическая выдача разрешения — NOT RUN.
+- Карточка подключения раньше выводила все возможности подряд: для реального
+  GitHub-подключения это 41 строка и непропорционально высокая карточка. В
+  списке теперь показаны первые три возможности и точный остаток (`+38`), а
+  полный счётчик 41 и подробности подключения сохранены. Адресный frontend unit
+  3/3, typecheck, ESLint, Prettier и `git diff --check` — PASS. После reload без
+  кэша на 1920×1080 Chrome показал компактную карточку без горизонтального
+  переполнения; console errors/warnings и HTTP 4xx/5xx отсутствуют. Screenshot:
+  `/tmp/kodex-integrations-github-preview.png`. Визуальная приёмка владельцем —
+  NOT RUN.

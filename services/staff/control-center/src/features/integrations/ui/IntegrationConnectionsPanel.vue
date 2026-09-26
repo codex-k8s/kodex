@@ -56,6 +56,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const serverMessage = useServerMessage();
+const capabilityPreviewLimit = 3;
 const expanded = ref(false);
 const searchId = useId();
 const scrollRoot = ref<HTMLElement>();
@@ -212,7 +213,10 @@ useCursorInfiniteScroll({
 
         <div class="connection-capabilities">
           <span
-            v-for="capability in connection.capabilities"
+            v-for="capability in connection.capabilities.slice(
+              0,
+              capabilityPreviewLimit,
+            )"
             :key="capability.key"
             :title="capability.description"
           >
@@ -224,6 +228,13 @@ useCursorInfiniteScroll({
               :size="12"
               :aria-label="t('workflows.humanGate')"
             />
+          </span>
+          <span
+            v-if="connection.capabilities.length > capabilityPreviewLimit"
+            class="connection-capabilities__more"
+            :title="`${connection.capabilities.length - capabilityPreviewLimit} ${t('integrationsRedesign.capabilitiesShort')}`"
+          >
+            +{{ connection.capabilities.length - capabilityPreviewLimit }}
           </span>
         </div>
 
@@ -570,6 +581,11 @@ useCursorInfiniteScroll({
 }
 .connection-capabilities code {
   font-size: 0.68rem;
+}
+.connection-capabilities .connection-capabilities__more {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: 700;
 }
 .connection-facts {
   align-items: stretch;
