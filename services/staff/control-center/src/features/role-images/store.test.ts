@@ -133,6 +133,7 @@ describe("role image catalog store", () => {
       "next",
       expect.any(AbortSignal),
       { query: "Среда", state: "ACTIVE" },
+      20,
     );
     expect(store.projectTotal[recipe.projectRef]).toBe(43);
   });

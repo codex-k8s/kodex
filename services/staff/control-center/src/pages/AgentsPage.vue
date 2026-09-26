@@ -46,6 +46,7 @@ const runtimes = computed(() =>
 );
 const catalogView = ref<AgentCatalogView>("grid");
 const catalogQuery = ref("");
+const pageSize = ref(20);
 const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
@@ -87,7 +88,7 @@ async function submit(): Promise<void> {
 async function load(): Promise<void> {
   await Promise.all([
     platform.loadProject(projectRef.value),
-    catalog.load(projectRef.value, catalogQuery.value),
+    catalog.load(projectRef.value, catalogQuery.value, false, pageSize.value),
     platform.loadRuntimes(),
   ]);
   if (route.query.create === "1") openDialog();
@@ -127,7 +128,7 @@ watch(
 watch(catalogQuery, (value) => {
   if (searchTimer !== undefined) window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(() => {
-    void catalog.load(projectRef.value, value);
+    void catalog.load(projectRef.value, value, false, pageSize.value);
   }, 500);
 });
 
@@ -158,7 +159,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
   const scope = projectRef.value;
   after(() => {
     if (catalogGeneration === expected && projectRef.value === scope)
-      void catalog.load(scope, catalogQuery.value, retain);
+      void catalog.load(scope, catalogQuery.value, retain, pageSize.value);
   });
   onError((error) => {
     if (catalogGeneration === expected) {
@@ -187,7 +188,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
       :problem="catalog.problem"
       :empty="list.length === 0"
       :empty-title="$t('agents.emptyTitle')"
-      @retry="catalog.load(projectRef, catalogQuery)"
+      @retry="catalog.load(projectRef, catalogQuery, false, pageSize)"
     >
       <template #empty-action
         ><button
@@ -202,6 +203,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
       >
       <AgentCatalog
         v-model:query="catalogQuery"
+        v-model:page-size="pageSize"
         v-model:view="catalogView"
         :agents="list"
         :project-ref="projectRef"

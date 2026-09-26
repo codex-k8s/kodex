@@ -79,6 +79,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     projectRef: string,
     reset = true,
     filter?: { query?: string; state?: "ACTIVE" | "ARCHIVED" },
+    pageSize = 20,
   ): Promise<void> {
     if (
       !reset &&
@@ -108,6 +109,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         cursor,
         controller.signal,
         activeFilter,
+        pageSize,
       );
       if (current !== catalogGeneration) return;
       if (
@@ -276,7 +278,12 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     mutating.value = true;
     problem.value = undefined;
     try {
-      const receipt = await commandRoleImage(projectRef, recipe, action, buildRef);
+      const receipt = await commandRoleImage(
+        projectRef,
+        recipe,
+        action,
+        buildRef,
+      );
       recipes[receipt.recipe.ref] = receipt.recipe;
       if (receipt.imageBuild) {
         const current = builds[receipt.recipe.ref] ?? [];

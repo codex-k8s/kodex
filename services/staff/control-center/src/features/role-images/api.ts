@@ -111,6 +111,7 @@ export async function loadRoleImagePage(
     state?: "ACTIVE" | "ARCHIVED";
     roleDefinitionRef?: string;
   } = {},
+  pageSize = 20,
 ): Promise<RoleImageRecipePage> {
   if (new TextEncoder().encode(filter.query ?? "").length > 128)
     throw new Error("Role image query exceeds 128 UTF-8 bytes");
@@ -119,7 +120,7 @@ export async function loadRoleImagePage(
       listRoleImageRecipes({
         path: { projectRef },
         query: {
-          pageSize: 40,
+          pageSize,
           ...(pageToken ? { pageToken } : {}),
           ...filter,
         },

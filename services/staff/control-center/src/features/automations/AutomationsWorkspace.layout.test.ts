@@ -17,7 +17,8 @@ describe("AutomationsWorkspace lifecycle contract", () => {
     expect(source).toContain("loadScheduleRevisionPage(");
     expect(source).toContain("loadScheduleRunPage(");
     expect(source).toContain("nextPageToken");
-    expect(source).toContain("IntersectionObserver");
+    expect(source).toContain("useCursorInfiniteScroll");
+    expect(source).toContain("useAdaptiveCursorPageSize");
     expect(source).toContain('v-if="nextPageToken"');
   });
 

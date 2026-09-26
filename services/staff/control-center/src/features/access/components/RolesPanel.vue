@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { permissionMessage } from "@/features/access/presentation";
@@ -10,6 +10,8 @@ import type {
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   roles: AccessRole[];
@@ -23,13 +25,28 @@ const emit = defineEmits<{
   create: [];
   edit: [role: AccessRole];
   archive: [role: AccessRole];
-  more: [];
+  more: [pageSize: number];
   retry: [];
 }>();
 const i18n = useI18n();
 const permissionMessages = computed(() =>
   i18n.tm("access.permissionsRegistry"),
 );
+const listRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".role-card",
+  itemCount: () => props.roles.length,
+  estimatedItemHeight: 320,
+  estimatedColumns: 3,
+});
+useCursorInfiniteScroll({
+  root: listRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more", pageSize.value),
+});
 
 function permissionDefinition(key: string): PermissionDefinition | undefined {
   return props.permissions.find((permission) => permission.key === key);
@@ -60,7 +77,7 @@ function permissionDefinition(key: string): PermissionDefinition | undefined {
       :empty-text="$t('access.rolesWorkspace.emptyHint')"
       @retry="emit('retry')"
     >
-      <div class="role-groups">
+      <div ref="listRoot" class="role-groups">
         <section v-for="kind in ['CUSTOM', 'SYSTEM'] as const" :key="kind">
           <header class="role-kind-header">
             <h3>{{ $t(`access.roleKinds.${kind}`) }}</h3>
@@ -182,15 +199,7 @@ function permissionDefinition(key: string): PermissionDefinition | undefined {
           </div>
         </section>
       </div>
-      <button
-        v-if="hasMore"
-        class="button load-more"
-        type="button"
-        :disabled="loading"
-        @click="emit('more')"
-      >
-        {{ $t("access.loadMore") }}
-      </button>
+      <div v-if="hasMore" ref="sentinel" class="cursor-sentinel" />
     </AsyncState>
   </section>
 </template>

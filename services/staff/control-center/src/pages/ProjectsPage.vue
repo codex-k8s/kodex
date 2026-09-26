@@ -21,6 +21,8 @@ import type {
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const platform = usePlatformStore();
 const purgeConfirmationField = `project-purge-${useId()}`;
@@ -47,6 +49,9 @@ const items = ref<Project[]>([]);
 const loading = ref(false);
 const listProblem = ref<AppProblem>();
 const pageToken = ref<string>();
+const scrollRoot = ref<HTMLElement>();
+const listRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
 const query = computed(() =>
   typeof route.query.q === "string" ? route.query.q : "",
 );
@@ -54,6 +59,21 @@ let controller: AbortController | undefined;
 let generation = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const cursors = new Set<string>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".project-list__item",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 190,
+  estimatedColumns: 2,
+});
+
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () =>
+    Boolean(pageToken.value) && !loading.value && !listProblem.value,
+  loadMore: () => load(true),
+});
 
 async function submit(): Promise<void> {
   if (!canCreate.value) return;
@@ -84,11 +104,13 @@ async function load(more = false): Promise<void> {
       ? await loadProjectTrash(
           more ? pageToken.value : undefined,
           request.signal,
+          pageSize.value,
         )
       : await searchProjects(
           query.value.trim(),
           more ? pageToken.value : undefined,
           request.signal,
+          pageSize.value,
         );
     if (request.signal.aborted || current !== generation) return;
     const next = more ? [...items.value, ...page.items] : page.items;
@@ -261,21 +283,18 @@ onBeforeUnmount(() => {
     <p v-else-if="!items.length && !listProblem">
       {{ $t(trashMode ? "projects.trashEmpty" : "projects.emptyTitle") }}
     </p>
-    <ProjectList
-      :items="items"
-      :trashed="trashMode"
-      @trash="openLifecycle($event, 'TRASH')"
-      @restore="openLifecycle($event, 'RESTORE')"
-      @purge="openLifecycle($event, 'PURGE')"
-    />
-    <button
-      v-if="pageToken"
-      class="button"
-      :disabled="loading"
-      @click="load(true)"
-    >
-      {{ $t("managed.more") }}
-    </button>
+    <div ref="listRoot">
+      <ProjectList
+        :items="items"
+        :trashed="trashMode"
+        @trash="openLifecycle($event, 'TRASH')"
+        @restore="openLifecycle($event, 'RESTORE')"
+        @purge="openLifecycle($event, 'PURGE')"
+      />
+    </div>
+    <div class="projects-list-footer">
+      <span ref="sentinel" class="projects-list-sentinel" aria-hidden="true" />
+    </div>
     <ModalDialog
       v-if="lifecycleTarget"
       :title="
@@ -403,3 +422,16 @@ onBeforeUnmount(() => {
     </ModalDialog>
   </PageFrame>
 </template>
+
+<style scoped>
+.projects-list-footer {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.projects-list-sentinel {
+  width: 1px;
+  height: 1px;
+}
+</style>

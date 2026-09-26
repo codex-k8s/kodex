@@ -7,6 +7,7 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import WorkflowCard from "@/features/workflows/catalog/WorkflowCard.vue";
 import AgentCard from "@/features/agents/catalog/AgentCard.vue";
 import { toAgentCatalogItem } from "@/features/agents/catalog/model";
@@ -37,6 +38,12 @@ const problem = ref<AppProblem>();
 const expandedProject = ref<string>();
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".organization-catalog__entry, .agent-card, .workflow-card",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 112,
+});
 useCursorInfiniteScroll({
   root: scrollRoot,
   sentinel,
@@ -79,6 +86,7 @@ async function load(more = false): Promise<void> {
       request.signal,
       token,
       props.projectRef,
+      pageSize.value,
     );
     if (request.signal.aborted || current !== generation) return;
     const next = more ? [...items.value, ...page.items] : page.items;
@@ -259,14 +267,6 @@ onBeforeUnmount(() => {
       class="organization-catalog__sentinel"
       aria-hidden="true"
     />
-    <button
-      v-if="pageToken"
-      class="button"
-      :disabled="loading"
-      @click="load(true)"
-    >
-      {{ $t("managed.more") }}
-    </button>
     <ModalDialog
       v-if="expandedProject"
       :title="projects[expandedProject]?.name ?? $t('app.project')"

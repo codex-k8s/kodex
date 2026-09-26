@@ -46,6 +46,7 @@ it.each([undefined, "project_synthetic"])(
       owner.signal,
       "cursor",
       projectRef,
+      20,
     );
     expect(sdk.listOrganizationProjectMemberships).toHaveBeenCalledOnce();
     const sent = sdk.listOrganizationProjectMemberships.mock.calls[0]?.[0];
@@ -53,7 +54,7 @@ it.each([undefined, "project_synthetic"])(
       query: "Участник",
       pageToken: "cursor",
       projectRef,
-      pageSize: 30,
+      pageSize: 20,
     });
     expect(sent?.signal).toBeInstanceOf(AbortSignal);
     expect(page.nextPageToken).toBe("next");

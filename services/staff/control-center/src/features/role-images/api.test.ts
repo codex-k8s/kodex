@@ -226,7 +226,7 @@ describe("role image API adapter", () => {
       expect.objectContaining({
         path: { projectRef: "project_1" },
         query: {
-          pageSize: 40,
+          pageSize: 20,
           pageToken: "page_1",
           query: "Среда",
           state: "ACTIVE",

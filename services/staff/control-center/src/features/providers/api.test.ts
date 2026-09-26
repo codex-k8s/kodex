@@ -83,7 +83,7 @@ describe("provider API adapter", () => {
     expect(sdk.listProviderAccounts).toHaveBeenCalledWith({
       query: {
         definitionKey: "openai-codex",
-        pageSize: 40,
+        pageSize: 20,
         query: "основной",
         pageToken: "cursor",
       },

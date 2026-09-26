@@ -299,6 +299,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     search: string,
     pageToken?: string,
     signal?: AbortSignal,
+    pageSize = 20,
   ): Promise<RuntimeEnvironmentPage> {
     return (
       await unwrap(
@@ -307,7 +308,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           query: {
             ...(search.trim() ? { query: search.trim() } : {}),
             ...(pageToken ? { pageToken } : {}),
-            pageSize: 30,
+            pageSize,
           },
           signal: requestSignal(signal),
         }),

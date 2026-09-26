@@ -32,8 +32,6 @@ export interface SchedulePage {
   nextPageToken?: string;
 }
 
-const pageSize = 40;
-
 export async function loadSchedulePreview(
   body: SchedulePreviewInput,
   signal: AbortSignal,
@@ -74,6 +72,7 @@ export async function loadSchedulePage(
   query: string,
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
+  pageSize = 20,
 ): Promise<SchedulePage> {
   return (
     await unwrap(
@@ -176,6 +175,7 @@ export async function loadScheduleRevisionPage(
   scheduleRef: string,
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
+  pageSize = 20,
 ): Promise<ScheduleRevisionPage> {
   return (
     await unwrap(
@@ -195,6 +195,7 @@ export async function loadScheduleRunPage(
   scheduleRef: string,
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
+  pageSize = 20,
 ): Promise<ScheduleRunOccurrencePage> {
   const page = (
     await unwrap(

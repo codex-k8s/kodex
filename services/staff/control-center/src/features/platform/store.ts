@@ -1176,7 +1176,7 @@ export const usePlatformStore = defineStore("platform", () => {
   async function loadAudit(
     projectRef?: string,
     search = "",
-    pageSize: 10 | 20 | 50 = 20,
+    pageSize = 20,
   ): Promise<void> {
     const normalizedSearch = search.trim();
     const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}`;
@@ -1212,7 +1212,7 @@ export const usePlatformStore = defineStore("platform", () => {
   async function loadMoreAudit(
     projectRef?: string,
     search = "",
-    pageSize: 10 | 20 | 50 = 20,
+    pageSize = 20,
   ): Promise<void> {
     const normalizedSearch = search.trim();
     const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}`;

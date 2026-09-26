@@ -27,10 +27,14 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const route = useRoute();
 const router = useRouter();
 const registry = ref<HTMLElement>();
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
 const searchId = useId();
@@ -59,6 +63,19 @@ let listController: AbortController | undefined;
 let inspectorController: AbortController | undefined;
 const visitedCursors = new Set<string>();
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+const pageSize = useAdaptiveCursorPageSize({
+  container: registry,
+  itemSelector: ".environment-table tbody tr",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 64,
+});
+
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => Boolean(cursor.value) && !loading.value && !loadingMore.value,
+  loadMore: () => load(false),
+});
 
 async function load(reset = true): Promise<void> {
   if (!reset && (!cursor.value || loadingMore.value)) return;
@@ -82,6 +99,7 @@ async function load(reset = true): Promise<void> {
       query.value,
       requestedCursor,
       controller.signal,
+      pageSize.value,
     );
     if (generation !== current || controller.signal.aborted) return;
     if (
@@ -169,15 +187,6 @@ async function remove(environment: RuntimeEnvironmentSet): Promise<void> {
   } finally {
     actionRef.value = "";
   }
-}
-
-function onScroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (
-    cursor.value &&
-    element.scrollTop + element.clientHeight >= element.scrollHeight - 80
-  )
-    void load(false);
 }
 
 watch(query, () => {
@@ -312,10 +321,10 @@ onBeforeUnmount(() => {
         :class="{ 'environment-registry__content--selected': selected }"
       >
         <div
+          ref="scrollRoot"
           class="environment-table-wrap"
           :class="{ 'environment-table-wrap--expanded': expanded }"
           :aria-busy="loading || loadingMore"
-          @scroll="onScroll"
         >
           <div v-if="loading" class="environment-state" role="status">
             {{ $t("common.loading") }}
@@ -430,14 +439,7 @@ onBeforeUnmount(() => {
           <p v-if="loadingMore" class="environment-loading" role="status">
             {{ $t("common.loading") }}
           </p>
-          <button
-            v-else-if="cursor"
-            class="button environment-loading"
-            type="button"
-            @click="load(false)"
-          >
-            {{ $t("roleImages.loadMore") }}
-          </button>
+          <div v-if="cursor" ref="sentinel" class="cursor-sentinel" />
         </div>
         <aside v-if="selected" class="environment-inspector">
           <div class="section-header">

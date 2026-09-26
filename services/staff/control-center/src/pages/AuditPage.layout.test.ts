@@ -19,8 +19,8 @@ describe("AuditPage pagination", () => {
     expect(source).toContain("pageSize.value");
     expect(source).toContain("useCursorInfiniteScroll");
     expect(template).toContain('ref="sentinel"');
-    expect(template).toContain('$t("audit.loadMore")');
-    expect(template).toContain("<CursorBatchSize");
+    expect(template).not.toContain('$t("audit.loadMore")');
+    expect(source).toContain("useAdaptiveCursorPageSize");
   });
 
   it("загружает только первую cursor-порцию до пересечения sentinel", () => {

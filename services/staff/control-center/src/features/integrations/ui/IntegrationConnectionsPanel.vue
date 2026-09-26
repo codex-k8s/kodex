@@ -27,8 +27,9 @@ import type {
   IntegrationDefinition,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 
-defineProps<{
+const props = defineProps<{
   connections: readonly IntegrationConnection[];
   definitions: Readonly<Record<string, IntegrationDefinition>>;
   coreReady: boolean;
@@ -57,6 +58,14 @@ const { t } = useI18n();
 const serverMessage = useServerMessage();
 const expanded = ref(false);
 const searchId = useId();
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more"),
+});
 </script>
 
 <template>
@@ -110,6 +119,7 @@ const searchId = useId();
     </div>
     <div
       v-if="connections.length"
+      ref="scrollRoot"
       class="connection-grid"
       :class="{ 'connection-grid--expanded': expanded }"
       role="list"
@@ -350,6 +360,7 @@ const searchId = useId();
           </button>
         </footer>
       </article>
+      <span ref="sentinel" class="connection-sentinel" aria-hidden="true" />
     </div>
     <p v-else-if="loading" role="status">{{ t("common.loading") }}</p>
     <div v-else class="connection-empty">
@@ -357,14 +368,6 @@ const searchId = useId();
       <h3>{{ t("integrationsRedesign.noConnectionsYet") }}</h3>
       <p>{{ t("integrations.noConnections") }}</p>
     </div>
-    <button
-      v-if="hasMore"
-      class="button"
-      :disabled="loading"
-      @click="emit('more')"
-    >
-      {{ t("impact.more") }}
-    </button>
   </component>
 </template>
 
@@ -454,6 +457,11 @@ const searchId = useId();
 }
 .connection-grid--expanded {
   max-height: none;
+}
+.connection-sentinel {
+  grid-column: 1 / -1;
+  width: 1px;
+  height: 1px;
 }
 .connection-card {
   display: flex;

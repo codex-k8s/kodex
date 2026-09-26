@@ -65,9 +65,10 @@ export async function loadCatalog(
   signal: AbortSignal,
   pageToken?: string,
   projectRef?: string,
+  pageSize = 20,
 ): Promise<CatalogPage> {
   const options = {
-    query: { query, pageToken, projectRef, pageSize: 30 },
+    query: { query, pageToken, projectRef, pageSize },
     signal: AbortSignal.any([signal, requestSignal()]),
   };
   const prefix = (project: string) =>

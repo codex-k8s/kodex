@@ -36,7 +36,7 @@ describe("agent catalog API", () => {
         url: "/api/v1/projects/{projectRef}/agents",
         path: { projectRef: "project_sales" },
         query: {
-          pageSize: 40,
+          pageSize: 20,
           query: "аналитик",
           pageToken: "page_1",
         },

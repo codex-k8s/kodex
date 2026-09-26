@@ -8,6 +8,8 @@ import type {
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   groups: OidcGroup[];
@@ -18,16 +20,31 @@ const props = defineProps<{
   hasMore?: boolean;
 }>();
 const emit = defineEmits<{
-  search: [query: string];
-  more: [query: string];
+  search: [query: string, pageSize: number];
+  more: [query: string, pageSize: number];
   retry: [];
   bind: [group: OidcGroup];
 }>();
 const query = ref("");
 let timer: ReturnType<typeof setTimeout> | undefined;
+const listRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".group-card",
+  itemCount: () => props.groups.length,
+  estimatedItemHeight: 300,
+  estimatedColumns: 3,
+});
+useCursorInfiniteScroll({
+  root: listRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more", query.value.trim(), pageSize.value),
+});
 watch(query, (value) => {
   if (timer) clearTimeout(timer);
-  timer = setTimeout(() => emit("search", value.trim()), 250);
+  timer = setTimeout(() => emit("search", value.trim(), pageSize.value), 250);
 });
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
@@ -70,7 +87,7 @@ function mappings(group: OidcGroup): AccessBinding[] {
       :empty-text="$t('access.groups.emptyHint')"
       @retry="emit('retry')"
     >
-      <div class="group-grid">
+      <div ref="listRoot" class="group-grid">
         <article v-for="group in groups" :key="group.ref" class="group-card">
           <header>
             <div>
@@ -118,15 +135,7 @@ function mappings(group: OidcGroup): AccessBinding[] {
           </button>
         </article>
       </div>
-      <button
-        v-if="hasMore"
-        class="button load-more"
-        type="button"
-        :disabled="loading"
-        @click="emit('more', query.trim())"
-      >
-        {{ $t("access.loadMore") }}
-      </button>
+      <div v-if="hasMore" ref="sentinel" class="cursor-sentinel" />
     </AsyncState>
   </section>
 </template>

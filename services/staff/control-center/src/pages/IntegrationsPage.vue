@@ -60,6 +60,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import { serializeConfigurationDocument } from "@/features/managed-configurations/document";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   connectionYaml,
   parseConnectionYaml,
@@ -70,6 +71,14 @@ const fieldPrefix = `integration-connection-${useId()}`;
 const platform = usePlatformStore();
 const connectionSearch = ref("");
 const connectionEntries = ref<IntegrationConnection[]>([]);
+const connectionListRoot = ref<HTMLElement>();
+const connectionPageSize = useAdaptiveCursorPageSize({
+  container: connectionListRoot,
+  itemSelector: ".connection-card",
+  itemCount: () => connectionEntries.value.length,
+  estimatedItemHeight: 360,
+  estimatedColumns: 3,
+});
 const connectionCursor = ref("");
 const connectionLoading = ref(false);
 const connectionProblem = ref<AppProblem>();
@@ -98,7 +107,7 @@ async function loadConnections(more = false): Promise<void> {
         listIntegrationConnections({
           query: {
             query: connectionSearch.value.trim(),
-            pageSize: 40,
+            pageSize: connectionPageSize.value,
             pageToken: token,
           },
           signal: requestSignal(controller.signal),
@@ -153,6 +162,14 @@ const activeSection = ref<IntegrationsSection>("CONNECTIONS");
 const catalogSearch = ref("");
 const catalogCategory = ref("");
 const catalogDefinitions = ref<IntegrationDefinition[]>([]);
+const catalogListRoot = ref<HTMLElement>();
+const catalogPageSize = useAdaptiveCursorPageSize({
+  container: catalogListRoot,
+  itemSelector: ".package-card",
+  itemCount: () => catalogDefinitions.value.length,
+  estimatedItemHeight: 312,
+  estimatedColumns: 3,
+});
 const catalogNextPageToken = ref<string>();
 const catalogLoading = ref(false);
 const catalogProblem = ref<AppProblem>();
@@ -181,7 +198,7 @@ async function loadCatalogPage(more = false): Promise<void> {
           query: {
             query: catalogSearch.value.trim(),
             category: catalogCategory.value || undefined,
-            pageSize: 30,
+            pageSize: catalogPageSize.value,
             pageToken: more ? catalogNextPageToken.value : undefined,
           },
           signal: requestSignal(request.signal),
@@ -1021,51 +1038,53 @@ onBeforeUnmount(() => {
             :problem="connectionProblem"
             @retry="loadConnections()"
           />
-          <IntegrationConnectionsPanel
-            v-if="activeSection === 'CONNECTIONS'"
-            :connections="connections"
-            :definitions="platform.definitions"
-            :core-ready="platform.integrationCoreReady === true"
-            :busy-ref="commandRef"
-            :busy-action="commandAction"
-            :search="connectionSearch"
-            :loading="connectionLoading"
-            :has-more="!!connectionCursor"
-            @update:search="connectionSearch = $event"
-            @more="loadConnections(true)"
-            @command="command"
-            @credential="openCredential"
-            @edit="openEdit"
-            @delete="openDelete"
-            @grants="openGrants"
-            @details="openConnectionDetails"
-          />
+          <div v-if="activeSection === 'CONNECTIONS'" ref="connectionListRoot">
+            <IntegrationConnectionsPanel
+              :connections="connections"
+              :definitions="platform.definitions"
+              :core-ready="platform.integrationCoreReady === true"
+              :busy-ref="commandRef"
+              :busy-action="commandAction"
+              :search="connectionSearch"
+              :loading="connectionLoading"
+              :has-more="!!connectionCursor"
+              @update:search="connectionSearch = $event"
+              @more="loadConnections(true)"
+              @command="command"
+              @credential="openCredential"
+              @edit="openEdit"
+              @delete="openDelete"
+              @grants="openGrants"
+              @details="openConnectionDetails"
+            />
+          </div>
 
-          <IntegrationCatalogPanel
-            v-else-if="activeSection === 'CATALOG'"
-            :packages="visiblePackages"
-            :categories="categories"
-            :search="catalogSearch"
-            :category="catalogCategory"
-            :loading="catalogLoading"
-            :has-more="!!catalogNextPageToken"
-            :problem="catalogProblem"
-            @more="loadCatalogPage(true)"
-            @retry="loadCatalogPage()"
-            @update:search="catalogSearch = $event"
-            @update:category="catalogCategory = $event"
-            @connect="openConnection"
-            @copied="
-              (configuration) =>
-                router.push({
-                  name: 'configuration',
-                  params: {
-                    kind: configuration.kind,
-                    configurationRef: configuration.ref,
-                  },
-                })
-            "
-          />
+          <div v-else-if="activeSection === 'CATALOG'" ref="catalogListRoot">
+            <IntegrationCatalogPanel
+              :packages="visiblePackages"
+              :categories="categories"
+              :search="catalogSearch"
+              :category="catalogCategory"
+              :loading="catalogLoading"
+              :has-more="!!catalogNextPageToken"
+              :problem="catalogProblem"
+              @more="loadCatalogPage(true)"
+              @retry="loadCatalogPage()"
+              @update:search="catalogSearch = $event"
+              @update:category="catalogCategory = $event"
+              @connect="openConnection"
+              @copied="
+                (configuration) =>
+                  router.push({
+                    name: 'configuration',
+                    params: {
+                      kind: configuration.kind,
+                      configurationRef: configuration.ref,
+                    },
+                  })
+              "
+            />
+          </div>
 
           <IntegrationGrantsPanel
             v-else

@@ -33,6 +33,8 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { loadProviderAccount, loadProviderDefinitions } from "./api";
 import ProviderUsageDetails from "./ProviderUsageDetails.vue";
 import ProviderAccountLifecyclePanel from "./ProviderAccountLifecyclePanel.vue";
@@ -88,6 +90,38 @@ const createForm = reactive({
   definitionKey: "" as ProviderDefinitionKey | "",
 });
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+const definitionsRoot = ref<HTMLElement>();
+const definitionsSentinel = ref<HTMLElement>();
+const definitionsPageSize = useAdaptiveCursorPageSize({
+  container: definitionsRoot,
+  itemSelector: ":scope > article",
+  itemCount: () => definitions.value.length,
+  estimatedItemHeight: 108,
+});
+const accountsRoot = ref<HTMLElement>();
+const accountsSentinel = ref<HTMLElement>();
+const accountsPageSize = useAdaptiveCursorPageSize({
+  container: accountsRoot,
+  itemSelector: ".provider-account-card",
+  itemCount: () => accounts.value.length,
+  estimatedItemHeight: 210,
+});
+useCursorInfiniteScroll({
+  root: definitionsRoot,
+  sentinel: definitionsSentinel,
+  enabled: () =>
+    Boolean(definitionsNextPageToken.value) && !definitionsLoadingMore.value,
+  loadMore: () => store.loadMoreDefinitions(definitionsPageSize.value),
+});
+useCursorInfiniteScroll({
+  root: accountsRoot,
+  sentinel: accountsSentinel,
+  enabled: () =>
+    Boolean(accountsNextPageToken.value) &&
+    !loading.value &&
+    !loadingMore.value,
+  loadMore: () => store.loadMore(accountsPageSize.value),
+});
 
 const canCreate = computed(() =>
   pageAllowsAccountCreation(pageNextActions.value),
@@ -188,7 +222,15 @@ function blockerLabel(code: string): string {
 
 function scheduleSearch(): void {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void store.load(search.value), 500);
+  searchTimer = setTimeout(
+    () =>
+      void store.load(
+        search.value,
+        accountsPageSize.value,
+        definitionsPageSize.value,
+      ),
+    500,
+  );
 }
 
 function openCreate(): void {
@@ -425,13 +467,14 @@ async function copyUserCode(): Promise<void> {
   }
 }
 
-function scrollAccounts(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    void store.loadMore();
-}
-
-onMounted(() => void store.load());
+onMounted(
+  () =>
+    void store.load(
+      undefined,
+      accountsPageSize.value,
+      definitionsPageSize.value,
+    ),
+);
 watch(accounts, (items) => {
   const currentRef = authorizationAccount.value?.ref;
   if (!currentRef) return;
@@ -504,6 +547,7 @@ onBeforeUnmount(() => {
     </aside>
 
     <section
+      ref="definitionsRoot"
       class="provider-readiness"
       :aria-label="$t('providers.definitions')"
     >
@@ -519,12 +563,10 @@ onBeforeUnmount(() => {
           </li>
         </ul>
       </article>
-      <button
+      <div
         v-if="definitionsNextPageToken"
-        class="button provider-readiness__more"
-        type="button"
-        :disabled="definitionsLoadingMore"
-        @click="store.loadMoreDefinitions"
+        ref="definitionsSentinel"
+        class="provider-readiness__more"
       >
         <LoaderCircle
           v-if="definitionsLoadingMore"
@@ -532,8 +574,7 @@ onBeforeUnmount(() => {
           :size="16"
           aria-hidden="true"
         />
-        {{ $t("providers.loadMoreProviders") }}
-      </button>
+      </div>
     </section>
 
     <AsyncState
@@ -575,9 +616,9 @@ onBeforeUnmount(() => {
         />
         <div
           v-if="accounts.length"
+          ref="accountsRoot"
           class="provider-account-list"
           :class="{ 'provider-account-list--expanded': expanded }"
-          @scroll="scrollAccounts"
         >
           <article
             v-for="account in accounts"
@@ -668,12 +709,10 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </article>
-          <button
+          <div
             v-if="accountsNextPageToken"
-            class="button providers-load-more"
-            type="button"
-            :disabled="loadingMore"
-            @click="store.loadMore"
+            ref="accountsSentinel"
+            class="providers-load-more"
           >
             <LoaderCircle
               v-if="loadingMore"
@@ -681,8 +720,7 @@ onBeforeUnmount(() => {
               :size="16"
               aria-hidden="true"
             />
-            {{ $t("providers.loadMore") }}
-          </button>
+          </div>
         </div>
         <section v-else class="empty-state">
           <KeyRound :size="28" aria-hidden="true" />

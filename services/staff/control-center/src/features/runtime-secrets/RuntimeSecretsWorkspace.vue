@@ -19,6 +19,8 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { readRuntimeSecret } from "./api";
 
 import type { RuntimeSecret } from "./model";
@@ -53,6 +55,8 @@ const searchId = useId();
 const session = useSessionStore();
 const { locale } = useI18n();
 const search = ref("");
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
 const createOpen = ref(false);
 const expanded = ref(false);
 const rotateTarget = ref<RuntimeSecret>();
@@ -62,6 +66,19 @@ const details = ref<RuntimeSecret>();
 const impactTarget = ref<RuntimeSecret>();
 const detailsProblem = ref<AppProblem>();
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: "tbody tr",
+  itemCount: () => store.items.length,
+  estimatedItemHeight: 64,
+});
+
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => store.hasMore && !store.loading && !store.loadingMore,
+  loadMore: () => store.loadMore(pageSize.value),
+});
 
 function prepareMutation(): void {
   store.clearMutationProblem();
@@ -110,15 +127,6 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-function onScroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (
-    store.hasMore &&
-    element.scrollTop + element.clientHeight >= element.scrollHeight - 96
-  )
-    void store.loadMore();
-}
-
 function restoreReauthenticatedReveal(): void {
   if (revealTarget.value) return;
   const secretRef = session.pendingRuntimeSecretReveal(props.projectRef);
@@ -138,7 +146,10 @@ watch(
 );
 watch(search, (value) => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void store.load(props.projectRef, value), 500);
+  searchTimer = setTimeout(
+    () => void store.load(props.projectRef, value, pageSize.value),
+    500,
+  );
 });
 watch(
   () => [props.projectRef, props.initialSecretRef],
@@ -171,7 +182,7 @@ watch(
     expanded.value = false;
     if (searchTimer) clearTimeout(searchTimer);
     search.value = "";
-    void store.load(value);
+    void store.load(value, "", pageSize.value);
   },
 );
 watch(
@@ -179,7 +190,7 @@ watch(
   restoreReauthenticatedReveal,
   { immediate: true },
 );
-onMounted(() => void store.load(props.projectRef));
+onMounted(() => void store.load(props.projectRef, "", pageSize.value));
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer);
   store.dispose();
@@ -259,7 +270,7 @@ onBeforeUnmount(() => {
         :problem="store.problem"
         @retry="store.reload"
       />
-      <div class="runtime-secrets__scroll" @scroll.passive="onScroll">
+      <div ref="scrollRoot" class="runtime-secrets__scroll">
         <table class="runtime-secrets__table">
           <thead>
             <tr>
@@ -360,14 +371,7 @@ onBeforeUnmount(() => {
         >
           {{ $t("common.loading") }}
         </div>
-        <button
-          v-else-if="store.hasMore"
-          class="button runtime-secrets__more"
-          type="button"
-          @click="store.loadMore"
-        >
-          {{ $t("runtimeSecrets.loadMore") }}
-        </button>
+        <div v-if="store.hasMore" ref="sentinel" class="cursor-sentinel" />
       </div>
     </AsyncState>
   </component>

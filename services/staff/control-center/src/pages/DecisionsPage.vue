@@ -49,6 +49,7 @@ import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const platform = usePlatformStore();
 const route = useRoute();
@@ -62,6 +63,13 @@ const view = ref<"PENDING" | "HISTORY">("PENDING");
 const search = ref("");
 const searchId = useId();
 const catalog = useGateCatalog();
+const decisionListRoot = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: decisionListRoot,
+  itemSelector: ".decision-row",
+  itemCount: () => catalog.items.value.length,
+  estimatedItemHeight: 112,
+});
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const addressedGate = ref<OwnerGate>();
 function loadCatalog(more = false): Promise<void> {
@@ -70,6 +78,7 @@ function loadCatalog(more = false): Promise<void> {
       projectRef: projectFilter.value || undefined,
       query: search.value,
       view: view.value,
+      pageSize: pageSize.value,
     },
     more,
   );
@@ -388,6 +397,7 @@ watch(
       projectRef: projectFilter.value || undefined,
       query: search.value,
       view: view.value,
+      pageSize: pageSize.value,
     });
   },
 );
@@ -732,7 +742,11 @@ const serverMessage = useServerMessage();
       @retry="loadCatalog()"
     >
       <div class="decision-inbox">
-        <div class="decision-list" @scroll="scrollCatalog">
+        <div
+          ref="decisionListRoot"
+          class="decision-list"
+          @scroll="scrollCatalog"
+        >
           <section v-for="group in groups" :key="group.key">
             <header class="decision-group-header">
               <span
@@ -803,15 +817,6 @@ const serverMessage = useServerMessage();
               </button>
             </div>
           </section>
-          <button
-            v-if="catalog.pageToken.value"
-            class="button"
-            type="button"
-            :disabled="catalog.loading.value"
-            @click="loadCatalog(true)"
-          >
-            {{ $t("common.loadMore") }}
-          </button>
         </div>
 
         <aside v-if="selected" class="decision-detail">

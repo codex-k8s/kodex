@@ -65,13 +65,14 @@ export async function loadRuntimeSecretPage(
   query: string,
   pageToken?: string,
   signal: AbortSignal = requestSignal(),
+  pageSize = 20,
 ): Promise<RuntimeSecretPage> {
   return (
     await unwrap(
       listRuntimeSecrets({
         path: { projectRef },
         query: {
-          pageSize: 40,
+          pageSize,
           ...(query.trim() ? { query: query.trim() } : {}),
           ...(pageToken ? { pageToken } : {}),
         },

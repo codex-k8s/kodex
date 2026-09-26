@@ -13,14 +13,7 @@ import {
   Trash2,
   Workflow,
 } from "@lucide/vue";
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-  type WatchStopHandle,
-} from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
@@ -51,6 +44,8 @@ import { AppProblem, asProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
@@ -90,12 +85,18 @@ const runsToken = ref<string>();
 const runsLoading = ref(false);
 const runsProblem = ref<AppProblem>();
 const listSentinel = ref<HTMLElement>();
+const listRoot = ref<HTMLElement>();
 
 let listController: AbortController | undefined;
 let historyController: AbortController | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let listObserver: IntersectionObserver | undefined;
-let stopSentinelWatch: WatchStopHandle | undefined;
+useCursorInfiniteScroll({
+  root: listRoot,
+  sentinel: listSentinel,
+  enabled: () =>
+    Boolean(nextPageToken.value) && !listLoading.value && !moreLoading.value,
+  loadMore: () => loadList(false),
+});
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canCreate = computed(() =>
@@ -112,6 +113,12 @@ const filteredSchedules = computed(() =>
     scheduleMatchesFilter(schedule, state.value),
   ),
 );
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".automation-row",
+  itemCount: () => filteredSchedules.value.length,
+  estimatedItemHeight: 76,
+});
 const selectedSchedule = computed(() => scopedSchedule(selectedRef.value));
 const selectedCapabilities = computed(() =>
   selectedSchedule.value
@@ -265,6 +272,7 @@ async function loadList(reset = false): Promise<void> {
       search.value,
       reset ? undefined : nextPageToken.value,
       controller.signal,
+      pageSize.value,
     );
     if (controller.signal.aborted || requestedProject !== props.projectRef)
       return;
@@ -513,26 +521,14 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
-function observeSentinel(element: HTMLElement | undefined): void {
-  listObserver?.disconnect();
-  if (!element || typeof IntersectionObserver === "undefined") return;
-  listObserver = new IntersectionObserver((entries) => {
-    if (entries.some((entry) => entry.isIntersecting)) void loadList(false);
-  });
-  listObserver.observe(element);
-}
-
 onMounted(() => {
   void Promise.all([loadList(true), platform.loadProject(props.projectRef)]);
-  stopSentinelWatch = watch(listSentinel, observeSentinel, { immediate: true });
 });
 
 onBeforeUnmount(() => {
   listController?.abort();
   historyController?.abort();
   if (searchTimer) clearTimeout(searchTimer);
-  listObserver?.disconnect();
-  stopSentinelWatch?.();
 });
 </script>
 
@@ -596,18 +592,21 @@ onBeforeUnmount(() => {
       >
         <h2>{{ custom.noMatches }}</h2>
         <p>{{ custom.noMatchesText }}</p>
-        <button
+        <div
           v-if="nextPageToken"
-          class="button"
-          type="button"
-          :disabled="moreLoading"
-          @click="loadList(false)"
+          ref="listSentinel"
+          class="automation-list-sentinel"
         >
-          {{ custom.loadMore }}
-        </button>
+          <LoaderCircle
+            v-if="moreLoading"
+            class="spin"
+            :size="18"
+            aria-hidden="true"
+          />
+        </div>
       </section>
       <div v-else class="automations-workspace__layout">
-        <div class="automations-list" role="list">
+        <div ref="listRoot" class="automations-list" role="list">
           <div class="automations-list__head desktop-only" aria-hidden="true">
             <span>{{ $t("common.name") }} · {{ custom.target }}</span>
             <span>{{ custom.schedule }}</span>
@@ -664,14 +663,6 @@ onBeforeUnmount(() => {
               :size="18"
               aria-hidden="true"
             />
-            <button
-              v-else-if="nextPageToken"
-              class="button"
-              type="button"
-              @click="loadList(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
           </div>
         </div>
 

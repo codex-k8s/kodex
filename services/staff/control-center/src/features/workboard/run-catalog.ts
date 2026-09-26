@@ -18,6 +18,7 @@ export interface RunCatalogScope {
   query: string;
   filter: RunFilter;
   states?: Run["state"][];
+  pageSize?: number;
 }
 
 export function createRunCatalog() {
@@ -101,7 +102,7 @@ export function createRunCatalog() {
               ...(scope.projectRef ? { projectRef: scope.projectRef } : {}),
               query: scope.query.trim(),
               ...(states ? { states } : {}),
-              pageSize: 40,
+              pageSize: scope.pageSize ?? 20,
               pageToken: cursor,
             },
             signal: requestSignal(active.signal),

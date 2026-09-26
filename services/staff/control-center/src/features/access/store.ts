@@ -143,11 +143,18 @@ export const useAccessStore = defineStore("access", () => {
     queryText = "",
     kind?: AccessSubjectKind,
     append = false,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = append ? subjectNextPageToken.value : undefined;
     await query(
       "subjects",
-      () => api.fetchAccessSubjects({ query: queryText, kind, pageToken }),
+      () =>
+        api.fetchAccessSubjects({
+          query: queryText,
+          kind,
+          pageToken,
+          pageSize,
+        }),
       (page) => {
         subjects.value = append
           ? appendUnique(subjects.value, page.items, (item) => item.ref)
@@ -157,11 +164,15 @@ export const useAccessStore = defineStore("access", () => {
     );
   }
 
-  async function loadGroups(queryText = "", append = false): Promise<void> {
+  async function loadGroups(
+    queryText = "",
+    append = false,
+    pageSize = 20,
+  ): Promise<void> {
     const pageToken = append ? groupNextPageToken.value : undefined;
     await query(
       "groups",
-      () => api.fetchOidcGroups({ query: queryText, pageToken }),
+      () => api.fetchOidcGroups({ query: queryText, pageToken, pageSize }),
       (page) => {
         groups.value = append
           ? appendUnique(groups.value, page.items, (item) => item.ref)
@@ -174,11 +185,12 @@ export const useAccessStore = defineStore("access", () => {
   async function loadRoles(
     includeArchived = false,
     append = false,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = append ? roleNextPageToken.value : undefined;
     await query(
       "roles",
-      () => api.fetchAccessRoles({ includeArchived, pageToken }),
+      () => api.fetchAccessRoles({ includeArchived, pageToken, pageSize }),
       (page) => {
         roles.value = append
           ? appendUnique(roles.value, page.items, (item) => item.ref)
@@ -228,11 +240,12 @@ export const useAccessStore = defineStore("access", () => {
   async function loadBindings(
     options: Parameters<typeof api.fetchAccessBindings>[0] = {},
     append = false,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = append ? bindingNextPageToken.value : undefined;
     await query(
       "bindings",
-      () => api.fetchAccessBindings({ ...options, pageToken }),
+      () => api.fetchAccessBindings({ ...options, pageToken, pageSize }),
       (page) => {
         bindings.value = append
           ? appendUnique(bindings.value, page.items, (item) => item.ref)

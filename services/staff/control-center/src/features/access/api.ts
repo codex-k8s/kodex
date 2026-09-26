@@ -78,6 +78,7 @@ export async function fetchAccessSubjects(options: {
   query?: string;
   kind?: AccessSubjectKind;
   pageToken?: string;
+  pageSize?: number;
 }): Promise<AccessSubjectPage> {
   return (
     await unwrap(
@@ -86,7 +87,7 @@ export async function fetchAccessSubjects(options: {
           ...(options.query ? { query: options.query } : {}),
           ...(options.kind ? { kind: options.kind } : {}),
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
-          pageSize: 50,
+          pageSize: options.pageSize ?? 20,
         },
         signal: requestSignal(),
       }),
@@ -97,6 +98,7 @@ export async function fetchAccessSubjects(options: {
 export async function fetchOidcGroups(options: {
   query?: string;
   pageToken?: string;
+  pageSize?: number;
 }): Promise<OidcGroupPage> {
   return (
     await unwrap(
@@ -104,7 +106,7 @@ export async function fetchOidcGroups(options: {
         query: {
           ...(options.query ? { query: options.query } : {}),
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
-          pageSize: 50,
+          pageSize: options.pageSize ?? 20,
         },
         signal: requestSignal(),
       }),
@@ -115,13 +117,14 @@ export async function fetchOidcGroups(options: {
 export async function fetchAccessRoles(options: {
   pageToken?: string;
   includeArchived?: boolean;
+  pageSize?: number;
 }): Promise<AccessRolePage> {
   return (
     await unwrap(
       listAccessRoles({
         query: {
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
-          pageSize: 50,
+          pageSize: options.pageSize ?? 20,
           includeArchived: options.includeArchived ?? false,
         },
         signal: requestSignal(),
@@ -151,6 +154,7 @@ export async function fetchAccessBindings(options: {
   roleRef?: string;
   projectRef?: string;
   includeRevoked?: boolean;
+  pageSize?: number;
 }): Promise<AccessBindingPage> {
   return (
     await unwrap(
@@ -161,7 +165,7 @@ export async function fetchAccessBindings(options: {
           ...(options.subjectRef ? { subjectRef: options.subjectRef } : {}),
           ...(options.roleRef ? { roleRef: options.roleRef } : {}),
           ...(options.projectRef ? { projectRef: options.projectRef } : {}),
-          pageSize: 50,
+          pageSize: options.pageSize ?? 20,
           includeRevoked: options.includeRevoked ?? false,
         },
         signal: requestSignal(),

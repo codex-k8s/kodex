@@ -15,6 +15,7 @@ import {
 import { useRunBoardStore } from "@/features/workboard/run-board";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const platform = usePlatformStore();
 const searchId = useId();
@@ -41,6 +42,13 @@ const {
 } = storeToRefs(catalog);
 const projectReady = ref(!projectRef.value || Boolean(project.value));
 const search = ref("");
+const listRoot = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".runs-lane:first-child .run-work-item",
+  itemCount: () => scopedRuns.value.length,
+  estimatedItemHeight: 104,
+});
 const query = ref("");
 let timer: ReturnType<typeof setTimeout> | undefined;
 const list = computed(() =>
@@ -62,7 +70,12 @@ async function refreshRuns(): Promise<void> {
 }
 async function loadRuns(more = false, lane?: RunLane): Promise<void> {
   await catalog.load(
-    { projectRef: projectRef.value, query: query.value, filter: filter.value },
+    {
+      projectRef: projectRef.value,
+      query: query.value,
+      filter: filter.value,
+      pageSize: pageSize.value,
+    },
     more,
     lane,
   );
@@ -114,6 +127,7 @@ watch(
       projectRef: projectRef.value,
       query: query.value,
       filter: filter.value,
+      pageSize: pageSize.value,
     }),
 );
 onBeforeUnmount(() => {
@@ -187,23 +201,17 @@ onBeforeUnmount(() => {
       :empty-text="$t('workboard.noRuns')"
       @retry="refreshRuns"
     >
-      <RunsBoard
-        :runs="list"
-        :columns="catalog.columns"
-        :has-more="Boolean(pageToken)"
-        :loading-more="loading"
-        @more="loadRuns(true, $event)"
-        :preserve-project="Boolean(projectRef)"
-      />
+      <div ref="listRoot">
+        <RunsBoard
+          :runs="list"
+          :columns="catalog.columns"
+          :has-more="Boolean(pageToken)"
+          :loading-more="loading"
+          @more="loadRuns(true, $event)"
+          :preserve-project="Boolean(projectRef)"
+        />
+      </div>
     </WorkboardSection>
-    <button
-      v-if="pageToken"
-      class="button"
-      :disabled="loading"
-      @click="loadRuns(true)"
-    >
-      {{ $t("common.loadMore") }}
-    </button>
   </PageFrame>
 </template>
 

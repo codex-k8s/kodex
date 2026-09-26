@@ -19,7 +19,7 @@ export async function loadAgentCatalogPage(
       listAgents({
         path: { projectRef: request.projectRef },
         query: {
-          pageSize: request.pageSize ?? 40,
+          pageSize: request.pageSize ?? 20,
           ...(request.query.trim() ? { query: request.query.trim() } : {}),
           ...(request.pageToken ? { pageToken: request.pageToken } : {}),
         },

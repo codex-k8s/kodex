@@ -158,7 +158,14 @@ describe("providers store", () => {
     expect(
       store.accounts.find((item) => item.ref === "pacc_primary")?.version,
     ).toBe(2);
-    expect(api.loadProviderAccounts).toHaveBeenLastCalledWith("", "next");
+    expect(api.loadProviderAccounts).toHaveBeenLastCalledWith(
+      "",
+      "next",
+      expect.any(AbortSignal),
+      undefined,
+      undefined,
+      20,
+    );
   });
 
   it("добавляет cursor-страницу definitions без дублей", async () => {
@@ -210,6 +217,8 @@ describe("providers store", () => {
     expect(api.loadProviderDefinitions).toHaveBeenLastCalledWith(
       "",
       "definitions-next",
+      expect.any(AbortSignal),
+      20,
     );
   });
 

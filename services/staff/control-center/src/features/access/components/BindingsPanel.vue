@@ -10,6 +10,8 @@ import type {
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   bindings: AccessBinding[];
@@ -24,7 +26,7 @@ const emit = defineEmits<{
   create: [];
   edit: [binding: AccessBinding];
   revoke: [binding: AccessBinding];
-  more: [];
+  more: [pageSize: number];
   retry: [];
 }>();
 const stateFilter = ref<"ACTIVE" | "ALL">("ACTIVE");
@@ -33,6 +35,20 @@ const visible = computed(() =>
     ? props.bindings
     : props.bindings.filter((binding) => binding.state === "ACTIVE"),
 );
+const listRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".binding-card",
+  itemCount: () => visible.value.length,
+  estimatedItemHeight: 170,
+});
+useCursorInfiniteScroll({
+  root: listRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more", pageSize.value),
+});
 
 function projectName(ref?: string): string {
   return props.projects.find((project) => project.ref === ref)?.name ?? "";
@@ -101,7 +117,7 @@ function assignmentKind(
       :empty-text="$t('access.bindingsWorkspace.emptyHint')"
       @retry="emit('retry')"
     >
-      <div class="binding-list">
+      <div ref="listRoot" class="binding-list">
         <article
           v-for="binding in visible"
           :key="binding.ref"
@@ -180,15 +196,7 @@ function assignmentKind(
           </footer>
         </article>
       </div>
-      <button
-        v-if="hasMore"
-        class="button load-more"
-        type="button"
-        :disabled="loading"
-        @click="emit('more')"
-      >
-        {{ $t("access.loadMore") }}
-      </button>
+      <div v-if="hasMore" ref="sentinel" class="cursor-sentinel" />
     </AsyncState>
   </section>
 </template>

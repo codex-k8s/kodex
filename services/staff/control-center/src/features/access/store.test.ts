@@ -186,6 +186,7 @@ describe("access store", () => {
       projectRef: "project_sales",
       includeRevoked: true,
       pageToken: undefined,
+      pageSize: 20,
     });
   });
 

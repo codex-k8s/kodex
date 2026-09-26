@@ -87,6 +87,7 @@ describe("agent catalog store", () => {
       projectRef: "project_sales",
       query: "аналитик",
       pageToken: "page_2",
+      pageSize: 20,
     });
     expect(store.hasMore).toBe(false);
   });

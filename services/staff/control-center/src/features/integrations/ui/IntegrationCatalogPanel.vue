@@ -23,9 +23,9 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import type { AppProblem } from "@/shared/api/problem";
-import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 
-defineProps<{
+const props = defineProps<{
   packages: readonly IntegrationPackagePresentation[];
   categories: readonly string[];
   search: string;
@@ -48,6 +48,14 @@ const { t } = useI18n();
 const fieldPrefix = `integration-catalog-${useId()}`;
 const expandedKey = ref("");
 const copySource = ref<ConfigurationCopySource>();
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading && !props.problem,
+  loadMore: () => emit("more"),
+});
 function copied(configuration: ManagedConfiguration): void {
   copySource.value = undefined;
   emit("copied", configuration);
@@ -56,14 +64,6 @@ function copied(configuration: ManagedConfiguration): void {
 function toggleDetails(key: string): void {
   expandedKey.value = expandedKey.value === key ? "" : key;
 }
-function scroll(event: Event): void {
-  if (
-    event.currentTarget instanceof HTMLElement &&
-    nearScrollEnd(event.currentTarget)
-  )
-    emit("more");
-}
-
 function fieldType(field: IntegrationConfigurationField): string {
   if (field.valueType === "URL") return "URL";
   if (field.valueType === "STRING_LIST") return "список строк";
@@ -130,11 +130,7 @@ function fieldType(field: IntegrationConfigurationField): string {
     <p v-if="loading && !packages.length" role="status">
       {{ t("common.loading") }}
     </p>
-    <div
-      v-if="packages.length"
-      class="package-grid"
-      @scroll="!loading && !problem && scroll($event)"
-    >
+    <div v-if="packages.length" ref="scrollRoot" class="package-grid">
       <article v-for="item in packages" :key="item.key" class="package-card">
         <header class="package-card__heading">
           <span class="package-icon" aria-hidden="true">
@@ -362,20 +358,13 @@ function fieldType(field: IntegrationConfigurationField): string {
           </button>
         </footer>
       </article>
+      <span ref="sentinel" class="catalog-sentinel" aria-hidden="true" />
     </div>
     <div v-else-if="!loading && !problem" class="catalog-empty">
       <PackageCheck :size="28" aria-hidden="true" />
       <h3>{{ t("integrationsRedesign.noPackages") }}</h3>
       <p>{{ t("integrationsRedesign.noPackagesHint") }}</p>
     </div>
-    <button
-      v-if="hasMore"
-      class="button"
-      :disabled="loading"
-      @click="emit('more')"
-    >
-      {{ t("managed.more") }}
-    </button>
   </section>
 </template>
 
@@ -465,6 +454,11 @@ function fieldType(field: IntegrationConfigurationField): string {
   gap: 12px;
   max-height: calc(6 * 312px);
   overflow: auto;
+}
+.catalog-sentinel {
+  grid-column: 1 / -1;
+  width: 1px;
+  height: 1px;
 }
 .package-card {
   display: flex;

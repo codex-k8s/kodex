@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Box, Layers3, Maximize2, Plus, Search } from "@lucide/vue";
+import { Box, Maximize2, Plus, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -8,6 +8,8 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import RoleImageLineage from "./RoleImageLineage.vue";
 
 const props = defineProps<{ projectRef: string }>();
@@ -19,11 +21,35 @@ const query = ref("");
 const expanded = ref(false);
 const state = ref<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
 const items = computed(() => store.catalog(props.projectRef));
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".image-card",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 360,
+  estimatedColumns: 3,
+});
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () =>
+    Boolean(store.projectNextPageToken[props.projectRef]) &&
+    !store.loadingCatalog &&
+    !store.loadingMore,
+  loadMore: () =>
+    store.loadCatalog(props.projectRef, false, undefined, pageSize.value),
+});
 function loadFiltered() {
-  return store.loadCatalog(props.projectRef, true, {
-    ...(query.value.trim() ? { query: query.value.trim() } : {}),
-    ...(state.value === "ALL" ? {} : { state: state.value }),
-  });
+  return store.loadCatalog(
+    props.projectRef,
+    true,
+    {
+      ...(query.value.trim() ? { query: query.value.trim() } : {}),
+      ...(state.value === "ALL" ? {} : { state: state.value }),
+    },
+    pageSize.value,
+  );
 }
 
 async function load(): Promise<void> {
@@ -31,15 +57,6 @@ async function load(): Promise<void> {
     loadFiltered(),
     store.loadSupportingCatalogs(props.projectRef),
   ]);
-}
-
-function onScroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (
-    element.scrollTop + element.clientHeight >= element.scrollHeight - 100 &&
-    store.projectNextPageToken[props.projectRef]
-  )
-    void store.loadCatalog(props.projectRef, false);
 }
 
 watch(
@@ -118,9 +135,9 @@ onBeforeUnmount(() => store.dispose());
     />
 
     <div
+      ref="scrollRoot"
       class="role-image-catalog__scroll"
       :aria-busy="store.loadingCatalog || store.loadingMore"
-      @scroll="onScroll"
     >
       <div
         v-if="store.loadingCatalog && !items.length"
@@ -203,15 +220,11 @@ onBeforeUnmount(() => store.dispose());
       <p v-if="store.loadingMore" class="catalog-loading" role="status">
         {{ t("common.loading") }}
       </p>
-      <button
-        v-else-if="store.projectNextPageToken[projectRef]"
-        class="button catalog-more"
-        type="button"
-        @click="store.loadCatalog(projectRef, false)"
-      >
-        <Layers3 :size="16" aria-hidden="true" />
-        {{ t("roleImages.loadMore") }}
-      </button>
+      <div
+        v-if="store.projectNextPageToken[projectRef]"
+        ref="sentinel"
+        class="cursor-sentinel"
+      />
     </div>
   </component>
 </template>

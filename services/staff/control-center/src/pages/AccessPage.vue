@@ -342,8 +342,14 @@ onMounted(() => void loadBaseline());
       :loading="access.loading.subjects"
       :problem="access.problems.subjects"
       :has-more="Boolean(access.subjectNextPageToken)"
-      @search="access.loadSubjects($event)"
-      @more="access.loadSubjects($event, undefined, true)"
+      @search="
+        (query, pageSize) =>
+          access.loadSubjects(query, undefined, false, pageSize)
+      "
+      @more="
+        (query, pageSize) =>
+          access.loadSubjects(query, undefined, true, pageSize)
+      "
       @bind="createBinding"
       @retry="loadSection"
     />
@@ -355,8 +361,8 @@ onMounted(() => void loadBaseline());
       :loading="access.loading.groups"
       :problem="access.problems.groups"
       :has-more="Boolean(access.groupNextPageToken)"
-      @search="access.loadGroups($event)"
-      @more="access.loadGroups($event, true)"
+      @search="(query, pageSize) => access.loadGroups(query, false, pageSize)"
+      @more="(query, pageSize) => access.loadGroups(query, true, pageSize)"
       @bind="createGroupBinding"
       @retry="loadSection"
     />
@@ -371,7 +377,7 @@ onMounted(() => void loadBaseline());
       @create="createRole"
       @edit="editRole"
       @archive="archiveRole"
-      @more="access.loadRoles(true, true)"
+      @more="access.loadRoles(true, true, $event)"
       @retry="loadSection"
     />
     <BindingsPanel
@@ -387,10 +393,12 @@ onMounted(() => void loadBaseline());
       @edit="editBinding"
       @revoke="revokeBinding"
       @more="
-        access.loadBindings(
-          { projectRef: projectRef || undefined, includeRevoked: true },
-          true,
-        )
+        (pageSize) =>
+          access.loadBindings(
+            { projectRef: projectRef || undefined, includeRevoked: true },
+            true,
+            pageSize,
+          )
       "
       @retry="loadSection"
     />

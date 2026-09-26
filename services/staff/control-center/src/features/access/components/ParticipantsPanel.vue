@@ -16,6 +16,8 @@ import type {
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   subjects: AccessSubject[];
@@ -31,14 +33,28 @@ const props = defineProps<{
   hasMore?: boolean;
 }>();
 const emit = defineEmits<{
-  search: [query: string];
-  more: [query: string];
+  search: [query: string, pageSize: number];
+  more: [query: string, pageSize: number];
   bind: [subject: AccessSubject];
   retry: [];
 }>();
 const query = ref("");
 const searchId = useId();
 let timer: ReturnType<typeof setTimeout> | undefined;
+const listRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".access-table__row",
+  itemCount: () => props.subjects.length,
+  estimatedItemHeight: 88,
+});
+useCursorInfiniteScroll({
+  root: listRoot,
+  sentinel,
+  enabled: () => props.hasMore && !props.loading,
+  loadMore: () => emit("more", query.value.trim(), pageSize.value),
+});
 
 const groupNames = computed(
   () => new Map(props.groups.map((group) => [group.ref, group.displayName])),
@@ -86,7 +102,7 @@ function permissionCount(subject: AccessSubject): number {
 
 watch(query, (value) => {
   if (timer) clearTimeout(timer);
-  timer = setTimeout(() => emit("search", value.trim()), 250);
+  timer = setTimeout(() => emit("search", value.trim(), pageSize.value), 250);
 });
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer);
@@ -129,7 +145,7 @@ onBeforeUnmount(() => {
       :empty-text="$t('access.participants.emptyHint')"
       @retry="emit('retry')"
     >
-      <div class="access-table" role="table">
+      <div ref="listRoot" class="access-table" role="table">
         <div class="access-table__head" role="row">
           <span>{{ $t("access.participants.participant") }}</span>
           <span>{{ $t("access.participants.identity") }}</span>
@@ -207,15 +223,7 @@ onBeforeUnmount(() => {
           </button>
         </article>
       </div>
-      <button
-        v-if="hasMore"
-        class="button load-more"
-        type="button"
-        :disabled="loading"
-        @click="emit('more', query.trim())"
-      >
-        {{ $t("access.loadMore") }}
-      </button>
+      <div v-if="hasMore" ref="sentinel" class="cursor-sentinel" />
     </AsyncState>
   </section>
 </template>

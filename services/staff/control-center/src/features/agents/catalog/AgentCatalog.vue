@@ -18,22 +18,26 @@ import {
 } from "@/features/agents/catalog/model";
 import type { Agent } from "@/shared/api/generated/openapi/types.gen";
 import ViewModeToggle from "@/shared/ui/ViewModeToggle.vue";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   agents: Agent[];
   projectRef: string;
   view: AgentCatalogView;
   query: string;
+  pageSize: number;
   hasMore: boolean;
   loadingMore: boolean;
 }>();
 const emit = defineEmits<{
   "update:view": [view: AgentCatalogView];
   "update:query": [query: string];
+  "update:pageSize": [pageSize: number];
   "load-more": [];
 }>();
 const { t } = useI18n();
 const sentinel = ref<HTMLElement>();
+const catalogRoot = ref<HTMLElement>();
 const items = computed(() =>
   props.agents
     .map(toAgentCatalogItem)
@@ -41,6 +45,13 @@ const items = computed(() =>
       left.name.localeCompare(right.name, "ru-RU", { sensitivity: "base" }),
     ),
 );
+const adaptivePageSize = useAdaptiveCursorPageSize({
+  container: catalogRoot,
+  itemSelector: ".agent-card, tbody tr",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 300,
+  estimatedColumns: 3,
+});
 let observer: IntersectionObserver | undefined;
 
 function updateQuery(event: Event): void {
@@ -67,11 +78,18 @@ watch(
   () => [props.hasMore, props.loadingMore, sentinel.value] as const,
   () => void nextTick(bindObserver),
 );
+watch(adaptivePageSize, (value) => {
+  if (value !== props.pageSize) emit("update:pageSize", value);
+});
 onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
-  <section class="agent-catalog" :aria-label="t('agents.title')">
+  <section
+    ref="catalogRoot"
+    class="agent-catalog"
+    :aria-label="t('agents.title')"
+  >
     <div class="agent-catalog__toolbar">
       <label class="agent-catalog__search">
         <span class="sr-only">{{ t("agents.catalogSearch") }}</span>
@@ -142,9 +160,6 @@ onBeforeUnmount(() => observer?.disconnect());
       aria-live="polite"
     >
       <span v-if="loadingMore">{{ t("agents.catalogLoadingMore") }}</span>
-      <button v-else class="button" type="button" @click="requestNextPage">
-        {{ t("agents.catalogLoadMore") }}
-      </button>
     </div>
   </section>
 </template>

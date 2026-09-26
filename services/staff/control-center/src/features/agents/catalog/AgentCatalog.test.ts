@@ -42,6 +42,7 @@ describe("AgentCatalog", () => {
           projectRef: "project_sales",
           view: "grid",
           query: "аналитик",
+          pageSize: 20,
           hasMore: true,
           loadingMore: false,
         }),
@@ -76,7 +77,8 @@ describe("AgentCatalog", () => {
     const html = await renderToString(app);
     expect(html).toContain('value="аналитик"');
     expect(html).toContain("Загружено: 1");
-    expect(html).toContain("Загрузить ещё");
+    expect(html).not.toContain("Загрузить ещё");
+    expect(html).toContain("agent-catalog__pagination");
     expect(html).not.toContain("agent-catalog__filter");
   });
 });
