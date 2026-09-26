@@ -450,7 +450,7 @@ function fieldType(field: IntegrationConfigurationField): string {
 }
 .package-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
   gap: 12px;
   max-height: calc(6 * 312px);
   overflow: auto;
@@ -660,9 +660,15 @@ function fieldType(field: IntegrationConfigurationField): string {
   font-size: 0.76rem;
 }
 .package-card__actions {
+  flex-wrap: wrap;
   justify-content: flex-end;
   margin-top: auto;
   padding-top: 16px;
+}
+.package-card__actions .button {
+  flex: 1 1 100px;
+  min-width: 0;
+  white-space: normal;
 }
 .catalog-empty {
   display: grid;

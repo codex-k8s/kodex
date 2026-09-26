@@ -459,6 +459,8 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if field.Kind() == protoreflect.Int64Kind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.IntegrationDefinition":
+			return float64(0), field.JSONName() == "connectionCount" || field.JSONName() == "healthyConnectionCount"
 		case "controlplane.v1.ProviderAccountBlockerCount":
 			return float64(0), field.JSONName() == "total"
 		case "controlplane.v1.ProviderAccountDeletion":

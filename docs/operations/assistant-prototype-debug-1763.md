@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.58
+version: 1.0.59
 updated: 2026-09-26
 ---
 
@@ -1099,3 +1099,19 @@ GitHub checks не считается `PASS`.
   переполнения; console errors/warnings и HTTP 4xx/5xx отсутствуют. Screenshot:
   `/tmp/kodex-integrations-github-preview.png`. Визуальная приёмка владельцем —
   NOT RUN.
+- Каталог пакетов ошибочно выводил состояние и число подключений по текущей
+  загруженной порции курсорного списка: GitHub менялся с «Подключено · 1» на
+  «Доступно · 0» после очистки поиска. `ListIntegrationDefinitions` теперь в
+  той же read-only snapshot-транзакции получает tenant-scoped агрегаты активных
+  подключений и передаёт их через Proto/OpenAPI; обязательные нулевые `int64`
+  gateway материализует явно. Vue больше не выводит агрегат из частичной
+  страницы. Одновременно desktop-сетка каталога ограничена четырьмя достаточно
+  широкими карточками, а три действия переносятся только внутри карточки.
+  `buf build`, адресные Go-тесты control-plane/gateway, 61 frontend unit,
+  typecheck, ESLint, Prettier и `git diff --check` — PASS; disposable БД не
+  запускалась. Air/Vite применили diff без image rebuild, оба Deployment Ready
+  `1/1`. После reload без кэша Chrome 1920×1080 стабильно показывает GitHub 1,
+  OpenAPI/MCP 52 и нули остальных пакетов, без пересечения кнопок,
+  горизонтального переполнения, console errors/warnings и HTTP 4xx/5xx.
+  Screenshot: `/tmp/kodex-integrations-catalog-counts-final.png`. Визуальная
+  приёмка владельцем — NOT RUN.

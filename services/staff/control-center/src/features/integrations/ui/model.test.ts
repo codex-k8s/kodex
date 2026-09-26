@@ -25,6 +25,8 @@ function definition(
     builtIn: true,
     version: 1,
     nextActions: [],
+    connectionCount: 0,
+    healthyConnectionCount: 0,
     available: true,
     capabilities: [
       {
@@ -79,12 +81,11 @@ describe("integrations presentation model", () => {
   it("считает подключения и не открывает create без server action", () => {
     const packages = buildIntegrationPackages(
       [
-        definition("github"),
+        definition("github", {
+          connectionCount: 2,
+          healthyConnectionCount: 1,
+        }),
         definition("custom", { builtIn: false, available: false }),
-      ],
-      [
-        connection("github-main", "github"),
-        connection("github-off", "github", { state: "DISABLED" }),
       ],
       false,
     );
@@ -119,7 +120,6 @@ describe("integrations presentation model", () => {
           ],
         }),
       ],
-      [],
       true,
     );
 

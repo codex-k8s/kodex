@@ -1833,7 +1833,7 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 	}
 	canCopy := authorization.allowed("organization.manage", resolvedAccessTarget{scope: organizationTarget(scope.organizationRef)})
 	rows, err := tx.Query(ctx, queryQueriesListintegrationdefinitionsSelectIntegrationDefinitionsCategory,
-		strings.TrimSpace(filter.Category), strings.TrimSpace(filter.Query), cursor, limit+1)
+		scope.organizationID, strings.TrimSpace(filter.Category), strings.TrimSpace(filter.Query), cursor, limit+1)
 	if err != nil {
 		return nil, "", nil, errs.ErrUnavailable
 	}
@@ -1847,6 +1847,7 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 			&capabilities, &schema, &item.SchemaVersion, &item.DefinitionVersion, &item.Origin,
 			&item.Digest, &item.Adapter, &item.CredentialSecretKey,
 			&item.AdapterOwner, &item.ExecutionRoute, &item.AdapterReadiness, &item.Version,
+			&item.ConnectionCount, &item.HealthyConnectionCount,
 		); err != nil {
 			return nil, "", nil, errs.ErrUnavailable
 		}

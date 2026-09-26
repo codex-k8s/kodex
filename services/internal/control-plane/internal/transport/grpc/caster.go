@@ -571,6 +571,7 @@ func castDefinition(value entity.IntegrationDefinition) *controlplanev1.Integrat
 		Origin: controlplanev1.IntegrationDefinitionOrigin_INTEGRATION_DEFINITION_ORIGIN_SHIPPED,
 		Digest: value.Digest, Adapter: value.Adapter, CredentialSecretKey: value.CredentialSecretKey,
 		AdapterOwner: value.AdapterOwner, ExecutionRoute: value.ExecutionRoute, AdapterReadiness: value.AdapterReadiness,
+		ConnectionCount: value.ConnectionCount, HealthyConnectionCount: value.HealthyConnectionCount,
 	}
 	for _, capability := range value.Capabilities {
 		result.Capabilities = append(result.Capabilities, castIntegrationCapability(capability))

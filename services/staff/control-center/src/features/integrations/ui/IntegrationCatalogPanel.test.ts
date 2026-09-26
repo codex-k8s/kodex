@@ -50,6 +50,8 @@ function githubDefinition(): IntegrationDefinition {
     builtIn: true,
     version: 1,
     nextActions: [],
+    connectionCount: 0,
+    healthyConnectionCount: 0,
     available: true,
     capabilities: [
       {
@@ -94,7 +96,7 @@ function githubDefinition(): IntegrationDefinition {
 
 describe("IntegrationCatalogPanel", () => {
   it("показывает только определения, подтверждённые сервером", async () => {
-    const packages = buildIntegrationPackages([githubDefinition()], [], true);
+    const packages = buildIntegrationPackages([githubDefinition()], true);
     const app = createSSRApp({
       render: () =>
         h(IntegrationCatalogPanel, {

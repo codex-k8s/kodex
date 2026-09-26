@@ -22,6 +22,8 @@ const definition: IntegrationDefinition = {
   builtIn: true,
   version: 1,
   nextActions: [],
+  connectionCount: 0,
+  healthyConnectionCount: 0,
   available: true,
   capabilities: [],
   configurationFields: [

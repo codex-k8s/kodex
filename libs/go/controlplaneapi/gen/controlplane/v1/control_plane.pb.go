@@ -12343,28 +12343,30 @@ func (x *IntegrationConfigurationField) GetMaximumLength() int32 {
 }
 
 type IntegrationDefinition struct {
-	state               protoimpl.MessageState           `protogen:"open.v1"`
-	Key                 string                           `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Name                string                           `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description         string                           `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Category            string                           `protobuf:"bytes,4,opt,name=category,proto3" json:"category,omitempty"`
-	BuiltIn             bool                             `protobuf:"varint,5,opt,name=built_in,json=builtIn,proto3" json:"built_in,omitempty"`
-	Available           bool                             `protobuf:"varint,6,opt,name=available,proto3" json:"available,omitempty"`
-	Capabilities        []*IntegrationCapability         `protobuf:"bytes,7,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	ConfigurationFields []*IntegrationConfigurationField `protobuf:"bytes,8,rep,name=configuration_fields,json=configurationFields,proto3" json:"configuration_fields,omitempty"`
-	SchemaVersion       string                           `protobuf:"bytes,9,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
-	DefinitionVersion   string                           `protobuf:"bytes,10,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
-	Origin              IntegrationDefinitionOrigin      `protobuf:"varint,11,opt,name=origin,proto3,enum=controlplane.v1.IntegrationDefinitionOrigin" json:"origin,omitempty"`
-	Digest              string                           `protobuf:"bytes,12,opt,name=digest,proto3" json:"digest,omitempty"`
-	Adapter             string                           `protobuf:"bytes,13,opt,name=adapter,proto3" json:"adapter,omitempty"`
-	CredentialSecretKey string                           `protobuf:"bytes,14,opt,name=credential_secret_key,json=credentialSecretKey,proto3" json:"credential_secret_key,omitempty"`
-	AdapterOwner        string                           `protobuf:"bytes,15,opt,name=adapter_owner,json=adapterOwner,proto3" json:"adapter_owner,omitempty"`
-	ExecutionRoute      string                           `protobuf:"bytes,16,opt,name=execution_route,json=executionRoute,proto3" json:"execution_route,omitempty"`
-	AdapterReadiness    string                           `protobuf:"bytes,17,opt,name=adapter_readiness,json=adapterReadiness,proto3" json:"adapter_readiness,omitempty"`
-	Version             int64                            `protobuf:"varint,18,opt,name=version,proto3" json:"version,omitempty"`
-	NextActions         []string                         `protobuf:"bytes,19,rep,name=next_actions,json=nextActions,proto3" json:"next_actions,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                  protoimpl.MessageState           `protogen:"open.v1"`
+	Key                    string                           `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Name                   string                           `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description            string                           `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Category               string                           `protobuf:"bytes,4,opt,name=category,proto3" json:"category,omitempty"`
+	BuiltIn                bool                             `protobuf:"varint,5,opt,name=built_in,json=builtIn,proto3" json:"built_in,omitempty"`
+	Available              bool                             `protobuf:"varint,6,opt,name=available,proto3" json:"available,omitempty"`
+	Capabilities           []*IntegrationCapability         `protobuf:"bytes,7,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	ConfigurationFields    []*IntegrationConfigurationField `protobuf:"bytes,8,rep,name=configuration_fields,json=configurationFields,proto3" json:"configuration_fields,omitempty"`
+	SchemaVersion          string                           `protobuf:"bytes,9,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	DefinitionVersion      string                           `protobuf:"bytes,10,opt,name=definition_version,json=definitionVersion,proto3" json:"definition_version,omitempty"`
+	Origin                 IntegrationDefinitionOrigin      `protobuf:"varint,11,opt,name=origin,proto3,enum=controlplane.v1.IntegrationDefinitionOrigin" json:"origin,omitempty"`
+	Digest                 string                           `protobuf:"bytes,12,opt,name=digest,proto3" json:"digest,omitempty"`
+	Adapter                string                           `protobuf:"bytes,13,opt,name=adapter,proto3" json:"adapter,omitempty"`
+	CredentialSecretKey    string                           `protobuf:"bytes,14,opt,name=credential_secret_key,json=credentialSecretKey,proto3" json:"credential_secret_key,omitempty"`
+	AdapterOwner           string                           `protobuf:"bytes,15,opt,name=adapter_owner,json=adapterOwner,proto3" json:"adapter_owner,omitempty"`
+	ExecutionRoute         string                           `protobuf:"bytes,16,opt,name=execution_route,json=executionRoute,proto3" json:"execution_route,omitempty"`
+	AdapterReadiness       string                           `protobuf:"bytes,17,opt,name=adapter_readiness,json=adapterReadiness,proto3" json:"adapter_readiness,omitempty"`
+	Version                int64                            `protobuf:"varint,18,opt,name=version,proto3" json:"version,omitempty"`
+	NextActions            []string                         `protobuf:"bytes,19,rep,name=next_actions,json=nextActions,proto3" json:"next_actions,omitempty"`
+	ConnectionCount        int64                            `protobuf:"varint,20,opt,name=connection_count,json=connectionCount,proto3" json:"connection_count,omitempty"`
+	HealthyConnectionCount int64                            `protobuf:"varint,21,opt,name=healthy_connection_count,json=healthyConnectionCount,proto3" json:"healthy_connection_count,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *IntegrationDefinition) Reset() {
@@ -12528,6 +12530,20 @@ func (x *IntegrationDefinition) GetNextActions() []string {
 		return x.NextActions
 	}
 	return nil
+}
+
+func (x *IntegrationDefinition) GetConnectionCount() int64 {
+	if x != nil {
+		return x.ConnectionCount
+	}
+	return 0
+}
+
+func (x *IntegrationDefinition) GetHealthyConnectionCount() int64 {
+	if x != nil {
+		return x.HealthyConnectionCount
+	}
+	return 0
 }
 
 // IntegrationResourceScope содержит только server-derived exact resource values.
@@ -74851,7 +74867,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"hasMinimum\x12\x1f\n" +
 	"\vhas_maximum\x18\f \x01(\bR\n" +
 	"hasMaximum\x12%\n" +
-	"\x0emaximum_length\x18\r \x01(\x05R\rmaximumLength\"\x9d\x06\n" +
+	"\x0emaximum_length\x18\r \x01(\x05R\rmaximumLength\"\x82\a\n" +
 	"\x15IntegrationDefinition\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -74872,7 +74888,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0fexecution_route\x18\x10 \x01(\tR\x0eexecutionRoute\x12+\n" +
 	"\x11adapter_readiness\x18\x11 \x01(\tR\x10adapterReadiness\x12\x18\n" +
 	"\aversion\x18\x12 \x01(\x03R\aversion\x12!\n" +
-	"\fnext_actions\x18\x13 \x03(\tR\vnextActions\"\xfa\x01\n" +
+	"\fnext_actions\x18\x13 \x03(\tR\vnextActions\x12)\n" +
+	"\x10connection_count\x18\x14 \x01(\x03R\x0fconnectionCount\x128\n" +
+	"\x18healthy_connection_count\x18\x15 \x01(\x03R\x16healthyConnectionCount\"\xfa\x01\n" +
 	"\x18IntegrationResourceScope\x12<\n" +
 	"\x04kind\x18\x01 \x01(\x0e2(.controlplane.v1.IntegrationResourceKindR\x04kind\x12M\n" +
 	"\x06values\x18\x02 \x03(\v25.controlplane.v1.IntegrationResourceScope.ValuesEntryR\x06values\x12\x16\n" +

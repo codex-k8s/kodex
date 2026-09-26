@@ -14,6 +14,8 @@ import { loadExactIntegrationDefinition } from "./definition-lookup";
 
 const definition = {
   nextActions: ["COPY"],
+  connectionCount: 0,
+  healthyConnectionCount: 0,
   version: 1,
   key: "github",
   name: "GitHub",

@@ -457,19 +457,11 @@ const canCreateConnection = computed(() =>
   platform.integrationDefinitionActions.includes("CREATE_CONNECTION"),
 );
 const packages = computed(() =>
-  buildIntegrationPackages(
-    definitions.value,
-    connections.value,
-    canCreateConnection.value,
-  ),
+  buildIntegrationPackages(definitions.value, canCreateConnection.value),
 );
 const categories = computed(() => integrationCategories(packages.value));
 const visiblePackages = computed(() =>
-  buildIntegrationPackages(
-    catalogDefinitions.value,
-    connections.value,
-    canCreateConnection.value,
-  ),
+  buildIntegrationPackages(catalogDefinitions.value, canCreateConnection.value),
 );
 const allGrants = computed(() => flattenIntegrationGrants(connections.value));
 const visibleGrants = computed(() =>

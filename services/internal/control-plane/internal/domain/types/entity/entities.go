@@ -701,7 +701,7 @@ type IntegrationConfigurationField struct {
 
 type IntegrationDefinition struct {
 	NextActions                                                        []string
-	Version                                                            int64
+	Version, ConnectionCount, HealthyConnectionCount                   int64
 	Key, Name, Description, Category, SchemaVersion, DefinitionVersion string
 	Origin, Digest, Adapter, CredentialSecretKey                       string
 	AdapterOwner, ExecutionRoute, AdapterReadiness                     string

@@ -9862,24 +9862,26 @@ type IntegrationCredentialInput struct {
 
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
-	Adapter             IntegrationDefinitionAdapter          `json:"adapter"`
-	AdapterOwner        IntegrationDefinitionAdapterOwner     `json:"adapterOwner"`
-	AdapterReadiness    IntegrationDefinitionAdapterReadiness `json:"adapterReadiness"`
-	Available           bool                                  `json:"available"`
-	BuiltIn             bool                                  `json:"builtIn"`
-	Capabilities        []IntegrationCapability               `json:"capabilities"`
-	Category            string                                `json:"category"`
-	ConfigurationFields []IntegrationConfigurationField       `json:"configurationFields"`
-	CredentialSecretKey *string                               `json:"credentialSecretKey,omitempty"`
-	DefinitionVersion   string                                `json:"definitionVersion"`
-	Description         string                                `json:"description"`
-	Digest              string                                `json:"digest"`
-	ExecutionRoute      IntegrationDefinitionExecutionRoute   `json:"executionRoute"`
-	Key                 string                                `json:"key"`
-	Name                string                                `json:"name"`
-	NextActions         []IntegrationDefinitionNextActions    `json:"nextActions"`
-	Origin              IntegrationDefinitionOrigin           `json:"origin"`
-	SchemaVersion       string                                `json:"schemaVersion"`
+	Adapter                IntegrationDefinitionAdapter          `json:"adapter"`
+	AdapterOwner           IntegrationDefinitionAdapterOwner     `json:"adapterOwner"`
+	AdapterReadiness       IntegrationDefinitionAdapterReadiness `json:"adapterReadiness"`
+	Available              bool                                  `json:"available"`
+	BuiltIn                bool                                  `json:"builtIn"`
+	Capabilities           []IntegrationCapability               `json:"capabilities"`
+	Category               string                                `json:"category"`
+	ConfigurationFields    []IntegrationConfigurationField       `json:"configurationFields"`
+	ConnectionCount        int64                                 `json:"connectionCount"`
+	CredentialSecretKey    *string                               `json:"credentialSecretKey,omitempty"`
+	DefinitionVersion      string                                `json:"definitionVersion"`
+	Description            string                                `json:"description"`
+	Digest                 string                                `json:"digest"`
+	ExecutionRoute         IntegrationDefinitionExecutionRoute   `json:"executionRoute"`
+	HealthyConnectionCount int64                                 `json:"healthyConnectionCount"`
+	Key                    string                                `json:"key"`
+	Name                   string                                `json:"name"`
+	NextActions            []IntegrationDefinitionNextActions    `json:"nextActions"`
+	Origin                 IntegrationDefinitionOrigin           `json:"origin"`
+	SchemaVersion          string                                `json:"schemaVersion"`
 
 	// Version Авторитетная версия каталога для If-Match при SHIPPED copy.
 	Version int64 `json:"version"`

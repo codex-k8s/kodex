@@ -17,6 +17,8 @@ const definition: IntegrationDefinition = {
   builtIn: true,
   version: 1,
   nextActions: [],
+  connectionCount: 1,
+  healthyConnectionCount: 1,
   available: true,
   capabilities: [
     {

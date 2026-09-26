@@ -1377,6 +1377,8 @@ message IntegrationDefinition {
   string adapter_readiness = 17;
   int64 version = 18;
   repeated string next_actions = 19;
+  int64 connection_count = 20;
+  int64 healthy_connection_count = 21;
 }
 
 // IntegrationResourceScope содержит только server-derived exact resource values.

@@ -658,8 +658,11 @@ func TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog(t *testing.
 	writer := &localizingRecorder{ResponseRecorder: httptest.NewRecorder()}
 	writeMessage(writer, http.StatusOK, &controlplanev1.ListIntegrationDefinitionsResponse{
 		Definitions: []*controlplanev1.IntegrationDefinition{{
-			Version: 3,
-			Key:     "example", Name: "i18n:INTEGRATION_EXAMPLE_NAME", Available: true,
+			Version:         3,
+			Key:             "example",
+			Name:            "i18n:INTEGRATION_EXAMPLE_NAME",
+			Available:       true,
+			ConnectionCount: 7,
 		}},
 		NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_CREATE_CONNECTION},
 		CoreReady:   true,
@@ -672,6 +675,10 @@ func TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog(t *testing.
 	items, _ := value["items"].([]any)
 	if len(items) != 1 || items[0].(map[string]any)["name"] != "localized:INTEGRATION_EXAMPLE_NAME" {
 		t.Fatalf("каталог не локализован: %#v", value)
+	}
+	definition := items[0].(map[string]any)
+	if definition["connectionCount"] != float64(7) || definition["healthyConnectionCount"] != float64(0) {
+		t.Fatalf("авторитетные агрегаты подключений потеряны: %#v", definition)
 	}
 	if ready, _ := value["coreReady"].(bool); !ready {
 		t.Fatalf("core readiness потерян: %#v", value)

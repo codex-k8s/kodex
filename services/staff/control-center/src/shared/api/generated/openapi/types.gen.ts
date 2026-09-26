@@ -3468,6 +3468,8 @@ export type IntegrationDefinition = {
     executionRoute: 'MANAGED_MCP' | 'INTERACTION';
     adapterReadiness: 'READY' | 'NOT_READY';
     credentialSecretKey?: string;
+    connectionCount: number;
+    healthyConnectionCount: number;
 };
 
 export type IntegrationResourceScope = {
