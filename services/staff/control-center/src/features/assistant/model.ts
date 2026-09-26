@@ -132,10 +132,17 @@ export function assistantIntegrationConnectionTarget(
     "UPDATE_INTEGRATION_CONNECTION",
     "INTEGRATION_CONNECTION",
   );
+  const testedRef = assistantAppliedResourceRef(
+    plan,
+    operationRef,
+    "TEST_INTEGRATION_CONNECTION",
+    "INTEGRATION_CONNECTION",
+  );
   const operation = plan.operations.find((item) => item.ref === operationRef);
   const connectionRef =
     createdRef ||
-    (updatedRef === operation?.target.ref ? updatedRef : undefined);
+    (updatedRef === operation?.target.ref ? updatedRef : undefined) ||
+    (testedRef === operation?.target.ref ? testedRef : undefined);
   return connectionRef ? { connectionRef } : undefined;
 }
 

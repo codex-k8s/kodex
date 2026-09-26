@@ -1317,7 +1317,8 @@ onBeforeUnmount(() => {
                     v-for="operation in turn.plan.operations.filter(
                       (item) =>
                         item.type === 'CREATE_INTEGRATION_CONNECTION' ||
-                        item.type === 'UPDATE_INTEGRATION_CONNECTION',
+                        item.type === 'UPDATE_INTEGRATION_CONNECTION' ||
+                        item.type === 'TEST_INTEGRATION_CONNECTION',
                     )"
                     :key="`connection-${operation.ref}`"
                     :plan="turn.plan"

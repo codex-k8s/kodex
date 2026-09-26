@@ -244,6 +244,7 @@ describe("AssistantWorkspace layout", () => {
       '<AssistantIntegrationConnectionCard @navigate="close"',
     );
     expect(template).toContain("item.type === 'UPDATE_INTEGRATION_CONNECTION'");
+    expect(template).toContain("item.type === 'TEST_INTEGRATION_CONNECTION'");
     expect(template).toContain("item.type === 'UPDATE_PROJECT'");
     expect(template).toContain("item.type === 'UPDATE_AGENT'");
   });

@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.49
+version: 1.0.50
 updated: 2026-09-26
 ---
 
@@ -987,4 +987,12 @@ GitHub checks не считается `PASS`.
   противоречивый `total` закрыто отклоняются; ошибка продолжения предлагает
   явный повтор без сброса первой страницы. Адресные frontend unit 36/36,
   typecheck, ESLint, Prettier и `git diff --check` — PASS. Chrome-повтор —
+  NOT RUN из-за закрытого transport `chrome-devtools-mcp`.
+- После применения `TEST_INTEGRATION_CONNECTION` чат показывал только общую
+  квитанцию плана: живая карточка подключения была связана с create/update.
+  Тест теперь разрешается только по exact operation receipt и target ref и
+  подключает ту же server readback-карточку. Она автоматически наблюдает
+  `TESTING` до авторитетного `CONNECTED` либо состояния ошибки, не повторяя
+  state-changing command и не раскрывая credential. Адресные frontend unit
+  74/74, typecheck, ESLint, Prettier и `git diff --check` — PASS; browser —
   NOT RUN из-за закрытого transport `chrome-devtools-mcp`.

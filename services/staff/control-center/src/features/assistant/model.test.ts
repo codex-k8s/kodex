@@ -343,6 +343,26 @@ describe("assistant role image build target", () => {
       assistantIntegrationConnectionTarget(
         {
           ...connectionPlan,
+          operations: [
+            {
+              ...connectionOperation,
+              type: "TEST_INTEGRATION_CONNECTION",
+              action: "EXECUTE",
+              target: {
+                kind: "INTEGRATION_CONNECTION",
+                ref: "conn_exact",
+                name: "GitHub",
+              },
+            },
+          ],
+        },
+        "op_connection",
+      ),
+    ).toEqual({ connectionRef: "conn_exact" });
+    expect(
+      assistantIntegrationConnectionTarget(
+        {
+          ...connectionPlan,
           receipt: { ...receipt, planRevision: 1 },
         },
         "op_connection",
