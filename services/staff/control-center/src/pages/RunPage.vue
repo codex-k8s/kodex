@@ -19,6 +19,7 @@ import {
 } from "@/features/platform/run-refresh";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { isTerminalRun } from "@/features/workboard/model";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
@@ -660,7 +661,11 @@ onBeforeUnmount(() => {
               class="live-indicator"
               :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
             >
-              ● {{ $t("runs.live") }} · #{{ sessionGraph.sequence }}
+              ●
+              {{
+                $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
+              }}
+              · #{{ sessionGraph.sequence }}
             </span>
             <RunTokenUsage :usage="run.usage" compact />
           </aside>

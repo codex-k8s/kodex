@@ -58,6 +58,7 @@ function messages() {
       previousAttempt: "Предыдущая попытка",
       continueTask: "Дополнительное задание",
       live: "Данные поступают в реальном времени",
+      historyComplete: "История запуска завершена",
       noEvents: "Событий пока нет",
       callback: "Ответ дочернего запуска",
       childRuns: "Дочерние запуски",
@@ -246,6 +247,8 @@ describe("RunPage runtime presentation", () => {
     expect(html).toContain("run-page-body");
     expect(html).toContain("run-workspace");
     expect(html).toContain("run-canvas-summary");
+    expect(html).toContain("История запуска завершена");
+    expect(html).not.toContain("Данные поступают в реальном времени");
     expect(html).toContain("token-usage");
     expect(html).toContain(new Intl.NumberFormat("ru").format(1700));
     expect(html).toContain("graph-legend");

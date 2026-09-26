@@ -25,6 +25,13 @@ function canLoad(lane: RunLane): boolean {
     : props.hasMore && !props.loadingMore;
 }
 const lanes = computed(() => groupRuns(props.runs));
+const terminalOnly = computed(
+  () =>
+    lanes.value.TERMINAL.length > 0 &&
+    lanes.value.QUEUED.length === 0 &&
+    lanes.value.RUNNING.length === 0 &&
+    lanes.value.WAITING_HUMAN.length === 0,
+);
 const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
 const laneRoots = Object.fromEntries(
   order.map((lane) => [lane, shallowRef<HTMLElement | null>(null)]),
@@ -43,8 +50,16 @@ for (const lane of order)
 
 <template>
   <div class="runs-board">
-    <div class="runs-board__kanban">
-      <section v-for="lane in order" :key="lane" class="runs-lane">
+    <div
+      class="runs-board__kanban"
+      :class="{ 'runs-board__kanban--terminal-only': terminalOnly }"
+    >
+      <section
+        v-for="lane in order"
+        v-show="!terminalOnly || lane === 'TERMINAL'"
+        :key="lane"
+        class="runs-lane"
+      >
         <header>
           <h2>{{ $t(`workboard.lanes.${lane}`) }}</h2>
           <span>{{ lanes[lane].length }}</span>
@@ -92,6 +107,13 @@ for (const lane of order)
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 8px;
+}
+.runs-board__kanban--terminal-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+.runs-board__kanban--terminal-only .runs-lane__body {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  max-height: min(960px, calc(100vh - 300px));
 }
 .runs-lane {
   display: flex;
