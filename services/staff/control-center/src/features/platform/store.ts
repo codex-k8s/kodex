@@ -1264,9 +1264,10 @@ export const usePlatformStore = defineStore("platform", () => {
     projectRef?: string,
     search = "",
     pageSize = 20,
+    resourceRef = "",
   ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}\n${resourceRef}`;
     auditScopeKey.value = scopeKey;
     auditNextPageToken.value = undefined;
     consumedAuditPageTokens.clear();
@@ -1281,6 +1282,7 @@ export const usePlatformStore = defineStore("platform", () => {
             listAuditEvents({
               query: {
                 ...(projectRef ? { projectRef } : {}),
+                ...(resourceRef ? { resourceRef } : {}),
                 ...(normalizedSearch ? { query: normalizedSearch } : {}),
                 pageSize,
               },
@@ -1300,9 +1302,10 @@ export const usePlatformStore = defineStore("platform", () => {
     projectRef?: string,
     search = "",
     pageSize = 20,
+    resourceRef = "",
   ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}\n${resourceRef}`;
     const pageToken = auditNextPageToken.value;
     if (
       !pageToken ||
@@ -1319,6 +1322,7 @@ export const usePlatformStore = defineStore("platform", () => {
             listAuditEvents({
               query: {
                 ...(projectRef ? { projectRef } : {}),
+                ...(resourceRef ? { resourceRef } : {}),
                 ...(normalizedSearch ? { query: normalizedSearch } : {}),
                 pageSize,
                 pageToken,

@@ -13437,6 +13437,9 @@ type AuditActionQuery = string
 // AuditOutcomeQuery defines model for AuditOutcomeQuery.
 type AuditOutcomeQuery = string
 
+// AuditResourceRefQuery defines model for AuditResourceRefQuery.
+type AuditResourceRefQuery = OpaqueRef
+
 // ConfigurationRef defines model for ConfigurationRef.
 type ConfigurationRef = OpaqueRef
 
@@ -14119,12 +14122,13 @@ type RemoveAttachmentSetItemsParams struct {
 
 // ListAuditEventsParams defines parameters for ListAuditEvents.
 type ListAuditEventsParams struct {
-	Outcome    *AuditOutcomeQuery `form:"outcome,omitempty" json:"outcome,omitempty"`
-	Action     *AuditActionQuery  `form:"action,omitempty" json:"action,omitempty"`
-	ProjectRef *ProjectRefQuery   `form:"projectRef,omitempty" json:"projectRef,omitempty"`
-	Query      *Query             `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	Outcome     *AuditOutcomeQuery     `form:"outcome,omitempty" json:"outcome,omitempty"`
+	Action      *AuditActionQuery      `form:"action,omitempty" json:"action,omitempty"`
+	ProjectRef  *ProjectRefQuery       `form:"projectRef,omitempty" json:"projectRef,omitempty"`
+	ResourceRef *AuditResourceRefQuery `form:"resourceRef,omitempty" json:"resourceRef,omitempty"`
+	Query       *Query                 `form:"query,omitempty" json:"query,omitempty"`
+	PageSize    *PageSize              `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken   *PageToken             `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ReconcileEmailEffectParams defines parameters for ReconcileEmailEffect.
@@ -23513,6 +23517,19 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "projectRef"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resourceRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceRef", r.URL.Query(), &params.ResourceRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
 		}
 		return
 	}

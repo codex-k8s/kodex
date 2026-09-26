@@ -2890,6 +2890,7 @@ message ListAuditEventsRequest {
   string action = 3;
   string outcome = 4;
   string query = 5;
+  string resource_ref = 6;
 }
 message ListAuditEventsResponse {
   repeated AuditEvent events = 1;

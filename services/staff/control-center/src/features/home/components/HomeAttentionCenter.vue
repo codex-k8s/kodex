@@ -313,6 +313,7 @@ useCursorInfiniteScroll({
 .home-attention {
   margin-top: 16px;
   overflow: hidden;
+  padding: 0;
 }
 .home-attention__header,
 .home-attention__heading,
@@ -493,7 +494,7 @@ useCursorInfiniteScroll({
 .home-attention__empty {
   grid-column: 1 / -1;
   margin: 0;
-  padding: 32px 16px;
+  padding: 18px 16px;
   color: var(--muted);
   text-align: center;
 }

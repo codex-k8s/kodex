@@ -3942,6 +3942,8 @@ export type ProjectRef = OpaqueRef;
 
 export type ProjectRefQuery = OpaqueRef;
 
+export type AuditResourceRefQuery = OpaqueRef;
+
 export type MembershipRef = OpaqueRef;
 
 export type AccessRoleRef = OpaqueRef;
@@ -11325,6 +11327,7 @@ export type ListAuditEventsData = {
         outcome?: string;
         action?: string;
         projectRef?: OpaqueRef;
+        resourceRef?: OpaqueRef;
         query?: string;
         pageSize?: number;
         pageToken?: string;

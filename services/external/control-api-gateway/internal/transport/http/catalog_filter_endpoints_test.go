@@ -26,6 +26,7 @@ func TestCatalogFiltersReachOwner(t *testing.T) {
 		{"/api/v1/integration-connections?definitionKey=email", "definition_key", "email", &cp.ListIntegrationConnectionsResponse{}},
 		{"/api/v1/audit-events?action=EXACT_ACTION", "action", "EXACT_ACTION", &cp.ListAuditEventsResponse{}},
 		{"/api/v1/audit-events?outcome=DENIED", "outcome", "DENIED", &cp.ListAuditEventsResponse{}},
+		{"/api/v1/audit-events?resourceRef=gat_fixture01", "resource_ref", "gat_fixture01", &cp.ListAuditEventsResponse{}},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			client := &catalogRPCRecorder{response: tc.response}

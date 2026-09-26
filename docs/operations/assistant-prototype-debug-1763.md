@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.75
+version: 1.0.77
 updated: 2026-09-26
 ---
 
@@ -1393,3 +1393,33 @@ GitHub checks не считается `PASS`.
   console errors/warnings и HTTP 4xx/5xx отсутствуют. Screenshot:
   `/tmp/kodex-integration-catalog-run-success.png`. Визуальная приёмка
   владельцем — NOT RUN.
+- На пустой Главной блок «Требует внимания» получал одновременно общий
+  внутренний отступ `panel` и собственные отступы header/body, поэтому его
+  содержимое было сдвинуто относительно соседних карточек, а пустое состояние
+  занимало лишнюю высоту. Компонент теперь обнуляет только унаследованный
+  padding и использует компактное пустое состояние; данные, realtime и
+  поведение непустого списка не менялись. После Vite HMR и reload без кэша
+  высота блока уменьшилась с `171` до `111 px`, рамки и header выровнены,
+  горизонтальное переполнение отсутствует. Console errors/warnings и HTTP
+  4xx/5xx отсутствуют; 7 адресных frontend unit и Prettier — PASS. Screenshot:
+  `/tmp/kodex-home-attention-compact.png`. Визуальная приёмка владельцем —
+  NOT RUN.
+- Живой локальный OpenAPI WRITE-сценарий подтвердил параметризованное
+  согласование: один Human Gate закрепил `body.marker` за точными сотрудником и
+  Run, оставил `body.note` изменяемым и разрешил два успешных вызова одной
+  capability с разными значениями note без второго Gate. В истории решения
+  при этом ошибочно отображалось ноль событий аудита: UI передавал gate ref как
+  полнотекстовый `query`, а owner SQL намеренно искал только безопасные названия
+  и summary. Добавлен точный необязательный `resourceRef` по пути проверенная
+  browser session → OpenAPI gateway → generated gRPC client → control-plane
+  owner scope → tenant/project/resource-ref SQL. Это read-only операция без
+  события и без расширения eligibility; обычный поиск и cursor используют тот
+  же scope key. Локальная генерация Proto/OpenAPI, `buf build`, адресные Go
+  tests/compile, 39 frontend unit, typecheck, ESLint, Prettier и
+  `git diff --check` — PASS. Удалённый Buf plugin вернул `403`, это не выдано
+  за PASS; generated Proto обновлён закреплёнными локальными plugins. Air/Vite
+  применили код без image rebuild, control-plane, gateway и PWA Ready `1/1`.
+  После reload без кэша exact audit request вернул `200`, экран показал одно
+  событие «Решение принято», console errors/warnings и HTTP 4xx/5xx отсутствуют.
+  Screenshot: `/tmp/kodex-human-gate-final.png`. Визуальная приёмка владельцем
+  — NOT RUN.

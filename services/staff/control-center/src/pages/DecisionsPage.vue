@@ -502,7 +502,7 @@ async function loadDecisionAttachments(gate?: OwnerGate): Promise<void> {
 
 async function loadGateAudit(gate?: OwnerGate): Promise<void> {
   if (!gate) return;
-  await platform.loadAudit(gate.projectRef, gate.ref);
+  await platform.loadAudit(gate.projectRef, "", 20, gate.ref);
 }
 
 function decisionOutcomeState(decision: DecisionAction): OwnerGate["state"] {

@@ -2303,7 +2303,7 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 	}
 	limit := boundedPage(filter.Page)
 	rows, err := repository.pool.Query(ctx, queryQueriesListauditeventsSelectAuditEventsOrganizationIdRefAction,
-		scope.organizationID, filter.ProjectRef, filter.Action, filter.Outcome, filter.Query,
+		scope.organizationID, filter.ProjectRef, filter.ResourceRef, filter.Action, filter.Outcome, filter.Query,
 		scope.role, scope.actorID, cursorOccurredAt, cursorRef, limit+1,
 	)
 	if err != nil {

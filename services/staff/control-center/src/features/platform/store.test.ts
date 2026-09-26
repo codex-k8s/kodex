@@ -557,6 +557,26 @@ describe("platform store", () => {
     );
   });
 
+  it("передаёт точную ссылку ресурса для аудита решения", async () => {
+    listAuditEventsMock.mockResolvedValue({
+      data: { items: [], nextPageToken: "" },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadAudit("project_sales", "", 20, "gat_review01");
+
+    expect(listAuditEventsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          projectRef: "project_sales",
+          resourceRef: "gat_review01",
+          pageSize: 20,
+        },
+      }),
+    );
+  });
+
   it("добавляет audit cursor-страницу без повторов и зацикливания", async () => {
     const first = auditEvent("aud_first_page", "2026-08-31T12:00:00Z");
     const second = auditEvent("aud_second_page", "2026-08-31T11:00:00Z");

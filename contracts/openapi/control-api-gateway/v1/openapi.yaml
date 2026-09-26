@@ -3796,7 +3796,7 @@ paths:
     get:
       tags: [Administration]
       operationId: listAuditEvents
-      parameters: [{ $ref: '#/components/parameters/AuditOutcomeQuery' }, { $ref: '#/components/parameters/AuditActionQuery' }, { $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
+      parameters: [{ $ref: '#/components/parameters/AuditOutcomeQuery' }, { $ref: '#/components/parameters/AuditActionQuery' }, { $ref: '#/components/parameters/ProjectRefQuery' }, { $ref: '#/components/parameters/AuditResourceRefQuery' }, { $ref: '#/components/parameters/Query' }, { $ref: '#/components/parameters/PageSize' }, { $ref: '#/components/parameters/PageToken' }]
       responses:
         '200':
           description: Безопасный audit readback
@@ -4887,6 +4887,11 @@ components:
       schema: { $ref: '#/components/schemas/OpaqueRef' }
     ProjectRefQuery:
       name: projectRef
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/OpaqueRef' }
+    AuditResourceRefQuery:
+      name: resourceRef
       in: query
       required: false
       schema: { $ref: '#/components/schemas/OpaqueRef' }
