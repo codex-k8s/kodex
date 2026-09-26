@@ -440,6 +440,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	if descriptor.FullName() == "controlplane.v1.Agent" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "system" || field.JSONName() == "enabled"
 	}
+	if field.Kind() == protoreflect.BoolKind && field.JSONName() == "ready" {
+		switch descriptor.FullName() {
+		case "controlplane.v1.RuntimeEnvironmentSet", "controlplane.v1.RuntimeEnvironmentReadiness":
+			return false, true
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.WorkflowCardSummary" {
 		if field.Kind() == protoreflect.BoolKind {
 			return false, field.JSONName() == "hasHumanGate"

@@ -17,6 +17,8 @@ describe("дружественная форма плана запуска", () =
     expect(source).toContain("isEligibleAgent");
     expect(source).toContain("isEligibleWorkflow");
     expect(source).toContain("target.projectRef !== projectRef");
+    expect(source).toContain("getAgentRuntimeConfiguration");
+    expect(source).toContain("selectedEnvironment.readinessBlockers");
     expect(source).toContain("<AsyncEntityPicker");
     expect(editor).toContain("<AssistantLaunchRunForm");
     expect(editor).toContain("friendlyInputsReady.value");

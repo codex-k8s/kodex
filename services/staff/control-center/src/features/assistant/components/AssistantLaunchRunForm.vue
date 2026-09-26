@@ -6,6 +6,7 @@ import {
   type EditablePlanOperation,
 } from "@/features/assistant/model";
 import { prepareAssistantWorkflowInput } from "@/features/assistant/run-input";
+import { environmentReadinessMessage } from "@/features/runtime/environment-readiness-message";
 import {
   createExecutionTargetPickerLoader,
   isEligibleAgent,
@@ -16,13 +17,19 @@ import {
   type ExecutionTargetType,
 } from "@/shared/api/execution-target-picker";
 import { requestSignal } from "@/shared/api/client";
-import { getAgent, getWorkflow } from "@/shared/api/generated/openapi/sdk.gen";
+import {
+  getAgent,
+  getAgentRuntimeConfiguration,
+  getWorkflow,
+} from "@/shared/api/generated/openapi/sdk.gen";
 import type {
   Agent,
+  RuntimeEnvironmentSet,
   Workflow,
   WorkflowInputField,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
+import { useI18n } from "vue-i18n";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
@@ -32,6 +39,7 @@ const props = defineProps<{
   projectRef?: string;
   disabled: boolean;
 }>();
+const { t } = useI18n();
 const fieldPrefix = `assistant-launch-${useId()}`;
 const workflowInputName = (key: string) => `${fieldPrefix}-input-${key}`;
 const emit = defineEmits<{
@@ -44,6 +52,8 @@ const emit = defineEmits<{
 }>();
 const selected = ref<ExecutionTargetPickerOption>();
 const targetProblem = ref(false);
+const selectedEnvironment = ref<RuntimeEnvironmentSet>();
+const environmentProblem = ref(false);
 const rawInput = ref<Record<string, string>>({});
 const invalidInitialInputKeys = ref<Set<string>>(new Set());
 
@@ -147,6 +157,39 @@ watch(
         selected.value = toExecutionTargetOption(type, target);
       } catch {
         if (!controller.signal.aborted) targetProblem.value = true;
+      }
+    })();
+  },
+  { immediate: true },
+);
+
+watch(
+  [() => props.projectRef, targetType, targetRef] as const,
+  ([projectRef, type, ref], _previous, onCleanup) => {
+    selectedEnvironment.value = undefined;
+    environmentProblem.value = false;
+    if (!projectRef || type !== "AGENT" || !ref) return;
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    void (async () => {
+      try {
+        const view = (
+          await unwrap(
+            getAgentRuntimeConfiguration({
+              path: { agentRef: ref },
+              signal: requestSignal(controller.signal),
+            }),
+          )
+        ).data;
+        if (controller.signal.aborted) return;
+        if (
+          view.configuration.agentRef !== ref ||
+          view.environment.projectRef !== projectRef
+        )
+          throw new Error("Assistant run environment readback mismatch");
+        selectedEnvironment.value = view.environment;
+      } catch {
+        if (!controller.signal.aborted) environmentProblem.value = true;
       }
     })();
   },
@@ -328,6 +371,22 @@ function setWorkflowInput(field: WorkflowInputField, value: string): void {
       />
       <small v-if="targetProblem" class="field-error" role="alert">
         {{ $t("assistant.planEditor.runTargetUnavailable") }}
+      </small>
+      <small
+        v-if="selectedEnvironment && !selectedEnvironment.ready"
+        class="field-error"
+        role="status"
+      >
+        {{ $t("assistant.planEditor.runEnvironmentUnavailable") }}
+        {{ selectedEnvironment.name }}.
+        {{
+          selectedEnvironment.readinessBlockers
+            .map((code) => environmentReadinessMessage(code, t))
+            .join(" · ")
+        }}
+      </small>
+      <small v-else-if="environmentProblem" class="field-error" role="status">
+        {{ $t("assistant.planEditor.runEnvironmentCheckFailed") }}
       </small>
     </div>
     <label class="field">

@@ -3603,6 +3603,10 @@ const ru = {
       runSearchTarget: "Найти сотрудника или процесс",
       runTargetUnavailable:
         "Выбранный исполнитель недоступен для запуска в этом проекте. Выберите другого или попросите помощника изменить план.",
+      runEnvironmentUnavailable:
+        "Назначенное окружение сотрудника не готово к запуску:",
+      runEnvironmentCheckFailed:
+        "Не удалось проверить назначенное окружение. Итоговую готовность проверит сервер перед применением плана.",
       runTask: "Задание",
       runWorkflowInput: "Входные данные процесса",
       runInputInvalid: "Проверьте значение обязательного поля.",
@@ -7348,6 +7352,10 @@ const en = {
       runSearchTarget: "Find an employee or workflow",
       runTargetUnavailable:
         "The selected executor cannot be launched in this project. Choose another or ask the assistant to revise the plan.",
+      runEnvironmentUnavailable:
+        "The employee's assigned environment is not ready to launch:",
+      runEnvironmentCheckFailed:
+        "Could not check the assigned environment. The server will verify readiness before applying the plan.",
       runTask: "Task",
       runWorkflowInput: "Workflow inputs",
       runInputInvalid: "Check this required field value.",
