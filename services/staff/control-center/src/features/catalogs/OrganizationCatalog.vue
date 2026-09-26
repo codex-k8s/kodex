@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ChevronRight, Expand, PackageOpen, Search } from "@lucide/vue";
+import { ChevronRight, PackageOpen, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { usePlatformStore } from "@/features/platform/store";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
@@ -22,7 +21,6 @@ import {
 const props = defineProps<{
   kind: CatalogKind;
   projectRef?: string;
-  expanded?: boolean;
 }>();
 const platform = usePlatformStore();
 const searchId = useId();
@@ -32,7 +30,6 @@ const projects = ref<Record<string, Project>>({});
 const pageToken = ref<string>();
 const loading = ref(false);
 const problem = ref<AppProblem>();
-const expandedProject = ref<string>();
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
@@ -131,7 +128,6 @@ function invalidate(retain = false): void {
   cursors.clear();
   problem.value = undefined;
   loading.value = false;
-  if (!retain) expandedProject.value = undefined;
 }
 watch(
   () => [props.kind, props.projectRef, query.value],
@@ -228,10 +224,7 @@ onBeforeUnmount(() => {
     <div
       v-if="groups.length"
       class="organization-catalog__groups"
-      :class="{
-        'organization-catalog__groups--expanded': expanded,
-        'organization-catalog__groups--members': kind === 'members',
-      }"
+      :class="{ 'organization-catalog__groups--members': kind === 'members' }"
     >
       <section
         v-for="group in groups"
@@ -239,7 +232,7 @@ onBeforeUnmount(() => {
         class="organization-catalog__group"
         :class="{ 'organization-catalog__group--members': kind === 'members' }"
       >
-        <header v-if="!expanded">
+        <header>
           <RouterLink
             :to="
               kind === 'members'
@@ -248,24 +241,20 @@ onBeforeUnmount(() => {
             "
             >{{ group.name ?? $t("app.project") }}</RouterLink
           ><RouterLink
-            v-if="kind === 'members'"
             class="button organization-catalog__manage"
-            :to="{ name: 'project-access', params: { projectRef: group.ref } }"
-            >{{ $t("catalog.manageAccess") }}</RouterLink
-          ><button
-            v-else
-            class="icon-button"
-            :title="$t('catalog.expand')"
-            :aria-label="$t('catalog.expand')"
-            @click="expandedProject = group.ref"
+            :to="`/projects/${encodeURIComponent(group.ref)}/${kind}`"
+            >{{
+              $t(
+                kind === "members"
+                  ? "catalog.manageAccess"
+                  : "catalog.openInProject",
+              )
+            }}</RouterLink
           >
-            <Expand :size="18" />
-          </button>
         </header>
         <div
           class="organization-catalog__items"
           :class="{
-            'organization-catalog__items--expanded': expanded,
             'organization-catalog__items--cards':
               kind === 'workflows' || kind === 'agents',
           }"
@@ -316,16 +305,6 @@ onBeforeUnmount(() => {
       class="organization-catalog__sentinel"
       aria-hidden="true"
     />
-    <ModalDialog
-      v-if="expandedProject"
-      :title="projects[expandedProject]?.name ?? $t('app.project')"
-      size="xl"
-      @close="expandedProject = undefined"
-      ><OrganizationCatalog
-        :kind="kind"
-        :project-ref="expandedProject"
-        expanded
-    /></ModalDialog>
   </section>
 </template>
 <style scoped>
@@ -358,9 +337,6 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   align-items: start;
   gap: 20px 12px;
-}
-.organization-catalog__groups--expanded {
-  display: block;
 }
 .organization-catalog__groups--members {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
@@ -414,7 +390,7 @@ onBeforeUnmount(() => {
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
-.organization-catalog__group--members > header > a:first-child {
+.organization-catalog__group > header > a:first-child {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
@@ -423,7 +399,7 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.organization-catalog__group--members > header > a:first-child:hover {
+.organization-catalog__group > header > a:first-child:hover {
   text-decoration: underline;
 }
 .organization-catalog__manage {
@@ -440,8 +416,7 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 12px;
 }
-.organization-catalog__groups:not(.organization-catalog__groups--expanded)
-  .organization-catalog__items--cards {
+.organization-catalog__items--cards {
   grid-template-columns: minmax(0, 1fr);
 }
 .organization-catalog__items--cards :deep(.agent-card),
@@ -459,18 +434,29 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 12px;
-  height: 112px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   color: inherit;
+  background: var(--surface);
   text-decoration: none;
+}
+.organization-catalog__entry > div {
+  min-width: 0;
+}
+.organization-catalog__entry:not(.organization-catalog__entry--member):hover {
+  border-color: var(--accent);
 }
 .organization-catalog__entry--member {
   grid-template-columns: minmax(0, 1fr) auto 16px;
-  height: auto;
   min-height: 72px;
   padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
 }
 .organization-catalog__entry--member:last-child {
   border-bottom: 0;

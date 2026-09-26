@@ -121,6 +121,15 @@ describe("OrganizationCatalog realtime", () => {
     expect(catalogTemplate).toContain('"catalog.emptyGlobalHelp"');
   });
 
+  it("ведёт к управлению разделом Проекта без повторной модалки списка", () => {
+    expect(catalogTemplate).toContain(
+      ':to="`/projects/${encodeURIComponent(group.ref)}/${kind}`"',
+    );
+    expect(catalogTemplate).toContain("catalog.openInProject");
+    expect(catalogTemplate).not.toContain("expandedProject");
+    expect(catalogTemplate).not.toContain("<ModalDialog");
+  });
+
   it("отменяет in-flight страницу и не принимает её после membership invalidation", async () => {
     let resolve!: (page: CatalogPage) => void;
     dependencies.load.mockReturnValueOnce(
