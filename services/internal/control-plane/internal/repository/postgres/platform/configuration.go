@@ -997,7 +997,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 func (repository *Repository) resolveAssistantContext(ctx context.Context, tx pgx.Tx, current scope, descriptor entity.AssistantContextDescriptor, projectRef string) (entity.AssistantContextDescriptor, error) {
 	if len(descriptor.Route) > 500 || len(descriptor.EntityKind) > 80 || len(descriptor.EntityRef) > 96 ||
 		(descriptor.EntityKind == "") != (descriptor.EntityRef == "") ||
-		!contains([]string{"", "PROJECT", "AGENT", "WORKFLOW", "RUN", "FILE", "ENVIRONMENT", "INTEGRATION_CONNECTION", "SCHEDULE"}, descriptor.EntityKind) {
+		!contains([]string{"", "PROJECT", "AGENT", "WORKFLOW", "RUN", "FILE", "ENVIRONMENT", "ROLE_IMAGE_RECIPE", "INTEGRATION_CONNECTION", "SCHEDULE"}, descriptor.EntityKind) {
 		return entity.AssistantContextDescriptor{}, errs.ErrInvalid
 	}
 	if projectRef != "" {

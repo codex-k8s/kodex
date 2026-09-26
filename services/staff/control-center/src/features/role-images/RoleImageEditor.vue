@@ -29,6 +29,7 @@ import {
   validateDockerfile,
 } from "@/features/role-images/model";
 import { useRoleImagesStore } from "@/features/role-images/store";
+import { requestAssistantRoleImageBuildDebug } from "@/features/assistant/events";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -766,6 +767,16 @@ onBeforeUnmount(() => {
                     {{ build.diagnosticCode }}
                   </code>
                 </p>
+                <button
+                  v-if="
+                    ['FAILED', 'EXPIRED', 'DEAD_LETTER'].includes(build.stage)
+                  "
+                  class="button build-debug-action"
+                  type="button"
+                  @click="requestAssistantRoleImageBuildDebug(build)"
+                >
+                  {{ t("roleImages.debugBuildWithAssistant") }}
+                </button>
                 <details
                   v-if="
                     build.sourceAvailable &&
@@ -1223,6 +1234,10 @@ onBeforeUnmount(() => {
 .build-diagnostic code {
   display: block;
   margin-top: 4px;
+}
+.build-debug-action {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 .build-source {
   grid-column: 1 / -1;

@@ -48,6 +48,7 @@ import {
   readableContextKind,
 } from "@/features/assistant/context";
 import {
+  isAssistantRoleImageBuildDebugRequest,
   openAssistantEvent,
   type AssistantIntegrationPublicationRequest,
 } from "@/features/assistant/events";
@@ -325,14 +326,34 @@ const contextIdentity = computed(() =>
 function handleOpenAssistant(event: Event): void {
   void (async () => {
     const request =
-      event instanceof CustomEvent
-        ? (event.detail as AssistantIntegrationPublicationRequest | undefined)
-        : undefined;
+      event instanceof CustomEvent ? (event.detail as unknown) : undefined;
     await show();
+    if (isAssistantRoleImageBuildDebugRequest(request)) {
+      if (
+        message.value.trim() &&
+        !window.confirm(t("assistant.replaceDraftWithBuildDebugConfirm"))
+      )
+        return;
+      message.value = t("assistant.roleImageBuild.debugPrompt", {
+        recipeRef: request.recipeRef,
+        buildRef: request.buildRef,
+        attempt: request.attempt,
+        stage: request.stage,
+        safeErrorCode: request.safeErrorCode || "NONE",
+        diagnosticCode: request.diagnosticCode || "NONE",
+        diagnosticSummary: request.diagnosticSummary || "NONE",
+      });
+      await nextTick();
+      composer.value?.focus();
+      return;
+    }
+    const publication = request as
+      | AssistantIntegrationPublicationRequest
+      | undefined;
     if (
-      !request ||
-      !/^mcfg_[A-Za-z0-9_-]{1,91}$/.test(request.configurationRef) ||
-      !/^mrev_[A-Za-z0-9_-]{1,91}$/.test(request.revisionRef)
+      !publication ||
+      !/^mcfg_[A-Za-z0-9_-]{1,91}$/.test(publication.configurationRef) ||
+      !/^mrev_[A-Za-z0-9_-]{1,91}$/.test(publication.revisionRef)
     )
       return;
     if (
@@ -341,8 +362,8 @@ function handleOpenAssistant(event: Event): void {
     )
       return;
     message.value = t("assistant.publishIntegrationRequest", {
-      configurationRef: request.configurationRef,
-      revisionRef: request.revisionRef,
+      configurationRef: publication.configurationRef,
+      revisionRef: publication.revisionRef,
     });
     await nextTick();
     composer.value?.focus();
