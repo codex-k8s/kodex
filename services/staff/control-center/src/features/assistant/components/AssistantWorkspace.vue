@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   History,
+  KeyRound,
   ListChecks,
   Pencil,
   Plus,
@@ -1471,15 +1472,18 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
               </div>
-              <button
-                v-if="projectRef"
-                class="assistant-composer__protected-link"
-                type="button"
-                @click="openPlainSecretForm"
-              >
-                {{ $t("assistant.openSecretForm") }}
-              </button>
-              <small>{{ $t("assistant.audit") }}</small>
+              <div class="assistant-composer__meta">
+                <button
+                  v-if="projectRef"
+                  class="assistant-composer__protected-link"
+                  type="button"
+                  @click="openPlainSecretForm"
+                >
+                  <KeyRound :size="15" aria-hidden="true" />
+                  {{ $t("assistant.openSecretForm") }}
+                </button>
+                <small>{{ $t("assistant.audit") }}</small>
+              </div>
             </footer>
           </div>
         </div>
@@ -2179,13 +2183,40 @@ onBeforeUnmount(() => {
   color: var(--subtle);
   cursor: not-allowed;
 }
-.assistant-composer > small {
+.assistant-composer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  min-width: 0;
+}
+.assistant-composer__meta > small {
   color: var(--subtle);
 }
 .assistant-composer__protected-link {
-  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
   color: var(--accent-strong);
   font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+.assistant-composer__protected-link:hover {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+.assistant-composer__protected-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 @media (max-width: 720px) {
   .assistant-setup-guide ol {

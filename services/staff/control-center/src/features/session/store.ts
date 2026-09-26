@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, onScopeDispose, ref } from "vue";
 import { clearProviderLifecycleAttempts } from "@/features/providers/lifecycle-attempt";
+import { runtimeSecretReauthSuggestionStorageKey } from "@/features/runtime-secrets/reauth-suggestion";
 import { environmentDraftReauthKey } from "@/features/runtime/environment-draft-reauth";
 import { emailAttemptStorageKey } from "@/features/integrations/email-attempt";
 import { mailboxCredentialRecoveryKey } from "@/features/integrations/email-credential-recovery";
@@ -316,6 +317,7 @@ export const useSessionStore = defineStore("session", () => {
     window.sessionStorage.removeItem(authorizationStateKey);
     window.sessionStorage.removeItem(sessionRevisionKey);
     window.sessionStorage.removeItem(environmentDraftReauthKey);
+    window.sessionStorage.removeItem(runtimeSecretReauthSuggestionStorageKey);
     window.sessionStorage.removeItem(emailAttemptStorageKey);
     window.sessionStorage.removeItem(mailboxCredentialRecoveryKey);
     window.sessionStorage.removeItem(gitSourceRecoveryKey);
