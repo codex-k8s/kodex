@@ -94,15 +94,6 @@ const fieldPrefix = `workflow-overview-${useId()}`;
       />
     </label>
     <label class="field">
-      <span>{{ $t("workflows.completion") }}</span>
-      <VoiceTextarea
-        :model-value="completionCriteria"
-        maxlength="2000"
-        :disabled="disabled"
-        @update:model-value="emit('update:completionCriteria', $event.trim())"
-      />
-    </label>
-    <label class="field">
       <span>{{ $t("workflows.concurrency") }}</span>
       <input
         :id="`${fieldPrefix}-concurrency`"
@@ -121,11 +112,23 @@ const fieldPrefix = `workflow-overview-${useId()}`;
         "
       />
     </label>
+    <label class="field field--wide">
+      <span>{{ $t("workflows.completion") }}</span>
+      <VoiceTextarea
+        :model-value="completionCriteria"
+        maxlength="2000"
+        :disabled="disabled"
+        @update:model-value="emit('update:completionCriteria', $event.trim())"
+      />
+    </label>
   </div>
 </template>
 
 <style scoped>
 .workflow-overview-fields {
   display: contents;
+}
+.workflow-overview-fields > .field {
+  align-content: start;
 }
 </style>

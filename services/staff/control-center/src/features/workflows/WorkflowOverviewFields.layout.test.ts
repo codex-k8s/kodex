@@ -29,6 +29,10 @@ describe("основные поля процесса", () => {
     expect(shared).toContain("<AsyncEntityPicker");
     expect(shared).toContain(':context-key="projectRef"');
     expect(shared).toContain("<VoiceTextarea");
+    expect(shared).toContain("align-content: start;");
+    expect(shared.indexOf("workflows.concurrency")).toBeLessThan(
+      shared.indexOf("workflows.completion"),
+    );
   });
 
   it("не загружает весь список координаторов в форме создания", () => {

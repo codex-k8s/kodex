@@ -224,7 +224,10 @@ onBeforeUnmount(() => {
     <div
       v-if="groups.length"
       class="organization-catalog__groups"
-      :class="{ 'organization-catalog__groups--members': kind === 'members' }"
+      :class="{
+        'organization-catalog__groups--members': kind === 'members',
+        'organization-catalog__groups--project': Boolean(projectRef),
+      }"
     >
       <section
         v-for="group in groups"
@@ -232,7 +235,7 @@ onBeforeUnmount(() => {
         class="organization-catalog__group"
         :class="{ 'organization-catalog__group--members': kind === 'members' }"
       >
-        <header>
+        <header v-if="!projectRef">
           <RouterLink
             :to="
               kind === 'members'
@@ -342,6 +345,9 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
   gap: 14px;
 }
+.organization-catalog__groups--project {
+  grid-template-columns: minmax(0, 1fr);
+}
 .organization-catalog__group--members {
   box-sizing: border-box;
   padding: 12px 14px 4px;
@@ -418,6 +424,9 @@ onBeforeUnmount(() => {
 }
 .organization-catalog__items--cards {
   grid-template-columns: minmax(0, 1fr);
+}
+.organization-catalog__groups--project .organization-catalog__items--cards {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
 }
 .organization-catalog__items--cards :deep(.agent-card),
 .organization-catalog__items--cards :deep(.workflow-card) {

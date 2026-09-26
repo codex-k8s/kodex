@@ -122,6 +122,8 @@ describe("OrganizationCatalog realtime", () => {
   });
 
   it("ведёт к управлению разделом Проекта без повторной модалки списка", () => {
+    expect(catalogTemplate).toContain('<header v-if="!projectRef">');
+    expect(catalogTemplate).toContain("organization-catalog__groups--project");
     expect(catalogTemplate).toContain(
       ':to="`/projects/${encodeURIComponent(group.ref)}/${kind}`"',
     );
