@@ -225,6 +225,10 @@ onBeforeUnmount(() => {
             }"
             role="row"
             :aria-selected="subject.ref === selectedRef"
+            tabindex="0"
+            @click="selectedRef = subject.ref"
+            @keydown.enter="selectedRef = subject.ref"
+            @keydown.space.prevent="selectedRef = subject.ref"
           >
             <div>
               <strong>{{ subject.displayName }}</strong>
@@ -513,6 +517,16 @@ onBeforeUnmount(() => {
 .access-table__row--selected {
   background: var(--accent-soft);
   box-shadow: inset 3px 0 var(--accent);
+}
+.access-table__row {
+  cursor: pointer;
+}
+.access-table__row:hover:not(.access-table__row--selected) {
+  background: var(--panel);
+}
+.access-table__row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .section-toolbar {
   display: flex;

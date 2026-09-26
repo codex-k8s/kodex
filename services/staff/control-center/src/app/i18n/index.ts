@@ -2388,7 +2388,7 @@ const ru = {
     loadMore: "Показать ещё",
     sections: {
       label: "Разделы управления доступом",
-      participants: "Субъекты и членство",
+      participants: "Участники",
       groups: "Группы OIDC",
       roles: "Роли",
       bindings: "Назначения",
@@ -2434,6 +2434,11 @@ const ru = {
       empty: "Участники не найдены",
       emptyHint:
         "Пользователи появляются после входа или синхронизации OIDC. Без назначения доступ к Проекту закрыт.",
+    },
+    scopeSelector: {
+      label: "Область доступа",
+      organization: "Организация",
+      project: "Выбрать Проект",
     },
     projectMembershipEditor: {
       title: "Доступ участника к Проекту",
@@ -6146,7 +6151,7 @@ const en = {
     loadMore: "Load more",
     sections: {
       label: "Access management sections",
-      participants: "Subjects and membership",
+      participants: "Participants",
       groups: "OIDC groups",
       roles: "Roles",
       bindings: "Assignments",
@@ -6191,6 +6196,11 @@ const en = {
       empty: "No participants found",
       emptyHint:
         "A user appears after the first OIDC sign-in; access remains denied until a binding is assigned.",
+    },
+    scopeSelector: {
+      label: "Access scope",
+      organization: "Organization",
+      project: "Choose Project",
     },
     projectMembershipEditor: {
       title: "Project member access",

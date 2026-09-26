@@ -14,6 +14,7 @@ import RoleEditorDialog from "@/features/access/components/RoleEditorDialog.vue"
 import RolesPanel from "@/features/access/components/RolesPanel.vue";
 import { accessSections, type AccessSection } from "@/features/access/model";
 import { useAccessStore } from "@/features/access/store";
+import ProjectPicker from "@/features/projects/ProjectPicker.vue";
 import type {
   AccessBinding,
   AccessBindingChangeInput,
@@ -37,6 +38,9 @@ const { t } = useI18n();
 
 const projectRef = computed(() =>
   typeof route.params.projectRef === "string" ? route.params.projectRef : "",
+);
+const scopeProject = computed(() =>
+  access.projects.find((project) => project.ref === projectRef.value),
 );
 const memberRef = computed(() =>
   typeof route.query.memberRef === "string" ? route.query.memberRef : "",
@@ -105,6 +109,18 @@ function selectSection(section: AccessSection): void {
     return;
   }
   void router.push({ name: "access", params: { section } });
+}
+
+function selectScope(ref: string): void {
+  if (ref) {
+    void router.push({
+      name: "project-access",
+      params: { projectRef: ref },
+      query: { section: routeSection.value },
+    });
+    return;
+  }
+  void router.push({ name: "access", params: { section: routeSection.value } });
 }
 
 async function loadSection(section = routeSection.value): Promise<void> {
@@ -371,8 +387,29 @@ onMounted(() => void loadBaseline());
       )
     "
   >
-    <template v-if="routeSection === 'participants'" #actions>
+    <template #actions>
+      <div
+        class="access-scope-switch"
+        :aria-label="$t('access.scopeSelector.label')"
+      >
+        <button
+          class="button"
+          :class="{ 'access-scope-switch__active': !projectRef }"
+          type="button"
+          :aria-pressed="!projectRef"
+          @click="selectScope('')"
+        >
+          {{ $t("access.scopeSelector.organization") }}
+        </button>
+        <ProjectPicker
+          :project="scopeProject"
+          :placeholder="$t('access.scopeSelector.project')"
+          :clearable="false"
+          @select="selectScope"
+        />
+      </div>
       <button
+        v-if="routeSection === 'participants'"
         class="button button--primary"
         type="button"
         :disabled="mutationBusy"
@@ -627,6 +664,21 @@ onMounted(() => void loadBaseline());
 </template>
 
 <style scoped>
+.access-scope-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.access-scope-switch > :last-child {
+  width: min(230px, 26vw);
+  min-width: 160px;
+}
+.access-scope-switch__active {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
 .access-identity-note {
   margin: -4px 0 16px;
   padding: 10px 14px;
