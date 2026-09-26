@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.53
+version: 1.0.54
 updated: 2026-09-26
 ---
 
@@ -1028,3 +1028,12 @@ GitHub checks не считается `PASS`.
   fixture и integration runtime, loopback CRUD/E2E и render/NetworkPolicy guards
   — PASS. Chrome UI/console/network/screenshot остаются NOT RUN: после повторного
   допуска владельца MCP всё ещё возвращает `Transport closed` на `list_pages`.
+- Ручное обновление и retry каталога provider accounts больше не возвращают
+  список к неявной фиксированной порции 20 строк: оба действия используют те же
+  измеренные размеры каталога аккаунтов и определений, что первоначальная
+  загрузка, server-side поиск и cursor-продолжение. Уже загруженные записи при
+  resize не сбрасываются. Typecheck, ESLint, Prettier, 4 адресных unit-теста и
+  `git diff --check` — PASS. SHA host/Pod совпадают, live Vite-модуль содержит
+  новый обработчик. Все актуальные Deployment и StatefulSet локального контура
+  Ready; старые terminal Pods не выданы за текущую доступность. Chrome-повтор —
+  NOT RUN: `list_pages` по-прежнему отвечает `Transport closed`.

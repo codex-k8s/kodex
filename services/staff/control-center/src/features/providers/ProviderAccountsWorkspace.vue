@@ -234,6 +234,14 @@ function scheduleSearch(): void {
   );
 }
 
+function reload(): Promise<void> {
+  return store.load(
+    search.value,
+    accountsPageSize.value,
+    definitionsPageSize.value,
+  );
+}
+
 function openCreate(): void {
   if (!canCreate.value) return;
   createForm.name = "";
@@ -514,7 +522,7 @@ onBeforeUnmount(() => {
         class="icon-button"
         type="button"
         :aria-label="$t('common.retry')"
-        @click="store.load(search)"
+        @click="reload"
       >
         <RefreshCw :size="17" aria-hidden="true" />
       </button>
@@ -581,7 +589,7 @@ onBeforeUnmount(() => {
     <AsyncState
       :loading="loading && !accounts.length"
       :problem="accounts.length ? undefined : problem"
-      @retry="store.load(search)"
+      @retry="reload"
     >
       <component
         :is="expanded ? ModalDialog : 'div'"
