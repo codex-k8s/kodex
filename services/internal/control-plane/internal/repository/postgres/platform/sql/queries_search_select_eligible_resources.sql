@@ -1,7 +1,7 @@
 -- name: queries_search_select_eligible_resources :many
 WITH matches AS (
     SELECT 'PROJECT'::text AS kind, project.ref, project.ref AS project_ref,
-           project.name AS title, project.purpose AS subtitle, project.lifecycle AS state,
+           project.name AS title, left(project.purpose, 1000) AS subtitle, project.lifecycle AS state,
            project.updated_at, project.created_at AS order_time,
            CASE WHEN lower(project.name) = lower(@query) THEN 0
                 WHEN project.name ILIKE @query || '%' THEN 1 ELSE 2 END AS relevance
@@ -11,7 +11,7 @@ WITH matches AS (
       AND (@project_ref = '' OR project.ref = @project_ref)
       AND (project.name ILIKE '%' || @query || '%' OR project.purpose ILIKE '%' || @query || '%')
     UNION ALL
-    SELECT 'AGENT', agent.ref, project.ref, agent.name, agent.purpose, agent.state,
+    SELECT 'AGENT', agent.ref, project.ref, agent.name, left(agent.purpose, 1000), agent.state,
            agent.updated_at, agent.created_at,
            CASE WHEN lower(agent.name) = lower(@query) THEN 0 WHEN agent.name ILIKE @query || '%' THEN 1 ELSE 2 END
     FROM control_plane.agents AS agent
@@ -21,7 +21,7 @@ WITH matches AS (
       AND agent.system_key IS NULL AND agent.state <> 'ARCHIVED'
       AND (agent.name ILIKE '%' || @query || '%' OR agent.purpose ILIKE '%' || @query || '%')
     UNION ALL
-    SELECT 'WORKFLOW', workflow.ref, project.ref, workflow.name, workflow.purpose,
+    SELECT 'WORKFLOW', workflow.ref, project.ref, workflow.name, left(workflow.purpose, 1000),
            workflow.state, workflow.updated_at, workflow.created_at,
            CASE WHEN lower(workflow.name) = lower(@query) THEN 0 WHEN workflow.name ILIKE @query || '%' THEN 1 ELSE 2 END
     FROM control_plane.workflows AS workflow
@@ -31,7 +31,7 @@ WITH matches AS (
       AND workflow.state <> 'ARCHIVED'
       AND (workflow.name ILIKE '%' || @query || '%' OR workflow.purpose ILIKE '%' || @query || '%')
     UNION ALL
-    SELECT 'RUN', run.ref, project.ref, run.title, run.task, run.state,
+    SELECT 'RUN', run.ref, project.ref, run.title, left(run.task, 1000), run.state,
            run.updated_at, run.created_at,
            CASE WHEN lower(run.title) = lower(@query) THEN 0 WHEN run.title ILIKE @query || '%' THEN 1 ELSE 2 END
     FROM control_plane.runs AS run

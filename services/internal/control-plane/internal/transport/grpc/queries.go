@@ -81,7 +81,7 @@ func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev
 	if err != nil {
 		return nil, err
 	}
-	items, total, next, err := server.service.Search(ctx, p, query.Filter{Query: request.GetQuery(), ProjectRef: request.GetProjectRef(), Limit: request.GetLimit(), Page: page(request.GetPage())})
+	items, total, next, err := server.service.Search(ctx, p, query.Filter{Query: request.GetQuery(), ProjectRef: request.GetProjectRef(), Limit: request.GetLimit(), Page: searchPage(request)})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -90,6 +90,14 @@ func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev
 		response.Results = append(response.Results, castSearchResult(item))
 	}
 	return response, nil
+}
+
+func searchPage(request *controlplanev1.SearchPlatformRequest) query.Page {
+	result := page(request.GetPage())
+	if request.GetLimit() > 0 {
+		result.Size = request.GetLimit()
+	}
+	return result
 }
 
 func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.ListProjectsRequest) (*controlplanev1.ListProjectsResponse, error) {

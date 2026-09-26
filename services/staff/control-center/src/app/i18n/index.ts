@@ -764,7 +764,7 @@ const ru = {
     editorKeyboard:
       "Tab: отступ; Shift+Tab: уменьшить отступ; Ctrl+M: переключить выход фокусом",
     noProject: "Без контекста Проекта",
-    search: "Найти Проект, запуск или сотрудника",
+    search: "Найти Проект, сотрудника, Процесс, запуск или файл",
     searchResults: "Результаты поиска",
     searchEmpty: "Ничего не найдено",
     searchHint: "Введите минимум два символа",
@@ -775,6 +775,7 @@ const ru = {
       AGENT: "ИИ-сотрудник",
       WORKFLOW: "Процесс",
       RUN: "Запуск",
+      ARTIFACT: "Файл",
     },
     decisions: "Ожидающие решения",
     offline:
@@ -4510,7 +4511,7 @@ const en = {
     editorKeyboard:
       "Tab: indent; Shift+Tab: outdent; Ctrl+M: toggle tab focus mode",
     noProject: "No project context",
-    search: "Find a project, run or employee",
+    search: "Find a project, employee, workflow, run or file",
     searchResults: "Search results",
     searchEmpty: "Nothing found",
     searchHint: "Enter at least two characters",
@@ -4521,6 +4522,7 @@ const en = {
       AGENT: "AI employee",
       WORKFLOW: "Workflow",
       RUN: "Run",
+      ARTIFACT: "File",
     },
     decisions: "Pending decisions",
     offline:

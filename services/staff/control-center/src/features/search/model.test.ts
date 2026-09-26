@@ -50,6 +50,9 @@ describe("global search model", () => {
     expect(canonicalSearchRoute(result("RUN", "run_execution01"))).toBe(
       "/projects/prj_project01/runs/run_execution01",
     );
+    expect(canonicalSearchRoute(result("ARTIFACT", "art_document01"))).toBe(
+      "/projects/prj_project01/files?artifactRef=art_document01",
+    );
   });
 });
 

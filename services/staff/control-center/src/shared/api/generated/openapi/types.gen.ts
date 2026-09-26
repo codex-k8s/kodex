@@ -1048,7 +1048,7 @@ export type Project = {
 };
 
 export type SearchResult = {
-    kind: 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN';
+    kind: 'PROJECT' | 'AGENT' | 'WORKFLOW' | 'RUN' | 'ARTIFACT';
     ref: OpaqueRef;
     projectRef: OpaqueRef;
     title: string;

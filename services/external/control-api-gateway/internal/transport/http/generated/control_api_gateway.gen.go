@@ -6400,6 +6400,7 @@ func (e ScheduleRevisionSessionPolicy) Valid() bool {
 // Defines values for SearchResultKind.
 const (
 	SearchResultKindAGENT    SearchResultKind = "AGENT"
+	SearchResultKindARTIFACT SearchResultKind = "ARTIFACT"
 	SearchResultKindPROJECT  SearchResultKind = "PROJECT"
 	SearchResultKindRUN      SearchResultKind = "RUN"
 	SearchResultKindWORKFLOW SearchResultKind = "WORKFLOW"
@@ -6409,6 +6410,8 @@ const (
 func (e SearchResultKind) Valid() bool {
 	switch e {
 	case SearchResultKindAGENT:
+		return true
+	case SearchResultKindARTIFACT:
 		return true
 	case SearchResultKindPROJECT:
 		return true

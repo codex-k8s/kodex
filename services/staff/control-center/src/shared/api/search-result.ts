@@ -14,7 +14,9 @@ export function isSearchResult(value: unknown): value is SearchResult {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<SearchResult>;
   return (
-    ["PROJECT", "AGENT", "WORKFLOW", "RUN"].includes(item.kind ?? "") &&
+    ["PROJECT", "AGENT", "WORKFLOW", "RUN", "ARTIFACT"].includes(
+      item.kind ?? "",
+    ) &&
     typeof item.ref === "string" &&
     item.ref.length > 0 &&
     typeof item.projectRef === "string" &&

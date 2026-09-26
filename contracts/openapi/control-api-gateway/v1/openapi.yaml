@@ -6421,7 +6421,7 @@ components:
       additionalProperties: false
       required: [kind, ref, projectRef, title, subtitle, state, updatedAt]
       properties:
-        kind: { type: string, enum: [PROJECT, AGENT, WORKFLOW, RUN] }
+        kind: { type: string, enum: [PROJECT, AGENT, WORKFLOW, RUN, ARTIFACT] }
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         projectRef: { $ref: '#/components/schemas/OpaqueRef' }
         title: { type: string, minLength: 1, maxLength: 300 }

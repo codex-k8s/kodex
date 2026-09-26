@@ -20,6 +20,8 @@ export function canonicalSearchRoute(result: SearchResult): string {
       return `/projects/${project}/workflows/${reference}`;
     case "RUN":
       return runPath(result.ref, result.projectRef);
+    case "ARTIFACT":
+      return `/projects/${project}/files?artifactRef=${reference}`;
   }
 }
 

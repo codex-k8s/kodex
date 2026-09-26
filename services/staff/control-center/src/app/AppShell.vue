@@ -58,6 +58,7 @@ import {
   type SupportedLocale,
 } from "@/shared/locale";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import CurrentUserSummary from "@/shared/ui/CurrentUserSummary.vue";
 import RealtimeStatus from "@/shared/ui/RealtimeStatus.vue";
@@ -78,6 +79,7 @@ const runtime = useRuntimeStore();
 const session = useSessionStore();
 useSpeechInput();
 const { locale, t } = useI18n();
+const serverMessage = useServerMessage();
 const mobileOpen = ref(false);
 const online = ref(navigator.onLine);
 const search = ref("");
@@ -589,7 +591,7 @@ onBeforeUnmount(() => {
             >
               <span>
                 <small>{{ $t(`app.searchKind.${result.kind}`) }}</small>
-                <strong>{{ result.title }}</strong>
+                <strong>{{ serverMessage(result.title) }}</strong>
                 <span>{{ result.subtitle }}</span>
               </span>
               <StatusBadge :state="result.state" />
