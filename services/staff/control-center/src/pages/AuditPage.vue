@@ -23,7 +23,6 @@ const projectRef = computed(() =>
 const list = computed(() => platform.auditEvents);
 const hasMore = computed(() => Boolean(platform.auditNextPageToken));
 const loadingMore = computed(() => Boolean(platform.loading.auditMore));
-const scrollRoot = ref<HTMLElement>();
 const listRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
@@ -51,7 +50,6 @@ function loadMore(): Promise<void> {
 }
 
 useCursorInfiniteScroll({
-  root: scrollRoot,
   sentinel,
   enabled: () => hasMore.value && !loadingMore.value,
   loadMore,

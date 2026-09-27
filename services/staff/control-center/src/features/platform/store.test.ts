@@ -755,6 +755,41 @@ describe("platform store", () => {
     expect(store.auditNextPageToken).toBeUndefined();
   });
 
+  it("продолжает audit cursor после изменения адаптивного размера страницы", async () => {
+    const first = auditEvent("aud_before_resize", "2026-08-31T12:00:00Z");
+    const second = auditEvent("aud_after_resize", "2026-08-31T11:00:00Z");
+    listAuditEventsMock
+      .mockResolvedValueOnce({
+        data: { items: [first], nextPageToken: "audit-page-after-resize" },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [second], nextPageToken: "" },
+        response: new Response(null, { status: 200 }),
+      });
+    const store = usePlatformStore();
+
+    await store.loadAudit("project_sales", "отчёт", 10);
+    await store.loadMoreAudit("project_sales", "отчёт", 23);
+
+    expect(listAuditEventsMock).toHaveBeenCalledTimes(2);
+    expect(listAuditEventsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: {
+          projectRef: "project_sales",
+          query: "отчёт",
+          pageSize: 23,
+          pageToken: "audit-page-after-resize",
+        },
+      }),
+    );
+    expect(store.auditEvents.map((event) => event.ref)).toEqual([
+      first.ref,
+      second.ref,
+    ]);
+    expect(store.auditNextPageToken).toBeUndefined();
+  });
+
   it("собирает опубликованные revisions инструкций из bounded pages", async () => {
     listAgentInstructionVersionsMock
       .mockResolvedValueOnce({

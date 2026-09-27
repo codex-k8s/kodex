@@ -1315,7 +1315,7 @@ export const usePlatformStore = defineStore("platform", () => {
     resourceRef = "",
   ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}\n${resourceRef}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${resourceRef}`;
     auditScopeKey.value = scopeKey;
     auditNextPageToken.value = undefined;
     consumedAuditPageTokens.clear();
@@ -1353,7 +1353,7 @@ export const usePlatformStore = defineStore("platform", () => {
     resourceRef = "",
   ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${String(pageSize)}\n${resourceRef}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${resourceRef}`;
     const pageToken = auditNextPageToken.value;
     if (
       !pageToken ||
