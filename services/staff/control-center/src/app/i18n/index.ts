@@ -1733,6 +1733,8 @@ const ru = {
     buildHistory: "История сборок",
     buildHistoryHelp:
       "Этапы, ход выполнения и безопасная диагностика каждой попытки сборки.",
+    statusRefreshPaused:
+      "Автоматическое обновление остановлено после длительного ожидания. Обновите состояние сборки и допуска вручную.",
     retryPending: "Ожидается автоматическая повторная попытка",
     debugBuildWithAssistant: "Передать сборку на разбор Kodex",
     noBuilds: "Сборки ещё не запускались.",
@@ -4958,6 +4960,8 @@ const en = {
     buildHistory: "Build history",
     buildHistoryHelp:
       "Authoritative attempt, stage, progress and safe diagnostics from the API.",
+    statusRefreshPaused:
+      "Automatic updates paused after a long wait. Refresh the build and admission status manually.",
     retryPending: "Waiting for an automatic retry",
     debugBuildWithAssistant: "Ask Kodex to debug this build",
     noBuilds: "No builds have been requested yet.",

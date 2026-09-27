@@ -27,6 +27,7 @@ import {
   canPromoteRoleImage,
   canRequestBuild,
   latestBuild,
+  roleImageLifecycleNeedsRefresh,
   roleImageState,
   validateDockerfile,
 } from "@/features/role-images/model";
@@ -128,14 +129,6 @@ const promotionEvidenceState = computed(() => {
     return artifact.value?.promotionState ?? "PROMOTED";
   return promotionReceipt.value?.state;
 });
-const buildActive = computed(() =>
-  currentBuild.value ? buildIsActive(currentBuild.value) : false,
-);
-const promotionPending = computed(
-  () =>
-    !recipe.value?.promotedImageReady &&
-    ["QUEUED", "PROMOTING"].includes(promotionReceipt.value?.state ?? ""),
-);
 const promotionVisualState = computed(() => {
   if (recipe.value?.promotedImageReady) return "PROMOTED";
   if (promotionReceipt.value?.state === "PROMOTING") return "RUNNING";
@@ -183,6 +176,7 @@ const environmentLabel = computed(() => {
 });
 let buildPollTimer: ReturnType<typeof setTimeout> | undefined;
 let lifecyclePollAttempts = 0;
+const pollingPaused = ref(false);
 let disposed = false;
 let loadGeneration = 0;
 
@@ -193,12 +187,14 @@ function stopBuildPolling(): void {
 
 function scheduleBuildPolling(): void {
   stopBuildPolling();
-  if (
-    disposed ||
-    !props.recipeRef ||
-    (!buildActive.value && !promotionPending.value) ||
-    lifecyclePollAttempts >= 150
-  )
+  const needsRefresh = roleImageLifecycleNeedsRefresh(
+    recipe.value,
+    currentBuild.value,
+    artifact.value,
+    promotionReceipt.value,
+  );
+  pollingPaused.value = needsRefresh && lifecyclePollAttempts >= 150;
+  if (disposed || !props.recipeRef || !needsRefresh || pollingPaused.value)
     return;
   buildPollTimer = setTimeout(() => void refreshBuild(), 2000);
 }
@@ -209,6 +205,12 @@ async function refreshBuild(): Promise<void> {
   lifecyclePollAttempts += 1;
   await store.loadDetail(props.projectRef, props.recipeRef, false);
   if (current === loadGeneration) scheduleBuildPolling();
+}
+
+async function resumeBuildPolling(): Promise<void> {
+  lifecyclePollAttempts = 0;
+  pollingPaused.value = false;
+  await refreshBuild();
 }
 
 function sync(): void {
@@ -224,6 +226,7 @@ function sync(): void {
 async function load(): Promise<void> {
   const current = ++loadGeneration;
   lifecyclePollAttempts = 0;
+  pollingPaused.value = false;
   const tasks: Promise<void>[] = [
     store.loadSupportingCatalogs(props.projectRef),
   ];
@@ -579,6 +582,17 @@ onBeforeUnmount(() => {
           <StatusBadge :state="promotionVisualState" />
         </article>
       </section>
+
+      <div
+        v-if="pollingPaused"
+        class="panel lifecycle-poll-paused"
+        role="status"
+      >
+        <span>{{ t("roleImages.statusRefreshPaused") }}</span>
+        <button class="button" type="button" @click="resumeBuildPolling">
+          {{ t("common.refresh") }}
+        </button>
+      </div>
 
       <div class="editor-layout">
         <main class="editor-main">
@@ -1134,6 +1148,12 @@ onBeforeUnmount(() => {
 .image-lifecycle {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.lifecycle-poll-paused {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 .lifecycle-step {

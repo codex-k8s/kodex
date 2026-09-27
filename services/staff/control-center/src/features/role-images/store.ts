@@ -293,6 +293,8 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         buildRef,
       );
       recipes[receipt.recipe.ref] = receipt.recipe;
+      if (action === "REQUEST_BUILD")
+        Reflect.deleteProperty(promotionReceipts, receipt.recipe.ref);
       if (receipt.imageBuild) {
         const current = builds[receipt.recipe.ref] ?? [];
         builds[receipt.recipe.ref] = [

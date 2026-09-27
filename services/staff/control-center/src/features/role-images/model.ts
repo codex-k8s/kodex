@@ -1,6 +1,7 @@
 import type {
   RoleImageArtifact,
   RoleImageBuild,
+  RoleImagePromotionReceipt,
   RoleImageRecipe,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -40,6 +41,45 @@ export function buildIsTerminal(build: RoleImageBuild): boolean {
 
 export function buildIsActive(build: RoleImageBuild): boolean {
   return !buildIsTerminal(build);
+}
+
+export function roleImageLifecycleNeedsRefresh(
+  recipe: RoleImageRecipe | undefined,
+  build: RoleImageBuild | undefined,
+  artifact: RoleImageArtifact | undefined,
+  receipt: RoleImagePromotionReceipt | undefined,
+): boolean {
+  if (!recipe || !build) return false;
+  if (buildIsActive(build)) return true;
+  if (build.stage !== "COMPLETED") return false;
+  const currentReceipt =
+    artifact && receipt?.imageArtifactRef === artifact.ref
+      ? receipt
+      : undefined;
+  if (currentReceipt?.state === "FAILED") return false;
+  if (
+    !artifact ||
+    artifact.buildRef !== build.ref ||
+    artifact.recipeGeneration !== build.recipeGeneration
+  )
+    return true;
+  if (
+    artifact.admissionVerdict === "REJECTED" ||
+    artifact.promotionState === "REJECTED"
+  )
+    return false;
+  if (
+    recipe.promotedImageReady &&
+    recipe.activeImageArtifactRef === artifact.ref
+  )
+    return false;
+  return (
+    (artifact.promotionRequested &&
+      ["PENDING", "CLAIMED", "AUTHORIZED", "PROMOTED"].includes(
+        artifact.promotionState,
+      )) ||
+    ["QUEUED", "PROMOTING"].includes(currentReceipt?.state ?? "")
+  );
 }
 
 export function canRequestBuild(recipe: RoleImageRecipe): boolean {

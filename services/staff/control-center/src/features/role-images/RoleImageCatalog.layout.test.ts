@@ -64,10 +64,9 @@ describe("каталог образов ИИ-сотрудников", () => {
     expect(summary).toContain('t("roleImages.debugBuildWithAssistant")');
   });
 
-  it("повторяет FAILED/EXPIRED и завершает опрос только после финального исхода", () => {
-    expect(editor).toContain(
-      "currentBuild.value ? buildIsActive(currentBuild.value) : false",
-    );
+  it("повторяет FAILED/EXPIRED и опрашивает допуск после завершения сборки", () => {
+    expect(editor).toContain("roleImageLifecycleNeedsRefresh(");
+    expect(editor).toContain("pollingPaused.value");
     expect(editor).toContain("!buildIsActive(current) ||");
     expect(editor).toContain("buildIsActive(currentBuild)");
     expect(editor).toContain('t("roleImages.retryPending")');
