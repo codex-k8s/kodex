@@ -114,19 +114,31 @@ async function load(more = false): Promise<void> {
       new Set(next.map((item) => item.ref)).size !== next.length
     )
       throw new Error("Invalid organization catalog cursor or duplicate entry");
+    const missing = props.projectRef
+      ? []
+      : [...new Set(page.items.map((item) => item.projectRef))].filter(
+          (ref) => !projects.value[ref],
+        );
+    // Названия проектов читаются по тем же authoritative owner boundaries, не выводятся из refs.
+    const loadedProjects: Record<string, Project> = {};
+    for (let offset = 0; offset < missing.length; offset += 4) {
+      const batch = await Promise.all(
+        missing.slice(offset, offset + 4).map(async (ref) => {
+          const project = await loadCatalogProject(ref, request.signal);
+          if (project.ref !== ref)
+            throw new Error("Invalid project catalog lookup scope");
+          return project;
+        }),
+      );
+      if (current !== generation) return;
+      for (const project of batch) loadedProjects[project.ref] = project;
+    }
+    if (current !== generation) return;
     if (!more) cursors.clear();
     if (token) cursors.add(token);
+    projects.value = { ...projects.value, ...loadedProjects };
     items.value = next;
     pageToken.value = page.nextPageToken || undefined;
-    const missing = [
-      ...new Set(page.items.map((item) => item.projectRef)),
-    ].filter((ref) => !projects.value[ref]);
-    // Названия проектов читаются по тем же authoritative owner boundaries, не выводятся из refs.
-    for (const ref of missing) {
-      const project = await loadCatalogProject(ref, request.signal);
-      if (current !== generation) return;
-      projects.value[ref] = project;
-    }
   } catch (error) {
     if (!request.signal.aborted && current === generation)
       problem.value = asProblem(error);
