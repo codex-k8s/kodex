@@ -1365,9 +1365,7 @@ onBeforeUnmount(() => {
 .artifact-card code {
   display: block;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 1000px) {
   .image-lifecycle {

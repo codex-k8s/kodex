@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.145
+version: 1.0.146
 updated: 2026-09-27
 ---
 
@@ -2973,3 +2973,10 @@ GitHub checks не считается `PASS`.
   4xx/5xx отсутствуют. Адресные ESLint, Prettier и typecheck — `PASS` на
   mounted diff после `dd0e2ae66`; новая сборка, отмена активной сборки,
   полный baseline, CI и ручная приёмка — `NOT RUN`.
+
+- В деталях образа SHA-256 свидетельств обрезались многоточием в узкой
+  боковой колонке. Длинные значения теперь переносятся внутри карточки и
+  видны полностью, не выходя за границу экрана. После Vite и reload без
+  кэша снимок `/tmp/kodex-role-image-detail-digests-20260927.png`;
+  console error/warn и HTTP 4xx/5xx нет. Адресные ESLint, Prettier и
+  typecheck — `PASS` на mounted diff после `e62ecfd6e`.
