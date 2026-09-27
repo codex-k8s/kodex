@@ -23,6 +23,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import {
   useRealtimeStore,
   webSocketHandshakeTimeoutMs,
+  sessionResumeTimeoutMs,
 } from "@/features/realtime/store";
 
 type SocketListener = (event: { data?: string }) => void;
@@ -318,6 +319,72 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it("повторяет соединение, если открытый socket не подтвердил SESSION_RESUME", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const first = socketAt(0);
+    first.open();
+
+    expect(store.platformState.state).toBe("recovering");
+    runScheduled(sessionResumeTimeoutMs);
+    expect(first.closeReason).toBe("SESSION_RESUME_TIMEOUT");
+    expect(store.platformState.state).toBe("offline");
+    runScheduled(1_000);
+    await flushProcessing();
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    store.closeAll();
+  });
+
+  it("повторяет соединение, если SESSION_READY не завершилось готовностью платформы", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message({
+      type: "SESSION_READY",
+      requestRef: requestRef(socket),
+      streams: [{ streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 }],
+    });
+    await flushProcessing();
+
+    expect(store.platformState.state).toBe("recovering");
+    runScheduled(sessionResumeTimeoutMs);
+    expect(socket.closeReason).toBe("SESSION_RESUME_TIMEOUT");
+    expect(store.platformState.state).toBe("offline");
+    store.closeAll();
+  });
+
+  it("снимает таймаут после подтверждения SESSION_READY и PLATFORM_READY", async () => {
+    const store = useRealtimeStore();
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    socket.message({
+      type: "SESSION_READY",
+      requestRef: requestRef(socket),
+      streams: [{ streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 }],
+    });
+    socket.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(socket),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 0,
+    });
+    await flushProcessing();
+
+    expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+    expect(
+      [...scheduled.values()].some(
+        (timer) => timer.delay === sessionResumeTimeoutMs,
+      ),
+    ).toBe(false);
+    store.closeAll();
+  });
+
   it("уход документа закрывает socket, resume сохраняет platform/run cursors и не дублирует соединение", async () => {
     const store = useRealtimeStore();
     const platform = usePlatformStore();
@@ -479,9 +546,11 @@ describe("browser-session realtime multiplexer", () => {
       attempt: 1,
     });
     expect(store.state.run_realtime02?.state).not.toBe("offline");
-    expect(scheduled.size).toBe(1);
+    expect(
+      [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+    ).toHaveLength(1);
 
-    runScheduled();
+    runScheduled(1_000);
     expect(sent(socket, 1)).toMatchObject({
       type: "SUBSCRIBE_RUN",
       runRef: "run_realtime01",
@@ -512,7 +581,9 @@ describe("browser-session realtime multiplexer", () => {
       state: "recovering",
       attempt: 1,
     });
-    expect(scheduled.size).toBe(1);
+    expect(
+      [...scheduled.values()].filter((timer) => timer.delay === 1_000),
+    ).toHaveLength(1);
     store.closeAll();
   });
 

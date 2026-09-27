@@ -42,9 +42,11 @@ interface SessionConnection {
   ticketController?: AbortController;
   socket?: WebSocket;
   handshakeTimer?: number;
+  resumeTimer?: number;
   timer?: number;
   requestRef?: string;
   resumeRunRefs?: Set<string>;
+  resumeReady?: boolean;
   attempt: number;
   stopped: boolean;
 }
@@ -70,6 +72,7 @@ const platformKinds = new Set<PlatformKind>([
 const platformStreamRef = "PLATFORM";
 const clientReconnectCloseCode = 4000;
 export const webSocketHandshakeTimeoutMs = 10_000;
+export const sessionResumeTimeoutMs = 30_000;
 
 export type PlatformSequenceOutcome =
   | "applied"
@@ -165,6 +168,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
     if (session.handshakeTimer !== undefined)
       window.clearTimeout(session.handshakeTimer);
     session.handshakeTimer = undefined;
+  }
+
+  function clearResumeTimer(): void {
+    if (session.resumeTimer !== undefined)
+      window.clearTimeout(session.resumeTimer);
+    session.resumeTimer = undefined;
   }
 
   function markOffline(): void {
@@ -299,6 +308,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
           problemTitle: undefined,
         });
       }
+      if (session.resumeReady) clearResumeTimer();
       return true;
     }
     return false;
@@ -403,6 +413,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
           attempt: 0,
           lastHeartbeat: envelope.serverTime,
         });
+      if (session.resumeReady) clearResumeTimer();
       return true;
     }
     if (envelope.streamKind === "RUN" && !activeRuns.has(envelope.streamRef))
@@ -536,7 +547,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
         expectedRefs.size === 0;
       if (envelope.requestRef !== session.requestRef || !validStreams)
         failProtocol(socket, "INVALID_SESSION_READY");
-      else session.resumeRunRefs = undefined;
+      else {
+        session.resumeReady = true;
+        session.resumeRunRefs = undefined;
+        if (!platformWanted || platformState.state === "live")
+          clearResumeTimer();
+      }
       return;
     }
     if (await processPlatformEnvelope(socket, envelope)) return;
@@ -620,6 +636,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         };
       });
       session.resumeRunRefs = new Set(runs.map(({ runRef }) => runRef));
+      session.resumeReady = false;
       send({
         type: "SESSION_RESUME",
         requestRef: sessionRequestRef,
@@ -631,6 +648,19 @@ export const useRealtimeStore = defineStore("realtime", () => {
           state: "recovering",
           attempt: session.attempt,
         });
+      clearResumeTimer();
+      session.resumeTimer = window.setTimeout(() => {
+        session.resumeTimer = undefined;
+        if (
+          !activeSocket(socket) ||
+          (session.resumeReady &&
+            (!platformWanted || platformState.state === "live"))
+        )
+          return;
+        session.socket = undefined;
+        retireWebSocket(socket, "SESSION_RESUME_TIMEOUT");
+        scheduleReconnect();
+      }, sessionResumeTimeoutMs);
     });
     socket.addEventListener("message", (message) => {
       if (!activeSocket(socket)) return;
@@ -661,9 +691,11 @@ export const useRealtimeStore = defineStore("realtime", () => {
     socket.addEventListener("close", () => {
       if (session.socket !== socket) return;
       clearHandshakeTimer();
+      clearResumeTimer();
       session.socket = undefined;
       session.requestRef = undefined;
       session.resumeRunRefs = undefined;
+      session.resumeReady = false;
       if (!session.stopped && hasConsumers()) scheduleReconnect();
     });
     socket.addEventListener("error", () => {
@@ -714,6 +746,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
   function closePlatform(): void {
     platformWanted = false;
+    if (session.resumeReady) clearResumeTimer();
     Object.assign(platformState, {
       state: "offline",
       attempt: 0,
@@ -733,10 +766,12 @@ export const useRealtimeStore = defineStore("realtime", () => {
     if (session.timer !== undefined) window.clearTimeout(session.timer);
     session.timer = undefined;
     clearHandshakeTimer();
+    clearResumeTimer();
     const socket = session.socket;
     session.socket = undefined;
     session.requestRef = undefined;
     session.resumeRunRefs = undefined;
+    session.resumeReady = false;
     session.attempt = 0;
     if (socket) retireWebSocket(socket, reason);
   }

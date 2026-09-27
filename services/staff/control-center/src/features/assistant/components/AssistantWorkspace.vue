@@ -283,9 +283,11 @@ const setupSuggestions = computed(() =>
   })),
 );
 const assistantReadinessLabel = computed(() =>
-  providerAccountRequired.value
-    ? t("assistant.providerAccountRequired")
-    : store.assistant?.readinessSummary,
+  !props.live
+    ? t("app.reconnecting")
+    : providerAccountRequired.value
+      ? t("assistant.providerAccountRequired")
+      : store.assistant?.readinessSummary,
 );
 const canCreateConversation = computed(
   () =>
@@ -1089,7 +1091,7 @@ onBeforeUnmount(() => {
         </div>
         <StatusBadge
           v-if="store.assistant"
-          :state="assistantRuntimeState"
+          :state="live ? assistantRuntimeState : 'RECOVERING'"
           :label="assistantReadinessLabel"
         />
         <button

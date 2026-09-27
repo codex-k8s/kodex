@@ -184,8 +184,8 @@ describe("AssistantWorkspace layout", () => {
     expect(template).toContain('v-show="open && assistantFormActive"');
     expect(template).toContain('class="assistant-detail-backdrop"');
     expect(template).toContain('class="assistant-plan-dialog"');
-    expect(template).toContain(
-      ':inert="Boolean(currentPlan) || assistantFormActive || undefined"',
+    expect(template).toMatch(
+      /:inert="\s*Boolean\(currentPlan\) \|\|\s*assistantFormActive \|\|\s*Boolean\(pendingProjectMove\) \|\|\s*undefined\s*"/,
     );
     expect(template).not.toContain(
       ':aria-hidden="Boolean(currentPlan) || assistantFormActive || undefined"',
