@@ -2246,6 +2246,8 @@ const ru = {
     table: {
       name: "Название",
       package: "Пакет",
+      description: "Описание",
+      category: "Категория и версия",
       state: "Состояние",
       credentials: "Учётные данные",
       access: "Доступ",
@@ -6075,6 +6077,8 @@ const en = {
     table: {
       name: "Name",
       package: "Package",
+      description: "Description",
+      category: "Category and version",
       state: "State",
       credentials: "Credentials",
       access: "Access",

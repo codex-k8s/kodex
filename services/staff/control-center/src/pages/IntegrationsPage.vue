@@ -167,10 +167,10 @@ const catalogDefinitions = ref<IntegrationDefinition[]>([]);
 const catalogListRoot = ref<HTMLElement>();
 const catalogPageSize = useAdaptiveCursorPageSize({
   container: catalogListRoot,
-  itemSelector: ".package-card",
+  itemSelector: ".package-row",
   itemCount: () => catalogDefinitions.value.length,
-  estimatedItemHeight: 312,
-  estimatedColumns: 3,
+  estimatedItemHeight: 64,
+  estimatedColumns: 1,
 });
 const catalogNextPageToken = ref<string>();
 const catalogLoading = ref(false);
