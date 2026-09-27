@@ -51,7 +51,9 @@ describe("STT configuration fields", () => {
       }),
     );
     const html = await renderToString(app);
-    expect(html).toContain("ru\nen");
+    expect(html).toMatch(/-language"[^>]*value="ru"/);
+    expect(html).toMatch(/-additional-languages"[^>]*>en<\/textarea>/);
+    expect(html).toContain("configuration-fields__advanced");
     expect(html).toContain("Kodex");
     expect(html).toContain("Synthetic context");
     expect(html).toContain('value="0.4"');

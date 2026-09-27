@@ -662,6 +662,8 @@ const ru = {
     diff: "Изменения",
     sttEnabled: "Распознавание речи включено",
     sttCatalog: {
+      apiKeyShort: "Для распознавания нужен API key",
+      accountNotReady: "Учётная запись сейчас недоступна для распознавания.",
       recommended: "Рекомендованная модель",
       recommendations:
         "Рекомендации: {model}, {bytes} байт, {milliseconds} мс. Они не заменяют предельные значения и не перезаписывают сохранённый документ.",
@@ -677,6 +679,13 @@ const ru = {
       promptBytes: "Ограничение профиля: {count} байт UTF-8.",
     },
     sttParameters: {
+      primaryLanguage: "Код языка",
+      primaryLanguageHint:
+        "Например, ru или en. Оставьте пустым для автоопределения.",
+      additionalLanguages: "Другие возможные языки",
+      additionalLanguagesHint:
+        "Только для модели gpt-transcribe. Коды по одному на строку; основной код укажите выше.",
+      advanced: "Дополнительные настройки распознавания",
       languages: "Языки (коды, по одному на строку)",
       keywords: "Ключевые слова (по одному на строку)",
       prompt: "Контекст распознавания",
@@ -4282,6 +4291,9 @@ const en = {
     diff: "Changes",
     sttEnabled: "Speech transcription enabled",
     sttCatalog: {
+      apiKeyShort: "API key required for transcription",
+      accountNotReady:
+        "This account is not currently available for transcription.",
       recommended: "Recommended model",
       recommendations:
         "Recommendations: {model}, {bytes} bytes, {milliseconds} ms. They do not replace limits or overwrite a saved document.",
@@ -4444,6 +4456,13 @@ const en = {
       sourceDigest: "Source contract digest",
     },
     sttParameters: {
+      primaryLanguage: "Language code",
+      primaryLanguageHint:
+        "For example, ru or en. Leave blank for automatic detection.",
+      additionalLanguages: "Other possible languages",
+      additionalLanguagesHint:
+        "Only for gpt-transcribe. Enter one code per line; set the primary code above.",
+      advanced: "Advanced transcription settings",
       languages: "Languages (one code per line)",
       keywords: "Keywords (one per line)",
       prompt: "Transcription context",
