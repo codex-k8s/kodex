@@ -408,6 +408,13 @@ const commandAction = ref<"TEST" | "ENABLE" | "DISABLE">();
 const operationSuccess = ref("");
 const pendingTest = ref<{ ref: string; version: number }>();
 function refreshTestFeedback(connection?: IntegrationConnection): void {
+  const details = detailsConnection.value;
+  if (
+    connection &&
+    details?.ref === connection.ref &&
+    connection.version > details.version
+  )
+    detailsConnection.value = connection;
   const pending = pendingTest.value;
   if (
     !pending ||
@@ -1029,11 +1036,14 @@ async function revokeGrant(item: IntegrationGrantPresentation): Promise<void> {
   }
 }
 
+async function reloadIntegrationWorkspace(): Promise<void> {
+  await platform.loadIntegrations();
+  integrationsLoaded.value = true;
+  if (!platform.problems.integrations) await loadConnections();
+}
+
 onMounted(() => {
-  void platform.loadIntegrations().then(() => {
-    integrationsLoaded.value = true;
-    return loadConnections();
-  });
+  void reloadIntegrationWorkspace();
 });
 
 onBeforeUnmount(() => {
@@ -1101,12 +1111,12 @@ onBeforeUnmount(() => {
           v-if="activeSection !== 'APPROVALS'"
           :loading="platform.loading.integrations"
           :problem="platform.problems.integrations"
-          @retry="platform.loadIntegrations()"
+          @retry="reloadIntegrationWorkspace"
         >
           <ProblemNotice
             v-if="connectionProblem && activeSection === 'CONNECTIONS'"
             :problem="connectionProblem"
-            @retry="loadConnections()"
+            @retry="reloadIntegrationWorkspace"
           />
           <div v-if="activeSection === 'CONNECTIONS'" ref="connectionListRoot">
             <IntegrationConnectionsPanel

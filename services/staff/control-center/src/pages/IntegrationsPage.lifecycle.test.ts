@@ -236,8 +236,10 @@ describe("IntegrationsPage lifecycle", () => {
       app.use(router);
     })) as unknown as IntegrationsSetup;
 
+    setup.detailsConnection.value = selected;
     await setup.command(selected, "TEST");
     expect(setup.operationSuccess.value).toBe("Проверка выполняется");
+    expect(setup.detailsConnection.value.state).toBe("TESTING");
     platform.connections[selected.ref] = {
       ...testing,
       state: "CONNECTED",
@@ -253,5 +255,7 @@ describe("IntegrationsPage lifecycle", () => {
     };
     setup.refreshTestFeedback(platform.connections[selected.ref]);
     expect(setup.operationSuccess.value).toContain("Проверка завершена");
+    expect(setup.detailsConnection.value.state).toBe("CONNECTED");
+    expect(setup.detailsConnection.value.version).toBe(5);
   });
 });
