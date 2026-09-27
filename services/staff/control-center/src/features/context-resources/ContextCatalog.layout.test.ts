@@ -12,4 +12,14 @@ describe("каталог контекстных ресурсов", () => {
     expect(source).toContain('class="context-catalog panel"');
     expect(source).not.toContain("Maximize2");
   });
+
+  it("показывает компактную таблицу с типовой иконкой и сохраняет контекст сотрудника", () => {
+    expect(source).toContain('class="context-catalog__table"');
+    expect(source).toContain('class="context-row"');
+    expect(source).toContain(
+      "<EntityIcon :kind=\"kind === 'skills' ? 'SKILL' : 'MEMORY'\" />",
+    );
+    expect(source).toContain("query: agentRef ? { agentRef } : {},");
+    expect(source).not.toContain("<code>{{ item.ref }}</code>");
+  });
 });

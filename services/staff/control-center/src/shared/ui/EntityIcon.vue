@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   Activity,
+  BookOpenText,
   Bot,
   CalendarClock,
   Container,
@@ -31,7 +32,8 @@ type EntityIconKind =
   | "RUN"
   | "FILE"
   | "GATE"
-  | "SKILL";
+  | "SKILL"
+  | "MEMORY";
 
 const props = defineProps<{ kind: EntityIconKind; size?: number }>();
 const icons = {
@@ -49,6 +51,7 @@ const icons = {
   FILE: FileStack,
   GATE: ShieldCheck,
   SKILL: PackageOpen,
+  MEMORY: BookOpenText,
 } as const;
 const icon = computed(() => icons[props.kind]);
 </script>

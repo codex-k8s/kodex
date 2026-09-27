@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Plus, RefreshCw, Search, X } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { ChevronRight, Plus, RefreshCw, Search, X } from "@lucide/vue";
+import { onBeforeUnmount, ref, useId, watch } from "vue";
 import type { ContextResourceState } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { listContext, type ContextItem, type ContextKind } from "./api";
@@ -23,7 +24,7 @@ const pageSize = useAdaptiveCursorPageSize({
   itemSelector: ".context-row",
   itemCount: () => items.value.length,
   estimatedViewportHeight: 576,
-  estimatedItemHeight: 96,
+  estimatedItemHeight: 64,
   minimum: 8,
   maximum: 100,
 });
@@ -38,22 +39,23 @@ let controller: AbortController | undefined;
 let generation = 0;
 const cursors = new Set<string>();
 const projectNames = ref<Record<string, string>>({});
-const groups = computed(() => {
-  const result = new Map<string, ContextItem[]>();
-  for (const item of items.value)
-    result.set(item.projectRef, [...(result.get(item.projectRef) ?? []), item]);
-  return [...result].map(([projectRef, entries]) => ({ projectRef, entries }));
-});
 function title(item: ContextItem): string {
   const revision =
     "draftRevision" in item
       ? (item.draftRevision ?? item.currentRevision)
       : item.currentRevision;
-  return revision
-    ? "title" in revision
-      ? revision.title
-      : revision.name
-    : item.ref;
+  return revision ? ("title" in revision ? revision.title : revision.name) : "";
+}
+function revisionNumber(item: ContextItem): number {
+  return "draftRevision" in item
+    ? ((item.draftRevision ?? item.currentRevision)?.revision ?? 0)
+    : (item.currentRevision?.revision ?? 0);
+}
+function retention(item: ContextItem): string {
+  const revision = item.currentRevision;
+  return revision && "retentionUntil" in revision
+    ? revision.retentionUntil
+    : "";
 }
 async function load(more = false): Promise<void> {
   if (more && (loading.value || !cursor.value)) return;
@@ -199,42 +201,97 @@ useCursorInfiniteScroll({
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
     <div ref="scrollRoot" class="context-catalog__scroll">
-      <section
-        v-for="group in groups"
-        :key="group.projectRef"
-        class="context-group"
-      >
-        <h3>
-          <RouterLink
-            :to="`/projects/${encodeURIComponent(group.projectRef)}`"
-            >{{
-              projectNames[group.projectRef] ?? group.projectRef
-            }}</RouterLink
-          >
-        </h3>
-        <div class="context-rows">
-          <RouterLink
-            v-for="item in group.entries"
-            :key="item.ref"
-            class="context-row"
-            :to="{
-              name: 'project-context-resource',
-              params: {
-                kind,
-                resourceRef: item.ref,
-                projectRef: item.projectRef,
-              },
-            }"
-          >
-            <span
-              ><strong>{{ title(item) }}</strong
-              ><code>{{ item.ref }}</code></span
-            ><StatusBadge :state="item.state" /><small
-              >v{{ item.version }}</small
-            >
-          </RouterLink>
-        </div>
-      </section>
+      <div v-if="items.length" class="context-catalog__table-wrap">
+        <table class="context-catalog__table">
+          <thead>
+            <tr>
+              <th scope="col">{{ $t("common.name") }}</th>
+              <th v-if="!projectRef" scope="col">
+                {{ $t("contextResources.project") }}
+              </th>
+              <th scope="col">{{ $t("common.status") }}</th>
+              <th scope="col">{{ $t("contextResources.revision") }}</th>
+              <th v-if="kind === 'memory'" scope="col">
+                {{ $t("contextResources.retention") }}
+              </th>
+              <th scope="col">{{ $t("roleImages.updatedAt") }}</th>
+              <th scope="col" class="context-catalog__open">
+                {{ $t("common.open") }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in items" :key="item.ref" class="context-row">
+              <td>
+                <div class="context-catalog__identity">
+                  <EntityIcon :kind="kind === 'skills' ? 'SKILL' : 'MEMORY'" />
+                  <RouterLink
+                    :to="{
+                      name: 'project-context-resource',
+                      params: {
+                        kind,
+                        resourceRef: item.ref,
+                        projectRef: item.projectRef,
+                      },
+                      query: agentRef ? { agentRef } : {},
+                    }"
+                    :title="title(item) || $t('common.noData')"
+                    >{{ title(item) || $t("common.noData") }}</RouterLink
+                  >
+                </div>
+              </td>
+              <td v-if="!projectRef">
+                <RouterLink
+                  :to="`/projects/${encodeURIComponent(item.projectRef)}`"
+                >
+                  {{ projectNames[item.projectRef] ?? $t("common.noData") }}
+                </RouterLink>
+              </td>
+              <td><StatusBadge :state="item.state" /></td>
+              <td>
+                <span v-if="revisionNumber(item)"
+                  >rev {{ revisionNumber(item) }}</span
+                >
+                <span v-else>{{ $t("common.noData") }}</span>
+                <StatusBadge
+                  v-if="'draftRevision' in item && item.draftRevision"
+                  :state="item.draftRevision.state"
+                />
+              </td>
+              <td v-if="kind === 'memory'">
+                <time v-if="retention(item)" :datetime="retention(item)">
+                  {{
+                    new Date(retention(item)).toLocaleDateString($i18n.locale)
+                  }}
+                </time>
+                <span v-else>{{ $t("common.noData") }}</span>
+              </td>
+              <td>
+                <time :datetime="item.updatedAt">{{
+                  new Date(item.updatedAt).toLocaleString($i18n.locale)
+                }}</time>
+              </td>
+              <td class="context-catalog__open">
+                <RouterLink
+                  class="icon-button"
+                  :to="{
+                    name: 'project-context-resource',
+                    params: {
+                      kind,
+                      resourceRef: item.ref,
+                      projectRef: item.projectRef,
+                    },
+                    query: agentRef ? { agentRef } : {},
+                  }"
+                  :aria-label="$t('common.open')"
+                  :title="$t('common.open')"
+                  ><ChevronRight :size="18" aria-hidden="true"
+                /></RouterLink>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <p
         v-if="!loading && !problem && !items.length"
         class="context-catalog__empty"
@@ -315,13 +372,62 @@ useCursorInfiniteScroll({
   color: var(--muted);
   cursor: pointer;
 }
-.context-group {
-  min-width: 0;
-  margin-block: 20px;
-}
 .context-catalog__scroll {
   max-height: 576px;
   overflow: auto;
+}
+.context-catalog__table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+.context-catalog__table {
+  width: 100%;
+  min-width: 850px;
+  border-collapse: collapse;
+}
+.context-catalog__table th {
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.context-catalog__table th:first-child {
+  width: 36%;
+}
+.context-catalog__table td {
+  height: 64px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+.context-catalog__table td:nth-child(4) > * + * {
+  margin-left: 6px;
+}
+.context-catalog__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.context-catalog__identity a {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.context-catalog__identity a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.context-catalog__open {
+  width: 68px;
+  text-align: center !important;
 }
 .context-catalog__empty {
   margin: 0;
@@ -332,33 +438,7 @@ useCursorInfiniteScroll({
 .context-catalog__sentinel {
   min-height: 1px;
 }
-.context-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
-  align-items: center;
-  min-height: 96px;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.context-row span {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-.context-row code,
-.context-row strong,
-h3 {
-  overflow-wrap: anywhere;
-}
 @media (max-width: 600px) {
-  .context-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-height: 144px;
-  }
-  .context-row span {
-    grid-column: 1 / -1;
-  }
   .context-toolbar {
     flex-wrap: wrap;
   }
