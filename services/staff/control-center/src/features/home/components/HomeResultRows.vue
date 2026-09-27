@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { HomeResultItem } from "../result-catalog";
+import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -72,7 +73,9 @@ useCursorInfiniteScroll({
           }}</time>
         </template>
       </small>
-      <small v-else>{{ item.description }}</small>
+      <small v-else
+        ><SafeSummary :content="item.description" :maximum-length="140"
+      /></small>
       <StatusBadge :state="item.state" />
     </div>
     <div
