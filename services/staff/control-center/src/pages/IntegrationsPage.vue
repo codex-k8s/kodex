@@ -32,6 +32,7 @@ import {
   buildIntegrationPackages,
   flattenIntegrationGrants,
   integrationCategories,
+  publicIntegrationConfiguration,
   type IntegrationGrantPresentation,
   type IntegrationsSection,
 } from "@/features/integrations/ui/model";
@@ -314,6 +315,36 @@ const returnedInvocationRef = computed(() =>
 );
 const detailsProblem = ref<AppProblem>();
 const detailsLoading = ref(false);
+const detailsDefinition = computed(() =>
+  detailsConnection.value
+    ? platform.definitions[detailsConnection.value.definitionKey]
+    : undefined,
+);
+const detailsConfiguration = computed(() =>
+  detailsConnection.value
+    ? publicIntegrationConfiguration(
+        detailsConnection.value,
+        detailsDefinition.value,
+      )
+    : [],
+);
+async function openDetailsAction(
+  action: "EDIT" | "CREDENTIAL" | "GRANTS",
+): Promise<void> {
+  const connection = detailsConnection.value;
+  if (!connection) return;
+  detailsConnection.value = undefined;
+  await router.replace({
+    query: {
+      ...route.query,
+      connectionRef: undefined,
+      invocationRef: undefined,
+    },
+  });
+  if (action === "EDIT") await openEdit(connection);
+  else if (action === "CREDENTIAL") await openCredential(connection);
+  else openGrants(connection);
+}
 watch(
   () => [route.query.connectionRef, route.query.invocationRef],
   async ([connectionRef, invocationRef]) => {
@@ -858,9 +889,13 @@ async function command(
   operationSuccess.value = "";
   try {
     const updated = await platform.changeConnection(connection, action);
+    if (detailsConnection.value?.ref === updated.ref)
+      detailsConnection.value = updated;
     operationSuccess.value =
       action === "TEST"
-        ? `Проверка «${updated.name}» завершена: ${serverMessage(updated.lastTestOutcome ?? updated.state)}.`
+        ? updated.state === "TESTING"
+          ? `Проверка «${updated.name}» запущена. Обновите сведения о подключении, чтобы увидеть результат.`
+          : `Проверка «${updated.name}» завершена: ${serverMessage(updated.lastTestOutcome ?? updated.state)}.`
         : action === "ENABLE"
           ? `Подключение «${updated.name}» включено.`
           : `Подключение «${updated.name}» отключено.`;
@@ -1138,6 +1173,112 @@ onBeforeUnmount(() => {
           >{{ detailsConnection.definitionKey }} /
           {{ detailsConnection.definitionVersion }}</code
         >
+        <div class="connection-details">
+          <section class="connection-details__section">
+            <h3>Учётные данные и проверка</h3>
+            <p>
+              {{
+                detailsConnection.credentialsConfigured
+                  ? "Учётные данные настроены и скрыты"
+                  : "Учётные данные ещё не настроены"
+              }}
+            </p>
+            <p v-if="detailsConnection.lastTestOutcome">
+              Последняя проверка:
+              {{ serverMessage(detailsConnection.lastTestOutcome) }}
+            </p>
+            <p v-if="detailsConnection.lastTestedAt">
+              {{ new Date(detailsConnection.lastTestedAt).toLocaleString() }}
+            </p>
+          </section>
+          <section
+            v-if="detailsConfiguration.length"
+            class="connection-details__section"
+          >
+            <h3>Публичные настройки</h3>
+            <dl class="connection-details__facts">
+              <div v-for="entry in detailsConfiguration" :key="entry.key">
+                <dt>{{ entry.label }}</dt>
+                <dd :title="entry.value">{{ entry.value }}</dd>
+              </div>
+            </dl>
+          </section>
+          <section class="connection-details__section">
+            <h3>Возможности</h3>
+            <p v-if="!detailsConnection.capabilities.length">
+              Доступных возможностей пока нет.
+            </p>
+            <ul v-else class="connection-details__capabilities">
+              <li
+                v-for="capability in detailsConnection.capabilities"
+                :key="capability.key"
+              >
+                <strong>{{ capability.name }}</strong>
+                <span>{{ $t("integrations.risk." + capability.risk) }}</span>
+                <span v-if="capability.approvalRequired">Human Gate</span>
+                <p>{{ capability.description }}</p>
+              </li>
+            </ul>
+          </section>
+          <div class="connection-details__actions">
+            <button
+              v-if="detailsConnection.nextActions.includes('UPDATE')"
+              class="button"
+              type="button"
+              :disabled="!!commandRef"
+              @click="openDetailsAction('EDIT')"
+            >
+              Изменить настройки
+            </button>
+            <button
+              v-if="
+                canConfigureCredential(detailsDefinition, detailsConnection)
+              "
+              class="button"
+              type="button"
+              :disabled="!!commandRef"
+              @click="openDetailsAction('CREDENTIAL')"
+            >
+              Настроить учётные данные
+            </button>
+            <button
+              v-if="detailsConnection.nextActions.includes('TEST')"
+              class="button"
+              type="button"
+              :disabled="!!commandRef"
+              @click="command(detailsConnection, 'TEST')"
+            >
+              Проверить подключение
+            </button>
+            <button
+              v-if="detailsConnection.nextActions.includes('ENABLE')"
+              class="button button--primary"
+              type="button"
+              :disabled="!!commandRef"
+              @click="command(detailsConnection, 'ENABLE')"
+            >
+              Включить
+            </button>
+            <button
+              v-if="detailsConnection.nextActions.includes('DISABLE')"
+              class="button"
+              type="button"
+              :disabled="!!commandRef"
+              @click="command(detailsConnection, 'DISABLE')"
+            >
+              Отключить
+            </button>
+            <button
+              v-if="detailsConnection.nextActions.includes('MANAGE_GRANTS')"
+              class="button"
+              type="button"
+              :disabled="!!commandRef"
+              @click="openDetailsAction('GRANTS')"
+            >
+              Управлять разрешениями
+            </button>
+          </div>
+        </div>
         <InteractionIdentitiesPanel
           v-if="detailsConnection.definitionKey === 'mattermost'"
           :key="detailsConnection.ref"
@@ -1469,6 +1610,66 @@ onBeforeUnmount(() => {
 .credential-summary,
 .credential-failure {
   margin: 0;
+}
+.connection-details {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+.connection-details__section {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.connection-details__section h3,
+.connection-details__section p {
+  margin: 0;
+}
+.connection-details__section h3 {
+  margin-bottom: 8px;
+}
+.connection-details__section p + p {
+  margin-top: 6px;
+}
+.connection-details__facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.connection-details__facts div {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+}
+.connection-details__facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.connection-details__capabilities {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.connection-details__capabilities li {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.connection-details__capabilities li span {
+  margin-left: 8px;
+  color: var(--muted);
+}
+.connection-details__capabilities li p {
+  margin-top: 5px;
+  color: var(--muted);
+}
+.connection-details__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .credential-failure {
   display: grid;

@@ -39,6 +39,7 @@ import {
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import { runPath } from "@/shared/routes";
+import { runTitleFromTask } from "@/features/runs/run-title";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
@@ -802,7 +803,7 @@ async function launch(): Promise<void> {
       projectRef: projectRef.value,
       targetRef: agent.value.ref,
       targetType: "AGENT",
-      title: task.value.trim().slice(0, 160),
+      title: runTitleFromTask(task.value),
       task: task.value.trim(),
     });
     if (!active()) return;
@@ -1025,8 +1026,12 @@ onBeforeUnmount(() => {
                     </dd>
                   </div>
                   <div>
-                    <dt>{{ $t("agents.capabilities") }}</dt>
+                    <dt>Возможности платформы</dt>
                     <dd>{{ agent.capabilities.length }}</dd>
+                  </div>
+                  <div>
+                    <dt>Разрешённые интеграции</dt>
+                    <dd>{{ agent.integrations.length }}</dd>
                   </div>
                 </dl>
               </section>

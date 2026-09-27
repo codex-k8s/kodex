@@ -17,7 +17,10 @@ const maximumIntegrationCatalogPage = 8
 func integrationCatalogTool() map[string]any {
 	inputSchema := objectSchema(nil, map[string]any{
 		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 256},
-		"connection_ref": opaqueRefSchema(), "capability_key": stringSchema(1, 255),
+		"connection_ref": opaqueRefSchema(), "capability_key": map[string]any{
+			"type": "string", "minLength": 1, "maxLength": 255,
+			"description": "Copy this value exactly from the compact catalog index. It is not the OpenAPI operationId or a display name.",
+		},
 	})
 	inputSchema["oneOf"] = []map[string]any{
 		{"not": map[string]any{"anyOf": []map[string]any{{"required": []string{"connection_ref"}}, {"required": []string{"capability_key"}}}}},
@@ -25,7 +28,7 @@ func integrationCatalogTool() map[string]any {
 	}
 	return map[string]any{
 		"name":        "get_integration_catalog",
-		"description": "Discover only integration grants bound to this RuntimeRevision. Use query and offset for a compact index. Supply exact connection_ref and capability_key together to read one input schema before invoke_integration. Names are display data, not authority.",
+		"description": "Discover only integration grants bound to this RuntimeRevision. First call with {} or query and offset for a compact index. Copy connection_ref and capability_key exactly from one index entry to read its input schema before invoke_integration. Do not guess a key from an OpenAPI operationId or display name.",
 		"inputSchema": inputSchema,
 		"outputSchema": objectSchema([]string{"grants"}, map[string]any{
 			"grants":      map[string]any{"type": "array", "maxItems": maximumIntegrationCatalogPage, "items": map[string]any{"type": "object"}},

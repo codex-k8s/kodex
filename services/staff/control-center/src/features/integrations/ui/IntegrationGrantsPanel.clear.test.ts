@@ -9,9 +9,13 @@ import type {
   IntegrationGrantCapabilityCandidate,
 } from "@/shared/api/generated/openapi/types.gen";
 
-const loaders = vi.hoisted(() => ({ projects: vi.fn(), recipients: vi.fn() }));
+const loaders = vi.hoisted(() => ({
+  connections: vi.fn(),
+  projects: vi.fn(),
+  recipients: vi.fn(),
+}));
 vi.mock("@/features/integrations/grant-candidates", () => ({
-  connectionCandidates: () => vi.fn(),
+  connectionCandidates: () => loaders.connections,
   projectCandidates: () => loaders.projects,
   recipientCandidates: () => loaders.recipients,
   capabilityCandidates: () => vi.fn(),
@@ -128,7 +132,10 @@ async function panel() {
   result.capabilityCandidate.value = capability;
   return { state: result, emit };
 }
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  loaders.connections.mockResolvedValue({ items: [] });
+});
 it.each([
   "clearProject",
   "clearRecipient",

@@ -700,10 +700,14 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		}
 		var catalogInputErr *integrationCatalogInputError
 		if errors.As(err, &catalogInputErr) {
+			guidance := "Retry once using either query and offset, or exact connection_ref and capability_key, but never both."
+			if catalogInputErr.reason == "selection_missing" {
+				guidance = "That exact connection_ref and capability_key pair is not bound to this run. Call get_integration_catalog with {} to read the compact index, then copy both values from the same entry exactly. Do not use an OpenAPI operationId or display name as capability_key."
+			}
 			structured = map[string]any{
 				"error_code": "CATALOG_INPUT_INVALID",
 				"retryable":  true,
-				"guidance":   "Retry once using either query and offset, or exact connection_ref and capability_key, but never both.",
+				"guidance":   guidance,
 			}
 		}
 		encoded, _ = json.Marshal(structured)

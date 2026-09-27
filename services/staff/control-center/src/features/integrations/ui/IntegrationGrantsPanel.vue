@@ -82,6 +82,7 @@ const availableApprovalScopePaths = computed(() =>
 const connectionRows = ref(
   new Map<string, IntegrationGrantConnectionCandidate>(),
 );
+const connectionCandidateLoading = ref(false);
 const connectionCandidate = computed(() => {
   const selected = props.selectedConnection;
   const candidate = selected && connectionRows.value.get(selected.ref);
@@ -116,6 +117,36 @@ let projectGeneration = 0;
 let recipientGeneration = 0;
 let capabilityGeneration = 0;
 const connectionLoader = connectionCandidates({ purpose: "GRANT" });
+watch(
+  () =>
+    [props.selectedConnection?.ref, props.selectedConnection?.version] as const,
+  (_identity, _previous, onCleanup) => {
+    const selected = props.selectedConnection;
+    if (!selected) return;
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    connectionCandidateLoading.value = true;
+    void connectionLoader(selected.name, undefined, controller.signal, 40)
+      .then((page) => {
+        if (controller.signal.aborted) return;
+        const candidate = page.items.find(
+          (item) =>
+            item.connectionRef === selected.ref &&
+            item.pins.connectionVersion === selected.version,
+        );
+        if (candidate)
+          connectionRows.value.set(candidate.connectionRef, candidate);
+      })
+      .catch(() => {
+        // Селектор остаётся явным способом повторить авторитетное чтение.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted)
+          connectionCandidateLoading.value = false;
+      });
+  },
+  { immediate: true },
+);
 const projectLoader = computed(() =>
   projectCandidates({ connectionRef: props.selectedConnection?.ref ?? "" }),
 );
@@ -716,7 +747,16 @@ const canManageSelected = computed(
           />
           <div v-else class="missing-boundary">
             <LockKeyhole :size="17" aria-hidden="true" />
-            <span>{{ t("integrationsRedesign.resourceScopeRefresh") }}</span>
+            <span v-if="connectionCandidateLoading"
+              >Проверяем область ресурса…</span
+            >
+            <span v-else-if="selectedConnection">
+              Область ресурса не получена. Откройте список подключений выше и
+              выберите его повторно.
+            </span>
+            <span v-else>{{
+              t("integrationsRedesign.resourceScopeRefresh")
+            }}</span>
           </div>
           <p class="grant-boundary">{{ t("integrations.grantBoundary") }}</p>
           <button

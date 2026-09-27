@@ -153,6 +153,37 @@ func TestIntegrationCatalogInvalidInputReturnsRetryableMCPError(t *testing.T) {
 		t.Fatalf("invalid catalog input lost safe owner projection: %#v", client.projection)
 	}
 }
+
+func TestIntegrationCatalogMissingSelectionPointsToBoundIndex(t *testing.T) {
+	client := &integrationResultClient{}
+	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	grant := integrationGrantFixture()
+	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
+	params, _ := json.Marshal(map[string]any{"name": "get_integration_catalog", "arguments": map[string]any{
+		"connection_ref": grant.ConnectionRef, "capability_key": "guessedOperationId",
+	}})
+	writer := httptest.NewRecorder()
+	server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
+	var wire struct {
+		Result struct {
+			StructuredContent map[string]any `json:"structuredContent"`
+			IsError           bool           `json:"isError"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError ||
+		wire.Result.StructuredContent["error_code"] != "CATALOG_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true {
+		t.Fatal("missing integration selection did not return a retryable catalog error")
+	}
+	guidance, _ := wire.Result.StructuredContent["guidance"].(string)
+	if !strings.Contains(guidance, "get_integration_catalog with {}") ||
+		!strings.Contains(guidance, "same entry") || !strings.Contains(guidance, "operationId") {
+		t.Fatal("missing integration selection did not direct the caller to exact bound identifiers")
+	}
+	if client.projection == nil || client.projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED {
+		t.Fatal("missing integration selection lost its owner projection")
+	}
+}
 func TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt(t *testing.T) {
 	for _, invalid := range []string{"", "short", "inv/foreign", "inv\nprivate", strings.Repeat("x", 129)} {
 		t.Run("invalid-ref", func(t *testing.T) {
