@@ -11,7 +11,11 @@ import {
   loadRoleImageDetail,
   promoteRoleImageArtifact,
 } from "@/features/role-images/api";
-import { canPromoteRoleImage, latestBuild } from "@/features/role-images/model";
+import {
+  buildIsActive,
+  canPromoteRoleImage,
+  latestBuild,
+} from "@/features/role-images/model";
 import type {
   AssistantPlan,
   RoleImagePromotionReceipt,
@@ -89,13 +93,7 @@ const awaitingAdmission = computed(
     !currentBuildPromoted.value &&
     !admissionTimedOut.value,
 );
-const cancellable = computed(
-  () =>
-    build.value &&
-    !["COMPLETED", "FAILED", "CANCELLED", "EXPIRED", "DEAD_LETTER"].includes(
-      build.value.stage,
-    ),
-);
+const cancellable = computed(() => build.value && buildIsActive(build.value));
 const debuggableFailure = computed(
   () =>
     Boolean(build.value) &&
@@ -294,6 +292,9 @@ async function promoteCandidate(): Promise<void> {
         </label>
         <p v-if="build.safeErrorCode" class="assistant-build-card__problem">
           {{ build.safeErrorCode }}
+        </p>
+        <p v-if="['FAILED', 'EXPIRED'].includes(build.stage)">
+          {{ $t("roleImages.retryPending") }}
         </p>
         <dl v-if="debuggableFailure" class="assistant-build-card__diagnostics">
           <div>

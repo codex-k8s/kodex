@@ -18,10 +18,11 @@ describe("AssistantRoleImageBuildCard", () => {
     expect(source).toContain("@click=\"emit('navigate')\"");
   });
 
-  it("отменяет точную сборку без архивирования рецепта", () => {
-    expect(source).toContain(
-      '["COMPLETED", "FAILED", "CANCELLED", "EXPIRED", "DEAD_LETTER"]',
-    );
+  it("наблюдает повторную попытку и отменяет точную сборку без архивирования рецепта", () => {
+    expect(source).toContain("buildIsActive(build.value)");
+    expect(source).toContain("assistantPollDelay(attempts)");
+    expect(source).toContain("cancellable.value ||");
+    expect(source).toContain("roleImages.retryPending");
     expect(source).toContain('current.nextActions.includes("CANCEL_BUILD")');
     expect(source).toMatch(
       /commandRoleImage\(\s*exact\.projectRef,\s*current,\s*"CANCEL_BUILD",\s*build\.value\.ref,?\s*\)/,
