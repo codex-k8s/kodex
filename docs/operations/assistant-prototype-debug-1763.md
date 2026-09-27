@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.182
+version: 1.0.183
 updated: 2026-09-27
 ---
 
@@ -3877,3 +3877,34 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-runs-terminal-fix-readback-20260927.png`. Это проверяет доставку
   кода и обычное чтение, но не новую ветку отказа: платный Run ради неё не
   создавался, PostgreSQL component и конкурентный claim/terminal — `NOT RUN`.
+
+### Стабилизация локальной сетевой проекции OpenAPI, 2026-09-27
+
+- Повторявшийся каждые 30 секунд warning был локализован закрытыми кодами
+  этапов до `kubernetes_readback_deployment_ready`: owner-документ и
+  Kubernetes-ресурсы обновлялись, но новый Pod ещё не достигал полной
+  готовности. Пока он выкатывался, очередной DNS snapshot создавал следующее
+  поколение; это превращало допустимый временный отказ точного Service в
+  частые последовательные rollouts.
+- Control-plane теперь удерживает одно подготовленное поколение до успешной
+  публикации и точного readback, повторяя его без новой записи в БД. На каждом
+  повторе актуальный список owner origins читается заново: отзыв или смена
+  подключения сбрасывает старый pending-документ. Диагностика сообщает только
+  закрытый этап; ожидаемая готовность нового Pod не засоряет warning раньше
+  двухминутного бюджета, после чего остаётся видимой как реальный отказ.
+  Утверждённый порядок `NetworkPolicy → Service selector → Pod template →
+  rollout readback` не менялся; старый Pod с устаревшими pins через новый
+  Service не обслуживает вызовы.
+- Локальные Go unit `internal/app` и `internal/integrationegress` — `PASS`;
+  Air запустил новую сборку, Service и Deployment достигли одного поколения,
+  Deployment `1/1` Ready. После нового no-cache reload списка запусков
+  console error/warn пусты, завершённых HTTP 4xx/5xx нет, один bootstrap
+  отменён навигацией. Снимок
+  `/tmp/kodex-runs-egress-projection-readback-20260927.png`. Следующий
+  реальный WRITE-вызов через OpenAPI и длительное наблюдение смен DNS —
+  `NOT RUN`, зелёный Pod их не заменяет.
+- Context7 MCP в этой сессии недоступен. Для проверки семантики rollout и
+  EndpointSlice использованы официальные страницы Kubernetes
+  `https://kubernetes.io/docs/concepts/workloads/controllers/deployment/` и
+  `https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/`;
+  продуктовый порядок переключения взят из `GUIDE-DOC-003`.

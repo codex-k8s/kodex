@@ -363,28 +363,35 @@ func validProjectionLabels(current, expected map[string]string) bool {
 }
 
 func (publisher *Kubernetes) Publish(ctx context.Context, document shared.Document) error {
+	_, err := publisher.PublishWithStage(ctx, document)
+	return err
+}
+
+// PublishWithStage возвращает только закрытый диагностический этап без
+// содержимого сетевой политики или Kubernetes-ответа.
+func (publisher *Kubernetes) PublishWithStage(ctx context.Context, document shared.Document) (string, error) {
 	if document.Validate() != nil {
-		return ErrInvalid
+		return "document", ErrInvalid
 	}
 	if err := publisher.CheckAdmission(ctx); err != nil {
-		return err
+		return "admission", err
 	}
 	configMap, network, err := projectionObjects(document)
 	if err != nil {
-		return err
+		return "render", err
 	}
 	current, err := publisher.client.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 	if err != nil {
-		return ErrUnavailable
+		return "deployment_source", ErrUnavailable
 	}
 	if checkGatewaySource(current, document) != nil || checkFence(current.Spec.Template.Annotations, document) != nil {
-		return ErrConflict
+		return "deployment_source", ErrConflict
 	}
 	if _, err := publisher.client.CoreV1().ConfigMaps(namespace).Create(ctx, &configMap, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return ErrUnavailable
+		return "configmap_create", ErrUnavailable
 	}
 	if err := publisher.checkConfigMap(ctx, configMap); err != nil {
-		return err
+		return "configmap_readback", err
 	}
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, err := publisher.client.NetworkingV1().NetworkPolicies(namespace).Get(ctx, shared.NetworkPolicyName, metav1.GetOptions{})
@@ -409,7 +416,7 @@ func (publisher *Kubernetes) Publish(ctx context.Context, document shared.Docume
 		_, err = publisher.client.NetworkingV1().NetworkPolicies(namespace).Update(ctx, current, metav1.UpdateOptions{})
 		return err
 	}); err != nil {
-		return ErrConflict
+		return "network_policy", ErrConflict
 	}
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, err := publisher.client.CoreV1().Services(namespace).Get(ctx, openAPIServiceName, metav1.GetOptions{})
@@ -426,7 +433,7 @@ func (publisher *Kubernetes) Publish(ctx context.Context, document shared.Docume
 		_, err = publisher.client.CoreV1().Services(namespace).Update(ctx, expected, metav1.UpdateOptions{})
 		return err
 	}); err != nil {
-		return ErrConflict
+		return "service", ErrConflict
 	}
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current, err := publisher.client.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
@@ -443,56 +450,68 @@ func (publisher *Kubernetes) Publish(ctx context.Context, document shared.Docume
 		_, err = publisher.client.AppsV1().Deployments(namespace).Update(ctx, expected, metav1.UpdateOptions{})
 		return err
 	}); err != nil {
-		return ErrConflict
+		return "deployment", ErrConflict
 	}
-	return publisher.Check(ctx, document)
+	stage, err := publisher.CheckWithStage(ctx, document)
+	return "readback_" + stage, err
 }
 
 // Check сверяет применённый render, а не только подготовленный документ.
 // Готовность слушателя проверяется отдельно в его Pod/readback.
 func (publisher *Kubernetes) Check(ctx context.Context, document shared.Document) error {
+	_, err := publisher.CheckWithStage(ctx, document)
+	return err
+}
+
+func (publisher *Kubernetes) CheckWithStage(ctx context.Context, document shared.Document) (string, error) {
 	if document.Validate() != nil {
-		return ErrInvalid
+		return "document", ErrInvalid
 	}
 	if err := publisher.CheckAdmission(ctx); err != nil {
-		return err
+		return "admission", err
 	}
 	configMap, network, err := projectionObjects(document)
 	if err != nil {
-		return err
+		return "render", err
 	}
 	if err := publisher.checkConfigMap(ctx, configMap); err != nil {
-		return err
+		return "configmap", err
 	}
 	currentNetwork, err := publisher.client.NetworkingV1().NetworkPolicies(namespace).Get(ctx, shared.NetworkPolicyName, metav1.GetOptions{})
 	if err != nil {
-		return ErrUnavailable
+		return "network_policy", ErrUnavailable
 	}
 	if currentNetwork.UID == "" || currentNetwork.ResourceVersion == "" ||
 		currentNetwork.Labels["app.kubernetes.io/name"] != deploymentName ||
 		currentNetwork.Labels["app.kubernetes.io/component"] != "platform-egress" ||
 		!sameJSON(currentNetwork.Spec, network.Spec) || currentNetwork.Annotations[generationAnnotation] != network.Annotations[generationAnnotation] ||
 		currentNetwork.Annotations[sourceAnnotation] != network.Annotations[sourceAnnotation] {
-		return ErrConflict
+		return "network_policy", ErrConflict
 	}
 	service, err := publisher.client.CoreV1().Services(namespace).Get(ctx, openAPIServiceName, metav1.GetOptions{})
 	if err != nil {
-		return ErrUnavailable
+		return "service", ErrUnavailable
 	}
 	expectedService := service.DeepCopy()
 	if setOpenAPIService(expectedService, document) != nil || !sameJSON(service.Spec, expectedService.Spec) ||
 		!sameJSON(service.Annotations, expectedService.Annotations) {
-		return ErrConflict
+		return "service", ErrConflict
 	}
 	deployment, err := publisher.client.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 	if err != nil {
-		return ErrUnavailable
+		return "deployment", ErrUnavailable
 	}
 	expected := deployment.DeepCopy()
-	if setDeployment(expected, document, configMap.Name) != nil || !sameJSON(deployment.Spec, expected.Spec) || !deploymentReady(deployment) {
-		return ErrConflict
+	if setDeployment(expected, document, configMap.Name) != nil {
+		return "deployment_source", ErrConflict
 	}
-	return nil
+	if !sameJSON(deployment.Spec, expected.Spec) {
+		return "deployment_spec", ErrConflict
+	}
+	if !deploymentReady(deployment) {
+		return "deployment_ready", ErrConflict
+	}
+	return "complete", nil
 }
 
 func deploymentReady(deployment *appsv1.Deployment) bool {

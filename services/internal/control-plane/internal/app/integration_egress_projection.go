@@ -29,6 +29,8 @@ type integrationEgressProjection struct {
 	kubernetesTimeout time.Duration
 	resolver          *dnsresolver.Resolver
 	pins              *integrationDNSResolver
+	pending           *shared.Document
+	pendingSince      time.Time
 }
 
 func (projection *integrationEgressProjection) Run(ctx context.Context) error {
@@ -36,10 +38,11 @@ func (projection *integrationEgressProjection) Run(ctx context.Context) error {
 	defer ticker.Stop()
 	for {
 		operation, cancel := context.WithTimeout(ctx, integrationEgressOperationTimeout)
-		err := projection.reconcile(operation)
+		stage, err := projection.reconcile(operation)
 		cancel()
-		if err != nil && ctx.Err() == nil {
-			slog.WarnContext(ctx, "integration egress projection reconciliation failed", "error_class", "integration_egress_projection")
+		if err != nil && ctx.Err() == nil &&
+			(stage != "kubernetes_readback_deployment_ready" || time.Since(projection.pendingSince) >= integrationEgressOperationTimeout) {
+			slog.WarnContext(ctx, "integration egress projection reconciliation failed", "error_class", "integration_egress_projection", "safe_stage", stage)
 		}
 		select {
 		case <-ctx.Done():
@@ -49,14 +52,14 @@ func (projection *integrationEgressProjection) Run(ctx context.Context) error {
 	}
 }
 
-func (projection *integrationEgressProjection) reconcile(ctx context.Context) error {
+func (projection *integrationEgressProjection) reconcile(ctx context.Context) (string, error) {
 	if projection.ready == nil || projection.ready(ctx) != nil {
-		return integrationegress.ErrUnavailable
+		return "readiness", integrationegress.ErrUnavailable
 	}
 	if projection.resolver == nil {
 		servers, err := dnsresolver.LoadSystemServers("/etc/resolv.conf")
 		if err != nil {
-			return err
+			return "dns_configuration", err
 		}
 		projection.resolver, err = dnsresolver.New(dnsresolver.Config{
 			MinimumTTLSeconds: 5, MaximumTTLSeconds: 300, MaximumCacheEntries: 128,
@@ -64,21 +67,38 @@ func (projection *integrationEgressProjection) reconcile(ctx context.Context) er
 			MaximumMessageBytes: 4096, QueryTimeoutMilliseconds: 2000,
 		}, servers, nil, nil)
 		if err != nil {
-			return err
+			return "dns_configuration", err
 		}
 	}
 	if projection.pins == nil {
 		projection.pins = &integrationDNSResolver{source: projection.resolver}
 	}
-	document, err := projection.repository.PrepareIntegrationEgressProjection(ctx, projection.baseDigest, projection.pins)
-	if err != nil {
-		return err
+	if projection.pending != nil {
+		hosts, err := projection.repository.IntegrationEgressHostnames(ctx)
+		if err != nil {
+			return "owner_projection", err
+		}
+		if projection.pending.SourceDigest != shared.SourceDigest(hosts) {
+			projection.pending = nil
+		}
+	}
+	if projection.pending == nil {
+		document, err := projection.repository.PrepareIntegrationEgressProjection(ctx, projection.baseDigest, projection.pins)
+		if err != nil {
+			return "owner_projection", err
+		}
+		projection.pending = &document
+		projection.pendingSince = time.Now()
 	}
 	publisher, err := integrationegress.InCluster(projection.kubernetesTimeout)
 	if err != nil {
-		return err
+		return "kubernetes_client", err
 	}
-	return publisher.Publish(ctx, document)
+	stage, err := publisher.PublishWithStage(ctx, *projection.pending)
+	if err == nil {
+		projection.pending = nil
+	}
+	return "kubernetes_" + stage, err
 }
 
 type integrationDNSRefresher interface {
