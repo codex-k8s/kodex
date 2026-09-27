@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Check, Copy } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { PromptTemplatePreview } from "@/shared/api/generated/openapi/types.gen";
@@ -7,7 +8,6 @@ import type { TemplateVariablePickerItem } from "./model";
 import { templateVariableInsertion } from "./model";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
-import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import PromptContextDetails from "./PromptContextDetails.vue";
 import TemplateVariableCatalog from "./TemplateVariableCatalog.vue";
@@ -32,6 +32,8 @@ const busy = ref(false);
 const problem = ref<AppProblem>();
 const copyProblem = ref<AppProblem>();
 const copiedVariable = ref("");
+const sectionCopyProblem = ref<AppProblem>();
+const copiedSectionIndex = ref<number | null>(null);
 const preview = ref<PromptTemplatePreview>();
 const previewOpen = ref(false);
 const contextKey = computed(() => JSON.stringify(props.target ?? {}));
@@ -49,6 +51,8 @@ function invalidate(): void {
   problem.value = undefined;
   copyProblem.value = undefined;
   copiedVariable.value = "";
+  sectionCopyProblem.value = undefined;
+  copiedSectionIndex.value = null;
 }
 watch(
   () => [contextKey.value, props.template, props.disabled, full.value],
@@ -94,6 +98,16 @@ async function copyVariable(item: TemplateVariablePickerItem): Promise<void> {
     copiedVariable.value = item.variable.name;
   } catch (error) {
     copyProblem.value = asProblem(error);
+  }
+}
+async function copySection(content: string, index: number): Promise<void> {
+  copiedSectionIndex.value = null;
+  sectionCopyProblem.value = undefined;
+  try {
+    await navigator.clipboard.writeText(content);
+    copiedSectionIndex.value = index;
+  } catch (error) {
+    sectionCopyProblem.value = asProblem(error);
   }
 }
 defineExpose({ refresh });
@@ -167,32 +181,69 @@ defineExpose({ refresh });
           >
         </div>
         <p class="prompt-target-preview__hint">
-          {{ t("promptContext.previewHint") }}
+          {{
+            t(
+              preview.fullMaterializedPrompt
+                ? "promptContext.previewFullHint"
+                : "promptContext.previewHint",
+            )
+          }}
         </p>
-        <div class="prompt-target-preview__columns">
-          <section class="prompt-target-preview__sections">
-            <h3>{{ t("promptContext.previewSections") }}</h3>
-            <ol>
-              <li v-for="(section, index) in preview.sections" :key="index">
-                <div class="prompt-target-preview__section-head">
+        <p
+          v-if="copiedSectionIndex !== null"
+          class="prompt-target-preview__copied"
+          role="status"
+        >
+          {{
+            t("promptContext.sectionCopied", {
+              number: copiedSectionIndex + 1,
+            })
+          }}
+        </p>
+        <ProblemNotice
+          v-if="sectionCopyProblem"
+          :problem="sectionCopyProblem"
+          compact
+        />
+        <section class="prompt-target-preview__sections">
+          <h3>{{ t("promptContext.previewSections") }}</h3>
+          <ol>
+            <li v-for="(section, index) in preview.sections" :key="index">
+              <button
+                type="button"
+                class="prompt-target-preview__section"
+                :aria-label="
+                  t('promptContext.copySection', { number: index + 1 })
+                "
+                :title="t('promptContext.copySection', { number: index + 1 })"
+                @click="copySection(section.content, index)"
+              >
+                <span class="prompt-target-preview__section-head">
                   <span class="prompt-target-preview__section-number">{{
                     index + 1
                   }}</span>
-                  <strong
-                    >{{ t(`promptDetails.${section.source}`)
+                  <strong>
+                    {{ t(`promptDetails.${section.source}`)
                     }}<template v-if="section.slot">
                       · {{ t(`promptDetails.slots.${section.slot}`) }}</template
-                    ></strong
-                  >
-                </div>
-                <SafeMarkdown :content="section.content" />
-              </li>
-            </ol>
-          </section>
-          <aside class="prompt-target-preview__details">
+                    >
+                  </strong>
+                  <Check v-if="copiedSectionIndex === index" :size="15" />
+                  <Copy v-else :size="15" />
+                </span>
+                <span class="prompt-target-preview__section-content">{{
+                  section.content
+                }}</span>
+              </button>
+            </li>
+          </ol>
+        </section>
+        <details class="prompt-target-preview__details">
+          <summary>{{ t("promptContext.previewDetails") }}</summary>
+          <div class="prompt-target-preview__details-body">
             <PromptContextDetails :preview="preview" />
-          </aside>
-        </div>
+          </div>
+        </details>
         <details class="prompt-target-preview__raw">
           <summary>{{ t("promptContext.rawPreview") }}</summary>
           <pre>{{ preview.fullMaterializedPrompt ?? preview.safePreview }}</pre>
@@ -210,7 +261,7 @@ defineExpose({ refresh });
 .prompt-target-preview__result {
   display: grid;
   min-width: 0;
-  gap: 16px;
+  gap: 12px;
   overflow-wrap: anywhere;
 }
 .prompt-target-preview__copied {
@@ -233,46 +284,70 @@ defineExpose({ refresh });
   margin: 0;
   color: var(--muted);
 }
-.prompt-target-preview__columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr);
-  align-items: start;
-  gap: 16px;
-  min-width: 0;
-}
-.prompt-target-preview__sections,
-.prompt-target-preview__details {
+.prompt-target-preview__sections {
   min-width: 0;
 }
 .prompt-target-preview__sections h3 {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 0.95rem;
 }
 .prompt-target-preview__sections ol {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.prompt-target-preview__sections li,
-.prompt-target-preview__details {
-  padding: 14px;
+.prompt-target-preview__sections li {
+  min-width: 0;
+}
+.prompt-target-preview__section {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 72px;
+  padding: 9px 11px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.prompt-target-preview__section:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.prompt-target-preview__section:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
 }
 .prompt-target-preview__section-head {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 9px;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 5px;
+  font-size: 0.82rem;
+}
+.prompt-target-preview__section-head strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prompt-target-preview__section-head svg {
+  flex: 0 0 auto;
+  color: var(--muted);
 }
 .prompt-target-preview__section-number {
   display: grid;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
   place-items: center;
   border-radius: 50%;
   color: var(--accent-strong);
@@ -280,8 +355,32 @@ defineExpose({ refresh });
   font-size: 0.75rem;
   font-weight: 700;
 }
-.prompt-target-preview__sections :deep(.safe-markdown) {
+.prompt-target-preview__section-content {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.prompt-target-preview__details,
+.prompt-target-preview__raw {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.prompt-target-preview__details summary,
+.prompt-target-preview__raw summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.prompt-target-preview__details-body {
+  padding-top: 12px;
 }
 .prompt-target-preview__raw pre {
   max-height: 320px;
@@ -294,7 +393,7 @@ defineExpose({ refresh });
   overflow-wrap: anywhere;
 }
 @media (max-width: 800px) {
-  .prompt-target-preview__columns {
+  .prompt-target-preview__sections ol {
     grid-template-columns: minmax(0, 1fr);
   }
 }

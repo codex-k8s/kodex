@@ -2190,9 +2190,14 @@ const ru = {
   promptContext: {
     full: "Запросить полный текст с отдельной проверкой доступа",
     copiedVariable: "Переменная {name} скопирована",
+    copySection: "Скопировать содержимое блока {number}",
+    sectionCopied: "Блок {number} скопирован",
     previewSections: "Состав контекста",
     previewHint:
-      "Блоки показаны в том порядке, в котором их получит исполнитель. Недоступные данные скрыты.",
+      "Показан безопасный состав без содержимого блоков. Для полного текста включите отдельную проверку доступа и повторите просмотр.",
+    previewFullHint:
+      "Показан полный текст после проверки доступа. Нажмите на блок, чтобы скопировать его содержимое.",
+    previewDetails: "Происхождение и версии",
     rawPreview: "Точный формат сообщения",
     previewRevision: "Ревизия шаблона",
     previewLocale: "Язык",
@@ -6039,9 +6044,14 @@ const en = {
   promptContext: {
     full: "Request full content with a separate access check",
     copiedVariable: "Variable {name} copied",
+    copySection: "Copy contents of section {number}",
+    sectionCopied: "Section {number} copied",
     previewSections: "Context sections",
     previewHint:
-      "Sections appear in the order received by the executor. Unavailable data is hidden.",
+      "This safe outline hides section contents. To see the full text, request a separate access check and preview again.",
+    previewFullHint:
+      "Full text is shown after an access check. Click a section to copy its contents.",
+    previewDetails: "Provenance and versions",
     rawPreview: "Exact message format",
     previewRevision: "Template revision",
     previewLocale: "Language",

@@ -39,6 +39,12 @@ describe("TemplateVariableCatalog server filters", () => {
     expect(preview).toContain("navigator.clipboard.writeText(");
     expect(preview).toContain('size="xl"');
     expect(preview).toContain('class="prompt-target-preview__sections"');
+    expect(preview).toContain(
+      "grid-template-columns: repeat(2, minmax(0, 1fr))",
+    );
+    expect(preview).toContain('@click="copySection(section.content, index)"');
+    expect(preview).toContain("navigator.clipboard.writeText(content)");
+    expect(preview).toContain('class="prompt-target-preview__details"');
     expect(instructions).toContain('@select="insertVariable"');
   });
 });
