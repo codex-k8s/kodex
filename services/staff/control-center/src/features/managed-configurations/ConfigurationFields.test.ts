@@ -12,6 +12,12 @@ vi.mock("@/shared/ui/VoiceTextarea.vue", () => ({
 vi.mock("@/shared/ui/AsyncEntityPicker.vue", () => ({
   default: defineComponent({ setup: () => () => h("button", "Picker") }),
 }));
+vi.mock("@/features/role-images/RoleImageDockerfileEditor.vue", () => ({
+  default: defineComponent({
+    props: { modelValue: String },
+    setup: (props) => () => h("pre", props.modelValue),
+  }),
+}));
 import ConfigurationFields from "./ConfigurationFields.vue";
 describe("STT configuration fields", () => {
   it("отображает полный сохраненный профиль без подмены eligibility", async () => {
@@ -65,5 +71,47 @@ describe("STT configuration fields", () => {
     expect(html).toMatch(/<fieldset[^>]*disabled/);
     expect(html.match(/<textarea disabled/g)).toHaveLength(4);
     expect(html).not.toContain("speechTranscription");
+  });
+});
+
+describe("Конфигурация образа роли", () => {
+  it("показывает поля действующего рецепта, а не пустые поля старой схемы", async () => {
+    const app = createSSRApp({
+      render: () =>
+        h(ConfigurationFields, {
+          kind: "ROLE_IMAGE",
+          name: "Образ координатора",
+          format: "JSON",
+          modelValue: JSON.stringify({
+            name: "Образ координатора",
+            roleImage: {
+              roleDefinitionRef: "role_example",
+              environment: {
+                environmentKey: "standard",
+                packageKeys: ["package.one"],
+                toolKeys: ["tool.one"],
+                installationBlock: "RUN echo safe",
+                dockerfile: "FROM image@sha256:abc",
+              },
+            },
+          }),
+        }),
+    });
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        missingWarn: false,
+        messages: { ru: {} },
+      }),
+    );
+    const html = await renderToString(app);
+    expect(html).toContain('value="role_example"');
+    expect(html).toContain('value="standard"');
+    expect(html).toContain("package.one");
+    expect(html).toContain("tool.one");
+    expect(html).toContain("RUN echo safe");
+    expect(html).toContain("FROM image@sha256:abc");
+    expect(html).not.toMatch(/name="[^"]+-base-image"/);
   });
 });

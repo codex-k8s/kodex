@@ -31,6 +31,7 @@ import {
   setPrimarySttLanguage,
 } from "./stt-language";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import type { ConfigurationKind } from "./api";
 import {
   parseConfigurationDocument,
@@ -364,6 +365,37 @@ const packages = computed(() =>
         .join("\n")
     : "",
 );
+const roleImage = computed(() => object(parsed.value.value.roleImage));
+const roleImageEnvironment = computed(() =>
+  object(roleImage.value.environment),
+);
+function roleImageList(key: "packageKeys" | "toolKeys"): string {
+  const values = roleImageEnvironment.value[key];
+  return Array.isArray(values)
+    ? values
+        .filter((value): value is string => typeof value === "string")
+        .join("\n")
+    : "";
+}
+function updateRoleImage(value: Record<string, unknown>): void {
+  write({ ...parsed.value.value, roleImage: { ...roleImage.value, ...value } });
+}
+function updateRoleImageEnvironment(value: Record<string, unknown>): void {
+  updateRoleImage({
+    environment: { ...roleImageEnvironment.value, ...value },
+  });
+}
+function updateRoleImageList(
+  key: "packageKeys" | "toolKeys",
+  value: string,
+): void {
+  updateRoleImageEnvironment({
+    [key]: value
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  });
+}
 function write(value: Record<string, unknown>): void {
   if (!props.disabled && parsed.value.valid)
     emit(
@@ -416,7 +448,7 @@ function update(key: string, event: Event, group?: "stt"): void {
         :model-value="text(parsed.value.description)"
         @update:model-value="write({ ...parsed.value, description: $event })"
     /></label>
-    <template v-if="kind === 'ROLE_IMAGE'">
+    <template v-if="kind === 'ROLE_IMAGE' && !parsed.value.roleImage">
       <label
         >{{ $t("managed.baseImage")
         }}<input
@@ -443,6 +475,84 @@ function update(key: string, event: Event, group?: "stt"): void {
           "
       /></label>
     </template>
+    <div
+      v-else-if="kind === 'ROLE_IMAGE'"
+      class="configuration-fields__role-image"
+    >
+      <p class="configuration-fields__note">
+        {{ $t("managed.roleImageFormHint") }}
+      </p>
+      <label
+        >{{ $t("managed.roleImageRoleRef") }}
+        <input
+          :id="`${fieldPrefix}-role-definition-ref`"
+          :name="`${fieldPrefix}-role-definition-ref`"
+          :value="text(roleImage.roleDefinitionRef)"
+          @input="
+            updateRoleImage({
+              roleDefinitionRef: ($event.target as HTMLInputElement).value,
+            })
+          "
+        />
+      </label>
+      <label
+        >{{ $t("managed.roleImageEnvironmentKey") }}
+        <input
+          :id="`${fieldPrefix}-environment-key`"
+          :name="`${fieldPrefix}-environment-key`"
+          :value="text(roleImageEnvironment.environmentKey)"
+          @input="
+            updateRoleImageEnvironment({
+              environmentKey: ($event.target as HTMLInputElement).value,
+            })
+          "
+        />
+      </label>
+      <details class="configuration-fields__role-image-advanced">
+        <summary>{{ $t("managed.roleImageAdvanced") }}</summary>
+        <div class="configuration-fields__role-image-advanced-content">
+          <label
+            >{{ $t("managed.roleImagePackageKeys") }}
+            <VoiceTextarea
+              :id="`${fieldPrefix}-package-keys`"
+              :name="`${fieldPrefix}-package-keys`"
+              :disabled="disabled"
+              :model-value="roleImageList('packageKeys')"
+              @update:model-value="updateRoleImageList('packageKeys', $event)"
+            />
+          </label>
+          <label
+            >{{ $t("managed.roleImageToolKeys") }}
+            <VoiceTextarea
+              :id="`${fieldPrefix}-tool-keys`"
+              :name="`${fieldPrefix}-tool-keys`"
+              :disabled="disabled"
+              :model-value="roleImageList('toolKeys')"
+              @update:model-value="updateRoleImageList('toolKeys', $event)"
+            />
+          </label>
+          <label class="configuration-fields__wide"
+            >{{ $t("managed.roleImageInstallationBlock") }}
+            <VoiceTextarea
+              :id="`${fieldPrefix}-installation-block`"
+              :name="`${fieldPrefix}-installation-block`"
+              :disabled="disabled"
+              :model-value="text(roleImageEnvironment.installationBlock)"
+              @update:model-value="
+                updateRoleImageEnvironment({ installationBlock: $event })
+              "
+            />
+          </label>
+        </div>
+      </details>
+      <RoleImageDockerfileEditor
+        class="configuration-fields__wide"
+        :model-value="text(roleImageEnvironment.dockerfile)"
+        :label="$t('roleImages.dockerfile')"
+        :readonly="disabled"
+        @update:model-value="updateRoleImageEnvironment({ dockerfile: $event })"
+      />
+    </div>
     <IntegrationPackageField
       v-if="kind === 'INTEGRATION_DEFINITION'"
       :schema="packageSchema"
@@ -704,6 +814,42 @@ function update(key: string, event: Event, group?: "stt"): void {
   min-width: 0;
   gap: 6px;
 }
+.configuration-fields__role-image {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+.configuration-fields__role-image > .configuration-fields__wide,
+.configuration-fields__role-image > .configuration-fields__note,
+.configuration-fields__role-image > .configuration-fields__role-image-advanced {
+  grid-column: 1 / -1;
+}
+.configuration-fields__role-image-advanced {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.configuration-fields__role-image-advanced summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+.configuration-fields__role-image-advanced[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+.configuration-fields__role-image-advanced-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+}
+.configuration-fields__role-image-advanced-content
+  > .configuration-fields__wide {
+  grid-column: 1 / -1;
+}
 .configuration-fields--stt {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
@@ -774,6 +920,12 @@ function update(key: string, event: Event, group?: "stt"): void {
   padding-top: 12px;
 }
 @media (max-width: 900px) {
+  .configuration-fields__role-image {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .configuration-fields__role-image-advanced-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .configuration-fields--stt {
     grid-template-columns: minmax(0, 1fr);
   }
