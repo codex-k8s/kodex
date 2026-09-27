@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.184
+version: 1.0.185
 updated: 2026-09-27
 ---
 
@@ -3933,3 +3933,18 @@ GitHub checks не считается `PASS`.
 - Context7 MCP недоступен. Сверены официальные руководства Vue по `watch`
   (`https://vuejs.org/guide/essentials/watchers`) и Vue I18n по `useI18n`
   (`https://vue-i18n.intlify.dev/guide/advanced/composition`).
+
+### Статус авторизованной учётной записи различим с первого взгляда, 2026-09-27
+
+- Общий `StatusBadge` показывал `AUTHORIZED` серым нейтральным цветом, хотя
+  учётная запись подтверждена. Добавлен успешный тон без изменения серверного
+  состояния или доступности. В текущем owner-сеансе обе записи отображаются
+  подтверждёнными; одна — по API key, другая — по коду устройства. Значения
+  учётных данных не читались и не менялись.
+- После Vite hot reload и no-cache reload обе строки имеют зелёный статус;
+  таблица при 1920×1080 не переполняется. Снимок:
+  `/tmp/kodex-provider-authorized-green-20260927.jpeg`. Адресный unit 7/7,
+  ESLint, Prettier, typecheck и build — локальный `PASS` на mounted diff;
+  предупреждение о крупном чанке осталось. Console error/warn пусты,
+  завершённых HTTP 4xx/5xx нет; один bootstrap прерван навигацией
+  (`ERR_ABORTED`). Повторная авторизация и отказ провайдера — `NOT RUN`.

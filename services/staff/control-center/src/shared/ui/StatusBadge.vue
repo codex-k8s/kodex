@@ -26,6 +26,7 @@ const tone = computed(() => {
       "SUCCEEDED",
       "PUBLISHED",
       "CONNECTED",
+      "AUTHORIZED",
       "CLEAN",
       "APPROVED",
       "ACCEPTED",

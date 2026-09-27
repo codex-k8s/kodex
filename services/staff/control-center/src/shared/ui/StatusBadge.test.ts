@@ -22,6 +22,7 @@ async function render(props: {
             SUCCEEDED: "Завершён",
             PUBLISHED: "Опубликован",
             ACCEPTED: "Допущен",
+            AUTHORIZED: "Авторизация подтверждена",
             PREPARED: "Подготовлен",
           },
         },
@@ -69,6 +70,13 @@ describe("StatusBadge", () => {
     expect(html).toContain("Допущен");
     expect(html).toContain("status-badge--success");
     expect(html).not.toContain("Статус недоступен");
+  });
+
+  it("отмечает подтверждённую авторизацию учётной записи как успешную", async () => {
+    const html = await render({ state: "AUTHORIZED" });
+
+    expect(html).toContain("Авторизация подтверждена");
+    expect(html).toContain("status-badge--success");
   });
 
   it("показывает подготовленный план нейтральным состоянием", async () => {
