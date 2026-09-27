@@ -49,7 +49,7 @@ if [[ -n "$selected_workload" ]]; then
     [[ "$selected_workload" == control-plane-migrate ]] ||
       fail 'migration workload selection requires control-plane-migrate'
   else
-    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service)$ ]] ||
+    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service|clamav-db-updater)$ ]] ||
       fail 'workload selection requires an exact core deployment'
   fi
 fi
@@ -1541,6 +1541,27 @@ PY
   fi
   if [[ "$stage" == core ]]; then
     if [[ "$mode" == apply ]]; then
+      if [[ -z "$selected_workload" || "$selected_workload" == clamav-db-updater ]]; then
+        apply_render clamav-db-updater-foundation '
+          select((.kind == "ServiceAccount" and .metadata.name == "clamav-db-updater") or
+            (.kind == "PersistentVolumeClaim" and .metadata.name == "clamav-database") or
+            (.kind == "ConfigMap" and
+              (.metadata.name == "clamav-db-updater-config" or
+               .metadata.name == "clamav-egress-policy")) or
+            (.kind == "Service" and .metadata.name == "clamav-egress-gateway") or
+            (.kind == "NetworkPolicy" and
+              (.metadata.name == "clamav-db-updater-deny-all" or
+               .metadata.name == "clamav-db-updater-exact-runtime-paths" or
+               .metadata.name == "clamav-egress-gateway-deny-all" or
+               .metadata.name == "clamav-egress-gateway-exact-runtime-paths")))
+        '
+        apply_render clamav-egress-workload '
+          select(.kind == "Deployment" and .metadata.name == "clamav-egress-gateway")
+        '
+        apply_render clamav-db-updater-schedule '
+          select(.kind == "CronJob" and .metadata.name == "clamav-db-updater")
+        '
+      fi
       if [[ -z "$selected_workload" || "$selected_workload" == control-plane ]]; then
         apply_render core-scanner-config 'select(.kind == "ConfigMap" and .metadata.name == "control-plane-skill-scanner")'
         apply_render core-project-purge-rbac '
@@ -1569,7 +1590,9 @@ PY
           select(.kind == "ConfigMap" and .metadata.name == "integration-gateway-runtime")
         '
       fi
-      if [[ -n "$selected_workload" ]]; then
+      if [[ "$selected_workload" == clamav-db-updater ]]; then
+        :
+      elif [[ -n "$selected_workload" ]]; then
         apply_render core-application "select(.kind == \"Deployment\" and .metadata.name == \"$selected_workload\")"
       else
       apply_render core-applications '
@@ -1577,6 +1600,14 @@ PY
           (.metadata.name | test("^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge)$")))
       '
       fi
+    fi
+    if [[ -z "$selected_workload" || "$selected_workload" == clamav-db-updater ]]; then
+      kubectl -n "$namespace" get cronjob/clamav-db-updater \
+        deployment/clamav-egress-gateway service/clamav-egress-gateway \
+        persistentvolumeclaim/clamav-database configmap/clamav-db-updater-config >/dev/null ||
+        fail 'ClamAV updater foundation is unavailable'
+      kubectl -n "$namespace" rollout status deployment/clamav-egress-gateway --timeout=5m >/dev/null ||
+        fail 'ClamAV egress gateway is unavailable'
     fi
     for workload in egress-gateway control-plane secret-broker control-api-gateway \
       staff-control-center automation-scheduler integration-gateway integration-synthetic email-bridge stt-tts-service; do

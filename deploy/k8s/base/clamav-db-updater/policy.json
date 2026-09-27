@@ -1,0 +1,30 @@
+{
+  "apiVersion": "kodex.io/v1alpha1",
+  "kind": "EgressGatewayPolicy",
+  "metadata": {"name": "egress-gateway", "revision": "2026-09-27.1"},
+  "spec": {
+    "dns": {
+      "minimumTTLSeconds": 30,
+      "maximumTTLSeconds": 300,
+      "maximumCacheEntries": 32,
+      "maximumQueries": 12,
+      "maximumCnameDepth": 8,
+      "maximumRecords": 64,
+      "maximumMessageBytes": 16384,
+      "queryTimeoutMilliseconds": 2000
+    },
+    "limits": {
+      "maximumHeaderBytes": 16384,
+      "maximumClientHelloBytes": 65536,
+      "maximumConnections": 32,
+      "maximumConnectionsPerSource": 4,
+      "headerTimeoutMilliseconds": 5000,
+      "clientHelloTimeoutMilliseconds": 5000,
+      "dialTimeoutMilliseconds": 5000,
+      "idleTimeoutMilliseconds": 300000,
+      "writeTimeoutMilliseconds": 5000,
+      "shutdownTimeoutMilliseconds": 20000
+    },
+    "destinations": [{"hostname": "database.clamav.net", "port": 443}]
+  }
+}

@@ -249,6 +249,10 @@ render="$temporary_directory/local.yaml"
   printf '\n---\n'
   kubectl kustomize "$repository_root/deploy/k8s/overlays/local/integration-synthetic"
 } >"$render"
+for task_kind in CronJob PersistentVolumeClaim; do
+  yq -e "select(.kind == \"$task_kind\" and (.metadata.name == \"clamav-db-updater\" or .metadata.name == \"clamav-database\"))" "$render" >/dev/null ||
+    fail "ClamAV $task_kind missing from initial local render"
+done
 
 source_revision=$(git -C "$source_root" rev-parse HEAD)
 source_digest=$(calculate_source_content_fingerprint)
@@ -302,6 +306,12 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
     ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.startupProbe != null) |
       .startupProbe.periodSeconds) = 2
   ) |
+  with(select(.kind == "CronJob" and .metadata.name == "clamav-db-updater");
+    .spec.jobTemplate.spec.template.metadata.labels."kodex.dev/environment" = "staging" |
+    .spec.jobTemplate.spec.template.metadata.labels."kodex.dev/local-profile" = "hot-reload" |
+    .spec.jobTemplate.spec.template.metadata.labels."kodex.dev/profile" = strenv(DEPLOYMENT_PROFILE) |
+    .spec.jobTemplate.spec.template.metadata.labels."kodex.dev/security-profile" = "trusted-cluster"
+  ) |
   with(select(.metadata.labels != null);
     .metadata.labels."kodex.dev/environment" = "staging" |
     .metadata.labels."kodex.dev/profile" = strenv(DEPLOYMENT_PROFILE) |
@@ -343,11 +353,12 @@ yq -i '
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
     .kind != "PrometheusRule" and
-    .kind != "CronJob" and
+    (.kind != "CronJob" or .metadata.name == "clamav-db-updater") and
     (.kind != "PersistentVolumeClaim" or
       .metadata.name == "kodex-image-registry-staging" or
       .metadata.name == "kodex-image-registry-promoted" or
-      .metadata.name == "kodex-image-registry-evidence") and
+      .metadata.name == "kodex-image-registry-evidence" or
+      .metadata.name == "clamav-database") and
     (.kind != "IngressRouteTCP" or .metadata.name == "kodex-image-registry-pull") and
     (.kind != "Deployment" or .metadata.name == "control-plane" or
       .metadata.name == "secret-broker" or
@@ -357,6 +368,7 @@ yq -i '
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
+      .metadata.name == "clamav-egress-gateway" or
       .metadata.name == "backup-controller" or
       .metadata.name == "automation-scheduler" or .metadata.name == "artifact-retention" or
       .metadata.name == "staff-control-center" or
@@ -869,6 +881,7 @@ patch_go_container Deployment email-bridge platform-worker-grant-agent services/
 patch_go_container Deployment control-api-gateway control-api-gateway services/external/control-api-gateway ./cmd/control-api-gateway
 patch_go_container Deployment control-api-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment egress-gateway egress-gateway services/external/egress-gateway ./cmd/egress-gateway
+patch_go_container Deployment clamav-egress-gateway clamav-egress-gateway services/external/egress-gateway ./cmd/egress-gateway
 patch_go_container Deployment runtime-controller runtime-controller services/internal/runtime-controller ./cmd/runtime-controller
 patch_go_container Deployment runtime-controller artifact-spool-init services/internal/runtime-controller ./cmd/runtime-controller
 # Init должен завершиться до subPath mount основного контейнера, без Air/retry.
@@ -1228,6 +1241,10 @@ yq -i '
   )
 ' "$render"
 
+for task_kind in CronJob PersistentVolumeClaim; do
+  yq -e "select(.kind == \"$task_kind\" and (.metadata.name == \"clamav-db-updater\" or .metadata.name == \"clamav-database\"))" "$render" >/dev/null ||
+    fail "ClamAV $task_kind missing before local normalization"
+done
 yq -o=json -I=0 '.' "$render" | jq -sc '
   map(select(.kind != null)) |
   unique_by([.apiVersion,.kind,(.metadata.namespace // ""),.metadata.name])

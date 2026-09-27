@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kodex-system
+resources:
+  - serviceaccount.yaml
+  - persistentvolumeclaim.yaml
+  - networkpolicy.yaml
+  - egress-gateway.yaml
+  - cronjob.yaml
+configMapGenerator:
+  - name: clamav-db-updater-config
+    files:
+      - freshclam.conf
+  - name: clamav-egress-policy
+    files:
+      - policy.json
+generatorOptions:
+  disableNameSuffixHash: true

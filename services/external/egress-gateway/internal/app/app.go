@@ -58,14 +58,77 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	if policyErr != nil {
 		return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
 	}
-	if _, err := activePolicy.ForProfile(policy.STTProfileName); err != nil {
-		return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
+	if config.Mode == "clamav" {
+		destinations := activePolicy.Destinations()
+		if len(destinations) != 1 || destinations[0] != (policy.Destination{Hostname: "database.clamav.net", Port: 443}) {
+			return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
+		}
+	}
+	if config.Mode != "clamav" {
+		if _, err := activePolicy.ForProfile(policy.STTProfileName); err != nil {
+			return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
+		}
 	}
 	servers, err := dnsresolver.LoadSystemServers(config.ResolverConfig)
 	if err != nil {
 		return runTechnicalOnly(lifecycle, shutdownBase, config, newDegradedState(activePolicy, readiness, metrics, business), metrics, business)
 	}
+	if config.Mode == "clamav" {
+		return runSingleDestination(lifecycle, shutdownBase, config, activePolicy, servers, readiness, metrics, business)
+	}
 	return runActive(lifecycle, shutdownBase, config, activePolicy, servers, readiness, metrics, business)
+}
+
+// runSingleDestination обслуживает только подписанный источник баз сканера.
+// Остальные listeners и их динамические policy этому deployable не принадлежат.
+func runSingleDestination(
+	lifecycle, shutdownBase context.Context,
+	config Config,
+	activePolicy *policy.Active,
+	servers []netip.AddrPort,
+	readiness *serviceruntime.Readiness,
+	metrics *sharedobservability.Metrics,
+	business *internalobservability.Metrics,
+) (resultErr error) {
+	runContext, cancelRun := context.WithCancel(lifecycle)
+	current := &runtime{policy: activePolicy, cancelRun: cancelRun}
+	defer func() { resultErr = errors.Join(resultErr, current.shutdown(context.WithoutCancel(shutdownBase))) }()
+	current.state = newState(activePolicy, readiness, metrics, business)
+	resolver, err := dnsresolver.New(activePolicy.DNS(), servers, nil, func(outcome string, reason dnsresolver.Reason) {
+		business.DNSObserver(outcome, string(reason))
+	})
+	if err != nil {
+		return err
+	}
+	current.state.setResolverConfigured()
+	current.technical, err = newTechnicalServer(config.TechnicalAddress, current.state, metrics)
+	if err != nil {
+		return err
+	}
+	if err := current.technical.Listen(); err != nil {
+		return err
+	}
+	technicalResult := make(chan error, 1)
+	go func() { technicalResult <- current.technical.Serve() }()
+	connect, err := gateway.New(runContext, config.ConnectAddress, activePolicy, resolver, &gateway.NetDialer{}, current.state, business)
+	if err != nil {
+		return err
+	}
+	current.connects = []*gateway.Server{connect}
+	if err := connect.Listen(); err != nil {
+		return err
+	}
+	connectResult := make(chan error, 1)
+	go func() { connectResult <- connect.Serve() }()
+	current.state.setProcess(processReady)
+	select {
+	case <-lifecycle.Done():
+		return nil
+	case serveErr := <-technicalResult:
+		return serveResult("technical HTTP", serveErr)
+	case serveErr := <-connectResult:
+		return serveResult("CONNECT", serveErr)
+	}
 }
 
 func runActive(
@@ -216,7 +279,11 @@ func runTechnicalOnly(
 	}
 	technicalResult := make(chan error, 1)
 	go func() { technicalResult <- technical.Serve() }()
-	for _, address := range []string{config.ConnectAddress, config.STTConnectAddress, config.MailConnectAddress, config.IntegrationConnectAddress} {
+	addresses := []string{config.ConnectAddress}
+	if config.Mode != "clamav" {
+		addresses = append(addresses, config.STTConnectAddress, config.MailConnectAddress, config.IntegrationConnectAddress)
+	}
+	for _, address := range addresses {
 		compatibility, err := gateway.NewReadinessOnly(runContext, address, currentState, business)
 		if err != nil {
 			return err

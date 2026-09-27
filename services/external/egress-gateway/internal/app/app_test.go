@@ -100,6 +100,28 @@ func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 	}
 }
 
+func TestClamavModeRequiresOnlyExactSingleDestinationListener(t *testing.T) {
+	for key, value := range map[string]string{
+		"EGRESS_GATEWAY_MODE":                     "clamav",
+		"EGRESS_GATEWAY_POLICY_FILE":              "/var/run/config/kodex/clamav-egress/policy.json",
+		"EGRESS_GATEWAY_EXPECTED_POLICY_REVISION": "2026-09-27.1",
+		"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST":   strings.Repeat("a", 64),
+		"EGRESS_GATEWAY_CONNECT_LISTEN":           ":8080",
+		"EGRESS_GATEWAY_TECHNICAL_LISTEN":         ":9090",
+		"EGRESS_GATEWAY_RESOLV_CONF":              "/etc/resolv.conf",
+	} {
+		t.Setenv(key, value)
+	}
+	config, err := loadConfig()
+	if err != nil || config.Mode != "clamav" {
+		t.Fatalf("single destination mode rejected: %v", err)
+	}
+	t.Setenv("EGRESS_GATEWAY_MODE", "unregistered")
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("unregistered egress mode must be rejected")
+	}
+}
+
 func TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener(t *testing.T) {
 	readiness := serviceruntime.NewReadiness()
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, "test", map[string]string{})

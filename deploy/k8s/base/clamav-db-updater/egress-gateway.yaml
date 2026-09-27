@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clamav-egress-gateway
+  labels:
+    app.kubernetes.io/name: clamav-egress-gateway
+    app.kubernetes.io/component: malware-signature-egress
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clamav-egress-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: clamav-egress-gateway
+        app.kubernetes.io/component: malware-signature-egress
+    spec:
+      serviceAccountName: clamav-db-updater
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: clamav-egress-gateway
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/egress-gateway@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: EGRESS_GATEWAY_MODE, value: clamav}
+            - {name: EGRESS_GATEWAY_POLICY_FILE, value: /var/run/config/kodex/clamav-egress/policy.json}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_REVISION, value: 2026-09-27.1}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST, value: bf4d6a316afdaaff048db9181d13f0e71d52a57419ae96675a186eec18b3568a}
+            - {name: EGRESS_GATEWAY_CONNECT_LISTEN, value: ":8080"}
+            - {name: EGRESS_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
+            - {name: EGRESS_GATEWAY_RESOLV_CONF, value: /etc/resolv.conf}
+          ports:
+            - {name: connect, containerPort: 8080, protocol: TCP}
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+          startupProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /readyz, port: metrics}
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: policy, mountPath: /var/run/config/kodex/clamav-egress, readOnly: true}
+      volumes:
+        - name: policy
+          configMap: {name: clamav-egress-policy}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clamav-egress-gateway
+  labels:
+    app.kubernetes.io/name: clamav-egress-gateway
+    app.kubernetes.io/component: malware-signature-egress
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: clamav-egress-gateway
+    app.kubernetes.io/component: malware-signature-egress
+  ports:
+    - {name: connect, port: 8080, targetPort: connect, protocol: TCP}

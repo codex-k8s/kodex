@@ -1,0 +1,84 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clamav-db-updater-deny-all
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: clamav-db-updater
+      app.kubernetes.io/component: malware-signature-updater
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clamav-db-updater-exact-runtime-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: clamav-db-updater
+      app.kubernetes.io/component: malware-signature-updater
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: clamav-egress-gateway
+              app.kubernetes.io/component: malware-signature-egress
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clamav-egress-gateway-deny-all
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: clamav-egress-gateway
+      app.kubernetes.io/component: malware-signature-egress
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clamav-egress-gateway-exact-runtime-paths
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: clamav-egress-gateway
+      app.kubernetes.io/component: malware-signature-egress
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: clamav-db-updater
+              app.kubernetes.io/component: malware-signature-updater
+      ports:
+        - {protocol: TCP, port: 8080}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    # Только proxy Pod может открыть TCP/443; hostname, DNS pin, CONNECT и SNI
+    # ограничены подписанной policy до dial, без прямого выхода updater Pod.
+    - ports:
+        - {protocol: TCP, port: 443}

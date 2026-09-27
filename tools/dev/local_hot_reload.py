@@ -94,6 +94,11 @@ def materialize(resources, source, cache, uid, gid):
     verify_mask_targets(source)
     resources = copy.deepcopy(resources)
     masked_namespaces = set()
+    for resource in resources:
+        if (resource.get("kind") == "PersistentVolumeClaim" and
+                resource.get("metadata", {}).get("name") == "clamav-database"):
+            # Локальный одновузловой provisioner поддерживает только RWO.
+            resource["spec"]["accessModes"] = ["ReadWriteOnce"]
     for resource, template in pod_specs(resources):
         spec = template["spec"]
         require(template.get("metadata", {}).get("labels", {}).get(PROFILE_LABEL) == PROFILE,
