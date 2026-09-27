@@ -34,6 +34,10 @@ func testRunCatalogTotals(t *testing.T, ctx context.Context, service *platformse
 	if err != nil || len(second) != 1 || total != 2 || last != "" || first[0].Ref == second[0].Ref {
 		t.Fatalf("run next page count: total=%d err=%v", total, err)
 	}
+	if first[0].CreatedAt.Before(second[0].CreatedAt) ||
+		(first[0].CreatedAt.Equal(second[0].CreatedAt) && first[0].Ref <= second[0].Ref) {
+		t.Fatalf("run cursor is not ordered newest first: first=%s second=%s", first[0].Ref, second[0].Ref)
+	}
 	filter.Query = "changed"
 	if _, _, _, err := service.ListRuns(ctx, reader, filter); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("changed query cursor: %v", err)

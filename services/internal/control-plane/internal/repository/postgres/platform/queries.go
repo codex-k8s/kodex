@@ -985,8 +985,22 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 	}
 	return authorizedCatalogWithTotal(ctx, repository, scope, "RUN", filter,
 		func(ctx context.Context, tx pgx.Tx, cursor string, limit int32) ([]entity.Run, error) {
-			rows, err := tx.Query(ctx, queryQueriesListrunsSelectRunsOrganizationIdRefProjectId, scope.organizationID, filter.ProjectRef,
-				scope.role, scope.actorID, strings.TrimSpace(filter.Query), limit, cursor, append([]string{}, filter.States...), scope.authorityProjectID)
+			cursorAt, cursorRef, err := parseRunCatalogPosition(cursor)
+			if err != nil {
+				return nil, err
+			}
+			rows, err := tx.Query(ctx, queryQueriesListrunsSelectRunsOrganizationIdRefProjectId, pgx.StrictNamedArgs{
+				"organization_id":      scope.organizationID,
+				"project_ref":          filter.ProjectRef,
+				"role":                 scope.role,
+				"actor_id":             scope.actorID,
+				"query":                filter.Query,
+				"limit":                limit,
+				"cursor_at":            cursorAt,
+				"cursor_ref":           cursorRef,
+				"states":               filter.States,
+				"authority_project_id": scope.authorityProjectID,
+			})
 			if err != nil {
 				return nil, errs.ErrUnavailable
 			}
@@ -1012,7 +1026,23 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 				return 0, errs.ErrUnavailable
 			}
 			return total, nil
-		})
+		}, runCatalogPosition)
+}
+
+func runCatalogPosition(item entity.Run) string {
+	return item.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + item.Ref
+}
+
+func parseRunCatalogPosition(cursor string) (*time.Time, string, error) {
+	if cursor == "" {
+		return nil, "", nil
+	}
+	stamp, ref, found := strings.Cut(cursor, "|")
+	at, err := time.Parse(time.RFC3339Nano, stamp)
+	if !found || err != nil || ref == "" || strings.Contains(ref, "|") {
+		return nil, "", errs.ErrInvalid
+	}
+	return &at, ref, nil
 }
 
 func scanRun(row rowScanner, actorScoped bool) (entity.Run, error) {
