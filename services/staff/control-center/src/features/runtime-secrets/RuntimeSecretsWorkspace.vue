@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-  Eye,
-  Link2,
-  Plus,
-  RotateCw,
-  Search,
-  ShieldCheck,
-  ShieldX,
-} from "@lucide/vue";
+import { Eye, Link2, Plus, RotateCw, Search, ShieldX } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -15,6 +7,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useSessionStore } from "@/features/session/store";
 import SecretImpactDialog from "@/features/runtime/SecretImpactDialog.vue";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -250,7 +243,13 @@ onBeforeUnmount(() => {
       :loading="store.loading && !store.items.length"
       :problem="store.items.length ? undefined : store.problem"
       :empty="store.empty"
-      :empty-title="$t('runtimeSecrets.emptyTitle')"
+      :empty-title="
+        $t(
+          search
+            ? 'runtimeSecrets.emptySearchTitle'
+            : 'runtimeSecrets.emptyTitle',
+        )
+      "
       :empty-text="
         search
           ? $t('runtimeSecrets.emptySearchText')
@@ -258,6 +257,10 @@ onBeforeUnmount(() => {
       "
       @retry="store.reload"
     >
+      <template #empty-icon>
+        <Search v-if="search" :size="18" aria-hidden="true" />
+        <Plus v-else :size="18" aria-hidden="true" />
+      </template>
       <ProblemNotice
         v-if="store.problem && store.items.length"
         :problem="store.problem"
@@ -281,10 +284,7 @@ onBeforeUnmount(() => {
             <tr v-for="secret in store.items" :key="secret.ref">
               <td>
                 <div class="runtime-secrets__identity">
-                  <span class="runtime-secrets__icon" aria-hidden="true">
-                    <ShieldCheck v-if="secret.state === 'ACTIVE'" :size="18" />
-                    <ShieldX v-else :size="18" />
-                  </span>
+                  <EntityIcon kind="SECRET" aria-hidden="true" />
                   <div>
                     <button
                       class="runtime-secrets__name"
@@ -575,15 +575,6 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-}
-.runtime-secrets__icon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 6px;
-  color: var(--accent);
-  background: var(--accent-soft);
 }
 .runtime-secrets__mask {
   white-space: nowrap;

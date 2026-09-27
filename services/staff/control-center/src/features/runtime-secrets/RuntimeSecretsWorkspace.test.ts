@@ -84,6 +84,7 @@ describe("RuntimeSecretsWorkspace", () => {
 
     const html = await renderToString(app);
     expect(html).toContain("CRM_TOKEN");
+    expect(html).toContain("entity-icon--secret");
     expect(html).toContain("tok••••••9z");
     expect(html).not.toContain("raw-secret-plaintext");
     expect(html).toContain("Создать секрет");

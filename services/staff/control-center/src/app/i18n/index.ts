@@ -1639,6 +1639,7 @@ const ru = {
     updatedAt: "Обновлено",
     loadMore: "Загрузить ещё",
     emptyTitle: "Секретов пока нет",
+    emptySearchTitle: "Секреты не найдены",
     emptyText:
       "Создайте первый секрет, чтобы затем закрепить его ревизию в рабочем окружении.",
     emptySearchText: "Измените поисковый запрос.",
@@ -5640,6 +5641,7 @@ const en = {
     updatedAt: "Updated",
     loadMore: "Load more",
     emptyTitle: "No secrets yet",
+    emptySearchTitle: "No matching secrets",
     emptyText:
       "Create the first secret, then pin its revision in a work environment.",
     emptySearchText: "Change the search query.",
