@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Link2, Unlink, RefreshCw } from "@lucide/vue";
-import { useI18n } from "vue-i18n";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import type { ContextKind } from "./api";
@@ -26,11 +26,11 @@ const props = defineProps<{
   ownerAgentRef?: string;
   disabled?: boolean;
 }>();
-const { t } = useI18n();
 const agent = ref(props.ownerAgentRef ?? props.agentRef ?? "");
 const snapshot = ref<ContextBindingSnapshot>();
 const problem = ref<AppProblem>();
 const busy = ref(false);
+const confirmUnbind = ref(false);
 let controller = new AbortController();
 const binding = computed(() =>
   snapshot.value
@@ -96,6 +96,7 @@ watch(
     props.eligible,
   ],
   () => {
+    confirmUnbind.value = false;
     void load();
   },
   { immediate: true },
@@ -107,11 +108,6 @@ async function change(action: "bind" | "unbind"): Promise<void> {
     busy.value ||
     props.disabled ||
     (action === "bind" && !props.eligible)
-  )
-    return;
-  if (
-    action === "unbind" &&
-    !window.confirm(t("contextResources.unbindConfirm"))
   )
     return;
   busy.value = true;
@@ -143,6 +139,7 @@ async function change(action: "bind" | "unbind"): Promise<void> {
   } catch (error) {
     if (!signal.aborted) problem.value = asProblem(error);
   } finally {
+    confirmUnbind.value = false;
     if (!signal.aborted) busy.value = false;
   }
 }
@@ -196,7 +193,7 @@ onBeforeUnmount(() => controller.abort());
       <button
         class="button"
         :disabled="busy || disabled || !binding"
-        @click="change('unbind')"
+        @click="confirmUnbind = true"
       >
         <Unlink :size="18" />{{ $t("contextResources.unbind") }}
       </button>
@@ -229,9 +226,34 @@ onBeforeUnmount(() => controller.abort());
         </template>
       </dl>
     </details>
+    <ModalDialog
+      v-if="confirmUnbind"
+      :title="$t('contextResources.unbind')"
+      :busy="busy"
+      @close="confirmUnbind = false"
+    >
+      <p>{{ $t("contextResources.unbindConfirm") }}</p>
+      <p class="context-binding__agent-name">{{ snapshot?.agentName }}</p>
+      <template #actions>
+        <button class="button" :disabled="busy" @click="confirmUnbind = false">
+          {{ $t("common.cancel") }}
+        </button>
+        <button
+          class="button button--primary"
+          :disabled="busy || disabled || !binding"
+          @click="change('unbind')"
+        >
+          {{ $t("contextResources.unbind") }}
+        </button>
+      </template>
+    </ModalDialog>
   </section>
 </template>
 <style scoped>
+.context-binding__agent-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .context-binding {
   display: grid;
   gap: 12px;
