@@ -2356,6 +2356,9 @@ const ru = {
     noGrantsHint:
       "Выберите управляемое подключение, Проект, получателя и capability.",
     grantEditorTitle: "Выдать разрешение",
+    updateGrant: "Обновить разрешение",
+    existingGrantHint:
+      "Это разрешение уже действует. Повторное сохранение обновит его настройки.",
     resourceScopeRefresh:
       "Выберите подключение в каталоге, чтобы проверить актуальную область ресурсов.",
     resourceScopeLoading: "Проверяем область ресурса…",
@@ -6296,6 +6299,9 @@ const en = {
     noGrantsHint:
       "Choose a manageable connection, Project, recipient, and capability.",
     grantEditorTitle: "Issue a grant",
+    updateGrant: "Update grant",
+    existingGrantHint:
+      "This grant is already active. Saving again updates its settings.",
     resourceScopeRefresh:
       "Select a connection in the catalog to check its current resource scope.",
     resourceScopeLoading: "Checking resource scope…",

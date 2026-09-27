@@ -87,6 +87,14 @@ useCursorInfiniteScroll({
 const availableApprovalScopePaths = computed(() =>
   approvalScopeOptions(capabilityCandidate.value?.capability.inputSchema),
 );
+const currentGrant = computed(() => {
+  const candidate = capabilityCandidate.value;
+  return props.selectedConnection?.grants.find(
+    (grant) =>
+      grant.ref === candidate?.currentGrantRef &&
+      grant.version === candidate.currentGrantVersion,
+  );
+});
 const connectionRows = ref(
   new Map<string, IntegrationGrantConnectionCandidate>(),
 );
@@ -291,6 +299,18 @@ function chooseCapability(option: AsyncEntityOption): void {
   if (!candidate?.grantable) return;
   approvalScopePaths.value = [];
   capabilityCandidate.value = candidate;
+  const existing = props.selectedConnection?.grants.find(
+    (grant) =>
+      grant.ref === candidate.currentGrantRef &&
+      grant.version === candidate.currentGrantVersion,
+  );
+  if (candidate.capability.approvalPolicy === "HUMAN_SCOPED" && existing) {
+    const previous = existing.approvalScopePaths ?? [];
+    if (
+      previous.every((path) => availableApprovalScopePaths.value.includes(path))
+    )
+      approvalScopePaths.value = [...previous];
+  }
   chosenCapability.value = option;
   emit("update:capabilityKey", option.ref);
 }
@@ -651,7 +671,13 @@ const canManageSelected = computed(
         <header>
           <div>
             <h3 id="grant-editor-title">
-              {{ t("integrationsRedesign.grantEditorTitle") }}
+              {{
+                t(
+                  currentGrant?.enabled
+                    ? "integrationsRedesign.updateGrant"
+                    : "integrationsRedesign.grantEditorTitle",
+                )
+              }}
             </h3>
             <p v-if="selectedConnection">{{ selectedConnection.name }}</p>
             <p v-else>{{ t("integrationsRedesign.chooseConnectionHint") }}</p>
@@ -741,10 +767,6 @@ const canManageSelected = computed(
             <p>{{ selectedCapability.description }}</p>
             <dl>
               <div>
-                <dt>{{ t("integrations.operation") }}</dt>
-                <dd class="mono">{{ selectedCapability.operation }}</dd>
-              </div>
-              <div>
                 <dt>{{ t("integrations.resourceKind") }}</dt>
                 <dd>
                   {{ resourceKindLabel(selectedCapability.resourceKind) }}
@@ -757,6 +779,10 @@ const canManageSelected = computed(
                 </dd>
               </div>
             </dl>
+            <details class="grant-technical-details">
+              <summary>{{ t("integrations.technicalDetails") }}</summary>
+              <code>{{ selectedCapability.operation }}</code>
+            </details>
           </section>
 
           <fieldset
@@ -813,14 +839,25 @@ const canManageSelected = computed(
               t("integrationsRedesign.resourceScopeRefresh")
             }}</span>
           </div>
-          <p class="grant-boundary">{{ t("integrations.grantBoundary") }}</p>
+          <p v-if="!currentGrant?.enabled" class="grant-boundary">
+            {{ t("integrations.grantBoundary") }}
+          </p>
+          <p v-if="currentGrant?.enabled" class="grant-existing-note">
+            {{ t("integrationsRedesign.existingGrantHint") }}
+          </p>
           <button
             class="button button--primary"
             type="submit"
             :disabled="!canManageSelected || busy || !selection"
           >
             <Plus :size="15" aria-hidden="true" />
-            {{ t("integrations.grant") }}
+            {{
+              t(
+                currentGrant?.enabled
+                  ? "integrationsRedesign.updateGrant"
+                  : "integrations.grant",
+              )
+            }}
           </button>
         </form>
       </aside>
@@ -1006,13 +1043,13 @@ const canManageSelected = computed(
   font-weight: 600;
 }
 .grant-table th:nth-child(1) {
-  width: 28%;
+  width: 32%;
 }
 .grant-table th:nth-child(2) {
-  width: 27%;
+  width: 26%;
 }
 .grant-table th:nth-child(3) {
-  width: 25%;
+  width: 22%;
 }
 .grant-table th:nth-child(4) {
   width: 10%;
@@ -1079,7 +1116,7 @@ const canManageSelected = computed(
 }
 .grant-form {
   display: grid;
-  gap: 13px;
+  gap: 10px;
   padding: 13px;
 }
 .missing-boundary {
@@ -1106,6 +1143,11 @@ const canManageSelected = computed(
   padding: 10px 13px;
   color: var(--muted);
   text-align: center;
+}
+.grant-existing-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .grant-sentinel {
   display: block;

@@ -13,12 +13,13 @@ const loaders = vi.hoisted(() => ({
   connections: vi.fn(),
   projects: vi.fn(),
   recipients: vi.fn(),
+  capabilities: vi.fn(),
 }));
 vi.mock("@/features/integrations/grant-candidates", () => ({
   connectionCandidates: () => loaders.connections,
   projectCandidates: () => loaders.projects,
   recipientCandidates: () => loaders.recipients,
-  capabilityCandidates: () => vi.fn(),
+  capabilityCandidates: () => loaders.capabilities,
 }));
 import IntegrationGrantsPanel from "./IntegrationGrantsPanel.vue";
 
@@ -88,13 +89,20 @@ interface State {
     cursor: undefined,
     signal: AbortSignal,
   ): Promise<unknown>;
+  loadCapabilities(
+    query: string,
+    cursor: undefined,
+    signal: AbortSignal,
+  ): Promise<unknown>;
+  chooseCapability(option: { ref: string; title: string }): void;
   recipientContextKey: Ref<string>;
   capabilityContextKey: Ref<string>;
+  approvalScopePaths: Ref<string[]>;
   projectCandidate: Ref<IntegrationGrantProjectCandidate | undefined>;
   recipientCandidate: Ref<IntegrationGrantRecipientCandidate | undefined>;
   capabilityCandidate: Ref<IntegrationGrantCapabilityCandidate | undefined>;
 }
-async function panel() {
+async function panel(selectedConnection = connection) {
   const emit = vi.fn();
   const setup = (
     IntegrationGrantsPanel as unknown as {
@@ -110,7 +118,7 @@ async function panel() {
         return setup(
           {
             grants: [],
-            selectedConnection: connection,
+            selectedConnection,
             projectRef: "project",
             targetKind: "AGENT",
             targetRef: "agent",
@@ -223,4 +231,63 @@ it("повторный выбор получателя сбрасывает capa
   expect(state.capabilityContextKey.value).not.toBe(previousContext);
   expect(emit.mock.calls.some(([name]) => name === "save")).toBe(false);
   expect(emit).toHaveBeenCalledWith("update:capabilityKey", "");
+});
+
+it("подставляет действующую область Human Gate при повторном выборе разрешения", async () => {
+  const selectedConnection: IntegrationConnection = {
+    ...connection,
+    grants: [
+      {
+        ref: "existing-grant",
+        version: 2,
+        capabilityKey: "read",
+        agentRef: "agent",
+        targetName: "Агент",
+        enabled: true,
+        risk: "WRITE",
+        approvalPolicy: "HUMAN_SCOPED",
+        approvalScopePaths: ["/body/id"],
+        resourceScope: {
+          kind: "HTTPS_RESOURCE",
+          values: { host: "example.test" },
+          digest: "c".repeat(64),
+        },
+      },
+    ],
+  };
+  const scopedCapability: IntegrationGrantCapabilityCandidate = {
+    ...capability,
+    capability: {
+      ...capability.capability,
+      approvalPolicy: "HUMAN_SCOPED",
+      inputSchema: JSON.stringify({
+        type: "object",
+        properties: {
+          body: { type: "object", properties: { id: { type: "integer" } } },
+        },
+      }),
+    },
+    currentGrantRef: "existing-grant",
+    currentGrantVersion: 2,
+  };
+  loaders.capabilities.mockResolvedValue({
+    items: [scopedCapability],
+    total: 1,
+  });
+  const { state } = await panel(selectedConnection);
+  await state.loadCapabilities("", undefined, new AbortController().signal);
+  state.chooseCapability({ ref: "read", title: "Чтение" });
+  expect(state.approvalScopePaths.value).toEqual(["/body/id"]);
+
+  scopedCapability.capability.inputSchema = JSON.stringify({
+    type: "object",
+    properties: { another: { type: "string" } },
+  });
+  loaders.capabilities.mockResolvedValue({
+    items: [scopedCapability],
+    total: 1,
+  });
+  await state.loadCapabilities("", undefined, new AbortController().signal);
+  state.chooseCapability({ ref: "read", title: "Чтение" });
+  expect(state.approvalScopePaths.value).toEqual([]);
 });
