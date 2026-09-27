@@ -51,6 +51,7 @@ const fieldPrefix = `context-editor-${useId()}`;
 const emit = defineEmits<{
   created: [ref: string, projectRef: string];
   named: [name: string];
+  agentSelected: [agentRef: string | undefined];
 }>();
 const i18n = useI18n();
 const { t } = i18n;
@@ -668,6 +669,7 @@ onBeforeUnmount(() => {
       :digest="item.currentRevision.digest"
       :agent-ref="agentRef"
       :owner-agent-ref="memory?.agentRef"
+      @select-agent="emit('agentSelected', $event)"
       :disabled="busy || dirty"
       :eligible="
         item.state === 'ACTIVE' &&

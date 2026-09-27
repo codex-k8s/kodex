@@ -7,7 +7,7 @@ const route = useRoute();
 const router = useRouter();
 const resourceName = ref("");
 watch(
-  () => route.fullPath,
+  () => route.path,
   () => {
     resourceName.value = "";
   },
@@ -48,19 +48,25 @@ function created(ref: string, projectRef: string): void {
   void router.replace({
     name: "project-context-resource",
     params: { kind: kind.value, resourceRef: ref, projectRef },
+    query: agentRef.value ? { agentRef: agentRef.value } : undefined,
   });
+}
+function selectedAgent(ref: string | undefined): void {
+  if (ref === agentRef.value) return;
+  void router.replace({ query: { ...route.query, agentRef: ref } });
 }
 </script>
 <template>
   <PageFrame :title="reference && resourceName ? resourceName : $t(titleKey)"
     ><ContextEditor
       v-if="kind"
-      :key="route.fullPath"
+      :key="route.path"
       :kind="kind"
       :resource-ref="reference"
       :project-ref="projectRef"
       :agent-ref="agentRef"
       @created="created"
       @named="resourceName = $event"
+      @agent-selected="selectedAgent"
   /></PageFrame>
 </template>

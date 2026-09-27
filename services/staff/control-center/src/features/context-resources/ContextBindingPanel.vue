@@ -26,7 +26,16 @@ const props = defineProps<{
   ownerAgentRef?: string;
   disabled?: boolean;
 }>();
+const emit = defineEmits<{ selectAgent: [agentRef: string | undefined] }>();
 const agent = ref(props.ownerAgentRef ?? props.agentRef ?? "");
+watch(agent, (agentRef) => emit("selectAgent", agentRef || undefined));
+watch(
+  () => props.agentRef,
+  (agentRef) => {
+    if (!props.ownerAgentRef && agent.value !== (agentRef ?? ""))
+      agent.value = agentRef ?? "";
+  },
+);
 const snapshot = ref<ContextBindingSnapshot>();
 const problem = ref<AppProblem>();
 const busy = ref(false);
