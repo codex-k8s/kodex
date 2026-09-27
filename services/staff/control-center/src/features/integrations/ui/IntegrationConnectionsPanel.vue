@@ -57,10 +57,8 @@ const { t } = useI18n();
 const serverMessage = useServerMessage();
 const capabilityPreviewLimit = 3;
 const searchId = useId();
-const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 useCursorInfiniteScroll({
-  root: scrollRoot,
   sentinel,
   enabled: () => props.hasMore && !props.loading,
   loadMore: () => emit("more"),
@@ -112,7 +110,6 @@ useCursorInfiniteScroll({
     </div>
     <div
       v-if="connections.length"
-      ref="scrollRoot"
       class="connection-grid"
       role="list"
       :aria-busy="loading"
@@ -156,19 +153,23 @@ useCursorInfiniteScroll({
                   definitions[connection.definitionKey],
                 )
                   ? t('integrations.openapiTemplateNeedsBinding')
-                  : connection.credentialsConfigured
-                    ? t('integrations.credentialsConfigured')
-                    : t('integrations.credentialsNotConfigured')
+                  : connection.credentialsHint ||
+                    t(
+                      connection.credentialsConfigured
+                        ? 'integrations.credentialsConfigured'
+                        : 'integrations.credentialsNotConfigured',
+                    )
               "
             />
-            <span>{{
-              isUnboundOpenAPITemplate(
-                connection,
-                definitions[connection.definitionKey],
-              )
-                ? t("integrations.openapiTemplateNextStep")
-                : connection.credentialsHint
-            }}</span>
+            <span
+              v-if="
+                isUnboundOpenAPITemplate(
+                  connection,
+                  definitions[connection.definitionKey],
+                )
+              "
+              >{{ t("integrations.openapiTemplateNextStep") }}</span
+            >
           </div>
           <code
             v-if="definitions[connection.definitionKey]?.credentialSecretKey"
@@ -296,7 +297,7 @@ useCursorInfiniteScroll({
             <FlaskConical v-else :size="15" aria-hidden="true" />
             {{
               busyRef === connection.ref && busyAction === "TEST"
-                ? "Проверяем…"
+                ? t("integrationsRedesign.testingConnection")
                 : t("common.test")
             }}
           </button>
@@ -327,7 +328,7 @@ useCursorInfiniteScroll({
             <Power v-else :size="15" aria-hidden="true" />
             {{
               busyRef === connection.ref && busyAction === "ENABLE"
-                ? "Включаем…"
+                ? t("integrationsRedesign.enablingConnection")
                 : t("common.enable")
             }}
           </button>
@@ -348,7 +349,7 @@ useCursorInfiniteScroll({
             <PowerOff v-else :size="15" aria-hidden="true" />
             {{
               busyRef === connection.ref && busyAction === "DISABLE"
-                ? "Отключаем…"
+                ? t("integrationsRedesign.disablingConnection")
                 : t("common.disable")
             }}
           </button>
@@ -482,8 +483,6 @@ useCursorInfiniteScroll({
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
   gap: 12px;
-  max-height: clamp(420px, 67dvh, 840px);
-  overflow: auto;
 }
 .connection-sentinel {
   grid-column: 1 / -1;
@@ -493,7 +492,7 @@ useCursorInfiniteScroll({
 .connection-card {
   display: flex;
   flex-direction: column;
-  height: max-content;
+  height: 100%;
   min-height: 360px;
   padding: 14px;
   border: 1px solid var(--border);

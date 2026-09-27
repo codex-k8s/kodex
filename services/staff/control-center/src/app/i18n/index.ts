@@ -2227,6 +2227,9 @@ const ru = {
       "Платформа полностью работоспособна без внешних подключений.",
     noConnectionsYet: "Подключений пока нет",
     connectionsTitle: "Рабочие подключения",
+    testingConnection: "Проверяем…",
+    enablingConnection: "Включаем…",
+    disablingConnection: "Отключаем…",
     connectionsDescription:
       "Health, учётные данные и доступные серверные команды каждого подключения.",
     activeGrants: "активных разрешений",
@@ -6028,6 +6031,9 @@ const en = {
       "The platform remains fully operational without external connections.",
     noConnectionsYet: "No connections yet",
     connectionsTitle: "Active connections",
+    testingConnection: "Testing…",
+    enablingConnection: "Enabling…",
+    disablingConnection: "Disabling…",
     connectionsDescription:
       "Health, credential state, and server-authorized actions for each connection.",
     activeGrants: "active grants",

@@ -328,7 +328,7 @@ export function createCursorIntersectionHandler(
 }
 
 export interface CursorInfiniteScrollOptions {
-  root: Ref<HTMLElement | null | undefined>;
+  root?: Ref<HTMLElement | null | undefined>;
   sentinel: Ref<Element | null | undefined>;
   enabled: MaybeRefOrGetter<boolean>;
   loadMore: () => void | Promise<void>;
@@ -354,7 +354,7 @@ export function useCursorInfiniteScroll(
       !toValue(options.enabled)
     )
       return;
-    const requestedRoot = options.root.value;
+    const requestedRoot = options.root?.value;
     const observerRoot =
       typeof requestedRoot?.contains === "function" &&
       requestedRoot.contains(sentinel)
@@ -375,7 +375,7 @@ export function useCursorInfiniteScroll(
 
   const stopWatch = watch(
     () => [
-      options.root.value,
+      options.root?.value,
       options.sentinel.value,
       toValue(options.enabled),
     ],

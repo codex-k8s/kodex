@@ -153,6 +153,8 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Изменить");
     expect(html).toContain("Удалить");
     expect(html).not.toMatch(/<button[^>]*disabled/);
+    expect(html).toContain("Не требуются");
+    expect(html).not.toContain("Учётные данные настроены");
   });
 
   it("отделяет пустой список от неподтверждённой готовности core", async () => {
