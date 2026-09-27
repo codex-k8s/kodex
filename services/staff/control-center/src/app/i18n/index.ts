@@ -971,6 +971,8 @@ const ru = {
   projects: {
     runAgent: "Запустить сотрудника",
     runWorkflow: "Запустить Процесс",
+    tableResources: "Ресурсы",
+    tableWork: "Работа",
     title: "Проекты",
     subtitle:
       "В Проектах вы создаёте изолированных ИИ-сотрудников, Процессы, запуски, файлы и знания",
@@ -4875,6 +4877,8 @@ const en = {
     ...ru.projects,
     runAgent: "Run employee",
     runWorkflow: "Run workflow",
+    tableResources: "Resources",
+    tableWork: "Work",
     title: "Projects",
     subtitle: "One container for employees, processes, files and runs",
     new: "New Project",

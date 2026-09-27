@@ -63,8 +63,8 @@ const pageSize = useAdaptiveCursorPageSize({
   container: listRoot,
   itemSelector: ".project-list__item",
   itemCount: () => items.value.length,
-  estimatedItemHeight: 190,
-  estimatedColumns: 2,
+  estimatedItemHeight: 76,
+  estimatedColumns: 1,
 });
 
 useCursorInfiniteScroll({
