@@ -208,6 +208,7 @@ const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
 let followLatestAfterLoad = false;
 let chatResizeObserver: ResizeObserver | undefined;
+let latestRestoreTimer: number | undefined;
 const historyMenu = ref<HTMLElement>();
 const fab = ref<HTMLButtonElement>();
 const planTrigger = ref<HTMLButtonElement>();
@@ -406,7 +407,7 @@ async function show(): Promise<void> {
   await store.load(props.context, props.projectRef);
   await nextTick();
   panel.value?.focus({ preventScroll: true });
-  scrollToLatest();
+  restoreLatestAfterRender();
 }
 
 function close(): void {
@@ -616,6 +617,23 @@ async function send(): Promise<void> {
 
 function scrollToLatest(): void {
   chatLog.value?.scrollTo({ top: chatLog.value.scrollHeight });
+}
+
+function cancelLatestRestore(): void {
+  if (latestRestoreTimer !== undefined) window.clearTimeout(latestRestoreTimer);
+  latestRestoreTimer = undefined;
+}
+
+function restoreLatestAfterRender(): void {
+  cancelLatestRestore();
+  let remaining = 5;
+  const advance = () => {
+    if (!open.value || !chatLog.value) return;
+    scrollToLatest();
+    if (remaining-- > 0) latestRestoreTimer = window.setTimeout(advance, 160);
+    else latestRestoreTimer = undefined;
+  };
+  advance();
 }
 
 function suggestSetup(prompt: string): void {
@@ -917,7 +935,7 @@ watch(
     await new Promise<void>((resolve) =>
       window.requestAnimationFrame(() => resolve()),
     );
-    scrollToLatest();
+    restoreLatestAfterRender();
   },
 );
 watch(
@@ -951,7 +969,7 @@ watch(
     openPlanRef.value = undefined;
     store.clearReceipt();
     await nextTick();
-    scrollToLatest();
+    restoreLatestAfterRender();
   },
 );
 watch(
@@ -967,7 +985,7 @@ watch(
   async () => {
     if (!open.value || openPlanRef.value) return;
     await nextTick();
-    scrollToLatest();
+    restoreLatestAfterRender();
   },
 );
 watch(
@@ -998,6 +1016,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   workspaceMounted = false;
+  cancelLatestRestore();
   chatResizeObserver?.disconnect();
   historyMedia?.removeEventListener("change", syncHistoryViewport);
   store.cancelReads();
@@ -1358,6 +1377,8 @@ onBeforeUnmount(() => {
               class="assistant-chat-log"
               role="log"
               aria-live="polite"
+              @wheel.passive="cancelLatestRestore"
+              @touchstart.passive="cancelLatestRestore"
             >
               <ProblemNotice
                 v-if="store.problem"
