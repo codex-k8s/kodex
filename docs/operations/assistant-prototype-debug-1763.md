@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.235
+version: 1.0.236
 updated: 2026-09-28
 ---
 
@@ -4904,3 +4904,15 @@ GitHub checks не считается `PASS`.
   осталось прежнее предупреждение о крупном chunk. Финальный console
   error/warn пуст, завершённых HTTP 4xx/5xx нет; один bootstrap GET отменён
   навигацией. Создание и публикация новой ревизии — `NOT RUN`.
+- В каталоге конфигураций образа кнопка «Создать» вела в старую форму
+  `baseImage/packages`, хотя серверный путь публикации требует
+  `roleImage.roleDefinitionRef` и `roleImage.environment`. Теперь она ведёт в
+  штатный редактор нового образа с выбором роли, окружения и Dockerfile;
+  старый прямой URL с выбранным Проектом перенаправляется туда же. После
+  no-cache reload переход и обратная совместимость URL проверены в Chrome:
+  `PASS`, снимок `/tmp/kodex-role-image-create-route-20260928.png`; создания
+  ещё одного тестового образа не было. Адресные 7 frontend unit, ESLint,
+  typecheck, Prettier и сборка PWA — локальный `PASS`, с прежним
+  предупреждением о крупном chunk. Console error/warn пусты, завершённых
+  HTTP 4xx/5xx нет; отменённые навигацией bootstrap GET не считаются ответом
+  сервера. Ручная приёмка — `NOT RUN`.

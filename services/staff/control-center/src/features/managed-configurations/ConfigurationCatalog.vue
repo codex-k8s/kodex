@@ -155,11 +155,15 @@ function created(configurationRef: string): void {
       <RouterLink
         v-if="!projectRequired"
         class="button button--primary"
-        :to="{
-          name: 'configuration',
-          params: { kind, configurationRef: 'new' },
-          query: projectRef ? { projectRef } : {},
-        }"
+        :to="
+          kind === 'ROLE_IMAGE'
+            ? { name: 'role-image-new', params: { projectRef } }
+            : {
+                name: 'configuration',
+                params: { kind, configurationRef: 'new' },
+                query: projectRef ? { projectRef } : {},
+              }
+        "
         ><Plus :size="18" />{{ $t("common.create") }}</RouterLink
       >
       <button

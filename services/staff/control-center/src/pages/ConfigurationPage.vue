@@ -37,6 +37,17 @@ const projectRef = computed(() =>
     ? route.query.projectRef
     : undefined,
 );
+watch(
+  () => [kind.value, configurationRef.value, projectRef.value],
+  ([currentKind, currentRef, currentProject]) => {
+    if (currentKind === "ROLE_IMAGE" && !currentRef && currentProject)
+      void router.replace({
+        name: "role-image-new",
+        params: { projectRef: currentProject },
+      });
+  },
+  { immediate: true },
+);
 const project = ref<Project>();
 const problem = ref<AppProblem>();
 watch(

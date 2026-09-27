@@ -33,6 +33,11 @@ async function render(
         component: defineComponent({ render: () => h("div") }),
       },
       {
+        path: "/projects/:projectRef/role-images/new",
+        name: "role-image-new",
+        component: defineComponent({ render: () => h("div") }),
+      },
+      {
         path: "/:pathMatch(.*)*",
         component: defineComponent({ render: () => h("div") }),
       },
@@ -92,6 +97,14 @@ describe("Project scope configuration catalog", () => {
     const html = await render("INTEGRATION_DEFINITION");
     expect(html).toContain("<a");
     expect(html).not.toContain("managed-catalog-project-required");
+  });
+
+  it("ведёт создание образа в штатный редактор рецепта", async () => {
+    const html = await render("ROLE_IMAGE", "prj_example");
+    expect(html).toContain('href="/projects/prj_example/role-images/new"');
+    expect(html).not.toContain(
+      'href="/configurations/ROLE_IMAGE/new?projectRef=prj_example"',
+    );
   });
 
   it("открывает форму OpenAPI по переходу из помощника", async () => {
