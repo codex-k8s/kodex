@@ -100,18 +100,37 @@ async function load(more = false): Promise<void> {
   listProblem.value = undefined;
   try {
     const inTrash = trashMode.value;
-    const page = inTrash
-      ? await loadProjectTrash(
-          more ? pageToken.value : undefined,
-          request.signal,
-          pageSize.value,
-        )
-      : await searchProjects(
-          query.value.trim(),
-          more ? pageToken.value : undefined,
-          request.signal,
-          pageSize.value,
-        );
+    const requestedPageToken = more ? pageToken.value : undefined;
+    const requestedPageSize = pageSize.value;
+    const requestedQuery = query.value.trim();
+    const fetchPage = () =>
+      inTrash
+        ? loadProjectTrash(
+            requestedPageToken,
+            request.signal,
+            requestedPageSize,
+          )
+        : searchProjects(
+            requestedQuery,
+            requestedPageToken,
+            request.signal,
+            requestedPageSize,
+          );
+    let page: Awaited<ReturnType<typeof fetchPage>>;
+    try {
+      page = await fetchPage();
+    } catch (error) {
+      const readProblem = asProblem(error);
+      if (
+        readProblem.status !== 0 ||
+        !readProblem.retryable ||
+        request.signal.aborted
+      )
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      request.signal.throwIfAborted();
+      page = await fetchPage();
+    }
     if (request.signal.aborted || current !== generation) return;
     const next = more ? [...items.value, ...page.items] : page.items;
     if (
