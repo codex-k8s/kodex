@@ -20,6 +20,7 @@ import { runPath } from "@/shared/routes";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { runListSummary } from "@/shared/ui/run-summary";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
@@ -230,7 +231,7 @@ useCursorInfiniteScroll({
             <div class="home-attention__copy">
               <h4>{{ run.title }}</h4>
               <SafeSummary
-                :content="run.safeErrorMessage ?? run.resultSummary"
+                :content="runListSummary(run)"
                 :fallback="run.activitySummary"
               />
               <p>

@@ -16,7 +16,7 @@ describe("HomeAttentionCenter states", () => {
     expect(template).toContain('v-if="gates.length"');
     expect(template).toContain('v-if="failedRuns.length"');
     expect(template).toContain("gate.contextSummary");
-    expect(template).toContain("run.safeErrorMessage");
+    expect(template).toContain("runListSummary(run)");
   });
 
   it("имеет отдельные loading, error и empty состояния", () => {
