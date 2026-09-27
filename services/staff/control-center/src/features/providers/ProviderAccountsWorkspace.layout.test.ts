@@ -35,6 +35,9 @@ describe("provider account layout", () => {
     expect(workspace).toContain("accountAllows(account");
     expect(workspace).toContain("safeVerificationUri");
     expect(workspace).toContain("definitionsNextPageToken");
+    expect(workspace).toContain("search.trim()");
+    expect(workspace).toContain('"providers.searchEmptyTitle"');
+    expect(workspace).toContain('"providers.searchEmptyText"');
     expect(workspace).toContain("requestRevoke(account)");
     expect(workspace).toContain('account.state === "AUTHORIZED"');
     expect(workspace).toContain('"providers.reauthorize"');

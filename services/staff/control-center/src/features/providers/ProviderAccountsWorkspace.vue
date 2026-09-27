@@ -740,8 +740,24 @@ onBeforeUnmount(() => {
         </div>
         <section v-else class="empty-state">
           <KeyRound :size="28" aria-hidden="true" />
-          <h2>{{ $t("providers.emptyTitle") }}</h2>
-          <p>{{ $t("providers.emptyText") }}</p>
+          <h2>
+            {{
+              $t(
+                search.trim()
+                  ? "providers.searchEmptyTitle"
+                  : "providers.emptyTitle",
+              )
+            }}
+          </h2>
+          <p>
+            {{
+              $t(
+                search.trim()
+                  ? "providers.searchEmptyText"
+                  : "providers.emptyText",
+              )
+            }}
+          </p>
         </section>
       </component>
     </AsyncState>
@@ -1228,7 +1244,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--panel);
-  min-height: 160px;
+  min-height: 112px;
 }
 .provider-account-card__identity {
   display: flex;

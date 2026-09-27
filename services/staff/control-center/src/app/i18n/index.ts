@@ -3023,6 +3023,8 @@ const ru = {
     emptyTitle: "Учётных записей пока нет",
     emptyText:
       "Добавьте учётную запись и завершите безопасную авторизацию перед запуском ИИ-сотрудника.",
+    searchEmptyTitle: "Учётные записи не найдены",
+    searchEmptyText: "Измените поисковый запрос или очистите строку поиска.",
     externalAccountPending: "Внешняя учётная запись ещё не подтверждена",
     authorize: "Авторизовать",
     revoke: "Отозвать",
@@ -6804,6 +6806,8 @@ const en = {
     emptyTitle: "No provider accounts yet",
     emptyText:
       "Add an account and finish secure authorization before launching an AI employee.",
+    searchEmptyTitle: "No matching provider accounts",
+    searchEmptyText: "Change the search query or clear the search field.",
     externalAccountPending: "External account is not confirmed yet",
     authorize: "Authorize",
     revoke: "Revoke",
