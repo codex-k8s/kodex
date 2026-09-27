@@ -105,6 +105,11 @@ const revision = computed(() =>
     ? (skill.value?.draftRevision ?? skill.value?.currentRevision)
     : memory.value?.currentRevision,
 );
+const currentResourceName = computed(() => {
+  const current = revision.value;
+  if (!current) return item.value?.ref ?? "";
+  return "name" in current ? current.name : current.title;
+});
 const fingerprint = () =>
   JSON.stringify(
     props.kind === "skills" ? specification.value : memoryInput.value,
@@ -770,7 +775,7 @@ onBeforeUnmount(() => {
     :busy="busy"
     @close="action = undefined"
   >
-    <p>{{ item?.ref }}</p>
+    <p class="context-action-target">{{ currentResourceName }}</p>
     <p v-if="action === 'purge'">{{ $t("contextResources.purgeConfirm") }}</p>
     <template v-if="action === 'review'"
       ><select
@@ -877,6 +882,11 @@ onBeforeUnmount(() => {
   />
 </template>
 <style scoped>
+.context-action-target {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .context-editor {
   min-width: 0;
   width: min(100%, 1120px);
