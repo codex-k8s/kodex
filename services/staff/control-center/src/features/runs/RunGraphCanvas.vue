@@ -31,6 +31,8 @@ import RunGraphNode from "@/features/runs/RunGraphNode.vue";
 import {
   createRunGraphFlowElements,
   runGraphFitViewOptions,
+  runGraphInitialFitOptions,
+  runGraphRetryAttempts,
   runGraphMaximumZoom,
   runGraphMinimumZoom,
   type RunGraphNodeData,
@@ -73,7 +75,35 @@ const activeRefs = computed(() => new Set(props.activeNodeRefs));
 const nodeByRef = computed(
   () => new Map(props.nodes.map((node) => [node.ref, node])),
 );
+const legendEdgeTypes = computed(() =>
+  (
+    [
+      "DELEGATED_TO",
+      "CALLBACK_TO",
+      "CONTINUES",
+      "RETRY_OF",
+      "WAITING_FOR",
+    ] as const
+  ).filter((type) => props.edges.some((edge) => edge.type === type)),
+);
+const legendStates = computed(() =>
+  (
+    [
+      "RUNNING",
+      "WAITING",
+      "QUEUED",
+      "SUCCEEDED",
+      "FAILED",
+      "CANCELLED",
+      "SKIPPED",
+      "PLANNED",
+    ] as const
+  ).filter((state) => props.nodes.some((node) => node.state === state)),
+);
 const layout = computed(() => layoutRunGraph(props.nodes, props.edges));
+const retryAttempts = computed(() =>
+  runGraphRetryAttempts(props.nodes, props.edges),
+);
 const { fitView, getViewport, onInit, setViewport, zoomIn, zoomOut } =
   useVueFlow(flowId);
 
@@ -184,7 +214,16 @@ async function fit(userInitiated = true): Promise<void> {
   if (userInitiated) userAdjustedView.value = true;
   programmaticViewportChange.value = true;
   try {
-    await fitView(runGraphFitViewOptions(window.innerWidth));
+    await fitView(
+      userInitiated
+        ? runGraphFitViewOptions(window.innerWidth)
+        : runGraphInitialFitOptions(
+            window.innerWidth,
+            props.nodes,
+            props.edges,
+            props.selectedRef,
+          ),
+    );
   } finally {
     programmaticViewportChange.value = false;
   }
@@ -274,6 +313,21 @@ function edgeDisplayLabel(edge: RunEdge): string {
   }
 }
 
+function edgeLegendLabel(type: RunEdge["type"]): string {
+  switch (type) {
+    case "DELEGATED_TO":
+      return t("runs.source.AGENT_DELEGATION");
+    case "CALLBACK_TO":
+      return t("runs.callback");
+    case "CONTINUES":
+      return t("runs.continueTask");
+    case "RETRY_OF":
+      return t("runs.retry");
+    case "WAITING_FOR":
+      return t("states.WAITING");
+  }
+}
+
 function edgeAccessibleLabel(edge: RunEdge): string {
   const source = nodeByRef.value.get(edge.sourceNodeRef)?.displayName ?? "";
   const target = nodeByRef.value.get(edge.targetNodeRef)?.displayName ?? "";
@@ -293,12 +347,6 @@ function nodeIcon(type: RunNode["type"]): Component {
   }
 }
 
-function nodeSurface(node: RunNode): "session" | "control" {
-  return node.type === "ROOT_PROCESS" || node.type === "AGENT_EXECUTION"
-    ? "session"
-    : "control";
-}
-
 function isFutureNode(node: RunNode): boolean {
   return (
     futureRefs.value.has(node.ref) ||
@@ -311,11 +359,13 @@ function isActiveNode(node: RunNode): boolean {
   return activeRefs.value.has(node.ref);
 }
 
-function nodeAccessibleLabel(node: RunNode): string {
+function nodeAccessibleLabel(node: RunNode, retryAttempt?: number): string {
   return [
-    t(`runs.${nodeSurface(node)}Node`),
+    retryAttempt
+      ? t("runs.graphRunAttempt", { attempt: retryAttempt })
+      : t(`runs.nodeTypes.${node.type}`),
     node.displayName,
-    node.role || t(`runs.nodeTypes.${node.type}`),
+    node.role,
     t(`states.${node.state}`),
   ].join(" · ");
 }
@@ -401,6 +451,10 @@ function compareNodes(left: RunNode, right: RunNode): number {
           <ListTree :size="18" aria-hidden="true" />
         </button>
       </div>
+      <span class="graph-toolbar__count">
+        {{ $t("runs.graphNodes", { count: nodes.length }) }} ·
+        {{ $t("runs.graphEdges", { count: edges.length }) }}
+      </span>
       <span class="graph-toolbar__separator" aria-hidden="true" />
       <button
         class="icon-button"
@@ -464,7 +518,6 @@ function compareNodes(left: RunNode, right: RunNode): number {
         :zoom-on-double-click="false"
         :prevent-scrolling="true"
         :apply-default="false"
-        fit-view-on-init
         @node-click="handleNodeClick"
         @node-double-click="handleNodeDoubleClick"
         @mini-map-node-click="handleNodeClick"
@@ -529,7 +582,14 @@ function compareNodes(left: RunNode, right: RunNode): number {
             <strong>{{ item.node.displayName }}</strong>
           </span>
           <small>
-            {{ item.node.role || $t("runs.nodeTypes." + item.node.type) }}
+            {{
+              retryAttempts.get(item.node.ref)
+                ? $t("runs.graphRunAttempt", {
+                    attempt: retryAttempts.get(item.node.ref),
+                  })
+                : $t("runs.nodeTypes." + item.node.type)
+            }}
+            <template v-if="item.node.role"> · {{ item.node.role }}</template>
           </small>
           <small v-if="item.node.progressSummary || item.node.inputSummary">
             {{ item.node.progressSummary || item.node.inputSummary }}
@@ -557,36 +617,38 @@ function compareNodes(left: RunNode, right: RunNode): number {
         <strong>{{ $t("runs.connections") }}</strong>
       </header>
       <div class="graph-legend__edges">
-        <span class="graph-legend__item">
-          <i class="graph-legend__line graph-legend__line--delegated_to" />
-          {{ $t("runs.source.AGENT_DELEGATION") }}
-        </span>
-        <span class="graph-legend__item">
-          <i class="graph-legend__line graph-legend__line--callback_to" />
-          {{ $t("runs.callback") }}
-        </span>
-        <span class="graph-legend__item">
-          <i class="graph-legend__line graph-legend__line--continues" />
-          {{ $t("runs.continueTask") }}
-        </span>
-        <span class="graph-legend__item">
-          <i class="graph-legend__line graph-legend__line--retry_of" />
-          {{ $t("runs.retry") }}
-        </span>
-        <span class="graph-legend__item">
-          <i class="graph-legend__line graph-legend__line--waiting_for" />
-          {{ $t("states.WAITING") }}
+        <span
+          v-for="type in legendEdgeTypes"
+          :key="type"
+          class="graph-legend__item"
+        >
+          <i
+            class="graph-legend__line"
+            :class="`graph-legend__line--${type.toLowerCase()}`"
+          />
+          {{ edgeLegendLabel(type) }}
         </span>
       </div>
       <div class="graph-legend__states">
-        <span class="graph-legend__item">
-          <i class="graph-legend__node graph-legend__node--session" />
-          {{ $t("runs.sessionNode") }}
+        <span
+          v-if="nodes.some((node) => node.type === 'ROOT_PROCESS')"
+          class="graph-legend__item"
+        >
+          <Workflow :size="14" aria-hidden="true" />
+          {{ $t("runs.nodeTypes.ROOT_PROCESS") }}
         </span>
-        <StatusBadge state="RUNNING" />
-        <StatusBadge state="WAITING" />
-        <StatusBadge state="SUCCEEDED" />
-        <StatusBadge state="FAILED" />
+        <span
+          v-if="nodes.some((node) => node.type === 'AGENT_EXECUTION')"
+          class="graph-legend__item"
+        >
+          <Bot :size="14" aria-hidden="true" />
+          {{ $t("runs.nodeTypes.AGENT_EXECUTION") }}
+        </span>
+        <StatusBadge
+          v-for="state in legendStates"
+          :key="state"
+          :state="state"
+        />
       </div>
     </aside>
   </section>
@@ -628,6 +690,12 @@ function compareNodes(left: RunNode, right: RunNode): number {
   height: 24px;
   margin: 0 3px;
   background: var(--border);
+}
+.graph-toolbar__count {
+  padding: 0 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  white-space: nowrap;
 }
 .graph-toolbar .icon-button[aria-pressed="true"] {
   border-color: var(--accent);
@@ -813,16 +881,6 @@ function compareNodes(left: RunNode, right: RunNode): number {
   display: block;
   width: 25px;
   border-top: 2px solid var(--border-strong);
-}
-.graph-legend__node {
-  width: 14px;
-  height: 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
-  background: var(--surface);
-}
-.graph-legend__node--session {
-  border-left: 3px solid var(--accent);
 }
 .graph-legend__line--delegated_to {
   border-color: var(--accent);

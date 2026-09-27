@@ -55,6 +55,8 @@ import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import {
   createRunGraphFlowElements,
   runGraphFitViewOptions,
+  runGraphInitialFitOptions,
+  runGraphRetryAttempts,
 } from "@/features/runs/run-graph-flow";
 import type {
   RunEdge,
@@ -101,6 +103,11 @@ const edges: RunEdge[] = [
   },
 ];
 
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("Missing graph test fixture");
+  return value;
+}
+
 async function render(): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -131,6 +138,9 @@ async function render(): Promise<string> {
             waitingForActivity: "Ожидает начала работы",
             sessionNode: "Сессия",
             controlNode: "Контрольный этап",
+            graphRunAttempt: "Запуск №{attempt}",
+            graphNodes: "Узлы: {count}",
+            graphEdges: "Связи: {count}",
             callback: "Ответ дочернего запуска",
             retry: "Повторить попытку",
             continueTask: "Дополнительное задание",
@@ -167,6 +177,48 @@ describe("RunGraphCanvas", () => {
     expect(runGraphFitViewOptions(412).padding).toBe(0.14);
   });
 
+  it("для большого графа открывает читаемую окрестность, сохраняя полный обзор по кнопке", () => {
+    const manyNodes = Array.from({ length: 30 }, (_, index) => ({
+      ...required(nodes[index ? 1 : 0]),
+      ref: `node_${String(index)}`,
+      createdAt: `2026-08-28T08:00:${String(index).padStart(2, "0")}Z`,
+    }));
+    const manyEdges = manyNodes.slice(1).map((node, index) => ({
+      ...required(edges[0]),
+      ref: `edge_${String(index)}`,
+      sourceNodeRef: required(manyNodes[Math.floor(index / 3)]).ref,
+      targetNodeRef: node.ref,
+    }));
+    const initialFit = runGraphInitialFitOptions(1920, manyNodes, manyEdges);
+    expect(initialFit.nodes?.[0]).toBe("node_0");
+    expect(initialFit.nodes).toHaveLength(4);
+    expect(initialFit.nodes).toEqual(
+      expect.arrayContaining(["node_0", "node_1", "node_2", "node_3"]),
+    );
+    expect(initialFit.minZoom).toBe(0.85);
+    expect(runGraphFitViewOptions(1920).nodes).toBeUndefined();
+    expect(runGraphInitialFitOptions(1920, nodes, edges).nodes).toBeUndefined();
+  });
+
+  it("различает номера попыток только внутри связанной цепочки повторов", () => {
+    const roots = [
+      { ...required(nodes[0]), ref: "old" },
+      { ...required(nodes[0]), ref: "retry" },
+      { ...required(nodes[0]), ref: "other" },
+    ];
+    const attempts = runGraphRetryAttempts(roots, [
+      {
+        ...required(edges[0]),
+        sourceNodeRef: "old",
+        targetNodeRef: "retry",
+        type: "RETRY_OF",
+      },
+    ]);
+    expect(attempts.get("old")).toBe(1);
+    expect(attempts.get("retry")).toBe(2);
+    expect(attempts.has("other")).toBe(false);
+  });
+
   it("держит контролы вне полотна и предоставляет доступное дерево", async () => {
     const html = await render();
 
@@ -194,6 +246,10 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain("Делегирование ИИ-сотрудника");
     expect(html).toContain("Аналитик продаж с подробным понятным названием");
     expect(html).toContain("graph-legend");
+    expect(html).toContain("Узлы: 2");
+    expect(html).toContain("Связи: 1");
+    expect(html).not.toContain("Ответ дочернего запуска");
+    expect(html).not.toContain("Ошибка");
     expect(html).not.toContain("graph-edge-label");
     expect(html).not.toContain(">DELEGATED_TO<");
   });

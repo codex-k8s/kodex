@@ -16,7 +16,7 @@ import type {
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 
-export const runGraphMinimumZoom = 0.3;
+export const runGraphMinimumZoom = 0.15;
 export const runGraphMaximumZoom = 1.8;
 export function runGraphFitViewOptions(viewportWidth: number): FitViewParams {
   return {
@@ -35,10 +35,55 @@ export function runGraphFitViewOptions(viewportWidth: number): FitViewParams {
   };
 }
 
+export function runGraphInitialFitOptions(
+  viewportWidth: number,
+  nodes: RunNode[],
+  edges: RunEdge[],
+  selectedRef?: string,
+): FitViewParams {
+  const options = runGraphFitViewOptions(viewportWidth);
+  if (nodes.length <= 16) return options;
+
+  const nodeRefs = new Set(nodes.map((node) => node.ref));
+  const root =
+    (selectedRef && nodeRefs.has(selectedRef) ? selectedRef : undefined) ??
+    [...nodes].sort(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.ref.localeCompare(right.ref),
+    )[0]?.ref;
+  if (!root) return options;
+
+  const positions = new Map(
+    layoutRunGraph(nodes, edges).nodes.map((item) => [item.node.ref, item]),
+  );
+  const rootY = positions.get(root)?.y ?? 0;
+  const firstChildren = edges
+    .filter(
+      (edge) =>
+        edge.sourceNodeRef === root &&
+        edge.type !== "CALLBACK_TO" &&
+        nodeRefs.has(edge.targetNodeRef),
+    )
+    .sort(
+      (left, right) =>
+        Math.abs((positions.get(left.targetNodeRef)?.y ?? 0) - rootY) -
+        Math.abs((positions.get(right.targetNodeRef)?.y ?? 0) - rootY),
+    )
+    .slice(0, 3)
+    .map((edge) => edge.targetNodeRef);
+  return {
+    ...options,
+    nodes: [root, ...firstChildren],
+    minZoom: 0.85,
+  };
+}
+
 export type RunGraphNodeSurface = "session" | "control";
 
 export interface RunGraphNodeData {
   node: RunNode;
+  retryAttempt?: number;
   surface: RunGraphNodeSurface;
   selected: boolean;
   future: boolean;
@@ -50,6 +95,7 @@ export interface RunGraphEdgeData {
   edge: RunEdge;
   accessibleLabel: string;
   color: string;
+  path?: string;
   dasharray?: string;
   strokeWidth: number;
 }
@@ -74,7 +120,7 @@ export interface RunGraphFlowOptions {
   selectedRef?: string;
   futureRefs: ReadonlySet<string>;
   activeRefs: ReadonlySet<string>;
-  nodeAccessibleLabel: (node: RunNode) => string;
+  nodeAccessibleLabel: (node: RunNode, retryAttempt?: number) => string;
   edgeAccessibleLabel: (edge: RunEdge) => string;
 }
 
@@ -84,6 +130,7 @@ export function createRunGraphFlowElements(
   options: RunGraphFlowOptions,
 ): RunGraphFlowElements {
   const layout = layoutRunGraph(nodes, edges);
+  const retryAttempts = runGraphRetryAttempts(nodes, edges);
 
   return {
     nodes: layout.nodes.map(({ node, x, y }) => {
@@ -92,6 +139,7 @@ export function createRunGraphFlowElements(
         node.state === "RUNNING" && options.activeRefs.has(node.ref);
       const selected = node.ref === options.selectedRef;
       const surface = nodeSurface(node);
+      const retryAttempt = retryAttempts.get(node.ref);
 
       return {
         id: node.ref,
@@ -106,7 +154,7 @@ export function createRunGraphFlowElements(
         selectable: false,
         focusable: false,
         deletable: false,
-        ariaLabel: options.nodeAccessibleLabel(node),
+        ariaLabel: options.nodeAccessibleLabel(node, retryAttempt),
         class: [
           "run-flow-node",
           `run-flow-node--${node.state.toLowerCase()}`,
@@ -126,15 +174,16 @@ export function createRunGraphFlowElements(
         },
         data: {
           node,
+          retryAttempt,
           surface,
           selected,
           future,
           active,
-          accessibleLabel: options.nodeAccessibleLabel(node),
+          accessibleLabel: options.nodeAccessibleLabel(node, retryAttempt),
         },
       };
     }),
-    edges: layout.edges.map(({ edge }) => {
+    edges: layout.edges.map(({ edge, path }) => {
       const visual = edgeVisual(edge.type);
       return {
         id: edge.ref,
@@ -158,12 +207,51 @@ export function createRunGraphFlowElements(
         },
         data: {
           edge,
+          path,
           accessibleLabel: options.edgeAccessibleLabel(edge),
           ...visual,
         },
       };
     }),
   };
+}
+
+export function runGraphRetryAttempts(
+  nodes: RunNode[],
+  edges: RunEdge[],
+): Map<string, number> {
+  const roots = new Set(
+    nodes
+      .filter((node) => node.type === "ROOT_PROCESS")
+      .map((node) => node.ref),
+  );
+  const predecessor = new Map<string, string>();
+  const participants = new Set<string>();
+  for (const edge of edges) {
+    if (
+      edge.type !== "RETRY_OF" ||
+      !roots.has(edge.sourceNodeRef) ||
+      !roots.has(edge.targetNodeRef)
+    )
+      continue;
+    predecessor.set(edge.targetNodeRef, edge.sourceNodeRef);
+    participants.add(edge.sourceNodeRef);
+    participants.add(edge.targetNodeRef);
+  }
+  const attempts = new Map<string, number>();
+  for (const ref of participants) {
+    let current = ref;
+    const visited = new Set([ref]);
+    while (predecessor.has(current)) {
+      const previous = predecessor.get(current);
+      if (!previous) break;
+      if (visited.has(previous)) break;
+      visited.add(previous);
+      current = previous;
+    }
+    attempts.set(ref, visited.size);
+  }
+  return attempts;
 }
 
 function nodeSurface(node: RunNode): RunGraphNodeSurface {
