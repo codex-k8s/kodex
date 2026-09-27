@@ -5002,7 +5002,9 @@ GitHub checks не считается `PASS`.
   владельцу. После hot reload и no-cache reload три карточки показывают
   «Профиль исполнения не поддерживается». Console error/warn пусты,
   завершённых HTTP 4xx/5xx нет; снимок
-  `/tmp/kodex-home-localized-failure-20260928.png`.
+  `/tmp/kodex-home-localized-failure-20260928.png`. При переключении на EN
+  тот же код стал «Runtime profile is unsupported»; снимок
+  `/tmp/kodex-home-localized-failure-en-20260928.png`, язык возвращён на RU.
 - Адресные 20 frontend unit, ESLint, Prettier, typecheck и сборка PWA —
   локальный `PASS`; предупреждение о крупном chunk сохранилось. Ручная
   приёмка этого состояния и проверка неизвестного кода в браузере —
