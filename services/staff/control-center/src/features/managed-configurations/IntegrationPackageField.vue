@@ -64,6 +64,15 @@ function updateInput(event: Event): void {
     if (value === "" || Number.isSafeInteger(value)) write(value);
   } else write(event.target.value);
 }
+function entryLabel(entry: unknown): string {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return "";
+  const item = entry as Record<string, unknown>;
+  for (const key of ["name", "key", "operation"]) {
+    const value = item[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
 </script>
 <template>
   <div v-if="field.type === 'object'" class="package-object">
@@ -171,6 +180,9 @@ function updateInput(event: Event): void {
         >
           <summary>
             {{ $t(`managed.packageFields.${fieldKey}`) }} {{ index + 1 }}
+            <span v-if="entryLabel(entry)" class="package-entry-label">
+              · {{ entryLabel(entry) }}
+            </span>
           </summary>
           <IntegrationPackageField
             :schema="field.items ?? {}"
@@ -331,6 +343,9 @@ function updateInput(event: Event): void {
   cursor: pointer;
   padding: 8px 0;
   overflow-wrap: anywhere;
+}
+.package-entry-label {
+  color: var(--text-muted);
 }
 @media (max-width: 720px) {
   .package-object {
