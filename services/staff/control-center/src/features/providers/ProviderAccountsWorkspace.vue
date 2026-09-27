@@ -1341,22 +1341,22 @@ onBeforeUnmount(() => {
   min-width: 1120px;
 }
 .provider-account-list__table th:first-child {
-  width: 22%;
+  width: 20%;
 }
 .provider-account-list__table th:nth-child(2) {
   width: 13%;
 }
 .provider-account-list__table th:nth-child(3) {
-  width: 19%;
+  width: 14%;
 }
 .provider-account-list__table th:nth-child(4) {
-  width: 17%;
+  width: 15%;
 }
 .provider-account-list__table th:nth-child(5) {
-  width: 10%;
+  width: 25%;
 }
 .provider-account-list__table th:last-child {
-  width: 19%;
+  width: 13%;
 }
 .provider-speech-setup {
   display: flex;
