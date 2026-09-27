@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.203
+version: 1.0.204
 updated: 2026-09-27
 ---
 
@@ -4278,3 +4278,9 @@ GitHub checks не считается `PASS`.
   исходника и lockfile совпали. Frontend typecheck,
   адресные unit 13/13, ESLint, Prettier и build — локальный `PASS`; полный
   сквозной lifecycle и ручная приёмка графа — `NOT RUN`.
+- На синтетическом Run без событий сводка показывала незавершённый номер
+  «· #». Номер теперь выводится только при положительном sequence; при
+  sequence=1 прежнее отображение сохранено. После hot reload и обновления без
+  кэша строка читается как «История запуска завершена», без висячего знака.
+  Адресный SSR unit, ESLint и typecheck — локальный `PASS`; финальные console
+  error/warn пусты, завершённых HTTP 4xx/5xx нет.

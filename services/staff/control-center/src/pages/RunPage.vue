@@ -673,7 +673,9 @@ onBeforeUnmount(() => {
               {{
                 $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
               }}
-              · #{{ sessionGraph.sequence }}
+              <template v-if="sessionGraph.sequence > 0">
+                · #{{ sessionGraph.sequence }}</template
+              >
             </span>
             <RunTokenUsage :usage="run.usage" compact />
           </aside>
