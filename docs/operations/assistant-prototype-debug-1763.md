@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.191
+version: 1.0.192
 updated: 2026-09-27
 ---
 
@@ -4068,3 +4068,11 @@ GitHub checks не считается `PASS`.
   `NOT RUN`.
 - Через Context7 сверено руководство Vue по реактивным источникам `watch` и
   вычисляемым значениям: `https://vuejs.org/guide/essentials/watchers`.
+- Пустой результат аудита больше не показывает значок добавления события:
+  через общий слот `AsyncState` для этого экрана задан значок поиска без
+  совпадений; другие каталоги не изменены. После hot reload, no-cache reload
+  и серверного поиска пустое состояние читается без переполнения, снимок
+  `/tmp/kodex-audit-search-empty-final-20260927.jpeg`. Поисковый `GET`
+  ответил 200, console error/warn пусты. Адресные 38/38, typecheck,
+  ESLint, Prettier и Vite build — локальный `PASS`; host/Pod SHA-256 двух
+  изменённых Vue-файлов совпали.

@@ -27,7 +27,9 @@ const emit = defineEmits<{ retry: [] }>();
     @retry="emit('retry')"
   />
   <section v-else-if="empty" class="empty-state">
-    <div class="empty-state__icon" aria-hidden="true">+</div>
+    <div class="empty-state__icon" aria-hidden="true">
+      <slot name="empty-icon">+</slot>
+    </div>
     <h2>{{ emptyTitle ?? $t("common.empty") }}</h2>
     <p v-if="emptyText">{{ emptyText }}</p>
     <slot name="empty-action" />

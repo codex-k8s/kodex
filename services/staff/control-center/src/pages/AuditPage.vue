@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
+import { SearchX } from "@lucide/vue";
 
 import { usePlatformStore } from "@/features/platform/store";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -85,6 +86,7 @@ onUnmounted(() => {
       :empty-title="$t('audit.emptyTitle')"
       @retry="load"
     >
+      <template #empty-icon><SearchX :size="20" /></template>
       <div
         ref="listRoot"
         class="audit-table"
