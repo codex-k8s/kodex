@@ -1785,6 +1785,7 @@ const ru = {
   runs: {
     title: "Запуски",
     search: "Поиск запусков",
+    createdAt: "Создан",
     subtitle: "Все текущие и завершённые задания",
     new: "Новый запуск",
     newRun: {
@@ -5655,6 +5656,7 @@ const en = {
     ...ru.runs,
     search: "Search runs",
     title: "Runs",
+    createdAt: "Created",
     subtitle: "All active and completed tasks",
     new: "New run",
     newRun: {

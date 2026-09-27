@@ -45,9 +45,9 @@ const search = ref("");
 const listRoot = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
   container: listRoot,
-  itemSelector: ".runs-lane:first-child .run-work-item",
+  itemSelector: ".run-table__row",
   itemCount: () => scopedRuns.value.length,
-  estimatedItemHeight: 104,
+  estimatedItemHeight: 64,
 });
 const query = ref("");
 let timer: ReturnType<typeof setTimeout> | undefined;

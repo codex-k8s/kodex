@@ -649,6 +649,14 @@ onBeforeUnmount(() => {
             </div>
             <StatusBadge :state="run.state" />
             <span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span>
+            <p
+              v-if="run.safeErrorCode"
+              class="run-canvas-summary__error"
+              role="status"
+            >
+              {{ serverMessage(run.safeErrorMessage || run.safeErrorCode) }}
+              <code>{{ run.safeErrorCode }}</code>
+            </p>
             <RouterLink
               v-if="run.retryOfRunRef"
               :to="
@@ -1091,6 +1099,19 @@ onBeforeUnmount(() => {
   grid-column: 1 / -1;
   margin-left: 0;
   white-space: normal;
+}
+.run-canvas-summary__error {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.run-canvas-summary__error code {
+  color: var(--subtle);
+  font-size: 0.7rem;
 }
 .graph-panel {
   min-width: 0;
