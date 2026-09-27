@@ -79,6 +79,7 @@ type resumableSessionCandidate struct {
 	RunRef, SessionID, SessionRef, ProjectID, ProjectRef string
 	TargetType, TargetRef, AccountRef                    string
 	Version                                              int64
+	CreatedAt                                            time.Time
 	TargetSpec                                           []byte
 	AgentRefs                                            []string
 	Configuration                                        entity.AgentRuntimeConfiguration
@@ -88,6 +89,12 @@ type resumableSessionCandidate struct {
 
 type resumableSessionCursor struct {
 	Scope, Ref, Snapshot string
+	CreatedAt            time.Time
+}
+
+func resumableSessionAfterCursor(item resumableSessionCandidate, cursor resumableSessionCursor) bool {
+	return cursor.Ref == "" || item.CreatedAt.Before(cursor.CreatedAt) ||
+		(item.CreatedAt.Equal(cursor.CreatedAt) && item.RunRef < cursor.Ref)
 }
 
 type continuationTargetSnapshot struct {
@@ -118,7 +125,7 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 	var cursor resumableSessionCursor
 	if filter.Page.Token != "" {
 		raw, err := base64.RawURLEncoding.DecodeString(filter.Page.Token)
-		if err != nil || len(filter.Page.Token) > 512 || json.Unmarshal(raw, &cursor) != nil || cursor.Scope != wantScope || cursor.Ref == "" || cursor.Snapshot == "" {
+		if err != nil || len(filter.Page.Token) > 512 || json.Unmarshal(raw, &cursor) != nil || cursor.Scope != wantScope || cursor.Ref == "" || cursor.CreatedAt.IsZero() || cursor.Snapshot == "" {
 			return nil, 0, "", errs.ErrInvalid
 		}
 	}
@@ -144,7 +151,7 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 	rows, err := tx.Query(ctx, queryResumableSessionCandidates, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": current.actorID,
 		"project_ref": filter.ProjectRef, "authority_project_id": current.authorityProjectID,
-		"query": filter.Query, "after_ref": "", "limit": int32(maximumResumableSessionCandidates + 1),
+		"query": filter.Query, "limit": int32(maximumResumableSessionCandidates + 1),
 		"target_type": filter.TargetType, "target_ref": filter.TargetRef,
 		"role_runtime_contract_revision": repository.roleImages.RoleRuntimeContractRevision,
 		"role_runtime_contract_sha256":   repository.roleImages.RoleRuntimeContractSHA256,
@@ -157,7 +164,7 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 	for rows.Next() {
 		var item resumableSessionCandidate
 		var accountCandidates, bindingModels []byte
-		if rows.Scan(&item.RunRef, &item.Version, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef,
+		if rows.Scan(&item.RunRef, &item.Version, &item.CreatedAt, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef,
 			&item.TargetType, &item.TargetRef, &item.AccountRef, &item.TargetSpec, &item.AgentRefs,
 			&item.Configuration.Provider, &item.Configuration.Model, &accountCandidates, &item.Overlay,
 			&item.Binding.CatalogRevision, &item.Binding.CatalogDigest, &bindingModels, &item.Binding.Provider,
@@ -181,8 +188,8 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 			return nil, 0, "", err
 		}
 		total++
-		_, _ = fmt.Fprintf(fingerprint, "%s:%d\n", item.RunRef, item.Version)
-		if item.RunRef > cursor.Ref && len(selected) <= int(limit) {
+		_, _ = fmt.Fprintf(fingerprint, "%s:%d:%s\n", item.RunRef, item.Version, item.CreatedAt.Format(time.RFC3339Nano))
+		if resumableSessionAfterCursor(item, cursor) && len(selected) <= int(limit) {
 			selected = append(selected, item)
 		}
 	}
@@ -193,7 +200,8 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 	next := ""
 	if len(selected) > int(limit) {
 		selected = selected[:limit]
-		raw, _ := json.Marshal(resumableSessionCursor{Scope: wantScope, Snapshot: snapshot, Ref: selected[len(selected)-1].RunRef})
+		last := selected[len(selected)-1]
+		raw, _ := json.Marshal(resumableSessionCursor{Scope: wantScope, Snapshot: snapshot, Ref: last.RunRef, CreatedAt: last.CreatedAt})
 		next = base64.RawURLEncoding.EncodeToString(raw)
 	}
 	items := make([]entity.Run, 0, len(selected))

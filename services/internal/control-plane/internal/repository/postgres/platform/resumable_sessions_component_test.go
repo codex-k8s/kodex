@@ -75,7 +75,7 @@ func testResumableSessionPagination(t *testing.T, ctx context.Context, repositor
 	filter := query.Filter{ProjectRef: original.ProjectRef, Query: "Verify immutable provider account affinity.", ResumableSessionsOnly: true, Page: query.Page{Size: 1}}
 	filter.TargetType, filter.TargetRef = original.Target.Type, original.Target.Ref
 	first, total, cursor, err := service.ListRuns(ctx, owner, filter)
-	if err != nil || total != 2 || len(first) != 1 || cursor == "" {
+	if err != nil || total != 2 || len(first) != 1 || cursor == "" || first[0].SessionRef != created.Run.SessionRef {
 		t.Fatalf("distinct first page: total=%d items=%d cursor=%q err=%v", total, len(first), cursor, err)
 	}
 	filter.Page.Token = cursor
@@ -83,7 +83,7 @@ func testResumableSessionPagination(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("different actor accepted cursor: %v", err)
 	}
 	second, secondTotal, next, err := service.ListRuns(ctx, owner, filter)
-	if err != nil || secondTotal != 2 || len(second) != 1 || next != "" || second[0].SessionRef == first[0].SessionRef {
+	if err != nil || secondTotal != 2 || len(second) != 1 || next != "" || second[0].SessionRef != original.SessionRef {
 		t.Fatalf("distinct second page: total=%d items=%d err=%v", secondTotal, len(second), err)
 	}
 	for _, item := range append(first, second...) {

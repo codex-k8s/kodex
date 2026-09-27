@@ -104,12 +104,11 @@ WITH latest AS MATERIALIZED (
       ON binding_policy.id = binding.provider_account_policy_id
      AND binding_policy.organization_id = binding.organization_id
 )
-SELECT ref, version, session_id::text, session_ref, project_id::text, project_ref,
+SELECT ref, version, created_at, session_id::text, session_ref, project_id::text, project_ref,
        target_type, target_ref, account_ref, target_spec, agent_refs,
        provider, model, account_candidates, overlay,
        catalog_revision, catalog_digest, models, binding_provider,
        binding_policy_id, binding_policy_ref, binding_policy_version, binding_policy_digest
 FROM prepared
-WHERE ref > @after_ref
-ORDER BY ref
+ORDER BY created_at DESC, ref DESC
 LIMIT @limit;
