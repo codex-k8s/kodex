@@ -137,6 +137,9 @@ async function render(
           runs: {
             activity: "Ход работы",
             context: "Контекст узла",
+            sessionFilter: "Сессия",
+            allSessions: "Все сессии",
+            activityItemCount: "Записей: {count}",
             noNodeActivity: "Сообщений пока нет",
             toolParameters: "Безопасные параметры",
             toolResult: "Безопасный результат",
@@ -158,7 +161,11 @@ describe("RunActivityDrawer", () => {
   it("разделяет сообщения инициатора и агента без выдуманного tool-call", async () => {
     const html = await render();
 
-    expect(html).toContain("run-session-strip");
+    expect(html).toContain("run-activity-drawer__session-filter");
+    expect(html).toContain("Все сессии");
+    expect(html).toContain("Записей: 2");
+    expect(html).toContain("Аналитик продаж · Выполняется");
+    expect(html).not.toContain("run-session-strip");
     expect(html).toContain("Аналитик продаж");
     expect(html).toContain("Владелец");
     expect(html).toContain("Проверь квартальный отчёт");

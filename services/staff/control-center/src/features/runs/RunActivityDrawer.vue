@@ -119,7 +119,7 @@ function formatBytes(value: number): string {
     <header class="run-activity-drawer__header">
       <div>
         <h2>{{ $t("runs.activity") }}</h2>
-        <p>{{ run.title }} · {{ events.length }}</p>
+        <p>{{ run.title }}</p>
       </div>
       <button
         class="icon-button"
@@ -131,49 +131,27 @@ function formatBytes(value: number): string {
       </button>
     </header>
     <div class="run-activity-drawer__tools">
-      <label>
-        <span class="sr-only">{{ $t("runs.context") }}</span>
+      <label class="run-activity-drawer__session-filter">
+        <span>{{ $t("runs.sessionFilter") }}</span>
         <select
           v-model="selectedNodeRef"
           :id="contextField"
           :name="contextField"
         >
-          <option value="">{{ $t("common.all") }}</option>
+          <option value="">{{ $t("runs.allSessions") }}</option>
           <option
             v-for="node in sessionNodes"
             :key="node.ref"
             :value="node.ref"
           >
-            {{ node.displayName }}
+            {{ node.displayName }} · {{ $t(`states.${node.state}`) }}
           </option>
         </select>
       </label>
-      <span>{{ events.length }}</span>
+      <span>{{
+        $t("runs.activityItemCount", { count: filteredItems.length })
+      }}</span>
     </div>
-
-    <nav class="run-session-strip" :aria-label="$t('runs.context')">
-      <button
-        v-for="node in sessionNodes"
-        :key="node.ref"
-        type="button"
-        :class="{
-          'run-session-strip__item--selected': selectedNodeRef === node.ref,
-          'run-session-strip__item--future':
-            node.planned ||
-            node.state === 'PLANNED' ||
-            ((node.state === 'QUEUED' || node.state === 'WAITING') &&
-              !node.startedAt),
-        }"
-        :aria-pressed="selectedNodeRef === node.ref"
-        @click="selectedNodeRef = selectedNodeRef === node.ref ? '' : node.ref"
-      >
-        <span>
-          <strong>{{ node.displayName }}</strong>
-          <small>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</small>
-        </span>
-        <StatusBadge :state="node.state" />
-      </button>
-    </nav>
 
     <div class="run-activity-drawer__body" aria-live="polite">
       <ol v-if="filteredItems.length" class="run-activity-list">
@@ -382,65 +360,27 @@ function formatBytes(value: number): string {
   background: var(--panel);
 }
 .run-activity-drawer__tools label {
+  display: flex;
   min-width: 0;
   flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+}
+.run-activity-drawer__session-filter > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 .run-activity-drawer__tools select {
-  width: min(100%, 360px);
+  min-width: 0;
+  max-width: 520px;
+  flex: 1 1 auto;
 }
 .run-activity-drawer__tools > span {
   flex: 0 0 auto;
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.76rem;
-}
-.run-session-strip {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 7px;
-  padding: 9px 16px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  scrollbar-width: thin;
-}
-.run-session-strip > button {
-  display: grid;
-  min-width: 190px;
-  max-width: 250px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 9px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.run-session-strip > button:hover,
-.run-session-strip__item--selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.run-session-strip__item--future {
-  border-style: dashed !important;
-  opacity: 0.74;
-}
-.run-session-strip > button > span {
-  display: grid;
-  min-width: 0;
-}
-.run-session-strip strong,
-.run-session-strip small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.run-session-strip small {
-  color: var(--muted);
-  font-size: 0.72rem;
 }
 .run-activity-drawer__body {
   flex: 1 1 auto;
