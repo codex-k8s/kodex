@@ -219,6 +219,16 @@ async function refresh() {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.automation-prompt-preview .checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.35;
+}
+.automation-prompt-preview .checkbox-label input {
+  flex: none;
+  margin: 2px 0 0;
+}
 .literal,
 pre {
   white-space: pre-wrap;

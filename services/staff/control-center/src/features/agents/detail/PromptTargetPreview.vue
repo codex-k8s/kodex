@@ -258,6 +258,16 @@ defineExpose({ refresh });
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.prompt-target-preview .checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.35;
+}
+.prompt-target-preview .checkbox-label input {
+  flex: none;
+  margin: 2px 0 0;
+}
 .prompt-target-preview__result {
   display: grid;
   min-width: 0;
