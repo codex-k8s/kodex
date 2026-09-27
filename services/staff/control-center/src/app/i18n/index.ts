@@ -198,6 +198,17 @@ const ru = {
     restore: "Восстановить",
     purge: "Удалить безвозвратно",
     purgeConfirm: "Содержимое будет удалено без возможности восстановления.",
+    diagnostics: {
+      SKILL_STRUCTURE_INVALID: "Недопустимая структура файлов навыка.",
+      SKILL_FILE_UNAVAILABLE:
+        "Файл навыка недоступен. Проверьте его и повторите попытку.",
+      SKILL_MANIFEST_INVALID:
+        "Файл SKILL.md имеет неверный формат или не совпадает с названием и описанием навыка.",
+      SKILL_MALWARE_SCANNER_UNAVAILABLE:
+        "Проверка файлов недоступна: антивирусный сканер или его база не готовы. Публикация заблокирована до восстановления проверки.",
+      SKILL_MALWARE_DETECTED:
+        "В файлах обнаружена угроза. Публикация заблокирована.",
+    },
     validate: "Проверить",
     review: "Рассмотреть",
     publish: "Опубликовать",
@@ -4190,6 +4201,17 @@ const en = {
     restore: "Restore",
     purge: "Delete permanently",
     purgeConfirm: "Content will be permanently deleted.",
+    diagnostics: {
+      SKILL_STRUCTURE_INVALID: "Invalid skill file structure.",
+      SKILL_FILE_UNAVAILABLE:
+        "A skill file is unavailable. Check it and try again.",
+      SKILL_MANIFEST_INVALID:
+        "SKILL.md has an invalid format or does not match the skill name and description.",
+      SKILL_MALWARE_SCANNER_UNAVAILABLE:
+        "File scanning is unavailable: the antivirus scanner or its database is not ready. Publication is blocked until scanning recovers.",
+      SKILL_MALWARE_DETECTED:
+        "A threat was detected in the files. Publication is blocked.",
+    },
     validate: "Validate",
     review: "Review",
     publish: "Publish",

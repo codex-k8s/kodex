@@ -52,7 +52,8 @@ const emit = defineEmits<{
   created: [ref: string, projectRef: string];
   named: [name: string];
 }>();
-const { t } = useI18n();
+const i18n = useI18n();
+const { t } = i18n;
 const skill = ref<SkillBundle>();
 const memory = ref<KodexMemoryRecord>();
 const memoryClock = ref(Date.now());
@@ -110,6 +111,10 @@ const currentResourceName = computed(() => {
   if (!current) return item.value?.ref ?? "";
   return "name" in current ? current.name : current.title;
 });
+function diagnosticMessage(code: string): string {
+  const key = `contextResources.diagnostics.${code}`;
+  return i18n.te(key) ? t(key) : code;
+}
 const fingerprint = () =>
   JSON.stringify(
     props.kind === "skills" ? specification.value : memoryInput.value,
@@ -725,7 +730,10 @@ onBeforeUnmount(() => {
       </div>
       <ul v-if="draft.diagnostics.length">
         <li v-for="(diagnostic, index) in draft.diagnostics" :key="index">
-          {{ diagnostic }}
+          {{ diagnosticMessage(diagnostic) }}
+          <code v-if="diagnosticMessage(diagnostic) !== diagnostic">{{
+            diagnostic
+          }}</code>
         </li>
       </ul>
     </template>
