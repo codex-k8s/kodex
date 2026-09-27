@@ -99,12 +99,12 @@ func TestCastScheduleMaterializesRevisionAndContinuationContract(t *testing.T) {
 	input := map[string]any{"task": "Prepare a bounded report.", "limit": float64(10)}
 	schedule := castSchedule(entity.Schedule{
 		Ref: "sch_contract", Version: 4, ProjectRef: "prj_contract", Name: "Daily report",
-		Target: entity.RunTarget{Type: "AGENT", Ref: "agt_contract"}, State: "ACTIVE", Enabled: true,
+		Target: entity.RunTarget{Type: "AGENT", Ref: "agt_contract"}, TargetVersion: 2, State: "ACTIVE", Enabled: true,
 		Preset: "DAILY", CronExpression: "0 9 * * *", Timezone: "UTC", Input: input,
 		SessionPolicy: "CONTINUE_ONE", NotificationPolicy: "CONTROL_CENTER_ONLY",
 		CurrentRevision: entity.ScheduleRevision{
 			Ref: "srev_contract", Revision: 3, Digest: strings.Repeat("a", 64), Name: "Daily report",
-			Target: entity.RunTarget{Type: "AGENT", Ref: "agt_contract"}, Preset: "DAILY",
+			Target: entity.RunTarget{Type: "AGENT", Ref: "agt_contract"}, TargetVersion: 2, Preset: "DAILY",
 			CronExpression: "0 9 * * *", Timezone: "UTC", Input: input,
 			SessionPolicy: "CONTINUE_ONE", NotificationPolicy: "CONTROL_CENTER_ONLY", CreatedAt: createdAt,
 		},
@@ -119,6 +119,9 @@ func TestCastScheduleMaterializesRevisionAndContinuationContract(t *testing.T) {
 	}
 	if schedule.GetContinueSessionRef() != "ses_contract" {
 		t.Fatalf("schedule continuation session = %q", schedule.GetContinueSessionRef())
+	}
+	if schedule.GetTarget().GetTargetVersion() != 2 || revision.GetTarget().GetTargetVersion() != 2 {
+		t.Fatal("schedule and revision must expose the pinned target version")
 	}
 	fields := schedule.ProtoReflect().Descriptor().Fields()
 	if fields.ByJSONName("currentRevision") == nil || fields.ByJSONName("continueSessionRef") == nil {

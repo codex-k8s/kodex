@@ -209,9 +209,11 @@ func (server *Server) ListScheduleRevisions(ctx context.Context, request *contro
 }
 
 func castScheduleRevision(value entity.ScheduleRevision) *controlplanev1.ScheduleRevision {
+	target := castRunTarget(value.Target)
+	target.TargetVersion = value.TargetVersion
 	return &controlplanev1.ScheduleRevision{
 		Ref: value.Ref, Revision: value.Revision, Digest: value.Digest, Name: value.Name,
-		Target: castRunTarget(value.Target), Preset: value.Preset, CronExpression: value.CronExpression,
+		Target: target, Preset: value.Preset, CronExpression: value.CronExpression,
 		Timezone: value.Timezone, Input: structure(value.Input), SessionPolicy: value.SessionPolicy,
 		NotificationPolicy: value.NotificationPolicy, CreatedAt: timestamp(value.CreatedAt),
 		DstGapPolicy: value.DSTGapPolicy, DstFoldPolicy: value.DSTFoldPolicy,

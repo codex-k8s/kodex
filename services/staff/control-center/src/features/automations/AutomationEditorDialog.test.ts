@@ -143,6 +143,8 @@ describe("AutomationEditorDialog", () => {
     );
     expect(html).toContain("версии 7");
     expect(html).toContain("Аналитик продаж");
+    expect(html).toContain("v2");
+    expect(html).not.toContain("undefined");
     expect(html).not.toContain("agent_sales");
     expect(html).toContain("Сохранить");
   });

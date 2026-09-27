@@ -547,9 +547,11 @@ func castAttachmentSet(value entity.AttachmentSet) *controlplanev1.AttachmentSet
 	return result
 }
 func castSchedule(value entity.Schedule) *controlplanev1.Schedule {
+	target := castRunTarget(value.Target)
+	target.TargetVersion = value.TargetVersion
 	return &controlplanev1.Schedule{
 		Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name,
-		Target: castRunTarget(value.Target), State: scheduleState(value), Preset: value.Preset,
+		Target: target, State: scheduleState(value), Preset: value.Preset,
 		CronExpression: value.CronExpression, Timezone: value.Timezone, Input: structure(value.Input),
 		SessionPolicy: value.SessionPolicy, NotificationPolicy: value.NotificationPolicy,
 		NextRunAt: optionalTimestamp(value.NextRunAt), NextActions: nextActions(value.NextActions),

@@ -778,6 +778,10 @@ func normalize(value any) {
 		if targetType, targetRef, ok := target(current); ok {
 			current["type"] = targetType
 			current["ref"] = targetRef
+			if version, present := current["targetVersion"]; present {
+				current["version"] = version
+				delete(current, "targetVersion")
+			}
 			delete(current, "agentRef")
 			delete(current, "workflowRef")
 		}

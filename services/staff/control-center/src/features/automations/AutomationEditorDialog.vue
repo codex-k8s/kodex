@@ -158,7 +158,7 @@ const selectedTargetOption = computed<
     return {
       ref: props.schedule.target.ref,
       title: props.schedule.target.displayName,
-      meta: `v${String(props.schedule.target.version)}`,
+      meta: `v${String(props.schedule.targetVersion)}`,
     };
   }
   return undefined;

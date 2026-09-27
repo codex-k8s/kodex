@@ -582,8 +582,12 @@ func TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget(t *testing.
 	t.Parallel()
 	value, err := messageMap(&controlplanev1.GetRunGraphResponse{
 		Run: &controlplanev1.Run{
-			Ref:    "run_example001",
-			Target: targetProto("AGENT", "agt_example001"),
+			Ref: "run_example001",
+			Target: func() *controlplanev1.RunTarget {
+				target := targetProto("AGENT", "agt_example001")
+				target.TargetVersion = 2
+				return target
+			}(),
 		},
 		Graph: &controlplanev1.RunGraph{
 			RunRef: "run_example001",
@@ -597,8 +601,11 @@ func TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget(t *testing.
 	}
 	run := value["run"].(map[string]any)
 	target := run["target"].(map[string]any)
-	if target["type"] != "AGENT" || target["ref"] != "agt_example001" {
+	if target["type"] != "AGENT" || target["ref"] != "agt_example001" || target["version"] != float64(2) {
 		t.Fatalf("run target не нормализован: %#v", target)
+	}
+	if _, leaked := target["targetVersion"]; leaked {
+		t.Fatalf("private target version shape leaked: %#v", target)
 	}
 	nodes := value["graph"].(map[string]any)["nodes"].([]any)
 	node := nodes[0].(map[string]any)
