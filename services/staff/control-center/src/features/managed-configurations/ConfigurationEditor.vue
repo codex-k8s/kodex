@@ -1326,8 +1326,12 @@ watch(
     <dl v-if="configuration" class="configuration-editor__source">
       <dt>{{ $t("managed.source") }}</dt>
       <dd>{{ configuration.source }}</dd>
-      <dt>{{ $t("managed.sourceRevision") }}</dt>
-      <dd>{{ configuration.sourceRevision }}</dd>
+      <dt v-if="configuration.sourceRevision">
+        {{ $t("managed.sourceRevision") }}
+      </dt>
+      <dd v-if="configuration.sourceRevision">
+        {{ configuration.sourceRevision }}
+      </dd>
     </dl>
     <GitSourcePanel
       v-if="

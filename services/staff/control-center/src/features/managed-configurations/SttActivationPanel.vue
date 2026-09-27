@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from "vue";
+import { ref, computed, watch, onBeforeUnmount, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
   ManagedConfiguration,
@@ -56,6 +56,12 @@ const already = computed(
   () =>
     plan.value?.current?.configurationRef === props.configuration.ref &&
     plan.value.current.revisionRef === props.revision.ref,
+);
+const selectedActive = computed(
+  () =>
+    read.value &&
+    effective.value?.configurationRef === props.configuration.ref &&
+    effective.value.revisionRef === props.revision.ref,
 );
 function invalidate() {
   active?.abort();
@@ -130,7 +136,7 @@ async function work(operation: (signal: AbortSignal) => Promise<void>) {
   }
 }
 function prepare() {
-  if (!allowed.value || unknown.value) return;
+  if (!allowed.value || unknown.value || selectedActive.value) return;
   plan.value = undefined;
   read.value = false;
   void work(async (signal) => {
@@ -213,6 +219,9 @@ function confirm() {
     await reread(signal);
   });
 }
+onMounted(() => {
+  void work(reread);
+});
 </script>
 <template>
   <section class="stt-activation" :aria-busy="busy">
@@ -275,6 +284,9 @@ function confirm() {
         {{ t("activation.cancel") }}
       </button>
     </template>
+    <p v-else-if="selectedActive" role="status">
+      {{ t("activation.already") }}
+    </p>
     <button
       v-else
       class="button"
