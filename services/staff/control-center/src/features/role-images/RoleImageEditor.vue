@@ -22,6 +22,7 @@ import ConfigurationCopyDialog from "@/features/managed-configurations/Configura
 import { recipeCopySource } from "@/features/managed-configurations/copy-source";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import {
+  buildIsActive,
   buildRevisionIdentity,
   canPromoteRoleImage,
   canRequestBuild,
@@ -128,11 +129,7 @@ const promotionEvidenceState = computed(() => {
   return promotionReceipt.value?.state;
 });
 const buildActive = computed(() =>
-  currentBuild.value
-    ? !["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(
-        currentBuild.value.stage,
-      )
-    : false,
+  currentBuild.value ? buildIsActive(currentBuild.value) : false,
 );
 const promotionPending = computed(
   () =>
@@ -322,7 +319,7 @@ async function cancelCurrentBuild(): Promise<void> {
     store.mutating ||
     hasLocalChanges.value ||
     !recipe.value.nextActions.includes("CANCEL_BUILD") ||
-    ["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(current.stage) ||
+    !buildIsActive(current) ||
     !window.confirm(t("roleImages.cancelBuildConfirm"))
   )
     return;
@@ -476,9 +473,7 @@ onBeforeUnmount(() => {
             v-if="
               recipe.nextActions.includes('CANCEL_BUILD') &&
               currentBuild &&
-              !['COMPLETED', 'CANCELLED', 'DEAD_LETTER'].includes(
-                currentBuild.stage,
-              )
+              buildIsActive(currentBuild)
             "
             class="button"
             type="button"
@@ -542,6 +537,13 @@ onBeforeUnmount(() => {
               {{ currentBuild.progressPercent }}% ·
               {{ new Date(currentBuild.updatedAt).toLocaleString() }}
             </small>
+            <small
+              v-if="
+                currentBuild &&
+                ['FAILED', 'EXPIRED'].includes(currentBuild.stage)
+              "
+              >{{ t("roleImages.retryPending") }}</small
+            >
           </div>
           <StatusBadge :state="currentBuild?.stage ?? 'PENDING'" />
         </article>

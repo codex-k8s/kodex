@@ -1688,6 +1688,7 @@ const ru = {
     buildHistory: "История сборок",
     buildHistoryHelp:
       "Этапы, ход выполнения и безопасная диагностика каждой попытки сборки.",
+    retryPending: "Ожидается автоматическая повторная попытка",
     debugBuildWithAssistant: "Передать сборку на разбор Kodex",
     noBuilds: "Сборки ещё не запускались.",
     attempt: "Попытка {attempt}",
@@ -4810,6 +4811,7 @@ const en = {
     buildHistory: "Build history",
     buildHistoryHelp:
       "Authoritative attempt, stage, progress and safe diagnostics from the API.",
+    retryPending: "Waiting for an automatic retry",
     debugBuildWithAssistant: "Ask Kodex to debug this build",
     noBuilds: "No builds have been requested yet.",
     attempt: "Attempt {attempt}",

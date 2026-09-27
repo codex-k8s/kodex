@@ -63,4 +63,13 @@ describe("каталог образов ИИ-сотрудников", () => {
     );
     expect(summary).toContain('t("roleImages.debugBuildWithAssistant")');
   });
+
+  it("повторяет FAILED/EXPIRED и завершает опрос только после финального исхода", () => {
+    expect(editor).toContain(
+      "currentBuild.value ? buildIsActive(currentBuild.value) : false",
+    );
+    expect(editor).toContain("!buildIsActive(current) ||");
+    expect(editor).toContain("buildIsActive(currentBuild)");
+    expect(editor).toContain('t("roleImages.retryPending")');
+  });
 });

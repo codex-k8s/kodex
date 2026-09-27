@@ -35,13 +35,7 @@ export function latestBuild(
 }
 
 export function buildIsTerminal(build: RoleImageBuild): boolean {
-  return [
-    "COMPLETED",
-    "FAILED",
-    "CANCELLED",
-    "EXPIRED",
-    "DEAD_LETTER",
-  ].includes(build.stage);
+  return ["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(build.stage);
 }
 
 export function buildIsActive(build: RoleImageBuild): boolean {

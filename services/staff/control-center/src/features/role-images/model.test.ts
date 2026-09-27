@@ -76,7 +76,10 @@ describe("role image model", () => {
 
   it("отличает активную сборку и promoted состояние", () => {
     expect(buildIsActive(build())).toBe(true);
-    expect(buildIsActive(build({ stage: "FAILED" }))).toBe(false);
+    for (const stage of ["FAILED", "EXPIRED"] as const)
+      expect(buildIsActive(build({ stage })), stage).toBe(true);
+    for (const stage of ["COMPLETED", "CANCELLED", "DEAD_LETTER"] as const)
+      expect(buildIsActive(build({ stage })), stage).toBe(false);
     expect(
       roleImageState(
         recipe({ promotedImageReady: true }),
