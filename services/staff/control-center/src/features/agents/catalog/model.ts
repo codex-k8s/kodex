@@ -1,6 +1,5 @@
 import type { Agent } from "@/shared/api/generated/openapi/types.gen";
 
-export type AgentCatalogView = "grid" | "list";
 export type AgentStatusTone = "success" | "accent" | "neutral";
 
 export interface AgentCatalogItem {
@@ -80,8 +79,4 @@ export function toAgentCatalogItem(agent: Agent): AgentCatalogItem {
     currentRunRef: agent.currentRunRef,
     updatedAt: agent.updatedAt,
   };
-}
-
-export function parseAgentCatalogView(value: string | null): AgentCatalogView {
-  return value === "list" ? "list" : "grid";
 }

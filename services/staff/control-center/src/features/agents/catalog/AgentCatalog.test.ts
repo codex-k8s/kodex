@@ -40,7 +40,6 @@ describe("AgentCatalog", () => {
         h(AgentCatalog, {
           agents: [agent],
           projectRef: "project_sales",
-          view: "grid",
           query: "аналитик",
           pageSize: 20,
           hasMore: true,

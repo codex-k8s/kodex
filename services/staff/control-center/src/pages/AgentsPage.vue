@@ -12,10 +12,6 @@ import { useRoute, useRouter } from "vue-router";
 
 import AgentCatalog from "@/features/agents/catalog/AgentCatalog.vue";
 import { openAssistantWorkspace } from "@/features/assistant/events";
-import {
-  parseAgentCatalogView,
-  type AgentCatalogView,
-} from "@/features/agents/catalog/model";
 import { useAgentCatalogStore } from "@/features/agents/catalog/store";
 import { catalogInvalidated } from "@/features/catalogs/api";
 import { usePlatformStore } from "@/features/platform/store";
@@ -30,8 +26,6 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
-const catalogViewStorageKey = "kodex.agents.catalog.view";
-
 const platform = usePlatformStore();
 const catalog = useAgentCatalogStore();
 const route = useRoute();
@@ -45,7 +39,6 @@ const list = computed(() => catalog.items.filter((item) => !item.system));
 const runtimes = computed(() =>
   Object.values(platform.runtimes).filter((item) => item.ready),
 );
-const catalogView = ref<AgentCatalogView>("grid");
 const catalogQuery = ref("");
 const pageSize = ref(20);
 const dialog = ref(false);
@@ -96,24 +89,6 @@ async function load(): Promise<void> {
 }
 
 onMounted(() => void load());
-
-onMounted(() => {
-  try {
-    catalogView.value = parseAgentCatalogView(
-      window.localStorage.getItem(catalogViewStorageKey),
-    );
-  } catch {
-    catalogView.value = "grid";
-  }
-});
-
-watch(catalogView, (value) => {
-  try {
-    window.localStorage.setItem(catalogViewStorageKey, value);
-  } catch {
-    // Выбор вида остаётся рабочим в текущей сессии без localStorage.
-  }
-});
 
 watch(
   runtimes,
@@ -196,7 +171,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
     <AsyncState
       :loading="catalog.loading && list.length === 0"
       :problem="catalog.problem"
-      :empty="list.length === 0"
+      :empty="list.length === 0 && !catalogQuery.trim()"
       :empty-title="$t('agents.emptyTitle')"
       @retry="catalog.load(projectRef, catalogQuery, false, pageSize)"
     >
@@ -214,7 +189,6 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
       <AgentCatalog
         v-model:query="catalogQuery"
         v-model:page-size="pageSize"
-        v-model:view="catalogView"
         :agents="list"
         :project-ref="projectRef"
         :has-more="catalog.hasMore"

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   agentInitials,
   agentStatusTone,
-  parseAgentCatalogView,
   sameOriginAvatarUrl,
   toAgentCatalogItem,
 } from "@/features/agents/catalog/model";
@@ -74,11 +73,5 @@ describe("agent catalog model", () => {
     expect(item.avatarUrl).toBe(
       "/api/v1/artifacts/art_avatar01/content?purpose=PREVIEW",
     );
-  });
-
-  it("строго разбирает сохранённый режим каталога", () => {
-    expect(parseAgentCatalogView("list")).toBe("list");
-    expect(parseAgentCatalogView("unknown")).toBe("grid");
-    expect(parseAgentCatalogView(null)).toBe("grid");
   });
 });

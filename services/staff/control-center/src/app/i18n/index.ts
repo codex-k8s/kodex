@@ -1098,6 +1098,8 @@ const ru = {
     currentActivity: "Сейчас",
     catalogSearch: "Поиск сотрудников",
     catalogSearchPlaceholder: "Найти по имени, назначению или роли",
+    catalogNoResults:
+      "Сотрудники по этому запросу не найдены. Измените или очистите поиск.",
     catalogClearSearch: "Очистить поиск",
     catalogView: "Вид каталога сотрудников",
     catalogGrid: "Карточки",
@@ -4984,6 +4986,8 @@ const en = {
     currentActivity: "Current activity",
     catalogSearch: "Search employees",
     catalogSearchPlaceholder: "Find by name, purpose, or role",
+    catalogNoResults:
+      "No employees match this search. Change or clear the query.",
     catalogClearSearch: "Clear search",
     catalogView: "Employee catalog view",
     catalogGrid: "Cards",

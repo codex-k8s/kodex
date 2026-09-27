@@ -10,27 +10,20 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 
-import AgentCard from "@/features/agents/catalog/AgentCard.vue";
 import AgentTable from "@/features/agents/catalog/AgentTable.vue";
-import {
-  toAgentCatalogItem,
-  type AgentCatalogView,
-} from "@/features/agents/catalog/model";
+import { toAgentCatalogItem } from "@/features/agents/catalog/model";
 import type { Agent } from "@/shared/api/generated/openapi/types.gen";
-import ViewModeToggle from "@/shared/ui/ViewModeToggle.vue";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   agents: Agent[];
   projectRef: string;
-  view: AgentCatalogView;
   query: string;
   pageSize: number;
   hasMore: boolean;
   loadingMore: boolean;
 }>();
 const emit = defineEmits<{
-  "update:view": [view: AgentCatalogView];
   "update:query": [query: string];
   "update:pageSize": [pageSize: number];
   "load-more": [];
@@ -47,10 +40,10 @@ const items = computed(() =>
 );
 const adaptivePageSize = useAdaptiveCursorPageSize({
   container: catalogRoot,
-  itemSelector: ".agent-card, tbody tr",
+  itemSelector: ".agent-table tbody tr",
   itemCount: () => items.value.length,
-  estimatedItemHeight: 300,
-  estimatedColumns: 3,
+  estimatedItemHeight: 64,
+  estimatedColumns: 1,
 });
 let observer: IntersectionObserver | undefined;
 
@@ -116,42 +109,13 @@ onBeforeUnmount(() => observer?.disconnect());
       <output class="agent-catalog__count" aria-live="polite">
         {{ t("agents.catalogLoaded", { count: items.length }) }}
       </output>
-
-      <ViewModeToggle
-        class="agent-catalog__view"
-        :model-value="view"
-        :ariaLabel="t('agents.catalogView')"
-        :grid-label="t('agents.catalogGrid')"
-        :list-label="t('agents.catalogTable')"
-        @update:model-value="emit('update:view', $event)"
-      />
     </div>
 
     <div v-if="items.length === 0" class="agent-catalog__empty">
-      <p>{{ t("common.empty") }}</p>
+      <p>{{ t(query.trim() ? "agents.catalogNoResults" : "common.empty") }}</p>
     </div>
 
-    <template v-else>
-      <div class="agent-catalog__mobile-grid">
-        <AgentCard
-          v-for="item in items"
-          :key="item.ref"
-          :item="item"
-          :to="`/projects/${projectRef}/agents/${item.ref}`"
-        />
-      </div>
-      <div class="agent-catalog__desktop-view">
-        <div v-if="view === 'grid'" class="agent-catalog__grid">
-          <AgentCard
-            v-for="item in items"
-            :key="item.ref"
-            :item="item"
-            :to="`/projects/${projectRef}/agents/${item.ref}`"
-          />
-        </div>
-        <AgentTable v-else :items="items" :project-ref="projectRef" />
-      </div>
-    </template>
+    <AgentTable v-else :items="items" :project-ref="projectRef" />
 
     <div
       v-if="hasMore || loadingMore"
@@ -172,7 +136,7 @@ onBeforeUnmount(() => observer?.disconnect());
 }
 .agent-catalog__toolbar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto auto;
+  grid-template-columns: minmax(260px, 1fr) auto;
   align-items: end;
   min-height: 48px;
   gap: 8px;
@@ -218,14 +182,6 @@ onBeforeUnmount(() => observer?.disconnect());
   text-align: right;
   white-space: nowrap;
 }
-.agent-catalog__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(278px, 100%), 1fr));
-  gap: 14px;
-}
-.agent-catalog__mobile-grid {
-  display: none;
-}
 .agent-catalog__empty {
   display: grid;
   min-height: 180px;
@@ -250,7 +206,7 @@ onBeforeUnmount(() => observer?.disconnect());
 }
 @media (max-width: 1050px) {
   .agent-catalog__toolbar {
-    grid-template-columns: minmax(240px, 1fr) auto auto;
+    grid-template-columns: minmax(240px, 1fr) auto;
   }
 }
 @media (max-width: 760px) {
@@ -264,21 +220,8 @@ onBeforeUnmount(() => observer?.disconnect());
   .agent-catalog__search input {
     height: 42px;
   }
-  .agent-catalog__view,
   .agent-catalog__count {
     display: none;
-  }
-  .agent-catalog__grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-  .agent-catalog__desktop-view {
-    display: none;
-  }
-  .agent-catalog__mobile-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
   }
 }
 </style>
