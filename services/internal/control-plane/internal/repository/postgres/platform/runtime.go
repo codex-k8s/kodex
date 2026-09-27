@@ -1479,6 +1479,9 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	rootAlreadyTerminal := contains([]string{"SUCCEEDED", "FAILED", "CANCELLED"}, lockedRootState)
+	if rootAlreadyTerminal {
+		return commandOutcome{}, errs.ErrConflict
+	}
 	if !payload.Success && payload.SafeErrorCode == "PROVIDER_AUTH_REJECTED" {
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionMarkProviderReauthorizationRequired, pgx.StrictNamedArgs{
 			"organization_id":     scope.organizationID,
@@ -1646,7 +1649,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	terminalRootNodeRef := ""
 	rootBecameTerminal := false
 	terminalSafeErrorCode := payload.SafeErrorCode
-	terminalPlannedNodeRefs := []string{}
+	type terminalGraphTransition struct{ kind, ref, nodeRef string }
+	terminalGraphTransitions := []terminalGraphTransition{}
 	if !payload.Success && !rootAlreadyTerminal {
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionFailRootRun, lease["rootRunID"], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -1681,19 +1685,19 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	}
 	if rootBecameTerminal {
 		if runState == "FAILED" {
-			rows, queryErr := tx.Query(ctx, queryRuntimeCompleteexecutionCancelPlannedWorkflowNodes, pgx.StrictNamedArgs{
-				"root_run_id": lease["rootRunID"], "safe_error_code": terminalSafeErrorCode,
+			rows, queryErr := tx.Query(ctx, queryRuntimeCompleteexecutionCloseTerminalGraph, pgx.StrictNamedArgs{
+				"organization_id": scope.organizationID, "root_run_id": lease["rootRunID"], "actor_id": scope.actorID,
 			})
 			if queryErr != nil {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 			for rows.Next() {
-				var nodeRef string
-				if scanErr := rows.Scan(&nodeRef); scanErr != nil {
+				var item terminalGraphTransition
+				if scanErr := rows.Scan(&item.kind, &item.ref, &item.nodeRef); scanErr != nil {
 					rows.Close()
 					return commandOutcome{}, errs.ErrUnavailable
 				}
-				terminalPlannedNodeRefs = append(terminalPlannedNodeRefs, nodeRef)
+				terminalGraphTransitions = append(terminalGraphTransitions, item)
 			}
 			queryErr = rows.Err()
 			rows.Close()
@@ -1718,8 +1722,19 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	for _, nodeRef := range terminalPlannedNodeRefs {
-		if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), nodeRef, "NODE_STATE_CHANGED", nodeRef, "", "", "", "i18n:WORKFLOW_STEPS_UNFULFILLED", runState, "CANCELLED"); err != nil {
+	for _, item := range terminalGraphTransitions {
+		eventKind, gateRef, nodeState := "RUN_STATE_CHANGED", "", ""
+		switch item.kind {
+		case "NODE":
+			eventKind, nodeState = "NODE_STATE_CHANGED", "CANCELLED"
+		case "GATE":
+			eventKind, gateRef, nodeState = "OWNER_GATE_RESOLVED", item.ref, "CANCELLED"
+		case "RUN":
+			if err := repository.auditRuntimeClaimTransition(ctx, tx, scope, input, stringMap(lease, "projectID"), item.ref, "i18n:RUN_CANCELLED"); err != nil {
+				return commandOutcome{}, err
+			}
+		}
+		if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), item.ref, eventKind, item.nodeRef, "", gateRef, "", "i18n:RUN_CANCELLED", runState, nodeState); err != nil {
 			return commandOutcome{}, err
 		}
 	}

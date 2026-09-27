@@ -5505,7 +5505,6 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if failedRegularLease == nil || lateGatedLease == nil {
 		t.Fatalf("failed-sibling child bindings differ: %#v", failedChildren.RuntimeItems)
 	}
-	completeClaimedExecution(t, ctx, service, worker, failedCoordinatorLease, "delegation-failed-sibling-coordinator", false)
 	failedChild, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-child-complete"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(failedRegularLease, "leaseRef"), Fence: stringMap(failedRegularLease, "fence"),
@@ -5515,17 +5514,50 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if err != nil || failedChild.Run == nil || failedChild.Run.State != "FAILED" {
 		t.Fatalf("fail parallel child: run=%#v err=%v", failedChild.Run, err)
 	}
-	lateGated := completeClaimedExecution(t, ctx, service, worker, lateGatedLease, "delegation-late-gated-child", false)
-	failedRoot, err := service.GetRun(ctx, owner, failedLaunch.Run.Ref)
-	if err != nil || failedRoot.State != "FAILED" || len(failedRoot.GateRefs) != 0 || lateGated.Graph == nil || graphNodeState(lateGated.Graph.Nodes, "ROOT_PROCESS") != "FAILED" {
-		t.Fatalf("late gated completion changed terminal root: root=%#v graph=%#v err=%v", failedRoot, lateGated.Graph, err)
+	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-coordinator-late"}, Payload: command.CompleteExecutionInput{
+			LeaseRef: stringMap(failedCoordinatorLease, "leaseRef"), Fence: stringMap(failedCoordinatorLease, "fence"),
+			Generation: failedCoordinatorLease["generation"].(int64), Success: true,
+			ResultSummary: "Late coordinator completion must be rejected", Usage: turnUsageFixture(),
+		}})
+	if !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("late coordinator completion after child failure was not rejected: %v", err)
 	}
-	for _, node := range lateGated.Graph.Nodes {
+	lateChild, err := service.GetRun(ctx, owner, stringMap(lateGatedLease, "runRef"))
+	if err != nil || lateChild.State != "CANCELLED" {
+		t.Fatalf("terminal root did not cancel sibling run: run=%#v err=%v", lateChild, err)
+	}
+	if failedChild.Graph == nil {
+		t.Fatal("terminal graph is missing")
+	}
+	lateNodeCancelled := false
+	for _, node := range failedChild.Graph.Nodes {
+		if node.Ref == stringMap(lateGatedLease, "nodeRef") {
+			lateNodeCancelled = node.State == "CANCELLED"
+		}
+	}
+	if !lateNodeCancelled {
+		t.Fatalf("terminal root did not cancel sibling node: graph=%#v", failedChild.Graph)
+	}
+	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-late-gated-child"}, Payload: command.CompleteExecutionInput{
+			LeaseRef: stringMap(lateGatedLease, "leaseRef"), Fence: stringMap(lateGatedLease, "fence"),
+			Generation: lateGatedLease["generation"].(int64), Success: true,
+			ResultSummary: "Late completion must be rejected", Usage: turnUsageFixture(),
+		}})
+	if !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("late child completion after root failure was not rejected: %v", err)
+	}
+	failedRoot, err := service.GetRun(ctx, owner, failedLaunch.Run.Ref)
+	if err != nil || failedRoot.State != "FAILED" || len(failedRoot.GateRefs) != 0 || graphNodeState(failedChild.Graph.Nodes, "ROOT_PROCESS") != "FAILED" {
+		t.Fatalf("late gated completion changed terminal root: root=%#v graph=%#v err=%v", failedRoot, failedChild.Graph, err)
+	}
+	for _, node := range failedChild.Graph.Nodes {
 		if node.Type == "HUMAN_GATE" {
 			t.Fatalf("late gated completion opened owner gate after terminal sibling: %#v", node)
 		}
 	}
-	for _, edge := range lateGated.Graph.Edges {
+	for _, edge := range failedChild.Graph.Edges {
 		if edge.Type == "CONTINUES" {
 			t.Fatalf("late gated completion scheduled continuation after terminal sibling: %#v", edge)
 		}

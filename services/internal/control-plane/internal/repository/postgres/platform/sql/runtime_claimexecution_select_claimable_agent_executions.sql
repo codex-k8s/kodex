@@ -706,6 +706,7 @@ WHERE n.organization_id = $1::uuid
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
+  AND root.state IN ('RUNNING', 'QUEUED')
   AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
   AND (
       (a.system_key = 'system-assistant' AND runtime_environment.role_image_artifact_id IS NULL)

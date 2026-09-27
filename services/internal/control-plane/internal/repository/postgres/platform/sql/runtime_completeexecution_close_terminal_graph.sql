@@ -1,0 +1,61 @@
+-- name: runtime_completeexecution_close_terminal_graph :many
+WITH graph AS MATERIALIZED (
+    SELECT id
+    FROM control_plane.runs
+    WHERE organization_id = @organization_id::uuid
+      AND root_run_id = @root_run_id::uuid
+), closed_runs AS (
+    UPDATE control_plane.runs
+    SET state = 'CANCELLED', safe_error_code = '', safe_error_message = '',
+        finished_at = clock_timestamp(), updated_at = clock_timestamp(), version = version + 1
+    WHERE id IN (SELECT id FROM graph)
+      AND id <> @root_run_id::uuid
+      AND state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')
+    RETURNING ref
+), closed_nodes AS (
+    UPDATE control_plane.run_nodes
+    SET state = 'CANCELLED', safe_error_code = '', safe_error_message = '',
+        next_actions = ARRAY['OPEN'], finished_at = clock_timestamp(), version = version + 1
+    WHERE root_run_id = @root_run_id::uuid
+      AND state IN ('PLANNED', 'QUEUED', 'RUNNING', 'WAITING')
+    RETURNING ref
+), closed_leases AS (
+    UPDATE control_plane.runtime_leases
+    SET state = 'CANCELLED', updated_at = clock_timestamp()
+    WHERE run_id IN (SELECT id FROM graph) AND state = 'CLAIMED'
+), closed_turns AS (
+    UPDATE control_plane.session_turns
+    SET state = 'CANCELLED', completed_at = clock_timestamp()
+    WHERE run_id IN (SELECT id FROM graph) AND state IN ('QUEUED', 'RUNNING')
+), closed_invocations AS (
+    UPDATE control_plane.integration_invocations
+    SET state = CASE WHEN state = 'RUNNING' AND risk <> 'READ' THEN 'UNKNOWN_OUTCOME' ELSE 'CANCELLED' END,
+        lease_ref = NULL, effect_fence_digest = NULL, workload_instance = NULL, lease_expires_at = NULL,
+        safe_error_code = CASE WHEN state = 'RUNNING' AND risk <> 'READ' THEN 'INTEGRATION_OUTCOME_UNKNOWN' ELSE '' END,
+        version = version + 1, updated_at = clock_timestamp()
+    WHERE run_id IN (SELECT id FROM graph) AND state IN ('WAITING_APPROVAL', 'READY', 'RUNNING')
+), closed_gates AS (
+    UPDATE control_plane.owner_gates
+    SET state = 'CANCELLED', decision = 'CANCEL', decision_comment = 'i18n:RUN_CANCELLED',
+        resolved_by = @actor_id::uuid, resolved_at = clock_timestamp(), version = version + 1
+    WHERE organization_id = @organization_id::uuid
+      AND root_run_id = @root_run_id::uuid
+      AND state = 'OPEN'
+    RETURNING id, ref, node_id
+), closed_gate_deliveries AS (
+    UPDATE control_plane.interaction_deliveries
+    SET state = CASE WHEN state = 'CLAIMED' THEN 'UNKNOWN_OUTCOME' ELSE 'CANCELLED' END,
+        safe_error_code = CASE WHEN state = 'CLAIMED' THEN 'INTERACTION_OUTCOME_UNKNOWN' ELSE safe_error_code END,
+        lease_ref = NULL, fence_digest = NULL, workload_instance = NULL, lease_expires_at = NULL,
+        version = version + 1, updated_at = clock_timestamp(), completed_at = clock_timestamp()
+    WHERE gate_id IN (SELECT id FROM closed_gates)
+      AND state IN ('WAITING_APPROVAL', 'DUE', 'FAILED', 'CLAIMED')
+)
+SELECT 'RUN'::text AS kind, ref, ''::text AS node_ref FROM closed_runs
+UNION ALL
+SELECT 'NODE', ref, ref FROM closed_nodes
+UNION ALL
+SELECT 'GATE', gate.ref, node.ref
+FROM closed_gates gate
+JOIN control_plane.run_nodes node ON node.id = gate.node_id
+ORDER BY kind, ref
