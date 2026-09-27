@@ -62,6 +62,14 @@ onBeforeUnmount(() => {
 function permissionDefinition(key: string): PermissionDefinition | undefined {
   return props.permissions.find((permission) => permission.key === key);
 }
+function hasDuplicateName(role: AccessRole): boolean {
+  return props.roles.some(
+    (other) =>
+      other.ref !== role.ref &&
+      other.kind === role.kind &&
+      other.currentVersion.name === role.currentVersion.name,
+  );
+}
 const selectedRole = computed(() =>
   props.roles.find((role) => role.ref === selectedRef.value),
 );
@@ -164,7 +172,12 @@ watch(
               >
                 <div>
                   <strong>{{ role.currentVersion.name }}</strong
-                  ><small>v{{ role.currentVersion.revision }}</small>
+                  ><small
+                    >v{{ role.currentVersion.revision
+                    }}<template v-if="hasDuplicateName(role)">
+                      · {{ role.ref.slice(-8) }}</template
+                    ></small
+                  >
                 </div>
                 <span class="role-table__description">{{
                   role.currentVersion.description
@@ -204,6 +217,9 @@ watch(
                     selectedRole.currentVersion.revision
                   }}</small
                 >
+                <small v-if="hasDuplicateName(selectedRole)" class="mono">{{
+                  selectedRole.ref
+                }}</small>
               </div>
               <StatusBadge :state="selectedRole.state" />
             </header>
@@ -405,12 +421,20 @@ watch(
   gap: 10px;
   border-bottom: 1px solid var(--border);
 }
+.role-detail__head > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
 .role-detail__head h3 {
   margin: 0;
   font-size: 1rem;
 }
 .role-detail__head small {
   color: var(--muted);
+}
+.role-detail__head .mono {
+  overflow-wrap: anywhere;
 }
 .role-detail__body {
   min-height: 0;
