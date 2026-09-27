@@ -158,6 +158,13 @@ useCursorInfiniteScroll({
   loadMore: () => loadRuns(false),
 });
 const selectedSchedule = computed(() => scopedSchedule(selectedRef.value));
+const selectedOutsideFilter = computed(
+  () =>
+    !!selectedSchedule.value &&
+    !filteredSchedules.value.some(
+      (schedule) => schedule.ref === selectedSchedule.value?.ref,
+    ),
+);
 const selectedCapabilities = computed(() =>
   selectedSchedule.value
     ? scheduleCapabilities(selectedSchedule.value)
@@ -228,6 +235,8 @@ const custom = computed(() =>
         runRef: "Run ref",
         schedule: "Schedule",
         search: "Search automations on the server",
+        selectedOutsideFilter:
+          "This previously selected automation is outside the current filter.",
         target: "Target",
         technicalDetails: "Technical details",
         version: "Resource version",
@@ -261,6 +270,8 @@ const custom = computed(() =>
         runRef: "Ссылка запуска",
         schedule: "Расписание",
         search: "Поиск автоматизаций на сервере",
+        selectedOutsideFilter:
+          "Ранее выбранная автоматизация не входит в текущий фильтр.",
         target: "Цель",
         technicalDetails: "Технические сведения",
         version: "Версия ресурса",
@@ -691,6 +702,14 @@ onBeforeUnmount(() => {
             <span>{{ $t("automations.nextRun") }}</span>
             <span>{{ custom.lastResult }}</span>
           </div>
+          <p
+            v-if="filteredSchedules.length === 0"
+            class="automations-list__empty"
+            role="status"
+          >
+            <strong>{{ custom.noMatches }}</strong>
+            <span>{{ custom.noMatchesText }}</span>
+          </p>
           <button
             v-for="schedule in filteredSchedules"
             :key="schedule.ref"
@@ -761,6 +780,13 @@ onBeforeUnmount(() => {
             </div>
             <CalendarClock :size="22" aria-hidden="true" />
           </header>
+          <p
+            v-if="selectedOutsideFilter"
+            class="automation-details__filter-note"
+            role="status"
+          >
+            {{ custom.selectedOutsideFilter }}
+          </p>
           <nav
             class="automation-details__tabs"
             :aria-label="$t('automations.sectionsLabel')"
@@ -1184,6 +1210,16 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
 }
+.automations-list__empty {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 24px 14px;
+  color: var(--muted);
+}
+.automations-list__empty strong {
+  color: var(--text);
+}
 .automation-details {
   max-height: 72vh;
   overflow: auto;
@@ -1217,6 +1253,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
+}
+.automation-details__filter-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .automation-details__tabs {
   display: grid;

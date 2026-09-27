@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.227
+version: 1.0.228
 updated: 2026-09-27
 ---
 
@@ -4742,3 +4742,12 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-automation-two-line-table-20260928.png`. После повторного
   no-cache reload console error/warn и завершённые HTTP 4xx/5xx отсутствуют.
   Адресные 10 unit, ESLint и Prettier — локальный `PASS`.
+- Сценарий фильтра теперь повторён в браузере: при выборе «Активен» левая
+  таблица с одной приостановленной записью показывает понятное пустое
+  состояние, а правая сводка сохраняет ранее выбранную автоматизацию и прямо
+  поясняет, что она вне фильтра. Возврат к «Действующие» восстановил строку.
+  Снимок `/tmp/kodex-automation-filter-selected-explained-20260928.png`;
+  после reload без кэша и выбора фильтра console error/warn пусты, завершённых
+  HTTP 4xx/5xx нет. Первое изменение текста подсказки выявило nullable
+  обращение в Vue typecheck; вычисление перенесено в типизированный computed,
+  после чего 10 unit, typecheck, ESLint и Prettier прошли локально.
