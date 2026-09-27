@@ -331,13 +331,24 @@ async function run(configure = false): Promise<void> {
 
 <style scoped>
 .git-source-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 16px;
   min-width: 0;
-  padding-block: 1rem;
+  padding-block: 8px;
+}
+.git-source-panel h3 {
+  margin: 0;
+}
+.git-source-panel > :not(h3):not(.git-source-panel__actions) {
+  grid-column: 1 / -1;
 }
 .git-source-panel dl {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: 0.5rem;
+  margin: 0;
 }
 .git-source-panel dd {
   margin: 0;
@@ -347,6 +358,7 @@ async function run(configure = false): Promise<void> {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  justify-self: end;
 }
 .git-source-panel__form,
 .git-source-panel__form label {
@@ -358,5 +370,14 @@ async function run(configure = false): Promise<void> {
 .git-source-panel__form select {
   width: 100%;
   min-width: 0;
+}
+@media (max-width: 900px) {
+  .git-source-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .git-source-panel__actions {
+    grid-column: 1;
+    justify-self: start;
+  }
 }
 </style>

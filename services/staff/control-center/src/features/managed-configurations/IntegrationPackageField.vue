@@ -71,6 +71,9 @@ function updateInput(event: Event): void {
       <div
         v-if="field.required?.includes(key) || record[key] !== undefined"
         class="package-property"
+        :class="{
+          'package-property--wide': key === 'name' || key === 'description',
+        }"
       >
         <div
           v-if="
@@ -265,12 +268,15 @@ function updateInput(event: Event): void {
   display: grid;
   gap: 12px;
   min-width: 0;
+  align-content: start;
 }
 .package-object {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
 }
 .package-property:has(.package-object),
-.package-property:has(.package-array) {
+.package-property:has(.package-array),
+.package-property--wide {
   grid-column: 1 / -1;
 }
 .package-heading {
@@ -287,6 +293,7 @@ function updateInput(event: Event): void {
   display: grid;
   gap: 6px;
   min-width: 0;
+  align-content: start;
 }
 .package-scalar :is(input, select, textarea) {
   width: 100%;
@@ -296,6 +303,9 @@ function updateInput(event: Event): void {
 .package-scalar input[type="checkbox"] {
   width: 18px;
   height: 18px;
+}
+.package-scalar :deep(textarea) {
+  min-height: 96px;
 }
 .package-add {
   justify-self: start;

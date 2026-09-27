@@ -1871,6 +1871,7 @@ watch(
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 4px 12px;
+  margin: 0;
   font-size: 12px;
 }
 .configuration-editor__source dd {
