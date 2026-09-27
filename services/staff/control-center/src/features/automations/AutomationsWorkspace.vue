@@ -229,6 +229,7 @@ const custom = computed(() =>
         schedule: "Schedule",
         search: "Search automations on the server",
         target: "Target",
+        technicalDetails: "Technical details",
         version: "Resource version",
       }
     : {
@@ -261,6 +262,7 @@ const custom = computed(() =>
         schedule: "Расписание",
         search: "Поиск автоматизаций на сервере",
         target: "Цель",
+        technicalDetails: "Технические сведения",
         version: "Версия ресурса",
       },
 );
@@ -336,12 +338,11 @@ watch(search, () => {
 
 watch(
   [schedules, filteredSchedules],
-  ([, visibleSchedules]) => {
+  ([allSchedules, visibleSchedules]) => {
     if (selectedRef.value === props.initialScheduleRef) return;
-    if (
-      !visibleSchedules.some((schedule) => schedule.ref === selectedRef.value)
-    )
-      selectedRef.value = visibleSchedules[0]?.ref ?? "";
+    if (allSchedules.some((schedule) => schedule.ref === selectedRef.value))
+      return;
+    selectedRef.value = visibleSchedules[0]?.ref ?? "";
   },
   { immediate: true },
 );
@@ -779,51 +780,59 @@ onBeforeUnmount(() => {
             </button>
           </nav>
 
-          <dl v-if="selectedSection === 'OVERVIEW'">
-            <div>
-              <dt>{{ custom.target }}</dt>
-              <dd>{{ selectedSchedule.target.displayName }}</dd>
-            </div>
-            <div>
-              <dt>{{ custom.schedule }}</dt>
-              <dd>
-                {{ scheduleLabel(selectedSchedule) }} ·
-                {{ selectedSchedule.timezone }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ $t("common.input") }}</dt>
-              <dd>{{ task(selectedSchedule) }}</dd>
-            </div>
-            <div>
-              <dt>{{ custom.revision }}</dt>
-              <dd>
-                <span class="mono">{{
-                  selectedSchedule.currentRevision.revision
-                }}</span>
-                · {{ selectedSchedule.currentRevision.ref }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ custom.automationRef }}</dt>
-              <dd class="mono">{{ selectedSchedule.ref }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("automations.nextRun") }}</dt>
-              <dd>
-                {{
-                  selectedSchedule.state === "ACTIVE" &&
-                  selectedSchedule.nextRunAt
-                    ? formatDate(selectedSchedule.nextRunAt)
-                    : "—"
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ custom.lastResult }}</dt>
-              <dd>{{ selectedSchedule.lastOutcome || "—" }}</dd>
-            </div>
-          </dl>
+          <div v-if="selectedSection === 'OVERVIEW'">
+            <dl>
+              <div>
+                <dt>{{ custom.target }}</dt>
+                <dd>{{ selectedSchedule.target.displayName }}</dd>
+              </div>
+              <div>
+                <dt>{{ custom.schedule }}</dt>
+                <dd>
+                  {{ scheduleLabel(selectedSchedule) }} ·
+                  {{ selectedSchedule.timezone }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ $t("common.input") }}</dt>
+                <dd>{{ task(selectedSchedule) }}</dd>
+              </div>
+              <div>
+                <dt>{{ custom.revision }}</dt>
+                <dd>{{ selectedSchedule.currentRevision.revision }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("automations.nextRun") }}</dt>
+                <dd>
+                  {{
+                    selectedSchedule.state === "ACTIVE" &&
+                    selectedSchedule.nextRunAt
+                      ? formatDate(selectedSchedule.nextRunAt)
+                      : "—"
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ custom.lastResult }}</dt>
+                <dd>{{ selectedSchedule.lastOutcome || "—" }}</dd>
+              </div>
+            </dl>
+            <details class="automation-details__technical">
+              <summary>{{ custom.technicalDetails }}</summary>
+              <dl>
+                <div>
+                  <dt>{{ custom.automationRef }}</dt>
+                  <dd class="mono">{{ selectedSchedule.ref }}</dd>
+                </div>
+                <div>
+                  <dt>{{ custom.revisionRef }}</dt>
+                  <dd class="mono">
+                    {{ selectedSchedule.currentRevision.ref }}
+                  </dd>
+                </div>
+              </dl>
+            </details>
+          </div>
 
           <section
             v-else-if="selectedSection === 'VERSIONS'"
@@ -1230,6 +1239,17 @@ onBeforeUnmount(() => {
 }
 .automation-details dl {
   margin: 0;
+}
+.automation-details__technical {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.automation-details__technical summary {
+  cursor: pointer;
+}
+.automation-details__technical dd {
+  overflow-wrap: anywhere;
 }
 .automation-details dl div {
   display: grid;
