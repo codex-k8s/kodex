@@ -271,21 +271,76 @@ function selectTemplateKind(event: Event): void {
       <p v-if="modelValue?.templateKind === 'CONTINUATION'">
         {{ t("promptContext.continuationHint") }}
       </p>
-      <PromptTargetPreview
-        v-if="target && modelValue?.templateKind !== 'CONTINUATION'"
-        :target="target"
-        :template="template"
-        :disabled="busy"
-      />
     </template>
+    <div
+      class="prompt-scope-fields__workspace"
+      :class="{
+        'prompt-scope-fields__workspace--with-variables':
+          target && modelValue?.templateKind !== 'CONTINUATION',
+      }"
+    >
+      <div class="prompt-scope-fields__editor">
+        <slot name="editor" />
+      </div>
+      <aside
+        v-if="target && modelValue?.templateKind !== 'CONTINUATION'"
+        class="prompt-scope-fields__variables"
+      >
+        <PromptTargetPreview
+          :target="target"
+          :template="template"
+          :disabled="busy"
+        />
+      </aside>
+    </div>
   </section>
 </template>
 <style scoped>
 .prompt-scope-fields {
+  display: grid;
+  gap: 12px;
   min-width: 0;
+}
+.prompt-scope-fields > h3,
+.prompt-scope-fields > p {
+  margin: 0;
 }
 .prompt-scope-fields label {
   display: grid;
   gap: 0.4rem;
+}
+.prompt-scope-fields__workspace {
+  min-width: 0;
+}
+.prompt-scope-fields__workspace--with-variables {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
+  gap: 16px;
+}
+.prompt-scope-fields__editor,
+.prompt-scope-fields__variables {
+  min-width: 0;
+}
+.prompt-scope-fields__editor :deep(.cm-editor) {
+  min-height: 500px;
+}
+.prompt-scope-fields__variables {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.prompt-scope-fields__variables :deep(.prompt-target-preview) {
+  display: grid;
+  gap: 10px;
+}
+.prompt-scope-fields__variables :deep(.variable-catalog__list) {
+  max-height: 310px;
+}
+@media (max-width: 900px) {
+  .prompt-scope-fields__workspace--with-variables {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

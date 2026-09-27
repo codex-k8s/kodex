@@ -682,9 +682,9 @@ const ru = {
       primaryLanguage: "Код языка",
       primaryLanguageHint:
         "Например, ru или en. Оставьте пустым для автоопределения.",
-      additionalLanguages: "Другие возможные языки",
+      additionalLanguages: "Дополнительные коды языков (необязательно)",
       additionalLanguagesHint:
-        "Только для модели gpt-transcribe. Коды по одному на строку; основной код укажите выше.",
+        "Для многоязычных моделей: по одному двухбуквенному коду на строку. Основной код задаётся выше.",
       advanced: "Дополнительные настройки распознавания",
       languages: "Языки (коды, по одному на строку)",
       keywords: "Ключевые слова (по одному на строку)",
@@ -4459,9 +4459,9 @@ const en = {
       primaryLanguage: "Language code",
       primaryLanguageHint:
         "For example, ru or en. Leave blank for automatic detection.",
-      additionalLanguages: "Other possible languages",
+      additionalLanguages: "Additional language codes (optional)",
       additionalLanguagesHint:
-        "Only for gpt-transcribe. Enter one code per line; set the primary code above.",
+        "For multilingual models: one two-letter code per line. Set the primary code above.",
       advanced: "Advanced transcription settings",
       languages: "Languages (one code per line)",
       keywords: "Keywords (one per line)",

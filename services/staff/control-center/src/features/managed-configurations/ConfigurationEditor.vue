@@ -1355,14 +1355,6 @@ watch(
       @busy="sourceBusy = $event"
       @changed="load()"
     />
-    <PromptScopeFields
-      v-if="kind === 'PROMPT_TEMPLATE'"
-      v-model="promptScope"
-      :project-ref="configuration?.projectRef ?? projectRef"
-      :template="content"
-      :disabled="busy || sourceBusy || gitOwned"
-      @valid="promptScopeValid = $event"
-    />
     <div class="configuration-editor__fields">
       <label
         >{{ $t("common.name")
@@ -1396,6 +1388,25 @@ watch(
         </select></label
       >
     </div>
+    <PromptScopeFields
+      v-if="kind === 'PROMPT_TEMPLATE'"
+      v-model="promptScope"
+      :project-ref="configuration?.projectRef ?? projectRef"
+      :template="content"
+      :disabled="busy || sourceBusy || gitOwned"
+      @valid="promptScopeValid = $event"
+    >
+      <template #editor>
+        <CodeEditor
+          v-if="sourceVisible"
+          v-model="content"
+          :label="$t('managed.content')"
+          :language="language"
+          :readonly="gitOwned || !sourceEditable"
+          :disabled="busy || sourceBusy"
+        />
+      </template>
+    </PromptScopeFields>
     <div
       v-if="sourceVisible && kind !== 'PROMPT_TEMPLATE' && format !== 'TOML'"
       class="configuration-editor__toolbar"
@@ -1431,7 +1442,7 @@ watch(
       :initialize-stt="kind === 'SYSTEM_STT' && !configurationRef"
     />
     <CodeEditor
-      v-else-if="sourceVisible"
+      v-else-if="sourceVisible && kind !== 'PROMPT_TEMPLATE'"
       v-model="content"
       :label="$t('managed.content')"
       :language="language"
