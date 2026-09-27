@@ -131,4 +131,19 @@ describe("IntegrationPackage canonical schema", () => {
       resolvePackageField({ $ref: "#/$defs/field" }).properties?.type?.enum,
     ).toEqual(["STRING", "INTEGER", "BOOLEAN"]);
   });
+  it("читает прежний пустой inputFields OpenAPI без изменения ревизии", () => {
+    const value = parseConfigurationDocument(
+      readFileSync(new URL("openapi-mcp.yaml", directory), "utf8"),
+      "YAML",
+    );
+    const spec = value.spec as Record<string, unknown>;
+    const capabilities = spec.capabilities as Record<string, unknown>[];
+    const first = capabilities[0];
+    if (!first) throw new Error("Missing OpenAPI capability fixture");
+    first.inputFields = null;
+    expect(packageDiagnostics(value)).toEqual([]);
+    expect(first.inputFields).toBeNull();
+    spec.adapter = "GITHUB";
+    expect(packageDiagnostics(value).length).toBeGreaterThan(0);
+  });
 });

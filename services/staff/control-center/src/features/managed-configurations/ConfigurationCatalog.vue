@@ -32,7 +32,7 @@ const pageSize = useAdaptiveCursorPageSize({
   container: list,
   itemSelector: ".configuration-catalog__row",
   itemCount: () => items.value.length,
-  estimatedItemHeight: 96,
+  estimatedItemHeight: 72,
   minimum: 8,
   maximum: 100,
 });
@@ -151,6 +151,7 @@ function created(configurationRef: string): void {
           type="search"
           :placeholder="$t('common.search')"
           :aria-label="$t('common.search')"
+          :disabled="projectRequired"
       /></label>
       <RouterLink
         v-if="!projectRequired"
@@ -196,10 +197,21 @@ function created(configurationRef: string): void {
       {{ $t("managed.projectRequired") }}
     </p>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
-    <p v-if="loading && !items.length" role="status">
+    <p v-if="loading && !items.length && !projectRequired" role="status">
       {{ $t("common.loading") }}
     </p>
-    <p v-else-if="!items.length && !problem">{{ $t("common.empty") }}</p>
+    <div
+      v-else-if="!items.length && !problem && !projectRequired"
+      class="configuration-catalog__empty"
+      role="status"
+    >
+      <strong>{{
+        $t(query.trim() ? "managed.searchEmptyTitle" : "managed.emptyTitle")
+      }}</strong>
+      <p>
+        {{ $t(query.trim() ? "managed.searchEmptyText" : "managed.emptyText") }}
+      </p>
+    </div>
     <div
       ref="list"
       class="configuration-catalog__list"
@@ -287,6 +299,16 @@ function created(configurationRef: string): void {
   max-height: 576px;
   overflow-y: auto;
 }
+.configuration-catalog__empty {
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.configuration-catalog__empty p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
 .configuration-catalog__list--expanded {
   max-height: 65vh;
 }
@@ -295,8 +317,8 @@ function created(configurationRef: string): void {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
-  height: 96px;
-  padding: 12px 0;
+  min-height: 72px;
+  padding: 10px 0;
   color: inherit;
   text-decoration: none;
   border-bottom: 1px solid var(--border);

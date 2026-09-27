@@ -136,6 +136,7 @@ func DraftOpenAPIPackage(ctx context.Context, raw []byte, options OpenAPIImportO
 			Key: key, Name: strings.TrimSpace(entry.Summary), Description: strings.TrimSpace(operation.Description),
 			Operation: "openapi." + key, Risk: choice.Risk, ApprovalPolicy: choice.ApprovalPolicy,
 			ResourceScope: ResourceScope{Kind: "HTTPS_RESOURCE", ConnectionFields: []string{"base_url"}},
+			InputFields:   []Field{},
 			OutputFields:  []Field{{Key: "body_json", Type: "STRING", Format: "PLAIN", Required: true, MaximumLength: 32768}},
 			Execution:     Execution{TimeoutSeconds: 20, MaxAttempts: 1, RetryBackoffMilliseconds: 250},
 			OpenAPI: &OpenAPIHTTP{OperationID: choice.OperationID, SourceDigest: inspection.Digest,

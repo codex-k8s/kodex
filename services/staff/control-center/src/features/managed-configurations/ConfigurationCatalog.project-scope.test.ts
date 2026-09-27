@@ -63,6 +63,10 @@ describe("Project scope configuration catalog", () => {
       const html = await render(kind);
       expect(html).toContain("disabled");
       expect(html).toContain(
+        'name="managed-configuration-search" type="search"',
+      );
+      expect(html).toContain('aria-label="Поиск" disabled');
+      expect(html).toContain(
         'aria-describedby="managed-catalog-project-required"',
       );
       expect(html).toContain("Выберите проект");

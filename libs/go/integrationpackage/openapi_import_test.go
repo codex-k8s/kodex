@@ -90,6 +90,11 @@ func TestDraftOpenAPIPackagePinsSelectedOperationsAndSource(t *testing.T) {
 		definition.Spec.HealthCheck.Operation != definition.Spec.Capabilities[0].Operation {
 		t.Fatal("source, server or health operation not pinned")
 	}
+	for _, capability := range definition.Spec.Capabilities {
+		if capability.InputFields == nil {
+			t.Fatal("OpenAPI capability input fields must serialize as an empty array")
+		}
+	}
 	write := definition.Spec.Capabilities[1]
 	if write.OpenAPI.Path != "/tickets/{id}" || write.OpenAPI.Method != "PATCH" ||
 		write.Execution.Idempotency != string(IdempotencyOneAttempt) ||

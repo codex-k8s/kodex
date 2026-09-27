@@ -528,6 +528,10 @@ const ru = {
   },
   managed: {
     expandCatalog: "Развернуть каталог",
+    emptyTitle: "Конфигураций пока нет",
+    emptyText: "Создайте первую конфигурацию в выбранном разделе.",
+    searchEmptyTitle: "Конфигурации не найдены",
+    searchEmptyText: "Измените поисковый запрос или очистите строку поиска.",
     openapiImport: {
       open: "Импорт OpenAPI",
       title: "Импорт интеграции из OpenAPI",
@@ -4122,6 +4126,10 @@ const en = {
   },
   managed: {
     expandCatalog: "Expand catalog",
+    emptyTitle: "No configurations yet",
+    emptyText: "Create the first configuration in this section.",
+    searchEmptyTitle: "No matching configurations",
+    searchEmptyText: "Change the search query or clear the search field.",
     openapiImport: {
       open: "Import OpenAPI",
       title: "Import integration from OpenAPI",
