@@ -1772,7 +1772,7 @@ func workflowCoordinatorTask(task, versionRef, versionDigest string, version ent
 	builder.WriteString(versionRef)
 	builder.WriteString(" (sha256:")
 	builder.WriteString(versionDigest)
-	builder.WriteString("). Use delegate_agent exactly once for every step assigned to another agent. Execute coordinator-owned steps locally. End this turn after all required delegations are accepted; child results arrive in a later callback turn.\n")
+	builder.WriteString("). Use delegate_agent exactly once for every step, including steps assigned to the coordinator itself, with its exact workflow_step_key. Do not claim a step is complete until its delegated execution returns a successful callback. End this turn after all eligible delegations are accepted; child results arrive in a later callback turn.\n")
 	if instructions := strings.TrimSpace(version.Instructions); instructions != "" {
 		builder.WriteString("\nWorkflow instructions: ")
 		builder.WriteString(instructions)
@@ -1783,11 +1783,7 @@ func workflowCoordinatorTask(task, versionRef, versionDigest string, version ent
 		builder.WriteString(step.Key)
 		builder.WriteString("; agent ")
 		builder.WriteString(step.AgentRef)
-		if step.AgentRef == version.CoordinatorAgentRef {
-			builder.WriteString(" (execute locally)")
-		} else {
-			builder.WriteString(" (delegate)")
-		}
+		builder.WriteString(" (delegate as a separate execution)")
 		builder.WriteString("; task: ")
 		builder.WriteString(step.Instructions)
 		if expected := strings.TrimSpace(step.ExpectedResult); expected != "" {

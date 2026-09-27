@@ -299,12 +299,15 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 		}
 		return blocked(reason, remediation)
 	}
-	if selected != nil && (!validRuntimeCatalogPin(*selected) || selected.CatalogRevision != revision || selected.CatalogDigest != digest || selected.ProviderDefinitionKey != provider) {
+	if selected != nil && (!validRuntimeCatalogPin(*selected) || selected.ProviderDefinitionKey != provider || selected.ModelCapabilityDigest == "" && (selected.CatalogRevision != revision || selected.CatalogDigest != digest)) {
 		return blocked("CATALOG_PIN_CHANGED", "REPUBLISH_CONFIGURATION")
 	}
 	for _, capability := range item.Models {
 		if capability.ID != model {
 			continue
+		}
+		if selected != nil && selected.ModelCapabilityDigest != "" && selected.ModelCapabilityDigest != modelcatalog.CapabilityDigest(provider, item.Ref, capability.ID, capability.ReasoningEfforts, capability.DefaultReasoningEffort, capability.IsDefault) {
+			return blocked("CATALOG_PIN_CHANGED", "REPUBLISH_CONFIGURATION")
 		}
 		if selected != nil && selected.DefaultReasoningEffort != capability.DefaultReasoningEffort {
 			return blocked("CATALOG_PIN_CHANGED", "REPUBLISH_CONFIGURATION")

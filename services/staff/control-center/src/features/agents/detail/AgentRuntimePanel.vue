@@ -156,6 +156,30 @@ const runtimeDirty = computed(() => {
       )
   );
 });
+const catalogPinsChanged = computed(() => {
+  const current = view.value?.configuration;
+  const selection = modelSelection.value;
+  if (
+    !current ||
+    !selection ||
+    runtimeDirty.value ||
+    selection.model !== form.model ||
+    selection.providerDefinitionKey !== selectedProvider.value ||
+    selection.accounts.length !== form.providerAccounts.length
+  )
+    return false;
+  return current.providerPolicy.accountCandidates.some((candidate) => {
+    const latest = selection.accounts.find(
+      (account) => account.accountRef === candidate.accountRef,
+    );
+    return (
+      latest &&
+      (candidate.catalogRevision !== latest.catalogRevision ||
+        candidate.catalogDigest !== latest.catalogDigest ||
+        candidate.providerDefinitionKey !== latest.providerDefinitionKey)
+    );
+  });
+});
 const overlayDirty = computed(
   () =>
     Boolean(view.value) &&
@@ -476,7 +500,7 @@ async function saveRuntime(): Promise<void> {
   if (
     !current ||
     !props.canEdit ||
-    !runtimeDirty.value ||
+    (!runtimeDirty.value && !catalogPinsChanged.value) ||
     !modelAvailable.value ||
     !providerSubmissionAllowed.value
   )
@@ -735,12 +759,15 @@ onBeforeUnmount(reset);
         </section>
         <div v-if="canEdit" class="runtime-panel__actions">
           <span v-if="runtimeDirty">{{ $t("states.DRAFT") }}</span>
+          <span v-else-if="catalogPinsChanged" role="status">{{
+            copy.runtime.catalogChangedHelp
+          }}</span>
           <button
             class="button button--primary"
             type="button"
             :disabled="
               busy ||
-              !runtimeDirty ||
+              (!runtimeDirty && !catalogPinsChanged) ||
               !form.runtimeProfileRef ||
               !form.model ||
               !modelAvailable ||
@@ -750,7 +777,11 @@ onBeforeUnmount(reset);
             "
             @click="saveRuntime"
           >
-            <Save :size="16" aria-hidden="true" />{{ copy.runtime.save }}
+            <Save :size="16" aria-hidden="true" />{{
+              catalogPinsChanged && !runtimeDirty
+                ? copy.runtime.refreshCatalog
+                : copy.runtime.save
+            }}
           </button>
         </div>
       </article>

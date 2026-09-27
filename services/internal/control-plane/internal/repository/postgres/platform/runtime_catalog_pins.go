@@ -9,6 +9,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
@@ -51,13 +52,8 @@ func bootstrapUnpinnedCatalogCandidates(ctx context.Context, tx pgx.Tx, organiza
 }
 
 func validRuntimeCatalogPin(candidate entity.ProviderAccountCandidate) bool {
-	if len(candidate.CatalogDigest) != 64 || candidate.CatalogRevision != "mcat_"+candidate.CatalogDigest || !validStableKey(candidate.ProviderDefinitionKey) {
+	if !validModelCatalogDigest(candidate.CatalogDigest) || candidate.CatalogRevision != "mcat_"+candidate.CatalogDigest || !validStableKey(candidate.ProviderDefinitionKey) || candidate.ModelCapabilityDigest != "" && !validModelCatalogDigest(candidate.ModelCapabilityDigest) {
 		return false
-	}
-	for _, character := range candidate.CatalogDigest {
-		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
-			return false
-		}
 	}
 	return true
 }
@@ -83,7 +79,7 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 	for index := range result {
 		candidate := &result[index]
 		legacyUnpinned := !input && legacyUnpinnedRuntimeCatalogCandidate(*candidate)
-		if !legacyUnpinned && (!validRuntimeCatalogPin(*candidate) || candidate.ProviderDefinitionKey != provider) || input && candidate.DefaultReasoningEffort != "" {
+		if !legacyUnpinned && (!validRuntimeCatalogPin(*candidate) || candidate.ProviderDefinitionKey != provider) || input && (candidate.DefaultReasoningEffort != "" || candidate.ModelCapabilityDigest != "") {
 			return nil, nil, errs.ErrInvalid
 		}
 		var ref string
@@ -107,7 +103,10 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 			candidate.ProviderDefinitionKey = provider
 			candidate.CatalogRevision, candidate.CatalogDigest = catalog.Revision, catalog.Digest
 		}
-		if catalog.Revision != candidate.CatalogRevision || catalog.Digest != candidate.CatalogDigest {
+		// При публикации проверяется точный снимок каталога. Уже сохранённая
+		// конфигурация с новым pin зависит только от выбранной модели: удаление
+		// или изменение чужой модели не отзывает разрешённый запуск.
+		if (input || candidate.ModelCapabilityDigest == "") && (catalog.Revision != candidate.CatalogRevision || catalog.Digest != candidate.CatalogDigest) {
 			return nil, nil, errs.ErrVersionMismatch
 		}
 		found := false
@@ -119,6 +118,10 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 			if !capability.Available || !slices.Contains(capability.EligibleProviderAccountRefs, candidate.AccountRef) || !validDefault {
 				return nil, nil, errs.ErrConflict
 			}
+			modelDigest := modelcatalog.CapabilityDigest(provider, candidate.AccountRef, capability.ID, capability.ReasoningEfforts, capability.DefaultReasoningEffort, capability.IsDefault)
+			if !input && candidate.ModelCapabilityDigest != "" && candidate.ModelCapabilityDigest != modelDigest {
+				return nil, nil, errs.ErrVersionMismatch
+			}
 			if legacyUnpinned {
 				candidate.DefaultReasoningEffort = capability.DefaultReasoningEffort
 			}
@@ -126,6 +129,9 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 				return nil, nil, errs.ErrConflict
 			}
 			candidate.DefaultReasoningEffort = capability.DefaultReasoningEffort
+			if input || legacyUnpinned {
+				candidate.ModelCapabilityDigest = modelDigest
+			}
 			modelEfforts := append([]string{}, capability.ReasoningEfforts...)
 			if len(runtimecontract.DiagnoseConfigOverlay(overlay, modelEfforts)) != 0 {
 				return nil, nil, errs.ErrConflict

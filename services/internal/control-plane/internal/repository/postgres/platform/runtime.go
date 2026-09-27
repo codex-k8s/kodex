@@ -1623,6 +1623,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	}
 	terminalRootNodeRef := ""
 	rootBecameTerminal := false
+	terminalSafeErrorCode := payload.SafeErrorCode
+	terminalPlannedNodeRefs := []string{}
 	if !payload.Success && !rootAlreadyTerminal {
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionFailRootRun, lease["rootRunID"], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -1632,22 +1634,51 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 	} else if payload.Success && !humanGateAfter && !rootAlreadyTerminal {
-		var active int
-		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunNodesRootRunIdType, lease["rootRunID"]).Scan(&active); err != nil {
+		var active, planned int
+		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunNodesRootRunIdType, lease["rootRunID"]).Scan(&active, &planned); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if active == 0 {
-			runState = "SUCCEEDED"
 			rootBecameTerminal = true
-			if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunsStateResultSummaryFinishedAt, lease["rootRunID"], truncate(payload.ResultSummary, 4000)); err != nil {
-				return commandOutcome{}, errs.ErrUnavailable
+			if planned > 0 {
+				runState = "FAILED"
+				terminalSafeErrorCode = "RUNTIME_WORKFLOW_INCOMPLETE"
+				if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionFailRootRun, lease["rootRunID"], "i18n:WORKFLOW_STEPS_UNFULFILLED", terminalSafeErrorCode, ""); err != nil {
+					return commandOutcome{}, errs.ErrUnavailable
+				}
+			} else {
+				runState = "SUCCEEDED"
+				if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunsStateResultSummaryFinishedAt, lease["rootRunID"], truncate(payload.ResultSummary, 4000)); err != nil {
+					return commandOutcome{}, errs.ErrUnavailable
+				}
 			}
-			if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], "SUCCEEDED").Scan(&terminalRootNodeRef); err != nil && !directRootWithoutProcessNode(err, lease) {
+			if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateRunNodesStateFinishedAtVersion, lease["rootRunID"], runState).Scan(&terminalRootNodeRef); err != nil && !directRootWithoutProcessNode(err, lease) {
 				return commandOutcome{}, errs.ErrUnavailable
 			}
 		}
 	}
 	if rootBecameTerminal {
+		if runState == "FAILED" {
+			rows, queryErr := tx.Query(ctx, queryRuntimeCompleteexecutionCancelPlannedWorkflowNodes, pgx.StrictNamedArgs{
+				"root_run_id": lease["rootRunID"], "safe_error_code": terminalSafeErrorCode,
+			})
+			if queryErr != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			for rows.Next() {
+				var nodeRef string
+				if scanErr := rows.Scan(&nodeRef); scanErr != nil {
+					rows.Close()
+					return commandOutcome{}, errs.ErrUnavailable
+				}
+				terminalPlannedNodeRefs = append(terminalPlannedNodeRefs, nodeRef)
+			}
+			queryErr = rows.Err()
+			rows.Close()
+			if queryErr != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+		}
 		var scheduleID string
 		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionUpdateScheduleOccurrencesStateLeaseRefFenceDigest, lease["rootRunID"], map[bool]string{true: "COMPLETED", false: "FAILED"}[runState == "SUCCEEDED"]).Scan(&scheduleID)
 		if err == nil {
@@ -1665,8 +1696,13 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	for _, nodeRef := range terminalPlannedNodeRefs {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), nodeRef, "NODE_STATE_CHANGED", nodeRef, "", "", "", "i18n:WORKFLOW_STEPS_UNFULFILLED", runState, "CANCELLED"); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	if terminalRootNodeRef != "" && terminalRootNodeRef != stringMap(lease, "nodeRef") {
-		if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), terminalRootNodeRef, "NODE_STATE_CHANGED", terminalRootNodeRef, "", "", "", "i18n:ROOT_PROCESS_COMPLETED", runState, map[bool]string{true: "SUCCEEDED", false: "FAILED"}[payload.Success]); err != nil {
+		if _, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), terminalRootNodeRef, "NODE_STATE_CHANGED", terminalRootNodeRef, "", "", "", "i18n:ROOT_PROCESS_COMPLETED", runState, runState); err != nil {
 			return commandOutcome{}, err
 		}
 	}

@@ -1,5 +1,10 @@
 -- name: runtime_delegateexecution_select_run_nodes_id :one
-SELECT 'platform.run.delegate' = ANY(parent_agent.capabilities) AS capability_allowed,
+SELECT (
+           'platform.run.delegate' = ANY(parent_agent.capabilities)
+           OR (root.workflow_version_id IS NOT NULL
+               AND parent_node.workflow_step_key LIKE 'workflow.coordinator.%'
+               AND parent_agent.ref = @target_agent_ref)
+       ) AS capability_allowed,
        CASE
            WHEN root.workflow_version_id IS NULL THEN @workflow_step_key = ''
            ELSE workflow_version.spec ->> 'CoordinatorAgentRef' = parent_agent.ref

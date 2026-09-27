@@ -93,6 +93,8 @@ var (
 	queryRuntimeCompleteexecutionFailRootRun string
 	//go:embed sql/runtime_completeexecution_select_run_nodes_root_run_id_type.sql
 	queryRuntimeCompleteexecutionSelectRunNodesRootRunIdType string
+	//go:embed sql/runtime_completeexecution_cancel_planned_workflow_nodes.sql
+	queryRuntimeCompleteexecutionCancelPlannedWorkflowNodes string
 	//go:embed sql/runtime_completeexecution_update_runs_state_result_summary_finished_at.sql
 	queryRuntimeCompleteexecutionUpdateRunsStateResultSummaryFinishedAt string
 	//go:embed sql/runtime_completeexecution_update_run_nodes_state_finished_at_version.sql

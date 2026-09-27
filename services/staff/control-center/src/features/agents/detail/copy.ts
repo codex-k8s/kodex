@@ -36,6 +36,8 @@ export interface AgentDetailCopy {
     overlayHelp: string;
     overlayPlaceholder: string;
     save: string;
+    refreshCatalog: string;
+    catalogChangedHelp: string;
     saveOverlay: string;
     accountPolicy: string;
     accounts: string;
@@ -146,6 +148,9 @@ const ru: AgentDetailCopy = {
       "Черновик проверяется сервером и применяется только после публикации.",
     overlayPlaceholder: "# Параметры, разрешённые политикой Kodex",
     save: "Сохранить runtime",
+    refreshCatalog: "Обновить закреплённый каталог",
+    catalogChangedHelp:
+      "Состав каталога изменился. Выбранная модель может оставаться пригодной; при отказе запуска обновите её привязку.",
     saveOverlay: "Сохранить overlay",
     accountPolicy: "Политика аккаунтов",
     accounts: "Аккаунты",
@@ -262,6 +267,9 @@ const en: AgentDetailCopy = {
       "The draft is validated by the server and only applies after publication.",
     overlayPlaceholder: "# Parameters allowed by the Kodex policy",
     save: "Save runtime",
+    refreshCatalog: "Refresh pinned model catalog",
+    catalogChangedHelp:
+      "The catalog contents changed. The selected model may still be available; refresh its pin if launch is blocked.",
     saveOverlay: "Save overlay",
     accountPolicy: "Account policy",
     accounts: "Accounts",

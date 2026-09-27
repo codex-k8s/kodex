@@ -45,6 +45,7 @@ interface State {
   view: Ref<AgentRuntimeConfigurationView | undefined>;
   form: RuntimeForm;
   modelSelection: Ref<ModelSelection | undefined>;
+  catalogPinsChanged: Ref<boolean>;
   overlayContent: Ref<string>;
   modelAvailable: Ref<boolean>;
   providerAccountEligibility: Ref<string>;
@@ -147,6 +148,59 @@ describe("runtime editor: сохранение независимых черно
     expect(state.overlayContent.value).toBe("unsaved overlay");
     expect(state.form.model).toBe("model-two");
     expect(state.busy.value).toBe(false);
+  });
+  it("разрешает обновить устаревший pin каталога без фиктивной смены модели", async () => {
+    const state = await panel();
+    const current = runtimeView();
+    const oldDigest = "a".repeat(64);
+    const freshDigest = "b".repeat(64);
+    current.configuration.providerPolicy.accountCandidates = [
+      {
+        accountRef: "account-one",
+        weight: 1,
+        catalogRevision: `mcat_${oldDigest}`,
+        catalogDigest: oldDigest,
+        providerDefinitionKey: "openai-codex",
+        defaultReasoningEffort: "high",
+      },
+    ];
+    state.view.value = current;
+    state.modelSelection.value = {
+      model: "model-one",
+      providerDefinitionKey: "openai-codex",
+      accounts: [
+        {
+          accountRef: "account-one",
+          providerDefinitionKey: "openai-codex",
+          catalogRevision: `mcat_${freshDigest}`,
+          catalogDigest: freshDigest,
+          catalogStatus: catalogStatusFixture,
+          model: {
+            id: "model-one",
+            providerDefinitionKey: "openai-codex",
+            available: true,
+            eligibleProviderAccountRefs: ["account-one"],
+            readinessBlockers: [],
+            reasoningEfforts: ["low", "high"],
+            defaultReasoningEffort: "high",
+          },
+        },
+      ],
+    };
+    state.modelAvailable.value = true;
+    state.providerSubmissionAllowed.value = true;
+    expect(state.catalogPinsChanged.value).toBe(true);
+    api.saveAgentRuntime.mockResolvedValue(runtimeView());
+    await state.saveRuntime();
+    expect(api.saveAgentRuntime).toHaveBeenCalledWith(
+      "agent-one",
+      expect.objectContaining({
+        providerAccounts: [
+          expect.objectContaining({ catalogDigest: freshDigest }),
+        ],
+      }),
+      3,
+    );
   });
   it("сохраняет несохранённую модель при сохранении overlay", async () => {
     const state = await panel();

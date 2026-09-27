@@ -69,6 +69,7 @@ type ProviderAccountCandidate struct {
 	Weight                 int32  `json:"weight"`
 	CatalogRevision        string `json:"catalogRevision,omitempty"`
 	CatalogDigest          string `json:"catalogDigest,omitempty"`
+	ModelCapabilityDigest  string `json:"modelCapabilityDigest,omitempty"`
 	ProviderDefinitionKey  string `json:"providerDefinitionKey,omitempty"`
 	DefaultReasoningEffort string `json:"defaultReasoningEffort,omitempty"`
 }

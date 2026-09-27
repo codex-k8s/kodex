@@ -7,6 +7,7 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
@@ -119,6 +120,33 @@ func TestProviderUsageLaunchPinsAndFreshCredentialBinding(t *testing.T) {
 	duplicate, _ := providerAccountUsage(account, context)
 	if duplicate.AllowedToSubmit {
 		t.Fatal("duplicate selected pin admitted")
+	}
+}
+
+func TestProviderUsageLaunchSelectedModelPinSurvivesOtherCatalogChanges(t *testing.T) {
+	account, context := providerUsageFixture()
+	first, err := providerAccountUsage(account, context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	context.Input = &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: "agt_usage00001"}
+	context.Agent = providerUsageAgent{Ref: context.Input.AgentRef, Enabled: true, State: "READY", ConfigRef: "rcfg_usage001", Provider: account.Provider, Model: "model-one", Candidates: []entity.ProviderAccountCandidate{{AccountRef: account.Ref, ProviderDefinitionKey: account.Provider, CatalogRevision: first.CatalogRevision, CatalogDigest: first.CatalogDigest, DefaultReasoningEffort: "medium", ModelCapabilityDigest: modelcatalog.CapabilityDigest(account.Provider, account.Ref, "model-one", []string{"low", "medium"}, "medium", false)}}}
+	account.CatalogSource = `{"account":"pacc_usage0001","content":"content-two"}`
+	account.Models = append(account.Models, platformrepo.ProviderModelCatalogRecord{ID: "unrelated-model"})
+	updated, err := providerAccountUsage(account, context)
+	if err != nil || !updated.AllowedToSubmit || updated.CatalogDigest == first.CatalogDigest {
+		t.Fatal("unrelated model change blocked selected model")
+	}
+	account.Models[0].ReasoningEfforts = []string{"medium"}
+	changed, err := providerAccountUsage(account, context)
+	if err != nil || changed.AllowedToSubmit || changed.ModelCompatibility.Reason != "CATALOG_PIN_CHANGED" {
+		t.Fatal("selected model change did not invalidate pin")
+	}
+	account.Models[0].ReasoningEfforts = []string{"low", "medium"}
+	account.State = "REVOKED"
+	revoked, err := providerAccountUsage(account, context)
+	if err != nil || revoked.AllowedToSubmit {
+		t.Fatal("revoked account admitted by model pin")
 	}
 }
 

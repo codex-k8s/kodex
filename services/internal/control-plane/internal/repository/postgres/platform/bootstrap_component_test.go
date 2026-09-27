@@ -5036,6 +5036,106 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }
 
+func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *platformservice.Service, owner, worker value.Principal, projectRef string, coordinator entity.Agent) {
+	t.Helper()
+	draft := entity.WorkflowVersion{
+		Ref: "draft", Name: "Coordinator-owned stage", Purpose: "Execute one bounded stage",
+		CoordinatorAgentRef: coordinator.Ref, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 1800,
+		Instructions: "Run the assigned stage and report its result.", CompletionCriteria: "The stage has completed.", ResultSchema: map[string]any{},
+		Steps: []entity.WorkflowStep{{Key: "self-review", Position: 1, Name: "Review", AgentRef: coordinator.Ref,
+			Instructions: "Review the bounded input.", TimeoutSeconds: 600, ExpectedResult: "Review summary"}},
+	}
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "self-stage-workflow-create"}, Payload: command.WorkflowInput{
+			ProjectRef: projectRef, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &draft,
+		}})
+	if err != nil || created.Workflow == nil {
+		t.Fatalf("create coordinator-owned Workflow: %v", err)
+	}
+	version := created.Workflow.Version
+	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "self-stage-workflow-validate", ExpectedVersion: &version},
+		Payload:  command.WorkflowInput{Ref: created.Workflow.Ref}})
+	if err != nil || validated.Workflow == nil || validated.Workflow.State != "VALID" {
+		t.Fatalf("validate coordinator-owned Workflow: %v", err)
+	}
+	version = validated.Workflow.Version
+	published, err := service.Execute(ctx, command.Command{Kind: command.PublishWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "self-stage-workflow-publish", ExpectedVersion: &version},
+		Payload:  command.WorkflowInput{Ref: created.Workflow.Ref}})
+	if err != nil || published.Workflow == nil || published.Workflow.State != "PUBLISHED" {
+		t.Fatalf("publish coordinator-owned Workflow: %v", err)
+	}
+	launch := func(key string) command.Result {
+		result, launchErr := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LaunchRunInput{
+				ProjectRef: projectRef, Target: entity.RunTarget{Type: "WORKFLOW", Ref: published.Workflow.Ref},
+				Task: "Review the bounded input.",
+			}})
+		if launchErr != nil || result.Run == nil {
+			t.Fatalf("launch coordinator-owned Workflow: %v", launchErr)
+		}
+		return result
+	}
+	claim := func(key string) map[string]any {
+		result, claimErr := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+		if claimErr != nil || len(result.RuntimeItems) != 1 {
+			t.Fatalf("claim coordinator-owned stage: items=%d err=%v", len(result.RuntimeItems), claimErr)
+		}
+		return result.RuntimeItems[0]
+	}
+	missing := launch("self-stage-missing-launch")
+	missingLease := claim("self-stage-missing-claim")
+	targets, ok := missingLease["delegationTargets"].([]map[string]string)
+	if !ok || len(targets) != 1 || targets[0]["ref"] != coordinator.Ref || targets[0]["workflowStepKey"] != "self-review" {
+		t.Fatalf("coordinator without global delegation capability lost its exact own stage: %#v", missingLease["delegationTargets"])
+	}
+	incomplete := completeClaimedExecution(t, ctx, service, worker, missingLease, "self-stage-missing", false)
+	if incomplete.Run == nil || incomplete.Run.Ref != missing.Run.Ref || incomplete.Run.State != "FAILED" ||
+		incomplete.Run.SafeErrorCode != "RUNTIME_WORKFLOW_INCOMPLETE" || incomplete.Graph == nil {
+		t.Fatalf("unexecuted stage was reported as complete: run=%#v", incomplete.Run)
+	}
+	for _, node := range incomplete.Graph.Nodes {
+		if node.Type == "AGENT_EXECUTION" && node.State == "PLANNED" {
+			t.Fatalf("terminal Workflow retained an open planned stage: %#v", node)
+		}
+	}
+	executed := launch("self-stage-executed-launch")
+	coordinatorLease := claim("self-stage-executed-claim")
+	delegated, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "self-stage-delegate"}, Payload: command.DelegateInput{
+			LeaseRef: stringMap(coordinatorLease, "leaseRef"), Fence: stringMap(coordinatorLease, "fence"),
+			Generation: coordinatorLease["generation"].(int64), TargetAgentRef: coordinator.Ref,
+			WorkflowStepKey: "self-review", Task: "Review the bounded input.",
+		}})
+	if err != nil || delegated.Run == nil {
+		t.Fatalf("materialize coordinator-owned stage: %v", err)
+	}
+	childLease := claim("self-stage-child-claim")
+	if stringMap(childLease, "runRef") != delegated.Run.Ref {
+		t.Fatalf("claimed wrong coordinator-owned child: %q", stringMap(childLease, "runRef"))
+	}
+	if childTargets, _ := childLease["delegationTargets"].([]map[string]string); len(childTargets) != 0 {
+		t.Fatalf("stage child inherited coordinator delegation targets: %#v", childTargets)
+	}
+	initial := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "self-stage-coordinator", false)
+	if initial.Run == nil || initial.Run.State != "RUNNING" {
+		t.Fatalf("coordinator completed before stage: %#v", initial.Run)
+	}
+	completeClaimedExecution(t, ctx, service, worker, childLease, "self-stage-child", false)
+	continuation := claim("self-stage-continuation-claim")
+	completed := completeClaimedExecution(t, ctx, service, worker, continuation, "self-stage-continuation", false)
+	if completed.Run == nil || completed.Run.Ref != executed.Run.Ref || completed.Run.State != "SUCCEEDED" || completed.Graph == nil {
+		t.Fatalf("coordinator-owned stage did not complete its root: %#v", completed.Run)
+	}
+	for _, node := range completed.Graph.Nodes {
+		if node.Type == "AGENT_EXECUTION" && node.State == "PLANNED" {
+			t.Fatalf("successful Workflow retained a planned stage: %#v", node)
+		}
+	}
+}
+
 func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -5075,6 +5175,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	coordinator := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-coordinator", "Content coordinator")
 	firstChild := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-researcher", "Research specialist")
 	secondChild := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-editor", "Content editor")
+	testCoordinatorOwnedWorkflow(t, ctx, service, owner, worker, project.Project.Ref, coordinator)
 	coordinatorVersion := coordinator.Version
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-unknown-capability", ExpectedVersion: &coordinatorVersion},

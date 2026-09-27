@@ -11,6 +11,24 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+// CapabilityDigest закрепляет возможности одной выбранной модели одного аккаунта.
+// Изменение других моделей в том же наблюдении не меняет этот pin.
+func CapabilityDigest(provider, accountRef, model string, efforts []string, defaultEffort string, isDefault bool) string {
+	canonicalEfforts := append([]string{}, efforts...)
+	slices.Sort(canonicalEfforts)
+	raw, _ := json.Marshal(struct {
+		Version       int      `json:"version"`
+		Provider      string   `json:"provider"`
+		AccountRef    string   `json:"accountRef"`
+		Model         string   `json:"model"`
+		Efforts       []string `json:"efforts"`
+		DefaultEffort string   `json:"defaultEffort"`
+		IsDefault     bool     `json:"isDefault"`
+	}{2, provider, accountRef, model, canonicalEfforts, defaultEffort, isDefault})
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
 // Digest связывает полный безопасный каталог, не его страницу или поисковый срез.
 func Digest(models []entity.ModelCapability, sources ...string) (string, error) {
 	items := make([]entity.ModelCapability, len(models))

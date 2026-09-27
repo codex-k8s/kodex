@@ -205,6 +205,14 @@ export const serverTokenTranslations = {
     "Входные данные превышают допустимый размер",
     "Runtime input exceeds the size limit",
   ],
+  RUNTIME_WORKFLOW_INCOMPLETE: [
+    "Процесс завершился до выполнения всех этапов",
+    "Workflow ended before all steps were executed",
+  ],
+  WORKFLOW_STEPS_UNFULFILLED: [
+    "Процесс не выполнил все запланированные этапы",
+    "Workflow did not execute every planned step",
+  ],
   RUNTIME_MCP_UNAVAILABLE: [
     "Инструменты исполнения недоступны",
     "Runtime tools unavailable",
