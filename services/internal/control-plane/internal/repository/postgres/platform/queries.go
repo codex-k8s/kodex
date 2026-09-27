@@ -1597,7 +1597,11 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 	filter.Query = strings.TrimSpace(filter.Query)
 	filter.State, filter.ArtifactType, filter.ScanState, filter.SourceKind = lifecycleState, artifactType, scanState, sourceKind
 	return authorizedCatalogWithTotal(ctx, repository, scope, "ARTIFACT", filter,
-		func(ctx context.Context, tx pgx.Tx, cursorRef string, limit int32) ([]entity.Artifact, error) {
+		func(ctx context.Context, tx pgx.Tx, cursorPosition string, limit int32) ([]entity.Artifact, error) {
+			cursorAt, cursorRef, err := decodeArtifactCursor(cursorPosition)
+			if err != nil {
+				return nil, err
+			}
 			rows, err := tx.Query(ctx, queryQueriesListartifactsSelectArtifactBindingsArtifactIdIdOrganizationId, pgx.StrictNamedArgs{
 				"authority_project": scope.authorityProjectID,
 				"organization_id":   scope.organizationID,
@@ -1611,6 +1615,7 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 				"scan_state":        scanState,
 				"source_kind":       sourceKind,
 				"source_kinds":      sourceKinds,
+				"cursor_created_at": cursorAt,
 				"cursor_ref":        cursorRef,
 				"limit":             limit,
 			})
@@ -1648,6 +1653,8 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 				return 0, errs.ErrUnavailable
 			}
 			return total, nil
+		}, func(item entity.Artifact) string {
+			return encodeArtifactCursor(item.CreatedAt, item.Ref)
 		})
 }
 

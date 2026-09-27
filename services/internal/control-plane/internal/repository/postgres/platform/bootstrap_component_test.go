@@ -6315,8 +6315,8 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1},
 	})
 	firstRef, secondRef := quarantined.Ref, uploaded.Ref
-	if firstRef > secondRef {
-		firstRef, secondRef = secondRef, firstRef
+	if uploaded.CreatedAt.After(quarantined.CreatedAt) || uploaded.CreatedAt.Equal(quarantined.CreatedAt) && uploaded.Ref > quarantined.Ref {
+		firstRef, secondRef = uploaded.Ref, quarantined.Ref
 	}
 	if err != nil || firstTotal != 2 || len(firstPage) != 1 || firstPage[0].Ref != firstRef || nextPageToken == "" {
 		t.Fatalf("first artifact cursor page is unstable: artifacts=%#v next=%q err=%v", firstPage, nextPageToken, err)

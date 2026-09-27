@@ -134,18 +134,32 @@ useCursorInfiniteScroll({
 }
 .home-result-rows--dashboard .home-result-row {
   height: auto;
-  min-height: 74px;
-  align-items: center;
-  padding: 12px 16px;
+  min-height: 82px;
+  align-items: start;
+  row-gap: 5px;
+  padding: 14px 16px;
 }
 .home-result-rows--dashboard .home-result-row > :first-child {
   grid-column: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 .home-result-rows--dashboard .home-result-row small {
   grid-column: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 .home-result-rows--dashboard .home-result-row :deep(.status-badge) {
   grid-column: 2;
   grid-row: 1 / 3;
+  align-self: center;
 }
 </style>

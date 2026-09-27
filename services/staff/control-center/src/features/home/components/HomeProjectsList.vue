@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { FolderKanban } from "@lucide/vue";
+import { ChevronRight, FolderKanban } from "@lucide/vue";
 import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 defineProps<{ items: Project[]; expanded?: boolean; dashboard?: boolean }>();
@@ -24,7 +24,14 @@ defineProps<{ items: Project[]; expanded?: boolean; dashboard?: boolean }>();
       <div class="home-project__copy">
         <h3>{{ project.name }}</h3>
         <p>{{ project.purpose }}</p>
-        <small>
+        <small
+          class="home-project__activity"
+          :class="{
+            'home-project__activity--attention': project.pendingGateCount > 0,
+            'home-project__activity--running':
+              project.pendingGateCount === 0 && project.activeRunCount > 0,
+          }"
+        >
           {{
             $t("workboard.projectActivity", {
               runs: project.activeRunCount,
@@ -35,6 +42,11 @@ defineProps<{ items: Project[]; expanded?: boolean; dashboard?: boolean }>();
         </small>
       </div>
       <StatusBadge :state="project.lifecycle" />
+      <ChevronRight
+        class="home-project__chevron"
+        :size="16"
+        aria-hidden="true"
+      />
     </RouterLink>
   </div>
 </template>
@@ -90,6 +102,9 @@ defineProps<{ items: Project[]; expanded?: boolean; dashboard?: boolean }>();
   margin-top: 9px;
   color: var(--muted);
 }
+.home-project__chevron {
+  display: none;
+}
 
 .home-projects {
   grid-auto-rows: 160px;
@@ -109,8 +124,11 @@ defineProps<{ items: Project[]; expanded?: boolean; dashboard?: boolean }>();
   overflow: visible;
 }
 .home-projects--dashboard .home-project {
-  display: block;
-  min-height: 62px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--hairline);
 }
@@ -128,6 +146,26 @@ defineProps<{ items: Project[]; expanded?: boolean; dashboard?: boolean }>();
 }
 .home-projects--dashboard .home-project small {
   margin-top: 4px;
+  line-height: 1.35;
+}
+.home-projects--dashboard .home-project__activity::before {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  content: "";
+}
+.home-projects--dashboard .home-project__activity--attention::before {
+  background: var(--warning, #b7791f);
+}
+.home-projects--dashboard .home-project__activity--running::before {
+  background: var(--accent);
+}
+.home-projects--dashboard .home-project__chevron {
+  display: block;
+  color: var(--muted);
 }
 @media (max-width: 700px) {
   .home-projects {
