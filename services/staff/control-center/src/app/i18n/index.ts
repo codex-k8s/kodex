@@ -1142,6 +1142,7 @@ const ru = {
     buildProgress: "Подготовка окружения: {progress}%",
     recipeName: "{name}: рабочее окружение",
     catalogTitle: "Каталог рабочих окружений",
+    catalogSoftware: "Инструменты и программы",
     catalogDescription:
       "Пользователи выбирают назначение окружения; внутренние образы и digest управляются платформой.",
   },
@@ -3127,6 +3128,7 @@ const ru = {
     assistant: "Always-hot помощник",
     adapters: "Необязательные адаптеры",
     incidents: "Диагностика",
+    nextStep: "Следующий шаг",
     ownerInstructions: "Дополнение владельца к системным инструкциям",
     corePromptProtected:
       "Core prompt поставляется платформой и не может быть заменён.",
@@ -5053,6 +5055,7 @@ const en = {
     buildProgress: "Preparing environment: {progress}%",
     recipeName: "{name}: work environment",
     catalogTitle: "Work environment catalog",
+    catalogSoftware: "Tools and software",
     catalogDescription:
       "Users choose an environment by purpose; internal images and digests are managed by the platform.",
   },
@@ -6950,6 +6953,7 @@ const en = {
     assistant: "Always-hot assistant",
     adapters: "Optional adapters",
     incidents: "Diagnostics",
+    nextStep: "Next step",
     ownerInstructions: "Owner extension to system instructions",
     corePromptProtected:
       "The core prompt is shipped with the platform and cannot be replaced.",
