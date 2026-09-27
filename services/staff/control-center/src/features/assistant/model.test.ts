@@ -16,6 +16,7 @@ import {
   assistantRoleImageBuildTarget,
   editableOperations,
   friendlyPlanOperationType,
+  latestAssistantSnapshot,
   operationActionLabel,
   operationInputs,
   operationSupportingTitle,
@@ -1574,6 +1575,28 @@ describe("assistant runtime presentation", () => {
 
   it("не подменяет явное состояние выполнения", () => {
     expect(assistantEffectiveRuntimeState(assistant("BUSY", []))).toBe("BUSY");
+  });
+
+  it("показывает более свежую готовность из глобального чтения вместо устаревшей сводки администрирования", () => {
+    const administration = {
+      ...assistant("RECOVERING", []),
+      lastHeartbeatAt: "2026-09-27T23:02:00Z",
+    };
+    const live = {
+      ...assistant("READY", ["CREATE_CONVERSATION"]),
+      lastHeartbeatAt: "2026-09-27T23:03:00Z",
+      readinessSummary: "Готов к команде",
+    } satisfies SystemAssistant;
+    expect(latestAssistantSnapshot(administration, live)).toBe(live);
+    expect(
+      latestAssistantSnapshot({ ...administration, version: 2 }, live),
+    ).toMatchObject({ runtimeState: "RECOVERING", version: 2 });
+    expect(
+      latestAssistantSnapshot(administration, {
+        ...live,
+        ref: "other_assistant",
+      }),
+    ).toBe(administration);
   });
 
   it("отличает provider-free first-run от готовой warm session", () => {

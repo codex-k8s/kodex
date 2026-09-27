@@ -486,6 +486,24 @@ export function assistantEffectiveRuntimeState(
   return assistant.runtimeState;
 }
 
+export function latestAssistantSnapshot(
+  administration: SystemAssistant,
+  live: SystemAssistant | undefined,
+): SystemAssistant {
+  if (!live || live.ref !== administration.ref) return administration;
+  if (live.version !== administration.version)
+    return live.version > administration.version ? live : administration;
+  const administrationHeartbeat = Date.parse(
+    administration.lastHeartbeatAt ?? "",
+  );
+  const liveHeartbeat = Date.parse(live.lastHeartbeatAt ?? "");
+  return Number.isFinite(administrationHeartbeat) &&
+    Number.isFinite(liveHeartbeat) &&
+    liveHeartbeat < administrationHeartbeat
+    ? administration
+    : live;
+}
+
 export function assistantRequiresProviderAccount(
   assistant: SystemAssistant,
 ): boolean {

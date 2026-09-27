@@ -2,7 +2,10 @@
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { computed, onMounted, ref } from "vue";
 
-import { assistantEffectiveRuntimeState } from "@/features/assistant/model";
+import {
+  assistantEffectiveRuntimeState,
+  latestAssistantSnapshot,
+} from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
@@ -16,6 +19,11 @@ const ownerInstructions = ref("");
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const state = computed(() => platform.administration);
+const currentAssistant = computed(() =>
+  state.value
+    ? latestAssistantSnapshot(state.value.assistant, platform.assistant)
+    : undefined,
+);
 const environments = computed(() =>
   Object.values(platform.roleEnvironments).sort((left, right) =>
     left.key.localeCompare(right.key),
@@ -97,10 +105,13 @@ onMounted(() => void load());
           <article class="metric-card">
             <span>{{ $t("administration.assistant") }}</span
             ><StatusBadge
-              :state="assistantEffectiveRuntimeState(state.assistant)"
-              :label="state.assistant.readinessSummary"
+              :state="
+                currentAssistant
+                  ? assistantEffectiveRuntimeState(currentAssistant)
+                  : 'RECOVERING'
+              "
+              :label="currentAssistant?.readinessSummary"
             />
-            <p>{{ state.assistant.readinessSummary }}</p>
           </article>
           <article class="metric-card">
             <span>{{ $t("administration.adapters") }}</span
