@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Expand, Plus, Search } from "@lucide/vue";
+import { ChevronRight, Plus, Search } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { RouterLink } from "vue-router";
 import type { ManagedConfigurationSummary } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -19,7 +19,6 @@ import {
 const props = defineProps<{
   kind: ConfigurationKind;
   projectRef?: string;
-  expanded?: boolean;
   autoOpenImport?: boolean;
 }>();
 const emit = defineEmits<{ created: [configurationRef: string] }>();
@@ -32,14 +31,14 @@ const pageSize = useAdaptiveCursorPageSize({
   container: list,
   itemSelector: ".configuration-catalog__row",
   itemCount: () => items.value.length,
-  estimatedItemHeight: 72,
+  estimatedItemHeight: 64,
+  estimatedColumns: 1,
   minimum: 8,
   maximum: 100,
 });
 const nextPageToken = ref<string>();
 const total = ref(0);
 const loading = ref(false);
-const expansionOpen = ref(false);
 const importOpen = ref(
   props.kind === "INTEGRATION_DEFINITION" && props.autoOpenImport,
 );
@@ -179,15 +178,6 @@ function created(configurationRef: string): void {
       >
         {{ $t("managed.openapiImport.open") }}
       </button>
-      <button
-        v-if="!props.expanded && (total > 6 || nextPageToken)"
-        class="icon-button"
-        :title="$t('managed.expandCatalog')"
-        :aria-label="$t('managed.expandCatalog')"
-        @click="expansionOpen = true"
-      >
-        <Expand :size="18" />
-      </button>
     </header>
     <p
       v-if="projectRequired"
@@ -212,38 +202,82 @@ function created(configurationRef: string): void {
         {{ $t(query.trim() ? "managed.searchEmptyText" : "managed.emptyText") }}
       </p>
     </div>
-    <div
-      ref="list"
-      class="configuration-catalog__list"
-      :class="{ 'configuration-catalog__list--expanded': props.expanded }"
-    >
-      <RouterLink
-        v-for="item in items"
-        :key="item.ref"
-        class="configuration-catalog__row"
-        :to="{
-          name: 'configuration',
-          params: { kind: item.kind, configurationRef: item.ref },
-        }"
-      >
-        <div>
-          <strong>{{ item.name }}</strong
-          ><small
-            >{{ item.managedBy
-            }}<template v-if="item.source"> · {{ item.source }}</template
-            ><template v-if="item.sourceRevision">
-              · {{ item.sourceRevision }}</template
-            ></small
+    <div ref="list" class="configuration-catalog__list">
+      <table v-if="items.length" class="configuration-catalog__table">
+        <thead>
+          <tr>
+            <th scope="col">{{ $t("catalog.table.name") }}</th>
+            <th scope="col">{{ $t("managed.catalogSource") }}</th>
+            <th scope="col">{{ $t("catalog.table.state") }}</th>
+            <th scope="col">{{ $t("managed.catalogRevision") }}</th>
+            <th scope="col" class="configuration-catalog__open-heading">
+              {{ $t("catalog.table.open") }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="item in items"
+            :key="item.ref"
+            class="configuration-catalog__row"
           >
-        </div>
-        <StatusBadge
-          :state="
-            item.archived
-              ? 'ARCHIVED'
-              : (item.currentRevision?.state ?? 'DRAFT')
-          "
-        /><span>v{{ item.currentRevision?.revision ?? item.version }}</span>
-      </RouterLink>
+            <td>
+              <RouterLink
+                class="configuration-catalog__identity"
+                :to="{
+                  name: 'configuration',
+                  params: { kind: item.kind, configurationRef: item.ref },
+                }"
+                :title="item.name"
+              >
+                <EntityIcon
+                  :kind="
+                    item.kind === 'ROLE_IMAGE'
+                      ? 'ROLE_IMAGE'
+                      : item.kind === 'INTEGRATION_DEFINITION'
+                        ? 'INTEGRATION'
+                        : 'CONFIGURATION'
+                  "
+                />
+                <strong>{{ item.name }}</strong>
+              </RouterLink>
+            </td>
+            <td>
+              <strong>{{
+                $t(`roleImages.managedBy.${item.managedBy}`)
+              }}</strong>
+              <small v-if="item.source" :title="item.source">{{
+                item.source
+              }}</small>
+              <small v-if="item.sourceRevision" :title="item.sourceRevision">{{
+                item.sourceRevision
+              }}</small>
+            </td>
+            <td>
+              <StatusBadge
+                :state="
+                  item.archived
+                    ? 'ARCHIVED'
+                    : (item.currentRevision?.state ?? 'DRAFT')
+                "
+              />
+            </td>
+            <td>v{{ item.currentRevision?.revision ?? item.version }}</td>
+            <td class="configuration-catalog__open-cell">
+              <RouterLink
+                class="icon-button"
+                :to="{
+                  name: 'configuration',
+                  params: { kind: item.kind, configurationRef: item.ref },
+                }"
+                :aria-label="$t('catalog.table.open')"
+                :title="$t('catalog.table.open')"
+                ><ChevronRight :size="18" aria-hidden="true"
+              /></RouterLink>
+            </td>
+          </tr>
+        </tbody>
+      </table>
       <div
         v-if="nextPageToken"
         ref="sentinel"
@@ -254,17 +288,6 @@ function created(configurationRef: string): void {
         <span class="sr-only">{{ items.length }}/{{ total }}</span>
       </div>
     </div>
-    <ModalDialog
-      v-if="expansionOpen"
-      :title="$t(`managed.kinds.${kind}`)"
-      size="xl"
-      @close="expansionOpen = false"
-      ><ConfigurationCatalog
-        :kind="kind"
-        :project-ref="projectRef"
-        expanded
-        @created="emit('created', $event)"
-    /></ModalDialog>
     <OpenAPIImportDialog
       v-if="importOpen"
       @close="importOpen = false"
@@ -296,8 +319,11 @@ function created(configurationRef: string): void {
   min-width: 0;
 }
 .configuration-catalog__list {
-  max-height: 576px;
-  overflow-y: auto;
+  max-height: min(720px, calc(100dvh - 220px));
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
 }
 .configuration-catalog__empty {
   padding: 16px;
@@ -309,44 +335,80 @@ function created(configurationRef: string): void {
   margin: 4px 0 0;
   color: var(--muted);
 }
-.configuration-catalog__list--expanded {
-  max-height: 65vh;
+.configuration-catalog__table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.configuration-catalog__table th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding: 11px 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+.configuration-catalog__table th:nth-child(1) {
+  width: 44%;
+}
+.configuration-catalog__table th:nth-child(2) {
+  width: 30%;
+}
+.configuration-catalog__table th:nth-child(3) {
+  width: 15%;
+}
+.configuration-catalog__table th:nth-child(4) {
+  width: 7%;
+}
+.configuration-catalog__table th:nth-child(5) {
+  width: 4%;
+  min-width: 52px;
+}
+.configuration-catalog__table td {
+  height: 64px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
 }
 .configuration-catalog__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
-  align-items: center;
-  min-height: 72px;
-  padding: 10px 0;
-  color: inherit;
-  text-decoration: none;
-  border-bottom: 1px solid var(--border);
+  min-height: 64px;
 }
 .configuration-catalog__sentinel {
   min-height: 1px;
 }
-.configuration-catalog__row > div {
+.configuration-catalog__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
-  overflow-wrap: anywhere;
+  color: var(--text);
+  text-decoration: none;
 }
-.configuration-catalog__row strong,
+.configuration-catalog__identity:hover strong {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.configuration-catalog__identity strong,
+.configuration-catalog__row td > strong,
 .configuration-catalog__row small {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: block;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .configuration-catalog__row small {
-  margin-top: 4px;
+  margin-top: 2px;
   color: var(--muted);
 }
-@media (max-width: 600px) {
-  .configuration-catalog__row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .configuration-catalog__row > span:last-child {
-    display: none;
-  }
+.configuration-catalog__open-heading,
+.configuration-catalog__open-cell {
+  text-align: center !important;
+}
+.configuration-catalog__open-cell .icon-button {
+  display: inline-flex;
 }
 </style>

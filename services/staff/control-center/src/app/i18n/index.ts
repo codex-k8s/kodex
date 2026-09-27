@@ -541,7 +541,8 @@ const ru = {
     },
   },
   managed: {
-    expandCatalog: "Развернуть каталог",
+    catalogSource: "Источник",
+    catalogRevision: "Ревизия",
     emptyTitle: "Конфигураций пока нет",
     emptyText: "Создайте первую конфигурацию в выбранном разделе.",
     searchEmptyTitle: "Конфигурации не найдены",
@@ -4178,7 +4179,8 @@ const en = {
     },
   },
   managed: {
-    expandCatalog: "Expand catalog",
+    catalogSource: "Source",
+    catalogRevision: "Revision",
     emptyTitle: "No configurations yet",
     emptyText: "Create the first configuration in this section.",
     searchEmptyTitle: "No matching configurations",

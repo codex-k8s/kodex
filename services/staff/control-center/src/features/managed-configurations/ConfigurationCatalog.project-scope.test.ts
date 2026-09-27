@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToString } from "@vue/server-renderer";
 import { createSSRApp, defineComponent, h } from "vue";
 import { createI18n } from "vue-i18n";
@@ -9,6 +10,11 @@ vi.mock("@/shared/ui/ProblemNotice.vue", () => ({
 }));
 
 import ConfigurationCatalog from "./ConfigurationCatalog.vue";
+
+const catalogSource = readFileSync(
+  new URL("./ConfigurationCatalog.vue", import.meta.url),
+  "utf8",
+);
 
 async function render(
   kind: "PROMPT_TEMPLATE" | "ROLE_IMAGE" | "INTEGRATION_DEFINITION",
@@ -57,6 +63,14 @@ async function render(
 }
 
 describe("Project scope configuration catalog", () => {
+  it("показывает таблицу с иконкой и не открывает второй каталог в модалке", () => {
+    expect(catalogSource).toContain('<table v-if="items.length"');
+    expect(catalogSource).toContain("<EntityIcon");
+    expect(catalogSource).toContain('class="configuration-catalog__identity"');
+    expect(catalogSource).not.toContain("expandCatalog");
+    expect(catalogSource).not.toContain("<ModalDialog");
+  });
+
   it.each(["PROMPT_TEMPLATE", "ROLE_IMAGE"] as const)(
     "объясняет недоступный create для %s без проекта",
     async (kind) => {
