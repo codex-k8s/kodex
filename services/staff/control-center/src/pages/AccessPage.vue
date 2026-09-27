@@ -643,6 +643,7 @@ onMounted(() => void loadBaseline());
     />
     <EffectiveAccessPanel
       v-else
+      :initial-project-ref="projectRef || undefined"
       :initial-subject-ref="
         typeof route.query.subjectRef === 'string'
           ? route.query.subjectRef

@@ -41,6 +41,7 @@ type Mode = "QUERY" | "EXPLAIN" | "SIMULATE";
 
 const props = defineProps<{
   initialSubjectRef?: string;
+  initialProjectRef?: string;
   subjects: AccessSubject[];
   permissions: PermissionDefinition[];
   roles: AccessRole[];
@@ -99,7 +100,7 @@ const form = reactive({
   subjectRef: "",
   permissionKey: "",
   roleRef: "",
-  scope: emptyScopeDraft(),
+  scope: emptyScopeDraft(props.initialProjectRef),
 });
 watch(
   () => props.initialSubjectRef,
@@ -107,6 +108,12 @@ watch(
     if (ref) form.subjectRef = ref;
   },
   { immediate: true },
+);
+watch(
+  () => props.initialProjectRef,
+  (ref) => {
+    form.scope = emptyScopeDraft(ref);
+  },
 );
 const subjectRows = new Map<string, AccessSubject>();
 const roleRows = new Map<string, AccessRole>();
