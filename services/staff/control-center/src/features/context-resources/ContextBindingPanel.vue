@@ -19,6 +19,7 @@ const props = defineProps<{
   projectRef: string;
   resourceRef: string;
   revisionRef: string;
+  revisionNumber: number;
   digest: string;
   eligible: boolean;
   agentRef?: string;
@@ -150,7 +151,11 @@ onBeforeUnmount(() => controller.abort());
 <template>
   <section class="context-binding">
     <h3>{{ $t("contextResources.agentBinding") }}</h3>
-    <code>{{ revisionRef }} / {{ digest }}</code>
+    <p class="context-binding__summary">
+      {{
+        $t("contextResources.bindCurrentRevision", { revision: revisionNumber })
+      }}
+    </p>
     <AsyncEntityPicker
       v-model="agent"
       :selected="selected"
@@ -163,9 +168,16 @@ onBeforeUnmount(() => controller.abort());
     <dl v-if="binding">
       <dt>{{ $t("contextResources.boundRevision") }}</dt>
       <dd>
-        <code>{{ binding.revisionRef }} / {{ binding.digest }}</code>
+        {{
+          $t(
+            binding.revisionRef === revisionRef
+              ? "contextResources.currentRevisionBound"
+              : "contextResources.otherRevisionBound",
+          )
+        }}
       </dd>
-      <dt>{{ $t("impact.bindingVersion", { version: binding.version }) }}</dt>
+      <dt>{{ $t("contextResources.bindingVersion") }}</dt>
+      <dd>v{{ binding.version }}</dd>
     </dl>
     <div class="context-binding-actions">
       <button
@@ -198,6 +210,25 @@ onBeforeUnmount(() => controller.abort());
         <RefreshCw :size="18" />
       </button>
     </div>
+    <details class="context-binding__technical">
+      <summary>{{ $t("contextResources.technicalDetails") }}</summary>
+      <dl>
+        <dt>{{ $t("contextResources.revision") }}</dt>
+        <dd>
+          <code>{{ revisionRef }}</code>
+        </dd>
+        <dt>Digest</dt>
+        <dd>
+          <code>{{ digest }}</code>
+        </dd>
+        <template v-if="binding">
+          <dt>{{ $t("contextResources.boundRevision") }}</dt>
+          <dd>
+            <code>{{ binding.revisionRef }} / {{ binding.digest }}</code>
+          </dd>
+        </template>
+      </dl>
+    </details>
   </section>
 </template>
 <style scoped>
@@ -213,11 +244,24 @@ onBeforeUnmount(() => controller.abort());
   margin: 0;
 }
 .context-binding dd {
-  margin: 8px 0;
+  margin: 0;
   overflow-wrap: anywhere;
 }
-.context-binding > code {
-  overflow-wrap: anywhere;
+.context-binding dl {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+}
+.context-binding__summary {
+  margin: 0;
+  color: var(--muted);
+}
+.context-binding__technical summary {
+  cursor: pointer;
+}
+.context-binding__technical dl {
+  margin-top: 10px;
 }
 .context-binding-actions {
   display: flex;

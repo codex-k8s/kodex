@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ContextEditor from "@/features/context-resources/ContextEditor.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 const route = useRoute();
 const router = useRouter();
+const resourceName = ref("");
+watch(
+  () => route.fullPath,
+  () => {
+    resourceName.value = "";
+  },
+  { flush: "sync" },
+);
 const kind = computed(() =>
   route.params.kind === "skills" || route.params.kind === "memory"
     ? route.params.kind
@@ -44,7 +52,7 @@ function created(ref: string, projectRef: string): void {
 }
 </script>
 <template>
-  <PageFrame :title="$t(titleKey)"
+  <PageFrame :title="reference && resourceName ? resourceName : $t(titleKey)"
     ><ContextEditor
       v-if="kind"
       :key="route.fullPath"
@@ -53,5 +61,6 @@ function created(ref: string, projectRef: string): void {
       :project-ref="projectRef"
       :agent-ref="agentRef"
       @created="created"
+      @named="resourceName = $event"
   /></PageFrame>
 </template>

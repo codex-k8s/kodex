@@ -48,7 +48,10 @@ const props = defineProps<{
   agentRef?: string;
 }>();
 const fieldPrefix = `context-editor-${useId()}`;
-const emit = defineEmits<{ created: [ref: string, projectRef: string] }>();
+const emit = defineEmits<{
+  created: [ref: string, projectRef: string];
+  named: [name: string];
+}>();
 const { t } = useI18n();
 const skill = ref<SkillBundle>();
 const memory = ref<KodexMemoryRecord>();
@@ -184,6 +187,7 @@ function acceptSkill(value: SkillBundle): void {
   skill.value = value;
   project.value = value.projectRef;
   const current = value.draftRevision ?? value.currentRevision;
+  if (current?.name) emit("named", current.name);
   specification.value = current
     ? {
         name: current.name,
@@ -204,6 +208,7 @@ function acceptMemory(value: KodexMemoryRecord): void {
   if (props.projectRef && value.projectRef !== props.projectRef)
     throw new Error("Memory project scope mismatch");
   memory.value = value;
+  emit("named", value.currentRevision.title);
   project.value = value.projectRef;
   memoryInput.value = {
     title: value.currentRevision.title,
@@ -649,6 +654,7 @@ onBeforeUnmount(() => {
       :resource-ref="item.ref"
       :project-ref="item.projectRef"
       :revision-ref="item.currentRevision.ref"
+      :revision-number="item.currentRevision.revision"
       :digest="item.currentRevision.digest"
       :agent-ref="agentRef"
       :owner-agent-ref="memory?.agentRef"
@@ -718,35 +724,45 @@ onBeforeUnmount(() => {
         </li>
       </ul>
     </template>
-    <dl v-if="revision" class="context-provenance">
-      <dt>{{ $t("contextResources.revision") }}</dt>
-      <dd>{{ revision.ref }} / {{ revision.revision }}</dd>
-      <dt>Digest</dt>
-      <dd>{{ revision.digest }}</dd>
-      <dt>{{ $t("managed.source") }}</dt>
-      <dd>
-        {{ revision.provenance.sourceKind }} /
-        {{ revision.provenance.sourceRef }}
-      </dd>
-      <dt>{{ $t("contextResources.actor") }}</dt>
-      <dd>{{ revision.provenance.actorRef }}</dd>
-      <dt>{{ $t("contextResources.createdAt") }}</dt>
-      <dd>{{ revision.provenance.createdAt }}</dd>
-      <template v-if="'scanState' in revision">
-        <dt>{{ $t("contextResources.scan") }}</dt>
+    <details v-if="revision" class="context-provenance">
+      <summary>
+        {{
+          $t("contextResources.revisionDetails", {
+            revision: revision.revision,
+          })
+        }}
+      </summary>
+      <dl>
+        <dt>{{ $t("contextResources.revision") }}</dt>
+        <dd>{{ revision.ref }} / {{ revision.revision }}</dd>
+        <dt>Digest</dt>
+        <dd>{{ revision.digest }}</dd>
+        <dt>{{ $t("managed.source") }}</dt>
         <dd>
-          <StatusBadge :state="revision.scanState" /> {{ revision.scanEngine }}
+          {{ revision.provenance.sourceKind }} /
+          {{ revision.provenance.sourceRef }}
         </dd>
-        <dt>{{ $t("contextResources.scanDigest") }}</dt>
-        <dd>{{ revision.scanDigest }}</dd>
-        <dt>{{ $t("contextResources.scannedAt") }}</dt>
-        <dd>{{ revision.scannedAt }}</dd>
-        <dt>{{ $t("contextResources.reviewedBy") }}</dt>
-        <dd>{{ revision.reviewedBy }}</dd>
-        <dt>{{ $t("contextResources.reviewedAt") }}</dt>
-        <dd>{{ revision.reviewedAt }}</dd>
-      </template>
-    </dl>
+        <dt>{{ $t("contextResources.actor") }}</dt>
+        <dd>{{ revision.provenance.actorRef }}</dd>
+        <dt>{{ $t("contextResources.createdAt") }}</dt>
+        <dd>{{ revision.provenance.createdAt }}</dd>
+        <template v-if="'scanState' in revision">
+          <dt>{{ $t("contextResources.scan") }}</dt>
+          <dd>
+            <StatusBadge :state="revision.scanState" />
+            {{ revision.scanEngine }}
+          </dd>
+          <dt>{{ $t("contextResources.scanDigest") }}</dt>
+          <dd>{{ revision.scanDigest }}</dd>
+          <dt>{{ $t("contextResources.scannedAt") }}</dt>
+          <dd>{{ revision.scannedAt }}</dd>
+          <dt>{{ $t("contextResources.reviewedBy") }}</dt>
+          <dd>{{ revision.reviewedBy }}</dd>
+          <dt>{{ $t("contextResources.reviewedAt") }}</dt>
+          <dd>{{ revision.reviewedAt }}</dd>
+        </template>
+      </dl>
+    </details>
   </section>
   <ModalDialog
     v-if="action"
@@ -915,6 +931,15 @@ onBeforeUnmount(() => {
   color: var(--danger);
 }
 .context-provenance {
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.context-provenance summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.context-provenance dl {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);
   gap: 10px;
