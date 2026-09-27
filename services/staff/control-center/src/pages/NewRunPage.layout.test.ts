@@ -31,6 +31,12 @@ describe("NewRunPage layout", () => {
     expect(source).toContain("min-height: 46px");
   });
 
+  it("очистка цели также убирает её старое имя из сводки запуска", () => {
+    expect(template).toContain('@update:model-value="updateTargetRef"');
+    expect(source).toContain("selectedTargetValue.value?.ref !== ref");
+    expect(source).toContain("selectedTargetValue.value = undefined");
+  });
+
   it("оставляет название необязательным и показывает источник запуска", () => {
     expect(template).toContain("runs.newRun.titleOptionalHint");
     expect(template).toContain("runs.newRun.titleWillBeSuggested");

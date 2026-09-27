@@ -399,6 +399,13 @@ function selectTarget(option: ExecutionTargetPickerOption): void {
   form.targetRef = option.ref;
 }
 
+function updateTargetRef(value: string | null | readonly string[]): void {
+  const ref = typeof value === "string" ? value : "";
+  form.targetRef = ref;
+  if (selectedTargetValue.value?.ref !== ref)
+    selectedTargetValue.value = undefined;
+}
+
 function setSessionMode(mode: "NEW" | "CONTINUE"): void {
   sessionMode.value = mode;
   if (mode === "NEW") {
@@ -610,12 +617,13 @@ watch(
                 <span>{{ $t("common.target") }}</span>
                 <AsyncEntityPicker
                   :key="`${projectRef}:${form.targetType}`"
-                  v-model="form.targetRef"
+                  :model-value="form.targetRef"
                   :load-page="targetLoader"
                   :selected="selectedTargetOption"
                   :trigger-label="$t('common.target')"
                   :placeholder="$t('runs.chooseTarget')"
                   :search-placeholder="$t('runs.chooseTarget')"
+                  @update:model-value="updateTargetRef"
                   @select="selectTarget"
                 />
                 <small v-if="selectedWorkflow">
