@@ -128,9 +128,11 @@ function nodeIcon(type: RunNode["type"]): Component {
 .run-node--succeeded {
   border-left-color: var(--success);
 }
-.run-node--failed,
-.run-node--cancelled {
+.run-node--failed {
   border-left-color: var(--danger);
+}
+.run-node--cancelled {
+  border-left-color: var(--text-secondary);
 }
 .run-node--session {
   border-left-width: 3px;
