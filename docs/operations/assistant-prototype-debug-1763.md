@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.187
+version: 1.0.188
 updated: 2026-09-27
 ---
 
@@ -3995,3 +3995,8 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-stt-picker-clean-20260927.jpeg`. Console error/warn пусты,
   завершённых HTTP 4xx/5xx нет; один bootstrap отменён навигацией.
   Публикация новой ревизии и реальный вызов STT — `NOT RUN`.
+- Пограничный browser-шаг после коммита `fc1895c24`: несохранённый переход
+  `gpt-transcribe → gpt-4o-transcribe` сохранил один видимый `ru`, а исходный
+  документ получил `language="ru"`, `parameters.languages=[]`; после no-cache
+  reload снова загружена опубликованная `gpt-transcribe`. Серверное состояние
+  не менялось.
