@@ -563,6 +563,10 @@ const ru = {
     },
   },
   managed: {
+    ownership: {
+      UI: "Создано в интерфейсе",
+      GIT: "Управляется из Git",
+    },
     catalogSource: "Источник",
     catalogRevision: "Ревизия",
     emptyTitle: "Конфигураций пока нет",
@@ -4276,6 +4280,10 @@ const en = {
     },
   },
   managed: {
+    ownership: {
+      UI: "Created in the interface",
+      GIT: "Managed from Git",
+    },
     catalogSource: "Source",
     catalogRevision: "Revision",
     emptyTitle: "No configurations yet",

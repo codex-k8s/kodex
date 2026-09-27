@@ -1202,7 +1202,9 @@ watch(
       <span v-if="revision">{{
         $t("managed.revision", { revision: revision.revision })
       }}</span>
-      <span v-if="configuration">{{ configuration.managedBy }}</span>
+      <span v-if="configuration">{{
+        $t("managed.ownership." + configuration.managedBy)
+      }}</span>
       <button
         v-if="configuration"
         class="icon-button"
