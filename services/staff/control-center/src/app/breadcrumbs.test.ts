@@ -16,6 +16,12 @@ const labels: BreadcrumbLabels = {
   run: "Запуск",
   files: "Файлы и знания",
   filesTrash: "Корзина",
+  skills: "Навыки",
+  skill: "Навык",
+  newSkill: "Новый навык",
+  memory: "Память Kodex",
+  memoryEntry: "Запись памяти",
+  newMemory: "Новая запись памяти",
   automations: "Автоматизации",
   environments: "Окружения",
   environment: "Окружение",
@@ -178,6 +184,48 @@ describe("breadcrumbs", () => {
       { label: "Продажи", path: "/projects/project_sales" },
       { label: "Файлы и знания", path: "/projects/project_sales/files" },
       { label: "Корзина" },
+    ]);
+  });
+
+  it("ведёт из нового навыка к каталогу текущего Проекта", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "project-context-resource",
+          project: { ref: "project_sales", name: "Продажи" },
+          contextResourceKind: "skills",
+          contextResourceNew: true,
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Проекты", path: "/projects" },
+      { label: "Продажи", path: "/projects/project_sales" },
+      {
+        label: "Файлы и знания",
+        path: "/projects/project_sales/files",
+      },
+      {
+        label: "Навыки",
+        path: "/projects/project_sales/files?view=skills",
+      },
+      { label: "Новый навык" },
+    ]);
+  });
+
+  it("ведёт из глобальной записи памяти к её каталогу", () => {
+    expect(
+      buildBreadcrumbs(
+        {
+          routeName: "context-resource",
+          contextResourceKind: "memory",
+        },
+        labels,
+      ),
+    ).toEqual([
+      { label: "Файлы и знания", path: "/files" },
+      { label: "Память Kodex", path: "/files?view=memory" },
+      { label: "Запись памяти" },
     ]);
   });
 

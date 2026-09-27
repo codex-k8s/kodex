@@ -17,6 +17,12 @@ export interface BreadcrumbLabels {
   run: string;
   files: string;
   filesTrash: string;
+  skills: string;
+  skill: string;
+  newSkill: string;
+  memory: string;
+  memoryEntry: string;
+  newMemory: string;
   automations: string;
   environments: string;
   environment: string;
@@ -42,6 +48,8 @@ export interface BreadcrumbContext {
   runName?: string;
   environmentName?: string;
   configurationKindName?: string;
+  contextResourceKind?: "skills" | "memory";
+  contextResourceNew?: boolean;
 }
 
 function current(label: string): Breadcrumb {
@@ -170,6 +178,32 @@ export function buildBreadcrumbs(
         },
         current(labels.filesTrash),
       ];
+    case "context-resource":
+    case "project-context-resource": {
+      const isSkill = context.contextResourceKind === "skills";
+      const catalog = isSkill ? labels.skills : labels.memory;
+      const entity = isSkill
+        ? context.contextResourceNew
+          ? labels.newSkill
+          : labels.skill
+        : context.contextResourceNew
+          ? labels.newMemory
+          : labels.memoryEntry;
+      const catalogPath = context.project
+        ? `/projects/${encodeURIComponent(context.project.ref)}/files?view=${isSkill ? "skills" : "memory"}`
+        : `/files?view=${isSkill ? "skills" : "memory"}`;
+      return [
+        ...(context.project ? project : []),
+        {
+          label: labels.files,
+          path: context.project
+            ? `/projects/${encodeURIComponent(context.project.ref)}/files`
+            : "/files",
+        },
+        { label: catalog, path: catalogPath },
+        current(entity),
+      ];
+    }
     case "automations":
       return [...project, current(labels.automations)];
     case "runtime-environments":

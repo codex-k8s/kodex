@@ -83,6 +83,12 @@ const specification = ref<SkillBundleSpecification>({
   description: "",
   files: [],
 });
+const skillNameLength = computed(
+  () => Array.from(specification.value.name).length,
+);
+const skillDescriptionLength = computed(
+  () => Array.from(specification.value.description).length,
+);
 const memoryInput = ref<MemoryRecordSpecification>({
   title: "",
   summary: "",
@@ -529,9 +535,15 @@ onBeforeUnmount(() => {
             :name="`${fieldPrefix}-skill-name`"
             maxlength="320"
             required
+            :aria-invalid="skillNameLength > 160"
             :aria-label="$t('common.name')"
-          /><span
-            >{{ Array.from(specification.name).length }} / 160</span
+          /><span :class="{ 'context-form__over-limit': skillNameLength > 160 }"
+            >{{ skillNameLength }} / 160</span
+          ><small
+            v-if="skillNameLength > 160"
+            class="context-form__over-limit"
+            role="alert"
+            >{{ $t("contextResources.maxLength", { max: 160 }) }}</small
           ></label
         >
         <label
@@ -540,9 +552,18 @@ onBeforeUnmount(() => {
             v-model="specification.description"
             maxlength="4000"
             :disabled="!editable"
+            :aria-invalid="skillDescriptionLength > 2000"
             rows="3"
           /><span
-            >{{ Array.from(specification.description).length }} / 2000</span
+            :class="{
+              'context-form__over-limit': skillDescriptionLength > 2000,
+            }"
+            >{{ skillDescriptionLength }} / 2000</span
+          ><small
+            v-if="skillDescriptionLength > 2000"
+            class="context-form__over-limit"
+            role="alert"
+            >{{ $t("contextResources.maxLength", { max: 2000 }) }}</small
           ></label
         >
         <button
@@ -843,6 +864,7 @@ onBeforeUnmount(() => {
 .context-editor {
   min-width: 0;
   width: min(100%, 1120px);
+  margin-inline: auto;
   display: grid;
   gap: 18px;
   padding: 20px;
@@ -888,6 +910,9 @@ onBeforeUnmount(() => {
 .context-form small {
   color: var(--muted);
   font-size: 0.78rem;
+}
+.context-form .context-form__over-limit {
+  color: var(--danger);
 }
 .context-provenance {
   display: grid;

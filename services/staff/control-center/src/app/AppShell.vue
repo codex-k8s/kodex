@@ -170,6 +170,12 @@ const breadcrumbs = computed(() => {
     run: t("nav.run"),
     files: t("nav.files"),
     filesTrash: t("files.trash"),
+    skills: t("contextResources.skills"),
+    skill: t("contextResources.skill"),
+    newSkill: t("contextResources.newSkill"),
+    memory: t("contextResources.memory"),
+    memoryEntry: t("contextResources.memoryEntry"),
+    newMemory: t("contextResources.newMemory"),
     automations: t("nav.automations"),
     environments: t("nav.environments"),
     environment: t("nav.environment"),
@@ -189,6 +195,10 @@ const breadcrumbs = computed(() => {
   return buildBreadcrumbs(
     {
       routeName: typeof route.name === "string" ? route.name : undefined,
+      ...(configurationKind === "skills" || configurationKind === "memory"
+        ? { contextResourceKind: configurationKind }
+        : {}),
+      contextResourceNew: route.params.resourceRef === "new",
       ...(project.value
         ? { project: { ref: project.value.ref, name: project.value.name } }
         : {}),

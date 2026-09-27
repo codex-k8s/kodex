@@ -167,7 +167,12 @@ const ru = {
     attachFiles: "Добавить в файлы навыка",
     removeImport: "Убрать из списка",
     skills: "Навыки",
+    skill: "Навык",
+    newSkill: "Новый навык",
     memory: "Память Kodex",
+    memoryEntry: "Запись памяти",
+    newMemory: "Новая запись памяти",
+    maxLength: "Не более {max} символов",
     emptySkills:
       "В этом Проекте пока нет навыков. Создайте первый навык, чтобы сотрудники могли им пользоваться.",
     emptyMemory:
@@ -4148,7 +4153,12 @@ const en = {
     attachFiles: "Add to manifest",
     removeImport: "Remove from list",
     skills: "Skills",
+    skill: "Skill",
+    newSkill: "New skill",
     memory: "Kodex Memory",
+    memoryEntry: "Memory entry",
+    newMemory: "New memory entry",
+    maxLength: "No more than {max} characters",
     emptySkills:
       "This project has no skills yet. Create the first skill for agents to use.",
     emptyMemory:

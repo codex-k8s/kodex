@@ -16,6 +16,16 @@ const reference = computed(() =>
     ? route.params.resourceRef
     : undefined,
 );
+const titleKey = computed(() => {
+  if (!kind.value) return "errors.NOT_FOUND";
+  if (kind.value === "skills")
+    return reference.value
+      ? "contextResources.skill"
+      : "contextResources.newSkill";
+  return reference.value
+    ? "contextResources.memoryEntry"
+    : "contextResources.newMemory";
+});
 const projectRef = computed(() =>
   typeof route.params.projectRef === "string"
     ? route.params.projectRef
@@ -34,8 +44,7 @@ function created(ref: string, projectRef: string): void {
 }
 </script>
 <template>
-  <PageFrame
-    :title="kind ? $t(`contextResources.${kind}`) : $t('errors.NOT_FOUND')"
+  <PageFrame :title="$t(titleKey)"
     ><ContextEditor
       v-if="kind"
       :key="route.fullPath"
