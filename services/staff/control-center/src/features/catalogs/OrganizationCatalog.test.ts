@@ -1,10 +1,5 @@
 import { readFileSync } from "node:fs";
-import {
-  defineComponent,
-  type ComputedRef,
-  type Ref,
-  type SetupContext,
-} from "vue";
+import { defineComponent, type Ref, type SetupContext } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import type { AppProblem } from "@/shared/api/problem";
@@ -57,7 +52,6 @@ const entry: CatalogEntry = {
 };
 interface State {
   items: Ref<CatalogEntry[]>;
-  groups: ComputedRef<Array<{ ref: string }>>;
   pageToken: Ref<string | undefined>;
   problem: Ref<AppProblem | undefined>;
   loading: Ref<boolean>;
@@ -121,13 +115,18 @@ describe("OrganizationCatalog realtime", () => {
     expect(catalogTemplate).toContain('"catalog.emptyGlobalHelp"');
   });
 
-  it("ведёт к управлению разделом Проекта без повторной модалки списка", () => {
-    expect(catalogTemplate).toContain('<header v-if="!projectRef">');
-    expect(catalogTemplate).toContain("organization-catalog__groups--project");
+  it("показывает один общий табличный реестр с точными переходами к Проекту", () => {
+    expect(catalogTemplate).toContain('v-if="items.length"');
+    expect(catalogTemplate).toContain("<table");
     expect(catalogTemplate).toContain(
-      ':to="`/projects/${encodeURIComponent(group.ref)}/${kind}`"',
+      ':to="`/projects/${encodeURIComponent(entry.projectRef)}/${kind}`"',
     );
-    expect(catalogTemplate).toContain("catalog.openInProject");
+    expect(catalogTemplate).toContain("organization-catalog__project-link");
+    expect(catalogTemplate).not.toContain('<EntityIcon kind="PROJECT" />');
+    expect(catalogTemplate).toContain("AgentAvatar");
+    expect(catalogTemplate).toContain("workflowLaunch(entry.workflow)");
+    expect(catalogTemplate).not.toContain("<AgentCard");
+    expect(catalogTemplate).not.toContain("<WorkflowCard");
     expect(catalogTemplate).not.toContain("expandedProject");
     expect(catalogTemplate).not.toContain("<ModalDialog");
   });
@@ -187,7 +186,7 @@ describe("OrganizationCatalog realtime", () => {
     expect(dependencies.load).toHaveBeenCalledOnce();
     expect(state.items.value).toEqual([]);
   });
-  it("RUN сохраняет геометрию карточек до ответа и перечитывает с первого cursor", async () => {
+  it("RUN сохраняет строки до ответа и перечитывает с первого cursor", async () => {
     const state = await catalog();
     await vi.advanceTimersByTimeAsync(500);
     const reload = action("reloadPlatformKind", "RUN");
@@ -227,7 +226,7 @@ describe("OrganizationCatalog realtime", () => {
     const state = await catalog();
     await vi.advanceTimersByTimeAsync(500);
     await state.load(true);
-    expect(state.groups.value.map((group) => group.ref)).toEqual([
+    expect(state.items.value.map((item) => item.projectRef)).toEqual([
       "project_z",
       "project_a",
     ]);
