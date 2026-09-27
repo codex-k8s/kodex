@@ -177,7 +177,7 @@ const pageSize = useAdaptiveCursorPageSize({
   container: scrollRoot,
   itemSelector: ".vfs-entry",
   itemCount: () => nodes.value.length,
-  estimatedItemHeight: 64,
+  estimatedItemHeight: 56,
   minimum: 8,
   maximum: 100,
 });
@@ -781,8 +781,8 @@ onBeforeUnmount(() => {
   grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  min-height: 72px;
-  padding: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
   text-align: left;
   border: 0;
   border-bottom: 1px solid var(--border);
@@ -803,7 +803,7 @@ onBeforeUnmount(() => {
 }
 .vfs-row small {
   color: var(--muted);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .vfs-inspector {
   min-width: 0;
