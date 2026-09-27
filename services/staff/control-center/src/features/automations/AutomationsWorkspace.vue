@@ -336,9 +336,11 @@ watch(search, () => {
 
 watch(
   [schedules, filteredSchedules],
-  ([allSchedules, visibleSchedules]) => {
+  ([, visibleSchedules]) => {
     if (selectedRef.value === props.initialScheduleRef) return;
-    if (!allSchedules.some((schedule) => schedule.ref === selectedRef.value))
+    if (
+      !visibleSchedules.some((schedule) => schedule.ref === selectedRef.value)
+    )
       selectedRef.value = visibleSchedules[0]?.ref ?? "";
   },
   { immediate: true },
@@ -639,7 +641,12 @@ onBeforeUnmount(() => {
     <AsyncState
       :loading="listLoading"
       :problem="listProblem"
-      :empty="schedules.length === 0 && !selectedSchedule"
+      :empty="
+        schedules.length === 0 &&
+        !selectedSchedule &&
+        !search.trim() &&
+        state === 'CURRENT'
+      "
       :empty-title="$t('automations.emptyTitle')"
       :empty-text="$t('automations.emptyText')"
       @retry="loadList(true)"

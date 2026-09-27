@@ -484,7 +484,7 @@ func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListSchedules(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListSchedules(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
