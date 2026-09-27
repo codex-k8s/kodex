@@ -448,6 +448,17 @@ function revisionLabel(revision: ScheduleRevision): string {
   return `${t(`automations.presetValue.${revision.preset}`)} · ${revision.cronExpression} · ${revision.timezone}`;
 }
 
+function revisionTargetLabel(revision: ScheduleRevision): string {
+  const current = selectedSchedule.value?.target;
+  const name =
+    revision.target.displayName ||
+    (current?.type === revision.target.type &&
+    current.ref === revision.target.ref
+      ? current.displayName
+      : "");
+  return `${name || revision.target.ref} · v${String(revision.targetVersion)}`;
+}
+
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(locale.value, {
     dateStyle: "medium",
@@ -866,7 +877,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div>
                   <dt>{{ custom.target }}</dt>
-                  <dd>{{ revision.target.displayName }}</dd>
+                  <dd>{{ revisionTargetLabel(revision) }}</dd>
                 </div>
                 <div>
                   <dt>{{ custom.createdAt }}</dt>
