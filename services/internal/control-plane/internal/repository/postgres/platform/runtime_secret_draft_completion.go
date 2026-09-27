@@ -304,6 +304,12 @@ func (r *Repository) recoverSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 			result.MaterializationAction = "DELETE"
 		}
 	}
+	// Повторная сверка уже опубликованного и удерживаемого Secret не создаёт
+	// новое намерение очистки и повторную запись аудита.
+	if secretDraftPublishedRecoveryAlreadySettled(*d, *o, input, result) {
+		result.Completed = true
+		return result, nil
+	}
 	if o.state == "CLAIMED" || o.state == "PREPARED" {
 		state := d.public.State
 		if state == "PREPARING" {
@@ -365,6 +371,11 @@ func (r *Repository) recoverSecretDraft(ctx context.Context, tx pgx.Tx, s scope,
 		return result, err
 	}
 	return result, nil
+}
+
+func secretDraftPublishedRecoveryAlreadySettled(d secretDraftRow, o secretDraftOperationRow, input repoport.RuntimeSecretDraftWorkInput, result entity.RuntimeSecretDraftResult) bool {
+	return o.cleanupCompleted && o.state == "COMPLETED" && d.public.State == "PUBLISHED" &&
+		input.Materialization != nil && result.MaterializationAction == "KEEP"
 }
 
 func secretDraftRecoverySettled(d secretDraftRow, o secretDraftOperationRow, input repoport.RuntimeSecretDraftWorkInput, result entity.RuntimeSecretDraftResult) bool {

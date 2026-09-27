@@ -68,3 +68,34 @@ func TestSecretDraftRecoverySettled(t *testing.T) {
 		})
 	}
 }
+
+func TestSecretDraftPublishedRecoveryAlreadySettled(t *testing.T) {
+	retained := &entity.RuntimeSecretMaterialization{}
+	baseDraft := secretDraftRow{public: entity.RuntimeSecretDraft{State: "PUBLISHED"}}
+	baseWork := secretDraftOperationRow{state: "COMPLETED", cleanupCompleted: true, encryptedCleanup: []byte(`{"namespace":"runtime"}`)}
+	baseInput := repoport.RuntimeSecretDraftWorkInput{Encrypted: &entity.RuntimeSecretDraftEncryptedDescriptor{}, Materialization: retained}
+	baseResult := entity.RuntimeSecretDraftResult{EncryptedAction: "KEEP", MaterializationAction: "KEEP"}
+	tests := []struct {
+		name   string
+		draft  secretDraftRow
+		work   secretDraftOperationRow
+		input  repoport.RuntimeSecretDraftWorkInput
+		result entity.RuntimeSecretDraftResult
+		want   bool
+	}{
+		{name: "completed published retained", draft: baseDraft, work: baseWork, input: baseInput, result: baseResult, want: true},
+		{name: "cleanup not completed", draft: baseDraft, work: secretDraftOperationRow{state: "COMPLETED"}, input: baseInput, result: baseResult},
+		{name: "draft not published", draft: secretDraftRow{public: entity.RuntimeSecretDraft{State: "FAILED"}}, work: baseWork, input: baseInput, result: baseResult},
+		{name: "operation not completed", draft: baseDraft, work: secretDraftOperationRow{state: "FAILED", cleanupCompleted: true}, input: baseInput, result: baseResult},
+		{name: "materialization absent", draft: baseDraft, work: baseWork, result: baseResult},
+		{name: "materialization scheduled for deletion", draft: baseDraft, work: baseWork, input: baseInput, result: entity.RuntimeSecretDraftResult{EncryptedAction: "KEEP", MaterializationAction: "DELETE"}},
+		{name: "encrypted cleanup pending", draft: baseDraft, work: secretDraftOperationRow{state: "COMPLETED", encryptedCleanup: []byte(`{"namespace":"runtime"}`)}, input: baseInput, result: baseResult},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := secretDraftPublishedRecoveryAlreadySettled(test.draft, test.work, test.input, test.result); got != test.want {
+				t.Fatalf("secretDraftPublishedRecoveryAlreadySettled() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
