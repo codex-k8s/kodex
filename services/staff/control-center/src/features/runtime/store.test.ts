@@ -407,7 +407,7 @@ describe("runtime store", () => {
       );
     getRoleImageRecipeMock.mockResolvedValueOnce(
       response({
-        recipe: {},
+        recipe: { name: "Инструменты продаж" },
         builds: [],
         activeArtifact: {
           ref: "imgart_main",
@@ -436,15 +436,37 @@ describe("runtime store", () => {
         recipeRef: "imgrec_main",
       }),
     ]);
+    const promoted = await store.loadPromotedRoleImageArtifact(
+      "project_sales",
+      "imgrec_main",
+      "imgart_main",
+    );
+    expect(promoted.artifact.tools).toEqual([
+      { name: "gh", version: "2.80.0" },
+    ]);
+    expect(promoted.recipeName).toBe("Инструменты продаж");
+  });
+
+  it("отличает старый артефакт от временной недоступности сервиса", async () => {
+    getRoleImageRecipeMock.mockResolvedValueOnce(
+      response({
+        recipe: {},
+        builds: [],
+        activeArtifact: { ref: "imgart_new", admissionVerdict: "ACCEPTED" },
+      }),
+    );
+    const store = useRuntimeStore();
     await expect(
       store.loadPromotedRoleImageArtifact(
         "project_sales",
         "imgrec_main",
-        "imgart_main",
+        "imgart_old",
       ),
-    ).resolves.toEqual(
-      expect.objectContaining({ tools: [{ name: "gh", version: "2.80.0" }] }),
-    );
+    ).rejects.toMatchObject({
+      code: "IMAGE_ARTIFACT_NOT_CURRENT",
+      status: 409,
+      retryable: false,
+    });
   });
 
   it("обязательно передаёт exact image и tools при create и publish", async () => {

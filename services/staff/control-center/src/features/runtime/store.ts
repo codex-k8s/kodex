@@ -38,7 +38,7 @@ import type {
   RoleImageArtifact,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
-import { asProblem, type AppProblem, unwrap } from "@/shared/api/problem";
+import { AppProblem, asProblem, unwrap } from "@/shared/api/problem";
 import type {
   AsyncEntityOption,
   AsyncEntityOptionPage,
@@ -382,7 +382,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     recipeRef: string,
     expectedArtifactRef: string,
     signal?: AbortSignal,
-  ): Promise<RoleImageArtifact> {
+  ): Promise<{ artifact: RoleImageArtifact; recipeName: string }> {
     const detail = (
       await unwrap(
         getRoleImageRecipe({
@@ -396,8 +396,13 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
       detail.activeArtifact.ref !== expectedArtifactRef ||
       detail.activeArtifact.admissionVerdict !== "ACCEPTED"
     )
-      throw new Error("Promoted role image artifact is unavailable");
-    return detail.activeArtifact;
+      throw new AppProblem({
+        status: 409,
+        code: "IMAGE_ARTIFACT_NOT_CURRENT",
+        retryable: false,
+        kind: "conflict",
+      });
+    return { artifact: detail.activeArtifact, recipeName: detail.recipe.name };
   }
 
   async function loadEnvironment(environmentRef: string): Promise<void> {

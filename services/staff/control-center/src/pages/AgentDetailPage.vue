@@ -1180,6 +1180,7 @@ onBeforeUnmount(() => {
         <PublicationImpactSelection
           :plan="instructionPlan"
           :busy="busy || instructionUnknown"
+          :consumer-names="agent ? { [agent.ref]: agent.name } : {}"
           @publish="publishInstructionSelection"
         />
         <button

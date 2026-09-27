@@ -1281,6 +1281,7 @@ const ru = {
       "Черновик восстановлен. Проверьте параметры и явно повторите создание или публикацию.",
     restoredImageSelection:
       "Выбор восстановлен после OIDC-аутентификации; точные сведения загрузятся после публикации.",
+    imageNeedsReplacement: "Нужен актуальный образ",
     restoredSecretSelection:
       "Ссылка на секрет восстановлена после OIDC-аутентификации.",
     environmentGeneral: "Основные параметры",
@@ -1344,19 +1345,19 @@ const ru = {
     versionDigest: "Хеш ревизии окружения",
     imageAndTools: "Образ и проверенные инструменты",
     imageAndToolsHelp:
-      "Окружение должно закреплять exact promoted image digest и разрешать только проверенные executable.",
+      "Окружение закрепляет точную опубликованную версию образа и разрешает только проверенные программы.",
     exactImage: "Точная ревизия и хеш образа",
     choosePromotedImage: "Выберите собранный и promoted образ",
     searchPromotedImage: "Найти promoted образ",
-    promotedAndVerified: "Promoted и проверен",
+    promotedAndVerified: "Опубликован и проверен",
     verifiedTools: "Проверенные инструменты",
     verifiedToolsHelp:
-      "Разрешите только нужные executable из выбранного образа и опишите их назначение для материализованного prompt.",
+      "Разрешите только нужные программы из выбранного образа и опишите их назначение для инструкции сотрудника.",
     selectedToolsCount: "Выбрано: {selected} из {total}",
     toolDisplayName: "Название в prompt",
-    toolCommand: "Проверенный executable",
+    toolCommand: "Проверенная программа",
     toolUsageHint: "Подсказка по использованию",
-    noVerifiedTools: "В образе нет проверенных executable.",
+    noVerifiedTools: "В образе нет проверенных программ.",
     chooseImageFirst: "Сначала выберите promoted образ.",
     secretReferences: "Ссылки на секреты",
     createSecret: "Создать секрет",
@@ -3920,6 +3921,8 @@ const ru = {
   errors: {
     REALTIME_OFFLINE:
       "Соединение с платформой восстанавливается. Изменения временно недоступны.",
+    IMAGE_ARTIFACT_NOT_CURRENT:
+      "Этот образ больше не опубликован как актуальный. Выберите новую опубликованную версию образа перед публикацией окружения.",
     default: "Не удалось выполнить действие. Повторите попытку.",
     UNAUTHENTICATED: "Сессия завершена. Войдите снова.",
     FORBIDDEN: "У вас нет полномочий для этого действия.",
@@ -5300,6 +5303,7 @@ const en = {
       "The draft was restored. Review it and explicitly create or publish again.",
     restoredImageSelection:
       "Selection restored after OIDC authentication; exact details will load after publishing.",
+    imageNeedsReplacement: "Current image required",
     restoredSecretSelection:
       "Secret reference restored after OIDC authentication.",
     environmentGeneral: "General settings",
@@ -7842,6 +7846,8 @@ const en = {
   errors: {
     REALTIME_OFFLINE:
       "The platform connection is recovering. Changes are temporarily unavailable.",
+    IMAGE_ARTIFACT_NOT_CURRENT:
+      "This image is no longer the current promoted version. Select a newly promoted image before publishing the environment.",
     default: "The action could not be completed. Try again.",
     UNAUTHENTICATED: "Your session ended. Sign in again.",
     FORBIDDEN: "You do not have permission for this action.",

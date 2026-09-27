@@ -238,6 +238,9 @@ const boundAgents = computed(() =>
     ? (runtime.environmentAgents[environmentRef.value] ?? [])
     : [],
 );
+const impactConsumerNames = computed(() =>
+  Object.fromEntries(boundAgents.value.map((agent) => [agent.ref, agent.name])),
+);
 const boundAgentList = ref<HTMLElement>();
 const boundAgentSentinel = ref<HTMLElement>();
 const boundAgentPageSize = useAdaptiveCursorPageSize({
@@ -411,13 +414,21 @@ async function loadImageArtifact(
   imageLoading.value = true;
   imageProblem.value = undefined;
   try {
-    const artifact = await runtime.loadPromotedRoleImageArtifact(
+    const result = await runtime.loadPromotedRoleImageArtifact(
       project,
       recipeRef,
       artifactRef,
       controller.signal,
     );
-    if (applicable()) imageArtifact.value = artifact;
+    if (applicable()) {
+      imageArtifact.value = result.artifact;
+      selectedImage.value = {
+        ...selectedImage.value,
+        ref: artifactRef,
+        title: result.recipeName,
+        description: result.artifact.promotedReference,
+      };
+    }
   } catch (error) {
     if (applicable()) imageProblem.value = asProblem(error);
   } finally {
@@ -1362,11 +1373,19 @@ onBeforeUnmount(() => {
                     <code>{{ input.imageArtifactRef }}</code>
                   </div>
                   <StatusBadge
-                    :state="imageArtifact ? 'ACCEPTED' : 'PENDING'"
+                    :state="
+                      imageArtifact
+                        ? 'ACCEPTED'
+                        : imageProblem
+                          ? 'CONFLICT'
+                          : 'PENDING'
+                    "
                     :label="
                       imageArtifact
                         ? $t('runtime.promotedAndVerified')
-                        : $t('common.loading')
+                        : imageProblem
+                          ? $t('runtime.imageNeedsReplacement')
+                          : $t('common.loading')
                     "
                   />
                 </article>
@@ -1780,6 +1799,7 @@ onBeforeUnmount(() => {
       <PublicationImpactSelection
         :plan="publicationPlan"
         :busy="busy || publicationUnknown"
+        :consumer-names="impactConsumerNames"
         @publish="publish"
       />
     </ModalDialog>

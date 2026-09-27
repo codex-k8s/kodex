@@ -194,7 +194,7 @@ watch(
         ref,
         controller.signal,
       );
-      if (!controller.signal.aborted) artifact.value = loaded;
+      if (!controller.signal.aborted) artifact.value = loaded.artifact;
     } catch {
       if (!controller.signal.aborted) loadFailed.value = true;
     } finally {

@@ -15,7 +15,11 @@ import {
   readPublicationImpact,
 } from "./publication-impact";
 
-const props = defineProps<{ plan: RevisionImpactPlan; busy?: boolean }>();
+const props = defineProps<{
+  plan: RevisionImpactPlan;
+  busy?: boolean;
+  consumerNames?: Record<string, string>;
+}>();
 const fieldPrefix = `publication-impact-${useId()}`;
 const emit = defineEmits<{ publish: [selectedItemRefs: string[]] }>();
 const page = ref<RevisionImpactPage>();
@@ -219,11 +223,13 @@ useCursorInfiniteScroll({
             :name="`${fieldPrefix}-item-${index}`"
             :checked="selected.has(item.ref)"
             :disabled="!editable || item.outcome !== 'PENDING'"
-            :aria-label="item.consumerRef"
+            :aria-label="consumerNames?.[item.consumerRef] || item.consumerRef"
             @change="toggle(item.ref)"
           />
           <span
-            ><span class="mono">{{ item.consumerRef }}</span
+            ><span :class="{ mono: !consumerNames?.[item.consumerRef] }">{{
+              consumerNames?.[item.consumerRef] || item.consumerRef
+            }}</span
             ><br />{{
               $t("impact.bindingVersion", { version: item.bindingVersion })
             }}</span
