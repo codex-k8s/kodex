@@ -135,7 +135,10 @@ func makeDirectories(root *os.Root, relative string) error {
 		if err != nil {
 			return ErrContextFiles
 		}
-		modeErr := exactMode(directory, 0o750)
+		// Каждый вложенный каталог должен наследовать fsGroup mount. Иначе
+		// bundle под skills/ получит primary GID materializer, а изолированный
+		// provider не сможет пройти к опубликованному SKILL.md.
+		modeErr := exactMode(directory, os.ModeSetgid|0o750)
 		closeErr := directory.Close()
 		if modeErr != nil || closeErr != nil {
 			return ErrContextFiles
@@ -149,7 +152,7 @@ func exactMode(file *os.File, mode os.FileMode) error {
 		return ErrContextFiles
 	}
 	info, err := file.Stat()
-	if err != nil || info.Mode().Perm() != mode {
+	if err != nil || info.Mode()&(os.ModePerm|os.ModeSetgid) != mode&(os.ModePerm|os.ModeSetgid) {
 		return ErrContextFiles
 	}
 	return nil
@@ -300,7 +303,7 @@ func verifyTree(root *os.Root, input runtimecontract.RunnerInput, snapshot runti
 			return ErrContextFiles
 		}
 		if entry.IsDir() {
-			if !dirs[name] || name != "." && info.Mode().Perm() != 0o750 {
+			if !dirs[name] || name != "." && info.Mode()&(os.ModePerm|os.ModeSetgid) != os.ModeSetgid|0o750 {
 				return ErrContextFiles
 			}
 			return nil
