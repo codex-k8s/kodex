@@ -2,6 +2,7 @@
 import { useServerMessage } from "@/shared/ui/server-message";
 import { PackageOpen, RefreshCw } from "@lucide/vue";
 import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import {
   computed,
   onBeforeUnmount,
@@ -69,6 +70,7 @@ import {
 } from "@/features/integrations/configuration-yaml";
 
 const serverMessage = useServerMessage();
+const { t } = useI18n();
 const fieldPrefix = `integration-connection-${useId()}`;
 const platform = usePlatformStore();
 const connectionSearch = ref("");
@@ -404,6 +406,27 @@ const pendingCredential = ref<PendingCredentialSetup>();
 const commandRef = ref("");
 const commandAction = ref<"TEST" | "ENABLE" | "DISABLE">();
 const operationSuccess = ref("");
+const pendingTest = ref<{ ref: string; version: number }>();
+function refreshTestFeedback(connection?: IntegrationConnection): void {
+  const pending = pendingTest.value;
+  if (
+    !pending ||
+    !connection ||
+    connection.version <= pending.version ||
+    connection.state === "TESTING"
+  )
+    return;
+  operationSuccess.value = t("integrationsRedesign.testFinished", {
+    name: connection.name,
+    outcome: serverMessage(connection.lastTestOutcome ?? connection.state),
+  });
+  pendingTest.value = undefined;
+}
+watch(
+  () =>
+    pendingTest.value ? platform.connections[pendingTest.value.ref] : undefined,
+  refreshTestFeedback,
+);
 const grantConnectionRef = ref("");
 const formSubmitted = ref(false);
 const configurationMode = ref<"FORM" | "YAML">("FORM");
@@ -901,15 +924,21 @@ async function command(
   commandAction.value = action;
   problem.value = undefined;
   operationSuccess.value = "";
+  pendingTest.value = undefined;
   try {
     const updated = await platform.changeConnection(connection, action);
     if (detailsConnection.value?.ref === updated.ref)
       detailsConnection.value = updated;
+    if (action === "TEST" && updated.state === "TESTING")
+      pendingTest.value = { ref: updated.ref, version: updated.version };
     operationSuccess.value =
       action === "TEST"
         ? updated.state === "TESTING"
-          ? `Проверка «${updated.name}» запущена. Обновите сведения о подключении, чтобы увидеть результат.`
-          : `Проверка «${updated.name}» завершена: ${serverMessage(updated.lastTestOutcome ?? updated.state)}.`
+          ? t("integrationsRedesign.testStarted", { name: updated.name })
+          : t("integrationsRedesign.testFinished", {
+              name: updated.name,
+              outcome: serverMessage(updated.lastTestOutcome ?? updated.state),
+            })
         : action === "ENABLE"
           ? `Подключение «${updated.name}» включено.`
           : `Подключение «${updated.name}» отключено.`;

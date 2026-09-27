@@ -2247,6 +2247,9 @@ const ru = {
     refreshRequired: "Контекст изменился. Обновите просмотр перед отправкой.",
   },
   integrationsRedesign: {
+    testStarted:
+      "Проверка «{name}» выполняется. Результат появится после обновления сведений о подключении.",
+    testFinished: "Проверка «{name}» завершена: {outcome}.",
     tabsLabel: "Разделы интеграций",
     tabs: {
       CONNECTIONS: "Подключения",
@@ -6130,6 +6133,9 @@ const en = {
       "The context changed. Refresh the preview before submitting.",
   },
   integrationsRedesign: {
+    testStarted:
+      "Checking “{name}”. The result will appear after refreshing the connection details.",
+    testFinished: "Check of “{name}” finished: {outcome}.",
     tabsLabel: "Integration sections",
     tabs: {
       CONNECTIONS: "Connections",
