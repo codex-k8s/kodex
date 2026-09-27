@@ -205,6 +205,18 @@ function text(value: unknown): string {
 }
 const stt = computed(() => object(parsed.value.value.stt));
 const sttParameters = computed(() => object(stt.value.parameters));
+const standardLanguageCodes = ["ru", "en", "de", "es", "fr"] as const;
+const customLanguageOpen = ref(false);
+const primaryLanguageCode = computed(() =>
+  primarySttLanguage(stt.value, multipleLanguages()),
+);
+const languageChoice = computed(() =>
+  customLanguageOpen.value ||
+  (primaryLanguageCode.value &&
+    !standardLanguageCodes.some((code) => code === primaryLanguageCode.value))
+    ? "custom"
+    : primaryLanguageCode.value,
+);
 function multipleLanguages(): boolean {
   return modelProfile.value
     ? supported("languages")
@@ -229,19 +241,22 @@ function updateSttParameter(key: string, value: unknown): void {
     },
   });
 }
-function updateLanguage(event: Event): void {
-  if (!(event.target instanceof HTMLInputElement)) return;
+function setLanguage(code: string): void {
   write({
     ...parsed.value.value,
     stt: {
-      ...setPrimarySttLanguage(
-        stt.value,
-        multipleLanguages(),
-        event.target.value,
-      ),
+      ...setPrimarySttLanguage(stt.value, multipleLanguages(), code),
       permissionKey: "platform.stt.use",
     },
   });
+}
+function selectLanguage(event: Event): void {
+  if (!(event.target instanceof HTMLSelectElement)) return;
+  customLanguageOpen.value = event.target.value === "custom";
+  if (!customLanguageOpen.value) setLanguage(event.target.value);
+}
+function updateLanguage(event: Event): void {
+  if (event.target instanceof HTMLInputElement) setLanguage(event.target.value);
 }
 function updateAdditionalLanguages(value: string): void {
   write({
@@ -386,7 +401,12 @@ function update(key: string, event: Event, group?: "stt"): void {
 </script>
 <template>
   <p v-if="!parsed.valid" role="alert">{{ $t("managed.invalidDocument") }}</p>
-  <fieldset v-else class="configuration-fields" :disabled="disabled">
+  <fieldset
+    v-else
+    class="configuration-fields"
+    :class="{ 'configuration-fields--stt': kind === 'SYSTEM_STT' }"
+    :disabled="disabled"
+  >
     <label v-if="kind !== 'INTEGRATION_DEFINITION' && kind !== 'SYSTEM_STT'"
       >{{ $t("common.description")
       }}<VoiceTextarea
@@ -473,28 +493,44 @@ function update(key: string, event: Event, group?: "stt"): void {
       <p v-if="!modelProfile">{{ $t("managed.sttCatalog.unconfirmed") }}</p>
       <label
         >{{ $t("managed.sttParameters.primaryLanguage")
-        }}<small>{{ $t("managed.sttParameters.primaryLanguageHint") }}</small
-        ><input
+        }}<select
           :id="`${fieldPrefix}-language`"
           :name="`${fieldPrefix}-language`"
-          :value="primarySttLanguage(stt, multipleLanguages())"
-          maxlength="2"
-          pattern="[a-z]{2}"
-          :list="`${fieldPrefix}-language-codes`"
-          placeholder="ru"
-          @input="updateLanguage" /><datalist
-          :id="`${fieldPrefix}-language-codes`"
+          :value="languageChoice"
+          @change="selectLanguage"
         >
+          <option value="">
+            {{ $t("managed.sttParameters.autoLanguage") }}
+          </option>
           <option
-            v-for="code in ['ru', 'en', 'de', 'es', 'fr']"
+            v-for="code in standardLanguageCodes"
             :key="code"
             :value="code"
-          /></datalist
-      ></label>
+          >
+            {{ $t(`managed.sttParameters.language${code.toUpperCase()}`) }}
+          </option>
+          <option value="custom">
+            {{ $t("managed.sttParameters.customLanguage") }}
+          </option>
+        </select></label
+      >
+      <label v-if="languageChoice === 'custom'">
+        {{ $t("managed.sttParameters.customLanguage") }}
+        <small>{{ $t("managed.sttParameters.primaryLanguageHint") }}</small>
+        <input
+          :id="`${fieldPrefix}-custom-language`"
+          :name="`${fieldPrefix}-custom-language`"
+          :value="primaryLanguageCode"
+          maxlength="2"
+          pattern="[a-z]{2}"
+          placeholder="pt"
+          @input="updateLanguage"
+        />
+      </label>
       <details class="configuration-fields__advanced">
         <summary>{{ $t("managed.sttParameters.advanced") }}</summary>
         <div class="configuration-fields__advanced-content">
-          <label
+          <label class="configuration-fields__wide"
             >{{ $t("common.description") }}
             <VoiceTextarea
               :id="`${fieldPrefix}-description`"
@@ -560,7 +596,7 @@ function update(key: string, event: Event, group?: "stt"): void {
               "
             />
           </label>
-          <label
+          <label class="configuration-fields__wide"
             >{{ $t("managed.sttParameters.prompt") }}
             <small v-if="modelProfile">{{
               $t("managed.sttCatalog.promptBytes", {
@@ -625,7 +661,7 @@ function update(key: string, event: Event, group?: "stt"): void {
               </option>
             </select>
           </label>
-          <label class="configuration-fields__toggle"
+          <label class="configuration-fields__toggle configuration-fields__wide"
             ><input
               :id="`${fieldPrefix}-stream`"
               :name="`${fieldPrefix}-stream`"
@@ -634,19 +670,21 @@ function update(key: string, event: Event, group?: "stt"): void {
               disabled
             /><span>{{ $t("managed.sttParameters.stream") }}</span></label
           >
-          <label v-for="limit in sttFormLimits" :key="limit.key">
-            {{ $t(`managed.sttParameters.${limit.key}`) }}
-            <input
-              :id="`${fieldPrefix}-${limit.key}`"
-              :name="`${fieldPrefix}-${limit.key}`"
-              type="number"
-              :min="limit.min"
-              :max="limit.max"
-              step="1"
-              :value="stt[limit.key]"
-              @input="updateSttNumber(limit.key, $event)"
-            />
-          </label>
+          <div class="configuration-fields__limits">
+            <label v-for="limit in sttFormLimits" :key="limit.key">
+              {{ $t(`managed.sttParameters.${limit.key}`) }}
+              <input
+                :id="`${fieldPrefix}-${limit.key}`"
+                :name="`${fieldPrefix}-${limit.key}`"
+                type="number"
+                :min="limit.min"
+                :max="limit.max"
+                step="1"
+                :value="stt[limit.key]"
+                @input="updateSttNumber(limit.key, $event)"
+              />
+            </label>
+          </div>
         </div>
       </details>
     </template>
@@ -665,6 +703,15 @@ function update(key: string, event: Event, group?: "stt"): void {
   display: grid;
   min-width: 0;
   gap: 6px;
+}
+.configuration-fields--stt {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+.configuration-fields--stt > .configuration-fields__toggle,
+.configuration-fields--stt > .configuration-fields__advanced,
+.configuration-fields--stt > p {
+  grid-column: 1 / -1;
 }
 .configuration-fields p,
 .configuration-fields small {
@@ -691,9 +738,21 @@ function update(key: string, event: Event, group?: "stt"): void {
 }
 .configuration-fields__advanced-content {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   min-width: 0;
   padding: 16px;
+}
+.configuration-fields__advanced-content > .configuration-fields__wide,
+.configuration-fields__advanced-content > .configuration-fields__note,
+.configuration-fields__limits {
+  grid-column: 1 / -1;
+}
+.configuration-fields__limits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
 }
 .configuration-fields__note {
   margin: 0;
@@ -713,5 +772,14 @@ function update(key: string, event: Event, group?: "stt"): void {
   gap: 12px;
   border-top: 1px solid var(--border);
   padding-top: 12px;
+}
+@media (max-width: 900px) {
+  .configuration-fields--stt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .configuration-fields__advanced-content,
+  .configuration-fields__limits {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

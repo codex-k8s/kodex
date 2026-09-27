@@ -225,8 +225,29 @@ onMounted(() => {
 </script>
 <template>
   <section class="stt-activation" :aria-busy="busy">
-    <h3>{{ t("activation.title") }}</h3>
-    <p>{{ t("activation.intro") }}</p>
+    <div class="stt-activation__header">
+      <div class="stt-activation__heading">
+        <h3>{{ t("activation.title") }}</h3>
+        <p>{{ t("activation.intro") }}</p>
+      </div>
+      <p
+        v-if="read"
+        class="stt-activation__readiness"
+        :class="{ 'stt-activation__readiness--ready': effective?.ready }"
+        role="status"
+        data-testid="stt-readiness"
+      >
+        {{
+          t(
+            effective
+              ? effective.ready
+                ? "activation.ready"
+                : "activation.notReady"
+              : "activation.absent",
+          )
+        }}
+      </p>
+    </div>
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <p v-if="problem?.status === 412" role="status">
       {{ t("activation.stale") }}
@@ -234,23 +255,12 @@ onMounted(() => {
     <p v-if="unknown" role="alert">{{ t("activation.unknown") }}</p>
     <p v-if="acknowledged" role="status">{{ t("activation.acknowledged") }}</p>
     <p v-if="observed" role="status">{{ t("activation.observed") }}</p>
-    <p v-if="read && effective">
+    <p v-if="read && effective" class="stt-activation__current">
       {{
         t("activation.active", {
           name: effectiveName,
           revision: effective.revision,
         })
-      }}
-    </p>
-    <p v-if="read" role="status" data-testid="stt-readiness">
-      {{
-        t(
-          effective
-            ? effective.ready
-              ? "activation.ready"
-              : "activation.notReady"
-            : "activation.absent",
-        )
       }}
     </p>
     <template v-if="plan">
@@ -273,47 +283,93 @@ onMounted(() => {
         }}
       </p>
       <p v-if="already">{{ t("activation.already") }}</p>
+    </template>
+    <div class="stt-activation__actions">
       <button
+        v-if="plan"
         class="button button--primary"
         :disabled="busy || !allowed || already || unknown"
         @click="confirm"
       >
         {{ t("activation.confirm") }}
       </button>
-      <button class="button" :disabled="busy" @click="plan = undefined">
+      <button
+        v-if="plan"
+        class="button"
+        :disabled="busy"
+        @click="plan = undefined"
+      >
         {{ t("activation.cancel") }}
       </button>
-    </template>
-    <p v-else-if="selectedActive" role="status">
-      {{ t("activation.already") }}
-    </p>
-    <button
-      v-else
-      class="button"
-      :disabled="busy || !allowed || unknown"
-      @click="prepare"
-    >
-      {{ t("activation.prepare") }}
-    </button>
-    <button
-      class="button"
-      :disabled="busy || owner.aborted"
-      @click="work(reread)"
-    >
-      {{ t("activation.readback") }}
-    </button>
+      <button
+        v-if="!plan && !selectedActive"
+        class="button"
+        :disabled="busy || !allowed || unknown"
+        @click="prepare"
+      >
+        {{ t("activation.prepare") }}
+      </button>
+      <button
+        class="button"
+        :disabled="busy || owner.aborted"
+        @click="work(reread)"
+      >
+        {{ t("activation.readback") }}
+      </button>
+    </div>
   </section>
 </template>
 <style scoped>
 .stt-activation {
+  display: grid;
+  gap: 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
   overflow-wrap: anywhere;
 }
-.stt-activation .button {
-  margin: 4px;
+.stt-activation__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.stt-activation__heading {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.stt-activation__heading h3,
+.stt-activation p {
+  margin: 0;
+}
+.stt-activation__heading p,
+.stt-activation__current {
+  color: var(--text-muted);
+}
+.stt-activation__readiness {
+  flex: 0 1 460px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface-muted, #f2f5f8);
+  font-size: 12px;
+}
+.stt-activation__readiness--ready {
+  color: var(--success, #18803c);
+  background: var(--success-subtle, #eaf6ef);
+}
+.stt-activation__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.stt-activation__actions .button {
   max-width: 100%;
-  white-space: normal;
+}
+@media (max-width: 900px) {
+  .stt-activation__header {
+    flex-direction: column;
+  }
 }
 </style>

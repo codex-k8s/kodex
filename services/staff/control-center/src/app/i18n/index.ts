@@ -680,8 +680,14 @@ const ru = {
     },
     sttParameters: {
       primaryLanguage: "Код языка",
-      primaryLanguageHint:
-        "Например, ru или en. Оставьте пустым для автоопределения.",
+      primaryLanguageHint: "Введите двухбуквенный код, например pt.",
+      autoLanguage: "Автоопределение",
+      customLanguage: "Другой код",
+      languageRU: "ru — Русский",
+      languageEN: "en — Английский",
+      languageDE: "de — Немецкий",
+      languageES: "es — Испанский",
+      languageFR: "fr — Французский",
       additionalLanguages: "Дополнительные коды языков (необязательно)",
       additionalLanguagesHint:
         "Для многоязычных моделей: по одному двухбуквенному коду на строку. Основной код задаётся выше.",
@@ -4457,8 +4463,14 @@ const en = {
     },
     sttParameters: {
       primaryLanguage: "Language code",
-      primaryLanguageHint:
-        "For example, ru or en. Leave blank for automatic detection.",
+      primaryLanguageHint: "Enter a two-letter code, such as pt.",
+      autoLanguage: "Detect automatically",
+      customLanguage: "Other code",
+      languageRU: "ru — Russian",
+      languageEN: "en — English",
+      languageDE: "de — German",
+      languageES: "es — Spanish",
+      languageFR: "fr — French",
       additionalLanguages: "Additional language codes (optional)",
       additionalLanguagesHint:
         "For multilingual models: one two-letter code per line. Set the primary code above.",
