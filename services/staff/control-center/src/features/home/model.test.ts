@@ -144,6 +144,16 @@ describe("home attention model", () => {
     const result = homeFailedRuns([
       run("failed", "FAILED", { finishedAt: "2026-08-29T11:00:00Z" }),
       run("cancelled", "CANCELLED"),
+      run("owner-cancelled", "CANCELLED", {
+        safeErrorCode: "CANCELLED_BY_OWNER",
+        safeErrorMessage: "Запуск отменён пользователем",
+        nextActions: ["OPEN", "RETRY"],
+      }),
+      run("project-trashed", "CANCELLED", {
+        safeErrorCode: "PROJECT_TRASHED",
+        safeErrorMessage: "Проект перемещён в корзину",
+        nextActions: ["OPEN", "RETRY"],
+      }),
       run("timeout", "CANCELLED", {
         safeErrorCode: "RUN_TIMEOUT",
         nextActions: ["RETRY"],

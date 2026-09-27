@@ -61,8 +61,8 @@ function isStoppedByFailure(run: Run): boolean {
   if (run.state === "FAILED") return true;
   return (
     run.state === "CANCELLED" &&
-    run.nextActions.includes("RETRY") &&
-    Boolean(run.safeErrorCode || run.safeErrorMessage)
+    run.safeErrorCode === "RUN_TIMEOUT" &&
+    run.nextActions.includes("RETRY")
   );
 }
 
