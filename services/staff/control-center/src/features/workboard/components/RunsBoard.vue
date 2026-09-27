@@ -5,7 +5,7 @@ import { useI18n } from "vue-i18n";
 
 import {
   groupRuns,
-  runExecutor,
+  runListSummary,
   type RunLane,
 } from "@/features/workboard/model";
 import type { AppProblem } from "@/shared/api/problem";
@@ -79,7 +79,7 @@ for (const lane of order)
       <thead>
         <tr>
           <th>{{ t("common.name") }}</th>
-          <th>{{ t("workboard.executor") }}</th>
+          <th>{{ t("common.target") }}</th>
           <th>{{ t("common.source") }}</th>
           <th>{{ t("common.status") }}</th>
           <th>{{ t("runs.createdAt") }}</th>
@@ -104,14 +104,18 @@ for (const lane of order)
                   run.title
                 }}</RouterLink>
                 <SafeSummary
-                  :content="run.currentActivity ?? run.resultSummary"
-                  :fallback="run.target.displayName"
+                  :content="runListSummary(run)"
+                  :fallback="
+                    run.state === 'FAILED'
+                      ? t('workboard.runFailedSummary')
+                      : run.target.displayName
+                  "
                 />
               </div>
             </div>
           </td>
-          <td :title="runExecutor(run) ?? t('workboard.executorUnavailable')">
-            {{ runExecutor(run) ?? t("workboard.executorUnavailable") }}
+          <td :title="run.target.displayName">
+            {{ run.target.displayName }}
           </td>
           <td>
             <div class="runs-board__source">

@@ -6,6 +6,7 @@ import type {
   RuntimeEnvironmentSet,
   Schedule,
 } from "@/shared/api/generated/openapi/types.gen";
+import { serverMessageKey } from "@/shared/ui/server-message";
 
 export type RunFilter = "ALL" | "ACTIVE" | "TERMINAL";
 export type RunView = "KANBAN" | "LIST";
@@ -116,6 +117,17 @@ export function groupRuns(runs: Run[]): Record<RunLane, Run[]> {
 
 export function runExecutor(run: Run): string | undefined {
   return run.target.type === "AGENT" ? run.target.displayName : undefined;
+}
+
+export function runListSummary(run: Run): string | undefined {
+  if (run.state !== "FAILED") return run.currentActivity ?? run.resultSummary;
+
+  if (run.safeErrorCode) {
+    const localizedCode = `i18n:${run.safeErrorCode}`;
+    if (serverMessageKey(localizedCode)) return localizedCode;
+  }
+  const message = run.safeErrorMessage ?? run.resultSummary;
+  return message && !/^[A-Z][A-Z0-9_]*$/.test(message) ? message : undefined;
 }
 
 export function collectAttention(
