@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.204
+version: 1.0.205
 updated: 2026-09-27
 ---
 
@@ -4284,3 +4284,12 @@ GitHub checks не считается `PASS`.
   кэша строка читается как «История запуска завершена», без висячего знака.
   Адресный SSR unit, ESLint и typecheck — локальный `PASS`; финальные console
   error/warn пусты, завершённых HTTP 4xx/5xx нет.
+- Альтернативный список связей на том же графе проверен с 30 строками. Первая
+  строка больше не находится под сводкой Run, легенда не перекрывает список,
+  последняя строка и её состояние доступны после прокрутки до конца без
+  перекрытия плавающей кнопкой. Снимки:
+  `/tmp/kodex-run-graph-outline-30-final.png` и
+  `/tmp/kodex-run-graph-outline-30-final-end.png`. После no-cache reload
+  console error/warn пусты, завершённых HTTP 4xx/5xx нет; realtime после
+  краткого восстановления снова показал «Подключено». Адресные unit,
+  typecheck, ESLint и Prettier — локальный `PASS`; ручная приёмка — `NOT RUN`.

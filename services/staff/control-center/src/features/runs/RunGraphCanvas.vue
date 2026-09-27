@@ -608,7 +608,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
     </div>
 
     <aside
-      v-if="nodes.length"
+      v-if="nodes.length && viewMode === 'graph'"
       class="graph-legend"
       :aria-label="$t('runs.connections')"
     >
@@ -775,7 +775,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
   min-width: 0;
   min-height: 0;
   gap: 8px;
-  padding: 72px 14px 126px;
+  padding: 144px 14px 100px;
+  scroll-padding-top: 144px;
   overflow: auto;
   background: var(--canvas);
 }
