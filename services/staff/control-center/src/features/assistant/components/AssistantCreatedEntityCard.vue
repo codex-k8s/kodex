@@ -16,6 +16,14 @@ const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
 const target = computed(() =>
   assistantCreatedEntityTarget(props.plan, props.operationRef),
 );
+const updated = computed(() =>
+  props.plan.operations.some(
+    (operation) =>
+      operation.ref === props.operationRef &&
+      (operation.type === "UPDATE_PROJECT" ||
+        operation.type === "UPDATE_AGENT"),
+  ),
+);
 const entity = ref<Project | Agent>();
 const loading = ref(false);
 const problem = ref(false);
@@ -85,7 +93,7 @@ watch(
           (value.kind === "AGENT" &&
             (!("projectRef" in next) || next.projectRef !== value.projectRef))
         )
-          throw new Error("Assistant created entity readback mismatch");
+          throw new Error("Assistant entity readback mismatch");
         entity.value = next;
         problem.value = false;
       } catch {
@@ -105,7 +113,11 @@ watch(
 <template>
   <section v-if="target" class="assistant-created-entity" aria-live="polite">
     <header>
-      <strong>{{ $t(`assistant.createdEntity.${target.kind}.title`) }}</strong>
+      <strong>{{
+        $t(
+          `assistant.createdEntity.${target.kind}.${updated ? "updatedTitle" : "title"}`,
+        )
+      }}</strong>
       <StatusBadge v-if="state" :state="state" />
     </header>
     <p v-if="loading && !entity">{{ $t("common.loading") }}</p>
@@ -114,7 +126,13 @@ watch(
     </p>
     <template v-if="entity">
       <p>{{ entity.name }}</p>
-      <p>{{ $t(`assistant.createdEntity.${target.kind}.next`) }}</p>
+      <p>
+        {{
+          $t(
+            `assistant.createdEntity.${target.kind}.${updated ? "updatedNext" : "next"}`,
+          )
+        }}
+      </p>
     </template>
     <div class="assistant-created-entity__actions">
       <button

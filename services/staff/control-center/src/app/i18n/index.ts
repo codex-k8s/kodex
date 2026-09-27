@@ -3566,16 +3566,20 @@ const ru = {
       open: "Открыть процесс",
     },
     createdEntity: {
-      loadFailed:
-        "Не удалось прочитать созданный объект. Повторите обновление.",
+      loadFailed: "Не удалось прочитать объект. Повторите обновление.",
       PROJECT: {
         title: "Созданный проект",
+        updatedTitle: "Изменённый проект",
         next: "Откройте проект, чтобы настроить сотрудников и рабочие ресурсы.",
+        updatedNext:
+          "Проверьте обновлённые параметры проекта и связанные ресурсы.",
         open: "Открыть проект",
       },
       AGENT: {
         title: "Созданный сотрудник",
+        updatedTitle: "Изменённый сотрудник",
         next: "Проверьте инструкции, образ, окружение и разрешения перед запуском.",
+        updatedNext: "Проверьте обновлённые параметры и готовность сотрудника.",
         open: "Открыть сотрудника",
       },
     },
@@ -7508,15 +7512,21 @@ const en = {
       open: "Open workflow",
     },
     createdEntity: {
-      loadFailed: "Could not read the created resource. Refresh to try again.",
+      loadFailed: "Could not read the resource. Refresh to try again.",
       PROJECT: {
         title: "Created project",
+        updatedTitle: "Updated project",
         next: "Open the project to configure employees and work resources.",
+        updatedNext:
+          "Review the updated project settings and related resources.",
         open: "Open project",
       },
       AGENT: {
         title: "Created employee",
+        updatedTitle: "Updated employee",
         next: "Review instructions, image, environment, and permissions before running.",
+        updatedNext:
+          "Review the updated settings and the employee's readiness.",
         open: "Open employee",
       },
     },

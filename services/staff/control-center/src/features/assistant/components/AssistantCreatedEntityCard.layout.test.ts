@@ -23,6 +23,9 @@ describe("карточка созданного помощником проек�
     expect(workspace).toContain("item.type === 'CREATE_PROJECT'");
     expect(workspace).toContain("item.type === 'CREATE_AGENT'");
     expect(source).toContain('query: { assistantForm: "1" }');
+    expect(source).toContain('operation.type === "UPDATE_PROJECT"');
+    expect(source).toContain('operation.type === "UPDATE_AGENT"');
+    expect(source).toContain('updated ? "updatedTitle" : "title"');
     expect(source).not.toContain("emit('navigate')");
     const agentPage = readFileSync(
       new URL("../../../pages/AgentDetailPage.vue", import.meta.url),
