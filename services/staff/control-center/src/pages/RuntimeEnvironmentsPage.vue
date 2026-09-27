@@ -29,6 +29,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -393,15 +394,18 @@ onBeforeUnmount(() => {
                 }"
               >
                 <td>
-                  <button
-                    class="environment-name"
-                    type="button"
-                    @click="toggleInspector(environment.ref)"
-                    @dblclick="openEditor(environment.ref)"
-                  >
-                    <strong>{{ environment.name }}</strong>
-                    <small>{{ environment.description }}</small>
-                  </button>
+                  <div class="environment-identity">
+                    <EntityIcon kind="ENVIRONMENT" />
+                    <button
+                      class="environment-name"
+                      type="button"
+                      @click="toggleInspector(environment.ref)"
+                      @dblclick="openEditor(environment.ref)"
+                    >
+                      <strong>{{ environment.name }}</strong>
+                      <small>{{ environment.description }}</small>
+                    </button>
+                  </div>
                 </td>
                 <td>rev {{ environment.currentVersion.revision }}</td>
                 <td>
@@ -826,6 +830,15 @@ onBeforeUnmount(() => {
   color: var(--text);
   text-align: left;
   cursor: pointer;
+}
+.environment-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.environment-identity .environment-name {
+  min-width: 0;
 }
 .environment-row-actions {
   display: flex;
