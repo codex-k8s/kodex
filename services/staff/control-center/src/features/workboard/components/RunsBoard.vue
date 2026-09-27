@@ -252,6 +252,11 @@ for (const lane of order)
   white-space: nowrap;
 }
 .runs-board__identity a {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-weight: 600;
   text-decoration: none;
 }

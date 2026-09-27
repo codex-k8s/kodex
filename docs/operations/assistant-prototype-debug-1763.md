@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.198
+version: 1.0.199
 updated: 2026-09-27
 ---
 
@@ -4175,3 +4175,12 @@ GitHub checks не считается `PASS`.
   console error/warn, обычный `ERR_ABORTED` при смене страницы и никаких
   завершённых HTTP 4xx/5xx. Host/Pod SHA-256 `RunsPage.vue` совпали.
   Адресные typecheck, ESLint и Prettier — локальный `PASS`.
+- Длинное название Run теперь занимает до двух строк, а краткая сводка
+  остаётся отдельной строкой. На 1920×1080 колонки и значки состояния
+  выровнены по строкам; снимок:
+  `/tmp/kodex-runs-two-line-title-20260927.png`. Host/Pod SHA-256 компонента
+  совпали; typecheck, ESLint и Prettier — локальный `PASS`. При reload
+  периодический bootstrap один раз получил браузерный
+  `ERR_NETWORK_CHANGED`, следующее чтение вернуло 200. Это не HTTP 4xx/5xx,
+  но финальная console-проверка пока `FAIL`, причина сетевого события ещё
+  `UNKNOWN`.
