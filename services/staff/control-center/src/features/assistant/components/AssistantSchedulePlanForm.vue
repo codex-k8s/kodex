@@ -750,7 +750,13 @@ function changeWorkflowInput(field: WorkflowInputField, raw: string): void {
       {{ $t("assistant.planEditor.scheduleNotReady") }}
     </p>
     <p class="assistant-plan-friendly__hint">
-      {{ $t("assistant.planEditor.scheduleNextSteps") }}
+      {{
+        $t(
+          operation.value.type === "UPDATE_SCHEDULE"
+            ? "assistant.planEditor.scheduleUpdateNextSteps"
+            : "assistant.planEditor.scheduleNextSteps",
+        )
+      }}
     </p>
     <AutomationPromptPreview
       v-if="projectRef"

@@ -48,6 +48,20 @@ describe("AutomationsWorkspace lifecycle contract", () => {
     expect(source).not.toContain("const schedules = ref<Schedule[]>([])");
   });
 
+  it("обновляет список после применения плана помощника в том же проекте", () => {
+    expect(source).toContain("assistantPlanAppliedEvent");
+    expect(source).toContain("detail.projectRef !== props.projectRef");
+    expect(source).toContain('detail.kinds.includes("SCHEDULE")');
+    expect(source).toContain("void loadList(true)");
+  });
+
+  it("не показывает следующую дату запуска приостановленной автоматизации", () => {
+    expect(source).toContain(
+      'schedule.state === "ACTIVE" && schedule.nextRunAt',
+    );
+    expect(source).toContain('selectedSchedule.state === "ACTIVE" &&');
+  });
+
   it("сохраняет выбранную запись после исключения из текущего фильтра", () => {
     expect(source).toContain("[schedules, filteredSchedules]");
     expect(source).toContain(

@@ -3636,6 +3636,8 @@ const ru = {
         "Укажите задание, исполнителя и корректное расписание, затем дождитесь проверки ближайших запусков.",
       scheduleNextSteps:
         "Автоматизация будет создана только после проверки и подтверждения плана. Её можно приостановить и изменить на странице автоматизаций.",
+      scheduleUpdateNextSteps:
+        "Изменения автоматизации будут применены только после проверки и подтверждения плана. Приостановленная автоматизация останется приостановленной.",
       transitionDetails: "Технические детали изменения",
       afterDetails: "Планируемое состояние",
       capabilities: {
@@ -7386,6 +7388,8 @@ const en = {
         "Provide a task, executor and valid schedule, then wait for the next run preview.",
       scheduleNextSteps:
         "The automation will be created only after plan validation and confirmation. You can pause or edit it on the Automations page.",
+      scheduleUpdateNextSteps:
+        "Automation changes will take effect only after plan validation and confirmation. A paused automation will remain paused.",
       transitionDetails: "Technical change details",
       afterDetails: "Planned state",
       capabilities: {

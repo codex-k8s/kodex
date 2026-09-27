@@ -19,6 +19,10 @@ import { useI18n } from "vue-i18n";
 import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
 import AutomationEditorDialog from "@/features/automations/AutomationEditorDialog.vue";
 import {
+  assistantPlanAppliedEvent,
+  type AssistantPlanAppliedDetail,
+} from "@/features/assistant/events";
+import {
   commandSchedule,
   loadSchedulePage,
   loadScheduleRevisionPage,
@@ -557,11 +561,29 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
+function handleAssistantPlanApplied(event: Event): void {
+  const detail = (event as CustomEvent<AssistantPlanAppliedDetail>).detail;
+  if (
+    detail.projectRef !== props.projectRef ||
+    !detail.kinds.includes("SCHEDULE")
+  )
+    return;
+  void loadList(true);
+}
+
 onMounted(() => {
+  window.addEventListener(
+    assistantPlanAppliedEvent,
+    handleAssistantPlanApplied,
+  );
   void Promise.all([loadList(true), platform.loadProject(props.projectRef)]);
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener(
+    assistantPlanAppliedEvent,
+    handleAssistantPlanApplied,
+  );
   listController?.abort();
   historyController?.abort();
   if (searchTimer) clearTimeout(searchTimer);
@@ -686,7 +708,11 @@ onBeforeUnmount(() => {
               <small class="mono">v{{ schedule.version }}</small>
             </span>
             <span class="automation-row__next">
-              {{ schedule.nextRunAt ? formatDate(schedule.nextRunAt) : "—" }}
+              {{
+                schedule.state === "ACTIVE" && schedule.nextRunAt
+                  ? formatDate(schedule.nextRunAt)
+                  : "—"
+              }}
             </span>
             <span class="automation-row__outcome">{{
               schedule.lastOutcome || "—"
@@ -768,6 +794,7 @@ onBeforeUnmount(() => {
               <dt>{{ $t("automations.nextRun") }}</dt>
               <dd>
                 {{
+                  selectedSchedule.state === "ACTIVE" &&
                   selectedSchedule.nextRunAt
                     ? formatDate(selectedSchedule.nextRunAt)
                     : "—"

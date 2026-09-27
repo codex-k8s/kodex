@@ -1,6 +1,18 @@
 import type { RoleImageBuild } from "@/shared/api/generated/openapi/types.gen";
 
 export const openAssistantEvent = "kodex:assistant:open";
+export const assistantPlanAppliedEvent = "kodex:assistant:plan-applied";
+
+export interface AssistantPlanAppliedDetail {
+  projectRef?: string;
+  kinds: string[];
+}
+
+export function notifyAssistantPlanApplied(
+  detail: AssistantPlanAppliedDetail,
+): void {
+  window.dispatchEvent(new CustomEvent(assistantPlanAppliedEvent, { detail }));
+}
 
 export interface AssistantIntegrationPublicationRequest {
   configurationRef: string;

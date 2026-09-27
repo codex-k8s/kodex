@@ -27,7 +27,8 @@ const loading = ref(false);
 const problem = ref(false);
 const nextRunLabel = computed(() => {
   const current = schedule.value;
-  if (!current?.nextRunAt) return undefined;
+  if (!current || current.state !== "ACTIVE" || !current.nextRunAt)
+    return undefined;
   const date = new Date(current.nextRunAt);
   if (Number.isNaN(date.getTime())) return current.nextRunAt;
   return `${new Intl.DateTimeFormat(locale.value, {

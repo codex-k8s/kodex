@@ -49,6 +49,7 @@ import {
 } from "@/features/assistant/context";
 import {
   isAssistantRoleImageBuildDebugRequest,
+  notifyAssistantPlanApplied,
   openAssistantEvent,
   type AssistantIntegrationPublicationRequest,
 } from "@/features/assistant/events";
@@ -740,6 +741,10 @@ async function applyPlan(): Promise<void> {
   await Promise.allSettled(
     [...kinds].map((kind) => platform.reloadPlatformKind(kind)),
   );
+  notifyAssistantPlanApplied({
+    projectRef: plan.projectRef,
+    kinds: [...kinds],
+  });
 }
 
 async function rejectPlan(): Promise<void> {
