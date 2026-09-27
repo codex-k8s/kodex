@@ -1,5 +1,9 @@
-const opaqueRefPattern =
-  /\b(?:agt|art|bld|cap|cnv|con|edg|evt|gat|inc|int|job|mbr|msg|nod|pln|prj|rev|rol|rti|run|sch|ses|trn|usr|wfl)_[A-Za-z0-9_-]{8,}\b/g;
+const opaqueRefSource = String.raw`\b(?:agt|art|bld|cap|cnv|con|edg|evt|gat|inc|int|job|mbr|msg|nod|pln|prj|rev|rol|rti|run|sch|ses|trn|usr|wfl)_[A-Za-z0-9_-]{8,}\b`;
+const opaqueRefPattern = new RegExp(opaqueRefSource, "g");
+const labeledOpaqueRefPattern = new RegExp(
+  String.raw`(?:[,;]\s*)?\b(?:ref|id)\s*[:=]?\s*` + opaqueRefSource,
+  "gi",
+);
 
 export interface SafeSummaryValue {
   text: string;
@@ -30,9 +34,12 @@ export function safeSummary(
     .replace(/```(?:\w+)?\s*([\s\S]*?)```/g, "$1")
     .replace(/!\[([^\]]*)]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/`/g, "")
+    .replace(labeledOpaqueRefPattern, "")
     .replace(opaqueRefPattern, "")
+    .replace(/\(\s*\)/g, "")
     .replace(/(^|\s)#{1,6}\s+/g, "$1")
-    .replace(/[*_~`>]/g, "")
+    .replace(/[*_~>]/g, "")
     .replace(/\s+/g, " ")
     .replace(/\s+([.,!?;:])/g, "$1")
     .trim();

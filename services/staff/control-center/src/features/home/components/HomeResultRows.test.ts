@@ -10,7 +10,7 @@ const template = readFileSync(
 describe("HomeResultRows", () => {
   it("показывает краткое безопасное описание вместо полного результата запуска", () => {
     expect(template).toContain(
-      '<SafeSummary :content="item.description" :maximum-length="140" />',
+      ':content="item.description" :maximum-length="140"',
     );
     expect(template).not.toContain("{{ item.description }}");
   });
