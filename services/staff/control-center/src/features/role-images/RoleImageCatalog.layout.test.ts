@@ -50,4 +50,17 @@ describe("каталог образов ИИ-сотрудников", () => {
     expect(editor).toContain("recipe.value?.promotedImageReady");
     expect(editor).toContain(':state="promotionEvidenceState"');
   });
+
+  it("предлагает диагностику последней неуспешной сборки рядом со статусом образа", () => {
+    const summary = editor.slice(
+      editor.indexOf('class="image-summary__actions"'),
+      editor.indexOf('class="editor-layout"'),
+    );
+    expect(summary).toContain("currentBuild.stage");
+    expect(summary).toContain("'DEAD_LETTER'");
+    expect(summary).toContain(
+      '@click="requestAssistantRoleImageBuildDebug(currentBuild)"',
+    );
+    expect(summary).toContain('t("roleImages.debugBuildWithAssistant")');
+  });
 });

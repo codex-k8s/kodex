@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   Archive,
+  Bot,
   Box,
   Hammer,
   Maximize2,
@@ -449,6 +450,18 @@ onBeforeUnmount(() => {
             }"
             >{{ t("managed.history") }}</RouterLink
           >
+          <button
+            v-if="
+              currentBuild &&
+              ['FAILED', 'EXPIRED', 'DEAD_LETTER'].includes(currentBuild.stage)
+            "
+            class="button"
+            type="button"
+            @click="requestAssistantRoleImageBuildDebug(currentBuild)"
+          >
+            <Bot :size="16" aria-hidden="true" />
+            {{ t("roleImages.debugBuildWithAssistant") }}
+          </button>
           <button
             v-if="canRequestBuild(recipe)"
             class="button button--primary"

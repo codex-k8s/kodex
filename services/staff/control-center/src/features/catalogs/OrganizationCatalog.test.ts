@@ -134,6 +134,26 @@ describe("OrganizationCatalog realtime", () => {
     expect(catalogTemplate).not.toContain("<ModalDialog");
   });
 
+  it("ставит название сущности первым, а Проект показывает отдельной ячейкой без иконки", () => {
+    const header = catalogTemplate.slice(
+      catalogTemplate.indexOf("<thead>"),
+      catalogTemplate.indexOf("</thead>"),
+    );
+    expect(header.indexOf("catalog.table.name")).toBeLessThan(
+      header.indexOf("catalog.table.project"),
+    );
+
+    const row = catalogTemplate.slice(
+      catalogTemplate.indexOf('<tr\n            v-for="entry in items"'),
+      catalogTemplate.indexOf('class="organization-catalog__description"'),
+    );
+    expect(row.indexOf('class="organization-catalog__identity"')).toBeLessThan(
+      row.indexOf('class="organization-catalog__project-link"'),
+    );
+    const projectCell = row.slice(row.indexOf('<td v-if="!projectRef">'));
+    expect(projectCell).not.toContain("<EntityIcon");
+  });
+
   it("показывает строки только после получения авторитетного названия Проекта", async () => {
     let resolveProject!: (project: { ref: string; name: string }) => void;
     dependencies.project.mockReturnValueOnce(
