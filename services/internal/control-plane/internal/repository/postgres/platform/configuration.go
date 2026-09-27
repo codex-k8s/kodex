@@ -418,7 +418,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		}
 		ref, _ := newRef("int")
 		maskedCredentials := "CONFIGURED"
-		if definition.Spec.Credential != nil {
+		if definition.Spec.Credential != nil || payload.DefinitionKey == "openapi-mcp" {
 			maskedCredentials = "NOT_CONFIGURED"
 		}
 		var item entity.IntegrationConnection

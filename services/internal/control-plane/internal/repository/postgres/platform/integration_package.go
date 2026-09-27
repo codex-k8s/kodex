@@ -59,6 +59,10 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 	var format, content string
 	err := querier.QueryRow(ctx, queryIntegrationPackageBoundRevision, current.organizationID, item.Ref).Scan(&format, &content)
 	if errors.Is(err, pgx.ErrNoRows) {
+		if item.DefinitionKey == "openapi-mcp" {
+			// Поставленный шаблон не исполняется до явной привязки ревизии владельца.
+			item.MaskedCredentialsState = "NOT_CONFIGURED"
+		}
 		return nil
 	}
 	if err != nil || (format != "JSON" && format != "YAML") {

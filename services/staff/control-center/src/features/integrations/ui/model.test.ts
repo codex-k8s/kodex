@@ -6,6 +6,7 @@ import {
   filterIntegrationPackages,
   flattenIntegrationGrants,
   integrationCategories,
+  isUnboundOpenAPITemplate,
   publicIntegrationConfiguration,
 } from "@/features/integrations/ui/model";
 import type {
@@ -78,6 +79,26 @@ function connection(
 }
 
 describe("integrations presentation model", () => {
+  it("отличает поставленный OpenAPI-шаблон от привязанной ревизии владельца", () => {
+    const shipped = definition("openapi-mcp");
+    expect(
+      isUnboundOpenAPITemplate(connection("template", "openapi-mcp"), shipped),
+    ).toBe(true);
+    expect(
+      isUnboundOpenAPITemplate(
+        connection("bound", "openapi-mcp", {
+          definitionDigest: "b".repeat(64),
+        }),
+        shipped,
+      ),
+    ).toBe(false);
+    expect(
+      isUnboundOpenAPITemplate(
+        connection("other", "github"),
+        definition("github"),
+      ),
+    ).toBe(false);
+  });
   it("считает подключения и не открывает create без server action", () => {
     const packages = buildIntegrationPackages(
       [

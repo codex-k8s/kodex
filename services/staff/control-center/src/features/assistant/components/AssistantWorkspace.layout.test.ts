@@ -201,6 +201,8 @@ describe("AssistantWorkspace layout", () => {
     expect(source).toContain("transform: translateY(-50%);");
     expect(source).toContain("max-height: calc(88dvh - 124px);");
     expect(source).toContain('route.query.assistantForm === "1"');
+    expect(source).toContain("watch(assistantFormActive, (active) => {");
+    expect(source).toContain("if (active && !open.value) void show();");
     expect(template).toContain('@click="closeAssistantForm"');
     expect(appShell).toContain("assistantStore.context");
     expect(environmentPage).toContain(

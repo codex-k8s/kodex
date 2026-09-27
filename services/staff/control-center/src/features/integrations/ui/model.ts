@@ -47,6 +47,17 @@ export interface IntegrationPublicConfigurationEntry {
   value: string;
 }
 
+export function isUnboundOpenAPITemplate(
+  connection: IntegrationConnection,
+  definition?: IntegrationDefinition,
+): boolean {
+  return (
+    connection.definitionKey === "openapi-mcp" &&
+    !!definition &&
+    connection.definitionDigest === definition.digest
+  );
+}
+
 const sensitiveConfigurationKey =
   /(^|_)(secret|token|password|credential|api_key)(_|$)/i;
 

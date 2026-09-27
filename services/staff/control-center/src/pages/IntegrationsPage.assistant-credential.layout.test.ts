@@ -14,6 +14,10 @@ describe("IntegrationsPage assistant credential handoff", () => {
     expect(source).toContain("connection.ref !== ref");
     expect(source).toContain("canConfigureCredential(definition, connection)");
     expect(source).toContain("openCredential(connection, definition)");
+    expect(source).toContain("credentialConnection.value = current");
+    expect(source).toContain("credentialConnection.definitionVersion");
+    expect(source).toContain("credentialConnection.capabilities");
+    expect(source).toContain('dialogMode === "CREDENTIAL"');
   });
 
   it("очищает route и одноразовое значение секрета при закрытии", () => {

@@ -32,6 +32,7 @@ import {
   buildIntegrationPackages,
   flattenIntegrationGrants,
   integrationCategories,
+  isUnboundOpenAPITemplate,
   publicIntegrationConfiguration,
   type IntegrationGrantPresentation,
   type IntegrationsSection,
@@ -247,6 +248,7 @@ watch(
 const dialog = ref(false);
 const dialogMode = ref<"CREATE" | "CREDENTIAL" | "EDIT">("CREATE");
 const editingConnection = ref<IntegrationConnection>();
+const credentialConnection = ref<IntegrationConnection>();
 const detailsConnection = ref<IntegrationConnection>();
 const mailboxCredentialBusy = ref(false);
 const mailboxConfigurationBusy = ref(false);
@@ -510,6 +512,14 @@ const selectedDefinition = computed(
     catalogDefinitions.value.find((item) => item.key === form.definitionKey) ??
     platform.definitions[form.definitionKey],
 );
+const boundCredentialDefinition = computed(
+  () =>
+    dialogMode.value === "CREDENTIAL" &&
+    credentialConnection.value !== undefined &&
+    selectedDefinition.value !== undefined &&
+    credentialConnection.value.definitionDigest !==
+      selectedDefinition.value.digest,
+);
 const requiresCredential = computed(() =>
   definitionRequiresCredential(selectedDefinition.value),
 );
@@ -572,6 +582,7 @@ function openConnection(definitionKey: string): void {
   problem.value = undefined;
   operationSuccess.value = "";
   editingConnection.value = undefined;
+  credentialConnection.value = undefined;
   configurationMode.value = "FORM";
   yamlContent.value = "";
   yamlInvalid.value = false;
@@ -588,6 +599,7 @@ function closeConnectionDialog(force = false): void {
   credentialValue.value = "";
   pendingCredential.value = undefined;
   editingConnection.value = undefined;
+  credentialConnection.value = undefined;
   credentialStepFailed.value = false;
   credentialRequired.value = false;
   formSubmitted.value = false;
@@ -625,6 +637,7 @@ async function openEdit(connection: IntegrationConnection): Promise<void> {
     if (!definition || !current.nextActions.includes("UPDATE")) return;
     dialogMode.value = "EDIT";
     editingConnection.value = current;
+    credentialConnection.value = undefined;
     form.definitionKey = current.definitionKey;
     form.name = current.name;
     form.configuration = Object.fromEntries(
@@ -675,6 +688,7 @@ async function openCredential(
     )
       return;
     assistantCredentialDefinition.value = definition;
+    credentialConnection.value = current;
     dialogMode.value = "CREDENTIAL";
     form.definitionKey = current.definitionKey;
     form.name = current.name;
@@ -1178,9 +1192,11 @@ onBeforeUnmount(() => {
             <h3>Учётные данные и проверка</h3>
             <p>
               {{
-                detailsConnection.credentialsConfigured
-                  ? "Учётные данные настроены и скрыты"
-                  : "Учётные данные ещё не настроены"
+                isUnboundOpenAPITemplate(detailsConnection, detailsDefinition)
+                  ? $t("integrations.openapiTemplateNextStep")
+                  : detailsConnection.credentialsConfigured
+                    ? "Учётные данные настроены и скрыты"
+                    : "Учётные данные ещё не настроены"
               }}
             </p>
             <p v-if="detailsConnection.lastTestOutcome">
@@ -1343,18 +1359,33 @@ onBeforeUnmount(() => {
         >
           <section class="field field--wide manifest-summary">
             <div>
-              <strong>{{ selectedDefinition.name }}</strong>
+              <strong>{{
+                dialogMode === "CREDENTIAL" && credentialConnection
+                  ? credentialConnection.name
+                  : selectedDefinition.name
+              }}</strong>
               <span class="mono">
                 {{ selectedDefinition.schemaVersion }} · v{{
-                  selectedDefinition.definitionVersion
+                  dialogMode === "CREDENTIAL" && credentialConnection
+                    ? credentialConnection.definitionVersion
+                    : selectedDefinition.definitionVersion
                 }}
               </span>
             </div>
-            <p>{{ selectedDefinition.description }}</p>
+            <p>
+              {{
+                boundCredentialDefinition
+                  ? $t("integrations.boundCredentialDefinition")
+                  : selectedDefinition.description
+              }}
+            </p>
             <div class="manifest-summary__facts">
               <span class="mono">{{ selectedDefinition.adapter }}</span>
               <span
-                v-for="capability in selectedDefinition.capabilities"
+                v-for="capability in dialogMode === 'CREDENTIAL' &&
+                credentialConnection
+                  ? credentialConnection.capabilities
+                  : selectedDefinition.capabilities"
                 :key="capability.key"
               >
                 {{ capability.name }} ·
@@ -1497,11 +1528,13 @@ onBeforeUnmount(() => {
             {{
               busy
                 ? "Сохраняем…"
-                : pendingCredential
+                : credentialStepFailed
                   ? $t("integrations.retryCredential")
-                  : dialogMode === "EDIT"
-                    ? $t("common.save")
-                    : $t("integrations.connect")
+                  : dialogMode === "CREDENTIAL"
+                    ? $t("integrations.configureCredential")
+                    : dialogMode === "EDIT"
+                      ? $t("common.save")
+                      : $t("integrations.connect")
             }}
           </button>
         </template>

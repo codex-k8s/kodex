@@ -156,6 +156,9 @@ func testOpenAPIImportLifecycle(t *testing.T, ctx context.Context, repository *R
 	if err != nil || connection.Connection == nil {
 		t.Fatalf("create unbound OpenAPI connection: %v", err)
 	}
+	if connection.Connection.MaskedCredentialsState != "NOT_CONFIGURED" || contains(connection.Connection.NextActions, "TEST") {
+		t.Fatalf("unbound OpenAPI template advertised readiness or test: state=%s actions=%v", connection.Connection.MaskedCredentialsState, connection.Connection.NextActions)
+	}
 	connectionVersion := connection.Connection.Version
 	if _, err := service.Execute(ctx, command.Command{Kind: command.TestConnection, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "openapi-import-unbound-test", ExpectedVersion: &connectionVersion},

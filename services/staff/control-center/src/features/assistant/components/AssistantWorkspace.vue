@@ -786,6 +786,9 @@ watch(contextIdentity, () => {
   attachmentComposer.value?.clear();
   if (open.value) void store.load(props.context, props.projectRef);
 });
+watch(assistantFormActive, (active) => {
+  if (active && !open.value) void show();
+});
 watch(
   [() => props.context, () => props.projectRef] as const,
   ([nextContext, nextProjectRef], [previousContext, previousProjectRef]) => {

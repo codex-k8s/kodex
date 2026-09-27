@@ -18,6 +18,7 @@ import { ref, useId } from "vue";
 import { canConfigureCredential } from "@/features/integrations/connection-setup";
 import {
   connectionAllows,
+  isUnboundOpenAPITemplate,
   publicIntegrationConfiguration,
 } from "@/features/integrations/ui/model";
 import type {
@@ -150,12 +151,24 @@ useCursorInfiniteScroll({
                 connection.credentialsConfigured ? 'READY' : 'NEEDS_ATTENTION'
               "
               :label="
-                connection.credentialsConfigured
-                  ? t('integrations.credentialsConfigured')
-                  : t('integrations.credentialsNotConfigured')
+                isUnboundOpenAPITemplate(
+                  connection,
+                  definitions[connection.definitionKey],
+                )
+                  ? t('integrations.openapiTemplateNeedsBinding')
+                  : connection.credentialsConfigured
+                    ? t('integrations.credentialsConfigured')
+                    : t('integrations.credentialsNotConfigured')
               "
             />
-            <span>{{ connection.credentialsHint }}</span>
+            <span>{{
+              isUnboundOpenAPITemplate(
+                connection,
+                definitions[connection.definitionKey],
+              )
+                ? t("integrations.openapiTemplateNextStep")
+                : connection.credentialsHint
+            }}</span>
           </div>
           <code
             v-if="definitions[connection.definitionKey]?.credentialSecretKey"

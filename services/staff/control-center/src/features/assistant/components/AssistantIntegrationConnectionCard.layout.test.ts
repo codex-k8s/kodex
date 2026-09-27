@@ -12,6 +12,7 @@ describe("AssistantIntegrationConnectionCard", () => {
     expect(source).toContain("assistantIntegrationConnectionTarget");
     expect(source).toContain("getIntegrationConnection");
     expect(source).toContain("next.ref !== value.connectionRef");
+    expect(source).toContain("!connection.value?.credentialsConfigured");
     expect(source).toContain('connection.value?.state === "TESTING"');
   });
 

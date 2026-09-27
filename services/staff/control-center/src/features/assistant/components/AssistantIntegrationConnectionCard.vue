@@ -28,8 +28,10 @@ const target = computed(() =>
 const connection = ref<IntegrationConnection>();
 const loading = ref(false);
 const problem = ref(false);
-const needsCredential = computed(() =>
-  connection.value?.nextActions.includes("CONFIGURE_CREDENTIAL"),
+const needsCredential = computed(
+  () =>
+    !connection.value?.credentialsConfigured &&
+    connection.value?.nextActions.includes("CONFIGURE_CREDENTIAL"),
 );
 const destination = computed(() => ({
   name: "integrations",
