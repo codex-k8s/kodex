@@ -2319,7 +2319,7 @@ func (repository *Repository) GetAdministration(ctx context.Context, principal v
 	if activeAdapters > 0 {
 		profile = "WEB_WITH_OPTIONAL_ADAPTERS"
 	}
-	result := platformrepo.Administration{Profile: profile, CoreReady: assistant.Ready, CoreSummary: "i18n:WEB_ONLY_CORE_SUMMARY", Assistant: assistant, OptionalAdapters: definitions, ObservedAt: time.Now().UTC()}
+	result := platformrepo.Administration{Profile: profile, CoreReady: true, CoreSummary: "i18n:WEB_ONLY_CORE_SUMMARY", Assistant: assistant, OptionalAdapters: definitions, ObservedAt: time.Now().UTC()}
 	incidentRows, err := repository.pool.Query(ctx, queryInteractionListFailedIncidents, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 	})
