@@ -260,8 +260,8 @@ onBeforeUnmount(() => store.dispose());
 }
 .role-image-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-  grid-auto-rows: minmax(270px, auto);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr));
+  grid-auto-rows: minmax(220px, auto);
   gap: 12px;
 }
 .image-card {
