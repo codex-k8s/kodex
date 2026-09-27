@@ -76,10 +76,10 @@ const connectionEntries = ref<IntegrationConnection[]>([]);
 const connectionListRoot = ref<HTMLElement>();
 const connectionPageSize = useAdaptiveCursorPageSize({
   container: connectionListRoot,
-  itemSelector: ".connection-card",
+  itemSelector: ".connection-row",
   itemCount: () => connectionEntries.value.length,
-  estimatedItemHeight: 360,
-  estimatedColumns: 3,
+  estimatedItemHeight: 64,
+  estimatedColumns: 1,
 });
 const connectionCursor = ref("");
 const connectionLoading = ref(false);

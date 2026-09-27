@@ -76,6 +76,8 @@ const connection: IntegrationConnection = {
 const messages = {
   ru: {
     common: {
+      actions: "Действия",
+      noData: "Нет данных",
       test: "Проверить",
       enable: "Включить",
       disable: "Отключить",
@@ -105,6 +107,16 @@ const messages = {
       noConnectionsYet: "Подключений пока нет",
       activeGrants: "разрешений",
       capabilitiesShort: "возможностей",
+      capabilityCount: "Возможностей: {count}",
+      table: {
+        name: "Название",
+        package: "Пакет",
+        state: "Состояние",
+        credentials: "Учётные данные",
+        access: "Доступ",
+        lastTest: "Последняя проверка",
+        grants: "Разрешений: {count}",
+      },
     },
   },
 };
@@ -145,8 +157,11 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).not.toContain("Платформа работает без интеграций");
     expect(html).not.toContain("Подключения необязательны");
     expect(html).toContain("Synthetic lifecycle");
-    expect(html).toContain("ui-lifecycle");
-    expect(html).toContain("SYNTHETIC_JOURNAL");
+    expect(html).toContain('<table class="connection-table"');
+    expect(html).toContain("Synthetic HTTP");
+    expect(html).toContain("Разрешений: 0");
+    expect(html).toContain("Возможностей: 1");
+    expect(html).not.toContain("ui-lifecycle");
     expect(html).not.toContain("must-never-be-rendered");
     expect(html).toContain("Проверить");
     expect(html).toContain("Отключить");
@@ -176,7 +191,7 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Подключения необязательны");
   });
 
-  it("оставляет полный набор возможностей в счётчике, но не растягивает карточку", async () => {
+  it("оставляет полный набор возможностей в счётчике, но не растягивает строку", async () => {
     const capability = definition.capabilities[0];
     if (!capability) {
       throw new Error("fixture capability is required");
@@ -191,7 +206,7 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Возможность 1");
     expect(html).toContain("Возможность 3");
     expect(html).not.toContain("Возможность 4");
-    expect(html).toContain("+1");
-    expect(html).toMatch(/<strong[^>]*>4<\/strong>/);
+    expect(html).toContain("Возможностей: 4");
+    expect(html).toContain('class="connection-row"');
   });
 });

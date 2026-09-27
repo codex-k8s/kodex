@@ -22,14 +22,17 @@ describe("IntegrationsPage layout", () => {
   it("помечает неполный счётчик подключений при наличии курсора", () => {
     expect(pageSource).toContain(':connections-has-more="!!connectionCursor"');
     expect(connectionsSource).toContain(
-      "count: hasMore ? `${connections.length}+` : connections.length",
+      '? "integrationsRedesign.connectionsLoadedCount"',
     );
+    expect(connectionsSource).toContain("{ count: connections.length }");
   });
   it("показывает готовность core по авторитетному API-флагу", () => {
     expect(pageSource).toContain(
       ':core-ready="platform.integrationCoreReady === true"',
     );
-    expect(connectionsTemplate).toContain('v-if="coreReady"');
+    expect(connectionsTemplate).toContain(
+      'v-if="coreReady && !connections.length && !search?.trim()"',
+    );
     expect(connectionsTemplate).toContain('class="core-readiness"');
     expect(connectionsTemplate).toContain(
       't("integrations.noConnectionsTitle")',
@@ -44,7 +47,7 @@ describe("IntegrationsPage layout", () => {
     expect(readiness).toBeGreaterThan(-1);
     expect(populated).toBeGreaterThan(readiness);
     expect(connectionsTemplate).toContain(
-      't("integrationsRedesign.noConnectionsYet")',
+      '"integrationsRedesign.noConnectionsYet"',
     );
   });
 
@@ -55,8 +58,13 @@ describe("IntegrationsPage layout", () => {
     expect(connectionsSource).toContain("flex: 0 0 auto");
   });
 
-  it("даёт карточке подключения вырасти по содержимому без наложения действий", () => {
-    expect(connectionsSource).toContain(".connection-card {");
-    expect(connectionsSource).toContain("height: max-content;");
+  it("показывает подключения компактной таблицей с курсором и доступными действиями", () => {
+    expect(pageSource).toContain('itemSelector: ".connection-row"');
+    expect(connectionsTemplate).toContain('<table class="connection-table">');
+    expect(connectionsTemplate).toContain('class="connection-row"');
+    expect(connectionsTemplate).toContain('ref="sentinel"');
+    expect(connectionsTemplate).not.toContain('class="connection-card"');
+    expect(connectionsSource).toContain(".connection-table-wrap {");
+    expect(connectionsSource).toContain("overflow-x: auto;");
   });
 });
