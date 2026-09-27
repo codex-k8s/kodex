@@ -96,11 +96,18 @@ const rolePermissions = computed(() =>
     selectedRole.value?.currentVersion.permissionKeys.includes(permission.key),
   ),
 );
+const unavailablePermissionKeys = computed(() => {
+  const available = new Set(
+    props.permissions.map((permission) => permission.key),
+  );
+  return (
+    selectedRole.value?.currentVersion.permissionKeys.filter(
+      (key) => !available.has(key),
+    ) ?? []
+  );
+});
 const permissionRegistryComplete = computed(
-  () =>
-    !selectedRole.value ||
-    rolePermissions.value.length ===
-      selectedRole.value.currentVersion.permissionKeys.length,
+  () => unavailablePermissionKeys.value.length === 0,
 );
 const allowedResourceKinds = computed(() => [
   ...new Set(
@@ -346,6 +353,7 @@ watch(
         </header>
         <p v-if="!permissionRegistryComplete" class="registry-unavailable">
           {{ $t("access.bindingEditor.permissionRegistryUnavailable") }}
+          <code>{{ unavailablePermissionKeys.join(", ") }}</code>
         </p>
         <ul>
           <li v-for="permission in rolePermissions" :key="permission.key">
@@ -468,6 +476,11 @@ watch(
   padding: 8px 10px;
   color: var(--warning);
   background: var(--warning-soft);
+}
+.registry-unavailable code {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
 }
 .selected-role-summary header,
 .selected-role-summary li {

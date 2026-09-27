@@ -2606,7 +2606,7 @@ const ru = {
       invalidWindow: "Дата окончания должна быть позже даты начала.",
       operationCount: "Типизированных операций: {count}",
       permissionRegistryUnavailable:
-        "Сохранение недоступно: серверный реестр вернул не все полномочия выбранной роли.",
+        "Эта версия роли содержит устаревшие полномочия. Выпустите новую версию роли без них либо выберите другую актуальную роль. Существующее назначение не изменено.",
       create: "Создать привязку",
     },
     effective: {
@@ -6398,7 +6398,7 @@ const en = {
       invalidWindow: "The end date must be later than the start date.",
       operationCount: "Typed operations: {count}",
       permissionRegistryUnavailable:
-        "Saving is unavailable: the server registry did not return every permission in the selected role.",
+        "This role version contains obsolete permissions. Publish a new role version without them or select another current role. The existing binding has not changed.",
       create: "Create binding",
     },
     effective: {
