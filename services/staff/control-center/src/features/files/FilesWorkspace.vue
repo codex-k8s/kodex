@@ -58,13 +58,11 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import ViewModeToggle from "@/shared/ui/ViewModeToggle.vue";
 import {
   useAsyncEntityCollection,
   useCursorInfiniteScroll,
 } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
-import type { ViewMode } from "@/shared/ui/view-mode-toggle";
 
 const props = defineProps<{
   projectRef: string;
@@ -74,7 +72,6 @@ const props = defineProps<{
 const emit = defineEmits<{ selection: [ref: string] }>();
 const maximumUploadBytes = 512 << 20;
 const maximumTextPreviewBytes = 256 << 10;
-const viewPreferenceKey = "kodex.files.view";
 const platform = usePlatformStore();
 const fieldId = useId();
 const { locale, t } = useI18n();
@@ -94,7 +91,6 @@ const activeTab = ref<Exclude<FileTab, "TRASH">>("FILES");
 const kind = ref<FileKind>("ALL");
 const scanState = ref<"ALL" | Artifact["scanState"]>("ALL");
 const source = ref<FileSource>("ALL");
-const viewMode = ref<ViewMode>("list");
 const selectedRef = ref(props.initialArtifactRef ?? "");
 watch(selectedRef, (value) => emit("selection", value));
 watch(
@@ -476,10 +472,6 @@ watch(
   },
   { immediate: true },
 );
-watch(viewMode, (mode) => {
-  if (typeof window !== "undefined")
-    window.localStorage.setItem(viewPreferenceKey, mode);
-});
 watch(activeTab, () => {
   source.value = "ALL";
 });
@@ -1049,8 +1041,6 @@ function closePreview(): void {
 }
 
 onMounted(() => {
-  const preferred = window.localStorage.getItem(viewPreferenceKey);
-  if (preferred === "grid" || preferred === "list") viewMode.value = preferred;
   void platform.loadProject(props.projectRef);
 });
 onBeforeUnmount(() => {
@@ -1184,13 +1174,6 @@ onBeforeUnmount(() => {
             : $t("files.loadedOfTotal", { loaded: items.length, total })
         }}
       </span>
-      <ViewModeToggle
-        v-model="viewMode"
-        class="files-workspace__view-toggle"
-        :ariaLabel="custom.view"
-        :list-label="$t('files.list')"
-        :grid-label="custom.grid"
-      />
       <button
         v-if="canUpload && !trashMode"
         class="button button--primary"
@@ -1428,141 +1411,6 @@ onBeforeUnmount(() => {
               {{ trashMode ? custom.trashContract : $t("files.noMatchesText") }}
             </p>
           </section>
-
-          <div v-else-if="viewMode === 'grid'" class="files-grid" role="list">
-            <div
-              v-for="artifact in filteredArtifacts"
-              :key="artifact.ref"
-              class="file-collection-item file-collection-item--tile"
-              role="listitem"
-              :data-artifact-ref="artifact.ref"
-            >
-              <label
-                class="file-collection-item__select"
-                :aria-label="`${custom.selected}: ${artifact.fileName}`"
-              >
-                <input
-                  type="checkbox"
-                  :name="`${fieldId}-artifact`"
-                  :value="artifact.ref"
-                  :checked="selectedRefs.includes(artifact.ref)"
-                  :disabled="
-                    contentBusy ||
-                    !artifactLifecycleAnnounced(
-                      artifact,
-                      trashMode ? 'RESTORE' : 'DELETE',
-                    )
-                  "
-                  @change="
-                    toggleSelection(
-                      artifact.ref,
-                      ($event.target as HTMLInputElement).checked,
-                    )
-                  "
-                />
-              </label>
-              <button
-                class="file-tile"
-                :class="{
-                  'file-tile--selected': selectedRef === artifact.ref,
-                }"
-                type="button"
-                @click="selectedRef = artifact.ref"
-                @dblclick="openPreview(artifact)"
-              >
-                <span class="file-tile__preview">
-                  <FileTypeIcon :artifact="artifact" large />
-                </span>
-                <strong :title="artifact.fileName">{{
-                  artifact.fileName
-                }}</strong>
-                <span class="file-tile__meta">
-                  <span class="mono">{{
-                    formatBytes(artifact.sizeBytes)
-                  }}</span>
-                  <span class="mono">v{{ artifact.revision }}</span>
-                </span>
-                <StatusBadge :state="artifact.scanState" />
-              </button>
-              <div class="file-collection-item__actions">
-                <button
-                  class="icon-button"
-                  type="button"
-                  :title="$t('files.openPreview')"
-                  :aria-label="`${$t('files.openPreview')}: ${artifact.fileName}`"
-                  @click="openPreview(artifact)"
-                >
-                  <Eye :size="16" aria-hidden="true" />
-                </button>
-                <button
-                  class="icon-button"
-                  type="button"
-                  :disabled="
-                    contentBusy || !artifact.nextActions.includes('DOWNLOAD')
-                  "
-                  :title="
-                    artifact.nextActions.includes('DOWNLOAD')
-                      ? $t('common.download')
-                      : custom.actionUnavailable
-                  "
-                  :aria-label="`${$t('common.download')}: ${artifact.fileName}`"
-                  @click="download(artifact)"
-                >
-                  <Download :size="16" aria-hidden="true" />
-                </button>
-                <button
-                  class="icon-button"
-                  :class="{
-                    'file-collection-item__lifecycle--danger': !trashMode,
-                  }"
-                  type="button"
-                  :disabled="
-                    contentBusy ||
-                    Boolean(
-                      lifecycleBlockLabel(
-                        artifact,
-                        trashMode ? 'RESTORE' : 'DELETE',
-                      ),
-                    )
-                  "
-                  :title="
-                    lifecycleBlockLabel(
-                      artifact,
-                      trashMode ? 'RESTORE' : 'DELETE',
-                    ) || (trashMode ? custom.restore : custom.delete)
-                  "
-                  :aria-label="`${
-                    trashMode ? custom.restore : custom.delete
-                  }: ${artifact.fileName}`"
-                  @click="
-                    openLifecycleDialog(
-                      artifact,
-                      trashMode ? 'RESTORE' : 'DELETE',
-                    )
-                  "
-                >
-                  <RotateCcw v-if="trashMode" :size="16" aria-hidden="true" />
-                  <Trash2 v-else :size="16" aria-hidden="true" />
-                </button>
-                <button
-                  v-if="trashMode"
-                  class="icon-button file-collection-item__lifecycle--danger"
-                  type="button"
-                  :disabled="
-                    contentBusy ||
-                    Boolean(lifecycleBlockLabel(artifact, 'PURGE'))
-                  "
-                  :title="
-                    lifecycleBlockLabel(artifact, 'PURGE') || custom.purge
-                  "
-                  :aria-label="`${custom.purge}: ${artifact.fileName}`"
-                  @click="openLifecycleDialog(artifact, 'PURGE')"
-                >
-                  <Trash2 :size="16" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </div>
 
           <div v-else class="files-list" role="list">
             <div class="files-list__head desktop-only" aria-hidden="true">
@@ -2166,34 +2014,12 @@ onBeforeUnmount(() => {
 .files-workspace__filtered-empty {
   margin: 16px;
 }
-.files-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 12px;
-  padding: 14px;
-}
 .file-collection-item {
   position: relative;
   min-width: 0;
 }
-.file-collection-item > .file-tile,
 .file-collection-item > .file-list-row {
   width: 100%;
-}
-.file-tile {
-  display: grid;
-  min-width: 0;
-  min-height: 196px;
-  align-content: start;
-  justify-items: start;
-  gap: 8px;
-  padding: 12px 44px 12px 12px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
 }
 .file-collection-item__actions {
   position: absolute;
@@ -2229,36 +2055,6 @@ onBeforeUnmount(() => {
 }
 .file-collection-item__lifecycle--danger {
   color: var(--danger, #b42318);
-}
-.file-tile:hover,
-.file-tile--selected {
-  border-color: var(--accent);
-}
-.file-tile--selected {
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
-.file-tile__preview {
-  display: grid;
-  width: 100%;
-  height: 82px;
-  place-items: center;
-  border-bottom: 1px solid var(--hairline);
-}
-.file-tile strong {
-  display: -webkit-box;
-  min-height: 2.6em;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
-  line-height: 1.3;
-}
-.file-tile__meta {
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 0.76rem;
 }
 .files-list {
   min-width: 720px;

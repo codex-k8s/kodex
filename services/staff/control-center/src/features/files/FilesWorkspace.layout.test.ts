@@ -41,12 +41,15 @@ describe("FilesWorkspace contract", () => {
     expect(source).toContain("useCursorInfiniteScroll");
   });
 
-  it("использует один toolbar для раздела, типа, состояния, источника и вида", () => {
+  it("использует один toolbar для раздела, типа, состояния и источника", () => {
     expect(source).toContain('v-model="activeTab"');
     expect(source).toContain('v-model="kind"');
     expect(source).toContain('v-model="scanState"');
     expect(source).toContain('v-model="source"');
-    expect(source).toContain("<ViewModeToggle");
+    expect(source).toContain('class="files-list"');
+    expect(source).not.toContain("<ViewModeToggle");
+    expect(source).not.toContain('viewMode === "grid"');
+    expect(source).not.toContain("files-grid");
     expect(source).not.toContain("files-workspace__tabs");
   });
 
