@@ -153,6 +153,7 @@ const ru = {
     importSkill: "Импортировать навык",
     importFiles: "Файлы",
     skillFiles: "Файлы навыка",
+    fileRevision: "Ревизия файла {revision}",
     skillManifestHint:
       "Для сохранения нужен файл SKILL.md. Импортируйте его или добавьте уже проверенный файл Проекта.",
     agentBinding: "Привязка к ИИ-сотруднику",
@@ -4221,6 +4222,7 @@ const en = {
     importSkill: "Import Skill",
     importFiles: "Files",
     skillFiles: "Skill files",
+    fileRevision: "File revision {revision}",
     skillManifestHint:
       "A SKILL.md file is required before saving. Import it or add an already verified project file.",
     agentBinding: "Agent binding",
