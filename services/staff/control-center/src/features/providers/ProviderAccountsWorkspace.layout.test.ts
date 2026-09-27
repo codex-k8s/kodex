@@ -55,13 +55,16 @@ describe("provider account layout", () => {
     expect(selector).toContain("controller.abort()");
   });
 
-  it("сохраняет стабильную responsive компоновку", () => {
+  it("показывает реестры таблицами с безопасными действиями и строковым курсором", () => {
     expect(workspace).toContain(
       'v-if="accounts.length > 6 || accountsNextPageToken"',
     );
-    expect(workspace).toContain(
-      "grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.8fr) auto",
-    );
+    expect(workspace).toContain('class="provider-readiness__table"');
+    expect(workspace).toContain('class="provider-account-list__table"');
+    expect(workspace).toContain('itemSelector: ".provider-account-row"');
+    expect(workspace).toContain("estimatedColumns: 1");
+    expect(workspace).toContain("account.authorization?.method");
+    expect(workspace).not.toContain("provider-account-card");
     expect(workspace).toContain("@media (max-width: 560px)");
     expect(selector).toContain("min-width: min(430px, calc(100vw - 32px))");
   });
