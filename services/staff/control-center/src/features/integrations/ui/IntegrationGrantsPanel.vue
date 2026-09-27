@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { LockKeyhole, Plus, Search, ShieldCheck, Trash2 } from "@lucide/vue";
+import {
+  Bot,
+  LockKeyhole,
+  Plus,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Workflow,
+} from "@lucide/vue";
 import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -517,68 +525,116 @@ const canManageSelected = computed(
           </label>
         </div>
 
-        <div v-if="grants.length" class="grant-list" role="list">
-          <article
-            v-for="item in grants"
-            :key="item.ref"
-            class="grant-row entity-row"
-            role="listitem"
-          >
-            <div class="grant-target">
-              <span class="grant-icon" aria-hidden="true">
-                <ShieldCheck :size="16" />
-              </span>
-              <div>
-                <h3>{{ item.targetName }}</h3>
-                <p>
-                  {{ t(`integrationsRedesign.targetKind.${item.targetKind}`) }}
-                  · {{ item.connectionName }}
-                </p>
-              </div>
-            </div>
-            <div class="grant-capability">
-              <strong>{{ item.capabilityName }}</strong>
-              <span>
-                {{ t("integrations.risk." + item.grant.risk) }} ·
-                {{ approvalPolicyLabel(item.grant.approvalPolicy) }}
-              </span>
-              <span>{{ resourceKindLabel(item.resourceKind) }}</span>
-              <span
-                v-for="path in item.grant.approvalScopePaths"
-                :key="path"
-                class="mono resource-value"
-                >{{ approvalPathLabel(path) }}</span
-              >
-              <span
-                v-for="entry in item.resourceValues"
-                :key="entry.key"
-                class="resource-value"
-                :title="`${entry.key}=${entry.value}`"
-              >
-                {{ entry.value }}
-              </span>
-              <details class="grant-technical-details">
-                <summary>{{ t("integrations.technicalDetails") }}</summary>
-                <code>{{ item.capabilityKey }}</code>
-                <code>{{ item.resourceKind }}</code>
-                <code>{{ item.grant.approvalPolicy }}</code>
-              </details>
-            </div>
-            <StatusBadge :state="item.enabled ? 'ENABLED' : 'REVOKED'" />
-            <button
-              v-if="
-                item.enabled &&
-                connectionAllows(item.connection, 'MANAGE_GRANTS')
-              "
-              class="button button--danger grant-revoke"
-              type="button"
-              :disabled="busy"
-              @click="emit('revoke', item)"
-            >
-              <Trash2 :size="15" aria-hidden="true" />
-              {{ t("integrations.revoke") }}
-            </button>
-          </article>
+        <div v-if="grants.length" class="grant-table-scroll">
+          <table class="grant-table">
+            <thead>
+              <tr>
+                <th scope="col">
+                  {{ t("integrationsRedesign.grantColumns.target") }}
+                </th>
+                <th scope="col">
+                  {{ t("integrationsRedesign.grantColumns.capability") }}
+                </th>
+                <th scope="col">
+                  {{ t("integrationsRedesign.grantColumns.resource") }}
+                </th>
+                <th scope="col">
+                  {{ t("integrationsRedesign.grantColumns.state") }}
+                </th>
+                <th scope="col" class="grant-actions-heading">
+                  {{ t("integrationsRedesign.grantColumns.actions") }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in grants" :key="item.ref" class="grant-row">
+                <td>
+                  <div class="grant-target">
+                    <span class="grant-icon" aria-hidden="true">
+                      <Workflow
+                        v-if="item.targetKind === 'WORKFLOW'"
+                        :size="16"
+                      />
+                      <Bot v-else :size="16" />
+                    </span>
+                    <div class="grant-target-text">
+                      <strong :title="item.targetName">{{
+                        item.targetName
+                      }}</strong>
+                      <span :title="item.connectionName">
+                        {{
+                          t(
+                            `integrationsRedesign.targetKind.${item.targetKind}`,
+                          )
+                        }}
+                        · {{ item.connectionName }}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="grant-capability">
+                    <strong :title="item.capabilityName">{{
+                      item.capabilityName
+                    }}</strong>
+                    <span>
+                      {{ t("integrations.risk." + item.grant.risk) }} ·
+                      {{ approvalPolicyLabel(item.grant.approvalPolicy) }}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div class="grant-resource">
+                    <span>{{ resourceKindLabel(item.resourceKind) }}</span>
+                    <span
+                      v-if="item.resourceValues[0]"
+                      class="grant-resource-preview"
+                      :title="`${item.resourceValues[0].key}=${item.resourceValues[0].value}`"
+                      >{{ item.resourceValues[0].value }}</span
+                    >
+                    <details class="grant-technical-details">
+                      <summary>
+                        {{ t("integrations.technicalDetails") }}
+                      </summary>
+                      <code>{{ item.capabilityKey }}</code>
+                      <code>{{ item.resourceKind }}</code>
+                      <code>{{ item.grant.approvalPolicy }}</code>
+                      <code
+                        v-for="path in item.grant.approvalScopePaths"
+                        :key="path"
+                      >
+                        {{ approvalPathLabel(path) }}
+                      </code>
+                      <code
+                        v-for="entry in item.resourceValues"
+                        :key="entry.key"
+                      >
+                        {{ entry.key }}={{ entry.value }}
+                      </code>
+                    </details>
+                  </div>
+                </td>
+                <td>
+                  <StatusBadge :state="item.enabled ? 'ENABLED' : 'REVOKED'" />
+                </td>
+                <td class="grant-actions">
+                  <button
+                    v-if="
+                      item.enabled &&
+                      connectionAllows(item.connection, 'MANAGE_GRANTS')
+                    "
+                    class="button button--danger grant-revoke"
+                    type="button"
+                    :disabled="busy"
+                    @click="emit('revoke', item)"
+                  >
+                    <Trash2 :size="15" aria-hidden="true" />
+                    {{ t("integrations.revoke") }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <div v-else class="grant-empty">
           <ShieldCheck :size="26" aria-hidden="true" />
@@ -747,12 +803,11 @@ const canManageSelected = computed(
           />
           <div v-else class="missing-boundary">
             <LockKeyhole :size="17" aria-hidden="true" />
-            <span v-if="connectionCandidateLoading"
-              >Проверяем область ресурса…</span
-            >
+            <span v-if="connectionCandidateLoading">{{
+              t("integrationsRedesign.resourceScopeLoading")
+            }}</span>
             <span v-else-if="selectedConnection">
-              Область ресурса не получена. Откройте список подключений выше и
-              выберите его повторно.
+              {{ t("integrationsRedesign.resourceScopeMissing") }}
             </span>
             <span v-else>{{
               t("integrationsRedesign.resourceScopeRefresh")
@@ -860,8 +915,6 @@ const canManageSelected = computed(
 }
 .panel-heading h2,
 .panel-heading p,
-.grant-row h3,
-.grant-row p,
 .grant-editor h3,
 .grant-editor p,
 .grant-empty h3,
@@ -870,7 +923,6 @@ const canManageSelected = computed(
   margin-bottom: 0;
 }
 .panel-heading p,
-.grant-row p,
 .grant-editor p,
 .grant-empty p,
 .result-count,
@@ -930,26 +982,80 @@ const canManageSelected = computed(
   color: var(--muted);
   font-size: 0.8rem;
 }
-.grant-row {
-  display: grid;
-  grid-template-columns: minmax(190px, 1fr) minmax(170px, 0.8fr) auto auto;
-  align-items: center;
-  gap: 12px;
-  min-height: 76px;
-  padding: 11px 13px;
-  border-top: 1px solid var(--hairline);
+.grant-table-scroll {
+  min-width: 0;
+  overflow-x: auto;
 }
-.grant-row:first-child {
-  border-top: 0;
+.grant-table {
+  width: 100%;
+  min-width: 880px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.grant-table th,
+.grant-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: middle;
+}
+.grant-table th {
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.grant-table th:nth-child(1) {
+  width: 28%;
+}
+.grant-table th:nth-child(2) {
+  width: 27%;
+}
+.grant-table th:nth-child(3) {
+  width: 25%;
+}
+.grant-table th:nth-child(4) {
+  width: 10%;
+}
+.grant-table th:nth-child(5) {
+  width: 10%;
+}
+.grant-row {
+  height: 68px;
+}
+.grant-row:hover {
+  background: var(--panel);
+}
+.grant-actions-heading,
+.grant-actions {
+  text-align: right !important;
+}
+.grant-actions .button {
+  white-space: nowrap;
 }
 .grant-target {
   min-width: 0;
 }
-.grant-target > div,
-.grant-capability {
+.grant-target-text,
+.grant-capability,
+.grant-resource {
   display: grid;
   min-width: 0;
   gap: 2px;
+}
+.grant-target-text > *,
+.grant-capability > *,
+.grant-resource-preview {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grant-target-text > span,
+.grant-capability > span,
+.grant-resource > span {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 .grant-icon {
   display: inline-grid;
@@ -960,16 +1066,6 @@ const canManageSelected = computed(
   border-radius: 7px;
   color: var(--accent-strong);
   background: var(--accent-soft);
-}
-.grant-capability span {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.72rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.grant-capability .resource-value {
-  max-width: 260px;
 }
 .grant-editor {
   position: sticky;
@@ -1037,8 +1133,7 @@ const canManageSelected = computed(
     flex-direction: column;
   }
   .connection-picker,
-  .grant-list-toolbar,
-  .grant-row {
+  .grant-list-toolbar {
     grid-template-columns: 1fr;
   }
   .grant-revoke {

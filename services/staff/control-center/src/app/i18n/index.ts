@@ -2338,6 +2338,13 @@ const ru = {
     grantsDescription:
       "Каждое разрешение связывает одну capability с одним ИИ-сотрудником или Процессом.",
     grantCount: "Разрешений: {count}",
+    grantColumns: {
+      target: "Получатель",
+      capability: "Возможность",
+      resource: "Ресурс",
+      state: "Состояние",
+      actions: "Действия",
+    },
     searchGrantConnections: "Найти разрешения по подключению",
     connectionPicker: "Подключение",
     allConnections: "Все подключения",
@@ -2351,6 +2358,9 @@ const ru = {
     grantEditorTitle: "Выдать разрешение",
     resourceScopeRefresh:
       "Выберите подключение в каталоге, чтобы проверить актуальную область ресурсов.",
+    resourceScopeLoading: "Проверяем область ресурса…",
+    resourceScopeMissing:
+      "Область ресурса не получена. Выберите подключение повторно.",
     chooseConnectionHint: "Выберите подключение с действием MANAGE_GRANTS.",
     resourceScopeUnavailable:
       "Resource scope, режим учётной записи, срок и Human Gate policy не представлены текущим API. Разрешение нельзя расширить локально.",
@@ -6268,6 +6278,13 @@ const en = {
     grantsDescription:
       "Each grant binds one capability to one AI employee or Process.",
     grantCount: "Grants: {count}",
+    grantColumns: {
+      target: "Recipient",
+      capability: "Capability",
+      resource: "Resource",
+      state: "State",
+      actions: "Actions",
+    },
     searchGrantConnections: "Find grants by connection",
     connectionPicker: "Connection",
     allConnections: "All connections",
@@ -6281,6 +6298,9 @@ const en = {
     grantEditorTitle: "Issue a grant",
     resourceScopeRefresh:
       "Select a connection in the catalog to check its current resource scope.",
+    resourceScopeLoading: "Checking resource scope…",
+    resourceScopeMissing:
+      "Resource scope is unavailable. Select the connection again.",
     chooseConnectionHint: "Choose a connection with the MANAGE_GRANTS action.",
     resourceScopeUnavailable:
       "Resource scope, credential mode, expiry, and Human Gate policy are not represented by the current API. The UI cannot widen the grant locally.",
