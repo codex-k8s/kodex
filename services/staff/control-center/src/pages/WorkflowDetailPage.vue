@@ -25,7 +25,11 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
-import { loadAgentCatalogPage } from "@/features/agents/catalog/api";
+import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
+import {
+  loadAgentCatalogPage,
+  loadAssignedAgent,
+} from "@/features/agents/catalog/api";
 import WorkflowOverviewFields from "@/features/workflows/WorkflowOverviewFields.vue";
 import EffectiveCapabilityCatalog from "@/features/agents/detail/EffectiveCapabilityCatalog.vue";
 const platform = usePlatformStore();
@@ -58,11 +62,10 @@ const launchExplanation = computed(() =>
               `workflowLaunch.operational.${launchReadiness.value.operationalState}`,
             ),
 );
-const agentList = computed(() =>
-  Object.values(platform.agents).filter(
-    (i) => i.projectRef === projectRef.value && !i.system,
-  ),
-);
+const assignedAgents = ref<Record<string, AsyncEntityOption>>({});
+const assignedAgentsLoading = ref(false);
+const assignedAgentsProblem = ref<AppProblem>();
+const assignedAgentsRetry = ref(0);
 async function searchAgents(
   query: string,
   pageToken: string | undefined,
@@ -89,10 +92,18 @@ async function searchAgents(
   };
 }
 function selectedAgent(ref: string) {
-  const agent = agentList.value.find((item) => item.ref === ref);
-  return agent
-    ? { ref: agent.ref, title: agent.name, description: agent.purpose }
-    : undefined;
+  if (!ref) return undefined;
+  return (
+    assignedAgents.value[ref] ?? {
+      ref,
+      title: t(
+        assignedAgentsLoading.value
+          ? "common.loading"
+          : "workflows.assignedAgentUnavailable",
+      ),
+      disabled: true,
+    }
+  );
 }
 function selectAgent(value: unknown, step?: WorkflowStepInput): void {
   if (!canEdit.value || busy.value) return;
@@ -138,6 +149,58 @@ const form = reactive({
 const savedForm = ref("");
 const dirty = computed(
   () => savedForm.value !== "" && JSON.stringify(form) !== savedForm.value,
+);
+watch(
+  () => [
+    projectRef.value,
+    assignedAgentsRetry.value,
+    form.coordinatorAgentRef,
+    ...form.steps.map((step) => step.agentRef),
+  ],
+  async (_values, _previous, onCleanup) => {
+    const project = projectRef.value;
+    const refs = [
+      ...new Set(
+        [
+          form.coordinatorAgentRef,
+          ...form.steps.map((step) => step.agentRef),
+        ].filter((ref): ref is string => Boolean(ref)),
+      ),
+    ];
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    assignedAgents.value = {};
+    assignedAgentsLoading.value = refs.length > 0;
+    assignedAgentsProblem.value = undefined;
+    const resolved: Record<string, AsyncEntityOption> = {};
+    let firstFailure: unknown;
+    for (let offset = 0; offset < refs.length; offset += 4) {
+      const batch = await Promise.allSettled(
+        refs
+          .slice(offset, offset + 4)
+          .map((ref) => loadAssignedAgent(project, ref, controller.signal)),
+      );
+      if (controller.signal.aborted) return;
+      for (const result of batch) {
+        if (result.status === "rejected") {
+          firstFailure ??= result.reason ?? new Error("Agent lookup failed");
+          continue;
+        }
+        const agent = result.value;
+        resolved[agent.ref] = {
+          ref: agent.ref,
+          title: agent.name,
+          description: agent.purpose,
+        };
+      }
+    }
+    if (controller.signal.aborted) return;
+    assignedAgents.value = resolved;
+    assignedAgentsLoading.value = false;
+    if (firstFailure !== undefined)
+      assignedAgentsProblem.value = asProblem(firstFailure);
+  },
+  { immediate: true },
 );
 watch(workflow, (current) => {
   if (!current) return;
@@ -231,7 +294,6 @@ async function load() {
   try {
     await Promise.all([
       platform.loadWorkflow(target),
-      platform.loadAgents(project),
       platform.loadCapabilities(),
     ]);
     if (current !== loadGeneration) return;
@@ -348,6 +410,12 @@ onBeforeUnmount(() => {
         :problem="platform.problems.workflow"
         @retry="load"
         ><div v-if="workflow" class="workflow-layout">
+          <ProblemNotice
+            v-if="assignedAgentsProblem"
+            :problem="assignedAgentsProblem"
+            compact
+            @retry="assignedAgentsRetry += 1"
+          />
           <ul
             v-if="(workflow.draft ?? workflow).validationMessages.length"
             class="problem"
@@ -511,21 +579,23 @@ onBeforeUnmount(() => {
                     @update:model-value="selectAgent($event, step)"
                   />
                 </div>
-                <div class="field field--wide">
-                  <span>{{ $t("common.purpose") }}</span
-                  ><TemplateSourceField
-                    v-model="step.purpose"
-                    :target="savedPromptTarget(step.position)"
-                    :label="$t('common.purpose')"
-                    :disabled="!canEdit || busy"
+                <div class="field--wide workflow-prompt-layout">
+                  <div class="workflow-prompt-editor">
+                    <span>{{ $t("common.purpose") }}</span>
+                    <TemplateSourceField
+                      v-model="step.purpose"
+                      :target="savedPromptTarget(step.position)"
+                      :label="$t('common.purpose')"
+                      :disabled="!canEdit || busy"
+                    />
+                  </div>
+                  <PromptTargetPreview
+                    class="workflow-prompt-aside"
+                    :target="promptTarget(step.position)"
+                    :disabled="busy || dirty"
+                    :disabled-reason="$t('promptContext.saveStage')"
                   />
                 </div>
-                <PromptTargetPreview
-                  class="field--wide"
-                  :target="promptTarget(step.position)"
-                  :disabled="busy || dirty"
-                  :disabled-reason="$t('promptContext.saveStage')"
-                />
                 <label class="check-field"
                   ><input
                     v-model="step.parallel"
@@ -714,6 +784,29 @@ onBeforeUnmount(() => {
   grid-template-columns: 36px minmax(0, 1fr) 40px;
   gap: 12px;
 }
+.workflow-prompt-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 0.42fr);
+  align-items: start;
+  gap: 14px;
+  min-width: 0;
+}
+.workflow-prompt-editor {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+.workflow-prompt-editor :deep(.cm-editor) {
+  height: 390px;
+  min-height: 390px;
+}
+.workflow-prompt-aside {
+  padding-top: 20px;
+}
+.workflow-prompt-aside :deep(.variable-catalog__list) {
+  max-height: 360px;
+}
 .workflow-save {
   justify-self: start;
 }
@@ -763,6 +856,18 @@ onBeforeUnmount(() => {
   display: grid;
   align-content: start;
   gap: 12px;
+}
+@media (max-width: 1100px) {
+  .workflow-prompt-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workflow-prompt-aside {
+    padding-top: 0;
+  }
+  .workflow-prompt-editor :deep(.cm-editor) {
+    height: clamp(240px, 36vh, 390px);
+    min-height: 240px;
+  }
 }
 @media (max-width: 950px) {
   .workflow-layout {

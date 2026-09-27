@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { Braces, LoaderCircle, Plus, RefreshCw, Search } from "@lucide/vue";
+import {
+  Braces,
+  Copy,
+  LoaderCircle,
+  Plus,
+  RefreshCw,
+  Search,
+} from "@lucide/vue";
 import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -23,6 +30,7 @@ const props = defineProps<{
   disabled: boolean;
   loadItems?: TemplateVariableLoader;
   contextKey?: string;
+  action?: "insert" | "copy";
 }>();
 const emit = defineEmits<{ select: [item: TemplateVariablePickerItem] }>();
 const { locale, t } = useI18n();
@@ -248,7 +256,12 @@ useCursorInfiniteScroll({
                 </code>
               </span>
             </span>
-            <Plus :size="16" :aria-label="copy.insertVariable" />
+            <Copy
+              v-if="action === 'copy'"
+              :size="16"
+              :aria-label="copy.copyVariable"
+            />
+            <Plus v-else :size="16" :aria-label="copy.insertVariable" />
           </button>
         </section>
         <div

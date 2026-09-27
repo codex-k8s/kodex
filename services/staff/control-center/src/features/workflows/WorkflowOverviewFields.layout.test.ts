@@ -42,4 +42,22 @@ describe("основные поля процесса", () => {
     expect(create).not.toContain("platform.loadAgents(projectRef.value)");
     expect(create).not.toContain("<select");
   });
+
+  it("в редакторе читает точные сохранённые назначения вне первой страницы", () => {
+    expect(manual).toContain(
+      "loadAssignedAgent(project, ref, controller.signal)",
+    );
+    expect(manual).toContain("assignedAgentUnavailable");
+    expect(manual).not.toContain("platform.loadAgents(project)");
+    expect(manual).toContain("loadAgentCatalogPage");
+  });
+
+  it("ставит редактор назначения и переменные рядом на desktop", () => {
+    expect(manual).toContain('class="field--wide workflow-prompt-layout"');
+    expect(manual).toContain('class="workflow-prompt-aside"');
+    expect(manual).toContain(
+      "grid-template-columns: minmax(0, 1fr) minmax(330px, 0.42fr);",
+    );
+    expect(manual).toContain(".workflow-prompt-editor :deep(.cm-editor)");
+  });
 });

@@ -19,4 +19,26 @@ describe("TemplateVariableCatalog server filters", () => {
       "items.value.filter((item) => item.scope === activeScope.value)",
     );
   });
+
+  it("копирует переменную в предпросмотре, сохраняя вставку в редакторе", () => {
+    const catalog = readFileSync(
+      new URL("./TemplateVariableCatalog.vue", import.meta.url),
+      "utf8",
+    );
+    const preview = readFileSync(
+      new URL("./PromptTargetPreview.vue", import.meta.url),
+      "utf8",
+    );
+    const instructions = readFileSync(
+      new URL("./AgentInstructionsPanel.vue", import.meta.url),
+      "utf8",
+    );
+
+    expect(catalog).toContain('action?: "insert" | "copy"');
+    expect(preview).toContain('action="copy"');
+    expect(preview).toContain("navigator.clipboard.writeText(");
+    expect(preview).toContain('size="xl"');
+    expect(preview).toContain('class="prompt-target-preview__sections"');
+    expect(instructions).toContain('@select="insertVariable"');
+  });
 });

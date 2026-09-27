@@ -1715,6 +1715,7 @@ const ru = {
     new: "Новый Процесс",
     emptyTitle: "Создайте первый Процесс",
     coordinator: "Координатор",
+    assignedAgentUnavailable: "Назначенный сотрудник недоступен",
     selectCoordinator: "Выберите координатора",
     searchCoordinator: "Найти ИИ-сотрудника",
     steps: "Этапы",
@@ -2188,6 +2189,13 @@ const ru = {
   },
   promptContext: {
     full: "Запросить полный текст с отдельной проверкой доступа",
+    copiedVariable: "Переменная {name} скопирована",
+    previewSections: "Состав контекста",
+    previewHint:
+      "Блоки показаны в том порядке, в котором их получит исполнитель. Недоступные данные скрыты.",
+    rawPreview: "Точный формат сообщения",
+    previewRevision: "Ревизия шаблона",
+    previewLocale: "Язык",
     saveStage: "Сохраните черновик этапа, чтобы проверить его точный контекст.",
     preview: "Просмотреть контекст исполнения",
     scope: "Контекст применения шаблона",
@@ -5548,6 +5556,7 @@ const en = {
     new: "New Process",
     emptyTitle: "Create the first Process",
     coordinator: "Coordinator",
+    assignedAgentUnavailable: "Assigned employee is unavailable",
     selectCoordinator: "Select a coordinator",
     searchCoordinator: "Find an AI employee",
     steps: "Steps",
@@ -6029,6 +6038,13 @@ const en = {
   },
   promptContext: {
     full: "Request full content with a separate access check",
+    copiedVariable: "Variable {name} copied",
+    previewSections: "Context sections",
+    previewHint:
+      "Sections appear in the order received by the executor. Unavailable data is hidden.",
+    rawPreview: "Exact message format",
+    previewRevision: "Template revision",
+    previewLocale: "Language",
     saveStage: "Save the stage draft to inspect its exact context.",
     preview: "Preview execution context",
     scope: "Template context",

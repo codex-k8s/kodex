@@ -63,6 +63,7 @@ export interface AgentDetailCopy {
     variableExample: string;
     collection: string;
     insertVariable: string;
+    copyVariable: string;
     usedVariables: string;
     noVariables: string;
     validation: string;
@@ -177,6 +178,7 @@ const ru: AgentDetailCopy = {
     variableExample: "Пример",
     collection: "Коллекция",
     insertVariable: "Вставить переменную",
+    copyVariable: "Скопировать переменную",
     usedVariables: "Переменные в тексте",
     noVariables: "В тексте нет шаблонных переменных",
     validation: "Сообщения проверки",
@@ -296,6 +298,7 @@ const en: AgentDetailCopy = {
     variableExample: "Example",
     collection: "Collection",
     insertVariable: "Insert variable",
+    copyVariable: "Copy variable",
     usedVariables: "Variables used in text",
     noVariables: "The text does not use template variables",
     validation: "Validation messages",
