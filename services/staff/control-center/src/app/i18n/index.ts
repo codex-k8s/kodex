@@ -481,6 +481,15 @@ const ru = {
     },
   },
   catalog: {
+    table: {
+      project: "Проект",
+      name: "Название",
+      details: "Описание и параметры",
+      state: "Состояние",
+      version: "Версия",
+      role: "Роль",
+      open: "Открыть",
+    },
     agents: "ИИ-сотрудники",
     workflows: "Процессы",
     automations: "Автоматизации",
@@ -4020,6 +4029,15 @@ const en = {
     },
   },
   catalog: {
+    table: {
+      project: "Project",
+      name: "Name",
+      details: "Description and details",
+      state: "Status",
+      version: "Version",
+      role: "Role",
+      open: "Open",
+    },
     agents: "AI employees",
     workflows: "Workflows",
     automations: "Automations",

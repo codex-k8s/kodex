@@ -11,6 +11,7 @@ import WorkflowCard from "@/features/workflows/catalog/WorkflowCard.vue";
 import AgentCard from "@/features/agents/catalog/AgentCard.vue";
 import { toAgentCatalogItem } from "@/features/agents/catalog/model";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import {
   loadCatalog,
   catalogInvalidated,
@@ -22,6 +23,22 @@ const props = defineProps<{
   kind: CatalogKind;
   projectRef?: string;
 }>();
+const tableKind = computed(
+  () => props.kind !== "agents" && props.kind !== "workflows",
+);
+const entityIconKind = computed(
+  () =>
+    (
+      ({
+        agents: "AGENT",
+        workflows: "WORKFLOW",
+        automations: "AUTOMATION",
+        environments: "ENVIRONMENT",
+        secrets: "SECRET",
+        members: "MEMBER",
+      }) as const
+    )[props.kind],
+);
 const platform = usePlatformStore();
 const searchId = useId();
 const query = ref("");
@@ -34,15 +51,15 @@ const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
   container: scrollRoot,
-  itemSelector: ".organization-catalog__entry, .agent-card, .workflow-card",
+  itemSelector: ".organization-catalog__row, .agent-card, .workflow-card",
   itemCount: () => items.value.length,
   estimatedItemHeight:
-    props.kind === "agents" ? 242 : props.kind === "workflows" ? 300 : 112,
+    props.kind === "agents" ? 242 : props.kind === "workflows" ? 300 : 64,
   estimatedColumns:
     props.kind === "agents" || props.kind === "workflows" ? 3 : 1,
 });
 useCursorInfiniteScroll({
-  root: scrollRoot,
+  root: tableKind.value ? undefined : scrollRoot,
   sentinel,
   enabled: () => Boolean(pageToken.value) && !loading.value && !problem.value,
   loadMore: () => load(true),
@@ -65,6 +82,15 @@ const groups = computed(() => {
     name: projects.value[ref]?.name,
   }));
 });
+function entryRoute(entry: CatalogEntry) {
+  return props.kind === "members"
+    ? {
+        name: "project-access",
+        params: { projectRef: entry.projectRef },
+        query: { memberRef: entry.subjectRef },
+      }
+    : entry.path;
+}
 async function load(more = false): Promise<void> {
   if (more && (!pageToken.value || loading.value)) return;
   controller?.abort();
@@ -174,7 +200,11 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section ref="scrollRoot" class="organization-catalog">
+  <section
+    ref="scrollRoot"
+    class="organization-catalog"
+    :class="{ 'organization-catalog--table': tableKind }"
+  >
     <label
       v-if="items.length || query.trim()"
       class="organization-catalog__search"
@@ -222,45 +252,119 @@ onBeforeUnmount(() => {
       >
     </div>
     <div
-      v-if="groups.length"
+      v-if="tableKind && items.length"
+      class="organization-catalog__table-wrap"
+    >
+      <table
+        class="organization-catalog__table"
+        :class="{ 'organization-catalog__table--project': !!projectRef }"
+      >
+        <thead>
+          <tr>
+            <th v-if="!projectRef" scope="col">
+              {{ $t("catalog.table.project") }}
+            </th>
+            <th scope="col">{{ $t("catalog.table.name") }}</th>
+            <th scope="col">{{ $t("catalog.table.details") }}</th>
+            <th scope="col">{{ $t("catalog.table.state") }}</th>
+            <th scope="col">
+              {{
+                $t(
+                  kind === "members"
+                    ? "catalog.table.role"
+                    : "catalog.table.version",
+                )
+              }}
+            </th>
+            <th scope="col" class="organization-catalog__open-heading">
+              {{ $t("catalog.table.open") }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="entry in items"
+            :key="entry.ref"
+            class="organization-catalog__row"
+          >
+            <td v-if="!projectRef">
+              <div class="organization-catalog__identity">
+                <EntityIcon kind="PROJECT" />
+                <RouterLink
+                  :to="`/projects/${encodeURIComponent(entry.projectRef)}/${kind}`"
+                  :title="projects[entry.projectRef]?.name ?? $t('app.project')"
+                >
+                  {{ projects[entry.projectRef]?.name ?? $t("app.project") }}
+                </RouterLink>
+              </div>
+            </td>
+            <td>
+              <div class="organization-catalog__identity">
+                <EntityIcon :kind="entityIconKind" />
+                <RouterLink :to="entryRoute(entry)" :title="entry.title">{{
+                  entry.title
+                }}</RouterLink>
+              </div>
+            </td>
+            <td>
+              <span
+                class="organization-catalog__description"
+                :title="entry.description"
+                >{{ entry.description || $t("common.noData") }}</span
+              >
+              <small
+                v-if="entry.meta.some(Boolean)"
+                :title="entry.meta.filter(Boolean).join(' · ')"
+                >{{ entry.meta.filter(Boolean).join(" · ") }}</small
+              >
+            </td>
+            <td><StatusBadge :state="entry.state" /></td>
+            <td>
+              <span v-if="kind === 'members' && entry.role">{{
+                $t(`access.platformRoles.${entry.role}`)
+              }}</span>
+              <span v-else>v{{ entry.version }}</span>
+            </td>
+            <td class="organization-catalog__open-cell">
+              <RouterLink
+                :to="entryRoute(entry)"
+                class="icon-button"
+                :aria-label="$t('common.open')"
+                :title="$t('common.open')"
+                ><ChevronRight :size="18" aria-hidden="true"
+              /></RouterLink>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div
+      v-if="!tableKind && groups.length"
       class="organization-catalog__groups"
-      :class="{
-        'organization-catalog__groups--members': kind === 'members',
-        'organization-catalog__groups--project': Boolean(projectRef),
-      }"
+      :class="{ 'organization-catalog__groups--project': Boolean(projectRef) }"
     >
       <section
         v-for="group in groups"
         :key="group.ref"
         class="organization-catalog__group"
-        :class="{ 'organization-catalog__group--members': kind === 'members' }"
       >
         <header v-if="!projectRef">
+          <div class="organization-catalog__project">
+            <EntityIcon kind="PROJECT" :size="16" />
+            <RouterLink
+              class="organization-catalog__project-link"
+              :to="`/projects/${encodeURIComponent(group.ref)}`"
+              >{{ group.name ?? $t("app.project") }}</RouterLink
+            >
+          </div>
           <RouterLink
-            :to="
-              kind === 'members'
-                ? { name: 'project-access', params: { projectRef: group.ref } }
-                : `/projects/${encodeURIComponent(group.ref)}`
-            "
-            >{{ group.name ?? $t("app.project") }}</RouterLink
-          ><RouterLink
             class="button organization-catalog__manage"
             :to="`/projects/${encodeURIComponent(group.ref)}/${kind}`"
-            >{{
-              $t(
-                kind === "members"
-                  ? "catalog.manageAccess"
-                  : "catalog.openInProject",
-              )
-            }}</RouterLink
+            >{{ $t("catalog.openInProject") }}</RouterLink
           >
         </header>
         <div
-          class="organization-catalog__items"
-          :class="{
-            'organization-catalog__items--cards':
-              kind === 'workflows' || kind === 'agents',
-          }"
+          class="organization-catalog__items organization-catalog__items--cards"
         >
           <template v-for="entry in group.entries" :key="entry.ref">
             <WorkflowCard v-if="entry.workflow" :workflow="entry.workflow" />
@@ -269,36 +373,6 @@ onBeforeUnmount(() => {
               :item="toAgentCatalogItem(entry.agent)"
               :to="entry.path"
             />
-            <RouterLink
-              v-else
-              :to="
-                kind === 'members'
-                  ? {
-                      name: 'project-access',
-                      params: { projectRef: entry.projectRef },
-                      query: { memberRef: entry.subjectRef },
-                    }
-                  : entry.path
-              "
-              class="organization-catalog__entry"
-              :class="{
-                'organization-catalog__entry--member': kind === 'members',
-              }"
-              ><div>
-                <h3 :title="entry.title">{{ entry.title }}</h3>
-                <p :title="entry.description">{{ entry.description }}</p>
-                <small v-if="entry.role">{{
-                  $t(`access.platformRoles.${entry.role}`)
-                }}</small>
-                <small :title="entry.meta.filter(Boolean).join(' · ')">{{
-                  entry.meta.filter(Boolean).join(" · ")
-                }}</small>
-              </div>
-              <StatusBadge :state="entry.state" /><span
-                v-if="kind !== 'members'"
-                >v{{ entry.version }}</span
-              ><ChevronRight v-else :size="16" aria-hidden="true"
-            /></RouterLink>
           </template>
         </div>
       </section>
@@ -318,6 +392,11 @@ onBeforeUnmount(() => {
   max-height: calc(100dvh - 240px);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.organization-catalog--table {
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
 }
 .organization-catalog__sentinel {
   height: 1px;
@@ -341,19 +420,8 @@ onBeforeUnmount(() => {
   align-items: start;
   gap: 20px 12px;
 }
-.organization-catalog__groups--members {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
-  gap: 14px;
-}
 .organization-catalog__groups--project {
   grid-template-columns: minmax(0, 1fr);
-}
-.organization-catalog__group--members {
-  box-sizing: border-box;
-  padding: 12px 14px 4px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
 }
 .organization-catalog__empty {
   display: grid;
@@ -389,14 +457,17 @@ onBeforeUnmount(() => {
   align-items: center;
   margin-bottom: 8px;
 }
-.organization-catalog__group--members > header {
-  gap: 12px;
-  min-height: 32px;
-  margin-bottom: 0;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+.organization-catalog__project {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
 }
-.organization-catalog__group > header > a:first-child {
+.organization-catalog__project :deep(.entity-icon) {
+  width: 28px;
+  height: 28px;
+}
+.organization-catalog__project-link {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
@@ -405,8 +476,101 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.organization-catalog__group > header > a:first-child:hover {
+.organization-catalog__project-link:hover {
   text-decoration: underline;
+}
+.organization-catalog__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.organization-catalog__table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.organization-catalog__table th,
+.organization-catalog__table td {
+  padding: 9px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+.organization-catalog__table th {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.organization-catalog__table th:first-child {
+  width: 21%;
+}
+.organization-catalog__table th:nth-child(2) {
+  width: 25%;
+}
+.organization-catalog__table th:nth-child(3) {
+  width: 32%;
+}
+.organization-catalog__table th:nth-child(4) {
+  width: 11%;
+}
+.organization-catalog__table th:nth-child(5) {
+  width: 7%;
+}
+.organization-catalog__table th:last-child {
+  width: 4%;
+}
+.organization-catalog__table--project th:first-child {
+  width: 30%;
+}
+.organization-catalog__table--project th:nth-child(2) {
+  width: 42%;
+}
+.organization-catalog__table--project th:nth-child(3) {
+  width: 14%;
+}
+.organization-catalog__table--project th:nth-child(4) {
+  width: 10%;
+}
+.organization-catalog__row {
+  height: 64px;
+  border-top: 1px solid var(--border);
+}
+.organization-catalog__row:hover {
+  background: var(--panel);
+}
+.organization-catalog__identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+.organization-catalog__identity a {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.organization-catalog__identity a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.organization-catalog__description,
+.organization-catalog__row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.organization-catalog__row small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+.organization-catalog__open-heading,
+.organization-catalog__open-cell {
+  text-align: center !important;
 }
 .organization-catalog__manage {
   flex: none;
@@ -437,84 +601,6 @@ onBeforeUnmount(() => {
   .organization-catalog__groups,
   .organization-catalog__items--cards {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-.organization-catalog__entry {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 112px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: inherit;
-  background: var(--surface);
-  text-decoration: none;
-}
-.organization-catalog__entry > div {
-  min-width: 0;
-}
-.organization-catalog__entry:not(.organization-catalog__entry--member):hover {
-  border-color: var(--accent);
-}
-.organization-catalog__entry--member {
-  grid-template-columns: minmax(0, 1fr) auto 16px;
-  min-height: 72px;
-  padding: 12px 0;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  background: transparent;
-}
-.organization-catalog__entry--member:last-child {
-  border-bottom: 0;
-}
-.organization-catalog__entry--member:hover h3 {
-  color: var(--accent-strong);
-  text-decoration: underline;
-}
-.organization-catalog__entry h3 {
-  font-size: 15px;
-  line-height: 20px;
-  margin: 0;
-}
-.organization-catalog__entry h3,
-.organization-catalog__entry p,
-.organization-catalog__entry small {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.organization-catalog__entry p,
-.organization-catalog__entry small {
-  margin: 4px 0 0;
-  color: var(--muted);
-  -webkit-line-clamp: 1;
-}
-.organization-catalog__entry p {
-  font-size: 14px;
-  line-height: 18px;
-}
-.organization-catalog__entry small {
-  font-size: 12px;
-  line-height: 16px;
-}
-.organization-catalog__entry h3,
-.organization-catalog__entry p,
-.organization-catalog__entry small {
-  overflow-wrap: anywhere;
-}
-.organization-catalog__entry > div {
-  min-width: 0;
-}
-@media (max-width: 600px) {
-  .organization-catalog__entry {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .organization-catalog__entry > span:last-child {
-    display: none;
   }
 }
 </style>
