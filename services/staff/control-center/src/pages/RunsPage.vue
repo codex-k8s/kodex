@@ -227,7 +227,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 180px;
+  flex: 1 1 420px;
+  min-width: 220px;
+  max-width: 720px;
 }
 .runs-search input {
   width: 100%;
