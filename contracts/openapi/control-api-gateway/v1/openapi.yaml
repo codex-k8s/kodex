@@ -3416,6 +3416,30 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AssistantConversation' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/assistant-conversations/{conversationRef}/project:
+    post:
+      tags: [Assistant]
+      operationId: moveAssistantConversationToProject
+      parameters: [{ $ref: '#/components/parameters/ConversationRef' }, { $ref: '#/components/parameters/IfMatch' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [projectRef]
+              properties:
+                projectRef: { $ref: '#/components/schemas/OpaqueRef' }
+      responses:
+        '200':
+          description: Личный глобальный диалог подтверждённо перенесён в доступный Проект вместе с сессией
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssistantConversation' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/assistant-conversations/{conversationRef}/turns:
     post:
       tags: [Assistant]

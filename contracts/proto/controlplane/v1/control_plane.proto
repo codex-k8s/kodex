@@ -336,6 +336,7 @@ service SystemAssistantService {
   rpc CreateAssistantConversation(CreateAssistantConversationRequest) returns (CreateAssistantConversationResponse);
   rpc UpdateAssistantConversationTitle(UpdateAssistantConversationTitleRequest) returns (UpdateAssistantConversationTitleResponse);
   rpc ArchiveAssistantConversation(ArchiveAssistantConversationRequest) returns (ArchiveAssistantConversationResponse);
+  rpc MoveAssistantConversationToProject(MoveAssistantConversationToProjectRequest) returns (MoveAssistantConversationToProjectResponse);
   rpc AddAssistantTurn(AddAssistantTurnRequest) returns (AddAssistantTurnResponse);
   rpc UpdateAssistantPlanDraft(UpdateAssistantPlanDraftRequest) returns (UpdateAssistantPlanDraftResponse);
   rpc ValidateAssistantPlan(ValidateAssistantPlanRequest) returns (ValidateAssistantPlanResponse);
@@ -2801,6 +2802,14 @@ message ArchiveAssistantConversationRequest {
   string conversation_ref = 2;
 }
 message ArchiveAssistantConversationResponse {
+  AssistantConversation conversation = 1;
+}
+message MoveAssistantConversationToProjectRequest {
+  MutationContext mutation = 1;
+  string conversation_ref = 2;
+  string project_ref = 3;
+}
+message MoveAssistantConversationToProjectResponse {
   AssistantConversation conversation = 1;
 }
 message UpdateAssistantConversationTitleRequest {

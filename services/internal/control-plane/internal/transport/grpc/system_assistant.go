@@ -23,6 +23,20 @@ func (server *Server) ArchiveAssistantConversation(ctx context.Context, request 
 	return &controlplanev1.ArchiveAssistantConversationResponse{Conversation: castConversation(*result.Conversation)}, nil
 }
 
+func (server *Server) MoveAssistantConversationToProject(ctx context.Context, request *controlplanev1.MoveAssistantConversationToProjectRequest) (*controlplanev1.MoveAssistantConversationToProjectResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_MoveAssistantConversationToProject_FullMethodName,
+		command.MoveAssistantConversationToProject, request.GetMutation(), command.AssistantConversationProjectInput{
+			ConversationRef: request.GetConversationRef(), ProjectRef: request.GetProjectRef(),
+		})
+	if err != nil {
+		return nil, err
+	}
+	if result.Conversation == nil {
+		return nil, status.Error(codes.Internal, "assistant project move result is missing")
+	}
+	return &controlplanev1.MoveAssistantConversationToProjectResponse{Conversation: castConversation(*result.Conversation)}, nil
+}
+
 func (server *Server) GetSystemAssistant(ctx context.Context, _ *controlplanev1.GetSystemAssistantRequest) (*controlplanev1.GetSystemAssistantResponse, error) {
 	p, err := principal(ctx, controlplanev1.SystemAssistantService_GetSystemAssistant_FullMethodName)
 	if err != nil {

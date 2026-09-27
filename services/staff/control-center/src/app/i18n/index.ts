@@ -3316,6 +3316,14 @@ const ru = {
     publishIntegrationRequest:
       "Предложи план публикации проверенного определения интеграции: конфигурация {configurationRef}, ревизия {revisionRef}. Не включай содержимое OpenAPI в план; используй только эти ссылки. Я проверю план перед применением.",
     openSecretForm: "Открыть защищённую форму нового секрета",
+    projectMove: {
+      title: "Продолжить этот диалог в Проекте?",
+      description:
+        "История останется в этом диалоге, а следующие команды получат контекст выбранного Проекта. Перенос невозможен, пока выполняется работа или есть неподтверждённый план.",
+      destination: "Проект:",
+      loadingProject: "Загружаем название…",
+      confirm: "Перенести и перейти",
+    },
     integrationDraftCreated:
       "Черновик интеграции создан. Проверьте, валидируйте и опубликуйте его перед созданием подключения.",
     openIntegrationDraft: "Проверить черновик",
@@ -7222,6 +7230,14 @@ const en = {
     publishIntegrationRequest:
       "Propose a plan to publish the validated integration definition: configuration {configurationRef}, revision {revisionRef}. Do not include OpenAPI content in the plan; use only these references. I will review the plan before applying it.",
     openSecretForm: "Open the protected new-secret form",
+    projectMove: {
+      title: "Continue this conversation in the project?",
+      description:
+        "The history stays in this conversation, and future commands use the selected project context. Moving is unavailable while work is running or a plan is pending.",
+      destination: "Project:",
+      loadingProject: "Loading project name…",
+      confirm: "Move and open",
+    },
     integrationDraftCreated:
       "Integration draft created. Review, validate, and publish it before connecting.",
     openIntegrationDraft: "Review draft",

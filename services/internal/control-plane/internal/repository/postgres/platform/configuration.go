@@ -925,6 +925,8 @@ func (repository *Repository) changeAssistant(ctx context.Context, tx pgx.Tx, sc
 		return repository.updateAssistantConversationTitle(ctx, tx, scope, input)
 	case command.ArchiveAssistantConversation:
 		return repository.archiveAssistantConversation(ctx, tx, scope, input)
+	case command.MoveAssistantConversationToProject:
+		return repository.moveAssistantConversationToProject(ctx, tx, scope, input)
 	case command.AddAssistantTurn:
 		return repository.addAssistantTurnCommand(ctx, tx, scope, input)
 	case command.UpdateAssistantPlan:

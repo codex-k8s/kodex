@@ -145,6 +145,13 @@ const credentialConnectionRef = ref("");
 const connectionRefreshToken = ref(0);
 const secretInitialDraftRef = ref<string>();
 const secretSuggestion = ref<RuntimeSecretDraftSuggestion>();
+const pendingProjectMove = ref<{ projectRef: string; path: string }>();
+const projectMoveDestination = computed(() => {
+  const projectRef = pendingProjectMove.value?.projectRef;
+  return projectRef ? platform.projects[projectRef]?.name : undefined;
+});
+const projectMoveDialog = ref<HTMLElement>();
+const projectMoveTrigger = ref<HTMLAnchorElement>();
 let workspaceMounted = false;
 let secretResumePending = false;
 const createdDefinitionRef = ref<string>();
@@ -404,6 +411,10 @@ async function show(): Promise<void> {
 
 function close(): void {
   if (store.busy) return;
+  if (pendingProjectMove.value) {
+    cancelProjectMove();
+    return;
+  }
   if (secretDialogOpen.value) return;
   if (credentialConnectionRef.value) return;
   if (assistantFormActive.value) {
@@ -624,10 +635,73 @@ function handleAssistantLink(event: MouseEvent): void {
   )
     return;
   const link = event.target.closest("a[href]");
-  if (link?.getAttribute("href") !== "/configurations/INTEGRATION_DEFINITION")
+  if (!(link instanceof HTMLAnchorElement)) return;
+  const target = new URL(link.href, window.location.origin);
+  const projectRef = /^\/projects\/([A-Za-z0-9_-]{8,96})(?:\/|$)/.exec(
+    target.pathname,
+  )?.[1];
+  if (
+    target.origin === window.location.origin &&
+    projectRef &&
+    store.selectedConversation?.projectRef === projectRef
+  ) {
+    persistAssistantConversationRef(projectRef, store.selectedConversation.ref);
+  }
+  if (
+    !props.projectRef &&
+    store.selectedConversation?.state === "ACTIVE" &&
+    !store.selectedConversation.projectRef &&
+    target.origin === window.location.origin &&
+    projectRef
+  ) {
+    event.preventDefault();
+    projectMoveTrigger.value = link;
+    pendingProjectMove.value = {
+      projectRef,
+      path: target.pathname + target.search + target.hash,
+    };
+    if (!platform.projects[projectRef]) void platform.loadProject(projectRef);
+    void nextTick(() => projectMoveDialog.value?.focus());
+    return;
+  }
+  if (link.getAttribute("href") !== "/configurations/INTEGRATION_DEFINITION")
     return;
   event.preventDefault();
   integrationImportOpen.value = true;
+}
+
+function cancelProjectMove(): void {
+  pendingProjectMove.value = undefined;
+  void nextTick(() => projectMoveTrigger.value?.focus());
+}
+
+async function confirmProjectMove(): Promise<void> {
+  const target = pendingProjectMove.value;
+  if (!target || !store.selectedConversation || store.busy) return;
+  try {
+    const moved = await store.moveSelectedToProject(target.projectRef);
+    persistAssistantConversationRef(target.projectRef, moved.ref);
+    pendingProjectMove.value = undefined;
+    await router.push(target.path);
+  } catch (error) {
+    if (!(error instanceof AppProblem)) throw error;
+  }
+}
+
+function handleProjectMoveKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape" && !store.busy) {
+    event.preventDefault();
+    cancelProjectMove();
+  }
+  if (event.key !== "Tab" || !projectMoveDialog.value) return;
+  const target = trappedFocusTarget(
+    focusableElements(projectMoveDialog.value),
+    document.activeElement,
+    event.shiftKey,
+  );
+  if (!target) return;
+  event.preventDefault();
+  target.focus();
 }
 
 function integrationDraftCreated(configurationRef: string): void {
@@ -797,6 +871,7 @@ function documentPointerDown(event: PointerEvent): void {
 }
 
 watch(contextIdentity, () => {
+  pendingProjectMove.value = undefined;
   contextOpen.value = false;
   integrationImportOpen.value = false;
   createdDefinitionRef.value = undefined;
@@ -968,10 +1043,19 @@ onBeforeUnmount(() => {
       ref="panel"
       class="assistant-drawer"
       role="dialog"
-      :aria-modal="!currentPlan && !assistantFormActive ? true : undefined"
+      :aria-modal="
+        !currentPlan && !assistantFormActive && !pendingProjectMove
+          ? true
+          : undefined
+      "
       :aria-label="$t('assistant.title')"
       :aria-busy="store.busy || store.loading"
-      :inert="Boolean(currentPlan) || assistantFormActive || undefined"
+      :inert="
+        Boolean(currentPlan) ||
+        assistantFormActive ||
+        Boolean(pendingProjectMove) ||
+        undefined
+      "
       :data-conversation-ref="store.selectedConversation?.ref"
       tabindex="-1"
       @keydown="handleKeydown"
@@ -1577,6 +1661,52 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </aside>
+    <div v-if="pendingProjectMove" class="assistant-project-move-layer">
+      <button
+        class="assistant-project-move-layer__backdrop"
+        type="button"
+        :aria-label="$t('common.close')"
+        :disabled="store.busy"
+        @click="cancelProjectMove"
+      />
+      <section
+        ref="projectMoveDialog"
+        class="assistant-project-move-dialog"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="$t('assistant.projectMove.title')"
+        tabindex="-1"
+        @keydown="handleProjectMoveKeydown"
+      >
+        <h2>{{ $t("assistant.projectMove.title") }}</h2>
+        <p>{{ $t("assistant.projectMove.description") }}</p>
+        <p class="assistant-project-move-dialog__destination">
+          {{ $t("assistant.projectMove.destination") }}
+          <strong>{{
+            projectMoveDestination || $t("assistant.projectMove.loadingProject")
+          }}</strong>
+        </p>
+        <ProblemNotice v-if="store.problem" :problem="store.problem" />
+        <footer>
+          <button
+            class="button"
+            type="button"
+            :disabled="store.busy"
+            @click="cancelProjectMove"
+          >
+            {{ $t("common.cancel") }}
+          </button>
+          <button
+            class="button button--primary"
+            type="button"
+            :disabled="store.busy"
+            @click="confirmProjectMove"
+          >
+            {{ $t("assistant.projectMove.confirm") }}
+          </button>
+        </footer>
+      </section>
+    </div>
     <button
       v-if="currentPlan && !assistantFormActive"
       class="assistant-detail-backdrop"
@@ -1727,6 +1857,49 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 70;
   inset: 0;
+}
+.assistant-project-move-layer {
+  position: fixed;
+  z-index: 3;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.assistant-project-move-layer__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(17 24 39 / 34%);
+}
+.assistant-project-move-dialog {
+  position: relative;
+  width: min(100%, 560px);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 24px 64px rgb(15 23 42 / 28%);
+  outline: 0;
+}
+.assistant-project-move-dialog h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+.assistant-project-move-dialog p {
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+.assistant-project-move-dialog__destination {
+  color: var(--muted);
+}
+.assistant-project-move-dialog__destination code {
+  overflow-wrap: anywhere;
+}
+.assistant-project-move-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .assistant-integration-draft {
   display: flex;

@@ -348,6 +348,10 @@ export const serverTokenTranslations = {
     "Conversation archived",
   ],
   ASSISTANT_CONVERSATION_CREATED: ["Диалог создан", "Conversation created"],
+  ASSISTANT_CONVERSATION_PROJECT_CHANGED: [
+    "Диалог перенесён в Проект",
+    "Conversation moved to project",
+  ],
   ASSISTANT_CONVERSATION_TITLE_UPDATED: [
     "Название диалога обновлено",
     "Conversation title updated",

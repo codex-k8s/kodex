@@ -11403,18 +11403,19 @@ var RuntimeSecretWorkService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	SystemAssistantService_GetSystemAssistant_FullMethodName               = "/controlplane.v1.SystemAssistantService/GetSystemAssistant"
-	SystemAssistantService_ListAssistantConversations_FullMethodName       = "/controlplane.v1.SystemAssistantService/ListAssistantConversations"
-	SystemAssistantService_CreateAssistantConversation_FullMethodName      = "/controlplane.v1.SystemAssistantService/CreateAssistantConversation"
-	SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName = "/controlplane.v1.SystemAssistantService/UpdateAssistantConversationTitle"
-	SystemAssistantService_ArchiveAssistantConversation_FullMethodName     = "/controlplane.v1.SystemAssistantService/ArchiveAssistantConversation"
-	SystemAssistantService_AddAssistantTurn_FullMethodName                 = "/controlplane.v1.SystemAssistantService/AddAssistantTurn"
-	SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName         = "/controlplane.v1.SystemAssistantService/UpdateAssistantPlanDraft"
-	SystemAssistantService_ValidateAssistantPlan_FullMethodName            = "/controlplane.v1.SystemAssistantService/ValidateAssistantPlan"
-	SystemAssistantService_ApplyAssistantPlan_FullMethodName               = "/controlplane.v1.SystemAssistantService/ApplyAssistantPlan"
-	SystemAssistantService_RejectAssistantPlan_FullMethodName              = "/controlplane.v1.SystemAssistantService/RejectAssistantPlan"
-	SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName = "/controlplane.v1.SystemAssistantService/UpdateAssistantOwnerInstructions"
-	SystemAssistantService_RecoverSystemAssistant_FullMethodName           = "/controlplane.v1.SystemAssistantService/RecoverSystemAssistant"
+	SystemAssistantService_GetSystemAssistant_FullMethodName                 = "/controlplane.v1.SystemAssistantService/GetSystemAssistant"
+	SystemAssistantService_ListAssistantConversations_FullMethodName         = "/controlplane.v1.SystemAssistantService/ListAssistantConversations"
+	SystemAssistantService_CreateAssistantConversation_FullMethodName        = "/controlplane.v1.SystemAssistantService/CreateAssistantConversation"
+	SystemAssistantService_UpdateAssistantConversationTitle_FullMethodName   = "/controlplane.v1.SystemAssistantService/UpdateAssistantConversationTitle"
+	SystemAssistantService_ArchiveAssistantConversation_FullMethodName       = "/controlplane.v1.SystemAssistantService/ArchiveAssistantConversation"
+	SystemAssistantService_MoveAssistantConversationToProject_FullMethodName = "/controlplane.v1.SystemAssistantService/MoveAssistantConversationToProject"
+	SystemAssistantService_AddAssistantTurn_FullMethodName                   = "/controlplane.v1.SystemAssistantService/AddAssistantTurn"
+	SystemAssistantService_UpdateAssistantPlanDraft_FullMethodName           = "/controlplane.v1.SystemAssistantService/UpdateAssistantPlanDraft"
+	SystemAssistantService_ValidateAssistantPlan_FullMethodName              = "/controlplane.v1.SystemAssistantService/ValidateAssistantPlan"
+	SystemAssistantService_ApplyAssistantPlan_FullMethodName                 = "/controlplane.v1.SystemAssistantService/ApplyAssistantPlan"
+	SystemAssistantService_RejectAssistantPlan_FullMethodName                = "/controlplane.v1.SystemAssistantService/RejectAssistantPlan"
+	SystemAssistantService_UpdateAssistantOwnerInstructions_FullMethodName   = "/controlplane.v1.SystemAssistantService/UpdateAssistantOwnerInstructions"
+	SystemAssistantService_RecoverSystemAssistant_FullMethodName             = "/controlplane.v1.SystemAssistantService/RecoverSystemAssistant"
 )
 
 // SystemAssistantServiceClient is the client API for SystemAssistantService service.
@@ -11426,6 +11427,7 @@ type SystemAssistantServiceClient interface {
 	CreateAssistantConversation(ctx context.Context, in *CreateAssistantConversationRequest, opts ...grpc.CallOption) (*CreateAssistantConversationResponse, error)
 	UpdateAssistantConversationTitle(ctx context.Context, in *UpdateAssistantConversationTitleRequest, opts ...grpc.CallOption) (*UpdateAssistantConversationTitleResponse, error)
 	ArchiveAssistantConversation(ctx context.Context, in *ArchiveAssistantConversationRequest, opts ...grpc.CallOption) (*ArchiveAssistantConversationResponse, error)
+	MoveAssistantConversationToProject(ctx context.Context, in *MoveAssistantConversationToProjectRequest, opts ...grpc.CallOption) (*MoveAssistantConversationToProjectResponse, error)
 	AddAssistantTurn(ctx context.Context, in *AddAssistantTurnRequest, opts ...grpc.CallOption) (*AddAssistantTurnResponse, error)
 	UpdateAssistantPlanDraft(ctx context.Context, in *UpdateAssistantPlanDraftRequest, opts ...grpc.CallOption) (*UpdateAssistantPlanDraftResponse, error)
 	ValidateAssistantPlan(ctx context.Context, in *ValidateAssistantPlanRequest, opts ...grpc.CallOption) (*ValidateAssistantPlanResponse, error)
@@ -11487,6 +11489,16 @@ func (c *systemAssistantServiceClient) ArchiveAssistantConversation(ctx context.
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ArchiveAssistantConversationResponse)
 	err := c.cc.Invoke(ctx, SystemAssistantService_ArchiveAssistantConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *systemAssistantServiceClient) MoveAssistantConversationToProject(ctx context.Context, in *MoveAssistantConversationToProjectRequest, opts ...grpc.CallOption) (*MoveAssistantConversationToProjectResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MoveAssistantConversationToProjectResponse)
+	err := c.cc.Invoke(ctx, SystemAssistantService_MoveAssistantConversationToProject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -11572,6 +11584,7 @@ type SystemAssistantServiceServer interface {
 	CreateAssistantConversation(context.Context, *CreateAssistantConversationRequest) (*CreateAssistantConversationResponse, error)
 	UpdateAssistantConversationTitle(context.Context, *UpdateAssistantConversationTitleRequest) (*UpdateAssistantConversationTitleResponse, error)
 	ArchiveAssistantConversation(context.Context, *ArchiveAssistantConversationRequest) (*ArchiveAssistantConversationResponse, error)
+	MoveAssistantConversationToProject(context.Context, *MoveAssistantConversationToProjectRequest) (*MoveAssistantConversationToProjectResponse, error)
 	AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error)
 	UpdateAssistantPlanDraft(context.Context, *UpdateAssistantPlanDraftRequest) (*UpdateAssistantPlanDraftResponse, error)
 	ValidateAssistantPlan(context.Context, *ValidateAssistantPlanRequest) (*ValidateAssistantPlanResponse, error)
@@ -11603,6 +11616,9 @@ func (UnimplementedSystemAssistantServiceServer) UpdateAssistantConversationTitl
 }
 func (UnimplementedSystemAssistantServiceServer) ArchiveAssistantConversation(context.Context, *ArchiveAssistantConversationRequest) (*ArchiveAssistantConversationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ArchiveAssistantConversation not implemented")
+}
+func (UnimplementedSystemAssistantServiceServer) MoveAssistantConversationToProject(context.Context, *MoveAssistantConversationToProjectRequest) (*MoveAssistantConversationToProjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MoveAssistantConversationToProject not implemented")
 }
 func (UnimplementedSystemAssistantServiceServer) AddAssistantTurn(context.Context, *AddAssistantTurnRequest) (*AddAssistantTurnResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddAssistantTurn not implemented")
@@ -11733,6 +11749,24 @@ func _SystemAssistantService_ArchiveAssistantConversation_Handler(srv interface{
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SystemAssistantServiceServer).ArchiveAssistantConversation(ctx, req.(*ArchiveAssistantConversationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SystemAssistantService_MoveAssistantConversationToProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MoveAssistantConversationToProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SystemAssistantServiceServer).MoveAssistantConversationToProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SystemAssistantService_MoveAssistantConversationToProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SystemAssistantServiceServer).MoveAssistantConversationToProject(ctx, req.(*MoveAssistantConversationToProjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -11889,6 +11923,10 @@ var SystemAssistantService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ArchiveAssistantConversation",
 			Handler:    _SystemAssistantService_ArchiveAssistantConversation_Handler,
+		},
+		{
+			MethodName: "MoveAssistantConversationToProject",
+			Handler:    _SystemAssistantService_MoveAssistantConversationToProject_Handler,
 		},
 		{
 			MethodName: "AddAssistantTurn",

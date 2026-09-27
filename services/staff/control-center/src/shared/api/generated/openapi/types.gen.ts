@@ -10684,6 +10684,40 @@ export type UpdateAssistantConversationTitleResponses = {
 
 export type UpdateAssistantConversationTitleResponse = UpdateAssistantConversationTitleResponses[keyof UpdateAssistantConversationTitleResponses];
 
+export type MoveAssistantConversationToProjectData = {
+    body: {
+        projectRef: OpaqueRef;
+    };
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        conversationRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/assistant-conversations/{conversationRef}/project';
+};
+
+export type MoveAssistantConversationToProjectErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type MoveAssistantConversationToProjectError = MoveAssistantConversationToProjectErrors[keyof MoveAssistantConversationToProjectErrors];
+
+export type MoveAssistantConversationToProjectResponses = {
+    /**
+     * Личный глобальный диалог подтверждённо перенесён в доступный Проект вместе с сессией
+     */
+    200: AssistantConversation;
+};
+
+export type MoveAssistantConversationToProjectResponse = MoveAssistantConversationToProjectResponses[keyof MoveAssistantConversationToProjectResponses];
+
 export type AddAssistantTurnData = {
     body: {
         content: string;

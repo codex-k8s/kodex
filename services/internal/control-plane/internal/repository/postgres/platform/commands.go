@@ -342,7 +342,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.ConfigureEmailCredential:
 		return repository.configureEmailCredential(ctx, tx, scope, input)
-	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.AddAssistantTurn,
+	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)

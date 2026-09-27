@@ -93,6 +93,11 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.assistant.conversations.project.move",
+      "source_binding_sha256": "f325280d2d19d097cc337fc8e626259faddb9e60699a80aa0ff71a3ea457dd8f",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.assistant.conversations.title.update",
       "source_binding_sha256": "886a44397c76550d7eab019ca5175ddd3283038c804cff03a7f19d4f2a1efec2",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"

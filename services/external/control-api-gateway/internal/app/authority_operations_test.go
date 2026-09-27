@@ -15,6 +15,7 @@ func TestIdentityEnvironmentSecretExactAuthorityOperations(t *testing.T) {
 		"platform.command.integration-definitions.archive":    controlplanev1.PlatformCommandService_ArchiveIntegrationDefinitionConfiguration_FullMethodName,
 		"platform.command.email-mailbox.configure-credential": controlplanev1.PlatformCommandService_ConfigureEmailMailboxCredential_FullMethodName,
 		"platform.assistant.conversations.archive":            controlplanev1.SystemAssistantService_ArchiveAssistantConversation_FullMethodName,
+		"platform.assistant.conversations.project.move":       controlplanev1.SystemAssistantService_MoveAssistantConversationToProject_FullMethodName,
 		"platform.query.managed-configurations.impact.get":    controlplanev1.PlatformQueryService_GetManagedConfigurationImpact_FullMethodName,
 		"platform.query.interaction-identities.list":          controlplanev1.PlatformQueryService_ListInteractionIdentities_FullMethodName,
 		"platform.command.interaction-identities.bind":        controlplanev1.PlatformCommandService_BindInteractionIdentity_FullMethodName,

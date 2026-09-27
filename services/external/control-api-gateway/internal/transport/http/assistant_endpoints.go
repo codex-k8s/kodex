@@ -78,6 +78,33 @@ func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *htt
 	}
 	writeMessage(w, http.StatusOK, response, "conversation", "")
 }
+func (server *Server) MoveAssistantConversationToProject(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.MoveAssistantConversationToProjectParams) {
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	body, ok := decodeJSON[generated.MoveAssistantConversationToProjectJSONBody](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.MoveAssistantConversationToProject(r.Context(), &controlplanev1.MoveAssistantConversationToProjectRequest{
+		Mutation: mutation, ConversationRef: ref, ProjectRef: body.ProjectRef,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	conversation := response.GetConversation()
+	if conversation == nil || conversation.Ref != ref || conversation.ProjectRef != body.ProjectRef || !validManagedVersion(conversation.Version) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "conversation", "")
+}
 func (server *Server) CreateAssistantConversation(w http.ResponseWriter, r *http.Request, p generated.CreateAssistantConversationParams) {
 	body, ok := decodeJSON[generated.CreateAssistantConversationJSONBody](w, r)
 	if !ok {

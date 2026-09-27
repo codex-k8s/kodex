@@ -17,7 +17,6 @@ JOIN LATERAL control_plane.assistant_context_projection(
 WHERE project.id = $3::uuid
   AND project.ref = $4
   AND project.organization_id = $1::uuid
-  AND project.created_by = $2::uuid
   AND project.lifecycle = 'ACTIVE'
   AND conversation.ref = $5
   AND conversation.organization_id = $1::uuid

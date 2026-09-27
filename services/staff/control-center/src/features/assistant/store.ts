@@ -6,6 +6,7 @@ import {
   archiveConversation,
   applyPlanDraft,
   createConversation,
+  moveConversationToProject,
   readAssistant,
   readConversations,
   rejectPlanDraft,
@@ -298,6 +299,28 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     if (context.value) await load(context.value, projectRef.value, false);
   }
 
+  async function moveSelectedToProject(
+    targetProjectRef: string,
+  ): Promise<AssistantConversation> {
+    const conversation = selectedConversation.value;
+    if (
+      !conversation ||
+      conversation.projectRef ||
+      projectRef.value ||
+      busy.value ||
+      loading.value
+    )
+      throw new Error("Assistant conversation cannot move from this context");
+    return runMutation(async () => {
+      const moved = await moveConversationToProject(
+        conversation,
+        targetProjectRef,
+      );
+      upsertConversation(moved);
+      return moved;
+    });
+  }
+
   function setContext(
     nextContext: AssistantContextDescriptor,
     nextProjectRef?: string,
@@ -520,6 +543,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     historyState,
     filterHistory,
     archiveSelected,
+    moveSelectedToProject,
     loadMoreHistory,
     setHistoryPageSize,
     cancelReads,

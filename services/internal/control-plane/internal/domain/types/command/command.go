@@ -141,6 +141,7 @@ const (
 	CreateAssistantConversation        Kind = "CREATE_ASSISTANT_CONVERSATION"
 	UpdateAssistantConversation        Kind = "UPDATE_ASSISTANT_CONVERSATION_TITLE"
 	ArchiveAssistantConversation       Kind = "ARCHIVE_ASSISTANT_CONVERSATION"
+	MoveAssistantConversationToProject Kind = "MOVE_ASSISTANT_CONVERSATION_TO_PROJECT"
 	AddAssistantTurn                   Kind = "ADD_ASSISTANT_TURN"
 	UpdateAssistantPlan                Kind = "UPDATE_ASSISTANT_PLAN_DRAFT"
 	ValidateAssistantPlan              Kind = "VALIDATE_ASSISTANT_PLAN"
@@ -376,6 +377,7 @@ type AssistantConversationInput struct {
 }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
 type AssistantConversationArchiveInput struct{ ConversationRef string }
+type AssistantConversationProjectInput struct{ ConversationRef, ProjectRef string }
 
 type EmailCredentialInput struct {
 	ConnectionRef string

@@ -8,7 +8,6 @@ JOIN control_plane.projects project
   ON project.id = $1::uuid
  AND project.ref = $2
  AND project.organization_id = conversation.organization_id
- AND project.created_by = conversation.created_by
  AND project.lifecycle = 'ACTIVE'
 WHERE session.id = conversation.session_id
   AND session.organization_id = $3::uuid

@@ -271,6 +271,7 @@ func TestBootstrapComponent(t *testing.T) {
 		testSystemAssistantTypedPlan(t, ctx, repository)
 	})
 	t.Run("assistant history search archive and actor cursor", func(t *testing.T) { testAssistantHistoryArchive(t, ctx, repository) })
+	t.Run("assistant conversation moves to an existing project with exact owner and version", func(t *testing.T) { testAssistantConversationProjectMove(t, ctx, repository) })
 	t.Run("assistant context uses fresh exact read authority", func(t *testing.T) { testAssistantContextAuthority(t, ctx, repository) })
 	t.Run("direct run continuation cancel and retry", func(t *testing.T) {
 		testDirectRunLifecycle(t, ctx, repository)
