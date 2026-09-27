@@ -19,8 +19,9 @@ describe("вход из помощника в защищённую форму с
   it("отдаёт маршрут возврата только помощнику и не открывает второй диалог на странице", () => {
     expect(page).toContain(':project-ref="projectRef"');
     expect(page).not.toContain("assistantCreateSecret");
-    expect(workspace).not.toContain("assistantCreateSecret");
-    expect(workspace).not.toContain("consumeRuntimeSecretReauthSuggestion");
+    expect(workspace).toContain("consumeRuntimeSecretReauthSuggestion");
+    expect(workspace).toContain('secretCreateAfterReauth !== "1"');
+    expect(workspace).toContain(':suggestion="createSuggestion"');
     expect(workspace).toContain(
       '<RuntimeSecretDraftDialog\n    v-if="createOpen"',
     );

@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimesecret"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	accessservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/access"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -93,7 +94,27 @@ func (repository *Repository) ListRuntimeSecrets(ctx context.Context, principal 
 			return items, rows.Err()
 		}, func(item entity.RuntimeSecret) entity.AccessScope {
 			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "SECRET", ResourceRef: item.Ref, ProjectRef: item.ProjectRef}
-		}, func(_ pgx.Tx, _ *entity.RuntimeSecret, _ func(string) bool) error { return nil })
+		}, func(_ pgx.Tx, item *entity.RuntimeSecret, allowed func(string) bool) error {
+			item.NextActions = runtimeSecretActions(*item, allowed)
+			return nil
+		})
+}
+
+func runtimeSecretActions(item entity.RuntimeSecret, allowed func(string) bool) []string {
+	actions := make([]string, 0, 3)
+	if item.State != "ACTIVE" {
+		return actions
+	}
+	for _, operation := range []struct{ action, permission string }{
+		{"ROTATE", "secret.rotate"},
+		{"REVEAL", "secret.reveal"},
+		{"REVOKE", "secret.revoke"},
+	} {
+		if allowed(operation.permission) {
+			actions = append(actions, operation.action)
+		}
+	}
+	return actions
 }
 
 func runtimeSecretListFilterDigest(projectRef, queryValue string) string {
@@ -157,6 +178,18 @@ func (repository *Repository) GetRuntimeSecret(ctx context.Context, principal va
 	if err != nil {
 		return entity.RuntimeSecret{}, err
 	}
+	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
+	if err != nil {
+		return entity.RuntimeSecret{}, err
+	}
+	bindings, err := repository.loadAccessBindings(ctx, tx, current.organizationID, subject)
+	if err != nil {
+		return entity.RuntimeSecret{}, err
+	}
+	at := time.Now().UTC()
+	item.NextActions = runtimeSecretActions(item, func(permission string) bool {
+		return accessservice.Evaluate(subject.AccessSubject, permission, target.scope, target.ownerSubjectRef, bindings, at).Allowed
+	})
 	if err := tx.Commit(ctx); err != nil {
 		return entity.RuntimeSecret{}, errs.ErrConflict
 	}

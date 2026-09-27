@@ -857,6 +857,9 @@ const ru = {
     empty: "Здесь пока ничего нет",
     error: "Не удалось получить данные",
     forbidden: "Недостаточно прав",
+    freshAuthenticationRequired: "Требуется свежий вход",
+    freshAuthenticationHelp:
+      "Войдите повторно через SSO и затем повторите действие.",
     forbiddenText:
       "У вашей роли нет разрешения на это действие в выбранном проекте.",
     conflict: "Состояние уже изменилось. Показано актуальное решение.",
@@ -1501,6 +1504,8 @@ const ru = {
       publish: "Опубликовать и применить выбранное",
       save: "Сохранить черновик",
       reauthenticate: "Войти заново для работы с секретами",
+      reauthValueCleared:
+        "Для этого действия нужен свежий вход. Введённое значение очищено; после входа укажите его повторно.",
       retry: "Повторить исходный запрос",
       help: "Сохранение создаёт черновик. Действующая версия изменится только после проверки и публикации.",
       assistantSourceHelp:
@@ -4637,6 +4642,9 @@ const en = {
     empty: "Nothing here yet",
     error: "Could not load data",
     forbidden: "Insufficient permissions",
+    freshAuthenticationRequired: "Fresh sign-in required",
+    freshAuthenticationHelp:
+      "Sign in again through SSO, then retry the action.",
     forbiddenText:
       "Your role does not allow this action in the selected project.",
     conflict: "State has already changed. Current decision is shown.",
@@ -5362,6 +5370,8 @@ const en = {
       publish: "Publish and apply selection",
       save: "Save draft",
       reauthenticate: "Sign in again to manage secrets",
+      reauthValueCleared:
+        "This action requires a fresh sign-in. The entered value was cleared; enter it again after signing in.",
       retry: "Retry original request",
       help: "Saving creates a draft. The active revision changes only after validation and publication.",
       assistantSourceHelp:

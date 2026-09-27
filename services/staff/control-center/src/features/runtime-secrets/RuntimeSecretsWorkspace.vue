@@ -10,6 +10,7 @@ import {
 } from "@lucide/vue";
 import { onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute, useRouter } from "vue-router";
 
 import { useSessionStore } from "@/features/session/store";
 import SecretImpactDialog from "@/features/runtime/SecretImpactDialog.vue";
@@ -22,8 +23,9 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { readRuntimeSecret } from "./api";
 
-import type { RuntimeSecret } from "./model";
+import type { RuntimeSecret, RuntimeSecretDraftSuggestion } from "./model";
 import { canRuntimeSecretAction, maskedSecretHint } from "./model";
+import { consumeRuntimeSecretReauthSuggestion } from "./reauth-suggestion";
 import RuntimeSecretRevealDialog from "./RuntimeSecretRevealDialog.vue";
 import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
 import RuntimeSecretDraftDialog from "./RuntimeSecretDraftDialog.vue";
@@ -49,6 +51,8 @@ function draftSaved(draft: RuntimeSecretDraft): void {
   if (draft.state !== "PUBLISHED") void store.reload();
 }
 const store = useRuntimeSecretsStore();
+const route = useRoute();
+const router = useRouter();
 const searchId = useId();
 const session = useSessionStore();
 const { locale } = useI18n();
@@ -56,6 +60,7 @@ const search = ref("");
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const createOpen = ref(false);
+const createSuggestion = ref<RuntimeSecretDraftSuggestion>();
 const rotateTarget = ref<RuntimeSecret>();
 const revealTarget = ref<RuntimeSecret>();
 const revokeTarget = ref<RuntimeSecret>();
@@ -83,7 +88,20 @@ function prepareMutation(): void {
 
 function openCreate(): void {
   prepareMutation();
+  createSuggestion.value = undefined;
   createOpen.value = true;
+}
+
+function resumeCreateAfterReauthentication(): void {
+  if (route.query.secretCreateAfterReauth !== "1") return;
+  createSuggestion.value = consumeRuntimeSecretReauthSuggestion(
+    window.sessionStorage,
+    { projectRef: props.projectRef },
+  );
+  createOpen.value = true;
+  void router.replace({
+    query: { ...route.query, secretCreateAfterReauth: undefined },
+  });
 }
 
 function openRotate(secret: RuntimeSecret): void {
@@ -179,7 +197,10 @@ watch(
   restoreReauthenticatedReveal,
   { immediate: true },
 );
-onMounted(() => void store.load(props.projectRef, "", pageSize.value));
+onMounted(() => {
+  void store.load(props.projectRef, "", pageSize.value);
+  resumeCreateAfterReauthentication();
+});
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer);
   store.dispose();
@@ -425,6 +446,7 @@ onBeforeUnmount(() => {
   <RuntimeSecretDraftDialog
     v-if="createOpen"
     :project-ref="projectRef"
+    :suggestion="createSuggestion"
     @close="createOpen = false"
     @saved="draftSaved"
     @published="store.acceptPublication"

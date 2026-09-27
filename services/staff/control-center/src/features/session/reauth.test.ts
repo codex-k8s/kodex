@@ -44,7 +44,7 @@ describe("OIDC re-auth intents", () => {
       1000,
     );
     expect(intent.returnPath).toBe(
-      "/projects/project_sales/secrets?assistantCreateSecret=1",
+      "/projects/project_sales/secrets?secretCreateAfterReauth=1",
     );
     expect(consumeOidcIntent(intent, pendingStorage(intent), 1100)).toEqual(
       intent,

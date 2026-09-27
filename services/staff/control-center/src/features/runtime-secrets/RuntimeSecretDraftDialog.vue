@@ -304,6 +304,9 @@ onBeforeUnmount(() => {
       {{ t("runtimeSecrets.draft.assistantSourceHelp") }}
       {{ suggestion.sourceHelp }}
     </p>
+    <p v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'" role="note">
+      {{ t("runtimeSecrets.draft.reauthValueCleared") }}
+    </p>
     <button
       v-if="problem?.code === 'FRESH_AUTHENTICATION_REQUIRED'"
       class="button"

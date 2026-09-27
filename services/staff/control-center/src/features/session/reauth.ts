@@ -290,7 +290,7 @@ function runtimeSecretDraftPath(
     return `${parsed.pathname}${parsed.search}`;
   }
   const path = runtimeSecretsPath(projectRef);
-  if (target === "create") return `${path}?assistantCreateSecret=1`;
+  if (target === "create") return `${path}?secretCreateAfterReauth=1`;
   return `${path}?${target === "draft" ? "draftRef" : "secretRef"}=${encodeURIComponent(targetRef ?? "")}`;
 }
 

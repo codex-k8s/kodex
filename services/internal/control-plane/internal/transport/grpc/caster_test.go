@@ -79,6 +79,19 @@ func TestCastRuntimeEnvironmentPreservesReadinessAndActions(t *testing.T) {
 	}
 }
 
+func TestCastRuntimeSecretPreservesAuthorizedActions(t *testing.T) {
+	t.Parallel()
+	secret := castRuntimeSecret(entity.RuntimeSecret{State: "ACTIVE", NextActions: []string{"ROTATE", "REVEAL", "REVOKE"}})
+	want := []controlplanev1.NextAction{
+		controlplanev1.NextAction_NEXT_ACTION_ROTATE,
+		controlplanev1.NextAction_NEXT_ACTION_REVEAL,
+		controlplanev1.NextAction_NEXT_ACTION_REVOKE,
+	}
+	if !reflect.DeepEqual(secret.GetNextActions(), want) {
+		t.Fatalf("runtime secret actions = %v, want %v", secret.GetNextActions(), want)
+	}
+}
+
 func TestCastScheduleMaterializesRevisionAndContinuationContract(t *testing.T) {
 	t.Parallel()
 
