@@ -1155,6 +1155,13 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.automation-row__identity strong,
+.automation-row__schedule strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
 .automation-row small,
 .automation-row__next,
 .automation-row__outcome {

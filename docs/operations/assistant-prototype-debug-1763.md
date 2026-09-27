@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.226
+version: 1.0.227
 updated: 2026-09-27
 ---
 
@@ -4735,3 +4735,10 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-automation-overview-technical-collapsed-20260928.png`.
   Console error/warn пусты, завершённых HTTP 4xx/5xx нет, один bootstrap GET
   отменён навигацией. Ручная приёмка и реальное переключение фильтра — `NOT RUN`.
+- Название и расписание в строке таблицы теперь занимают до двух строк:
+  «Понедельник · 12:00» читается целиком, без обрезанного времени. При
+  1920×1080 высота строки выросла только по содержимому, соседние колонки
+  остались выровнены; снимок
+  `/tmp/kodex-automation-two-line-table-20260928.png`. После повторного
+  no-cache reload console error/warn и завершённые HTTP 4xx/5xx отсутствуют.
+  Адресные 10 unit, ESLint и Prettier — локальный `PASS`.
