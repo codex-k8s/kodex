@@ -48,6 +48,34 @@ func TestNormalizePreservesRequiredWorkflowDefaults(t *testing.T) {
 	}
 }
 
+func TestNormalizeDoesNotAddAgentFieldsToAssistantPlanSnapshot(t *testing.T) {
+	t.Parallel()
+	before := map[string]any{
+		"agentRef": "agt_fixture", "name": "Координатор", "roleDescription": "Проверяет факты",
+	}
+	value := map[string]any{
+		"auditSummary": "Изменить описание",
+		"operations":   []any{map[string]any{"before": before}},
+	}
+	normalize(value)
+	for _, key := range []string{"capabilities", "integrations", "knowledgeArtifactRefs", "nextActions"} {
+		if _, exists := before[key]; exists {
+			t.Fatalf("план получил поле сотрудника %s", key)
+		}
+	}
+
+	agent := map[string]any{
+		"ref": "agt_fixture", "projectRef": "prj_fixture", "version": float64(1),
+		"roleDescription": "Проверяет факты",
+	}
+	normalize(agent)
+	for _, key := range []string{"capabilities", "integrations", "knowledgeArtifactRefs", "nextActions"} {
+		if _, exists := agent[key].([]any); !exists {
+			t.Fatalf("сотрудник лишился обязательной коллекции %s", key)
+		}
+	}
+}
+
 func TestWorkflowDraftPreservesBoundedInputFields(t *testing.T) {
 	t.Parallel()
 

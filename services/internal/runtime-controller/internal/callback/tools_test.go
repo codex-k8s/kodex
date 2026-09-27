@@ -458,9 +458,18 @@ func TestConfigurationCatalogPinsAgentUpdateToExactContext(t *testing.T) {
 	input := runtimecontract.RunnerInput{SystemAssistant: true, ProjectRef: "prj_current", AssistantContext: &runtimecontract.RunnerAssistantContext{
 		EntityKind: "AGENT", EntityRef: "agt_current", EntityName: "Coordinator", AllowedOperations: []string{"UPDATE_AGENT"},
 	}}
+	input.DelegationTargets = []runtimecontract.RunnerDelegationTarget{
+		{Ref: "agt_current", Name: "Coordinator", Purpose: strings.Repeat("Ц", 500), RoleDescription: strings.Repeat("Р", 500)},
+		{Ref: "agt_other", Name: "Other", Purpose: strings.Repeat("Ц", 500), RoleDescription: strings.Repeat("Р", 500)},
+	}
 	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
 	if err != nil || !reflect.DeepEqual(compact.(map[string]any)["operation_types"], []string{"UPDATE_AGENT"}) {
 		t.Fatalf("unexpected exact-context operation index: result=%#v err=%v", compact, err)
+	}
+	agents := compact.(map[string]any)["agents"].([]map[string]string)
+	if len([]rune(agents[0]["purpose"])) != 500 || len([]rune(agents[0]["role_description"])) != 500 ||
+		len([]rune(agents[1]["purpose"])) != 240 || len([]rune(agents[1]["role_description"])) != 240 {
+		t.Fatal("catalog must expose complete current agent profile and bounded previews for other agents")
 	}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"UPDATE_AGENT"}})
 	if err != nil {

@@ -900,7 +900,11 @@ func requiredCollectionKeys(value map[string]any) []string {
 	if _, isWorkflowInput := value["valueType"]; isWorkflowInput {
 		keys = append(keys, "options")
 	}
-	if _, isAgent := value["roleDescription"]; isAgent {
+	_, isAgent := value["roleDescription"]
+	_, hasRef := value["ref"]
+	_, hasProject := value["projectRef"]
+	_, hasVersion := value["version"]
+	if isAgent && hasRef && hasProject && hasVersion {
 		keys = append(keys, "capabilities", "integrations", "knowledgeArtifactRefs", "nextActions")
 	}
 	if _, isMembership := value["platformRole"]; isMembership {

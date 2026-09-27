@@ -6,6 +6,7 @@ import {
   extractTemplateVariables,
   insertTextAtSelection,
   normalizeTemplateVariable,
+  profileDraftAfterAuthoritativeUpdate,
   runtimeModels,
   runtimeProviders,
   runtimeRefForSelection,
@@ -61,6 +62,22 @@ describe("agentDetailTabFromQuery", () => {
 });
 
 describe("agent detail model", () => {
+  it("обновляет только нетронутый черновик профиля", () => {
+    const previous = {
+      name: "Агент",
+      purpose: "Работа",
+      roleDescription: "Первый текст",
+    };
+    const current = { ...previous, roleDescription: "Новая ревизия" };
+    expect(
+      profileDraftAfterAuthoritativeUpdate(previous, previous, current),
+    ).toEqual(current);
+    const local = { ...previous, roleDescription: "Локальная правка" };
+    expect(profileDraftAfterAuthoritativeUpdate(local, previous, current)).toBe(
+      local,
+    );
+  });
+
   it("строит provider/model/runtime выбор только из готового каталога", () => {
     expect(runtimeProviders(runtimes)).toEqual(["openai-codex"]);
     expect(runtimeModels(runtimes, "openai-codex")).toEqual([

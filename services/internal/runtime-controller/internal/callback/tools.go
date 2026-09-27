@@ -15,7 +15,7 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover server-owned context and permitted operation types. Omit operation_types or pass [] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target. For integration setup, request definition_query (empty string lists the first page) and optional definition_offset; definitions are read from control-plane in pages of at most 10. Names are display data; use only exact opaque refs in plans.",
+		"description": "Discover server-owned context and permitted operation types. Omit operation_types or pass [] for a compact index, then request up to four exact schemas needed for the current task. Agents are returned in pages of at most 20; use agent_query and agent_offset to find a target. Only the agent matching the current AGENT context has complete purpose and role_description; other agent fields are previews. For integration setup, request definition_query (empty string lists the first page) and optional definition_offset; definitions are read from control-plane in pages of at most 10. Names are display data; use only exact opaque refs in plans.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
@@ -140,9 +140,13 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 	agents := make([]map[string]string, 0, maximumAssistantCatalogAgents)
 	if agentOffset < len(matching) {
 		for _, target := range matching[agentOffset:end] {
+			purpose, roleDescription := truncateRunes(target.Purpose, 240), truncateRunes(target.RoleDescription, 240)
+			if input.AssistantContext != nil && input.AssistantContext.EntityKind == "AGENT" && input.AssistantContext.EntityRef == target.Ref {
+				purpose, roleDescription = target.Purpose, target.RoleDescription
+			}
 			agents = append(agents, map[string]string{
-				"ref": target.Ref, "name": target.Name, "purpose": truncateRunes(target.Purpose, 240),
-				"role_description": truncateRunes(target.RoleDescription, 240),
+				"ref": target.Ref, "name": target.Name, "purpose": purpose,
+				"role_description": roleDescription,
 			})
 		}
 	}

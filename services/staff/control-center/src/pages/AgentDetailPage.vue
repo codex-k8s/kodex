@@ -23,6 +23,7 @@ import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
 import {
   agentDetailTabFromQuery,
+  profileDraftAfterAuthoritativeUpdate,
   sameProfileDraft,
   type AgentBackendFeatureAvailability,
   type AgentDetailTab,
@@ -305,6 +306,15 @@ function syncProfile(value = agent.value): void {
     roleDescription: value.roleDescription,
   };
 }
+
+watch(currentProfile, (current, previous) => {
+  if (loaded.value)
+    profileDraft.value = profileDraftAfterAuthoritativeUpdate(
+      profileDraft.value,
+      previous,
+      current,
+    );
+});
 
 function syncInstructions(): void {
   instructions.value = authoritativeInstructions.value;
