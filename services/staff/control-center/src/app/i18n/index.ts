@@ -3202,6 +3202,17 @@ const ru = {
   audit: {
     title: "Аудит и диагностика",
     subtitle: "Кто инициировал действие, кто выполнил и чем оно завершилось",
+    project: "Проект",
+    allProjects: "Все Проекты",
+    findProject: "Найти Проект",
+    selectedProject: "Выбранный Проект",
+    protectedSecret: "Защищённое значение",
+    secretDraftAction: {
+      save: "Сохранение черновика секрета подготовлено",
+      validate: "Проверка черновика секрета подготовлена",
+      publish: "Публикация секрета подготовлена",
+      discard: "Отмена черновика секрета подготовлена",
+    },
     initiator: "Инициатор",
     executor: "Исполнитель",
     action: "Действие",
@@ -3220,6 +3231,7 @@ const ru = {
       SYSTEM_ASSISTANT: "Помощник Kodex",
     },
     resourceTypeValue: {
+      SECRET: "Секрет",
       INSTALLATION: "Установка",
       PROJECT: "Проект",
       PLATFORM_MEMBERSHIP: "Доступ к платформе",
@@ -7089,6 +7101,17 @@ const en = {
   audit: {
     title: "Audit and diagnostics",
     subtitle: "Who initiated an action, who executed it and how it ended",
+    project: "Project",
+    allProjects: "All Projects",
+    findProject: "Find a Project",
+    selectedProject: "Selected Project",
+    protectedSecret: "Protected value",
+    secretDraftAction: {
+      save: "Secret draft save prepared",
+      validate: "Secret draft validation prepared",
+      publish: "Secret publication prepared",
+      discard: "Secret draft discard prepared",
+    },
     initiator: "Initiator",
     executor: "Executor",
     action: "Action",
@@ -7107,6 +7130,7 @@ const en = {
       SYSTEM_ASSISTANT: "Kodex Assistant",
     },
     resourceTypeValue: {
+      SECRET: "Secret",
       INSTALLATION: "Installation",
       PROJECT: "Project",
       PLATFORM_MEMBERSHIP: "Platform access",

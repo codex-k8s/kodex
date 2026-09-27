@@ -33,4 +33,18 @@ describe("AuditPage pagination", () => {
     expect(loadBody).not.toContain("loadMoreAudit");
     expect(loadBody).not.toContain("while");
   });
+
+  it("позволяет выбрать область Проекта без потери остальных параметров URL", () => {
+    expect(source).toContain(':load-page="accessProjectOptions"');
+    expect(source).toContain('@update:model-value="selectProject"');
+    expect(source).toContain("{ ...route.query, projectRef: next }");
+    expect(source).toContain("watch(projectRef, () => {");
+    expect(source).toContain("loadSelectedProject()");
+  });
+
+  it("различает подготовку публикации секрета и общее изменение черновика", () => {
+    expect(source).toContain('const prefix = "runtime-secret-draft."');
+    expect(source).toContain("actionSummary(event)");
+    expect(source).toContain("event.safeSummary");
+  });
 });
