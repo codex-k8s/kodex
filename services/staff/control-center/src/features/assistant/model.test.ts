@@ -16,6 +16,7 @@ import {
   assistantRoleImageBuildTarget,
   editableOperations,
   friendlyPlanOperationType,
+  honestEditedPlanSummaries,
   latestAssistantSnapshot,
   operationActionLabel,
   operationInputs,
@@ -737,6 +738,60 @@ describe("assistant plan card", () => {
 });
 
 describe("assistant plan editor model", () => {
+  it("убирает устаревшую сводку после изменения полей формы", () => {
+    const item = {
+      ...operation(),
+      type: "UPDATE_PROJECT" as const,
+      action: "UPDATE" as const,
+      summary: "Назначение: временное",
+      parameters: { purpose: "временное" },
+      after: { purpose: "временное" },
+    };
+    const plan: AssistantPlan = {
+      ref: "pln_edit",
+      version: 1,
+      revision: 1,
+      state: "DRAFT",
+      conversationRef: "conv_edit",
+      operations: [item],
+      auditSummary: "Назначение: временное",
+      applied: false,
+      contentDigest: "a".repeat(64),
+      validationProblems: [],
+      nextActions: [],
+    };
+    const edited = {
+      ...item,
+      parameters: { purpose: "итоговое" },
+      after: { purpose: "итоговое" },
+    };
+    const labels = { plan: "План исправлен", operation: "Поля исправлены" };
+
+    expect(
+      honestEditedPlanSummaries(plan, plan.auditSummary, [edited], labels),
+    ).toMatchObject({
+      auditSummary: "План исправлен",
+      operations: [{ summary: "Поля исправлены" }],
+    });
+    expect(
+      honestEditedPlanSummaries(
+        plan,
+        "Проверенное пояснение пользователя",
+        [{ ...edited, summary: "Проверенное описание" }],
+        labels,
+      ),
+    ).toMatchObject({
+      auditSummary: "Проверенное пояснение пользователя",
+      operations: [{ summary: "Проверенное описание" }],
+    });
+    expect(
+      honestEditedPlanSummaries(plan, plan.auditSummary, [item], labels),
+    ).toMatchObject({
+      auditSummary: plan.auditSummary,
+      operations: [{ summary: item.summary }],
+    });
+  });
+
   it("сохраняет согласованные параметры и итог при изменении формы проекта", () => {
     const editable = editableOperations([
       {

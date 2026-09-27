@@ -449,6 +449,48 @@ export function operationInputs(
   }));
 }
 
+export function honestEditedPlanSummaries(
+  plan: AssistantPlan,
+  auditSummary: string,
+  operations: readonly AssistantPlanOperationInput[],
+  labels: { plan: string; operation: string },
+): {
+  auditSummary: string;
+  operations: AssistantPlanOperationInput[];
+} {
+  const revisions = operations.map((operation) => {
+    const original = plan.operations.find((item) => item.ref === operation.ref);
+    if (!original) return { operation, changed: false };
+    const content = (item: AssistantPlanOperationInput) =>
+      JSON.stringify([
+        item.type,
+        item.action,
+        item.title,
+        item.target,
+        item.expectedVersion,
+        item.parameters,
+        item.before,
+        item.after,
+      ]);
+    const contentChanged = content(operation) !== content(original);
+    return {
+      operation:
+        contentChanged && operation.summary === original.summary
+          ? { ...operation, summary: labels.operation }
+          : operation,
+      changed: contentChanged || operation.selected !== original.selected,
+    };
+  });
+  return {
+    auditSummary:
+      revisions.some((item) => item.changed) &&
+      auditSummary === plan.auditSummary
+        ? labels.plan
+        : auditSummary,
+    operations: revisions.map((item) => item.operation),
+  };
+}
+
 export function operationActionLabel(
   action: AssistantPlanOperation["action"],
 ): "create" | "update" | "delete" | "execute" {

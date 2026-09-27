@@ -42,6 +42,7 @@ import { useRuntimeStore } from "@/features/runtime/store";
 import {
   editableOperations,
   friendlyPlanOperationType,
+  honestEditedPlanSummaries,
   operationActionLabel,
   operationInputs,
   operationParameter,
@@ -601,7 +602,16 @@ function save(): void {
         prepared.value,
       );
     }
-    emit("save", summary.value.trim(), operationInputs(operations.value));
+    const revised = honestEditedPlanSummaries(
+      props.plan,
+      summary.value.trim(),
+      operationInputs(operations.value),
+      {
+        plan: t("assistant.planEditor.editedPlanSummary"),
+        operation: t("assistant.planEditor.editedOperationSummary"),
+      },
+    );
+    emit("save", revised.auditSummary, revised.operations);
   } catch {
     inputProblem.value = t("assistant.planEditor.jsonError");
   }
