@@ -4,6 +4,7 @@ import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import TemplateSourceField from "@/features/agents/detail/TemplateSourceField.vue";
 import PromptTargetPreview from "@/features/agents/detail/PromptTargetPreview.vue";
 import {
+  workflowEditorAfterAuthoritativeUpdate,
   workflowEditorInput,
   workflowStagePromptTarget,
 } from "@/features/platform/workflow-editor";
@@ -138,6 +139,19 @@ const savedForm = ref("");
 const dirty = computed(
   () => savedForm.value !== "" && JSON.stringify(form) !== savedForm.value,
 );
+watch(workflow, (current) => {
+  if (!current) return;
+  const refreshed = workflowEditorAfterAuthoritativeUpdate(
+    form,
+    savedForm.value,
+    projectRef.value,
+    workflowRef.value,
+    current,
+  );
+  if (!refreshed) return;
+  Object.assign(form, refreshed);
+  savedForm.value = JSON.stringify(form);
+});
 useUnsavedChanges(dirty, () => t("managed.discard"));
 const validStepText = computed(() =>
   form.steps.every(
