@@ -175,6 +175,12 @@ describe("RunGraphCanvas", () => {
       left: "380px",
     });
     expect(runGraphFitViewOptions(412).padding).toBe(0.14);
+    expect(runGraphFitViewOptions(1920, true).padding).toEqual({
+      top: "180px",
+      right: "32px",
+      bottom: "160px",
+      left: "32px",
+    });
   });
 
   it("для большого графа открывает читаемую окрестность, сохраняя полный обзор по кнопке", () => {

@@ -52,11 +52,13 @@ const props = withDefaults(
     selectedRef?: string;
     futureNodeRefs?: string[];
     activeNodeRefs?: string[];
+    compact?: boolean;
   }>(),
   {
     selectedRef: undefined,
     futureNodeRefs: () => [],
     activeNodeRefs: () => [],
+    compact: false,
   },
 );
 const emit = defineEmits<{
@@ -216,12 +218,13 @@ async function fit(userInitiated = true): Promise<void> {
   try {
     await fitView(
       userInitiated
-        ? runGraphFitViewOptions(window.innerWidth)
+        ? runGraphFitViewOptions(window.innerWidth, props.compact)
         : runGraphInitialFitOptions(
             window.innerWidth,
             props.nodes,
             props.edges,
             props.selectedRef,
+            props.compact,
           ),
     );
   } finally {

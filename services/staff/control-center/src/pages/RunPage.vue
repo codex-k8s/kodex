@@ -603,7 +603,10 @@ onBeforeUnmount(() => {
           />
           <ProblemNotice v-if="problem" :problem="problem" compact />
         </div>
-        <div class="run-workspace">
+        <div
+          class="run-workspace"
+          :class="{ 'run-workspace--activity': activityOpen }"
+        >
           <nav
             class="run-workspace-toolbar"
             role="toolbar"
@@ -683,6 +686,8 @@ onBeforeUnmount(() => {
           <section id="run-graph-panel" class="graph-panel">
             <div class="graph-panel__canvas">
               <RunGraphCanvas
+                :key="activityOpen ? 'with-activity' : 'full-width'"
+                :compact="activityOpen"
                 :nodes="sessionGraph.nodes"
                 :edges="sessionGraph.edges"
                 :selected-ref="selectedNode?.ref"
@@ -1124,6 +1129,12 @@ onBeforeUnmount(() => {
   inset: 0;
   background: var(--canvas);
 }
+.run-workspace--activity .graph-panel {
+  right: min(720px, 54%);
+}
+.run-workspace--activity .run-workspace-toolbar {
+  left: calc((100% - min(720px, 54%)) / 2);
+}
 .graph-panel__canvas {
   width: 100%;
   height: 100%;
@@ -1194,6 +1205,9 @@ onBeforeUnmount(() => {
     left: 0;
     width: 100%;
     min-width: 0;
+  }
+  .run-workspace--activity .graph-panel {
+    right: 0;
   }
 }
 </style>

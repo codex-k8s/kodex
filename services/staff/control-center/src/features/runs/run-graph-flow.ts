@@ -18,17 +18,27 @@ import type {
 
 export const runGraphMinimumZoom = 0.15;
 export const runGraphMaximumZoom = 1.8;
-export function runGraphFitViewOptions(viewportWidth: number): FitViewParams {
+export function runGraphFitViewOptions(
+  viewportWidth: number,
+  compact = false,
+): FitViewParams {
   return {
     padding:
       viewportWidth <= 760
         ? 0.14
-        : {
-            top: "180px",
-            right: "210px",
-            bottom: "160px",
-            left: "380px",
-          },
+        : compact
+          ? {
+              top: "180px",
+              right: "32px",
+              bottom: "160px",
+              left: "32px",
+            }
+          : {
+              top: "180px",
+              right: "210px",
+              bottom: "160px",
+              left: "380px",
+            },
     minZoom: runGraphMinimumZoom,
     maxZoom: 1.1,
     duration: 180,
@@ -40,8 +50,9 @@ export function runGraphInitialFitOptions(
   nodes: RunNode[],
   edges: RunEdge[],
   selectedRef?: string,
+  compact = false,
 ): FitViewParams {
-  const options = runGraphFitViewOptions(viewportWidth);
+  const options = runGraphFitViewOptions(viewportWidth, compact);
   if (nodes.length <= 16) return options;
 
   const nodeRefs = new Set(nodes.map((node) => node.ref));
