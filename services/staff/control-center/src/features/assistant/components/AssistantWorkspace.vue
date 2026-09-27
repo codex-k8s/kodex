@@ -199,6 +199,8 @@ const planDialog = ref<HTMLElement>();
 const formSlot = ref<HTMLElement>();
 const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
+let followLatestAfterLoad = false;
+let chatResizeObserver: ResizeObserver | undefined;
 const historyMenu = ref<HTMLElement>();
 const fab = ref<HTMLButtonElement>();
 const planTrigger = ref<HTMLButtonElement>();
@@ -212,9 +214,26 @@ const checkedContext = computed(() => {
     ? conversation.context
     : undefined;
 });
-const contextTitle = computed(() =>
-  assistantContextTitle(props.context, checkedContext.value),
-);
+const configurationKinds = new Set([
+  "PROMPT_TEMPLATE",
+  "ROLE_IMAGE",
+  "INTEGRATION_DEFINITION",
+  "SYSTEM_STT",
+]);
+const contextTitle = computed(() => {
+  const kind = route.params.kind;
+  if (
+    !props.context.entityName &&
+    !checkedContext.value?.entityName &&
+    (route.name === "configuration" ||
+      route.name === "configuration-catalog") &&
+    typeof kind === "string" &&
+    configurationKinds.has(kind)
+  ) {
+    return t(`managed.kinds.${kind}`);
+  }
+  return assistantContextTitle(props.context, checkedContext.value);
+});
 const checkedOperations = computed(() =>
   checkedContext.value
     ? readableContextOperations(checkedContext.value.allowedOperations)
@@ -379,7 +398,8 @@ async function show(): Promise<void> {
   activeView.value = "CHAT";
   await store.load(props.context, props.projectRef);
   await nextTick();
-  panel.value?.focus();
+  panel.value?.focus({ preventScroll: true });
+  scrollToLatest();
 }
 
 function close(): void {
@@ -808,6 +828,43 @@ watch(
   },
 );
 watch(
+  () => store.loading,
+  async (loading, wasLoading) => {
+    if (loading) {
+      const log = chatLog.value;
+      followLatestAfterLoad =
+        !log || log.scrollHeight - log.clientHeight - log.scrollTop < 80;
+      return;
+    }
+    if (!wasLoading || !followLatestAfterLoad || !open.value) return;
+    followLatestAfterLoad = false;
+    await nextTick();
+    await new Promise<void>((resolve) =>
+      window.requestAnimationFrame(() => resolve()),
+    );
+    scrollToLatest();
+  },
+);
+watch(
+  chatLog,
+  (element) => {
+    chatResizeObserver?.disconnect();
+    if (!element || typeof ResizeObserver === "undefined") return;
+    chatResizeObserver ??= new ResizeObserver(() => {
+      const log = chatLog.value;
+      if (
+        open.value &&
+        log &&
+        log.scrollHeight - log.clientHeight - log.scrollTop < 96
+      ) {
+        scrollToLatest();
+      }
+    });
+    chatResizeObserver.observe(element);
+  },
+  { flush: "post" },
+);
+watch(
   () => store.selectedConversation?.ref,
   async () => {
     if (store.selectedConversation?.ref)
@@ -866,6 +923,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   workspaceMounted = false;
+  chatResizeObserver?.disconnect();
   historyMedia?.removeEventListener("change", syncHistoryViewport);
   store.cancelReads();
   document.removeEventListener("pointerdown", documentPointerDown);
