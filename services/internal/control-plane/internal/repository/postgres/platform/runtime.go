@@ -1365,8 +1365,30 @@ func runtimeRevisionSessionContext(value any) []runtimecontract.RunnerSessionMes
 }
 
 func decodeStoredRuntimeEnvironment(rawValues, rawSecrets []byte, values *[]runtimecontract.RuntimeEnvironmentValue, secrets *[]runtimecontract.RuntimeSecretProjection) error {
-	decodedValues, decodedSecrets, err := runtimecontract.DecodeRuntimeEnvironment(rawValues, rawSecrets)
+	decodedValues, _, err := runtimecontract.DecodeRuntimeEnvironment(rawValues, []byte("[]"))
 	if err != nil {
+		return err
+	}
+	// В БД хранится полный серверный дескриптор с ref/namespace/revision;
+	// Runner получает только закрытую проекцию без этих полей.
+	var stored []entity.RuntimeSecretDescriptor
+	decoder := json.NewDecoder(bytes.NewReader(rawSecrets))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&stored) != nil || !errors.Is(decoder.Decode(&struct{}{}), io.EOF) {
+		return errors.New("invalid stored runtime Secret descriptors")
+	}
+	decodedSecrets := make([]runtimecontract.RuntimeSecretProjection, 0, len(stored))
+	for _, item := range stored {
+		if !strings.HasPrefix(item.SecretRef, "sec_") || len(item.SecretRef) > 96 || item.Namespace == "" || item.Revision < 1 {
+			return errors.New("invalid stored runtime Secret identity")
+		}
+		decodedSecrets = append(decodedSecrets, runtimecontract.RuntimeSecretProjection{
+			Name: item.Name, SecretName: item.SecretName, SecretKey: item.SecretKey,
+			SecretUID: item.SecretUID, SecretResourceVersion: item.SecretResourceVersion,
+			ContentSHA256: item.ContentSHA256,
+		})
+	}
+	if err := runtimecontract.ValidateRuntimeEnvironment(decodedValues, decodedSecrets); err != nil {
 		return err
 	}
 	*values, *secrets = decodedValues, decodedSecrets

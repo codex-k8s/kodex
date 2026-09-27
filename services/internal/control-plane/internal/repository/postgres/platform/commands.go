@@ -10,6 +10,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -1632,7 +1633,7 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 	title := strings.TrimSpace(payload.Title)
 	titleSource := strings.TrimSpace(payload.TitleSource)
 	if title == "" {
-		title = targetName + ": " + truncate(payload.Task, 120)
+		title = boundedRunTitle(targetName + ": " + truncate(payload.Task, 120))
 		titleSource = "SERVER_DEFAULT"
 	} else if titleSource == "" {
 		titleSource = "SERVER_DEFAULT"
@@ -1836,6 +1837,19 @@ func truncate(value string, maximum int) string {
 		return "…"
 	}
 	return string(runes[:maximum-1]) + "…"
+}
+
+func boundedRunTitle(title string) string {
+	const maximumBytes = 240
+	if len(title) <= maximumBytes {
+		return title
+	}
+	prefix := title
+	for len(prefix) > maximumBytes-len("…") {
+		_, size := utf8.DecodeLastRuneInString(prefix)
+		prefix = prefix[:len(prefix)-size]
+	}
+	return strings.TrimSpace(prefix) + "…"
 }
 
 func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string) error {
@@ -2351,17 +2365,17 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	if !contains([]string{"FAILED", "CANCELLED"}, state) {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	var targetType, targetRef, title, task, sessionRef, source string
+	var targetType, targetRef, title, titleSource, task, sessionRef, source string
 	var raw []byte
 	var attachmentSetRef, attachmentPurpose string
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &task, &sessionRef, &source, &raw, &attachmentSetRef, &attachmentPurpose); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &titleSource, &task, &sessionRef, &source, &raw, &attachmentSetRef, &attachmentPurpose); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var launchInput map[string]any
 	_ = json.Unmarshal(raw, &launchInput)
 	nested := input
 	nested.Kind = command.LaunchRun
-	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: title, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
+	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: boundedRunTitle(title), TitleSource: titleSource, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
 	outcome, err := repository.launchRunWithAttachmentPolicy(ctx, tx, scope, nested, true)
 	if err != nil {
 		return commandOutcome{}, err
