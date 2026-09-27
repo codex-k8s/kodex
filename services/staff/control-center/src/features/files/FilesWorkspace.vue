@@ -223,7 +223,7 @@ const previewLabels = computed<FilePreviewLabels>(() => ({
     ? "Protected preview"
     : "Защищённый предпросмотр",
   size: t("files.size"),
-  source: t("common.source"),
+  source: t("files.artifactSource"),
   unavailable: t("files.previewUnavailable"),
   version: t("files.revision"),
   zoom: locale.value.startsWith("en") ? "Zoom" : "Масштаб",
@@ -1602,7 +1602,7 @@ onBeforeUnmount(() => {
               <dd class="mono">v{{ selectedArtifact.revision }}</dd>
             </div>
             <div>
-              <dt>{{ $t("common.source") }}</dt>
+              <dt>{{ $t("files.artifactSource") }}</dt>
               <dd>{{ sourceLabel(selectedArtifact.source) }}</dd>
             </div>
             <div>

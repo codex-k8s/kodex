@@ -1954,6 +1954,7 @@ const ru = {
   },
   files: {
     title: "Файлы и знания",
+    artifactSource: "Источник файла",
     subtitle: "Материалы для ИИ-сотрудников и результаты их работы",
     trash: "Корзина",
     emptyTitle: "Файлов пока нет",
@@ -5829,6 +5830,7 @@ const en = {
   files: {
     ...ru.files,
     title: "Files and knowledge",
+    artifactSource: "File source",
     trash: "Trash",
     subtitle: "Materials for AI employees and the results of their work",
     emptyTitle: "No files yet",
