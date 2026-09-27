@@ -1418,7 +1418,7 @@ onBeforeUnmount(() => {
               <span>{{ $t("files.usedBy") }}</span>
               <span>{{ $t("files.revision") }}</span>
               <span>{{ $t("common.status") }}</span>
-              <span></span>
+              <span>{{ $t("files.addedAt") }}</span>
             </div>
             <div
               v-for="artifact in filteredArtifacts"
@@ -2074,7 +2074,7 @@ onBeforeUnmount(() => {
   z-index: 2;
   top: 0;
   min-height: 38px;
-  padding: 0 14px;
+  padding: 0 152px 0 48px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
   color: var(--subtle);

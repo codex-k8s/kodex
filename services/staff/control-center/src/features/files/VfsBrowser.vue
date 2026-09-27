@@ -59,9 +59,12 @@ let actionController: AbortController | undefined;
 const bulkActions: VfsBulkAction[] = ["REMOVE", "RESTORE", "PURGE"];
 const projectFolders = new Set([
   "agents",
+  "automations",
   "environments",
   "files",
+  "memories",
   "runs",
+  "skills",
   "workflows",
 ]);
 function folderLabel(path: string, raw: string, projectRef: string): string {
