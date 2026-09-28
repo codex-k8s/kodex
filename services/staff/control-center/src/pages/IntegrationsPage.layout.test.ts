@@ -67,4 +67,13 @@ describe("IntegrationsPage layout", () => {
     expect(connectionsSource).toContain(".connection-table-wrap {");
     expect(connectionsSource).toContain("overflow-x: auto;");
   });
+
+  it("локализует сведения подключения", () => {
+    expect(pageSource).toContain("integrations.detailsCredentialsTitle");
+    expect(pageSource).toContain("integrations.publicConfiguration");
+    expect(pageSource).toContain("integrations.noCapabilities");
+    expect(pageSource).not.toContain("Учётные данные и проверка");
+    expect(pageSource).not.toContain("Публичные настройки");
+    expect(pageSource).not.toContain("Доступных возможностей пока нет.");
+  });
 });
