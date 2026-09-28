@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -57,8 +58,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	adapter, err := integration.New(integration.Config{
 		RPCProfile:          config.RPCProfile,
-		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL,
-		SyntheticBaseURL: config.SyntheticBaseURL, Timeout: config.OperationTimeout,
+		CredentialDirectory: config.CredentialDirectory, ProxyURL: config.EgressProxyURL, OpenAPIProxyURL: config.OpenAPIProxyURL,
+		SyntheticBaseURL: config.SyntheticBaseURL, LocalOpenAPIBaseURL: config.LocalOpenAPIBaseURL,
+		LocalOpenAPICAFile: config.LocalOpenAPICAFile, Timeout: config.OperationTimeout,
 		EmailCAFile: config.ControlPlaneCAFile, EmailCertificateFile: config.ControlPlaneCertificateFile, EmailPrivateKeyFile: config.ControlPlanePrivateKeyFile,
 	})
 	if err != nil {
@@ -123,7 +125,7 @@ func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration
 		degraded := false
 		for {
 			cycle, cancel := context.WithTimeout(ctx, integrationCycleBudget(config))
-			processed, err := processIntegrationWork(cycle, control, adapter, metrics, config)
+			processed, err := processIntegrationWork(cycle, control, adapter, metrics, logger, config)
 			cancel()
 			workHealth.record(time.Now(), err)
 			if err != nil {
@@ -150,7 +152,7 @@ func runIntegrationLoop(control *controlplaneclient.Client, adapter *integration
 	}
 }
 
-func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, config Config) (int, error) {
+func processIntegrationWork(ctx context.Context, control *controlplaneclient.Client, adapter *integration.Adapter, metrics *businessmetrics.Metrics, logger *slog.Logger, config Config) (int, error) {
 	tests, err := control.Runtime.ClaimIntegrationConnectionTests(ctx, &controlplanev1.ClaimIntegrationConnectionTestsRequest{WorkloadInstance: config.InstanceID, Limit: config.ClaimLimit})
 	if err != nil {
 		return 0, err
@@ -184,6 +186,9 @@ func processIntegrationWork(ctx context.Context, control *controlplaneclient.Cli
 		}
 		cancel()
 		metrics.Operation(false, operationErr == nil, integration.IsUnknownOutcome(operationErr))
+		if integration.IsUnknownOutcome(operationErr) {
+			logger.WarnContext(ctx, "integration invocation outcome unknown", "error_class", "integration_outcome_unknown", "stage", integration.UnknownOutcomeStage(operationErr))
+		}
 		if err := completeInvocation(ctx, control, claim, result, operationErr); err != nil {
 			return processed, err
 		}
@@ -204,7 +209,7 @@ func completeTest(ctx context.Context, control *controlplaneclient.Client, claim
 		return errors.New("integration test lease is missing")
 	}
 	success, code := integration.Outcome(operationErr)
-	_, err := control.Runtime.CompleteIntegrationConnectionTest(ctx, &controlplanev1.CompleteIntegrationConnectionTestRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetTestRef(), "complete")}, TestRef: claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), Success: success, ResultSummary: result, SafeErrorCode: code})
+	_, err := control.Runtime.CompleteIntegrationConnectionTest(ctx, &controlplanev1.CompleteIntegrationConnectionTestRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(claim.GetTestRef(), fmt.Sprintf("complete:%d", lease.GetGeneration()))}, TestRef: claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), Success: success, ResultSummary: result, SafeErrorCode: code})
 	return err
 }
 

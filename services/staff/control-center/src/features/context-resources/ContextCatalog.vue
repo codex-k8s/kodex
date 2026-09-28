@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { Maximize2, Plus, RefreshCw, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { ChevronRight, Plus, RefreshCw, Search, X } from "@lucide/vue";
+import { onBeforeUnmount, ref, useId, watch } from "vue";
 import type { ContextResourceState } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { listContext, type ContextItem, type ContextKind } from "./api";
 import { loadCatalogProject } from "@/features/catalogs/api";
 const props = defineProps<{
@@ -13,35 +15,47 @@ const props = defineProps<{
   projectRef?: string;
   agentRef?: string;
 }>();
+const fieldPrefix = `context-catalog-${useId()}`;
 const items = ref<ContextItem[]>([]);
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".context-row",
+  itemCount: () => items.value.length,
+  estimatedViewportHeight: 576,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
 const query = ref("");
 const state = ref<ContextResourceState>("ACTIVE");
 const total = ref(0);
 const cursor = ref("");
 const loading = ref(false);
-const expanded = ref(false);
 const problem = ref<AppProblem>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let controller: AbortController | undefined;
 let generation = 0;
 const cursors = new Set<string>();
 const projectNames = ref<Record<string, string>>({});
-const groups = computed(() => {
-  const result = new Map<string, ContextItem[]>();
-  for (const item of items.value)
-    result.set(item.projectRef, [...(result.get(item.projectRef) ?? []), item]);
-  return [...result].map(([projectRef, entries]) => ({ projectRef, entries }));
-});
 function title(item: ContextItem): string {
   const revision =
     "draftRevision" in item
       ? (item.draftRevision ?? item.currentRevision)
       : item.currentRevision;
-  return revision
-    ? "title" in revision
-      ? revision.title
-      : revision.name
-    : item.ref;
+  return revision ? ("title" in revision ? revision.title : revision.name) : "";
+}
+function revisionNumber(item: ContextItem): number {
+  return "draftRevision" in item
+    ? ((item.draftRevision ?? item.currentRevision)?.revision ?? 0)
+    : (item.currentRevision?.revision ?? 0);
+}
+function retention(item: ContextItem): string {
+  const revision = item.currentRevision;
+  return revision && "retentionUntil" in revision
+    ? revision.retentionUntil
+    : "";
 }
 async function load(more = false): Promise<void> {
   if (more && (loading.value || !cursor.value)) return;
@@ -59,6 +73,7 @@ async function load(more = false): Promise<void> {
       query: query.value.trim(),
       state: state.value,
       pageToken: token,
+      pageSize: pageSize.value,
       signal: active.signal,
     });
     if (current !== generation) return;
@@ -113,24 +128,42 @@ onBeforeUnmount(() => {
   controller?.abort();
   if (timer) clearTimeout(timer);
 });
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => Boolean(cursor.value) && !loading.value && !problem.value,
+  loadMore: () => load(true),
+});
 </script>
 <template>
-  <component
-    :is="expanded ? ModalDialog : 'section'"
-    :title="$t(`contextResources.${kind}`)"
-    size="full"
-    class="context-catalog"
-    @close="expanded = false"
+  <section
+    class="context-catalog panel"
+    :aria-label="$t(`contextResources.${kind}`)"
   >
     <header class="context-toolbar">
       <label class="context-search"
-        ><Search :size="18" /><input
+        ><Search :size="18" aria-hidden="true" /><input
           v-model="query"
+          :id="`${fieldPrefix}-search`"
+          :name="`${fieldPrefix}-search`"
           type="search"
           :aria-label="$t('common.search')"
-          maxlength="500"
-      /></label>
-      <select v-model="state" :aria-label="$t('contextResources.state')">
+          :placeholder="$t('common.search')"
+          maxlength="500" /><button
+          v-if="query"
+          type="button"
+          :title="$t('contextResources.clearSearch')"
+          :aria-label="$t('contextResources.clearSearch')"
+          @click="query = ''"
+        >
+          <X :size="15" aria-hidden="true" /></button
+      ></label>
+      <select
+        v-model="state"
+        :id="`${fieldPrefix}-state`"
+        :name="`${fieldPrefix}-state`"
+        :aria-label="$t('contextResources.state')"
+      >
         <option
           v-for="value in ['ACTIVE', 'ARCHIVED', 'EXPIRED', 'PURGED']"
           :key="value"
@@ -139,7 +172,9 @@ onBeforeUnmount(() => {
           {{ $t(`contextResources.states.${value}`) }}
         </option>
       </select>
-      <span>{{ total }}</span>
+      <span class="context-toolbar__count">{{
+        $t("files.loadedOfTotal", { loaded: items.length, total })
+      }}</span>
       <button
         class="icon-button"
         :disabled="loading"
@@ -149,134 +184,267 @@ onBeforeUnmount(() => {
       >
         <RefreshCw :size="18" />
       </button>
-      <button
-        v-if="!expanded"
-        class="icon-button"
-        :title="$t('contextResources.expand')"
-        :aria-label="$t('contextResources.expand')"
-        @click="expanded = true"
-      >
-        <Maximize2 :size="18" />
-      </button>
       <RouterLink
         class="button button--primary"
         :to="{
-          name: 'context-resource',
-          params: { kind, resourceRef: 'new' },
-          query: { projectRef, agentRef },
+          name: projectRef ? 'project-context-resource' : 'context-resource',
+          params: {
+            kind,
+            resourceRef: 'new',
+            ...(projectRef ? { projectRef } : {}),
+          },
+          query: agentRef ? { agentRef } : {},
         }"
         ><Plus :size="18" />{{ $t("common.create") }}</RouterLink
       >
     </header>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
-    <section
-      v-for="group in groups"
-      :key="group.projectRef"
-      class="context-group"
-    >
-      <h3>
-        <RouterLink :to="`/projects/${encodeURIComponent(group.projectRef)}`">{{
-          projectNames[group.projectRef] ?? group.projectRef
-        }}</RouterLink>
-      </h3>
-      <div class="context-rows" :class="{ 'context-rows--expanded': expanded }">
-        <RouterLink
-          v-for="item in group.entries"
-          :key="item.ref"
-          class="context-row"
-          :to="{
-            name: 'project-context-resource',
-            params: {
-              kind,
-              resourceRef: item.ref,
-              projectRef: item.projectRef,
-            },
-          }"
-        >
-          <span
-            ><strong>{{ title(item) }}</strong
-            ><code>{{ item.ref }}</code></span
-          ><StatusBadge :state="item.state" /><small>v{{ item.version }}</small>
-        </RouterLink>
+    <div ref="scrollRoot" class="context-catalog__scroll">
+      <div v-if="items.length" class="context-catalog__table-wrap">
+        <table class="context-catalog__table">
+          <thead>
+            <tr>
+              <th scope="col">{{ $t("common.name") }}</th>
+              <th v-if="!projectRef" scope="col">
+                {{ $t("contextResources.project") }}
+              </th>
+              <th scope="col">{{ $t("common.status") }}</th>
+              <th scope="col">{{ $t("contextResources.revision") }}</th>
+              <th v-if="kind === 'memory'" scope="col">
+                {{ $t("contextResources.retention") }}
+              </th>
+              <th scope="col">{{ $t("roleImages.updatedAt") }}</th>
+              <th scope="col" class="context-catalog__open">
+                {{ $t("common.open") }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in items" :key="item.ref" class="context-row">
+              <td>
+                <div class="context-catalog__identity">
+                  <EntityIcon :kind="kind === 'skills' ? 'SKILL' : 'MEMORY'" />
+                  <RouterLink
+                    :to="{
+                      name: 'project-context-resource',
+                      params: {
+                        kind,
+                        resourceRef: item.ref,
+                        projectRef: item.projectRef,
+                      },
+                      query: agentRef ? { agentRef } : {},
+                    }"
+                    :title="title(item) || $t('common.noData')"
+                    >{{ title(item) || $t("common.noData") }}</RouterLink
+                  >
+                </div>
+              </td>
+              <td v-if="!projectRef">
+                <RouterLink
+                  :to="`/projects/${encodeURIComponent(item.projectRef)}`"
+                >
+                  {{ projectNames[item.projectRef] ?? $t("common.noData") }}
+                </RouterLink>
+              </td>
+              <td><StatusBadge :state="item.state" /></td>
+              <td>
+                <span v-if="revisionNumber(item)"
+                  >rev {{ revisionNumber(item) }}</span
+                >
+                <span v-else>{{ $t("common.noData") }}</span>
+                <StatusBadge
+                  v-if="'draftRevision' in item && item.draftRevision"
+                  :state="item.draftRevision.state"
+                />
+              </td>
+              <td v-if="kind === 'memory'">
+                <time v-if="retention(item)" :datetime="retention(item)">
+                  {{
+                    new Date(retention(item)).toLocaleDateString($i18n.locale)
+                  }}
+                </time>
+                <span v-else>{{ $t("common.noData") }}</span>
+              </td>
+              <td>
+                <time :datetime="item.updatedAt">{{
+                  new Date(item.updatedAt).toLocaleString($i18n.locale)
+                }}</time>
+              </td>
+              <td class="context-catalog__open">
+                <RouterLink
+                  class="icon-button"
+                  :to="{
+                    name: 'project-context-resource',
+                    params: {
+                      kind,
+                      resourceRef: item.ref,
+                      projectRef: item.projectRef,
+                    },
+                    query: agentRef ? { agentRef } : {},
+                  }"
+                  :aria-label="$t('common.open')"
+                  :title="$t('common.open')"
+                  ><ChevronRight :size="18" aria-hidden="true"
+                /></RouterLink>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </section>
-    <p v-if="!loading && !problem && !items.length">{{ $t("common.empty") }}</p>
-    <button
-      v-if="cursor"
-      class="button"
-      :disabled="loading"
-      @click="load(true)"
-    >
-      {{ $t("impact.more") }}
-    </button>
-  </component>
+      <p
+        v-if="!loading && !problem && !items.length"
+        class="context-catalog__empty"
+      >
+        {{
+          $t(
+            query
+              ? "contextResources.emptySearch"
+              : kind === "skills"
+                ? "contextResources.emptySkills"
+                : "contextResources.emptyMemory",
+          )
+        }}
+      </p>
+      <div
+        v-if="cursor"
+        ref="sentinel"
+        class="context-catalog__sentinel"
+        role="status"
+      >
+        <span v-if="loading">{{ $t("common.loading") }}</span>
+      </div>
+    </div>
+  </section>
 </template>
 <style scoped>
 .context-catalog {
   min-width: 0;
+  padding: 0;
+  overflow: hidden;
 }
 .context-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  min-height: 58px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.context-toolbar select {
+  width: 160px;
+  min-height: 36px;
+  flex: 0 0 160px;
+}
+.context-toolbar__count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 .context-search {
   display: flex;
+  min-width: 210px;
+  flex: 1 1 320px;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 220px;
-  min-width: 0;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
 }
 .context-search input {
   width: 100%;
   min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  outline: 0;
 }
-.context-group {
-  min-width: 0;
-  margin-block: 20px;
+.context-search button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
 }
-.context-rows {
+.context-catalog__scroll {
   max-height: 576px;
   overflow: auto;
 }
-.context-rows--expanded {
-  max-height: none;
-}
-.context-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
-  align-items: center;
-  min-height: 96px;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.context-row span {
-  display: grid;
-  gap: 8px;
+.context-catalog__table-wrap {
   min-width: 0;
+  overflow-x: auto;
 }
-.context-row code,
-.context-row strong,
-h3 {
-  overflow-wrap: anywhere;
+.context-catalog__table {
+  width: 100%;
+  min-width: 850px;
+  border-collapse: collapse;
+}
+.context-catalog__table th {
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.context-catalog__table th:first-child {
+  width: 36%;
+}
+.context-catalog__table td {
+  height: 64px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+.context-catalog__table td:nth-child(4) > * + * {
+  margin-left: 6px;
+}
+.context-catalog__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.context-catalog__identity a {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.context-catalog__identity a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.context-catalog__open {
+  width: 68px;
+  text-align: center !important;
+}
+.context-catalog__empty {
+  margin: 0;
+  padding: 44px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.context-catalog__sentinel {
+  min-height: 1px;
 }
 @media (max-width: 600px) {
-  .context-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-height: 144px;
+  .context-toolbar {
+    flex-wrap: wrap;
   }
-  .context-row span {
-    grid-column: 1 / -1;
-  }
-  .context-rows {
-    max-height: 864px;
-  }
-  .context-rows--expanded {
-    max-height: none;
+  .context-toolbar select {
+    width: auto;
+    flex: 1 1 160px;
   }
 }
 </style>

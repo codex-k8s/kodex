@@ -1,18 +1,13 @@
 -- name: configuration_addassistantturncommand_update_assistant_conversations_version_updated_at :one
-WITH superseded_plan AS (
-    UPDATE control_plane.assistant_plans AS plan
-    SET state = 'STALE',
-        validation_problems = ARRAY['superseded-by-new-turn'],
-        version = plan.version + 1
-    FROM control_plane.assistant_conversations AS conversation
-    WHERE conversation.id = $1::uuid
-      AND plan.id = conversation.latest_plan_id
-      AND plan.state IN ('DRAFT', 'VALID', 'INVALID')
-    RETURNING plan.id
-)
 UPDATE control_plane.assistant_conversations
 SET version = version + 1,
     latest_plan_id = NULL,
+    context_route = $2,
+    context_entity_kind = $3,
+    context_entity_ref = $4,
+    context_entity_name = $5,
+    context_entity_version = $6,
+    allowed_operations = $7,
     updated_at = clock_timestamp()
 WHERE id = $1::uuid
 RETURNING title,

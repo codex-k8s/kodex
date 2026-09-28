@@ -13,6 +13,7 @@ import {
   projectRuntimeEnvironments,
   projectSchedules,
   runExecutor,
+  runListSummary,
 } from "@/features/workboard/model";
 import type {
   OwnerGate,
@@ -75,6 +76,43 @@ function run(
     ...options,
   };
 }
+
+describe("runListSummary", () => {
+  it("показывает переведённый код отказа вместо сырого результата", () => {
+    expect(
+      runListSummary(
+        run("failed", "FAILED", {
+          resultSummary: "RUNTIME_PROVIDER_UNAVAILABLE",
+          safeErrorCode: "PROVIDER_UNAVAILABLE",
+        }),
+      ),
+    ).toBe("i18n:PROVIDER_UNAVAILABLE");
+    expect(
+      runListSummary(
+        run("invalid", "FAILED", {
+          safeErrorCode: "RUNTIME_INPUT_INVALID",
+          safeErrorMessage: "RUNTIME_INPUT_INVALID",
+        }),
+      ),
+    ).toBe("i18n:RUNTIME_INPUT_INVALID");
+  });
+
+  it("не показывает неизвестную машинную константу", () => {
+    expect(
+      runListSummary(
+        run("unknown", "FAILED", {
+          safeErrorCode: "UNKNOWN_PRIVATE_ERROR",
+          safeErrorMessage: "UNKNOWN_PRIVATE_ERROR",
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      runListSummary(
+        run("active", "RUNNING", { currentActivity: "Проверяет проект" }),
+      ),
+    ).toBe("Проверяет проект");
+  });
+});
 
 function gate(runRef: string): OwnerGate {
   return {

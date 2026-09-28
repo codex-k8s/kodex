@@ -217,16 +217,16 @@ func (owner *Owner) CompleteCleanup(ctx context.Context, work value.DraftWork, e
 	}
 	e, m, err := requestDescriptors(work, encrypted, materialized, true)
 	if err != nil {
-		return err
+		return secretdrafts.CleanupAckError{Stage: "descriptor", Cause: err}
 	}
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	response, err := owner.client.CompleteRuntimeSecretDraftCleanup(ctx, &cp.CompleteRuntimeSecretDraftCleanupRequest{OperationRef: work.OperationRef, ClaimantId: work.ClaimantID, ClaimGeneration: work.ClaimGeneration, Encrypted: e, Materialization: m})
 	if err != nil {
-		return rpcError(ctx, err)
+		return secretdrafts.CleanupAckError{Stage: "rpc_" + status.Code(err).String(), Cause: rpcError(ctx, err)}
 	}
 	if !response.GetCompleted() {
-		return secretdrafts.ErrConflict
+		return secretdrafts.CleanupAckError{Stage: "response", Cause: secretdrafts.ErrConflict}
 	}
 	return nil
 }

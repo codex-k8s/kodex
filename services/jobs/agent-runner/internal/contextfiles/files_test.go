@@ -137,7 +137,7 @@ func TestContextValidationPrecedesFileFetch(t *testing.T) {
 }
 
 func TestContextRejectsCorruptUnsafeAndAdditionalFiles(t *testing.T) {
-	for _, kind := range []string{"content", "mode", "symlink", "hardlink", "directory symlink", "extra file", "fifo", "expiry", "writable mount"} {
+	for _, kind := range []string{"content", "mode", "directory group inheritance", "symlink", "hardlink", "directory symlink", "extra file", "fifo", "expiry", "writable mount"} {
 		t.Run(kind, func(t *testing.T) {
 			input, snapshot, source, now := fixture()
 			root := t.TempDir()
@@ -162,6 +162,10 @@ func TestContextRejectsCorruptUnsafeAndAdditionalFiles(t *testing.T) {
 				}
 			case "mode":
 				if err := os.Chmod(file, 0o640); err != nil {
+					t.Fatal(err)
+				}
+			case "directory group inheritance":
+				if err := os.Chmod(filepath.Dir(file), 0o750); err != nil {
 					t.Fatal(err)
 				}
 			case "symlink", "hardlink", "fifo":

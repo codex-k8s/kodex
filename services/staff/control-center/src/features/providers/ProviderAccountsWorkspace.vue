@@ -3,9 +3,12 @@ import {
   Check,
   CircleAlert,
   Copy,
+  Info,
   KeyRound,
   LoaderCircle,
   Plus,
+  Power,
+  PowerOff,
   RefreshCw,
   Search,
   ShieldOff,
@@ -21,6 +24,7 @@ import {
   onMounted,
   reactive,
   ref,
+  useId,
   watch,
 } from "vue";
 
@@ -32,6 +36,8 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { loadProviderAccount, loadProviderDefinitions } from "./api";
 import ProviderUsageDetails from "./ProviderUsageDetails.vue";
 import ProviderAccountLifecyclePanel from "./ProviderAccountLifecyclePanel.vue";
@@ -68,6 +74,10 @@ const {
   problem,
 } = storeToRefs(store);
 const search = ref("");
+const searchId = useId();
+const expandedSearchId = useId();
+const createNameId = useId();
+const apiKeyId = useId();
 const expanded = ref(false);
 const createOpen = ref(false);
 const authorizationAccount = ref<ProviderAccount>();
@@ -83,6 +93,40 @@ const createForm = reactive({
   definitionKey: "" as ProviderDefinitionKey | "",
 });
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+const definitionsRoot = ref<HTMLElement>();
+const definitionsSentinel = ref<HTMLElement>();
+const definitionsPageSize = useAdaptiveCursorPageSize({
+  container: definitionsRoot,
+  itemSelector: ".provider-readiness__row",
+  itemCount: () => definitions.value.length,
+  estimatedItemHeight: 64,
+  estimatedColumns: 1,
+});
+const accountsRoot = ref<HTMLElement>();
+const accountsSentinel = ref<HTMLElement>();
+const accountsPageSize = useAdaptiveCursorPageSize({
+  container: accountsRoot,
+  itemSelector: ".provider-account-row",
+  itemCount: () => accounts.value.length,
+  estimatedItemHeight: 72,
+  estimatedColumns: 1,
+});
+useCursorInfiniteScroll({
+  root: definitionsRoot,
+  sentinel: definitionsSentinel,
+  enabled: () =>
+    Boolean(definitionsNextPageToken.value) && !definitionsLoadingMore.value,
+  loadMore: () => store.loadMoreDefinitions(definitionsPageSize.value),
+});
+useCursorInfiniteScroll({
+  root: accountsRoot,
+  sentinel: accountsSentinel,
+  enabled: () =>
+    Boolean(accountsNextPageToken.value) &&
+    !loading.value &&
+    !loadingMore.value,
+  loadMore: () => store.loadMore(accountsPageSize.value),
+});
 
 const canCreate = computed(() =>
   pageAllowsAccountCreation(pageNextActions.value),
@@ -114,7 +158,8 @@ watch(
             availability.reason === "STT_NOT_CONFIGURED";
       })
       .catch(() => {
-        if (!controller.signal.aborted) speechConfigurationMissing.value = false;
+        if (!controller.signal.aborted)
+          speechConfigurationMissing.value = false;
       });
   },
   { immediate: true },
@@ -138,8 +183,9 @@ async function searchDefinitions(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await loadProviderDefinitions(query, cursor, signal);
+  const page = await loadProviderDefinitions(query, cursor, signal, pageSize);
   if (!Array.isArray(page.items) || typeof page.nextPageToken !== "string")
     throw new Error("Invalid provider definition catalog");
   return {
@@ -182,7 +228,23 @@ function blockerLabel(code: string): string {
 
 function scheduleSearch(): void {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void store.load(search.value), 500);
+  searchTimer = setTimeout(
+    () =>
+      void store.load(
+        search.value,
+        accountsPageSize.value,
+        definitionsPageSize.value,
+      ),
+    500,
+  );
+}
+
+function reload(): Promise<void> {
+  return store.load(
+    search.value,
+    accountsPageSize.value,
+    definitionsPageSize.value,
+  );
 }
 
 function openCreate(): void {
@@ -419,13 +481,14 @@ async function copyUserCode(): Promise<void> {
   }
 }
 
-function scrollAccounts(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    void store.loadMore();
-}
-
-onMounted(() => void store.load());
+onMounted(
+  () =>
+    void store.load(
+      undefined,
+      accountsPageSize.value,
+      definitionsPageSize.value,
+    ),
+);
 watch(accounts, (items) => {
   const currentRef = authorizationAccount.value?.ref;
   if (!currentRef) return;
@@ -448,11 +511,13 @@ onBeforeUnmount(() => {
 <template>
   <section class="providers-workspace">
     <header class="providers-toolbar">
-      <label class="providers-toolbar__search">
+      <label class="providers-toolbar__search" :for="searchId">
         <Search :size="17" aria-hidden="true" />
         <span class="sr-only">{{ $t("providers.search") }}</span>
         <input
+          :id="searchId"
           v-model="search"
+          name="provider-account-search"
           type="search"
           :placeholder="$t('providers.searchPlaceholder')"
           @input="scheduleSearch"
@@ -462,7 +527,7 @@ onBeforeUnmount(() => {
         class="icon-button"
         type="button"
         :aria-label="$t('common.retry')"
-        @click="store.load(search)"
+        @click="reload"
       >
         <RefreshCw :size="17" aria-hidden="true" />
       </button>
@@ -475,6 +540,7 @@ onBeforeUnmount(() => {
         <Plus :size="17" aria-hidden="true" />{{ $t("providers.create") }}
       </button>
       <button
+        v-if="accounts.length > 6 || accountsNextPageToken"
         class="icon-button"
         :aria-label="$t('catalog.expand')"
         :title="$t('catalog.expand')"
@@ -484,7 +550,11 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
-    <aside v-if="speechConfigurationMissing" class="provider-speech-setup" role="status">
+    <aside
+      v-if="speechConfigurationMissing"
+      class="provider-speech-setup"
+      role="status"
+    >
       <p>{{ $t("providers.speechSetupRequired") }}</p>
       <RouterLink class="button" to="/configurations/SYSTEM_STT">
         {{ $t("providers.configureSpeech") }}
@@ -492,27 +562,53 @@ onBeforeUnmount(() => {
     </aside>
 
     <section
+      ref="definitionsRoot"
       class="provider-readiness"
       :aria-label="$t('providers.definitions')"
     >
-      <article v-for="definition in definitions" :key="definition.key">
-        <div>
-          <strong>{{ definition.name }}</strong>
-          <p>{{ definition.description }}</p>
-        </div>
-        <StatusBadge :state="definition.ready ? 'READY' : 'UNAVAILABLE'" />
-        <ul v-if="definition.readinessBlockers.length">
-          <li v-for="blocker in definition.readinessBlockers" :key="blocker">
-            {{ $t(blockerLabel(blocker)) }}
-          </li>
-        </ul>
-      </article>
-      <button
+      <table v-if="definitions.length" class="provider-readiness__table">
+        <thead>
+          <tr>
+            <th scope="col">{{ $t("providers.definition") }}</th>
+            <th scope="col">{{ $t("common.status") }}</th>
+            <th scope="col">{{ $t("common.details") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="definition in definitions"
+            :key="definition.key"
+            class="provider-readiness__row"
+          >
+            <td>
+              <strong>{{ definition.name }}</strong>
+              <small>{{ definition.description }}</small>
+            </td>
+            <td>
+              <StatusBadge
+                :state="definition.ready ? 'READY' : 'UNAVAILABLE'"
+              />
+            </td>
+            <td>
+              <span v-if="!definition.readinessBlockers.length">{{
+                $t("providers.noReadinessBlockers")
+              }}</span>
+              <ul v-else>
+                <li
+                  v-for="blocker in definition.readinessBlockers"
+                  :key="blocker"
+                >
+                  {{ $t(blockerLabel(blocker)) }}
+                </li>
+              </ul>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div
         v-if="definitionsNextPageToken"
-        class="button provider-readiness__more"
-        type="button"
-        :disabled="definitionsLoadingMore"
-        @click="store.loadMoreDefinitions"
+        ref="definitionsSentinel"
+        class="provider-readiness__more"
       >
         <LoaderCircle
           v-if="definitionsLoadingMore"
@@ -520,14 +616,13 @@ onBeforeUnmount(() => {
           :size="16"
           aria-hidden="true"
         />
-        {{ $t("providers.loadMoreProviders") }}
-      </button>
+      </div>
     </section>
 
     <AsyncState
       :loading="loading && !accounts.length"
       :problem="accounts.length ? undefined : problem"
-      @retry="store.load(search)"
+      @retry="reload"
     >
       <component
         :is="expanded ? ModalDialog : 'div'"
@@ -535,12 +630,18 @@ onBeforeUnmount(() => {
         size="full"
         @close="expanded = false"
       >
-        <label v-if="expanded" class="providers-toolbar__search">
+        <label
+          v-if="expanded"
+          class="providers-toolbar__search"
+          :for="expandedSearchId"
+        >
           <Search :size="17" /><span class="sr-only">{{
             $t("providers.search")
           }}</span>
           <input
+            :id="expandedSearchId"
             v-model="search"
+            name="provider-account-expanded-search"
             type="search"
             :placeholder="$t('providers.searchPlaceholder')"
             @input="scheduleSearch"
@@ -557,105 +658,171 @@ onBeforeUnmount(() => {
         />
         <div
           v-if="accounts.length"
+          ref="accountsRoot"
           class="provider-account-list"
           :class="{ 'provider-account-list--expanded': expanded }"
-          @scroll="scrollAccounts"
         >
-          <article
-            v-for="account in accounts"
-            :key="account.ref"
-            class="provider-account-card"
-          >
-            <div class="provider-account-card__identity">
-              <span class="provider-account-card__icon"
-                ><KeyRound :size="20" aria-hidden="true"
-              /></span>
-              <div>
-                <h2>{{ account.name }}</h2>
-                <p>{{ providerName(account.definitionKey) }}</p>
-              </div>
-            </div>
-            <div class="provider-account-card__state">
-              <StatusBadge :state="account.state" />
-              <ProviderUsageDetails :usage="account.usage" />
-              <span v-if="account.safeStatusReason">{{
-                $t(`providers.reasons.${account.safeStatusReason}`)
-              }}</span>
-              <span>{{
-                account.externalAccountMasked ||
-                $t("providers.externalAccountPending")
-              }}</span>
-            </div>
-            <div class="provider-account-card__actions">
-              <button
-                type="button"
-                class="button"
-                :disabled="busyRefs.includes(account.ref)"
-                @click="impactAccount = account"
+          <table class="provider-account-list__table">
+            <thead>
+              <tr>
+                <th scope="col">{{ $t("providers.tableAccount") }}</th>
+                <th scope="col">{{ $t("common.status") }}</th>
+                <th scope="col">{{ $t("providers.tableAvailability") }}</th>
+                <th scope="col">{{ $t("providers.tableExternalAccount") }}</th>
+                <th scope="col">{{ $t("providers.tableUsage") }}</th>
+                <th scope="col">{{ $t("common.actions") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="account in accounts"
+                :key="account.ref"
+                class="provider-account-row"
               >
-                {{ $t("providerLifecycle.title") }}
-              </button>
-              <button
-                v-if="
-                  account.authorization?.method === 'DEVICE_CODE' &&
-                  accountAllows(account, 'REFRESH_AUTHORIZATION')
-                "
-                class="button"
-                :disabled="busyRefs.includes(account.ref)"
-                @click="
-                  openAuthorization(account);
-                  refreshAuthorization();
-                "
-              >
-                <RefreshCw :size="16" />{{ $t("providers.checkAuthorization") }}
-              </button>
-              <button
-                v-if="accountAllows(account, 'DELETE')"
-                class="button button--danger"
-                :disabled="busyRefs.includes(account.ref)"
-                @click="requestDelete(account)"
-              >
-                <Trash2 :size="16" />{{ $t("common.delete") }}
-              </button>
-              <button
-                v-if="accountAllows(account, 'CONFIGURE_CREDENTIAL')"
-                class="button"
-                type="button"
-                :disabled="busyRefs.includes(account.ref)"
-                @click="openAuthorization(account)"
-              >
-                {{ $t("providers.authorize") }}
-              </button>
-              <button
-                v-if="
-                  accountAllows(account, account.enabled ? 'DISABLE' : 'ENABLE')
-                "
-                class="button"
-                type="button"
-                :disabled="busyRefs.includes(account.ref)"
-                @click="changeEnabled(account)"
-              >
-                {{ $t(account.enabled ? "common.disable" : "common.enable") }}
-              </button>
-              <button
-                v-if="accountAllows(account, 'REVOKE')"
-                class="button button--danger"
-                type="button"
-                :disabled="busyRefs.includes(account.ref)"
-                @click="requestRevoke(account)"
-              >
-                <ShieldOff :size="16" aria-hidden="true" />{{
-                  $t("providers.revoke")
-                }}
-              </button>
-            </div>
-          </article>
-          <button
+                <td>
+                  <div class="provider-account-row__identity">
+                    <span class="provider-account-row__icon"
+                      ><KeyRound :size="18" aria-hidden="true"
+                    /></span>
+                    <div>
+                      <strong :title="account.name">{{ account.name }}</strong>
+                      <small>{{ providerName(account.definitionKey) }}</small>
+                    </div>
+                  </div>
+                </td>
+                <td><StatusBadge :state="account.state" /></td>
+                <td>
+                  <span v-if="account.authorization?.method">{{
+                    $t(`providers.methods.${account.authorization.method}`)
+                  }}</span>
+                  <span v-else>{{ $t("common.noData") }}</span>
+                  <small
+                    v-if="
+                      account.safeStatusReason &&
+                      account.safeStatusReason !== 'AUTHORIZED'
+                    "
+                    >{{
+                      $t(`providers.reasons.${account.safeStatusReason}`)
+                    }}</small
+                  >
+                </td>
+                <td>
+                  {{
+                    account.externalAccountMasked ||
+                    $t("providers.externalAccountPending")
+                  }}
+                </td>
+                <td><ProviderUsageDetails :usage="account.usage" /></td>
+                <td>
+                  <nav
+                    class="provider-account-row__actions"
+                    :aria-label="account.name"
+                  >
+                    <button
+                      type="button"
+                      class="icon-button"
+                      :title="$t('providerLifecycle.title')"
+                      :aria-label="$t('providerLifecycle.title')"
+                      :disabled="busyRefs.includes(account.ref)"
+                      @click="impactAccount = account"
+                    >
+                      <Info :size="18" aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="
+                        account.authorization?.method === 'DEVICE_CODE' &&
+                        accountAllows(account, 'REFRESH_AUTHORIZATION')
+                      "
+                      type="button"
+                      class="icon-button"
+                      :title="$t('providers.checkAuthorization')"
+                      :aria-label="$t('providers.checkAuthorization')"
+                      :disabled="busyRefs.includes(account.ref)"
+                      @click="
+                        openAuthorization(account);
+                        refreshAuthorization();
+                      "
+                    >
+                      <RefreshCw :size="18" aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="accountAllows(account, 'CONFIGURE_CREDENTIAL')"
+                      type="button"
+                      class="icon-button"
+                      :title="
+                        $t(
+                          account.state === 'AUTHORIZED'
+                            ? 'providers.reauthorize'
+                            : 'providers.authorize',
+                        )
+                      "
+                      :aria-label="
+                        $t(
+                          account.state === 'AUTHORIZED'
+                            ? 'providers.reauthorize'
+                            : 'providers.authorize',
+                        )
+                      "
+                      :disabled="busyRefs.includes(account.ref)"
+                      @click="openAuthorization(account)"
+                    >
+                      <KeyRound :size="18" aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="
+                        accountAllows(
+                          account,
+                          account.enabled ? 'DISABLE' : 'ENABLE',
+                        )
+                      "
+                      type="button"
+                      class="icon-button"
+                      :title="
+                        $t(account.enabled ? 'common.disable' : 'common.enable')
+                      "
+                      :aria-label="
+                        $t(account.enabled ? 'common.disable' : 'common.enable')
+                      "
+                      :disabled="busyRefs.includes(account.ref)"
+                      @click="changeEnabled(account)"
+                    >
+                      <PowerOff
+                        v-if="account.enabled"
+                        :size="18"
+                        aria-hidden="true"
+                      /><Power v-else :size="18" aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="accountAllows(account, 'REVOKE')"
+                      type="button"
+                      class="icon-button icon-button--danger"
+                      :title="$t('providers.revoke')"
+                      :aria-label="$t('providers.revoke')"
+                      :disabled="busyRefs.includes(account.ref)"
+                      @click="requestRevoke(account)"
+                    >
+                      <ShieldOff :size="18" aria-hidden="true" />
+                    </button>
+                    <button
+                      v-if="accountAllows(account, 'DELETE')"
+                      type="button"
+                      class="icon-button icon-button--danger"
+                      :title="$t('common.delete')"
+                      :aria-label="$t('common.delete')"
+                      :disabled="busyRefs.includes(account.ref)"
+                      @click="requestDelete(account)"
+                    >
+                      <Trash2 :size="18" aria-hidden="true" />
+                    </button>
+                  </nav>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div
             v-if="accountsNextPageToken"
-            class="button providers-load-more"
-            type="button"
-            :disabled="loadingMore"
-            @click="store.loadMore"
+            ref="accountsSentinel"
+            class="providers-load-more"
           >
             <LoaderCircle
               v-if="loadingMore"
@@ -663,13 +830,28 @@ onBeforeUnmount(() => {
               :size="16"
               aria-hidden="true"
             />
-            {{ $t("providers.loadMore") }}
-          </button>
+          </div>
         </div>
         <section v-else class="empty-state">
           <KeyRound :size="28" aria-hidden="true" />
-          <h2>{{ $t("providers.emptyTitle") }}</h2>
-          <p>{{ $t("providers.emptyText") }}</p>
+          <h2>
+            {{
+              $t(
+                search.trim()
+                  ? "providers.searchEmptyTitle"
+                  : "providers.emptyTitle",
+              )
+            }}
+          </h2>
+          <p>
+            {{
+              $t(
+                search.trim()
+                  ? "providers.searchEmptyText"
+                  : "providers.emptyText",
+              )
+            }}
+          </p>
         </section>
       </component>
     </AsyncState>
@@ -692,7 +874,13 @@ onBeforeUnmount(() => {
       <div class="provider-form">
         <label class="field">
           <span>{{ $t("common.name") }}</span>
-          <input v-model="createForm.name" maxlength="160" autocomplete="off" />
+          <input
+            :id="createNameId"
+            v-model="createForm.name"
+            name="provider-account-name"
+            maxlength="160"
+            autocomplete="off"
+          />
         </label>
         <div class="field">
           <span>{{ $t("providers.definition") }}</span>
@@ -953,7 +1141,9 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span>{{ $t("providers.apiKey") }}</span>
                 <input
+                  :id="apiKeyId"
                   v-model="apiKey"
+                  name="provider-account-api-key"
                   type="password"
                   maxlength="16384"
                   autocomplete="off"
@@ -1089,39 +1279,84 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 .provider-readiness {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
 }
-.provider-readiness article {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  padding: 14px;
+.provider-readiness__table,
+.provider-account-list__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
   border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel);
+  background: var(--surface);
 }
-.provider-readiness p,
-.provider-readiness ul {
-  margin: 4px 0 0;
+.provider-readiness__table {
+  min-width: 720px;
+}
+.provider-readiness__table th:first-child {
+  width: 42%;
+}
+.provider-readiness__table th:nth-child(2) {
+  width: 18%;
+}
+.provider-readiness__table th:last-child {
+  width: 40%;
+}
+.provider-readiness__table th,
+.provider-readiness__table td,
+.provider-account-list__table th,
+.provider-account-list__table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+.provider-readiness__table th,
+.provider-account-list__table th {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.provider-readiness__table tbody tr + tr,
+.provider-account-list__table tbody tr + tr {
+  border-top: 1px solid var(--border);
+}
+.provider-readiness__table td:first-child small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
 }
 .provider-readiness__more {
-  min-height: 52px;
-  align-self: stretch;
-  justify-self: stretch;
+  min-height: 24px;
 }
 .provider-readiness ul {
-  grid-column: 1 / -1;
-  padding-left: 18px;
+  margin: 0;
+  padding-left: 16px;
 }
 .provider-account-list {
-  display: grid;
-  gap: 8px;
+  min-width: 0;
   max-height: 1000px;
   overflow: auto;
+}
+.provider-account-list__table {
+  min-width: 1120px;
+}
+.provider-account-list__table th:first-child {
+  width: 20%;
+}
+.provider-account-list__table th:nth-child(2) {
+  width: 13%;
+}
+.provider-account-list__table th:nth-child(3) {
+  width: 14%;
+}
+.provider-account-list__table th:nth-child(4) {
+  width: 15%;
+}
+.provider-account-list__table th:nth-child(5) {
+  width: 25%;
+}
+.provider-account-list__table th:last-child {
+  width: 13%;
 }
 .provider-speech-setup {
   display: flex;
@@ -1139,59 +1374,59 @@ onBeforeUnmount(() => {
 .provider-account-list--expanded {
   max-height: calc(100dvh - 230px);
 }
-.provider-account-card {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.8fr) auto;
-  align-items: center;
-  gap: 16px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel);
-  min-height: 160px;
-}
-.provider-account-card__identity {
+.provider-account-row__identity {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 10px;
 }
-.provider-account-card__icon {
+.provider-account-row__identity > div {
   display: grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--primary);
+  gap: 3px;
+  min-width: 0;
 }
-.provider-account-card h2,
-.provider-account-card p {
-  margin: 0;
+.provider-account-row__identity strong,
+.provider-account-row__identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.provider-account-card h2 {
-  font-size: 0.94rem;
-  overflow-wrap: anywhere;
-}
-.provider-account-card p,
-.provider-account-card__state span {
+.provider-account-row__identity small {
   color: var(--muted);
   font-size: 0.8rem;
 }
-.provider-account-card__state {
+.provider-account-row__icon {
   display: grid;
-  justify-items: start;
-  gap: 5px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--accent-strong);
 }
-.provider-account-card__actions {
+.provider-account-row td {
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
+.provider-account-row td small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+}
+.provider-account-row__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 7px;
-  flex-wrap: wrap;
+  gap: 2px;
+  white-space: nowrap;
+}
+.provider-account-row__actions .icon-button--danger {
+  color: var(--danger);
 }
 .providers-load-more {
-  justify-self: center;
+  display: flex;
+  justify-content: center;
 }
 .provider-form,
 .authorization-dialog,
@@ -1253,15 +1488,6 @@ onBeforeUnmount(() => {
     transform: rotate(360deg);
   }
 }
-@media (max-width: 900px) {
-  .provider-account-card {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .provider-account-card__actions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-}
 @media (max-width: 560px) {
   .provider-speech-setup {
     align-items: stretch;
@@ -1274,12 +1500,6 @@ onBeforeUnmount(() => {
   }
   .providers-toolbar__search {
     min-width: 0;
-  }
-  .provider-account-card {
-    grid-template-columns: 1fr;
-  }
-  .provider-account-card__actions {
-    grid-column: auto;
   }
 }
 </style>

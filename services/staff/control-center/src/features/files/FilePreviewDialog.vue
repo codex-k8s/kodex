@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Download, RotateCcw, Search, ShieldCheck, Trash2 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 
 import FileTypeIcon from "@/features/files/FileTypeIcon.vue";
 import type { FilePreviewLabels } from "@/features/files/model";
@@ -30,6 +30,7 @@ const emit = defineEmits<{
 }>();
 const find = ref("");
 const zoom = ref(100);
+const fieldPrefix = `file-preview-${useId()}`;
 
 watch(
   () => props.artifact.ref,
@@ -82,12 +83,20 @@ const textChunks = computed(() => {
           <label v-if="previewText" class="file-preview-dialog__search">
             <Search :size="15" aria-hidden="true" />
             <span class="sr-only">{{ labels.find }}</span>
-            <input v-model="find" type="search" :placeholder="labels.find" />
+            <input
+              v-model="find"
+              :id="`${fieldPrefix}-search`"
+              :name="`${fieldPrefix}-search`"
+              type="search"
+              :placeholder="labels.find"
+            />
           </label>
           <label v-else-if="imageUrl" class="file-preview-dialog__zoom">
             <span>{{ labels.zoom }}</span>
             <input
               v-model.number="zoom"
+              :id="`${fieldPrefix}-zoom`"
+              :name="`${fieldPrefix}-zoom`"
               type="range"
               min="50"
               max="100"

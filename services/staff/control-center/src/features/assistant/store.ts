@@ -6,6 +6,7 @@ import {
   archiveConversation,
   applyPlanDraft,
   createConversation,
+  moveConversationToProject,
   readAssistant,
   readConversations,
   rejectPlanDraft,
@@ -14,6 +15,7 @@ import {
   validatePlanDraft,
 } from "@/features/assistant/api";
 import { conversationMatchesContext } from "@/features/assistant/context";
+import { restoreAssistantConversationRef } from "@/features/assistant/workspace-state";
 import type {
   AssistantContextDescriptor,
   AssistantConversation,
@@ -89,19 +91,46 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       b.updatedAt.localeCompare(a.updatedAt),
     ),
   );
+  const historyPageSize = ref<number>();
+
+  function setHistoryPageSize(value: number): void {
+    historyPageSize.value = Math.min(100, Math.max(1, Math.floor(value)));
+  }
+
+  function readHistory(
+    nextProjectRef: string | undefined,
+    pageToken: string | undefined,
+    signal: AbortSignal,
+  ) {
+    const filter = {
+      query: historyQuery.value,
+      state: historyState.value,
+    };
+    return historyPageSize.value
+      ? readConversations(
+          nextProjectRef,
+          pageToken,
+          signal,
+          filter,
+          historyPageSize.value,
+        )
+      : readConversations(nextProjectRef, pageToken, signal, filter);
+  }
 
   function selectMatchingConversation(): void {
     const currentContext = context.value;
     if (!currentContext) return;
+    // Ручной выбор пользователя важнее контекста открытого экрана. Диалог
+    // может относиться к другой сущности того же проекта: realtime-снимок и
+    // навигация не должны внезапно возвращать пользователя к новому чату.
     const selected = conversations.value.find(
-      (item) =>
-        item.ref === selectedRef.value &&
-        conversationMatchesContext(item, currentContext),
+      (item) => item.ref === selectedRef.value,
     );
     if (selected) return;
-    selectedRef.value = sortedConversations.value.find((item) =>
-      conversationMatchesContext(item, currentContext),
-    )?.ref;
+    selectedRef.value =
+      sortedConversations.value.find((item) =>
+        conversationMatchesContext(item, currentContext),
+      )?.ref ?? sortedConversations.value[0]?.ref;
   }
 
   async function load(
@@ -111,12 +140,16 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   ): Promise<void> {
     cancelReads();
     const current = ++generation;
-    const retained =
-      projectRef.value === nextProjectRef &&
-      selectedConversation.value &&
-      conversationMatchesContext(selectedConversation.value, nextContext)
-        ? selectedRef.value
-        : undefined;
+    const retained = select
+      ? (projectRef.value === nextProjectRef && selectedConversation.value
+          ? selectedRef.value
+          : undefined) ||
+        (typeof window !== "undefined" &&
+        !historyQuery.value &&
+        historyState.value === "ACTIVE"
+          ? restoreAssistantConversationRef(nextProjectRef)
+          : undefined)
+      : undefined;
     if (projectRef.value !== nextProjectRef) {
       conversations.value = [];
       selectedRef.value = undefined;
@@ -133,10 +166,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     try {
       const [assistantValue, firstPage] = await Promise.all([
         readAssistant(signal),
-        readConversations(nextProjectRef, undefined, signal, {
-          query: historyQuery.value,
-          state: historyState.value,
-        }),
+        readHistory(nextProjectRef, undefined, signal),
       ]);
       if (current !== generation) return;
       checkPage(firstPage, nextProjectRef);
@@ -148,15 +178,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         !conversationValues.some((item) => item.ref === retained) &&
         page.nextPageToken
       ) {
-        if (count++ >= 30)
-          throw new Error("Assistant history readback page limit exceeded");
+        if (count++ >= 30) break;
         historyCursors.add(page.nextPageToken);
-        page = await readConversations(
-          nextProjectRef,
-          page.nextPageToken,
-          signal,
-          { query: historyQuery.value, state: historyState.value },
-        );
+        page = await readHistory(nextProjectRef, page.nextPageToken, signal);
         if (current !== generation) return;
         checkPage(page, nextProjectRef);
         conversationValues.push(...page.items);
@@ -182,7 +206,14 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           true,
         ),
       );
-      if (select) selectMatchingConversation();
+      if (select) {
+        if (
+          retained &&
+          conversations.value.some((item) => item.ref === retained)
+        )
+          selectedRef.value = retained;
+        selectMatchingConversation();
+      }
     } catch (error) {
       if (current === generation) {
         problem.value = asProblem(error);
@@ -197,19 +228,19 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     }
   }
 
-  async function loadMoreHistory(): Promise<void> {
+  async function loadMoreHistory(pageSize?: number): Promise<void> {
     const cursor = nextPageToken.value;
     if (!cursor || loading.value || loadingMore.value || busy.value) return;
     const current = generation;
     controller ??= new AbortController();
     loadingMore.value = true;
     historyProblem.value = undefined;
+    if (pageSize !== undefined) setHistoryPageSize(pageSize);
     try {
-      const page = await readConversations(
+      const page = await readHistory(
         projectRef.value,
         cursor,
         controller.signal,
-        { query: historyQuery.value, state: historyState.value },
       );
       if (current !== generation) return;
       historyCursors.add(cursor);
@@ -266,6 +297,28 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       receipt.value = undefined;
     });
     if (context.value) await load(context.value, projectRef.value, false);
+  }
+
+  async function moveSelectedToProject(
+    targetProjectRef: string,
+  ): Promise<AssistantConversation> {
+    const conversation = selectedConversation.value;
+    if (
+      !conversation ||
+      conversation.projectRef ||
+      projectRef.value ||
+      busy.value ||
+      loading.value
+    )
+      throw new Error("Assistant conversation cannot move from this context");
+    return runMutation(async () => {
+      const moved = await moveConversationToProject(
+        conversation,
+        targetProjectRef,
+      );
+      upsertConversation(moved);
+      return moved;
+    });
   }
 
   function setContext(
@@ -408,14 +461,15 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         );
         upsertConversation(conversation);
       }
+      if (!context.value) throw new Error("Assistant context is unavailable");
       const appended = attachmentSetRef
-        ? await appendTurn(conversation, normalized, attachmentSetRef)
-        : await appendTurn(conversation, normalized);
-      conversations.value = conversations.value.map((item) =>
-        item.ref === conversation.ref
-          ? { ...item, turns: item.turns.filter((turn) => !turn.plan) }
-          : item,
-      );
+        ? await appendTurn(
+            conversation,
+            normalized,
+            context.value,
+            attachmentSetRef,
+          )
+        : await appendTurn(conversation, normalized, context.value);
       upsertConversation(appended);
     });
   }
@@ -489,7 +543,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     historyState,
     filterHistory,
     archiveSelected,
+    moveSelectedToProject,
     loadMoreHistory,
+    setHistoryPageSize,
     cancelReads,
     load,
     setContext,

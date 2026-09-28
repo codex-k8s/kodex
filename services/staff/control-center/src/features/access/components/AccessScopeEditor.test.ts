@@ -2,6 +2,7 @@ import { createSSRApp, h } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import AccessScopeEditor from "@/features/access/components/AccessScopeEditor.vue";
 
@@ -56,7 +57,7 @@ describe("AccessScopeEditor", () => {
             kind: "RESOURCE_INSTANCE",
             projectRef: "project_sales",
             resourceKind: "WORKFLOW",
-            resourceRef: "",
+            resourceRef: "workflow_leads",
           },
           projects: [
             {
@@ -118,5 +119,16 @@ describe("AccessScopeEditor", () => {
 
     expect(html).toContain("Квалификация лида");
     expect(html).not.toContain("Недоступно текущим API");
+  });
+
+  it("не ограничивает Проекты и ресурсы уже загруженным фрагментом", () => {
+    const source = readFileSync(
+      new URL("./AccessScopeEditor.vue", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain(':load-page="accessProjectOptions"');
+    expect(source).toContain(':load-page="loadResources"');
+    expect(source).not.toContain('name="access-scope-project"');
+    expect(source).not.toContain('name="access-scope-resource"');
   });
 });

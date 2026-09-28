@@ -1,0 +1,178 @@
+<script setup lang="ts">
+import { computed, useId, watch } from "vue";
+
+import { isAgentDraftComplete } from "@/features/platform/agent-form";
+import type { RuntimeSelection } from "@/shared/api/generated/openapi/types.gen";
+import type { AppProblem } from "@/shared/api/problem";
+import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+
+const props = withDefaults(
+  defineProps<{
+    name: string;
+    purpose: string;
+    roleDescription: string;
+    initialInstructions: string;
+    runtimeRef: string;
+    runtimes: readonly RuntimeSelection[];
+    runtimeProblem?: AppProblem;
+    disabled?: boolean;
+    runtimeExpanded?: boolean;
+    allowDefaultRuntime?: boolean;
+  }>(),
+  {
+    disabled: false,
+    runtimeExpanded: false,
+    allowDefaultRuntime: false,
+  },
+);
+const emit = defineEmits<{
+  "update:name": [value: string];
+  "update:purpose": [value: string];
+  "update:roleDescription": [value: string];
+  "update:initialInstructions": [value: string];
+  "update:runtimeRef": [value: string];
+  valid: [value: boolean];
+}>();
+const nameId = useId();
+const purposeId = useId();
+const roleDescriptionId = useId();
+const instructionsId = useId();
+const runtimeId = useId();
+const valid = computed(
+  () =>
+    isAgentDraftComplete({
+      ...props,
+      runtimeRef:
+        props.runtimeRef || (props.allowDefaultRuntime ? "DEFAULT" : ""),
+    }) &&
+    (props.runtimeRef
+      ? props.runtimes.some(
+          (runtime) => runtime.ready && runtime.ref === props.runtimeRef,
+        )
+      : props.allowDefaultRuntime &&
+        props.runtimes.some((runtime) => runtime.ready)),
+);
+watch(valid, (value) => emit("valid", value), { immediate: true });
+</script>
+
+<template>
+  <div class="agent-form-fields">
+    <label class="field" :for="nameId">
+      <span>{{ $t("common.name") }}</span>
+      <input
+        :id="nameId"
+        :name="nameId"
+        :value="name"
+        :disabled="disabled"
+        required
+        maxlength="120"
+        @input="
+          emit('update:name', ($event.target as HTMLInputElement).value.trim())
+        "
+      />
+    </label>
+    <label class="field" :for="purposeId">
+      <span>{{ $t("common.purpose") }}</span>
+      <input
+        :id="purposeId"
+        :name="purposeId"
+        :value="purpose"
+        :disabled="disabled"
+        required
+        maxlength="1000"
+        @input="
+          emit(
+            'update:purpose',
+            ($event.target as HTMLInputElement).value.trim(),
+          )
+        "
+      />
+    </label>
+    <label class="field field--wide" :for="roleDescriptionId">
+      <span>{{ $t("agents.role") }}</span>
+      <VoiceTextarea
+        :id="roleDescriptionId"
+        :name="roleDescriptionId"
+        :model-value="roleDescription"
+        :disabled="disabled"
+        required
+        maxlength="1000"
+        @update:model-value="emit('update:roleDescription', $event.trim())"
+      />
+    </label>
+    <label class="field field--wide" :for="instructionsId">
+      <span>{{ $t("agents.instructions") }}</span>
+      <VoiceTextarea
+        :id="instructionsId"
+        :name="instructionsId"
+        :model-value="initialInstructions"
+        :disabled="disabled"
+        required
+        minlength="20"
+        maxlength="65536"
+        @update:model-value="emit('update:initialInstructions', $event.trim())"
+      />
+    </label>
+    <details class="field--wide advanced-settings" :open="runtimeExpanded">
+      <summary>{{ $t("common.advanced") }}</summary>
+      <label class="field" :for="runtimeId">
+        <span>{{ $t("agents.runtime") }}</span>
+        <select
+          :id="runtimeId"
+          :name="runtimeId"
+          :value="runtimeRef"
+          :disabled="disabled"
+          :required="!allowDefaultRuntime"
+          @change="
+            emit(
+              'update:runtimeRef',
+              ($event.target as HTMLSelectElement).value,
+            )
+          "
+        >
+          <option value="" :disabled="!allowDefaultRuntime">
+            {{
+              allowDefaultRuntime
+                ? $t("agents.runtimeDefault")
+                : $t("agents.runtime")
+            }}
+          </option>
+          <option
+            v-for="runtime in runtimes.filter((item) => item.ready)"
+            :key="runtime.ref"
+            :value="runtime.ref"
+          >
+            {{ runtime.name }}
+          </option>
+        </select>
+        <small>{{ $t("agents.runtimeHelp") }}</small>
+      </label>
+      <ProblemNotice v-if="runtimeProblem" :problem="runtimeProblem" compact />
+    </details>
+  </div>
+</template>
+
+<style scoped>
+.agent-form-fields {
+  display: contents;
+}
+.field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.field--wide {
+  grid-column: 1 / -1;
+}
+.advanced-settings {
+  display: grid;
+  gap: 12px;
+}
+.advanced-settings summary {
+  cursor: pointer;
+}
+.advanced-settings .field {
+  margin-top: 12px;
+}
+</style>

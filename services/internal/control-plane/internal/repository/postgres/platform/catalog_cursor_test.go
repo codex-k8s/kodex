@@ -2,12 +2,39 @@ package platform
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
+
+func TestListProjectsQueryDoesNotMixNamedAndPositionalArguments(t *testing.T) {
+	if regexp.MustCompile(`\$[0-9]+`).MatchString(queryQueriesListprojectsSelectProjectsOrganizationIdProjectIdSubjectId) {
+		t.Fatal("project list query mixes named and positional arguments")
+	}
+}
+
+func TestArtifactCatalogCursorKeepsTimeAndAuthorityScope(t *testing.T) {
+	current := scope{organizationID: "organization-a", actorID: "actor-a"}
+	filter := query.Filter{ProjectRef: "project-a", State: "ACTIVE"}
+	position := encodeArtifactCursor(time.Date(2026, time.September, 27, 2, 0, 0, 123, time.UTC), "art_12345678")
+	filter.Page.Token = encodeCatalogCursor(current, "ARTIFACT", filter, position)
+	decoded, err := decodeCatalogCursor(current, "ARTIFACT", filter)
+	if err != nil || decoded != position {
+		t.Fatalf("artifact catalog position was lost: err=%v", err)
+	}
+	if _, _, err := decodeArtifactCursor(decoded); err != nil {
+		t.Fatalf("artifact catalog position is not a valid time/ref cursor: %v", err)
+	}
+	changed := filter
+	changed.ProjectRef = "project-b"
+	if _, err := decodeCatalogCursor(current, "ARTIFACT", changed); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatal("artifact cursor crossed the project boundary")
+	}
+}
 
 func TestCatalogCursorBindsTenantActorKindAndFilter(t *testing.T) {
 	current := scope{organizationID: "organization-a", actorID: "actor-a"}

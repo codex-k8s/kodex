@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modelcatalog"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -146,11 +147,12 @@ func capabilityCatalogReady(ctx context.Context, tx pgx.Tx, current scope, confi
 		if err != nil {
 			return false, err
 		}
-		if !validRuntimeCatalogPin(candidate) || catalog.Digest != candidate.CatalogDigest || catalog.Revision != candidate.CatalogRevision {
+		if !validRuntimeCatalogPin(candidate) || candidate.ModelCapabilityDigest == "" && (catalog.Digest != candidate.CatalogDigest || catalog.Revision != candidate.CatalogRevision) {
 			return false, nil
 		}
 		if !slices.ContainsFunc(catalog.Models, func(model entity.ModelCapability) bool {
-			return model.ID == configuration.Model && model.Available && slices.Contains(model.EligibleProviderAccountRefs, candidate.AccountRef)
+			return model.ID == configuration.Model && model.Available && slices.Contains(model.EligibleProviderAccountRefs, candidate.AccountRef) &&
+				(candidate.ModelCapabilityDigest == "" || candidate.ModelCapabilityDigest == modelcatalog.CapabilityDigest(configuration.Provider, candidate.AccountRef, model.ID, model.ReasoningEfforts, model.DefaultReasoningEffort, model.IsDefault))
 		}) {
 			return false, nil
 		}

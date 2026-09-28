@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, useId } from "vue";
 import { Maximize2, X } from "@lucide/vue";
 import type { SkillBundleFileInput } from "@/shared/api/generated/openapi/types.gen";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -8,6 +8,7 @@ const props = defineProps<{
   modelValue: SkillBundleFileInput[];
   disabled?: boolean;
 }>();
+const fieldPrefix = `skill-manifest-${useId()}`;
 const emit = defineEmits<{
   "update:modelValue": [value: SkillBundleFileInput[]];
 }>();
@@ -60,6 +61,8 @@ function remove(index: number): void {
         >{{ $t("contextResources.path") }}
         <input
           :value="file.path"
+          :id="`${fieldPrefix}-path-${index}`"
+          :name="`${fieldPrefix}-path-${index}`"
           :aria-label="$t('contextResources.path')"
           maxlength="240"
           :disabled="disabled"
@@ -68,7 +71,16 @@ function remove(index: number): void {
         />
         <span>{{ skillPathBytes(file.path) }} / 240 B</span>
       </label>
-      <code>{{ file.artifactRef }} / r{{ file.artifactRevision }}</code>
+      <details class="context-file__revision">
+        <summary>
+          {{
+            $t("contextResources.fileRevision", {
+              revision: file.artifactRevision,
+            })
+          }}
+        </summary>
+        <code>{{ file.artifactRef }}</code>
+      </details>
       <button
         type="button"
         class="icon-button"
@@ -95,10 +107,10 @@ function remove(index: number): void {
 }
 .context-file {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px) 40px;
   align-items: center;
   gap: 12px;
-  min-height: 104px;
+  min-height: 76px;
   border-bottom: 1px solid var(--border);
 }
 .context-file label {
@@ -111,7 +123,17 @@ function remove(index: number): void {
   width: 100%;
   box-sizing: border-box;
 }
-.context-file code {
+.context-file__revision {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.context-file__revision summary {
+  cursor: pointer;
+}
+.context-file__revision code {
+  display: block;
+  margin-top: 8px;
   overflow-wrap: anywhere;
 }
 @media (max-width: 600px) {

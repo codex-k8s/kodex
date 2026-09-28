@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useId } from "vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import type {
   EmailMailboxSpecification,
@@ -14,6 +15,9 @@ const props = defineProps<{
   credentials: EmailMailboxCredential[];
   disabled?: boolean;
 }>();
+const fieldPrefix = `mailbox-fields-${useId()}`;
+const endpointName = (kind: string, field: string) =>
+  `${fieldPrefix}-${kind}-${field}`;
 const emit = defineEmits<{ change: [value: EmailMailboxSpecification] }>();
 const endpointKinds = ["smtp", "imap", "pop"] as const;
 const identityFields = [
@@ -160,6 +164,8 @@ function policy(
     <label class="checkbox"
       ><input
         type="checkbox"
+        :id="`${fieldPrefix}-enabled`"
+        :name="`${fieldPrefix}-enabled`"
         :checked="value.enabled"
         @change="set('enabled', ($event.target as HTMLInputElement).checked)"
       />{{ $t("mailbox.enabled") }}</label
@@ -168,6 +174,8 @@ function policy(
       ><span>{{ $t("mailbox.receiveProtocol") }}</span
       ><select
         :value="value.receiveProtocol ?? ''"
+        :id="`${fieldPrefix}-receive-protocol`"
+        :name="`${fieldPrefix}-receive-protocol`"
         @change="
           set(
             'receiveProtocol',
@@ -187,6 +195,8 @@ function policy(
         ><span>{{ $t(`mailbox.fields.${field}`) }}</span
         ><input
           :value="value[field] ?? ''"
+          :id="`${fieldPrefix}-${field}`"
+          :name="`${fieldPrefix}-${field}`"
           autocomplete="off"
           @input="set(field, text($event))"
       /></label>
@@ -220,6 +230,8 @@ function policy(
           ><span>{{ $t("mailbox.host") }}</span
           ><input
             :value="value[kind]?.host ?? ''"
+            :id="endpointName(kind, 'host')"
+            :name="endpointName(kind, 'host')"
             autocomplete="off"
             @input="endpoint(kind, 'host', text($event))"
         /></label>
@@ -227,6 +239,8 @@ function policy(
           ><span>{{ $t("mailbox.port") }}</span
           ><input
             type="number"
+            :id="endpointName(kind, 'port')"
+            :name="endpointName(kind, 'port')"
             min="1"
             max="65535"
             :value="value[kind]?.port"
@@ -236,6 +250,8 @@ function policy(
           ><span>{{ $t("mailbox.serverName") }}</span
           ><input
             :value="value[kind]?.serverName ?? ''"
+            :id="endpointName(kind, 'server-name')"
+            :name="endpointName(kind, 'server-name')"
             autocomplete="off"
             @input="endpoint(kind, 'serverName', text($event))"
         /></label>
@@ -243,6 +259,8 @@ function policy(
           ><span>TLS</span
           ><select
             :value="value[kind]?.tlsMode ?? ''"
+            :id="endpointName(kind, 'tls-mode')"
+            :name="endpointName(kind, 'tls-mode')"
             @change="
               endpoint(
                 kind,
@@ -260,6 +278,8 @@ function policy(
           ><span>{{ $t("mailbox.authMethod") }}</span
           ><select
             :value="value[kind]?.authMethod ?? ''"
+            :id="endpointName(kind, 'auth-method')"
+            :name="endpointName(kind, 'auth-method')"
             @change="
               endpoint(
                 kind,
@@ -280,6 +300,8 @@ function policy(
           }}</span
           ><select
             :value="credentialKey(value[kind]?.[field])"
+            :id="endpointName(kind, `credential-${field}`)"
+            :name="endpointName(kind, `credential-${field}`)"
             @change="selectCredential(kind, field, $event)"
           >
             <option value=""></option>
@@ -311,6 +333,8 @@ function policy(
           ><span>{{ $t(`mailbox.limitFields.${field}`) }}</span
           ><input
             type="number"
+            :id="`${fieldPrefix}-limit-${field}`"
+            :name="`${fieldPrefix}-limit-${field}`"
             min="0"
             :value="value.limits?.[field]"
             @input="
@@ -331,6 +355,8 @@ function policy(
           ><span>{{ $t("mailbox.operation") }}</span
           ><select
             :value="item.operation ?? ''"
+            :id="`${fieldPrefix}-policy-${index}-operation`"
+            :name="`${fieldPrefix}-policy-${index}-operation`"
             @change="policy(index, 'operation', $event)"
           >
             <option value=""></option>
@@ -347,6 +373,8 @@ function policy(
           ><span>{{ $t("mailbox.approval") }}</span
           ><select
             :value="item.policy ?? ''"
+            :id="`${fieldPrefix}-policy-${index}-approval`"
+            :name="`${fieldPrefix}-policy-${index}-approval`"
             @change="policy(index, 'policy', $event)"
           >
             <option value=""></option>

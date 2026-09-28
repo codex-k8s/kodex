@@ -12,12 +12,6 @@ defineProps<NodeProps<RunGraphNodeData>>();
 const emit = defineEmits<{ select: [node: RunNode] }>();
 const { t } = useI18n();
 
-function compactDisplayName(displayName: string): string {
-  const characters = Array.from(displayName);
-  if (characters.length <= 44) return displayName;
-  return `${characters.slice(0, 27).join("")}…${characters.slice(-14).join("")}`;
-}
-
 function nodeIcon(type: RunNode["type"]): Component {
   switch (type) {
     case "ROOT_PROCESS":
@@ -71,15 +65,15 @@ function nodeIcon(type: RunNode["type"]): Component {
       />
       <span class="run-node__kind">
         {{
-          data.surface === "session"
-            ? t("runs.sessionNode")
-            : t("runs.controlNode")
+          data.retryAttempt
+            ? t("runs.graphRunAttempt", { attempt: data.retryAttempt })
+            : t(`runs.nodeTypes.${data.node.type}`)
         }}
       </span>
       <StatusBadge :state="data.node.state" />
     </span>
     <strong class="run-node__title" :title="data.node.displayName">
-      {{ compactDisplayName(data.node.displayName) }}
+      {{ data.node.displayName }}
     </strong>
     <span class="run-node__role" :title="data.node.role">
       {{ data.node.role || t(`runs.nodeTypes.${data.node.type}`) }}
@@ -134,9 +128,11 @@ function nodeIcon(type: RunNode["type"]): Component {
 .run-node--succeeded {
   border-left-color: var(--success);
 }
-.run-node--failed,
-.run-node--cancelled {
+.run-node--failed {
   border-left-color: var(--danger);
+}
+.run-node--cancelled {
+  border-left-color: var(--text-secondary);
 }
 .run-node--session {
   border-left-width: 3px;

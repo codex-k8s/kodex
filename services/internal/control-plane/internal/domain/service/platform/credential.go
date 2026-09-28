@@ -59,8 +59,14 @@ func (service *Service) ConfigureIntegrationCredential(
 		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}
 	definition, registered := definitions[connection.DefinitionKey]
-	if !registered || !(definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) ||
-		definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction)) {
+	// Поставленный OpenAPI-шаблон не исполняется сам по себе. Только owner-read
+	// опубликованной привязки возвращает иной digest и capability для команды;
+	// repository повторно сверяет exact package в той же write-транзакции.
+	managedOpenAPI := registered && connection.DefinitionKey == "openapi-mcp" &&
+		connection.DefinitionDigest != definition.Digest && len(connection.Capabilities) > 0
+	if !registered || (!managedOpenAPI &&
+		!definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) &&
+		!definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction)) {
 		return entity.IntegrationConnection{}, errs.ErrForbidden
 	}
 	digest := sha256.Sum256([]byte(connectionRef + "\x00" + mutation.IdempotencyKey))

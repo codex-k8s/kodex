@@ -137,7 +137,7 @@ fi
 if rg -q 'replace_mapper' "$bootstrap"; then
   fail 'legacy create-only mapper helper remains active'
 fi
-[[ "$(rg -c '^[[:space:]]*reconcile_mapper ' "$bootstrap")" == 7 ]] ||
+[[ "$(rg -c '^[[:space:]]*reconcile_mapper ' "$bootstrap")" == 9 ]] ||
   fail 'not every canonical mapper uses stable reconcile'
 [[ "$(rg -F -c '"claim.name":"groups","full.path":"false","multivalued":"true"' "$bootstrap")" == 2 ]] ||
   fail 'group mapper apply and readback must require canonical multivalued output'

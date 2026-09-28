@@ -1,0 +1,40 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: openapi-mcp
+  version: 1.1.0
+  origin: SHIPPED
+spec:
+  name: OpenAPI / MCP
+  description: Шаблон для проверенных операций из OpenAPI. Исполнение доступно после публикации определения, привязки подключения и сетевого допуска.
+  category: data
+  adapter: OPENAPI_MCP
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
+  configurationFields:
+    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
+  networkDestinations:
+    - {key: openapi_origin, source: CONFIGURATION, configurationField: base_url, port: 443, tls: REQUIRED}
+  healthCheck: {operation: openapi.health, timeoutSeconds: 15, maxAttempts: 2}
+  capabilities:
+    - key: health.read
+      name: Проверить подключение
+      description: Только безопасная проверка шаблона; не является опубликованным инструментом.
+      operation: openapi.health
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url]}
+      inputFields: []
+      outputFields:
+        - {key: body_json, type: STRING, format: PLAIN, required: true, maximumLength: 32768}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 2, retryBackoffMilliseconds: 250}
+      openapi:
+        operationId: getHealth
+        method: GET
+        path: /
+        authScheme: NONE
+        inputSchema:
+          type: object
+          additionalProperties: false
+          properties: {}

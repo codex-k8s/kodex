@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Link2, Unlink, RefreshCw } from "@lucide/vue";
-import { useI18n } from "vue-i18n";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
+import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import type { ContextKind } from "./api";
@@ -19,17 +19,27 @@ const props = defineProps<{
   projectRef: string;
   resourceRef: string;
   revisionRef: string;
+  revisionNumber: number;
   digest: string;
   eligible: boolean;
   agentRef?: string;
   ownerAgentRef?: string;
   disabled?: boolean;
 }>();
-const { t } = useI18n();
+const emit = defineEmits<{ selectAgent: [agentRef: string | undefined] }>();
 const agent = ref(props.ownerAgentRef ?? props.agentRef ?? "");
+watch(agent, (agentRef) => emit("selectAgent", agentRef || undefined));
+watch(
+  () => props.agentRef,
+  (agentRef) => {
+    if (!props.ownerAgentRef && agent.value !== (agentRef ?? ""))
+      agent.value = agentRef ?? "";
+  },
+);
 const snapshot = ref<ContextBindingSnapshot>();
 const problem = ref<AppProblem>();
 const busy = ref(false);
+const confirmUnbind = ref(false);
 let controller = new AbortController();
 const binding = computed(() =>
   snapshot.value
@@ -49,8 +59,15 @@ async function loadAgents(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await bindingAgents(props.projectRef, query, cursor, signal);
+  const page = await bindingAgents(
+    props.projectRef,
+    query,
+    cursor,
+    signal,
+    pageSize,
+  );
   return {
     ...page,
     items: page.items.map((item) => ({
@@ -88,6 +105,7 @@ watch(
     props.eligible,
   ],
   () => {
+    confirmUnbind.value = false;
     void load();
   },
   { immediate: true },
@@ -99,11 +117,6 @@ async function change(action: "bind" | "unbind"): Promise<void> {
     busy.value ||
     props.disabled ||
     (action === "bind" && !props.eligible)
-  )
-    return;
-  if (
-    action === "unbind" &&
-    !window.confirm(t("contextResources.unbindConfirm"))
   )
     return;
   busy.value = true;
@@ -135,6 +148,7 @@ async function change(action: "bind" | "unbind"): Promise<void> {
   } catch (error) {
     if (!signal.aborted) problem.value = asProblem(error);
   } finally {
+    confirmUnbind.value = false;
     if (!signal.aborted) busy.value = false;
   }
 }
@@ -143,7 +157,11 @@ onBeforeUnmount(() => controller.abort());
 <template>
   <section class="context-binding">
     <h3>{{ $t("contextResources.agentBinding") }}</h3>
-    <code>{{ revisionRef }} / {{ digest }}</code>
+    <p class="context-binding__summary">
+      {{
+        $t("contextResources.bindCurrentRevision", { revision: revisionNumber })
+      }}
+    </p>
     <AsyncEntityPicker
       v-model="agent"
       :selected="selected"
@@ -156,9 +174,16 @@ onBeforeUnmount(() => controller.abort());
     <dl v-if="binding">
       <dt>{{ $t("contextResources.boundRevision") }}</dt>
       <dd>
-        <code>{{ binding.revisionRef }} / {{ binding.digest }}</code>
+        {{
+          $t(
+            binding.revisionRef === revisionRef
+              ? "contextResources.currentRevisionBound"
+              : "contextResources.otherRevisionBound",
+          )
+        }}
       </dd>
-      <dt>{{ $t("impact.bindingVersion", { version: binding.version }) }}</dt>
+      <dt>{{ $t("contextResources.bindingVersion") }}</dt>
+      <dd>v{{ binding.version }}</dd>
     </dl>
     <div class="context-binding-actions">
       <button
@@ -177,7 +202,7 @@ onBeforeUnmount(() => controller.abort());
       <button
         class="button"
         :disabled="busy || disabled || !binding"
-        @click="change('unbind')"
+        @click="confirmUnbind = true"
       >
         <Unlink :size="18" />{{ $t("contextResources.unbind") }}
       </button>
@@ -191,9 +216,53 @@ onBeforeUnmount(() => controller.abort());
         <RefreshCw :size="18" />
       </button>
     </div>
+    <details class="context-binding__technical">
+      <summary>{{ $t("contextResources.technicalDetails") }}</summary>
+      <dl>
+        <dt>{{ $t("contextResources.revision") }}</dt>
+        <dd>
+          <code>{{ revisionRef }}</code>
+        </dd>
+        <dt>Digest</dt>
+        <dd>
+          <code>{{ digest }}</code>
+        </dd>
+        <template v-if="binding">
+          <dt>{{ $t("contextResources.boundRevision") }}</dt>
+          <dd>
+            <code>{{ binding.revisionRef }} / {{ binding.digest }}</code>
+          </dd>
+        </template>
+      </dl>
+    </details>
+    <ModalDialog
+      v-if="confirmUnbind"
+      :title="$t('contextResources.unbind')"
+      :busy="busy"
+      @close="confirmUnbind = false"
+    >
+      <p>{{ $t("contextResources.unbindConfirm") }}</p>
+      <p class="context-binding__agent-name">{{ snapshot?.agentName }}</p>
+      <template #actions>
+        <button class="button" :disabled="busy" @click="confirmUnbind = false">
+          {{ $t("common.cancel") }}
+        </button>
+        <button
+          class="button button--primary"
+          :disabled="busy || disabled || !binding"
+          @click="change('unbind')"
+        >
+          {{ $t("contextResources.unbind") }}
+        </button>
+      </template>
+    </ModalDialog>
   </section>
 </template>
 <style scoped>
+.context-binding__agent-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .context-binding {
   display: grid;
   gap: 12px;
@@ -206,11 +275,24 @@ onBeforeUnmount(() => controller.abort());
   margin: 0;
 }
 .context-binding dd {
-  margin: 8px 0;
+  margin: 0;
   overflow-wrap: anywhere;
 }
-.context-binding > code {
-  overflow-wrap: anywhere;
+.context-binding dl {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+}
+.context-binding__summary {
+  margin: 0;
+  color: var(--muted);
+}
+.context-binding__technical summary {
+  cursor: pointer;
+}
+.context-binding__technical dl {
+  margin-top: 10px;
 }
 .context-binding-actions {
   display: flex;

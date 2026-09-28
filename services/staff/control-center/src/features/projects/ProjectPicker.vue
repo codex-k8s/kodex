@@ -6,7 +6,11 @@ import type { Project } from "@/shared/api/generated/openapi/types.gen";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 
-const props = defineProps<{ project?: Project }>();
+const props = defineProps<{
+  project?: Project;
+  placeholder?: string;
+  clearable?: boolean;
+}>();
 const emit = defineEmits<{ select: [ref: string] }>();
 const { t } = useI18n();
 const selected = computed(() =>
@@ -24,8 +28,9 @@ async function loadPage(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await searchProjects(query, cursor, signal);
+  const page = await searchProjects(query, cursor, signal, pageSize);
   return {
     items: [
       ...(!cursor && !query
@@ -42,8 +47,9 @@ async function loadPage(
     :model-value="project?.ref"
     :selected="selected"
     :load-page="loadPage"
+    :clearable="clearable"
     :trigger-label="$t('app.project')"
-    :placeholder="$t('app.allProjects')"
+    :placeholder="placeholder ?? $t('app.allProjects')"
     :search-placeholder="$t('app.chooseProject')"
     @update:model-value="
       emit(

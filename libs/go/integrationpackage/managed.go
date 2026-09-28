@@ -49,6 +49,9 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 		}
 		return nil
 	}
+	if shipped.Spec.Adapter == string(AdapterOpenAPIMCP) {
+		return validateOpenAPIManagedRevision(candidate, shipped)
+	}
 	c, s := candidate.Spec, shipped.Spec
 	if legacy, ok := legacyManagedMailbox(shipped); ok && reflect.DeepEqual(c.Credential, legacy.Spec.Credential) {
 		s = legacy.Spec
@@ -70,6 +73,29 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 			capability.Execution.TimeoutSeconds > base.Execution.TimeoutSeconds ||
 			capability.Execution.MaxAttempts > base.Execution.MaxAttempts ||
 			capability.Execution.RetryBackoffMilliseconds < base.Execution.RetryBackoffMilliseconds {
+			return errExecutableRevision
+		}
+	}
+	return nil
+}
+
+// В отличие от поставленных adapters, OpenAPI-managed revision может задавать
+// новые операции. Расширяется только проверенный типизированный HTTP-контракт,
+// а не право исполнять произвольный код или выбирать destination из вызова.
+func validateOpenAPIManagedRevision(candidate, baseline Package) error {
+	c, s := candidate.Spec, baseline.Spec
+	if c.Adapter != s.Adapter || c.AdapterOwner != s.AdapterOwner || c.ExecutionRoute != s.ExecutionRoute ||
+		c.Readiness != s.Readiness || !reflect.DeepEqual(c.ConfigurationFields, s.ConfigurationFields) ||
+		!reflect.DeepEqual(c.NetworkDestinations, s.NetworkDestinations) ||
+		c.HealthCheck.TimeoutSeconds > s.HealthCheck.TimeoutSeconds || c.HealthCheck.MaxAttempts > s.HealthCheck.MaxAttempts {
+		return errExecutableRevision
+	}
+	if c.Credential != nil && (c.Credential.SecretKey != "token" || c.Credential.Kind != "TOKEN") {
+		return errExecutableRevision
+	}
+	for _, capability := range c.Capabilities {
+		if capability.OpenAPI == nil || capability.ResourceScope.Kind != "HTTPS_RESOURCE" ||
+			len(capability.ResourceScope.ConnectionFields) != 1 || capability.ResourceScope.ConnectionFields[0] != "base_url" {
 			return errExecutableRevision
 		}
 	}

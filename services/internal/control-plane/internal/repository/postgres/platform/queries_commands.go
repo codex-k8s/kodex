@@ -253,6 +253,12 @@ var (
 	queryCommandsChangerunInsertRunEdgesRefRootRunIdTargetNodeId string
 	//go:embed sql/commands_resolvegate_select_owner_gates_organization_id_ref_state.sql
 	queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState string
+	//go:embed sql/commands_resolvegate_select_scoped_integration_invocation.sql
+	queryCommandsResolvegateSelectScopedIntegrationInvocation string
+	//go:embed sql/commands_resolvegate_insert_integration_approval_scope.sql
+	queryCommandsResolvegateInsertIntegrationApprovalScope string
+	//go:embed sql/commands_resolvegate_bind_integration_approval_scope.sql
+	queryCommandsResolvegateBindIntegrationApprovalScope string
 	//go:embed sql/commands_resolvegate_update_owner_gates_state_decision_decision_comment.sql
 	queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment string
 	//go:embed sql/commands_resolvegate_update_integration_invocation.sql
@@ -269,6 +275,8 @@ var (
 	queryCommandsResolvegateUpdateRootNodeState string
 	//go:embed sql/commands_resolvegate_select_active_agent_nodes.sql
 	queryCommandsResolvegateSelectActiveAgentNodes string
+	//go:embed sql/commands_resolvegate_count_open_gates.sql
+	queryCommandsResolvegateCountOpenGates string
 	//go:embed sql/commands_resolvegate_complete_root_run.sql
 	queryCommandsResolvegateCompleteRootRun string
 	//go:embed sql/commands_resolvegate_update_runs_state_version_updated_at.sql

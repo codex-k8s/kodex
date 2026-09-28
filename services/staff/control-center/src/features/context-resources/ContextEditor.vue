@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
   Artifact,
@@ -31,6 +31,8 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import * as api from "./api";
 import SkillImportDialog from "./SkillImportDialog.vue";
 import SkillManifestFiles from "./SkillManifestFiles.vue";
@@ -38,24 +40,60 @@ import ContextBindingPanel from "./ContextBindingPanel.vue";
 import { memoryContentAvailable } from "./retention";
 import { validSkillSpecification } from "./skill-import";
 import { artifacts, projects, runs, sourceRun } from "./selectors";
+import { loadCatalogProject } from "@/features/catalogs/api";
 const props = defineProps<{
   kind: api.ContextKind;
   resourceRef?: string;
   projectRef?: string;
   agentRef?: string;
 }>();
-const emit = defineEmits<{ created: [ref: string, projectRef: string] }>();
-const { t } = useI18n();
+const fieldPrefix = `context-editor-${useId()}`;
+const emit = defineEmits<{
+  created: [ref: string, projectRef: string];
+  named: [name: string];
+  agentSelected: [agentRef: string | undefined];
+}>();
+const i18n = useI18n();
+const { t } = i18n;
 const skill = ref<SkillBundle>();
 const memory = ref<KodexMemoryRecord>();
 const memoryClock = ref(Date.now());
 const expiredReads = new Set<string>();
 const project = ref(props.projectRef ?? "");
+const selectedProject = ref<AsyncEntityOption>();
+watch(
+  project,
+  async (reference, _previous, onCleanup) => {
+    selectedProject.value = undefined;
+    if (!reference) return;
+    const request = new AbortController();
+    onCleanup(() => request.abort());
+    try {
+      const value = await loadCatalogProject(reference, request.signal);
+      if (!request.signal.aborted)
+        selectedProject.value = {
+          ref: value.ref,
+          title: value.name,
+          description: value.purpose,
+          meta: value.lifecycle,
+        };
+    } catch {
+      /* Недоступный Проект не заменяется чужим объектом. */
+    }
+  },
+  { immediate: true },
+);
 const specification = ref<SkillBundleSpecification>({
   name: "",
   description: "",
   files: [],
 });
+const skillNameLength = computed(
+  () => Array.from(specification.value.name).length,
+);
+const skillDescriptionLength = computed(
+  () => Array.from(specification.value.description).length,
+);
 const memoryInput = ref<MemoryRecordSpecification>({
   title: "",
   summary: "",
@@ -69,6 +107,15 @@ const revision = computed(() =>
     ? (skill.value?.draftRevision ?? skill.value?.currentRevision)
     : memory.value?.currentRevision,
 );
+const currentResourceName = computed(() => {
+  const current = revision.value;
+  if (!current) return item.value?.ref ?? "";
+  return "name" in current ? current.name : current.title;
+});
+function diagnosticMessage(code: string): string {
+  const key = `contextResources.diagnostics.${code}`;
+  return i18n.te(key) ? t(key) : code;
+}
 const fingerprint = () =>
   JSON.stringify(
     props.kind === "skills" ? specification.value : memoryInput.value,
@@ -82,6 +129,17 @@ const problem = ref<AppProblem>();
 const historyOpen = ref(false);
 const importOpen = ref(false);
 const revisions = ref<api.ContextRevision[]>([]);
+const historyList = ref<HTMLElement>();
+const historySentinel = ref<HTMLElement>();
+const historyPageSize = useAdaptiveCursorPageSize({
+  container: historyList,
+  itemSelector: "details",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
 const historyCursor = ref("");
 const historyLoading = ref(false);
 const historyProblem = ref<AppProblem>();
@@ -140,6 +198,7 @@ function acceptSkill(value: SkillBundle): void {
   skill.value = value;
   project.value = value.projectRef;
   const current = value.draftRevision ?? value.currentRevision;
+  if (current?.name) emit("named", current.name);
   specification.value = current
     ? {
         name: current.name,
@@ -160,6 +219,7 @@ function acceptMemory(value: KodexMemoryRecord): void {
   if (props.projectRef && value.projectRef !== props.projectRef)
     throw new Error("Memory project scope mismatch");
   memory.value = value;
+  emit("named", value.currentRevision.title);
   project.value = value.projectRef;
   memoryInput.value = {
     title: value.currentRevision.title,
@@ -272,6 +332,7 @@ async function loadHistory(more = false): Promise<void> {
       item.value.ref,
       more ? historyCursor.value : undefined,
       controller.signal,
+      historyPageSize.value,
     );
     if (disposed || item.value.version !== version) return;
     const next = more ? [...revisions.value, ...page.items] : page.items;
@@ -294,13 +355,22 @@ async function loadHistory(more = false): Promise<void> {
     if (!disposed) historyLoading.value = false;
   }
 }
+useCursorInfiniteScroll({
+  root: historyList,
+  sentinel: historySentinel,
+  enabled: () =>
+    historyOpen.value && Boolean(historyCursor.value) && !historyLoading.value,
+  loadMore: () => loadHistory(true),
+});
+
 async function loadArtifacts(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!project.value) return { items: [] };
-  const page = await artifacts(project.value, query, cursor, signal);
+  const page = await artifacts(project.value, query, cursor, signal, pageSize);
   for (const artifact of page.items)
     artifactValues.set(
       `${artifact.ref}:${String(artifact.revision)}`,
@@ -321,9 +391,10 @@ async function loadRuns(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   return project.value
-    ? runs(project.value, query, cursor, signal)
+    ? runs(project.value, query, cursor, signal, pageSize)
     : { items: [] };
 }
 function addArtifact(value: unknown): void {
@@ -455,17 +526,20 @@ onBeforeUnmount(() => {
       </button>
     </header>
     <AsyncEntityPicker
-      v-if="!item"
+      v-if="!item && !projectRef"
       :model-value="project || null"
+      :selected="selectedProject"
       :load-page="projects"
       :disabled="!editable"
       :trigger-label="$t('contextResources.project')"
       @update:model-value="chooseProject"
     />
     <RouterLink
-      v-else
-      :to="`/projects/${encodeURIComponent(item.projectRef)}`"
-      >{{ item.projectRef }}</RouterLink
+      v-else-if="project"
+      class="context-editor__project"
+      :to="`/projects/${encodeURIComponent(project)}`"
+      >{{ $t("contextResources.project") }}:
+      {{ selectedProject?.title ?? project }}</RouterLink
     >
     <fieldset :disabled="!editable" class="context-form">
       <template v-if="kind === 'skills'">
@@ -473,11 +547,19 @@ onBeforeUnmount(() => {
           >{{ $t("common.name")
           }}<input
             v-model="specification.name"
+            :id="`${fieldPrefix}-skill-name`"
+            :name="`${fieldPrefix}-skill-name`"
             maxlength="320"
             required
+            :aria-invalid="skillNameLength > 160"
             :aria-label="$t('common.name')"
-          /><span
-            >{{ Array.from(specification.name).length }} / 160</span
+          /><span :class="{ 'context-form__over-limit': skillNameLength > 160 }"
+            >{{ skillNameLength }} / 160</span
+          ><small
+            v-if="skillNameLength > 160"
+            class="context-form__over-limit"
+            role="alert"
+            >{{ $t("contextResources.maxLength", { max: 160 }) }}</small
           ></label
         >
         <label
@@ -486,9 +568,18 @@ onBeforeUnmount(() => {
             v-model="specification.description"
             maxlength="4000"
             :disabled="!editable"
+            :aria-invalid="skillDescriptionLength > 2000"
             rows="3"
           /><span
-            >{{ Array.from(specification.description).length }} / 2000</span
+            :class="{
+              'context-form__over-limit': skillDescriptionLength > 2000,
+            }"
+            >{{ skillDescriptionLength }} / 2000</span
+          ><small
+            v-if="skillDescriptionLength > 2000"
+            class="context-form__over-limit"
+            role="alert"
+            >{{ $t("contextResources.maxLength", { max: 2000 }) }}</small
           ></label
         >
         <button
@@ -510,17 +601,26 @@ onBeforeUnmount(() => {
       <template v-else>
         <label
           >{{ $t("common.name")
-          }}<input v-model="memoryInput.title" maxlength="320"
+          }}<input
+            v-model="memoryInput.title"
+            :id="`${fieldPrefix}-memory-title`"
+            :name="`${fieldPrefix}-memory-title`"
+            maxlength="320"
         /></label>
-        <CodeEditor
+        <div
           v-if="
             !memory ||
             memoryContentAvailable(memory.currentRevision, memoryClock)
           "
-          v-model="memoryInput.summary"
-          :label="$t('contextResources.summary')"
-          :disabled="!editable"
-        />
+          class="context-form__editor"
+        >
+          <strong>{{ $t("contextResources.summary") }}</strong>
+          <CodeEditor
+            v-model="memoryInput.summary"
+            :label="$t('contextResources.summary')"
+            :disabled="!editable"
+          />
+        </div>
         <p v-else>{{ $t("contextResources.redacted") }}</p>
         <label
           >{{ $t("contextResources.sourceRun") }}
@@ -538,8 +638,14 @@ onBeforeUnmount(() => {
         </label>
         <label
           >{{ $t("contextResources.retention")
-          }}<input v-model="retention" type="datetime-local" required
-        /></label>
+          }}<input
+            v-model="retention"
+            :id="`${fieldPrefix}-retention`"
+            :name="`${fieldPrefix}-retention`"
+            type="datetime-local"
+            required
+          /><small>{{ $t("contextResources.retentionHint") }}</small></label
+        >
       </template>
     </fieldset>
     <SkillManifestFiles
@@ -547,15 +653,23 @@ onBeforeUnmount(() => {
       v-model="specification.files"
       :disabled="!editable"
     />
+    <p
+      v-if="kind === 'skills' && !specification.files.length"
+      class="context-editor__hint"
+    >
+      {{ $t("contextResources.skillManifestHint") }}
+    </p>
     <ContextBindingPanel
       v-if="item?.currentRevision"
       :kind="kind"
       :resource-ref="item.ref"
       :project-ref="item.projectRef"
       :revision-ref="item.currentRevision.ref"
+      :revision-number="item.currentRevision.revision"
       :digest="item.currentRevision.digest"
       :agent-ref="agentRef"
       :owner-agent-ref="memory?.agentRef"
+      @select-agent="emit('agentSelected', $event)"
       :disabled="busy || dirty"
       :eligible="
         item.state === 'ACTIVE' &&
@@ -618,39 +732,52 @@ onBeforeUnmount(() => {
       </div>
       <ul v-if="draft.diagnostics.length">
         <li v-for="(diagnostic, index) in draft.diagnostics" :key="index">
-          {{ diagnostic }}
+          {{ diagnosticMessage(diagnostic) }}
+          <code v-if="diagnosticMessage(diagnostic) !== diagnostic">{{
+            diagnostic
+          }}</code>
         </li>
       </ul>
     </template>
-    <dl v-if="revision" class="context-provenance">
-      <dt>{{ $t("contextResources.revision") }}</dt>
-      <dd>{{ revision.ref }} / {{ revision.revision }}</dd>
-      <dt>Digest</dt>
-      <dd>{{ revision.digest }}</dd>
-      <dt>{{ $t("managed.source") }}</dt>
-      <dd>
-        {{ revision.provenance.sourceKind }} /
-        {{ revision.provenance.sourceRef }}
-      </dd>
-      <dt>{{ $t("contextResources.actor") }}</dt>
-      <dd>{{ revision.provenance.actorRef }}</dd>
-      <dt>{{ $t("contextResources.createdAt") }}</dt>
-      <dd>{{ revision.provenance.createdAt }}</dd>
-      <template v-if="'scanState' in revision">
-        <dt>{{ $t("contextResources.scan") }}</dt>
+    <details v-if="revision" class="context-provenance">
+      <summary>
+        {{
+          $t("contextResources.revisionDetails", {
+            revision: revision.revision,
+          })
+        }}
+      </summary>
+      <dl>
+        <dt>{{ $t("contextResources.revision") }}</dt>
+        <dd>{{ revision.ref }} / {{ revision.revision }}</dd>
+        <dt>Digest</dt>
+        <dd>{{ revision.digest }}</dd>
+        <dt>{{ $t("managed.source") }}</dt>
         <dd>
-          <StatusBadge :state="revision.scanState" /> {{ revision.scanEngine }}
+          {{ revision.provenance.sourceKind }} /
+          {{ revision.provenance.sourceRef }}
         </dd>
-        <dt>{{ $t("contextResources.scanDigest") }}</dt>
-        <dd>{{ revision.scanDigest }}</dd>
-        <dt>{{ $t("contextResources.scannedAt") }}</dt>
-        <dd>{{ revision.scannedAt }}</dd>
-        <dt>{{ $t("contextResources.reviewedBy") }}</dt>
-        <dd>{{ revision.reviewedBy }}</dd>
-        <dt>{{ $t("contextResources.reviewedAt") }}</dt>
-        <dd>{{ revision.reviewedAt }}</dd>
-      </template>
-    </dl>
+        <dt>{{ $t("contextResources.actor") }}</dt>
+        <dd>{{ revision.provenance.actorRef }}</dd>
+        <dt>{{ $t("contextResources.createdAt") }}</dt>
+        <dd>{{ revision.provenance.createdAt }}</dd>
+        <template v-if="'scanState' in revision">
+          <dt>{{ $t("contextResources.scan") }}</dt>
+          <dd>
+            <StatusBadge :state="revision.scanState" />
+            {{ revision.scanEngine }}
+          </dd>
+          <dt>{{ $t("contextResources.scanDigest") }}</dt>
+          <dd>{{ revision.scanDigest }}</dd>
+          <dt>{{ $t("contextResources.scannedAt") }}</dt>
+          <dd>{{ revision.scannedAt }}</dd>
+          <dt>{{ $t("contextResources.reviewedBy") }}</dt>
+          <dd>{{ revision.reviewedBy }}</dd>
+          <dt>{{ $t("contextResources.reviewedAt") }}</dt>
+          <dd>{{ revision.reviewedAt }}</dd>
+        </template>
+      </dl>
+    </details>
   </section>
   <ModalDialog
     v-if="action"
@@ -658,11 +785,13 @@ onBeforeUnmount(() => {
     :busy="busy"
     @close="action = undefined"
   >
-    <p>{{ item?.ref }}</p>
+    <p class="context-action-target">{{ currentResourceName }}</p>
     <p v-if="action === 'purge'">{{ $t("contextResources.purgeConfirm") }}</p>
     <template v-if="action === 'review'"
       ><select
         v-model="decision"
+        :id="`${fieldPrefix}-review-decision`"
+        :name="`${fieldPrefix}-review-decision`"
         :disabled="busy"
         :aria-label="$t('contextResources.decision')"
       >
@@ -699,7 +828,7 @@ onBeforeUnmount(() => {
       @retry="loadHistory()"
     />
     <p v-if="historyLoading" role="status">{{ $t("common.loading") }}</p>
-    <div class="context-history">
+    <div ref="historyList" class="context-history">
       <details
         v-for="entry in revisions"
         :key="entry.ref"
@@ -741,15 +870,15 @@ onBeforeUnmount(() => {
           </p></template
         >
       </details>
+      <div
+        v-if="historyCursor"
+        ref="historySentinel"
+        class="context-history__sentinel"
+        role="status"
+      >
+        <span v-if="historyLoading">{{ $t("common.loading") }}</span>
+      </div>
     </div>
-    <button
-      v-if="historyCursor"
-      class="button"
-      :disabled="historyLoading"
-      @click="loadHistory(true)"
-    >
-      {{ $t("impact.more") }}
-    </button>
   </ModalDialog>
   <SkillImportDialog
     v-if="importOpen && project"
@@ -763,16 +892,38 @@ onBeforeUnmount(() => {
   />
 </template>
 <style scoped>
+.context-action-target {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .context-editor {
   min-width: 0;
+  width: min(100%, 1120px);
+  margin-inline: auto;
   display: grid;
-  gap: 20px;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
 }
 .context-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+  justify-content: flex-end;
+}
+.context-editor__project {
+  width: fit-content;
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.context-editor__hint {
+  margin: -12px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 .context-form {
   border: 0;
@@ -787,7 +938,28 @@ onBeforeUnmount(() => {
   gap: 6px;
   min-width: 0;
 }
+.context-form__editor {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+.context-form small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.context-form .context-form__over-limit {
+  color: var(--danger);
+}
 .context-provenance {
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.context-provenance summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.context-provenance dl {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);
   gap: 10px;
@@ -803,6 +975,9 @@ li {
 .context-history {
   max-height: 432px;
   overflow: auto;
+}
+.context-history__sentinel {
+  min-height: 1px;
 }
 .context-history details {
   min-height: 72px;

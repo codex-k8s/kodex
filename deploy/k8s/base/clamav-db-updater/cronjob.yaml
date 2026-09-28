@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: clamav-db-updater
+  labels:
+    app.kubernetes.io/name: clamav-db-updater
+    app.kubernetes.io/component: malware-signature-updater
+spec:
+  schedule: "7 */6 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      ttlSecondsAfterFinished: 604800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: clamav-db-updater
+            app.kubernetes.io/component: malware-signature-updater
+        spec:
+          serviceAccountName: clamav-db-updater
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 30
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: freshclam
+              image: docker.io/clamav/clamav@sha256:0e31ce089574268aefa0b543767d66b70240ab51ed49eec53e07f18d5629d817
+              imagePullPolicy: IfNotPresent
+              command: [freshclam]
+              args: [--config-file=/etc/kodex-freshclam/freshclam.conf, --stdout]
+              resources:
+                requests: {cpu: 100m, memory: 256Mi}
+                limits: {cpu: "1", memory: 1Gi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+              volumeMounts:
+                - {name: database, mountPath: /var/lib/clamav}
+                - {name: configuration, mountPath: /etc/kodex-freshclam, readOnly: true}
+                - {name: temporary, mountPath: /tmp}
+          volumes:
+            - name: database
+              persistentVolumeClaim:
+                claimName: clamav-database
+            - name: configuration
+              configMap:
+                name: clamav-db-updater-config
+            - name: temporary
+              emptyDir:
+                sizeLimit: 512Mi

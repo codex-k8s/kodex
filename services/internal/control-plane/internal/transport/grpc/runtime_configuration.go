@@ -88,7 +88,7 @@ func (server *Server) ListTemplateVariables(ctx context.Context, request *contro
 	if err != nil {
 		return nil, err
 	}
-	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())}
+	filter := query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), SourceKind: request.GetSource(), Page: page(request.GetPage())}
 	if request.GetAgentRef() != "" || request.GetRuntimeRevisionRef() != "" || request.GetTargetKind() != "" || request.GetTargetRef() != "" || request.GetContext() != nil || request.GetExpectedContextDigest() != "" {
 		filter.TemplateContext = &query.TemplateVariableContext{AgentRef: request.GetAgentRef(), RuntimeRevisionRef: request.GetRuntimeRevisionRef(),
 			TargetKind: request.GetTargetKind(), TargetRef: request.GetTargetRef(), ExpectedContextDigest: request.GetExpectedContextDigest(), Preview: castPromptPreviewContext(request.GetContext())}

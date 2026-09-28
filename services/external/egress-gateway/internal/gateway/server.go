@@ -32,9 +32,15 @@ type AccessPolicy interface {
 	Limits() policy.Limits
 }
 
-// MailAccess принадлежит listener, не заголовкам CONNECT; TLS остаётся у bridge.
+// MailAccess принадлежит только почтовому listener: общий TLSMode не делает
+// OpenAPI-профиль почтовым и не запрещает частичное перекрытие DNS-адресов.
 type MailAccess interface {
 	TLSMode(string, int) string
+	AllowsLiteral(string, int, netip.Addr) bool
+	RequireCompleteDNSPinning()
+}
+
+type literalAccess interface {
 	AllowsLiteral(string, int, netip.Addr) bool
 }
 
@@ -53,6 +59,19 @@ type Readiness interface {
 	Ready() (bool, string)
 }
 
+type destinationReadiness interface {
+	ReadyFor(string) (bool, string)
+}
+
+func (server *Server) readyFor(host string) bool {
+	if scoped, ok := server.readiness.(destinationReadiness); ok {
+		ready, _ := scoped.ReadyFor(host)
+		return ready
+	}
+	ready, _ := server.readiness.Ready()
+	return ready
+}
+
 // Server владеет listener, active connections и cancel/join boundary.
 type Server struct {
 	address   string
@@ -68,7 +87,7 @@ type Server struct {
 	global    chan struct{}
 	wait      sync.WaitGroup
 	mu        sync.Mutex
-	active    map[net.Conn]struct{}
+	active    map[net.Conn]bool
 	perSource map[string]int
 }
 
@@ -82,7 +101,7 @@ func New(parent context.Context, address string, accessPolicy AccessPolicy, reso
 	return &Server{
 		address: address, policy: accessPolicy, resolver: resolver, dialer: dialer, readiness: readiness, metrics: metrics,
 		context: lifecycleContext, cancel: cancel, global: make(chan struct{}, limits.MaximumConnections),
-		active: make(map[net.Conn]struct{}), perSource: make(map[string]int),
+		active: make(map[net.Conn]bool), perSource: make(map[string]int),
 	}, nil
 }
 
@@ -97,7 +116,7 @@ func NewReadinessOnly(parent context.Context, address string, readiness Readines
 	return &Server{
 		address: address, policy: accessPolicy, readiness: readiness, metrics: metrics,
 		context: lifecycleContext, cancel: cancel, global: make(chan struct{}, limits.MaximumConnections),
-		active: make(map[net.Conn]struct{}), perSource: make(map[string]int),
+		active: make(map[net.Conn]bool), perSource: make(map[string]int),
 	}, nil
 }
 
@@ -158,21 +177,24 @@ func (server *Server) Serve() error {
 	}
 }
 
-// Drain закрывает accept и tunnels до ожидания других listener.
+// Drain останавливает новые CONNECT и незавершённые рукопожатия. Установленные
+// туннели получают bounded shutdown budget для завершения внешнего эффекта.
 func (server *Server) Drain() {
 	server.draining.Store(true)
-	server.cancel()
 	if server.listener != nil {
 		_ = server.listener.Close()
 	}
 	server.mu.Lock()
-	for connection := range server.active {
-		_ = connection.Close()
+	for connection, established := range server.active {
+		if !established {
+			_ = connection.Close()
+		}
 	}
 	server.mu.Unlock()
 }
 
-// Shutdown останавливает accept, закрывает tunnels и ограниченно ожидает join.
+// Shutdown ждёт завершения туннелей в пределах бюджета и принудительно
+// закрывает их только после исчерпания этого бюджета.
 func (server *Server) Shutdown(ctx context.Context) error {
 	server.Drain()
 	done := make(chan struct{})
@@ -182,8 +204,15 @@ func (server *Server) Shutdown(ctx context.Context) error {
 	}()
 	select {
 	case <-ctx.Done():
+		server.cancel()
+		server.mu.Lock()
+		for connection := range server.active {
+			_ = connection.Close()
+		}
+		server.mu.Unlock()
 		return errors.New("gateway connection join deadline exceeded")
 	case <-done:
+		server.cancel()
 		return nil
 	}
 }
@@ -199,7 +228,7 @@ func (server *Server) handle(client net.Conn) {
 		server.writeCompatibilityReadiness(client, duration(limits.WriteTimeoutMilliseconds))
 		return
 	}
-	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+	if !server.readyFor(request.Target.Hostname) || server.draining.Load() {
 		server.metrics.Connection("rejected", "connect", "not_ready")
 		server.writeResponse(client, readinessNotReady, duration(limits.WriteTimeoutMilliseconds))
 		return
@@ -223,7 +252,7 @@ func (server *Server) handle(client net.Conn) {
 			return
 		}
 	}
-	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+	if !server.readyFor(target.Hostname) || server.draining.Load() {
 		server.metrics.Connection("rejected", "connect", "not_ready")
 		return
 	}
@@ -232,15 +261,31 @@ func (server *Server) handle(client net.Conn) {
 		server.metrics.Connection("rejected", "dns", dnsReason(err))
 		return
 	}
-	if isMail {
+	if err := dnsresolver.ValidateAddresses(snapshot.Addresses); err != nil {
+		server.metrics.Connection("rejected", "dns", dnsReason(err))
+		return
+	}
+	if !time.Now().Before(snapshot.ExpiresAt) {
+		server.metrics.Connection("rejected", "dns", "timeout")
+		return
+	}
+	if pinned, ok := server.policy.(literalAccess); ok {
+		permitted := make([]netip.Addr, 0, len(snapshot.Addresses))
 		for _, address := range snapshot.Addresses {
-			if !mail.AllowsLiteral(target.Hostname, target.Port, address) {
-				server.metrics.Connection("rejected", "connect", "policy")
-				return
+			if pinned.AllowsLiteral(target.Hostname, target.Port, address) {
+				permitted = append(permitted, address)
 			}
 		}
+		// Mail сохраняет полный DNS snapshot; динамический OpenAPI-origin
+		// может использовать только пересечение свежего DNS с ранее
+		// проверенными публичными адресами immutable policy.
+		if len(permitted) == 0 || isMail && len(permitted) != len(snapshot.Addresses) {
+			server.metrics.Connection("rejected", "connect", "policy")
+			return
+		}
+		snapshot.Addresses = permitted
 	}
-	if ready, _ := server.readiness.Ready(); !ready || server.draining.Load() {
+	if !server.readyFor(target.Hostname) || server.draining.Load() {
 		server.metrics.Connection("rejected", "connect", "not_ready")
 		return
 	}
@@ -261,6 +306,10 @@ func (server *Server) handle(client net.Conn) {
 		}
 	}
 	_ = upstream.SetWriteDeadline(time.Time{})
+	if !server.markEstablished(client) {
+		server.metrics.Connection("rejected", "tunnel", "not_ready")
+		return
+	}
 	server.tunnel(client, upstream, duration(limits.IdleTimeoutMilliseconds), duration(limits.WriteTimeoutMilliseconds))
 }
 
@@ -450,10 +499,22 @@ func (server *Server) acquire(connection net.Conn) bool {
 		return false
 	}
 	server.perSource[source]++
-	server.active[connection] = struct{}{}
+	server.active[connection] = false
 	// Add находится под тем же lock, что drain: Wait не обгонит новый handler.
 	server.wait.Add(1)
 	server.metrics.AddActive(1)
+	return true
+}
+
+func (server *Server) markEstablished(connection net.Conn) bool {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	if server.draining.Load() {
+		return false
+	}
+	if _, tracked := server.active[connection]; tracked {
+		server.active[connection] = true
+	}
 	return true
 }
 

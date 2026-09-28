@@ -208,6 +208,12 @@ PROJECT_CREATED:
   other: Project created
 PROJECT_UPDATED:
   other: Project updated
+PROJECT_TRASHED:
+  other: Project moved to trash
+PROJECT_RESTORED:
+  other: Project restored from trash
+PROJECT_PURGE_REQUESTED:
+  other: Permanent project deletion requested
 PROJECT_ACCESS_UPDATED:
   other: Project access updated
 AGENT_CREATED_READY:
@@ -260,6 +266,8 @@ INTEGRATION_GRANT_UPDATED:
   other: Integration permission updated
 INTEGRATION_CONNECTION_TEST_COMPLETED:
   other: Connection test completed
+INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED:
+  other: Connection test retry scheduled
 INTEGRATION_TEST_SUCCEEDED:
   other: Connection is working
 INTEGRATION_CREDENTIAL_NOT_CONFIGURED:
@@ -288,6 +296,8 @@ NEW_ASSISTANT_CONVERSATION:
   other: New conversation
 ASSISTANT_CONVERSATION_CREATED:
   other: Assistant conversation created
+ASSISTANT_CONVERSATION_PROJECT_CHANGED:
+  other: Conversation moved to project
 ASSISTANT_CONVERSATION_TITLE_UPDATED:
   other: Assistant conversation title updated
 ASSISTANT_TURN_QUEUED:
@@ -362,6 +372,16 @@ RUNTIME_EXECUTION_COMPLETED:
   other: Runtime execution completed
 INTEGRATION_ACTION_COMPLETED:
   other: Integration action completed
+INTEGRATION_ACTION_SUCCEEDED:
+  other: Integration action succeeded
+INTEGRATION_ACTION_FAILED:
+  other: Integration action was rejected or failed
+INTEGRATION_ACTION_OUTCOME_UNKNOWN:
+  other: Integration action outcome is unknown
+RUNTIME_INPUT_INVALID:
+  other: Runtime input is invalid
+WORKFLOW_STEPS_UNFULFILLED:
+  other: Workflow did not execute every planned step
 INTEGRATION_INVOCATION_COMPLETED:
   other: Integration invocation completed
 INTEGRATION_EFFECT_GATE_NODE_NAME:

@@ -1,0 +1,33 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: https-json
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: HTTPS JSON (чтение)
+  description: Читает один закреплённый JSON-ресурс по HTTPS с токеном соединения. Хост должен быть отдельно разрешён политикой исходящего доступа.
+  category: data
+  adapter: HTTPS_JSON_READ
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
+  credential: {secretKey: token, kind: TOKEN}
+  configurationFields:
+    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
+    - {key: resource_path, type: STRING, format: HTTPS_PATH, required: true, maximumLength: 512}
+  networkDestinations:
+    - {key: https_resource, source: CONFIGURATION, configurationField: base_url, port: 443, tls: REQUIRED}
+  healthCheck: {operation: https_json.resource.read, timeoutSeconds: 15, maxAttempts: 2}
+  capabilities:
+    - key: https_json.resource.read
+      name: Прочитать JSON-ресурс
+      description: Читает только закреплённый в соединении путь и возвращает ограниченный JSON без перенаправлений.
+      operation: https_json.resource.read
+      risk: READ
+      approvalPolicy: NONE
+      resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url, resource_path]}
+      inputFields: []
+      outputFields:
+        - {key: body_json, type: STRING, format: PLAIN, required: true, maximumLength: 32768}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 2, retryBackoffMilliseconds: 250}

@@ -50,6 +50,7 @@ const { t } = useI18n();
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ t("access.searchMember") }}</span>
         <input
+          name="access-member-search"
           type="search"
           :value="search"
           :placeholder="t('access.searchMemberPlaceholder')"

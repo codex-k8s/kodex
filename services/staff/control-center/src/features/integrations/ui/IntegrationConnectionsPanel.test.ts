@@ -17,6 +17,8 @@ const definition: IntegrationDefinition = {
   builtIn: true,
   version: 1,
   nextActions: [],
+  connectionCount: 1,
+  healthyConnectionCount: 1,
   available: true,
   capabilities: [
     {
@@ -74,6 +76,8 @@ const connection: IntegrationConnection = {
 const messages = {
   ru: {
     common: {
+      actions: "Действия",
+      noData: "Нет данных",
       test: "Проверить",
       enable: "Включить",
       disable: "Отключить",
@@ -96,9 +100,23 @@ const messages = {
       connectionsTitle: "Рабочие подключения",
       connectionsDescription: "Описание",
       connectionCount: "Подключений: {count}",
+      connectionsLoadedCount: "Показано подключений: {count}",
+      searchConnections: "Найти подключение по названию",
+      noConnectionMatches: "Подключения не найдены",
+      tryAnotherSearch: "Измените поисковый запрос.",
       noConnectionsYet: "Подключений пока нет",
       activeGrants: "разрешений",
       capabilitiesShort: "возможностей",
+      capabilityCount: "Возможностей: {count}",
+      table: {
+        name: "Название",
+        package: "Пакет",
+        state: "Состояние",
+        credentials: "Учётные данные",
+        access: "Доступ",
+        lastTest: "Последняя проверка",
+        grants: "Разрешений: {count}",
+      },
     },
   },
 };
@@ -106,6 +124,8 @@ const messages = {
 async function renderPanel(
   values: readonly IntegrationConnection[],
   coreReady: boolean,
+  hasMore = false,
+  search = "",
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -114,6 +134,8 @@ async function renderPanel(
         definitions: { synthetic: definition },
         coreReady,
         busyRef: "",
+        hasMore,
+        search,
       }),
   });
   app.use(
@@ -123,20 +145,31 @@ async function renderPanel(
 }
 
 describe("IntegrationConnectionsPanel", () => {
+  it("не выдаёт число загруженных строк за точное общее количество", async () => {
+    expect(await renderPanel([connection], true, true)).toContain(
+      "Показано подключений: 1",
+    );
+    expect(await renderPanel([connection], true)).toContain("Подключений: 1");
+  });
   it("показывает только разрешённые server-owned lifecycle действия", async () => {
     const html = await renderPanel([connection], true);
 
-    expect(html).toContain("Платформа работает без интеграций");
-    expect(html).toContain("Подключения необязательны");
+    expect(html).not.toContain("Платформа работает без интеграций");
+    expect(html).not.toContain("Подключения необязательны");
     expect(html).toContain("Synthetic lifecycle");
-    expect(html).toContain("ui-lifecycle");
-    expect(html).toContain("SYNTHETIC_JOURNAL");
+    expect(html).toContain('<table class="connection-table"');
+    expect(html).toContain("Synthetic HTTP");
+    expect(html).toContain("Разрешений: 0");
+    expect(html).toContain("Возможностей: 1");
+    expect(html).not.toContain("ui-lifecycle");
     expect(html).not.toContain("must-never-be-rendered");
     expect(html).toContain("Проверить");
     expect(html).toContain("Отключить");
     expect(html).toContain("Изменить");
     expect(html).toContain("Удалить");
     expect(html).not.toMatch(/<button[^>]*disabled/);
+    expect(html).toContain("Не требуются");
+    expect(html).not.toContain("Учётные данные настроены");
   });
 
   it("отделяет пустой список от неподтверждённой готовности core", async () => {
@@ -146,5 +179,34 @@ describe("IntegrationConnectionsPanel", () => {
     expect(html).toContain("Откройте каталог, чтобы настроить подключение.");
     expect(html).not.toContain("Платформа работает без интеграций");
     expect(html).not.toContain("Подключения необязательны");
+  });
+  it("не показывает плашку про отсутствие интеграций для пустого поиска", async () => {
+    const html = await renderPanel([], true, false, "неизвестное");
+    expect(html).toContain("Подключения не найдены");
+    expect(html).not.toContain("Платформа работает без интеграций");
+  });
+  it("поясняет необязательность интеграций только в пустом каталоге", async () => {
+    const html = await renderPanel([], true);
+    expect(html).toContain("Платформа работает без интеграций");
+    expect(html).toContain("Подключения необязательны");
+  });
+
+  it("оставляет полный набор возможностей в счётчике, но не растягивает строку", async () => {
+    const capability = definition.capabilities[0];
+    if (!capability) {
+      throw new Error("fixture capability is required");
+    }
+    const capabilities = Array.from({ length: 4 }, (_, index) => ({
+      ...capability,
+      key: `synthetic.capability.${String(index + 1)}`,
+      name: `Возможность ${String(index + 1)}`,
+    }));
+    const html = await renderPanel([{ ...connection, capabilities }], true);
+
+    expect(html).toContain("Возможность 1");
+    expect(html).toContain("Возможность 3");
+    expect(html).not.toContain("Возможность 4");
+    expect(html).toContain("Возможностей: 4");
+    expect(html).toContain('class="connection-row"');
   });
 });

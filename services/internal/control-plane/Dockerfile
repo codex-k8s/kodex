@@ -14,6 +14,7 @@ COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
 COPY libs/go/eventing/ libs/go/eventing/
 COPY libs/go/emailbridgeapi/ libs/go/emailbridgeapi/
 COPY libs/go/mailpolicy/ libs/go/mailpolicy/
+COPY libs/go/integrationegresspolicy/ libs/go/integrationegresspolicy/
 COPY libs/go/dnsresolver/ libs/go/dnsresolver/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/i18n/ libs/go/i18n/

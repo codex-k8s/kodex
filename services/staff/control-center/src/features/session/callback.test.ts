@@ -11,6 +11,14 @@ describe("OIDC callback return", () => {
       }),
     ).toBe("/projects/project_sales/secrets");
   });
+  it("возвращает fresh re-auth к форме создания секрета", () => {
+    expect(
+      callbackReturnPath({
+        kind: "runtime-secret-draft",
+        returnPath: "/projects/project_sales/secrets?assistantCreateSecret=1",
+      }),
+    ).toBe("/projects/project_sales/secrets?assistantCreateSecret=1");
+  });
 
   it("возвращает fresh re-auth в редактор окружения", () => {
     expect(

@@ -17,6 +17,7 @@ import (
 // Каждый advertised operation обязан иметь отдельный положительный сценарий.
 func catalogInputs() map[string]string {
 	return map[string]string{
+		"https_json.resource.read":             `{}`,
 		"github.pull_request.file.list":        `{"pull_request_number":3,"limit":1,"cursor":2}`,
 		"gitlab.merge_request.diff.list":       `{"merge_request_iid":3,"limit":1,"cursor":2}`,
 		"confluence.space.list":                `{}`,
@@ -203,6 +204,8 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 					expectedHost := key + ".example.test"
 					if key == "email" {
 						expectedHost = "email-bridge.kodex-system.svc.cluster.local"
+					} else if key == "https-json" {
+						expectedHost = "api.example.test"
 					}
 					if r.URL.Scheme != "https" || r.URL.Host != expectedHost {
 						t.Error("provider escaped configured origin")
@@ -246,6 +249,11 @@ func catalogResponse(t *testing.T, provider, operation string, r *http.Request) 
 	}
 	path := r.URL.Path
 	switch provider {
+	case "https-json":
+		if r.Method != http.MethodGet || path != "/v1/status" {
+			t.Error("unexpected HTTPS JSON read endpoint")
+		}
+		return `{"status":"ready"}`
 	case "github":
 		if !strings.HasPrefix(path, "/repos/acme/repo") {
 			t.Fatal("wrong repository")
@@ -400,7 +408,7 @@ func catalogResponse(t *testing.T, provider, operation string, r *http.Request) 
 
 func TestEveryMutationPreservesUnknownOutcome(t *testing.T) {
 	for operation, raw := range catalogInputs() {
-		provider := strings.Split(operation, ".")[0]
+		provider := catalogProviderKey(operation)
 		if provider == "synthetic" {
 			continue
 		}
@@ -448,7 +456,7 @@ func TestScopeDeniedBeforeCredentialRead(t *testing.T) {
 	for operation, raw := range catalogInputs() {
 		t.Run(operation, func(t *testing.T) {
 			adapter := testAdapter(t)
-			definition := adapter.definitions[strings.Split(operation, ".")[0]]
+			definition := adapter.definitions[catalogProviderKey(operation)]
 			var credential *CredentialRevision
 			if definition.RequiresConnectionCredential() {
 				credential = &CredentialRevision{}
@@ -468,7 +476,7 @@ func TestScopeDeniedBeforeCredentialRead(t *testing.T) {
 
 func TestReadOperationsHandleRateLimits(t *testing.T) {
 	for operation, raw := range catalogInputs() {
-		provider := strings.Split(operation, ".")[0]
+		provider := catalogProviderKey(operation)
 		if provider == "synthetic" {
 			continue
 		}
@@ -523,6 +531,13 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 			}
 		})
 	}
+}
+
+func catalogProviderKey(operation string) string {
+	if operation == "https_json.resource.read" {
+		return "https-json"
+	}
+	return strings.Split(operation, ".")[0]
 }
 
 func TestEmailNotReadyCannotSend(t *testing.T) {

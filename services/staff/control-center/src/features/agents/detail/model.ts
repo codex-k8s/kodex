@@ -204,6 +204,14 @@ export function sameProfileDraft(
   );
 }
 
+export function profileDraftAfterAuthoritativeUpdate(
+  draft: AgentProfileDraft,
+  previous: AgentProfileDraft,
+  current: AgentProfileDraft,
+): AgentProfileDraft {
+  return sameProfileDraft(draft, previous) ? { ...current } : draft;
+}
+
 export function toTemplateVariablePickerItem(
   variable: TemplateVariable,
 ): TemplateVariablePickerItem {

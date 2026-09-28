@@ -69,7 +69,7 @@ func TestIntegrationTerminalWireAndOwnerProjection(t *testing.T) {
 			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 			grant := integrationGrantFixture()
 			input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2, IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
-			arguments := integrationArguments(grant, "private <input> & Пример")
+			arguments := integrationRefArguments(grant, "private <input> & Пример")
 			params, _ := json.Marshal(map[string]any{"name": "invoke_integration", "arguments": arguments})
 			writer := httptest.NewRecorder()
 			server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
@@ -127,6 +127,89 @@ func TestIntegrationTerminalWireAndOwnerProjection(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegrationCatalogInvalidInputReturnsRetryableMCPError(t *testing.T) {
+	client := &integrationResultClient{}
+	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{integrationGrantFixture()}}
+	params, _ := json.Marshal(map[string]any{"name": "get_integration_catalog", "arguments": map[string]any{
+		"query": "test", "connection_ref": input.IntegrationGrants[0].ConnectionRef,
+	}})
+	writer := httptest.NewRecorder()
+	server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
+	var wire struct {
+		Result struct {
+			StructuredContent map[string]any `json:"structuredContent"`
+			IsError           bool           `json:"isError"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError ||
+		wire.Result.StructuredContent["error_code"] != "CATALOG_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true {
+		t.Fatalf("invalid catalog input did not return retry guidance: %s", writer.Body.String())
+	}
+	if client.projection == nil || client.projection.GetCapabilityRef() != "platform.integration.catalog" ||
+		client.projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED || client.projection.GetSafeResult() != "TOOL_UNAVAILABLE" {
+		t.Fatalf("invalid catalog input lost safe owner projection: %#v", client.projection)
+	}
+}
+
+func TestIntegrationCatalogMissingSelectionPointsToBoundIndex(t *testing.T) {
+	client := &integrationResultClient{}
+	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	grant := integrationGrantFixture()
+	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
+	params, _ := json.Marshal(map[string]any{"name": "get_integration_catalog", "arguments": map[string]any{
+		"connection_ref": grant.ConnectionRef, "capability_key": "guessedOperationId",
+	}})
+	writer := httptest.NewRecorder()
+	server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
+	var wire struct {
+		Result struct {
+			StructuredContent map[string]any `json:"structuredContent"`
+			IsError           bool           `json:"isError"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError ||
+		wire.Result.StructuredContent["error_code"] != "CATALOG_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true {
+		t.Fatal("missing integration selection did not return a retryable catalog error")
+	}
+	guidance, _ := wire.Result.StructuredContent["guidance"].(string)
+	if !strings.Contains(guidance, "get_integration_catalog with {}") ||
+		!strings.Contains(guidance, "grant_ref") || !strings.Contains(guidance, "operationId") {
+		t.Fatal("missing integration selection did not direct the caller to exact bound identifiers")
+	}
+	if client.projection == nil || client.projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED {
+		t.Fatal("missing integration selection lost its owner projection")
+	}
+}
+func TestIntegrationInvalidGrantReturnsBoundedRetryGuidance(t *testing.T) {
+	client := &integrationResultClient{}
+	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	grant := integrationGrantFixture()
+	input := runtimecontract.RunnerInput{RunRef: "run_fixture", NodeRef: "node_fixture", LeaseRef: "lease_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 2,
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant}}
+	params, _ := json.Marshal(map[string]any{"name": "invoke_integration", "arguments": map[string]any{
+		"grant_ref": "igr_foreign", "input": map[string]any{"value": "private-input"},
+	}})
+	writer := httptest.NewRecorder()
+	server.callTool(writer, httptest.NewRequest("POST", "/", nil), mcpRequest{ID: json.RawMessage(`"call1"`), Params: params}, input)
+	var wire struct {
+		Result struct {
+			StructuredContent map[string]any `json:"structuredContent"`
+			IsError           bool           `json:"isError"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(writer.Body.Bytes(), &wire) != nil || !wire.Result.IsError ||
+		wire.Result.StructuredContent["error_code"] != "INTEGRATION_INPUT_INVALID" || wire.Result.StructuredContent["retryable"] != true {
+		t.Fatalf("invalid integration grant did not return bounded guidance: %s", writer.Body.String())
+	}
+	if strings.Contains(writer.Body.String(), "private-input") || len(client.resolves) != 0 || client.projection != nil {
+		t.Fatal("invalid grant reached owner mutation or leaked input")
+	}
+}
+
 func TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt(t *testing.T) {
 	for _, invalid := range []string{"", "short", "inv/foreign", "inv\nprivate", strings.Repeat("x", 129)} {
 		t.Run("invalid-ref", func(t *testing.T) {
@@ -152,6 +235,16 @@ func TestIntegrationRefAndGrantFailuresHaveNoFalseReceipt(t *testing.T) {
 	}
 	if len(c.resolves) != 0 {
 		t.Fatal("foreign scope reached owner mutation")
+	}
+	for _, ref := range []string{"", "igr_foreign"} {
+		args := integrationRefArguments(grant, "x")
+		args["grant_ref"] = ref
+		if _, err := s.invoke(t.Context(), input, args, json.RawMessage(`1`)); err == nil {
+			t.Fatal("foreign grant reference accepted")
+		}
+	}
+	if len(c.resolves) != 0 {
+		t.Fatal("foreign grant reference reached owner mutation")
 	}
 	if safeToolCallResult("invoke_integration", map[string]any{"invocationRef": "inv_forged"}, nil) != "TOOL_UNAVAILABLE" {
 		t.Fatal("untyped result became authoritative projection")

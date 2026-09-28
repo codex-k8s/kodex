@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   Archive,
+  Bot,
   Box,
   Hammer,
   Maximize2,
@@ -8,11 +9,12 @@ import {
   PackageCheck,
   RotateCcw,
   ShieldCheck,
+  Square,
   TerminalSquare,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
@@ -25,15 +27,19 @@ import {
   canPromoteRoleImage,
   canRequestBuild,
   latestBuild,
+  roleImageLifecycleNeedsRefresh,
   roleImageState,
   validateDockerfile,
 } from "@/features/role-images/model";
 import { useRoleImagesStore } from "@/features/role-images/store";
+import { requestAssistantRoleImageBuildDebug } from "@/features/assistant/events";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
@@ -41,7 +47,9 @@ const props = defineProps<{
 }>();
 const { t } = useI18n();
 const router = useRouter();
+const route = useRoute();
 const store = useRoleImagesStore();
+const fieldNamePrefix = `role-image-${useId()}`;
 const name = ref("");
 const roleDefinitionRef = ref("");
 const environmentKey = ref("");
@@ -49,6 +57,8 @@ const dockerfile = ref("");
 const diffOpen = ref(false);
 const buildsExpanded = ref(false);
 const revisionsExpanded = ref(false);
+const revisionRoot = ref<HTMLElement>();
+const revisionSentinel = ref<HTMLElement>();
 const openedBuildSources = ref(new Set<string>());
 function toggleBuildSource(ref: string, event: Event): void {
   const details = event.currentTarget;
@@ -88,17 +98,37 @@ const artifact = computed(() =>
 const revisions = computed(() =>
   props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
 );
+const revisionPageSize = useAdaptiveCursorPageSize({
+  container: revisionRoot,
+  itemSelector: ".revision-row",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 96,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: revisionRoot,
+  sentinel: revisionSentinel,
+  enabled: () =>
+    Boolean(recipe.value && store.revisionNextPageToken[recipe.value.ref]) &&
+    !store.loadingDetail,
+  loadMore: () =>
+    recipe.value &&
+    store.loadMoreRevisions(
+      props.projectRef,
+      recipe.value.ref,
+      revisionPageSize.value,
+    ),
+});
 const promotionReceipt = computed(() =>
   props.recipeRef ? store.promotionReceipts[props.recipeRef] : undefined,
 );
-const buildActive = computed(() =>
-  currentBuild.value ? buildIsActive(currentBuild.value) : false,
-);
-const promotionPending = computed(
-  () =>
-    !recipe.value?.promotedImageReady &&
-    ["QUEUED", "PROMOTING"].includes(promotionReceipt.value?.state ?? ""),
-);
+const promotionEvidenceState = computed(() => {
+  if (recipe.value?.promotedImageReady)
+    return artifact.value?.promotionState ?? "PROMOTED";
+  return promotionReceipt.value?.state;
+});
 const promotionVisualState = computed(() => {
   if (recipe.value?.promotedImageReady) return "PROMOTED";
   if (promotionReceipt.value?.state === "PROMOTING") return "RUNNING";
@@ -131,12 +161,13 @@ const canSave = computed(
     dockerfileMessages.value.length === 0 &&
     (!recipe.value || recipe.value.nextActions.includes("UPDATE")),
 );
-const roleLabel = computed(
-  () =>
-    store.roleDefinitionByRef.get(
-      recipe.value?.roleDefinitionRef ?? roleDefinitionRef.value,
-    )?.label ?? t("roleImages.unknownRole"),
-);
+const roleLabel = computed(() => {
+  const ref = recipe.value?.roleDefinitionRef ?? roleDefinitionRef.value;
+  if (!ref) return t("roleImages.chooseRole");
+  return (
+    store.roleDefinitionByRef.get(ref)?.label ?? t("roleImages.unknownRole")
+  );
+});
 const environmentLabel = computed(() => {
   const key = environmentKey.value;
   if (!key) return t("common.noData");
@@ -145,6 +176,7 @@ const environmentLabel = computed(() => {
 });
 let buildPollTimer: ReturnType<typeof setTimeout> | undefined;
 let lifecyclePollAttempts = 0;
+const pollingPaused = ref(false);
 let disposed = false;
 let loadGeneration = 0;
 
@@ -155,12 +187,14 @@ function stopBuildPolling(): void {
 
 function scheduleBuildPolling(): void {
   stopBuildPolling();
-  if (
-    disposed ||
-    !props.recipeRef ||
-    (!buildActive.value && !promotionPending.value) ||
-    lifecyclePollAttempts >= 150
-  )
+  const needsRefresh = roleImageLifecycleNeedsRefresh(
+    recipe.value,
+    currentBuild.value,
+    artifact.value,
+    promotionReceipt.value,
+  );
+  pollingPaused.value = needsRefresh && lifecyclePollAttempts >= 150;
+  if (disposed || !props.recipeRef || !needsRefresh || pollingPaused.value)
     return;
   buildPollTimer = setTimeout(() => void refreshBuild(), 2000);
 }
@@ -171,6 +205,12 @@ async function refreshBuild(): Promise<void> {
   lifecyclePollAttempts += 1;
   await store.loadDetail(props.projectRef, props.recipeRef, false);
   if (current === loadGeneration) scheduleBuildPolling();
+}
+
+async function resumeBuildPolling(): Promise<void> {
+  lifecyclePollAttempts = 0;
+  pollingPaused.value = false;
+  await refreshBuild();
 }
 
 function sync(): void {
@@ -186,11 +226,19 @@ function sync(): void {
 async function load(): Promise<void> {
   const current = ++loadGeneration;
   lifecyclePollAttempts = 0;
+  pollingPaused.value = false;
   const tasks: Promise<void>[] = [
     store.loadSupportingCatalogs(props.projectRef),
   ];
   if (props.recipeRef)
-    tasks.push(store.loadDetail(props.projectRef, props.recipeRef));
+    tasks.push(
+      store.loadDetail(
+        props.projectRef,
+        props.recipeRef,
+        true,
+        revisionPageSize.value,
+      ),
+    );
   await Promise.all(tasks);
   if (disposed || current !== loadGeneration) return;
   if (!props.recipeRef && !environmentKey.value) {
@@ -241,9 +289,11 @@ async function save(): Promise<void> {
       name: name.value.trim(),
       environment: selection,
     });
-    await router.replace(
-      `/projects/${encodeURIComponent(props.projectRef)}/role-images/${encodeURIComponent(created.ref)}`,
-    );
+    await router.replace({
+      name: "role-image",
+      params: { projectRef: props.projectRef, recipeRef: created.ref },
+      query: route.query.assistantForm === "1" ? { assistantForm: "1" } : {},
+    });
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
@@ -257,6 +307,33 @@ async function runCommand(
     await store.command(props.projectRef, recipe.value, action);
     lifecyclePollAttempts = 0;
     confirmationAction.value = undefined;
+    sync();
+    scheduleBuildPolling();
+  } catch {
+    // Store сохраняет нормализованную problem-модель для видимого состояния.
+  }
+}
+
+async function cancelCurrentBuild(): Promise<void> {
+  const current = currentBuild.value;
+  if (
+    !recipe.value ||
+    !current ||
+    store.mutating ||
+    hasLocalChanges.value ||
+    !recipe.value.nextActions.includes("CANCEL_BUILD") ||
+    !buildIsActive(current) ||
+    !window.confirm(t("roleImages.cancelBuildConfirm"))
+  )
+    return;
+  try {
+    await store.command(
+      props.projectRef,
+      recipe.value,
+      "CANCEL_BUILD",
+      current.ref,
+    );
+    lifecyclePollAttempts = 0;
     sync();
     scheduleBuildPolling();
   } catch {
@@ -374,6 +451,18 @@ onBeforeUnmount(() => {
             >{{ t("managed.history") }}</RouterLink
           >
           <button
+            v-if="
+              currentBuild &&
+              ['FAILED', 'EXPIRED', 'DEAD_LETTER'].includes(currentBuild.stage)
+            "
+            class="button"
+            type="button"
+            @click="requestAssistantRoleImageBuildDebug(currentBuild)"
+          >
+            <Bot :size="16" aria-hidden="true" />
+            {{ t("roleImages.debugBuildWithAssistant") }}
+          </button>
+          <button
             v-if="canRequestBuild(recipe)"
             class="button button--primary"
             type="button"
@@ -382,6 +471,20 @@ onBeforeUnmount(() => {
           >
             <Hammer :size="16" aria-hidden="true" />
             {{ t("roleImages.requestBuild") }}
+          </button>
+          <button
+            v-if="
+              recipe.nextActions.includes('CANCEL_BUILD') &&
+              currentBuild &&
+              buildIsActive(currentBuild)
+            "
+            class="button"
+            type="button"
+            :disabled="store.mutating || hasLocalChanges"
+            @click="cancelCurrentBuild"
+          >
+            <Square :size="16" aria-hidden="true" />
+            {{ t("roleImages.cancelBuild") }}
           </button>
           <button
             v-if="recipe.nextActions.includes('ARCHIVE')"
@@ -420,6 +523,7 @@ onBeforeUnmount(() => {
         v-if="recipe"
         class="panel"
         :lineage="recipe.managedLineage"
+        collapsible
       />
       <section v-if="recipe" class="image-lifecycle" aria-live="polite">
         <article class="panel lifecycle-step">
@@ -437,6 +541,13 @@ onBeforeUnmount(() => {
               {{ currentBuild.progressPercent }}% ·
               {{ new Date(currentBuild.updatedAt).toLocaleString() }}
             </small>
+            <small
+              v-if="
+                currentBuild &&
+                ['FAILED', 'EXPIRED'].includes(currentBuild.stage)
+              "
+              >{{ t("roleImages.retryPending") }}</small
+            >
           </div>
           <StatusBadge :state="currentBuild?.stage ?? 'PENDING'" />
         </article>
@@ -473,6 +584,17 @@ onBeforeUnmount(() => {
         </article>
       </section>
 
+      <div
+        v-if="pollingPaused"
+        class="panel lifecycle-poll-paused"
+        role="status"
+      >
+        <span>{{ t("roleImages.statusRefreshPaused") }}</span>
+        <button class="button" type="button" @click="resumeBuildPolling">
+          {{ t("common.refresh") }}
+        </button>
+      </div>
+
       <div class="editor-layout">
         <main class="editor-main">
           <section class="panel recipe-form">
@@ -497,6 +619,8 @@ onBeforeUnmount(() => {
                 <span>{{ t("common.name") }}</span>
                 <input
                   v-model="name"
+                  :id="`${fieldNamePrefix}-name`"
+                  :name="`${fieldNamePrefix}-name`"
                   maxlength="120"
                   :readonly="!!recipe && !recipe.nextActions.includes('UPDATE')"
                 />
@@ -505,6 +629,8 @@ onBeforeUnmount(() => {
                 <span>{{ t("roleImages.role") }}</span>
                 <select
                   v-model="roleDefinitionRef"
+                  :id="`${fieldNamePrefix}-role`"
+                  :name="`${fieldNamePrefix}-role`"
                   :disabled="!!recipe || !store.roleDefinitions.length"
                 >
                   <option value="" disabled>
@@ -525,6 +651,8 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span>{{ t("roleImages.environment") }}</span>
                 <select
+                  :id="`${fieldNamePrefix}-environment`"
+                  :name="`${fieldNamePrefix}-environment`"
                   :value="environmentKey"
                   :disabled="
                     !store.environments.length ||
@@ -623,7 +751,7 @@ onBeforeUnmount(() => {
                 <p>{{ t("roleImages.buildHistoryHelp") }}</p>
               </div>
               <button
-                v-if="!buildsExpanded"
+                v-if="!buildsExpanded && builds.length > 5"
                 class="icon-button"
                 type="button"
                 :title="t('catalog.expand')"
@@ -669,6 +797,16 @@ onBeforeUnmount(() => {
                     {{ build.diagnosticCode }}
                   </code>
                 </p>
+                <button
+                  v-if="
+                    ['FAILED', 'EXPIRED', 'DEAD_LETTER'].includes(build.stage)
+                  "
+                  class="button build-debug-action"
+                  type="button"
+                  @click="requestAssistantRoleImageBuildDebug(build)"
+                >
+                  {{ t("roleImages.debugBuildWithAssistant") }}
+                </button>
                 <details
                   v-if="
                     build.sourceAvailable &&
@@ -718,7 +856,11 @@ onBeforeUnmount(() => {
                 <p>{{ t("roleImages.immutableRevisionHelp") }}</p>
               </div>
               <button
-                v-if="!revisionsExpanded"
+                v-if="
+                  !revisionsExpanded &&
+                  (revisions.length > 5 ||
+                    store.revisionNextPageToken[recipe.ref])
+                "
                 class="icon-button"
                 type="button"
                 :title="t('catalog.expand')"
@@ -728,7 +870,10 @@ onBeforeUnmount(() => {
                 <Maximize2 :size="20" />
               </button>
             </header>
-            <div class="build-history__scroll build-history__scroll--revisions">
+            <div
+              ref="revisionRoot"
+              class="build-history__scroll build-history__scroll--revisions"
+            >
               <div v-if="!revisions.length" class="empty-section">
                 {{ t("common.empty") }}
               </div>
@@ -758,15 +903,12 @@ onBeforeUnmount(() => {
                   new Date(revision.createdAt).toLocaleString()
                 }}</small>
               </article>
-              <button
+              <div
                 v-if="store.revisionNextPageToken[recipe.ref]"
-                class="button"
-                type="button"
-                :disabled="store.loadingDetail"
-                @click="store.loadMoreRevisions(projectRef, recipe.ref)"
-              >
-                {{ t("roleImages.loadMore") }}
-              </button>
+                ref="revisionSentinel"
+                class="cursor-sentinel"
+                aria-hidden="true"
+              />
             </div>
           </component>
         </main>
@@ -850,8 +992,8 @@ onBeforeUnmount(() => {
               </div>
             </dl>
             <StatusBadge
-              v-if="promotionReceipt"
-              :state="promotionReceipt.state"
+              v-if="promotionEvidenceState"
+              :state="promotionEvidenceState"
             />
             <p v-else>{{ t("roleImages.noPromotedArtifact") }}</p>
           </section>
@@ -1009,6 +1151,12 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
+.lifecycle-poll-paused {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .lifecycle-step {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
@@ -1122,6 +1270,10 @@ onBeforeUnmount(() => {
 .build-diagnostic code {
   display: block;
   margin-top: 4px;
+}
+.build-debug-action {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 .build-source {
   grid-column: 1 / -1;
@@ -1249,9 +1401,7 @@ onBeforeUnmount(() => {
 .artifact-card code {
   display: block;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 @media (max-width: 1000px) {
   .image-lifecycle {

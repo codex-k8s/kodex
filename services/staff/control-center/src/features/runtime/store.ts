@@ -38,7 +38,7 @@ import type {
   RoleImageArtifact,
 } from "@/shared/api/generated/openapi/types.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
-import { asProblem, type AppProblem, unwrap } from "@/shared/api/problem";
+import { AppProblem, asProblem, unwrap } from "@/shared/api/problem";
 import type {
   AsyncEntityOption,
   AsyncEntityOptionPage,
@@ -299,6 +299,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     search: string,
     pageToken?: string,
     signal?: AbortSignal,
+    pageSize = 20,
   ): Promise<RuntimeEnvironmentPage> {
     return (
       await unwrap(
@@ -307,7 +308,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           query: {
             ...(search.trim() ? { query: search.trim() } : {}),
             ...(pageToken ? { pageToken } : {}),
-            pageSize: 30,
+            pageSize,
           },
           signal: requestSignal(signal),
         }),
@@ -320,6 +321,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     search: string,
     pageToken?: string,
     signal?: AbortSignal,
+    pageSize = 30,
   ): Promise<AsyncEntityOptionPage> {
     const needle = search.trim().toLocaleLowerCase();
     const visitedTokens = new Set<string>();
@@ -330,7 +332,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
           listRoleImageRecipes({
             path: { projectRef },
             query: {
-              pageSize: 30,
+              pageSize,
               ...(cursor ? { pageToken: cursor } : {}),
             },
             signal: signal ?? requestSignal(),
@@ -380,7 +382,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     recipeRef: string,
     expectedArtifactRef: string,
     signal?: AbortSignal,
-  ): Promise<RoleImageArtifact> {
+  ): Promise<{ artifact: RoleImageArtifact; recipeName: string }> {
     const detail = (
       await unwrap(
         getRoleImageRecipe({
@@ -394,8 +396,13 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
       detail.activeArtifact.ref !== expectedArtifactRef ||
       detail.activeArtifact.admissionVerdict !== "ACCEPTED"
     )
-      throw new Error("Promoted role image artifact is unavailable");
-    return detail.activeArtifact;
+      throw new AppProblem({
+        status: 409,
+        code: "IMAGE_ARTIFACT_NOT_CURRENT",
+        retryable: false,
+        kind: "conflict",
+      });
+    return { artifact: detail.activeArtifact, recipeName: detail.recipe.name };
   }
 
   async function loadEnvironment(environmentRef: string): Promise<void> {
@@ -448,6 +455,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     environmentRef: string,
     reset = true,
     signal?: AbortSignal,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = reset
       ? undefined
@@ -461,7 +469,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             listRuntimeEnvironmentAgents({
               path: { environmentRef },
               query: {
-                pageSize: 30,
+                pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
                 ...(pageToken ? { pageToken } : {}),
               },
               signal: requestSignal(signal),
@@ -509,6 +517,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
   async function loadEnvironmentVersions(
     environmentRef: string,
     reset = true,
+    pageSize = 30,
   ): Promise<void> {
     const pageToken = reset
       ? undefined
@@ -522,7 +531,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             listRuntimeEnvironmentVersions({
               path: { environmentRef },
               query: {
-                pageSize: 30,
+                pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
                 ...(pageToken ? { pageToken } : {}),
               },
               signal: requestSignal(),

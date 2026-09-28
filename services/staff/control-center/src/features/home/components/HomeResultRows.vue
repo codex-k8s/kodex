@@ -1,18 +1,57 @@
 <script setup lang="ts">
+import { ref } from "vue";
+import { useI18n } from "vue-i18n";
 import type { HomeResultItem } from "../result-catalog";
+import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
-defineProps<{ items: HomeResultItem[]; more?: string; loading: boolean }>();
-const emit = defineEmits<{ more: []; open: [item: HomeResultItem] }>();
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+const props = defineProps<{
+  items: HomeResultItem[];
+  more?: string;
+  loading: boolean;
+  dashboard?: boolean;
+}>();
+const emit = defineEmits<{
+  more: [pageSize: number];
+  open: [item: HomeResultItem];
+}>();
 const serverMessage = useServerMessage();
-function scroll(event: Event) {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    emit("more");
+const { locale } = useI18n();
+
+function formatDate(value: string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "";
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(timestamp);
 }
+const root = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: root,
+  itemSelector: ".home-result-row",
+  itemCount: () => props.items.length,
+  estimatedViewportHeight: 552,
+  estimatedItemHeight: 92,
+  minimum: 6,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root,
+  sentinel,
+  enabled: () => Boolean(props.more) && !props.loading,
+  loadMore: () => emit("more", pageSize.value),
+});
 </script>
 <template>
-  <div class="home-result-rows" @scroll="scroll">
+  <div
+    ref="root"
+    class="home-result-rows"
+    :class="{ 'home-result-rows--dashboard': dashboard }"
+  >
     <div v-for="item in items" :key="item.ref" class="home-result-row">
       <RouterLink v-if="item.to" :to="item.to">{{
         serverMessage(item.title)
@@ -25,18 +64,28 @@ function scroll(event: Event) {
       >
         {{ item.title }}
       </button>
-      <small>{{ item.description }}</small>
+      <small v-if="item.artifact" class="home-result-row__source">
+        <span>{{ $t(`files.source.${item.artifact.source}`) }}</span>
+        <template v-if="formatDate(item.artifact.createdAt)">
+          <span aria-hidden="true">·</span>
+          <time :datetime="item.artifact.createdAt">{{
+            formatDate(item.artifact.createdAt)
+          }}</time>
+        </template>
+      </small>
+      <small v-else
+        ><SafeSummary :content="item.description" :maximum-length="140"
+      /></small>
       <StatusBadge :state="item.state" />
     </div>
-    <button
+    <div
       v-if="more"
-      type="button"
-      class="button"
-      :disabled="loading"
-      @click="emit('more')"
+      ref="sentinel"
+      class="home-result-rows__sentinel"
+      role="status"
     >
-      {{ $t("common.loadMore") }}
-    </button>
+      <span v-if="loading">{{ $t("common.loading") }}</span>
+    </div>
   </div>
 </template>
 <style scoped>
@@ -67,5 +116,53 @@ function scroll(event: Event) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.home-result-row__source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.home-result-row__source > :first-child,
+.home-result-row__source time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-result-rows__sentinel {
+  min-height: 1px;
+}
+.home-result-rows--dashboard {
+  max-height: none;
+  overflow: visible;
+}
+.home-result-rows--dashboard .home-result-row {
+  height: auto;
+  min-height: 82px;
+  align-items: start;
+  row-gap: 5px;
+  padding: 14px 16px;
+}
+.home-result-rows--dashboard .home-result-row > :first-child {
+  grid-column: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+.home-result-rows--dashboard .home-result-row small {
+  grid-column: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.home-result-rows--dashboard .home-result-row :deep(.status-badge) {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
 }
 </style>

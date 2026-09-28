@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { agentDetailCopy } from "@/features/agents/detail/copy";
+import { needsEnvironmentBinding } from "@/features/agents/detail/environment-binding";
 import type { ApplyBoundary } from "@/features/agents/detail/model";
 import {
   bindRuntimeEnvironment,
@@ -45,11 +46,21 @@ const selectedCandidate = ref<EnvironmentPickerOption>();
 const busy = ref(false);
 const loading = ref(false);
 const problem = ref<AppProblem>();
-const dirty = computed(
-  () =>
-    Boolean(selectedEnvironment.value) &&
-    selectedEnvironment.value !== view.value?.environment.ref,
-);
+const dirty = computed(() => {
+  const current = view.value;
+  const candidate = selectedCandidate.value;
+  return Boolean(
+    current &&
+    candidate?.ref === selectedEnvironment.value &&
+    needsEnvironmentBinding(
+      current.environmentBinding.environmentRef,
+      current.environmentBinding.versionRef,
+      candidate.ref,
+      candidate.environment.currentVersion.ref,
+      candidate.environment.ready,
+    ),
+  );
+});
 
 function notify(state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED"): void {
   emit("apply-state", state, copy.value.environment.catalog, "next-turn");
@@ -113,8 +124,15 @@ async function load(): Promise<void> {
 async function loadEnvironmentPage(
   query: string,
   cursor?: string,
+  _signal?: AbortSignal,
+  pageSize = 30,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await searchRuntimeEnvironments(props.projectRef, query, cursor);
+  const page = await searchRuntimeEnvironments(
+    props.projectRef,
+    query,
+    cursor,
+    pageSize,
+  );
   return {
     items: page.items.map(environmentOption),
     ...(page.nextPageToken ? { nextPageToken: page.nextPageToken } : {}),
@@ -124,11 +142,12 @@ async function loadEnvironmentPage(
 function select(value: string | null | readonly string[]): void {
   if (typeof value !== "string") return;
   selectedEnvironment.value = value;
-  notify(value === view.value?.environment.ref ? "APPLIED" : "DRAFT");
+  notify(dirty.value ? "DRAFT" : "APPLIED");
 }
 
 function selectOption(value: EnvironmentPickerOption): void {
   selectedCandidate.value = value;
+  notify(dirty.value ? "DRAFT" : "APPLIED");
 }
 
 async function bind(): Promise<void> {
@@ -174,6 +193,21 @@ onMounted(() => void load());
             <h3>{{ view.environment.name }}</h3>
             <code>{{ view.environment.ref }}</code>
           </div>
+        </div>
+        <div
+          v-if="view.environment.readinessBlockers.length"
+          class="environment-current__blockers"
+          role="status"
+        >
+          <StatusBadge state="UNAVAILABLE" />
+          <ul>
+            <li
+              v-for="blocker in view.environment.readinessBlockers"
+              :key="blocker"
+            >
+              {{ environmentReadinessMessage(blocker, t) }}
+            </li>
+          </ul>
         </div>
         <dl class="environment-current__meta">
           <div>
@@ -305,7 +339,11 @@ onMounted(() => void load());
             :disabled="!canEdit || busy || !dirty"
             @click="bind"
           >
-            <Save :size="16" aria-hidden="true" />{{ copy.environment.bind }}
+            <Save :size="16" aria-hidden="true" />{{
+              selectedEnvironment === view.environment.ref
+                ? copy.environment.updatePin
+                : copy.environment.bind
+            }}
           </button>
         </div>
       </article>
@@ -375,6 +413,23 @@ onMounted(() => void load());
   font-family: var(--font-mono);
   font-size: 0.72rem;
   overflow-wrap: anywhere;
+}
+.environment-current__blockers {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border, var(--border));
+  border-radius: 8px;
+  background: var(--warning-soft, var(--panel));
+}
+.environment-current__blockers ul {
+  min-width: 0;
+  margin: 0;
+  padding-left: 17px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 .environment-current__meta {
   display: grid;

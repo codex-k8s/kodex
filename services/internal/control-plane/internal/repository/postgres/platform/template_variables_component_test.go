@@ -51,6 +51,22 @@ func testTemplateVariableContext(t *testing.T, ctx context.Context, repository *
 	if _, _, _, err := service.ListTemplateVariables(ctx, owner, base); err != nil {
 		t.Fatal(err)
 	}
+	base.Page = query.Page{Size: 100}
+	base.SourceKind = "WORKFLOW"
+	workflow, total, _, err := service.ListTemplateVariables(ctx, owner, base)
+	if err != nil || len(workflow) == 0 || total != int64(len(workflow)) {
+		t.Fatalf("workflow source filter: %d/%d %v", len(workflow), total, err)
+	}
+	for _, item := range workflow {
+		if item.Source != "WORKFLOW" {
+			t.Fatalf("source filter leaked %q", item.Source)
+		}
+	}
+	base.SourceKind = "UNKNOWN"
+	if _, _, _, err := service.ListTemplateVariables(ctx, owner, base); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("unknown source: %v", err)
+	}
+	base.SourceKind = ""
 	base.TemplateContext = &query.TemplateVariableContext{AgentRef: agentRef}
 	if _, _, _, err := service.ListTemplateVariables(ctx, owner, base); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("context cursor reuse: %v", err)

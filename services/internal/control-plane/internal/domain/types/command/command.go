@@ -53,6 +53,7 @@ const (
 	UnbindAgentSkillBundle             Kind = "UNBIND_AGENT_SKILL_BUNDLE"
 	CompleteOnboarding                 Kind = "COMPLETE_ONBOARDING"
 	CreateProject                      Kind = "CREATE_PROJECT"
+	CreateProjectFile                  Kind = "CREATE_PROJECT_FILE"
 	UpdateProject                      Kind = "UPDATE_PROJECT"
 	TrashProject                       Kind = "TRASH_PROJECT"
 	RestoreProject                     Kind = "RESTORE_PROJECT"
@@ -141,6 +142,7 @@ const (
 	CreateAssistantConversation        Kind = "CREATE_ASSISTANT_CONVERSATION"
 	UpdateAssistantConversation        Kind = "UPDATE_ASSISTANT_CONVERSATION_TITLE"
 	ArchiveAssistantConversation       Kind = "ARCHIVE_ASSISTANT_CONVERSATION"
+	MoveAssistantConversationToProject Kind = "MOVE_ASSISTANT_CONVERSATION_TO_PROJECT"
 	AddAssistantTurn                   Kind = "ADD_ASSISTANT_TURN"
 	UpdateAssistantPlan                Kind = "UPDATE_ASSISTANT_PLAN_DRAFT"
 	ValidateAssistantPlan              Kind = "VALIDATE_ASSISTANT_PLAN"
@@ -187,6 +189,8 @@ const (
 	PublishPromptTemplateDraft         Kind = "PUBLISH_PROMPT_TEMPLATE_DRAFT"
 	RebindPromptTemplate               Kind = "REBIND_PROMPT_TEMPLATE_CONSUMERS"
 	CreateRoleImageRevisionDraft       Kind = "CREATE_ROLE_IMAGE_REVISION_DRAFT"
+	CreateAssistantRoleImageRecipe     Kind = "CREATE_ASSISTANT_ROLE_IMAGE_RECIPE"
+	UpdateAssistantRoleImageRecipe     Kind = "UPDATE_ASSISTANT_ROLE_IMAGE_RECIPE"
 	ValidateRoleImageRevision          Kind = "VALIDATE_ROLE_IMAGE_REVISION_DRAFT"
 	PublishRoleImageRevision           Kind = "PUBLISH_ROLE_IMAGE_REVISION_DRAFT"
 	RebindRoleImage                    Kind = "REBIND_ROLE_IMAGE_CONSUMERS"
@@ -238,6 +242,15 @@ type AgentInput struct {
 	InitialCapabilities                                                                                     []string
 	Ref, ProjectRef, RoleDefinitionRef, Name, Purpose, RoleDescription, AvatarURL, RuntimeRef, Instructions string
 	Enabled                                                                                                 bool
+}
+type AssistantRoleImageRecipeInput struct {
+	ProjectRef, AgentRef, Name string
+	AgentVersion               int64
+	Environment                entity.RoleEnvironmentSelection
+}
+type AssistantRoleImageUpdateInput struct {
+	ProjectRef, RecipeRef, Name string
+	Environment                 entity.RoleEnvironmentSelection
 }
 type AgentBindingInput struct {
 	AgentRef, BindingRef string
@@ -356,6 +369,7 @@ type ConnectionInput struct {
 }
 type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string
+	ApprovalScopePaths                                  []string
 	Enabled                                             bool
 }
 type AssistantConversationInput struct {
@@ -364,6 +378,7 @@ type AssistantConversationInput struct {
 }
 type AssistantConversationTitleInput struct{ ConversationRef, Title string }
 type AssistantConversationArchiveInput struct{ ConversationRef string }
+type AssistantConversationProjectInput struct{ ConversationRef, ProjectRef string }
 
 type EmailCredentialInput struct {
 	ConnectionRef string
@@ -372,10 +387,19 @@ type EmailCredentialInput struct {
 }
 type AssistantTurnInput struct {
 	ConversationRef, Content, AttachmentSetRef string
+	Context                                    *entity.AssistantContextDescriptor
 }
 type AssistantPlanInput struct {
-	PlanRef  string
-	Revision int64
+	PlanRef       string
+	Revision      int64
+	PreparedFiles map[string]CompletedArtifact
+}
+
+type ProjectFileInput struct {
+	ProjectRef, FileName, MediaType, SHA256 string
+	SizeBytes                               int64
+	Content                                 []byte
+	Prepared                                *PreparedArtifact
 }
 type AssistantPlanDraftInput struct {
 	PlanRef, Summary string

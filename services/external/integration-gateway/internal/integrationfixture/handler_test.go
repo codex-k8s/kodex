@@ -2,6 +2,7 @@ package integrationfixture
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,50 @@ import (
 	"testing"
 	"time"
 )
+
+func TestBearerProtectedOpenAPIPath(t *testing.T) {
+	t.Parallel()
+	const token = "fixture-token-with-at-least-thirty-two-bytes"
+	handler := NewBearerHandler(NewStore(), sha256.Sum256([]byte(token)))
+	handler.SetReady(true)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	endpoint := server.URL + "/openapi/v1/journals/openapi"
+	assertStatus(t, server.Client(), http.MethodGet, endpoint, "", nil, http.StatusUnauthorized)
+	assertStatus(t, server.Client(), http.MethodGet, endpoint, "", http.Header{
+		"Authorization": {"Bearer invalid-token-with-at-least-thirty-two-bytes"},
+	}, http.StatusUnauthorized)
+	projection := requestProjection(t, server.Client(), http.MethodGet, endpoint, "", http.Header{
+		"Authorization": {"Bearer " + token},
+	})
+	if projection.Count != 0 || projection.Sequence != 0 {
+		t.Fatalf("protected projection = %#v", projection)
+	}
+
+	writeHeaders := mutationHeaders("eff-openapi")
+	writeHeaders.Set("Authorization", "Bearer "+token)
+	written := requestProjection(t, server.Client(), http.MethodPost,
+		server.URL+"/openapi/v1/journals/openapi/entries", `{"value":"protected"}`, writeHeaders)
+	if written.Count != 1 || written.Value != "protected" {
+		t.Fatalf("protected write projection = %#v", written)
+	}
+	legacy := requestProjection(t, server.Client(), http.MethodGet, server.URL+"/v1/journals/openapi", "", nil)
+	if legacy.Count != 1 || legacy.Value != "protected" {
+		t.Fatalf("legacy readback projection = %#v", legacy)
+	}
+}
+
+func TestOpenAPIPathIsClosedWithoutBearerConfiguration(t *testing.T) {
+	t.Parallel()
+	handler := NewHandler(NewStore())
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	assertStatus(t, server.Client(), http.MethodGet, server.URL+"/openapi/v1/journals/main", "", http.Header{
+		"Authorization": {"Bearer fixture-token-with-at-least-thirty-two-bytes"},
+	}, http.StatusNotFound)
+}
 
 func TestReadinessAndStrictJournalContract(t *testing.T) {
 	t.Parallel()

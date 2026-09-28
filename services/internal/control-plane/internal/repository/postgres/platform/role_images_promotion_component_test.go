@@ -62,12 +62,43 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	admittedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
 	if err != nil || admittedDetail.PromotionCandidate == nil ||
 		admittedDetail.PromotionCandidate.Ref != artifact.Ref ||
+		admittedDetail.PromotionCandidate.PromotionState != "PENDING" ||
+		admittedDetail.PromotionCandidate.PromotionRequested ||
 		!containsString(admittedDetail.Recipe.NextActions, "PROMOTE") {
 		t.Fatalf("admitted promotion candidate readback mismatch: detail=%#v err=%v", admittedDetail, err)
 	}
 	roleImages, err := roleimageservice.New(repository, catalog)
 	if err != nil {
 		t.Fatalf("construct role image service: %v", err)
+	}
+	rejected, err := repository.Manage(ctx, roleimagerepo.ManageInput{
+		Principal: resolvedOwner, Action: "CREATE", ProjectRef: projectResult.Project.Ref,
+		RoleDefinitionRef: agent.RoleDefinitionRef, Name: "Rejected promotion image", Recipe: recipeInput,
+		Mutation: roleImageTestMutation("role-image-promotion-rejected-create", "CREATE", nil),
+	})
+	if err != nil || rejected.Build == nil {
+		t.Fatalf("create rejected promotion fixture: build=%#v err=%v", rejected.Build, err)
+	}
+	rejectedArtifact := seedPromotionArtifact(t, ctx, repository, resolvedOwner,
+		rejected.Recipe, *rejected.Build, "REJECTED")
+	rejectedDetail, err := repository.Get(ctx, resolvedOwner, rejected.Recipe.Ref)
+	if err != nil || rejectedDetail.PromotionCandidate == nil ||
+		rejectedDetail.PromotionCandidate.Ref != rejectedArtifact.Ref ||
+		rejectedDetail.PromotionCandidate.AdmissionVerdict != "REJECTED" ||
+		rejectedDetail.PromotionCandidate.PromotionState != "REJECTED" ||
+		rejectedDetail.PromotionCandidate.PromotionRequested ||
+		containsString(rejectedDetail.Recipe.NextActions, "PROMOTE") {
+		t.Fatalf("rejected admission readback or promotion authority mismatch: candidate=%#v actions=%#v err=%v",
+			rejectedDetail.PromotionCandidate, rejectedDetail.Recipe.NextActions, err)
+	}
+	rejectedVersion := int64(rejected.Recipe.Version)
+	if _, err := roleImages.Promote(ctx, roleimagerepo.PromotionRequestInput{
+		Principal: owner,
+		Mutation:  value.Mutation{IdempotencyKey: "role-image-promotion-rejected-attempt", ExpectedVersion: &rejectedVersion},
+		RecipeRef: rejected.Recipe.Ref, ArtifactRef: rejectedArtifact.Ref,
+		ExpectedProvenanceSHA256: rejectedArtifact.ProvenanceSHA256,
+	}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatalf("rejected artifact promotion was accepted: %v", err)
 	}
 	availabilityPrincipal := resolvedOwner
 	availabilityPrincipal.CallerWorkload = "image-admission-controller"
@@ -117,6 +148,8 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	queuedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
 	if err != nil || queuedDetail.PromotionCandidate == nil ||
 		queuedDetail.PromotionCandidate.Ref != artifact.Ref ||
+		queuedDetail.PromotionCandidate.PromotionState != "PENDING" ||
+		!queuedDetail.PromotionCandidate.PromotionRequested ||
 		containsString(queuedDetail.Recipe.NextActions, "PROMOTE") {
 		t.Fatalf("queued promotion candidate readback mismatch: detail=%#v err=%v", queuedDetail, err)
 	}
@@ -222,6 +255,7 @@ WHERE ref = $1`, artifact.Ref); err != nil {
 	detail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
 	readback, activeArtifact := detail.Recipe, detail.ActiveArtifact
 	if err != nil || activeArtifact == nil || detail.PromotionCandidate != nil ||
+		activeArtifact.PromotionState != "PROMOTED" || !activeArtifact.PromotionRequested ||
 		readback.ActiveImageArtifactRef != artifact.Ref || readback.PromotedImageReference != promotedReference {
 		t.Fatalf("promoted active image readback mismatch: recipe=%#v artifact=%#v err=%v",
 			readback, activeArtifact, err)
@@ -315,6 +349,12 @@ func promotionComponentCatalog(t *testing.T) (*roleimageservice.Catalog, entity.
 func seedAdmittedPromotionArtifact(t *testing.T, ctx context.Context, repository *Repository,
 	principal value.Principal, recipe entity.RoleImageRecipe, build entity.ImageBuild) entity.ImageArtifact {
 	t.Helper()
+	return seedPromotionArtifact(t, ctx, repository, principal, recipe, build, "ACCEPTED")
+}
+
+func seedPromotionArtifact(t *testing.T, ctx context.Context, repository *Repository,
+	principal value.Principal, recipe entity.RoleImageRecipe, build entity.ImageBuild, decision string) entity.ImageArtifact {
+	t.Helper()
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		t.Fatalf("resolve promotion fixture scope: %v", err)
@@ -355,20 +395,20 @@ func seedAdmittedPromotionArtifact(t *testing.T, ctx context.Context, repository
 	var verdict string
 	var updatedAt time.Time
 	if err := repository.pool.QueryRow(ctx, queryRoleImagesRecordAdmission,
-		current.organizationID, artifactID, uint64(1), "ACCEPTED",
+		current.organizationID, artifactID, uint64(1), decision,
 		strings.Repeat("2", 64), strings.Repeat("3", 64),
 		"spiffe://kodex.local/ns/kodex-system/sa/image-admission",
 		strings.Repeat("4", 64), strings.Repeat("5", 64),
 		"sha256:"+strings.Repeat("6", 64)).Scan(
 		&version, &verdict, &admissionRevision, &updatedAt); err != nil {
-		t.Fatalf("admit promotion fixture artifact: %v", err)
+		t.Fatalf("record promotion fixture admission: %v", err)
 	}
 	artifact, err := scanRoleImageArtifact(repository.pool.QueryRow(ctx,
 		queryRoleImagesGetActiveArtifact, current.organizationID, artifactRef))
 	if err != nil {
 		t.Fatalf("read admitted promotion fixture: %v", err)
 	}
-	if artifact.RecipeRef != recipe.Ref || artifact.Version != version || verdict != "ACCEPTED" || admissionRevision == 0 {
+	if artifact.RecipeRef != recipe.Ref || artifact.Version != version || verdict != decision || admissionRevision == 0 {
 		t.Fatalf("invalid admitted promotion fixture: artifact=%#v verdict=%s revision=%d", artifact, verdict, admissionRevision)
 	}
 	return artifact

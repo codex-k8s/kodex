@@ -24,12 +24,17 @@ describe("Skill manifest files", () => {
           legacy: false,
           locale: "ru",
           missingWarn: false,
-          messages: { ru: {} },
+          messages: {
+            ru: {
+              contextResources: { fileRevision: "Ревизия файла {revision}" },
+            },
+          },
         }),
       );
       const html = await renderToString(app);
       expect(html.match(/class="context-file"/g)).toHaveLength(6);
-      expect(html).toContain("artifact_5 / r3");
+      expect(html).toContain("Ревизия файла 3");
+      expect(html).toMatch(/<code[^>]*>artifact_5<\/code>/);
       expect(html).not.toContain("artifact_6");
       expect(html).toMatch(
         /<button[^>]*aria-label="managed.expandFields"[^>]*>/,

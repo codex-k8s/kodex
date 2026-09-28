@@ -78,6 +78,8 @@ const definition: IntegrationDefinition = {
   definitionVersion: "1.0.0",
   version: 5,
   nextActions: ["COPY"],
+  connectionCount: 0,
+  healthyConnectionCount: 0,
   origin: "SHIPPED",
   digest: "a".repeat(64),
   adapter: "SYNTHETIC_HTTP",

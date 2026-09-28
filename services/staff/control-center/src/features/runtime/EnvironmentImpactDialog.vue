@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link2, RefreshCw } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   RuntimeEnvironmentImpact,
   RuntimeEnvironmentRebindResult,
@@ -8,14 +8,28 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   applyEnvironmentRebind,
   consumerKey,
   readEnvironmentImpact,
 } from "./revision-impact";
 const props = defineProps<{ environmentRef: string; versionRef: string }>();
+const fieldPrefix = `environment-impact-${useId()}`;
 const emit = defineEmits<{ close: []; applied: [] }>();
 const impact = ref<RuntimeEnvironmentImpact>();
+const impactList = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: impactList,
+  itemSelector: ".impact-consumer",
+  itemCount: () => impact.value?.consumers.length ?? 0,
+  estimatedViewportHeight: 672,
+  estimatedItemHeight: 112,
+  minimum: 6,
+  maximum: 100,
+});
 const selected = ref(new Set<string>());
 const receipt = ref<RuntimeEnvironmentRebindResult>();
 const problem = ref<AppProblem>();
@@ -56,6 +70,7 @@ async function load(more = false): Promise<void> {
       more ? previous?.nextPageToken : undefined,
       active.signal,
       query.value,
+      pageSize.value,
     );
     if (current !== generation) return;
     if (more && previous?.nextPageToken) cursors.add(previous.nextPageToken);
@@ -138,6 +153,13 @@ onBeforeUnmount(() => {
   generation += 1;
   controller?.abort();
 });
+useCursorInfiniteScroll({
+  root: impactList,
+  sentinel,
+  enabled: () =>
+    Boolean(impact.value?.nextPageToken) && !loading.value && !busy.value,
+  loadMore: () => load(true),
+});
 </script>
 <template>
   <ModalDialog
@@ -160,6 +182,8 @@ onBeforeUnmount(() => {
     </div>
     <input
       v-model="query"
+      :id="`${fieldPrefix}-search`"
+      :name="`${fieldPrefix}-search`"
       type="search"
       :aria-label="$t('common.search')"
       :placeholder="$t('common.search')"
@@ -174,14 +198,16 @@ onBeforeUnmount(() => {
         }}
       </p>
       <code class="impact-digest">{{ impact.targetDigest }}</code>
-      <div class="impact-list">
+      <div ref="impactList" class="impact-list">
         <label
-          v-for="consumer in impact.consumers"
+          v-for="(consumer, index) in impact.consumers"
           :key="consumer.agentRef"
           class="impact-consumer"
         >
           <input
             type="checkbox"
+            :id="`${fieldPrefix}-consumer-${index}`"
+            :name="`${fieldPrefix}-consumer-${index}`"
             :checked="selected.has(consumerKey(consumer))"
             :disabled="
               busy ||
@@ -204,15 +230,15 @@ onBeforeUnmount(() => {
           }}</span>
         </label>
         <p v-if="!impact.consumers.length">{{ $t("common.empty") }}</p>
+        <div
+          v-if="impact.nextPageToken"
+          ref="sentinel"
+          class="impact-sentinel"
+          role="status"
+        >
+          <span v-if="loading">{{ $t("common.loading") }}</span>
+        </div>
       </div>
-      <button
-        v-if="impact.nextPageToken"
-        class="button"
-        :disabled="loading || busy"
-        @click="load(true)"
-      >
-        {{ $t("impact.more") }}
-      </button>
     </template>
     <section v-if="receipt" class="impact-receipt" role="status">
       <h3>{{ $t("impact.applied") }}</h3>
@@ -253,6 +279,9 @@ onBeforeUnmount(() => {
   max-height: 672px;
   overflow: auto;
   margin: 12px 0;
+}
+.impact-sentinel {
+  min-height: 1px;
 }
 .impact-consumer {
   display: grid;

@@ -37,8 +37,14 @@ spec:
           image: registry-pull.invalid/kodex/integration-synthetic@sha256:0000000000000000000000000000000000000000000000000000000000000000
           imagePullPolicy: Never
           command: [/usr/local/bin/integration-synthetic]
+          env:
+            - {name: KODEX_INTEGRATION_SYNTHETIC_TLS_LISTEN_ADDRESS, value: ":8443"}
+            - {name: KODEX_INTEGRATION_SYNTHETIC_TLS_CERTIFICATE_FILE, value: /var/run/secrets/kodex/integration-synthetic/tls/tls.crt}
+            - {name: KODEX_INTEGRATION_SYNTHETIC_TLS_PRIVATE_KEY_FILE, value: /var/run/secrets/kodex/integration-synthetic/tls/tls.key}
+            - {name: KODEX_INTEGRATION_SYNTHETIC_BEARER_SHA256, value: "0000000000000000000000000000000000000000000000000000000000000000"}
           ports:
             - {name: http, containerPort: 8080, protocol: TCP}
+            - {name: https-openapi, containerPort: 8443, protocol: TCP}
           startupProbe:
             httpGet: {path: /readyz, port: http, scheme: HTTP}
             periodSeconds: 2
@@ -67,6 +73,11 @@ spec:
               drop: [ALL]
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
+            - {name: server-tls, mountPath: /var/run/secrets/kodex/integration-synthetic/tls, readOnly: true}
       volumes:
         - name: tmp
           emptyDir: {sizeLimit: 64Mi}
+        - name: server-tls
+          secret:
+            secretName: integration-synthetic-server-tls
+            defaultMode: 0440

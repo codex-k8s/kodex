@@ -346,6 +346,7 @@ func castRuntimeSecret(value entity.RuntimeSecret) *controlplanev1.RuntimeSecret
 		Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, Name: value.Name,
 		Description: value.Description, ValueType: runtimeSecretValueType(value.ValueType), State: value.State,
 		CurrentRevision: value.CurrentRevision, CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), Namespace: value.Namespace,
+		NextActions: nextActions(value.NextActions),
 	}
 	if value.DisplayHint != nil {
 		result.DisplayHint = &controlplanev1.RuntimeSecretDisplayHint{Prefix: value.DisplayHint.Prefix, Suffix: value.DisplayHint.Suffix}

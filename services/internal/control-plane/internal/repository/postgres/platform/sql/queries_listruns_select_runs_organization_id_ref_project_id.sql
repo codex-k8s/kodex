@@ -3,13 +3,13 @@ SELECT r.ref,COALESCE(p.ref,''),s.ref,root.ref,COALESCE(parent.ref,''),COALESCE(
        COALESCE((SELECT array_agg(artifact.ref ORDER BY artifact.created_at) FROM control_plane.artifacts artifact JOIN control_plane.runs artifact_run ON artifact_run.id=artifact.run_id WHERE artifact_run.root_run_id=r.root_run_id),'{}'::text[]),
        COALESCE((SELECT array_agg(gate.ref ORDER BY gate.created_at) FROM control_plane.owner_gates gate WHERE gate.root_run_id=r.root_run_id),'{}'::text[]),
        r.usage,r.created_at,r.started_at,r.finished_at,
-       ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
+       (@role IN ('OWNER','ADMINISTRATOR') OR EXISTS(
          SELECT 1 FROM control_plane.memberships m
-         WHERE m.project_id=r.project_id AND m.subject_id=$4::uuid AND m.active AND 'CANCEL_RUNS'=ANY(m.permissions)
+         WHERE m.project_id=r.project_id AND m.subject_id=@actor_id::uuid AND m.active AND 'CANCEL_RUNS'=ANY(m.permissions)
        )),
-       ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(
+       (@role IN ('OWNER','ADMINISTRATOR') OR EXISTS(
          SELECT 1 FROM control_plane.memberships m
-         WHERE m.project_id=r.project_id AND m.subject_id=$4::uuid AND m.active AND 'LAUNCH_RUNS'=ANY(m.permissions)
+         WHERE m.project_id=r.project_id AND m.subject_id=@actor_id::uuid AND m.active AND 'LAUNCH_RUNS'=ANY(m.permissions)
        ))
 FROM control_plane.runs r
 LEFT JOIN control_plane.projects p ON p.id=r.project_id
@@ -22,15 +22,15 @@ LEFT JOIN control_plane.agents a ON r.target_type IN ('AGENT','SYSTEM_ASSISTANT'
 LEFT JOIN control_plane.workflows w ON r.target_type='WORKFLOW' AND w.ref=r.target_ref
 LEFT JOIN control_plane.agents sa ON r.target_type='SYSTEM_ASSISTANT' AND sa.system_key='system-assistant'
 LEFT JOIN control_plane.attachment_sets input_attachment_set ON input_attachment_set.id=r.input_attachment_set_id
-WHERE r.organization_id=$1::uuid
-  AND ($2='' OR p.ref=$2)
-  AND ($5='' OR strpos(lower(r.title),lower($5)) > 0 OR strpos(lower(r.task),lower($5)) > 0)
-  AND ($7 = '' OR r.ref > $7)
-  AND (cardinality($8::text[]) = 0 OR r.state = ANY($8::text[]))
-  AND ($9='' OR r.project_id = NULLIF($9,'')::uuid)
-  AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
+WHERE r.organization_id=@organization_id::uuid
+  AND (@project_ref='' OR p.ref=@project_ref)
+  AND (@query='' OR strpos(lower(r.title),lower(@query)) > 0 OR strpos(lower(r.task),lower(@query)) > 0)
+  AND (@cursor_at::timestamptz IS NULL OR (r.created_at, r.ref) < (@cursor_at::timestamptz, @cursor_ref::text))
+  AND (cardinality(@states::text[]) = 0 OR r.state = ANY(@states::text[]))
+  AND (@authority_project_id='' OR r.project_id = NULLIF(@authority_project_id,'')::uuid)
+  AND (@role IN ('OWNER','ADMINISTRATOR') OR EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
       WHERE target.organization_id=r.organization_id AND target.kind='RUN' AND target.id=r.id
-        AND control_plane.catalog_resource_visible(r.organization_id, $4::uuid, 'run.view', target.kind,
+        AND control_plane.catalog_resource_visible(r.organization_id, @actor_id::uuid, 'run.view', target.kind,
             target.id, target.project_id, target.owner_id, target.related_ids, transaction_timestamp())))
-ORDER BY r.ref
-LIMIT $6
+ORDER BY r.created_at DESC, r.ref DESC
+LIMIT @limit

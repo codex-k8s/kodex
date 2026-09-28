@@ -5,6 +5,7 @@ import {
   onScopeDispose,
   ref,
   shallowRef,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -23,7 +24,14 @@ import type {
   AsyncEntityOptionPage,
 } from "@/shared/ui/async-entity-picker";
 import { providerAccount, providerAccounts } from "./api";
+import {
+  additionalSttLanguages,
+  primarySttLanguage,
+  setAdditionalSttLanguages,
+  setPrimarySttLanguage,
+} from "./stt-language";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import type { ConfigurationKind } from "./api";
 import {
   parseConfigurationDocument,
@@ -38,7 +46,9 @@ const props = defineProps<{
   initializeStt?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
-const { t } = useI18n();
+const translator = useI18n();
+const { t } = translator;
+const fieldPrefix = `configuration-fields-${useId()}`;
 const catalog = shallowRef<SttModelCatalog>();
 const catalogFailed = ref(false);
 const catalogScope = new AbortController();
@@ -64,8 +74,9 @@ function supported(key: string): boolean {
 }
 async function loadModels(
   query: string,
-  _cursor: string | undefined,
+  cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<AsyncEntityOptionPage> {
   const generation = ++catalogGeneration;
   const combined = AbortSignal.any([signal, catalogScope.signal]);
@@ -91,7 +102,7 @@ async function loadModels(
             permissionKey: "platform.stt.use",
             parameters: {
               languages: sttParameterSupported(recommended, "languages")
-                ? ["ru", "en"]
+                ? ["ru"]
                 : [],
               keywords: [],
               prompt: "",
@@ -106,23 +117,32 @@ async function loadModels(
         });
       }
     }
+    const filtered = result.models.filter((item) =>
+      item.model.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+    );
+    const parsedOffset = Number.parseInt(cursor ?? "0", 10);
+    const offset =
+      Number.isSafeInteger(parsedOffset) && parsedOffset >= 0
+        ? parsedOffset
+        : 0;
+    const items = filtered.slice(offset, offset + pageSize);
+    const nextOffset = offset + items.length;
     return {
-      items: result.models
-        .filter((item) =>
-          item.model.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
-        )
-        .map((item) => ({
-          ref: item.model,
-          title: item.model,
-          meta: [
-            item.model === result.recommendedModel
-              ? t("managed.sttCatalog.recommended")
-              : "",
-            item.legacy ? t("managed.sttCatalog.legacy") : "",
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        })),
+      items: items.map((item) => ({
+        ref: item.model,
+        title: item.model,
+        meta: [
+          item.model === result.recommendedModel
+            ? t("managed.sttCatalog.recommended")
+            : "",
+          item.legacy ? t("managed.sttCatalog.legacy") : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+      ...(nextOffset < filtered.length
+        ? { nextPageToken: String(nextOffset) }
+        : {}),
     };
   } catch (error) {
     if (!combined.aborted && generation === catalogGeneration)
@@ -147,10 +167,19 @@ watch(
   },
 );
 function selectModel(option: AsyncEntityOption): void {
-  if (!catalog.value?.models.some((item) => item.model === option.ref)) return;
+  const profile = catalog.value?.models.find(
+    (item) => item.model === option.ref,
+  );
+  if (!profile) return;
+  const multiple = sttParameterSupported(profile, "languages");
+  const language = primarySttLanguage(stt.value, multipleLanguages());
   write({
     ...parsed.value.value,
-    stt: { ...stt.value, model: option.ref, permissionKey: "platform.stt.use" },
+    stt: {
+      ...setPrimarySttLanguage(stt.value, multiple, language),
+      model: option.ref,
+      permissionKey: "platform.stt.use",
+    },
   });
 }
 const parsed = computed(() => {
@@ -177,6 +206,24 @@ function text(value: unknown): string {
 }
 const stt = computed(() => object(parsed.value.value.stt));
 const sttParameters = computed(() => object(stt.value.parameters));
+const standardLanguageCodes = ["ru", "en", "de", "es", "fr"] as const;
+const customLanguageOpen = ref(false);
+const primaryLanguageCode = computed(() =>
+  primarySttLanguage(stt.value, multipleLanguages()),
+);
+const languageChoice = computed(() =>
+  customLanguageOpen.value ||
+  (primaryLanguageCode.value &&
+    !standardLanguageCodes.some((code) => code === primaryLanguageCode.value))
+    ? "custom"
+    : primaryLanguageCode.value,
+);
+function multipleLanguages(): boolean {
+  return modelProfile.value
+    ? supported("languages")
+    : Array.isArray(sttParameters.value.languages) &&
+        sttParameters.value.languages.length > 0;
+}
 function sttList(key: string): string {
   const value = sttParameters.value[key];
   return Array.isArray(value)
@@ -192,6 +239,32 @@ function updateSttParameter(key: string, value: unknown): void {
       ...stt.value,
       permissionKey: "platform.stt.use",
       parameters: { ...sttParameters.value, [key]: value },
+    },
+  });
+}
+function setLanguage(code: string): void {
+  write({
+    ...parsed.value.value,
+    stt: {
+      ...setPrimarySttLanguage(stt.value, multipleLanguages(), code),
+      permissionKey: "platform.stt.use",
+    },
+  });
+}
+function selectLanguage(event: Event): void {
+  if (!(event.target instanceof HTMLSelectElement)) return;
+  customLanguageOpen.value = event.target.value === "custom";
+  if (!customLanguageOpen.value) setLanguage(event.target.value);
+}
+function updateLanguage(event: Event): void {
+  if (event.target instanceof HTMLInputElement) setLanguage(event.target.value);
+}
+function updateAdditionalLanguages(value: string): void {
+  write({
+    ...parsed.value.value,
+    stt: {
+      ...setAdditionalSttLanguages(stt.value, value),
+      permissionKey: "platform.stt.use",
     },
   });
 }
@@ -236,16 +309,30 @@ async function loadAccounts(
   query: string,
   cursor: string | undefined,
   signal: AbortSignal,
+  pageSize = 30,
 ): Promise<AsyncEntityOptionPage> {
-  const page = await providerAccounts(query, cursor, signal);
+  const page = await providerAccounts(query, cursor, signal, pageSize);
   return {
-    items: page.items.map((item) => ({
-      ref: item.ref,
-      title: item.name,
-      description: item.externalAccountMasked,
-      meta: item.state,
-      disabled: !item.ready || item.authorization?.method !== "API_KEY",
-    })),
+    items: page.items.map((item) => {
+      const apiKey = item.authorization?.method === "API_KEY";
+      const stateKey = `states.${item.state}`;
+      return {
+        ref: item.ref,
+        title: item.name,
+        description: apiKey ? item.externalAccountMasked : undefined,
+        meta: apiKey
+          ? translator.te(stateKey)
+            ? t(stateKey)
+            : t("common.unknownStatus")
+          : undefined,
+        disabled: !item.ready || !apiKey,
+        disabledReason: !apiKey
+          ? t("managed.sttCatalog.apiKeyShort")
+          : !item.ready
+            ? t("managed.sttCatalog.accountNotReady")
+            : undefined,
+      };
+    }),
     nextPageToken: page.nextPageToken,
   };
 }
@@ -278,6 +365,37 @@ const packages = computed(() =>
         .join("\n")
     : "",
 );
+const roleImage = computed(() => object(parsed.value.value.roleImage));
+const roleImageEnvironment = computed(() =>
+  object(roleImage.value.environment),
+);
+function roleImageList(key: "packageKeys" | "toolKeys"): string {
+  const values = roleImageEnvironment.value[key];
+  return Array.isArray(values)
+    ? values
+        .filter((value): value is string => typeof value === "string")
+        .join("\n")
+    : "";
+}
+function updateRoleImage(value: Record<string, unknown>): void {
+  write({ ...parsed.value.value, roleImage: { ...roleImage.value, ...value } });
+}
+function updateRoleImageEnvironment(value: Record<string, unknown>): void {
+  updateRoleImage({
+    environment: { ...roleImageEnvironment.value, ...value },
+  });
+}
+function updateRoleImageList(
+  key: "packageKeys" | "toolKeys",
+  value: string,
+): void {
+  updateRoleImageEnvironment({
+    [key]: value
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  });
+}
 function write(value: Record<string, unknown>): void {
   if (!props.disabled && parsed.value.valid)
     emit(
@@ -315,24 +433,35 @@ function update(key: string, event: Event, group?: "stt"): void {
 </script>
 <template>
   <p v-if="!parsed.valid" role="alert">{{ $t("managed.invalidDocument") }}</p>
-  <fieldset v-else class="configuration-fields" :disabled="disabled">
-    <label v-if="kind !== 'INTEGRATION_DEFINITION'"
+  <fieldset
+    v-else
+    class="configuration-fields"
+    :class="{ 'configuration-fields--stt': kind === 'SYSTEM_STT' }"
+    :disabled="disabled"
+  >
+    <label v-if="kind !== 'INTEGRATION_DEFINITION' && kind !== 'SYSTEM_STT'"
       >{{ $t("common.description")
       }}<VoiceTextarea
+        :id="`${fieldPrefix}-description`"
+        :name="`${fieldPrefix}-description`"
         :disabled="disabled"
         :model-value="text(parsed.value.description)"
         @update:model-value="write({ ...parsed.value, description: $event })"
     /></label>
-    <template v-if="kind === 'ROLE_IMAGE'">
+    <template v-if="kind === 'ROLE_IMAGE' && !parsed.value.roleImage">
       <label
         >{{ $t("managed.baseImage")
         }}<input
+          :id="`${fieldPrefix}-base-image`"
+          :name="`${fieldPrefix}-base-image`"
           :value="text(parsed.value.baseImage)"
           @input="update('baseImage', $event)"
       /></label>
       <label
         >{{ $t("managed.packages")
         }}<VoiceTextarea
+          :id="`${fieldPrefix}-packages`"
+          :name="`${fieldPrefix}-packages`"
           :disabled="disabled"
           :model-value="packages"
           @update:model-value="
@@ -346,6 +475,84 @@ function update(key: string, event: Event, group?: "stt"): void {
           "
       /></label>
     </template>
+    <div
+      v-else-if="kind === 'ROLE_IMAGE'"
+      class="configuration-fields__role-image"
+    >
+      <p class="configuration-fields__note">
+        {{ $t("managed.roleImageFormHint") }}
+      </p>
+      <label
+        >{{ $t("managed.roleImageRoleRef") }}
+        <input
+          :id="`${fieldPrefix}-role-definition-ref`"
+          :name="`${fieldPrefix}-role-definition-ref`"
+          :value="text(roleImage.roleDefinitionRef)"
+          @input="
+            updateRoleImage({
+              roleDefinitionRef: ($event.target as HTMLInputElement).value,
+            })
+          "
+        />
+      </label>
+      <label
+        >{{ $t("managed.roleImageEnvironmentKey") }}
+        <input
+          :id="`${fieldPrefix}-environment-key`"
+          :name="`${fieldPrefix}-environment-key`"
+          :value="text(roleImageEnvironment.environmentKey)"
+          @input="
+            updateRoleImageEnvironment({
+              environmentKey: ($event.target as HTMLInputElement).value,
+            })
+          "
+        />
+      </label>
+      <details class="configuration-fields__role-image-advanced">
+        <summary>{{ $t("managed.roleImageAdvanced") }}</summary>
+        <div class="configuration-fields__role-image-advanced-content">
+          <label
+            >{{ $t("managed.roleImagePackageKeys") }}
+            <VoiceTextarea
+              :id="`${fieldPrefix}-package-keys`"
+              :name="`${fieldPrefix}-package-keys`"
+              :disabled="disabled"
+              :model-value="roleImageList('packageKeys')"
+              @update:model-value="updateRoleImageList('packageKeys', $event)"
+            />
+          </label>
+          <label
+            >{{ $t("managed.roleImageToolKeys") }}
+            <VoiceTextarea
+              :id="`${fieldPrefix}-tool-keys`"
+              :name="`${fieldPrefix}-tool-keys`"
+              :disabled="disabled"
+              :model-value="roleImageList('toolKeys')"
+              @update:model-value="updateRoleImageList('toolKeys', $event)"
+            />
+          </label>
+          <label class="configuration-fields__wide"
+            >{{ $t("managed.roleImageInstallationBlock") }}
+            <VoiceTextarea
+              :id="`${fieldPrefix}-installation-block`"
+              :name="`${fieldPrefix}-installation-block`"
+              :disabled="disabled"
+              :model-value="text(roleImageEnvironment.installationBlock)"
+              @update:model-value="
+                updateRoleImageEnvironment({ installationBlock: $event })
+              "
+            />
+          </label>
+        </div>
+      </details>
+      <RoleImageDockerfileEditor
+        class="configuration-fields__wide"
+        :model-value="text(roleImageEnvironment.dockerfile)"
+        :label="$t('roleImages.dockerfile')"
+        :readonly="disabled"
+        @update:model-value="updateRoleImageEnvironment({ dockerfile: $event })"
+      />
+    </div>
     <IntegrationPackageField
       v-if="kind === 'INTEGRATION_DEFINITION'"
       :schema="packageSchema"
@@ -357,6 +564,8 @@ function update(key: string, event: Event, group?: "stt"): void {
     <template v-if="kind === 'SYSTEM_STT'">
       <label class="configuration-fields__toggle">
         <input
+          :id="`${fieldPrefix}-stt-enabled`"
+          :name="`${fieldPrefix}-stt-enabled`"
           type="checkbox"
           :checked="stt.enabled === true"
           @change="toggleEnabled"
@@ -385,23 +594,6 @@ function update(key: string, event: Event, group?: "stt"): void {
           :placeholder="$t('managed.fields.model')"
           @select="selectModel"
       /></label>
-      <p v-if="catalog">
-        {{
-          $t("managed.sttCatalog.metadata", {
-            version: catalog.version,
-            observedAt: catalog.observedAt,
-          })
-        }}
-      </p>
-      <p v-if="catalog">
-        {{
-          $t("managed.sttCatalog.recommendations", {
-            model: catalog.recommendedModel,
-            bytes: catalog.recommendedMaximumAudioBytes,
-            milliseconds: catalog.recommendedMaximumAudioDurationMilliseconds,
-          })
-        }}
-      </p>
       <p v-if="catalogFailed" role="alert">
         {{ $t("managed.sttCatalog.failed") }}
         <button type="button" @click="refreshCatalog">
@@ -410,106 +602,201 @@ function update(key: string, event: Event, group?: "stt"): void {
       </p>
       <p v-if="!modelProfile">{{ $t("managed.sttCatalog.unconfirmed") }}</p>
       <label
-        >{{ $t("managed.fields.language")
-        }}<input
-          :value="text(stt.language)"
-          @input="update('language', $event, 'stt')"
-      /></label>
-      <label v-for="key in ['languages', 'keywords']" :key="key">
-        {{ $t(`managed.sttParameters.${key}`) }}
-        <small v-if="!supported(key)">{{
-          $t("managed.sttCatalog.parameterUnconfirmed")
-        }}</small>
-        <small v-else-if="key === 'keywords' && modelProfile">{{
-          $t("managed.sttCatalog.keywordBounds", {
-            count: modelProfile.maximumKeywords,
-            bytes: modelProfile.maximumKeywordBytes,
-          })
-        }}</small>
-        <VoiceTextarea
-          :model-value="sttList(key)"
-          :disabled="disabled"
-          rows="3"
-          @update:model-value="
-            updateSttParameter(key, $event ? $event.split('\n') : [])
-          "
-        />
-      </label>
-      <label
-        >{{ $t("managed.sttParameters.prompt") }}
-        <small v-if="modelProfile">{{
-          $t("managed.sttCatalog.promptBytes", {
-            count: modelProfile.maximumPromptBytes,
-          })
-        }}</small>
-        <VoiceTextarea
-          :model-value="text(sttParameters.prompt)"
-          :disabled="disabled"
-          rows="4"
-          @update:model-value="updateSttParameter('prompt', $event)"
-        />
-      </label>
-      <label
-        >{{ $t("managed.sttParameters.temperature") }}
-        <input
-          type="number"
-          :min="Math.max(0, modelProfile?.minimumTemperature ?? 0)"
-          :max="Math.min(1, modelProfile?.maximumTemperature ?? 1)"
-          step="0.05"
-          :value="sttParameters.temperature"
-          @input="updateSttNumber('temperature', $event, true)"
-        />
-      </label>
-      <label
-        >{{ $t("managed.sttParameters.chunkingStrategy") }}
-        <select
-          :value="text(sttParameters.chunkingStrategy)"
-          @change="
-            updateSttParameter(
-              'chunkingStrategy',
-              ($event.target as HTMLSelectElement).value,
-            )
-          "
+        >{{ $t("managed.sttParameters.primaryLanguage")
+        }}<select
+          :id="`${fieldPrefix}-language`"
+          :name="`${fieldPrefix}-language`"
+          :value="languageChoice"
+          @change="selectLanguage"
         >
-          <option
-            v-if="
-              !chunkingStrategies.includes(text(sttParameters.chunkingStrategy))
-            "
-            :value="text(sttParameters.chunkingStrategy)"
-            disabled
-          >
-            {{
-              text(sttParameters.chunkingStrategy) ||
-              $t("managed.sttParameters.default")
-            }}
+          <option value="">
+            {{ $t("managed.sttParameters.autoLanguage") }}
           </option>
           <option
-            v-for="strategy in chunkingStrategies"
-            :key="strategy"
-            :value="strategy"
+            v-for="code in standardLanguageCodes"
+            :key="code"
+            :value="code"
           >
-            {{ strategy || $t("managed.sttParameters.default") }}
+            {{ $t(`managed.sttParameters.language${code.toUpperCase()}`) }}
           </option>
-        </select>
-      </label>
-      <label class="configuration-fields__toggle"
-        ><input
-          type="checkbox"
-          :checked="sttParameters.stream === true"
-          disabled
-        /><span>{{ $t("managed.sttParameters.stream") }}</span></label
+          <option value="custom">
+            {{ $t("managed.sttParameters.customLanguage") }}
+          </option>
+        </select></label
       >
-      <label v-for="limit in sttFormLimits" :key="limit.key">
-        {{ $t(`managed.sttParameters.${limit.key}`) }}
+      <label v-if="languageChoice === 'custom'">
+        {{ $t("managed.sttParameters.customLanguage") }}
+        <small>{{ $t("managed.sttParameters.primaryLanguageHint") }}</small>
         <input
-          type="number"
-          :min="limit.min"
-          :max="limit.max"
-          step="1"
-          :value="stt[limit.key]"
-          @input="updateSttNumber(limit.key, $event)"
+          :id="`${fieldPrefix}-custom-language`"
+          :name="`${fieldPrefix}-custom-language`"
+          :value="primaryLanguageCode"
+          maxlength="2"
+          pattern="[a-z]{2}"
+          placeholder="pt"
+          @input="updateLanguage"
         />
       </label>
+      <details class="configuration-fields__advanced">
+        <summary>{{ $t("managed.sttParameters.advanced") }}</summary>
+        <div class="configuration-fields__advanced-content">
+          <label class="configuration-fields__wide"
+            >{{ $t("common.description") }}
+            <VoiceTextarea
+              :id="`${fieldPrefix}-description`"
+              :name="`${fieldPrefix}-description`"
+              :disabled="disabled"
+              :model-value="text(parsed.value.description)"
+              @update:model-value="
+                write({ ...parsed.value, description: $event })
+              "
+            />
+          </label>
+          <p v-if="catalog" class="configuration-fields__note">
+            {{
+              $t("managed.sttCatalog.metadata", {
+                version: catalog.version,
+                observedAt: catalog.observedAt,
+              })
+            }}
+          </p>
+          <p v-if="catalog" class="configuration-fields__note">
+            {{
+              $t("managed.sttCatalog.recommendations", {
+                model: catalog.recommendedModel,
+                bytes: catalog.recommendedMaximumAudioBytes,
+                milliseconds:
+                  catalog.recommendedMaximumAudioDurationMilliseconds,
+              })
+            }}
+          </p>
+          <label v-if="supported('languages') || additionalSttLanguages(stt)">
+            {{ $t("managed.sttParameters.additionalLanguages") }}
+            <small>{{
+              $t("managed.sttParameters.additionalLanguagesHint")
+            }}</small>
+            <VoiceTextarea
+              :id="`${fieldPrefix}-additional-languages`"
+              :name="`${fieldPrefix}-additional-languages`"
+              :model-value="additionalSttLanguages(stt)"
+              :disabled="disabled"
+              rows="2"
+              @update:model-value="updateAdditionalLanguages"
+            />
+          </label>
+          <label>
+            {{ $t("managed.sttParameters.keywords") }}
+            <small v-if="!supported('keywords')">{{
+              $t("managed.sttCatalog.parameterUnconfirmed")
+            }}</small>
+            <small v-else-if="modelProfile">{{
+              $t("managed.sttCatalog.keywordBounds", {
+                count: modelProfile.maximumKeywords,
+                bytes: modelProfile.maximumKeywordBytes,
+              })
+            }}</small>
+            <VoiceTextarea
+              :id="`${fieldPrefix}-keywords`"
+              :name="`${fieldPrefix}-keywords`"
+              :model-value="sttList('keywords')"
+              :disabled="disabled"
+              rows="3"
+              @update:model-value="
+                updateSttParameter('keywords', $event ? $event.split('\n') : [])
+              "
+            />
+          </label>
+          <label class="configuration-fields__wide"
+            >{{ $t("managed.sttParameters.prompt") }}
+            <small v-if="modelProfile">{{
+              $t("managed.sttCatalog.promptBytes", {
+                count: modelProfile.maximumPromptBytes,
+              })
+            }}</small>
+            <VoiceTextarea
+              :id="`${fieldPrefix}-prompt`"
+              :name="`${fieldPrefix}-prompt`"
+              :model-value="text(sttParameters.prompt)"
+              :disabled="disabled"
+              rows="4"
+              @update:model-value="updateSttParameter('prompt', $event)"
+            />
+          </label>
+          <label
+            >{{ $t("managed.sttParameters.temperature") }}
+            <input
+              :id="`${fieldPrefix}-temperature`"
+              :name="`${fieldPrefix}-temperature`"
+              type="number"
+              :min="Math.max(0, modelProfile?.minimumTemperature ?? 0)"
+              :max="Math.min(1, modelProfile?.maximumTemperature ?? 1)"
+              step="0.05"
+              :value="sttParameters.temperature"
+              @input="updateSttNumber('temperature', $event, true)"
+            />
+          </label>
+          <label
+            >{{ $t("managed.sttParameters.chunkingStrategy") }}
+            <select
+              :id="`${fieldPrefix}-chunking-strategy`"
+              :name="`${fieldPrefix}-chunking-strategy`"
+              :value="text(sttParameters.chunkingStrategy)"
+              @change="
+                updateSttParameter(
+                  'chunkingStrategy',
+                  ($event.target as HTMLSelectElement).value,
+                )
+              "
+            >
+              <option
+                v-if="
+                  !chunkingStrategies.includes(
+                    text(sttParameters.chunkingStrategy),
+                  )
+                "
+                :value="text(sttParameters.chunkingStrategy)"
+                disabled
+              >
+                {{
+                  text(sttParameters.chunkingStrategy) ||
+                  $t("managed.sttParameters.default")
+                }}
+              </option>
+              <option
+                v-for="strategy in chunkingStrategies"
+                :key="strategy"
+                :value="strategy"
+              >
+                {{ strategy || $t("managed.sttParameters.default") }}
+              </option>
+            </select>
+          </label>
+          <label class="configuration-fields__toggle configuration-fields__wide"
+            ><input
+              :id="`${fieldPrefix}-stream`"
+              :name="`${fieldPrefix}-stream`"
+              type="checkbox"
+              :checked="sttParameters.stream === true"
+              disabled
+            /><span>{{ $t("managed.sttParameters.stream") }}</span></label
+          >
+          <div class="configuration-fields__limits">
+            <label v-for="limit in sttFormLimits" :key="limit.key">
+              {{ $t(`managed.sttParameters.${limit.key}`) }}
+              <input
+                :id="`${fieldPrefix}-${limit.key}`"
+                :name="`${fieldPrefix}-${limit.key}`"
+                type="number"
+                :min="limit.min"
+                :max="limit.max"
+                step="1"
+                :value="stt[limit.key]"
+                @input="updateSttNumber(limit.key, $event)"
+              />
+            </label>
+          </div>
+        </div>
+      </details>
     </template>
   </fieldset>
 </template>
@@ -527,6 +814,51 @@ function update(key: string, event: Event, group?: "stt"): void {
   min-width: 0;
   gap: 6px;
 }
+.configuration-fields__role-image {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+.configuration-fields__role-image > .configuration-fields__wide,
+.configuration-fields__role-image > .configuration-fields__note,
+.configuration-fields__role-image > .configuration-fields__role-image-advanced {
+  grid-column: 1 / -1;
+}
+.configuration-fields__role-image-advanced {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.configuration-fields__role-image-advanced summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+.configuration-fields__role-image-advanced[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+.configuration-fields__role-image-advanced-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+}
+.configuration-fields__role-image-advanced-content
+  > .configuration-fields__wide {
+  grid-column: 1 / -1;
+}
+.configuration-fields--stt {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+.configuration-fields--stt > .configuration-fields__toggle,
+.configuration-fields--stt > .configuration-fields__advanced,
+.configuration-fields--stt > p {
+  grid-column: 1 / -1;
+}
 .configuration-fields p,
 .configuration-fields small {
   overflow-wrap: anywhere;
@@ -535,6 +867,42 @@ function update(key: string, event: Event, group?: "stt"): void {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.configuration-fields__advanced {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.configuration-fields__advanced summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+.configuration-fields__advanced[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+.configuration-fields__advanced-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+}
+.configuration-fields__advanced-content > .configuration-fields__wide,
+.configuration-fields__advanced-content > .configuration-fields__note,
+.configuration-fields__limits {
+  grid-column: 1 / -1;
+}
+.configuration-fields__limits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+.configuration-fields__note {
+  margin: 0;
+  color: var(--text-muted);
 }
 .configuration-fields__row {
   display: flex;
@@ -550,5 +918,20 @@ function update(key: string, event: Event, group?: "stt"): void {
   gap: 12px;
   border-top: 1px solid var(--border);
   padding-top: 12px;
+}
+@media (max-width: 900px) {
+  .configuration-fields__role-image {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .configuration-fields__role-image-advanced-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .configuration-fields--stt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .configuration-fields__advanced-content,
+  .configuration-fields__limits {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

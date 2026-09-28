@@ -2,8 +2,10 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -16,6 +18,7 @@ type integrationCredentialRepository struct {
 	resolveCalls  int
 	readPrincipal value.Principal
 	executed      command.Command
+	connection    *entity.IntegrationConnection
 }
 
 func (repository *integrationCredentialRepository) ResolvePrincipal(_ context.Context, principal value.Principal) (value.Principal, error) {
@@ -30,9 +33,42 @@ func (repository *integrationCredentialRepository) ResolvePrincipal(_ context.Co
 
 func (repository *integrationCredentialRepository) GetIntegrationConnection(_ context.Context, principal value.Principal, ref string) (entity.IntegrationConnection, error) {
 	repository.readPrincipal = principal
+	if repository.connection != nil {
+		return *repository.connection, nil
+	}
 	return entity.IntegrationConnection{
 		Ref: ref, DefinitionKey: "github", Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
 	}, nil
+}
+
+func TestConfigureIntegrationCredentialRequiresPublishedOpenAPIPin(t *testing.T) {
+	t.Parallel()
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := definitions["openapi-mcp"]
+	repository := &integrationCredentialRepository{connection: &entity.IntegrationConnection{
+		Ref: "intconn_openapi", DefinitionKey: "openapi-mcp", DefinitionDigest: base.Digest,
+		Version: 3, CredentialSecretKey: "token", NextActions: []string{"CONFIGURE_CREDENTIAL"},
+		Capabilities: []entity.IntegrationCapability{{Key: "openapi.read"}},
+	}}
+	service, err := New(repository, WithCredentialMaterializer(integrationCredentialMaterializer{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := int64(3)
+	principal := value.Principal{ActorID: "external-actor", AuthorityTenant: "external-tenant", Permission: "platform.command.integrations.configure-credential", CorrelationRef: "correlation-openapi", CallerWorkload: "control-api-gateway", CredentialRevision: 1}
+	mutation := value.Mutation{IdempotencyKey: "openapi-credential-fixture", ExpectedVersion: &version}
+	_, err = service.ConfigureIntegrationCredential(context.Background(), principal, mutation, repository.connection.Ref, []byte("fixture-value"))
+	if !errors.Is(err, errs.ErrForbidden) || repository.executed.Kind != "" {
+		t.Fatalf("unpublished OpenAPI template admitted: %v", err)
+	}
+	repository.connection.DefinitionDigest = "sha256:published-owner-revision"
+	_, err = service.ConfigureIntegrationCredential(context.Background(), principal, mutation, repository.connection.Ref, []byte("fixture-value"))
+	if err != nil || repository.executed.Kind != command.ConfigureConnectionCredential {
+		t.Fatalf("published OpenAPI credential rejected: %v", err)
+	}
 }
 
 func (repository *integrationCredentialRepository) Execute(_ context.Context, input command.Command) (command.Result, error) {

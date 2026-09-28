@@ -264,6 +264,39 @@ require_mapper_exact() {
     ' <<<"$mapper_json" >/dev/null
 }
 
+password_amr_config='{"default.reference.value":"pwd","default.reference.maxAge":"300"}'
+
+password_execution() {
+  keycloak_request get authentication/flows/browser/executions -r "$realm" |
+    jq -er '
+      [.[] | select(.providerId == "auth-username-password-form" and .requirement == "REQUIRED")] |
+      if length == 1 then .[0] else error("browser password execution is ambiguous") end
+    '
+}
+
+readback_password_amr() {
+  local execution config_id
+  execution=$(password_execution) || fail 'browser password execution is unavailable'
+  config_id=$(jq -er '.authenticationConfig | select(type == "string" and length > 0)' <<<"$execution") ||
+    fail 'browser password authenticator reference is absent'
+  keycloak_request get "authentication/config/$config_id" -r "$realm" |
+    jq -e --argjson expected "$password_amr_config" '
+      .alias == "kodex-password-amr" and .config == $expected
+    ' >/dev/null || fail 'browser password authenticator reference readback failed'
+}
+
+reconcile_password_amr() {
+  local execution config_id
+  execution=$(password_execution) || fail 'browser password execution is unavailable'
+  config_id=$(jq -r '.authenticationConfig // ""' <<<"$execution") ||
+    fail 'browser password authenticator reference is invalid'
+  if [[ -z "$config_id" ]]; then
+    keycloak_request create "authentication/executions/$(jq -er '.id' <<<"$execution")/config" \
+      -r "$realm" -s alias=kodex-password-amr -s "config=$password_amr_config" >/dev/null
+  fi
+  readback_password_amr
+}
+
 read_management_client_secret() {
   local client_id=$1 namespace_name=$2 secret_name=$3
   local secret_json actual_client_id client_secret
@@ -449,6 +482,11 @@ if [[ "$mode" == apply ]]; then
     '{"claim.name":"realm_access.roles","jsonType.label":"String","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
   reconcile_mapper "$control_center_id" kodex-groups oidc-group-membership-mapper \
     '{"claim.name":"groups","full.path":"false","multivalued":"true","access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"true","introspection.token.claim":"true"}'
+  reconcile_mapper "$control_center_id" kodex-acr oidc-acr-mapper \
+    '{"access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"false"}'
+  reconcile_mapper "$control_center_id" kodex-amr oidc-amr-mapper \
+    '{"access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"false"}'
+  reconcile_password_amr
 
   owner_count=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
     jq -r --arg username "$owner_username" '[.[] | select(.username == $username)] | length')
@@ -526,6 +564,11 @@ require_mapper_exact "$mapper_json" kodex-realm-roles oidc-usermodel-realm-role-
   "$roles_mapper_config" || fail 'OIDC claim mapper readback failed'
 require_mapper_exact "$mapper_json" kodex-groups oidc-group-membership-mapper \
   "$groups_mapper_config" || fail 'OIDC claim mapper readback failed'
+require_mapper_exact "$mapper_json" kodex-acr oidc-acr-mapper \
+  '{"access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"false"}' || fail 'OIDC ACR mapper readback failed'
+require_mapper_exact "$mapper_json" kodex-amr oidc-amr-mapper \
+  '{"access.token.claim":"true","id.token.claim":"true","userinfo.token.claim":"false","introspection.token.claim":"false"}' || fail 'OIDC AMR mapper readback failed'
+readback_password_amr
 
 owner_id=$(keycloak_request get users -r "$realm" -q "username=$owner_username" |
   jq -er --arg username "$owner_username" '

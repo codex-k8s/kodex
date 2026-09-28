@@ -10,6 +10,19 @@ const conversationalMessageKinds = new Set<RunEvent["messageKind"]>([
   "FINAL_MESSAGE",
 ]);
 
+export function runtimeProgressKey(
+  value: string | undefined,
+): string | undefined {
+  switch (value?.trim()) {
+    case "WORKLOAD_SCHEDULED":
+      return "runs.runtimeProgress.workloadScheduled";
+    case "MODEL_REQUEST_RUNNING":
+      return "runs.runtimeProgress.modelRequestRunning";
+    default:
+      return undefined;
+  }
+}
+
 export function presentRuntimeText(
   value: string | undefined,
   serverMessage: (value: string) => string,

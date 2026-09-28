@@ -168,6 +168,16 @@ describe("execution target picker API", () => {
     expect(page.nextPageToken).toBe("workflow-page-3");
   });
 
+  it("отклоняет чужой проект в ответе каталога исполнителей", async () => {
+    api.listAgents.mockReturnValueOnce(
+      response({ items: [agent({ projectRef: "project_other" })] }),
+    );
+    const loader = createExecutionTargetPickerLoader("project_sales", "AGENT");
+    await expect(
+      loader("", undefined, new AbortController().signal),
+    ).rejects.toThrow("project mismatch");
+  });
+
   it.each([
     ["AGENT", "AGENT", "agent_sales", "agent_sales"],
     ["AGENT", "WORKFLOW", "agent_sales", ""],

@@ -23,11 +23,12 @@ export async function searchProjects(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ) {
   return (
     await unwrap(
       listProjects({
-        query: { query, pageToken, pageSize: 30 },
+        query: { query, pageToken, pageSize },
         signal: requestSignal(signal),
       }),
     )
@@ -37,11 +38,12 @@ export async function searchProjects(
 export async function loadProjectTrash(
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ) {
   return (
     await unwrap(
       listTrashedProjects({
-        query: { pageToken, pageSize: 30 },
+        query: { pageToken, pageSize },
         signal: requestSignal(signal),
       }),
     )
@@ -84,7 +86,9 @@ export async function restoreProjectFromTrash(
   return response.data;
 }
 
-export async function purgeProjectFromTrash(project: Project): Promise<Project> {
+export async function purgeProjectFromTrash(
+  project: Project,
+): Promise<Project> {
   const response = await mutate(
     (headers) =>
       purgeProject({

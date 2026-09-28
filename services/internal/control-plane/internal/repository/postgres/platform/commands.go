@@ -10,6 +10,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -266,6 +267,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.completeOnboarding(ctx, tx, scope)
 	case command.CreateProject:
 		return repository.createProject(ctx, tx, scope, input.Payload)
+	case command.CreateProjectFile:
+		return repository.createProjectFile(ctx, tx, scope, input.Payload)
 	case command.UpdateProject:
 		return repository.updateProject(ctx, tx, scope, input.Mutation, input.Payload)
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
@@ -276,6 +279,14 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeMembership(ctx, tx, scope, input)
 	case command.CreateAgent:
 		return repository.createAgent(ctx, tx, scope, input.Payload)
+	case command.CreateAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
+		if !ok {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		return repository.createAssistantRoleImage(ctx, tx, scope, payload)
+	case command.UpdateAssistantRoleImageRecipe:
+		return repository.updateAssistantRoleImage(ctx, tx, scope, input)
 	case command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent:
 		return repository.changeAgent(ctx, tx, scope, input)
 	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
@@ -333,7 +344,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.ConfigureEmailCredential:
 		return repository.configureEmailCredential(ctx, tx, scope, input)
-	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.AddAssistantTurn,
+	case command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant:
 		return repository.changeAssistant(ctx, tx, scope, input)
@@ -517,7 +528,7 @@ func (repository *Repository) changeMembership(ctx context.Context, tx pgx.Tx, s
 		if item.Version != *input.Mutation.ExpectedVersion {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		}
-		if subjectID == scope.actorID && scope.role != "OWNER" && scope.role != "ADMINISTRATOR" {
+		if subjectID == scope.actorID {
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		err = tx.QueryRow(ctx, queryProjectMembershipUpdate, pgx.StrictNamedArgs{
@@ -638,7 +649,7 @@ func (repository *Repository) changePlatformMembership(ctx context.Context, tx p
 		if scope.role != "OWNER" && item.Role == "OWNER" {
 			return commandOutcome{}, errs.ErrForbidden
 		}
-		if subjectID == scope.actorID && !payload.Active {
+		if subjectID == scope.actorID && (!payload.Active || payload.Role != item.Role) {
 			return commandOutcome{}, errs.ErrForbidden
 		}
 		if err := repository.protectLastOwner(ctx, tx, scope.organizationID, membershipID, item, payload.Role, payload.Active); err != nil {
@@ -822,6 +833,9 @@ func (repository *Repository) createAgent(ctx context.Context, tx pgx.Tx, scope 
 	}
 	bindingRef, bindingVersion, err := assignInstructionBinding(ctx, tx, scope.organizationID, agentID, instructionRef)
 	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.validateAgentPromptContextTx(ctx, tx, scope, item.Ref, input.Instructions, false); err != nil {
 		return commandOutcome{}, err
 	}
 	item.InstructionBinding = &entity.AgentInstructionsBinding{Ref: bindingRef, Version: bindingVersion, RevisionRef: instructionRef, Effective: true}
@@ -1621,7 +1635,7 @@ func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context,
 	title := strings.TrimSpace(payload.Title)
 	titleSource := strings.TrimSpace(payload.TitleSource)
 	if title == "" {
-		title = targetName + ": " + truncate(payload.Task, 120)
+		title = boundedRunTitle(targetName + ": " + truncate(payload.Task, 120))
 		titleSource = "SERVER_DEFAULT"
 	} else if titleSource == "" {
 		titleSource = "SERVER_DEFAULT"
@@ -1761,7 +1775,7 @@ func workflowCoordinatorTask(task, versionRef, versionDigest string, version ent
 	builder.WriteString(versionRef)
 	builder.WriteString(" (sha256:")
 	builder.WriteString(versionDigest)
-	builder.WriteString("). Use delegate_agent exactly once for every step assigned to another agent. Execute coordinator-owned steps locally. End this turn after all required delegations are accepted; child results arrive in a later callback turn.\n")
+	builder.WriteString("). Use delegate_agent exactly once for every step, including steps assigned to the coordinator itself, with its exact workflow_step_key. Do not claim a step is complete until its delegated execution returns a successful callback. End this turn after all eligible delegations are accepted; child results arrive in a later callback turn.\n")
 	if instructions := strings.TrimSpace(version.Instructions); instructions != "" {
 		builder.WriteString("\nWorkflow instructions: ")
 		builder.WriteString(instructions)
@@ -1772,11 +1786,7 @@ func workflowCoordinatorTask(task, versionRef, versionDigest string, version ent
 		builder.WriteString(step.Key)
 		builder.WriteString("; agent ")
 		builder.WriteString(step.AgentRef)
-		if step.AgentRef == version.CoordinatorAgentRef {
-			builder.WriteString(" (execute locally)")
-		} else {
-			builder.WriteString(" (delegate)")
-		}
+		builder.WriteString(" (delegate as a separate execution)")
 		builder.WriteString("; task: ")
 		builder.WriteString(step.Instructions)
 		if expected := strings.TrimSpace(step.ExpectedResult); expected != "" {
@@ -1829,6 +1839,19 @@ func truncate(value string, maximum int) string {
 		return "…"
 	}
 	return string(runes[:maximum-1]) + "…"
+}
+
+func boundedRunTitle(title string) string {
+	const maximumBytes = 240
+	if len(title) <= maximumBytes {
+		return title
+	}
+	prefix := title
+	for len(prefix) > maximumBytes-len("…") {
+		_, size := utf8.DecodeLastRuneInString(prefix)
+		prefix = prefix[:len(prefix)-size]
+	}
+	return strings.TrimSpace(prefix) + "…"
 }
 
 func (repository *Repository) emitPlatformEvent(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string) error {
@@ -2344,17 +2367,17 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 	if !contains([]string{"FAILED", "CANCELLED"}, state) {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	var targetType, targetRef, title, task, sessionRef, source string
+	var targetType, targetRef, title, titleSource, task, sessionRef, source string
 	var raw []byte
 	var attachmentSetRef, attachmentPurpose string
-	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &task, &sessionRef, &source, &raw, &attachmentSetRef, &attachmentPurpose); err != nil {
+	if err := tx.QueryRow(ctx, queryCommandsChangerunSelectRunsId, runID).Scan(&targetType, &targetRef, &title, &titleSource, &task, &sessionRef, &source, &raw, &attachmentSetRef, &attachmentPurpose); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	var launchInput map[string]any
 	_ = json.Unmarshal(raw, &launchInput)
 	nested := input
 	nested.Kind = command.LaunchRun
-	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: title, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
+	nested.Payload = command.LaunchRunInput{ProjectRef: projectRef, Title: boundedRunTitle(title), TitleSource: titleSource, Task: task, SessionRef: sessionRef, Source: source, Target: entity.RunTarget{Type: targetType, Ref: targetRef}, Input: launchInput, AttachmentSetRef: attachmentSetRef, AttachmentPurpose: attachmentPurpose}
 	outcome, err := repository.launchRunWithAttachmentPolicy(ctx, tx, scope, nested, true)
 	if err != nil {
 		return commandOutcome{}, err
@@ -2403,13 +2426,13 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return outcome, err
 	}
 	var gateID, nodeID, rootRunID, projectID, projectRef, gateNodeRef string
-	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID string
+	var predecessorNodeID, predecessorNodeRef, predecessorRunID, sessionID, integrationInvocationID, integrationApprovalPolicy string
 	var version int64
 	var allowed []string
 	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectOwnerGatesOrganizationIdRefState, scope.organizationID, payload.GateRef).Scan(
 		&gateID, &nodeID, &rootRunID, &projectID, &projectRef, &version, &allowed, &gateNodeRef,
 		&predecessorNodeID, &predecessorNodeRef, &predecessorRunID, &sessionID,
-		&integrationInvocationID,
+		&integrationInvocationID, &integrationApprovalPolicy,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrAlreadyResolved
@@ -2428,6 +2451,11 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 		return commandOutcome{}, err
 	}
 	if integrationInvocationID != "" {
+		if integrationApprovalPolicy == "HUMAN_SCOPED" && payload.Decision == "APPROVE" {
+			if err := repository.approveIntegrationScope(ctx, tx, scope, gateID, integrationInvocationID, rootRunID, projectID); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		invocationState, safeErrorCode := "READY", ""
 		if payload.Decision == "REJECT" {
 			invocationState, safeErrorCode = "REJECTED", "INTEGRATION_REJECTED_BY_OWNER"
@@ -2446,6 +2474,11 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	}
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment, gateID, nextState, payload.Decision, truncate(payload.Comment, 2000), scope.actorID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if integrationInvocationID != "" && (payload.Decision == "REJECT" || payload.Decision == "CANCEL") {
+		if _, err := repository.scheduleIntegrationContinuation(ctx, tx, scope, integrationInvocationID, projectID); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if attachmentSet.ID != "" {
 		tag, err := tx.Exec(ctx, queryAttachmentSetsBindGateResolution, pgx.StrictNamedArgs{
@@ -2512,7 +2545,23 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if active == 0 {
-			runState = "SUCCEEDED"
+			if integrationInvocationID != "" {
+				// Исполнение ожидает внешний effect и следующий ход той же Session.
+				runState = "WAITING_HUMAN"
+			} else {
+				runState = "SUCCEEDED"
+			}
+		}
+	}
+	if integrationInvocationID != "" {
+		var openGates int64
+		if err := tx.QueryRow(ctx, queryCommandsResolvegateCountOpenGates, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID, "root_run_id": rootRunID,
+		}).Scan(&openGates); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if openGates > 0 {
+			runState = "WAITING_HUMAN"
 		}
 	}
 	terminalRootNodeRef := ""

@@ -768,6 +768,9 @@ func (repository *Repository) runtimeEnvironmentReadiness(item entity.RuntimeEnv
 	} else if item.CurrentVersion.Image.RoleRuntimeContractRevision != int64(repository.roleImages.RoleRuntimeContractRevision) ||
 		item.CurrentVersion.Image.RoleRuntimeContractSHA256 != repository.roleImages.RoleRuntimeContractSHA256 {
 		result.Blockers = append(result.Blockers, "ROLE_RUNTIME_CONTRACT_STALE")
+	} else if item.CurrentVersion.Image.PlatformOwnedBootstrap &&
+		item.CurrentVersion.Image.Digest != repository.roleImages.DefaultImageDigest {
+		result.Blockers = append(result.Blockers, "DEFAULT_ROLE_IMAGE_STALE")
 	}
 	result.Ready = len(result.Blockers) == 0
 	return result

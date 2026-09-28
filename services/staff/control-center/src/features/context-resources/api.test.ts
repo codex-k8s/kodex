@@ -104,7 +104,7 @@ describe("context resource adapters", () => {
           query: "Skill",
           state: "ACTIVE",
           pageToken: "next",
-          pageSize: 40,
+          pageSize: 20,
         },
       }),
     );

@@ -13,6 +13,7 @@ describe("Environment readiness messages", () => {
         "PUBLISHED_VERSION_MISSING",
         "PROMOTED_IMAGE_MISSING",
         "ROLE_RUNTIME_CONTRACT_STALE",
+        "DEFAULT_ROLE_IMAGE_STALE",
       ]) {
         const text = environmentReadinessMessage(code, t);
         expect(text).not.toContain(code);

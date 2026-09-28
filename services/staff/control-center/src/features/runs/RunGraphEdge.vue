@@ -7,6 +7,7 @@ import type { RunGraphEdgeData } from "@/features/runs/run-graph-flow";
 const props = defineProps<EdgeProps<RunGraphEdgeData>>();
 const path = computed(
   () =>
+    props.data.path ||
     getBezierPath({
       sourceX: props.sourceX,
       sourceY: props.sourceY,

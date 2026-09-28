@@ -34,10 +34,11 @@ const (
 )
 
 type Config struct {
-	RPCProfile                                             string
-	CredentialDirectory, ProxyURL, SyntheticBaseURL        string
-	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile string
-	Timeout                                                time.Duration
+	RPCProfile                                                       string
+	CredentialDirectory, ProxyURL, OpenAPIProxyURL, SyntheticBaseURL string
+	LocalOpenAPIBaseURL, LocalOpenAPICAFile                          string
+	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile           string
+	Timeout                                                          time.Duration
 }
 
 type CredentialRevision struct {
@@ -70,13 +71,29 @@ type Result struct {
 type SafeError struct {
 	Code          string
 	HealthSummary string
+	Transient     bool
 }
 
 func (err *SafeError) Error() string { return err.Code }
 
-type UnknownOutcomeError struct{}
+type UnknownOutcomeError struct{ stage string }
 
 func (*UnknownOutcomeError) Error() string { return "INTEGRATION_OUTCOME_UNKNOWN" }
+
+// UnknownOutcomeStage возвращает только закрытый диагностический класс без URL,
+// входных данных или учётных данных. Он не меняет внешний код UNKNOWN_OUTCOME.
+func UnknownOutcomeStage(err error) string {
+	var unknown *UnknownOutcomeError
+	if !errors.As(err, &unknown) {
+		return "not_unknown"
+	}
+	switch unknown.stage {
+	case "transport", "response_body", "provider_status", "response_validation", "receipt_validation":
+		return unknown.stage
+	default:
+		return "unclassified"
+	}
+}
 
 func IsUnknownOutcome(err error) bool {
 	var unknown *UnknownOutcomeError
@@ -84,16 +101,19 @@ func IsUnknownOutcome(err error) bool {
 }
 
 type Adapter struct {
-	proxyURL           string
-	credentials        *credentialfs.Store
-	definitions        map[string]integrationpackage.Package
-	githubHTTPClient   *http.Client
-	githubBaseURL      *url.URL
-	providerHTTPClient *http.Client
-	emailHTTPClient    *http.Client
-	syntheticClient    *http.Client
-	syntheticBaseURL   *url.URL
-	timeout            time.Duration
+	proxyURL            string
+	credentials         *credentialfs.Store
+	definitions         map[string]integrationpackage.Package
+	githubHTTPClient    *http.Client
+	githubBaseURL       *url.URL
+	providerHTTPClient  *http.Client
+	openAPIHTTPClient   *http.Client
+	localOpenAPIClient  *http.Client
+	emailHTTPClient     *http.Client
+	syntheticClient     *http.Client
+	syntheticBaseURL    *url.URL
+	localOpenAPIBaseURL *url.URL
+	timeout             time.Duration
 }
 
 func New(config Config) (*Adapter, error) {
@@ -104,6 +124,11 @@ func New(config Config) (*Adapter, error) {
 	if err != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8080" ||
 		proxy.Path != "" || proxy.RawQuery != "" || proxy.User != nil {
 		return nil, errors.New("integration adapter proxy is invalid")
+	}
+	openAPIProxy, err := url.Parse(config.OpenAPIProxyURL)
+	if err != nil || openAPIProxy.Scheme != "http" || openAPIProxy.Host != "egress-gateway-openapi.kodex-system.svc.cluster.local:8083" ||
+		openAPIProxy.Path != "" || openAPIProxy.RawQuery != "" || openAPIProxy.User != nil {
+		return nil, errors.New("integration adapter OpenAPI proxy is invalid")
 	}
 	syntheticBase, err := url.Parse(config.SyntheticBaseURL)
 	if err != nil || syntheticBase.Scheme != "http" || syntheticBase.Hostname() != syntheticServiceHost ||
@@ -129,6 +154,12 @@ func New(config Config) (*Adapter, error) {
 	}
 	providerTransport := githubTransport.Clone()
 	providerTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
+	openAPITransport := providerTransport.Clone()
+	openAPITransport.Proxy = http.ProxyURL(openAPIProxy)
+	localOpenAPIBaseURL, localOpenAPIClient, err := newLocalOpenAPIClient(config)
+	if err != nil {
+		return nil, err
+	}
 	emailClient, err := newEmailClient(config)
 	if err != nil {
 		return nil, err
@@ -146,13 +177,16 @@ func New(config Config) (*Adapter, error) {
 				return errors.New("provider redirect is forbidden")
 			},
 		},
+		openAPIHTTPClient: &http.Client{Transport: openAPITransport, Timeout: config.Timeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("OpenAPI redirect is forbidden") }},
+		localOpenAPIClient: localOpenAPIClient,
 		syntheticClient: &http.Client{
 			Timeout: config.Timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return errors.New("synthetic integration redirect is forbidden")
 			},
 		},
-		syntheticBaseURL: syntheticBase, timeout: config.Timeout,
+		syntheticBaseURL: syntheticBase, localOpenAPIBaseURL: localOpenAPIBaseURL, timeout: config.Timeout,
 	}, nil
 }
 
@@ -233,7 +267,7 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	if err != nil || definition.ValidateConfiguration(configuration) != nil {
 		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
-	capability, ok := definition.Capability(definition.Spec.HealthCheck.Operation)
+	capability, ok := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
 	if !ok || capability.ApprovalPolicy != "NONE" {
 		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
@@ -253,6 +287,12 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	request.Input, request.EffectKey = map[string]any{}, "health-check"
 	result, err := adapter.Execute(ctx, request)
 	var safe *SafeError
+	if definition.Spec.Adapter == string(integrationpackage.AdapterOpenAPIMCP) &&
+		errors.As(err, &safe) && safe.Code == "INTEGRATION_CREDENTIAL_UNAVAILABLE" && safe.Transient {
+		// Монтирование нового Kubernetes Secret может отстать от owner-команды.
+		// Повторяется только READ health-test, без внешнего WRITE-эффекта.
+		return "", &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+	}
 	if errors.As(err, &safe) && safe.Code == emailapi.HealthNotReadyCode {
 		return safe.HealthSummary, err
 	}
@@ -288,6 +328,10 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		// Legacy metadata уже проверена вместе с owner claim; в mail adapter она не передаётся.
 		request.Credential = nil
 		result, err = adapter.executeEmail(ctx, request, capability, configuration, canonicalInput)
+	case "HTTPS_JSON_READ":
+		result, err = adapter.executeHTTPSJSONRead(ctx, request, capability, configuration)
+	case "OPENAPI_MCP":
+		result, err = adapter.executeOpenAPI(ctx, request, capability, configuration, canonicalInput)
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
@@ -315,14 +359,14 @@ func validateExecutionResult(capability integrationpackage.Capability, request R
 		var safe *SafeError
 		if capability.Risk != "READ" && errors.As(err, &safe) &&
 			(safe.Code == "INTEGRATION_UNAVAILABLE" || safe.Code == "INTEGRATION_RESPONSE_INVALID") {
-			return Result{}, &UnknownOutcomeError{}
+			return Result{}, &UnknownOutcomeError{stage: "response_validation"}
 		}
 		return Result{}, err
 	}
 	canonicalOutput, err := capability.ValidateOutput([]byte(result.Summary))
 	if err != nil {
 		if capability.Risk != "READ" {
-			return Result{}, &UnknownOutcomeError{}
+			return Result{}, &UnknownOutcomeError{stage: "response_validation"}
 		}
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
@@ -333,7 +377,7 @@ func validateExecutionResult(capability integrationpackage.Capability, request R
 		result.Receipt.InputDigest != request.InputDigest || result.Receipt.ProviderEffectRef == "" ||
 		len(result.Receipt.ResponseDigest) != sha256.Size*2 || result.Summary == "" || len(result.Summary) > maximumResponseBytes {
 		if capability.Risk != "READ" {
-			return Result{}, &UnknownOutcomeError{}
+			return Result{}, &UnknownOutcomeError{stage: "receipt_validation"}
 		}
 		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
@@ -681,7 +725,7 @@ func (adapter *Adapter) readCredential(ctx context.Context, credential *Credenti
 			if !timer.Stop() {
 				<-timer.C
 			}
-			return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
+			return nil, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE", Transient: true}
 		case <-timer.C:
 		}
 	}

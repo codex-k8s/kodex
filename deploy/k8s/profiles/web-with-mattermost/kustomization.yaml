@@ -8,6 +8,7 @@ resources:
   - ../../overlays/production/internal-rpc-authority
   - ../../overlays/production/image-supply-chain
   - ../../overlays/production/control-plane
+  - ../../base/clamav-db-updater
   - ../../overlays/production/egress-gateway
   - ../../overlays/production/role-image-builder
   - ../../overlays/production/runtime-controller

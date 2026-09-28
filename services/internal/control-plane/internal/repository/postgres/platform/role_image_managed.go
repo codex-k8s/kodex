@@ -115,7 +115,7 @@ func (repository *Repository) managedRoleImageTarget(ctx context.Context, tx pgx
 	if err != nil {
 		return nil, err
 	}
-	if set.ManagedBy != "UI" && input.Action != "REQUEST_BUILD" {
+	if set.ManagedBy != "UI" && input.Action != "REQUEST_BUILD" && input.Action != "CANCEL_BUILD" {
 		return nil, errs.ErrConflict
 	}
 	if set.Archived && input.Action != "RESTORE" {
@@ -195,6 +195,7 @@ func (repository *Repository) recordManagedRoleImageCommand(ctx context.Context,
 
 func (repository *Repository) ConfigureRoleImageCatalog(catalog *roleimageservice.Catalog) {
 	repository.roleImageCatalogResolver = catalog.Resolve
+	repository.roleImageRecommendedSelection = catalog.RecommendedSelection
 	repository.roleImageBootstrapCopySelection = catalog.CopyBootstrapSelection
 }
 

@@ -41,6 +41,7 @@ func authorizedCatalogWithTotal[T any](ctx context.Context, repository *Reposito
 	target func(T) entity.AccessScope,
 	decorate func(pgx.Tx, *T, func(string) bool) error,
 	count func(context.Context, pgx.Tx) (int64, error),
+	position ...func(T) string,
 ) ([]T, int64, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, catalogQueryTimeout)
 	defer cancel()
@@ -88,6 +89,9 @@ func authorizedCatalogWithTotal[T any](ctx context.Context, repository *Reposito
 		for _, item := range batch {
 			actionScope := target(item)
 			cursor = actionScope.ResourceRef
+			if len(position) != 0 {
+				cursor = position[0](item)
+			}
 			scope := actionScope
 			if kind == "RUNTIME_ENVIRONMENT" || kind == "MEMBERSHIP" {
 				scope = entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: scope.ProjectRef, ProjectRef: scope.ProjectRef}
@@ -139,7 +143,11 @@ func authorizedCatalogWithTotal[T any](ctx context.Context, repository *Reposito
 	next := ""
 	if len(items) > int(limit) {
 		items = items[:limit]
-		next = encodeCatalogCursor(current, kind, filter, target(items[len(items)-1]).ResourceRef)
+		last := target(items[len(items)-1]).ResourceRef
+		if len(position) != 0 {
+			last = position[0](items[len(items)-1])
+		}
+		next = encodeCatalogCursor(current, kind, filter, last)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, 0, "", errs.ErrUnavailable

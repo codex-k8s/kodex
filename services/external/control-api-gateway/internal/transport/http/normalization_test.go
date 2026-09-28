@@ -48,6 +48,34 @@ func TestNormalizePreservesRequiredWorkflowDefaults(t *testing.T) {
 	}
 }
 
+func TestNormalizeDoesNotAddAgentFieldsToAssistantPlanSnapshot(t *testing.T) {
+	t.Parallel()
+	before := map[string]any{
+		"agentRef": "agt_fixture", "name": "Координатор", "roleDescription": "Проверяет факты",
+	}
+	value := map[string]any{
+		"auditSummary": "Изменить описание",
+		"operations":   []any{map[string]any{"before": before}},
+	}
+	normalize(value)
+	for _, key := range []string{"capabilities", "integrations", "knowledgeArtifactRefs", "nextActions"} {
+		if _, exists := before[key]; exists {
+			t.Fatalf("план получил поле сотрудника %s", key)
+		}
+	}
+
+	agent := map[string]any{
+		"ref": "agt_fixture", "projectRef": "prj_fixture", "version": float64(1),
+		"roleDescription": "Проверяет факты",
+	}
+	normalize(agent)
+	for _, key := range []string{"capabilities", "integrations", "knowledgeArtifactRefs", "nextActions"} {
+		if _, exists := agent[key].([]any); !exists {
+			t.Fatalf("сотрудник лишился обязательной коллекции %s", key)
+		}
+	}
+}
+
 func TestWorkflowDraftPreservesBoundedInputFields(t *testing.T) {
 	t.Parallel()
 
@@ -249,6 +277,31 @@ func TestMessageMapMaterializesRequiredProviderAccountZeroValues(t *testing.T) {
 	}
 }
 
+func TestMessageMapMaterializesRequiredRuntimeEnvironmentEmptyStrings(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.RuntimeEnvironmentSet{
+		Ref:  "renv-example",
+		Name: "Среда",
+		CurrentVersion: &controlplanev1.RuntimeEnvironmentVersion{
+			Values: []*controlplanev1.RuntimeEnvironmentValue{{Name: "EMPTY"}},
+			Tools:  []*controlplanev1.RuntimeEnvironmentTool{{Name: "tool", Command: "tool"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["description"] != "" {
+		t.Fatalf("обязательное описание окружения потеряно: %#v", value)
+	}
+	version := value["currentVersion"].(map[string]any)
+	item := version["values"].([]any)[0].(map[string]any)
+	tool := version["tools"].([]any)[0].(map[string]any)
+	if item["value"] != "" || tool["description"] != "" || tool["usageHint"] != "" {
+		t.Fatalf("обязательные пустые строки окружения потеряны: %#v", version)
+	}
+}
+
 func TestMessageMapNormalizesRunEventEnumsToOpenAPIValues(t *testing.T) {
 	t.Parallel()
 
@@ -420,6 +473,7 @@ func TestMessageMapMaterializesNestedEmptyCollections(t *testing.T) {
 
 func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 	t.Parallel()
+	targetVersion := int64(7)
 
 	parameters, err := structpb.NewStruct(map[string]any{"name": "Продажи"})
 	if err != nil {
@@ -437,7 +491,7 @@ func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 				Operations: []*controlplanev1.AssistantPlanOperation{{
 					Ref: "operation-001", Type: controlplanev1.AssistantPlanOperation_TYPE_CREATE_PROJECT,
 					Action: controlplanev1.AssistantPlanOperation_ACTION_CREATE, TargetKind: "PROJECT", TargetName: "Продажи",
-					Parameters: parameters,
+					TargetVersion: &targetVersion, Parameters: parameters,
 				}},
 			},
 		}},
@@ -461,7 +515,7 @@ func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 		t.Fatalf("assistant operation enums are not public: %#v", operation)
 	}
 	target := operation["target"].(map[string]any)
-	if target["kind"] != "PROJECT" || target["name"] != "Продажи" {
+	if target["kind"] != "PROJECT" || target["name"] != "Продажи" || target["version"] != float64(7) {
 		t.Fatalf("assistant operation target is invalid: %#v", target)
 	}
 	if !reflect.DeepEqual(operation["parameters"], map[string]any{"name": "Продажи"}) {
@@ -528,8 +582,12 @@ func TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget(t *testing.
 	t.Parallel()
 	value, err := messageMap(&controlplanev1.GetRunGraphResponse{
 		Run: &controlplanev1.Run{
-			Ref:    "run_example001",
-			Target: targetProto("AGENT", "agt_example001"),
+			Ref: "run_example001",
+			Target: func() *controlplanev1.RunTarget {
+				target := targetProto("AGENT", "agt_example001")
+				target.TargetVersion = 2
+				return target
+			}(),
 		},
 		Graph: &controlplanev1.RunGraph{
 			RunRef: "run_example001",
@@ -543,8 +601,11 @@ func TestMessageMapPreservesRunNodeIdentityWhileNormalizingRunTarget(t *testing.
 	}
 	run := value["run"].(map[string]any)
 	target := run["target"].(map[string]any)
-	if target["type"] != "AGENT" || target["ref"] != "agt_example001" {
+	if target["type"] != "AGENT" || target["ref"] != "agt_example001" || target["version"] != float64(2) {
 		t.Fatalf("run target не нормализован: %#v", target)
+	}
+	if _, leaked := target["targetVersion"]; leaked {
+		t.Fatalf("private target version shape leaked: %#v", target)
 	}
 	nodes := value["graph"].(map[string]any)["nodes"].([]any)
 	node := nodes[0].(map[string]any)
@@ -632,8 +693,11 @@ func TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog(t *testing.
 	writer := &localizingRecorder{ResponseRecorder: httptest.NewRecorder()}
 	writeMessage(writer, http.StatusOK, &controlplanev1.ListIntegrationDefinitionsResponse{
 		Definitions: []*controlplanev1.IntegrationDefinition{{
-			Version: 3,
-			Key:     "example", Name: "i18n:INTEGRATION_EXAMPLE_NAME", Available: true,
+			Version:         3,
+			Key:             "example",
+			Name:            "i18n:INTEGRATION_EXAMPLE_NAME",
+			Available:       true,
+			ConnectionCount: 7,
 		}},
 		NextActions: []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_CREATE_CONNECTION},
 		CoreReady:   true,
@@ -646,6 +710,10 @@ func TestWriteMessagePreservesCollectionAuthorityAndLocalizesCatalog(t *testing.
 	items, _ := value["items"].([]any)
 	if len(items) != 1 || items[0].(map[string]any)["name"] != "localized:INTEGRATION_EXAMPLE_NAME" {
 		t.Fatalf("каталог не локализован: %#v", value)
+	}
+	definition := items[0].(map[string]any)
+	if definition["connectionCount"] != float64(7) || definition["healthyConnectionCount"] != float64(0) {
+		t.Fatalf("авторитетные агрегаты подключений потеряны: %#v", definition)
 	}
 	if ready, _ := value["coreReady"].(bool); !ready {
 		t.Fatalf("core readiness потерян: %#v", value)

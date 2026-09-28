@@ -9,8 +9,8 @@ import (
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
-func (server *Server) listTemplateVariables(w http.ResponseWriter, r *http.Request, project, agent, revision, query string, size *int, token *string) {
-	if !validHTTPPage(size, token) || !validSearchText(query, 0, 200) || (agent != "" && !opaqueHTTPReference.MatchString(agent)) || (revision != "" && !opaqueHTTPReference.MatchString(revision)) {
+func (server *Server) listTemplateVariables(w http.ResponseWriter, r *http.Request, project, agent, revision, query, source string, size *int, token *string) {
+	if !validHTTPPage(size, token) || !validSearchText(query, 0, 200) || !validTemplateVariableSource(source) || (agent != "" && !opaqueHTTPReference.MatchString(agent)) || (revision != "" && !opaqueHTTPReference.MatchString(revision)) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
@@ -22,12 +22,16 @@ func (server *Server) listTemplateVariables(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	paging := page(size, token)
-	response, err := server.control.Query.ListTemplateVariables(r.Context(), &cp.ListTemplateVariablesRequest{ProjectRef: project, AgentRef: agent, RuntimeRevisionRef: revision, Query: query, Page: paging})
+	response, err := server.control.Query.ListTemplateVariables(r.Context(), &cp.ListTemplateVariablesRequest{ProjectRef: project, AgentRef: agent, RuntimeRevisionRef: revision, Query: query, Source: source, Page: paging})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
 	}
 	server.writeTemplateVariablePage(w, response, paging.GetPageSize())
+}
+
+func validTemplateVariableSource(source string) bool {
+	return source == "" || generated.TemplateVariableSourceQuery(source).Valid()
 }
 
 func (server *Server) writeTemplateVariablePage(w http.ResponseWriter, response *cp.ListTemplateVariablesResponse, size int32) {

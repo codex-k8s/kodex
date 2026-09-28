@@ -14,6 +14,7 @@ function appendUnique(current: Agent[], incoming: Agent[]): Agent[] {
 export const useAgentCatalogStore = defineStore("agent-catalog", () => {
   const projectRef = ref("");
   const query = ref("");
+  const pageSize = ref(20);
   const items = ref<Agent[]>([]);
   const nextPageToken = ref<string>();
   const loading = ref(false);
@@ -28,15 +29,18 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
     nextProjectRef: string,
     nextQuery = "",
     retain = false,
+    nextPageSize = pageSize.value,
   ): Promise<void> {
     const current = ++generation;
     const normalizedQuery = nextQuery.trim();
     const keepItems =
       retain &&
       projectRef.value === nextProjectRef &&
-      query.value === normalizedQuery;
+      query.value === normalizedQuery &&
+      pageSize.value === nextPageSize;
     projectRef.value = nextProjectRef;
     query.value = normalizedQuery;
+    pageSize.value = nextPageSize;
     if (!keepItems) items.value = [];
     nextPageToken.value = undefined;
     consumedPageTokens.clear();
@@ -47,6 +51,7 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
       const page = await loadAgentCatalogPage({
         projectRef: nextProjectRef,
         query: normalizedQuery,
+        pageSize: nextPageSize,
       });
       if (generation !== current) return;
       items.value = appendUnique([], page.items);
@@ -58,7 +63,7 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
     }
   }
 
-  async function loadMore(): Promise<void> {
+  async function loadMore(nextPageSize = pageSize.value): Promise<void> {
     const pageToken = nextPageToken.value;
     if (
       !pageToken ||
@@ -71,6 +76,7 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
     const current = generation;
     const currentProjectRef = projectRef.value;
     const currentQuery = query.value;
+    pageSize.value = nextPageSize;
     consumedPageTokens.add(pageToken);
     loadingMore.value = true;
     problem.value = undefined;
@@ -79,6 +85,7 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
         projectRef: currentProjectRef,
         query: currentQuery,
         pageToken,
+        pageSize: nextPageSize,
       });
       if (generation !== current) return;
       items.value = appendUnique(items.value, page.items);
@@ -110,6 +117,7 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
     generation += 1;
     projectRef.value = "";
     query.value = "";
+    pageSize.value = 20;
     items.value = [];
     nextPageToken.value = undefined;
     loading.value = false;
@@ -121,6 +129,7 @@ export const useAgentCatalogStore = defineStore("agent-catalog", () => {
   return {
     projectRef,
     query,
+    pageSize,
     items,
     loading,
     loadingMore,

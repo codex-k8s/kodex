@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import * as sdk from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -26,6 +26,7 @@ const emit = defineEmits<{
   valid: [value: boolean];
 }>();
 const { t } = useI18n();
+const fieldPrefix = `prompt-scope-${useId()}`;
 const kind = ref<"AGENT" | "WORKFLOW_STAGE">("AGENT");
 const selected = ref<Agent | Workflow>();
 const problem = ref<AppProblem>();
@@ -134,11 +135,12 @@ async function load(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   if (!props.projectRef) return { items: [] };
   const options = {
     path: { projectRef: props.projectRef },
-    query: { query, pageToken, pageSize: 40 },
+    query: { query, pageToken, pageSize },
     signal: requestSignal(signal),
   };
   const page =
@@ -205,7 +207,12 @@ function selectTemplateKind(event: Event): void {
     <template v-else>
       <label
         >{{ t("integrations.targetType")
-        }}<select v-model="kind" :disabled="disabled || busy">
+        }}<select
+          v-model="kind"
+          :id="`${fieldPrefix}-target-kind`"
+          :name="`${fieldPrefix}-target-kind`"
+          :disabled="disabled || busy"
+        >
           <option value="AGENT">{{ t("promptContext.AGENT") }}</option>
           <option value="WORKFLOW_STAGE">
             {{ t("promptContext.WORKFLOW_STAGE") }}
@@ -231,6 +238,8 @@ function selectTemplateKind(event: Event): void {
       <label v-if="workflow && modelValue?.targetKind === 'WORKFLOW_STAGE'"
         >{{ t("promptContext.stage")
         }}<select
+          :id="`${fieldPrefix}-stage`"
+          :name="`${fieldPrefix}-stage`"
           :value="modelValue.workflowStageKey ?? ''"
           :disabled="disabled || busy"
           @change="selectStage"
@@ -244,6 +253,8 @@ function selectTemplateKind(event: Event): void {
       <label v-if="modelValue"
         >{{ t("promptContext.kind")
         }}<select
+          :id="`${fieldPrefix}-template-kind`"
+          :name="`${fieldPrefix}-template-kind`"
           :value="modelValue.templateKind"
           :disabled="disabled || busy"
           @change="selectTemplateKind"
@@ -260,21 +271,76 @@ function selectTemplateKind(event: Event): void {
       <p v-if="modelValue?.templateKind === 'CONTINUATION'">
         {{ t("promptContext.continuationHint") }}
       </p>
-      <PromptTargetPreview
-        v-if="target && modelValue?.templateKind !== 'CONTINUATION'"
-        :target="target"
-        :template="template"
-        :disabled="busy"
-      />
     </template>
+    <div
+      class="prompt-scope-fields__workspace"
+      :class="{
+        'prompt-scope-fields__workspace--with-variables':
+          target && modelValue?.templateKind !== 'CONTINUATION',
+      }"
+    >
+      <div class="prompt-scope-fields__editor">
+        <slot name="editor" />
+      </div>
+      <aside
+        v-if="target && modelValue?.templateKind !== 'CONTINUATION'"
+        class="prompt-scope-fields__variables"
+      >
+        <PromptTargetPreview
+          :target="target"
+          :template="template"
+          :disabled="busy"
+        />
+      </aside>
+    </div>
   </section>
 </template>
 <style scoped>
 .prompt-scope-fields {
+  display: grid;
+  gap: 12px;
   min-width: 0;
+}
+.prompt-scope-fields > h3,
+.prompt-scope-fields > p {
+  margin: 0;
 }
 .prompt-scope-fields label {
   display: grid;
   gap: 0.4rem;
+}
+.prompt-scope-fields__workspace {
+  min-width: 0;
+}
+.prompt-scope-fields__workspace--with-variables {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  align-items: start;
+  gap: 16px;
+}
+.prompt-scope-fields__editor,
+.prompt-scope-fields__variables {
+  min-width: 0;
+}
+.prompt-scope-fields__editor :deep(.cm-editor) {
+  min-height: 500px;
+}
+.prompt-scope-fields__variables {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.prompt-scope-fields__variables :deep(.prompt-target-preview) {
+  display: grid;
+  gap: 10px;
+}
+.prompt-scope-fields__variables :deep(.variable-catalog__list) {
+  max-height: 310px;
+}
+@media (max-width: 900px) {
+  .prompt-scope-fields__workspace--with-variables {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

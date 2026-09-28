@@ -20,3 +20,13 @@ func TestIntegrationFieldPreservesZeroBoundAndConstraints(t *testing.T) {
 		t.Fatal("missing numeric bounds invented")
 	}
 }
+
+func TestIntegrationDefinitionPreservesAuthoritativeConnectionSummary(t *testing.T) {
+	result := castDefinition(entity.IntegrationDefinition{
+		ConnectionCount:        41,
+		HealthyConnectionCount: 7,
+	})
+	if result.ConnectionCount != 41 || result.HealthyConnectionCount != 7 {
+		t.Fatal("integration connection summary lost")
+	}
+}

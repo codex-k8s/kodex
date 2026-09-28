@@ -38,11 +38,11 @@ WHERE ar.organization_id=@organization_id::uuid
       OR lower(ar.file_name) ~ '\.(doc|docx|odt|ppt|pptx|csv|ods|xls|xlsx)$'
     ))
   )
-  AND (@cursor_ref = '' OR ar.ref > @cursor_ref)
+  AND (@cursor_ref = '' OR (ar.created_at, ar.ref) < (@cursor_created_at::timestamptz, @cursor_ref))
   AND (@authority_project = '' OR ar.project_id = NULLIF(@authority_project,'')::uuid)
   AND (@role IN ('OWNER','ADMINISTRATOR') OR EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
       WHERE target.organization_id=ar.organization_id AND target.kind='ARTIFACT' AND target.id=ar.id
         AND control_plane.catalog_resource_visible(ar.organization_id, @actor_id::uuid, 'artifact.view', target.kind,
             target.id, target.project_id, target.owner_id, target.related_ids, transaction_timestamp())))
-ORDER BY ar.ref
+ORDER BY ar.created_at DESC, ar.ref DESC
 LIMIT @limit

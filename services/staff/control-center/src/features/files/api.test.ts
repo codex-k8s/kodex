@@ -208,7 +208,7 @@ describe("loadArtifactPage", () => {
       path: { projectRef: "project_sales" },
       query: {
         lifecycleState: "DELETED",
-        pageSize: 40,
+        pageSize: 20,
         pageToken: "trash-before",
         query: "результат",
       },
@@ -246,7 +246,7 @@ describe("loadArtifactPage", () => {
       path: { projectRef: "project_sales" },
       query: {
         lifecycleState: "ACTIVE",
-        pageSize: 40,
+        pageSize: 20,
         query: "договор",
         pageToken: "owner-before",
         scanState: "CLEAN",

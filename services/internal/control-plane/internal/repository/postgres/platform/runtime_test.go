@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -11,6 +12,45 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
+
+func TestDecodeStoredRuntimeEnvironmentProjectsSecretDescriptor(t *testing.T) {
+	t.Parallel()
+	values := []entity.RuntimeEnvironmentValue{{Name: "APP_TEST_MODE", Value: "local"}}
+	descriptor := entity.RuntimeSecretDescriptor{
+		Name: "SYNTHETIC_TEST_SECRET", SecretRef: "sec_abcdefgh", Namespace: "kodex-runtime", Revision: 2,
+		SecretName: "runtime-secret-test-r2", SecretKey: "value", SecretUID: "test-uid",
+		SecretResourceVersion: "42", ContentSHA256: strings.Repeat("a", 64),
+	}
+	rawValues, rawSecrets, expectedValues, expectedSecrets, err := validateEnvironmentPayload(values, []entity.RuntimeSecretDescriptor{descriptor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actualValues []runtimecontract.RuntimeEnvironmentValue
+	var actualSecrets []runtimecontract.RuntimeSecretProjection
+	if err := decodeStoredRuntimeEnvironment(rawValues, rawSecrets, &actualValues, &actualSecrets); err != nil {
+		t.Fatalf("decode stored environment: %v", err)
+	}
+	if !reflect.DeepEqual(actualValues, expectedValues) || !reflect.DeepEqual(actualSecrets, expectedSecrets) {
+		t.Fatalf("stored environment projection changed: values=%v secrets=%v", actualValues, actualSecrets)
+	}
+	for name, mutate := range map[string]func(*entity.RuntimeSecretDescriptor){
+		"missing source ref": func(item *entity.RuntimeSecretDescriptor) { item.SecretRef = "" },
+		"missing namespace":  func(item *entity.RuntimeSecretDescriptor) { item.Namespace = "" },
+		"missing revision":   func(item *entity.RuntimeSecretDescriptor) { item.Revision = 0 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := descriptor
+			mutate(&invalid)
+			raw, err := json.Marshal([]entity.RuntimeSecretDescriptor{invalid})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := decodeStoredRuntimeEnvironment(rawValues, raw, &actualValues, &actualSecrets); err == nil {
+				t.Fatal("invalid stored Secret descriptor accepted")
+			}
+		})
+	}
+}
 
 func TestRuntimeRevisionDigestBindsEnvironmentImageAndTools(t *testing.T) {
 	t.Parallel()

@@ -106,6 +106,7 @@ async function render(
   events: PresentedRunEvent[] = [event],
   artifacts: Artifact[] = [],
   initialNodeRef?: string,
+  initiatorSummary = run.inputSummary ?? "",
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
@@ -115,7 +116,7 @@ async function render(
         nodes,
         events,
         artifacts,
-        initiatorSummary: run.inputSummary ?? "",
+        initiatorSummary,
         initialNodeRef,
       }),
   });
@@ -136,11 +137,16 @@ async function render(
           runs: {
             activity: "Ход работы",
             context: "Контекст узла",
+            sessionFilter: "Сессия",
+            allSessions: "Все сессии",
+            activityItemCount: "Записей: {count}",
             noNodeActivity: "Сообщений пока нет",
             toolParameters: "Безопасные параметры",
             toolResult: "Безопасный результат",
             artifactUnavailable: "Описание файла недоступно",
             toolDuration: "Длительность: {duration} мс",
+            expandMessage: "Показать полностью",
+            collapseMessage: "Свернуть",
             nodeTypes: { EXTERNAL_ACTION: "Внешнее действие" },
           },
           states: { RUNNING: "Выполняется", SUCCEEDED: "Завершено" },
@@ -155,7 +161,11 @@ describe("RunActivityDrawer", () => {
   it("разделяет сообщения инициатора и агента без выдуманного tool-call", async () => {
     const html = await render();
 
-    expect(html).toContain("run-session-strip");
+    expect(html).toContain("run-activity-drawer__session-filter");
+    expect(html).toContain("Все сессии");
+    expect(html).toContain("Записей: 2");
+    expect(html).toContain("Аналитик продаж · Выполняется");
+    expect(html).not.toContain("run-session-strip");
     expect(html).toContain("Аналитик продаж");
     expect(html).toContain("Владелец");
     expect(html).toContain("Проверь квартальный отчёт");
@@ -203,6 +213,46 @@ describe("RunActivityDrawer", () => {
     expect(html).toContain("Найдено 4 фрагмента");
     expect(html).toContain("Безопасный результат");
     expect(html).toContain("Длительность: 240 мс");
+  });
+
+  it("не выводит пустую длительность неуспешного вызова инструмента", async () => {
+    const failedTool: PresentedRunEvent = {
+      ...event,
+      ref: "evt_failed_tool",
+      type: "TOOL_CALL_RECORDED",
+      toolCall: {
+        ref: "trn_failed_tool",
+        tool: "integration.read",
+        safeParameters: {},
+        state: "FAILED",
+        safeResult: "",
+        auditRef: "evt_failed_audit",
+        durationMs: 0,
+      },
+    };
+    if (!failedTool.toolCall) throw new Error("Test tool call is missing");
+    Reflect.deleteProperty(failedTool.toolCall, "durationMs");
+
+    const html = await render([node], [failedTool]);
+
+    expect(html).toContain("integration.read");
+    expect(html).not.toContain("Длительность:");
+  });
+
+  it("сворачивает длинное сообщение инициатора, сохраняя раскрытие", async () => {
+    const html = await render();
+    expect(html).not.toContain("Показать полностью");
+    expect(html).not.toContain("Нет данных");
+
+    const longHtml = await render(
+      [node],
+      [event],
+      [],
+      undefined,
+      "Проверить отчёт. ".repeat(30),
+    );
+    expect(longHtml).toContain("run-activity-item__message--collapsed");
+    expect(longHtml).toContain("Показать полностью");
   });
 
   it("показывает безопасное описание файла из события", async () => {

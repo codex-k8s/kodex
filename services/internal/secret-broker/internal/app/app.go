@@ -23,6 +23,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	controlowner "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/controlplane"
+	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/domain/service/secretdraft"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 	businessobservability "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/observability"
 	"github.com/codex-k8s/kodex/services/internal/secret-broker/internal/providercredential"
@@ -228,7 +229,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		reconciler.Worker(),
 		drafts.Worker(config.RecoveryInterval, config.RecoveryTimeout, func(err error) {
 			if err != nil {
-				logger.Warn("secret draft recovery cycle failed", "error_class", "recovery")
+				logger.Warn("secret draft recovery cycle failed", "error_class", secretdraft.RecoveryFailureClass(err), "stage", secretdraft.RecoveryFailureStage(err))
 			}
 		}),
 	)

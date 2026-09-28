@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link2, RefreshCw } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import type {
   RuntimeSecretImpact,
   RuntimeSecretRebindResult,
@@ -9,14 +9,28 @@ import type {
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   applySecretRebind,
   consumerKey,
   readSecretImpact,
 } from "./revision-impact";
 const props = defineProps<{ secretRef: string; revision: number }>();
+const fieldPrefix = `secret-impact-${useId()}`;
 const emit = defineEmits<{ close: []; applied: [] }>();
 const impact = ref<RuntimeSecretImpact>();
+const impactGroups = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: impactGroups,
+  itemSelector: ".impact-group",
+  itemCount: () => impact.value?.consumers.length ?? 0,
+  estimatedViewportHeight: 672,
+  estimatedItemHeight: 112,
+  minimum: 6,
+  maximum: 100,
+});
 const receipt = ref<RuntimeSecretRebindResult>();
 const selections = ref<RuntimeSecretRebindSelection[]>([]);
 const problem = ref<AppProblem>();
@@ -121,6 +135,7 @@ async function load(more = false): Promise<void> {
       more ? previous?.nextPageToken : undefined,
       active.signal,
       query.value,
+      pageSize.value,
     );
     if (current !== generation) return;
     if (more && previous?.nextPageToken) cursors.add(previous.nextPageToken);
@@ -215,6 +230,13 @@ onBeforeUnmount(() => {
   generation += 1;
   controller?.abort();
 });
+useCursorInfiniteScroll({
+  root: impactGroups,
+  sentinel,
+  enabled: () =>
+    Boolean(impact.value?.nextPageToken) && !loading.value && !busy.value,
+  loadMore: () => load(true),
+});
 </script>
 <template>
   <ModalDialog
@@ -237,6 +259,8 @@ onBeforeUnmount(() => {
     </header>
     <input
       v-model="query"
+      :id="`${fieldPrefix}-search`"
+      :name="`${fieldPrefix}-search`"
       type="search"
       :aria-label="$t('common.search')"
       :placeholder="$t('common.search')"
@@ -250,11 +274,17 @@ onBeforeUnmount(() => {
           impact.secretVersion
         }}
       </p>
-      <div class="impact-groups">
-        <section v-for="group in groups" :key="group.key" class="impact-group">
+      <div ref="impactGroups" class="impact-groups">
+        <section
+          v-for="(group, groupIndex) in groups"
+          :key="group.key"
+          class="impact-group"
+        >
           <label class="impact-row"
             ><input
               type="checkbox"
+              :id="`${fieldPrefix}-group-${groupIndex}`"
+              :name="`${fieldPrefix}-group-${groupIndex}`"
               :checked="!!selection(group)"
               :disabled="
                 busy ||
@@ -274,11 +304,13 @@ onBeforeUnmount(() => {
           >
           <div class="impact-agents">
             <label
-              v-for="consumer in group.consumers"
+              v-for="(consumer, consumerIndex) in group.consumers"
               :key="consumer.agentRef"
               class="impact-row"
               ><input
                 type="checkbox"
+                :id="`${fieldPrefix}-group-${groupIndex}-consumer-${consumerIndex}`"
+                :name="`${fieldPrefix}-group-${groupIndex}-consumer-${consumerIndex}`"
                 :checked="
                   selection(group)?.consumers.some(
                     (item) => consumerKey(item) === consumerKey(consumer),
@@ -311,15 +343,15 @@ onBeforeUnmount(() => {
           </div>
         </section>
         <p v-if="!groups.length">{{ $t("common.empty") }}</p>
+        <div
+          v-if="impact.nextPageToken"
+          ref="sentinel"
+          class="impact-sentinel"
+          role="status"
+        >
+          <span v-if="loading">{{ $t("common.loading") }}</span>
+        </div>
       </div>
-      <button
-        v-if="impact.nextPageToken"
-        class="button"
-        :disabled="loading || busy"
-        @click="load(true)"
-      >
-        {{ $t("impact.more") }}
-      </button>
     </template>
     <section v-if="receipt" class="impact-receipt" role="status">
       <h3>{{ $t("impact.applied") }}</h3>
@@ -362,6 +394,9 @@ onBeforeUnmount(() => {
 .impact-groups {
   max-height: 672px;
   overflow: auto;
+}
+.impact-sentinel {
+  min-height: 1px;
 }
 .impact-group {
   min-height: 112px;

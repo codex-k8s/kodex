@@ -5,6 +5,7 @@ import {
   ref,
   shallowRef,
   shallowReactive,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -16,6 +17,8 @@ import {
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { WriteBackController } from "./controller";
 import {
   actionReason,
@@ -33,6 +36,7 @@ const props = defineProps<{
   configuration: ManagedConfiguration;
   disabled?: boolean;
 }>();
+const fieldPrefix = `git-writeback-${useId()}`;
 const emit = defineEmits<{ changed: []; busy: [boolean] }>();
 const { t, locale } = useI18n({
   useScope: "local",
@@ -43,6 +47,17 @@ const editing = ref(false);
 const approved = ref(false);
 const adopted = ref(false);
 const now = ref(Date.now());
+const historyRoot = ref<HTMLElement>();
+const historySentinel = ref<HTMLElement>();
+const historyPageSize = useAdaptiveCursorPageSize({
+  container: historyRoot,
+  itemSelector: ".history li",
+  itemCount: () => state.value?.items.length ?? 0,
+  estimatedViewportHeight: 360,
+  estimatedItemHeight: 64,
+  minimum: 6,
+  maximum: 100,
+});
 let timer: ReturnType<typeof setTimeout> | undefined;
 let stopOwner: (() => void) | undefined;
 const view = computed(() => state.value?.view);
@@ -54,6 +69,12 @@ const blocked = computed(
     !state.value ||
     state.value.signal.aborted,
 );
+useCursorInfiniteScroll({
+  root: historyRoot,
+  sentinel: historySentinel,
+  enabled: () => Boolean(state.value?.cursor) && !blocked.value,
+  loadMore: () => state.value?.history(true, historyPageSize.value),
+});
 const reason = computed(() => preparationReason(props.configuration));
 const pending = computed(() => state.value?.pending);
 const size = computed(() => contentBytes(state.value?.content ?? ""));
@@ -112,7 +133,7 @@ watch(
       !props.disabled
     ) {
       if (current.pending?.proposalRef) void current.recover();
-      else void current.history();
+      else void current.history(false, historyPageSize.value);
     }
     schedule();
   },
@@ -285,12 +306,16 @@ async function adopt(): Promise<void> {
       <header>
         <h4>{{ t("wb.history") }}</h4>
         <span>{{ t("wb.count", { count: state?.total ?? 0 }) }}</span
-        ><button type="button" :disabled="blocked" @click="state?.history()">
+        ><button
+          type="button"
+          :disabled="blocked"
+          @click="state?.history(false, historyPageSize)"
+        >
           {{ t("wb.refresh") }}
         </button>
       </header>
       <p v-if="!state?.items.length && !state?.working">{{ t("wb.empty") }}</p>
-      <ul>
+      <ul ref="historyRoot">
         <li v-for="item in state?.items" :key="item.ref">
           <button
             type="button"
@@ -308,15 +333,13 @@ async function adopt(): Promise<void> {
             ><code>{{ item.ref }}</code>
           </button>
         </li>
+        <li
+          v-if="state?.cursor"
+          ref="historySentinel"
+          class="cursor-sentinel"
+          aria-hidden="true"
+        />
       </ul>
-      <button
-        v-if="state?.cursor"
-        type="button"
-        :disabled="blocked"
-        @click="state.history(true)"
-      >
-        {{ t("wb.more") }}
-      </button>
     </section>
     <section v-if="view && proposal" class="plan" :aria-label="t('wb.inspect')">
       <h4>{{ t(`wb.state.${proposal.state}`) }}</h4>
@@ -372,6 +395,8 @@ async function adopt(): Promise<void> {
         <label
           ><input
             v-model="adopted"
+            :id="`${fieldPrefix}-adopted`"
+            :name="`${fieldPrefix}-adopted`"
             type="checkbox"
             :disabled="blocked || !matchesPreparation(pending, proposal)"
           />{{ t("wb.adoptConfirm") }}</label
@@ -411,6 +436,8 @@ async function adopt(): Promise<void> {
       <label v-if="!actionReason(proposal, 'APPROVE', now)"
         ><input
           v-model="approved"
+          :id="`${fieldPrefix}-approved`"
+          :name="`${fieldPrefix}-approved`"
           type="checkbox"
           :disabled="blocked || !!pending || !!state?.stale"
         />{{ t("wb.confirmed") }}</label

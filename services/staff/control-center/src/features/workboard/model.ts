@@ -6,6 +6,7 @@ import type {
   RuntimeEnvironmentSet,
   Schedule,
 } from "@/shared/api/generated/openapi/types.gen";
+export { runListSummary } from "@/shared/ui/run-summary";
 
 export type RunFilter = "ALL" | "ACTIVE" | "TERMINAL";
 export type RunView = "KANBAN" | "LIST";

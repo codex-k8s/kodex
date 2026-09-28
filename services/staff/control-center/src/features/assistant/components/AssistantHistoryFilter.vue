@@ -18,6 +18,7 @@ function changeState(event: Event): void {
   <div class="assistant-history-filter">
     <input
       :value="query"
+      name="assistant-history-search"
       type="search"
       :disabled="disabled"
       :aria-label="$t('assistant.searchHistory')"
@@ -26,6 +27,7 @@ function changeState(event: Event): void {
     />
     <select
       :value="state"
+      name="assistant-history-state"
       :disabled="disabled"
       :aria-label="$t('assistant.historyState')"
       @change="changeState"

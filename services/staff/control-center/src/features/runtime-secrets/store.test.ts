@@ -92,6 +92,7 @@ describe("runtime secrets store", () => {
       "crm",
       "page_2",
       expect.any(AbortSignal),
+      20,
     );
   });
 

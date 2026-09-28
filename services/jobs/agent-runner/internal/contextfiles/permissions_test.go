@@ -63,6 +63,9 @@ func TestMaterializeWithPrivateUmask(t *testing.T) {
 		if info.Mode().Perm() != want {
 			t.Fatalf("materialized mode = %o, want %o", info.Mode().Perm(), want)
 		}
+		if entry.IsDir() && info.Mode()&os.ModeSetgid == 0 {
+			t.Fatal("nested skill directory does not inherit the shared context group")
+		}
 		return nil
 	}); err != nil {
 		t.Fatal(err)

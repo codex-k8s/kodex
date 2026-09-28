@@ -230,6 +230,8 @@ message ListOIDCGroupsResponse {
 message ListAccessRolesRequest {
   PageRequest page = 1;
   bool include_archived = 2;
+  string query = 3;
+  repeated string query_aliases = 4;
 }
 message ListAccessRolesResponse {
   repeated AccessRole roles = 1;
@@ -253,6 +255,8 @@ message ListAccessBindingsRequest {
   string role_ref = 4;
   string project_ref = 5;
   bool include_revoked = 6;
+  string query = 7;
+  repeated string query_aliases = 8;
 }
 message ListAccessBindingsResponse {
   repeated AccessBinding bindings = 1;

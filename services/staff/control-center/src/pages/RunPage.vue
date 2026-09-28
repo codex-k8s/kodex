@@ -19,13 +19,17 @@ import {
 } from "@/features/platform/run-refresh";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { isTerminalRun } from "@/features/workboard/model";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
-import { presentRuntimeText } from "@/features/runs/runtime-text";
+import {
+  presentRuntimeText,
+  runtimeProgressKey,
+} from "@/features/runs/runtime-text";
 import {
   indexRunSessionOwnership,
   projectRunSessionGraph,
@@ -74,8 +78,13 @@ const graph = computed(
 const streamState = computed(
   () => realtime.state[graph.value?.runRef ?? runRef.value],
 );
-function safeRuntimeText(value?: string): string | undefined {
-  return presentRuntimeText(value, serverMessage);
+function safeRuntimeText(
+  value?: string,
+  messageKind?: RunEvent["messageKind"],
+): string | undefined {
+  const progressKey = runtimeProgressKey(value);
+  if (progressKey) return translator.t(progressKey);
+  return presentRuntimeText(value, serverMessage, messageKind);
 }
 
 const runSubtitle = computed(
@@ -169,13 +178,9 @@ const eventList = computed<PresentedRunEvent[]>(() =>
     .map((event) => ({
       ...event,
       displaySummary:
-        presentRuntimeText(event.summary, serverMessage, event.messageKind) ??
+        safeRuntimeText(event.summary, event.messageKind) ??
         eventFallback(event),
-      displayProgress: presentRuntimeText(
-        event.progress,
-        serverMessage,
-        event.messageKind,
-      ),
+      displayProgress: safeRuntimeText(event.progress, event.messageKind),
     })),
 );
 const gateList = computed(() =>
@@ -258,6 +263,7 @@ const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
 const activityOpen = ref(false);
 const activityNodeRef = ref<string>();
+const activityDrawer = ref<HTMLElement>();
 const nodeInspectorOpen = ref(false);
 const nodeDetailsOpen = ref(false);
 const gateDialogOpen = ref(false);
@@ -433,6 +439,64 @@ function gateNodeName(gate: OwnerGate): string {
       ?.displayName ?? translator.t("decisions.openNode")
   );
 }
+function gateIntegrationRisk(gate: OwnerGate): string {
+  const risk = gate.integrationIntent?.effectPreview.risk;
+  return risk === "READ" ||
+    risk === "WRITE" ||
+    risk === "SENSITIVE" ||
+    risk === "DESTRUCTIVE"
+    ? risk
+    : "UNKNOWN";
+}
+function gateDisplayTitle(gate: OwnerGate): string {
+  if (!gate.integrationIntent) return serverMessage(gate.title);
+  const risk = gateIntegrationRisk(gate);
+  const key =
+    risk === "READ"
+      ? "decisions.integrationReadTitle"
+      : risk === "WRITE"
+        ? "decisions.integrationWriteTitle"
+        : "decisions.integrationActionTitle";
+  return translator.t(key, {
+    connection: gate.integrationIntent.connectionName,
+  });
+}
+function gateDisplayQuestion(gate: OwnerGate): string {
+  if (!gate.integrationIntent) return serverMessage(gate.contextSummary);
+  return translator.t("decisions.integrationQuestion", {
+    connection: gate.integrationIntent.connectionName,
+    risk: translator.t(
+      `decisions.integrationRisk.${gateIntegrationRisk(gate)}`,
+    ),
+  });
+}
+function gateScopeFields(
+  gate: OwnerGate,
+): Array<{ path: string; value: unknown }> {
+  const scope = gate.integrationIntent?.effectPreview.approvalScope;
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return [];
+  const selected = (scope as Record<string, unknown>).selected;
+  if (!Array.isArray(selected)) return [];
+  const entries: unknown[] = selected;
+  return entries.filter(
+    (field): field is { path: string; value: unknown } =>
+      field !== null &&
+      typeof field === "object" &&
+      !Array.isArray(field) &&
+      typeof (field as Record<string, unknown>).path === "string" &&
+      "value" in field,
+  );
+}
+function gateScopeValue(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+function gateScopePath(path: string): string {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
+    .join(".");
+}
 function inspectGateNode(gate: OwnerGate): void {
   const sessionRef = sessionOwnership.value.get(gate.nodeRef);
   const node = sessionGraph.value?.nodes.find(
@@ -453,6 +517,7 @@ function openNodeDetails(node: RunNode): void {
 function openActivity(nodeRef?: string): void {
   activityNodeRef.value = nodeRef;
   activityOpen.value = true;
+  void nextTick(() => activityDrawer.value?.focus());
   // Terminal WS delta может прийти раньше авторитетного Run readback с
   // вычисленными nextActions. Drawer всегда освежает eligibility продолжения.
   void refreshScheduler.request(runRef.value);
@@ -596,7 +661,10 @@ onBeforeUnmount(() => {
           />
           <ProblemNotice v-if="problem" :problem="problem" compact />
         </div>
-        <div class="run-workspace">
+        <div
+          class="run-workspace"
+          :class="{ 'run-workspace--activity': activityOpen }"
+        >
           <nav
             class="run-workspace-toolbar"
             role="toolbar"
@@ -642,6 +710,14 @@ onBeforeUnmount(() => {
             </div>
             <StatusBadge :state="run.state" />
             <span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span>
+            <p
+              v-if="run.safeErrorCode"
+              class="run-canvas-summary__error"
+              role="status"
+            >
+              {{ serverMessage(run.safeErrorMessage || run.safeErrorCode) }}
+              <code>{{ run.safeErrorCode }}</code>
+            </p>
             <RouterLink
               v-if="run.retryOfRunRef"
               :to="
@@ -654,7 +730,13 @@ onBeforeUnmount(() => {
               class="live-indicator"
               :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
             >
-              ● {{ $t("runs.live") }} · #{{ sessionGraph.sequence }}
+              ●
+              {{
+                $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
+              }}
+              <template v-if="sessionGraph.sequence > 0">
+                · #{{ sessionGraph.sequence }}</template
+              >
             </span>
             <RunTokenUsage :usage="run.usage" compact />
           </aside>
@@ -662,6 +744,8 @@ onBeforeUnmount(() => {
           <section id="run-graph-panel" class="graph-panel">
             <div class="graph-panel__canvas">
               <RunGraphCanvas
+                :key="activityOpen ? 'with-activity' : 'full-width'"
+                :compact="activityOpen"
                 :nodes="sessionGraph.nodes"
                 :edges="sessionGraph.edges"
                 :selected-ref="selectedNode?.ref"
@@ -684,7 +768,7 @@ onBeforeUnmount(() => {
             <article v-for="gate in openGateList" :key="gate.ref">
               <div class="gate-question">
                 <p class="eyebrow">{{ $t("decisions.question") }}</p>
-                <h2>{{ serverMessage(gate.title) }}</h2>
+                <h2>{{ gateDisplayTitle(gate) }}</h2>
                 <dl>
                   <div>
                     <dt>{{ $t("decisions.requestedBy") }}</dt>
@@ -704,7 +788,46 @@ onBeforeUnmount(() => {
                   </div>
                 </dl>
                 <h3>{{ $t("decisions.fullQuestion") }}</h3>
-                <SafeMarkdown :content="gate.contextSummary" />
+                <p v-if="gate.integrationIntent">
+                  {{ gateDisplayQuestion(gate) }}
+                </p>
+                <SafeMarkdown v-else :content="gate.contextSummary" />
+                <template v-if="gate.integrationIntent">
+                  <dl class="gate-integration-details">
+                    <div>
+                      <dt>{{ $t("decisions.integrationOperation") }}</dt>
+                      <dd>
+                        <code>{{ gate.integrationIntent.operation }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>{{ $t("decisions.integrationCapability") }}</dt>
+                      <dd>
+                        <code>{{ gate.integrationIntent.capabilityKey }}</code>
+                      </dd>
+                    </div>
+                  </dl>
+                  <div
+                    v-if="gateScopeFields(gate).length"
+                    class="gate-approval-scope"
+                  >
+                    <h3>{{ $t("decisions.approvalScopeTitle") }}</h3>
+                    <p>{{ $t("decisions.approvalScopeExplanation") }}</p>
+                    <dl>
+                      <div
+                        v-for="field in gateScopeFields(gate)"
+                        :key="field.path"
+                      >
+                        <dt>
+                          <code>{{ gateScopePath(field.path) }}</code>
+                        </dt>
+                        <dd>
+                          <code>{{ gateScopeValue(field.value) }}</code>
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                </template>
                 <h3>{{ $t("decisions.consequences") }}</h3>
                 <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
@@ -786,11 +909,13 @@ onBeforeUnmount(() => {
             @details="openSelectedDetails"
           />
         </ModalDialog>
-        <ModalDialog
+        <aside
           v-if="activityOpen"
-          :title="$t('runs.activity')"
-          size="full"
-          @close="closeActivity"
+          ref="activityDrawer"
+          class="run-activity-overlay"
+          tabindex="-1"
+          :aria-label="$t('runs.activity')"
+          @keydown.esc.stop="closeActivity"
         >
           <RunActivityDrawer
             :open="true"
@@ -831,7 +956,7 @@ onBeforeUnmount(() => {
               </form>
             </template>
           </RunActivityDrawer>
-        </ModalDialog>
+        </aside>
         <RunSessionDetailsDialog
           v-if="selectedNode && nodeDetailsOpen"
           :run="selectedRun ?? run"
@@ -961,6 +1086,37 @@ onBeforeUnmount(() => {
   min-height: 0;
   padding: 0;
 }
+.gate-integration-details {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.gate-integration-details code,
+.gate-approval-scope code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.gate-approval-scope {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted, #f5f7fa);
+}
+.gate-approval-scope h3 {
+  margin-top: 0;
+}
+.gate-approval-scope > p {
+  color: var(--subtle);
+  font-size: 0.76rem;
+}
+.gate-approval-scope dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+.gate-approval-scope dd {
+  padding-top: 4px;
+}
 .gate-response {
   display: grid;
   gap: 10px;
@@ -1079,6 +1235,19 @@ onBeforeUnmount(() => {
   margin-left: 0;
   white-space: normal;
 }
+.run-canvas-summary__error {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.run-canvas-summary__error code {
+  color: var(--subtle);
+  font-size: 0.7rem;
+}
 .graph-panel {
   min-width: 0;
   min-height: 0;
@@ -1088,10 +1257,31 @@ onBeforeUnmount(() => {
   inset: 0;
   background: var(--canvas);
 }
+.run-workspace--activity .graph-panel {
+  right: min(720px, 54%);
+}
+.run-workspace--activity .run-workspace-toolbar {
+  left: calc((100% - min(720px, 54%)) / 2);
+}
 .graph-panel__canvas {
   width: 100%;
   height: 100%;
   min-height: 0;
+}
+.run-activity-overlay {
+  position: absolute;
+  z-index: 24;
+  inset-block: 0;
+  right: 0;
+  display: flex;
+  width: min(720px, 54%);
+  min-width: 520px;
+  min-height: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  outline: 0;
+  background: var(--surface);
+  box-shadow: -14px 0 36px rgba(16, 22, 30, 0.14);
 }
 .run-continuation {
   display: grid;
@@ -1138,6 +1328,14 @@ onBeforeUnmount(() => {
     top: 8px;
     left: 8px;
     transform: none;
+  }
+  .run-activity-overlay {
+    left: 0;
+    width: 100%;
+    min-width: 0;
+  }
+  .run-workspace--activity .graph-panel {
+    right: 0;
   }
 }
 </style>

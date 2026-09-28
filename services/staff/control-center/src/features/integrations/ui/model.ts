@@ -47,6 +47,17 @@ export interface IntegrationPublicConfigurationEntry {
   value: string;
 }
 
+export function isUnboundOpenAPITemplate(
+  connection: IntegrationConnection,
+  definition?: IntegrationDefinition,
+): boolean {
+  return (
+    connection.definitionKey === "openapi-mcp" &&
+    !!definition &&
+    connection.definitionDigest === definition.digest
+  );
+}
+
 const sensitiveConfigurationKey =
   /(^|_)(secret|token|password|credential|api_key)(_|$)/i;
 
@@ -86,14 +97,10 @@ export function publicIntegrationConfiguration(
 
 export function buildIntegrationPackages(
   definitions: readonly IntegrationDefinition[],
-  connections: readonly IntegrationConnection[],
   canCreateConnection: boolean,
 ): IntegrationPackagePresentation[] {
   return definitions
     .map((definition): IntegrationPackagePresentation => {
-      const packageConnections = connections.filter(
-        (connection) => connection.definitionKey === definition.key,
-      );
       return {
         key: definition.key,
         name: definition.name,
@@ -105,10 +112,8 @@ export function buildIntegrationPackages(
         approvalCapabilityCount: definition.capabilities.filter(
           (capability) => capability.approvalRequired,
         ).length,
-        connectionCount: packageConnections.length,
-        healthyConnectionCount: packageConnections.filter(
-          (connection) => connection.state === "CONNECTED",
-        ).length,
+        connectionCount: definition.connectionCount,
+        healthyConnectionCount: definition.healthyConnectionCount,
         canConnect: canCreateConnection && definition.available,
         definition,
       };

@@ -59,12 +59,16 @@ export async function listContext(
     query: string;
     state: ContextResourceState;
     pageToken?: string;
+    pageSize?: number;
     signal: AbortSignal;
   },
 ) {
   const { signal, ...query } = options;
   const request = {
-    query: { ...query, pageSize: 40 },
+    query: {
+      ...query,
+      pageSize: Math.min(100, Math.max(1, Math.floor(query.pageSize ?? 20))),
+    },
     signal: requestSignal(signal),
   };
   const page =
@@ -280,8 +284,12 @@ export async function history(
   ref: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<{ items: ContextRevision[]; total: number; nextPageToken: string }> {
-  const query = { pageSize: 40, pageToken };
+  const query = {
+    pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+    pageToken,
+  };
   const page =
     kind === "skills"
       ? (

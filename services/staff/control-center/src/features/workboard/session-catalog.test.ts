@@ -42,7 +42,7 @@ describe("distinct Session owner catalog", () => {
         targetType: "AGENT",
         targetRef: "agent-one",
         pageToken: "first",
-        pageSize: 30,
+        pageSize: 20,
       },
       signal,
     });

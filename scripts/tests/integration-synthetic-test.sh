@@ -73,7 +73,10 @@ jq -e '
     .spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-system" and
     .spec.ingress[0].from[0].podSelector.matchLabels["app.kubernetes.io/name"] == "integration-gateway" and
     .spec.ingress[0].from[0].podSelector.matchLabels["app.kubernetes.io/component"] == "integration-worker" and
-    .spec.ingress[0].ports == [{"protocol":"TCP","port":8080}])
+    .spec.ingress[0].ports == [
+      {"protocol":"TCP","port":8080},
+      {"protocol":"TCP","port":8443}
+    ])
 ' "$local_json" >/dev/null || fail 'exact NetworkPolicy is invalid'
 
 for profile in web-only web-with-mattermost; do

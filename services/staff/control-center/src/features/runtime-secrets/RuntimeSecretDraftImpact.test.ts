@@ -104,7 +104,7 @@ it("сохраняет выбор и version pins после lost ACK и чит�
   state.toggle("other");
   expect(state.selected.value).toEqual(["item"]);
   await state.publish();
-  expect(api.readSecretDraft).toHaveBeenCalledOnce();
+  expect(api.readSecretDraft).toHaveBeenCalledTimes(2);
   expect(impact.publishSecretDraft.mock.calls[0]).toEqual(
     impact.publishSecretDraft.mock.calls[1],
   );
@@ -124,7 +124,7 @@ it("подтверждает lost ACK через authoritative PUBLISHED/APPLIED
   const state = await panel();
   api.readSecretDraft
     .mockResolvedValueOnce(draft)
-    .mockResolvedValueOnce({ ...draft, state: "PUBLISHED" });
+    .mockResolvedValueOnce({ ...draft, state: "PUBLISHED", publishedRevision: 1 });
   api.readRuntimeSecret.mockResolvedValue({ ref: "secret" });
   impact.publishSecretDraft.mockRejectedValueOnce(new Error("lost ACK"));
   impact.readDraftImpact.mockResolvedValue({

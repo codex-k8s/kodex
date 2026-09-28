@@ -46,7 +46,7 @@ func packageJSONFieldNames(value reflect.Type) map[string]bool {
 func parsePackageJSON(raw []byte) (Package, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
-	if err := uniqueJSONValue(decoder, 0); err != nil {
+	if err := uniqueJSONValue(decoder, 0, false); err != nil {
 		return Package{}, errPackageJSON
 	}
 	if _, err := decoder.Token(); err != io.EOF {
@@ -70,7 +70,7 @@ func parsePackageJSON(raw []byte) (Package, error) {
 	return result, nil
 }
 
-func uniqueJSONValue(decoder *json.Decoder, depth int) error {
+func uniqueJSONValue(decoder *json.Decoder, depth int, schema bool) error {
 	if depth > maximumJSONDepth {
 		return errPackageJSON
 	}
@@ -88,17 +88,17 @@ func uniqueJSONValue(decoder *json.Decoder, depth int) error {
 		for decoder.More() {
 			key, err := decoder.Token()
 			name, ok := key.(string)
-			if err != nil || !ok || seen[name] || !packageJSONKeys[name] {
+			if err != nil || !ok || seen[name] || !schema && !packageJSONKeys[name] {
 				return errPackageJSON
 			}
 			seen[name] = true
-			if err := uniqueJSONValue(decoder, depth+1); err != nil {
+			if err := uniqueJSONValue(decoder, depth+1, schema || name == "inputSchema"); err != nil {
 				return err
 			}
 		}
 	case '[':
 		for decoder.More() {
-			if err := uniqueJSONValue(decoder, depth+1); err != nil {
+			if err := uniqueJSONValue(decoder, depth+1, schema); err != nil {
 				return err
 			}
 		}

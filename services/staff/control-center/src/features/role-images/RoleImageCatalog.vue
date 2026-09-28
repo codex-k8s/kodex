@@ -1,26 +1,53 @@
 <script setup lang="ts">
-import { Box, Layers3, Maximize2, Plus, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Box, ChevronRight, Plus, Search } from "@lucide/vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { useRoleImagesStore } from "@/features/role-images/store";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
 
 const props = defineProps<{ projectRef: string }>();
 const { t } = useI18n();
+const localizeServerMessage = useServerMessage();
+const fieldId = useId();
 const store = useRoleImagesStore();
 const query = ref("");
-const expanded = ref(false);
 const state = ref<"ALL" | "ACTIVE" | "ARCHIVED">("ALL");
 const items = computed(() => store.catalog(props.projectRef));
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".role-image-catalog__row",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 72,
+  estimatedColumns: 1,
+});
+useCursorInfiniteScroll({
+  sentinel,
+  enabled: () =>
+    Boolean(store.projectNextPageToken[props.projectRef]) &&
+    !store.loadingCatalog &&
+    !store.loadingMore,
+  loadMore: () =>
+    store.loadCatalog(props.projectRef, false, undefined, pageSize.value),
+});
 function loadFiltered() {
-  return store.loadCatalog(props.projectRef, true, {
-    ...(query.value.trim() ? { query: query.value.trim() } : {}),
-    ...(state.value === "ALL" ? {} : { state: state.value }),
-  });
+  return store.loadCatalog(
+    props.projectRef,
+    true,
+    {
+      ...(query.value.trim() ? { query: query.value.trim() } : {}),
+      ...(state.value === "ALL" ? {} : { state: state.value }),
+    },
+    pageSize.value,
+  );
 }
 
 async function load(): Promise<void> {
@@ -28,15 +55,6 @@ async function load(): Promise<void> {
     loadFiltered(),
     store.loadSupportingCatalogs(props.projectRef),
   ]);
-}
-
-function onScroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (
-    element.scrollTop + element.clientHeight >= element.scrollHeight - 100 &&
-    store.projectNextPageToken[props.projectRef]
-  )
-    void store.loadCatalog(props.projectRef, false);
 }
 
 watch(
@@ -49,28 +67,27 @@ onBeforeUnmount(() => store.dispose());
 </script>
 
 <template>
-  <component
-    :is="expanded ? ModalDialog : 'section'"
-    class="role-image-catalog"
-    :class="{ 'role-image-catalog--expanded': expanded }"
-    :title="expanded ? t('roleImages.title') : undefined"
-    size="full"
-    @close="expanded = false"
-  >
+  <section class="role-image-catalog">
     <header class="role-image-catalog__toolbar">
-      <label class="catalog-search">
+      <label class="catalog-search" :for="`${fieldId}-search`">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ t("roleImages.search") }}</span>
         <input
+          :id="`${fieldId}-search`"
           v-model="query"
+          :name="`${fieldId}-search`"
           type="search"
           maxlength="128"
           :placeholder="t('roleImages.search')"
         />
       </label>
-      <label class="catalog-filter">
+      <label class="catalog-filter" :for="`${fieldId}-state`">
         <span>{{ t("common.status") }}</span>
-        <select v-model="state">
+        <select
+          :id="`${fieldId}-state`"
+          v-model="state"
+          :name="`${fieldId}-state`"
+        >
           <option value="ALL">{{ t("common.all") }}</option>
           <option value="ACTIVE">{{ t("common.active") }}</option>
           <option value="ARCHIVED">{{ t("roleImages.archived") }}</option>
@@ -82,16 +99,6 @@ onBeforeUnmount(() => store.dispose());
       >
         {{ t("roleImages.total", { count: store.projectTotal[projectRef] }) }}
       </span>
-      <button
-        v-if="!expanded"
-        type="button"
-        class="icon-button"
-        :title="t('catalog.expand')"
-        :aria-label="t('catalog.expand')"
-        @click="expanded = true"
-      >
-        <Maximize2 :size="18" />
-      </button>
       <RouterLink
         v-if="store.createAllowed[projectRef]"
         class="button button--primary"
@@ -109,9 +116,9 @@ onBeforeUnmount(() => store.dispose());
     />
 
     <div
+      ref="scrollRoot"
       class="role-image-catalog__scroll"
       :aria-busy="store.loadingCatalog || store.loadingMore"
-      @scroll="onScroll"
     >
       <div
         v-if="store.loadingCatalog && !items.length"
@@ -125,30 +132,45 @@ onBeforeUnmount(() => store.dispose());
         <strong>{{ t("roleImages.empty") }}</strong>
         <p>{{ t("roleImages.emptyHelp") }}</p>
       </div>
-      <div v-else class="role-image-grid">
-        <article v-for="recipe in items" :key="recipe.ref" class="image-card">
-          <header>
-            <span class="image-card__icon"><Box :size="20" /></span>
-            <div>
-              <h2>{{ recipe.name }}</h2>
-              <p>
-                {{
-                  store.roleDefinitionByRef.get(recipe.roleDefinitionRef)
-                    ?.label ?? t("roleImages.unknownRole")
-                }}
-              </p>
-            </div>
-            <StatusBadge :state="recipe.state" />
-          </header>
-          <dl>
-            <div>
-              <dt>{{ t("roleImages.generation") }}</dt>
-              <dd>{{ recipe.generation }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("roleImages.environment") }}</dt>
-              <dd>
-                {{
+      <div v-else class="role-image-catalog__table-wrap">
+        <table class="role-image-catalog__table">
+          <thead>
+            <tr>
+              <th scope="col">{{ t("catalog.table.name") }}</th>
+              <th scope="col">{{ t("roleImages.environment") }}</th>
+              <th scope="col">{{ t("common.status") }}</th>
+              <th scope="col">{{ t("roleImages.promotion") }}</th>
+              <th scope="col">{{ t("roleImages.generation") }}</th>
+              <th scope="col">{{ t("roleImages.updatedAt") }}</th>
+              <th scope="col" class="role-image-catalog__open">
+                {{ t("common.open") }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="recipe in items"
+              :key="recipe.ref"
+              class="role-image-catalog__row"
+            >
+              <td>
+                <div class="role-image-catalog__identity">
+                  <EntityIcon kind="ROLE_IMAGE" />
+                  <div>
+                    <RouterLink
+                      :to="`/projects/${encodeURIComponent(projectRef)}/role-images/${encodeURIComponent(recipe.ref)}`"
+                      :title="localizeServerMessage(recipe.name)"
+                      >{{ localizeServerMessage(recipe.name) }}</RouterLink
+                    >
+                    <small>{{
+                      store.roleDefinitionByRef.get(recipe.roleDefinitionRef)
+                        ?.label ?? t("roleImages.unknownRole")
+                    }}</small>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span>{{
                   store.environmentByKey.get(recipe.environment.environmentKey)
                     ? t(
                         store.environmentByKey.get(
@@ -156,12 +178,14 @@ onBeforeUnmount(() => store.dispose());
                         )!.nameMessageKey,
                       )
                     : recipe.environment.environmentKey
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ t("roleImages.promotion") }}</dt>
-              <dd>
+                }}</span>
+                <RoleImageLineage
+                  :lineage="recipe.managedLineage"
+                  collapsible
+                />
+              </td>
+              <td><StatusBadge :state="recipe.state" /></td>
+              <td>
                 <StatusBadge
                   :state="recipe.promotedImageReady ? 'PROMOTED' : 'PENDING'"
                   :label="
@@ -170,46 +194,41 @@ onBeforeUnmount(() => store.dispose());
                       : t('roleImages.notPromoted')
                   "
                 />
-              </dd>
-            </div>
-          </dl>
-          <RoleImageLineage :lineage="recipe.managedLineage" />
-          <footer>
-            <span>
-              {{
-                t("roleImages.updated", {
-                  date: new Date(recipe.updatedAt).toLocaleString(),
-                })
-              }}
-            </span>
-            <RouterLink
-              class="button"
-              :to="`/projects/${encodeURIComponent(projectRef)}/role-images/${encodeURIComponent(recipe.ref)}`"
-            >
-              {{ t("common.open") }}
-            </RouterLink>
-          </footer>
-        </article>
+              </td>
+              <td>{{ recipe.generation }}</td>
+              <td>
+                <time :datetime="recipe.updatedAt">{{
+                  new Date(recipe.updatedAt).toLocaleString()
+                }}</time>
+              </td>
+              <td class="role-image-catalog__open">
+                <RouterLink
+                  class="icon-button"
+                  :to="`/projects/${encodeURIComponent(projectRef)}/role-images/${encodeURIComponent(recipe.ref)}`"
+                  :aria-label="t('common.open')"
+                  :title="t('common.open')"
+                  ><ChevronRight :size="18" aria-hidden="true"
+                /></RouterLink>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <p v-if="store.loadingMore" class="catalog-loading" role="status">
         {{ t("common.loading") }}
       </p>
-      <button
-        v-else-if="store.projectNextPageToken[projectRef]"
-        class="button catalog-more"
-        type="button"
-        @click="store.loadCatalog(projectRef, false)"
-      >
-        <Layers3 :size="16" aria-hidden="true" />
-        {{ t("roleImages.loadMore") }}
-      </button>
+      <div
+        v-if="store.projectNextPageToken[projectRef]"
+        ref="sentinel"
+        class="cursor-sentinel"
+      />
     </div>
-  </component>
+  </section>
 </template>
 
 <style scoped>
 .role-image-catalog {
-  overflow: hidden;
+  min-width: 0;
 }
 .role-image-catalog__toolbar {
   display: flex;
@@ -251,81 +270,107 @@ onBeforeUnmount(() => store.dispose());
   font-size: 0.78rem;
 }
 .role-image-catalog__scroll {
-  max-height: 1696px;
+  min-width: 0;
   padding: 14px;
-  overflow: auto;
 }
-.role-image-catalog--expanded .role-image-catalog__scroll {
-  max-height: calc(100dvh - 240px);
-}
-.role-image-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-  grid-auto-rows: minmax(340px, auto);
-  gap: 12px;
-}
-.image-card {
-  display: grid;
-  gap: 16px;
-  padding: 16px;
+.role-image-catalog__table-wrap {
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
 }
-.image-card > header {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
+.role-image-catalog__table {
+  width: 100%;
+  min-width: 980px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.role-image-catalog__table th,
+.role-image-catalog__table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+.role-image-catalog__table th {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.role-image-catalog__table th:nth-child(1) {
+  width: 28%;
+}
+.role-image-catalog__table th:nth-child(2) {
+  width: 18%;
+}
+.role-image-catalog__table th:nth-child(3) {
+  width: 12%;
+}
+.role-image-catalog__table th:nth-child(4) {
+  width: 15%;
+}
+.role-image-catalog__table th:nth-child(5) {
+  width: 8%;
+}
+.role-image-catalog__table th:nth-child(6) {
+  width: 14%;
+}
+.role-image-catalog__table th:nth-child(7) {
+  width: 5%;
+}
+.role-image-catalog__row {
+  min-height: 72px;
+  border-top: 1px solid var(--border);
+}
+.role-image-catalog__row:hover {
+  background: var(--panel);
+}
+.role-image-catalog__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
   gap: 10px;
 }
-.image-card__icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 7px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-.image-card h2,
-.image-card p {
-  margin: 0;
-}
-.image-card h2 {
-  font-size: 1rem;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-.image-card p,
-.image-card footer > span {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-}
-.image-card dl {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-}
-.image-card dl > div {
+.role-image-catalog__identity > div {
   min-width: 0;
 }
-.image-card dt {
-  color: var(--text-secondary);
+.role-image-catalog__identity a,
+.role-image-catalog__identity small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role-image-catalog__identity a {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.role-image-catalog__identity a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.role-image-catalog__identity small,
+.role-image-catalog__table time {
+  color: var(--muted);
   font-size: 0.75rem;
 }
-.image-card dd {
-  margin: 4px 0 0;
-  overflow-wrap: anywhere;
+.role-image-catalog__table td:nth-child(2) > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.image-card footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.role-image-catalog__table :deep(.role-image-lineage summary) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role-image-catalog__table :deep(.role-image-lineage summary span) {
+  display: none;
+}
+.role-image-catalog__open {
+  text-align: center !important;
 }
 .catalog-state {
   display: grid;
@@ -340,12 +385,8 @@ onBeforeUnmount(() => store.dispose());
   max-width: 420px;
   margin: 0;
 }
-.catalog-loading,
-.catalog-more {
+.catalog-loading {
   margin: 16px auto 0;
-}
-.catalog-more {
-  display: flex;
 }
 @media (max-width: 820px) {
   .role-image-catalog__toolbar {
@@ -357,25 +398,6 @@ onBeforeUnmount(() => store.dispose());
   }
   .catalog-count {
     margin-left: 0;
-  }
-}
-@media (max-width: 520px) {
-  .role-image-grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-auto-rows: minmax(440px, auto);
-  }
-  .image-card dl {
-    grid-template-columns: 1fr;
-  }
-  .image-card > header {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-  .image-card > header > :last-child {
-    grid-column: 2;
-    justify-self: start;
-  }
-  .image-card footer {
-    flex-wrap: wrap;
   }
 }
 </style>

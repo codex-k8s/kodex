@@ -68,13 +68,14 @@ export async function readEnvironmentImpact(
   pageToken: string | undefined,
   signal: AbortSignal,
   query = "",
+  pageSize = 40,
 ): Promise<RuntimeEnvironmentImpact> {
   const result = (
     await unwrap(
       getRuntimeEnvironmentImpact({
         path: { environmentRef, versionRef },
         query: {
-          pageSize: 40,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
           ...(pageToken ? { pageToken } : {}),
           ...(query.trim() ? { query: query.trim() } : {}),
         },
@@ -155,13 +156,14 @@ export async function readSecretImpact(
   pageToken: string | undefined,
   signal: AbortSignal,
   query = "",
+  pageSize = 40,
 ): Promise<RuntimeSecretImpact> {
   const result = (
     await unwrap(
       getRuntimeSecretImpact({
         path: { secretRef, revision },
         query: {
-          pageSize: 40,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
           ...(pageToken ? { pageToken } : {}),
           ...(query.trim() ? { query: query.trim() } : {}),
         },

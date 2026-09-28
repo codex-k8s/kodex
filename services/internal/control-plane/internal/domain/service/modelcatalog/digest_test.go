@@ -34,3 +34,21 @@ func TestCatalogDigestCanonicalAndVersionBound(t *testing.T) {
 		t.Fatal("empty catalog has no commitment")
 	}
 }
+
+func TestCapabilityDigestIgnoresOtherModelsButBindsSelectedCapabilities(t *testing.T) {
+	base := CapabilityDigest("provider", "pacc_one", "selected", []string{"medium", "low"}, "medium", true)
+	if len(base) != 64 || CapabilityDigest("provider", "pacc_one", "selected", []string{"low", "medium"}, "medium", true) != base {
+		t.Fatal("selected model digest is not canonical")
+	}
+	for _, changed := range []string{
+		CapabilityDigest("provider", "pacc_other", "selected", []string{"low", "medium"}, "medium", true),
+		CapabilityDigest("provider", "pacc_one", "other", []string{"low", "medium"}, "medium", true),
+		CapabilityDigest("provider", "pacc_one", "selected", []string{"medium"}, "medium", true),
+		CapabilityDigest("provider", "pacc_one", "selected", []string{"low", "medium"}, "low", true),
+		CapabilityDigest("provider", "pacc_one", "selected", []string{"low", "medium"}, "medium", false),
+	} {
+		if changed == base {
+			t.Fatal("selected model capability change did not invalidate pin")
+		}
+	}
+}

@@ -11,7 +11,7 @@ import {
   Send,
   Trash2,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type {
   ManagedConfiguration,
@@ -24,10 +24,14 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import * as api from "./api";
 import { archiveConfiguration } from "./lifecycle";
@@ -51,6 +55,7 @@ import {
   type PublicationAttempt,
 } from "@/features/runtime/publication-attempt";
 import RoleImageImpactSelection from "./RoleImageImpactSelection.vue";
+import { requestAssistantIntegrationPublication } from "@/features/assistant";
 import {
   prepareImageImpact,
   applyImageImpact,
@@ -85,9 +90,32 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ created: [configuration: ManagedConfiguration] }>();
 const { t } = useI18n();
+const fieldPrefix = `configuration-editor-${useId()}`;
 const configuration = ref<ManagedConfiguration>();
 const revision = ref<ManagedConfigurationRevision>();
 const revisions = ref<ManagedConfigurationRevision[]>([]);
+const historyList = ref<HTMLElement>();
+const historySentinel = ref<HTMLElement>();
+const diffList = ref<HTMLElement>();
+const diffSentinel = ref<HTMLElement>();
+const historyPageSize = useAdaptiveCursorPageSize({
+  container: historyList,
+  itemSelector: ".configuration-editor__revision",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
+const diffPageSize = useAdaptiveCursorPageSize({
+  container: diffList,
+  itemSelector: "option",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 320,
+  estimatedItemHeight: 36,
+  minimum: 8,
+  maximum: 100,
+});
 const pageToken = ref<string>();
 const historyCursors = new Set<string>();
 const name = ref("");
@@ -104,6 +132,7 @@ const publicationPlan = ref<RevisionImpactPlan>();
 const publicationUnknown = ref(false);
 const imagePlan = ref<RoleImageImpactPlan>();
 const imageUnknown = ref(false);
+const imageImpactConflict = ref(false);
 const promptAttempt = ref<PublicationAttempt>();
 const imageAttempt = ref<PublicationAttempt>();
 let promptKey = "";
@@ -147,10 +176,48 @@ const comparison = computed(() => {
   }
 });
 const impactValue = ref<ManagedConfigurationImpact>();
+const impactList = ref<HTMLElement>();
+const impactSentinel = ref<HTMLElement>();
+const impactPageSize = useAdaptiveCursorPageSize({
+  container: impactList,
+  itemSelector: ".configuration-editor__consumer",
+  itemCount: () => impactValue.value?.consumers.length ?? 0,
+  estimatedViewportHeight: 420,
+  estimatedItemHeight: 64,
+  minimum: 8,
+  maximum: 100,
+});
 const impactOpen = ref(false);
 const impactQuery = ref("");
 const impactLoading = ref(false);
 const impactProblem = ref<AppProblem>();
+const newConnection = ref<AsyncEntityOption>();
+const impactDefinitionKey = computed(() => {
+  if (props.kind !== "INTEGRATION_DEFINITION" || !revision.value)
+    return undefined;
+  if (
+    revision.value.contentFormat !== "JSON" &&
+    revision.value.contentFormat !== "YAML"
+  )
+    return undefined;
+  try {
+    const document = parseConfigurationDocument(
+      revision.value.content,
+      revision.value.contentFormat,
+    );
+    const metadata = document.metadata;
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+      return undefined;
+    const key = (metadata as Record<string, unknown>).key;
+    return typeof key === "string" &&
+      key.length <= 120 &&
+      /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/.test(key)
+      ? key
+      : undefined;
+  } catch {
+    return undefined;
+  }
+});
 let impactGeneration = 0;
 let impactController: AbortController | undefined;
 let impactTimer: ReturnType<typeof setTimeout> | undefined;
@@ -162,6 +229,7 @@ function closeImpact(): void {
   impactOpen.value = false;
   impactValue.value = undefined;
   impactLoading.value = false;
+  newConnection.value = undefined;
 }
 const selected = ref<string[]>([]);
 const sourceAction = ref<"copy" | "detach">();
@@ -210,16 +278,18 @@ const projectRequired = computed(
     api.configurationRequiresProject(props.kind) &&
     !api.configurationProjectScopeValid(props.kind, props.projectRef),
 );
-const dirty = computed(
-  () =>
+const dirty = computed(() => {
+  if (props.kind === "ROLE_IMAGE" && !sourceVisible.value) return false;
+  return (
     content.value !== (revision.value?.content ?? "") ||
     JSON.stringify(promptScope.value) !==
       JSON.stringify(promptScopeInput(revision.value?.promptScope)) ||
     format.value !==
       (revision.value?.contentFormat ??
         (props.kind === "PROMPT_TEMPLATE" ? "TEXT" : "JSON")) ||
-    name.value !== (configuration.value?.name ?? ""),
-);
+    name.value !== (configuration.value?.name ?? "")
+  );
+});
 useUnsavedChanges(dirty, () => t("managed.discard"));
 const language = computed(() =>
   format.value === "TEXT"
@@ -348,11 +418,13 @@ async function load(more = false): Promise<void> {
     !window.confirm(t("managed.discard"))
   )
     return;
+  imageImpactConflict.value = false;
   await perform(async () => {
     const result = await api.history(
       ref,
       controller.signal,
       more ? pageToken.value : undefined,
+      diffOpen.value ? diffPageSize.value : historyPageSize.value,
     );
     if (disposed) return;
     if (
@@ -411,6 +483,37 @@ async function load(more = false): Promise<void> {
     }
   });
 }
+useCursorInfiniteScroll({
+  root: historyList,
+  sentinel: historySentinel,
+  enabled: () =>
+    historyOpen.value &&
+    Boolean(pageToken.value) &&
+    !busy.value &&
+    !sourceBusy.value,
+  loadMore: () => load(true),
+});
+useCursorInfiniteScroll({
+  root: diffList,
+  sentinel: diffSentinel,
+  enabled: () =>
+    diffOpen.value &&
+    Boolean(pageToken.value) &&
+    !busy.value &&
+    !sourceBusy.value,
+  loadMore: () => load(true),
+});
+useCursorInfiniteScroll({
+  root: impactList,
+  sentinel: impactSentinel,
+  enabled: () =>
+    impactOpen.value &&
+    Boolean(impactValue.value?.nextPageToken) &&
+    !impactLoading.value &&
+    !busy.value,
+  loadMore: () => showImpact(true),
+});
+
 async function save(): Promise<void> {
   if (!canSave.value) return;
   await perform(async () => {
@@ -704,33 +807,39 @@ async function showImpact(more = false): Promise<void> {
   )
     return;
   if (current.kind === "ROLE_IMAGE") {
+    imageImpactConflict.value = false;
     await perform(async () => {
-      const saved = readPublicationAttempt(
-        "ROLE_IMAGE",
-        current.ref,
-        window.sessionStorage,
-      );
-      if (saved) {
-        const report = await restoreImageImpact(
-          saved.planRef,
-          controller.signal,
+      try {
+        const saved = readPublicationAttempt(
+          "ROLE_IMAGE",
+          current.ref,
+          window.sessionStorage,
         );
-        if (
-          report.plan.configurationRef !== current.ref ||
-          report.plan.revisionRef !== target.ref ||
-          report.plan.configurationVersion !== saved.version
-        )
-          throw new Error("Role image recovery scope mismatch");
-        imagePlan.value = report.plan;
-        imageAttempt.value = saved;
-        imageKey = saved.key;
-        imageUnknown.value = report.plan.state === "PREPARED";
-        if (!imageUnknown.value) clearImageAttempt(current.ref);
-      } else {
-        imagePlan.value = await prepareImageImpact(current, target);
-        imageUnknown.value = false;
-        imageAttempt.value = undefined;
-        imageKey = crypto.randomUUID();
+        if (saved) {
+          const report = await restoreImageImpact(
+            saved.planRef,
+            controller.signal,
+          );
+          if (
+            report.plan.configurationRef !== current.ref ||
+            report.plan.revisionRef !== target.ref ||
+            report.plan.configurationVersion !== saved.version
+          )
+            throw new Error("Role image recovery scope mismatch");
+          imagePlan.value = report.plan;
+          imageAttempt.value = saved;
+          imageKey = saved.key;
+          imageUnknown.value = report.plan.state === "PREPARED";
+          if (!imageUnknown.value) clearImageAttempt(current.ref);
+        } else {
+          imagePlan.value = await prepareImageImpact(current, target);
+          imageUnknown.value = false;
+          imageAttempt.value = undefined;
+          imageKey = crypto.randomUUID();
+        }
+      } catch (error) {
+        imageImpactConflict.value = asProblem(error).status === 412;
+        throw error;
       }
     });
     return;
@@ -757,6 +866,7 @@ async function showImpact(more = false): Promise<void> {
       active.signal,
       impactQuery.value,
       previous?.nextPageToken,
+      impactPageSize.value,
     );
     if (disposed || generation !== impactGeneration) return;
     if (previous?.nextPageToken) impactCursors.add(previous.nextPageToken);
@@ -827,6 +937,74 @@ async function rebind(): Promise<void> {
       await api.rebind(current, target, {
         impactDigest: impact.digest,
         consumers: selectedConsumers(impact.consumers, selected.value),
+      }),
+    ),
+  );
+}
+async function connectionCandidates(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize = 30,
+) {
+  const key = impactDefinitionKey.value;
+  if (!key) throw new Error("Integration definition key is unavailable");
+  const page = await api.listDefinitionConnectionCandidates(
+    key,
+    query,
+    cursor,
+    signal,
+    pageSize,
+  );
+  const bound = new Set(
+    (impactValue.value?.consumers ?? [])
+      .filter((item) => item.kind === "INTEGRATION_CONNECTION")
+      .map((item) => item.ref),
+  );
+  return {
+    items: page.items.map((item) => ({
+      ref: item.ref,
+      title: item.name,
+      description: item.state,
+      disabled: item.state === "DELETED" || bound.has(item.ref),
+      disabledReason: bound.has(item.ref)
+        ? t("managed.connectionAlreadyBound")
+        : undefined,
+    })),
+    nextPageToken: page.nextPageToken || undefined,
+  };
+}
+async function bindNewConnection(): Promise<void> {
+  const current = configuration.value;
+  const target = revision.value;
+  const impact = impactValue.value;
+  const candidate = newConnection.value;
+  if (
+    !current ||
+    current.kind !== "INTEGRATION_DEFINITION" ||
+    current.archived ||
+    !target ||
+    target.state !== "PUBLISHED" ||
+    !impact ||
+    !candidate ||
+    !impactDefinitionKey.value ||
+    busy.value ||
+    impactLoading.value ||
+    impactProblem.value ||
+    problem.value
+  )
+    return;
+  await perform(async () =>
+    accept(
+      await api.rebind(current, target, {
+        impactDigest: impact.digest,
+        consumers: [
+          {
+            kind: "INTEGRATION_CONNECTION",
+            ref: candidate.ref,
+            expectedAbsent: true,
+          },
+        ],
       }),
     ),
   );
@@ -1028,13 +1206,18 @@ watch(
 
 <template>
   <section class="configuration-editor" :aria-busy="busy">
-    <ProblemNotice v-if="problem" :problem="problem" />
+    <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
+    <p v-if="imageImpactConflict && problem" role="status">
+      {{ $t("roleImages.impactConflictHelp") }}
+    </p>
     <header class="configuration-editor__toolbar">
       <StatusBadge v-if="revision" :state="revision.state" />
       <span v-if="revision">{{
         $t("managed.revision", { revision: revision.revision })
       }}</span>
-      <span v-if="configuration">{{ configuration.managedBy }}</span>
+      <span v-if="configuration">{{
+        $t("managed.ownership." + configuration.managedBy)
+      }}</span>
       <button
         v-if="configuration"
         class="icon-button"
@@ -1153,13 +1336,23 @@ watch(
       @busy="sourceBusy = $event"
     />
     <p v-if="!sourceVisible" role="status">
-      {{ $t("roleImages.sourceUnavailable") }}
+      {{
+        $t(
+          problem
+            ? "roleImages.sourceHiddenAfterError"
+            : "roleImages.sourceUnavailable",
+        )
+      }}
     </p>
     <dl v-if="configuration" class="configuration-editor__source">
       <dt>{{ $t("managed.source") }}</dt>
       <dd>{{ configuration.source }}</dd>
-      <dt>{{ $t("managed.sourceRevision") }}</dt>
-      <dd>{{ configuration.sourceRevision }}</dd>
+      <dt v-if="configuration.sourceRevision">
+        {{ $t("managed.sourceRevision") }}
+      </dt>
+      <dd v-if="configuration.sourceRevision">
+        {{ configuration.sourceRevision }}
+      </dd>
     </dl>
     <GitSourcePanel
       v-if="
@@ -1183,25 +1376,21 @@ watch(
       @busy="sourceBusy = $event"
       @changed="load()"
     />
-    <PromptScopeFields
-      v-if="kind === 'PROMPT_TEMPLATE'"
-      v-model="promptScope"
-      :project-ref="configuration?.projectRef ?? projectRef"
-      :template="content"
-      :disabled="busy || sourceBusy || gitOwned"
-      @valid="promptScopeValid = $event"
-    />
     <div class="configuration-editor__fields">
       <label
         >{{ $t("common.name")
         }}<input
           v-model="name"
+          :id="`${fieldPrefix}-name`"
+          :name="`${fieldPrefix}-name`"
           maxlength="160"
           :disabled="busy || !!configuration || !sourceEditable"
       /></label>
       <label
         >{{ $t("managed.format")
         }}<select
+          :id="`${fieldPrefix}-format`"
+          :name="`${fieldPrefix}-format`"
           :value="format"
           @change="changeFormat"
           :disabled="
@@ -1220,6 +1409,25 @@ watch(
         </select></label
       >
     </div>
+    <PromptScopeFields
+      v-if="kind === 'PROMPT_TEMPLATE'"
+      v-model="promptScope"
+      :project-ref="configuration?.projectRef ?? projectRef"
+      :template="content"
+      :disabled="busy || sourceBusy || gitOwned"
+      @valid="promptScopeValid = $event"
+    >
+      <template #editor>
+        <CodeEditor
+          v-if="sourceVisible"
+          v-model="content"
+          :label="$t('managed.content')"
+          :language="language"
+          :readonly="gitOwned || !sourceEditable"
+          :disabled="busy || sourceBusy"
+        />
+      </template>
+    </PromptScopeFields>
     <div
       v-if="sourceVisible && kind !== 'PROMPT_TEMPLATE' && format !== 'TOML'"
       class="configuration-editor__toolbar"
@@ -1255,7 +1463,7 @@ watch(
       :initialize-stt="kind === 'SYSTEM_STT' && !configurationRef"
     />
     <CodeEditor
-      v-else-if="sourceVisible"
+      v-else-if="sourceVisible && kind !== 'PROMPT_TEMPLATE'"
       v-model="content"
       :label="$t('managed.content')"
       :language="language"
@@ -1342,6 +1550,26 @@ watch(
         <Send :size="18" />{{ $t("managed.publish") }}
       </button>
       <button
+        v-if="
+          configuration &&
+          revision &&
+          kind === 'INTEGRATION_DEFINITION' &&
+          revision.state === 'VALID'
+        "
+        class="button"
+        :disabled="
+          busy || sourceBusy || dirty || !canPublish(configuration, revision)
+        "
+        @click="
+          requestAssistantIntegrationPublication({
+            configurationRef: configuration.ref,
+            revisionRef: revision.ref,
+          })
+        "
+      >
+        {{ $t("managed.publishWithAssistant") }}
+      </button>
+      <button
         v-if="configuration && revision"
         class="button"
         :disabled="busy || sourceBusy || dirty || configuration.archived"
@@ -1376,7 +1604,7 @@ watch(
       :busy="busy"
       @close="historyOpen = false"
     >
-      <div class="configuration-editor__history">
+      <div ref="historyList" class="configuration-editor__history">
         <button
           v-for="item in revisions"
           :key="item.ref"
@@ -1387,15 +1615,15 @@ watch(
           <span>{{ $t("managed.revision", { revision: item.revision }) }}</span
           ><StatusBadge :state="item.state" /><time>{{ item.createdAt }}</time>
         </button>
+        <div
+          v-if="pageToken"
+          ref="historySentinel"
+          class="configuration-editor__sentinel"
+          role="status"
+        >
+          <span v-if="busy || sourceBusy">{{ $t("common.loading") }}</span>
+        </div>
       </div>
-      <button
-        v-if="pageToken"
-        class="button"
-        :disabled="busy || sourceBusy"
-        @click="load(true)"
-      >
-        {{ $t("managed.more") }}
-      </button>
     </ModalDialog>
     <ModalDialog
       v-if="impactOpen"
@@ -1406,6 +1634,8 @@ watch(
     >
       <input
         v-model="impactQuery"
+        :id="`${fieldPrefix}-impact-search`"
+        :name="`${fieldPrefix}-impact-search`"
         type="search"
         :aria-label="$t('common.search')"
         :placeholder="$t('common.search')"
@@ -1424,7 +1654,7 @@ watch(
       <p v-if="impactValue && !impactValue.consumers.length">
         {{ $t("managed.noConsumers") }}
       </p>
-      <div class="configuration-editor__history">
+      <div ref="impactList" class="configuration-editor__history">
         <label
           v-for="consumer in impactValue?.consumers ?? []"
           :key="consumerKey(consumer)"
@@ -1432,6 +1662,7 @@ watch(
           ><input
             v-model="selected"
             type="checkbox"
+            :name="`${fieldPrefix}-consumer`"
             :value="consumerKey(consumer)"
             :disabled="
               kind === 'SYSTEM_STT' ||
@@ -1446,15 +1677,50 @@ watch(
           ><code>{{ consumer.ref }}</code
           ><span>v{{ consumer.version }}</span></label
         >
+        <div
+          v-if="impactValue?.nextPageToken"
+          ref="impactSentinel"
+          class="configuration-editor__sentinel"
+          role="status"
+        >
+          <span v-if="impactLoading">{{ $t("common.loading") }}</span>
+        </div>
       </div>
-      <button
-        v-if="impactValue?.nextPageToken"
-        class="button"
-        :disabled="busy || impactLoading"
-        @click="showImpact(true)"
+      <div
+        v-if="
+          kind === 'INTEGRATION_DEFINITION' &&
+          impactDefinitionKey &&
+          revision?.state === 'PUBLISHED'
+        "
+        class="configuration-editor__new-connection"
       >
-        {{ $t("impact.more") }}
-      </button>
+        <h3>{{ $t("managed.newConnection") }}</h3>
+        <p>{{ $t("managed.newConnectionHint") }}</p>
+        <AsyncEntityPicker
+          :model-value="newConnection?.ref"
+          :selected="newConnection"
+          :load-page="connectionCandidates"
+          :context-key="`${configuration?.ref}:${revision?.ref}:${impactDefinitionKey}`"
+          :trigger-label="$t('managed.newConnection')"
+          :disabled="busy || impactLoading || !!impactProblem"
+          @select="newConnection = $event"
+          @update:model-value="!$event && (newConnection = undefined)"
+        />
+        <button
+          class="button button--primary"
+          type="button"
+          :disabled="
+            busy ||
+            impactLoading ||
+            !!impactProblem ||
+            !!problem ||
+            !newConnection
+          "
+          @click="bindNewConnection"
+        >
+          {{ $t("managed.bindNewConnection") }}
+        </button>
+      </div>
       <button
         v-if="kind !== 'SYSTEM_STT'"
         class="button button--primary"
@@ -1478,30 +1744,36 @@ watch(
       size="xl"
       @close="diffOpen = false"
     >
-      <label class="configuration-editor__comparison">
-        {{ $t("managed.compareRevision") }}
-        <select v-model="compareRef">
-          <option value="">{{ $t("managed.currentRevision") }}</option>
-          <option v-for="item in revisions" :key="item.ref" :value="item.ref">
-            v{{ item.revision }} · {{ item.state }}
-          </option>
-        </select>
-      </label>
-      <CodeDiff
-        v-if="comparison"
-        :original="comparison.original"
-        :modified="comparison.modified"
-        :label="$t('managed.diff')"
-      />
-      <p v-else role="alert">{{ $t("managed.invalidDocument") }}</p>
-      <button
-        v-if="pageToken"
-        class="button"
-        :disabled="busy || sourceBusy"
-        @click="load(true)"
-      >
-        {{ $t("managed.more") }}
-      </button>
+      <div ref="diffList" class="configuration-editor__diff-list">
+        <label class="configuration-editor__comparison">
+          {{ $t("managed.compareRevision") }}
+          <select
+            v-model="compareRef"
+            :id="`${fieldPrefix}-compare`"
+            :name="`${fieldPrefix}-compare`"
+          >
+            <option value="">{{ $t("managed.currentRevision") }}</option>
+            <option v-for="item in revisions" :key="item.ref" :value="item.ref">
+              v{{ item.revision }} · {{ item.state }}
+            </option>
+          </select>
+        </label>
+        <CodeDiff
+          v-if="comparison"
+          :original="comparison.original"
+          :modified="comparison.modified"
+          :label="$t('managed.diff')"
+        />
+        <p v-else role="alert">{{ $t("managed.invalidDocument") }}</p>
+        <div
+          v-if="pageToken"
+          ref="diffSentinel"
+          class="configuration-editor__sentinel"
+          role="status"
+        >
+          <span v-if="busy || sourceBusy">{{ $t("common.loading") }}</span>
+        </div>
+      </div>
     </ModalDialog>
     <ModalDialog
       v-if="sourceAction"
@@ -1510,7 +1782,12 @@ watch(
       @close="sourceAction = undefined"
     >
       <label v-if="sourceAction === 'copy'"
-        >{{ $t("common.name") }}<input v-model="copyName" maxlength="160"
+        >{{ $t("common.name")
+        }}<input
+          v-model="copyName"
+          :id="`${fieldPrefix}-copy-name`"
+          :name="`${fieldPrefix}-copy-name`"
+          maxlength="160"
       /></label>
       <p v-else>{{ $t("managed.detachConfirm") }}</p>
       <button
@@ -1615,6 +1892,7 @@ watch(
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 4px 12px;
+  margin: 0;
   font-size: 12px;
 }
 .configuration-editor__source dd {
@@ -1625,6 +1903,13 @@ watch(
   max-height: 420px;
   overflow: auto;
   margin-bottom: 16px;
+}
+.configuration-editor__diff-list {
+  max-height: 65vh;
+  overflow: auto;
+}
+.configuration-editor__sentinel {
+  min-height: 1px;
 }
 .configuration-editor__revision,
 .configuration-editor__consumer {
@@ -1643,6 +1928,19 @@ watch(
 .configuration-editor__consumer code {
   overflow-wrap: anywhere;
   min-width: 0;
+}
+.configuration-editor__new-connection {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.configuration-editor__new-connection h3,
+.configuration-editor__new-connection p {
+  margin: 0;
 }
 .configuration-editor__diagnostics {
   overflow-wrap: anywhere;

@@ -21,6 +21,19 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.CreateAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.AssistantRoleImageRecipeInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		return repository.authorizeAssistantRoleImage(ctx, tx, current, payload)
+	case command.UpdateAssistantRoleImageRecipe:
+		payload, ok := input.Payload.(command.AssistantRoleImageUpdateInput)
+		if !ok {
+			return errs.ErrInvalid
+		}
+		_, _, err := repository.assistantRoleImageUpdateInput(ctx, tx, current, input.Mutation, payload)
+		return err
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
 		_, ok := input.Payload.(command.ProjectLifecycleInput)
 		if !ok {
@@ -49,6 +62,9 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	case command.ArchiveAssistantConversation:
 		_, err := repository.authorizeAssistantArchive(ctx, tx, current, input)
+		return err
+	case command.MoveAssistantConversationToProject:
+		_, _, err := repository.authorizeAssistantProjectMove(ctx, tx, current, input)
 		return err
 	case command.ReconcileEmailEffect:
 		_, err := repository.authorizeEmailReconciliation(ctx, tx, current, input)
@@ -174,6 +190,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "project.create", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.Ref, payload.Ref)
+	case command.ProjectFileInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "artifact.upload", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 	case command.PlatformMembershipInput:
 		return "access.manage", organization, nil
 	case command.MembershipInput:

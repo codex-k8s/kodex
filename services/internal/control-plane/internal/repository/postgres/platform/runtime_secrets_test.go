@@ -2,13 +2,39 @@ package platform
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
+
+func TestRuntimeSecretActionsFromExactPermissions(t *testing.T) {
+	tests := []struct {
+		name        string
+		state       string
+		permissions map[string]bool
+		want        string
+	}{
+		{name: "owner", state: "ACTIVE", permissions: map[string]bool{"secret.rotate": true, "secret.reveal": true, "secret.revoke": true}, want: "ROTATE,REVEAL,REVOKE"},
+		{name: "partial", state: "ACTIVE", permissions: map[string]bool{"secret.rotate": true}, want: "ROTATE"},
+		{name: "denied", state: "ACTIVE", permissions: map[string]bool{}, want: ""},
+		{name: "revoked", state: "REVOKED", permissions: map[string]bool{"secret.rotate": true, "secret.reveal": true, "secret.revoke": true}, want: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := runtimeSecretActions(entity.RuntimeSecret{State: test.state}, func(permission string) bool {
+				return test.permissions[permission]
+			})
+			if strings.Join(got, ",") != test.want {
+				t.Fatalf("runtime secret actions = %v, want %s", got, test.want)
+			}
+		})
+	}
+}
 
 func TestRuntimeSecretAuditSummary(t *testing.T) {
 	tests := map[string]string{

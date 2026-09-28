@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, onScopeDispose, ref } from "vue";
 import { clearProviderLifecycleAttempts } from "@/features/providers/lifecycle-attempt";
+import { runtimeSecretReauthSuggestionStorageKey } from "@/features/runtime-secrets/reauth-suggestion";
 import { environmentDraftReauthKey } from "@/features/runtime/environment-draft-reauth";
 import { emailAttemptStorageKey } from "@/features/integrations/email-attempt";
 import { mailboxCredentialRecoveryKey } from "@/features/integrations/email-credential-recovery";
@@ -14,6 +15,7 @@ import {
   createEmailReconciliationIntent,
   type EmailReconciliationIntent,
   createRuntimeEnvironmentPolicyIntent,
+  createRuntimeSecretDraftIntent,
   createRuntimeSecretRevealIntent,
   oidcReauthIntentStorageKey,
   recordRuntimeEnvironmentPolicyReauthCompletion,
@@ -74,6 +76,7 @@ export interface LoginCompletion {
   readonly kind:
     | "login"
     | "runtime-secret"
+    | "runtime-secret-draft"
     | "runtime-environment-policy"
     | "email-reconciliation";
   readonly returnPath?: string;
@@ -314,6 +317,7 @@ export const useSessionStore = defineStore("session", () => {
     window.sessionStorage.removeItem(authorizationStateKey);
     window.sessionStorage.removeItem(sessionRevisionKey);
     window.sessionStorage.removeItem(environmentDraftReauthKey);
+    window.sessionStorage.removeItem(runtimeSecretReauthSuggestionStorageKey);
     window.sessionStorage.removeItem(emailAttemptStorageKey);
     window.sessionStorage.removeItem(mailboxCredentialRecoveryKey);
     window.sessionStorage.removeItem(gitSourceRecoveryKey);
@@ -444,15 +448,45 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
+  async function beginRuntimeSecretDraftReauth(input: {
+    assistantReturnPath?: string;
+    projectRef: string;
+    target: "create" | "draft" | "secret";
+    targetRef?: string;
+    surface?: "assistant";
+  }): Promise<void> {
+    const intent = createRuntimeSecretDraftIntent(
+      input.projectRef,
+      input.target,
+      input.targetRef,
+      Date.now(),
+      input.surface,
+      input.assistantReturnPath,
+    );
+    window.sessionStorage.setItem(
+      oidcReauthIntentStorageKey,
+      JSON.stringify(intent),
+    );
+    try {
+      await redirectAuthorization({ freshAuthentication: true });
+    } catch (error) {
+      window.sessionStorage.removeItem(oidcReauthIntentStorageKey);
+      throw error;
+    }
+  }
+
   async function beginRuntimeEnvironmentPolicyReauth(input: {
     environmentRef?: string;
     operation: RuntimeEnvironmentPolicyOperation;
     projectRef: string;
+    surface?: "assistant";
   }): Promise<void> {
     const intent = createRuntimeEnvironmentPolicyIntent(
       input.projectRef,
       input.operation,
       input.environmentRef,
+      Date.now(),
+      input.surface,
     );
     pendingRuntimeSecretRevealState.value = undefined;
     window.sessionStorage.removeItem(
@@ -585,6 +619,9 @@ export const useSessionStore = defineStore("session", () => {
         };
         return { kind: intent.kind, returnPath: intent.returnPath };
       }
+      if (intent.kind === "runtime-secret-draft") {
+        return { kind: intent.kind, returnPath: intent.returnPath };
+      }
       if (intent.kind === "runtime-environment-policy") {
         recordRuntimeEnvironmentPolicyReauthCompletion(
           intent,
@@ -673,8 +710,7 @@ export const useSessionStore = defineStore("session", () => {
           }
           if (attempt === 0 && normalized.retryable) continue;
           problem.value = normalized;
-          phase.value =
-            normalized.kind === "forbidden" ? "forbidden" : "error";
+          phase.value = normalized.kind === "forbidden" ? "forbidden" : "error";
           return;
         }
       }
@@ -831,6 +867,7 @@ export const useSessionStore = defineStore("session", () => {
     probe,
     beginLogin,
     beginRuntimeSecretRevealReauth,
+    beginRuntimeSecretDraftReauth,
     beginRuntimeEnvironmentPolicyReauth,
     beginEmailReconciliationReauth,
     hasPendingEmailConfirmation,

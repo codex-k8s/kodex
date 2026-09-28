@@ -21,6 +21,14 @@ describe("safeSummary", () => {
     expect(result.text).not.toContain("https://");
   });
 
+  it("убирает подпись и пустые скобки вместе с внутренней ссылкой", () => {
+    const result = safeSummary(
+      "Процесс: «Проверка», ref `wfl_9Dw3bS7-1Mc-mUvrYPiVjOP7`. Источник (`run_secret123456`).",
+    );
+
+    expect(result.text).toBe("Процесс: «Проверка». Источник.");
+  });
+
   it("ограничивает длинное описание целым словом", () => {
     const result = safeSummary("один два три четыре", 14);
 

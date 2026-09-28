@@ -114,6 +114,8 @@ const overview: Overview = {
 const integration: IntegrationDefinition = {
   version: 1,
   nextActions: [],
+  connectionCount: 0,
+  healthyConnectionCount: 0,
   key: "github",
   name: "GitHub",
   description: "Репозитории и задачи",

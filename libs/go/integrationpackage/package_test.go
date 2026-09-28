@@ -42,8 +42,8 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 7 {
-		t.Fatalf("LoadShipped() returned %d definitions; want 7", len(definitions))
+	if len(definitions) != 9 {
+		t.Fatalf("LoadShipped() returned %d definitions; want 9", len(definitions))
 	}
 	github := definitions["github"]
 	if github.Digest == "" || github.Metadata.Version != "2.3.0" || github.Spec.Credential.SecretKey != "token" {
@@ -58,7 +58,7 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if write.Risk != "WRITE" || write.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
 		t.Fatalf("synthetic write policy = %s/%s", write.Risk, write.ApprovalPolicy)
 	}
-	for _, key := range []string{"gitlab", "jira", "confluence", "email", "mattermost", "synthetic"} {
+	for _, key := range []string{"gitlab", "jira", "confluence", "email", "https-json", "mattermost", "synthetic", "openapi-mcp"} {
 		definition := definitions[key]
 		if definition.Digest == "" || definition.Spec.HealthCheck.Operation == "" || len(definition.Spec.NetworkDestinations) == 0 {
 			t.Fatalf("definition %q does not have an executable boundary: %#v", key, definition.Spec)
@@ -66,6 +66,12 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	}
 	for key, definition := range definitions {
 		executable := definition.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP)
+		if key == "openapi-mcp" {
+			if executable || definition.Spec.Readiness != string(ReadinessReady) {
+				t.Fatalf("unbound OpenAPI template became executable: %#v", definition.Spec)
+			}
+			continue
+		}
 		if key == "mattermost" {
 			if executable || definition.Spec.AdapterOwner != string(OwnerInteractionGateway) ||
 				definition.Spec.ExecutionRoute != string(RouteInteraction) || !definition.ExecutableBy(OwnerInteractionGateway, RouteInteraction) {
@@ -150,6 +156,30 @@ func TestConfigurationRejectsUnsafeProviderOrigin(t *testing.T) {
 	} {
 		if err := gitlab.ValidateConfiguration(map[string]string{"base_url": origin, "project_path": "org/project"}); err == nil {
 			t.Fatalf("ValidateConfiguration() accepted unsafe origin %q", origin)
+		}
+	}
+}
+
+func TestHTTPSJSONReadConfigurationHasExactResourcePath(t *testing.T) {
+	t.Parallel()
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition := definitions["https-json"]
+	for _, path := range []string{"/v1/status", "/v1/status.json", "/v1/items/2026-09-24"} {
+		if err := definition.ValidateConfiguration(map[string]string{"base_url": "https://api.example.test", "resource_path": path}); err != nil {
+			t.Fatalf("valid fixed path %q rejected: %v", path, err)
+		}
+	}
+	for _, path := range []string{"", "status", "//outside.test", "/v1//status", "/v1/../status", "/./status", "/v1/%2e%2e", "/v1/status?token=x", "/v1/status#part", "/v1/\\status", "/v1/status\n"} {
+		if err := definition.ValidateConfiguration(map[string]string{"base_url": "https://api.example.test", "resource_path": path}); err == nil {
+			t.Fatalf("unsafe fixed path %q accepted", path)
+		}
+	}
+	for _, origin := range []string{"http://api.example.test", "https://127.0.0.1", "https://user@api.example.test", "https://api.example.test/other"} {
+		if err := definition.ValidateConfiguration(map[string]string{"base_url": origin, "resource_path": "/v1/status"}); err == nil {
+			t.Fatalf("unsafe origin %q accepted", origin)
 		}
 	}
 }

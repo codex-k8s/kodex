@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useId } from "vue";
 import { Plus, Trash2, Maximize2 } from "@lucide/vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -15,6 +15,7 @@ const props = defineProps<{
   disabled?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
+const fieldId = `integration-package-${useId()}-${props.fieldKey}`;
 const field = computed(() => resolvePackageField(props.schema));
 const record = computed<Record<string, unknown>>(() =>
   props.modelValue &&
@@ -63,6 +64,15 @@ function updateInput(event: Event): void {
     if (value === "" || Number.isSafeInteger(value)) write(value);
   } else write(event.target.value);
 }
+function entryLabel(entry: unknown): string {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return "";
+  const item = entry as Record<string, unknown>;
+  for (const key of ["name", "key", "operation"]) {
+    const value = item[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
 </script>
 <template>
   <div v-if="field.type === 'object'" class="package-object">
@@ -70,6 +80,9 @@ function updateInput(event: Event): void {
       <div
         v-if="field.required?.includes(key) || record[key] !== undefined"
         class="package-property"
+        :class="{
+          'package-property--wide': key === 'name' || key === 'description',
+        }"
       >
         <div
           v-if="
@@ -167,6 +180,9 @@ function updateInput(event: Event): void {
         >
           <summary>
             {{ $t(`managed.packageFields.${fieldKey}`) }} {{ index + 1 }}
+            <span v-if="entryLabel(entry)" class="package-entry-label">
+              · {{ entryLabel(entry) }}
+            </span>
           </summary>
           <IntegrationPackageField
             :schema="field.items ?? {}"
@@ -201,12 +217,16 @@ function updateInput(event: Event): void {
     <span>{{ $t(`managed.packageFields.${fieldKey}`) }}</span>
     <input
       v-if="field.const !== undefined"
+      :id="fieldId"
+      :name="fieldId"
       :value="scalar"
       readonly
       :disabled="disabled"
     />
     <select
       v-else-if="field.enum"
+      :id="fieldId"
+      :name="fieldId"
       :value="scalar"
       :disabled="disabled"
       @change="updateInput"
@@ -220,6 +240,8 @@ function updateInput(event: Event): void {
     </select>
     <input
       v-else-if="field.type === 'boolean'"
+      :id="fieldId"
+      :name="fieldId"
       type="checkbox"
       :checked="modelValue === true"
       :disabled="disabled"
@@ -227,6 +249,8 @@ function updateInput(event: Event): void {
     />
     <VoiceTextarea
       v-else-if="fieldKey === 'description'"
+      :id="fieldId"
+      :name="fieldId"
       :model-value="String(scalar)"
       :disabled="disabled"
       :maxlength="field.maxLength"
@@ -235,6 +259,8 @@ function updateInput(event: Event): void {
     />
     <input
       v-else
+      :id="fieldId"
+      :name="fieldId"
       :type="field.type === 'integer' ? 'number' : 'text'"
       :value="scalar"
       :disabled="disabled"
@@ -254,12 +280,15 @@ function updateInput(event: Event): void {
   display: grid;
   gap: 12px;
   min-width: 0;
+  align-content: start;
 }
 .package-object {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
 }
 .package-property:has(.package-object),
-.package-property:has(.package-array) {
+.package-property:has(.package-array),
+.package-property--wide {
   grid-column: 1 / -1;
 }
 .package-heading {
@@ -276,6 +305,7 @@ function updateInput(event: Event): void {
   display: grid;
   gap: 6px;
   min-width: 0;
+  align-content: start;
 }
 .package-scalar :is(input, select, textarea) {
   width: 100%;
@@ -285,6 +315,9 @@ function updateInput(event: Event): void {
 .package-scalar input[type="checkbox"] {
   width: 18px;
   height: 18px;
+}
+.package-scalar :deep(textarea) {
+  min-height: 96px;
 }
 .package-add {
   justify-self: start;
@@ -310,6 +343,9 @@ function updateInput(event: Event): void {
   cursor: pointer;
   padding: 8px 0;
   overflow-wrap: anywhere;
+}
+.package-entry-label {
+  color: var(--text-muted);
 }
 @media (max-width: 720px) {
   .package-object {

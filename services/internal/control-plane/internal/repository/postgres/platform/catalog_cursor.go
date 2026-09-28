@@ -38,7 +38,11 @@ func decodeCatalogCursor(current scope, kind string, filter query.Filter) (strin
 		return "", errs.ErrInvalid
 	}
 	var cursor catalogCursor
-	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 1 || cursor.Scope != catalogScope(current, kind, filter) || cursor.Ref == "" || len(cursor.Ref) > 96 || strings.ContainsAny(cursor.Ref, "\x00\n\r") {
+	maximumPositionLength := 96
+	if kind == "ARTIFACT" {
+		maximumPositionLength = 256
+	}
+	if json.Unmarshal(raw, &cursor) != nil || cursor.Version != 1 || cursor.Scope != catalogScope(current, kind, filter) || cursor.Ref == "" || len(cursor.Ref) > maximumPositionLength || strings.ContainsAny(cursor.Ref, "\x00\n\r") {
 		return "", errs.ErrInvalid
 	}
 	return cursor.Ref, nil

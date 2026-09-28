@@ -12,6 +12,7 @@ import (
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -70,17 +71,30 @@ func (client *managedDraftRecorder) Invoke(_ context.Context, method string, req
 	}
 	revision.State = cp.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DISCARDED
 	revision.ContentFormat = client.test.format
-	if client.test.save {
+	if client.test.save || strings.HasPrefix(client.test.method, "Create") {
 		input := request.(interface {
 			GetContent() string
 			GetContentFormat() string
 		})
-		revision.Ref = "mrev_fixture02"
-		revision.ParentRevisionRef = "mrev_fixture01"
-		revision.Revision = 3
+		if client.test.save {
+			revision.Ref = "mrev_fixture02"
+			revision.ParentRevisionRef = "mrev_fixture01"
+			revision.Revision = 3
+		}
 		revision.State = cp.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DRAFT
 		revision.Content = strings.TrimSpace(input.GetContent())
 		revision.ContentFormat = input.GetContentFormat()
+		if revision.ContentFormat == "OPENAPI_IMPORT" {
+			definition, err := integrationpackage.DraftOpenAPIPackageFromJSON(context.Background(), []byte(revision.Content))
+			if err != nil {
+				return status.Error(codes.InvalidArgument, "OpenAPI import is invalid")
+			}
+			encoded, err := json.Marshal(definition)
+			if err != nil {
+				return status.Error(codes.Internal, "OpenAPI import serialization failed")
+			}
+			revision.Content, revision.ContentFormat = string(encoded), "JSON"
+		}
 		digest := sha256.Sum256([]byte(revision.Content))
 		revision.Digest = hex.EncodeToString(digest[:])
 	}
@@ -137,6 +151,82 @@ func TestManagedDraftExactCommands(t *testing.T) {
 				t.Fatalf("discard rewrote source: %+v", result.Revision)
 			}
 		})
+	}
+}
+
+func TestManagedDraftOpenAPIImportCanonicalReadback(t *testing.T) {
+	const source = `openapi: 3.1.0
+info: {title: Заявки, version: 1.0.0}
+servers: [{url: https://api.example.test}]
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses: {'200': {description: OK}}
+`
+	payload, err := json.Marshal(integrationpackage.OpenAPIImportPayload{Source: source,
+		Options: integrationpackage.OpenAPIImportOptions{Version: "1.0.0", HealthOperationID: "getHealth",
+			Choices: []integrationpackage.OpenAPIImportChoice{{OperationID: "getHealth", Risk: "READ", ApprovalPolicy: "NONE"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v1/integration-definition-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"
+	for _, tc := range []struct {
+		name    string
+		corrupt func(*cp.ManagedConfigurationSet, *cp.ManagedConfigurationRevision)
+		want    int
+	}{
+		{name: "canonical", want: http.StatusOK},
+		{name: "changed-content", corrupt: func(_ *cp.ManagedConfigurationSet, revision *cp.ManagedConfigurationRevision) {
+			revision.Content += " "
+		}, want: http.StatusBadGateway},
+		{name: "changed-format", corrupt: func(_ *cp.ManagedConfigurationSet, revision *cp.ManagedConfigurationRevision) {
+			revision.ContentFormat = "OPENAPI_IMPORT"
+		}, want: http.StatusBadGateway},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &managedDraftRecorder{test: managedDraftCase{method: "SaveIntegrationDefinitionDraft", kind: cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION, save: true}, corrupt: tc.corrupt}
+			w := httptest.NewRecorder()
+			managedDraftHandler(client).ServeHTTP(w, managedTestRequest("POST", path, managedSaveBody("OPENAPI_IMPORT", string(payload))))
+			if w.Code != tc.want {
+				t.Fatalf("status=%d want=%d body=%s", w.Code, tc.want, w.Body.String())
+			}
+			if tc.want == http.StatusOK && (strings.Contains(w.Body.String(), "openapi: 3.1.0") || !strings.Contains(w.Body.String(), `"contentFormat":"JSON"`)) {
+				t.Fatal("import source was returned or canonical format was lost")
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name    string
+		corrupt func(*cp.ManagedConfigurationSet, *cp.ManagedConfigurationRevision)
+		want    int
+	}{
+		{name: "create", want: http.StatusCreated},
+		{name: "create-changed-content", corrupt: func(_ *cp.ManagedConfigurationSet, revision *cp.ManagedConfigurationRevision) {
+			revision.Content += " "
+		}, want: http.StatusBadGateway},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &managedDraftRecorder{test: managedDraftCase{method: "CreateIntegrationDefinitionDraft", kind: cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION}, corrupt: tc.corrupt}
+			body, err := json.Marshal(map[string]string{"name": "Заявки", "contentFormat": "OPENAPI_IMPORT", "content": string(payload)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := httptest.NewRecorder()
+			managedDraftHandler(client).ServeHTTP(w, managedTestRequest("POST", "/api/v1/integration-definition-configurations/drafts", string(body)))
+			if w.Code != tc.want {
+				t.Fatalf("status=%d want=%d body=%s", w.Code, tc.want, w.Body.String())
+			}
+		})
+	}
+	for _, kind := range []string{"prompt-template-configurations", "role-image-configurations", "system-stt-configurations"} {
+		client := &managedDraftRecorder{}
+		w := httptest.NewRecorder()
+		path := "/api/v1/" + kind + "/mcfg_fixture01/revisions/mrev_fixture01/saves"
+		managedDraftHandler(client).ServeHTTP(w, managedTestRequest("POST", path, managedSaveBody("OPENAPI_IMPORT", string(payload))))
+		if w.Code != http.StatusBadRequest || client.request != nil {
+			t.Fatalf("%s accepted integration import: %d", kind, w.Code)
+		}
 	}
 }
 

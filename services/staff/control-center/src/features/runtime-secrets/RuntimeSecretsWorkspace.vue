@@ -1,28 +1,24 @@
 <script setup lang="ts">
-import {
-  Eye,
-  Link2,
-  Maximize2,
-  Plus,
-  RotateCw,
-  Search,
-  ShieldCheck,
-  ShieldX,
-} from "@lucide/vue";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Eye, Link2, Plus, RotateCw, Search, ShieldX } from "@lucide/vue";
+import { onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute, useRouter } from "vue-router";
 
 import { useSessionStore } from "@/features/session/store";
 import SecretImpactDialog from "@/features/runtime/SecretImpactDialog.vue";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { readRuntimeSecret } from "./api";
 
-import type { RuntimeSecret } from "./model";
+import type { RuntimeSecret, RuntimeSecretDraftSuggestion } from "./model";
 import { canRuntimeSecretAction, maskedSecretHint } from "./model";
+import { consumeRuntimeSecretReauthSuggestion } from "./reauth-suggestion";
 import RuntimeSecretRevealDialog from "./RuntimeSecretRevealDialog.vue";
 import RuntimeSecretRevokeDialog from "./RuntimeSecretRevokeDialog.vue";
 import RuntimeSecretDraftDialog from "./RuntimeSecretDraftDialog.vue";
@@ -48,11 +44,16 @@ function draftSaved(draft: RuntimeSecretDraft): void {
   if (draft.state !== "PUBLISHED") void store.reload();
 }
 const store = useRuntimeSecretsStore();
+const route = useRoute();
+const router = useRouter();
+const searchId = useId();
 const session = useSessionStore();
 const { locale } = useI18n();
 const search = ref("");
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
 const createOpen = ref(false);
-const expanded = ref(false);
+const createSuggestion = ref<RuntimeSecretDraftSuggestion>();
 const rotateTarget = ref<RuntimeSecret>();
 const revealTarget = ref<RuntimeSecret>();
 const revokeTarget = ref<RuntimeSecret>();
@@ -60,6 +61,19 @@ const details = ref<RuntimeSecret>();
 const impactTarget = ref<RuntimeSecret>();
 const detailsProblem = ref<AppProblem>();
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: "tbody tr",
+  itemCount: () => store.items.length,
+  estimatedItemHeight: 64,
+});
+
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => store.hasMore && !store.loading && !store.loadingMore,
+  loadMore: () => store.loadMore(pageSize.value),
+});
 
 function prepareMutation(): void {
   store.clearMutationProblem();
@@ -67,7 +81,20 @@ function prepareMutation(): void {
 
 function openCreate(): void {
   prepareMutation();
+  createSuggestion.value = undefined;
   createOpen.value = true;
+}
+
+function resumeCreateAfterReauthentication(): void {
+  if (route.query.secretCreateAfterReauth !== "1") return;
+  createSuggestion.value = consumeRuntimeSecretReauthSuggestion(
+    window.sessionStorage,
+    { projectRef: props.projectRef },
+  );
+  createOpen.value = true;
+  void router.replace({
+    query: { ...route.query, secretCreateAfterReauth: undefined },
+  });
 }
 
 function openRotate(secret: RuntimeSecret): void {
@@ -101,15 +128,6 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-function onScroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (
-    store.hasMore &&
-    element.scrollTop + element.clientHeight >= element.scrollHeight - 96
-  )
-    void store.loadMore();
-}
-
 function restoreReauthenticatedReveal(): void {
   if (revealTarget.value) return;
   const secretRef = session.pendingRuntimeSecretReveal(props.projectRef);
@@ -129,7 +147,10 @@ watch(
 );
 watch(search, (value) => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => void store.load(props.projectRef, value), 500);
+  searchTimer = setTimeout(
+    () => void store.load(props.projectRef, value, pageSize.value),
+    500,
+  );
 });
 watch(
   () => [props.projectRef, props.initialSecretRef],
@@ -159,10 +180,9 @@ watch(
     rotateTarget.value = undefined;
     revealTarget.value = undefined;
     revokeTarget.value = undefined;
-    expanded.value = false;
     if (searchTimer) clearTimeout(searchTimer);
     search.value = "";
-    void store.load(value);
+    void store.load(value, "", pageSize.value);
   },
 );
 watch(
@@ -170,7 +190,10 @@ watch(
   restoreReauthenticatedReveal,
   { immediate: true },
 );
-onMounted(() => void store.load(props.projectRef));
+onMounted(() => {
+  void store.load(props.projectRef, "", pageSize.value);
+  resumeCreateAfterReauthentication();
+});
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer);
   store.dispose();
@@ -178,35 +201,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component
-    :is="expanded ? ModalDialog : 'section'"
-    class="runtime-secrets"
-    :class="{ 'runtime-secrets--expanded': expanded }"
-    :title="expanded ? $t('runtimeSecrets.secret') : undefined"
-    size="full"
-    @close="expanded = false"
-  >
+  <section class="runtime-secrets">
     <header class="runtime-secrets__toolbar">
-      <label class="runtime-secrets__search">
+      <label class="runtime-secrets__search" :for="searchId">
         <Search :size="17" aria-hidden="true" />
         <span class="sr-only">{{ $t("runtimeSecrets.search") }}</span>
         <input
+          :id="searchId"
           v-model="search"
+          :name="searchId"
           type="search"
           :placeholder="$t('runtimeSecrets.searchPlaceholder')"
         />
       </label>
       <div class="runtime-secrets__toolbar-meta">
-        <button
-          v-if="!expanded"
-          class="icon-button"
-          type="button"
-          :title="$t('catalog.expand')"
-          :aria-label="$t('catalog.expand')"
-          @click="expanded = true"
-        >
-          <Maximize2 :size="17" />
-        </button>
         <span>{{
           $t("runtimeSecrets.shown", { count: store.items.length })
         }}</span>
@@ -235,7 +243,13 @@ onBeforeUnmount(() => {
       :loading="store.loading && !store.items.length"
       :problem="store.items.length ? undefined : store.problem"
       :empty="store.empty"
-      :empty-title="$t('runtimeSecrets.emptyTitle')"
+      :empty-title="
+        $t(
+          search
+            ? 'runtimeSecrets.emptySearchTitle'
+            : 'runtimeSecrets.emptyTitle',
+        )
+      "
       :empty-text="
         search
           ? $t('runtimeSecrets.emptySearchText')
@@ -243,12 +257,16 @@ onBeforeUnmount(() => {
       "
       @retry="store.reload"
     >
+      <template #empty-icon>
+        <Search v-if="search" :size="18" aria-hidden="true" />
+        <Plus v-else :size="18" aria-hidden="true" />
+      </template>
       <ProblemNotice
         v-if="store.problem && store.items.length"
         :problem="store.problem"
         @retry="store.reload"
       />
-      <div class="runtime-secrets__scroll" @scroll.passive="onScroll">
+      <div ref="scrollRoot" class="runtime-secrets__scroll">
         <table class="runtime-secrets__table">
           <thead>
             <tr>
@@ -266,10 +284,7 @@ onBeforeUnmount(() => {
             <tr v-for="secret in store.items" :key="secret.ref">
               <td>
                 <div class="runtime-secrets__identity">
-                  <span class="runtime-secrets__icon" aria-hidden="true">
-                    <ShieldCheck v-if="secret.state === 'ACTIVE'" :size="18" />
-                    <ShieldX v-else :size="18" />
-                  </span>
+                  <EntityIcon kind="SECRET" aria-hidden="true" />
                   <div>
                     <button
                       class="runtime-secrets__name"
@@ -349,17 +364,10 @@ onBeforeUnmount(() => {
         >
           {{ $t("common.loading") }}
         </div>
-        <button
-          v-else-if="store.hasMore"
-          class="button runtime-secrets__more"
-          type="button"
-          @click="store.loadMore"
-        >
-          {{ $t("runtimeSecrets.loadMore") }}
-        </button>
+        <div v-if="store.hasMore" ref="sentinel" class="cursor-sentinel" />
       </div>
     </AsyncState>
-  </component>
+  </section>
   <ModalDialog
     v-if="details"
     :title="details.name"
@@ -378,47 +386,47 @@ onBeforeUnmount(() => {
         <dt>{{ $t("runtimeSecrets.updatedAt") }}</dt>
         <dd>{{ formatDate(details.updatedAt) }}</dd>
       </dl>
-      <div class="runtime-secrets__actions">
+      <div class="runtime-secret-details__actions">
         <button
-          class="icon-button"
-          :title="$t('impact.inspect')"
-          :aria-label="$t('impact.inspect')"
+          class="button"
+          type="button"
           @click="
             impactTarget = details;
             details = undefined;
           "
         >
-          <Link2 :size="18" />
+          <Link2 :size="16" aria-hidden="true" />
+          {{ $t("impact.inspect") }}
         </button>
         <button
           v-if="canRuntimeSecretAction(details, 'REVEAL')"
-          class="icon-button"
-          :title="$t('runtimeSecrets.reveal')"
-          :aria-label="$t('runtimeSecrets.reveal')"
+          class="button"
+          type="button"
           @click="
             revealTarget = details;
             details = undefined;
           "
         >
-          <Eye :size="18" />
+          <Eye :size="16" aria-hidden="true" />
+          {{ $t("runtimeSecrets.reveal") }}
         </button>
         <button
           v-if="canRuntimeSecretAction(details, 'ROTATE')"
-          class="icon-button"
-          :title="$t('runtimeSecrets.rotate')"
-          :aria-label="$t('runtimeSecrets.rotate')"
+          class="button"
+          type="button"
           @click="openRotate(details)"
         >
-          <RotateCw :size="18" />
+          <RotateCw :size="16" aria-hidden="true" />
+          {{ $t("runtimeSecrets.rotate") }}
         </button>
         <button
           v-if="canRuntimeSecretAction(details, 'REVOKE')"
-          class="icon-button icon-button--danger"
-          :title="$t('runtimeSecrets.revoke')"
-          :aria-label="$t('runtimeSecrets.revoke')"
+          class="button button--danger"
+          type="button"
           @click="openRevoke(details)"
         >
-          <ShieldX :size="18" />
+          <ShieldX :size="16" aria-hidden="true" />
+          {{ $t("runtimeSecrets.revoke") }}
         </button>
       </div>
     </div>
@@ -438,6 +446,7 @@ onBeforeUnmount(() => {
   <RuntimeSecretDraftDialog
     v-if="createOpen"
     :project-ref="projectRef"
+    :suggestion="createSuggestion"
     @close="createOpen = false"
     @saved="draftSaved"
     @published="store.acceptPublication"
@@ -501,6 +510,12 @@ onBeforeUnmount(() => {
 .runtime-secret-details dd {
   margin: 0;
 }
+.runtime-secret-details__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
 .runtime-secrets__toolbar {
   display: flex;
   min-height: 62px;
@@ -526,11 +541,8 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 .runtime-secrets__scroll {
-  max-height: 526px;
+  max-height: calc(100dvh - 260px);
   overflow: auto;
-}
-.runtime-secrets--expanded .runtime-secrets__scroll {
-  max-height: calc(100dvh - 220px);
 }
 .runtime-secrets__table tbody tr {
   height: 80px;
@@ -569,15 +581,6 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-}
-.runtime-secrets__icon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 6px;
-  color: var(--accent);
-  background: var(--accent-soft);
 }
 .runtime-secrets__mask {
   white-space: nowrap;

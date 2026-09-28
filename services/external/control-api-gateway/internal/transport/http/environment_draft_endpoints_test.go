@@ -144,6 +144,9 @@ func TestEnvironmentPublishedSecretDescriptorPreservesPin(t *testing.T) {
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || len(result.CurrentVersion.SecretDescriptors) != 1 || result.CurrentVersion.SecretDescriptors[0].Revision != revision {
 			t.Fatalf("published Secret pin lost: %d", w.Code)
 		}
+		if !strings.Contains(w.Body.String(), `"ready":false`) {
+			t.Fatal("false published environment readiness was omitted")
+		}
 		if strings.Contains(w.Body.String(), "internal-only-namespace") || strings.Contains(w.Body.String(), `"namespace"`) {
 			t.Fatal("private namespace leaked")
 		}

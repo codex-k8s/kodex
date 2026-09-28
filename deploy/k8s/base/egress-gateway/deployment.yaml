@@ -50,12 +50,15 @@ spec:
             - {name: EGRESS_GATEWAY_STT_CONNECT_LISTEN, value: ":8081"}
             - {name: EGRESS_GATEWAY_MAIL_CONNECT_LISTEN, value: ":8082"}
             - {name: EGRESS_GATEWAY_MAIL_POLICY_FILE, value: /var/run/config/kodex/egress-gateway-mail/mail-policy.json}
+            - {name: EGRESS_GATEWAY_INTEGRATION_CONNECT_LISTEN, value: ":8083"}
+            - {name: EGRESS_GATEWAY_INTEGRATION_POLICY_FILE, value: /var/run/config/kodex/egress-gateway-integration/integration-policy.json}
             - {name: EGRESS_GATEWAY_TECHNICAL_LISTEN, value: ":9090"}
             - {name: EGRESS_GATEWAY_RESOLV_CONF, value: /etc/resolv.conf}
           ports:
             - {name: connect, containerPort: 8080, protocol: TCP}
             - {name: stt-connect, containerPort: 8081, protocol: TCP}
             - {name: mail-connect, containerPort: 8082, protocol: TCP}
+            - {name: openapi-connect, containerPort: 8083, protocol: TCP}
             - {name: metrics, containerPort: 9090, protocol: TCP}
           startupProbe:
             httpGet: {path: /healthz, port: metrics}
@@ -86,6 +89,9 @@ spec:
           volumeMounts:
             - name: mail-policy
               mountPath: /var/run/config/kodex/egress-gateway-mail
+              readOnly: true
+            - name: integration-policy
+              mountPath: /var/run/config/kodex/egress-gateway-integration
               readOnly: true
             - name: policy
               mountPath: /var/run/config/kodex/egress-gateway

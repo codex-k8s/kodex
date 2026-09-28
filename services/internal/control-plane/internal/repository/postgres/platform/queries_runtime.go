@@ -93,6 +93,8 @@ var (
 	queryRuntimeCompleteexecutionFailRootRun string
 	//go:embed sql/runtime_completeexecution_select_run_nodes_root_run_id_type.sql
 	queryRuntimeCompleteexecutionSelectRunNodesRootRunIdType string
+	//go:embed sql/runtime_completeexecution_close_terminal_graph.sql
+	queryRuntimeCompleteexecutionCloseTerminalGraph string
 	//go:embed sql/runtime_completeexecution_update_runs_state_result_summary_finished_at.sql
 	queryRuntimeCompleteexecutionUpdateRunsStateResultSummaryFinishedAt string
 	//go:embed sql/runtime_completeexecution_update_run_nodes_state_finished_at_version.sql
@@ -145,6 +147,14 @@ var (
 	queryRuntimeCallbackUpdateSession string
 	//go:embed sql/runtime_callback_resolve_continuation.sql
 	queryRuntimeCallbackResolveContinuation string
+	//go:embed sql/runtime_integration_resolve_continuation.sql
+	queryRuntimeIntegrationResolveContinuation string
+	//go:embed sql/runtime_integration_resume_child_run.sql
+	queryRuntimeIntegrationResumeChildRun string
+	//go:embed sql/runtime_integration_resume_root_run.sql
+	queryRuntimeIntegrationResumeRootRun string
+	//go:embed sql/runtime_integration_read_root_state.sql
+	queryRuntimeIntegrationReadRootState string
 	//go:embed sql/runtime_callback_insert_continuation_turn.sql
 	queryRuntimeCallbackInsertContinuationTurn string
 	//go:embed sql/runtime_callback_insert_continuation_node.sql

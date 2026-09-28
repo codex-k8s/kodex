@@ -15,6 +15,7 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/gateway"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/integrationpolicy"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/mailpolicy"
 	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
@@ -57,14 +58,77 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	if policyErr != nil {
 		return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
 	}
-	if _, err := activePolicy.ForProfile(policy.STTProfileName); err != nil {
-		return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
+	if config.Mode == "clamav" {
+		destinations := activePolicy.Destinations()
+		if len(destinations) != 1 || destinations[0] != (policy.Destination{Hostname: "database.clamav.net", Port: 443}) {
+			return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
+		}
+	}
+	if config.Mode != "clamav" {
+		if _, err := activePolicy.ForProfile(policy.STTProfileName); err != nil {
+			return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
+		}
 	}
 	servers, err := dnsresolver.LoadSystemServers(config.ResolverConfig)
 	if err != nil {
 		return runTechnicalOnly(lifecycle, shutdownBase, config, newDegradedState(activePolicy, readiness, metrics, business), metrics, business)
 	}
+	if config.Mode == "clamav" {
+		return runSingleDestination(lifecycle, shutdownBase, config, activePolicy, servers, readiness, metrics, business)
+	}
 	return runActive(lifecycle, shutdownBase, config, activePolicy, servers, readiness, metrics, business)
+}
+
+// runSingleDestination обслуживает только подписанный источник баз сканера.
+// Остальные listeners и их динамические policy этому deployable не принадлежат.
+func runSingleDestination(
+	lifecycle, shutdownBase context.Context,
+	config Config,
+	activePolicy *policy.Active,
+	servers []netip.AddrPort,
+	readiness *serviceruntime.Readiness,
+	metrics *sharedobservability.Metrics,
+	business *internalobservability.Metrics,
+) (resultErr error) {
+	runContext, cancelRun := context.WithCancel(lifecycle)
+	current := &runtime{policy: activePolicy, cancelRun: cancelRun}
+	defer func() { resultErr = errors.Join(resultErr, current.shutdown(context.WithoutCancel(shutdownBase))) }()
+	current.state = newState(activePolicy, readiness, metrics, business)
+	resolver, err := dnsresolver.New(activePolicy.DNS(), servers, nil, func(outcome string, reason dnsresolver.Reason) {
+		business.DNSObserver(outcome, string(reason))
+	})
+	if err != nil {
+		return err
+	}
+	current.state.setResolverConfigured()
+	current.technical, err = newTechnicalServer(config.TechnicalAddress, current.state, metrics)
+	if err != nil {
+		return err
+	}
+	if err := current.technical.Listen(); err != nil {
+		return err
+	}
+	technicalResult := make(chan error, 1)
+	go func() { technicalResult <- current.technical.Serve() }()
+	connect, err := gateway.New(runContext, config.ConnectAddress, activePolicy, resolver, &gateway.NetDialer{}, current.state, business)
+	if err != nil {
+		return err
+	}
+	current.connects = []*gateway.Server{connect}
+	if err := connect.Listen(); err != nil {
+		return err
+	}
+	connectResult := make(chan error, 1)
+	go func() { connectResult <- connect.Serve() }()
+	current.state.setProcess(processReady)
+	select {
+	case <-lifecycle.Done():
+		return nil
+	case serveErr := <-technicalResult:
+		return serveResult("technical HTTP", serveErr)
+	case serveErr := <-connectResult:
+		return serveResult("CONNECT", serveErr)
+	}
 }
 
 func runActive(
@@ -133,6 +197,27 @@ func runActive(
 		return err
 	}
 	current.connects = append(current.connects, mailServer)
+	integrationResolver, err := dnsresolver.New(activePolicy.DNS(), servers, nil, func(outcome string, reason dnsresolver.Reason) {
+		business.DNSObserver(outcome, string(reason))
+	})
+	if err != nil {
+		return err
+	}
+	integrationActive, integrationErr := integrationpolicy.LoadFile(config.IntegrationPolicyFile, config.IntegrationExpectedDigest, activePolicy)
+	integrationReadiness := integrationpolicy.NewReadiness(integrationActive, integrationResolver)
+	if err := internalobservability.RegisterIntegrationReadiness(metrics.Register, integrationReadiness.Ready); err != nil {
+		return err
+	}
+	var integrationServer *gateway.Server
+	if integrationErr != nil {
+		integrationServer, err = gateway.NewReadinessOnly(runContext, config.IntegrationConnectAddress, integrationReadiness, business)
+	} else {
+		integrationServer, err = gateway.New(runContext, config.IntegrationConnectAddress, integrationActive, integrationResolver, &gateway.NetDialer{}, integrationReadiness, business)
+	}
+	if err != nil {
+		return err
+	}
+	current.connects = append(current.connects, integrationServer)
 	for _, server := range current.connects[1:] {
 		if err := server.ShareConnectionLimit(current.connects[0]); err != nil {
 			return err
@@ -146,7 +231,7 @@ func runActive(
 		go func() { connectResult <- server.Serve() }()
 	}
 	mailRefreshInterval := time.Duration(activePolicy.DNS().MinimumTTLSeconds) * time.Second
-	current.workers = serviceruntime.StartWorkers(runContext, mailReadiness.Run(mailRefreshInterval))
+	current.workers = serviceruntime.StartWorkers(runContext, mailReadiness.Run(mailRefreshInterval), integrationReadiness.Run(mailRefreshInterval))
 	workerResult := make(chan error, 1)
 	go func() { workerResult <- current.workers.Wait(runContext) }()
 	current.state.setProcess(processReady)
@@ -194,7 +279,11 @@ func runTechnicalOnly(
 	}
 	technicalResult := make(chan error, 1)
 	go func() { technicalResult <- technical.Serve() }()
-	for _, address := range []string{config.ConnectAddress, config.STTConnectAddress, config.MailConnectAddress} {
+	addresses := []string{config.ConnectAddress}
+	if config.Mode != "clamav" {
+		addresses = append(addresses, config.STTConnectAddress, config.MailConnectAddress, config.IntegrationConnectAddress)
+	}
+	for _, address := range addresses {
 		compatibility, err := gateway.NewReadinessOnly(runContext, address, currentState, business)
 		if err != nil {
 			return err
@@ -257,9 +346,13 @@ func (current *runtime) shutdown(base context.Context) error {
 	}
 	result := serviceruntime.RunShutdown(base,
 		serviceruntime.ShutdownOperation{Name: "CONNECT server", Timeout: shutdownTimeout, Run: func(ctx context.Context) error {
-			var result error
+			results := make(chan error, len(current.connects))
 			for _, server := range current.connects {
-				result = errors.Join(result, server.Shutdown(ctx))
+				go func() { results <- server.Shutdown(ctx) }()
+			}
+			var result error
+			for range current.connects {
+				result = errors.Join(result, <-results)
 			}
 			return result
 		}},

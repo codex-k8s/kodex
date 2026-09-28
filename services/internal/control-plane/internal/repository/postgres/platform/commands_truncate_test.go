@@ -33,3 +33,23 @@ func TestTruncateKeepsDatabaseCharacterLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestBoundedRunTitleUsesUTF8ByteLimit(t *testing.T) {
+	t.Parallel()
+	for _, title := range []string{
+		"Короткое название",
+		"Процесс: " + strings.Repeat("Проверка окружения ", 12),
+		strings.Repeat("a", 241),
+	} {
+		actual := boundedRunTitle(title)
+		if len(actual) > 240 || !utf8.ValidString(actual) {
+			t.Fatalf("run title is not bounded UTF-8: bytes=%d", len(actual))
+		}
+		if len(title) <= 240 && actual != title {
+			t.Fatal("bounded run title changed an already valid title")
+		}
+		if len(title) > 240 && !strings.HasSuffix(actual, "…") {
+			t.Fatal("truncated run title lost the omission marker")
+		}
+	}
+}

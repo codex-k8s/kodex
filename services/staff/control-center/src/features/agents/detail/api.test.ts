@@ -50,7 +50,7 @@ describe("agent detail api", () => {
     expect(listTemplateVariables).toHaveBeenCalledWith({
       path: { projectRef: "project_sales" },
       query: {
-        pageSize: 50,
+        pageSize: 20,
         query: "tools",
         pageToken: "agent.ref",
       },
@@ -76,13 +76,14 @@ describe("agent detail api", () => {
     await createTemplateVariableLoader("project_sales", {
       agentRef: "agent_sales",
       runtimeRevisionRef: "revision_exact",
-    })({ query: "", signal });
+    })({ query: "", source: "WORKFLOW", signal });
     expect(listTemplateVariables).toHaveBeenCalledWith({
       path: { projectRef: "project_sales" },
       query: {
-        pageSize: 50,
+        pageSize: 20,
         agentRef: "agent_sales",
         runtimeRevisionRef: "revision_exact",
+        source: "WORKFLOW",
       },
       signal,
     });

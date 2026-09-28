@@ -14,7 +14,7 @@ func TestCatalogPinnedAuthorityBeforeCredentials(t *testing.T) {
 	for operation, raw := range catalogInputs() {
 		for _, change := range []string{"version", "operation", "risk", "approval", "scope", "input"} {
 			t.Run(operation+"/"+change, func(t *testing.T) {
-				provider := strings.Split(operation, ".")[0]
+				provider := catalogProviderKey(operation)
 				var input map[string]any
 				_ = json.Unmarshal([]byte(raw), &input)
 				request := invocationRequest(t, adapter.definitions[provider], operation, input, &CredentialRevision{})
@@ -42,7 +42,7 @@ func TestCatalogPinnedAuthorityBeforeCredentials(t *testing.T) {
 
 func TestCatalogMutationProviderFailuresNeverReplay(t *testing.T) {
 	for operation, raw := range catalogInputs() {
-		provider := strings.Split(operation, ".")[0]
+		provider := catalogProviderKey(operation)
 		if provider == "email" || provider == "synthetic" {
 			continue
 		}

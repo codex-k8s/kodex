@@ -22,6 +22,13 @@ export type {
 export type RuntimeSecretState = RuntimeSecret["state"];
 export type RuntimeSecretAction = "ROTATE" | "REVOKE" | "REVEAL";
 
+export interface RuntimeSecretDraftSuggestion {
+  name: string;
+  description: string;
+  valueType: RuntimeSecretValueType;
+  sourceHelp: string;
+}
+
 const mask = "••••••";
 
 export function maskedSecretHint(secret: RuntimeSecret): string {

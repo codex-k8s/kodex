@@ -6,9 +6,8 @@ import {
   Folder,
   RefreshCw,
   Search,
-  Maximize2,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import type {
@@ -18,13 +17,14 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { loadVfsPage, vfsEntityRoute } from "./vfs";
 import {
   parseVfsTrail,
   vfsKinds as availableKinds,
   vfsLifecycleStates as availableStates,
 } from "./vfs-location";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import {
   applyVfsAction,
   prepareVfsAction,
@@ -36,10 +36,11 @@ import {
   type VfsActionReceipt,
 } from "./vfs-actions";
 
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 const props = defineProps<{ projectRef?: string }>();
 const route = useRoute();
 const router = useRouter();
+const fieldId = useId();
 const lifecycleState = ref<
   NonNullable<SearchVfsData["query"]["lifecycleState"]>
 >(availableStates.find((state) => state === route.query.vfsState) ?? "ACTIVE");
@@ -56,6 +57,26 @@ const prepared = ref<VfsPreparedItem[]>([]);
 const receipts = ref<VfsActionReceipt[]>([]);
 let actionController: AbortController | undefined;
 const bulkActions: VfsBulkAction[] = ["REMOVE", "RESTORE", "PURGE"];
+const projectFolders = new Set([
+  "agents",
+  "automations",
+  "environments",
+  "files",
+  "memories",
+  "runs",
+  "skills",
+  "workflows",
+]);
+function folderLabel(path: string, raw: string, projectRef: string): string {
+  return projectFolders.has(raw) && path === `/projects/${projectRef}/${raw}`
+    ? t(`vfs.folder.${raw}`)
+    : raw;
+}
+function nodeLabel(node: VfsNode): string {
+  return node.directory
+    ? folderLabel(node.path, node.name, node.projectRef)
+    : node.name;
+}
 function selectable(node: VfsNode): boolean {
   return (
     node.selectable &&
@@ -139,15 +160,27 @@ async function download(node: VfsNode): Promise<void> {
     if (actionController === request) actionBusy.value = false;
   }
 }
-const expanded = ref(false);
 const folders = ref(parseVfsTrail(route.query.vfsTrail));
 const path = computed(() => folders.value.at(-1)?.path ?? "/projects");
 const query = ref(
   typeof route.query.vfsQuery === "string"
-    ? route.query.vfsQuery.slice(0, 500)
+    ? route.query.vfsQuery.slice(0, 200)
     : "",
 );
+const queryNeedsMoreCharacters = computed(
+  () => Array.from(query.value.trim()).length === 1,
+);
 const nodes = ref<VfsNode[]>([]);
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".vfs-entry",
+  itemCount: () => nodes.value.length,
+  estimatedItemHeight: 56,
+  minimum: 8,
+  maximum: 100,
+});
 const selected = ref<VfsNode>();
 const entityRoute = computed(() =>
   selected.value ? vfsEntityRoute(selected.value) : undefined,
@@ -183,6 +216,13 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let generation = 0;
 const consumedCursors = new Set<string>();
 async function load(more = false): Promise<void> {
+  if (queryNeedsMoreCharacters.value) {
+    nodes.value = [];
+    total.value = 0;
+    nextPageToken.value = "";
+    loading.value = false;
+    return;
+  }
   if (more && (loading.value || !nextPageToken.value)) return;
   controller?.abort();
   const request = new AbortController();
@@ -197,6 +237,7 @@ async function load(more = false): Promise<void> {
       query: query.value,
       projectRef: props.projectRef,
       pageToken: token,
+      pageSize: pageSize.value,
       lifecycleState: lifecycleState.value,
       kinds: kinds.value,
       signal: request.signal,
@@ -234,7 +275,7 @@ async function load(more = false): Promise<void> {
 }
 function open(node: VfsNode): void {
   if (!node.directory) {
-    selected.value = node;
+    selected.value = selected.value?.ref === node.ref ? undefined : node;
     return;
   }
   if (query.value.trim())
@@ -242,11 +283,12 @@ function open(node: VfsNode): void {
   else folders.value.push({ path: node.path, name: node.name });
   query.value = "";
 }
-function scroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (element.scrollTop + element.clientHeight >= element.scrollHeight - 80)
-    void load(true);
-}
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => Boolean(nextPageToken.value) && !loading.value,
+  loadMore: () => load(true),
+});
 watch(
   [folders, query, lifecycleState, kinds, selected],
   () => {
@@ -299,7 +341,8 @@ watch(
     total.value = 0;
     problem.value = undefined;
     consumedCursors.clear();
-    loading.value = true;
+    loading.value = !queryNeedsMoreCharacters.value;
+    if (queryNeedsMoreCharacters.value) return;
     timer = setTimeout(
       () => {
         void load();
@@ -318,278 +361,289 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component
-    :is="expanded ? ModalDialog : 'section'"
-    :title="expanded ? $t('files.title') : undefined"
-    size="full"
-    @close="expanded = false"
-  >
-    <section class="vfs-browser" @keydown.esc="selected = undefined">
-      <div class="vfs-toolbar">
+  <section class="vfs-browser panel" @keydown.esc="selected = undefined">
+    <div class="vfs-toolbar">
+      <button
+        class="icon-button"
+        :disabled="!folders.length || !!query"
+        :title="$t('vfs.back')"
+        :aria-label="$t('vfs.back')"
+        @click="folders.pop()"
+      >
+        <ArrowLeft :size="18" />
+      </button>
+      <nav :aria-label="$t('vfs.folders')">
         <button
-          class="icon-button"
-          :disabled="!folders.length || !!query"
-          :title="$t('vfs.back')"
-          :aria-label="$t('vfs.back')"
-          @click="folders.pop()"
-        >
-          <ArrowLeft :size="18" />
-        </button>
-        <nav :aria-label="$t('vfs.folders')">
-          <button
-            class="button button--ghost"
-            @click="
-              folders = [];
-              query = '';
-            "
-          >
-            {{ $t("nav.projects") }}</button
-          ><button
-            v-for="(folder, index) in folders"
-            :key="folder.path"
-            class="button button--ghost"
-            @click="
-              folders = folders.slice(0, index + 1);
-              query = '';
-            "
-          >
-            {{ folder.name }}
-          </button>
-        </nav>
-        <button
-          class="icon-button"
-          :disabled="loading"
-          :title="$t('vfs.refresh')"
-          :aria-label="$t('vfs.refresh')"
-          @click="load()"
-        >
-          <RefreshCw :size="18" />
-        </button>
-        <label class="vfs-search"
-          ><Search :size="18" /><input
-            v-model="query"
-            type="search"
-            :aria-label="$t('files.search')"
-            :placeholder="$t('files.search')"
-        /></label>
-        <label class="vfs-filter">
-          <span>{{ $t("vfs.lifecycle") }}</span>
-          <select v-model="lifecycleState" :disabled="actionBusy">
-            <option
-              v-for="state in availableStates"
-              :key="state"
-              :value="state"
-            >
-              {{ $t(`vfs.lifecycleState.${state}`) }}
-            </option>
-          </select>
-        </label>
-        <details class="vfs-kind-filter">
-          <summary>
-            {{ $t("vfs.filterKinds") }} ({{
-              kinds.length || availableKinds.length
-            }})
-          </summary>
-          <fieldset :disabled="actionBusy">
-            <legend>{{ $t("vfs.filterKinds") }}</legend>
-            <label v-for="kind in availableKinds" :key="kind">
-              <input v-model="kinds" type="checkbox" :value="kind" />{{
-                $t(`vfs.kind.${kind}`)
-              }}
-            </label>
-            <button type="button" class="button" @click="kinds = []">
-              {{ $t("vfs.allKinds") }}
-            </button>
-          </fieldset>
-        </details>
-        <button
-          v-if="!expanded"
-          class="icon-button"
-          :title="$t('catalog.expand')"
-          :aria-label="$t('catalog.expand')"
-          @click="expanded = true"
-        >
-          <Maximize2 :size="18" />
-        </button>
-      </div>
-      <div class="vfs-bulk" :aria-busy="actionBusy">
-        <span>{{ $t("common.selectedCount", { count: checked.length }) }}</span>
-        <span v-if="checked.length === 100">{{
-          $t("vfs.selectionLimit")
-        }}</span>
-        <button
-          class="button"
-          :disabled="!checked.length || actionBusy"
+          class="button button--ghost"
           @click="
-            checked = [];
-            prepared = [];
+            folders = [];
+            query = '';
           "
         >
-          {{ $t("vfs.clearSelection") }}
-        </button>
-        <button
-          v-for="action in bulkActions"
-          :key="action"
-          class="button"
-          :disabled="actionBusy || !allows(action)"
-          @click="prepare(action)"
+          {{ $t("nav.projects") }}</button
+        ><button
+          v-for="(folder, index) in folders"
+          :key="folder.path"
+          class="button button--ghost"
+          @click="
+            folders = folders.slice(0, index + 1);
+            query = '';
+          "
         >
-          {{ $t(`vfs.bulkAction.${action}`) }}
+          {{
+            props.projectRef
+              ? folderLabel(folder.path, folder.name, props.projectRef)
+              : folder.name
+          }}
         </button>
-      </div>
-      <section
-        v-if="prepared.length"
-        class="vfs-confirmation"
-        :aria-label="$t('vfs.confirmTitle')"
+      </nav>
+      <button
+        class="icon-button"
+        :disabled="loading"
+        :title="$t('vfs.refresh')"
+        :aria-label="$t('vfs.refresh')"
+        @click="load()"
       >
-        <h2>{{ $t("vfs.confirmTitle") }}</h2>
-        <p>{{ $t("vfs.confirmDescription") }}</p>
-        <ul>
-          <li v-for="item in prepared" :key="item.node.ref">
-            {{ item.node.name }} · {{ $t(`vfs.command.${item.action}`) }} ·
-            {{
-              $t("vfs.version", {
-                version: item.node.version,
-                revision: item.node.revision,
-              })
-            }}
-            <span v-if="item.impact">
-              ·
-              {{
-                $t("vfs.impact", {
-                  bindings: item.impact.bindingCount,
-                  attachments: item.impact.attachmentCount,
-                })
-              }}</span
-            >
-          </li>
-        </ul>
-        <button
-          class="button button--danger"
+        <RefreshCw :size="18" />
+      </button>
+      <label class="vfs-search"
+        ><Search :size="18" aria-hidden="true" /><input
+          v-model="query"
+          :id="`${fieldId}-query`"
+          :name="`${fieldId}-query`"
+          type="search"
+          :aria-label="$t('files.search')"
+          :placeholder="$t('files.search')"
+          maxlength="200"
+      /></label>
+      <label class="vfs-filter">
+        <span class="sr-only">{{ $t("vfs.lifecycle") }}</span>
+        <select
+          v-model="lifecycleState"
+          :id="`${fieldId}-lifecycle`"
+          :name="`${fieldId}-lifecycle`"
+          :aria-label="$t('vfs.lifecycle')"
           :disabled="actionBusy"
-          @click="confirm"
         >
-          {{ $t("vfs.confirm", { count: prepared.length }) }}
-        </button>
-        <button class="button" :disabled="actionBusy" @click="prepared = []">
-          {{ $t("common.cancel") }}
-        </button>
-      </section>
-      <section v-if="receipts.length" :aria-label="$t('vfs.results')">
-        <h2>{{ $t("vfs.results") }}</h2>
-        <div v-for="receipt in receipts" :key="receipt.node.ref">
-          <p>{{ receipt.node.name }} · {{ $t(`states.${receipt.status}`) }}</p>
-          <ProblemNotice v-if="receipt.problem" :problem="receipt.problem" />
-        </div>
-      </section>
-      <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
-      <p v-if="loading && !nodes.length" role="status">
-        {{ $t("common.loading") }}
-      </p>
-      <p v-else-if="!nodes.length && !problem">{{ $t("common.empty") }}</p>
-      <div class="vfs-content" :class="{ 'vfs-content--selected': selected }">
-        <div
-          class="vfs-list"
-          :class="{ 'vfs-list--expanded': expanded }"
-          :aria-busy="loading"
-          @scroll="scroll"
-        >
-          <div v-for="node in nodes" :key="node.ref" class="vfs-entry">
+          <option v-for="state in availableStates" :key="state" :value="state">
+            {{ $t(`vfs.lifecycleState.${state}`) }}
+          </option>
+        </select>
+      </label>
+      <details class="vfs-kind-filter">
+        <summary>
+          {{ $t("vfs.filterKinds") }} ({{
+            kinds.length || availableKinds.length
+          }})
+        </summary>
+        <fieldset :disabled="actionBusy">
+          <legend>{{ $t("vfs.filterKinds") }}</legend>
+          <label v-for="kind in availableKinds" :key="kind">
             <input
+              v-model="kinds"
+              :name="`${fieldId}-kinds`"
               type="checkbox"
-              :checked="checked.some((item) => item.ref === node.ref)"
-              :disabled="actionBusy || !selectable(node)"
-              :aria-label="$t('vfs.selectNode', { name: node.name })"
-              :title="$t(`vfs.selectionReason.${node.selectionReason}`)"
-              @change="toggle(node)"
-            />
-            <button
-              class="vfs-row"
-              :class="{ 'vfs-row--selected': selected?.ref === node.ref }"
-              :aria-pressed="selected?.ref === node.ref"
-              @click="selected = selected?.ref === node.ref ? undefined : node"
-              @dblclick="open(node)"
-              @keydown.enter.prevent="open(node)"
-            >
-              <component :is="node.directory ? Folder : File" :size="20" />
-              <span
-                ><strong>{{ node.name }}</strong
-                ><small>{{ $t(`vfs.kind.${node.kind}`) }}</small>
-                <small v-if="!node.selectable">{{
-                  $t(`vfs.selectionReason.${node.selectionReason}`)
-                }}</small></span
-              >
-              <span v-if="!node.directory" class="vfs-size"
-                >{{ $n(node.sizeBytes) }} {{ $t("vfs.bytes") }}</span
-              >
-            </button>
-          </div>
-          <button
-            v-if="nextPageToken"
-            class="button"
-            :disabled="loading"
-            @click="load(true)"
-          >
-            {{ $t("managed.more") }} ({{ nodes.length }}/{{ total }})
+              :value="kind"
+            />{{ $t(`vfs.kind.${kind}`) }}
+          </label>
+          <button type="button" class="button" @click="kinds = []">
+            {{ $t("vfs.allKinds") }}
           </button>
-        </div>
-        <aside v-if="selected" class="vfs-inspector">
-          <h2>{{ selected.name }}</h2>
-          <p>{{ $t(`vfs.kind.${selected.kind}`) }}</p>
-          <p>{{ $t(`vfs.selectionReason.${selected.selectionReason}`) }}</p>
-          <p>
+        </fieldset>
+      </details>
+    </div>
+    <div v-if="checked.length" class="vfs-bulk" :aria-busy="actionBusy">
+      <span>{{ $t("common.selectedCount", { count: checked.length }) }}</span>
+      <span v-if="checked.length === 100">{{ $t("vfs.selectionLimit") }}</span>
+      <button
+        class="button"
+        :disabled="!checked.length || actionBusy"
+        @click="
+          checked = [];
+          prepared = [];
+        "
+      >
+        {{ $t("vfs.clearSelection") }}
+      </button>
+      <button
+        v-for="action in bulkActions"
+        :key="action"
+        class="button"
+        :disabled="actionBusy || !allows(action)"
+        @click="prepare(action)"
+      >
+        {{ $t(`vfs.bulkAction.${action}`) }}
+      </button>
+    </div>
+    <section
+      v-if="prepared.length"
+      class="vfs-confirmation"
+      :aria-label="$t('vfs.confirmTitle')"
+    >
+      <h2>{{ $t("vfs.confirmTitle") }}</h2>
+      <p>{{ $t("vfs.confirmDescription") }}</p>
+      <ul>
+        <li v-for="item in prepared" :key="item.node.ref">
+          {{ item.node.name }} · {{ $t(`vfs.command.${item.action}`) }} ·
+          {{
+            $t("vfs.version", {
+              version: item.node.version,
+              revision: item.node.revision,
+            })
+          }}
+          <span v-if="item.impact">
+            ·
             {{
-              $t("vfs.version", {
-                version: selected.version,
-                revision: selected.revision,
+              $t("vfs.impact", {
+                bindings: item.impact.bindingCount,
+                attachments: item.impact.attachmentCount,
               })
-            }}
-          </p>
-          <button
-            v-if="selected.nextActions.includes('DOWNLOAD')"
-            class="button"
-            :disabled="actionBusy"
-            @click="download(selected)"
+            }}</span
           >
-            {{ $t("vfs.download") }}
-          </button>
-          <button
-            v-if="selected.directory"
-            class="button"
-            @click="open(selected)"
-          >
-            <Folder :size="18" />{{ $t("common.open") }}
-          </button>
-          <RouterLink
-            v-if="entityRoute"
-            class="button button--secondary"
-            :to="entityLocation ?? entityRoute"
-            ><ExternalLink :size="18" />{{ $t("vfs.entity") }}</RouterLink
-          >
-          <dl>
-            <dt>{{ $t("vfs.path") }}</dt>
-            <dd>{{ selected.path }}</dd>
-            <template v-if="selected.digest"
-              ><dt>{{ $t("vfs.digest") }}</dt>
-              <dd>{{ selected.digest }}</dd></template
-            ><template v-if="selected.modifiedAt"
-              ><dt>{{ $t("vfs.modified") }}</dt>
-              <dd>
-                {{ new Date(selected.modifiedAt).toLocaleString(locale) }}
-              </dd></template
-            >
-          </dl>
-        </aside>
+        </li>
+      </ul>
+      <button
+        class="button button--danger"
+        :disabled="actionBusy"
+        @click="confirm"
+      >
+        {{ $t("vfs.confirm", { count: prepared.length }) }}
+      </button>
+      <button class="button" :disabled="actionBusy" @click="prepared = []">
+        {{ $t("common.cancel") }}
+      </button>
+    </section>
+    <section v-if="receipts.length" :aria-label="$t('vfs.results')">
+      <h2>{{ $t("vfs.results") }}</h2>
+      <div v-for="receipt in receipts" :key="receipt.node.ref">
+        <p>{{ receipt.node.name }} · {{ $t(`states.${receipt.status}`) }}</p>
+        <ProblemNotice v-if="receipt.problem" :problem="receipt.problem" />
       </div>
     </section>
-  </component>
+    <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
+    <p
+      v-if="queryNeedsMoreCharacters"
+      class="vfs-browser__notice"
+      role="status"
+    >
+      {{ $t("vfs.searchMinLength") }}
+    </p>
+    <p v-else-if="loading && !nodes.length" role="status">
+      {{ $t("common.loading") }}
+    </p>
+    <p v-else-if="!nodes.length && !problem">{{ $t("common.empty") }}</p>
+    <div class="vfs-content" :class="{ 'vfs-content--selected': selected }">
+      <div ref="scrollRoot" class="vfs-list" :aria-busy="loading">
+        <div v-for="node in nodes" :key="node.ref" class="vfs-entry">
+          <span
+            v-if="node.directory"
+            class="vfs-entry__selection-placeholder"
+            aria-hidden="true"
+          />
+          <input
+            v-else
+            :name="`${fieldId}-selection`"
+            type="checkbox"
+            :value="node.ref"
+            :checked="checked.some((item) => item.ref === node.ref)"
+            :disabled="actionBusy || !selectable(node)"
+            :aria-label="$t('vfs.selectNode', { name: nodeLabel(node) })"
+            :title="$t(`vfs.selectionReason.${node.selectionReason}`)"
+            @change="toggle(node)"
+          />
+          <button
+            class="vfs-row"
+            :class="{ 'vfs-row--selected': selected?.ref === node.ref }"
+            :aria-pressed="
+              node.directory ? undefined : selected?.ref === node.ref
+            "
+            @click="open(node)"
+            @keydown.enter.prevent="open(node)"
+          >
+            <component :is="node.directory ? Folder : File" :size="20" />
+            <span
+              ><strong>{{ nodeLabel(node) }}</strong
+              ><small>{{ $t(`vfs.kind.${node.kind}`) }}</small>
+              <small v-if="!node.selectable && !node.directory">{{
+                $t(`vfs.selectionReason.${node.selectionReason}`)
+              }}</small></span
+            >
+            <span v-if="!node.directory" class="vfs-size"
+              >{{ $n(node.sizeBytes) }} {{ $t("vfs.bytes") }}</span
+            >
+          </button>
+        </div>
+        <div
+          v-if="nextPageToken"
+          ref="sentinel"
+          class="vfs-sentinel"
+          role="status"
+        >
+          <span v-if="loading">{{ $t("common.loading") }}</span>
+          <span class="sr-only">{{ nodes.length }}/{{ total }}</span>
+        </div>
+      </div>
+      <aside v-if="selected" class="vfs-inspector">
+        <h2>{{ selected.name }}</h2>
+        <p>{{ $t(`vfs.kind.${selected.kind}`) }}</p>
+        <p>{{ $t(`vfs.selectionReason.${selected.selectionReason}`) }}</p>
+        <p>
+          {{
+            $t("vfs.version", {
+              version: selected.version,
+              revision: selected.revision,
+            })
+          }}
+        </p>
+        <button
+          v-if="selected.nextActions.includes('DOWNLOAD')"
+          class="button"
+          :disabled="actionBusy"
+          @click="download(selected)"
+        >
+          {{ $t("vfs.download") }}
+        </button>
+        <button
+          v-if="selected.directory"
+          class="button"
+          @click="open(selected)"
+        >
+          <Folder :size="18" />{{ $t("common.open") }}
+        </button>
+        <RouterLink
+          v-if="entityRoute"
+          class="button button--secondary"
+          :to="entityLocation ?? entityRoute"
+          ><ExternalLink :size="18" />{{ $t("vfs.entity") }}</RouterLink
+        >
+        <dl>
+          <dt>{{ $t("vfs.path") }}</dt>
+          <dd>{{ selected.path }}</dd>
+          <template v-if="selected.digest"
+            ><dt>{{ $t("vfs.digest") }}</dt>
+            <dd>{{ selected.digest }}</dd></template
+          ><template v-if="selected.modifiedAt"
+            ><dt>{{ $t("vfs.modified") }}</dt>
+            <dd>
+              {{ new Date(selected.modifiedAt).toLocaleString(locale) }}
+            </dd></template
+          >
+        </dl>
+      </aside>
+    </div>
+  </section>
 </template>
 
 <style scoped>
 .vfs-browser {
   display: grid;
-  gap: 16px;
   min-width: 0;
+  padding: 0;
+}
+.vfs-browser__notice {
+  margin: 0;
+  padding: 16px 14px;
+  color: var(--muted);
 }
 .vfs-filter,
 .vfs-kind-filter fieldset {
@@ -609,6 +663,8 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
 }
 .vfs-confirmation {
   padding: 16px;
@@ -627,52 +683,97 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   margin-left: 8px;
 }
+.vfs-entry__selection-placeholder {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-left: 8px;
+}
 .vfs-entry > .vfs-row {
   min-width: 0;
   flex: 1;
 }
 .vfs-toolbar {
-  display: flex;
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns:
+    36px minmax(160px, 1fr) 36px minmax(220px, 360px)
+    160px auto;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  min-height: 58px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
 }
 .vfs-toolbar nav {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
-  flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 .vfs-toolbar nav button {
-  overflow-wrap: anywhere;
-  white-space: normal;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .vfs-search {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
 }
 .vfs-search input {
   min-width: 0;
   width: 100%;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+}
+.vfs-filter select {
+  width: 100%;
+  min-height: 36px;
+}
+.vfs-kind-filter {
+  position: relative;
+}
+.vfs-kind-filter summary {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.vfs-kind-filter fieldset {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  width: min(440px, 85vw);
+  margin: 5px 0 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
 }
 .vfs-content {
   display: grid;
   min-width: 0;
   gap: 24px;
+  padding: 0 14px 14px;
 }
 .vfs-content--selected {
   grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
 }
 .vfs-list {
   min-width: 0;
-  max-height: 432px;
+  max-height: 600px;
   overflow: auto;
-}
-.vfs-list--expanded {
-  max-height: calc(100dvh - 230px);
 }
 .vfs-row {
   display: grid;
@@ -680,8 +781,8 @@ onBeforeUnmount(() => {
   grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  min-height: 72px;
-  padding: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
   text-align: left;
   border: 0;
   border-bottom: 1px solid var(--border);
@@ -702,11 +803,13 @@ onBeforeUnmount(() => {
 }
 .vfs-row small {
   color: var(--muted);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .vfs-inspector {
   min-width: 0;
   overflow-wrap: anywhere;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
 }
 .vfs-inspector h2 {
   font-size: 18px;
@@ -722,6 +825,14 @@ onBeforeUnmount(() => {
   color: var(--muted);
 }
 @media (max-width: 760px) {
+  .vfs-toolbar {
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+  }
+  .vfs-search,
+  .vfs-filter,
+  .vfs-kind-filter {
+    grid-column: 1 / -1;
+  }
   .vfs-content--selected {
     grid-template-columns: minmax(0, 1fr);
   }

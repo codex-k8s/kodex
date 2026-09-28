@@ -39,7 +39,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	if err != nil {
 		t.Fatalf("resolve legacy fixture scope: %v", err)
 	}
-	if _, err := repository.pool.Exec(ctx, queryIntegrationPackageBindConnection, currentScope.organizationID, connection.Ref, legacy.Metadata.Version, legacy.Digest); err != nil {
+	if _, err := repository.pool.Exec(ctx, queryIntegrationPackageBindConnection, currentScope.organizationID, connection.Ref, legacy.Metadata.Version, legacy.Digest, legacy.RequiresConnectionCredential()); err != nil {
 		t.Fatalf("bind legacy fixture: %v", err)
 	}
 	connection, err = readConnection(ctx, repository.pool, currentScope, connection.Ref)

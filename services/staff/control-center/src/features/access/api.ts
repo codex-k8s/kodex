@@ -1,7 +1,10 @@
 import { requestSignal } from "@/shared/api/client";
 import {
+  addPlatformMembership,
   archiveAccessRole,
+  changePlatformMembership,
   changeAccessBinding,
+  changeProjectMembership,
   createAccessBinding,
   createAccessRole,
   createAccessRoleVersion,
@@ -15,11 +18,14 @@ import {
   listOidcGroups,
   listPermissionRegistry,
   listPlatformMemberships,
+  listPlatformMembershipCandidates,
   listProjectMemberships,
   listProjects,
   listWorkflows,
   queryEffectiveAccess,
+  removeProjectMembership,
   revokeAccessBinding,
+  removePlatformMembership,
   simulateAccess,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
@@ -41,11 +47,16 @@ import type {
   OidcGroupPage,
   IntegrationConnection,
   Membership,
+  NextAction,
+  PlatformMembershipChangeInput,
+  PlatformMembershipCreateInput,
+  ProjectMembershipChangeInput,
   PermissionDefinitionPage,
   ProjectPage,
   SimulateAccessInput,
   SimulateAccessResult,
   WorkflowPage,
+  UserSummary,
 } from "@/shared/api/generated/openapi/types.gen";
 import { csrfToken, mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
@@ -78,6 +89,7 @@ export async function fetchAccessSubjects(options: {
   query?: string;
   kind?: AccessSubjectKind;
   pageToken?: string;
+  pageSize?: number;
 }): Promise<AccessSubjectPage> {
   return (
     await unwrap(
@@ -86,7 +98,7 @@ export async function fetchAccessSubjects(options: {
           ...(options.query ? { query: options.query } : {}),
           ...(options.kind ? { kind: options.kind } : {}),
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
-          pageSize: 50,
+          pageSize: options.pageSize ?? 20,
         },
         signal: requestSignal(),
       }),
@@ -97,6 +109,7 @@ export async function fetchAccessSubjects(options: {
 export async function fetchOidcGroups(options: {
   query?: string;
   pageToken?: string;
+  pageSize?: number;
 }): Promise<OidcGroupPage> {
   return (
     await unwrap(
@@ -104,7 +117,7 @@ export async function fetchOidcGroups(options: {
         query: {
           ...(options.query ? { query: options.query } : {}),
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
-          pageSize: 50,
+          pageSize: options.pageSize ?? 20,
         },
         signal: requestSignal(),
       }),
@@ -113,15 +126,18 @@ export async function fetchOidcGroups(options: {
 }
 
 export async function fetchAccessRoles(options: {
+  query?: string;
   pageToken?: string;
   includeArchived?: boolean;
+  pageSize?: number;
 }): Promise<AccessRolePage> {
   return (
     await unwrap(
       listAccessRoles({
         query: {
+          ...(options.query ? { query: options.query } : {}),
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
-          pageSize: 50,
+          pageSize: options.pageSize ?? 20,
           includeArchived: options.includeArchived ?? false,
         },
         signal: requestSignal(),
@@ -145,23 +161,26 @@ export async function fetchAccessRoleVersions(
 }
 
 export async function fetchAccessBindings(options: {
+  query?: string;
   pageToken?: string;
   subjectKind?: AccessSubjectKind;
   subjectRef?: string;
   roleRef?: string;
   projectRef?: string;
   includeRevoked?: boolean;
+  pageSize?: number;
 }): Promise<AccessBindingPage> {
   return (
     await unwrap(
       listAccessBindings({
         query: {
+          ...(options.query ? { query: options.query } : {}),
           ...(options.pageToken ? { pageToken: options.pageToken } : {}),
           ...(options.subjectKind ? { subjectKind: options.subjectKind } : {}),
           ...(options.subjectRef ? { subjectRef: options.subjectRef } : {}),
           ...(options.roleRef ? { roleRef: options.roleRef } : {}),
           ...(options.projectRef ? { projectRef: options.projectRef } : {}),
-          pageSize: 50,
+          pageSize: options.pageSize ?? 20,
           includeRevoked: options.includeRevoked ?? false,
         },
         signal: requestSignal(),
@@ -218,8 +237,12 @@ export async function fetchIntegrationConnections(): Promise<
     .data.items;
 }
 
-export async function fetchPlatformMemberships(): Promise<Membership[]> {
+export async function fetchPlatformMemberships(): Promise<{
+  items: Membership[];
+  nextActions: NextAction[];
+}> {
   const items: Membership[] = [];
+  let nextActions: NextAction[] = [];
   const seenPageTokens = new Set<string>();
   let pageToken: string | undefined;
   do {
@@ -232,26 +255,148 @@ export async function fetchPlatformMemberships(): Promise<Membership[]> {
       )
     ).data;
     items.push(...page.items);
+    if (!seenPageTokens.size) nextActions = page.nextActions;
     pageToken = page.nextPageToken;
     if (pageToken && seenPageTokens.has(pageToken)) {
       throw new Error("Platform membership pagination token was repeated");
     }
     if (pageToken) seenPageTokens.add(pageToken);
   } while (pageToken);
-  return items;
+  return { items, nextActions };
+}
+
+export async function fetchPlatformMembershipCandidates(options: {
+  query: string;
+  pageToken?: string;
+  pageSize?: number;
+  signal?: AbortSignal;
+}): Promise<{ items: UserSummary[]; nextPageToken?: string }> {
+  return (
+    await unwrap(
+      listPlatformMembershipCandidates({
+        query: {
+          query: options.query,
+          pageSize: options.pageSize ?? 20,
+          ...(options.pageToken ? { pageToken: options.pageToken } : {}),
+        },
+        signal: requestSignal(options.signal),
+      }),
+    )
+  ).data;
+}
+
+export async function createPlatformMembership(
+  input: PlatformMembershipCreateInput,
+): Promise<Membership> {
+  return (
+    await mutate((headers) =>
+      addPlatformMembership({
+        body: input,
+        headers: mutationHeaders(headers),
+        signal: requestSignal(),
+      }),
+    )
+  ).data;
+}
+
+export async function updatePlatformMembership(
+  membership: Membership,
+  input: PlatformMembershipChangeInput,
+): Promise<Membership> {
+  return (
+    await mutate(
+      (headers) =>
+        changePlatformMembership({
+          path: { membershipRef: membership.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
+    )
+  ).data;
+}
+
+export async function revokePlatformMembership(
+  membership: Membership,
+): Promise<Membership> {
+  return (
+    await mutate(
+      (headers) =>
+        removePlatformMembership({
+          path: { membershipRef: membership.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
+    )
+  ).data;
 }
 
 export async function fetchProjectMemberships(
   projectRef: string,
+  userRef?: string,
 ): Promise<Membership[]> {
+  const items: Membership[] = [];
+  const seenPageTokens = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const page = (
+      await unwrap(
+        listProjectMemberships({
+          path: { projectRef },
+          query: userRef
+            ? { query: userRef, pageSize: 1 }
+            : { pageSize: 100, ...(pageToken ? { pageToken } : {}) },
+          signal: requestSignal(),
+        }),
+      )
+    ).data;
+    items.push(...page.items);
+    if (userRef) break;
+    pageToken = page.nextPageToken;
+    if (pageToken && seenPageTokens.has(pageToken)) {
+      throw new Error("Project membership pagination token was repeated");
+    }
+    if (pageToken) seenPageTokens.add(pageToken);
+  } while (pageToken);
+  return items;
+}
+
+export async function updateProjectMembership(
+  projectRef: string,
+  membership: Membership,
+  input: ProjectMembershipChangeInput,
+): Promise<Membership> {
   return (
-    await unwrap(
-      listProjectMemberships({
-        path: { projectRef },
-        signal: requestSignal(),
-      }),
+    await mutate(
+      (headers) =>
+        changeProjectMembership({
+          path: { projectRef, membershipRef: membership.ref },
+          body: input,
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
     )
-  ).data.items;
+  ).data;
+}
+
+export async function revokeProjectMembership(
+  projectRef: string,
+  membership: Membership,
+): Promise<Membership> {
+  return (
+    await mutate(
+      (headers) =>
+        removeProjectMembership({
+          path: { projectRef, membershipRef: membership.ref },
+          headers: versionedHeaders(headers),
+          signal: requestSignal(),
+        }),
+      membership.version,
+    )
+  ).data;
 }
 
 export async function addAccessRole(

@@ -183,7 +183,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 79, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 81, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -285,7 +285,7 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	switch operationID {
 	case "platform.query.integration-grant-candidates.connections.list", "platform.query.integration-grant-candidates.projects.list", "platform.query.integration-grant-candidates.recipients.list", "platform.query.integration-grant-candidates.capabilities.list":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
-	case "platform.runtime.files.search", "platform.runtime.files.metadata", "platform.runtime.files.preview", "platform.runtime.files.manifest", "platform.runtime.execution.artifact.stream":
+	case "platform.runtime.files.search", "platform.runtime.files.metadata", "platform.runtime.files.preview", "platform.runtime.files.manifest", "platform.runtime.execution.artifact.stream", "platform.runtime.assistant.resources.search":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	}
 	mode := "UNARY_PROTO_SHA256"
@@ -311,6 +311,8 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 		return "FORBIDDEN"
 	}
 	switch operationID {
+	case "platform.assistant.conversations.project.move":
+		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.command.projects.trash", "platform.command.projects.restore", "platform.command.projects.purge":
 		return requestProfile{Mode: mode, Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.command.environment-draft-impact.prepare", "platform.command.instructions-impact.prepare", "platform.command.prompt-template-impact.prepare":

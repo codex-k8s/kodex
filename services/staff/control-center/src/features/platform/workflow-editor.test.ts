@@ -4,6 +4,7 @@ import type {
   WorkflowStep,
 } from "@/shared/api/generated/openapi/types.gen";
 import {
+  workflowEditorAfterAuthoritativeUpdate,
   workflowEditorInput,
   workflowStagePromptTarget,
 } from "./workflow-editor";
@@ -85,6 +86,47 @@ it("после save и нового GET сохраняет Draft body и exact s
     },
   });
   expect(workflow.steps[0]?.purpose).toBe("Опубликованное назначение");
+});
+it("подхватывает новую серверную ревизию только для чистого редактора того же процесса", () => {
+  const current = workflowEditorInput(workflow);
+  const saved = JSON.stringify(current);
+  const updated = { ...workflow, name: "Новое название", version: 8 };
+  expect(
+    workflowEditorAfterAuthoritativeUpdate(
+      current,
+      saved,
+      "project",
+      "workflow",
+      updated,
+    )?.name,
+  ).toBe("Новое название");
+  expect(
+    workflowEditorAfterAuthoritativeUpdate(
+      { ...current, name: "Локальный ввод" },
+      saved,
+      "project",
+      "workflow",
+      updated,
+    ),
+  ).toBeUndefined();
+  expect(
+    workflowEditorAfterAuthoritativeUpdate(
+      current,
+      saved,
+      "other",
+      "workflow",
+      updated,
+    ),
+  ).toBeUndefined();
+  expect(
+    workflowEditorAfterAuthoritativeUpdate(
+      current,
+      saved,
+      "project",
+      "other",
+      updated,
+    ),
+  ).toBeUndefined();
 });
 it("published-only preview использует только exact displayed revision и не выводит ref из ordinal", () => {
   const published = {

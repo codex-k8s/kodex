@@ -78,6 +78,33 @@ func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *htt
 	}
 	writeMessage(w, http.StatusOK, response, "conversation", "")
 }
+func (server *Server) MoveAssistantConversationToProject(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.MoveAssistantConversationToProjectParams) {
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	body, ok := decodeJSON[generated.MoveAssistantConversationToProjectJSONBody](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.MoveAssistantConversationToProject(r.Context(), &controlplanev1.MoveAssistantConversationToProjectRequest{
+		Mutation: mutation, ConversationRef: ref, ProjectRef: body.ProjectRef,
+	})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	conversation := response.GetConversation()
+	if conversation == nil || conversation.Ref != ref || conversation.ProjectRef != body.ProjectRef || !validManagedVersion(conversation.Version) {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "conversation", "")
+}
 func (server *Server) CreateAssistantConversation(w http.ResponseWriter, r *http.Request, p generated.CreateAssistantConversationParams) {
 	body, ok := decodeJSON[generated.CreateAssistantConversationJSONBody](w, r)
 	if !ok {
@@ -113,7 +140,7 @@ func (server *Server) AddAssistantTurn(w http.ResponseWriter, r *http.Request, r
 		return
 	}
 	m, _ := requireMutation(w, p.IdempotencyKey, "")
-	response, err := server.control.Assistant.AddAssistantTurn(r.Context(), &controlplanev1.AddAssistantTurnRequest{Mutation: m, ConversationRef: ref, Content: body.Content, AttachmentSetRef: stringValue(body.AttachmentSetRef)})
+	response, err := server.control.Assistant.AddAssistantTurn(r.Context(), &controlplanev1.AddAssistantTurnRequest{Mutation: m, ConversationRef: ref, Content: body.Content, AttachmentSetRef: stringValue(body.AttachmentSetRef), Context: assistantContextInput(body.Context)})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return
@@ -208,11 +235,12 @@ func assistantPlanOperationsInput(items []generated.AssistantPlanOperationInput)
 		if item.Target.Ref != nil {
 			targetRef = string(*item.Target.Ref)
 		}
+		targetVersion := item.Target.Version
 		result = append(result, &controlplanev1.AssistantPlanOperation{Ref: string(item.Ref),
 			Type:   controlplanev1.AssistantPlanOperation_Type(controlplanev1.AssistantPlanOperation_Type_value["TYPE_"+string(item.Type)]),
 			Action: controlplanev1.AssistantPlanOperation_Action(controlplanev1.AssistantPlanOperation_Action_value["ACTION_"+string(item.Action)]),
 			Title:  item.Title, Summary: item.Summary, TargetKind: item.Target.Kind, TargetRef: targetRef,
-			TargetName: item.Target.Name, ExpectedVersion: item.ExpectedVersion, Parameters: parameters, Before: before,
+			TargetName: item.Target.Name, TargetVersion: targetVersion, ExpectedVersion: item.ExpectedVersion, Parameters: parameters, Before: before,
 			After: after, Selected: item.Selected})
 	}
 	return result

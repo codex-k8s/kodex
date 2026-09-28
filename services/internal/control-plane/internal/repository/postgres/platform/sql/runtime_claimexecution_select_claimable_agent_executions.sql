@@ -435,7 +435,9 @@ SELECT n.id::text,
            ), '[]'::jsonb),
            CASE
                WHEN a.system_key <> 'system-assistant'
-                AND 'platform.run.delegate' <> ALL(a.capabilities) THEN '[]'::jsonb
+                AND 'platform.run.delegate' <> ALL(a.capabilities)
+                AND NOT (root.workflow_version_id IS NOT NULL
+                         AND n.workflow_step_key LIKE 'workflow.coordinator.%') THEN '[]'::jsonb
                ELSE COALESCE((
                    SELECT jsonb_agg(jsonb_build_object(
                        'ref', target.ref,
@@ -489,11 +491,12 @@ SELECT n.id::text,
                          ON candidate.organization_id = r.organization_id
                         AND candidate.project_id = r.project_id
                         AND candidate.ref = step.value ->> 'AgentRef'
-                        AND candidate.id <> a.id
                         AND candidate.enabled
                         AND candidate.state = 'READY'
                        WHERE root.workflow_version_id IS NOT NULL
                          AND a.ref = workflow_version.spec ->> 'CoordinatorAgentRef'
+                         AND n.workflow_step_key LIKE 'workflow.coordinator.%'
+                         AND (candidate.id = a.id OR 'platform.run.delegate' = ANY(a.capabilities))
                          AND NOT EXISTS (
                              SELECT 1
                              FROM control_plane.run_nodes delegated
@@ -703,6 +706,7 @@ WHERE n.organization_id = $1::uuid
   AND n.type = 'AGENT_EXECUTION'
   AND n.state = 'QUEUED'
   AND r.state IN ('RUNNING', 'QUEUED')
+  AND root.state IN ('RUNNING', 'QUEUED')
   AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
   AND (
       (a.system_key = 'system-assistant' AND runtime_environment.role_image_artifact_id IS NULL)

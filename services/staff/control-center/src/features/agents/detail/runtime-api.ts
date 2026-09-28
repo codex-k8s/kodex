@@ -147,6 +147,7 @@ export async function searchRuntimeEnvironments(
   projectRef: string,
   search: string,
   pageToken?: string,
+  pageSize = 30,
 ): Promise<RuntimeEnvironmentPage> {
   return readWithRetry(
     async () =>
@@ -157,7 +158,7 @@ export async function searchRuntimeEnvironments(
             query: {
               ...(search.trim() ? { query: search.trim() } : {}),
               ...(pageToken ? { pageToken } : {}),
-              pageSize: 30,
+              pageSize,
             },
             signal: requestSignal(),
           }),

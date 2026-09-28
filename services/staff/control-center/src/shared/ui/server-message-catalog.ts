@@ -205,6 +205,14 @@ export const serverTokenTranslations = {
     "Входные данные превышают допустимый размер",
     "Runtime input exceeds the size limit",
   ],
+  RUNTIME_WORKFLOW_INCOMPLETE: [
+    "Процесс завершился до выполнения всех этапов",
+    "Workflow ended before all steps were executed",
+  ],
+  WORKFLOW_STEPS_UNFULFILLED: [
+    "Процесс не выполнил все запланированные этапы",
+    "Workflow did not execute every planned step",
+  ],
   RUNTIME_MCP_UNAVAILABLE: [
     "Инструменты исполнения недоступны",
     "Runtime tools unavailable",
@@ -340,6 +348,10 @@ export const serverTokenTranslations = {
     "Conversation archived",
   ],
   ASSISTANT_CONVERSATION_CREATED: ["Диалог создан", "Conversation created"],
+  ASSISTANT_CONVERSATION_PROJECT_CHANGED: [
+    "Диалог перенесён в Проект",
+    "Conversation moved to project",
+  ],
   ASSISTANT_CONVERSATION_TITLE_UPDATED: [
     "Название диалога обновлено",
     "Conversation title updated",
@@ -467,11 +479,27 @@ export const serverTokenTranslations = {
     "Действие интеграции завершено",
     "Integration action completed",
   ],
+  INTEGRATION_ACTION_SUCCEEDED: [
+    "Действие интеграции выполнено успешно",
+    "Integration action succeeded",
+  ],
+  INTEGRATION_ACTION_FAILED: [
+    "Действие интеграции отклонено или завершилось ошибкой",
+    "Integration action was rejected or failed",
+  ],
+  INTEGRATION_ACTION_OUTCOME_UNKNOWN: [
+    "Результат действия интеграции неизвестен",
+    "Integration action outcome is unknown",
+  ],
   INTEGRATION_CONNECTION_CREATED: ["Подключение создано", "Connection created"],
   INTEGRATION_CONNECTION_DELETED: ["Подключение удалено", "Connection deleted"],
   INTEGRATION_CONNECTION_TEST_COMPLETED: [
     "Проверка подключения завершена",
     "Connection test completed",
+  ],
+  INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED: [
+    "Повторная проверка подключения назначена",
+    "Connection test retry scheduled",
   ],
   INTEGRATION_CONNECTION_UPDATED: [
     "Подключение обновлено",

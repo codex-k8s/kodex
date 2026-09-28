@@ -57,7 +57,7 @@ describe("серверные страницы решений", () => {
             "CANCELLED",
             "EXPIRED",
           ],
-          pageSize: 30,
+          pageSize: 20,
           pageToken: undefined,
         },
       }),

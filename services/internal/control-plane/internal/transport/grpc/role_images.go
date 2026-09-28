@@ -158,6 +158,14 @@ func imageAdmissionVerdict(verdict string) controlplanev1.ImageAdmissionVerdict 
 	return controlplanev1.ImageAdmissionVerdict(value)
 }
 
+func imagePromotionState(state string) controlplanev1.ImagePromotionState {
+	value, exists := controlplanev1.ImagePromotionState_value["IMAGE_PROMOTION_STATE_"+state]
+	if !exists {
+		return controlplanev1.ImagePromotionState_IMAGE_PROMOTION_STATE_UNSPECIFIED
+	}
+	return controlplanev1.ImagePromotionState(value)
+}
+
 func castImageArtifact(input entity.ImageArtifact) *controlplanev1.ImageArtifact {
 	result := &controlplanev1.ImageArtifact{
 		Ref: input.Ref, Version: input.Version, RecipeRef: input.RecipeRef,
@@ -172,6 +180,8 @@ func castImageArtifact(input entity.ImageArtifact) *controlplanev1.ImageArtifact
 		PolicySha256: input.PolicySHA256, SbomSha256: input.SBOMSHA256,
 		VulnerabilityEvidenceSha256: input.VulnerabilityEvidenceSHA256,
 		AdmissionVerdict:            imageAdmissionVerdict(input.AdmissionVerdict),
+		PromotionState:              imagePromotionState(input.PromotionState),
+		PromotionRequested:          input.PromotionRequested,
 		SignatureIdentity:           input.SignatureIdentity, SignatureSha256: input.SignatureSHA256,
 		AdmissionRevision:                 input.AdmissionRevision,
 		AdmissionReceiptSha256:            input.AdmissionReceiptSHA256,
@@ -294,7 +304,7 @@ func (server *RoleImageServer) ManageRoleImageRecipe(ctx context.Context, reques
 	}
 	result, err := server.service.Manage(ctx, roleimagerepository.ManageInput{
 		Principal: p, Mutation: mutation(request.GetMutation()), Action: roleImageAction(request.GetAction()),
-		RecipeRef: request.GetRecipeRef(), ProjectRef: request.GetProjectRef(),
+		RecipeRef: request.GetRecipeRef(), ProjectRef: request.GetProjectRef(), BuildRef: request.GetBuildRef(),
 		RoleDefinitionRef: request.GetRoleDefinitionRef(), Name: request.GetName(),
 		Environment: domainRoleEnvironmentSelection(request.GetEnvironment()),
 	})

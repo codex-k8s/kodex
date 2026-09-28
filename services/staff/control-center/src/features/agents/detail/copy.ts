@@ -36,6 +36,8 @@ export interface AgentDetailCopy {
     overlayHelp: string;
     overlayPlaceholder: string;
     save: string;
+    refreshCatalog: string;
+    catalogChangedHelp: string;
     saveOverlay: string;
     accountPolicy: string;
     accounts: string;
@@ -61,6 +63,7 @@ export interface AgentDetailCopy {
     variableExample: string;
     collection: string;
     insertVariable: string;
+    copyVariable: string;
     usedVariables: string;
     noVariables: string;
     validation: string;
@@ -81,6 +84,7 @@ export interface AgentDetailCopy {
     loadingMore: string;
     imageReady: string;
     bind: string;
+    updatePin: string;
     values: string;
     secrets: string;
     image: string;
@@ -146,6 +150,9 @@ const ru: AgentDetailCopy = {
       "Черновик проверяется сервером и применяется только после публикации.",
     overlayPlaceholder: "# Параметры, разрешённые политикой Kodex",
     save: "Сохранить runtime",
+    refreshCatalog: "Обновить закреплённый каталог",
+    catalogChangedHelp:
+      "Состав каталога изменился. Выбранная модель может оставаться пригодной; при отказе запуска обновите её привязку.",
     saveOverlay: "Сохранить overlay",
     accountPolicy: "Политика аккаунтов",
     accounts: "Аккаунты",
@@ -172,6 +179,7 @@ const ru: AgentDetailCopy = {
     variableExample: "Пример",
     collection: "Коллекция",
     insertVariable: "Вставить переменную",
+    copyVariable: "Скопировать переменную",
     usedVariables: "Переменные в тексте",
     noVariables: "В тексте нет шаблонных переменных",
     validation: "Сообщения проверки",
@@ -196,6 +204,7 @@ const ru: AgentDetailCopy = {
     loadingMore: "Загружаем следующую страницу",
     imageReady: "Образ подготовлен",
     bind: "Назначить окружение",
+    updatePin: "Обновить закреплённую ревизию",
     values: "Переменные окружения",
     secrets: "Ссылки на секреты",
     image: "Образ",
@@ -262,6 +271,9 @@ const en: AgentDetailCopy = {
       "The draft is validated by the server and only applies after publication.",
     overlayPlaceholder: "# Parameters allowed by the Kodex policy",
     save: "Save runtime",
+    refreshCatalog: "Refresh pinned model catalog",
+    catalogChangedHelp:
+      "The catalog contents changed. The selected model may still be available; refresh its pin if launch is blocked.",
     saveOverlay: "Save overlay",
     accountPolicy: "Account policy",
     accounts: "Accounts",
@@ -288,6 +300,7 @@ const en: AgentDetailCopy = {
     variableExample: "Example",
     collection: "Collection",
     insertVariable: "Insert variable",
+    copyVariable: "Copy variable",
     usedVariables: "Variables used in text",
     noVariables: "The text does not use template variables",
     validation: "Validation messages",
@@ -312,6 +325,7 @@ const en: AgentDetailCopy = {
     loadingMore: "Loading the next page",
     imageReady: "Image prepared",
     bind: "Assign environment",
+    updatePin: "Update pinned revision",
     values: "Environment values",
     secrets: "Secret descriptors",
     image: "Image",

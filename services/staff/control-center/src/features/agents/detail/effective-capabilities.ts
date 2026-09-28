@@ -23,6 +23,7 @@ export async function loadEffectiveCapabilities(
   pageToken: string | undefined,
   digest: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ) {
   if (Boolean(scope.workflowRef) !== Boolean(scope.stepKey))
     throw new Error("Incomplete workflow capability scope");
@@ -33,7 +34,7 @@ export async function loadEffectiveCapabilities(
         query: {
           query,
           pageToken,
-          pageSize: 30,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
           workflowRef: scope.workflowRef,
           stepKey: scope.stepKey,
         },

@@ -1,0 +1,16 @@
+{
+  "apiVersion": "v1",
+  "data": {
+    "integration-policy.json": "{\"schema\":\"egress-integration/v1\",\"generation\":1,\"sourceDigest\":\"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"gatewayPolicyDigest\":\"8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218\",\"destinations\":[]}"
+  },
+  "immutable": true,
+  "kind": "ConfigMap",
+  "metadata": {
+    "labels": {
+      "app.kubernetes.io/component": "platform-egress",
+      "app.kubernetes.io/name": "egress-gateway"
+    },
+    "name": "egress-gateway-integration-d811998f9f7e53f7765eac93",
+    "namespace": "kodex-system"
+  }
+}

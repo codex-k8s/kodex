@@ -137,25 +137,25 @@ function formattedDate(value: string): string {
   font-weight: 600;
 }
 .agent-table th:nth-child(1) {
-  width: 235px;
+  width: 29%;
 }
 .agent-table th:nth-child(2) {
-  width: 130px;
+  width: 18%;
 }
 .agent-table th:nth-child(3) {
-  width: 120px;
+  width: 10%;
 }
 .agent-table th:nth-child(4) {
-  width: 150px;
+  width: 16%;
 }
 .agent-table th:nth-child(5) {
-  width: 220px;
+  width: 13%;
 }
 .agent-table th:nth-child(6) {
-  width: 145px;
+  width: 10%;
 }
 .agent-table th:last-child {
-  width: 52px;
+  width: 4%;
 }
 .agent-table tbody tr:last-child td {
   border-bottom: 0;

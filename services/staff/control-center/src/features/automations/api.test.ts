@@ -159,7 +159,7 @@ describe("automation API boundary", () => {
       expect.objectContaining({
         path: { projectRef: "project_sales" },
         query: {
-          pageSize: 40,
+          pageSize: 20,
           pageToken: "cursor_schedule",
           query: "сводка",
         },
@@ -264,13 +264,13 @@ describe("automation API boundary", () => {
     expect(mocks.revisions).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { scheduleRef: "schedule_daily" },
-        query: { pageSize: 40, pageToken: "revision_before" },
+        query: { pageSize: 20, pageToken: "revision_before" },
       }),
     );
     expect(mocks.runs).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { scheduleRef: "schedule_daily" },
-        query: { pageSize: 40, pageToken: "run_before" },
+        query: { pageSize: 20, pageToken: "run_before" },
       }),
     );
     expect(page.items[0]).toMatchObject({

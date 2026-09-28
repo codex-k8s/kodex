@@ -66,7 +66,9 @@ func (server *Server) ListAccessRoles(ctx context.Context, request *controlplane
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListAccessRoles(ctx, p, page(request.GetPage()), request.GetIncludeArchived())
+	items, next, err := server.service.ListAccessRoles(ctx, p, query.Filter{
+		Query: request.GetQuery(), Aliases: request.GetQueryAliases(), Page: page(request.GetPage()),
+	}, request.GetIncludeArchived())
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -101,7 +103,7 @@ func (server *Server) ListAccessBindings(ctx context.Context, request *controlpl
 	items, next, err := server.service.ListAccessBindings(ctx, p, query.AccessBindingFilter{
 		Page: page(request.GetPage()), SubjectKind: accessSubjectKind(request.GetSubjectKind()),
 		SubjectRef: request.GetSubjectRef(), RoleRef: request.GetRoleRef(), ProjectRef: request.GetProjectRef(),
-		IncludeRevoked: request.GetIncludeRevoked(),
+		IncludeRevoked: request.GetIncludeRevoked(), Query: request.GetQuery(), Aliases: request.GetQueryAliases(),
 	})
 	if err != nil {
 		return nil, transportError(err)

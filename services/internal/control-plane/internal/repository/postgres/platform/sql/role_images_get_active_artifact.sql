@@ -9,7 +9,8 @@ SELECT artifact.ref, recipe.ref, artifact.spec_sha256, build.ref, artifact.stagi
        artifact.role_runtime_contract_sha256, artifact.version, artifact.recipe_version,
        artifact.recipe_generation, artifact.build_version, artifact.policy_revision,
        artifact.admission_revision, artifact.role_runtime_contract_revision,
-       artifact.build_attempt, artifact.promoted_at, artifact.created_at, artifact.updated_at
+       artifact.build_attempt, artifact.promoted_at, artifact.created_at, artifact.updated_at,
+       artifact.promotion_state, artifact.promotion_request_id IS NOT NULL
 FROM control_plane.image_artifacts artifact
 JOIN control_plane.role_image_recipes recipe ON recipe.id = artifact.recipe_id
 JOIN control_plane.image_builds build ON build.id = artifact.build_id

@@ -8,6 +8,7 @@ export interface GateCatalogScope {
   projectRef?: string;
   query: string;
   view: "PENDING" | "HISTORY";
+  pageSize?: number;
 }
 
 export function useGateCatalog() {
@@ -82,7 +83,7 @@ export function useGateCatalog() {
               projectRef: scope.projectRef,
               query: scope.query,
               states,
-              pageSize: 30,
+              pageSize: scope.pageSize ?? 20,
               pageToken: cursor,
             },
             signal: requestSignal(active.signal),

@@ -7,13 +7,17 @@ export interface AgentDraft {
 }
 
 export function isAgentDraftComplete(input: AgentDraft): boolean {
-  return [
-    input.name,
-    input.purpose,
-    input.roleDescription,
-    input.initialInstructions,
-    input.runtimeRef,
-  ].every((value) => value.trim().length > 0);
+  return (
+    input.name.trim().length > 0 &&
+    input.name.length <= 120 &&
+    input.purpose.trim().length > 0 &&
+    input.purpose.length <= 1000 &&
+    input.roleDescription.trim().length > 0 &&
+    input.roleDescription.length <= 1000 &&
+    input.initialInstructions.trim().length >= 20 &&
+    input.initialInstructions.length <= 65536 &&
+    input.runtimeRef.trim().length > 0
+  );
 }
 
 export function resolveAgentRuntimeRef(

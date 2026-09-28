@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Eye, EyeOff, KeyRound, RotateCw } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
@@ -14,6 +14,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import type {
   RuntimeSecret,
   RuntimeSecretCreateInput,
+  RuntimeSecretDraftSuggestion,
   RuntimeSecretRotateInput,
   RuntimeSecretValueType,
 } from "./model";
@@ -25,15 +26,18 @@ const props = defineProps<{
   submitLabel?: string;
   problem?: AppProblem;
   secret?: RuntimeSecret;
+  suggestion?: RuntimeSecretDraftSuggestion;
 }>();
 const emit = defineEmits<{
   close: [];
   create: [input: RuntimeSecretCreateInput];
   rotate: [input: RuntimeSecretRotateInput];
+  safeDraft: [suggestion: RuntimeSecretDraftSuggestion];
 }>();
 
 const name = ref("");
 const { t } = useI18n();
+const fieldPrefix = `runtime-secret-${useId()}`;
 const description = ref("");
 const valueType = ref<RuntimeSecretValueType>("STRING");
 const value = ref("");
@@ -106,16 +110,33 @@ watch(showValue, (visible) => {
       showValue.value = false;
     }, 30_000);
 });
+watch(
+  () => props.problem?.code,
+  (code) => {
+    if (code === "FRESH_AUTHENTICATION_REQUIRED") clearPlaintext();
+  },
+);
 
 watch(
-  () => props.secret,
-  (secret) => {
+  [() => props.secret, () => props.suggestion] as const,
+  ([secret, suggestion]) => {
     clearPlaintext();
     submitted.value = false;
-    name.value = secret?.name ?? "";
-    description.value = secret?.description ?? "";
-    valueType.value = secret?.valueType ?? "STRING";
+    name.value = secret?.name ?? suggestion?.name ?? "";
+    description.value = secret?.description ?? suggestion?.description ?? "";
+    valueType.value = secret?.valueType ?? suggestion?.valueType ?? "STRING";
   },
+  { immediate: true },
+);
+watch(
+  [name, description, valueType] as const,
+  ([nextName, nextDescription, nextValueType]) =>
+    emit("safeDraft", {
+      name: nextName,
+      description: nextDescription,
+      valueType: nextValueType,
+      sourceHelp: props.suggestion?.sourceHelp ?? "",
+    }),
   { immediate: true },
 );
 onBeforeUnmount(clearPlaintext);
@@ -146,6 +167,8 @@ onBeforeUnmount(clearPlaintext);
       <label v-if="!rotating" class="field">
         <span>{{ $t("common.name") }}</span>
         <input
+          :id="`${fieldPrefix}-name`"
+          :name="`${fieldPrefix}-name`"
           v-model="name"
           :disabled="busy || locked"
           maxlength="120"
@@ -170,6 +193,8 @@ onBeforeUnmount(clearPlaintext);
       <label v-if="!rotating" class="field">
         <span>{{ $t("runtimeSecrets.valueType") }}</span>
         <select
+          :id="`${fieldPrefix}-value-type`"
+          :name="`${fieldPrefix}-value-type`"
           :value="valueType"
           :aria-label="$t('runtimeSecrets.valueType')"
           :disabled="busy || locked"
@@ -198,6 +223,8 @@ onBeforeUnmount(clearPlaintext);
           />
           <textarea
             v-else
+            :id="`${fieldPrefix}-value`"
+            :name="`${fieldPrefix}-value`"
             v-model="value"
             :class="{ 'secret-form__masked': !showValue }"
             :aria-label="$t('runtimeSecrets.value')"

@@ -59,6 +59,41 @@ func TestIntegrationGatePreviewBoundsAndOpaqueFields(t *testing.T) {
 	}
 }
 
+func TestScopedGatePreviewRedactsValuesWithoutDecisionPermission(t *testing.T) {
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	capability, ok := definitions["synthetic"].Capability("synthetic.journal.write")
+	if !ok {
+		t.Fatal("synthetic write capability is missing")
+	}
+	input := []byte(`{"action":"UPDATE","value":"private-approval-parameter"}`)
+	redacted, err := integrationScopedGatePreview(capability, input, []string{"/value"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(redacted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "private-approval-parameter") || strings.Contains(string(encoded), `"value":"UPDATE"`) {
+		t.Fatal("scoped values leaked into redacted preview")
+	}
+	selected, ok := redacted["selected"].([]map[string]string)
+	if !ok || len(selected) != 1 || selected[0]["path"] != "/value" || selected[0]["type"] != "string" {
+		t.Fatalf("redacted scope descriptor is incomplete: %v", redacted["selected"])
+	}
+	visible, err := integrationScopedGatePreview(capability, input, []string{"/value"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	visibleJSON, err := json.Marshal(visible)
+	if err != nil || !strings.Contains(string(visibleJSON), "private-approval-parameter") || visible["scopeDigest"] != redacted["scopeDigest"] {
+		t.Fatal("authorized scope preview is incomplete")
+	}
+}
+
 func TestGateConsequencesDistinguishExecutionAndDelivery(t *testing.T) {
 	decisions := []string{"APPROVE", "REJECT", "CANCEL", "REQUEST_CHANGES"}
 	for _, kind := range []string{"ordinary", "integration", "delivery"} {

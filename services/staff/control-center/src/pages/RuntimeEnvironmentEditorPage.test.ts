@@ -7,8 +7,10 @@ import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen
 const runtime = vi.hoisted(() => ({
   environments: {},
   environmentVersions: {},
+  environmentVersionCursors: {},
   environmentReadiness: {},
   environmentAgents: {},
+  loading: {},
   loadPromotedRoleImageArtifact: vi.fn(),
   loadEnvironment: vi.fn(),
   loadEnvironmentVersions: vi.fn(),
@@ -65,8 +67,14 @@ describe("ответы образа принадлежат текущему ок
     "старый %s не заменяет новый образ",
     async (outcome) => {
       const state = await editor();
-      const first = pending<RoleImageArtifact>();
-      const second = pending<RoleImageArtifact>();
+      const first = pending<{
+        artifact: RoleImageArtifact;
+        recipeName: string;
+      }>();
+      const second = pending<{
+        artifact: RoleImageArtifact;
+        recipeName: string;
+      }>();
       runtime.loadPromotedRoleImageArtifact
         .mockReturnValueOnce(first.promise)
         .mockReturnValueOnce(second.promise);
@@ -78,13 +86,19 @@ describe("ответы образа принадлежат текущему ок
       const secondRead = state.loadImageArtifact("recipe_2", "image_2");
       expect(firstSignal.aborted).toBe(true);
       if (outcome === "success")
-        first.resolve({ ref: "image_1" } as RoleImageArtifact);
+        first.resolve({
+          artifact: { ref: "image_1" } as RoleImageArtifact,
+          recipeName: "Старый образ",
+        });
       else first.reject(new Error("stale image failure"));
       await firstRead;
       expect(state.imageLoading.value).toBe(true);
       expect(state.imageArtifact.value).toBeUndefined();
       expect(state.imageProblem.value).toBeUndefined();
-      second.resolve({ ref: "image_2" } as RoleImageArtifact);
+      second.resolve({
+        artifact: { ref: "image_2" } as RoleImageArtifact,
+        recipeName: "Новый образ",
+      });
       await secondRead;
       expect(state.imageArtifact.value?.ref).toBe("image_2");
       expect(state.imageLoading.value).toBe(false);
@@ -93,14 +107,35 @@ describe("ответы образа принадлежат текущему ок
 
   it("не принимает image readback другого проекта", async () => {
     const state = await editor();
-    const request = pending<RoleImageArtifact>();
+    const request = pending<{
+      artifact: RoleImageArtifact;
+      recipeName: string;
+    }>();
     runtime.loadPromotedRoleImageArtifact.mockReturnValueOnce(request.promise);
     state.input.imageArtifactRef = "image_1";
     const loading = state.loadImageArtifact("recipe_1", "image_1");
     route.params.projectRef = "project_2";
-    request.resolve({ ref: "image_1" } as RoleImageArtifact);
+    request.resolve({
+      artifact: { ref: "image_1" } as RoleImageArtifact,
+      recipeName: "Другой проект",
+    });
     await loading;
     expect(state.imageArtifact.value).toBeUndefined();
+  });
+
+  it("показывает ошибку актуальности образа после завершения чтения", async () => {
+    const state = await editor();
+    runtime.loadPromotedRoleImageArtifact.mockRejectedValueOnce({
+      code: "IMAGE_ARTIFACT_NOT_CURRENT",
+      status: 409,
+      retryable: false,
+    });
+    state.input.imageArtifactRef = "image_old";
+    await state.loadImageArtifact("recipe_1", "image_old");
+    expect(state.imageLoading.value).toBe(false);
+    expect(state.imageProblem.value).toMatchObject({
+      code: "IMAGE_ARTIFACT_NOT_CURRENT",
+    });
   });
 
   it("закрытие редактора отменяет запрос и отбрасывает позднюю ошибку", async () => {

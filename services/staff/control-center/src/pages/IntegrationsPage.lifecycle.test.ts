@@ -4,6 +4,7 @@ import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 
 import { usePlatformStore } from "@/features/platform/store";
 import IntegrationsPage from "@/pages/IntegrationsPage.vue";
@@ -21,6 +22,8 @@ const definition: IntegrationDefinition = {
   builtIn: true,
   version: 1,
   nextActions: [],
+  connectionCount: 0,
+  healthyConnectionCount: 0,
   available: true,
   capabilities: [],
   configurationFields: [
@@ -67,6 +70,10 @@ function connection(
 }
 
 interface IntegrationsSetup {
+  command: (
+    connection: IntegrationConnection,
+    action: "TEST" | "ENABLE" | "DISABLE",
+  ) => Promise<void>;
   confirmDelete: () => Promise<void>;
   credentialValue: { value: string };
   deleteCandidate: { value?: IntegrationConnection };
@@ -74,7 +81,10 @@ interface IntegrationsSetup {
   dialogMode: { value: string };
   openDelete: (connection: IntegrationConnection) => Promise<void>;
   openEdit: (connection: IntegrationConnection) => Promise<void>;
+  operationSuccess: { value: string };
+  refreshTestFeedback: (connection?: IntegrationConnection) => void;
   submit: () => Promise<void>;
+  detailsConnection: { value?: IntegrationConnection };
 }
 
 describe("IntegrationsPage lifecycle", () => {
@@ -161,5 +171,91 @@ describe("IntegrationsPage lifecycle", () => {
     expect(source).toContain("<ModalDialog");
     expect(source).toContain('@click="confirmDelete"');
     expect(source).not.toContain("window.confirm");
+  });
+
+  it("открывает прямую ссылку на подключение любого типа", async () => {
+    const pinia = createPinia();
+    const platform = usePlatformStore(pinia);
+    const selected = connection("connection_source", ["UPDATE"]);
+    vi.spyOn(platform, "loadIntegrations").mockResolvedValue();
+    vi.spyOn(platform, "loadProjects").mockResolvedValue();
+    const read = vi
+      .spyOn(platform, "readConnection")
+      .mockResolvedValue(selected);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/integrations", component: IntegrationsPage }],
+    });
+    await router.push(`/integrations?connectionRef=${selected.ref}`);
+    await router.isReady();
+    const setup = (await captureSetupState(IntegrationsPage, (app) => {
+      app.use(pinia);
+      app.use(
+        createI18n({ legacy: false, locale: "ru", messages: { ru: {} } }),
+      );
+      app.use(router);
+    })) as unknown as IntegrationsSetup;
+    await nextTick();
+    expect(read).toHaveBeenCalledWith(selected.ref);
+    expect(setup.detailsConnection.value?.ref).toBe(selected.ref);
+  });
+
+  it("заменяет сообщение о начатой проверке после авторитетного readback", async () => {
+    const pinia = createPinia();
+    const platform = usePlatformStore(pinia);
+    const selected = connection("connection_test", ["TEST"]);
+    const testing = { ...selected, state: "TESTING" as const, version: 4 };
+    platform.connections[selected.ref] = selected;
+    vi.spyOn(platform, "loadIntegrations").mockResolvedValue();
+    vi.spyOn(platform, "changeConnection").mockImplementation(() => {
+      platform.connections[selected.ref] = testing;
+      return Promise.resolve(testing);
+    });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/integrations", component: IntegrationsPage }],
+    });
+    await router.push("/integrations");
+    await router.isReady();
+    const setup = (await captureSetupState(IntegrationsPage, (app) => {
+      app.use(pinia);
+      app.use(
+        createI18n({
+          legacy: false,
+          locale: "ru",
+          messages: {
+            ru: {
+              integrationsRedesign: {
+                testStarted: "Проверка выполняется",
+                testFinished: "Проверка завершена: {outcome}",
+              },
+            },
+          },
+        }),
+      );
+      app.use(router);
+    })) as unknown as IntegrationsSetup;
+
+    setup.detailsConnection.value = selected;
+    await setup.command(selected, "TEST");
+    expect(setup.operationSuccess.value).toBe("Проверка выполняется");
+    expect(setup.detailsConnection.value.state).toBe("TESTING");
+    platform.connections[selected.ref] = {
+      ...testing,
+      state: "CONNECTED",
+      lastTestOutcome: "CONNECTED",
+    };
+    setup.refreshTestFeedback(platform.connections[selected.ref]);
+    expect(setup.operationSuccess.value).toBe("Проверка выполняется");
+    platform.connections[selected.ref] = {
+      ...testing,
+      state: "CONNECTED",
+      version: 5,
+      lastTestOutcome: "CONNECTED",
+    };
+    setup.refreshTestFeedback(platform.connections[selected.ref]);
+    expect(setup.operationSuccess.value).toContain("Проверка завершена");
+    expect(setup.detailsConnection.value.state).toBe("CONNECTED");
+    expect(setup.detailsConnection.value.version).toBe(5);
   });
 });

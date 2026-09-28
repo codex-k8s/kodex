@@ -19,8 +19,8 @@ type managedConfigurationResponse interface {
 	GetRevision() *controlplanev1.ManagedConfigurationRevision
 }
 
-func requireManagedDraftMutation(w http.ResponseWriter, key, etag string, body generated.ManagedConfigurationDraftInput, allowPromptScope ...bool) (*controlplanev1.MutationContext, bool) {
-	if body.PromptScope != nil && (len(allowPromptScope) != 1 || !allowPromptScope[0]) {
+func requireManagedDraftMutation(w http.ResponseWriter, key, etag string, body generated.ManagedConfigurationDraftInput, kind controlplanev1.ManagedConfigurationKind) (*controlplanev1.MutationContext, bool) {
+	if body.PromptScope != nil && kind != controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_PROMPT_TEMPLATE {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return nil, false
 	}
@@ -31,6 +31,11 @@ func requireManagedDraftMutation(w http.ResponseWriter, key, etag string, body g
 	}
 	switch body.ContentFormat {
 	case "TEXT", "JSON", "YAML", "TOML":
+	case "OPENAPI_IMPORT":
+		if kind != controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION {
+			writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+			return nil, false
+		}
 	default:
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return nil, false

@@ -28,7 +28,8 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 	}
 	var integration, delivery, completesRun bool
 	var scopeJSON, input []byte
-	var inputDigest, risk, approval string
+	var inputDigest, risk, approval, definitionVersion, definitionDigest string
+	var approvalScopePaths []string
 	intent := &entity.IntegrationIntent{}
 	var actorID any
 	if current.actorID != "" {
@@ -38,6 +39,7 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		&gate.SourceAttachmentSetRef, &integration, &delivery, &completesRun,
 		&intent.ConnectionRef, &intent.ConnectionName, &intent.DefinitionKey, &intent.CapabilityKey, &intent.Operation,
 		&intent.EffectKey, &intent.ResourceKind, &scopeJSON, &intent.ResourceScopeDigest, &input, &inputDigest, &risk, &approval,
+		&definitionVersion, &definitionDigest, &approvalScopePaths,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrNotFound
@@ -68,6 +70,40 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 			return previewErr
 		}
 		intent.EffectPreview["risk"], intent.EffectPreview["approvalPolicy"] = risk, approval
+		if approval == string(integrationpackage.ApprovalHumanScoped) {
+			// Для параметризованного согласования исходные аргументы не входят
+			// в событие запуска и не раскрываются тем, кто видит Gate без права решения.
+			intent.EffectPreview["fields"] = []any{}
+			intent.EffectPreview["contentComplete"] = false
+			showScopeValues := false
+			if actorScoped {
+				tx, ok := runner.(pgx.Tx)
+				if !ok {
+					return errs.ErrUnavailable
+				}
+				accessErr := repository.requireAccess(ctx, tx, current, "gate.resolve", entity.AccessScope{
+					Kind: "RESOURCE_INSTANCE", ResourceKind: "OWNER_GATE", ResourceRef: gate.Ref,
+				})
+				if accessErr != nil && !errors.Is(accessErr, errs.ErrNotFound) && !errors.Is(accessErr, errs.ErrForbidden) {
+					return accessErr
+				}
+				showScopeValues = accessErr == nil
+			}
+			definition, definitionErr := repository.integrationPackage(ctx, runner, current.organizationID,
+				intent.ConnectionRef, intent.DefinitionKey, definitionVersion, definitionDigest)
+			if definitionErr != nil {
+				return definitionErr
+			}
+			capability, ok := definition.Capability(intent.CapabilityKey)
+			if !ok || capability.Operation != intent.Operation {
+				return errs.ErrUnavailable
+			}
+			scopePreview, scopeErr := integrationScopedGatePreview(capability, input, approvalScopePaths, showScopeValues)
+			if scopeErr != nil {
+				return scopeErr
+			}
+			intent.EffectPreview["approvalScope"] = scopePreview
+		}
 		gate.IntegrationIntent = intent
 	}
 	if len(gate.DecisionConsequences) == 0 {

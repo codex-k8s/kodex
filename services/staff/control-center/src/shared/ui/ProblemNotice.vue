@@ -8,6 +8,8 @@ const props = defineProps<{ problem?: AppProblem; compact?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
 const translator = useI18n();
 const heading = computed(() => {
+  if (props.problem?.code === "FRESH_AUTHENTICATION_REQUIRED")
+    return translator.t("common.freshAuthenticationRequired");
   if (props.problem?.kind === "forbidden")
     return translator.t("common.forbidden");
   if (props.problem?.kind === "conflict")
@@ -17,6 +19,8 @@ const heading = computed(() => {
   return translator.t("common.error");
 });
 const message = computed(() => {
+  if (props.problem?.code === "FRESH_AUTHENTICATION_REQUIRED")
+    return translator.t("common.freshAuthenticationHelp");
   if (props.problem?.title) return props.problem.title;
   const key = `errors.${props.problem?.code ?? "default"}`;
   return translator.te(key)

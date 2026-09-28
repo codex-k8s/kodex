@@ -18,7 +18,8 @@ import (
 
 type searchQueryStub struct {
 	controlplanev1.PlatformQueryServiceClient
-	request *controlplanev1.SearchPlatformRequest
+	request  *controlplanev1.SearchPlatformRequest
+	response *controlplanev1.SearchPlatformResponse
 }
 
 func TestSearchRejectsMalformedInputBeforeRPC(t *testing.T) {
@@ -73,6 +74,9 @@ func TestVFSMismatchedProjectIsNotReturned(t *testing.T) {
 
 func (stub *searchQueryStub) SearchPlatform(_ context.Context, request *controlplanev1.SearchPlatformRequest, _ ...grpc.CallOption) (*controlplanev1.SearchPlatformResponse, error) {
 	stub.request = request
+	if stub.response != nil {
+		return stub.response, nil
+	}
 	return &controlplanev1.SearchPlatformResponse{
 		Results: []*controlplanev1.SearchResult{{Kind: controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_AGENT, Ref: "agt_employee01", ProjectRef: "prj_project01", Title: "Сотрудник", State: "ACTIVE", UpdatedAt: timestamppb.New(time.Unix(100, 0))}},
 		Total:   27, Page: &controlplanev1.PageInfo{NextPageToken: "next-page"},
@@ -104,5 +108,29 @@ func TestSearchPlatformForwardsFilterAndCursorAndPreservesPage(t *testing.T) {
 	}
 	if response.Code != http.StatusOK || body.Total != 27 || body.NextPageToken != "next-page" || len(body.Items) != 1 || body.Items[0].Kind != "AGENT" {
 		t.Fatalf("search response = status %d body %+v", response.Code, body)
+	}
+}
+
+func TestSearchPlatformReturnsAuthorizedArtifact(t *testing.T) {
+	query := &searchQueryStub{}
+	response, _ := query.SearchPlatform(t.Context(), &controlplanev1.SearchPlatformRequest{})
+	response.Results[0].Kind = controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_ARTIFACT
+	response.Results[0].Ref = "art_document01"
+	response.Results[0].Title = "result.md"
+	query.response = response
+	server := &Server{control: &controlplaneclient.Client{Query: query}}
+	limit := 5
+	recorder := httptest.NewRecorder()
+
+	server.SearchPlatform(recorder, httptest.NewRequest(http.MethodGet, "/", nil), generated.SearchPlatformParams{Query: "result", Limit: &limit})
+
+	var body struct {
+		Items []struct{ Kind, Ref, ProjectRef string } `json:"items"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode search response: %v", err)
+	}
+	if recorder.Code != http.StatusOK || len(body.Items) != 1 || body.Items[0].Kind != "ARTIFACT" || body.Items[0].Ref != "art_document01" || body.Items[0].ProjectRef != "prj_project01" {
+		t.Fatalf("artifact search response = status %d body %+v", recorder.Code, body)
 	}
 }

@@ -64,12 +64,17 @@ export const useProvidersStore = defineStore("providers", {
     problem: undefined,
   }),
   actions: {
-    async loadDefinitions(query = ""): Promise<void> {
-      const page = await loadProviderDefinitions(query);
+    async loadDefinitions(query = "", pageSize = 20): Promise<void> {
+      const page = await loadProviderDefinitions(
+        query,
+        undefined,
+        requestSignal(),
+        pageSize,
+      );
       this.definitions = page.items;
       this.definitionsNextPageToken = page.nextPageToken;
     },
-    async loadMoreDefinitions(): Promise<void> {
+    async loadMoreDefinitions(pageSize = 20): Promise<void> {
       if (!this.definitionsNextPageToken || this.definitionsLoadingMore) return;
       this.definitionsLoadingMore = true;
       this.problem = undefined;
@@ -77,6 +82,8 @@ export const useProvidersStore = defineStore("providers", {
         const page = await loadProviderDefinitions(
           "",
           this.definitionsNextPageToken,
+          requestSignal(),
+          pageSize,
         );
         const definitions = new Map(
           this.definitions.map((definition) => [definition.key, definition]),
@@ -93,7 +100,11 @@ export const useProvidersStore = defineStore("providers", {
         this.definitionsLoadingMore = false;
       }
     },
-    async load(query?: string): Promise<void> {
+    async load(
+      query?: string,
+      accountPageSize = 20,
+      definitionPageSize = 20,
+    ): Promise<void> {
       this.query = (query ?? this.query).trim();
       this.loading = true;
       this.problem = undefined;
@@ -103,8 +114,20 @@ export const useProvidersStore = defineStore("providers", {
       const generation = ++loadGeneration;
       try {
         const [definitions, accounts] = await Promise.all([
-          loadProviderDefinitions("", undefined, controller.signal),
-          loadProviderAccounts(this.query, undefined, controller.signal),
+          loadProviderDefinitions(
+            "",
+            undefined,
+            controller.signal,
+            definitionPageSize,
+          ),
+          loadProviderAccounts(
+            this.query,
+            undefined,
+            controller.signal,
+            undefined,
+            undefined,
+            accountPageSize,
+          ),
         ]);
         if (controller.signal.aborted || generation !== loadGeneration) return;
         this.definitions = definitions.items;
@@ -121,7 +144,7 @@ export const useProvidersStore = defineStore("providers", {
         if (loadController === controller) loadController = undefined;
       }
     },
-    async loadMore(): Promise<void> {
+    async loadMore(pageSize = 20): Promise<void> {
       if (!this.accountsNextPageToken || this.loadingMore) return;
       this.loadingMore = true;
       this.problem = undefined;
@@ -129,7 +152,14 @@ export const useProvidersStore = defineStore("providers", {
       const generation = loadGeneration;
       const query = this.query;
       try {
-        const page = await loadProviderAccounts(query, token);
+        const page = await loadProviderAccounts(
+          query,
+          token,
+          requestSignal(),
+          undefined,
+          undefined,
+          pageSize,
+        );
         if (generation !== loadGeneration || query !== this.query) return;
         for (const account of page.items)
           this.accounts = upsertProviderAccount(this.accounts, account);

@@ -1,6 +1,7 @@
 import type {
   RoleImageArtifact,
   RoleImageBuild,
+  RoleImagePromotionReceipt,
   RoleImageRecipe,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -25,25 +26,60 @@ export function latestBuild(
   builds: readonly RoleImageBuild[],
 ): RoleImageBuild | undefined {
   return [...builds].sort((left, right) => {
-    const time = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+    const time = Date.parse(right.createdAt) - Date.parse(left.createdAt);
     if (time !== 0) return time;
+    const update = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+    if (update !== 0) return update;
     if (right.attempt !== left.attempt) return right.attempt - left.attempt;
     return buildStageOrder[right.stage] - buildStageOrder[left.stage];
   })[0];
 }
 
 export function buildIsTerminal(build: RoleImageBuild): boolean {
-  return [
-    "COMPLETED",
-    "FAILED",
-    "CANCELLED",
-    "EXPIRED",
-    "DEAD_LETTER",
-  ].includes(build.stage);
+  return ["COMPLETED", "CANCELLED", "DEAD_LETTER"].includes(build.stage);
 }
 
 export function buildIsActive(build: RoleImageBuild): boolean {
   return !buildIsTerminal(build);
+}
+
+export function roleImageLifecycleNeedsRefresh(
+  recipe: RoleImageRecipe | undefined,
+  build: RoleImageBuild | undefined,
+  artifact: RoleImageArtifact | undefined,
+  receipt: RoleImagePromotionReceipt | undefined,
+): boolean {
+  if (!recipe || !build) return false;
+  if (buildIsActive(build)) return true;
+  if (build.stage !== "COMPLETED") return false;
+  const currentReceipt =
+    artifact && receipt?.imageArtifactRef === artifact.ref
+      ? receipt
+      : undefined;
+  if (currentReceipt?.state === "FAILED") return false;
+  if (
+    !artifact ||
+    artifact.buildRef !== build.ref ||
+    artifact.recipeGeneration !== build.recipeGeneration
+  )
+    return true;
+  if (
+    artifact.admissionVerdict === "REJECTED" ||
+    artifact.promotionState === "REJECTED"
+  )
+    return false;
+  if (
+    recipe.promotedImageReady &&
+    recipe.activeImageArtifactRef === artifact.ref
+  )
+    return false;
+  return (
+    (artifact.promotionRequested &&
+      ["PENDING", "CLAIMED", "AUTHORIZED", "PROMOTED"].includes(
+        artifact.promotionState,
+      )) ||
+    ["QUEUED", "PROMOTING"].includes(currentReceipt?.state ?? "")
+  );
 }
 
 export function canRequestBuild(recipe: RoleImageRecipe): boolean {

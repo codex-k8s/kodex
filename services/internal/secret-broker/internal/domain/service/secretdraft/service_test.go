@@ -21,6 +21,8 @@ type ownerFixture struct {
 	decision                            value.DraftRecoveryDecision
 	lastEncrypted                       *value.DraftEncryptedDescriptor
 	lastMaterialization                 *value.DraftMaterialization
+	cleanupEncrypted                    *value.DraftEncryptedDescriptor
+	cleanupMaterialization              *value.DraftMaterialization
 }
 
 func (owner *ownerFixture) Check(context.Context) error { return nil }
@@ -40,8 +42,9 @@ func (owner *ownerFixture) Recover(_ context.Context, _ value.DraftWork, encrypt
 	owner.lastEncrypted, owner.lastMaterialization = encrypted, materialization
 	return owner.decision, nil
 }
-func (owner *ownerFixture) CompleteCleanup(context.Context, value.DraftWork, *value.DraftEncryptedDescriptor, *value.DraftMaterialization) error {
+func (owner *ownerFixture) CompleteCleanup(_ context.Context, _ value.DraftWork, encrypted *value.DraftEncryptedDescriptor, materialization *value.DraftMaterialization) error {
 	owner.cleanup++
+	owner.cleanupEncrypted, owner.cleanupMaterialization = encrypted, materialization
 	return owner.cleanupErr
 }
 
@@ -259,6 +262,18 @@ func TestRecoveryKeepsPublishedEffectAndNeverDecryptsOrRepublishes(t *testing.T)
 	}
 	if staged.deletes != 0 || runtime.deletes != 0 || runtime.publishes != 0 || cipher.decryptions != 0 || owner.cleanup != 0 {
 		t.Fatal("KEEP or recovery violated effect boundaries")
+	}
+}
+
+func TestRecoveryAcknowledgesOnlyDeletedCiphertextWhenPublicationIsRetained(t *testing.T) {
+	service, owner, staged, runtime, _ := serviceFixture(t, value.DraftPublish)
+	owner.work.RecoveryEncrypted = &staged.descriptor
+	owner.decision = value.DraftRecoveryDecision{EncryptedAction: value.DraftRecoveryDelete, MaterializationAction: value.DraftRecoveryKeep}
+	if err := service.ReconcileOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if owner.cleanup != 1 || owner.cleanupEncrypted == nil || *owner.cleanupEncrypted != staged.descriptor || owner.cleanupMaterialization != nil || staged.deletes != 1 || runtime.deletes != 0 {
+		t.Fatal("cleanup ACK included retained publication or lost ciphertext deletion")
 	}
 }
 

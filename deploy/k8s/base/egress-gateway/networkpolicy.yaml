@@ -87,6 +87,16 @@ spec:
               app.kubernetes.io/name: email-bridge
       ports:
         - {protocol: TCP, port: 8082}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kodex-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: integration-gateway
+              app.kubernetes.io/component: integration-worker
+      ports:
+        - {protocol: TCP, port: 8083}
   egress:
     - to:
         - namespaceSelector:
@@ -111,7 +121,8 @@ spec:
       ports:
         - {protocol: TCP, port: 8443}
     # Destination-less TCP/443 — осознанное исключение на L3/L4 boundary:
-    # application Pod его не получает, а gateway до dial проверяет CONNECT,
-    # ClientHello SNI, immutable policy и полный DNS snapshot.
+    # application Pod его не получает. Все listeners до dial проверяют CONNECT,
+    # ClientHello SNI, immutable policy и полный DNS snapshot. Динамические
+    # NetworkPolicy pins не сужают это исключение; точный допуск держит gateway.
     - ports:
         - {protocol: TCP, port: 443}

@@ -81,7 +81,7 @@ func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev
 	if err != nil {
 		return nil, err
 	}
-	items, total, next, err := server.service.Search(ctx, p, query.Filter{Query: request.GetQuery(), ProjectRef: request.GetProjectRef(), Limit: request.GetLimit(), Page: page(request.GetPage())})
+	items, total, next, err := server.service.Search(ctx, p, query.Filter{Query: request.GetQuery(), ProjectRef: request.GetProjectRef(), Limit: request.GetLimit(), Page: searchPage(request)})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -90,6 +90,14 @@ func (server *Server) SearchPlatform(ctx context.Context, request *controlplanev
 		response.Results = append(response.Results, castSearchResult(item))
 	}
 	return response, nil
+}
+
+func searchPage(request *controlplanev1.SearchPlatformRequest) query.Page {
+	result := page(request.GetPage())
+	if request.GetLimit() > 0 {
+		result.Size = request.GetLimit()
+	}
+	return result
 }
 
 func (server *Server) ListProjects(ctx context.Context, request *controlplanev1.ListProjectsRequest) (*controlplanev1.ListProjectsResponse, error) {
@@ -476,7 +484,7 @@ func (server *Server) ListSchedules(ctx context.Context, request *controlplanev1
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListSchedules(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListSchedules(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -567,7 +575,7 @@ func (server *Server) ListAuditEvents(ctx context.Context, request *controlplane
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListAuditEvents(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), Action: request.GetAction(), Outcome: request.GetOutcome(), Query: request.GetQuery(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListAuditEvents(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetResourceRef(), Action: request.GetAction(), Outcome: request.GetOutcome(), Query: request.GetQuery(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}

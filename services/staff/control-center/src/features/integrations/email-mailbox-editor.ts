@@ -101,7 +101,7 @@ export function mailboxEditor(connectionRef: string) {
       if (current()) busy.value = false;
     }
   }
-  async function catalog(more = false): Promise<void> {
+  async function catalog(more = false, pageSize = 20): Promise<void> {
     if (uncertain.value) return;
     await task(async (signal, current) => {
       const page = await listMailboxes(
@@ -109,6 +109,7 @@ export function mailboxEditor(connectionRef: string) {
         query.value,
         signal,
         more ? nextPageToken.value : undefined,
+        pageSize,
       );
       if (!current()) return;
       const items = more ? [...list.value, ...page.items] : page.items;

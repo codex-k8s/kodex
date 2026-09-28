@@ -21,6 +21,7 @@ export interface IntegrationGrantSelection {
   recipientKind: "AGENT" | "WORKFLOW";
   recipientRef: string;
   capabilityKey: string;
+  approvalScopePaths?: string[];
 }
 
 type CandidatePage =
@@ -128,6 +129,7 @@ function loader<T extends CandidatePage>(
     query: string,
     cursor: string | undefined,
     signal: AbortSignal,
+    pageSize: number,
   ) => Promise<T>,
   expected?: IntegrationGrantCandidatePins,
 ) {
@@ -138,9 +140,10 @@ function loader<T extends CandidatePage>(
     query: string,
     cursor: string | undefined,
     signal: AbortSignal,
+    pageSize = 40,
   ): Promise<T> => {
     const page = checkedCandidatePage(
-      await fetch(query, cursor, signal),
+      await fetch(query, cursor, signal, pageSize),
       context,
       purpose,
       expected,
@@ -170,11 +173,11 @@ export function connectionCandidates(context: ConnectionQuery) {
   return loader(
     scope,
     purpose,
-    async (query, cursor, signal) =>
+    async (query, cursor, signal, pageSize) =>
       (
         await unwrap(
           sdk.listIntegrationGrantConnectionCandidates({
-            query: { ...context, query, pageToken: cursor, pageSize: 40 },
+            query: { ...context, query, pageToken: cursor, pageSize },
             signal: requestSignal(signal),
             cache: "no-store",
           }),
@@ -193,11 +196,11 @@ export function projectCandidates(
   return loader(
     context,
     "GRANT",
-    async (query, cursor, signal) =>
+    async (query, cursor, signal, pageSize) =>
       (
         await unwrap(
           sdk.listIntegrationGrantProjectCandidates({
-            query: { ...context, query, pageToken: cursor, pageSize: 40 },
+            query: { ...context, query, pageToken: cursor, pageSize },
             signal: requestSignal(signal),
             cache: "no-store",
           }),
@@ -217,11 +220,11 @@ export function recipientCandidates(
   return loader(
     context,
     "GRANT",
-    async (query, cursor, signal) =>
+    async (query, cursor, signal, pageSize) =>
       (
         await unwrap(
           sdk.listIntegrationGrantRecipientCandidates({
-            query: { ...context, query, pageToken: cursor, pageSize: 40 },
+            query: { ...context, query, pageToken: cursor, pageSize },
             signal: requestSignal(signal),
             cache: "no-store",
           }),
@@ -241,11 +244,11 @@ export function capabilityCandidates(
   return loader(
     context,
     "GRANT",
-    async (query, cursor, signal) =>
+    async (query, cursor, signal, pageSize) =>
       (
         await unwrap(
           sdk.listIntegrationGrantCapabilityCandidates({
-            query: { ...context, query, pageToken: cursor, pageSize: 40 },
+            query: { ...context, query, pageToken: cursor, pageSize },
             signal: requestSignal(signal),
             cache: "no-store",
           }),

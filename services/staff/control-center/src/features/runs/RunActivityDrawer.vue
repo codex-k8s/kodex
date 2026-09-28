@@ -7,8 +7,9 @@ import {
   FileText,
   UserRound,
   Wrench,
+  X,
 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -40,9 +41,11 @@ const props = withDefaults(
     initialNodeRef: undefined,
   },
 );
+const contextField = `run-activity-context-${useId()}`;
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale } = useI18n();
 const selectedNodeRef = ref("");
+const expandedMessages = ref<Record<string, boolean>>({});
 const sessionNodes = computed(() => props.nodes.filter(isRunSessionNode));
 
 const artifactsByRef = computed(
@@ -113,46 +116,42 @@ function formatBytes(value: number): string {
     role="region"
     :aria-label="$t('runs.activity')"
   >
+    <header class="run-activity-drawer__header">
+      <div>
+        <h2>{{ $t("runs.activity") }}</h2>
+        <p>{{ run.title }}</p>
+      </div>
+      <button
+        class="icon-button"
+        type="button"
+        :aria-label="$t('common.close')"
+        @click="emit('close')"
+      >
+        <X :size="19" aria-hidden="true" />
+      </button>
+    </header>
     <div class="run-activity-drawer__tools">
-      <label>
-        <span class="sr-only">{{ $t("runs.context") }}</span>
-        <select v-model="selectedNodeRef">
-          <option value="">{{ $t("common.all") }}</option>
+      <label class="run-activity-drawer__session-filter">
+        <span>{{ $t("runs.sessionFilter") }}</span>
+        <select
+          v-model="selectedNodeRef"
+          :id="contextField"
+          :name="contextField"
+        >
+          <option value="">{{ $t("runs.allSessions") }}</option>
           <option
             v-for="node in sessionNodes"
             :key="node.ref"
             :value="node.ref"
           >
-            {{ node.displayName }}
+            {{ node.displayName }} · {{ $t(`states.${node.state}`) }}
           </option>
         </select>
       </label>
-      <span>{{ events.length }}</span>
+      <span>{{
+        $t("runs.activityItemCount", { count: filteredItems.length })
+      }}</span>
     </div>
-
-    <nav class="run-session-strip" :aria-label="$t('runs.context')">
-      <button
-        v-for="node in sessionNodes"
-        :key="node.ref"
-        type="button"
-        :class="{
-          'run-session-strip__item--selected': selectedNodeRef === node.ref,
-          'run-session-strip__item--future':
-            node.planned ||
-            node.state === 'PLANNED' ||
-            ((node.state === 'QUEUED' || node.state === 'WAITING') &&
-              !node.startedAt),
-        }"
-        :aria-pressed="selectedNodeRef === node.ref"
-        @click="selectedNodeRef = selectedNodeRef === node.ref ? '' : node.ref"
-      >
-        <span>
-          <strong>{{ node.displayName }}</strong>
-          <small>{{ node.role || $t(`runs.nodeTypes.${node.type}`) }}</small>
-        </span>
-        <StatusBadge :state="node.state" />
-      </button>
-    </nav>
 
     <div class="run-activity-drawer__body" aria-live="polite">
       <ol v-if="filteredItems.length" class="run-activity-list">
@@ -239,7 +238,7 @@ function formatBytes(value: number): string {
                   {{ $t("common.noData") }}
                 </p>
               </details>
-              <small>
+              <small v-if="item.toolCall.durationMs !== undefined">
                 {{
                   $t("runs.toolDuration", {
                     duration: item.toolCall.durationMs,
@@ -252,9 +251,36 @@ function formatBytes(value: number): string {
               <SafeMarkdown
                 v-if="item.summary"
                 :content="item.summary"
-                class="run-activity-item__message"
+                :class="[
+                  'run-activity-item__message',
+                  {
+                    'run-activity-item__message--collapsed':
+                      item.kind === 'initiator' &&
+                      item.summary.length > 360 &&
+                      !expandedMessages[item.id],
+                  },
+                ]"
               />
-              <p v-else class="run-activity-item__empty">
+              <button
+                v-if="
+                  item.kind === 'initiator' &&
+                  item.summary &&
+                  item.summary.length > 360
+                "
+                type="button"
+                class="run-activity-item__expand"
+                :aria-expanded="Boolean(expandedMessages[item.id])"
+                @click="expandedMessages[item.id] = !expandedMessages[item.id]"
+              >
+                {{
+                  $t(
+                    expandedMessages[item.id]
+                      ? "runs.collapseMessage"
+                      : "runs.expandMessage",
+                  )
+                }}
+              </button>
+              <p v-if="!item.summary" class="run-activity-item__empty">
                 {{ $t("common.noData") }}
               </p>
               <SafeMarkdown
@@ -294,6 +320,36 @@ function formatBytes(value: number): string {
   overflow: hidden;
   background: var(--surface);
 }
+.run-activity-drawer__header {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.run-activity-drawer__header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.run-activity-drawer__header h2,
+.run-activity-drawer__header p {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-activity-drawer__header h2 {
+  font-size: 1rem;
+}
+.run-activity-drawer__header p {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
 .run-activity-drawer__tools {
   display: flex;
   align-items: center;
@@ -304,65 +360,27 @@ function formatBytes(value: number): string {
   background: var(--panel);
 }
 .run-activity-drawer__tools label {
+  display: flex;
   min-width: 0;
   flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+}
+.run-activity-drawer__session-filter > span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 .run-activity-drawer__tools select {
-  width: min(100%, 360px);
+  min-width: 0;
+  max-width: 520px;
+  flex: 1 1 auto;
 }
 .run-activity-drawer__tools > span {
   flex: 0 0 auto;
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.76rem;
-}
-.run-session-strip {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 7px;
-  padding: 9px 16px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  scrollbar-width: thin;
-}
-.run-session-strip > button {
-  display: grid;
-  min-width: 190px;
-  max-width: 250px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 9px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.run-session-strip > button:hover,
-.run-session-strip__item--selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.run-session-strip__item--future {
-  border-style: dashed !important;
-  opacity: 0.74;
-}
-.run-session-strip > button > span {
-  display: grid;
-  min-width: 0;
-}
-.run-session-strip strong,
-.run-session-strip small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.run-session-strip small {
-  color: var(--muted);
-  font-size: 0.72rem;
 }
 .run-activity-drawer__body {
   flex: 1 1 auto;
@@ -469,6 +487,26 @@ function formatBytes(value: number): string {
 .run-activity-item__progress :deep(p),
 .run-activity-item__empty {
   margin: 0;
+}
+.run-activity-item__message--collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.run-activity-item__expand {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.run-activity-item__expand:hover {
+  text-decoration: underline;
 }
 .run-activity-item__progress {
   margin-top: 7px;

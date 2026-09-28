@@ -25,7 +25,11 @@ async function race(mode: "close" | "unmount" | "reopen") {
 const integrationFixture =
   new URLSearchParams(location.search).get("fixture") ===
   "integration-terminal";
-if (integrationFixture) {
+const assistantImportFixture = [
+  "assistant-openapi-import",
+  "assistant-openapi-create",
+].includes(new URLSearchParams(location.search).get("fixture") ?? "");
+if (integrationFixture || assistantImportFixture) {
   const platform = usePlatformStore();
   platform.loadIntegrations = () => Promise.resolve();
   platform.loadProjects = () => Promise.resolve();
@@ -57,7 +61,20 @@ function conversation(index: number): AssistantConversation {
       entityName: "Длинное понятное название проекта для проверки контекста",
       allowedOperations: [],
     },
-    turns: [],
+    turns:
+      assistantImportFixture && index === 0
+        ? [
+            {
+              ref: "turn_openapi_import_fixture",
+              sequence: 1,
+              role: "ASSISTANT",
+              content:
+                "Откройте [защищённую форму импорта](/configurations/INTEGRATION_DEFINITION). Не отправляйте документ в чат.",
+              state: "COMPLETED",
+              createdAt: "2026-09-25T00:00:00Z",
+            },
+          ]
+        : [],
     updatedAt: `2026-09-08T10:${String(index).padStart(2, "0")}:00Z`,
   };
 }

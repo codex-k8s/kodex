@@ -577,41 +577,70 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
 	result = append(result, runtimeFileTools(input)...)
 	if input.SystemAssistant {
-		result = append(result, configurationCatalogTool(input), assistantPlanTool(input), assistantMetadataTool())
+		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
 	}
 	if len(input.IntegrationGrants) != 0 {
-		result = append(result, integrationTool(input.IntegrationGrants))
+		result = append(result, integrationCatalogTool(), integrationTool())
 	}
 	return result
 }
 
-func integrationTool(grants []runtimecontract.RunnerIntegrationGrant) map[string]any {
-	variants := make([]any, 0, len(grants))
-	for _, grant := range grants {
-		var inputSchema map[string]any
-		if json.Unmarshal([]byte(grant.InputSchema), &inputSchema) != nil {
-			continue
-		}
-		variants = append(variants, map[string]any{
-			"type": "object", "additionalProperties": false,
-			"required": []string{"connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input"},
-			"properties": map[string]any{
-				"connection_ref":      map[string]any{"type": "string", "const": grant.ConnectionRef},
-				"capability_key":      map[string]any{"type": "string", "const": grant.CapabilityKey},
-				"definition_version":  map[string]any{"type": "string", "const": grant.DefinitionVersion},
-				"definition_digest":   map[string]any{"type": "string", "const": grant.DefinitionDigest},
-				"input_schema_sha256": map[string]any{"type": "string", "const": grant.InputSchemaSHA256},
-				"input":               inputSchema,
-			},
-		})
-	}
+func integrationTool() map[string]any {
 	return map[string]any{
-		"name": "invoke_integration", "description": "Invoke one exact typed integration grant from this RuntimeRevision.",
-		"inputSchema": map[string]any{"oneOf": variants},
+		"name": "invoke_integration", "description": "Invoke one exact grant from this RuntimeRevision. First read the compact get_integration_catalog index, then select its grant_ref to read the input schema. Copy that same grant_ref here with an input matching that schema. The server resolves and revalidates the pinned connection, capability, versions and authority.",
+		"inputSchema": objectSchema([]string{"grant_ref", "input"}, map[string]any{
+			"grant_ref": opaqueRefSchema(),
+			"input":     map[string]any{"type": "object"},
+		}),
 	}
+}
+
+// Старый полный набор полей принимается только для уже начатых ходов; новый
+// вызов привязывается к одному ref из подписанной RuntimeRevision.
+func integrationGrantForCall(input runtimecontract.RunnerInput, arguments map[string]any) (runtimecontract.RunnerIntegrationGrant, bool) {
+	if !onlyKeys(arguments, "grant_ref", "connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input") {
+		return runtimecontract.RunnerIntegrationGrant{}, false
+	}
+	if ref, selected := arguments["grant_ref"].(string); selected {
+		if ref == "" || len(arguments) != 2 {
+			return runtimecontract.RunnerIntegrationGrant{}, false
+		}
+		for _, grant := range input.IntegrationGrants {
+			if grant.Ref == ref {
+				return grant, true
+			}
+		}
+		return runtimecontract.RunnerIntegrationGrant{}, false
+	}
+	if len(arguments) != 6 {
+		return runtimecontract.RunnerIntegrationGrant{}, false
+	}
+	connection, _ := arguments["connection_ref"].(string)
+	capability, _ := arguments["capability_key"].(string)
+	definitionVersion, _ := arguments["definition_version"].(string)
+	definitionDigest, _ := arguments["definition_digest"].(string)
+	inputSchemaDigest, _ := arguments["input_schema_sha256"].(string)
+	for _, grant := range input.IntegrationGrants {
+		if grant.ConnectionRef == connection && grant.CapabilityKey == capability &&
+			grant.DefinitionVersion == definitionVersion && grant.DefinitionDigest == definitionDigest &&
+			grant.InputSchemaSHA256 == inputSchemaDigest {
+			return grant, true
+		}
+	}
+	return runtimecontract.RunnerIntegrationGrant{}, false
+}
+
+type integrationCallInputError struct{ reason string }
+
+func (inputErr *integrationCallInputError) Error() string {
+	return "integration call input is invalid"
+}
+
+func (inputErr *integrationCallInputError) GRPCStatus() *status.Status {
+	return status.New(codes.InvalidArgument, inputErr.Error())
 }
 
 func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string]any {
@@ -653,7 +682,11 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	err = nil
 	switch params.Name {
 	case "get_configuration_catalog":
-		result, err = configurationCatalog(input, params.Arguments)
+		result, err = server.configurationCatalog(request.Context(), input, params.Arguments)
+	case "get_integration_catalog":
+		result, err = integrationCatalog(input, params.Arguments)
+	case "find_platform_resources":
+		result, err = server.findPlatformResources(request.Context(), input, params.Arguments)
 	case "propose_configuration_plan":
 		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
 	case "propose_assistant_metadata":
@@ -669,12 +702,21 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	default:
 		err = errors.New("tool is not available")
 	}
+	invocationInputInvalid := params.Name == "invoke_integration" && status.Code(err) == codes.InvalidArgument
 	projectionErr := server.recordToolCall(request.Context(), input, params.Name, params.Arguments, result, err, rpc.ID, time.Since(startedAt))
 	if err != nil {
 		failureClass := controlFailureClass(err)
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
 			failureClass = "assistant_plan_" + planInputErr.reason
+		}
+		var catalogInputErr *integrationCatalogInputError
+		if errors.As(err, &catalogInputErr) {
+			failureClass = "integration_catalog_" + catalogInputErr.reason
+		}
+		var invocationInputErr *integrationCallInputError
+		if errors.As(err, &invocationInputErr) {
+			failureClass = "integration_call_" + invocationInputErr.reason
 		}
 		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed",
 			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(),
@@ -694,10 +736,33 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
+			guidance := "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names."
+			if planInputErr.reason == "environment_variable_name" {
+				guidance = "Environment variable names cannot use reserved platform prefixes such as KODEX_. Do not rename a user-requested variable silently; explain the restriction and ask for a non-reserved name."
+			}
 			structured = map[string]any{
 				"error_code": "PLAN_INPUT_INVALID",
 				"retryable":  true,
-				"guidance":   "Read the current tool schema and retry once with exactly the required operation fields and camelCase parameter names.",
+				"guidance":   guidance,
+			}
+		}
+		var catalogInputErr *integrationCatalogInputError
+		if errors.As(err, &catalogInputErr) {
+			guidance := "Retry once using either query and offset, or the exact grant_ref copied from the catalog index, but never both."
+			if catalogInputErr.reason == "selection_missing" {
+				guidance = "That grant is not bound to this run. Call get_integration_catalog with {} to read the compact index, then copy grant_ref from one entry exactly. Do not use an OpenAPI operationId or display name as a grant_ref."
+			}
+			structured = map[string]any{
+				"error_code": "CATALOG_INPUT_INVALID",
+				"retryable":  true,
+				"guidance":   guidance,
+			}
+		}
+		if invocationInputInvalid {
+			structured = map[string]any{
+				"error_code": "INTEGRATION_INPUT_INVALID",
+				"retryable":  true,
+				"guidance":   "Read get_integration_catalog with {} and select one exact grant_ref to obtain its input_schema. Call invoke_integration using only that grant_ref and input matching the schema. Retry at most once.",
 			}
 		}
 		encoded, _ = json.Marshal(structured)
@@ -755,20 +820,20 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	}
 	summary, _ := arguments["summary"].(string)
 	rawOperations, _ := arguments["operations"].([]any)
-	if strings.TrimSpace(summary) == "" || len(summary) > 2000 || len(rawOperations) == 0 || len(rawOperations) > 32 {
+	if !assistantPlanTextWithinLimit(summary, 2000) || len(rawOperations) == 0 || len(rawOperations) > 32 {
 		return nil, invalidAssistantPlan("summary_or_count")
 	}
 	operations := make([]*controlplanev1.AssistantPlanOperation, 0, len(rawOperations))
-	currentProjectName := ""
-	if input.AssistantContext != nil && input.AssistantContext.EntityKind == "PROJECT" && input.AssistantContext.EntityRef == input.ProjectRef {
-		currentProjectName = input.AssistantContext.EntityName
+	currentEntityName := ""
+	if input.AssistantContext != nil {
+		currentEntityName = input.AssistantContext.EntityName
 	}
 	for index, raw := range rawOperations {
 		operation, ok := raw.(map[string]any)
 		if !ok || !onlyKeys(operation, "type", "action", "title", "summary", "target", "parameters", "expectedVersion", "before", "after", "selected") {
 			return nil, invalidAssistantPlan("operation_shape")
 		}
-		operation, normalizeErr := normalizeServerHydratedAssistantOperation(operation, summary, input.ProjectRef, currentProjectName)
+		operation, normalizeErr := normalizeServerHydratedAssistantOperation(operation, summary, input.ProjectRef, currentEntityName)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -792,7 +857,7 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		selected, selectedOK := operation["selected"].(bool)
 		if serverHydrated {
 			action = assistantServerAction(kind)
-			target = assistantServerTarget(kind, parameters)
+			target = assistantServerTarget(kind, parameters, input.AssistantContext)
 			targetOK = target != nil
 			selected, selectedOK = true, true
 		}
@@ -804,10 +869,10 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		if !actionExists || actionValue == 0 {
 			return nil, invalidAssistantPlan("operation_action")
 		}
-		if strings.TrimSpace(title) == "" || len(title) > 200 {
+		if !assistantPlanTextWithinLimit(title, 200) {
 			return nil, invalidAssistantPlan("operation_title")
 		}
-		if strings.TrimSpace(operationSummary) == "" || len(operationSummary) > 500 {
+		if !assistantPlanTextWithinLimit(operationSummary, 500) {
 			return nil, invalidAssistantPlan("operation_summary")
 		}
 		if parameters == nil {
@@ -894,6 +959,10 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	if err != nil {
 		return nil, invalidAssistantPlan("operation_parameter_alias")
 	}
+	if (kind == "CREATE_RUNTIME_ENVIRONMENT_DRAFT" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION") &&
+		!assistantEnvironmentVariableNamesValid(normalizedParameters) {
+		return nil, invalidAssistantPlan("environment_variable_name")
+	}
 	if assistantProjectScopedOperation(kind) && strings.TrimSpace(projectRef) != "" {
 		normalizedParameters["projectRef"] = strings.TrimSpace(projectRef)
 	}
@@ -903,7 +972,7 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	}
 	normalized["type"] = kind
 	normalized["parameters"] = normalizedParameters
-	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" {
+	if title, _ := normalized["title"].(string); strings.TrimSpace(title) == "" || kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" {
 		normalized["title"] = assistantOperationTitle(kind, normalizedParameters, projectName)
 	}
 	if operationSummary, _ := normalized["summary"].(string); strings.TrimSpace(operationSummary) == "" {
@@ -915,9 +984,41 @@ func normalizeServerHydratedAssistantOperation(operation map[string]any, planSum
 	return normalized, nil
 }
 
+func assistantEnvironmentVariableNamesValid(parameters map[string]any) bool {
+	for _, field := range []string{"publicValues", "publicValueUpdates", "secretBindings"} {
+		entries, supplied := parameters[field]
+		if !supplied {
+			continue
+		}
+		list, ok := entries.([]any)
+		if !ok {
+			continue
+		}
+		for _, entry := range list {
+			item, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, ok := item["name"].(string)
+			if ok && !runtimecontract.ValidRuntimeEnvironmentName(name) {
+				return false
+			}
+		}
+	}
+	if entries, ok := parameters["publicValueRemovals"].([]any); ok {
+		for _, entry := range entries {
+			name, ok := entry.(string)
+			if ok && !runtimecontract.ValidRuntimeEnvironmentName(name) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func assistantProjectScopedOperation(kind string) bool {
 	switch kind {
-	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE":
+	case "UPDATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
 		return true
 	default:
 		return false
@@ -926,12 +1027,19 @@ func assistantProjectScopedOperation(kind string) bool {
 
 var assistantParameterAliases = map[string]string{
 	"agent_ref": "agentRef", "artifact_refs": "artifactRefs", "avatar_url": "avatarUrl",
+	"file_name": "fileName", "media_type": "mediaType",
 	"capability_key": "capabilityKey", "completion_criteria": "completionCriteria",
 	"connection_ref": "connectionRef", "coordinator_agent_ref": "coordinatorAgentRef",
 	"day_of_week": "dayOfWeek", "definition_key": "definitionKey", "gate_decisions": "gateDecisions",
 	"human_gate": "humanGate", "input_fields": "inputFields", "max_concurrency": "maxConcurrency",
-	"notification_policy": "notificationPolicy", "parallel_group": "parallelGroup",
+	"image_artifact_ref": "imageArtifactRef", "environment_key": "environmentKey",
+	"recipe_ref":            "recipeRef",
+	"environment_ref":       "environmentRef",
+	"public_value_updates":  "publicValueUpdates",
+	"public_value_removals": "publicValueRemovals",
+	"notification_policy":   "notificationPolicy", "parallel_group": "parallelGroup",
 	"project_ref": "projectRef", "public_configuration": "publicConfiguration",
+	"schedule_ref": "scheduleRef", "cron_expression": "cronExpression", "automation_text": "automationText",
 	"required_capability_keys": "requiredCapabilityKeys", "role_definition_ref": "roleDefinitionRef",
 	"role_description": "roleDescription", "runtime_ref": "runtimeRef", "session_policy": "sessionPolicy",
 	"session_ref": "sessionRef", "target_ref": "targetRef", "target_type": "targetType",
@@ -977,21 +1085,34 @@ func normalizeAssistantParameterValue(value any) (any, error) {
 	}
 }
 
-func assistantOperationTitle(kind string, parameters map[string]any, projectName string) string {
+func assistantOperationTitle(kind string, parameters map[string]any, entityName string) string {
 	name, _ := parameters["name"].(string)
-	if kind == "UPDATE_PROJECT" && strings.TrimSpace(projectName) != "" {
-		name = projectName
+	if kind == "CREATE_PROJECT_FILE" {
+		name, _ = parameters["fileName"].(string)
 	}
-	if strings.TrimSpace(name) == "" {
+	if (kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE") && strings.TrimSpace(entityName) != "" {
+		name = entityName
+	}
+	if strings.TrimSpace(name) == "" && kind != "UPDATE_ROLE_IMAGE_RECIPE" {
 		name, _ = parameters["projectRef"].(string)
 	}
 	labels := map[string]string{
-		"CREATE_PROJECT":                "Создать Проект",
-		"UPDATE_PROJECT":                "Изменить Проект",
-		"CREATE_AGENT":                  "Создать ИИ-сотрудника",
-		"CREATE_WORKFLOW":               "Создать Процесс",
-		"CREATE_INTEGRATION_CONNECTION": "Создать подключение",
-		"CREATE_SCHEDULE":               "Создать автоматизацию",
+		"CREATE_PROJECT":                       "Создать Проект",
+		"CREATE_PROJECT_FILE":                  "Создать файл",
+		"UPDATE_PROJECT":                       "Изменить Проект",
+		"CREATE_AGENT":                         "Создать ИИ-сотрудника",
+		"UPDATE_AGENT":                         "Изменить ИИ-сотрудника",
+		"CREATE_WORKFLOW":                      "Создать Процесс",
+		"CREATE_INTEGRATION_CONNECTION":        "Создать подключение",
+		"UPDATE_INTEGRATION_CONNECTION":        "Изменить подключение",
+		"CREATE_SCHEDULE":                      "Создать автоматизацию",
+		"UPDATE_WORKFLOW":                      "Изменить процесс",
+		"UPDATE_SCHEDULE":                      "Изменить автоматизацию",
+		"CREATE_RUNTIME_ENVIRONMENT_DRAFT":     "Создать черновик среды",
+		"PREPARE_RUNTIME_ENVIRONMENT_REVISION": "Подготовить новую ревизию среды",
+		"CREATE_ROLE_IMAGE_RECIPE":             "Создать рецепт образа",
+		"UPDATE_ROLE_IMAGE_RECIPE":             "Изменить рецепт образа",
+		"PUBLISH_INTEGRATION_DEFINITION":       "Опубликовать интеграцию",
 	}
 	label := labels[kind]
 	if strings.TrimSpace(name) == "" {
@@ -1022,7 +1143,7 @@ func assistantProjectUpdateSummary(parameters map[string]any, projectName string
 
 func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "UPDATE_PROJECT":
+	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION":
 		return true
 	default:
 		return false
@@ -1030,19 +1151,78 @@ func assistantServerHydratedOperation(kind string) bool {
 }
 
 func assistantServerAction(kind string) string {
-	if kind == "UPDATE_PROJECT" {
+	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "UPDATE_ROLE_IMAGE_RECIPE" || kind == "PUBLISH_INTEGRATION_DEFINITION" {
 		return "UPDATE"
 	}
 	return "CREATE"
 }
 
-func assistantServerTarget(kind string, parameters map[string]any) map[string]any {
+func assistantServerTarget(kind string, parameters map[string]any, context *runtimecontract.RunnerAssistantContext) map[string]any {
 	if parameters == nil {
 		return nil
 	}
 	targetKind := strings.TrimPrefix(kind, "CREATE_")
-	if kind == "UPDATE_PROJECT" {
+	if kind == "CREATE_PROJECT_FILE" {
+		name, _ := parameters["fileName"].(string)
+		if strings.TrimSpace(name) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "ARTIFACT", "name": strings.TrimSpace(name)}
+	} else if kind == "UPDATE_PROJECT" {
 		targetKind = "PROJECT"
+	} else if kind == "UPDATE_ROLE_IMAGE_RECIPE" {
+		ref, _ := parameters["recipeRef"].(string)
+		if strings.TrimSpace(ref) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "ROLE_IMAGE_RECIPE", "name": strings.TrimSpace(ref)}
+	} else if kind == "PUBLISH_INTEGRATION_DEFINITION" {
+		ref, _ := parameters["configurationRef"].(string)
+		if strings.TrimSpace(ref) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "INTEGRATION_DEFINITION", "name": strings.TrimSpace(ref)}
+	} else if kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" {
+		requestedRef, _ := parameters["agentRef"].(string)
+		if context == nil || context.EntityKind != "AGENT" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "AGENT", "name": context.EntityName}
+	} else if kind == "UPDATE_INTEGRATION_CONNECTION" {
+		requestedRef, _ := parameters["connectionRef"].(string)
+		if context == nil || context.EntityKind != "INTEGRATION_CONNECTION" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "INTEGRATION_CONNECTION", "name": context.EntityName}
+	} else if kind == "CHANGE_INTEGRATION_GRANT" {
+		connectionRef, _ := parameters["connectionRef"].(string)
+		if strings.TrimSpace(connectionRef) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "INTEGRATION_CONNECTION", "name": strings.TrimSpace(connectionRef)}
+	} else if kind == "UPDATE_SCHEDULE" {
+		requestedRef, _ := parameters["scheduleRef"].(string)
+		if context == nil || context.EntityKind != "SCHEDULE" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "SCHEDULE", "name": context.EntityName}
+	} else if kind == "UPDATE_WORKFLOW" {
+		requestedRef, _ := parameters["workflowRef"].(string)
+		if context == nil || context.EntityKind != "WORKFLOW" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "WORKFLOW", "name": context.EntityName}
+	} else if kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+		requestedRef, _ := parameters["environmentRef"].(string)
+		if context == nil || context.EntityKind != "ENVIRONMENT" || context.EntityRef == "" ||
+			context.EntityRef != strings.TrimSpace(requestedRef) || context.EntityName == "" {
+			return nil
+		}
+		return map[string]any{"kind": "ENVIRONMENT", "name": context.EntityName}
 	}
 	name, _ := parameters["name"].(string)
 	if strings.TrimSpace(name) == "" {
@@ -1165,6 +1345,10 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	switch tool {
 	case "get_configuration_catalog":
 		return map[string]any{}, "platform.configuration.read", "", input.SystemAssistant
+	case "get_integration_catalog":
+		return map[string]any{}, "platform.integration.catalog", "", len(input.IntegrationGrants) != 0
+	case "find_platform_resources":
+		return map[string]any{}, "platform.resources.search", "", input.SystemAssistant
 	case "propose_configuration_plan":
 		operations, _ := arguments["operations"].([]any)
 		return map[string]any{"operation_count": len(operations)}, "platform.configuration.plan", "", input.SystemAssistant
@@ -1180,12 +1364,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		step, _ := arguments["workflow_step_key"].(string)
 		return map[string]any{"target_agent_ref": target, "workflow_step_key": step}, "platform.run.delegate", "", true
 	case "invoke_integration":
-		connection, _ := arguments["connection_ref"].(string)
-		capability, _ := arguments["capability_key"].(string)
-		for _, grant := range input.IntegrationGrants {
-			if grant.ConnectionRef == connection && grant.CapabilityKey == capability {
-				return map[string]any{"connection_ref": connection, "capability_key": capability}, capability, grant.Ref, true
-			}
+		if grant, ok := integrationGrantForCall(input, arguments); ok {
+			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
 		}
 	}
 	return nil, "", "", false
@@ -1239,7 +1419,7 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 			return "TOOL_UNAVAILABLE"
 		}
 		switch value.state {
-		case "SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "UNKNOWN_OUTCOME":
+		case "SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "WAITING_APPROVAL", "UNKNOWN_OUTCOME":
 		default:
 			return "TOOL_UNAVAILABLE"
 		}
@@ -1266,6 +1446,10 @@ func truncateRunes(value string, maximum int) string {
 		return string(runes)
 	}
 	return string(runes[:maximum])
+}
+
+func assistantPlanTextWithinLimit(value string, maximum int) bool {
+	return strings.TrimSpace(value) != "" && len([]rune(value)) <= maximum
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
@@ -1300,27 +1484,14 @@ func (server *Server) delegate(ctx context.Context, input runtimecontract.Runner
 }
 
 func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
-	if !onlyKeys(arguments, "connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input") {
-		return nil, errors.New("integration input is invalid")
-	}
-	connection, _ := arguments["connection_ref"].(string)
-	capability, _ := arguments["capability_key"].(string)
-	definitionVersion, _ := arguments["definition_version"].(string)
-	definitionDigest, _ := arguments["definition_digest"].(string)
-	inputSchemaDigest, _ := arguments["input_schema_sha256"].(string)
-	allowed := false
-	for _, grant := range input.IntegrationGrants {
-		if grant.ConnectionRef == connection && grant.CapabilityKey == capability &&
-			grant.DefinitionVersion == definitionVersion && grant.DefinitionDigest == definitionDigest &&
-			grant.InputSchemaSHA256 == inputSchemaDigest {
-			allowed = true
-			break
-		}
-	}
+	grant, allowed := integrationGrantForCall(input, arguments)
 	if !allowed {
-		return nil, errors.New("integration capability is not allowed")
+		return nil, &integrationCallInputError{reason: "grant_selection"}
 	}
-	bounded, _ := arguments["input"].(map[string]any)
+	bounded, ok := arguments["input"].(map[string]any)
+	if !ok {
+		return nil, &integrationCallInputError{reason: "input_shape"}
+	}
 	structure, err := structpb.NewStruct(bounded)
 	if err != nil {
 		return nil, errors.New("integration input is invalid")
@@ -1330,7 +1501,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		return nil, errors.New("integration input digest is invalid")
 	}
 	inputDigest := sha256.Sum256(inputBytes)
-	resolveRequest := &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: connection, CapabilityKey: capability, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))}
+	resolveRequest := &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: grant.ConnectionRef, CapabilityKey: grant.CapabilityKey, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))}
 	var resolved *controlplanev1.ResolveIntegrationInvocationResponse
 	for attempt := 0; attempt < 2; attempt++ {
 		requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
@@ -1366,6 +1537,8 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 			return integrationToolResult{OK: true, Result: state.GetResultSummary(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "FAILED", "REJECTED", "CANCELLED":
 			return integrationToolResult{ErrorCode: state.GetSafeErrorCode(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
+		case "WAITING_APPROVAL":
+			return integrationToolResult{ErrorCode: "INTEGRATION_APPROVAL_PENDING", OwnerDecisionRequired: true, InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "UNKNOWN_OUTCOME":
 			return integrationToolResult{ErrorCode: "INTEGRATION_OUTCOME_UNKNOWN", OwnerDecisionRequired: true, InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		}

@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -31,6 +32,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type unavailableReadinessObjectStore struct {
+	objectstorage.Store
+	checkCalls int
+}
+
+func (store *unavailableReadinessObjectStore) Check(context.Context) error {
+	store.checkCalls++
+	return objectstorage.ErrUnavailable
+}
 
 var (
 	//go:embed testdata/sql/bootstrap_component_readback.sql
@@ -150,6 +161,18 @@ func TestBootstrapComponent(t *testing.T) {
 			t.Fatalf("bootstrap attempt %d: %v", attempt+1, err)
 		}
 	}
+	t.Run("readiness ignores unavailable object storage", func(t *testing.T) {
+		original := repository.objects
+		unavailable := &unavailableReadinessObjectStore{Store: original}
+		repository.objects = unavailable
+		defer func() { repository.objects = original }()
+		if err := repository.Ready(ctx); err != nil {
+			t.Fatalf("readiness depends on object storage: %v", err)
+		}
+		if unavailable.checkCalls != 0 {
+			t.Fatal("readiness checked object storage")
+		}
+	})
 	assertBootstrapReadback(t, ctx, pool)
 	t.Run("catalog owner probe", func(t *testing.T) { testCatalogOwnerProbe(t, ctx, repository) })
 
@@ -248,6 +271,7 @@ func TestBootstrapComponent(t *testing.T) {
 		testSystemAssistantTypedPlan(t, ctx, repository)
 	})
 	t.Run("assistant history search archive and actor cursor", func(t *testing.T) { testAssistantHistoryArchive(t, ctx, repository) })
+	t.Run("assistant conversation moves to an existing project with exact owner and version", func(t *testing.T) { testAssistantConversationProjectMove(t, ctx, repository) })
 	t.Run("assistant context uses fresh exact read authority", func(t *testing.T) { testAssistantContextAuthority(t, ctx, repository) })
 	t.Run("direct run continuation cancel and retry", func(t *testing.T) {
 		testDirectRunLifecycle(t, ctx, repository)
@@ -318,6 +342,9 @@ func TestBootstrapComponent(t *testing.T) {
 	})
 	t.Run("managed draft save and discard preserve immutable history", func(t *testing.T) {
 		testManagedDraftLifecycle(t, ctx, repository)
+	})
+	t.Run("OpenAPI import publishes and binds a bounded origin", func(t *testing.T) {
+		testOpenAPIImportLifecycle(t, ctx, repository)
 	})
 	t.Run("runtime environment create rejects a missing exact image", func(t *testing.T) {
 		testRuntimeEnvironmentRejectsMissingImage(t, ctx, repository)
@@ -797,6 +824,112 @@ LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRe
 	roleCatalog, _ := promotionComponentCatalog(t)
 	repository.ConfigureRoleImageCatalog(roleCatalog)
 	roleAgent := createLifecycleAgent(t, ctx, service, owner, environmentProjectRef, "managed-role-image-agent", "Managed image role")
+	roleTemplate, err := roleCatalog.Resolve(entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"})
+	if err != nil {
+		t.Fatalf("resolve assistant image environment: %v", err)
+	}
+	assistantRecipeInput := command.AssistantRoleImageRecipeInput{ProjectRef: environmentProjectRef,
+		AgentRef: roleAgent.Ref, AgentVersion: roleAgent.Version, Name: "Assistant-managed image",
+		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion", Dockerfile: roleTemplate.Dockerfile + "\n# assistant create\n"}}
+	staleRecipeInput := assistantRecipeInput
+	staleRecipeInput.AgentVersion++
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-stale"}, Payload: staleRecipeInput}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("assistant image accepted stale employee role: %v", err)
+	}
+	foreignRecipeInput := assistantRecipeInput
+	foreignRecipeInput.ProjectRef = "prj_unknown"
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-cross-project"}, Payload: foreignRecipeInput}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant image crossed project boundary: %v", err)
+	}
+	assistantRecipe, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-create"}, Payload: assistantRecipeInput})
+	if err != nil || len(assistantRecipe.RuntimeItems) != 1 || assistantRecipe.RuntimeItems[0]["imageBuildRef"] == "" {
+		t.Fatalf("assistant image did not queue a build: result=%#v err=%v", assistantRecipe.RuntimeItems, err)
+	}
+	var assistantConfigurationRef, assistantRevisionRef, assistantState, assistantContent, assistantBuildRef string
+	var assistantGeneration uint64
+	if err := pool.QueryRow(ctx, queryRoleImageManagedReadback, assistantRecipe.CreatedRefs[0],
+		assistantRecipe.RuntimeItems[0]["imageBuildRef"]).Scan(&assistantConfigurationRef, &assistantRevisionRef,
+		&assistantState, &assistantContent, &assistantGeneration, &assistantBuildRef); err != nil ||
+		assistantConfigurationRef == "" || assistantRevisionRef == "" || assistantState != "PUBLISHED" || assistantBuildRef == "" {
+		t.Fatalf("assistant image managed build readback: state=%q err=%v", assistantState, err)
+	}
+	var imageVersion int64
+	if err := pool.QueryRow(ctx, `SELECT version FROM control_plane.role_image_recipes WHERE ref=$1`,
+		assistantRecipe.CreatedRefs[0]).Scan(&imageVersion); err != nil {
+		t.Fatalf("read assistant image version: %v", err)
+	}
+	imageUpdate := command.AssistantRoleImageUpdateInput{ProjectRef: environmentProjectRef,
+		RecipeRef: assistantRecipe.CreatedRefs[0], Name: "Assistant-managed image updated",
+		Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion", Dockerfile: roleTemplate.Dockerfile + "\n# assistant update\n"}}
+	imageTx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		t.Fatalf("open assistant image plan snapshot: %v", err)
+	}
+	imageOperation, err := repository.hydrateAssistantRoleImageUpdate(ctx, imageTx, ownerScope, environmentProjectRef,
+		entity.AssistantPlanOperation{Type: "UPDATE_ROLE_IMAGE_RECIPE", Key: "image-update", Title: "Update image",
+			Summary: "Update image", Parameters: map[string]any{"recipeRef": assistantRecipe.CreatedRefs[0], "name": imageUpdate.Name}})
+	if err != nil || imageOperation.Target.Ref != assistantRecipe.CreatedRefs[0] || imageOperation.ExpectedVersion == nil ||
+		*imageOperation.ExpectedVersion != imageVersion || assistantRoleImageDockerfile(imageOperation.Before) != assistantRecipeInput.Environment.Dockerfile {
+		_ = imageTx.Rollback(ctx)
+		t.Fatalf("hydrate assistant image update plan: operation=%#v err=%v", imageOperation, err)
+	}
+	imageOperation, err = normalizeAssistantOperation(imageOperation)
+	if err != nil {
+		_ = imageTx.Rollback(ctx)
+		t.Fatalf("normalize assistant image update: %v", err)
+	}
+	matching, err := repository.assistantRoleImageUpdateSnapshotMatches(ctx, imageTx, ownerScope, imageOperation)
+	if err != nil || !matching {
+		_ = imageTx.Rollback(ctx)
+		t.Fatalf("assistant image plan snapshot mismatch: matching=%t err=%v", matching, err)
+	}
+	if err := imageTx.Rollback(ctx); err != nil {
+		t.Fatalf("close assistant image plan snapshot: %v", err)
+	}
+	foreignImageUpdate := imageUpdate
+	foreignImageUpdate.ProjectRef = "prj_unknown"
+	if _, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-update-cross-project", ExpectedVersion: &imageVersion},
+		Payload:  foreignImageUpdate}); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant image update crossed project boundary: %v", err)
+	}
+	staleImageVersion := imageVersion + 1
+	if _, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-update-stale", ExpectedVersion: &staleImageVersion},
+		Payload:  imageUpdate}); !errors.Is(err, domainerrs.ErrVersionMismatch) {
+		t.Fatalf("assistant image update accepted stale recipe version: %v", err)
+	}
+	updatedImage, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantRoleImageRecipe, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-role-image-update", ExpectedVersion: &imageVersion},
+		Payload:  imageUpdate})
+	if err != nil || len(updatedImage.RuntimeItems) != 1 || updatedImage.RuntimeItems[0]["imageBuildRef"] == "" ||
+		updatedImage.RuntimeItems[0]["imageBuildRef"] == assistantRecipe.RuntimeItems[0]["imageBuildRef"] {
+		t.Fatalf("assistant image update did not queue a new build: result=%#v err=%v", updatedImage.RuntimeItems, err)
+	}
+	var updatedImageName, originalBuildStage string
+	if err := pool.QueryRow(ctx, `SELECT name FROM control_plane.role_image_recipes WHERE ref=$1`,
+		assistantRecipe.CreatedRefs[0]).Scan(&updatedImageName); err != nil || updatedImageName != imageUpdate.Name {
+		t.Fatalf("assistant image update did not persist the name: name=%q err=%v", updatedImageName, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT stage FROM control_plane.image_builds WHERE ref=$1`,
+		assistantRecipe.RuntimeItems[0]["imageBuildRef"]).Scan(&originalBuildStage); err != nil || originalBuildStage != "CANCELLED" {
+		t.Fatalf("assistant image update did not fence previous build: stage=%q err=%v", originalBuildStage, err)
+	}
+	imageTx, err = pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		t.Fatalf("open stale assistant image snapshot: %v", err)
+	}
+	matching, err = repository.assistantRoleImageUpdateSnapshotMatches(ctx, imageTx, ownerScope, imageOperation)
+	if err != nil || matching {
+		_ = imageTx.Rollback(ctx)
+		t.Fatalf("stale assistant image plan remained valid: matching=%t err=%v", matching, err)
+	}
+	if err := imageTx.Rollback(ctx); err != nil {
+		t.Fatalf("close stale assistant image snapshot: %v", err)
+	}
 	roleContent := string(asJSON(map[string]any{"name": "Runtime role image", "roleImage": map[string]any{"roleDefinitionRef": roleAgent.RoleDefinitionRef, "environment": map[string]any{"environmentKey": "promotion"}}}))
 	roleImage := publishAndRebindManagedConfiguration(t, ctx, service, owner,
 		"managed-role-image", command.CreateRoleImageRevisionDraft, command.ValidateRoleImageRevision,
@@ -3002,8 +3135,12 @@ func testSystemAssistantCorePromptUpgrade(t *testing.T, ctx context.Context, rep
 		}
 		return tx.Commit(ctx)
 	}
-	const upgradedRevision = "system-assistant-core-v6"
-	const upgradedPrompt = "Platform-owned system assistant core prompt revision six."
+	currentNumber, valid := systemAssistantCoreRevisionNumber(systemassistant.CorePromptRevision)
+	if !valid {
+		t.Fatal("current core prompt revision is invalid")
+	}
+	upgradedRevision := fmt.Sprintf("system-assistant-core-v%d", currentNumber+1)
+	const upgradedPrompt = "Platform-owned system assistant core prompt revision twenty two."
 	if err := upgrade(upgradedRevision, upgradedPrompt); err != nil {
 		t.Fatalf("upgrade core prompt: %v", err)
 	}
@@ -3122,7 +3259,7 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 		t.Fatalf("construct integration service: %v", err)
 	}
 	definitions, _, actions, err := service.ListIntegrationDefinitions(ctx, owner, query.Filter{})
-	if err != nil || len(definitions) != 7 {
+	if err != nil || len(definitions) != 9 {
 		t.Fatalf("list integration definitions: definitions=%d err=%v", len(definitions), err)
 	}
 	if !contains(actions, "CREATE_CONNECTION") {
@@ -4038,6 +4175,32 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 	if ownerMembership.Ref == "" {
 		t.Fatal("installation owner membership missing")
 	}
+	ownerProjectMemberships, _, err := service.ListMemberships(ctx, owner, query.Filter{ProjectRef: projectRef, Page: query.Page{Size: 20}})
+	if err != nil {
+		t.Fatalf("list owner project membership: %v", err)
+	}
+	ownerProjectMembershipFound := false
+	for _, membership := range ownerProjectMemberships {
+		if membership.User.Ref != ownerMembership.User.Ref {
+			continue
+		}
+		ownerProjectMembershipFound = true
+		if len(membership.NextActions) != 0 {
+			t.Fatalf("owner received self project membership actions: %v", membership.NextActions)
+		}
+		ownerProjectVersion := membership.Version
+		if _, err := service.Execute(ctx, command.Command{
+			Kind: command.ChangeMembership, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "project-owner-self-deactivate", ExpectedVersion: &ownerProjectVersion},
+			Payload:  command.MembershipInput{ProjectRef: projectRef, MembershipRef: membership.Ref, Permissions: membership.Permissions, Active: false},
+		}); !errors.Is(err, domainerrs.ErrForbidden) {
+			t.Fatalf("owner changed own project membership: %v", err)
+		}
+		break
+	}
+	if !ownerProjectMembershipFound {
+		t.Fatal("owner project membership missing")
+	}
 	administratorInput := platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000004", ExternalTenantID: ownerInput.ExternalTenantID,
 		ExternalDisplayName: "Jamie Rivera", ExternalEmailHint: "j***@example.test",
@@ -4874,6 +5037,106 @@ func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repos
 	testOwnerGateList(t, ctx, service, owner, project.Project.Ref)
 }
 
+func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *platformservice.Service, owner, worker value.Principal, projectRef string, coordinator entity.Agent) {
+	t.Helper()
+	draft := entity.WorkflowVersion{
+		Ref: "draft", Name: "Coordinator-owned stage", Purpose: "Execute one bounded stage",
+		CoordinatorAgentRef: coordinator.Ref, VersionNumber: 1, Concurrency: 1, TimeoutSeconds: 1800,
+		Instructions: "Run the assigned stage and report its result.", CompletionCriteria: "The stage has completed.", ResultSchema: map[string]any{},
+		Steps: []entity.WorkflowStep{{Key: "self-review", Position: 1, Name: "Review", AgentRef: coordinator.Ref,
+			Instructions: "Review the bounded input.", TimeoutSeconds: 600, ExpectedResult: "Review summary"}},
+	}
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "self-stage-workflow-create"}, Payload: command.WorkflowInput{
+			ProjectRef: projectRef, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &draft,
+		}})
+	if err != nil || created.Workflow == nil {
+		t.Fatalf("create coordinator-owned Workflow: %v", err)
+	}
+	version := created.Workflow.Version
+	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "self-stage-workflow-validate", ExpectedVersion: &version},
+		Payload:  command.WorkflowInput{Ref: created.Workflow.Ref}})
+	if err != nil || validated.Workflow == nil || validated.Workflow.State != "VALID" {
+		t.Fatalf("validate coordinator-owned Workflow: %v", err)
+	}
+	version = validated.Workflow.Version
+	published, err := service.Execute(ctx, command.Command{Kind: command.PublishWorkflow, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "self-stage-workflow-publish", ExpectedVersion: &version},
+		Payload:  command.WorkflowInput{Ref: created.Workflow.Ref}})
+	if err != nil || published.Workflow == nil || published.Workflow.State != "PUBLISHED" {
+		t.Fatalf("publish coordinator-owned Workflow: %v", err)
+	}
+	launch := func(key string) command.Result {
+		result, launchErr := service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LaunchRunInput{
+				ProjectRef: projectRef, Target: entity.RunTarget{Type: "WORKFLOW", Ref: published.Workflow.Ref},
+				Task: "Review the bounded input.",
+			}})
+		if launchErr != nil || result.Run == nil {
+			t.Fatalf("launch coordinator-owned Workflow: %v", launchErr)
+		}
+		return result
+	}
+	claim := func(key string) map[string]any {
+		result, claimErr := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.LeaseInput{WorkloadInstance: "runtime-test", Limit: 1}})
+		if claimErr != nil || len(result.RuntimeItems) != 1 {
+			t.Fatalf("claim coordinator-owned stage: items=%d err=%v", len(result.RuntimeItems), claimErr)
+		}
+		return result.RuntimeItems[0]
+	}
+	missing := launch("self-stage-missing-launch")
+	missingLease := claim("self-stage-missing-claim")
+	targets, ok := missingLease["delegationTargets"].([]map[string]string)
+	if !ok || len(targets) != 1 || targets[0]["ref"] != coordinator.Ref || targets[0]["workflowStepKey"] != "self-review" {
+		t.Fatalf("coordinator without global delegation capability lost its exact own stage: %#v", missingLease["delegationTargets"])
+	}
+	incomplete := completeClaimedExecution(t, ctx, service, worker, missingLease, "self-stage-missing", false)
+	if incomplete.Run == nil || incomplete.Run.Ref != missing.Run.Ref || incomplete.Run.State != "FAILED" ||
+		incomplete.Run.SafeErrorCode != "RUNTIME_WORKFLOW_INCOMPLETE" || incomplete.Graph == nil {
+		t.Fatalf("unexecuted stage was reported as complete: run=%#v", incomplete.Run)
+	}
+	for _, node := range incomplete.Graph.Nodes {
+		if node.Type == "AGENT_EXECUTION" && node.State == "PLANNED" {
+			t.Fatalf("terminal Workflow retained an open planned stage: %#v", node)
+		}
+	}
+	executed := launch("self-stage-executed-launch")
+	coordinatorLease := claim("self-stage-executed-claim")
+	delegated, err := service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "self-stage-delegate"}, Payload: command.DelegateInput{
+			LeaseRef: stringMap(coordinatorLease, "leaseRef"), Fence: stringMap(coordinatorLease, "fence"),
+			Generation: coordinatorLease["generation"].(int64), TargetAgentRef: coordinator.Ref,
+			WorkflowStepKey: "self-review", Task: "Review the bounded input.",
+		}})
+	if err != nil || delegated.Run == nil {
+		t.Fatalf("materialize coordinator-owned stage: %v", err)
+	}
+	childLease := claim("self-stage-child-claim")
+	if stringMap(childLease, "runRef") != delegated.Run.Ref {
+		t.Fatalf("claimed wrong coordinator-owned child: %q", stringMap(childLease, "runRef"))
+	}
+	if childTargets, _ := childLease["delegationTargets"].([]map[string]string); len(childTargets) != 0 {
+		t.Fatalf("stage child inherited coordinator delegation targets: %#v", childTargets)
+	}
+	initial := completeClaimedExecution(t, ctx, service, worker, coordinatorLease, "self-stage-coordinator", false)
+	if initial.Run == nil || initial.Run.State != "RUNNING" {
+		t.Fatalf("coordinator completed before stage: %#v", initial.Run)
+	}
+	completeClaimedExecution(t, ctx, service, worker, childLease, "self-stage-child", false)
+	continuation := claim("self-stage-continuation-claim")
+	completed := completeClaimedExecution(t, ctx, service, worker, continuation, "self-stage-continuation", false)
+	if completed.Run == nil || completed.Run.Ref != executed.Run.Ref || completed.Run.State != "SUCCEEDED" || completed.Graph == nil {
+		t.Fatalf("coordinator-owned stage did not complete its root: %#v", completed.Run)
+	}
+	for _, node := range completed.Graph.Nodes {
+		if node.Type == "AGENT_EXECUTION" && node.State == "PLANNED" {
+			t.Fatalf("successful Workflow retained a planned stage: %#v", node)
+		}
+	}
+}
+
 func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
@@ -4913,6 +5176,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	coordinator := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-coordinator", "Content coordinator")
 	firstChild := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-researcher", "Research specialist")
 	secondChild := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "delegation-editor", "Content editor")
+	testCoordinatorOwnedWorkflow(t, ctx, service, owner, worker, project.Project.Ref, coordinator)
 	coordinatorVersion := coordinator.Version
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-unknown-capability", ExpectedVersion: &coordinatorVersion},
@@ -5242,7 +5506,6 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if failedRegularLease == nil || lateGatedLease == nil {
 		t.Fatalf("failed-sibling child bindings differ: %#v", failedChildren.RuntimeItems)
 	}
-	completeClaimedExecution(t, ctx, service, worker, failedCoordinatorLease, "delegation-failed-sibling-coordinator", false)
 	failedChild, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-child-complete"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(failedRegularLease, "leaseRef"), Fence: stringMap(failedRegularLease, "fence"),
@@ -5252,17 +5515,50 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if err != nil || failedChild.Run == nil || failedChild.Run.State != "FAILED" {
 		t.Fatalf("fail parallel child: run=%#v err=%v", failedChild.Run, err)
 	}
-	lateGated := completeClaimedExecution(t, ctx, service, worker, lateGatedLease, "delegation-late-gated-child", false)
-	failedRoot, err := service.GetRun(ctx, owner, failedLaunch.Run.Ref)
-	if err != nil || failedRoot.State != "FAILED" || len(failedRoot.GateRefs) != 0 || lateGated.Graph == nil || graphNodeState(lateGated.Graph.Nodes, "ROOT_PROCESS") != "FAILED" {
-		t.Fatalf("late gated completion changed terminal root: root=%#v graph=%#v err=%v", failedRoot, lateGated.Graph, err)
+	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-coordinator-late"}, Payload: command.CompleteExecutionInput{
+			LeaseRef: stringMap(failedCoordinatorLease, "leaseRef"), Fence: stringMap(failedCoordinatorLease, "fence"),
+			Generation: failedCoordinatorLease["generation"].(int64), Success: true,
+			ResultSummary: "Late coordinator completion must be rejected", Usage: turnUsageFixture(),
+		}})
+	if !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("late coordinator completion after child failure was not rejected: %v", err)
 	}
-	for _, node := range lateGated.Graph.Nodes {
+	lateChild, err := service.GetRun(ctx, owner, stringMap(lateGatedLease, "runRef"))
+	if err != nil || lateChild.State != "CANCELLED" {
+		t.Fatalf("terminal root did not cancel sibling run: run=%#v err=%v", lateChild, err)
+	}
+	if failedChild.Graph == nil {
+		t.Fatal("terminal graph is missing")
+	}
+	lateNodeCancelled := false
+	for _, node := range failedChild.Graph.Nodes {
+		if node.Ref == stringMap(lateGatedLease, "nodeRef") {
+			lateNodeCancelled = node.State == "CANCELLED"
+		}
+	}
+	if !lateNodeCancelled {
+		t.Fatalf("terminal root did not cancel sibling node: graph=%#v", failedChild.Graph)
+	}
+	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: "delegation-late-gated-child"}, Payload: command.CompleteExecutionInput{
+			LeaseRef: stringMap(lateGatedLease, "leaseRef"), Fence: stringMap(lateGatedLease, "fence"),
+			Generation: lateGatedLease["generation"].(int64), Success: true,
+			ResultSummary: "Late completion must be rejected", Usage: turnUsageFixture(),
+		}})
+	if !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("late child completion after root failure was not rejected: %v", err)
+	}
+	failedRoot, err := service.GetRun(ctx, owner, failedLaunch.Run.Ref)
+	if err != nil || failedRoot.State != "FAILED" || len(failedRoot.GateRefs) != 0 || graphNodeState(failedChild.Graph.Nodes, "ROOT_PROCESS") != "FAILED" {
+		t.Fatalf("late gated completion changed terminal root: root=%#v graph=%#v err=%v", failedRoot, failedChild.Graph, err)
+	}
+	for _, node := range failedChild.Graph.Nodes {
 		if node.Type == "HUMAN_GATE" {
 			t.Fatalf("late gated completion opened owner gate after terminal sibling: %#v", node)
 		}
 	}
-	for _, edge := range lateGated.Graph.Edges {
+	for _, edge := range failedChild.Graph.Edges {
 		if edge.Type == "CONTINUES" {
 			t.Fatalf("late gated completion scheduled continuation after terminal sibling: %#v", edge)
 		}
@@ -6052,8 +6348,8 @@ func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repos
 		ProjectRef: project.Project.Ref, Page: query.Page{Size: 1},
 	})
 	firstRef, secondRef := quarantined.Ref, uploaded.Ref
-	if firstRef > secondRef {
-		firstRef, secondRef = secondRef, firstRef
+	if uploaded.CreatedAt.After(quarantined.CreatedAt) || uploaded.CreatedAt.Equal(quarantined.CreatedAt) && uploaded.Ref > quarantined.Ref {
+		firstRef, secondRef = uploaded.Ref, quarantined.Ref
 	}
 	if err != nil || firstTotal != 2 || len(firstPage) != 1 || firstPage[0].Ref != firstRef || nextPageToken == "" {
 		t.Fatalf("first artifact cursor page is unstable: artifacts=%#v next=%q err=%v", firstPage, nextPageToken, err)
@@ -6384,6 +6680,10 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read",
 	}, "runtime-controller")
+	searchReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.resources.search",
+	}, "runtime-controller")
 	toolWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.tool-call.record",
@@ -6461,10 +6761,12 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		t.Fatalf("resolve owner scope readback: %v", err)
 	}
 	var conversationID, sessionID, sessionRef, projectID, projectRef string
+	var contextRoute, contextKind, contextRef string
 	var conversationVersion int64
 	if err := repository.pool.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantConversationsOrganizationIdRefState,
 		ownerScope.organizationID, created.Conversation.Ref,
-	).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &conversationVersion); err != nil {
+	).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &conversationVersion,
+		&contextRoute, &contextKind, &contextRef); err != nil {
 		t.Fatalf("read assistant conversation before turn: %v", err)
 	}
 	turn, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
@@ -6476,7 +6778,9 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	}
 	if turn.Conversation == nil || turn.Conversation.TitleSource != "SERVER_DEFAULT" ||
 		turn.Conversation.TitleRevision != 1 || turn.Conversation.Context.Route != "" ||
-		len(turn.Conversation.Context.AllowedOperations) != 2 {
+		!reflect.DeepEqual(turn.Conversation.Context.AllowedOperations, []string{
+			"CREATE_PROJECT", "CREATE_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION",
+		}) {
 		t.Fatalf("assistant turn returned incomplete conversation: %#v", turn.Conversation)
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ArchiveAssistantConversation, Principal: owner,
@@ -6545,6 +6849,62 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if stringMap(lease, "projectRef") != projectRef {
 		t.Fatalf("assistant runtime lost project binding: got=%q want=%q", stringMap(lease, "projectRef"), projectRef)
 	}
+	projectCreator := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create",
+	}, "control-api-gateway")
+	searchProject, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: projectCreator,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-resource-search-project"},
+		Payload:  command.ProjectInput{Name: "Assistant resource search project", Language: "en"}})
+	if err != nil || searchProject.Project == nil {
+		t.Fatalf("create owner-visible search project: project=%#v err=%v", searchProject.Project, err)
+	}
+	searchLeaseRef, searchFence, searchGeneration := stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64)
+	results, truncated, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, searchProject.Project.Name)
+	if err != nil || truncated {
+		t.Fatalf("search owner-visible project through assistant lease: results=%#v truncated=%v err=%v", results, truncated, err)
+	}
+	foundProject := false
+	for _, result := range results {
+		if result.Kind == "PROJECT" && result.Ref == searchProject.Project.Ref && result.ProjectRef == searchProject.Project.Ref {
+			foundProject = true
+		}
+	}
+	if !foundProject {
+		t.Fatalf("assistant search omitted owner-visible project: %#v", results)
+	}
+	searchConnection, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-resource-search-connection"},
+		Payload: command.ConnectionInput{DefinitionKey: "synthetic", Name: "Assistant search integration connection",
+			PublicConfiguration: map[string]any{"journal": "assistant-search"}}})
+	if err != nil || searchConnection.Connection == nil {
+		t.Fatalf("create searchable integration connection: connection=%#v err=%v", searchConnection.Connection, err)
+	}
+	connectionResults, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, searchConnection.Connection.Name)
+	if err != nil || len(connectionResults) != 1 || connectionResults[0].Kind != "INTEGRATION" ||
+		connectionResults[0].Ref != searchConnection.Connection.Ref || connectionResults[0].ProjectRef != "" {
+		t.Fatalf("assistant search lost organization-scoped integration: results=%#v err=%v", connectionResults, err)
+	}
+	definitions, nextDefinition, err := service.ListAssistantIntegrationDefinitions(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, "https-json", 0)
+	if err != nil || nextDefinition != 0 || len(definitions) != 1 || definitions[0].Key != "https-json" ||
+		definitions[0].CredentialSecretKey != "token" || len(definitions[0].ConfigurationFields) != 2 {
+		t.Fatalf("assistant integration catalog lost verified public schema: count=%d next=%d err=%v", len(definitions), nextDefinition, err)
+	}
+	if _, _, err := service.ListAssistantIntegrationDefinitions(ctx, searchReader, searchLeaseRef, "wrong-fence", searchGeneration, "https-json", 0); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant integration catalog accepted wrong fence: %v", err)
+	}
+	if _, _, err := service.ListAssistantIntegrationDefinitions(ctx, runtimeReader, searchLeaseRef, searchFence, searchGeneration, "https-json", 0); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("assistant integration catalog accepted another runtime permission: %v", err)
+	}
+	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, "wrong-fence", searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant search accepted wrong fence: %v", err)
+	}
+	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration+1, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant search accepted wrong generation: %v", err)
+	}
+	if _, _, err := service.SearchAssistantResources(ctx, runtimeReader, searchLeaseRef, searchFence, searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("assistant search accepted another runtime permission: %v", err)
+	}
 	artifactCatalog, ok := lease["artifacts"].([]map[string]any)
 	if !ok || len(artifactCatalog) != 1 || stringMap(artifactCatalog[0], "ref") != assistantInput.Ref {
 		t.Fatalf("assistant runtime lost soft-deleted organization attachment snapshot: %#v", lease["artifacts"])
@@ -6569,6 +6929,15 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if err != nil || planResult.Plan == nil || planResult.Plan.State != "DRAFT" {
 		t.Fatalf("propose assistant plan: result=%#v err=%v", planResult.Plan, err)
 	}
+	planVersion := planResult.Plan.Version
+	editedPlan, err := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantPlan, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-plan-edit-1", ExpectedVersion: &planVersion},
+		Payload: command.AssistantPlanDraftInput{PlanRef: planResult.Plan.Ref, Summary: "Create project Sales after review",
+			Operations: planResult.Plan.Operations}})
+	if err != nil || editedPlan.Plan == nil || editedPlan.Plan.State != "DRAFT" || editedPlan.Plan.Revision != 2 {
+		t.Fatalf("edit assistant plan exact revision: plan=%#v err=%v", editedPlan.Plan, err)
+	}
+	planResult.Plan = editedPlan.Plan
 	toolCall, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolWorker,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-tool-call-1"}, Payload: command.RunToolCallInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
@@ -6596,6 +6965,9 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		}})
 	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" || len(completed.CreatedRefs) != 1 {
 		t.Fatalf("complete direct assistant execution: run=%#v err=%v", completed.Run, err)
+	}
+	if _, _, err := service.SearchAssistantResources(ctx, searchReader, searchLeaseRef, searchFence, searchGeneration, searchProject.Project.Name); !errors.Is(err, domainerrs.ErrNotFound) {
+		t.Fatalf("assistant search accepted completed lease: %v", err)
 	}
 	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
 	if err != nil {
@@ -6633,7 +7005,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	if readErr != nil || closeErr != nil || !bytes.Equal(downloadedOutput, assistantOutputBody) {
 		t.Fatalf("read assistant result body=%q read_err=%v close_err=%v", string(downloadedOutput), readErr, closeErr)
 	}
-	expectedPlanVersion := int64(1)
+	expectedPlanVersion := planResult.Plan.Version
 	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateAssistantPlan, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-validate-1", ExpectedVersion: &expectedPlanVersion},
 		Payload:  command.AssistantPlanInput{PlanRef: planResult.Plan.Ref, Revision: planResult.Plan.Revision}})
@@ -6646,6 +7018,24 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 		Payload:  command.AssistantPlanInput{PlanRef: planResult.Plan.Ref, Revision: planResult.Plan.Revision}})
 	if err != nil || applied.Plan == nil || applied.Plan.State != "APPLIED" || applied.PlanReceipt == nil || len(applied.CreatedRefs) != 1 {
 		t.Fatalf("apply assistant plan: result=%#v refs=%v err=%v", applied.Plan, applied.CreatedRefs, err)
+	}
+	readback, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	if err != nil {
+		t.Fatalf("list assistant conversations after plan application: %v", err)
+	}
+	var appliedReadback *entity.AssistantPlan
+	for index := range readback {
+		if readback[index].Ref == created.Conversation.Ref {
+			appliedReadback = readback[index].LatestPlan
+			break
+		}
+	}
+	if appliedReadback == nil || appliedReadback.Receipt == nil ||
+		appliedReadback.Receipt.Ref != applied.PlanReceipt.Ref ||
+		appliedReadback.Receipt.PlanRevision != appliedReadback.Revision ||
+		len(appliedReadback.Receipt.Operations) != 1 ||
+		appliedReadback.Receipt.Operations[0].ResourceRef != applied.CreatedRefs[0] {
+		t.Fatalf("assistant conversation lost exact applied receipt: plan=%#v", appliedReadback)
 	}
 }
 
@@ -6677,7 +7067,7 @@ func assertBootstrapReadback(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 	if organizationCount != 1 || ownerContractCount != 1 || systemAssistantCount != 1 ||
 		corePromptCount != 1 || assistantRuntimeCount != 1 || capabilityCount != 9 ||
-		integrationDefinitionCount != 7 || providerDefinitionCount != 1 || providerAccountCount != 1 ||
+		integrationDefinitionCount != 9 || providerDefinitionCount != 1 || providerAccountCount != 1 ||
 		providerCredentialRevisionCount != 1 || completedBootstrapCount != 1 {
 		t.Fatalf("unexpected bootstrap state: organization=%d owner_contract=%d assistant=%d core_prompt=%d runtime=%d capabilities=%d integrations=%d provider_definitions=%d provider_accounts=%d provider_credentials=%d completed=%d",
 			organizationCount, ownerContractCount, systemAssistantCount, corePromptCount,

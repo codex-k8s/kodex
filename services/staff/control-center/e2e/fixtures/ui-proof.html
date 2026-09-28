@@ -15,8 +15,9 @@
       import "../../src/app/styles/base.css";
       import UiProofFixture from "./UiProofFixture.vue";
       if (
-        new URLSearchParams(location.search).get("fixture") ===
-        "integration-terminal"
+        ["integration-terminal", "assistant-openapi-create"].includes(
+          new URLSearchParams(location.search).get("fixture"),
+        )
       ) {
         const { loadRuntimeConfig } =
           await import("../../src/shared/config/runtime");

@@ -177,6 +177,14 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 	if err := rows.Err(); err != nil {
 		return roleimagerepo.Detail{}, errs.ErrUnavailable
 	}
+	if canBuild && recipe.State == "ACTIVE" {
+		for _, build := range builds {
+			if build.Stage != "COMPLETED" && build.Stage != "CANCELLED" && build.Stage != "DEAD_LETTER" {
+				recipe.NextActions = append(recipe.NextActions, "CANCEL_BUILD")
+				break
+			}
+		}
+	}
 	var activeArtifact *entity.ImageArtifact
 	if recipe.ActiveImageArtifactRef != "" {
 		item, artifactErr := scanRoleImageArtifact(querier.QueryRow(ctx, queryRoleImagesGetActiveArtifact,
@@ -307,7 +315,7 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 		recipe := detail.Recipe
 		build, err := repository.insertRoleImageBuild(ctx, tx, current, recipeID, recipe)
 		return roleImageManageResult(recipe, build, nil, false), projectID, input.ProjectRef, err
-	case "UPDATE", "ARCHIVE", "RESTORE", "REQUEST_BUILD":
+	case "UPDATE", "ARCHIVE", "RESTORE", "REQUEST_BUILD", "CANCEL_BUILD":
 		locked, err := scanLockedRecipe(tx.QueryRow(ctx, queryRoleImagesLockRecipe,
 			current.organizationID, input.RecipeRef))
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -327,6 +335,21 @@ func (repository *Repository) applyRoleImageManage(ctx context.Context, tx pgx.T
 		}
 		if input.Action != "RESTORE" && locked.Recipe.State != "ACTIVE" || input.Action == "RESTORE" && locked.Recipe.State != "ARCHIVED" {
 			return roleimagerepo.ManageResult{}, "", "", errs.ErrConflict
+		}
+		if input.Action == "CANCEL_BUILD" {
+			build, err := scanBuild(tx.QueryRow(ctx, queryRoleImagesCancelExactBuild,
+				current.organizationID, locked.ID, input.BuildRef))
+			if errors.Is(err, pgx.ErrNoRows) {
+				return roleimagerepo.ManageResult{}, "", "", errs.ErrNotFound
+			}
+			if err != nil {
+				return roleimagerepo.ManageResult{}, "", "", errs.ErrUnavailable
+			}
+			detail, err := repository.getRoleImageRecipe(ctx, tx, current, input.RecipeRef, true, false)
+			if err != nil {
+				return roleimagerepo.ManageResult{}, "", "", err
+			}
+			return roleImageManageResult(detail.Recipe, &build, detail.ActiveArtifact, false), locked.ProjectID, locked.Recipe.ProjectRef, nil
 		}
 		if input.Action == "UPDATE" {
 			if _, err := tx.Exec(ctx, queryRoleImagesCancelOpenBuilds, current.organizationID, locked.ID); err != nil {

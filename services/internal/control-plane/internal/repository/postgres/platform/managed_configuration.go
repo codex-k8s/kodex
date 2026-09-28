@@ -100,12 +100,17 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 			format := strings.ToUpper(strings.TrimSpace(payload.ContentFormat))
 			if len(payload.Content) > 256<<10 || !utf8.ValidString(payload.Content) || strings.ContainsRune(payload.Content, 0) ||
 				kind == revisionservice.KindPromptTemplate && format != "TEXT" ||
-				kind != revisionservice.KindPromptTemplate && format != "JSON" && format != "YAML" && format != "TOML" {
+				kind != revisionservice.KindPromptTemplate && format != "JSON" && format != "YAML" && format != "TOML" &&
+					(kind != revisionservice.KindIntegrationDefinition || format != "OPENAPI_IMPORT") {
 				return commandOutcome{}, errs.ErrInvalid
 			}
 			content := strings.TrimSpace(payload.Content)
 			if kind == revisionservice.KindIntegrationDefinition {
-				format, content = repository.normalizeIntegrationDraft(format, content, configuration.ManagedBy)
+				var importErr error
+				format, content, importErr = repository.prepareIntegrationDraft(ctx, format, content, configuration.ManagedBy)
+				if importErr != nil {
+					return commandOutcome{}, importErr
+				}
 			}
 			digest := sha256.Sum256([]byte(content))
 			ref, refErr := newRef("mrev")
@@ -133,7 +138,8 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		}
 		format := strings.ToUpper(strings.TrimSpace(payload.ContentFormat))
 		if kind == revisionservice.KindPromptTemplate && format != "TEXT" ||
-			kind != revisionservice.KindPromptTemplate && format != "JSON" && format != "YAML" && format != "TOML" {
+			kind != revisionservice.KindPromptTemplate && format != "JSON" && format != "YAML" && format != "TOML" &&
+				(kind != revisionservice.KindIntegrationDefinition || format != "OPENAPI_IMPORT") {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		if configuration.ManagedBy != "UI" {
@@ -141,7 +147,11 @@ func (repository *Repository) changeManagedConfiguration(ctx context.Context, tx
 		}
 		content := strings.TrimSpace(payload.Content)
 		if kind == revisionservice.KindIntegrationDefinition {
-			format, content = repository.normalizeIntegrationDraft(format, content, configuration.ManagedBy)
+			var importErr error
+			format, content, importErr = repository.prepareIntegrationDraft(ctx, format, content, configuration.ManagedBy)
+			if importErr != nil {
+				return commandOutcome{}, importErr
+			}
 		}
 		digest := sha256.Sum256([]byte(content))
 		revisionRef, refErr := newRef("mrev")

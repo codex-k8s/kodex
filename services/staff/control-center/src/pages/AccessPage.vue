@@ -4,16 +4,18 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import AccessTabs from "@/features/access/components/AccessTabs.vue";
-import AccessModelOverview from "@/features/access/components/AccessModelOverview.vue";
 import BindingEditorDialog from "@/features/access/components/BindingEditorDialog.vue";
 import BindingsPanel from "@/features/access/components/BindingsPanel.vue";
 import EffectiveAccessPanel from "@/features/access/components/EffectiveAccessPanel.vue";
 import GroupsPanel from "@/features/access/components/GroupsPanel.vue";
 import ParticipantsPanel from "@/features/access/components/ParticipantsPanel.vue";
+import PlatformMembershipEditorDialog from "@/features/access/components/PlatformMembershipEditorDialog.vue";
+import ProjectMembershipEditorDialog from "@/features/access/components/ProjectMembershipEditorDialog.vue";
 import RoleEditorDialog from "@/features/access/components/RoleEditorDialog.vue";
 import RolesPanel from "@/features/access/components/RolesPanel.vue";
 import { accessSections, type AccessSection } from "@/features/access/model";
 import { useAccessStore } from "@/features/access/store";
+import ProjectPicker from "@/features/projects/ProjectPicker.vue";
 import type {
   AccessBinding,
   AccessBindingChangeInput,
@@ -21,7 +23,11 @@ import type {
   AccessRole,
   AccessRoleInput,
   AccessSubject,
+  Membership,
   OidcGroup,
+  PlatformMembershipChangeInput,
+  PlatformMembershipCreateInput,
+  ProjectMembershipChangeInput,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
@@ -35,6 +41,24 @@ const { t } = useI18n();
 
 const projectRef = computed(() =>
   typeof route.params.projectRef === "string" ? route.params.projectRef : "",
+);
+const scopeProject = computed(() =>
+  access.projects.find((project) => project.ref === projectRef.value),
+);
+const memberRef = computed(() =>
+  typeof route.query.memberRef === "string" ? route.query.memberRef : "",
+);
+const memberSearch = computed(() =>
+  projectRef.value && memberRef.value
+    ? (access.projectMemberships.find(
+        (membership) =>
+          membership.projectRef === projectRef.value &&
+          membership.user.ref === memberRef.value,
+      )?.user.displayName ?? "")
+    : "",
+);
+const selectedSubjectRef = computed(() =>
+  memberSearch.value ? memberRef.value : "",
 );
 const routeSection = computed(() => {
   const raw =
@@ -57,13 +81,6 @@ const bindingSubjects = computed<AccessSubject[]>(() => [
     oidcGroupRefs: [],
   })),
 ]);
-const counts = computed(() => ({
-  participants: participantSubjects.value.length,
-  groups: access.groups.length,
-  roles: access.roles.length,
-  bindings: access.bindings.filter((binding) => binding.state === "ACTIVE")
-    .length,
-}));
 const editorAgentsProjectRef = ref("");
 const editorAgents = computed(
   () => access.agents[editorAgentsProjectRef.value] ?? [],
@@ -73,15 +90,96 @@ const editorWorkflows = computed(
 );
 const roleDialog = ref(false);
 const bindingDialog = ref(false);
+const platformDialog = ref(false);
+const selectedPlatformMembership = ref<Membership>();
 const selectedRole = ref<AccessRole>();
 const selectedBinding = ref<AccessBinding>();
+const selectedMembership = ref<Membership>();
 const initialSubject = ref<AccessSubject>();
 const mutationBusy = ref(false);
 const mutationProblem = ref<AppProblem>();
 const confirmation = ref<
   | { kind: "ARCHIVE_ROLE"; role: AccessRole }
   | { kind: "REVOKE_BINDING"; binding: AccessBinding }
+  | { kind: "REVOKE_MEMBERSHIP"; membership: Membership }
+  | { kind: "REVOKE_PLATFORM_MEMBERSHIP"; membership: Membership }
 >();
+
+function inspectEffective(subject: AccessSubject): void {
+  if (projectRef.value) {
+    void router.push({
+      name: "project-access",
+      params: { projectRef: projectRef.value },
+      query: { section: "effective", subjectRef: subject.ref },
+    });
+    return;
+  }
+  void router.push({
+    name: "access",
+    params: { section: "effective" },
+    query: { subjectRef: subject.ref },
+  });
+}
+
+function addPlatformMember(): void {
+  if (!access.platformMembershipActions.includes("MANAGE_MEMBERS")) return;
+  selectedPlatformMembership.value = undefined;
+  mutationProblem.value = undefined;
+  platformDialog.value = true;
+}
+
+function editPlatformMember(membership: Membership): void {
+  if (!membership.nextActions.includes("EDIT")) return;
+  selectedPlatformMembership.value = membership;
+  mutationProblem.value = undefined;
+  platformDialog.value = true;
+}
+
+async function savePlatformMember(
+  operation: () => Promise<Membership>,
+  membership?: Membership,
+): Promise<void> {
+  if (mutationBusy.value) return;
+  mutationBusy.value = true;
+  mutationProblem.value = undefined;
+  try {
+    await operation();
+    platformDialog.value = false;
+  } catch (error) {
+    mutationProblem.value = asProblem(error);
+    if (mutationProblem.value.kind === "conflict") {
+      await access.loadMembershipPresentation();
+      if (membership) {
+        selectedPlatformMembership.value = access.platformMemberships.find(
+          (item) => item.ref === membership.ref,
+        );
+        if (!selectedPlatformMembership.value) platformDialog.value = false;
+      }
+    }
+  } finally {
+    mutationBusy.value = false;
+  }
+}
+
+function createPlatformMember(input: PlatformMembershipCreateInput): void {
+  if (!access.platformMembershipActions.includes("MANAGE_MEMBERS")) return;
+  void savePlatformMember(() => access.createPlatformMembership(input));
+}
+
+function updatePlatformMember(input: PlatformMembershipChangeInput): void {
+  const membership = selectedPlatformMembership.value;
+  if (!membership?.nextActions.includes("EDIT")) return;
+  void savePlatformMember(
+    () => access.updatePlatformMembership(membership, input),
+    membership,
+  );
+}
+
+function revokePlatformMember(membership: Membership): void {
+  if (!membership.nextActions.includes("REVOKE")) return;
+  mutationProblem.value = undefined;
+  confirmation.value = { kind: "REVOKE_PLATFORM_MEMBERSHIP", membership };
+}
 
 function selectSection(section: AccessSection): void {
   if (route.name === "project-access") {
@@ -95,10 +193,22 @@ function selectSection(section: AccessSection): void {
   void router.push({ name: "access", params: { section } });
 }
 
+function selectScope(ref: string): void {
+  if (ref) {
+    void router.push({
+      name: "project-access",
+      params: { projectRef: ref },
+      query: { section: routeSection.value },
+    });
+    return;
+  }
+  void router.push({ name: "access", params: { section: routeSection.value } });
+}
+
 async function loadSection(section = routeSection.value): Promise<void> {
   if (section === "participants") {
     await Promise.all([
-      access.loadSubjects(),
+      access.loadSubjects(memberSearch.value),
       access.loadBindings({ projectRef: projectRef.value || undefined }),
     ]);
   } else if (section === "groups") {
@@ -114,7 +224,7 @@ async function loadSection(section = routeSection.value): Promise<void> {
       access.loadSubjects(),
       access.loadBindings({
         projectRef: projectRef.value || undefined,
-        includeRevoked: true,
+        includeRevoked: false,
       }),
     ]);
   } else {
@@ -133,7 +243,7 @@ async function loadBaseline(): Promise<void> {
     access.loadRoles(true),
     access.loadGroups(),
     access.loadIntegrations(),
-    access.loadMembershipPresentation(projectRef.value),
+    access.loadMembershipPresentation(projectRef.value, memberRef.value),
   ]);
   await loadSection();
 }
@@ -180,6 +290,44 @@ function revokeBinding(binding: AccessBinding): void {
   confirmation.value = { kind: "REVOKE_BINDING", binding };
 }
 
+function editMembership(membership: Membership): void {
+  if (!projectRef.value || !membership.nextActions.includes("EDIT")) return;
+  selectedMembership.value = membership;
+  mutationProblem.value = undefined;
+}
+
+async function saveMembership(
+  input: ProjectMembershipChangeInput,
+): Promise<void> {
+  const membership = selectedMembership.value;
+  if (!membership || !projectRef.value || mutationBusy.value) return;
+  mutationBusy.value = true;
+  mutationProblem.value = undefined;
+  try {
+    await access.saveProjectMembership(projectRef.value, membership, input);
+    selectedMembership.value = undefined;
+  } catch (error) {
+    mutationProblem.value = asProblem(error);
+    if (mutationProblem.value.kind === "conflict") {
+      await access.loadMembershipPresentation(
+        projectRef.value,
+        memberRef.value,
+      );
+      selectedMembership.value = access.projectMemberships.find(
+        (item) => item.ref === membership.ref,
+      );
+    }
+  } finally {
+    mutationBusy.value = false;
+  }
+}
+
+function revokeMembership(membership: Membership): void {
+  if (!projectRef.value || !membership.nextActions.includes("REVOKE")) return;
+  mutationProblem.value = undefined;
+  confirmation.value = { kind: "REVOKE_MEMBERSHIP", membership };
+}
+
 function closeConfirmation(force = false): void {
   if (mutationBusy.value && !force) return;
   confirmation.value = undefined;
@@ -194,8 +342,15 @@ async function confirmMutation(): Promise<void> {
   try {
     if (requested.kind === "ARCHIVE_ROLE") {
       await access.archiveRole(requested.role);
-    } else {
+    } else if (requested.kind === "REVOKE_BINDING") {
       await access.revokeBinding(requested.binding);
+    } else if (requested.kind === "REVOKE_PLATFORM_MEMBERSHIP") {
+      await access.revokePlatformMembership(requested.membership);
+    } else {
+      await access.revokeProjectMembership(
+        projectRef.value,
+        requested.membership,
+      );
     }
     closeConfirmation(true);
   } catch (error) {
@@ -203,11 +358,27 @@ async function confirmMutation(): Promise<void> {
     if (mutationProblem.value.kind === "conflict") {
       if (requested.kind === "ARCHIVE_ROLE") {
         await access.loadRoles(true);
-      } else {
+      } else if (requested.kind === "REVOKE_BINDING") {
         await access.loadBindings({
           projectRef: projectRef.value || undefined,
           includeRevoked: true,
         });
+      } else if (requested.kind === "REVOKE_PLATFORM_MEMBERSHIP") {
+        await access.loadMembershipPresentation();
+        const latest = access.platformMemberships.find(
+          (item) => item.ref === requested.membership.ref,
+        );
+        if (latest?.nextActions.includes("REVOKE"))
+          confirmation.value = {
+            kind: "REVOKE_PLATFORM_MEMBERSHIP",
+            membership: latest,
+          };
+        else confirmation.value = undefined;
+      } else {
+        await access.loadMembershipPresentation(
+          projectRef.value,
+          memberRef.value,
+        );
       }
     }
   } finally {
@@ -291,8 +462,11 @@ async function saveBinding(
 }
 
 watch(routeSection, (section) => void loadSection(section));
-watch(projectRef, (value) => {
-  void Promise.all([loadSection(), access.loadMembershipPresentation(value)]);
+watch([projectRef, memberRef], ([value, selected]) => {
+  void Promise.all([
+    loadSection(),
+    access.loadMembershipPresentation(value, selected),
+  ]);
 });
 onMounted(() => void loadBaseline());
 </script>
@@ -308,12 +482,49 @@ onMounted(() => void loadBaseline());
       )
     "
   >
-    <AccessModelOverview :project-context="Boolean(projectRef)" />
-    <AccessTabs
-      :active="routeSection"
-      :counts="counts"
-      @select="selectSection"
-    />
+    <template #actions>
+      <div
+        class="access-scope-switch"
+        :aria-label="$t('access.scopeSelector.label')"
+      >
+        <button
+          class="button"
+          :class="{ 'access-scope-switch__active': !projectRef }"
+          type="button"
+          :aria-pressed="!projectRef"
+          @click="selectScope('')"
+        >
+          {{ $t("access.scopeSelector.organization") }}
+        </button>
+        <ProjectPicker
+          :project="scopeProject"
+          :placeholder="$t('access.scopeSelector.project')"
+          :clearable="false"
+          @select="selectScope"
+        />
+      </div>
+      <button
+        v-if="routeSection === 'participants'"
+        class="button button--primary"
+        type="button"
+        :disabled="
+          mutationBusy ||
+          (!projectRef &&
+            !access.platformMembershipActions.includes('MANAGE_MEMBERS'))
+        "
+        @click="projectRef ? createBinding() : addPlatformMember()"
+      >
+        {{
+          projectRef
+            ? $t("access.participants.createBinding")
+            : "Добавить участника"
+        }}
+      </button>
+    </template>
+    <AccessTabs :active="routeSection" @select="selectSection" />
+    <p v-if="routeSection === 'participants'" class="access-identity-note">
+      {{ $t("access.participants.authorityHint") }}
+    </p>
     <ProblemNotice
       v-if="access.problems.permissions"
       :problem="access.problems.permissions"
@@ -327,8 +538,11 @@ onMounted(() => void loadBaseline());
 
     <ParticipantsPanel
       v-if="routeSection === 'participants'"
+      :initial-query="memberSearch"
+      :selected-subject-ref="selectedSubjectRef"
       :subjects="participantSubjects"
       :groups="access.groups"
+      :projects="access.projects"
       :bindings="access.bindings"
       :platform-memberships="access.platformMemberships"
       :project-memberships="access.projectMemberships"
@@ -342,9 +556,21 @@ onMounted(() => void loadBaseline());
       :loading="access.loading.subjects"
       :problem="access.problems.subjects"
       :has-more="Boolean(access.subjectNextPageToken)"
-      @search="access.loadSubjects($event)"
-      @more="access.loadSubjects($event, undefined, true)"
+      :mutation-busy="mutationBusy"
+      @edit-membership="editMembership"
+      @revoke-membership="revokeMembership"
+      @search="
+        (query, pageSize) =>
+          access.loadSubjects(query, undefined, false, pageSize)
+      "
+      @more="
+        (query, pageSize) =>
+          access.loadSubjects(query, undefined, true, pageSize)
+      "
       @bind="createBinding"
+      @inspect-effective="inspectEffective"
+      @edit-platform-membership="editPlatformMember"
+      @revoke-platform-membership="revokePlatformMember"
       @retry="loadSection"
     />
     <GroupsPanel
@@ -355,8 +581,8 @@ onMounted(() => void loadBaseline());
       :loading="access.loading.groups"
       :problem="access.problems.groups"
       :has-more="Boolean(access.groupNextPageToken)"
-      @search="access.loadGroups($event)"
-      @more="access.loadGroups($event, true)"
+      @search="(query, pageSize) => access.loadGroups(query, false, pageSize)"
+      @more="(query, pageSize) => access.loadGroups(query, true, pageSize)"
       @bind="createGroupBinding"
       @retry="loadSection"
     />
@@ -371,7 +597,10 @@ onMounted(() => void loadBaseline());
       @create="createRole"
       @edit="editRole"
       @archive="archiveRole"
-      @more="access.loadRoles(true, true)"
+      @search="
+        (query, pageSize) => access.loadRoles(true, false, pageSize, query)
+      "
+      @more="(query, pageSize) => access.loadRoles(true, true, pageSize, query)"
       @retry="loadSection"
     />
     <BindingsPanel
@@ -386,16 +615,40 @@ onMounted(() => void loadBaseline());
       @create="createBinding()"
       @edit="editBinding"
       @revoke="revokeBinding"
+      @search="
+        (query, includeRevoked, pageSize) =>
+          access.loadBindings(
+            {
+              query,
+              projectRef: projectRef || undefined,
+              includeRevoked,
+            },
+            false,
+            pageSize,
+          )
+      "
       @more="
-        access.loadBindings(
-          { projectRef: projectRef || undefined, includeRevoked: true },
-          true,
-        )
+        (query, includeRevoked, pageSize) =>
+          access.loadBindings(
+            {
+              query,
+              projectRef: projectRef || undefined,
+              includeRevoked,
+            },
+            true,
+            pageSize,
+          )
       "
       @retry="loadSection"
     />
     <EffectiveAccessPanel
       v-else
+      :initial-project-ref="projectRef || undefined"
+      :initial-subject-ref="
+        typeof route.query.subjectRef === 'string'
+          ? route.query.subjectRef
+          : undefined
+      "
       :subjects="bindingSubjects"
       :permissions="access.permissions"
       :roles="access.roles"
@@ -435,6 +688,23 @@ onMounted(() => void loadBaseline());
       @close="roleDialog = false"
       @save="saveRole"
     />
+    <ProjectMembershipEditorDialog
+      v-if="selectedMembership"
+      :membership="selectedMembership"
+      :busy="mutationBusy"
+      :problem="mutationProblem"
+      @close="selectedMembership = undefined"
+      @save="saveMembership"
+    />
+    <PlatformMembershipEditorDialog
+      v-if="platformDialog"
+      :membership="selectedPlatformMembership"
+      :busy="mutationBusy"
+      :problem="mutationProblem"
+      @close="platformDialog = false"
+      @create="createPlatformMember"
+      @update="updatePlatformMember"
+    />
     <BindingEditorDialog
       v-if="bindingDialog"
       :binding="selectedBinding"
@@ -458,7 +728,11 @@ onMounted(() => void loadBaseline());
       :title="
         confirmation.kind === 'ARCHIVE_ROLE'
           ? 'Архивировать роль'
-          : 'Отозвать назначение'
+          : confirmation.kind === 'REVOKE_BINDING'
+            ? 'Отозвать назначение'
+            : confirmation.kind === 'REVOKE_PLATFORM_MEMBERSHIP'
+              ? 'Удалить из организации'
+              : t('access.projectMembershipEditor.revoke')
       "
       :busy="mutationBusy"
       size="md"
@@ -470,7 +744,13 @@ onMounted(() => void loadBaseline());
             ? t("access.rolesWorkspace.archiveConfirm", {
                 name: confirmation.role.currentVersion.name,
               })
-            : t("access.bindingsWorkspace.revokeConfirm")
+            : confirmation.kind === "REVOKE_BINDING"
+              ? t("access.bindingsWorkspace.revokeConfirm")
+              : confirmation.kind === "REVOKE_PLATFORM_MEMBERSHIP"
+                ? `Удалить ${confirmation.membership.user.displayName} из организации? Доступ Kodex будет отозван; учётная запись Keycloak останется.`
+                : t("access.projectMembershipEditor.revokeConfirm", {
+                    name: confirmation.membership.user.displayName,
+                  })
         }}
       </p>
       <ProblemNotice
@@ -498,7 +778,9 @@ onMounted(() => void loadBaseline());
               ? "Выполняем…"
               : confirmation.kind === "ARCHIVE_ROLE"
                 ? "Архивировать"
-                : "Отозвать"
+                : confirmation.kind === "REVOKE_BINDING"
+                  ? "Отозвать"
+                  : t("access.projectMembershipEditor.revoke")
           }}
         </button>
       </template>
@@ -507,6 +789,31 @@ onMounted(() => void loadBaseline());
 </template>
 
 <style scoped>
+.access-scope-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.access-scope-switch > :last-child {
+  width: min(230px, 26vw);
+  min-width: 160px;
+}
+.access-scope-switch__active {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.access-identity-note {
+  margin: -4px 0 16px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--accent-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
 .confirmation-copy {
   margin: 0;
 }

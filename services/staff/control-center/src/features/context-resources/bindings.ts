@@ -65,11 +65,12 @@ export async function bindingAgents(
   query: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 40,
 ): Promise<AsyncEntityOptionPage> {
   const page = (
     await unwrap(
       sdk.listOrganizationAgents({
-        query: { projectRef, query, pageToken, pageSize: 40 },
+        query: { projectRef, query, pageToken, pageSize },
         signal: requestSignal(signal),
       }),
     )

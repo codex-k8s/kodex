@@ -1,28 +1,51 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import { SearchX } from "@lucide/vue";
 
 import { usePlatformStore } from "@/features/platform/store";
+import { accessProjectOptions } from "@/features/access/entity-pickers";
+import type { AuditEvent } from "@/shared/api/generated/openapi/types.gen";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const platform = usePlatformStore();
 const route = useRoute();
+const router = useRouter();
 const i18n = useI18n();
 const query = ref("");
+const chosenProject = ref<AsyncEntityOption>();
+const searchId = useId();
 const projectRef = computed(() =>
   typeof route.query.projectRef === "string"
     ? route.query.projectRef
     : undefined,
 );
+const selectedProject = computed<AsyncEntityOption | undefined>(() => {
+  if (!projectRef.value) return undefined;
+  const known = platform.projects[projectRef.value];
+  if (known)
+    return { ref: known.ref, title: known.name, description: known.purpose };
+  if (chosenProject.value?.ref === projectRef.value) return chosenProject.value;
+  return { ref: projectRef.value, title: i18n.t("audit.selectedProject") };
+});
 const list = computed(() => platform.auditEvents);
 const hasMore = computed(() => Boolean(platform.auditNextPageToken));
 const loadingMore = computed(() => Boolean(platform.loading.auditMore));
-const scrollRoot = ref<HTMLElement>();
+const listRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".audit-table__row",
+  itemCount: () => list.value.length,
+  estimatedItemHeight: 62,
+});
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 function auditLabel(
@@ -33,18 +56,43 @@ function auditLabel(
   return i18n.te(key) ? i18n.t(key) : value;
 }
 
+function actionSummary(event: AuditEvent): string {
+  const prefix = "runtime-secret-draft.";
+  if (!event.action.startsWith(prefix)) return event.safeSummary;
+  const action = event.action.slice(prefix.length);
+  const key = `audit.secretDraftAction.${action}`;
+  return i18n.te(key) ? i18n.t(key) : event.safeSummary;
+}
+
+function resourceName(event: AuditEvent): string {
+  if (
+    event.action.startsWith("runtime-secret-draft.") &&
+    event.resourceName === event.safeSummary
+  )
+    return i18n.t("audit.protectedSecret");
+  return event.resourceName;
+}
+
+function selectProject(value: string | null | readonly string[]): void {
+  const next = typeof value === "string" ? value : undefined;
+  if (next === projectRef.value) return;
+  void router.replace({ query: { ...route.query, projectRef: next } });
+}
+
 async function load(): Promise<void> {
-  await platform.loadAudit(projectRef.value, query.value);
-  if (platform.auditNextPageToken)
-    await platform.loadMoreAudit(projectRef.value, query.value);
+  await platform.loadAudit(projectRef.value, query.value, pageSize.value);
 }
 
 function loadMore(): Promise<void> {
-  return platform.loadMoreAudit(projectRef.value, query.value);
+  return platform.loadMoreAudit(projectRef.value, query.value, pageSize.value);
+}
+
+function loadSelectedProject(): void {
+  if (projectRef.value && !platform.projects[projectRef.value])
+    void platform.loadProject(projectRef.value);
 }
 
 useCursorInfiniteScroll({
-  root: scrollRoot,
   sentinel,
   enabled: () => hasMore.value && !loadingMore.value,
   loadMore,
@@ -54,8 +102,14 @@ watch(query, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => void load(), 250);
 });
-watch(projectRef, () => void load());
-onMounted(() => void load());
+watch(projectRef, () => {
+  loadSelectedProject();
+  void load();
+});
+onMounted(() => {
+  loadSelectedProject();
+  void load();
+});
 onUnmounted(() => {
   if (searchTimer) clearTimeout(searchTimer);
 });
@@ -63,14 +117,39 @@ onUnmounted(() => {
 
 <template>
   <PageFrame :title="$t('audit.title')" :subtitle="$t('audit.subtitle')">
-    <label class="field audit-search"
-      ><span>{{ $t("audit.search") }}</span
-      ><input
-        v-model="query"
-        type="search"
-        :placeholder="$t('audit.searchPlaceholder')"
-        autocomplete="off"
-    /></label>
+    <div class="audit-filters">
+      <label class="field audit-search" :for="searchId"
+        ><span>{{ $t("audit.search") }}</span
+        ><input
+          :id="searchId"
+          v-model="query"
+          name="audit-search"
+          type="search"
+          :placeholder="$t('audit.searchPlaceholder')"
+          autocomplete="off"
+      /></label>
+      <div class="field audit-project-filter">
+        <span>{{ $t("audit.project") }}</span>
+        <AsyncEntityPicker
+          :model-value="projectRef"
+          :selected="selectedProject"
+          :load-page="accessProjectOptions"
+          :labels="{
+            label: $t('audit.project'),
+            searchPlaceholder: $t('audit.findProject'),
+            loading: $t('common.loading'),
+            loadingMore: $t('common.loading'),
+            empty: $t('common.empty'),
+            error: $t('errors.default'),
+            retry: $t('common.retry'),
+          }"
+          :placeholder="$t('audit.allProjects')"
+          :trigger-label="$t('audit.project')"
+          @select="chosenProject = $event"
+          @update:model-value="selectProject"
+        />
+      </div>
+    </div>
     <AsyncState
       :loading="platform.loading.audit"
       :problem="platform.problems.audit"
@@ -78,7 +157,13 @@ onUnmounted(() => {
       :empty-title="$t('audit.emptyTitle')"
       @retry="load"
     >
-      <div class="audit-table" role="table" :aria-label="$t('audit.title')">
+      <template #empty-icon><SearchX :size="20" /></template>
+      <div
+        ref="listRoot"
+        class="audit-table"
+        role="table"
+        :aria-label="$t('audit.title')"
+      >
         <div class="audit-table__header" role="row">
           <strong role="columnheader">{{ $t("audit.time") }}</strong
           ><strong role="columnheader">{{ $t("audit.initiator") }}</strong
@@ -100,14 +185,14 @@ onUnmounted(() => {
             ><small>{{ auditLabel("executorValue", event.executor) }}</small>
           </div>
           <div role="cell">
-            <strong>{{ event.safeSummary }}</strong>
+            <strong>{{ actionSummary(event) }}</strong>
             <details class="audit-technical">
               <summary>{{ $t("audit.technicalDetails") }}</summary>
               <small>{{ $t("audit.operationCode") }}: {{ event.action }}</small>
             </details>
           </div>
           <div role="cell">
-            <strong>{{ event.resourceName }}</strong
+            <strong>{{ resourceName(event) }}</strong
             ><small>{{
               auditLabel("resourceTypeValue", event.resourceType)
             }}</small>
@@ -122,12 +207,13 @@ onUnmounted(() => {
         aria-live="polite"
       >
         <span v-if="loadingMore">{{ $t("audit.loadingMore") }}</span>
-        <button v-else class="button" type="button" @click="loadMore">
-          {{
-            platform.problems.auditMore
-              ? $t("common.retry")
-              : $t("audit.loadMore")
-          }}
+        <button
+          v-else-if="platform.problems.auditMore"
+          class="button"
+          type="button"
+          @click="loadMore"
+        >
+          {{ $t("common.retry") }}
         </button>
       </div>
     </AsyncState>
@@ -135,9 +221,18 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.audit-search {
-  max-width: 520px;
+.audit-filters {
+  display: grid;
+  grid-template-columns: minmax(280px, 520px) minmax(220px, 340px);
+  gap: 12px;
   margin-bottom: 18px;
+  align-items: start;
+}
+.audit-filters .field {
+  min-width: 0;
+}
+.audit-search input {
+  min-height: 52px;
 }
 .audit-table {
   display: grid;

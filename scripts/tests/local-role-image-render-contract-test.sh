@@ -107,6 +107,16 @@ rg -Fq -- "-ec 'rm -rf /work/docker /work/home'" \
 rg -Fq 'serverstransport.traefik.io/staff-control-center' \
   "$source_root/tools/dev/deploy-local.sh" ||
   fail 'local deploy does not remove the obsolete frontend ServersTransport'
+catalog_apply_line=$(rg -n -F 'apply_render role-environment-catalog' \
+  "$source_root/tools/dev/deploy-local.sh" | cut -d: -f1)
+builder_apply_line=$(rg -n -F 'apply_render image-supply-chain-controllers' \
+  "$source_root/tools/dev/deploy-local.sh" | cut -d: -f1)
+[[ -n "$catalog_apply_line" && -n "$builder_apply_line" &&
+  "$catalog_apply_line" -lt "$builder_apply_line" ]] ||
+  fail 'new trusted runner digest must enter the catalog before builder rollout'
+rg -Fq 'role environment catalog readback mismatch' \
+  "$source_root/tools/dev/deploy-local.sh" ||
+  fail 'local deploy does not compare the applied role environment catalog'
 timeout 120s bash "$source_root/scripts/tests/local-go-cache-contract-test.sh" >/dev/null ||
   fail 'shared Go cache behavior or writable-mount rejection is invalid'
 configure_calls=$(rg -c --fixed-strings 'tools/deploy/configure-keycloak.sh' "$source_root/dev.sh")

@@ -9,6 +9,7 @@ import type { IntegrationDefinition } from "@/shared/api/generated/openapi/types
 
 const messages = {
   ru: {
+    common: { actions: "Действия" },
     integrations: {
       connect: "Подключить",
       unavailable: "Сейчас недоступна",
@@ -25,7 +26,15 @@ const messages = {
       packageCount: "Пакетов: {count}",
       searchPackages: "Найти",
       category: "Категория",
+      table: {
+        name: "Название",
+        description: "Описание",
+        category: "Категория и версия",
+        state: "Состояние",
+        access: "Доступ",
+      },
       allCategories: "Все",
+      packageCategories: { "source-control": "Разработка" },
       firstParty: "first-party",
       customPackage: "пользовательский",
       connectionCount: "Подключений: {count}",
@@ -50,6 +59,8 @@ function githubDefinition(): IntegrationDefinition {
     builtIn: true,
     version: 1,
     nextActions: [],
+    connectionCount: 0,
+    healthyConnectionCount: 0,
     available: true,
     capabilities: [
       {
@@ -94,7 +105,7 @@ function githubDefinition(): IntegrationDefinition {
 
 describe("IntegrationCatalogPanel", () => {
   it("показывает только определения, подтверждённые сервером", async () => {
-    const packages = buildIntegrationPackages([githubDefinition()], [], true);
+    const packages = buildIntegrationPackages([githubDefinition()], true);
     const app = createSSRApp({
       render: () =>
         h(IntegrationCatalogPanel, {
@@ -111,13 +122,18 @@ describe("IntegrationCatalogPanel", () => {
     const html = await renderToString(app);
 
     expect(html).toContain("GitHub");
+    expect(html).toContain('<table class="package-table"');
+    expect(html).toContain('class="package-row"');
+    expect(html).toContain("Разработка");
+    expect(html).toContain("v1.0.0 · first-party");
+    expect(html).not.toContain("source-control ·");
     for (const missing of ["GitLab", "Jira", "Confluence", "Email"]) {
       expect(html).not.toContain(missing);
     }
     expect(html).not.toContain("YAML · API —");
     expect(html.match(/<button[^>]*disabled/g)).toBeNull();
     expect(html).toContain('aria-haspopup="dialog"');
-    expect(html).toContain("Подробнее");
+    expect(html).toContain('aria-label="Подробнее"');
     expect(html).not.toContain("package-details");
     expect(html).not.toContain("zero-connection-notice");
   });

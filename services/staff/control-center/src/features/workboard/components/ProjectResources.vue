@@ -9,6 +9,7 @@ import {
   ShieldQuestion,
   Workflow,
 } from "@lucide/vue";
+import { RouterLink } from "vue-router";
 
 import type {
   Project,

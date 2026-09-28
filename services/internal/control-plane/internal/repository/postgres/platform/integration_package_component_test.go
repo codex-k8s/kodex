@@ -60,6 +60,17 @@ func testManagedIntegrationPackageExecution(t *testing.T, ctx context.Context, r
 		t.Fatalf("managed test completion: %v", err)
 	}
 	testManagedRuntimeCapabilityAuthority(t, ctx, repository, service, owner, *completed.Connection, definition)
+	// Перепривязка не вправе наследовать Secret descriptor прежней ревизии,
+	// даже если новый пакет пока не требует credential.
+	if _, err := repository.pool.Exec(ctx, `WITH revision AS (
+INSERT INTO control_plane.integration_credential_revisions
+(ref,organization_id,connection_id,revision,secret_ref,secret_uid,secret_resource_version,content_sha256,created_by)
+SELECT 'icr_managed_rebind',organization_id,id,1,'kodex-system/kodex-integration-credentials#managed-rebind',gen_random_uuid(),'1',repeat('d',64),created_by
+FROM control_plane.integration_connections WHERE ref=$1 RETURNING id,connection_id)
+UPDATE control_plane.integration_connections connection SET credential_revision_id=revision.id,masked_credentials_state='CONFIGURED',credential_materialization_ref='managed-rebind'
+FROM revision WHERE connection.id=revision.connection_id`, connectionRef); err != nil {
+		t.Fatalf("seed obsolete credential binding: %v", err)
+	}
 	for index := range definition.Spec.Capabilities {
 		if definition.Spec.Capabilities[index].Operation == definition.Spec.HealthCheck.Operation {
 			definition.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_EACH_EFFECT"
@@ -71,7 +82,7 @@ func testManagedIntegrationPackageExecution(t *testing.T, ctx context.Context, r
 		command.ManagedConfigurationInput{Name: definition.Spec.Name, ContentFormat: "JSON", Content: string(asJSON(definition))},
 		entity.ManagedConfigurationConsumer{Kind: "INTEGRATION_CONNECTION", Ref: connectionRef})
 	connection, err = service.GetIntegrationConnection(ctx, owner, connectionRef)
-	if err != nil || connection.DefinitionDigest != second.ManagedRevision.Digest || slices.Contains(connection.NextActions, "TEST") || !connection.TestRequiresApproval {
+	if err != nil || connection.DefinitionDigest != second.ManagedRevision.Digest || connection.CredentialRevision != nil || slices.Contains(connection.NextActions, "TEST") || !connection.TestRequiresApproval {
 		t.Fatalf("gated health readback exposed unsafe test: %+v %v", connection, err)
 	}
 	version = connection.Version

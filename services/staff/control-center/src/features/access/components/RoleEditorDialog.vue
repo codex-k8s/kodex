@@ -40,6 +40,15 @@ const form = reactive({
   allowedScopes: [] as AccessScopeKind[],
   changeComment: "",
 });
+const unavailablePermissionKeys = computed(() =>
+  form.permissionKeys.filter(
+    (key) => !props.permissions.some((permission) => permission.key === key),
+  ),
+);
+function unavailablePermissionName(key: string): string {
+  const name = permissionMessage(permissionMessages.value, key, "name");
+  return name === key ? i18n.t("access.roleEditor.unknownPermission") : name;
+}
 
 const compatibleScopes = computed(() => {
   if (form.permissionKeys.length === 0) return accessScopeKinds;
@@ -119,7 +128,13 @@ watch(() => props.role, reset, { immediate: true });
 
       <label class="field">
         <span>{{ $t("common.name") }}</span>
-        <input v-model="form.name" required maxlength="160" :disabled="busy" />
+        <input
+          v-model="form.name"
+          name="access-role-name"
+          required
+          maxlength="160"
+          :disabled="busy"
+        />
       </label>
       <label class="field">
         <span>{{ $t("access.roleEditor.description") }}</span>
@@ -134,6 +149,29 @@ watch(() => props.role, reset, { immediate: true });
       <fieldset class="role-fieldset">
         <legend>{{ $t("access.roleEditor.permissions") }}</legend>
         <p>{{ $t("access.roleEditor.permissionsHint") }}</p>
+        <div
+          v-if="unavailablePermissionKeys.length"
+          class="unavailable-permissions"
+          role="alert"
+        >
+          <strong>{{ $t("access.roleEditor.unavailablePermissions") }}</strong>
+          <p>{{ $t("access.roleEditor.unavailablePermissionsHint") }}</p>
+          <div
+            v-for="key in unavailablePermissionKeys"
+            :key="key"
+            class="unavailable-permissions__item"
+          >
+            <span>{{ unavailablePermissionName(key) }}</span>
+            <button
+              class="button"
+              type="button"
+              :disabled="busy"
+              @click="togglePermission(key)"
+            >
+              {{ $t("access.roleEditor.removeUnavailablePermission") }}
+            </button>
+          </div>
+        </div>
         <div class="permission-catalog">
           <label
             v-for="permission in permissions"
@@ -141,6 +179,7 @@ watch(() => props.role, reset, { immediate: true });
             class="permission-option"
           >
             <input
+              name="access-role-permissions"
               type="checkbox"
               :checked="form.permissionKeys.includes(permission.key)"
               :disabled="busy"
@@ -173,6 +212,7 @@ watch(() => props.role, reset, { immediate: true });
         <div class="scope-options">
           <label v-for="scope in accessScopeKinds" :key="scope">
             <input
+              name="access-role-scopes"
               type="checkbox"
               :checked="form.allowedScopes.includes(scope)"
               :disabled="busy || !compatibleScopes.includes(scope)"
@@ -190,6 +230,7 @@ watch(() => props.role, reset, { immediate: true });
         <span>{{ $t("access.roleEditor.changeComment") }}</span>
         <input
           v-model="form.changeComment"
+          name="access-role-change-comment"
           maxlength="500"
           :disabled="busy"
           :placeholder="$t('access.roleEditor.changeCommentPlaceholder')"
@@ -241,6 +282,23 @@ watch(() => props.role, reset, { immediate: true });
 </template>
 
 <style scoped>
+.unavailable-permissions {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  background: var(--warning-soft);
+}
+.unavailable-permissions p {
+  margin: 0;
+}
+.unavailable-permissions__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 .role-form {
   display: grid;
   gap: 18px;

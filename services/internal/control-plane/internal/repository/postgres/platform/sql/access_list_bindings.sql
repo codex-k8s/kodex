@@ -34,6 +34,12 @@ WHERE b.organization_id = @organization_id::uuid
   AND (@subject_ref = '' OR COALESCE(subject.ref, oidc_group.ref) = @subject_ref)
   AND (@role_ref = '' OR r.ref = @role_ref)
   AND (@project_ref = '' OR project.ref = @project_ref)
+  AND (@query = '' OR COALESCE(subject.display_name, oidc_group.display_name) ILIKE '%' || @query || '%'
+                    OR rv.name ILIKE '%' || @query || '%'
+                    OR rv.description ILIKE '%' || @query || '%'
+                    OR project.name ILIKE '%' || @query || '%'
+                    OR rv.name = ANY(@query_aliases::text[])
+                    OR rv.description = ANY(@query_aliases::text[]))
   AND (@cursor = '' OR b.ref > @cursor)
 ORDER BY b.ref
 LIMIT @limit

@@ -349,7 +349,7 @@ describe("runtime store", () => {
         path: { projectRef: "project_sales" },
         query: {
           query: "pdf",
-          pageSize: 30,
+          pageSize: 20,
           pageToken: "cursor-current",
         },
       }),
@@ -407,7 +407,7 @@ describe("runtime store", () => {
       );
     getRoleImageRecipeMock.mockResolvedValueOnce(
       response({
-        recipe: {},
+        recipe: { name: "Инструменты продаж" },
         builds: [],
         activeArtifact: {
           ref: "imgart_main",
@@ -417,6 +417,8 @@ describe("runtime store", () => {
           manifestDigest: "f".repeat(64),
           promotedReference: runtimeImage.reference,
           admissionVerdict: "ACCEPTED",
+          promotionState: "PROMOTED",
+          promotionRequested: true,
           tools: [{ name: "gh", version: "2.80.0" }],
           promotedAt: "2026-08-29T11:00:00Z",
         },
@@ -434,15 +436,37 @@ describe("runtime store", () => {
         recipeRef: "imgrec_main",
       }),
     ]);
+    const promoted = await store.loadPromotedRoleImageArtifact(
+      "project_sales",
+      "imgrec_main",
+      "imgart_main",
+    );
+    expect(promoted.artifact.tools).toEqual([
+      { name: "gh", version: "2.80.0" },
+    ]);
+    expect(promoted.recipeName).toBe("Инструменты продаж");
+  });
+
+  it("отличает старый артефакт от временной недоступности сервиса", async () => {
+    getRoleImageRecipeMock.mockResolvedValueOnce(
+      response({
+        recipe: {},
+        builds: [],
+        activeArtifact: { ref: "imgart_new", admissionVerdict: "ACCEPTED" },
+      }),
+    );
+    const store = useRuntimeStore();
     await expect(
       store.loadPromotedRoleImageArtifact(
         "project_sales",
         "imgrec_main",
-        "imgart_main",
+        "imgart_old",
       ),
-    ).resolves.toEqual(
-      expect.objectContaining({ tools: [{ name: "gh", version: "2.80.0" }] }),
-    );
+    ).rejects.toMatchObject({
+      code: "IMAGE_ARTIFACT_NOT_CURRENT",
+      status: 409,
+      retryable: false,
+    });
   });
 
   it("обязательно передаёт exact image и tools при create и publish", async () => {
@@ -631,7 +655,7 @@ describe("runtime store", () => {
     expect(listRuntimeEnvironmentAgentsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { environmentRef: environment.ref },
-        query: { pageSize: 30 },
+        query: { pageSize: 20 },
       }),
     );
     expect(deleteRuntimeEnvironmentMock).toHaveBeenCalledWith(

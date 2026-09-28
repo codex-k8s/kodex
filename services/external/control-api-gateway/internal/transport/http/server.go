@@ -440,6 +440,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	if descriptor.FullName() == "controlplane.v1.Agent" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "system" || field.JSONName() == "enabled"
 	}
+	if field.Kind() == protoreflect.BoolKind && field.JSONName() == "ready" {
+		switch descriptor.FullName() {
+		case "controlplane.v1.RuntimeEnvironmentSet", "controlplane.v1.RuntimeEnvironmentReadiness":
+			return false, true
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.WorkflowCardSummary" {
 		if field.Kind() == protoreflect.BoolKind {
 			return false, field.JSONName() == "hasHumanGate"
@@ -459,6 +465,8 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if field.Kind() == protoreflect.Int64Kind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.IntegrationDefinition":
+			return float64(0), field.JSONName() == "connectionCount" || field.JSONName() == "healthyConnectionCount"
 		case "controlplane.v1.ProviderAccountBlockerCount":
 			return float64(0), field.JSONName() == "total"
 		case "controlplane.v1.ProviderAccountDeletion":
@@ -491,6 +499,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if field.Kind() == protoreflect.StringKind {
 		switch descriptor.FullName() {
+		case "controlplane.v1.RuntimeEnvironmentSet", "controlplane.v1.RuntimeEnvironmentDraftSpecification":
+			return "", field.JSONName() == "description"
+		case "controlplane.v1.RuntimeEnvironmentTool":
+			return "", field.JSONName() == "description" || field.JSONName() == "usageHint"
+		case "controlplane.v1.RuntimeEnvironmentValue":
+			return "", field.JSONName() == "value"
 		case "controlplane.v1.OwnerGateDecisionConsequence":
 			return "", field.JSONName() == "safeSummary"
 		case "controlplane.v1.IntegrationIntent":
@@ -764,6 +778,10 @@ func normalize(value any) {
 		if targetType, targetRef, ok := target(current); ok {
 			current["type"] = targetType
 			current["ref"] = targetRef
+			if version, present := current["targetVersion"]; present {
+				current["version"] = version
+				delete(current, "targetVersion")
+			}
 			delete(current, "agentRef")
 			delete(current, "workflowRef")
 		}
@@ -824,10 +842,14 @@ func normalizeAssistantShape(value map[string]any) {
 	if targetRef, exists := value["targetRef"]; exists && targetRef != "" {
 		target["ref"] = targetRef
 	}
+	if targetVersion, exists := value["targetVersion"]; exists {
+		target["version"] = targetVersion
+	}
 	value["target"] = target
 	delete(value, "targetKind")
 	delete(value, "targetRef")
 	delete(value, "targetName")
+	delete(value, "targetVersion")
 	for _, key := range []string{"parameters", "before", "after"} {
 		if _, exists := value[key]; !exists {
 			value[key] = map[string]any{}
@@ -882,7 +904,11 @@ func requiredCollectionKeys(value map[string]any) []string {
 	if _, isWorkflowInput := value["valueType"]; isWorkflowInput {
 		keys = append(keys, "options")
 	}
-	if _, isAgent := value["roleDescription"]; isAgent {
+	_, isAgent := value["roleDescription"]
+	_, hasRef := value["ref"]
+	_, hasProject := value["projectRef"]
+	_, hasVersion := value["version"]
+	if isAgent && hasRef && hasProject && hasVersion {
 		keys = append(keys, "capabilities", "integrations", "knowledgeArtifactRefs", "nextActions")
 	}
 	if _, isMembership := value["platformRole"]; isMembership {

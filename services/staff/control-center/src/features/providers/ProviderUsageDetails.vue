@@ -1,6 +1,41 @@
 <script setup lang="ts">
 import type { ProviderAccountUsage } from "@/shared/api/generated/openapi/types.gen";
-defineProps<{ usage?: ProviderAccountUsage; compact?: boolean }>();
+import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+
+const props = defineProps<{
+  usage?: ProviderAccountUsage;
+  compact?: boolean;
+}>();
+const { locale } = useI18n();
+const now = ref(Date.now());
+function readableTime(value: string): string {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp)
+    ? new Date(timestamp).toLocaleString(locale.value)
+    : "—";
+}
+const stale = computed(() => {
+  if (!props.usage) return false;
+  const expiresAt = Date.parse(props.usage.expiresAt);
+  return !Number.isFinite(expiresAt) || expiresAt <= now.value;
+});
+watch(
+  () => props.usage?.expiresAt,
+  (expiresAt, _previous, onCleanup) => {
+    now.value = Date.now();
+    const deadline = Date.parse(expiresAt ?? "");
+    if (!Number.isFinite(deadline) || deadline <= now.value) return;
+    const timer = setTimeout(
+      () => {
+        now.value = Date.now();
+      },
+      Math.min(deadline - now.value + 1, 2_147_483_647),
+    );
+    onCleanup(() => clearTimeout(timer));
+  },
+  { immediate: true },
+);
 const dimensions = [
   "lifecycle",
   "credential",
@@ -13,7 +48,16 @@ const dimensions = [
 <template>
   <component :is="compact ? 'div' : 'details'" class="provider-usage">
     <summary v-if="!compact">{{ $t("providerUsage.title") }}</summary>
-    <template v-if="usage">
+    <template v-if="usage && stale">
+      <p role="status">{{ $t("providerUsage.staleDetails") }}</p>
+      <p v-if="!compact">
+        {{ $t("providerUsage.expires") }}:
+        <time :datetime="usage.expiresAt">{{
+          readableTime(usage.expiresAt)
+        }}</time>
+      </p>
+    </template>
+    <template v-else-if="usage">
       <p v-if="usage.context">
         {{ $t("providerUsage.selection") }}:
         {{
@@ -49,13 +93,13 @@ const dimensions = [
         <p v-if="usage.providerHealthObservedAt">
           {{ $t("providerUsage.observed") }}:
           <time :datetime="usage.providerHealthObservedAt">{{
-            usage.providerHealthObservedAt
+            readableTime(usage.providerHealthObservedAt)
           }}</time>
         </p>
         <p v-if="usage.providerHealthExpiresAt">
           {{ $t("providerUsage.expires") }}:
           <time :datetime="usage.providerHealthExpiresAt">{{
-            usage.providerHealthExpiresAt
+            readableTime(usage.providerHealthExpiresAt)
           }}</time>
         </p>
         <p>
@@ -68,7 +112,9 @@ const dimensions = [
         </p>
         <p>
           {{ $t("providerUsage.expires") }}:
-          <time :datetime="usage.expiresAt">{{ usage.expiresAt }}</time>
+          <time :datetime="usage.expiresAt">{{
+            readableTime(usage.expiresAt)
+          }}</time>
         </p>
       </template>
     </template>
@@ -99,5 +145,8 @@ small {
 }
 p {
   margin: 0.35rem 0;
+}
+time {
+  white-space: nowrap;
 }
 </style>

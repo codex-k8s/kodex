@@ -89,7 +89,7 @@ describe("серверный каталог запусков", () => {
     expect(sdk.listRuns.mock.lastCall?.[0].query).toMatchObject({
       states: ["QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"],
       query: "задача",
-      pageSize: 40,
+      pageSize: 20,
     });
     sdk.listRuns.mockResolvedValueOnce(response([run("run_two", "FAILED")]));
     await store.load({

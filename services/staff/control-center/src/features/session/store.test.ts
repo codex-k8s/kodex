@@ -283,6 +283,7 @@ describe("BFF session lifecycle", () => {
   });
   test("берёт CP revision с сервера для logout и очищает локальные recovery", async () => {
     values.set("kodex.configuration.git-source-attempts", "safe-intent");
+    values.set("kodex.oidc.runtime-secret-draft-suggestion", "safe-intent");
     values.set("kodex.session.revision", "99");
     const session = useSessionStore();
     await session.probe();
@@ -291,6 +292,9 @@ describe("BFF session lifecycle", () => {
       headers: { "If-Match": '"7"' },
     });
     expect(values.has("kodex.configuration.git-source-attempts")).toBe(false);
+    expect(values.has("kodex.oidc.runtime-secret-draft-suggestion")).toBe(
+      false,
+    );
     expect(session.connectionIdentity).toBe("");
   });
   test("считает logout завершённым при уже закрытой browser Session", async () => {

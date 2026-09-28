@@ -82,13 +82,14 @@ export class WriteBackController {
       throw new Error("Write-back controller scope changed");
     this.configuration = configuration;
   }
-  async history(more = false): Promise<void> {
+  async history(more = false, pageSize = 20): Promise<void> {
     await this.run(async () => {
       const page = await this.port.listProposals(
         this.configuration.ref,
         this.signal,
         more ? this.cursor : undefined,
         more ? this.items : [],
+        pageSize,
       );
       this.signal.throwIfAborted();
       this.items = more ? [...this.items, ...page.items] : page.items;

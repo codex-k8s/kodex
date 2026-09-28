@@ -105,9 +105,45 @@ func TestTemplateVariableCursorIsBoundToCatalogFilter(t *testing.T) {
 	if _, err := decodeCatalogCursor(current, "TEMPLATE_VARIABLE", other); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatal("changed target cursor accepted")
 	}
+	other = filter
+	other.SourceKind = "PROJECT"
+	if _, err := decodeCatalogCursor(current, "TEMPLATE_VARIABLE", other); !errors.Is(err, domainerrs.ErrInvalid) {
+		t.Fatal("changed source cursor accepted")
+	}
 	current.actorID = "foreign"
 	if _, err := decodeCatalogCursor(current, "TEMPLATE_VARIABLE", filter); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatal("changed actor cursor accepted")
+	}
+}
+
+func TestTemplateVariableSourceKindIsClosed(t *testing.T) {
+	for _, source := range []string{"", "AGENT", "AUTOMATION", "GATE", "INPUT", "ORGANIZATION", "PROJECT", "RUN", "RUNTIME", "SESSION", "USER", "WORKFLOW"} {
+		if !validTemplateVariableSourceKind(source) {
+			t.Fatalf("known source rejected: %q", source)
+		}
+	}
+	for _, source := range []string{"agent", "SYSTEM", "UNKNOWN", " PROJECT"} {
+		if validTemplateVariableSourceKind(source) {
+			t.Fatalf("unknown source accepted: %q", source)
+		}
+	}
+}
+
+func TestTemplateVariableFilterMatchesSearchAndSourceTogether(t *testing.T) {
+	item := entity.TemplateVariable{Name: "workflow.name", Description: "Название процесса", Source: "WORKFLOW"}
+	for _, test := range []struct {
+		query, source string
+		want          bool
+	}{
+		{"", "", true},
+		{"process", "", false},
+		{"процесса", "", true},
+		{"workflow", "WORKFLOW", true},
+		{"workflow", "PROJECT", false},
+	} {
+		if got := templateVariableMatchesFilter(item, test.query, test.source); got != test.want {
+			t.Fatalf("filter query=%q source=%q: got %t want %t", test.query, test.source, got, test.want)
+		}
 	}
 }
 

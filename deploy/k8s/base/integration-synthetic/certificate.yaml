@@ -1,0 +1,20 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: integration-synthetic-server
+  labels:
+    app.kubernetes.io/name: integration-synthetic
+    app.kubernetes.io/component: integration-fixture
+spec:
+  secretName: integration-synthetic-server-tls
+  duration: 168h
+  renewBefore: 24h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages: [server auth]
+  dnsNames:
+    - integration-synthetic.kodex-system.svc.cluster.local
+  issuerRef:
+    name: kodex-installation-ca
+    kind: Issuer

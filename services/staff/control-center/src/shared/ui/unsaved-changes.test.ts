@@ -3,8 +3,8 @@ import { computed, ref } from "vue";
 const hooks = vi.hoisted(() => ({
   mounted: vi.fn(),
   unmounted: vi.fn(),
-  leave: vi.fn(),
-  update: vi.fn(),
+  beforeEach: vi.fn(),
+  removeGuard: vi.fn(),
 }));
 vi.mock("vue", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue")>()),
@@ -12,8 +12,9 @@ vi.mock("vue", async (importOriginal) => ({
   onBeforeUnmount: hooks.unmounted,
 }));
 vi.mock("vue-router", () => ({
-  onBeforeRouteLeave: hooks.leave,
-  onBeforeRouteUpdate: hooks.update,
+  useRouter: () => ({
+    beforeEach: hooks.beforeEach.mockReturnValue(hooks.removeGuard),
+  }),
 }));
 import { useUnsavedChanges } from "./unsaved-changes";
 describe("unsaved changes guard", () => {
@@ -27,15 +28,13 @@ describe("unsaved changes guard", () => {
       () => "Discard changes?",
       { ignoreQueryOnly: true },
     );
-    const update = hooks.update.mock.calls[0]?.[0] as (
+    const guard = hooks.beforeEach.mock.calls[0]?.[0] as (
       to: { path: string },
       from: { path: string },
     ) => boolean;
-    expect(update({ path: "/agents/one" }, { path: "/agents/one" })).toBe(true);
+    expect(guard({ path: "/agents/one" }, { path: "/agents/one" })).toBe(true);
     expect(confirm).not.toHaveBeenCalled();
-    expect(update({ path: "/agents/two" }, { path: "/agents/one" })).toBe(
-      false,
-    );
+    expect(guard({ path: "/agents/two" }, { path: "/agents/one" })).toBe(false);
   });
   it("сохраняет dirty-форму при отмене, разрешает чистую навигацию и удаляет listener", () => {
     const confirm = vi.fn(() => false);
@@ -47,16 +46,14 @@ describe("unsaved changes guard", () => {
       computed(() => dirty.value),
       () => "Discard changes?",
     );
-    const leave = hooks.leave.mock.calls[0]?.[0] as () => boolean;
-    const update = hooks.update.mock.calls[0]?.[0] as () => boolean;
-    expect(leave()).toBe(true);
+    const guard = hooks.beforeEach.mock.calls[0]?.[0] as () => boolean;
+    expect(guard()).toBe(true);
     expect(confirm).not.toHaveBeenCalled();
     dirty.value = true;
-    expect(leave()).toBe(false);
-    expect(update()).toBe(false);
+    expect(guard()).toBe(false);
     expect(dirty.value).toBe(true);
     confirm.mockReturnValue(true);
-    expect(leave()).toBe(true);
+    expect(guard()).toBe(true);
     const mount = hooks.mounted.mock.calls[0]?.[0] as () => void;
     const unmount = hooks.unmounted.mock.calls[0]?.[0] as () => void;
     mount();
@@ -71,6 +68,7 @@ describe("unsaved changes guard", () => {
     listener({ preventDefault });
     expect(preventDefault).not.toHaveBeenCalled();
     unmount();
+    expect(hooks.removeGuard).toHaveBeenCalledOnce();
     expect(removeEventListener).toHaveBeenCalledWith("beforeunload", listener);
   });
 });

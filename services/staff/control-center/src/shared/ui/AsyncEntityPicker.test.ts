@@ -480,4 +480,37 @@ describe("AsyncEntityPicker", () => {
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('aria-label="Рабочее окружение"');
   });
+
+  it("не показывает очистку выбора для пустого строкового значения", async () => {
+    const app = createSSRApp(AsyncEntityPicker, {
+      modelValue: "",
+      loadPage: vi.fn(),
+      triggerLabel: "Цель",
+      placeholder: "Выберите цель",
+      searchPlaceholder: "Найти цель",
+    });
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        messages: {
+          ru: {
+            common: {
+              loading: "Загрузка",
+              retry: "Повторить",
+              empty: "Пусто",
+              clearSelection: "Очистить выбор",
+            },
+            errors: { default: "Ошибка" },
+            runtime: { pickerShown: "Показано: {count}", pickerScroll: "Ещё" },
+          },
+        },
+      }),
+    );
+
+    const html = await renderToString(app);
+
+    expect(html).toContain("Выберите цель");
+    expect(html).not.toContain('title="Очистить выбор"');
+  });
 });

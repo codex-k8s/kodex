@@ -5,5 +5,5 @@ SELECT p.id::text,p.ref,p.name,p.purpose,p.language,p.lifecycle,p.version,p.crea
        (SELECT count(*)::integer FROM control_plane.runs execution WHERE execution.project_id=p.id AND execution.state IN ('QUEUED','RUNNING','WAITING_HUMAN','CANCELLING')),
        (SELECT count(*)::integer FROM control_plane.owner_gates gate WHERE gate.project_id=p.id AND gate.state='OPEN')
 		FROM control_plane.projects p WHERE p.organization_id=$1::uuid AND p.ref=$2
-		AND EXISTS (SELECT 1 FROM control_plane.assistant_context_projection(
+		AND EXISTS (SELECT 1 FROM control_plane.assistant_context_projection_v2(
             p.organization_id,$3::uuid,NULLIF($4,'')::uuid,'PROJECT',p.ref,clock_timestamp()))

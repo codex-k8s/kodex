@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { Expand, Plus, Search } from "@lucide/vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { ChevronRight, Plus, Search } from "@lucide/vue";
+import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
+import { RouterLink } from "vue-router";
 import type { ManagedConfigurationSummary } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import ModalDialog from "@/shared/ui/ModalDialog.vue";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import { nearScrollEnd } from "@/shared/ui/async-entity-picker";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import OpenAPIImportDialog from "./OpenAPIImportDialog.vue";
 import {
   configurationProjectScopeValid,
   configurationRequiresProject,
@@ -16,14 +19,29 @@ import {
 const props = defineProps<{
   kind: ConfigurationKind;
   projectRef?: string;
-  expanded?: boolean;
+  autoOpenImport?: boolean;
 }>();
+const emit = defineEmits<{ created: [configurationRef: string] }>();
 const query = ref("");
+const searchId = useId();
 const items = ref<ManagedConfigurationSummary[]>([]);
+const list = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
+const pageSize = useAdaptiveCursorPageSize({
+  container: list,
+  itemSelector: ".configuration-catalog__row",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 64,
+  estimatedColumns: 1,
+  minimum: 8,
+  maximum: 100,
+});
 const nextPageToken = ref<string>();
 const total = ref(0);
 const loading = ref(false);
-const expansionOpen = ref(false);
+const importOpen = ref(
+  props.kind === "INTEGRATION_DEFINITION" && props.autoOpenImport,
+);
 const problem = ref<AppProblem>();
 const cursors = new Set<string>();
 const projectRequired = computed(
@@ -49,6 +67,7 @@ async function load(more = false): Promise<void> {
       projectRef: props.projectRef,
       query: query.value.trim(),
       pageToken: token,
+      pageSize: pageSize.value,
       signal: request.signal,
     });
     if (request.signal.aborted || generation !== current) return;
@@ -96,38 +115,55 @@ watch(
   },
   { immediate: true, flush: "sync" },
 );
+watch(
+  () => [props.kind, props.autoOpenImport],
+  () => {
+    if (props.kind === "INTEGRATION_DEFINITION" && props.autoOpenImport)
+      importOpen.value = true;
+  },
+);
 onBeforeUnmount(() => {
   controller?.abort();
   if (timer) clearTimeout(timer);
   generation += 1;
 });
-function scroll(event: Event): void {
-  if (
-    event.currentTarget instanceof HTMLElement &&
-    nearScrollEnd(event.currentTarget) &&
-    !problem.value
-  )
-    void load(true);
+useCursorInfiniteScroll({
+  root: list,
+  sentinel,
+  enabled: () =>
+    Boolean(nextPageToken.value) && !loading.value && !problem.value,
+  loadMore: () => load(true),
+});
+function created(configurationRef: string): void {
+  importOpen.value = false;
+  emit("created", configurationRef);
 }
 </script>
 <template>
   <section class="configuration-catalog">
     <header>
-      <label
+      <label :for="searchId"
         ><Search :size="18" /><input
+          :id="searchId"
           v-model="query"
+          name="managed-configuration-search"
           type="search"
           :placeholder="$t('common.search')"
           :aria-label="$t('common.search')"
+          :disabled="projectRequired"
       /></label>
       <RouterLink
         v-if="!projectRequired"
         class="button button--primary"
-        :to="{
-          name: 'configuration',
-          params: { kind, configurationRef: 'new' },
-          query: projectRef ? { projectRef } : {},
-        }"
+        :to="
+          kind === 'ROLE_IMAGE'
+            ? { name: 'role-image-new', params: { projectRef } }
+            : {
+                name: 'configuration',
+                params: { kind, configurationRef: 'new' },
+                query: projectRef ? { projectRef } : {},
+              }
+        "
         ><Plus :size="18" />{{ $t("common.create") }}</RouterLink
       >
       <button
@@ -139,13 +175,12 @@ function scroll(event: Event): void {
         <Plus :size="18" />{{ $t("common.create") }}
       </button>
       <button
-        v-if="!props.expanded && (total > 6 || nextPageToken)"
-        class="icon-button"
-        :title="$t('catalog.expand')"
-        :aria-label="$t('catalog.expand')"
-        @click="expansionOpen = true"
+        v-if="kind === 'INTEGRATION_DEFINITION'"
+        class="button"
+        type="button"
+        @click="importOpen = true"
       >
-        <Expand :size="18" />
+        {{ $t("managed.openapiImport.open") }}
       </button>
     </header>
     <p
@@ -156,58 +191,112 @@ function scroll(event: Event): void {
       {{ $t("managed.projectRequired") }}
     </p>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
-    <p v-if="loading && !items.length" role="status">
+    <p v-if="loading && !items.length && !projectRequired" role="status">
       {{ $t("common.loading") }}
     </p>
-    <p v-else-if="!items.length && !problem">{{ $t("common.empty") }}</p>
     <div
-      class="configuration-catalog__list"
-      :class="{ 'configuration-catalog__list--expanded': props.expanded }"
-      @scroll.passive="scroll"
+      v-else-if="!items.length && !problem && !projectRequired"
+      class="configuration-catalog__empty"
+      role="status"
     >
-      <RouterLink
-        v-for="item in items"
-        :key="item.ref"
-        class="configuration-catalog__row"
-        :to="{
-          name: 'configuration',
-          params: { kind: item.kind, configurationRef: item.ref },
-        }"
-      >
-        <div>
-          <strong>{{ item.name }}</strong
-          ><small
-            >{{ item.managedBy
-            }}<template v-if="item.source"> · {{ item.source }}</template
-            ><template v-if="item.sourceRevision">
-              · {{ item.sourceRevision }}</template
-            ></small
-          >
-        </div>
-        <StatusBadge
-          :state="
-            item.archived
-              ? 'ARCHIVED'
-              : (item.currentRevision?.state ?? 'DRAFT')
-          "
-        /><span>v{{ item.currentRevision?.revision ?? item.version }}</span>
-      </RouterLink>
-      <button
-        v-if="nextPageToken"
-        class="button"
-        :disabled="loading"
-        @click="load(true)"
-      >
-        {{ $t("managed.more") }} ({{ items.length }}/{{ total }})
-      </button>
+      <strong>{{
+        $t(query.trim() ? "managed.searchEmptyTitle" : "managed.emptyTitle")
+      }}</strong>
+      <p>
+        {{ $t(query.trim() ? "managed.searchEmptyText" : "managed.emptyText") }}
+      </p>
     </div>
-    <ModalDialog
-      v-if="expansionOpen"
-      :title="$t(`managed.kinds.${kind}`)"
-      size="xl"
-      @close="expansionOpen = false"
-      ><ConfigurationCatalog :kind="kind" :project-ref="projectRef" expanded
-    /></ModalDialog>
+    <div ref="list" class="configuration-catalog__list">
+      <table v-if="items.length" class="configuration-catalog__table">
+        <thead>
+          <tr>
+            <th scope="col">{{ $t("catalog.table.name") }}</th>
+            <th scope="col">{{ $t("managed.catalogSource") }}</th>
+            <th scope="col">{{ $t("catalog.table.state") }}</th>
+            <th scope="col">{{ $t("managed.catalogRevision") }}</th>
+            <th scope="col" class="configuration-catalog__open-heading">
+              {{ $t("catalog.table.open") }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="item in items"
+            :key="item.ref"
+            class="configuration-catalog__row"
+          >
+            <td>
+              <RouterLink
+                class="configuration-catalog__identity"
+                :to="{
+                  name: 'configuration',
+                  params: { kind: item.kind, configurationRef: item.ref },
+                }"
+                :title="item.name"
+              >
+                <EntityIcon
+                  :kind="
+                    item.kind === 'ROLE_IMAGE'
+                      ? 'ROLE_IMAGE'
+                      : item.kind === 'INTEGRATION_DEFINITION'
+                        ? 'INTEGRATION'
+                        : 'CONFIGURATION'
+                  "
+                />
+                <strong>{{ item.name }}</strong>
+              </RouterLink>
+            </td>
+            <td>
+              <strong>{{
+                $t(`roleImages.managedBy.${item.managedBy}`)
+              }}</strong>
+              <small v-if="item.source" :title="item.source">{{
+                item.source
+              }}</small>
+              <small v-if="item.sourceRevision" :title="item.sourceRevision">{{
+                item.sourceRevision
+              }}</small>
+            </td>
+            <td>
+              <StatusBadge
+                :state="
+                  item.archived
+                    ? 'ARCHIVED'
+                    : (item.currentRevision?.state ?? 'DRAFT')
+                "
+              />
+            </td>
+            <td>v{{ item.currentRevision?.revision ?? item.version }}</td>
+            <td class="configuration-catalog__open-cell">
+              <RouterLink
+                class="icon-button"
+                :to="{
+                  name: 'configuration',
+                  params: { kind: item.kind, configurationRef: item.ref },
+                }"
+                :aria-label="$t('catalog.table.open')"
+                :title="$t('catalog.table.open')"
+                ><ChevronRight :size="18" aria-hidden="true"
+              /></RouterLink>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div
+        v-if="nextPageToken"
+        ref="sentinel"
+        class="configuration-catalog__sentinel"
+        role="status"
+      >
+        <span v-if="loading">{{ $t("common.loading") }}</span>
+        <span class="sr-only">{{ items.length }}/{{ total }}</span>
+      </div>
+    </div>
+    <OpenAPIImportDialog
+      v-if="importOpen"
+      @close="importOpen = false"
+      @created="created"
+    />
   </section>
 </template>
 <style scoped>
@@ -234,44 +323,96 @@ function scroll(event: Event): void {
   min-width: 0;
 }
 .configuration-catalog__list {
-  max-height: 576px;
-  overflow-y: auto;
+  max-height: min(720px, calc(100dvh - 220px));
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
 }
-.configuration-catalog__list--expanded {
-  max-height: 65vh;
+.configuration-catalog__empty {
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--panel);
 }
-.configuration-catalog__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
-  align-items: center;
-  height: 96px;
-  padding: 12px 0;
-  color: inherit;
-  text-decoration: none;
-  border-bottom: 1px solid var(--border);
-}
-.configuration-catalog__row > div {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.configuration-catalog__row strong,
-.configuration-catalog__row small {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.configuration-catalog__row small {
-  margin-top: 4px;
+.configuration-catalog__empty p {
+  margin: 4px 0 0;
   color: var(--muted);
 }
-@media (max-width: 600px) {
-  .configuration-catalog__row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .configuration-catalog__row > span:last-child {
-    display: none;
-  }
+.configuration-catalog__table {
+  width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.configuration-catalog__table th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding: 11px 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+.configuration-catalog__table th:nth-child(1) {
+  width: 44%;
+}
+.configuration-catalog__table th:nth-child(2) {
+  width: 30%;
+}
+.configuration-catalog__table th:nth-child(3) {
+  width: 15%;
+}
+.configuration-catalog__table th:nth-child(4) {
+  width: 7%;
+}
+.configuration-catalog__table th:nth-child(5) {
+  width: 4%;
+  min-width: 52px;
+}
+.configuration-catalog__table td {
+  height: 64px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+.configuration-catalog__row {
+  min-height: 64px;
+}
+.configuration-catalog__sentinel {
+  min-height: 1px;
+}
+.configuration-catalog__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+.configuration-catalog__identity:hover strong {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.configuration-catalog__identity strong,
+.configuration-catalog__row td > strong,
+.configuration-catalog__row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.configuration-catalog__row small {
+  margin-top: 2px;
+  color: var(--muted);
+}
+.configuration-catalog__open-heading,
+.configuration-catalog__open-cell {
+  text-align: center !important;
+}
+.configuration-catalog__open-cell .icon-button {
+  display: inline-flex;
 }
 </style>

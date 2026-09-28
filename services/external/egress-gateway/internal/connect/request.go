@@ -168,7 +168,7 @@ func parseReadinessAuthority(value string) (Target, error) {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	host, portValue, err := net.SplitHostPort(value)
-	if err != nil || (portValue != "8080" && portValue != "8081" && portValue != "8082") {
+	if err != nil || (portValue != "8080" && portValue != "8081" && portValue != "8082" && portValue != "8083") {
 		return Target{}, &Error{Reason: ReasonAuthority}
 	}
 	hostname, err := policy.NormalizeHostname(host)

@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -27,6 +28,7 @@ func TestNewUsesOnlyExactProviderEndpoints(t *testing.T) {
 	adapter, err := New(Config{
 		CredentialDirectory: t.TempDir(),
 		ProxyURL:            "http://egress-gateway.kodex-system.svc.cluster.local:8080",
+		OpenAPIProxyURL:     "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083",
 		SyntheticBaseURL:    "http://integration-synthetic.kodex-system.svc.cluster.local:8080",
 		Timeout:             10 * time.Second,
 	})
@@ -34,8 +36,9 @@ func TestNewUsesOnlyExactProviderEndpoints(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 	for _, invalid := range []Config{
-		{CredentialDirectory: t.TempDir(), ProxyURL: "http://other:8080", SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
-		{CredentialDirectory: t.TempDir(), ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", SyntheticBaseURL: "http://forged.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
+		{CredentialDirectory: t.TempDir(), ProxyURL: "http://other:8080", OpenAPIProxyURL: "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083", SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
+		{CredentialDirectory: t.TempDir(), ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", OpenAPIProxyURL: "http://other:8083", SyntheticBaseURL: "http://integration-synthetic.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
+		{CredentialDirectory: t.TempDir(), ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", OpenAPIProxyURL: "http://egress-gateway-openapi.kodex-system.svc.cluster.local:8083", SyntheticBaseURL: "http://forged.kodex-system.svc.cluster.local:8080", Timeout: 10 * time.Second},
 	} {
 		if _, err := New(invalid); err == nil {
 			t.Fatal("New() accepted alternate provider endpoint")
@@ -166,6 +169,29 @@ func TestCredentialRevisionDigestMismatchFailsClosed(t *testing.T) {
 	credential.ContentSHA256 = strings.Repeat("0", 64)
 	if _, _, err := adapter.githubClient(t.Context(), credential); err == nil {
 		t.Fatal("githubClient() accepted credential content digest mismatch")
+	} else {
+		var safe *SafeError
+		if !errors.As(err, &safe) || safe.Transient {
+			t.Fatalf("digest mismatch was classified as transient: %v", err)
+		}
+	}
+}
+
+func TestMissingProjectedCredentialIsTransientOnlyUntilReadDeadline(t *testing.T) {
+	t.Parallel()
+	adapter := testAdapter(t)
+	credential := &CredentialRevision{
+		Ref: "icr_projected", Revision: 1,
+		SecretRef: "kodex-system/kodex-integration-credentials#not-yet-projected",
+		SecretUID: "3f18ba8c-8829-4c7f-8350-b8ed65f80d41", SecretResourceVersion: "18",
+		ContentSHA256: strings.Repeat("a", 64),
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
+	defer cancel()
+	_, err := adapter.readCredential(ctx, credential)
+	var safe *SafeError
+	if !errors.As(err, &safe) || safe.Code != "INTEGRATION_CREDENTIAL_UNAVAILABLE" || !safe.Transient {
+		t.Fatalf("projection lag was not isolated from invalid credential: %v", err)
 	}
 }
 
@@ -206,6 +232,17 @@ func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 	success, code := Outcome(errors.New("raw provider response"))
 	if success || code != "INTEGRATION_UNAVAILABLE" {
 		t.Fatalf("Outcome() = %v, %q", success, code)
+	}
+	for _, stage := range []string{"transport", "response_body", "provider_status", "response_validation", "receipt_validation"} {
+		err := &UnknownOutcomeError{stage: stage}
+		success, code = Outcome(err)
+		if success || code != "INTEGRATION_OUTCOME_UNKNOWN" || UnknownOutcomeStage(err) != stage {
+			t.Fatal("unknown outcome lost the closed diagnostic stage")
+		}
+	}
+	if UnknownOutcomeStage(&UnknownOutcomeError{stage: "raw provider response"}) != "unclassified" ||
+		UnknownOutcomeStage(errors.New("raw provider response")) != "not_unknown" {
+		t.Fatal("untrusted diagnostic stage escaped into logs")
 	}
 }
 
@@ -309,6 +346,7 @@ func testAdapter(t *testing.T) *Adapter {
 		credentials: store, definitions: definitions, timeout: 10 * time.Second,
 		githubHTTPClient: &http.Client{Timeout: 10 * time.Second}, githubBaseURL: mustURL(githubAPIBaseURL),
 		providerHTTPClient: &http.Client{Timeout: 10 * time.Second},
+		openAPIHTTPClient:  &http.Client{Timeout: 10 * time.Second},
 		syntheticClient:    &http.Client{Timeout: 10 * time.Second}, syntheticBaseURL: mustURL("http://" + syntheticServiceHost + ":8080"),
 	}
 }
@@ -332,6 +370,10 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		configuration = map[string]string{"base_url": "https://confluence.example.test", "auth_scheme": "BEARER", "space_id": "42"}
 	case "email":
 		configuration = map[string]string{"base_url": emailOrigin, "from_address": "sender@example.test", "mailbox_id": "mailbox"}
+	case "https-json":
+		configuration = map[string]string{"base_url": "https://api.example.test", "resource_path": "/v1/status"}
+	case "openapi-mcp":
+		configuration = map[string]string{"base_url": "https://api.example.test"}
 	}
 	scope, err := capability.ResourceScopeValues(configuration)
 	if err != nil {

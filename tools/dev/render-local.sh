@@ -30,6 +30,7 @@ usage() {
     '  [--profile web-only|web-with-mattermost]' \
     '  [--security-profile protected|trusted-cluster] [--host-uid <uid>] [--host-gid <gid>]' \
     '  [--mail-configuration <exact-snapshot>] [--mail-resolv-conf <trusted-resolver-file>]' \
+    '  [--integration-fixture-bearer-token-file <owner-private-file>]' \
     '  --public-host <dns> --oidc-host <dns> --kubernetes-service-cidr <cidr>' \
     '  [--ingress-class <name>] [--cluster-issuer <name>] [--tls-mode local-ca|public-acme]' \
     '  --kubernetes-endpoint-cidr <cidr> --kubernetes-endpoint-port <port>' \
@@ -55,6 +56,7 @@ cache_root=""
 output=""
 mail_configuration=""
 mail_resolv_conf=/etc/resolv.conf
+integration_fixture_bearer_token_file=""
 deployment_profile=web-only
 security_profile=protected
 host_uid=$(id -u)
@@ -90,6 +92,7 @@ while (($# > 0)); do
     --output) output=${2:-}; shift 2 ;;
     --mail-configuration) mail_configuration=${2:-}; shift 2 ;;
     --mail-resolv-conf) mail_resolv_conf=${2:-}; shift 2 ;;
+    --integration-fixture-bearer-token-file) integration_fixture_bearer_token_file=${2:-}; shift 2 ;;
     --profile) deployment_profile=${2:-}; shift 2 ;;
     --security-profile) security_profile=${2:-}; shift 2 ;;
     --host-uid) host_uid=${2:-}; shift 2 ;;
@@ -134,8 +137,30 @@ case "$security_profile" in
   *) fail 'security profile is invalid' ;;
 esac
 
+integration_fixture_bearer_sha256=0000000000000000000000000000000000000000000000000000000000000000
+if [[ -n "$integration_fixture_bearer_token_file" ]]; then
+  [[ "$security_profile" == trusted-cluster ]] ||
+    fail 'local integration fixture bearer is available only in trusted-cluster'
+  [[ "$integration_fixture_bearer_token_file" == /* &&
+    -f "$integration_fixture_bearer_token_file" && ! -L "$integration_fixture_bearer_token_file" &&
+    "$(stat -c '%u' "$integration_fixture_bearer_token_file")" == "$(id -u)" &&
+    $((8#$(stat -c '%a' "$integration_fixture_bearer_token_file") & 8#077)) == 0 ]] ||
+    fail 'local integration fixture bearer file is unsafe'
+  IFS= read -r integration_fixture_bearer_token <"$integration_fixture_bearer_token_file" ||
+    fail 'local integration fixture bearer is unavailable'
+  [[ "$integration_fixture_bearer_token" =~ ^[a-f0-9]{64}$ ]] ||
+    fail 'local integration fixture bearer is invalid'
+  integration_fixture_bearer_sha256=$(printf '%s' "$integration_fixture_bearer_token" | sha256sum | awk '{print $1}')
+  unset integration_fixture_bearer_token
+fi
+
 [[ "$source_root" == /* && -d "$source_root/.git" || -f "$source_root/.git" ]] ||
   fail 'source root must be an exact Git worktree path'
+if [[ -n "$integration_fixture_bearer_token_file" ]]; then
+  case "$integration_fixture_bearer_token_file" in
+    "$source_root"|"$source_root"/*) fail 'local integration fixture bearer must stay outside source' ;;
+  esac
+fi
 [[ "$cache_root" == /* && "$cache_root" != / ]] || fail 'cache root is invalid'
 [[ "$output" == /* ]] || fail 'output must be an absolute path'
 for host in "$public_host" "$oidc_host"; do
@@ -224,6 +249,10 @@ render="$temporary_directory/local.yaml"
   printf '\n---\n'
   kubectl kustomize "$repository_root/deploy/k8s/overlays/local/integration-synthetic"
 } >"$render"
+for task_kind in CronJob PersistentVolumeClaim; do
+  yq -e "select(.kind == \"$task_kind\" and (.metadata.name == \"clamav-db-updater\" or .metadata.name == \"clamav-database\"))" "$render" >/dev/null ||
+    fail "ClamAV $task_kind missing from initial local render"
+done
 
 source_revision=$(git -C "$source_root" rev-parse HEAD)
 source_digest=$(calculate_source_content_fingerprint)
@@ -277,6 +306,12 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
     ((.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.startupProbe != null) |
       .startupProbe.periodSeconds) = 2
   ) |
+  with(select(.kind == "CronJob" and .metadata.name == "clamav-db-updater");
+    .spec.jobTemplate.spec.template.metadata.labels."kodex.dev/environment" = "staging" |
+    .spec.jobTemplate.spec.template.metadata.labels."kodex.dev/local-profile" = "hot-reload" |
+    .spec.jobTemplate.spec.template.metadata.labels."kodex.dev/profile" = strenv(DEPLOYMENT_PROFILE) |
+    .spec.jobTemplate.spec.template.metadata.labels."kodex.dev/security-profile" = "trusted-cluster"
+  ) |
   with(select(.metadata.labels != null);
     .metadata.labels."kodex.dev/environment" = "staging" |
     .metadata.labels."kodex.dev/profile" = strenv(DEPLOYMENT_PROFILE) |
@@ -318,11 +353,12 @@ yq -i '
     .kind != "ServiceMonitor" and
     .kind != "PodMonitor" and
     .kind != "PrometheusRule" and
-    .kind != "CronJob" and
+    (.kind != "CronJob" or .metadata.name == "clamav-db-updater") and
     (.kind != "PersistentVolumeClaim" or
       .metadata.name == "kodex-image-registry-staging" or
       .metadata.name == "kodex-image-registry-promoted" or
-      .metadata.name == "kodex-image-registry-evidence") and
+      .metadata.name == "kodex-image-registry-evidence" or
+      .metadata.name == "clamav-database") and
     (.kind != "IngressRouteTCP" or .metadata.name == "kodex-image-registry-pull") and
     (.kind != "Deployment" or .metadata.name == "control-plane" or
       .metadata.name == "secret-broker" or
@@ -332,6 +368,7 @@ yq -i '
       .metadata.name == "control-api-gateway" or .metadata.name == "egress-gateway" or
       .metadata.name == "runtime-controller" or .metadata.name == "integration-gateway" or
       .metadata.name == "integration-synthetic" or
+      .metadata.name == "clamav-egress-gateway" or
       .metadata.name == "backup-controller" or
       .metadata.name == "automation-scheduler" or .metadata.name == "artifact-retention" or
       .metadata.name == "staff-control-center" or
@@ -387,6 +424,13 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
   with(select(.kind == "Deployment" and
       (.metadata.name | test("^(kodex-image-registry-|kodex-buildkit$|role-image-builder$)")));
     .spec.replicas = 1
+  ) |
+  # На одноузловом стенде второй BuildKit Pod не помещается по CPU.
+  # Нулевой surge освобождает прежний Pod до запуска нового.
+  with(select(.kind == "Deployment" and .metadata.name == "kodex-buildkit");
+    .spec.strategy.type = "RollingUpdate" |
+    .spec.strategy.rollingUpdate.maxSurge = 0 |
+    .spec.strategy.rollingUpdate.maxUnavailable = 1
   ) |
   with(select(.kind == "Deployment");
     with((.spec.template.spec.initContainers[]?, .spec.template.spec.containers[]?) |
@@ -837,6 +881,7 @@ patch_go_container Deployment email-bridge platform-worker-grant-agent services/
 patch_go_container Deployment control-api-gateway control-api-gateway services/external/control-api-gateway ./cmd/control-api-gateway
 patch_go_container Deployment control-api-gateway internal-rpc-authority-issuer services/internal/internal-rpc-authority ./cmd/internal-rpc-authority-issuer
 patch_go_container Deployment egress-gateway egress-gateway services/external/egress-gateway ./cmd/egress-gateway
+patch_go_container Deployment clamav-egress-gateway clamav-egress-gateway services/external/egress-gateway ./cmd/egress-gateway
 patch_go_container Deployment runtime-controller runtime-controller services/internal/runtime-controller ./cmd/runtime-controller
 patch_go_container Deployment runtime-controller artifact-spool-init services/internal/runtime-controller ./cmd/runtime-controller
 # Init должен завершиться до subPath mount основного контейнера, без Air/retry.
@@ -883,6 +928,37 @@ yq -i '
     (.spec.template.spec.volumes[] | select(.name == "tmp")).emptyDir = {"sizeLimit":"64Mi"}
   )
 ' "$render"
+
+if [[ "$security_profile" == trusted-cluster ]]; then
+  INTEGRATION_FIXTURE_BEARER_SHA256="$integration_fixture_bearer_sha256" yq -i '
+    with(select(.kind == "Deployment" and .metadata.name == "integration-synthetic");
+      (.spec.template.spec.containers[] | select(.name == "integration-synthetic") |
+        .env[] | select(.name == "KODEX_INTEGRATION_SYNTHETIC_BEARER_SHA256")).value =
+          strenv(INTEGRATION_FIXTURE_BEARER_SHA256)
+    ) |
+    with(select(.kind == "ConfigMap" and .metadata.name == "integration-gateway-runtime");
+      .data.INTEGRATION_GATEWAY_LOCAL_OPENAPI_BASE_URL =
+        "https://integration-synthetic.kodex-system.svc.cluster.local" |
+      .data.INTEGRATION_GATEWAY_LOCAL_OPENAPI_CA_FILE =
+        "/var/run/config/kodex/integration-gateway/local-openapi/ca.crt"
+    ) |
+    with(select(.kind == "Deployment" and .metadata.name == "integration-gateway");
+      (.spec.template.spec.containers[] | select(.name == "integration-gateway")).volumeMounts += [{
+        "name":"local-openapi-ca",
+        "mountPath":"/var/run/config/kodex/integration-gateway/local-openapi",
+        "readOnly":true
+      }] |
+      .spec.template.spec.volumes += [{
+        "name":"local-openapi-ca",
+        "secret":{
+          "secretName":"integration-synthetic-server-tls",
+          "defaultMode":288,
+          "items":[{"key":"ca.crt","path":"ca.crt"}]
+        }
+      }]
+    )
+  ' "$render"
+fi
 
 INTEGRATION_IMAGE="$integration_hot_reload_image" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "integration-gateway");
@@ -958,6 +1034,12 @@ yq -i '
 
 frontend_middlewares=kodex-system-staff-control-center-retry@kubernetescrd
 api_middlewares=""
+frontend_bootstrap_digest=$(
+  sha256sum "$source_root/services/staff/control-center/vite.config.ts" \
+    "$source_root/tools/dev/run-frontend.sh" |
+    awk '{print $1}' | sha256sum | awk '{print $1}'
+)
+[[ "$frontend_bootstrap_digest" =~ ^[a-f0-9]{64}$ ]] || fail 'frontend bootstrap digest is invalid'
 if [[ "$tls_mode" == public-acme ]]; then
   frontend_middlewares=kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd
   api_middlewares=kodex-system-oauth2-control-center-auth@kubernetescrd
@@ -965,6 +1047,7 @@ fi
 NODE_IMAGE="$node_image" FRONTEND_CACHE="$frontend_cache" \
 SOURCE_ROOT="$source_root" CACHE_ROOT="$cache_root" PUBLIC_HOST="$public_host" \
 SOURCE_DIGEST="$source_digest" OIDC_ISSUER="$oidc_issuer" \
+FRONTEND_BOOTSTRAP_DIGEST="$frontend_bootstrap_digest" \
 FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" yq -i '
   with(select(.kind == "ServersTransport" and .metadata.name == "staff-control-center");
     .metadata.name = "control-api-gateway" |
@@ -976,6 +1059,7 @@ FRONTEND_MIDDLEWARES="$frontend_middlewares" API_MIDDLEWARES="$api_middlewares" 
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "staff-control-center");
     .spec.replicas = 1 |
+    .spec.template.metadata.annotations."kodex.dev/frontend-bootstrap-sha256" = strenv(FRONTEND_BOOTSTRAP_DIGEST) |
     .spec.template.spec.securityContext.runAsNonRoot = false |
     .spec.template.spec.securityContext.runAsUser = 0 |
     .spec.template.spec.securityContext.runAsGroup = 0 |
@@ -1157,6 +1241,10 @@ yq -i '
   )
 ' "$render"
 
+for task_kind in CronJob PersistentVolumeClaim; do
+  yq -e "select(.kind == \"$task_kind\" and (.metadata.name == \"clamav-db-updater\" or .metadata.name == \"clamav-database\"))" "$render" >/dev/null ||
+    fail "ClamAV $task_kind missing before local normalization"
+done
 yq -o=json -I=0 '.' "$render" | jq -sc '
   map(select(.kind != null)) |
   unique_by([.apiVersion,.kind,(.metadata.namespace // ""),.metadata.name])
@@ -1546,7 +1634,22 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
     .spec.ingress[0].from[0].namespaceSelector.matchLabels["kubernetes.io/metadata.name"] == "kodex-system" and
     .spec.ingress[0].from[0].podSelector.matchLabels["app.kubernetes.io/name"] == "integration-gateway" and
     .spec.ingress[0].from[0].podSelector.matchLabels["app.kubernetes.io/component"] == "integration-worker" and
-    .spec.ingress[0].ports == [{"protocol":"TCP","port":8080}])
+    (.spec.ingress[0].ports | sort_by(.port)) ==
+      ([{"protocol":"TCP","port":8080},{"protocol":"TCP","port":8443}] | sort_by(.port))) and
+  any(.[];
+    .kind == "Service" and .metadata.name == "integration-synthetic" and
+    .metadata.namespace == "kodex-system" and
+    ([.spec.ports[] | [.name,.protocol,.port,.targetPort]] | sort) ==
+      ([
+        ["http","TCP",8080,"http"],
+        ["https-openapi","TCP",443,"https-openapi"]
+      ] | sort)) and
+  any(.[];
+    .kind == "Certificate" and .metadata.name == "integration-synthetic-server" and
+    .metadata.namespace == "kodex-system" and
+    .spec.secretName == "integration-synthetic-server-tls" and
+    .spec.issuerRef == {"kind":"Issuer","name":"kodex-installation-ca"} and
+    .spec.dnsNames == ["integration-synthetic.kodex-system.svc.cluster.local"])
 ' >/dev/null || fail 'integration-synthetic exact NetworkPolicy is absent'
 yq -e 'select(.kind == "NetworkPolicy" and .metadata.name == "integration-gateway-exact-runtime-paths")' "$output" >/dev/null ||
   fail 'integration-gateway exact NetworkPolicy is absent from the local fixture path'
@@ -1625,6 +1728,9 @@ RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
       any($resources[]; .kind == "Deployment" and .metadata.name == $name))) and
   any($resources[]; .kind == "Deployment" and .metadata.name == "kodex-buildkit" and
     .spec.replicas == 1 and .spec.template.spec.hostUsers == false and
+    .spec.strategy.type == "RollingUpdate" and
+    .spec.strategy.rollingUpdate.maxSurge == 0 and
+    .spec.strategy.rollingUpdate.maxUnavailable == 1 and
     any(.spec.template.spec.containers[];
       .name == "buildkitd" and .securityContext.privileged == true and
       .resources.requests.cpu == "8" and

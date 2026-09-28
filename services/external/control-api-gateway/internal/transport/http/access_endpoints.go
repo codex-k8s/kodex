@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -42,14 +43,38 @@ func (server *Server) ListOIDCGroups(writer http.ResponseWriter, request *http.R
 }
 
 func (server *Server) ListAccessRoles(writer http.ResponseWriter, request *http.Request, parameters generated.ListAccessRolesParams) {
+	search := stringValue(parameters.Query)
 	response, err := server.control.Access.ListAccessRoles(request.Context(), &controlplanev1.ListAccessRolesRequest{
 		Page: page(parameters.PageSize, parameters.PageToken), IncludeArchived: boolValue(parameters.IncludeArchived),
+		Query: search, QueryAliases: accessRoleQueryAliases(writer, search),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)
 		return
 	}
 	writeMessage(writer, http.StatusOK, response, "", "roles")
+}
+
+func accessRoleQueryAliases(writer http.ResponseWriter, search string) []string {
+	localizer, ok := writer.(interface{ Localize(string) string })
+	needle := strings.ToLower(strings.TrimSpace(search))
+	if !ok || needle == "" {
+		return nil
+	}
+	messageIDs := [...]string{
+		"SYSTEM_ROLE_OWNER", "SYSTEM_ROLE_OWNER_DESCRIPTION",
+		"SYSTEM_ROLE_ADMINISTRATOR", "SYSTEM_ROLE_ADMINISTRATOR_DESCRIPTION",
+		"SYSTEM_ROLE_OPERATOR", "SYSTEM_ROLE_OPERATOR_DESCRIPTION",
+		"SYSTEM_ROLE_MEMBER", "SYSTEM_ROLE_MEMBER_DESCRIPTION",
+		"SYSTEM_ROLE_AUDITOR", "SYSTEM_ROLE_AUDITOR_DESCRIPTION",
+	}
+	aliases := make([]string, 0, len(messageIDs))
+	for _, messageID := range messageIDs {
+		if strings.Contains(strings.ToLower(localizer.Localize(messageID)), needle) {
+			aliases = append(aliases, "i18n:"+messageID)
+		}
+	}
+	return aliases
 }
 
 func (server *Server) ListAccessRoleVersions(writer http.ResponseWriter, request *http.Request, roleRef generated.AccessRoleRef, parameters generated.ListAccessRoleVersionsParams) {
@@ -64,10 +89,11 @@ func (server *Server) ListAccessRoleVersions(writer http.ResponseWriter, request
 }
 
 func (server *Server) ListAccessBindings(writer http.ResponseWriter, request *http.Request, parameters generated.ListAccessBindingsParams) {
+	search := stringValue(parameters.Query)
 	response, err := server.control.Access.ListAccessBindings(request.Context(), &controlplanev1.ListAccessBindingsRequest{
 		Page: page(parameters.PageSize, parameters.PageToken), SubjectKind: protoSubjectKind(stringValue(parameters.SubjectKind)),
 		SubjectRef: stringValue(parameters.SubjectRef), RoleRef: stringValue(parameters.RoleRef), ProjectRef: stringValue(parameters.ProjectRef),
-		IncludeRevoked: boolValue(parameters.IncludeRevoked),
+		IncludeRevoked: boolValue(parameters.IncludeRevoked), Query: search, QueryAliases: accessRoleQueryAliases(writer, search),
 	})
 	if err != nil {
 		writeRPCProblem(writer, err)

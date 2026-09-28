@@ -74,6 +74,7 @@ func (a *MailActive) ProfileIdentity() (string, string, string) {
 }
 func (a *MailActive) Configured() bool                  { return len(a.document.Destinations) != 0 }
 func (a *MailActive) Allows(host string, port int) bool { return a.TLSMode(host, port) != "" }
+func (a *MailActive) RequireCompleteDNSPinning()        {}
 func (a *MailActive) TLSMode(host string, port int) string {
 	for _, d := range a.document.Destinations {
 		if d.Hostname == host && d.Port == port {

@@ -38,9 +38,10 @@ LEFT JOIN control_plane.memberships resource_membership ON e.resource_kind IN ('
 LEFT JOIN control_plane.subjects resource_subject ON resource_subject.id = resource_membership.subject_id
 WHERE e.organization_id = $1::uuid
   AND ($2 = '' OR scope_project.ref = $2)
-  AND ($3 = '' OR e.action = $3)
-  AND ($4 = '' OR e.outcome = $4)
-  AND ($5 = '' OR COALESCE(resource_project.name,
+  AND ($3 = '' OR e.resource_ref = $3)
+  AND ($4 = '' OR e.action = $4)
+  AND ($5 = '' OR e.outcome = $5)
+  AND ($6 = '' OR COALESCE(resource_project.name,
                            resource_agent.name,
                            resource_workflow.name,
                            resource_run.title,
@@ -49,16 +50,16 @@ WHERE e.organization_id = $1::uuid
                            resource_schedule.name,
                            resource_connection.name,
                            resource_subject.display_name,
-                           e.safe_summary) ILIKE '%' || $5 || '%')
-  AND ($6 IN ('OWNER', 'ADMINISTRATOR', 'AUDITOR')
+                           e.safe_summary) ILIKE '%' || $6 || '%')
+  AND ($7 IN ('OWNER', 'ADMINISTRATOR', 'AUDITOR')
        OR EXISTS(SELECT 1
                  FROM control_plane.memberships membership
                  WHERE membership.project_id = e.project_id
-                   AND membership.subject_id = $7::uuid
+                   AND membership.subject_id = $8::uuid
                    AND membership.active
                    AND 'VIEW_AUDIT' = ANY(membership.permissions)))
-  AND ($8::timestamptz IS NULL
-       OR e.occurred_at < $8::timestamptz
-       OR (e.occurred_at = $8::timestamptz AND e.ref > $9))
+  AND ($9::timestamptz IS NULL
+       OR e.occurred_at < $9::timestamptz
+       OR (e.occurred_at = $9::timestamptz AND e.ref > $10))
 ORDER BY e.occurred_at DESC, e.ref
-LIMIT $10
+LIMIT $11

@@ -111,7 +111,11 @@ func TestMailCONNECTAllRegisteredTransportsPreserveOpaqueBytes(t *testing.T) {
 }
 
 func TestMailCONNECTRebindingRejectsBeforeDial(t *testing.T) {
-	for _, addresses := range [][]netip.Addr{{netip.MustParseAddr("1.1.1.1")}, {netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("10.0.0.1")}} {
+	for _, addresses := range [][]netip.Addr{
+		{netip.MustParseAddr("1.1.1.1")},
+		{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("9.9.9.9")},
+		{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("10.0.0.1")},
+	} {
 		resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{Addresses: addresses, ExpiresAt: time.Now().Add(time.Minute)}}
 		dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
 		server, err := New(context.Background(), "unused", mailFixture(t, "smtp", "starttls", 587), resolver, dialer, readyStub(true), newTestMetrics(t))

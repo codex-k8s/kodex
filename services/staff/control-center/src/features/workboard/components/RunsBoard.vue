@@ -1,11 +1,20 @@
 <script setup lang="ts">
+import { ArrowRight } from "@lucide/vue";
 import { computed, shallowRef } from "vue";
-import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
-import type { AppProblem } from "@/shared/api/problem";
+import { useI18n } from "vue-i18n";
 
-import { groupRuns, type RunLane } from "@/features/workboard/model";
+import {
+  groupRuns,
+  runListSummary,
+  type RunLane,
+} from "@/features/workboard/model";
+import type { AppProblem } from "@/shared/api/problem";
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
-import RunWorkItem from "@/features/workboard/components/RunWorkItem.vue";
+import { runPath } from "@/shared/routes";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
+import SafeSummary from "@/shared/ui/SafeSummary.vue";
+import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{
   runs: Run[];
@@ -18,32 +27,46 @@ const props = defineProps<{
   >;
 }>();
 const emit = defineEmits<{ more: [lane: RunLane] }>();
+const { locale, t } = useI18n();
+const dateFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }),
+);
+const lanes = computed(() => groupRuns(props.runs));
+const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
+const scrollRoot = shallowRef<HTMLElement | null>(null);
+const laneSentinels = Object.fromEntries(
+  order.map((lane) => [lane, shallowRef<HTMLElement | null>(null)]),
+) as Record<RunLane, ReturnType<typeof shallowRef<HTMLElement | null>>>;
+
 function canLoad(lane: RunLane): boolean {
   const column = props.columns?.[lane];
   return column
     ? Boolean(column.pageToken) && !column.loading && !column.problem
     : props.hasMore && !props.loadingMore;
 }
-function onScroll(event: Event, lane: RunLane): void {
-  const element = event.currentTarget;
-  if (
-    canLoad(lane) &&
-    element instanceof HTMLElement &&
-    element.scrollHeight - element.scrollTop - element.clientHeight <= 40
-  )
-    emit("more", lane);
+
+const visibleOrder = computed(() =>
+  order.filter((lane) => lanes.value[lane].length > 0 || canLoad(lane)),
+);
+
+function formattedDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf())
+    ? t("common.noData")
+    : dateFormatter.value.format(date);
 }
-const lanes = computed(() => groupRuns(props.runs));
-const order: RunLane[] = ["QUEUED", "RUNNING", "WAITING_HUMAN", "TERMINAL"];
-const laneRoots = Object.fromEntries(
-  order.map((lane) => [lane, shallowRef<HTMLElement | null>(null)]),
-) as Record<RunLane, ReturnType<typeof shallowRef<HTMLElement | null>>>;
-const laneSentinels = Object.fromEntries(
-  order.map((lane) => [lane, shallowRef<HTMLElement | null>(null)]),
-) as Record<RunLane, ReturnType<typeof shallowRef<HTMLElement | null>>>;
+
+function link(run: Run): string {
+  return runPath(run.ref, props.preserveProject ? run.projectRef : undefined);
+}
+
 for (const lane of order)
   useCursorInfiniteScroll({
-    root: laneRoots[lane],
+    root: scrollRoot,
     sentinel: laneSentinels[lane],
     enabled: () => canLoad(lane),
     loadMore: () => emit("more", lane),
@@ -51,148 +74,216 @@ for (const lane of order)
 </script>
 
 <template>
-  <div class="runs-board">
-    <div class="runs-board__kanban">
-      <section v-for="lane in order" :key="lane" class="runs-lane">
-        <header>
-          <h2>{{ $t(`workboard.lanes.${lane}`) }}</h2>
-          <span>{{ lanes[lane].length }}</span>
-        </header>
-        <div
-          :ref="
-            (element) => (laneRoots[lane].value = element as HTMLElement | null)
-          "
-          class="runs-lane__body"
-          tabindex="0"
-          :aria-label="$t(`workboard.lanes.${lane}`)"
-          @scroll="onScroll($event, lane)"
+  <div ref="scrollRoot" class="runs-board" tabindex="0">
+    <table class="runs-board__table">
+      <thead>
+        <tr>
+          <th>{{ t("common.name") }}</th>
+          <th>{{ t("common.target") }}</th>
+          <th>{{ t("common.source") }}</th>
+          <th>{{ t("common.status") }}</th>
+          <th>{{ t("runs.createdAt") }}</th>
+          <th>
+            <span class="sr-only">{{ t("common.actions") }}</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody v-for="lane in visibleOrder" :key="lane">
+        <tr class="runs-board__group">
+          <th colspan="6" scope="rowgroup">
+            {{ t(`workboard.lanes.${lane}`) }}
+            <span>{{ lanes[lane].length }}</span>
+          </th>
+        </tr>
+        <tr v-for="run in lanes[lane]" :key="run.ref" class="run-table__row">
+          <td>
+            <div class="runs-board__identity">
+              <EntityIcon kind="RUN" :size="16" />
+              <div>
+                <RouterLink :to="link(run)" :title="run.title">{{
+                  run.title
+                }}</RouterLink>
+                <SafeSummary
+                  :content="runListSummary(run)"
+                  :fallback="
+                    run.state === 'FAILED'
+                      ? t('workboard.runFailedSummary')
+                      : run.target.displayName
+                  "
+                />
+              </div>
+            </div>
+          </td>
+          <td :title="run.target.displayName">
+            {{ run.target.displayName }}
+          </td>
+          <td>
+            <div class="runs-board__source">
+              <span>{{ t(`runs.source.${run.source}`) }}</span>
+              <small :title="run.initiator.displayName">{{
+                run.initiator.displayName
+              }}</small>
+            </div>
+          </td>
+          <td><StatusBadge :state="run.state" /></td>
+          <td>
+            <time :datetime="run.createdAt">{{
+              formattedDate(run.createdAt)
+            }}</time>
+          </td>
+          <td>
+            <RouterLink
+              :to="link(run)"
+              class="button button--ghost runs-board__action"
+              :aria-label="`${t('common.open')}: ${run.title}`"
+              :title="t('common.open')"
+              ><ArrowRight :size="17" aria-hidden="true"
+            /></RouterLink>
+          </td>
+        </tr>
+        <tr
+          v-if="canLoad(lane)"
+          class="runs-board__sentinel-row"
+          aria-hidden="true"
         >
-          <RunWorkItem
-            v-for="run in lanes[lane]"
-            :key="run.ref"
-            :run="run"
-            :preserve-project="preserveProject"
-            compact
-          />
-          <p v-if="lanes[lane].length === 0" class="runs-lane__empty">
-            {{ $t("workboard.noRunsInLane") }}
-          </p>
-          <div
-            :ref="
-              (element) =>
-                (laneSentinels[lane].value = element as HTMLElement | null)
-            "
-            class="runs-lane__sentinel"
-            aria-hidden="true"
-          />
-        </div>
-      </section>
-    </div>
+          <td colspan="6">
+            <span
+              :ref="
+                (element) =>
+                  (laneSentinels[lane].value = element as HTMLElement | null)
+              "
+              class="runs-board__sentinel"
+            />
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </template>
 
 <style scoped>
 .runs-board {
-  min-width: 0;
-  max-width: 100%;
-}
-.runs-board__kanban {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(250px, 1fr));
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-}
-.runs-lane {
-  display: flex;
-  flex-direction: column;
-  min-height: 320px;
+  width: 100%;
+  max-height: min(960px, calc(100vh - 300px));
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--surface);
+}
+.runs-board__table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.runs-board__table thead th,
+.runs-board__table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: middle;
+}
+.runs-board__table thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  color: var(--subtle);
+  background: var(--panel);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.runs-board__table thead th:nth-child(1) {
+  width: 39%;
+}
+.runs-board__table thead th:nth-child(2) {
+  width: 17%;
+}
+.runs-board__table thead th:nth-child(3) {
+  width: 16%;
+}
+.runs-board__table thead th:nth-child(4) {
+  width: 10%;
+}
+.runs-board__table thead th:nth-child(5) {
+  width: 14%;
+}
+.runs-board__table thead th:nth-child(6) {
+  width: 4%;
+}
+.runs-board__group th {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--text);
+  background: var(--panel);
+  font-size: 0.78rem;
+  text-align: left;
+}
+.runs-board__group span {
+  margin-left: 6px;
+  color: var(--subtle);
+  font-weight: 400;
+}
+.run-table__row:hover {
   background: var(--panel);
 }
-.runs-lane > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 44px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.runs-lane h2 {
-  margin: 0;
-  font-size: 0.82rem;
-}
-.runs-lane header span {
-  min-width: 24px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  color: var(--muted);
-  background: var(--surface);
-  font-family: var(--font-mono);
-  text-align: center;
-}
-.runs-lane__body {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  padding: 8px;
-  max-height: 1256px;
-  box-sizing: border-box;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  grid-auto-rows: auto;
-}
-.runs-lane__body :deep(.run-work-item) {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  height: 200px;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-.runs-lane__body :deep(.run-work-item h3) {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  font-size: 14px;
-  line-height: 1.3;
-}
-.runs-lane__body :deep(.run-work-item .safe-summary) {
-  -webkit-line-clamp: 1;
-}
-.runs-lane__body :deep(.run-work-item dd) {
+.run-table__row td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.runs-lane__body :deep(.run-work-item__aside) {
-  justify-content: space-between;
-  flex-wrap: wrap;
+.runs-board__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
-  gap: 4px;
 }
-.runs-lane__body :deep(.run-work-item__actors) {
+.runs-board__identity > div,
+.runs-board__source {
   display: grid;
-  gap: 3px;
+  gap: 2px;
+  min-width: 0;
 }
-.runs-lane__body :deep(.run-work-item__aside) {
-  align-items: flex-start;
-  flex-direction: row;
+.runs-board__identity a,
+.runs-board__identity :deep(.safe-summary),
+.runs-board__source span,
+.runs-board__source small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.runs-lane__empty {
-  margin: 0;
-  padding: 26px 10px;
-  color: var(--muted);
-  text-align: center;
+.runs-board__identity a {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  text-decoration: none;
 }
-.runs-lane__sentinel {
+.runs-board__identity a:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+.runs-board__identity :deep(.safe-summary),
+.runs-board__source small {
+  color: var(--subtle);
+  font-size: 0.74rem;
+}
+.runs-board__table time {
+  color: var(--subtle);
+  font-size: 0.72rem;
+}
+.runs-board__action {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.runs-board__sentinel-row td {
+  padding: 0;
+  border: 0;
+}
+.runs-board__sentinel {
+  display: block;
   height: 1px;
-  min-height: 1px;
-  align-self: start;
 }
 </style>

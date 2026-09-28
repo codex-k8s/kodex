@@ -26,7 +26,14 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 )
 
-require github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+require (
+	github.com/getkin/kin-openapi v0.149.0 // indirect
+	github.com/go-openapi/jsonpointer v0.22.5 // indirect
+	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
+	github.com/oasdiff/yaml v0.1.1 // indirect
+	github.com/oasdiff/yaml3 v0.0.14 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+)
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect

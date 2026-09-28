@@ -58,6 +58,7 @@ function messages() {
       previousAttempt: "Предыдущая попытка",
       continueTask: "Дополнительное задание",
       live: "Данные поступают в реальном времени",
+      historyComplete: "История запуска завершена",
       noEvents: "Событий пока нет",
       callback: "Ответ дочернего запуска",
       childRuns: "Дочерние запуски",
@@ -246,6 +247,9 @@ describe("RunPage runtime presentation", () => {
     expect(html).toContain("run-page-body");
     expect(html).toContain("run-workspace");
     expect(html).toContain("run-canvas-summary");
+    expect(html).toContain("История запуска завершена");
+    expect(html).toContain("· #1");
+    expect(html).not.toContain("Данные поступают в реальном времени");
     expect(html).toContain("token-usage");
     expect(html).toContain(new Intl.NumberFormat("ru").format(1700));
     expect(html).toContain("graph-legend");
@@ -256,5 +260,21 @@ describe("RunPage runtime presentation", () => {
     expect(html).not.toContain("run_secret_header_reference");
     expect(html).not.toContain("i18n:RUN_COORDINATION_ROLE");
     expect(html).not.toContain("{&quot;status&quot;");
+
+    const graphWithoutEvents = platform.graphs[runRef];
+    graphWithoutEvents.sequence = 0;
+    const noEventsApp = createSSRApp(RunPage);
+    noEventsApp.use(pinia);
+    noEventsApp.use(router);
+    noEventsApp.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        messages: { ru: messages() },
+      }),
+    );
+    const noEventsHtml = await renderToString(noEventsApp);
+    expect(noEventsHtml).toContain("История запуска завершена");
+    expect(noEventsHtml).not.toContain("· #");
   });
 });

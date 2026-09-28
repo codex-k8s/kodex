@@ -70,12 +70,16 @@ export async function readInteractionIdentities(
   connectionRef: string,
   pageToken: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ): Promise<InteractionIdentityPage> {
   const page = (
     await unwrap(
       listInteractionIdentities({
         path: { connectionRef },
-        query: { pageSize: 40, ...(pageToken ? { pageToken } : {}) },
+        query: {
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+          ...(pageToken ? { pageToken } : {}),
+        },
         signal: requestSignal(signal),
       }),
     )

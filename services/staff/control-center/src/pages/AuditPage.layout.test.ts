@@ -14,24 +14,37 @@ const template = source.slice(
 describe("AuditPage pagination", () => {
   it("использует server-side search и cursor-дозагрузку", () => {
     expect(source).toContain(
-      "platform.loadAudit(projectRef.value, query.value)",
+      "platform.loadAudit(projectRef.value, query.value, pageSize.value)",
     );
-    expect(source).toContain(
-      "platform.loadMoreAudit(projectRef.value, query.value)",
-    );
+    expect(source).toContain("pageSize.value");
     expect(source).toContain("useCursorInfiniteScroll");
     expect(template).toContain('ref="sentinel"');
-    expect(template).toContain('$t("audit.loadMore")');
+    expect(template).not.toContain('$t("audit.loadMore")');
+    expect(source).toContain("useAdaptiveCursorPageSize");
   });
 
-  it("ограничивает начальную загрузку двумя cursor-страницами", () => {
+  it("загружает только первую cursor-порцию до пересечения sentinel", () => {
     const loadBody = source.slice(
       source.indexOf("async function load()"),
       source.indexOf("function loadMore()"),
     );
 
     expect(loadBody.match(/loadAudit/g)).toHaveLength(1);
-    expect(loadBody.match(/loadMoreAudit/g)).toHaveLength(1);
+    expect(loadBody).not.toContain("loadMoreAudit");
     expect(loadBody).not.toContain("while");
+  });
+
+  it("позволяет выбрать область Проекта без потери остальных параметров URL", () => {
+    expect(source).toContain(':load-page="accessProjectOptions"');
+    expect(source).toContain('@update:model-value="selectProject"');
+    expect(source).toContain("{ ...route.query, projectRef: next }");
+    expect(source).toContain("watch(projectRef, () => {");
+    expect(source).toContain("loadSelectedProject()");
+  });
+
+  it("различает подготовку публикации секрета и общее изменение черновика", () => {
+    expect(source).toContain('const prefix = "runtime-secret-draft."');
+    expect(source).toContain("actionSummary(event)");
+    expect(source).toContain("event.safeSummary");
   });
 });

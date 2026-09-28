@@ -28,6 +28,39 @@ const testContractDigest = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 const testProviderDigest = "004ab004093ba6916de2d7fa718d1e1539157f24f04e747d0346e86e0a87556c"
 const testArtifactDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 
+func TestAssistantRunContextPreservesEmptyAllowedOperationsInRevisionDigest(t *testing.T) {
+	t.Parallel()
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	execution := testExecution(true)
+	baseline, binding, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput(baseline) error = %v", err)
+	}
+	baseline.AssistantContext = &runtimecontract.RunnerAssistantContext{
+		Route: "/projects/prj_abcdefgh/runs/run_abcdefgh", EntityKind: "RUN",
+		EntityRef: execution.Run.Ref, EntityName: "Test run", AllowedOperations: []string{},
+	}
+	digest, err := runtimecontract.RuntimeRevisionDigest(baseline, runtimecontract.RuntimeRevisionCredentialSource{
+		SecretName: binding.Name, SecretUID: binding.UID, SecretResourceVersion: binding.ResourceVersion,
+	})
+	if err != nil {
+		t.Fatalf("RuntimeRevisionDigest() error = %v", err)
+	}
+	execution.Revision.RevisionDigest = digest
+	execution.Revision.AssistantContext = &controlplanev1.AssistantContextDescriptor{
+		Route: baseline.AssistantContext.Route, EntityKind: baseline.AssistantContext.EntityKind,
+		EntityRef: baseline.AssistantContext.EntityRef, EntityName: baseline.AssistantContext.EntityName,
+		AllowedOperations: []controlplanev1.AssistantPlanOperation_Type{},
+	}
+	input, _, err := manager.BuildTurnInput(execution)
+	if err != nil {
+		t.Fatalf("BuildTurnInput(RUN context) error = %v", err)
+	}
+	if input.AssistantContext == nil || input.AssistantContext.AllowedOperations == nil || len(input.AssistantContext.AllowedOperations) != 0 {
+		t.Fatalf("empty allowed operations lost from RUN context: %#v", input.AssistantContext)
+	}
+}
+
 func TestRunAsLeaderHasCompleteClientGoCallbacks(t *testing.T) {
 	t.Parallel()
 	manager := newTestManager(t, fake.NewSimpleClientset())
@@ -1367,6 +1400,60 @@ func TestSessionPVCRejectsCrossTenantAndProjectReuse(t *testing.T) {
 				t.Fatalf("cross-boundary PVC reuse error = %v", err)
 			}
 		})
+	}
+}
+
+func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", SystemAssistant: true}
+	if err := manager.ensureSessionPVC(t.Context(), global); err != nil {
+		t.Fatalf("create global assistant volume: %v", err)
+	}
+	project := global
+	project.ProjectRef = "prj_abcdefgh"
+	if err := manager.ensureSessionPVC(t.Context(), project); err != nil {
+		t.Fatalf("promote assistant volume: %v", err)
+	}
+	if err := manager.ensureSessionPVC(t.Context(), project); err != nil {
+		t.Fatalf("repeat exact project binding: %v", err)
+	}
+	name, _ := runtimecontract.SessionPVCName(global.SessionRef)
+	volume, err := client.CoreV1().PersistentVolumeClaims("kodex-runtime").Get(t.Context(), name, metav1.GetOptions{})
+	if err != nil || volume.Annotations[projectHashAnnotation] != shortHash(project.ProjectRef) {
+		t.Fatal("assistant volume project readback did not match promoted project")
+	}
+	for name, mutate := range map[string]func(*runtimecontract.RunnerInput){
+		"other project":      func(value *runtimecontract.RunnerInput) { value.ProjectRef = "prj_ijklmnop" },
+		"other organization": func(value *runtimecontract.RunnerInput) { value.OrganizationRef = "org_ijklmnop" },
+		"reverse migration":  func(value *runtimecontract.RunnerInput) { value.ProjectRef = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := project
+			mutate(&candidate)
+			if err := manager.ensureSessionPVC(t.Context(), candidate); err == nil {
+				t.Fatal("foreign or reverse assistant volume binding accepted")
+			}
+		})
+	}
+
+	busy := global
+	busy.SessionRef = "session_ijklmnop"
+	if err := manager.ensureSessionPVC(t.Context(), busy); err != nil {
+		t.Fatal(err)
+	}
+	busyName, _ := runtimecontract.SessionPVCName(busy.SessionRef)
+	_, err = client.CoreV1().Pods("kodex-runtime").Create(t.Context(), &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "assistant-old-turn", Namespace: "kodex-runtime"},
+		Spec:       corev1.PodSpec{Volumes: []corev1.Volume{{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: busyName}}}}},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	busy.ProjectRef = "prj_abcdefgh"
+	if err := manager.ensureSessionPVC(t.Context(), busy); err == nil || !strings.Contains(err.Error(), "active consumer") {
+		t.Fatalf("active global consumer was not fenced: %v", err)
 	}
 }
 

@@ -20,6 +20,7 @@ export interface AsyncEntityPickerItem {
 export interface AsyncEntityLoadRequest {
   query: string;
   cursor?: string;
+  pageSize?: number;
   signal: AbortSignal;
 }
 
@@ -42,6 +43,7 @@ export type AsyncEntityPickerPhase =
 export interface AsyncEntityCollectionOptions {
   debounceMs?: number;
   immediate?: boolean;
+  pageSize?: MaybeRefOrGetter<number>;
 }
 
 export interface VirtualWindow {
@@ -164,6 +166,9 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
       const page = await loader({
         query: query.value,
         cursor: append ? (nextCursor.value ?? undefined) : undefined,
+        ...(options.pageSize
+          ? { pageSize: Math.max(1, Math.floor(toValue(options.pageSize))) }
+          : {}),
         signal: requestController.signal,
       });
       if (requestController.signal.aborted || expectedGeneration !== generation)
@@ -323,7 +328,7 @@ export function createCursorIntersectionHandler(
 }
 
 export interface CursorInfiniteScrollOptions {
-  root: Ref<HTMLElement | null | undefined>;
+  root?: Ref<HTMLElement | null | undefined>;
   sentinel: Ref<Element | null | undefined>;
   enabled: MaybeRefOrGetter<boolean>;
   loadMore: () => void | Promise<void>;
@@ -342,28 +347,35 @@ export function useCursorInfiniteScroll(
 
   function reconnect(): void {
     disconnect();
+    const sentinel = options.sentinel.value;
     if (
       typeof IntersectionObserver === "undefined" ||
-      !options.sentinel.value ||
+      !sentinel ||
       !toValue(options.enabled)
     )
       return;
+    const requestedRoot = options.root?.value;
+    const observerRoot =
+      typeof requestedRoot?.contains === "function" &&
+      requestedRoot.contains(sentinel)
+        ? requestedRoot
+        : null;
     observer = new IntersectionObserver(
       createCursorIntersectionHandler(
         () => toValue(options.enabled),
         options.loadMore,
       ),
       {
-        root: options.root.value ?? null,
+        root: observerRoot,
         rootMargin: options.rootMargin ?? "0px 0px 120px",
       },
     );
-    observer.observe(options.sentinel.value);
+    observer.observe(sentinel);
   }
 
   const stopWatch = watch(
     () => [
-      options.root.value,
+      options.root?.value,
       options.sentinel.value,
       toValue(options.enabled),
     ],

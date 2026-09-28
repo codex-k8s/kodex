@@ -18,6 +18,10 @@ import type {
   ExplainAccessResult,
   IntegrationConnection,
   Membership,
+  NextAction,
+  PlatformMembershipChangeInput,
+  PlatformMembershipCreateInput,
+  ProjectMembershipChangeInput,
   OidcGroup,
   PermissionDefinition,
   Project,
@@ -68,6 +72,7 @@ export const useAccessStore = defineStore("access", () => {
   const workflows = reactive<Record<string, Workflow[]>>({});
   const integrations = ref<IntegrationConnection[]>([]);
   const platformMemberships = ref<Membership[]>([]);
+  const platformMembershipActions = ref<NextAction[]>([]);
   const projectMemberships = ref<Membership[]>([]);
   const roleVersions = reactive<Record<string, AccessRoleVersion[]>>({});
   const effective = ref<EffectiveAccessPage>();
@@ -143,11 +148,18 @@ export const useAccessStore = defineStore("access", () => {
     queryText = "",
     kind?: AccessSubjectKind,
     append = false,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = append ? subjectNextPageToken.value : undefined;
     await query(
       "subjects",
-      () => api.fetchAccessSubjects({ query: queryText, kind, pageToken }),
+      () =>
+        api.fetchAccessSubjects({
+          query: queryText,
+          kind,
+          pageToken,
+          pageSize,
+        }),
       (page) => {
         subjects.value = append
           ? appendUnique(subjects.value, page.items, (item) => item.ref)
@@ -157,11 +169,15 @@ export const useAccessStore = defineStore("access", () => {
     );
   }
 
-  async function loadGroups(queryText = "", append = false): Promise<void> {
+  async function loadGroups(
+    queryText = "",
+    append = false,
+    pageSize = 20,
+  ): Promise<void> {
     const pageToken = append ? groupNextPageToken.value : undefined;
     await query(
       "groups",
-      () => api.fetchOidcGroups({ query: queryText, pageToken }),
+      () => api.fetchOidcGroups({ query: queryText, pageToken, pageSize }),
       (page) => {
         groups.value = append
           ? appendUnique(groups.value, page.items, (item) => item.ref)
@@ -174,11 +190,19 @@ export const useAccessStore = defineStore("access", () => {
   async function loadRoles(
     includeArchived = false,
     append = false,
+    pageSize = 20,
+    queryText = "",
   ): Promise<void> {
     const pageToken = append ? roleNextPageToken.value : undefined;
     await query(
       "roles",
-      () => api.fetchAccessRoles({ includeArchived, pageToken }),
+      () =>
+        api.fetchAccessRoles({
+          includeArchived,
+          query: queryText,
+          pageToken,
+          pageSize,
+        }),
       (page) => {
         roles.value = append
           ? appendUnique(roles.value, page.items, (item) => item.ref)
@@ -228,11 +252,12 @@ export const useAccessStore = defineStore("access", () => {
   async function loadBindings(
     options: Parameters<typeof api.fetchAccessBindings>[0] = {},
     append = false,
+    pageSize = 20,
   ): Promise<void> {
     const pageToken = append ? bindingNextPageToken.value : undefined;
     await query(
       "bindings",
-      () => api.fetchAccessBindings({ ...options, pageToken }),
+      () => api.fetchAccessBindings({ ...options, pageToken, pageSize }),
       (page) => {
         bindings.value = append
           ? appendUnique(bindings.value, page.items, (item) => item.ref)
@@ -283,14 +308,14 @@ export const useAccessStore = defineStore("access", () => {
     });
   }
 
-  async function loadMembershipPresentation(projectRef = ""): Promise<void> {
-    await query(
-      "platformMemberships",
-      api.fetchPlatformMemberships,
-      (items) => {
-        platformMemberships.value = items;
-      },
-    );
+  async function loadMembershipPresentation(
+    projectRef = "",
+    selectedUserRef = "",
+  ): Promise<void> {
+    await query("platformMemberships", api.fetchPlatformMemberships, (page) => {
+      platformMemberships.value = page.items;
+      platformMembershipActions.value = page.nextActions;
+    });
     if (!projectRef) {
       projectMemberships.value = [];
       delete problems.projectMemberships;
@@ -298,11 +323,87 @@ export const useAccessStore = defineStore("access", () => {
     }
     await query(
       "projectMemberships",
-      () => api.fetchProjectMemberships(projectRef),
+      async () => {
+        const firstPage = await api.fetchProjectMemberships(projectRef);
+        if (
+          !selectedUserRef ||
+          firstPage.some((item) => item.user.ref === selectedUserRef)
+        ) {
+          return firstPage;
+        }
+        const selected = await api.fetchProjectMemberships(
+          projectRef,
+          selectedUserRef,
+        );
+        return appendUnique(
+          firstPage,
+          selected.filter(
+            (item) =>
+              item.projectRef === projectRef &&
+              item.user.ref === selectedUserRef,
+          ),
+          (item) => item.ref,
+        );
+      },
       (items) => {
         projectMemberships.value = items;
       },
     );
+  }
+
+  async function saveProjectMembership(
+    projectRef: string,
+    membership: Membership,
+    input: ProjectMembershipChangeInput,
+  ): Promise<Membership> {
+    const updated = await api.updateProjectMembership(
+      projectRef,
+      membership,
+      input,
+    );
+    projectMemberships.value = appendUnique(
+      projectMemberships.value,
+      [updated],
+      (item) => item.ref,
+    );
+    return updated;
+  }
+
+  async function createPlatformMembership(
+    input: PlatformMembershipCreateInput,
+  ): Promise<Membership> {
+    const updated = await api.createPlatformMembership(input);
+    await loadMembershipPresentation();
+    return updated;
+  }
+
+  async function updatePlatformMembership(
+    membership: Membership,
+    input: PlatformMembershipChangeInput,
+  ): Promise<Membership> {
+    const updated = await api.updatePlatformMembership(membership, input);
+    await loadMembershipPresentation();
+    return updated;
+  }
+
+  async function revokePlatformMembership(
+    membership: Membership,
+  ): Promise<void> {
+    await api.revokePlatformMembership(membership);
+    await loadMembershipPresentation();
+  }
+
+  async function revokeProjectMembership(
+    projectRef: string,
+    membership: Membership,
+  ): Promise<Membership> {
+    const updated = await api.revokeProjectMembership(projectRef, membership);
+    projectMemberships.value = appendUnique(
+      projectMemberships.value,
+      [updated],
+      (item) => item.ref,
+    );
+    return updated;
   }
 
   async function saveRole(
@@ -398,6 +499,7 @@ export const useAccessStore = defineStore("access", () => {
     workflows,
     integrations,
     platformMemberships,
+    platformMembershipActions,
     projectMemberships,
     roleVersions,
     effective,
@@ -421,6 +523,11 @@ export const useAccessStore = defineStore("access", () => {
     loadWorkflows,
     loadIntegrations,
     loadMembershipPresentation,
+    saveProjectMembership,
+    createPlatformMembership,
+    updatePlatformMembership,
+    revokePlatformMembership,
+    revokeProjectMembership,
     saveRole,
     archiveRole,
     saveBinding,

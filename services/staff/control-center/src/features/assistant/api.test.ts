@@ -160,6 +160,7 @@ describe("assistant api mutation reconciliation", () => {
     const result = appendTurn(
       initial,
       "Измени назначение",
+      initial.context,
       "attachment-set-own",
     );
     await vi.runAllTimersAsync();
@@ -173,6 +174,7 @@ describe("assistant api mutation reconciliation", () => {
       path: { conversationRef: "cnv_sales" },
       body: {
         content: "Измени назначение",
+        context: initial.context,
         attachmentSetRef: "attachment-set-own",
       },
       headers: {
@@ -208,7 +210,12 @@ describe("assistant api mutation reconciliation", () => {
       },
     });
 
-    const result = appendTurn(initial, "Измени назначение", "attachment-own");
+    const result = appendTurn(
+      initial,
+      "Измени назначение",
+      initial.context,
+      "attachment-own",
+    );
     const rejected = expect(result).rejects.toBe(uncertain);
     await vi.runAllTimersAsync();
     await rejected;

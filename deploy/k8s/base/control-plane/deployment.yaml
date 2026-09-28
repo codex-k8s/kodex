@@ -31,6 +31,8 @@ spec:
       terminationGracePeriodSeconds: 35
       securityContext:
         runAsNonRoot: true
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -305,6 +307,12 @@ spec:
               command: [clamdscan, --config-file=/etc/kodex-skill-scanner/clamd.conf, --ping=1]
             periodSeconds: 30
             timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: [sh, /etc/kodex-skill-scanner/healthcheck.sh]
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 2
           volumeMounts:
             - name: skill-scanner-config
               mountPath: /etc/kodex-skill-scanner
@@ -313,6 +321,9 @@ spec:
               mountPath: /run/kodex-skill-scanner
             - name: skill-scanner-tmp
               mountPath: /tmp
+            - name: skill-scanner-database
+              mountPath: /var/lib/clamav
+              readOnly: true
       volumes:
         - name: skill-scanner-config
           configMap:
@@ -323,6 +334,10 @@ spec:
         - name: skill-scanner-tmp
           emptyDir:
             sizeLimit: 128Mi
+        - name: skill-scanner-database
+          persistentVolumeClaim:
+            claimName: clamav-database
+            readOnly: true
         - name: kube-api-access
           projected:
             defaultMode: 0440

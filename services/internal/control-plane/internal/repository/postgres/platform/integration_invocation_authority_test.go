@@ -20,3 +20,24 @@ func TestIntegrationExecutionRoute(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationActionOutcomeMessage(t *testing.T) {
+	for state, want := range map[string]string{
+		"SUCCEEDED":       "i18n:INTEGRATION_ACTION_SUCCEEDED",
+		"FAILED":          "i18n:INTEGRATION_ACTION_FAILED",
+		"UNKNOWN_OUTCOME": "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN",
+	} {
+		if got := integrationActionOutcomeMessage(state); got != want {
+			t.Errorf("state %s: got %q, want %q", state, got, want)
+		}
+	}
+}
+
+func TestIntegrationGateContextSummary(t *testing.T) {
+	if got := integrationGateContextSummary("Тестовое подключение", "Изменить запись", "write"); got != "Тестовое подключение · Изменить запись" {
+		t.Fatalf("unexpected gate context summary: %q", got)
+	}
+	if got := integrationGateContextSummary("Тестовое подключение", "", "write"); got != "Тестовое подключение · write" {
+		t.Fatalf("unexpected fallback gate context summary: %q", got)
+	}
+}

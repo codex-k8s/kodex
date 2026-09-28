@@ -35,12 +35,17 @@ export async function loadBindingTargets(
   pageToken: string | undefined,
   digest: string | undefined,
   signal: AbortSignal,
+  pageSize = 20,
 ) {
   const page = (
     await unwrap(
       listArtifactBindingTargets({
         path: { artifactRef: artifact.ref },
-        query: { query, pageSize: 30, pageToken },
+        query: {
+          query,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+          pageToken,
+        },
         signal: requestSignal(signal),
       }),
     )

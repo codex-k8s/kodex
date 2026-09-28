@@ -73,7 +73,7 @@ describe("VFS", () => {
           path: "/projects",
           projectRef: "project_one",
           pageToken: "cursor",
-          pageSize: 30,
+          pageSize: 20,
         },
       }),
     );
@@ -88,11 +88,20 @@ describe("VFS", () => {
         query: {
           query: "Проект",
           projectRef: "project_one",
-          pageSize: 30,
+          pageSize: 20,
           path: "/projects",
         },
       }),
     );
+  });
+  it("не отправляет поиск с длиной вне контракта OpenAPI", async () => {
+    calls.search.mockClear();
+    const signal = new AbortController().signal;
+    for (const query of ["x", "а", "x".repeat(201)])
+      await expect(loadVfsPage({ ...scope, query, signal })).rejects.toThrow(
+        "Invalid VFS search query length",
+      );
+    expect(calls.search).not.toHaveBeenCalled();
   });
   it("отклоняет чужой scope, неизвестный вид, неправильный путь, дубликаты и oversized cursor", () => {
     expect(() =>

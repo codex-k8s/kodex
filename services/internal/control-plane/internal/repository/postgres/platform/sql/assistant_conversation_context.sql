@@ -3,7 +3,7 @@ SELECT COALESCE(project.ref,''), conversation.context_route, conversation.contex
        conversation.context_entity_ref, projection.entity_name, projection.entity_version, projection.allowed_operations
 FROM control_plane.assistant_conversations conversation
 LEFT JOIN control_plane.projects project ON project.id=conversation.project_id
-JOIN LATERAL control_plane.assistant_context_projection(conversation.organization_id,@actor_id::uuid,
+JOIN LATERAL control_plane.assistant_context_projection_v2(conversation.organization_id,@actor_id::uuid,
     NULLIF(@authority_project,'')::uuid,conversation.context_entity_kind,conversation.context_entity_ref,transaction_timestamp(),conversation.project_id) projection ON true
 WHERE conversation.organization_id=@organization_id::uuid AND conversation.created_by=@actor_id::uuid
   AND ((@conversation_ref<>'' AND conversation.ref=@conversation_ref)

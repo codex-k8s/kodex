@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   explainAccess: vi.fn(),
   listPlatformMemberships: vi.fn(),
+  listProjectMemberships: vi.fn(),
   queryEffectiveAccess: vi.fn(),
   simulateAccess: vi.fn(),
 }));
@@ -21,6 +22,7 @@ import {
   fetchAccessSimulation,
   fetchEffectiveAccess,
   fetchPlatformMemberships,
+  fetchProjectMemberships,
 } from "@/features/access/api";
 
 const csrfHeaders = {
@@ -88,6 +90,50 @@ describe("access decision API", () => {
     });
     sdk.listPlatformMemberships
       .mockResolvedValueOnce({
+        data: {
+          items: [membership("first")],
+          nextActions: ["MANAGE_MEMBERS"],
+          nextPageToken: "next-page",
+        },
+        response: new Response(null, { status: 200 }),
+      })
+      .mockResolvedValueOnce({
+        data: { items: [membership("second")], nextActions: [] },
+        response: new Response(null, { status: 200 }),
+      });
+
+    await expect(fetchPlatformMemberships()).resolves.toEqual({
+      items: [membership("first"), membership("second")],
+      nextActions: ["MANAGE_MEMBERS"],
+    });
+    expect(sdk.listPlatformMemberships).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        query: { pageSize: 100, pageToken: "next-page" },
+      }),
+    );
+  });
+
+  it("загружает проектное членство по точному userRef", async () => {
+    sdk.listProjectMemberships.mockResolvedValue({
+      data: { items: [] },
+      response: new Response(null, { status: 200 }),
+    });
+
+    await fetchProjectMemberships("project_sales", "subject_selected");
+
+    expect(sdk.listProjectMemberships).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { projectRef: "project_sales" },
+        query: { query: "subject_selected", pageSize: 1 },
+      }),
+    );
+  });
+
+  it("читает все страницы проектного членства для таблицы участников", async () => {
+    const membership = (ref: string) => ({ ref, user: { ref: `user_${ref}` } });
+    sdk.listProjectMemberships
+      .mockResolvedValueOnce({
         data: { items: [membership("first")], nextPageToken: "next-page" },
         response: new Response(null, { status: 200 }),
       })
@@ -96,15 +142,29 @@ describe("access decision API", () => {
         response: new Response(null, { status: 200 }),
       });
 
-    await expect(fetchPlatformMemberships()).resolves.toEqual([
+    await expect(fetchProjectMemberships("project_sales")).resolves.toEqual([
       membership("first"),
       membership("second"),
     ]);
-    expect(sdk.listPlatformMemberships).toHaveBeenNthCalledWith(
+    expect(sdk.listProjectMemberships).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
+        path: { projectRef: "project_sales" },
         query: { pageSize: 100, pageToken: "next-page" },
       }),
     );
+    expect(sdk.listProjectMemberships).toHaveBeenCalledTimes(2);
+  });
+
+  it("закрыто отклоняет повторный курсор проектного членства", async () => {
+    sdk.listProjectMemberships.mockResolvedValue({
+      data: { items: [], nextPageToken: "stuck" },
+      response: new Response(null, { status: 200 }),
+    });
+
+    await expect(fetchProjectMemberships("project_sales")).rejects.toThrow(
+      "Project membership pagination token was repeated",
+    );
+    expect(sdk.listProjectMemberships).toHaveBeenCalledTimes(2);
   });
 });

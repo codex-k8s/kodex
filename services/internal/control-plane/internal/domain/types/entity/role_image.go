@@ -78,6 +78,8 @@ type ImageArtifact struct {
 	SignatureIdentity, SignatureSHA256, AdmissionReceiptSHA256                    string
 	AdmissionReceiptOCIManifestDigest, PromotedReference, PromotionReadbackSHA256 string
 	RoleRuntimeContractSHA256                                                     string
+	PromotionState                                                                string
+	PromotionRequested                                                            bool
 	Version, RecipeVersion, RecipeGeneration, BuildVersion, PolicyRevision        uint64
 	AdmissionRevision, RoleRuntimeContractRevision                                uint64
 	BuildAttempt                                                                  uint32

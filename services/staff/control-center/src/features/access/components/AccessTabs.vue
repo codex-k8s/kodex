@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import type { AccessSection } from "@/features/access/model";
 
-defineProps<{
-  active: AccessSection;
-  counts: Partial<Record<AccessSection, number>>;
-}>();
+defineProps<{ active: AccessSection }>();
 const emit = defineEmits<{ select: [section: AccessSection] }>();
 
 const sections: AccessSection[] = [
@@ -28,9 +25,6 @@ const sections: AccessSection[] = [
       @click="emit('select', section)"
     >
       <span>{{ $t(`access.sections.${section}`) }}</span>
-      <span v-if="counts[section] !== undefined" class="count-badge">{{
-        counts[section]
-      }}</span>
     </button>
   </nav>
 </template>

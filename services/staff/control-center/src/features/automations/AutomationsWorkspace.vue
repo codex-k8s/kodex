@@ -13,18 +13,15 @@ import {
   Trash2,
   Workflow,
 } from "@lucide/vue";
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-  type WatchStopHandle,
-} from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AutomationArchiveDialog from "@/features/automations/AutomationArchiveDialog.vue";
 import AutomationEditorDialog from "@/features/automations/AutomationEditorDialog.vue";
+import {
+  assistantPlanAppliedEvent,
+  type AssistantPlanAppliedDetail,
+} from "@/features/assistant/events";
 import {
   commandSchedule,
   loadSchedulePage,
@@ -49,13 +46,17 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem, asProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
   initialScheduleRef?: string;
 }>();
+const emit = defineEmits<{ select: [scheduleRef: string] }>();
 const platform = usePlatformStore();
 const { locale, t } = useI18n();
 
@@ -67,6 +68,10 @@ const listLoading = ref(false);
 const moreLoading = ref(false);
 const listProblem = ref<AppProblem>();
 const selectedRef = ref("");
+function selectSchedule(scheduleRef: string): void {
+  selectedRef.value = scheduleRef;
+  emit("select", scheduleRef);
+}
 const selectedSection = ref<"OVERVIEW" | "VERSIONS" | "RUNS">("OVERVIEW");
 const editorOpen = ref(false);
 const editorScheduleRef = ref("");
@@ -85,12 +90,22 @@ const runsToken = ref<string>();
 const runsLoading = ref(false);
 const runsProblem = ref<AppProblem>();
 const listSentinel = ref<HTMLElement>();
+const listRoot = ref<HTMLElement>();
+const revisionRoot = ref<HTMLElement>();
+const revisionSentinel = ref<HTMLElement>();
+const runRoot = ref<HTMLElement>();
+const runSentinel = ref<HTMLElement>();
 
 let listController: AbortController | undefined;
 let historyController: AbortController | undefined;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let listObserver: IntersectionObserver | undefined;
-let stopSentinelWatch: WatchStopHandle | undefined;
+useCursorInfiniteScroll({
+  root: listRoot,
+  sentinel: listSentinel,
+  enabled: () =>
+    Boolean(nextPageToken.value) && !listLoading.value && !moreLoading.value,
+  loadMore: () => loadList(false),
+});
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canCreate = computed(() =>
@@ -107,7 +122,50 @@ const filteredSchedules = computed(() =>
     scheduleMatchesFilter(schedule, state.value),
   ),
 );
+const pageSize = useAdaptiveCursorPageSize({
+  container: listRoot,
+  itemSelector: ".automation-row",
+  itemCount: () => filteredSchedules.value.length,
+  estimatedItemHeight: 76,
+});
+const revisionPageSize = useAdaptiveCursorPageSize({
+  container: revisionRoot,
+  itemSelector: ".automation-details__revision",
+  itemCount: () => revisions.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 180,
+  minimum: 4,
+  maximum: 100,
+});
+const runPageSize = useAdaptiveCursorPageSize({
+  container: runRoot,
+  itemSelector: ".automation-details__run",
+  itemCount: () => runOccurrences.value.length,
+  estimatedViewportHeight: 520,
+  estimatedItemHeight: 190,
+  minimum: 4,
+  maximum: 100,
+});
+useCursorInfiniteScroll({
+  root: revisionRoot,
+  sentinel: revisionSentinel,
+  enabled: () => Boolean(revisionsToken.value) && !revisionsLoading.value,
+  loadMore: () => loadRevisions(false),
+});
+useCursorInfiniteScroll({
+  root: runRoot,
+  sentinel: runSentinel,
+  enabled: () => Boolean(runsToken.value) && !runsLoading.value,
+  loadMore: () => loadRuns(false),
+});
 const selectedSchedule = computed(() => scopedSchedule(selectedRef.value));
+const selectedOutsideFilter = computed(
+  () =>
+    !!selectedSchedule.value &&
+    !filteredSchedules.value.some(
+      (schedule) => schedule.ref === selectedSchedule.value?.ref,
+    ),
+);
 const selectedCapabilities = computed(() =>
   selectedSchedule.value
     ? scheduleCapabilities(selectedSchedule.value)
@@ -178,7 +236,10 @@ const custom = computed(() =>
         runRef: "Run ref",
         schedule: "Schedule",
         search: "Search automations on the server",
+        selectedOutsideFilter:
+          "This previously selected automation is outside the current filter.",
         target: "Target",
+        technicalDetails: "Technical details",
         version: "Resource version",
       }
     : {
@@ -210,7 +271,10 @@ const custom = computed(() =>
         runRef: "Ссылка запуска",
         schedule: "Расписание",
         search: "Поиск автоматизаций на сервере",
+        selectedOutsideFilter:
+          "Ранее выбранная автоматизация не входит в текущий фильтр.",
         target: "Цель",
+        technicalDetails: "Технические сведения",
         version: "Версия ресурса",
       },
 );
@@ -260,6 +324,7 @@ async function loadList(reset = false): Promise<void> {
       search.value,
       reset ? undefined : nextPageToken.value,
       controller.signal,
+      pageSize.value,
     );
     if (controller.signal.aborted || requestedProject !== props.projectRef)
       return;
@@ -287,8 +352,9 @@ watch(
   [schedules, filteredSchedules],
   ([allSchedules, visibleSchedules]) => {
     if (selectedRef.value === props.initialScheduleRef) return;
-    if (!allSchedules.some((schedule) => schedule.ref === selectedRef.value))
-      selectedRef.value = visibleSchedules[0]?.ref ?? "";
+    if (allSchedules.some((schedule) => schedule.ref === selectedRef.value))
+      return;
+    selectedRef.value = visibleSchedules[0]?.ref ?? "";
   },
   { immediate: true },
 );
@@ -337,6 +403,7 @@ async function loadRevisions(reset = false): Promise<void> {
       scheduleRef,
       reset ? undefined : revisionsToken.value,
       controller.signal,
+      revisionPageSize.value,
     );
     if (controller.signal.aborted || scheduleRef !== selectedRef.value) return;
     revisions.value = reset
@@ -366,6 +433,7 @@ async function loadRuns(reset = false): Promise<void> {
       scheduleRef,
       reset ? undefined : runsToken.value,
       controller.signal,
+      runPageSize.value,
     );
     if (controller.signal.aborted || scheduleRef !== selectedRef.value) return;
     runOccurrences.value = reset
@@ -391,6 +459,17 @@ function scheduleLabel(schedule: Schedule): string {
 
 function revisionLabel(revision: ScheduleRevision): string {
   return `${t(`automations.presetValue.${revision.preset}`)} · ${revision.cronExpression} · ${revision.timezone}`;
+}
+
+function revisionTargetLabel(revision: ScheduleRevision): string {
+  const current = selectedSchedule.value?.target;
+  const name =
+    revision.target.displayName ||
+    (current?.type === revision.target.type &&
+    current.ref === revision.target.ref
+      ? current.displayName
+      : "");
+  return `${name || revision.target.ref} · v${String(revision.targetVersion)}`;
 }
 
 function formatDate(value: string): string {
@@ -508,26 +587,32 @@ async function confirmDelete(): Promise<void> {
   }
 }
 
-function observeSentinel(element: HTMLElement | undefined): void {
-  listObserver?.disconnect();
-  if (!element || typeof IntersectionObserver === "undefined") return;
-  listObserver = new IntersectionObserver((entries) => {
-    if (entries.some((entry) => entry.isIntersecting)) void loadList(false);
-  });
-  listObserver.observe(element);
+function handleAssistantPlanApplied(event: Event): void {
+  const detail = (event as CustomEvent<AssistantPlanAppliedDetail>).detail;
+  if (
+    detail.projectRef !== props.projectRef ||
+    !detail.kinds.includes("SCHEDULE")
+  )
+    return;
+  void loadList(true);
 }
 
 onMounted(() => {
+  window.addEventListener(
+    assistantPlanAppliedEvent,
+    handleAssistantPlanApplied,
+  );
   void Promise.all([loadList(true), platform.loadProject(props.projectRef)]);
-  stopSentinelWatch = watch(listSentinel, observeSentinel, { immediate: true });
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener(
+    assistantPlanAppliedEvent,
+    handleAssistantPlanApplied,
+  );
   listController?.abort();
   historyController?.abort();
   if (searchTimer) clearTimeout(searchTimer);
-  listObserver?.disconnect();
-  stopSentinelWatch?.();
 });
 </script>
 
@@ -537,11 +622,20 @@ onBeforeUnmount(() => {
       <label class="automations-workspace__search">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ custom.search }}</span>
-        <input v-model="search" type="search" :placeholder="custom.search" />
+        <input
+          v-model="search"
+          name="automation-search"
+          type="search"
+          :placeholder="custom.search"
+        />
       </label>
       <label>
         <span class="sr-only">{{ $t("common.status") }}</span>
-        <select v-model="state" :aria-label="$t('common.status')">
+        <select
+          v-model="state"
+          name="automation-state"
+          :aria-label="$t('common.status')"
+        >
           <option value="CURRENT">{{ custom.currentStates }}</option>
           <option value="ALL">{{ custom.allStates }}</option>
           <option value="ACTIVE">{{ $t("states.ACTIVE") }}</option>
@@ -571,7 +665,12 @@ onBeforeUnmount(() => {
     <AsyncState
       :loading="listLoading"
       :problem="listProblem"
-      :empty="schedules.length === 0 && !selectedSchedule"
+      :empty="
+        schedules.length === 0 &&
+        !selectedSchedule &&
+        !search.trim() &&
+        state === 'CURRENT'
+      "
       :empty-title="$t('automations.emptyTitle')"
       :empty-text="$t('automations.emptyText')"
       @retry="loadList(true)"
@@ -582,18 +681,21 @@ onBeforeUnmount(() => {
       >
         <h2>{{ custom.noMatches }}</h2>
         <p>{{ custom.noMatchesText }}</p>
-        <button
+        <div
           v-if="nextPageToken"
-          class="button"
-          type="button"
-          :disabled="moreLoading"
-          @click="loadList(false)"
+          ref="listSentinel"
+          class="automation-list-sentinel"
         >
-          {{ custom.loadMore }}
-        </button>
+          <LoaderCircle
+            v-if="moreLoading"
+            class="spin"
+            :size="18"
+            aria-hidden="true"
+          />
+        </div>
       </section>
       <div v-else class="automations-workspace__layout">
-        <div class="automations-list" role="list">
+        <div ref="listRoot" class="automations-list" role="list">
           <div class="automations-list__head desktop-only" aria-hidden="true">
             <span>{{ $t("common.name") }} · {{ custom.target }}</span>
             <span>{{ custom.schedule }}</span>
@@ -601,6 +703,14 @@ onBeforeUnmount(() => {
             <span>{{ $t("automations.nextRun") }}</span>
             <span>{{ custom.lastResult }}</span>
           </div>
+          <p
+            v-if="filteredSchedules.length === 0"
+            class="automations-list__empty"
+            role="status"
+          >
+            <strong>{{ custom.noMatches }}</strong>
+            <span>{{ custom.noMatchesText }}</span>
+          </p>
           <button
             v-for="schedule in filteredSchedules"
             :key="schedule.ref"
@@ -610,20 +720,23 @@ onBeforeUnmount(() => {
             }"
             type="button"
             role="listitem"
-            @click="selectedRef = schedule.ref"
+            @click="selectSchedule(schedule.ref)"
             @dblclick="openEdit(schedule)"
           >
             <span class="automation-row__identity">
-              <strong>{{ schedule.name }}</strong>
-              <small>
-                <Bot
-                  v-if="schedule.target.type === 'AGENT'"
-                  :size="14"
-                  aria-hidden="true"
-                />
-                <Workflow v-else :size="14" aria-hidden="true" />
-                {{ schedule.target.displayName }}
-              </small>
+              <EntityIcon kind="AUTOMATION" :size="16" />
+              <span class="automation-row__identity-copy">
+                <strong>{{ schedule.name }}</strong>
+                <small>
+                  <Bot
+                    v-if="schedule.target.type === 'AGENT'"
+                    :size="14"
+                    aria-hidden="true"
+                  />
+                  <Workflow v-else :size="14" aria-hidden="true" />
+                  {{ schedule.target.displayName }}
+                </small>
+              </span>
             </span>
             <span class="automation-row__schedule">
               <strong>{{ scheduleLabel(schedule) }}</strong>
@@ -637,7 +750,11 @@ onBeforeUnmount(() => {
               <small class="mono">v{{ schedule.version }}</small>
             </span>
             <span class="automation-row__next">
-              {{ schedule.nextRunAt ? formatDate(schedule.nextRunAt) : "—" }}
+              {{
+                schedule.state === "ACTIVE" && schedule.nextRunAt
+                  ? formatDate(schedule.nextRunAt)
+                  : "—"
+              }}
             </span>
             <span class="automation-row__outcome">{{
               schedule.lastOutcome || "—"
@@ -650,14 +767,6 @@ onBeforeUnmount(() => {
               :size="18"
               aria-hidden="true"
             />
-            <button
-              v-else-if="nextPageToken"
-              class="button"
-              type="button"
-              @click="loadList(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
           </div>
         </div>
 
@@ -675,6 +784,13 @@ onBeforeUnmount(() => {
             </div>
             <CalendarClock :size="22" aria-hidden="true" />
           </header>
+          <p
+            v-if="selectedOutsideFilter"
+            class="automation-details__filter-note"
+            role="status"
+          >
+            {{ custom.selectedOutsideFilter }}
+          </p>
           <nav
             class="automation-details__tabs"
             :aria-label="$t('automations.sectionsLabel')"
@@ -694,53 +810,63 @@ onBeforeUnmount(() => {
             </button>
           </nav>
 
-          <dl v-if="selectedSection === 'OVERVIEW'">
-            <div>
-              <dt>{{ custom.target }}</dt>
-              <dd>{{ selectedSchedule.target.displayName }}</dd>
-            </div>
-            <div>
-              <dt>{{ custom.schedule }}</dt>
-              <dd>
-                {{ scheduleLabel(selectedSchedule) }} ·
-                {{ selectedSchedule.timezone }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ $t("common.input") }}</dt>
-              <dd>{{ task(selectedSchedule) }}</dd>
-            </div>
-            <div>
-              <dt>{{ custom.revision }}</dt>
-              <dd>
-                <span class="mono">{{
-                  selectedSchedule.currentRevision.revision
-                }}</span>
-                · {{ selectedSchedule.currentRevision.ref }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ custom.automationRef }}</dt>
-              <dd class="mono">{{ selectedSchedule.ref }}</dd>
-            </div>
-            <div>
-              <dt>{{ $t("automations.nextRun") }}</dt>
-              <dd>
-                {{
-                  selectedSchedule.nextRunAt
-                    ? formatDate(selectedSchedule.nextRunAt)
-                    : "—"
-                }}
-              </dd>
-            </div>
-            <div>
-              <dt>{{ custom.lastResult }}</dt>
-              <dd>{{ selectedSchedule.lastOutcome || "—" }}</dd>
-            </div>
-          </dl>
+          <div v-if="selectedSection === 'OVERVIEW'">
+            <dl>
+              <div>
+                <dt>{{ custom.target }}</dt>
+                <dd>{{ selectedSchedule.target.displayName }}</dd>
+              </div>
+              <div>
+                <dt>{{ custom.schedule }}</dt>
+                <dd>
+                  {{ scheduleLabel(selectedSchedule) }} ·
+                  {{ selectedSchedule.timezone }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ $t("common.input") }}</dt>
+                <dd>{{ task(selectedSchedule) }}</dd>
+              </div>
+              <div>
+                <dt>{{ custom.revision }}</dt>
+                <dd>{{ selectedSchedule.currentRevision.revision }}</dd>
+              </div>
+              <div>
+                <dt>{{ $t("automations.nextRun") }}</dt>
+                <dd>
+                  {{
+                    selectedSchedule.state === "ACTIVE" &&
+                    selectedSchedule.nextRunAt
+                      ? formatDate(selectedSchedule.nextRunAt)
+                      : "—"
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ custom.lastResult }}</dt>
+                <dd>{{ selectedSchedule.lastOutcome || "—" }}</dd>
+              </div>
+            </dl>
+            <details class="automation-details__technical">
+              <summary>{{ custom.technicalDetails }}</summary>
+              <dl>
+                <div>
+                  <dt>{{ custom.automationRef }}</dt>
+                  <dd class="mono">{{ selectedSchedule.ref }}</dd>
+                </div>
+                <div>
+                  <dt>{{ custom.revisionRef }}</dt>
+                  <dd class="mono">
+                    {{ selectedSchedule.currentRevision.ref }}
+                  </dd>
+                </div>
+              </dl>
+            </details>
+          </div>
 
           <section
             v-else-if="selectedSection === 'VERSIONS'"
+            ref="revisionRoot"
             class="automation-details__history"
           >
             <div class="automation-details__history-heading">
@@ -790,7 +916,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div>
                   <dt>{{ custom.target }}</dt>
-                  <dd>{{ revision.target.displayName }}</dd>
+                  <dd>{{ revisionTargetLabel(revision) }}</dd>
                 </div>
                 <div>
                   <dt>{{ custom.createdAt }}</dt>
@@ -798,18 +924,15 @@ onBeforeUnmount(() => {
                 </div>
               </dl>
             </article>
-            <button
+            <div
               v-if="revisionsToken"
-              class="button"
-              type="button"
-              :disabled="revisionsLoading"
-              @click="loadRevisions(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
+              ref="revisionSentinel"
+              class="cursor-sentinel"
+              aria-hidden="true"
+            />
           </section>
 
-          <section v-else class="automation-details__history">
+          <section v-else ref="runRoot" class="automation-details__history">
             <div class="automation-details__history-heading">
               <History :size="18" aria-hidden="true" />
               <h3>{{ $t("automations.runHistory") }}</h3>
@@ -871,15 +994,12 @@ onBeforeUnmount(() => {
                 >{{ $t("common.open") }}</RouterLink
               >
             </article>
-            <button
+            <div
               v-if="runsToken"
-              class="button"
-              type="button"
-              :disabled="runsLoading"
-              @click="loadRuns(false)"
-            >
-              {{ custom.loadMore }}
-            </button>
+              ref="runSentinel"
+              class="cursor-sentinel"
+              aria-hidden="true"
+            />
           </section>
 
           <div class="automation-details__actions" :aria-label="custom.actions">
@@ -1065,6 +1185,21 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.automation-row__identity strong,
+.automation-row__schedule strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+.automation-row__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.automation-row__identity-copy {
+  min-width: 0;
+}
 .automation-row small,
 .automation-row__next,
 .automation-row__outcome {
@@ -1086,6 +1221,16 @@ onBeforeUnmount(() => {
   min-height: 52px;
   align-items: center;
   justify-content: center;
+}
+.automations-list__empty {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 24px 14px;
+  color: var(--muted);
+}
+.automations-list__empty strong {
+  color: var(--text);
 }
 .automation-details {
   max-height: 72vh;
@@ -1121,6 +1266,11 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin-top: 8px;
 }
+.automation-details__filter-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
 .automation-details__tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1150,6 +1300,17 @@ onBeforeUnmount(() => {
 .automation-details dl {
   margin: 0;
 }
+.automation-details__technical {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.automation-details__technical summary {
+  cursor: pointer;
+}
+.automation-details__technical dd {
+  overflow-wrap: anywhere;
+}
 .automation-details dl div {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
@@ -1175,6 +1336,8 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
   padding-top: 14px;
+  max-height: min(520px, calc(100dvh - 280px));
+  overflow: auto;
 }
 .automation-details__history-heading {
   justify-content: flex-start;

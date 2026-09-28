@@ -4,6 +4,10 @@ import { useI18n } from "vue-i18n";
 
 import AccessScopeEditor from "@/features/access/components/AccessScopeEditor.vue";
 import {
+  accessRoleOptions,
+  accessSubjectOptions,
+} from "@/features/access/entity-pickers";
+import {
   emptyScopeDraft,
   toAccessScope,
   validScope,
@@ -25,12 +29,19 @@ import type {
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AppProblem } from "@/shared/api/problem";
+import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import type {
+  AsyncEntityOption,
+  AsyncEntityOptionPage,
+} from "@/shared/ui/async-entity-picker";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 type Mode = "QUERY" | "EXPLAIN" | "SIMULATE";
 
 const props = defineProps<{
+  initialSubjectRef?: string;
+  initialProjectRef?: string;
   subjects: AccessSubject[];
   permissions: PermissionDefinition[];
   roles: AccessRole[];
@@ -84,26 +95,77 @@ const permissionMessages = computed(() =>
   i18n.tm("access.permissionsRegistry"),
 );
 
-const mode = ref<Mode>("EXPLAIN");
+const mode = ref<Mode>("QUERY");
 const form = reactive({
   subjectRef: "",
   permissionKey: "",
   roleRef: "",
-  scope: emptyScopeDraft(),
+  scope: emptyScopeDraft(props.initialProjectRef),
 });
-const selectedSubject = computed(() =>
-  props.subjects.find((subject) => subject.ref === form.subjectRef),
+watch(
+  () => props.initialSubjectRef,
+  (ref) => {
+    if (ref) form.subjectRef = ref;
+  },
+  { immediate: true },
 );
-const selectedRole = computed(() =>
-  props.roles.find((role) => role.ref === form.roleRef),
+watch(
+  () => props.initialProjectRef,
+  (ref) => {
+    form.scope = emptyScopeDraft(ref);
+  },
+);
+const subjectRows = new Map<string, AccessSubject>();
+const roleRows = new Map<string, AccessRole>();
+const selectedSubject = computed(
+  () =>
+    subjectRows.get(form.subjectRef) ??
+    props.subjects.find((subject) => subject.ref === form.subjectRef),
+);
+const selectedRole = computed(
+  () =>
+    roleRows.get(form.roleRef) ??
+    props.roles.find((role) => role.ref === form.roleRef),
+);
+const selectedSubjectOption = computed<AsyncEntityOption | undefined>(() =>
+  selectedSubject.value
+    ? {
+        ref: selectedSubject.value.ref,
+        title: selectedSubject.value.displayName,
+      }
+    : undefined,
+);
+const selectedRoleOption = computed<AsyncEntityOption | undefined>(() =>
+  selectedRole.value
+    ? {
+        ref: selectedRole.value.ref,
+        title: selectedRole.value.currentVersion.name,
+        description: selectedRole.value.currentVersion.description,
+        meta: `v${String(selectedRole.value.currentVersion.revision)}`,
+      }
+    : undefined,
 );
 const selectedPermission = computed(() =>
   props.permissions.find((permission) => permission.key === form.permissionKey),
 );
+function permissionName(key: string): string {
+  const name = permissionMessage(permissionMessages.value, key, "name");
+  return name === key ? i18n.t("access.roleEditor.unknownPermission") : name;
+}
+function riskLabel(key: string): string {
+  const risk = props.permissions.find(
+    (permission) => permission.key === key,
+  )?.risk;
+  return risk
+    ? i18n.t(`access.risk.${risk}`)
+    : i18n.t("access.effective.unknownRisk");
+}
 const valid = computed(
   () =>
     Boolean(form.subjectRef) &&
-    Boolean(form.permissionKey) &&
+    (mode.value === "QUERY"
+      ? props.permissions.length > 0 && props.permissions.length <= 100
+      : Boolean(form.permissionKey)) &&
     validScope(form.scope) &&
     (mode.value !== "SIMULATE" || Boolean(selectedRole.value)),
 );
@@ -123,7 +185,7 @@ function submit(): void {
   if (mode.value === "QUERY") {
     emit("query", {
       subjectRef: form.subjectRef,
-      permissionKeys: [form.permissionKey],
+      permissionKeys: props.permissions.map((permission) => permission.key),
       target,
     });
     return;
@@ -154,7 +216,70 @@ function submit(): void {
   });
 }
 
+function selection(value: string | null | readonly string[]): string {
+  return typeof value === "string" ? value : "";
+}
+
+function pickerLabels(label: string, searchPlaceholder: string) {
+  return {
+    label,
+    searchPlaceholder,
+    loading: i18n.t("common.loading"),
+    loadingMore: i18n.t("common.loading"),
+    empty: i18n.t("common.empty"),
+    error: i18n.t("errors.default"),
+    retry: i18n.t("common.retry"),
+  };
+}
+
+function loadSubjects(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize?: number,
+): Promise<AsyncEntityOptionPage> {
+  return accessSubjectOptions(
+    undefined,
+    query,
+    cursor,
+    signal,
+    pageSize,
+    (items) => items.forEach((item) => subjectRows.set(item.ref, item)),
+  );
+}
+
+function loadRoles(
+  query: string,
+  cursor: string | undefined,
+  signal: AbortSignal,
+  pageSize?: number,
+): Promise<AsyncEntityOptionPage> {
+  return accessRoleOptions(query, cursor, signal, pageSize, (items) =>
+    items.forEach((item) => roleRows.set(item.ref, item)),
+  );
+}
+
 watch(mode, () => emit("clear"));
+watch(
+  () => [
+    form.subjectRef,
+    form.scope.kind,
+    form.scope.projectRef,
+    form.scope.resourceKind,
+    form.scope.resourceRef,
+    mode.value === "QUERY" ? "" : form.permissionKey,
+    mode.value === "SIMULATE" ? form.roleRef : "",
+  ],
+  () => emit("clear"),
+);
+watch(
+  () => props.effective,
+  (page) => {
+    if (mode.value !== "QUERY" || !page?.items.length) return;
+    if (!page.items.some((item) => item.permissionKey === form.permissionKey))
+      form.permissionKey = page.items[0]?.permissionKey ?? "";
+  },
+);
 </script>
 
 <template>
@@ -182,27 +307,36 @@ watch(mode, () => emit("clear"));
       </div>
     </header>
 
-    <div class="effective-layout">
+    <div
+      class="effective-layout"
+      :class="{ 'effective-layout--query': mode === 'QUERY' }"
+    >
       <form class="effective-form panel" @submit.prevent="submit">
-        <label class="field">
+        <div class="field">
           <span>{{ $t("access.effective.subject") }}</span>
-          <select v-model="form.subjectRef" required>
-            <option value="" disabled>
-              {{ $t("access.effective.chooseSubject") }}
-            </option>
-            <option
-              v-for="subject in subjects"
-              :key="subject.ref"
-              :value="subject.ref"
-            >
-              {{ subject.displayName }} ·
-              {{ $t(`access.subjectKinds.${subject.kind}`) }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
+          <AsyncEntityPicker
+            :model-value="form.subjectRef"
+            :selected="selectedSubjectOption"
+            :load-page="loadSubjects"
+            :labels="
+              pickerLabels(
+                $t('access.effective.subject'),
+                $t('access.effective.chooseSubject'),
+              )
+            "
+            :placeholder="$t('access.effective.chooseSubject')"
+            :trigger-label="$t('access.effective.subject')"
+            :clearable="false"
+            @update:model-value="form.subjectRef = selection($event)"
+          />
+        </div>
+        <label v-if="mode !== 'QUERY'" class="field">
           <span>{{ $t("access.effective.permission") }}</span>
-          <select v-model="form.permissionKey" required>
+          <select
+            v-model="form.permissionKey"
+            name="access-effective-permission"
+            required
+          >
             <option value="" disabled>
               {{ $t("access.effective.choosePermission") }}
             </option>
@@ -217,23 +351,29 @@ watch(mode, () => emit("clear"));
             </option>
           </select>
         </label>
-        <label v-if="mode === 'SIMULATE'" class="field">
+        <p v-else class="query-hint">
+          {{
+            $t("access.effective.queryAllHint", { count: permissions.length })
+          }}
+        </p>
+        <div v-if="mode === 'SIMULATE'" class="field">
           <span>{{ $t("access.effective.role") }}</span>
-          <select v-model="form.roleRef" required>
-            <option value="" disabled>
-              {{ $t("access.effective.chooseRole") }}
-            </option>
-            <option
-              v-for="role in roles.filter((item) => item.state === 'ACTIVE')"
-              :key="role.ref"
-              :value="role.ref"
-            >
-              {{ role.currentVersion.name }} · v{{
-                role.currentVersion.revision
-              }}
-            </option>
-          </select>
-        </label>
+          <AsyncEntityPicker
+            :model-value="form.roleRef"
+            :selected="selectedRoleOption"
+            :load-page="loadRoles"
+            :labels="
+              pickerLabels(
+                $t('access.effective.role'),
+                $t('access.effective.chooseRole'),
+              )
+            "
+            :placeholder="$t('access.effective.chooseRole')"
+            :trigger-label="$t('access.effective.role')"
+            :clearable="false"
+            @update:model-value="form.roleRef = selection($event)"
+          />
+        </div>
         <AccessScopeEditor
           v-model="form.scope"
           :projects="projects"
@@ -242,6 +382,7 @@ watch(mode, () => emit("clear"));
           :integrations="integrations"
           :allowed-scopes="selectedPermission?.allowedScopes"
           :allowed-resource-kinds="selectedPermission?.resourceKinds"
+          :show-contract-boundary="mode !== 'QUERY'"
           @load-project-resources="emit('load-project-resources', $event)"
         />
         <ProblemNotice v-if="problem" :problem="problem" compact />
@@ -257,6 +398,101 @@ watch(mode, () => emit("clear"));
       <section class="result-panel panel" aria-live="polite">
         <div v-if="loading" class="skeleton-stack" role="status">
           <span /><span /><span />
+        </div>
+        <div v-else-if="mode === 'QUERY' && effective" class="effective-matrix">
+          <div class="effective-matrix__summary">
+            <h3>
+              {{ $t("access.effective.matrixTitle") }}
+              <span>{{ effective.items.length }}</span>
+            </h3>
+            <p>
+              {{
+                $t("access.effective.matrixSummary", {
+                  allowed: effective.items.filter(
+                    (item) => item.decision === "ALLOWED",
+                  ).length,
+                  denied: effective.items.filter(
+                    (item) => item.decision !== "ALLOWED",
+                  ).length,
+                })
+              }}
+            </p>
+          </div>
+          <div
+            class="effective-matrix__table"
+            role="table"
+            :aria-label="$t('access.effective.matrixTitle')"
+          >
+            <header
+              class="effective-matrix__row effective-matrix__row--head"
+              role="row"
+            >
+              <span>{{ $t("access.effective.permission") }}</span>
+              <span>{{ $t("access.effective.risk") }}</span>
+              <span>{{ $t("access.effective.result") }}</span>
+              <span>{{ $t("access.effective.source") }}</span>
+            </header>
+            <button
+              v-for="item in effective.items"
+              :key="item.permissionKey"
+              class="effective-matrix__row effective-matrix__option"
+              :class="{
+                'effective-matrix__option--selected':
+                  item.permissionKey === form.permissionKey,
+              }"
+              type="button"
+              :aria-pressed="item.permissionKey === form.permissionKey"
+              @click="form.permissionKey = item.permissionKey"
+            >
+              <strong>{{ permissionName(item.permissionKey) }}</strong>
+              <span>{{ riskLabel(item.permissionKey) }}</span>
+              <StatusBadge
+                :state="item.decision"
+                :tone="item.decision === 'ALLOWED' ? 'success' : 'danger'"
+              />
+              <span>{{
+                item.explanation.length
+                  ? $t(`access.explanation.${item.explanation[0]?.code}`)
+                  : $t("access.effective.noSource")
+              }}</span>
+            </button>
+          </div>
+          <aside
+            class="effective-matrix__detail"
+            :aria-label="$t('access.effective.selectedDecision')"
+          >
+            <template v-if="decision">
+              <header class="decision-header">
+                <div>
+                  <h3>{{ permissionName(decision.permissionKey) }}</h3>
+                  <p>{{ effective.subject.displayName }}</p>
+                </div>
+                <StatusBadge
+                  :state="decision.decision"
+                  :tone="decision.decision === 'ALLOWED' ? 'success' : 'danger'"
+                />
+              </header>
+              <p class="matrix-evaluated">
+                {{ $t("access.effective.evaluatedAt") }}:
+                {{ new Date(effective.evaluatedAt).toLocaleString() }}
+              </p>
+              <h4>{{ $t("access.effective.explanationTitle") }}</h4>
+              <ol class="explanation-list">
+                <li
+                  v-for="(step, index) in decision.explanation"
+                  :key="`${step.code}-${index}`"
+                >
+                  <strong>{{ $t(`access.explanation.${step.code}`) }}</strong
+                  ><small v-if="accessScopeKind(step.scope)">{{
+                    $t(`access.scope.values.${accessScopeKind(step.scope)}`)
+                  }}</small>
+                </li>
+              </ol>
+              <p v-if="!decision.explanation.length" class="muted">
+                {{ $t("access.effective.noSource") }}
+              </p>
+            </template>
+          </aside>
         </div>
         <template v-else-if="simulation">
           <h3>{{ $t("access.effective.simulationTitle") }}</h3>
@@ -353,6 +589,119 @@ watch(mode, () => emit("clear"));
 </template>
 
 <style scoped>
+.effective-layout.effective-layout--query {
+  grid-template-columns: minmax(0, 1fr);
+}
+.effective-layout--query .effective-form {
+  grid-template-columns: minmax(240px, 320px) minmax(320px, 1fr) auto;
+  align-items: end;
+}
+.effective-layout--query .effective-form > .scope-editor {
+  grid-column: 2;
+  grid-row: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.effective-layout--query .effective-form > .query-hint,
+.effective-layout--query .effective-form > .problem-notice {
+  grid-column: 1 / -1;
+}
+.effective-layout--query .effective-form > button {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  min-width: 190px;
+}
+.query-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.effective-matrix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 16px;
+  min-width: 0;
+}
+.effective-matrix__summary {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.effective-matrix__summary h3,
+.effective-matrix__summary p {
+  margin: 0;
+}
+.effective-matrix__summary h3 span {
+  margin-left: 4px;
+  color: var(--muted);
+}
+.effective-matrix__table {
+  max-height: min(560px, calc(100vh - 300px));
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.effective-matrix__row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.3fr) 145px 135px minmax(230px, 0.9fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+}
+.effective-matrix__row--head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--muted);
+  background: #f4f6f8;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.effective-matrix__option {
+  min-height: 50px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+.effective-matrix__option--selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.effective-matrix__option strong {
+  overflow-wrap: anywhere;
+}
+.effective-matrix__detail {
+  min-width: 0;
+  max-height: min(560px, calc(100vh - 300px));
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.effective-matrix__detail h4 {
+  margin: 18px 0 8px;
+  font-size: 0.85rem;
+}
+.matrix-evaluated {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.muted {
+  color: var(--muted);
+}
+@media (max-width: 1200px) {
+  .effective-matrix {
+    grid-template-columns: 1fr;
+  }
+}
 .effective-header,
 .decision-header,
 .decision-comparison,

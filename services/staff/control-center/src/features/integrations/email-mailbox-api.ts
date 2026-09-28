@@ -132,13 +132,14 @@ export async function listMailboxes(
   query: string,
   signal: AbortSignal,
   pageToken?: string,
+  pageSize = 20,
 ): Promise<EmailMailboxConfigurationPage> {
   const result = (
     await unwrap(
       sdk.listEmailMailboxConfigurations({
         path: { connectionRef },
         query: {
-          pageSize: 30,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
           ...(query.trim() ? { query: query.trim() } : {}),
           ...(pageToken ? { pageToken } : {}),
         },
@@ -170,12 +171,17 @@ export async function listMailboxCredentials(
   kind: EmailMailboxCredentialKind,
   signal: AbortSignal,
   pageToken?: string,
+  pageSize = 20,
 ): Promise<EmailMailboxCredentialPage> {
   const result = (
     await unwrap(
       sdk.listEmailMailboxCredentials({
         path: { connectionRef },
-        query: { kind, pageSize: 40, ...(pageToken ? { pageToken } : {}) },
+        query: {
+          kind,
+          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+          ...(pageToken ? { pageToken } : {}),
+        },
         signal: requestSignal(signal),
         cache: "no-store",
       }),

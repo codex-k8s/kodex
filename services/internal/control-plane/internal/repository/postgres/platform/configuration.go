@@ -413,12 +413,12 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, errs.ErrConflict
 		}
 		configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
-		if !valid || definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
+		if !valid || definition.ValidateConnectionBootstrapConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		ref, _ := newRef("int")
 		maskedCredentials := "CONFIGURED"
-		if definition.Spec.Credential != nil {
+		if definition.Spec.Credential != nil || payload.DefinitionKey == "openapi-mcp" {
 			maskedCredentials = "NOT_CONFIGURED"
 		}
 		var item entity.IntegrationConnection
@@ -455,15 +455,23 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 	var item entity.IntegrationConnection
 	if input.Kind == command.ConfigureConnectionCredential {
 		credential := payload.CredentialRevision
-		var connectionID, credentialSecretKey string
+		var connectionID string
 		if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionSelectCredentialTarget,
 			scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion,
-		).Scan(&connectionID, &credentialSecretKey); errors.Is(err, pgx.ErrNoRows) {
+		).Scan(&connectionID); errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
 		} else if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if credentialSecretKey == "" || payload.MaterializationRef == "" || len(payload.MaterializationRef) > 128 ||
+		locked, err := repository.lockIntegrationConnection(ctx, tx, scope.organizationID, payload.Ref)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		definition, err := repository.integrationPackage(ctx, tx, scope.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if !definition.RequiresConnectionCredential() || payload.MaterializationRef == "" || len(payload.MaterializationRef) > 128 ||
 			!validIntegrationCredentialInput(true, credential) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
@@ -500,7 +508,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		health, found := definition.Capability(definition.Spec.HealthCheck.Operation)
+		health, found := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
 		if !found || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
 			return commandOutcome{}, errs.ErrForbidden
 		}
@@ -739,6 +747,17 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if packageErr != nil || !valid || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if payload.Enabled {
+		if capability.ApprovalPolicy == "HUMAN_SCOPED" {
+			if capability.ValidateApprovalScopePaths(payload.ApprovalScopePaths) != nil {
+				return commandOutcome{}, errs.ErrInvalid
+			}
+		} else if len(payload.ApprovalScopePaths) != 0 {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+	} else if len(payload.ApprovalScopePaths) != 0 {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	configuration := map[string]string{}
 	if json.Unmarshal(encodedConfiguration, &configuration) != nil || definition.ValidateConfiguration(configuration) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -759,6 +778,7 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 			grantRef, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef,
 			capability.ApprovalPolicy, scope.actorID, capability.Risk, capability.ResourceScope.Kind,
 			encodedScope, hex.EncodeToString(scopeDigest[:]), definition.Metadata.Version, definition.Digest,
+			sortedApprovalScopePaths(payload.ApprovalScopePaths),
 		).Scan(&grantRef)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
@@ -905,6 +925,8 @@ func (repository *Repository) changeAssistant(ctx context.Context, tx pgx.Tx, sc
 		return repository.updateAssistantConversationTitle(ctx, tx, scope, input)
 	case command.ArchiveAssistantConversation:
 		return repository.archiveAssistantConversation(ctx, tx, scope, input)
+	case command.MoveAssistantConversationToProject:
+		return repository.moveAssistantConversationToProject(ctx, tx, scope, input)
 	case command.AddAssistantTurn:
 		return repository.addAssistantTurnCommand(ctx, tx, scope, input)
 	case command.UpdateAssistantPlan:
@@ -977,7 +999,7 @@ func (repository *Repository) createAssistantConversation(ctx context.Context, t
 func (repository *Repository) resolveAssistantContext(ctx context.Context, tx pgx.Tx, current scope, descriptor entity.AssistantContextDescriptor, projectRef string) (entity.AssistantContextDescriptor, error) {
 	if len(descriptor.Route) > 500 || len(descriptor.EntityKind) > 80 || len(descriptor.EntityRef) > 96 ||
 		(descriptor.EntityKind == "") != (descriptor.EntityRef == "") ||
-		!contains([]string{"", "PROJECT", "AGENT", "WORKFLOW", "RUN", "FILE", "ENVIRONMENT", "INTEGRATION_CONNECTION"}, descriptor.EntityKind) {
+		!contains([]string{"", "PROJECT", "AGENT", "WORKFLOW", "RUN", "FILE", "ENVIRONMENT", "ROLE_IMAGE_RECIPE", "INTEGRATION_CONNECTION", "SCHEDULE"}, descriptor.EntityKind) {
 		return entity.AssistantContextDescriptor{}, errs.ErrInvalid
 	}
 	if projectRef != "" {
@@ -1015,7 +1037,11 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	var conversationID, sessionID, sessionRef string
 	var projectID, projectRef string
 	var version int64
-	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantConversationsOrganizationIdRefState, scope.organizationID, payload.ConversationRef).Scan(&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &version); err != nil {
+	storedContext := entity.AssistantContextDescriptor{}
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantConversationsOrganizationIdRefState, scope.organizationID, payload.ConversationRef).Scan(
+		&conversationID, &sessionID, &sessionRef, &projectID, &projectRef, &version,
+		&storedContext.Route, &storedContext.EntityKind, &storedContext.EntityRef,
+	); err != nil {
 		return commandOutcome{}, fmt.Errorf("lock system assistant conversation: %w", errs.ErrNotFound)
 	}
 	if input.Mutation.ExpectedVersion != nil && *input.Mutation.ExpectedVersion != version {
@@ -1026,6 +1052,14 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 		return commandOutcome{}, err
 	}
 	if err := validateSessionRuntimeCatalog(ctx, tx, scope.organizationID, sessionID, assistant.Ref); err != nil {
+		return commandOutcome{}, err
+	}
+	requestedContext := storedContext
+	if payload.Context != nil {
+		requestedContext = *payload.Context
+	}
+	resolvedContext, err := repository.resolveAssistantContext(ctx, tx, scope, requestedContext, projectRef)
+	if err != nil {
 		return commandOutcome{}, err
 	}
 	turnRef, _ := newRef("trn")
@@ -1039,7 +1073,10 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	}
 	runRef, _ := newRef("run")
 	var runID string
-	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertRunsRefProjectIdTargetType, runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID).Scan(&runID); err != nil {
+	if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandInsertRunsRefProjectIdTargetType,
+		runRef, scope.organizationID, projectID, sessionID, payload.Content, scope.actorID,
+		resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
+	).Scan(&runID); err != nil {
 		return commandOutcome{}, fmt.Errorf("insert system assistant run: %w", errs.ErrUnavailable)
 	}
 	if err := repository.attachSetToRun(ctx, tx, scope, projectID, attachmentSet, runID, "RUN_INPUT"); err != nil {
@@ -1070,7 +1107,8 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 	if err := tx.QueryRow(
 		ctx,
 		queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt,
-		conversationID,
+		conversationID, resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
+		resolvedContext.EntityName, resolvedContext.EntityVersion, resolvedContext.AllowedOperations,
 	).Scan(
 		&conversation.Title,
 		&conversation.TitleSource,
@@ -1135,10 +1173,15 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	}
 	created := []string{}
 	operationReceipts := []entity.AssistantPlanOperationReceipt{}
+	appliedAgentVersions := map[string]int64{}
 	var projectID, projectRef string
 	for _, operation := range operations {
 		if !operation.Selected {
 			continue
+		}
+		agentVersionKey := assistantPlanAgentVersionKey(operation)
+		if version, carried := appliedAgentVersions[agentVersionKey]; carried {
+			operation = rebaseAssistantPlanAgentVersion(operation, version)
 		}
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
@@ -1146,21 +1189,90 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
+		if operation.Type == "CREATE_PROJECT_FILE" {
+			prepared, exists := payload.PreparedFiles[operation.Key]
+			projectFile, valid := planned.Payload.(command.ProjectFileInput)
+			if !exists || !valid || prepared.Prepared == nil || prepared.FileName != projectFile.FileName ||
+				prepared.SizeBytes != projectFile.SizeBytes || !strings.EqualFold(prepared.SHA256, projectFile.SHA256) {
+				_ = operationEffectsTx.Rollback(ctx)
+				_ = effectTx.Rollback(ctx)
+				return commandOutcome{}, errs.ErrConflict
+			}
+			projectFile.Prepared = prepared.Prepared
+			projectFile.Content = nil
+			planned.Payload = projectFile
+		}
 		if err := repository.authorizeCommand(ctx, operationEffectsTx, scope, planned); err != nil {
 			_ = operationEffectsTx.Rollback(ctx)
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
-		outcome, err := repository.applyCommand(ctx, operationEffectsTx, scope, planned)
+		var outcome commandOutcome
+		if operation.Type == "UPDATE_WORKFLOW" {
+			var matching bool
+			matching, err = repository.assistantWorkflowUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == "CREATE_INSTRUCTION_DRAFT" {
+			var matching bool
+			matching, err = repository.assistantInstructionDraftSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
+			var matching bool
+			matching, err = repository.assistantEnvironmentSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
+			err = repository.lockAssistantBindingEnvironment(ctx, operationEffectsTx, scope, conversationProjectRef,
+				assistantString(operation.Parameters, "environmentRef"))
+			if err == nil {
+				var matching bool
+				matching, err = repository.assistantAgentBindingSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+				if err != nil || !matching {
+					err = errs.ErrConflict
+				}
+			}
+		}
+		if operation.Type == "UPDATE_SCHEDULE" {
+			var matching bool
+			matching, err = repository.assistantScheduleUpdateSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == "UPDATE_ROLE_IMAGE_RECIPE" {
+			var matching bool
+			matching, err = repository.assistantRoleImageUpdateSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == "PUBLISH_INTEGRATION_DEFINITION" {
+			var matching bool
+			matching, err = repository.assistantIntegrationDefinitionPublicationSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if err != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if err == nil {
+			outcome, err = repository.applyCommand(ctx, operationEffectsTx, scope, planned)
+		}
 		if err != nil {
 			if errors.Is(err, errs.ErrVersionMismatch) || errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrNotFound) {
 				if rollbackErr := operationEffectsTx.Rollback(ctx); rollbackErr != nil {
 					_ = effectTx.Rollback(ctx)
 					return commandOutcome{}, fmt.Errorf("rollback assistant plan operation effects: %w", errs.ErrUnavailable)
 				}
-				conflicts := []entity.AssistantPlanConflict{{OperationRef: operation.Key, TargetRef: operation.Target.Ref,
-					Field: "version", Expected: valueOrNil(operation.ExpectedVersion), Actual: "CHANGED"}}
-				if _, updateErr := effectTx.Exec(ctx, queryConfigurationMarkAssistantPlanStale, planID, []string{"operation-version-conflict"}); updateErr != nil {
+				conflict, problem := assistantOperationConflict(operation)
+				conflicts := []entity.AssistantPlanConflict{conflict}
+				if _, updateErr := effectTx.Exec(ctx, queryConfigurationMarkAssistantPlanStale, planID, []string{problem}); updateErr != nil {
 					_ = effectTx.Rollback(ctx)
 					return commandOutcome{}, errs.ErrUnavailable
 				}
@@ -1175,7 +1287,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 				}
 				plan := entity.AssistantPlan{Ref: payload.PlanRef, ConversationRef: conversationRef, ProjectRef: conversationProjectRef,
 					Summary: summary, State: "STALE", Version: version + 1, Revision: revision, ValidatedRevision: validatedRevision,
-					ContentDigest: digest, ValidationProblems: []string{"operation-version-conflict"}, Operations: operations}
+					ContentDigest: digest, ValidationProblems: []string{problem}, Operations: operations}
 				conversation := entity.AssistantConversation{Ref: conversationRef}
 				return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt},
 					resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_CONFLICT",
@@ -1186,6 +1298,9 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			return commandOutcome{}, fmt.Errorf("apply assistant plan operation: %w", err)
 		}
 		created = append(created, outcome.resourceRef)
+		if agentVersionKey != "" && outcome.result.Agent != nil && outcome.result.Agent.Ref == agentVersionKey && outcome.result.Agent.Version > 0 {
+			appliedAgentVersions[agentVersionKey] = outcome.result.Agent.Version
+		}
 		if outcome.projectID != "" {
 			projectID, projectRef = outcome.projectID, outcome.projectRef
 		}
@@ -1209,6 +1324,12 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 		_ = effectTx.Rollback(ctx)
 		return commandOutcome{}, fmt.Errorf("commit assistant plan operation effects: %w", errs.ErrConflict)
 	}
+	if conversationProjectRef == "" && assistantPlanCreatesSingleProject(operations) && projectID != "" && projectRef != "" {
+		if err := repository.promoteAssistantConversationProject(ctx, effectTx, scope, conversationRef, projectID, projectRef); err != nil {
+			_ = effectTx.Rollback(ctx)
+			return commandOutcome{}, err
+		}
+	}
 	if _, err := effectTx.Exec(ctx, queryConfigurationApplyassistantplancommandUpdateAssistantPlansStateVersionAppliedAt, planID); err != nil {
 		_ = effectTx.Rollback(ctx)
 		return commandOutcome{}, fmt.Errorf("mark assistant plan applied: %w", errs.ErrUnavailable)
@@ -1225,8 +1346,45 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	plan := entity.AssistantPlan{Ref: payload.PlanRef, ConversationRef: conversationRef, ProjectRef: conversationProjectRef,
 		Summary: summary, State: "APPLIED", Version: version + 1, Revision: revision, ValidatedRevision: validatedRevision,
 		ContentDigest: digest, Operations: operations, AppliedAt: timePointer(time.Now().UTC())}
-	conversation := entity.AssistantConversation{Ref: conversationRef}
+	conversation := entity.AssistantConversation{Ref: conversationRef, ProjectRef: projectRef}
 	return commandOutcome{result: command.Result{Conversation: &conversation, Plan: &plan, PlanReceipt: &receipt, CreatedRefs: created}, projectID: projectID, projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef, summary: "i18n:ASSISTANT_PLAN_APPLIED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+}
+
+func assistantPlanCreatesSingleProject(operations []entity.AssistantPlanOperation) bool {
+	selected := 0
+	for _, operation := range operations {
+		if !operation.Selected {
+			continue
+		}
+		selected++
+		if operation.Type != "CREATE_PROJECT" {
+			return false
+		}
+	}
+	return selected == 1
+}
+
+func (repository *Repository) promoteAssistantConversationProject(ctx context.Context, tx pgx.Tx, scope scope,
+	conversationRef, projectID, projectRef string,
+) error {
+	var sessionID string
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandPromoteSessionProject,
+		projectID, projectRef, scope.organizationID, scope.actorID, conversationRef,
+	).Scan(&sessionID); err != nil {
+		return fmt.Errorf("promote assistant session project: %w", errs.ErrConflict)
+	}
+	if _, err := tx.Exec(ctx, queryConfigurationApplyassistantplancommandPromoteSessionStorageProject,
+		projectID, sessionID, scope.organizationID,
+	); err != nil {
+		return fmt.Errorf("promote assistant session storage project: %w", errs.ErrUnavailable)
+	}
+	var promotedRef string
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandPromoteConversationProject,
+		scope.organizationID, scope.actorID, projectID, projectRef, conversationRef,
+	).Scan(&promotedRef); err != nil || promotedRef != conversationRef {
+		return fmt.Errorf("promote assistant conversation project: %w", errs.ErrConflict)
+	}
+	return nil
 }
 
 func valueOrNil(value *int64) any {
@@ -1234,6 +1392,15 @@ func valueOrNil(value *int64) any {
 		return nil
 	}
 	return *value
+}
+
+func assistantOperationConflict(operation entity.AssistantPlanOperation) (entity.AssistantPlanConflict, string) {
+	if operation.Type == "LAUNCH_RUN" {
+		return entity.AssistantPlanConflict{OperationRef: operation.Key, TargetRef: operation.Target.Ref,
+			Field: "runtime", Expected: "READY", Actual: "UNAVAILABLE"}, "operation-runtime-unavailable"
+	}
+	return entity.AssistantPlanConflict{OperationRef: operation.Key, TargetRef: operation.Target.Ref,
+		Field: "version", Expected: valueOrNil(operation.ExpectedVersion), Actual: "CHANGED"}, "operation-version-conflict"
 }
 
 func (repository *Repository) auditAssistantOperation(ctx context.Context, tx pgx.Tx, scope scope, outcome commandOutcome, action string) (string, error) {

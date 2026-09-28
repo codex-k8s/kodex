@@ -6,6 +6,7 @@ import {
   createAssistantConversation,
   getSystemAssistant,
   listAssistantConversations,
+  moveAssistantConversationToProject,
   rejectAssistantPlan,
   updateAssistantConversationTitle,
   updateAssistantPlanDraft,
@@ -42,6 +43,7 @@ export async function readConversations(
   pageToken?: string,
   signal?: AbortSignal,
   filter: { query?: string; state?: AssistantConversation["state"] } = {},
+  pageSize = 40,
 ): Promise<ListAssistantConversationsResponse> {
   return readWithRetry(
     async () =>
@@ -49,7 +51,7 @@ export async function readConversations(
         await unwrap(
           listAssistantConversations({
             query: {
-              pageSize: 40,
+              pageSize,
               ...(projectRef ? { projectRef } : {}),
               ...(pageToken ? { pageToken } : {}),
               ...(filter.query?.trim() ? { query: filter.query.trim() } : {}),
@@ -89,6 +91,35 @@ export async function archiveConversation(
     result.version <= conversation.version
   )
     throw new Error("Assistant archive receipt mismatch");
+  return result;
+}
+
+export async function moveConversationToProject(
+  conversation: AssistantConversation,
+  projectRef: string,
+): Promise<AssistantConversation> {
+  const result = (
+    await mutate(
+      (headers) =>
+        moveAssistantConversationToProject({
+          path: { conversationRef: conversation.ref },
+          body: { projectRef },
+          headers: {
+            "If-Match": headers["If-Match"] ?? "",
+            "Idempotency-Key": headers["Idempotency-Key"],
+            "X-CSRF-Token": headers["X-CSRF-Token"],
+          },
+          signal: requestSignal(),
+        }),
+      conversation.version,
+    )
+  ).data;
+  if (
+    result.ref !== conversation.ref ||
+    result.projectRef !== projectRef ||
+    result.version !== conversation.version + 1
+  )
+    throw new Error("Assistant project move receipt mismatch");
   return result;
 }
 
@@ -135,13 +166,18 @@ export async function renameConversation(
 export async function appendTurn(
   conversation: AssistantConversation,
   content: string,
+  context: AssistantContextDescriptor,
   attachmentSetRef?: string,
 ): Promise<AssistantConversation> {
   return (
     await mutateWithRetry((headers) =>
       addAssistantTurn({
         path: { conversationRef: conversation.ref },
-        body: { content, ...(attachmentSetRef ? { attachmentSetRef } : {}) },
+        body: {
+          content,
+          context,
+          ...(attachmentSetRef ? { attachmentSetRef } : {}),
+        },
         headers: {
           "Idempotency-Key": headers["Idempotency-Key"],
           "X-CSRF-Token": headers["X-CSRF-Token"],

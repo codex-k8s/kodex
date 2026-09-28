@@ -10,8 +10,8 @@ usage() {
   printf '%s\n' \
     'Usage: deploy-local.sh --context <exact-context> --mode apply|readback' \
     '  --render <path> --state-directory <path> [--tls-mode local-ca|public-acme]' \
-    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|core]' \
-    '  [--workload <exact-core-deployment|stt-tts-service>]' >&2
+    '  [--security-profile protected|trusted-cluster] [--stage full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress|runtime-rbac]' \
+    '  [--workload <exact-core-deployment|stt-tts-service|control-plane-migrate>]' >&2
 }
 
 context=""
@@ -41,12 +41,17 @@ done
 case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
 case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is invalid' ;; esac
 case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
-case "$stage" in full|data|network|migrate|supply-chain|core) ;; *) fail 'deployment stage is invalid' ;; esac
+case "$stage" in full|data|network|migrate|supply-chain|builder-runtime|core|integration-egress|runtime-rbac) ;; *) fail 'deployment stage is invalid' ;; esac
 [[ "$stage" == full || "$security_profile" == trusted-cluster ]] || fail 'data stage requires trusted-cluster'
 [[ "$security_profile" == protected || "$stage" != full ]] || fail 'trusted-cluster full stage is not implemented yet'
 if [[ -n "$selected_workload" ]]; then
-  [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|email-bridge|stt-tts-service)$ ]] ||
-    fail 'workload selection requires an exact core deployment'
+  if [[ "$stage" == migrate ]]; then
+    [[ "$selected_workload" == control-plane-migrate ]] ||
+      fail 'migration workload selection requires control-plane-migrate'
+  else
+    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service|clamav-db-updater)$ ]] ||
+      fail 'workload selection requires an exact core deployment'
+  fi
 fi
 [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && -d "$state_directory" &&
@@ -64,6 +69,12 @@ script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 object_storage_secret_name=""
 temporary_directory=$(mktemp -d)
 image_admission_controller_restore_replicas=""
+# Подстановки exact локальных имён выполняются только на приватной копии:
+# исходный проверенный render может одновременно читать другой readback.
+render_input=$render
+render="$temporary_directory/render.yaml"
+cp -- "$render_input" "$render"
+chmod 0600 "$render"
 
 cleanup_on_exit() {
   if [[ -n "$image_admission_controller_restore_replicas" ]]; then
@@ -82,11 +93,78 @@ filter_render() {
   printf '%s' "$output"
 }
 
+# CP владеет поколением OpenAPI egress-policy. Локальный apply Deployment
+# сохраняет его exact live-поля вместо попытки вернуть bootstrap generation 1.
+preserve_live_egress_projection() {
+  local output=$1 live="$temporary_directory/egress-live.json" updated="$temporary_directory/egress-updated.yaml"
+  if [[ "$(yq -N -r 'select(.kind == "Deployment" and .metadata.name == "egress-gateway") | .metadata.name' "$output")" != egress-gateway ]]; then
+    return
+  fi
+  kubectl -n "$namespace" get deployment/egress-gateway --ignore-not-found -o json >"$live" ||
+    fail 'local egress Deployment discovery failed'
+  [[ -s "$live" ]] || return
+  jq -e '
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    (.spec.template.metadata.annotations["kodex.dev/integration-egress-generation"] as $generation |
+      ($generation | test("^[1-9][0-9]*$")) and
+      .spec.template.metadata.labels["kodex.dev/integration-egress-generation"] == $generation) and
+    (.spec.template.metadata.annotations["kodex.dev/integration-egress-source-digest"] | test("^[a-f0-9]{64}$")) and
+    ([.spec.template.spec.containers[] | select(.name == "egress-gateway") |
+      .env[] | select(.name == "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST") | .value] as $digests |
+      ($digests | length) == 1 and ($digests[0] | test("^[a-f0-9]{64}$")) and
+      ([.spec.template.spec.volumes[] | select(.name == "integration-policy") | .configMap.name] ==
+        ["egress-gateway-integration-" + $digests[0][:24]]))
+  ' "$live" >/dev/null || fail 'live egress projection is not exact and owner-controlled'
+  local policy_name
+  policy_name=$(jq -r '.spec.template.spec.volumes[] | select(.name == "integration-policy") | .configMap.name' "$live")
+  kubectl -n "$namespace" get "configmap/$policy_name" -o json | jq -e '
+    .immutable == true and .metadata.labels["app.kubernetes.io/name"] == "egress-gateway" and
+    .metadata.labels["app.kubernetes.io/component"] == "platform-egress" and
+    (.data["integration-policy.json"] | fromjson | .generation | type == "number")
+  ' >/dev/null || fail 'live egress immutable policy readback failed'
+  local expected_digest actual_digest
+  expected_digest=$(jq -r '.spec.template.spec.containers[] | select(.name == "egress-gateway") |
+    .env[] | select(.name == "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST") | .value' "$live")
+  actual_digest=$(kubectl -n "$namespace" get "configmap/$policy_name" -o json |
+    jq -j '.data["integration-policy.json"]' | sha256sum | awk '{print $1}')
+  [[ "$actual_digest" == "$expected_digest" ]] || fail 'live egress policy digest changed'
+  yq -N -o=json -I=0 '.' "$output" | jq -s --slurpfile live "$live" '
+    ($live[0].spec.template) as $template |
+    ($template.spec.containers[] | select(.name == "egress-gateway") |
+      .env[] | select(.name == "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST")) as $policyEnv |
+    ($template.spec.volumes[] | select(.name == "integration-policy")) as $policyVolume |
+    .[] | if .kind == "Deployment" and .metadata.name == "egress-gateway" then
+      .spec.template.metadata.annotations["kodex.dev/integration-egress-generation"] =
+        $template.metadata.annotations["kodex.dev/integration-egress-generation"] |
+      .spec.template.metadata.annotations["kodex.dev/integration-egress-source-digest"] =
+        $template.metadata.annotations["kodex.dev/integration-egress-source-digest"] |
+      .spec.template.metadata.labels["kodex.dev/integration-egress-generation"] =
+        $template.metadata.labels["kodex.dev/integration-egress-generation"] |
+      .spec.template.spec.containers |= map(if .name == "egress-gateway" then
+        .env |= map(if .name == "EGRESS_GATEWAY_INTEGRATION_POLICY_DIGEST" then $policyEnv else . end)
+      else . end) |
+      .spec.template.spec.volumes |= map(if .name == "integration-policy" then $policyVolume else . end)
+    else . end
+  ' | yq -p=json -P >"$updated" || fail 'local egress projection preservation failed'
+  # JSON→YAML roundtrip не должен превращать строковые env вроде "off" в bool.
+  yq -i '
+    (select(.kind == "Deployment") | .spec.template.spec |
+      (.initContainers[]?, .containers[]?) | .env[]? |
+      select(has("value")) | .value) style="double"
+  ' "$updated"
+  mv -- "$updated" "$output"
+}
+
 apply_render() {
   local name=$1 expression=$2 output
   output=$(filter_render "$name" "$expression")
   if [[ "$security_profile" == trusted-cluster ]]; then
     verify_local_resource_ownership "$output"
+    if [[ "$stage" == core ]]; then
+      preserve_live_egress_projection "$output"
+    fi
     kubectl apply --server-side --field-manager=kodex-local-dev -f "$output" >/dev/null
     return
   fi
@@ -1040,7 +1118,7 @@ wait_stable_workloads() {
 
 readback_local_image_supply_chain() {
   local expected_policy actual_policy policy_resource controller workloads expected_deployments
-  local expected_digest actual_digest
+  local expected_digest actual_digest catalog_expected_digest catalog_actual_digest
   local target_registry promoted_pull_host resource name
   expected_policy=$(yq -o=json -I=0 '
     select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
@@ -1055,6 +1133,16 @@ readback_local_image_supply_chain() {
   actual_digest=$(jq -cS . <<<"$actual_policy" | sha256sum | awk '{print $1}')
   [[ "$actual_digest" == "$expected_digest" ]] ||
     fail 'image admission policy ConfigMap readback mismatch'
+
+  catalog_expected_digest=$(yq -N -r '
+    select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments") |
+    .data."catalog.json" | from_json | to_json
+  ' "$render" | jq -cS . | sha256sum | awk '{print $1}')
+  catalog_actual_digest=$(kubectl -n "$namespace" get configmap/kodex-role-environments -o json |
+    jq -cS '.data["catalog.json"] | fromjson' | sha256sum | awk '{print $1}') ||
+    fail 'role environment catalog is absent'
+  [[ "$catalog_actual_digest" == "$catalog_expected_digest" ]] ||
+    fail 'role environment catalog readback mismatch'
 
   policy_resource=$(kubectl -n "$namespace" get \
     imageadmissionpolicyparameters/kodex-image-admission-policy -o json) ||
@@ -1239,17 +1327,89 @@ PY
       fail "local StatefulSet is unavailable: $workload"
   done
   readback_local_object_storage_secret
+  if [[ "$stage" == runtime-rbac ]]; then
+    if [[ "$mode" == apply ]]; then
+      apply_render runtime-controller-workload-rbac '
+        select(.kind == "Role" and .metadata.name == "runtime-controller" and
+          .metadata.namespace == "kodex-runtime")
+      '
+    fi
+    kubectl -n "$runtime_namespace" get role/runtime-controller -o json | jq -e '
+      .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+      .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+      .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+      any(.rules[]; .apiGroups == [""] and
+        .resources == ["persistentvolumeclaims"] and
+        .verbs == ["get", "create", "update"])
+    ' >/dev/null || fail 'runtime-controller PVC promotion RBAC readback failed'
+  fi
+  if [[ "$stage" == integration-egress ]]; then
+    if [[ "$mode" == apply ]]; then
+      # Только объекты этой проекции: остальные живые policy/workload не меняем.
+      apply_render integration-egress-admission-policies '
+        select(.kind == "ValidatingAdmissionPolicy" and
+          (.metadata.name | test("^(egress-mail-configmap-publication|egress-integration-configmap-publication|control-plane-egress-configmap-boundary)$")))
+      '
+      apply_render integration-egress-admission-bindings '
+        select(.kind == "ValidatingAdmissionPolicyBinding" and
+          (.metadata.name | test("^(egress-mail-configmap-publication|egress-integration-configmap-publication|control-plane-egress-configmap-boundary)$")))
+      '
+      apply_render integration-egress-configuration '
+        select(.kind == "ConfigMap" and
+          (.metadata.name == "integration-gateway-runtime" or
+           (.metadata.name | test("^egress-gateway-integration-[a-f0-9]{24}$"))))
+      '
+      apply_render integration-egress-rbac '
+        select(((.kind == "Role" or .kind == "RoleBinding") and
+            .metadata.name == "control-plane-email-projection-writer") or
+          ((.kind == "ClusterRole" or .kind == "ClusterRoleBinding") and
+            .metadata.name == "control-plane-mail-publication-admission-reader"))
+      '
+      apply_render integration-egress-service '
+        select(.kind == "Service" and
+          (.metadata.name == "egress-gateway" or .metadata.name == "egress-gateway-openapi"))
+      '
+      apply_render integration-egress-network '
+        select(.kind == "NetworkPolicy" and
+          (.metadata.name | test("^(egress-gateway-integration-destinations|egress-gateway-exact-runtime-paths|integration-gateway-exact-runtime-paths)$")))
+      '
+    fi
+    for resource in \
+      validatingadmissionpolicy/egress-mail-configmap-publication \
+      validatingadmissionpolicy/egress-integration-configmap-publication \
+      validatingadmissionpolicy/control-plane-egress-configmap-boundary; do
+      kubectl get "$resource" -o json | jq -e '
+        .metadata.generation > 0 and
+        .status.observedGeneration == .metadata.generation and
+        (.status.typeChecking.expressionWarnings // [] | length) == 0
+      ' >/dev/null || fail "integration egress admission is not observed: $resource"
+    done
+    kubectl -n "$namespace" get service/egress-gateway service/egress-gateway-openapi \
+      configmap/integration-gateway-runtime \
+      networkpolicy/egress-gateway-integration-destinations >/dev/null ||
+      fail 'integration egress foundation readback failed'
+    kubectl -n "$namespace" get service/egress-gateway-openapi -o json | jq -e '
+      .spec.type == "ClusterIP" and
+      (.spec.selector | length) == 3 and
+      .spec.selector["app.kubernetes.io/name"] == "egress-gateway" and
+      .spec.selector["app.kubernetes.io/component"] == "platform-egress" and
+      (.spec.selector["kodex.dev/integration-egress-generation"] | test("^[1-9][0-9]*$")) and
+      (.spec.ports | length) == 1 and .spec.ports[0].name == "openapi-connect" and
+      .spec.ports[0].port == 8083 and .spec.ports[0].targetPort == "openapi-connect"
+    ' >/dev/null || fail 'OpenAPI egress Service does not select one exact generation'
+  fi
   if [[ "$stage" == network && "$mode" == apply ]]; then
     apply_render network-policies 'select(.kind == "NetworkPolicy")'
   fi
   if [[ "$stage" == migrate ]]; then
-    if [[ "$mode" == apply ]]; then
+    if [[ "$mode" == apply && -z "$selected_workload" ]]; then
       apply_render migration-configuration '
         select(.kind == "ConfigMap" and .metadata.name == "kodex-postgresql-runtime-credentials")
       '
     fi
     for job in seaweedfs-bucket-bootstrap control-plane-migrate email-bridge-migration \
       kodex-postgresql-runtime-credentials control-plane-broker-bootstrap; do
+      [[ -z "$selected_workload" || "$job" == "$selected_workload" ]] || continue
       if [[ "$mode" == apply ]]; then
         apply_job "$job"
       else
@@ -1287,6 +1447,11 @@ PY
       # promoted image, поэтому до импорта её ждать нельзя.
       "$script_directory/seed-local-image-supply-chain.sh" --context "$context" \
         --state-directory "$state_directory" --render "$render"
+      # Builder проверяет новый trusted runner digest при старте; сначала
+      # публикуем тот же exact catalog, иначе Deployment уйдёт в restart loop.
+      apply_render role-environment-catalog '
+        select(.kind == "ConfigMap" and .metadata.name == "kodex-role-environments")
+      '
       apply_render buildkit-workload '
         select(.kind == "Deployment" and .metadata.name == "kodex-buildkit")
       '
@@ -1307,8 +1472,96 @@ PY
     done
     readback_local_image_supply_chain
   fi
+  if [[ "$stage" == builder-runtime ]]; then
+    desired_builder=$(yq -o=json -I=0 '
+      select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime") | .data
+    ' "$render")
+    desired_policy_toolchain=$(yq -r '
+      select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
+      .data.toolchainSHA256
+    ' "$render")
+    desired_policy_sha=$(yq -r '
+      select(.kind == "ConfigMap" and .metadata.name == "kodex-image-admission-policy") |
+      .data.policySHA256
+    ' "$render")
+    current_policy=$(kubectl -n "$namespace" get configmap/kodex-image-admission-policy -o json) ||
+      fail 'local image admission policy is unavailable'
+    current_builder=$(kubectl -n "$namespace" get configmap/role-image-builder-runtime -o json) ||
+      fail 'local role image builder configuration is unavailable'
+    current_workload=$(kubectl -n "$namespace" get deployment/role-image-builder -o json) ||
+      fail 'local role image builder Deployment is unavailable'
+    current_control_plane=$(kubectl -n "$namespace" get deployment/control-plane -o json) ||
+      fail 'local control-plane Deployment is unavailable'
+    desired_image=$(yq -r '
+      select(.kind == "Deployment" and .metadata.name == "role-image-builder") |
+      .spec.template.spec.containers[] | select(.name == "role-image-builder") | .image
+    ' "$render")
+    desired_toolchain=$(jq -r '.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256' <<<"$desired_builder")
+    [[ "$desired_toolchain" =~ ^[a-f0-9]{64}$ &&
+      "$desired_toolchain" == "$desired_policy_toolchain" &&
+      "$desired_toolchain" == "$(jq -r '.data.toolchainSHA256' <<<"$current_policy")" ]] ||
+      fail 'role image builder toolchain does not match the live immutable admission policy'
+    [[ "$desired_policy_sha" =~ ^[a-f0-9]{64}$ &&
+      "$desired_policy_sha" == "$(jq -r '.data.policySHA256' <<<"$current_policy")" &&
+      "$desired_policy_sha" == "$(jq -r '
+        [.spec.template.spec.containers[].env[]? |
+          select(.name == "CONTROL_PLANE_IMAGE_POLICY_SHA256") | .value] | unique | first
+      ' <<<"$current_control_plane")" ]] ||
+      fail 'control-plane and role image builder do not share the live admission policy'
+    for resource in "$current_policy" "$current_builder" "$current_workload" "$current_control_plane"; do
+      jq -e '
+        .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+        .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+        .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster"
+      ' <<<"$resource" >/dev/null || fail 'role image builder resource is not owned by the local profile'
+    done
+    [[ "$desired_image" == "$(jq -r '
+      .spec.template.spec.containers[] | select(.name == "role-image-builder") | .image
+    ' <<<"$current_workload")" ]] ||
+      fail 'builder-runtime stage cannot change the role image builder binary'
+    jq -e --argjson desired "$desired_builder" '
+      (.data | del(.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256)) ==
+      ($desired | del(.ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256))
+    ' <<<"$current_builder" >/dev/null ||
+      fail 'builder-runtime stage cannot change unrelated builder configuration'
+    if [[ "$mode" == apply ]]; then
+      apply_render role-image-builder-runtime '
+        select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime")
+      '
+      kubectl -n "$namespace" rollout restart deployment/role-image-builder >/dev/null ||
+        fail 'local role image builder could not restart after configuration change'
+    fi
+    kubectl -n "$namespace" rollout status deployment/role-image-builder --timeout=5m >/dev/null ||
+      fail 'local role image builder is unavailable after configuration change'
+    actual_toolchain=$(kubectl -n "$namespace" exec deployment/role-image-builder \
+      -c role-image-builder -- printenv ROLE_IMAGE_BUILDER_EXPECTED_TOOLCHAIN_SHA256) ||
+      fail 'role image builder toolchain Pod readback failed'
+    [[ "$actual_toolchain" == "$desired_toolchain" ]] ||
+      fail 'role image builder Pod toolchain does not match the admission policy'
+  fi
   if [[ "$stage" == core ]]; then
     if [[ "$mode" == apply ]]; then
+      if [[ -z "$selected_workload" || "$selected_workload" == clamav-db-updater ]]; then
+        apply_render clamav-db-updater-foundation '
+          select((.kind == "ServiceAccount" and .metadata.name == "clamav-db-updater") or
+            (.kind == "PersistentVolumeClaim" and .metadata.name == "clamav-database") or
+            (.kind == "ConfigMap" and
+              (.metadata.name == "clamav-db-updater-config" or
+               .metadata.name == "clamav-egress-policy")) or
+            (.kind == "Service" and .metadata.name == "clamav-egress-gateway") or
+            (.kind == "NetworkPolicy" and
+              (.metadata.name == "clamav-db-updater-deny-all" or
+               .metadata.name == "clamav-db-updater-exact-runtime-paths" or
+               .metadata.name == "clamav-egress-gateway-deny-all" or
+               .metadata.name == "clamav-egress-gateway-exact-runtime-paths")))
+        '
+        apply_render clamav-egress-workload '
+          select(.kind == "Deployment" and .metadata.name == "clamav-egress-gateway")
+        '
+        apply_render clamav-db-updater-schedule '
+          select(.kind == "CronJob" and .metadata.name == "clamav-db-updater")
+        '
+      fi
       if [[ -z "$selected_workload" || "$selected_workload" == control-plane ]]; then
         apply_render core-scanner-config 'select(.kind == "ConfigMap" and .metadata.name == "control-plane-skill-scanner")'
         apply_render core-project-purge-rbac '
@@ -1317,7 +1570,29 @@ PY
             .metadata.namespace == "kodex-runtime")
         '
       fi
-      if [[ -n "$selected_workload" ]]; then
+      if [[ "$selected_workload" == integration-synthetic ]]; then
+        apply_render integration-synthetic-foundation '
+          select(
+            (.kind == "Certificate" and .metadata.name == "integration-synthetic-server") or
+            (.kind == "ServiceAccount" and .metadata.name == "integration-synthetic") or
+            (.kind == "Service" and .metadata.name == "integration-synthetic") or
+            (.kind == "NetworkPolicy" and
+              (.metadata.name == "integration-synthetic-default-deny" or
+               .metadata.name == "integration-synthetic-exact-runtime-paths" or
+               .metadata.name == "integration-gateway-exact-runtime-paths")))
+        '
+        kubectl -n "$namespace" wait --for=condition=Ready \
+          certificate/integration-synthetic-server --timeout=2m >/dev/null ||
+          fail 'local integration fixture certificate is unavailable'
+      fi
+      if [[ "$selected_workload" == integration-gateway ]]; then
+        apply_render integration-gateway-local-configuration '
+          select(.kind == "ConfigMap" and .metadata.name == "integration-gateway-runtime")
+        '
+      fi
+      if [[ "$selected_workload" == clamav-db-updater ]]; then
+        :
+      elif [[ -n "$selected_workload" ]]; then
         apply_render core-application "select(.kind == \"Deployment\" and .metadata.name == \"$selected_workload\")"
       else
       apply_render core-applications '
@@ -1326,8 +1601,16 @@ PY
       '
       fi
     fi
+    if [[ -z "$selected_workload" || "$selected_workload" == clamav-db-updater ]]; then
+      kubectl -n "$namespace" get cronjob/clamav-db-updater \
+        deployment/clamav-egress-gateway service/clamav-egress-gateway \
+        persistentvolumeclaim/clamav-database configmap/clamav-db-updater-config >/dev/null ||
+        fail 'ClamAV updater foundation is unavailable'
+      kubectl -n "$namespace" rollout status deployment/clamav-egress-gateway --timeout=5m >/dev/null ||
+        fail 'ClamAV egress gateway is unavailable'
+    fi
     for workload in egress-gateway control-plane secret-broker control-api-gateway \
-      staff-control-center automation-scheduler integration-gateway email-bridge stt-tts-service; do
+      staff-control-center automation-scheduler integration-gateway integration-synthetic email-bridge stt-tts-service; do
       [[ "$workload" != stt-tts-service || "$selected_workload" == stt-tts-service ]] || continue
       [[ -z "$selected_workload" || "$selected_workload" == "$workload" ]] || continue
       kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=5m >/dev/null ||

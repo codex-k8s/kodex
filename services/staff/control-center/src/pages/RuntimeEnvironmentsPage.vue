@@ -10,7 +10,7 @@ import {
   Maximize2,
   ExternalLink,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { environmentReadinessMessage } from "@/features/runtime/environment-readiness-message";
 import { useRoute, useRouter } from "vue-router";
@@ -27,12 +27,18 @@ import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
 const registry = ref<HTMLElement>();
+const scrollRoot = ref<HTMLElement>();
+const sentinel = ref<HTMLElement>();
 const { t } = useI18n();
 const runtime = useRuntimeStore();
+const searchId = useId();
 const projectRef = computed(() => String(route.params.projectRef));
 const query = ref("");
 const items = ref<RuntimeEnvironmentSet[]>([]);
@@ -51,6 +57,17 @@ const selectedReadiness = computed(() =>
 const selectedAgents = computed(() =>
   selected.value ? (runtime.environmentAgents[selected.value.ref] ?? []) : [],
 );
+const agentList = ref<HTMLElement>();
+const agentSentinel = ref<HTMLElement>();
+const agentPageSize = useAdaptiveCursorPageSize({
+  container: agentList,
+  itemSelector: ".chip-list > span:not(.cursor-sentinel)",
+  itemCount: () => selectedAgents.value.length,
+  estimatedViewportHeight: 240,
+  estimatedItemHeight: 36,
+  minimum: 6,
+  maximum: 100,
+});
 const actionRef = ref("");
 const deleteTarget = ref<RuntimeEnvironmentSet>();
 let generation = 0;
@@ -58,6 +75,35 @@ let listController: AbortController | undefined;
 let inspectorController: AbortController | undefined;
 const visitedCursors = new Set<string>();
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+const pageSize = useAdaptiveCursorPageSize({
+  container: registry,
+  itemSelector: ".environment-table tbody tr",
+  itemCount: () => items.value.length,
+  estimatedItemHeight: 64,
+});
+
+useCursorInfiniteScroll({
+  root: scrollRoot,
+  sentinel,
+  enabled: () => Boolean(cursor.value) && !loading.value && !loadingMore.value,
+  loadMore: () => load(false),
+});
+useCursorInfiniteScroll({
+  root: agentList,
+  sentinel: agentSentinel,
+  enabled: () =>
+    Boolean(
+      selected.value && runtime.environmentAgentCursors[selected.value.ref],
+    ) && !runtime.loading[`environment-agents:${selected.value?.ref ?? ""}`],
+  loadMore: () =>
+    selected.value &&
+    runtime.loadEnvironmentAgents(
+      selected.value.ref,
+      false,
+      inspectorController?.signal,
+      agentPageSize.value,
+    ),
+});
 
 async function load(reset = true): Promise<void> {
   if (!reset && (!cursor.value || loadingMore.value)) return;
@@ -81,6 +127,7 @@ async function load(reset = true): Promise<void> {
       query.value,
       requestedCursor,
       controller.signal,
+      pageSize.value,
     );
     if (generation !== current || controller.signal.aborted) return;
     if (
@@ -132,7 +179,12 @@ async function loadOperationalState(
 ): Promise<void> {
   await Promise.all([
     runtime.loadEnvironmentReadiness(environmentRef, signal),
-    runtime.loadEnvironmentAgents(environmentRef, true, signal),
+    runtime.loadEnvironmentAgents(
+      environmentRef,
+      true,
+      signal,
+      agentPageSize.value,
+    ),
   ]);
 }
 
@@ -168,15 +220,6 @@ async function remove(environment: RuntimeEnvironmentSet): Promise<void> {
   } finally {
     actionRef.value = "";
   }
-}
-
-function onScroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement;
-  if (
-    cursor.value &&
-    element.scrollTop + element.clientHeight >= element.scrollHeight - 80
-  )
-    void load(false);
 }
 
 watch(query, () => {
@@ -282,18 +325,20 @@ onBeforeUnmount(() => {
       @close="expanded = false"
     >
       <header class="environment-toolbar">
-        <label>
+        <label :for="searchId">
           <Search :size="16" aria-hidden="true" />
           <span class="sr-only">{{ $t("runtime.searchEnvironment") }}</span>
           <input
+            :id="searchId"
             v-model="query"
+            :name="searchId"
             type="search"
             :placeholder="$t('runtime.searchEnvironment')"
           />
         </label>
         <span>{{ $t("runtime.pickerShown", { count: items.length }) }}</span>
         <button
-          v-if="!expanded"
+          v-if="!expanded && (items.length > 6 || cursor)"
           class="icon-button"
           :title="$t('catalog.expand')"
           :aria-label="$t('catalog.expand')"
@@ -309,10 +354,10 @@ onBeforeUnmount(() => {
         :class="{ 'environment-registry__content--selected': selected }"
       >
         <div
+          ref="scrollRoot"
           class="environment-table-wrap"
           :class="{ 'environment-table-wrap--expanded': expanded }"
           :aria-busy="loading || loadingMore"
-          @scroll="onScroll"
         >
           <div v-if="loading" class="environment-state" role="status">
             {{ $t("common.loading") }}
@@ -349,15 +394,18 @@ onBeforeUnmount(() => {
                 }"
               >
                 <td>
-                  <button
-                    class="environment-name"
-                    type="button"
-                    @click="toggleInspector(environment.ref)"
-                    @dblclick="openEditor(environment.ref)"
-                  >
-                    <strong>{{ environment.name }}</strong>
-                    <small>{{ environment.description }}</small>
-                  </button>
+                  <div class="environment-identity">
+                    <EntityIcon kind="ENVIRONMENT" />
+                    <button
+                      class="environment-name"
+                      type="button"
+                      @click="toggleInspector(environment.ref)"
+                      @dblclick="openEditor(environment.ref)"
+                    >
+                      <strong>{{ environment.name }}</strong>
+                      <small>{{ environment.description }}</small>
+                    </button>
+                  </div>
                 </td>
                 <td>rev {{ environment.currentVersion.revision }}</td>
                 <td>
@@ -427,14 +475,7 @@ onBeforeUnmount(() => {
           <p v-if="loadingMore" class="environment-loading" role="status">
             {{ $t("common.loading") }}
           </p>
-          <button
-            v-else-if="cursor"
-            class="button environment-loading"
-            type="button"
-            @click="load(false)"
-          >
-            {{ $t("roleImages.loadMore") }}
-          </button>
+          <div v-if="cursor" ref="sentinel" class="cursor-sentinel" />
         </div>
         <aside v-if="selected" class="environment-inspector">
           <div class="section-header">
@@ -539,7 +580,11 @@ onBeforeUnmount(() => {
               <div>
                 <dt>{{ $t("runtime.kubernetesRbac") }}</dt>
                 <dd>
-                  {{ selected.currentVersion.policy.kubernetesAccess.kind }}
+                  {{
+                    $t(
+                      `runtime.kubernetesAccessLabel.${selected.currentVersion.policy.kubernetesAccess.kind}`,
+                    )
+                  }}
                 </dd>
               </div>
             </dl>
@@ -592,10 +637,20 @@ onBeforeUnmount(() => {
                 {{ environmentReadinessMessage(blocker, t) }}
               </li>
             </ul>
-            <div v-if="selectedAgents.length" class="chip-list">
+            <div
+              v-if="selectedAgents.length"
+              ref="agentList"
+              class="chip-list chip-list--cursor"
+            >
               <span v-for="agent in selectedAgents" :key="agent.ref">
                 {{ agent.name }}
               </span>
+              <span
+                v-if="runtime.environmentAgentCursors[selected.ref]"
+                ref="agentSentinel"
+                class="cursor-sentinel"
+                aria-hidden="true"
+              />
             </div>
             <ProblemNotice
               v-if="runtime.problems[`environment-agents:${selected.ref}`]"
@@ -605,24 +660,10 @@ onBeforeUnmount(() => {
                   selected.ref,
                   true,
                   inspectorController?.signal,
+                  agentPageSize,
                 )
               "
             />
-            <button
-              v-if="runtime.environmentAgentCursors[selected.ref]"
-              class="button"
-              type="button"
-              :disabled="runtime.loading[`environment-agents:${selected.ref}`]"
-              @click="
-                runtime.loadEnvironmentAgents(
-                  selected.ref,
-                  false,
-                  inspectorController?.signal,
-                )
-              "
-            >
-              {{ $t("roleImages.loadMore") }}
-            </button>
           </section>
           <section>
             <h3>{{ $t("runtime.secretDescriptorNames") }}</h3>
@@ -766,9 +807,6 @@ onBeforeUnmount(() => {
 .environment-table td:first-child {
   min-width: 280px;
 }
-.environment-table td:first-child > * {
-  display: block;
-}
 .environment-table small {
   max-width: 520px;
   margin-top: 3px;
@@ -792,6 +830,15 @@ onBeforeUnmount(() => {
   color: var(--text);
   text-align: left;
   cursor: pointer;
+}
+.environment-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.environment-identity .environment-name {
+  min-width: 0;
 }
 .environment-row-actions {
   display: flex;
@@ -846,6 +893,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+.chip-list--cursor {
+  max-height: 240px;
+  overflow: auto;
+}
+.chip-list .cursor-sentinel {
+  min-height: 1px;
+  padding: 0;
+  border: 0;
 }
 .chip-list span {
   padding: 4px 7px;

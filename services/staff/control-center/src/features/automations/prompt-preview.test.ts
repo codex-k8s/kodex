@@ -5,6 +5,8 @@ import type {
   TemplateVariable,
 } from "@/shared/api/generated/openapi/types.gen";
 import {
+  automationTimezoneOptions,
+  formatAutomationOccurrence,
   scheduleMaterializationInput,
   scheduleTimePreview,
   checkedScheduleMaterialization,
@@ -29,6 +31,26 @@ const input: ScheduleInput = {
 };
 
 describe("Automation materialization input", () => {
+  it("использует один каталог часовых поясов и локализует ближайший запуск", () => {
+    expect(automationTimezoneOptions("Pacific/Auckland")).toEqual(
+      expect.arrayContaining([
+        "Pacific/Auckland",
+        "Europe/Saratov",
+        "Asia/Tokyo",
+      ]),
+    );
+    expect(
+      formatAutomationOccurrence(
+        "2026-10-02T06:00:00Z",
+        "ru-RU",
+        "Europe/Saratov",
+      ),
+    ).toMatch(/10:00/);
+    expect(
+      formatAutomationOccurrence("not-a-date", "ru-RU", "Europe/Saratov"),
+    ).toBe("not-a-date");
+  });
+
   it.each(["AGENT", "WORKFLOW"] as const)(
     "передаёт authoritative задачу и сохраняет input для %s",
     (targetType) => {

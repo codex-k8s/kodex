@@ -4,7 +4,10 @@ import type {
   RunEdge,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
-import { layoutRunGraph } from "@/features/runs/run-graph-layout";
+import {
+  layoutRunGraph,
+  smoothRunEdgePath,
+} from "@/features/runs/run-graph-layout";
 
 function node(ref: string, createdAt: string): RunNode {
   return {
@@ -35,6 +38,11 @@ function edge(
     type,
     label: type,
   };
+}
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("Missing graph test fixture");
+  return value;
 }
 
 describe("layoutRunGraph", () => {
@@ -85,5 +93,80 @@ describe("layoutRunGraph", () => {
     expect(layout.nodes).toHaveLength(2);
     expect(layout.width).toBeLessThan(1000);
     expect(layout.edges).toHaveLength(2);
+  });
+
+  it("ставит повторную попытку между прежним запуском и новым исполнителем", () => {
+    const layout = layoutRunGraph(
+      [
+        { ...node("old", "2026-01-01T00:00:00Z"), type: "ROOT_PROCESS" },
+        { ...node("retry", "2026-01-01T00:00:01Z"), type: "ROOT_PROCESS" },
+        node("agent", "2026-01-01T00:00:02Z"),
+      ],
+      [
+        edge("retry_edge", "old", "retry", "RETRY_OF"),
+        edge("delegation", "retry", "agent"),
+      ],
+    );
+    const positions = new Map(
+      layout.nodes.map((item) => [item.node.ref, item]),
+    );
+    expect(required(positions.get("old")).x).toBeLessThan(
+      required(positions.get("retry")).x,
+    );
+    expect(required(positions.get("retry")).x).toBeLessThan(
+      required(positions.get("agent")).x,
+    );
+    expect(layout.edges.every((item) => item.path?.startsWith("M "))).toBe(
+      true,
+    );
+    expect(layout.edges.every((item) => item.path?.includes(" C "))).toBe(true);
+  });
+
+  it("соединяет маршрут гладкой кривой Безье без изломов", () => {
+    expect(smoothRunEdgePath([])).toBeUndefined();
+    const path = smoothRunEdgePath([
+      { x: 0, y: 0 },
+      { x: 50, y: 0 },
+      { x: 100, y: 50 },
+    ]);
+    expect(path).toMatch(/^M 0 0 C /);
+    expect(path).toContain(" C ");
+    expect(path).toMatch(/ 100 50$/);
+    expect(path).not.toContain(" L ");
+  });
+
+  it("разводит десятки узлов без наложения и сохраняет все связи", () => {
+    const nodes = Array.from({ length: 48 }, (_, index) =>
+      node(
+        `node_${String(index).padStart(2, "0")}`,
+        `2026-01-01T00:00:${String(index).padStart(2, "0")}Z`,
+      ),
+    );
+    const edges = nodes
+      .slice(1)
+      .map((item, index) =>
+        edge(
+          `edge_${String(index)}`,
+          required(nodes[Math.floor(index / 3)]).ref,
+          item.ref,
+        ),
+      );
+    const layout = layoutRunGraph(nodes, edges);
+    expect(layout.nodes).toHaveLength(48);
+    expect(layout.edges).toHaveLength(47);
+    for (let left = 0; left < layout.nodes.length; left += 1) {
+      for (let right = left + 1; right < layout.nodes.length; right += 1) {
+        const a = required(layout.nodes[left]);
+        const b = required(layout.nodes[right]);
+        expect(
+          a.x + 244 <= b.x ||
+            b.x + 244 <= a.x ||
+            a.y + 132 <= b.y ||
+            b.y + 132 <= a.y,
+        ).toBe(true);
+      }
+    }
+    expect(layout.width).toBeGreaterThan(0);
+    expect(layout.height).toBeGreaterThan(0);
   });
 });

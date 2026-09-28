@@ -208,6 +208,12 @@ PROJECT_CREATED:
   other: Проект создан
 PROJECT_UPDATED:
   other: Проект обновлён
+PROJECT_TRASHED:
+  other: Проект перемещён в корзину
+PROJECT_RESTORED:
+  other: Проект восстановлен из корзины
+PROJECT_PURGE_REQUESTED:
+  other: Запрошено окончательное удаление проекта
 PROJECT_ACCESS_UPDATED:
   other: Доступ к проекту обновлён
 AGENT_CREATED_READY:
@@ -260,6 +266,8 @@ INTEGRATION_GRANT_UPDATED:
   other: Разрешение интеграции обновлено
 INTEGRATION_CONNECTION_TEST_COMPLETED:
   other: Проверка подключения завершена
+INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED:
+  other: Повторная проверка подключения назначена
 INTEGRATION_TEST_SUCCEEDED:
   other: Подключение работает
 INTEGRATION_CREDENTIAL_NOT_CONFIGURED:
@@ -288,6 +296,8 @@ NEW_ASSISTANT_CONVERSATION:
   other: Новый диалог
 ASSISTANT_CONVERSATION_CREATED:
   other: Разговор с помощником создан
+ASSISTANT_CONVERSATION_PROJECT_CHANGED:
+  other: Диалог перенесён в Проект
 ASSISTANT_CONVERSATION_TITLE_UPDATED:
   other: Название разговора обновлено
 ASSISTANT_TURN_QUEUED:
@@ -362,6 +372,16 @@ RUNTIME_EXECUTION_COMPLETED:
   other: Выполнение в среде завершено
 INTEGRATION_ACTION_COMPLETED:
   other: Действие интеграции завершено
+INTEGRATION_ACTION_SUCCEEDED:
+  other: Действие интеграции выполнено успешно
+INTEGRATION_ACTION_FAILED:
+  other: Действие интеграции отклонено или завершилось ошибкой
+INTEGRATION_ACTION_OUTCOME_UNKNOWN:
+  other: Результат действия интеграции неизвестен
+RUNTIME_INPUT_INVALID:
+  other: Входные данные исполнения недопустимы
+WORKFLOW_STEPS_UNFULFILLED:
+  other: Процесс не выполнил все запланированные этапы
 INTEGRATION_INVOCATION_COMPLETED:
   other: Вызов интеграции завершён
 INTEGRATION_EFFECT_GATE_NODE_NAME:

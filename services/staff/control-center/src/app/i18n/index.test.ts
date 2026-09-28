@@ -6,6 +6,7 @@ import ts from "typescript";
 import { parse, compileTemplate } from "vue/compiler-sfc";
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import { i18n } from "./index";
+import integrationPackageSchema from "@/shared/api/generated/integration-package/schema.json";
 function entries(value: unknown, prefix = ""): [string, string][] {
   if (typeof value === "string") return [[prefix, value]];
   if (!value || typeof value !== "object") return [];
@@ -14,6 +15,44 @@ function entries(value: unknown, prefix = ""): [string, string][] {
   );
 }
 describe("Control Center translations", () => {
+  it("переводит каждое поле схемы пакета интеграции", () => {
+    const keys = new Set<string>();
+    const visited = new Set<object>();
+    function visit(value: unknown): void {
+      if (!value || typeof value !== "object" || visited.has(value)) return;
+      visited.add(value);
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      const record = value as Record<string, unknown>;
+      if (record.properties && typeof record.properties === "object")
+        Object.keys(record.properties).forEach((key) => keys.add(key));
+      Object.values(record).forEach(visit);
+    }
+    visit(integrationPackageSchema);
+    const missing = [...keys].filter(
+      (key) =>
+        !i18n.global.te(`managed.packageFields.${key}`, "ru") ||
+        !i18n.global.te(`managed.packageFields.${key}`, "en"),
+    );
+    expect(missing.sort()).toEqual([]);
+  });
+  it("переводит все состояния узла графа выполнения", () => {
+    for (const state of [
+      "PLANNED",
+      "QUEUED",
+      "RUNNING",
+      "WAITING",
+      "SUCCEEDED",
+      "FAILED",
+      "CANCELLED",
+      "SKIPPED",
+    ]) {
+      expect(i18n.global.te(`states.${state}`, "ru"), state).toBe(true);
+      expect(i18n.global.te(`states.${state}`, "en"), state).toBe(true);
+    }
+  });
   it("разрешает статические ключи из Vue и TypeScript без показа идентификаторов в UI", () => {
     const root = fileURLToPath(new URL("../../", import.meta.url));
     const keys = new Set(

@@ -43,7 +43,7 @@ export function emptyPackageField(field: PackageFieldSchema): unknown {
   return "";
 }
 export function packageDiagnostics(value: unknown): string[] {
-  if (validate(value)) return [];
+  if (validate(normalizeLegacyOpenAPIInputFields(value))) return [];
   // Только пути схемы и закрытые имена правил, без пользовательских значений.
   return [
     ...new Set(
@@ -52,4 +52,33 @@ export function packageDiagnostics(value: unknown): string[] {
       ),
     ),
   ];
+}
+
+function normalizeLegacyOpenAPIInputFields(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const document = value as Record<string, unknown>;
+  const spec = document.spec;
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) return value;
+  const packageSpec = spec as Record<string, unknown>;
+  if (
+    packageSpec.adapter !== "OPENAPI_MCP" ||
+    !Array.isArray(packageSpec.capabilities)
+  )
+    return value;
+  // Старые импортированные ревизии сериализовали пустой Go slice как null.
+  // Для диагностики это пустой список; сохранённый документ не меняем.
+  return {
+    ...document,
+    spec: {
+      ...packageSpec,
+      capabilities: packageSpec.capabilities.map((item: unknown) => {
+        if (!item || typeof item !== "object" || Array.isArray(item))
+          return item;
+        const capability = item as Record<string, unknown>;
+        return capability.inputFields === null
+          ? { ...capability, inputFields: [] }
+          : item;
+      }),
+    },
+  };
 }

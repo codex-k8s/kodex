@@ -373,7 +373,7 @@ func (server *Server) SetProviderAccountEnabled(w http.ResponseWriter, r *http.R
 }
 
 func (server *Server) ListPromptTemplateVariables(w http.ResponseWriter, r *http.Request, p generated.ListPromptTemplateVariablesParams) {
-	server.listTemplateVariables(w, r, stringValue(p.ProjectRef), stringValue(p.AgentRef), stringValue(p.RuntimeRevisionRef), stringValue(p.Query), p.PageSize, p.PageToken)
+	server.listTemplateVariables(w, r, stringValue(p.ProjectRef), stringValue(p.AgentRef), stringValue(p.RuntimeRevisionRef), stringValue(p.Query), stringValue(p.Source), p.PageSize, p.PageToken)
 }
 
 func (server *Server) ValidatePromptTemplate(w http.ResponseWriter, r *http.Request, _ generated.ValidatePromptTemplateParams) {

@@ -9,4 +9,4 @@ LEFT JOIN control_plane.projects AS project
   ON project.organization_id=conversation.organization_id
  AND project.id=conversation.project_id
 WHERE plan.organization_id=$1::uuid AND plan.ref=$2 AND plan.state='VALID'
-FOR UPDATE OF plan
+FOR UPDATE OF plan, conversation

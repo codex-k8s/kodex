@@ -260,6 +260,8 @@ Gateway использует NATS только как сигнал достав�
   сетевых вызовов на probe;
 - background readiness проверяет только PostgreSQL, outbox, NATS и local
   authority verifier;
+- объектное хранилище не блокирует запуск и общую readiness: файловые операции
+  проверяют его при выполнении и закрыто отказывают при недоступности;
 - недоступность соседнего business service не входит в readiness;
 - OIDC JWKS обновляется независимо и использует двухминутный bounded
   last-known-good без продления при повторных ошибках;

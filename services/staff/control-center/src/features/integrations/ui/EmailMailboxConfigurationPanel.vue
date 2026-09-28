@@ -5,6 +5,7 @@ import {
   onMounted,
   reactive,
   ref,
+  useId,
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -19,6 +20,8 @@ import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import EmailMailboxFields from "./EmailMailboxFields.vue";
 import { mailboxEditor } from "../email-mailbox-editor";
 import {
@@ -32,6 +35,7 @@ const props = defineProps<{
   initialConfigurationRef?: string;
   initialRevisionRef?: string;
 }>();
+const fieldPrefix = `mailbox-configuration-${useId()}`;
 const emit = defineEmits<{
   busy: [value: boolean];
   saved: [];
@@ -40,6 +44,28 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const editor = reactive(mailboxEditor(props.connection.ref));
 const credentials = ref<EmailMailboxCredential[]>([]);
+const credentialCatalog = ref<HTMLElement>();
+const credentialSentinel = ref<HTMLElement>();
+const mailboxCatalog = ref<HTMLElement>();
+const mailboxSentinel = ref<HTMLElement>();
+const mailboxPageSize = useAdaptiveCursorPageSize({
+  container: mailboxCatalog,
+  itemSelector: ".mailbox-panel__item",
+  itemCount: () => editor.list.length,
+  estimatedViewportHeight: 432,
+  estimatedItemHeight: 56,
+  minimum: 8,
+  maximum: 100,
+});
+const credentialPageSize = useAdaptiveCursorPageSize({
+  container: credentialCatalog,
+  itemSelector: "option",
+  itemCount: () => credentials.value.length,
+  estimatedViewportHeight: 432,
+  estimatedItemHeight: 36,
+  minimum: 8,
+  maximum: 100,
+});
 const credentialKind = ref<EmailMailboxCredentialKind>("AUTH_SECRET");
 const credentialCursor = ref("");
 const credentialTotal = ref(0);
@@ -132,6 +158,7 @@ async function loadCredentials(more = false): Promise<void> {
       kind,
       controller.signal,
       more ? credentialCursor.value : undefined,
+      credentialPageSize.value,
     );
     if (disposed) return;
     const previous = credentials.value.filter(
@@ -207,6 +234,18 @@ onBeforeUnmount(() => {
   editor.dispose();
   emit("busy", false);
 });
+useCursorInfiniteScroll({
+  root: mailboxCatalog,
+  sentinel: mailboxSentinel,
+  enabled: () => Boolean(editor.nextPageToken) && !locked.value,
+  loadMore: () => editor.catalog(true, mailboxPageSize.value),
+});
+useCursorInfiniteScroll({
+  root: credentialCatalog,
+  sentinel: credentialSentinel,
+  enabled: () => Boolean(credentialCursor.value) && !locked.value,
+  loadMore: () => loadCredentials(true),
+});
 </script>
 
 <template>
@@ -226,34 +265,38 @@ onBeforeUnmount(() => {
     >
       {{ t("mailbox.retryExact") }}
     </button>
-    <details>
+    <details ref="credentialCatalog">
       <summary>{{ t("mailbox.catalog") }} · {{ editor.total }}</summary>
       <label class="field"
         ><span>{{ t("mailbox.search") }}</span
         ><input
           v-model="editor.query"
+          :id="`${fieldPrefix}-search`"
+          :name="`${fieldPrefix}-search`"
           type="search"
           :disabled="locked || editor.uncertain"
           @input="search"
       /></label>
-      <button
-        v-for="item in editor.list"
-        :key="item.configuration.ref"
-        class="button mailbox-panel__item"
-        :disabled="locked || editor.uncertain"
-        @click="open(item.configuration.ref, item.revision.ref)"
-      >
-        {{ item.configuration.name }} · {{ item.revision.revision }}
-        <StatusBadge :state="item.revision.state" />
-      </button>
-      <button
-        v-if="editor.nextPageToken"
-        class="button"
-        :disabled="locked || editor.uncertain"
-        @click="editor.catalog(true)"
-      >
-        {{ t("common.loadMore") }}
-      </button>
+      <div ref="mailboxCatalog" class="mailbox-panel__catalog">
+        <button
+          v-for="item in editor.list"
+          :key="item.configuration.ref"
+          class="button mailbox-panel__item"
+          :disabled="locked || editor.uncertain"
+          @click="open(item.configuration.ref, item.revision.ref)"
+        >
+          {{ item.configuration.name }} · {{ item.revision.revision }}
+          <StatusBadge :state="item.revision.state" />
+        </button>
+        <div
+          v-if="editor.nextPageToken"
+          ref="mailboxSentinel"
+          class="mailbox-panel__sentinel"
+          role="status"
+        >
+          <span v-if="editor.busy">{{ t("common.loading") }}</span>
+        </div>
+      </div>
       <button
         class="button"
         :disabled="
@@ -324,6 +367,8 @@ onBeforeUnmount(() => {
       ><span>{{ t("common.name") }}</span
       ><input
         v-model="editor.name"
+        :id="`${fieldPrefix}-name`"
+        :name="`${fieldPrefix}-name`"
         :disabled="
           locked || editor.uncertain || Boolean(editor.view) || !editor.writable
         "
@@ -377,6 +422,8 @@ onBeforeUnmount(() => {
         ><span>{{ t("mailboxCredential.kind") }}</span
         ><select
           v-model="credentialKind"
+          :id="`${fieldPrefix}-credential-kind`"
+          :name="`${fieldPrefix}-credential-kind`"
           :disabled="locked || editor.uncertain"
           @change="loadCredentials()"
         >
@@ -401,14 +448,14 @@ onBeforeUnmount(() => {
       >
         {{ t("vfs.refresh") }}
       </button>
-      <button
+      <div
         v-if="credentialCursor"
-        class="button"
-        :disabled="locked || editor.uncertain"
-        @click="loadCredentials(true)"
+        ref="credentialSentinel"
+        class="mailbox-panel__sentinel"
+        role="status"
       >
-        {{ t("common.loadMore") }}
-      </button>
+        <span v-if="credentialBusy">{{ t("common.loading") }}</span>
+      </div>
     </details>
     <ul v-if="editor.diagnostics.length" class="mailbox-panel__diagnostics">
       <li v-for="(item, index) in editor.diagnostics" :key="index">
@@ -431,7 +478,11 @@ onBeforeUnmount(() => {
     <p>{{ t("mailbox.authorityHelp") }}</p>
     <label v-if="editor.allowed('COPY')" class="field"
       ><span>{{ t("mailbox.copyName") }}</span
-      ><input v-model="editor.copyName" :disabled="locked || editor.uncertain"
+      ><input
+        v-model="editor.copyName"
+        :id="`${fieldPrefix}-copy-name`"
+        :name="`${fieldPrefix}-copy-name`"
+        :disabled="locked || editor.uncertain"
     /></label>
     <div class="mailbox-panel__actions">
       <button
@@ -455,6 +506,14 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding-block: 16px;
   border-top: 1px solid var(--border);
+}
+.mailbox-panel__catalog {
+  display: grid;
+  max-height: 432px;
+  overflow: auto;
+}
+.mailbox-panel__sentinel {
+  min-height: 1px;
 }
 .mailbox-panel__metadata {
   display: grid;

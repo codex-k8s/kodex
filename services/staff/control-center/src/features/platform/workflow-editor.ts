@@ -39,6 +39,23 @@ export function workflowEditorInput(
   };
 }
 
+export function workflowEditorAfterAuthoritativeUpdate(
+  current: Required<WorkflowInput>,
+  saved: string,
+  projectRef: string,
+  workflowRef: string,
+  workflow: Workflow,
+): Required<WorkflowInput> | undefined {
+  if (
+    !saved ||
+    JSON.stringify(current) !== saved ||
+    workflow.projectRef !== projectRef ||
+    workflow.ref !== workflowRef
+  )
+    return undefined;
+  return workflowEditorInput(workflow);
+}
+
 export function workflowStagePromptTarget(
   workflow: Workflow,
   position: number,

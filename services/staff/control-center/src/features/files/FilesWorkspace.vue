@@ -9,7 +9,7 @@ import {
   Upload,
   X,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 
@@ -58,13 +58,11 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
-import ViewModeToggle from "@/shared/ui/ViewModeToggle.vue";
 import {
-  nearScrollEnd,
   useAsyncEntityCollection,
   useCursorInfiniteScroll,
 } from "@/shared/ui/async-entity-picker";
-import type { ViewMode } from "@/shared/ui/view-mode-toggle";
+import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   projectRef: string;
@@ -74,17 +72,25 @@ const props = defineProps<{
 const emit = defineEmits<{ selection: [ref: string] }>();
 const maximumUploadBytes = 512 << 20;
 const maximumTextPreviewBytes = 256 << 10;
-const viewPreferenceKey = "kodex.files.view";
 const platform = usePlatformStore();
+const fieldId = useId();
 const { locale, t } = useI18n();
 const fileInput = ref<HTMLInputElement>();
 const scrollRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
+const loadedItemCount = ref(0);
+const pageSize = useAdaptiveCursorPageSize({
+  container: scrollRoot,
+  itemSelector: ".file-collection-item",
+  itemCount: loadedItemCount,
+  estimatedItemHeight: 72,
+  minimum: 8,
+  maximum: 100,
+});
 const activeTab = ref<Exclude<FileTab, "TRASH">>("FILES");
 const kind = ref<FileKind>("ALL");
 const scanState = ref<"ALL" | Artifact["scanState"]>("ALL");
 const source = ref<FileSource>("ALL");
-const viewMode = ref<ViewMode>("list");
 const selectedRef = ref(props.initialArtifactRef ?? "");
 watch(selectedRef, (value) => emit("selection", value));
 watch(
@@ -146,7 +152,7 @@ const collection = useAsyncEntityCollection(
       ...(kind.value === "ALL" ? {} : { type: kind.value }),
       ...(scanState.value === "ALL" ? {} : { scanState: scanState.value }),
     }),
-  { debounceMs: 500 },
+  { debounceMs: 500, pageSize },
 );
 const {
   error: loadError,
@@ -159,6 +165,13 @@ const {
   total,
   refresh,
 } = collection;
+watch(
+  () => items.value.length,
+  (count) => {
+    loadedItemCount.value = count;
+  },
+  { immediate: true },
+);
 
 const project = computed(() => platform.projects[props.projectRef]);
 const canUpload = computed(() =>
@@ -210,7 +223,7 @@ const previewLabels = computed<FilePreviewLabels>(() => ({
     ? "Protected preview"
     : "Защищённый предпросмотр",
   size: t("files.size"),
-  source: t("common.source"),
+  source: t("files.artifactSource"),
   unavailable: t("files.previewUnavailable"),
   version: t("files.revision"),
   zoom: locale.value.startsWith("en") ? "Zoom" : "Масштаб",
@@ -459,10 +472,6 @@ watch(
   },
   { immediate: true },
 );
-watch(viewMode, (mode) => {
-  if (typeof window !== "undefined")
-    window.localStorage.setItem(viewPreferenceKey, mode);
-});
 watch(activeTab, () => {
   source.value = "ALL";
 });
@@ -486,12 +495,6 @@ useCursorInfiniteScroll({
   enabled: hasMore,
   loadMore,
 });
-
-function handleScroll(event: Event): void {
-  const target = event.currentTarget;
-  if (target instanceof HTMLElement && hasMore.value && nearScrollEnd(target))
-    void loadMore();
-}
 
 function formatBytes(value: number): string {
   const units = ["BYTE", "KILOBYTE", "MEGABYTE", "GIGABYTE"] as const;
@@ -1038,8 +1041,6 @@ function closePreview(): void {
 }
 
 onMounted(() => {
-  const preferred = window.localStorage.getItem(viewPreferenceKey);
-  if (preferred === "grid" || preferred === "list") viewMode.value = preferred;
   void platform.loadProject(props.projectRef);
 });
 onBeforeUnmount(() => {
@@ -1061,7 +1062,9 @@ onBeforeUnmount(() => {
     @drop="handleDrop"
   >
     <input
+      :id="`${fieldId}-upload`"
       ref="fileInput"
+      :name="`${fieldId}-upload`"
       class="sr-only"
       type="file"
       multiple
@@ -1075,11 +1078,13 @@ onBeforeUnmount(() => {
       <strong>{{ custom.dropFiles }}</strong>
     </div>
     <div class="files-workspace__toolbar">
-      <label class="files-workspace__search">
+      <label class="files-workspace__search" :for="`${fieldId}-search`">
         <Search :size="16" aria-hidden="true" />
         <span class="sr-only">{{ $t("files.search") }}</span>
         <input
+          :id="`${fieldId}-search`"
           v-model="query"
+          :name="`${fieldId}-search`"
           type="search"
           :placeholder="$t('files.search')"
         />
@@ -1093,9 +1098,14 @@ onBeforeUnmount(() => {
           <X :size="15" aria-hidden="true" />
         </button>
       </label>
-      <label v-if="!trashMode">
+      <label v-if="!trashMode" :for="`${fieldId}-tab`">
         <span class="sr-only">{{ custom.viewFilter }}</span>
-        <select v-model="activeTab" :aria-label="custom.viewFilter">
+        <select
+          :id="`${fieldId}-tab`"
+          v-model="activeTab"
+          :name="`${fieldId}-tab`"
+          :aria-label="custom.viewFilter"
+        >
           <option value="FILES">{{ $t("files.tab.FILES") }}</option>
           <option value="KNOWLEDGE">{{ custom.knowledgeSources }}</option>
           <option value="RESULTS">{{ $t("files.tab.RESULTS") }}</option>
@@ -1109,18 +1119,28 @@ onBeforeUnmount(() => {
         <Trash2 v-else :size="16" aria-hidden="true" />
         {{ trashMode ? custom.allFiles : custom.trash }}
       </RouterLink>
-      <label>
+      <label :for="`${fieldId}-kind`">
         <span class="sr-only">{{ $t("files.typeFilter") }}</span>
-        <select v-model="kind" :aria-label="$t('files.typeFilter')">
+        <select
+          :id="`${fieldId}-kind`"
+          v-model="kind"
+          :name="`${fieldId}-kind`"
+          :aria-label="$t('files.typeFilter')"
+        >
           <option value="ALL">{{ $t("files.kind.ALL") }}</option>
           <option value="TEXT">{{ $t("files.kind.TEXT") }}</option>
           <option value="DOCUMENT">{{ $t("files.kind.DOCUMENT") }}</option>
           <option value="IMAGE">{{ $t("files.kind.IMAGE") }}</option>
         </select>
       </label>
-      <label>
+      <label :for="`${fieldId}-state`">
         <span class="sr-only">{{ $t("files.stateFilter") }}</span>
-        <select v-model="scanState" :aria-label="$t('files.stateFilter')">
+        <select
+          :id="`${fieldId}-state`"
+          v-model="scanState"
+          :name="`${fieldId}-state`"
+          :aria-label="$t('files.stateFilter')"
+        >
           <option value="ALL">{{ $t("files.allStates") }}</option>
           <option value="PENDING">{{ $t("states.PENDING") }}</option>
           <option value="SCANNING">{{ $t("states.SCANNING") }}</option>
@@ -1129,9 +1149,14 @@ onBeforeUnmount(() => {
           <option value="FAILED">{{ $t("states.FAILED") }}</option>
         </select>
       </label>
-      <label class="desktop-only">
+      <label class="desktop-only" :for="`${fieldId}-source`">
         <span class="sr-only">{{ $t("files.sourceFilter") }}</span>
-        <select v-model="source" :aria-label="$t('files.sourceFilter')">
+        <select
+          :id="`${fieldId}-source`"
+          v-model="source"
+          :name="`${fieldId}-source`"
+          :aria-label="$t('files.sourceFilter')"
+        >
           <option value="ALL">{{ $t("files.allSources") }}</option>
           <option
             v-for="sourceOption in sourceOptions"
@@ -1149,13 +1174,6 @@ onBeforeUnmount(() => {
             : $t("files.loadedOfTotal", { loaded: items.length, total })
         }}
       </span>
-      <ViewModeToggle
-        v-model="viewMode"
-        class="files-workspace__view-toggle"
-        :ariaLabel="custom.view"
-        :list-label="$t('files.list')"
-        :grid-label="custom.grid"
-      />
       <button
         v-if="canUpload && !trashMode"
         class="button button--primary"
@@ -1255,6 +1273,7 @@ onBeforeUnmount(() => {
         <label class="trash-toolbar__select-all">
           <input
             type="checkbox"
+            :name="`${fieldId}-select-all`"
             :checked="allVisibleSelected"
             :disabled="selectableArtifacts.length === 0 || contentBusy"
             @change="toggleAllVisible"
@@ -1380,11 +1399,7 @@ onBeforeUnmount(() => {
           'files-workspace__layout--details': Boolean(selectedArtifact),
         }"
       >
-        <div
-          ref="scrollRoot"
-          class="files-workspace__scroll"
-          @scroll.passive="handleScroll"
-        >
+        <div ref="scrollRoot" class="files-workspace__scroll">
           <section
             v-if="filteredArtifacts.length === 0"
             class="empty-state files-workspace__filtered-empty"
@@ -1397,146 +1412,13 @@ onBeforeUnmount(() => {
             </p>
           </section>
 
-          <div v-else-if="viewMode === 'grid'" class="files-grid" role="list">
-            <div
-              v-for="artifact in filteredArtifacts"
-              :key="artifact.ref"
-              class="file-collection-item file-collection-item--tile"
-              role="listitem"
-              :data-artifact-ref="artifact.ref"
-            >
-              <label
-                class="file-collection-item__select"
-                :aria-label="`${custom.selected}: ${artifact.fileName}`"
-              >
-                <input
-                  type="checkbox"
-                  :checked="selectedRefs.includes(artifact.ref)"
-                  :disabled="
-                    contentBusy ||
-                    !artifactLifecycleAnnounced(
-                      artifact,
-                      trashMode ? 'RESTORE' : 'DELETE',
-                    )
-                  "
-                  @change="
-                    toggleSelection(
-                      artifact.ref,
-                      ($event.target as HTMLInputElement).checked,
-                    )
-                  "
-                />
-              </label>
-              <button
-                class="file-tile"
-                :class="{
-                  'file-tile--selected': selectedRef === artifact.ref,
-                }"
-                type="button"
-                @click="selectedRef = artifact.ref"
-                @dblclick="openPreview(artifact)"
-              >
-                <span class="file-tile__preview">
-                  <FileTypeIcon :artifact="artifact" large />
-                </span>
-                <strong :title="artifact.fileName">{{
-                  artifact.fileName
-                }}</strong>
-                <span class="file-tile__meta">
-                  <span class="mono">{{
-                    formatBytes(artifact.sizeBytes)
-                  }}</span>
-                  <span class="mono">v{{ artifact.revision }}</span>
-                </span>
-                <StatusBadge :state="artifact.scanState" />
-              </button>
-              <div class="file-collection-item__actions">
-                <button
-                  class="icon-button"
-                  type="button"
-                  :title="$t('files.openPreview')"
-                  :aria-label="`${$t('files.openPreview')}: ${artifact.fileName}`"
-                  @click="openPreview(artifact)"
-                >
-                  <Eye :size="16" aria-hidden="true" />
-                </button>
-                <button
-                  class="icon-button"
-                  type="button"
-                  :disabled="
-                    contentBusy || !artifact.nextActions.includes('DOWNLOAD')
-                  "
-                  :title="
-                    artifact.nextActions.includes('DOWNLOAD')
-                      ? $t('common.download')
-                      : custom.actionUnavailable
-                  "
-                  :aria-label="`${$t('common.download')}: ${artifact.fileName}`"
-                  @click="download(artifact)"
-                >
-                  <Download :size="16" aria-hidden="true" />
-                </button>
-                <button
-                  class="icon-button"
-                  :class="{
-                    'file-collection-item__lifecycle--danger': !trashMode,
-                  }"
-                  type="button"
-                  :disabled="
-                    contentBusy ||
-                    Boolean(
-                      lifecycleBlockLabel(
-                        artifact,
-                        trashMode ? 'RESTORE' : 'DELETE',
-                      ),
-                    )
-                  "
-                  :title="
-                    lifecycleBlockLabel(
-                      artifact,
-                      trashMode ? 'RESTORE' : 'DELETE',
-                    ) || (trashMode ? custom.restore : custom.delete)
-                  "
-                  :aria-label="`${
-                    trashMode ? custom.restore : custom.delete
-                  }: ${artifact.fileName}`"
-                  @click="
-                    openLifecycleDialog(
-                      artifact,
-                      trashMode ? 'RESTORE' : 'DELETE',
-                    )
-                  "
-                >
-                  <RotateCcw v-if="trashMode" :size="16" aria-hidden="true" />
-                  <Trash2 v-else :size="16" aria-hidden="true" />
-                </button>
-                <button
-                  v-if="trashMode"
-                  class="icon-button file-collection-item__lifecycle--danger"
-                  type="button"
-                  :disabled="
-                    contentBusy ||
-                    Boolean(lifecycleBlockLabel(artifact, 'PURGE'))
-                  "
-                  :title="
-                    lifecycleBlockLabel(artifact, 'PURGE') || custom.purge
-                  "
-                  :aria-label="`${custom.purge}: ${artifact.fileName}`"
-                  @click="openLifecycleDialog(artifact, 'PURGE')"
-                >
-                  <Trash2 :size="16" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </div>
-
           <div v-else class="files-list" role="list">
             <div class="files-list__head desktop-only" aria-hidden="true">
               <span>{{ $t("files.file") }}</span>
               <span>{{ $t("files.usedBy") }}</span>
               <span>{{ $t("files.revision") }}</span>
               <span>{{ $t("common.status") }}</span>
-              <span></span>
+              <span>{{ $t("files.addedAt") }}</span>
             </div>
             <div
               v-for="artifact in filteredArtifacts"
@@ -1554,6 +1436,8 @@ onBeforeUnmount(() => {
               >
                 <input
                   type="checkbox"
+                  :name="`${fieldId}-artifact`"
+                  :value="artifact.ref"
                   :checked="selectedRefs.includes(artifact.ref)"
                   :disabled="
                     contentBusy ||
@@ -1718,7 +1602,7 @@ onBeforeUnmount(() => {
               <dd class="mono">v{{ selectedArtifact.revision }}</dd>
             </div>
             <div>
-              <dt>{{ $t("common.source") }}</dt>
+              <dt>{{ $t("files.artifactSource") }}</dt>
               <dd>{{ sourceLabel(selectedArtifact.source) }}</dd>
             </div>
             <div>
@@ -2130,34 +2014,12 @@ onBeforeUnmount(() => {
 .files-workspace__filtered-empty {
   margin: 16px;
 }
-.files-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 12px;
-  padding: 14px;
-}
 .file-collection-item {
   position: relative;
   min-width: 0;
 }
-.file-collection-item > .file-tile,
 .file-collection-item > .file-list-row {
   width: 100%;
-}
-.file-tile {
-  display: grid;
-  min-width: 0;
-  min-height: 196px;
-  align-content: start;
-  justify-items: start;
-  gap: 8px;
-  padding: 12px 44px 12px 12px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
 }
 .file-collection-item__actions {
   position: absolute;
@@ -2194,36 +2056,6 @@ onBeforeUnmount(() => {
 .file-collection-item__lifecycle--danger {
   color: var(--danger, #b42318);
 }
-.file-tile:hover,
-.file-tile--selected {
-  border-color: var(--accent);
-}
-.file-tile--selected {
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
-.file-tile__preview {
-  display: grid;
-  width: 100%;
-  height: 82px;
-  place-items: center;
-  border-bottom: 1px solid var(--hairline);
-}
-.file-tile strong {
-  display: -webkit-box;
-  min-height: 2.6em;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
-  line-height: 1.3;
-}
-.file-tile__meta {
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 0.76rem;
-}
 .files-list {
   min-width: 720px;
   background: var(--surface);
@@ -2242,7 +2074,7 @@ onBeforeUnmount(() => {
   z-index: 2;
   top: 0;
   min-height: 38px;
-  padding: 0 14px;
+  padding: 0 152px 0 48px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
   color: var(--subtle);

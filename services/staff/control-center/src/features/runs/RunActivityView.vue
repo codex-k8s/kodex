@@ -71,7 +71,7 @@ function isMessage(event: RunEvent): boolean {
             <p v-if="event.toolCall.safeResult">
               {{ event.toolCall.safeResult }}
             </p>
-            <small>
+            <small v-if="event.toolCall.durationMs !== undefined">
               {{
                 $t("runs.toolDuration", {
                   duration: event.toolCall.durationMs,
