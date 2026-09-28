@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.264
+version: 1.0.265
 updated: 2026-09-28
 ---
 
@@ -5566,3 +5566,12 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-global-agents-cursor-20260928.png`,
   `/tmp/kodex-global-files-review-20260928.png`.
 - Ручная приёмка новой волны и оставшиеся пункты Issue #1784 — `NOT RUN`.
+- После массового `git switch` Air начал сборку gateway до завершения записи
+  общего protobuf-дерева, а control-plane — примерно на 30 секунд позже.
+  Gateway временно возвращал `INVALID_UPSTREAM_RESPONSE` для каталогов
+  интеграций, realtime был отключён. Повторная сборка только gateway на уже
+  стабильном дереве (без изменения исходников и образов) восстановила exact
+  контракт: оба endpoint вернули 200, realtime — «Подключено», console
+  error/warn пусты. Это локальная recovery-проверка, а не изменение кода.
+  Снимок проектного обзора через DevTools на этом шаге дважды завис и поэтому
+  остаётся `NOT RUN`; DOM и network readback выполнены.
