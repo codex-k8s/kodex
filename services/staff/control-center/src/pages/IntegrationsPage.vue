@@ -65,7 +65,7 @@ import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import { serializeConfigurationDocument } from "@/features/managed-configurations/document";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
-  connectionYaml,
+  connectionDraftYaml,
   parseConnectionYaml,
 } from "@/features/integrations/configuration-yaml";
 
@@ -464,17 +464,28 @@ const normalizedConfigurationYaml = computed(() =>
 
 function selectConfigurationMode(mode: "FORM" | "YAML"): void {
   if (mode === configurationMode.value || !selectedDefinition.value) return;
-  try {
-    if (mode === "YAML")
-      yamlContent.value = connectionYaml(
-        selectedDefinition.value.configurationFields,
-        form.configuration,
-      );
-    else
+  if (mode === "YAML") {
+    yamlContent.value = connectionDraftYaml(
+      selectedDefinition.value.configurationFields,
+      form.configuration,
+    );
+    configurationMode.value = mode;
+    try {
       form.configuration = parseConnectionYaml(
         yamlContent.value,
         selectedDefinition.value.configurationFields,
       );
+      yamlInvalid.value = false;
+    } catch {
+      yamlInvalid.value = true;
+    }
+    return;
+  }
+  try {
+    form.configuration = parseConnectionYaml(
+      yamlContent.value,
+      selectedDefinition.value.configurationFields,
+    );
     yamlInvalid.value = false;
     configurationMode.value = mode;
   } catch {
@@ -1463,7 +1474,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <p v-if="yamlInvalid" role="alert">
-              {{ $t("managed.invalidDocument") }}
+              {{ $t("integrationsRedesign.invalidConfigurationYaml") }}
             </p>
             <CodeEditor
               v-if="configurationMode === 'YAML'"

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { IntegrationConfigurationField } from "@/shared/api/generated/openapi/types.gen";
-import { connectionYaml, parseConnectionYaml } from "./configuration-yaml";
+import {
+  connectionDraftYaml,
+  connectionYaml,
+  parseConnectionYaml,
+} from "./configuration-yaml";
 import { prepareConnectionConfiguration } from "./connection-setup";
 
 const fields: IntegrationConfigurationField[] = [
@@ -67,6 +71,21 @@ describe("публичная конфигурация подключения", (
       },
       problems: {},
     });
+  });
+  it("открывает YAML-черновик с незаполненными обязательными полями", () => {
+    const source = connectionDraftYaml(fields, {
+      host: "",
+      port: "",
+      enabled: "false",
+      mode: "",
+      folders: "",
+    });
+
+    expect(source).toContain("host: ''");
+    expect(source).toContain("port: ''");
+    expect(source).toContain("enabled: false");
+    expect(source).toContain("folders: []");
+    expect(() => parseConnectionYaml(source, fields)).toThrow();
   });
   it("закрыто отклоняет неизвестные поля и ошибочные типы без утечки исходного значения", () => {
     const source = connectionYaml(fields, values);

@@ -2294,6 +2294,8 @@ const ru = {
     refreshRequired: "Контекст изменился. Обновите просмотр перед отправкой.",
   },
   integrationsRedesign: {
+    invalidConfigurationYaml:
+      "Исправьте YAML и заполните обязательные значения перед сохранением или возвратом к форме.",
     testStarted:
       "Проверка «{name}» выполняется. Результат появится после обновления сведений о подключении.",
     testFinished: "Проверка «{name}» завершена: {outcome}.",
@@ -6290,6 +6292,8 @@ const en = {
       "The context changed. Refresh the preview before submitting.",
   },
   integrationsRedesign: {
+    invalidConfigurationYaml:
+      "Fix the YAML and provide required values before saving or returning to the form.",
     testStarted:
       "Checking “{name}”. The result will appear after refreshing the connection details.",
     testFinished: "Check of “{name}” finished: {outcome}.",
