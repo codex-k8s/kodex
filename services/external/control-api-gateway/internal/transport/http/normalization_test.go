@@ -193,6 +193,20 @@ func TestNormalizeArtifactLifecycleState(t *testing.T) {
 	}
 }
 
+func TestMessageMapNormalizesAccessBindingManagementKind(t *testing.T) {
+	t.Parallel()
+
+	value, err := messageMap(&controlplanev1.AccessBinding{
+		ManagementKind: controlplanev1.AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_PROJECT_MEMBERSHIP,
+	})
+	if err != nil {
+		t.Fatalf("messageMap() error = %v", err)
+	}
+	if value["managementKind"] != "PROJECT_MEMBERSHIP" {
+		t.Fatalf("access binding management kind is not public: %#v", value)
+	}
+}
+
 func TestMessageMapNormalizesAttachmentSetEnumsToOpenAPIValues(t *testing.T) {
 	t.Parallel()
 

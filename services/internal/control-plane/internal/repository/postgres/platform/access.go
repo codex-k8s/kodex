@@ -979,10 +979,21 @@ func (repository *Repository) changeAccessBinding(ctx context.Context, tx pgx.Tx
 	if !ok {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if input.Kind == command.RevokeAccessBinding {
+	var existing entity.AccessBinding
+	if input.Kind == command.ChangeAccessBinding || input.Kind == command.RevokeAccessBinding {
 		if payload.BindingRef == "" || input.Mutation.ExpectedVersion == nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		var err error
+		existing, err = repository.getAccessBinding(ctx, tx, current.organizationID, payload.BindingRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if existing.PresentationKind != "NONE" {
+			return commandOutcome{}, errs.ErrProtected
+		}
+	}
+	if input.Kind == command.RevokeAccessBinding {
 		var internalID, ref, state string
 		var version int64
 		var createdAt, updatedAt time.Time
@@ -1000,13 +1011,6 @@ func (repository *Repository) changeAccessBinding(ctx context.Context, tx pgx.Tx
 		return accessBindingOutcome(binding), nil
 	}
 	if input.Kind == command.ChangeAccessBinding {
-		if payload.BindingRef == "" || input.Mutation.ExpectedVersion == nil {
-			return commandOutcome{}, errs.ErrInvalid
-		}
-		existing, err := repository.getAccessBinding(ctx, tx, current.organizationID, payload.BindingRef)
-		if err != nil {
-			return commandOutcome{}, err
-		}
 		payload.SubjectKind, payload.SubjectRef = existing.Subject.Kind, existing.Subject.Ref
 	} else if payload.BindingRef != "" {
 		return commandOutcome{}, errs.ErrInvalid

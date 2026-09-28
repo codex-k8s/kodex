@@ -90,6 +90,7 @@ function accessBinding(ref: string): AccessBinding {
     ref,
     version: 1,
     state: "ACTIVE",
+    managementKind: "DIRECT",
     subject: subject("subject_sales"),
     roleVersion: role.currentVersion,
     scope: {

@@ -2720,6 +2720,15 @@ const ru = {
       until: "До {date}",
       noConditions: "Без дополнительных условий",
       permissionCount: "полномочий: {count}",
+      columns: {
+        subject: "Участник или источник",
+        role: "Роль",
+        assignment: "Назначение и область",
+        conditions: "Условия",
+      },
+      manageMembership: "Открыть управление участником",
+      membershipProtected:
+        "Служебное назначение изменяется только через раздел участников",
       assignmentKinds: {
         PLATFORM_ROLE: "Платформенная роль",
         PROJECT_MEMBERSHIP: "Членство в Проекте",
@@ -6716,6 +6725,15 @@ const en = {
       until: "Until {date}",
       noConditions: "No additional conditions",
       permissionCount: "permissions: {count}",
+      columns: {
+        subject: "Participant or source",
+        role: "Role",
+        assignment: "Assignment and scope",
+        conditions: "Conditions",
+      },
+      manageMembership: "Open participant management",
+      membershipProtected:
+        "This managed assignment can only be changed in Participants",
       assignmentKinds: {
         PLATFORM_ROLE: "Platform role",
         PROJECT_MEMBERSHIP: "Project membership",

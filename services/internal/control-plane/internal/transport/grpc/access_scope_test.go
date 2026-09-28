@@ -29,3 +29,15 @@ func TestPublicAccessScopeRPCPreservesQueryShape(t *testing.T) {
 		})
 	}
 }
+
+func TestBindingManagementKindMapsInternalDirectBinding(t *testing.T) {
+	if got := bindingManagementKindEnum("NONE"); got != cp.AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_DIRECT {
+		t.Fatalf("internal direct binding mapped to %s", got)
+	}
+	if got := bindingManagementKindEnum("PLATFORM_MEMBERSHIP"); got != cp.AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_PLATFORM_MEMBERSHIP {
+		t.Fatalf("platform membership mapped to %s", got)
+	}
+	if got := bindingManagementKindEnum("PROJECT_MEMBERSHIP"); got != cp.AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_PROJECT_MEMBERSHIP {
+		t.Fatalf("project membership mapped to %s", got)
+	}
+}

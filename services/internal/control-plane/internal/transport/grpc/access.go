@@ -334,7 +334,7 @@ func castAccessBinding(value entity.AccessBinding) *controlplanev1.AccessBinding
 	if value.Conditions.ValidUntil != nil {
 		conditions.ValidUntil = timestamppb.New(*value.Conditions.ValidUntil)
 	}
-	return &controlplanev1.AccessBinding{Ref: value.Ref, Version: value.Version, State: bindingStateEnum(value.State), Subject: castAccessSubject(value.Subject), RoleVersion: castAccessRoleVersion(value.RoleVersion), Scope: castAccessScope(value.Scope), Conditions: conditions, CreatedAt: timestamppb.New(value.CreatedAt), UpdatedAt: timestamppb.New(value.UpdatedAt)}
+	return &controlplanev1.AccessBinding{Ref: value.Ref, Version: value.Version, State: bindingStateEnum(value.State), Subject: castAccessSubject(value.Subject), RoleVersion: castAccessRoleVersion(value.RoleVersion), Scope: castAccessScope(value.Scope), Conditions: conditions, CreatedAt: timestamppb.New(value.CreatedAt), UpdatedAt: timestamppb.New(value.UpdatedAt), ManagementKind: bindingManagementKindEnum(value.PresentationKind)}
 }
 
 func castEffectiveDecision(value entity.EffectiveAccessDecision) *controlplanev1.EffectiveAccessDecision {
@@ -369,6 +369,13 @@ func roleStateEnum(value string) controlplanev1.AccessRoleState {
 }
 func bindingStateEnum(value string) controlplanev1.AccessBindingState {
 	return controlplanev1.AccessBindingState(controlplanev1.AccessBindingState_value["ACCESS_BINDING_STATE_"+value])
+}
+
+func bindingManagementKindEnum(value string) controlplanev1.AccessBindingManagementKind {
+	if value == "NONE" {
+		return controlplanev1.AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_DIRECT
+	}
+	return controlplanev1.AccessBindingManagementKind(controlplanev1.AccessBindingManagementKind_value["ACCESS_BINDING_MANAGEMENT_KIND_"+value])
 }
 func oidcGroupState(value string) controlplanev1.OIDCGroupState {
 	return controlplanev1.OIDCGroupState(controlplanev1.OIDCGroupState_value["OIDC_GROUP_STATE_"+value])

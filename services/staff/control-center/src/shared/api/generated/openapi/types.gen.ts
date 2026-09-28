@@ -169,6 +169,7 @@ export type AccessBinding = {
     conditions: AccessConditions;
     createdAt: Timestamp;
     updatedAt: Timestamp;
+    managementKind: 'DIRECT' | 'PLATFORM_MEMBERSHIP' | 'PROJECT_MEMBERSHIP';
 };
 
 export type AccessBindingPage = {

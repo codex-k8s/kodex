@@ -5401,7 +5401,7 @@ components:
     AccessBinding:
       type: object
       additionalProperties: false
-      required: [ref, version, state, subject, roleVersion, scope, conditions, createdAt, updatedAt]
+      required: [ref, version, state, subject, roleVersion, scope, conditions, createdAt, updatedAt, managementKind]
       properties:
         ref: { $ref: '#/components/schemas/OpaqueRef' }
         version: { type: integer, format: int64, minimum: 1 }
@@ -5412,6 +5412,7 @@ components:
         conditions: { $ref: '#/components/schemas/AccessConditions' }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         updatedAt: { $ref: '#/components/schemas/Timestamp' }
+        managementKind: { type: string, enum: [DIRECT, PLATFORM_MEMBERSHIP, PROJECT_MEMBERSHIP] }
     AccessBindingPage:
       type: object
       additionalProperties: false

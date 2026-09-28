@@ -4265,6 +4265,22 @@ func testProjectMembershipCandidate(t *testing.T, ctx context.Context, repositor
 		t.Fatalf("change canonical project membership: membership=%#v err=%v", changedProjectMembership.Membership, err)
 	}
 	added.Membership = changedProjectMembership.Membership
+	protectedProjectMembershipVersion := added.Membership.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.RevokeAccessBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "project-membership-direct-revoke", ExpectedVersion: &protectedProjectMembershipVersion},
+		Payload:  command.AccessBindingInput{BindingRef: added.Membership.Ref},
+	}); !errors.Is(err, domainerrs.ErrProtected) {
+		t.Fatalf("project membership projection was revoked through direct binding command: %v", err)
+	}
+	protectedOwnerVersion := ownerMembership.Version
+	if _, err := service.Execute(ctx, command.Command{
+		Kind: command.ChangeAccessBinding, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "platform-membership-direct-change", ExpectedVersion: &protectedOwnerVersion},
+		Payload:  command.AccessBindingInput{BindingRef: ownerMembership.Ref},
+	}); !errors.Is(err, domainerrs.ErrProtected) {
+		t.Fatalf("platform membership projection was changed through direct binding command: %v", err)
+	}
 	if err := repository.pool.QueryRow(ctx, `
 		SELECT role_version.permission_keys,
 		       (SELECT count(*) FROM control_plane.application_role_versions version WHERE version.role_id = role.id)

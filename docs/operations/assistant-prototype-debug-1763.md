@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.278
+version: 1.0.279
 updated: 2026-09-28
 ---
 
@@ -5913,3 +5913,34 @@ GitHub checks не считается `PASS`.
 - Адресные проверки: frontend unit 7/7, typecheck, ESLint, Prettier и
   `git diff --check` — локальный `PASS` на mounted diff поверх `71208d252`.
   Ручная приёмка владельцем — `NOT RUN`.
+
+### Доступ: компактные назначения и защищённый lifecycle членства, 2026-09-28
+
+- Вкладка «Назначения» показывала высокие карточки, а проекции платформенного
+  и проектного членства ошибочно предлагала менять и отзывать как обычные
+  назначения. Это обходило специализированный membership lifecycle и защиту
+  последнего владельца.
+- В Proto/OpenAPI добавлен закрытый `managementKind`: внутренняя историческая
+  запись `NONE` преобразуется в публичный `DIRECT`, а
+  `PLATFORM_MEMBERSHIP`/`PROJECT_MEMBERSHIP` сохраняют собственную семантику.
+  Control Plane теперь закрыто отклоняет общий change/revoke для обеих
+  membership-проекций; управлять ими можно только через раздел участников.
+- Каталог заменён компактной таблицей с серверным поиском, cursor-дозагрузкой и
+  адаптивным размером порции. На реальных данных загружены 50 строк: у
+  `owner Owner` нет edit/revoke и есть переход к точному участнику, у прямого
+  служебного назначения `Kodex` доступны штатные действия. В карточке
+  участника проекции теперь подписаны как «Платформенная роль» и «Членство в
+  Проекте», а не как прямые назначения.
+- После Air/Vite hot reload и no-cache reload переход из строки владельца открыл
+  `/administration/access/participants` с точным `memberRef`; console
+  error/warn пусты, все завершённые запросы ответили 200, горизонтального
+  переполнения при 1920×1080 нет. Снимок
+  `/tmp/kodex-access-bindings-table-owner-protected-final-20260928.png`.
+- Локальный k3s проверен явным kubeconfig: все Deployment и StatefulSet имеют
+  полную готовность, не-Running/не-Succeeded Pod отсутствуют. Адресные проверки:
+  frontend 23/23, typecheck, ESLint, Prettier; Go transport и gateway unit,
+  repository package compile и `git diff --check` — локальный `PASS` на
+  mounted diff поверх `c1314bdec`. PostgreSQL component и ручная приёмка
+  владельцем — `NOT RUN`. Стандартный remote Buf codegen check получил внешний
+  HTTP 403; те же Proto сгенерированы локальными закреплёнными версиями Buf и
+  Go plugins.

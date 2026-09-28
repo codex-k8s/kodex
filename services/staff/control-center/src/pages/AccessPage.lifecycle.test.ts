@@ -46,6 +46,7 @@ const role: AccessRole = {
 const binding: AccessBinding = {
   ref: "binding_operator",
   version: 3,
+  managementKind: "DIRECT",
   subject: {
     ref: "user_operator",
     kind: "USER",

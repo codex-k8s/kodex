@@ -139,6 +139,16 @@ function bindingScope(binding: AccessBinding): string {
   );
 }
 
+function bindingPresentationKey(binding: AccessBinding): string {
+  if (binding.managementKind === "PLATFORM_MEMBERSHIP") {
+    return "access.bindingsWorkspace.assignmentKinds.PLATFORM_ROLE";
+  }
+  if (binding.managementKind === "PROJECT_MEMBERSHIP") {
+    return "access.bindingsWorkspace.assignmentKinds.PROJECT_MEMBERSHIP";
+  }
+  return "access.participants.directBinding";
+}
+
 watch(
   [() => props.subjects, () => props.selectedSubjectRef],
   ([subjects, preferred]) => {
@@ -376,7 +386,7 @@ onBeforeUnmount(() => {
                   }}</span>
                   <small>{{
                     bindingSource(binding) ||
-                    $t("access.participants.directBinding")
+                    $t(bindingPresentationKey(binding))
                   }}</small>
                 </li>
               </ul>
