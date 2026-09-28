@@ -523,6 +523,7 @@ onBeforeUnmount(() => {
         v-if="recipe"
         class="panel"
         :lineage="recipe.managedLineage"
+        collapsible
       />
       <section v-if="recipe" class="image-lifecycle" aria-live="polite">
         <article class="panel lifecycle-step">

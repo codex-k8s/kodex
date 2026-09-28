@@ -1684,8 +1684,8 @@ const ru = {
   roleImages: {
     sourceUnavailable:
       "Исходник недоступен с текущими правами. Сведения об образе и разрешённые действия доступны отдельно.",
-    sourceHiddenAfterConflict:
-      "Исходник временно скрыт после отказа операции. Повторите чтение конфигурации, чтобы увидеть актуальную версию.",
+    sourceHiddenAfterError:
+      "Исходник временно скрыт после ошибки. Повторите чтение конфигурации, чтобы увидеть доступную версию.",
     impactConflictHelp:
       "План влияния не подготовлен. Обновите конфигурацию; если отказ повторится, проверьте успешную сборку и действующий допуск образа.",
     title: "Образы ИИ-сотрудников",
@@ -4954,8 +4954,8 @@ const en = {
   roleImages: {
     sourceUnavailable:
       "Source is unavailable with the current permissions. Image metadata and permitted actions remain available separately.",
-    sourceHiddenAfterConflict:
-      "The source is temporarily hidden after the operation was rejected. Refresh the configuration to read the current version.",
+    sourceHiddenAfterError:
+      "The source is temporarily hidden after an error. Refresh the configuration to read an available version.",
     impactConflictHelp:
       "The impact plan was not prepared. Refresh the configuration; if this happens again, check the build and current image admission.",
     title: "AI employee images",

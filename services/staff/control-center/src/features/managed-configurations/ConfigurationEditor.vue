@@ -1338,8 +1338,8 @@ watch(
     <p v-if="!sourceVisible" role="status">
       {{
         $t(
-          imageImpactConflict && problem
-            ? "roleImages.sourceHiddenAfterConflict"
+          problem
+            ? "roleImages.sourceHiddenAfterError"
             : "roleImages.sourceUnavailable",
         )
       }}
