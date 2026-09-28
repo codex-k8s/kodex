@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.280
+version: 1.0.281
 updated: 2026-09-28
 ---
 
@@ -5671,28 +5671,39 @@ GitHub checks не считается `PASS`.
   на экране больше нет.
 - Подписочная device-code учётная запись корректно помечена несовместимой с
   распознаванием, поскольку STT требует API key; выбранная API-key запись
-  доступна. Снимок `/tmp/kodex-stt-provider-picker-20260928.png`.
+  доступна. При этом runtime системного помощника отдельно подтверждён на
+  авторизованной device-code записи, то есть платная API-key запись для его
+  диалогов не выбирается. Снимки `/tmp/kodex-stt-provider-picker-20260928.png`,
+  `/tmp/kodex-stt-basic-advanced-20260928.png` и
+  `/tmp/kodex-provider-device-code-ready-20260928.png`.
 - Это browser-readback уже запущенного кода: изменения на этом шаге не
   вносились. Отправка нового аудио и ручная приёмка владельцем — `NOT RUN`.
 
-### Аудит: технические heartbeat скрыты по умолчанию, 2026-09-28
+### Аудит: технические события скрыты до cursor-пагинации, 2026-09-28
 
-- Частый `controlplane.report_warm_runtime` больше не вытесняет пользовательские
-  действия с первого экрана аудита. По умолчанию heartbeat скрыт; компактный
-  переключатель «Показывать технические события» возвращает его и сохраняет
-  явный `technical=1` в URL.
-- Клиентская фильтрация не меняет серверный cursor-контракт: если текущая порция
-  содержит только скрытые события, sentinel продолжает дозагрузку до
-  содержательных записей или конца списка. На 1920×1080 фильтры имеют
-  одинаковую высоту 42 px, таблица не создаёт горизонтального переполнения.
-- После hot reload и обновления без кэша режим по умолчанию показал 26
-  содержательных строк без heartbeat; режим `technical=1` — 38 строк, включая
-  12 heartbeat. Возврат выключателя удалил параметр из URL. Снимок
-  `/tmp/kodex-audit-technical-hidden-20260928.png`; console error/warn пусты,
-  завершённые прикладные запросы — 200. Prettier, адресный Vitest (5 тестов),
-  frontend typecheck, адресный ESLint и `git diff --check` — локальный `PASS`
-  на `655c1f3701c2a3cb4f1c9531bd1a333a921ab822`. Ручная приёмка владельцем —
-  `NOT RUN`.
+- Частые runtime lease, claim, node/tool progress, runtime revision и schedule
+  occurrence больше не вытесняют пользовательские действия. Фильтр выполняет
+  авторитетный PostgreSQL read path **до** cursor-пагинации; OpenAPI передаёт
+  явный `includeTechnical`, gateway преобразует его в закрытый внутренний
+  `exclude_technical`. Старые API-клиенты по умолчанию сохраняют полный audit
+  readback.
+- По умолчанию переключатель выключен и запрос
+  `includeTechnical=false&pageSize=23` вернул 200 без lease/progress/runtime
+  строк. После включения запрос `includeTechnical=true&pageSize=18` вернул 200
+  и снова показал, в частности, «Аренда среды выполнения продлена». Возврат
+  выключателя удалил `technical=1` из URL и повторно скрыл служебные записи.
+- После Air/Vite hot reload и финального обновления без кэша console содержит
+  только Vite debug без error/warn; прикладные запросы не имеют 4xx/5xx,
+  горизонтального переполнения при 1920×1080 нет. Снимки
+  `/tmp/kodex-audit-technical-visible-20260928.png` и
+  `/tmp/kodex-audit-default-filtered-20260928.png`.
+- Адресные проверки: gateway transport unit, compile внутренних gRPC и
+  PostgreSQL repository packages, Buf lint/build, frontend Vitest 42/42,
+  typecheck, ESLint, Prettier и `git diff --check` — локальный `PASS` на mounted
+  diff поверх `c4dbf1ae0`. PostgreSQL component не запускался по принятому
+  быстрому debug-профилю; ручная приёмка владельцем — `NOT RUN`. Удалённый Buf
+  codegen получил внешний 403, поэтому Proto сгенерирован предусмотренным
+  `buf.gen.local.yaml` с закреплёнными версиями плагинов.
 
 ### Помощник: форма варианта поверх сохранённого диалога, 2026-09-28
 

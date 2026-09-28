@@ -14,6 +14,7 @@ type Filter struct {
 	TargetType, TargetRef                                                           string                              `json:",omitempty"`
 	ResumableSessionsOnly                                                           bool                                `json:",omitempty"`
 	MatchAssistantLocalizedDefaultTitle                                             bool                                `json:",omitempty"`
+	ExcludeTechnical                                                                bool                                `json:",omitempty"`
 	ExpectedCatalogRevision, ExpectedCatalogDigest                                  string                              `json:",omitempty"`
 	TemplateContext                                                                 *TemplateVariableContext            `json:",omitempty"`
 	ProjectRef, ResourceRef, Query, State, Category, DefinitionKey, Action, Outcome string

@@ -35,15 +35,8 @@ const selectedProject = computed<AsyncEntityOption | undefined>(() => {
   if (chosenProject.value?.ref === projectRef.value) return chosenProject.value;
   return { ref: projectRef.value, title: i18n.t("audit.selectedProject") };
 });
-const technicalActions = new Set(["controlplane.report_warm_runtime"]);
 const showTechnical = computed(() => route.query.technical === "1");
-const list = computed(() =>
-  showTechnical.value
-    ? platform.auditEvents
-    : platform.auditEvents.filter(
-        (event) => !technicalActions.has(event.action),
-      ),
-);
+const list = computed(() => platform.auditEvents);
 const hasMore = computed(() => Boolean(platform.auditNextPageToken));
 const loadingMore = computed(() => Boolean(platform.loading.auditMore));
 const listRoot = ref<HTMLElement>();
@@ -95,11 +88,23 @@ function toggleTechnical(event: Event): void {
 }
 
 async function load(): Promise<void> {
-  await platform.loadAudit(projectRef.value, query.value, pageSize.value);
+  await platform.loadAudit(
+    projectRef.value,
+    query.value,
+    pageSize.value,
+    "",
+    showTechnical.value,
+  );
 }
 
 function loadMore(): Promise<void> {
-  return platform.loadMoreAudit(projectRef.value, query.value, pageSize.value);
+  return platform.loadMoreAudit(
+    projectRef.value,
+    query.value,
+    pageSize.value,
+    "",
+    showTechnical.value,
+  );
 }
 
 function loadSelectedProject(): void {
@@ -117,7 +122,7 @@ watch(query, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => void load(), 250);
 });
-watch(projectRef, () => {
+watch([projectRef, showTechnical], () => {
   loadSelectedProject();
   void load();
 });

@@ -13468,6 +13468,9 @@ type AttachmentSetRef = string
 // AuditActionQuery defines model for AuditActionQuery.
 type AuditActionQuery = string
 
+// AuditIncludeTechnicalQuery defines model for AuditIncludeTechnicalQuery.
+type AuditIncludeTechnicalQuery = bool
+
 // AuditOutcomeQuery defines model for AuditOutcomeQuery.
 type AuditOutcomeQuery = string
 
@@ -14172,9 +14175,12 @@ type ListAuditEventsParams struct {
 	Action      *AuditActionQuery      `form:"action,omitempty" json:"action,omitempty"`
 	ProjectRef  *ProjectRefQuery       `form:"projectRef,omitempty" json:"projectRef,omitempty"`
 	ResourceRef *AuditResourceRefQuery `form:"resourceRef,omitempty" json:"resourceRef,omitempty"`
-	Query       *Query                 `form:"query,omitempty" json:"query,omitempty"`
-	PageSize    *PageSize              `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken   *PageToken             `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+
+	// IncludeTechnical Включить внутренние runtime и reconciliation события. По умолчанию сохраняется полный audit readback.
+	IncludeTechnical *AuditIncludeTechnicalQuery `form:"includeTechnical,omitempty" json:"includeTechnical,omitempty"`
+	Query            *Query                      `form:"query,omitempty" json:"query,omitempty"`
+	PageSize         *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken        *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ReconcileEmailEffectParams defines parameters for ReconcileEmailEffect.
@@ -23688,6 +23694,19 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceRef"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "includeTechnical" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeTechnical", r.URL.Query(), &params.IncludeTechnical, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeTechnical"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeTechnical", Err: err})
 		}
 		return
 	}

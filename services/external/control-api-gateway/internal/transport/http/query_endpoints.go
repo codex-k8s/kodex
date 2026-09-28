@@ -573,7 +573,7 @@ func (server *Server) ListAuditEvents(w http.ResponseWriter, r *http.Request, p 
 		writeLocalProblem(w, 400, "INVALID_REQUEST", false)
 		return
 	}
-	response, err := server.control.Query.ListAuditEvents(r.Context(), &controlplanev1.ListAuditEventsRequest{ProjectRef: stringValue(p.ProjectRef), ResourceRef: stringValue(p.ResourceRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), Action: stringValue(p.Action), Outcome: stringValue(p.Outcome)})
+	response, err := server.control.Query.ListAuditEvents(r.Context(), &controlplanev1.ListAuditEventsRequest{ProjectRef: stringValue(p.ProjectRef), ResourceRef: stringValue(p.ResourceRef), Page: page(p.PageSize, p.PageToken), Query: stringValue(p.Query), Action: stringValue(p.Action), Outcome: stringValue(p.Outcome), ExcludeTechnical: p.IncludeTechnical != nil && !*p.IncludeTechnical})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

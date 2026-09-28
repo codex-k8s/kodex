@@ -1313,9 +1313,10 @@ export const usePlatformStore = defineStore("platform", () => {
     search = "",
     pageSize = 20,
     resourceRef = "",
+    includeTechnical = true,
   ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${resourceRef}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${resourceRef}\n${String(includeTechnical)}`;
     auditScopeKey.value = scopeKey;
     auditNextPageToken.value = undefined;
     consumedAuditPageTokens.clear();
@@ -1332,6 +1333,7 @@ export const usePlatformStore = defineStore("platform", () => {
                 ...(projectRef ? { projectRef } : {}),
                 ...(resourceRef ? { resourceRef } : {}),
                 ...(normalizedSearch ? { query: normalizedSearch } : {}),
+                includeTechnical,
                 pageSize,
               },
               signal: requestSignal(),
@@ -1351,9 +1353,10 @@ export const usePlatformStore = defineStore("platform", () => {
     search = "",
     pageSize = 20,
     resourceRef = "",
+    includeTechnical = true,
   ): Promise<void> {
     const normalizedSearch = search.trim();
-    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${resourceRef}`;
+    const scopeKey = `${projectRef ?? ""}\n${normalizedSearch}\n${resourceRef}\n${String(includeTechnical)}`;
     const pageToken = auditNextPageToken.value;
     if (
       !pageToken ||
@@ -1372,6 +1375,7 @@ export const usePlatformStore = defineStore("platform", () => {
                 ...(projectRef ? { projectRef } : {}),
                 ...(resourceRef ? { resourceRef } : {}),
                 ...(normalizedSearch ? { query: normalizedSearch } : {}),
+                includeTechnical,
                 pageSize,
                 pageToken,
               },

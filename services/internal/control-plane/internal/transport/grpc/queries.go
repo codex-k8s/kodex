@@ -575,7 +575,7 @@ func (server *Server) ListAuditEvents(ctx context.Context, request *controlplane
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := server.service.ListAuditEvents(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetResourceRef(), Action: request.GetAction(), Outcome: request.GetOutcome(), Query: request.GetQuery(), Page: page(request.GetPage())})
+	items, next, err := server.service.ListAuditEvents(ctx, p, query.Filter{ProjectRef: request.GetProjectRef(), ResourceRef: request.GetResourceRef(), Action: request.GetAction(), Outcome: request.GetOutcome(), Query: request.GetQuery(), ExcludeTechnical: request.GetExcludeTechnical(), Page: page(request.GetPage())})
 	if err != nil {
 		return nil, transportError(err)
 	}

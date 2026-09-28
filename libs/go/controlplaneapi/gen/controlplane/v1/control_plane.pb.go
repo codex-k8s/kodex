@@ -27928,15 +27928,16 @@ func (x *GetAdministrationResponse) GetState() *AdministrationState {
 }
 
 type ListAuditEventsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectRef    string                 `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
-	Page          *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
-	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
-	Outcome       string                 `protobuf:"bytes,4,opt,name=outcome,proto3" json:"outcome,omitempty"`
-	Query         string                 `protobuf:"bytes,5,opt,name=query,proto3" json:"query,omitempty"`
-	ResourceRef   string                 `protobuf:"bytes,6,opt,name=resource_ref,json=resourceRef,proto3" json:"resource_ref,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ProjectRef       string                 `protobuf:"bytes,1,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	Page             *PageRequest           `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
+	Action           string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
+	Outcome          string                 `protobuf:"bytes,4,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	Query            string                 `protobuf:"bytes,5,opt,name=query,proto3" json:"query,omitempty"`
+	ResourceRef      string                 `protobuf:"bytes,6,opt,name=resource_ref,json=resourceRef,proto3" json:"resource_ref,omitempty"`
+	ExcludeTechnical bool                   `protobuf:"varint,7,opt,name=exclude_technical,json=excludeTechnical,proto3" json:"exclude_technical,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ListAuditEventsRequest) Reset() {
@@ -28009,6 +28010,13 @@ func (x *ListAuditEventsRequest) GetResourceRef() string {
 		return x.ResourceRef
 	}
 	return ""
+}
+
+func (x *ListAuditEventsRequest) GetExcludeTechnical() bool {
+	if x != nil {
+		return x.ExcludeTechnical
+	}
+	return false
 }
 
 type ListAuditEventsResponse struct {
@@ -76257,7 +76265,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05state\x18\x01 \x01(\v2\x1f.controlplane.v1.BootstrapStateR\x05state\"\x1a\n" +
 	"\x18GetAdministrationRequest\"W\n" +
 	"\x19GetAdministrationResponse\x12:\n" +
-	"\x05state\x18\x01 \x01(\v2$.controlplane.v1.AdministrationStateR\x05state\"\xd6\x01\n" +
+	"\x05state\x18\x01 \x01(\v2$.controlplane.v1.AdministrationStateR\x05state\"\x83\x02\n" +
 	"\x16ListAuditEventsRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x120\n" +
@@ -76265,7 +76273,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x06action\x18\x03 \x01(\tR\x06action\x12\x18\n" +
 	"\aoutcome\x18\x04 \x01(\tR\aoutcome\x12\x14\n" +
 	"\x05query\x18\x05 \x01(\tR\x05query\x12!\n" +
-	"\fresource_ref\x18\x06 \x01(\tR\vresourceRef\"}\n" +
+	"\fresource_ref\x18\x06 \x01(\tR\vresourceRef\x12+\n" +
+	"\x11exclude_technical\x18\a \x01(\bR\x10excludeTechnical\"}\n" +
 	"\x17ListAuditEventsResponse\x123\n" +
 	"\x06events\x18\x01 \x03(\v2\x1b.controlplane.v1.AuditEventR\x06events\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\x9e\x02\n" +
