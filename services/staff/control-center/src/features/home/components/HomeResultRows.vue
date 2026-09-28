@@ -7,6 +7,7 @@ import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { presentRuntimeText } from "@/features/runs/runtime-text";
 const props = defineProps<{
   items: HomeResultItem[];
   more?: string;
@@ -27,6 +28,9 @@ function formatDate(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(timestamp);
+}
+function visibleDescription(item: HomeResultItem): string | undefined {
+  return presentRuntimeText(item.description, serverMessage);
 }
 const root = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
@@ -74,7 +78,7 @@ useCursorInfiniteScroll({
         </template>
       </small>
       <small v-else
-        ><SafeSummary :content="item.description" :maximum-length="140"
+        ><SafeSummary :content="visibleDescription(item)" :maximum-length="140"
       /></small>
       <StatusBadge :state="item.state" />
     </div>
