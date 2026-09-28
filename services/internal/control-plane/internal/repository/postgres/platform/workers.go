@@ -1519,7 +1519,7 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 			return commandOutcome{}, err
 		}
 	}
-	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.InvocationRef, "TURN_PROGRESS", nodeRef, "", "", "", "i18n:INTEGRATION_ACTION_COMPLETED", "RUNNING", "RUNNING")
+	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.InvocationRef, "TURN_PROGRESS", nodeRef, "", "", "", integrationActionOutcomeMessage(next), "RUNNING", "RUNNING")
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -1532,6 +1532,17 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 		return commandOutcome{}, err
 	}
 	return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: &event}, projectID: projectID, projectRef: projectRef, resourceKind: "INTEGRATION_INVOCATION", resourceRef: payload.InvocationRef, summary: "i18n:INTEGRATION_INVOCATION_COMPLETED"}, nil
+}
+
+func integrationActionOutcomeMessage(state string) string {
+	switch state {
+	case "SUCCEEDED":
+		return "i18n:INTEGRATION_ACTION_SUCCEEDED"
+	case "FAILED":
+		return "i18n:INTEGRATION_ACTION_FAILED"
+	default:
+		return "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"
+	}
 }
 
 func safeIntegrationErrorCode(code string) bool {

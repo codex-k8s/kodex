@@ -479,6 +479,18 @@ export const serverTokenTranslations = {
     "Действие интеграции завершено",
     "Integration action completed",
   ],
+  INTEGRATION_ACTION_SUCCEEDED: [
+    "Действие интеграции выполнено успешно",
+    "Integration action succeeded",
+  ],
+  INTEGRATION_ACTION_FAILED: [
+    "Действие интеграции отклонено или завершилось ошибкой",
+    "Integration action was rejected or failed",
+  ],
+  INTEGRATION_ACTION_OUTCOME_UNKNOWN: [
+    "Результат действия интеграции неизвестен",
+    "Integration action outcome is unknown",
+  ],
   INTEGRATION_CONNECTION_CREATED: ["Подключение создано", "Connection created"],
   INTEGRATION_CONNECTION_DELETED: ["Подключение удалено", "Connection deleted"],
   INTEGRATION_CONNECTION_TEST_COMPLETED: [
