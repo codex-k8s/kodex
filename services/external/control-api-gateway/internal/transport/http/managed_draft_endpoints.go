@@ -185,15 +185,10 @@ func writeManagedDraftResult(ctx context.Context, w http.ResponseWriter, result 
 	if saved == nil {
 		valid = valid && revision.GetRef() == revisionRef && revision.GetState() == controlplanev1.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DISCARDED
 	} else {
-		content := strings.TrimSpace(*saved.Content)
-		format := string(saved.ContentFormat)
-		if format == "OPENAPI_IMPORT" {
-			canonical, err := canonicalOpenAPIImport(ctx, content)
-			if err != nil {
-				writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
-				return
-			}
-			content, format = canonical, "JSON"
+		content, format, err := expectedManagedDraftReceipt(ctx, kind, string(saved.ContentFormat), *saved.Content)
+		if err != nil {
+			writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
 		}
 		digest := sha256.Sum256([]byte(content))
 		valid = valid && opaqueHTTPReference.MatchString(revision.GetRef()) && revision.GetRef() != revisionRef &&
@@ -205,6 +200,31 @@ func writeManagedDraftResult(ctx context.Context, w http.ResponseWriter, result 
 		return
 	}
 	writeManagedResult(w, http.StatusOK, result)
+}
+
+func expectedManagedDraftReceipt(ctx context.Context, kind controlplanev1.ManagedConfigurationKind, format, content string) (string, string, error) {
+	content = strings.TrimSpace(content)
+	if kind != controlplanev1.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION {
+		return content, format, nil
+	}
+	if format == "OPENAPI_IMPORT" {
+		canonical, err := canonicalOpenAPIImport(ctx, content)
+		return canonical, "JSON", err
+	}
+	if format != "JSON" && format != "YAML" {
+		return content, format, nil
+	}
+	shipped, err := integrationpackage.LoadShipped()
+	if err != nil {
+		return "", "", err
+	}
+	_, canonical, err := integrationpackage.NormalizeManagedRevision([]byte(content), integrationpackage.OriginUI, shipped)
+	if err != nil {
+		// Невалидный черновик сохраняется без канонизации, чтобы редактор мог
+		// показать точную диагностику до публикации.
+		return content, format, nil
+	}
+	return string(canonical), "JSON", nil
 }
 
 func canonicalOpenAPIImport(ctx context.Context, content string) (string, error) {
