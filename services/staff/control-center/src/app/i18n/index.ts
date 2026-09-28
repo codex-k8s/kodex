@@ -1892,6 +1892,8 @@ const ru = {
       "Набор полей задан опубликованной версией Процесса и проверяется сервером.",
     inputFiles: "Входные файлы",
     inputFilesHint: "Доступны только проверенные файлы из текущего Проекта.",
+    chooseTargetBeforeFiles:
+      "Сначала выберите ИИ-сотрудника или Процесс — затем мы проверим доступность файлов.",
     filesCapabilityRequired:
       "Сначала выдайте всем выбранным ИИ-сотрудникам возможность «Файлы».",
     attachmentEligibility: {
@@ -1903,7 +1905,7 @@ const ru = {
       SESSION_UNAVAILABLE: "Вложения для продолжения этой сессии недоступны.",
     },
     fileReady: "Проверен и готов",
-    noInputFiles: "В Проекте пока нет проверенных файлов.",
+    noInputFiles: "Входные файлы не выбраны.",
     manageFiles: "Открыть файлы Проекта",
     sessionPolicy: "Продолжение работы",
     newSession: "Новая сессия",
@@ -5871,6 +5873,8 @@ const en = {
     inputFiles: "Input files",
     inputFilesHint:
       "Only validated files from the current Project are available.",
+    chooseTargetBeforeFiles:
+      "Choose an AI employee or Process first, then file availability will be checked.",
     filesCapabilityRequired:
       "Grant the Files capability to every selected AI employee first.",
     attachmentEligibility: {
@@ -5884,7 +5888,7 @@ const en = {
         "Attachments are unavailable for continuing this session.",
     },
     fileReady: "Validated and ready",
-    noInputFiles: "This Project has no validated files yet.",
+    noInputFiles: "No input files selected.",
     manageFiles: "Open Project files",
     sessionPolicy: "Work continuation",
     newSession: "New session",

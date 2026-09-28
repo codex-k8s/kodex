@@ -211,6 +211,20 @@ const attachmentEligibilityReload = ref(0);
 const targetSupportsFiles = computed(
   () => attachmentEligibility.value?.eligible === true,
 );
+const attachmentEligibilityMessage = computed(() => {
+  if (attachmentEligibilityBusy.value) return t("common.loading");
+  if (attachmentEligibility.value && !targetSupportsFiles.value) {
+    return t(
+      `runs.attachmentEligibility.${attachmentEligibility.value.reason}`,
+    );
+  }
+  return t("runs.inputFilesHint");
+});
+const attachmentEmptyMessage = computed(() => {
+  if (!selectedTarget.value) return t("runs.chooseTargetBeforeFiles");
+  if (!targetSupportsFiles.value) return attachmentEligibilityMessage.value;
+  return t("runs.noInputFiles");
+});
 watch(
   () =>
     [
@@ -871,18 +885,7 @@ watch(
                   {{ $t("runs.inputFiles") }}
                   <span class="count-badge">{{ attachmentState.count }}</span>
                 </h2>
-                <p>
-                  {{
-                    attachmentEligibilityBusy
-                      ? $t("common.loading")
-                      : attachmentEligibility && !targetSupportsFiles
-                        ? $t(
-                            "runs.attachmentEligibility." +
-                              attachmentEligibility.reason,
-                          )
-                        : $t("runs.inputFilesHint")
-                  }}
-                </p>
+                <p>{{ attachmentEligibilityMessage }}</p>
               </div>
               <button
                 class="button"
@@ -914,7 +917,7 @@ watch(
               class="selected-files-empty"
             >
               <Files :size="22" aria-hidden="true" />
-              <span>{{ $t("runs.noInputFiles") }}</span>
+              <span>{{ attachmentEmptyMessage }}</span>
             </div>
             <RouterLink
               class="files-manage-link"

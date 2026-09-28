@@ -45,4 +45,10 @@ describe("NewRunPage layout", () => {
     expect(template).toContain("runs.newRun.externalChannelUnavailable");
     expect(source).not.toContain("Boolean(form.title.trim())");
   });
+
+  it("не подменяет отсутствие выбора файлов отсутствием файлов в Проекте", () => {
+    expect(source).toContain('t("runs.chooseTargetBeforeFiles")');
+    expect(template).toContain("attachmentEligibilityMessage");
+    expect(source).toContain('t("runs.noInputFiles")');
+  });
 });
