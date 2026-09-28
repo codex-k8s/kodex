@@ -14,7 +14,8 @@ LEFT JOIN control_plane.runtime_secret_revisions revision
 WHERE secret.organization_id = @organization_id::uuid
   AND (@project_ref = '' OR project.ref = @project_ref)
   AND secret.state <> 'PROVISIONING'
-  AND (@query = '' OR secret.name ILIKE '%' || @query || '%' OR secret.description ILIKE '%' || @query || '%')
+  AND (@query = '' OR secret.name ILIKE '%' || @query || '%' OR secret.description ILIKE '%' || @query || '%'
+      OR secret.value_type ILIKE '%' || @query || '%' OR project.name ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR secret.ref > @cursor_ref)
   AND (@authority_project = '' OR secret.project_id = NULLIF(@authority_project,'')::uuid)
   AND control_plane.catalog_resource_visible(secret.organization_id, @actor_id::uuid, 'secret.view', 'SECRET',

@@ -525,6 +525,7 @@ const ru = {
     environments: "Окружения",
     secrets: "Секреты",
     members: "Участники",
+    searchPlaceholder: "Найти по названию, описанию или Проекту",
     memberSearchPlaceholder: "Найти по участнику, email или Проекту",
     workflowSummary:
       "Этапов: {stages} · сотрудников: {agents} · ожидают решения: {gates}",
@@ -4227,6 +4228,7 @@ const en = {
     environments: "Environments",
     secrets: "Secrets",
     members: "Members",
+    searchPlaceholder: "Find by name, description, or Project",
     memberSearchPlaceholder: "Find by member, email, or Project",
     workflowSummary:
       "Stages: {stages} · employees: {agents} · pending decisions: {gates}",

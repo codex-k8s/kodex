@@ -6,7 +6,7 @@ SELECT w.ref,p.ref,w.name,w.purpose,COALESCE(a.ref,''),w.state,w.version,w.draft
 		LEFT JOIN control_plane.workflow_versions published ON published.workflow_id=w.id
 		  AND published.organization_id=w.organization_id AND published.version_number=w.published_version
 		WHERE w.organization_id=$1::uuid AND ($2='' OR p.ref=$2) AND w.state<>'ARCHIVED'
-		AND ($5='' OR w.name ILIKE '%'||$5||'%') AND ($6='' OR w.state=$6)
+		AND ($5='' OR w.name ILIKE '%'||$5||'%' OR w.purpose ILIKE '%'||$5||'%' OR p.name ILIKE '%'||$5||'%') AND ($6='' OR w.state=$6)
 		AND ($8='' OR w.ref > $8)
 		AND ($9='' OR w.project_id = NULLIF($9,'')::uuid)
 		AND control_plane.catalog_resource_visible(w.organization_id, $4::uuid, 'workflow.view', 'WORKFLOW',

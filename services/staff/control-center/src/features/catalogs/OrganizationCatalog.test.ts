@@ -120,6 +120,7 @@ describe("OrganizationCatalog realtime", () => {
 
   it("объясняет поля серверного поиска участников", () => {
     expect(catalogTemplate).toContain("catalog.memberSearchPlaceholder");
+    expect(catalogTemplate).toContain("catalog.searchPlaceholder");
     expect(catalogTemplate).toContain(":aria-label=");
     expect(catalogTemplate).toContain(":placeholder=");
   });

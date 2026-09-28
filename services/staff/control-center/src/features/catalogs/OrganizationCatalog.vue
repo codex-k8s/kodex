@@ -218,12 +218,12 @@ onBeforeUnmount(() => {
         :aria-label="
           kind === 'members'
             ? $t('catalog.memberSearchPlaceholder')
-            : $t('common.search')
+            : $t('catalog.searchPlaceholder')
         "
         :placeholder="
           kind === 'members'
             ? $t('catalog.memberSearchPlaceholder')
-            : $t('common.search')
+            : $t('catalog.searchPlaceholder')
         "
     /></label>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
