@@ -300,10 +300,16 @@ onUnmounted(() => {
 }
 .audit-table__row div {
   display: grid;
+  min-width: 0;
   gap: 3px;
 }
 .audit-table small {
   color: var(--muted);
+}
+.audit-technical small {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .audit-technical summary {
   color: var(--muted);

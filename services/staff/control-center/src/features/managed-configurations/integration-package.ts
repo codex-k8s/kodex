@@ -17,6 +17,11 @@ export interface PackageFieldSchema {
   maximum?: number;
   pattern?: string;
 }
+
+export interface PackageDiagnosticDetail {
+  path: string[];
+  keyword: string;
+}
 export const packageSchema: PackageFieldSchema = schema;
 export function resolvePackageField(
   field: PackageFieldSchema,
@@ -52,6 +57,31 @@ export function packageDiagnostics(value: unknown): string[] {
       ),
     ),
   ];
+}
+
+export function packageDiagnosticDetails(
+  value: unknown,
+): PackageDiagnosticDetail[] {
+  if (validate(normalizeLegacyOpenAPIInputFields(value))) return [];
+  const details = new Map<string, PackageDiagnosticDetail>();
+  for (const error of validate.errors ?? []) {
+    const path = error.instancePath
+      .split("/")
+      .slice(1)
+      .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"));
+    if (error.keyword === "required") {
+      const params = error.params as Record<string, unknown>;
+      const missingProperty = params.missingProperty;
+      if (
+        typeof missingProperty === "string" &&
+        /^[A-Za-z][A-Za-z0-9_-]{0,80}$/.test(missingProperty)
+      )
+        path.push(missingProperty);
+    }
+    const detail = { path, keyword: error.keyword };
+    details.set(`${path.join(".")}:${error.keyword}`, detail);
+  }
+  return [...details.values()];
 }
 
 function normalizeLegacyOpenAPIInputFields(value: unknown): unknown {

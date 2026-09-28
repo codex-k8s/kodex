@@ -719,6 +719,23 @@ const ru = {
     editMode: "Режим редактора",
     invalidDocument:
       "Исправьте синтаксис исходного документа перед редактированием формы.",
+    validation: {
+      document: "Документ",
+      required: "Заполните обязательное поле «{field}».",
+      additionalProperties:
+        "Уберите неподдерживаемое поле из раздела «{field}».",
+      type: "Проверьте тип значения в поле «{field}».",
+      pattern: "Исправьте формат значения в поле «{field}».",
+      enum: "Выберите допустимое значение в поле «{field}».",
+      const: "Восстановите обязательное значение поля «{field}».",
+      minimum: "Увеличьте значение поля «{field}» до допустимого.",
+      maximum: "Уменьшите значение поля «{field}» до допустимого.",
+      minLength: "Введите более полное значение в поле «{field}».",
+      maxLength: "Сократите значение в поле «{field}».",
+      minItems: "Добавьте элементы в раздел «{field}».",
+      maxItems: "Уберите лишние элементы из раздела «{field}».",
+      invalid: "Исправьте значение в поле «{field}».",
+    },
     baseImage: "Базовый образ",
     packages: "Пакеты",
     roleImageFormHint:
@@ -4437,6 +4454,23 @@ const en = {
     form: "Form",
     editMode: "Editor mode",
     invalidDocument: "Fix the source document syntax before editing the form.",
+    validation: {
+      document: "Document",
+      required: "Complete the required “{field}” field.",
+      additionalProperties:
+        "Remove the unsupported field from “{field}” section.",
+      type: "Check the value type in “{field}” field.",
+      pattern: "Fix the value format in “{field}” field.",
+      enum: "Select an allowed value in “{field}” field.",
+      const: "Restore the required value of “{field}” field.",
+      minimum: "Increase the value of “{field}” to the allowed range.",
+      maximum: "Reduce the value of “{field}” to the allowed range.",
+      minLength: "Enter a more complete value in “{field}” field.",
+      maxLength: "Shorten the value in “{field}” field.",
+      minItems: "Add items to “{field}” section.",
+      maxItems: "Remove extra items from “{field}” section.",
+      invalid: "Fix the value in “{field}” field.",
+    },
     baseImage: "Base image",
     packages: "Packages",
     roleImageFormHint:

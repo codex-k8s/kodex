@@ -54,5 +54,6 @@ describe("AuditPage pagination", () => {
     expect(template).toContain(':empty="list.length === 0 && !hasMore"');
     expect(source).toContain('next.technical = "1"');
     expect(source).toContain("watch([projectRef, showTechnical]");
+    expect(source).toContain("overflow-wrap: anywhere");
   });
 });

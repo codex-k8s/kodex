@@ -74,7 +74,10 @@ import {
   parseConfigurationDocument,
   serializeConfigurationDocument,
 } from "./document";
-import { packageDiagnostics } from "./integration-package";
+import {
+  packageDiagnosticDetails,
+  type PackageDiagnosticDetail,
+} from "./integration-package";
 import {
   canPublish,
   canChangeDraft,
@@ -89,7 +92,8 @@ const props = defineProps<{
   projectRef?: string;
 }>();
 const emit = defineEmits<{ created: [configuration: ManagedConfiguration] }>();
-const { t } = useI18n();
+const i18n = useI18n();
+const { t } = i18n;
 const fieldPrefix = `configuration-editor-${useId()}`;
 const configuration = ref<ManagedConfiguration>();
 const revision = ref<ManagedConfigurationRevision>();
@@ -302,13 +306,27 @@ const localDiagnostics = computed(() => {
   if (format.value !== "JSON" && format.value !== "YAML")
     return [t("managed.invalidDocument")];
   try {
-    return packageDiagnostics(
+    return packageDiagnosticDetails(
       parseConfigurationDocument(content.value, format.value),
-    );
+    ).map(localDiagnosticMessage);
   } catch {
     return [t("managed.invalidDocument")];
   }
 });
+
+function localDiagnosticMessage(diagnostic: PackageDiagnosticDetail): string {
+  const fieldKey = [...diagnostic.path]
+    .reverse()
+    .find((part) => !/^\d+$/.test(part));
+  const field =
+    fieldKey && i18n.te(`managed.packageFields.${fieldKey}`)
+      ? t(`managed.packageFields.${fieldKey}`)
+      : fieldKey || t("managed.validation.document");
+  const messageKey = `managed.validation.${diagnostic.keyword}`;
+  return i18n.te(messageKey)
+    ? t(messageKey, { field })
+    : t("managed.validation.invalid", { field });
+}
 const canSave = computed(
   () =>
     !busy.value &&
