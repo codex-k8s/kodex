@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.300
+version: 1.0.301
 updated: 2026-09-28
 ---
 
@@ -6414,3 +6414,32 @@ GitHub checks не считается `PASS`.
   на отдельной БД не запускалась по принятому debug-режиму; live browser
   readback — `PASS`. Этап 3 checklist завершён; ручная приёмка владельцем —
   `NOT RUN`.
+
+### Образы: отмена активной сборки и итоговая диагностика, 2026-09-28
+
+- Через штатную форму создан отдельный рецепт
+  `imgrec_DtGbowoB-zVtVBcnJO2DOHTo` с заведомо долгим несекретным шагом
+  сборки. На этапе `INSTALLATION` и прогрессе 60% интерфейс показал точное
+  действие «Остановить сборку». После подтверждения попытка
+  `imgbld_Xa0Cdhd7MteQZ7RWpgELr9gG` перешла в `CANCELLED` с безопасным кодом
+  `IMAGE_BUILD_CANCELLED_BY_USER`.
+- PostgreSQL readback подтвердил terminal-состояние и отсутствие
+  `claimant_workload`, lease token и активной аренды. После reload без кэша
+  отмена осталась видна, действие остановки исчезло, а рецепт сохранил
+  возможность отдельной повторной сборки. Снимок:
+  `/tmp/kodex-role-image-build-cancelled-stage4-clean.png`.
+- Существующая terminal-попытка образа «Проверка ошибки сборки 2609» сохранила
+  `DEAD_LETTER`, `INSTALLATION_FAILED` и `INSTALL_COMMAND_REJECTED`; экран
+  показывает очищенное описание и действие передачи на разбор без Pod logs,
+  credential и значений Secret. Ранее созданный этим действием Run
+  `run_jsVglTG5j3dBQuIIu20qUsHh` повторно прочитан в состоянии `SUCCEEDED`.
+  Снимок: `/tmp/kodex-role-image-terminal-diagnostic-stage4.png`.
+- Причина прежней неготовности объекта «Разработчик Marketplace» больше не
+  актуальна: новый рецепт `imgrec_4owKIZ1GxqCMl80Y44awFz3W` имеет завершённую
+  сборку, `ACCEPTED` admission и `PROMOTED` artifact; каталог показывает его
+  опубликованным. Старое неуспешное поколение не переписывалось.
+- Frontend unit образов и карточки помощника 43/43, `vue-tsc` и
+  `git diff --check` — локальный `PASS`. На финальном no-cache readback console
+  error/warn пуста; все завершённые рабочие XHR/fetch имеют 2xx, первичные
+  чтения отменены самой навигацией. Этап 4 checklist завершён; ручная приёмка
+  владельцем — `NOT RUN`.
