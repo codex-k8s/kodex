@@ -196,9 +196,41 @@ describe("integrations presentation model", () => {
       "WORKFLOW",
     ]);
     expect(grants[0]?.capabilityName).toBe("Чтение");
+    expect(grants[0]?.capabilityAvailable).toBe(true);
     expect(grants[0]).toMatchObject({
       resourceKind: "GITHUB_REPOSITORY",
       resourceValues: [{ key: "repository", value: "codex-k8s/kodex" }],
+    });
+  });
+
+  it("не показывает внутренний key удалённой возможности как пользовательское имя", () => {
+    const [grant] = flattenIntegrationGrants([
+      connection("legacy", "github", {
+        capabilities: [],
+        grants: [
+          {
+            ref: "grant-legacy",
+            version: 1,
+            capabilityKey: "op.technical-reference",
+            agentRef: "agent-release",
+            targetName: "Инженер релизов",
+            enabled: false,
+            risk: "READ",
+            approvalPolicy: "NONE",
+            resourceScope: {
+              kind: "HTTPS_RESOURCE",
+              values: { url: "https://example.test" },
+              digest: "b".repeat(64),
+            },
+          },
+        ],
+      }),
+    ]);
+
+    expect(grant).toMatchObject({
+      capabilityKey: "op.technical-reference",
+      capabilityName: "",
+      capabilityAvailable: false,
     });
   });
 

@@ -594,9 +594,18 @@ const canManageSelected = computed(
                 </td>
                 <td>
                   <div class="grant-capability">
-                    <strong :title="item.capabilityName">{{
-                      item.capabilityName
-                    }}</strong>
+                    <strong
+                      :title="
+                        item.capabilityAvailable
+                          ? item.capabilityName
+                          : t('integrationsRedesign.capabilityUnavailable')
+                      "
+                      >{{
+                        item.capabilityAvailable
+                          ? item.capabilityName
+                          : t("integrationsRedesign.capabilityUnavailable")
+                      }}</strong
+                    >
                     <span>
                       {{ t("integrations.risk." + item.grant.risk) }} ·
                       {{ approvalPolicyLabel(item.grant.approvalPolicy) }}

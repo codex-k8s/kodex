@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.273
+version: 1.0.274
 updated: 2026-09-28
 ---
 
@@ -5830,3 +5830,18 @@ GitHub checks не считается `PASS`.
 - Адресные проверки: Go unit 1/1, frontend typecheck, ESLint, Prettier и
   `git diff --check` — локальный `PASS` на mounted diff поверх
   `bc0643b0f`. Ручная приёмка владельцем — `NOT RUN`.
+
+### Интеграции: безопасный fallback исторической возможности, 2026-09-28
+
+- Историческое отозванное разрешение ссылалось на уже удалённую capability и
+  показывало пользователю внутренний ключ вида `op.*` вместо названия.
+- Пользовательская колонка теперь выводит локализованное «Возможность
+  недоступна» / `Capability unavailable`; технический ключ остаётся только в
+  раскрываемых технических сведениях и не подменяет пользовательское имя.
+- После Vite hot reload на вкладке разрешений видна одна ожидаемая строка с
+  безопасным fallback. Console error/warn пусты, запросы интеграций ответили
+  200, горизонтального переполнения при 1920×1080 нет. Снимок
+  `/tmp/kodex-integration-grant-unavailable-capability-20260928.png`.
+- Адресные проверки: frontend unit 7/7, typecheck, ESLint, Prettier и
+  `git diff --check` — локальный `PASS` на mounted diff поверх `7a6bbd283`.
+  Ручная приёмка владельцем — `NOT RUN`.

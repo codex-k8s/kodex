@@ -2327,6 +2327,7 @@ const ru = {
     noConnectionMatches: "Подключения не найдены",
     tryAnotherSearch: "Измените поисковый запрос.",
     capabilityCount: "Возможностей: {count}",
+    capabilityUnavailable: "Возможность недоступна",
     approvalCapabilityCount: "Human Gate: {count}",
     packageDetails: "Подробнее",
     packageDetailsUnavailable:
@@ -6322,6 +6323,7 @@ const en = {
     noConnectionMatches: "No matching connections",
     tryAnotherSearch: "Try another search query.",
     capabilityCount: "Capabilities: {count}",
+    capabilityUnavailable: "Capability unavailable",
     approvalCapabilityCount: "Human Gate: {count}",
     packageDetails: "Package details",
     packageDetailsUnavailable:
