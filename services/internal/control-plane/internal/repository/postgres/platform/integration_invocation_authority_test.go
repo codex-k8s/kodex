@@ -32,3 +32,12 @@ func TestIntegrationActionOutcomeMessage(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationGateContextSummary(t *testing.T) {
+	if got := integrationGateContextSummary("Тестовое подключение", "Изменить запись", "write"); got != "Тестовое подключение · Изменить запись" {
+		t.Fatalf("unexpected gate context summary: %q", got)
+	}
+	if got := integrationGateContextSummary("Тестовое подключение", "", "write"); got != "Тестовое подключение · write" {
+		t.Fatalf("unexpected fallback gate context summary: %q", got)
+	}
+}

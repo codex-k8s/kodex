@@ -1,6 +1,6 @@
 -- name: workers_resolveintegrationinvocation_select_runs_id_organization_id_ref :one
 SELECT r.id::text,n.id::text,c.id::text,g.id::text,g.ref,r.project_id::text,r.root_run_id::text,
-	c.definition_key,c.definition_version,c.definition_digest,
+	c.definition_key,c.definition_version,c.definition_digest,c.name,
 	g.risk,g.approval_policy,g.resource_kind,g.resource_scope,g.resource_scope_digest,initiator.ref,
 	g.version,g.approval_scope_paths,COALESCE(n.agent_id::text,'')
 FROM control_plane.runs r

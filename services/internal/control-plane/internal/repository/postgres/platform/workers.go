@@ -1114,7 +1114,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		return nil, errs.ErrInvalid
 	}
 	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef, agentID string
-	var definitionKey, definitionVersion, definitionDigest, risk, approvalPolicy, resourceKind, resourceScopeDigest string
+	var definitionKey, definitionVersion, definitionDigest, connectionName, risk, approvalPolicy, resourceKind, resourceScopeDigest string
 	var encodedScope []byte
 	var grantVersion int64
 	var approvalScopePaths []string
@@ -1122,7 +1122,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 		scope.organizationID, input["run_ref"], input["node_ref"], input["connection_ref"], input["capability_key"],
 	).Scan(
 		&runID, &nodeID, &connectionID, &grantID, &grantRef, &projectID, &rootRunID,
-		&definitionKey, &definitionVersion, &definitionDigest, &risk, &approvalPolicy,
+		&definitionKey, &definitionVersion, &definitionDigest, &connectionName, &risk, &approvalPolicy,
 		&resourceKind, &encodedScope, &resourceScopeDigest, &initiatorRef,
 		&grantVersion, &approvalScopePaths, &agentID,
 	)
@@ -1260,7 +1260,7 @@ func (repository *Repository) resolveIntegrationInvocation(ctx context.Context, 
 			var gateID string
 			if err := tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationInsertOwnerGate,
 				gateRef, scope.organizationID, projectID, rootRunID, gateNodeID,
-				truncate(input["capability_key"]+" "+string(encodedScope), 1000), invocationID,
+				integrationGateContextSummary(connectionName, capability.Name, capability.Operation), invocationID,
 			).Scan(&gateID); err != nil {
 				return nil, serializableTransactionError(err, errs.ErrUnavailable)
 			}
@@ -1543,6 +1543,14 @@ func integrationActionOutcomeMessage(state string) string {
 	default:
 		return "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"
 	}
+}
+
+func integrationGateContextSummary(connectionName, capabilityName, operation string) string {
+	name := strings.TrimSpace(capabilityName)
+	if name == "" {
+		name = strings.TrimSpace(operation)
+	}
+	return truncate(strings.TrimSpace(connectionName)+" · "+name, 1000)
 }
 
 func safeIntegrationErrorCode(code string) bool {
