@@ -1373,10 +1373,14 @@ func (repository *Repository) promoteAssistantConversationProject(ctx context.Co
 	).Scan(&sessionID); err != nil {
 		return fmt.Errorf("promote assistant session project: %w", errs.ErrConflict)
 	}
-	if _, err := tx.Exec(ctx, queryConfigurationApplyassistantplancommandPromoteSessionStorageProject,
+	var lineagePromoted bool
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandPromoteSessionStorageProject,
 		projectID, sessionID, scope.organizationID,
-	); err != nil {
+	).Scan(&lineagePromoted); err != nil {
 		return fmt.Errorf("promote assistant session storage project: %w", errs.ErrUnavailable)
+	}
+	if !lineagePromoted {
+		return fmt.Errorf("promote assistant session lineage project: %w", errs.ErrConflict)
 	}
 	var promotedRef string
 	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandPromoteConversationProject,

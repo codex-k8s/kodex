@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.298
+version: 1.0.299
 updated: 2026-09-28
 ---
 
@@ -6354,3 +6354,34 @@ GitHub checks не считается `PASS`.
 - Go workload tests, frontend unit 5/5, ESLint, Prettier и `git diff --check`
   — локальный `PASS` на mounted diff после `456971b21`. Этап 1 checklist
   завершён; ручная приёмка владельцем — `NOT RUN`.
+
+### Проекты: каскадная корзина и очистка через 30 дней, 2026-09-28
+
+- Непустой Проект `prj_7O6vmBqi-Gpx9BX5KT-oF3O-` с файлом
+  `cascade-proof.md`, артефактом и runtime-сессией перенесён в корзину через
+  штатный интерфейс. Дочерние объекты исчезли из рабочих списков; после
+  восстановления файл вернулся в состоянии «Проверен». Повторное удаление и
+  безвозвратная очистка завершили весь граф Проекта.
+- Первую очистку останавливал старый global run: после переноса диалога в
+  Проект его `session`, `run`, `run_event` и `RuntimeRevision` имели разные
+  project boundaries. Команда переноса теперь атомарно проверяет и продвигает
+  точный session lineage, а любой уже чужой `project_id` закрыто отклоняется.
+  Forward-only миграция `20260928000300_assistant_session_project_lineage.sql`
+  сохранила неизменяемость снимков, выполнила такой же fail-closed backfill и
+  применена repo-owned Job `control-plane-migrate-b3954aff4d2a`.
+- После миграции readback показал ноль несовпадающих `run`, `run_event` и
+  `RuntimeRevision`; штатный purge worker завершил застрявший Проект. Для
+  отдельной живой проверки срока через UI создан и помещён в корзину Проект
+  `prj_fo1QMr3f_2BhvKWgxVSdQ42B`; только его `purge_after` в локальной БД
+  переведён за 30-дневную границу. Repo-owned цикл удалил его примерно через
+  45 секунд, без ручного вызова purge-команды.
+- После reload без кэша `/projects?trash=1` показывает «Корзина пуста» без
+  горизонтального переполнения. Console error/warn пуста, все завершённые
+  XHR/fetch имеют 2xx; один bootstrap отменён самой навигацией. Снимки:
+  `/tmp/kodex-project-purge-stage2.png` и
+  `/tmp/kodex-project-retention-stage2.png`.
+- Полный package unit `go test ./internal/repository/postgres/platform`,
+  SQL-проверка миграции с rollback и `git diff --check` — локальный `PASS`.
+  PostgreSQL component suite на отдельной БД не запускалась по принятому
+  debug-режиму; exact live lifecycle в локальном кластере — `PASS`. Этап 2
+  checklist завершён; ручная приёмка владельцем — `NOT RUN`.

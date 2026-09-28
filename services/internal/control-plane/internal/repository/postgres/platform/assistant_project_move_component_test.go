@@ -35,6 +35,38 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if err != nil || created.Conversation == nil || created.Conversation.ProjectRef != "" {
 		t.Fatalf("create global conversation: %v", err)
 	}
+	turn, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-move-global-turn"}, Payload: command.AssistantTurnInput{
+			ConversationRef: created.Conversation.Ref, Content: "Prepare the conversation for a project move",
+		}})
+	if err != nil || turn.Conversation == nil {
+		t.Fatalf("queue global assistant turn: conversation=%#v err=%v", turn.Conversation, err)
+	}
+	var runRef string
+	if err := repository.pool.QueryRow(ctx, `SELECT run.ref
+		FROM control_plane.runs run
+		JOIN control_plane.assistant_conversations conversation ON conversation.session_id=run.session_id
+		WHERE conversation.ref=$1 ORDER BY run.created_at DESC,run.ref DESC LIMIT 1`, created.Conversation.Ref).Scan(&runRef); err != nil {
+		t.Fatalf("read global assistant run: %v", err)
+	}
+	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.complete",
+	}, "runtime-controller")
+	claimAndCompleteRun(t, ctx, service, worker, runRef, "assistant-move-global-run", false)
+	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.Filter{Page: query.Page{Size: 100}})
+	if err != nil {
+		t.Fatalf("refresh terminal assistant conversation: %v", err)
+	}
+	for index := range conversations {
+		if conversations[index].Ref == created.Conversation.Ref {
+			created.Conversation = &conversations[index]
+			break
+		}
+	}
+	if created.Conversation.Version <= turn.Conversation.Version {
+		t.Fatalf("assistant completion did not advance conversation: %#v", created.Conversation)
+	}
 	move := command.Command{Kind: command.MoveAssistantConversationToProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-move-to-existing-project", ExpectedVersion: &created.Conversation.Version},
 		Payload:  command.AssistantConversationProjectInput{ConversationRef: created.Conversation.Ref, ProjectRef: project.Project.Ref}}
@@ -82,5 +114,25 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	}
 	if !found {
 		t.Fatal("moved conversation is missing from project history")
+	}
+	var mismatchedRuns, mismatchedEvents, mismatchedRevisions int
+	if err := repository.pool.QueryRow(ctx, `WITH selected_session AS (
+		SELECT session.id,session.project_id FROM control_plane.sessions session
+		JOIN control_plane.assistant_conversations conversation ON conversation.session_id=session.id
+		WHERE conversation.ref=$1
+	), selected_runs AS (
+		SELECT run.id FROM control_plane.runs run JOIN selected_session session ON session.id=run.session_id
+	)
+	SELECT
+		(SELECT count(*) FROM control_plane.runs run CROSS JOIN selected_session session
+		 WHERE run.id IN (SELECT id FROM selected_runs) AND run.project_id IS DISTINCT FROM session.project_id),
+		(SELECT count(*) FROM control_plane.run_events event CROSS JOIN selected_session session
+		 WHERE event.root_run_id IN (SELECT id FROM selected_runs) AND event.project_id IS DISTINCT FROM session.project_id),
+		(SELECT count(*) FROM control_plane.runtime_revisions revision CROSS JOIN selected_session session
+		 WHERE revision.session_id=session.id AND revision.project_id IS DISTINCT FROM session.project_id)`, moved.Conversation.Ref).
+		Scan(&mismatchedRuns, &mismatchedEvents, &mismatchedRevisions); err != nil ||
+		mismatchedRuns != 0 || mismatchedEvents != 0 || mismatchedRevisions != 0 {
+		t.Fatalf("moved conversation retained foreign lineage: runs=%d events=%d revisions=%d err=%v",
+			mismatchedRuns, mismatchedEvents, mismatchedRevisions, err)
 	}
 }
