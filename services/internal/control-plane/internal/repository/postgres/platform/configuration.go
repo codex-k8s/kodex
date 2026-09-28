@@ -216,6 +216,10 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
+		if _, cancelErr := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences,
+			pgx.StrictNamedArgs{"schedule_id": scheduleID}); cancelErr != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		item.Target = payload.Target
 		item.Input = payload.Input
 		item.PromptInputs = payload.PromptInputs
