@@ -14,6 +14,7 @@ import type {
   Run,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
+import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
@@ -154,7 +155,7 @@ async function stopRun(): Promise<void> {
       </p>
       <section v-if="run.resultSummary" class="assistant-run-card__result">
         <strong>{{ $t("assistant.launchedRun.result") }}</strong>
-        <p>{{ run.resultSummary }}</p>
+        <SafeMarkdown :content="run.resultSummary" />
       </section>
       <p v-if="run.safeErrorCode" class="assistant-run-card__problem">
         {{ run.safeErrorCode }}
@@ -227,8 +228,11 @@ async function stopRun(): Promise<void> {
   border-radius: 6px;
   background: var(--surface);
 }
-.assistant-run-card__result p {
-  white-space: pre-wrap;
+.assistant-run-card__result :deep(.safe-markdown > :first-child) {
+  margin-top: 0;
+}
+.assistant-run-card__result :deep(.safe-markdown > :last-child) {
+  margin-bottom: 0;
 }
 .assistant-run-card__problem {
   color: var(--danger);
