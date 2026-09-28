@@ -24,7 +24,13 @@ LEFT JOIN control_plane.agents sa ON r.target_type='SYSTEM_ASSISTANT' AND sa.sys
 LEFT JOIN control_plane.attachment_sets input_attachment_set ON input_attachment_set.id=r.input_attachment_set_id
 WHERE r.organization_id=@organization_id::uuid
   AND (@project_ref='' OR p.ref=@project_ref)
-  AND (@query='' OR strpos(lower(r.title),lower(@query)) > 0 OR strpos(lower(r.task),lower(@query)) > 0)
+  AND (@query='' OR
+       strpos(lower(r.title),lower(@query)) > 0 OR
+       strpos(lower(r.task),lower(@query)) > 0 OR
+       strpos(lower(COALESCE(r.presentation_metadata->>'activitySummary','')),lower(@query)) > 0 OR
+       strpos(lower(r.result_summary),lower(@query)) > 0 OR
+       strpos(lower(sub.display_name),lower(@query)) > 0 OR
+       strpos(lower(COALESCE(a.name,w.name,sa.name,r.target_ref)),lower(@query)) > 0)
   AND (@cursor_at::timestamptz IS NULL OR (r.created_at, r.ref) < (@cursor_at::timestamptz, @cursor_ref::text))
   AND (cardinality(@states::text[]) = 0 OR r.state = ANY(@states::text[]))
   AND (@authority_project_id='' OR r.project_id = NULLIF(@authority_project_id,'')::uuid)

@@ -27,3 +27,24 @@ func TestOrganizationCatalogSearchIncludesVisibleProjectName(t *testing.T) {
 		})
 	}
 }
+
+func TestRunCatalogSearchIncludesVisibleColumns(t *testing.T) {
+	statements := map[string]string{
+		"page":  queryQueriesListrunsSelectRunsOrganizationIdRefProjectId,
+		"total": queryCatalogRunsCount,
+	}
+	for name, statement := range statements {
+		t.Run(name, func(t *testing.T) {
+			for _, visibleValue := range []string{
+				"activitySummary",
+				"r.result_summary",
+				"sub.display_name",
+				"COALESCE(a.name,w.name,sa.name,r.target_ref)",
+			} {
+				if !strings.Contains(statement, visibleValue) {
+					t.Fatalf("run catalog search must include visible value %q", visibleValue)
+				}
+			}
+		})
+	}
+}
