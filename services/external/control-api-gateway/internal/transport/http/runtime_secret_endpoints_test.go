@@ -226,6 +226,24 @@ func TestRuntimeSecretReadEndpointsReturnPublicMetadataShape(t *testing.T) {
 	}
 }
 
+func TestCastRuntimeSecretMetadataKeepsNextActionsAsArray(t *testing.T) {
+	t.Parallel()
+	now := timestamppb.Now()
+	result := castRuntimeSecretMetadata(&secretbrokerv1.RuntimeSecretMetadata{
+		SecretRef: "sec_terminal123", ProjectRef: "prj_project_sales", Name: "CRM_TOKEN",
+		ValueType: secretbrokerv1.RuntimeSecretValueType_RUNTIME_SECRET_VALUE_TYPE_STRING,
+		Status:    secretbrokerv1.RuntimeSecretStatus_RUNTIME_SECRET_STATUS_REVOKED,
+		Version:   3, Revision: 1, CreatedAt: now, UpdatedAt: now,
+	})
+	body, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"nextActions":[]`) {
+		t.Fatalf("terminal secret response must contain a non-null nextActions array: %s", body)
+	}
+}
+
 func TestCreateRuntimeSecretBindsDigestAndReturnsTerminalReceipt(t *testing.T) {
 	value := "synthetic-secret-value"
 	expected := sha256.Sum256([]byte(value))
@@ -260,6 +278,9 @@ func TestCreateRuntimeSecretBindsDigestAndReturnsTerminalReceipt(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `"valueType":"STRING"`) || strings.Contains(response.Body.String(), "RUNTIME_SECRET_VALUE_TYPE_") {
 		t.Fatalf("create response is not normalized: %s", response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"nextActions":[]`) {
+		t.Fatalf("create response must contain a non-null nextActions array: %s", response.Body.String())
 	}
 }
 

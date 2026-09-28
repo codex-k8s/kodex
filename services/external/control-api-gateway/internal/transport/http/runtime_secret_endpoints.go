@@ -256,6 +256,7 @@ func castRuntimeSecretMetadata(value *secretbrokerv1.RuntimeSecretMetadata) gene
 		ValueType: generated.RuntimeSecretValueType(runtimeSecretValueTypeName(value.GetValueType())),
 		State:     generated.RuntimeSecretState(runtimeSecretStatusName(value.GetStatus())), Version: value.GetVersion(), CurrentRevision: int64(value.GetRevision()),
 		CreatedAt: runtimeSecretTime(value.GetCreatedAt()), UpdatedAt: runtimeSecretTime(value.GetUpdatedAt()),
+		NextActions: make([]generated.NextAction, 0),
 	}
 	if hint := value.GetDisplayHint(); hint != nil {
 		result.DisplayHint = &generated.RuntimeSecretDisplayHint{Prefix: hint.GetPrefix(), Suffix: hint.GetSuffix()}
