@@ -82,6 +82,16 @@ describe("AssistantPlanEditor layout", () => {
     expect(environmentPolicy).toContain('name="runtime-read-own-execution"');
   });
 
+  it("не помещает бинарное содержимое файла в текстовый редактор плана", () => {
+    expect(source).toContain("projectFileEncoding(operation) === 'UTF8'");
+    expect(source).toContain('type="file"');
+    expect(source).toContain("setProjectBinaryFile(operation, $event)");
+    expect(source).toContain(
+      'accept="image/png,image/jpeg,image/webp,application/pdf"',
+    );
+    expect(source).toContain("projectFileBinaryStatus");
+  });
+
   it("повторно использует ручную форму профиля для изменения сотрудника", () => {
     const profile = readFileSync(
       new URL("../../agents/detail/AgentProfileFields.vue", import.meta.url),

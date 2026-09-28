@@ -166,8 +166,12 @@ func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *ht
 }
 
 func decodeJSON[T any](writer http.ResponseWriter, request *http.Request) (T, bool) {
+	return decodeJSONWithLimit[T](writer, request, maximumJSONBody)
+}
+
+func decodeJSONWithLimit[T any](writer http.ResponseWriter, request *http.Request, maximumBody int64) (T, bool) {
 	var result T
-	decoder := json.NewDecoder(io.LimitReader(request.Body, maximumJSONBody+1))
+	decoder := json.NewDecoder(io.LimitReader(request.Body, maximumBody+1))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)

@@ -185,6 +185,9 @@ func (repository *Repository) prepareAssistantPlanObjects(ctx context.Context, c
 		if !operation.Selected || operation.Type != "CREATE_PROJECT_FILE" {
 			continue
 		}
+		if !assistantProjectFileContentReady(operation) {
+			return nil, errs.ErrInvalid
+		}
 		planned, mapErr := assistantOperationCommand(operation)
 		if mapErr != nil {
 			return nil, mapErr

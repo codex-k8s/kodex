@@ -292,6 +292,10 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		if !operation.Selected {
 			continue
 		}
+		if !assistantProjectFileContentReady(operation) {
+			problems = append(problems, fmt.Sprintf("operation-%d-content-required", index+1))
+			continue
+		}
 		planned, commandErr := assistantOperationCommand(operation)
 		if commandErr != nil {
 			problems = append(problems, fmt.Sprintf("operation-%d-invalid", index+1))

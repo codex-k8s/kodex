@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -788,8 +789,16 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	if operation.Action != expectedAction {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
 	}
-	if expectedAction == "CREATE" && (len(operation.Before) != 0 || !reflect.DeepEqual(operation.Parameters, operation.After)) {
-		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	if expectedAction == "CREATE" {
+		expectedAfter := cloneAssistantFields(operation.Parameters)
+		if operation.Type == "CREATE_PROJECT_FILE" {
+			delete(expectedAfter, "content")
+		}
+		if len(operation.Before) != 0 ||
+			(!reflect.DeepEqual(operation.Parameters, operation.After) && !reflect.DeepEqual(expectedAfter, operation.After)) {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
+		operation.After = expectedAfter
 	}
 	if expectedAction == "CREATE" {
 		kind, name, supported := assistantCreateTarget(operation.Type, operation.Parameters)
@@ -903,7 +912,7 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		result.Kind, result.Payload = command.CreateProject, command.ProjectInput{Name: name, Purpose: purpose, Language: language}
 	case "CREATE_PROJECT_FILE":
-		if !onlyAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "content") ||
+		if !onlyAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "contentEncoding", "content") ||
 			!hasAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "content") {
 			return command.Command{}, errs.ErrInvalid
 		}
@@ -911,15 +920,34 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		fileName := assistantString(operation.Input, "fileName")
 		mediaType := assistantString(operation.Input, "mediaType")
 		content, contentOK := operation.Input["content"].(string)
+		contentEncoding := assistantString(operation.Input, "contentEncoding")
+		if contentEncoding == "" {
+			contentEncoding = "UTF8"
+		}
+		body := []byte(content)
+		if contentEncoding == "BASE64" {
+			body = nil
+			if content != "" {
+				var err error
+				body, err = base64.StdEncoding.Strict().DecodeString(content)
+				if err != nil || len(body) == 0 {
+					return command.Command{}, errs.ErrInvalid
+				}
+			}
+		}
+		textMedia := contains([]string{"text/plain", "text/markdown", "text/csv", "application/json"}, mediaType)
+		binaryMedia := contains([]string{"image/png", "image/jpeg", "image/webp", "application/pdf"}, mediaType)
 		if projectRef == "" || fileName == "" || safeFileName(fileName) != fileName ||
-			!contains([]string{"text/plain", "text/markdown", "text/csv", "application/json"}, mediaType) ||
-			!contentOK || len(content) > 1<<20 {
+			!contentOK || len(body) > 1<<20 ||
+			(contentEncoding == "UTF8" && !textMedia) ||
+			(contentEncoding == "BASE64" && !binaryMedia) ||
+			(contentEncoding != "UTF8" && contentEncoding != "BASE64") {
 			return command.Command{}, errs.ErrInvalid
 		}
-		digest := sha256.Sum256([]byte(content))
+		digest := sha256.Sum256(body)
 		result.Kind, result.Payload = command.CreateProjectFile, command.ProjectFileInput{
 			ProjectRef: projectRef, FileName: fileName, MediaType: mediaType,
-			SHA256: fmt.Sprintf("%x", digest[:]), SizeBytes: int64(len(content)), Content: []byte(content),
+			SHA256: fmt.Sprintf("%x", digest[:]), SizeBytes: int64(len(body)), Content: body,
 		}
 	case "UPDATE_PROJECT":
 		if !onlyAssistantFields(operation.Input, "projectRef", "name", "purpose", "language", "expectedVersion") ||
@@ -1311,6 +1339,14 @@ func assistantRun(input map[string]any) (command.LaunchRunInput, error) {
 		return command.LaunchRunInput{}, errs.ErrInvalid
 	}
 	return payload, nil
+}
+
+func assistantProjectFileContentReady(operation entity.AssistantPlanOperation) bool {
+	if operation.Type != "CREATE_PROJECT_FILE" {
+		return true
+	}
+	return assistantString(operation.Input, "contentEncoding") != "BASE64" ||
+		assistantString(operation.Input, "content") != ""
 }
 
 func onlyAssistantFields(input map[string]any, allowed ...string) bool {

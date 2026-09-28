@@ -3750,9 +3750,12 @@ const ru = {
       projectFileName: "Имя файла",
       projectFileType: "Формат",
       projectFileContent: "Содержимое",
+      projectFileBinary: "Локальный файл",
+      projectFileBinaryMissing: "файл не выбран",
+      projectFileBinaryStatus: "{name} · {count} байт из 1 МиБ",
       projectFileBytes: "{count} байт из 1 МиБ",
       projectFileInvalid:
-        "Проверьте имя, формат и содержимое файла. JSON должен быть синтаксически корректным, размер — не более 1 МиБ.",
+        "Проверьте имя, формат и содержимое файла. Для бинарного формата выберите локальный файл; JSON должен быть синтаксически корректным, размер — не более 1 МиБ.",
       projectFileBoundary:
         "После подтверждения будет создана новая ревизия файла в этом Проекте. Не вводите здесь секреты и ключи доступа.",
       projectLanguage: "Язык проекта",
@@ -7773,9 +7776,12 @@ const en = {
       projectFileName: "File name",
       projectFileType: "Format",
       projectFileContent: "Content",
+      projectFileBinary: "Local file",
+      projectFileBinaryMissing: "no file selected",
+      projectFileBinaryStatus: "{name} · {count} bytes of 1 MiB",
       projectFileBytes: "{count} bytes of 1 MiB",
       projectFileInvalid:
-        "Check the file name, format, and content. JSON must be syntactically valid and the file must not exceed 1 MiB.",
+        "Check the file name, format, and content. Select a local file for a binary format; JSON must be syntactically valid and the file must not exceed 1 MiB.",
       projectFileBoundary:
         "Confirmation creates a new file revision in this Project. Do not enter secrets or access keys here.",
       projectLanguage: "Project language",
