@@ -1497,6 +1497,8 @@ message AssistantPlanOperation {
     TYPE_UPDATE_WORKFLOW = 22;
     // Изменить существующее расписание по exact version.
     TYPE_UPDATE_SCHEDULE = 23;
+    // Создать проверенный текстовый файл Проекта через подтверждаемый план помощника.
+    TYPE_CREATE_PROJECT_FILE = 24;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;

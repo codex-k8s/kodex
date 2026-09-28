@@ -1318,7 +1318,7 @@ func knownCommand(kind command.Kind) bool {
 	case command.CreateRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
 		command.PrepareEnvironmentDraftImpact, command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft, command.RebindRuntimeEnvironment, command.RebindRuntimeSecret, command.BindInteractionIdentity, command.RevokeInteractionIdentity:
 		return true
-	case command.CompleteOnboarding, command.CreateProject, command.UpdateProject, command.TrashProject, command.RestoreProject, command.PurgeProject,
+	case command.CompleteOnboarding, command.CreateProject, command.CreateProjectFile, command.UpdateProject, command.TrashProject, command.RestoreProject, command.PurgeProject,
 		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,

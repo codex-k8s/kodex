@@ -267,6 +267,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.completeOnboarding(ctx, tx, scope)
 	case command.CreateProject:
 		return repository.createProject(ctx, tx, scope, input.Payload)
+	case command.CreateProjectFile:
+		return repository.createProjectFile(ctx, tx, scope, input.Payload)
 	case command.UpdateProject:
 		return repository.updateProject(ctx, tx, scope, input.Mutation, input.Payload)
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:

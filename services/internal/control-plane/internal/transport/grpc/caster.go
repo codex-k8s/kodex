@@ -661,6 +661,8 @@ func assistantPlanOperationTitle(operation entity.AssistantPlanOperation) string
 	switch operation.Type {
 	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
 		field = "name"
+	case "CREATE_PROJECT_FILE":
+		field = "fileName"
 	case "LAUNCH_RUN":
 		field = "title"
 	}

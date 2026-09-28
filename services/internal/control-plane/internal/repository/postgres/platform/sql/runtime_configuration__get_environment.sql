@@ -38,5 +38,5 @@ LEFT JOIN control_plane.role_image_recipes image_recipe ON image_recipe.id = ima
 WHERE environment.organization_id = $1::uuid
   AND environment.ref = $2
   AND environment.state <> 'DELETED'
-  AND ($3 <> '' AND EXISTS (SELECT 1 FROM control_plane.assistant_context_projection(
+  AND ($3 <> '' AND EXISTS (SELECT 1 FROM control_plane.assistant_context_projection_v2(
       environment.organization_id,$4::uuid,NULL,'ENVIRONMENT',environment.ref,transaction_timestamp())));

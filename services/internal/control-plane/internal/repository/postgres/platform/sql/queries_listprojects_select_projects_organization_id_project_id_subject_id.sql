@@ -25,7 +25,7 @@ FROM control_plane.projects p
 WHERE p.organization_id=@organization_id::uuid
   AND p.lifecycle='ACTIVE'
   AND (@authority_project='' OR p.id=NULLIF(@authority_project,'')::uuid)
-  AND EXISTS(SELECT 1 FROM control_plane.assistant_context_projection(
+  AND EXISTS(SELECT 1 FROM control_plane.assistant_context_projection_v2(
       p.organization_id,@actor_id::uuid,NULLIF(@authority_project,'')::uuid,'PROJECT',p.ref,statement_timestamp()))
   AND (@query='' OR p.name ILIKE '%'||@query||'%' OR p.purpose ILIKE '%'||@query||'%')
   AND (@cursor_at='' OR (p.updated_at,p.ref) < (NULLIF(@cursor_at,'')::timestamptz,@cursor_ref))

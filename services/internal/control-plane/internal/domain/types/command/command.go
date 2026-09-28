@@ -53,6 +53,7 @@ const (
 	UnbindAgentSkillBundle             Kind = "UNBIND_AGENT_SKILL_BUNDLE"
 	CompleteOnboarding                 Kind = "COMPLETE_ONBOARDING"
 	CreateProject                      Kind = "CREATE_PROJECT"
+	CreateProjectFile                  Kind = "CREATE_PROJECT_FILE"
 	UpdateProject                      Kind = "UPDATE_PROJECT"
 	TrashProject                       Kind = "TRASH_PROJECT"
 	RestoreProject                     Kind = "RESTORE_PROJECT"
@@ -389,8 +390,16 @@ type AssistantTurnInput struct {
 	Context                                    *entity.AssistantContextDescriptor
 }
 type AssistantPlanInput struct {
-	PlanRef  string
-	Revision int64
+	PlanRef       string
+	Revision      int64
+	PreparedFiles map[string]CompletedArtifact
+}
+
+type ProjectFileInput struct {
+	ProjectRef, FileName, MediaType, SHA256 string
+	SizeBytes                               int64
+	Content                                 []byte
+	Prepared                                *PreparedArtifact
 }
 type AssistantPlanDraftInput struct {
 	PlanRef, Summary string

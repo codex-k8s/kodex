@@ -2827,6 +2827,7 @@ const ru = {
       values: {
         ORGANIZATION: "Организация",
         PROJECT: "Проект",
+        ARTIFACT: "Файл",
         RESOURCE_KIND: "Тип ресурсов",
         RESOURCE_INSTANCE: "Конкретный ресурс",
       },
@@ -3372,6 +3373,7 @@ const ru = {
     contextOperationsUnknown: "Список команд требует обновления интерфейса",
     contextOperation: {
       CREATE_PROJECT: "Создать Проект",
+      CREATE_PROJECT_FILE: "Создать файл Проекта",
       UPDATE_PROJECT: "Изменить Проект",
       UPDATE_AGENT: "Изменить сотрудника",
       CREATE_INSTRUCTION_DRAFT: "Подготовить черновик инструкций сотрудника",
@@ -3583,6 +3585,12 @@ const ru = {
         open: "Открыть сотрудника",
       },
     },
+    createdFile: {
+      title: "Созданный файл Проекта",
+      loadFailed: "Не удалось прочитать созданный файл. Повторите обновление.",
+      next: "Файл сохранён в знаниях Проекта и доступен по выданным разрешениям.",
+      open: "Открыть файл",
+    },
     instructionDraft: {
       title: "Черновик инструкций сотрудника",
       loadFailed:
@@ -3684,6 +3692,14 @@ const ru = {
         "Новые запуски этого объекта станут недоступны. Существующая история и результаты сохранятся; действие применяется только к указанной версии.",
       entityName: "Название",
       entityPurpose: "Назначение",
+      projectFileName: "Имя файла",
+      projectFileType: "Формат",
+      projectFileContent: "Содержимое",
+      projectFileBytes: "{count} байт из 1 МиБ",
+      projectFileInvalid:
+        "Проверьте имя, формат и содержимое файла. JSON должен быть синтаксически корректным, размер — не более 1 МиБ.",
+      projectFileBoundary:
+        "После подтверждения будет создана новая ревизия файла в этом Проекте. Не вводите здесь секреты и ключи доступа.",
       projectLanguage: "Язык проекта",
       agentRole: "Роль сотрудника",
       agentInstructions: "Инструкции сотруднику",
@@ -6779,6 +6795,7 @@ const en = {
       values: {
         ORGANIZATION: "Organization",
         PROJECT: "Project",
+        ARTIFACT: "File",
         RESOURCE_KIND: "Resource kind",
         RESOURCE_INSTANCE: "Specific resource",
       },
@@ -7325,6 +7342,7 @@ const en = {
       "Update the interface to display the command list",
     contextOperation: {
       CREATE_PROJECT: "Create Project",
+      CREATE_PROJECT_FILE: "Create Project file",
       UPDATE_PROJECT: "Update Project",
       UPDATE_AGENT: "Update employee",
       CREATE_INSTRUCTION_DRAFT: "Prepare employee instruction draft",
@@ -7534,6 +7552,12 @@ const en = {
         open: "Open employee",
       },
     },
+    createdFile: {
+      title: "Created Project file",
+      loadFailed: "Could not read the created file. Refresh to try again.",
+      next: "The file is saved in Project knowledge and is available according to granted permissions.",
+      open: "Open file",
+    },
     instructionDraft: {
       title: "Employee instruction draft",
       loadFailed: "Could not verify the saved draft. Refresh its state.",
@@ -7632,6 +7656,14 @@ const en = {
         "New runs of this target will become unavailable. Existing history and results remain available; the action applies only to the specified version.",
       entityName: "Name",
       entityPurpose: "Purpose",
+      projectFileName: "File name",
+      projectFileType: "Format",
+      projectFileContent: "Content",
+      projectFileBytes: "{count} bytes of 1 MiB",
+      projectFileInvalid:
+        "Check the file name, format, and content. JSON must be syntactically valid and the file must not exceed 1 MiB.",
+      projectFileBoundary:
+        "Confirmation creates a new file revision in this Project. Do not enter secrets or access keys here.",
       projectLanguage: "Project language",
       agentRole: "Employee role",
       agentInstructions: "Employee instructions",

@@ -29,6 +29,7 @@ import { useRoute, useRouter } from "vue-router";
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
 import AssistantCreatedEntityCard from "@/features/assistant/components/AssistantCreatedEntityCard.vue";
+import AssistantCreatedProjectFileCard from "@/features/assistant/components/AssistantCreatedProjectFileCard.vue";
 import AssistantInstructionDraftCard from "@/features/assistant/components/AssistantInstructionDraftCard.vue";
 import AssistantAgentEnvironmentBindingCard from "@/features/assistant/components/AssistantAgentEnvironmentBindingCard.vue";
 import AssistantCreatedWorkflowCard from "@/features/assistant/components/AssistantCreatedWorkflowCard.vue";
@@ -815,6 +816,9 @@ async function applyPlan(): Promise<void> {
       case "UPDATE_PROJECT":
         kinds.add("PROJECT");
         break;
+      case "CREATE_PROJECT_FILE":
+        kinds.add("ARTIFACT");
+        break;
       case "CREATE_AGENT":
       case "UPDATE_AGENT":
       case "ARCHIVE_AGENT":
@@ -1526,6 +1530,14 @@ onBeforeUnmount(() => {
                         item.type === 'UPDATE_AGENT',
                     )"
                     :key="`entity-${operation.ref}`"
+                    :plan="turn.plan"
+                    :operation-ref="operation.ref"
+                  />
+                  <AssistantCreatedProjectFileCard
+                    v-for="operation in turn.plan.operations.filter(
+                      (item) => item.type === 'CREATE_PROJECT_FILE',
+                    )"
+                    :key="`file-${operation.ref}`"
                     :plan="turn.plan"
                     :operation-ref="operation.ref"
                   />

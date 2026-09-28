@@ -176,7 +176,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatal("assistant plan envelope lost the allowed operation types")
 	}
 	oneOf := assistantPlanOperationSchemas(input)
-	if len(oneOf) != 16 {
+	if len(oneOf) != 17 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
@@ -188,6 +188,11 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		byType[operationType] = properties["parameters"].(map[string]any)
 		operationByType[operationType] = properties
 		schemaByType[operationType] = operation
+	}
+	fileProperties := byType["CREATE_PROJECT_FILE"]["properties"].(map[string]any)
+	if fileProperties["projectRef"] == nil || fileProperties["fileName"] == nil ||
+		fileProperties["mediaType"] == nil || fileProperties["content"] == nil {
+		t.Fatalf("project file schema is incomplete: %#v", fileProperties)
 	}
 	createProject := operationByType["CREATE_PROJECT"]
 	createBefore := createProject["before"].(map[string]any)
@@ -300,7 +305,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
 	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 0 ||
-		len(catalog["operation_types"].([]string)) != 16 {
+		len(catalog["operation_types"].([]string)) != 17 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
@@ -308,7 +313,7 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	}
 	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
 	if err != nil || len(compact.(map[string]any)["operation_schemas"].([]map[string]any)) != 0 ||
-		len(compact.(map[string]any)["operation_types"].([]string)) != 16 {
+		len(compact.(map[string]any)["operation_types"].([]string)) != 17 {
 		t.Fatalf("compact configuration catalog is invalid: %v", err)
 	}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN", "CREATE_WORKFLOW"}})

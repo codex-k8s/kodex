@@ -166,6 +166,61 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	return item, nil
 }
 
+func (repository *Repository) createProjectFile(ctx context.Context, tx pgx.Tx, current scope, raw any) (commandOutcome, error) {
+	input, ok := raw.(command.ProjectFileInput)
+	if !ok || input.ProjectRef == "" || input.FileName == "" || safeFileName(input.FileName) != input.FileName ||
+		input.SizeBytes < 0 || input.SizeBytes > 1<<20 || input.Content != nil {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	prepared, err := preparedArtifact(command.CompletedArtifact{
+		FileName: input.FileName, MediaType: input.MediaType, SHA256: input.SHA256,
+		SizeBytes: input.SizeBytes, Prepared: input.Prepared,
+	})
+	if err != nil || prepared.MediaType != input.MediaType {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	if prepared.ObjectKey != artifactObjectKey(current.organizationRef, current.actorRef, input.ProjectRef, prepared.Ref, prepared.Digest) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
+	projectID := mustProjectID(ctx, tx, current.organizationID, input.ProjectRef)
+	if projectID == "" {
+		return commandOutcome{}, errs.ErrNotFound
+	}
+	if err := repository.requireArtifactUploadAccess(ctx, tx, current, input.ProjectRef); err != nil {
+		return commandOutcome{}, err
+	}
+	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, current.organizationID, projectID,
+		"artifact.upload.filename", input.FileName); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	receiptRef, err := newRef("obj")
+	if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	var item entity.Artifact
+	if err := tx.QueryRow(ctx, queryArtifactsUploadartifactInsertArtifactsRefProjectIdFileName,
+		prepared.Ref, current.organizationID, projectID, nil, input.FileName, prepared.MediaType,
+		prepared.SizeBytes, prepared.Digest, prepared.ScanState, receiptRef, prepared.PreviewState, current.actorID,
+	).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState,
+		&item.PreviewState, &item.Revision, &item.Version, &item.CreatedAt); err != nil {
+		return commandOutcome{}, mapWriteError(err)
+	}
+	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertArtifactContentArtifactId,
+		prepared.Ref, prepared.ObjectKey, prepared.ObjectVersion, prepared.ObjectETag,
+		prepared.Digest, prepared.SizeBytes); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	item.ProjectRef = input.ProjectRef
+	item.Source = "CONTROL_CENTER"
+	item.LifecycleState = "ACTIVE"
+	item.NextActions = []string{"DOWNLOAD", "BIND"}
+	return commandOutcome{
+		result: command.Result{Artifact: &item}, projectID: projectID, projectRef: input.ProjectRef,
+		resourceKind: "ARTIFACT", resourceRef: item.Ref, summary: "i18n:ARTIFACT_AVAILABLE",
+		platformEvent: "ARTIFACT_CHANGED",
+	}, nil
+}
+
 func (repository *Repository) putArtifactObject(
 	ctx context.Context,
 	objectKey string,

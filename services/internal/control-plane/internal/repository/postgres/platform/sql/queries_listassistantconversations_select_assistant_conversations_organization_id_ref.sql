@@ -5,7 +5,7 @@ SELECT c.ref,c.title,c.title_source,c.title_revision,COALESCE(p.ref,''),s.ref,c.
 FROM control_plane.assistant_conversations c
 LEFT JOIN control_plane.projects p ON p.id=c.project_id
 JOIN control_plane.sessions s ON s.id=c.session_id
-JOIN LATERAL control_plane.assistant_context_projection(c.organization_id,@actor_id::uuid,
+JOIN LATERAL control_plane.assistant_context_projection_v2(c.organization_id,@actor_id::uuid,
     NULLIF(@authority_project,'')::uuid,c.context_entity_kind,c.context_entity_ref,@evaluated_at,c.project_id) context ON true
 WHERE c.organization_id=@organization_id::uuid AND c.created_by=@actor_id::uuid
   AND (@project_ref='' OR p.ref=@project_ref) AND c.state=@state

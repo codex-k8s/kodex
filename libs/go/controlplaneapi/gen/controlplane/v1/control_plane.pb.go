@@ -7358,6 +7358,8 @@ const (
 	AssistantPlanOperation_TYPE_UPDATE_WORKFLOW AssistantPlanOperation_Type = 22
 	// Изменить существующее расписание по exact version.
 	AssistantPlanOperation_TYPE_UPDATE_SCHEDULE AssistantPlanOperation_Type = 23
+	// Создать проверенный текстовый файл Проекта через подтверждаемый план помощника.
+	AssistantPlanOperation_TYPE_CREATE_PROJECT_FILE AssistantPlanOperation_Type = 24
 )
 
 // Enum value maps for AssistantPlanOperation_Type.
@@ -7387,6 +7389,7 @@ var (
 		21: "TYPE_UPDATE_INTEGRATION_CONNECTION",
 		22: "TYPE_UPDATE_WORKFLOW",
 		23: "TYPE_UPDATE_SCHEDULE",
+		24: "TYPE_CREATE_PROJECT_FILE",
 	}
 	AssistantPlanOperation_Type_value = map[string]int32{
 		"TYPE_UNSPECIFIED":                          0,
@@ -7413,6 +7416,7 @@ var (
 		"TYPE_UPDATE_INTEGRATION_CONNECTION":        21,
 		"TYPE_UPDATE_WORKFLOW":                      22,
 		"TYPE_UPDATE_SCHEDULE":                      23,
+		"TYPE_CREATE_PROJECT_FILE":                  24,
 	}
 )
 
@@ -75073,7 +75077,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa7\r\n" +
+	"updated_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xc5\r\n" +
 	"\x16AssistantPlanOperation\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12@\n" +
 	"\x04type\x18\x02 \x01(\x0e2,.controlplane.v1.AssistantPlanOperation.TypeR\x04type\x12\x14\n" +
@@ -75098,7 +75102,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05after\x18\x0f \x01(\v2\x17.google.protobuf.StructR\x05after\x12\x1a\n" +
 	"\bselected\x18\x10 \x01(\bR\bselected\x12/\n" +
 	"\x13validation_problems\x18\x11 \x03(\tR\x12validationProblems\x12*\n" +
-	"\x0etarget_version\x18\x12 \x01(\x03H\x01R\rtargetVersion\x88\x01\x01\"\xf6\x05\n" +
+	"\x0etarget_version\x18\x12 \x01(\x03H\x01R\rtargetVersion\x88\x01\x01\"\x94\x06\n" +
 	"\x04Type\x12\x14\n" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13TYPE_CREATE_PROJECT\x10\x01\x12\x15\n" +
@@ -75124,7 +75128,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1dTYPE_CREATE_INSTRUCTION_DRAFT\x10\x14\x12&\n" +
 	"\"TYPE_UPDATE_INTEGRATION_CONNECTION\x10\x15\x12\x18\n" +
 	"\x14TYPE_UPDATE_WORKFLOW\x10\x16\x12\x18\n" +
-	"\x14TYPE_UPDATE_SCHEDULE\x10\x17\"n\n" +
+	"\x14TYPE_UPDATE_SCHEDULE\x10\x17\x12\x1c\n" +
+	"\x18TYPE_CREATE_PROJECT_FILE\x10\x18\"n\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rACTION_CREATE\x10\x01\x12\x11\n" +

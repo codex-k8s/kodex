@@ -309,6 +309,11 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_PROJECT", objectSchema([]string{"name", "purpose", "language"}, map[string]any{
 			"name": stringSchema(1, 120), "purpose": stringSchema(1, 1000), "language": enumSchema("ru", "en"),
 		})),
+		assistantOperationSchema("CREATE_PROJECT_FILE", objectSchema([]string{"projectRef", "fileName", "mediaType", "content"}, map[string]any{
+			"projectRef": projectRef, "fileName": stringSchema(1, 255),
+			"mediaType": enumSchema("text/plain", "text/markdown", "text/csv", "application/json"),
+			"content":   stringSchema(0, 1<<20),
+		})),
 		assistantOperationSchema("UPDATE_PROJECT", projectUpdateInputSchema(projectRef)),
 		assistantOperationSchema("CREATE_AGENT", objectSchema([]string{"projectRef", "name", "purpose", "roleDescription", "instructions"}, map[string]any{
 			"projectRef": projectRef, "roleDefinitionRef": opaqueRefSchema(), "name": stringSchema(1, 120),

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -14,11 +15,18 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
 
 func (repository *Repository) prepareCommandObjects(ctx context.Context, scope scope, input *command.Command) ([]objectstorage.Receipt, error) {
-	if input == nil || input.Kind != command.CompleteExecution {
+	if input == nil {
+		return nil, nil
+	}
+	if input.Kind == command.ApplyAssistantPlan {
+		return repository.prepareAssistantPlanObjects(ctx, scope, input)
+	}
+	if input.Kind != command.CompleteExecution {
 		return nil, nil
 	}
 	payload, ok := input.Payload.(command.CompleteExecutionInput)
@@ -112,6 +120,146 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 			ScanState: verdict.ScanState, PreviewState: verdict.PreviewState,
 		}
 		artifact.Content = nil
+	}
+	input.Payload = payload
+	return prepared, nil
+}
+
+func (repository *Repository) prepareAssistantPlanObjects(ctx context.Context, current scope, input *command.Command) ([]objectstorage.Receipt, error) {
+	payload, ok := input.Payload.(command.AssistantPlanInput)
+	if !ok || payload.PlanRef == "" || payload.Revision < 1 || input.Mutation.ExpectedVersion == nil {
+		return nil, errs.ErrInvalid
+	}
+	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := repository.authorizeCommand(ctx, tx, current, *input); err != nil {
+		return nil, err
+	}
+	var storedDigest string
+	var storedPayload []byte
+	err = tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation,
+		current.organizationID, current.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).
+		Scan(&storedDigest, &storedPayload)
+	if err == nil {
+		if storedDigest != input.Mutation.IntentDigest {
+			return nil, errs.ErrIdempotencyReuse
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return nil, errs.ErrConflict
+		}
+		return nil, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, errs.ErrUnavailable
+	}
+	var planID, conversationRef, summary, projectRef, digest string
+	var raw []byte
+	var version, revision int64
+	var validatedRevision *int64
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandSelectAssistantPlansOrganizationIdRefState,
+		current.organizationID, payload.PlanRef).Scan(
+		&planID, &conversationRef, &summary, &raw, &version, &revision, &validatedRevision, &digest, &projectRef,
+	); err != nil {
+		return nil, errs.ErrConflict
+	}
+	if version != *input.Mutation.ExpectedVersion || revision != payload.Revision || validatedRevision == nil || *validatedRevision != revision {
+		return nil, errs.ErrVersionMismatch
+	}
+	var stored []entity.AssistantPlanOperation
+	if json.Unmarshal(raw, &stored) != nil {
+		return nil, errs.ErrConflict
+	}
+	operations, err := normalizeAssistantOperations(stored, projectRef)
+	if err != nil {
+		return nil, err
+	}
+	type plannedFile struct {
+		key  string
+		file command.ProjectFileInput
+	}
+	files := make([]plannedFile, 0)
+	for _, operation := range operations {
+		if !operation.Selected || operation.Type != "CREATE_PROJECT_FILE" {
+			continue
+		}
+		planned, mapErr := assistantOperationCommand(operation)
+		if mapErr != nil {
+			return nil, mapErr
+		}
+		if err := repository.authorizeCommand(ctx, tx, current, planned); err != nil {
+			return nil, err
+		}
+		file, valid := planned.Payload.(command.ProjectFileInput)
+		if !valid {
+			return nil, errs.ErrInvalid
+		}
+		files = append(files, plannedFile{key: operation.Key, file: file})
+	}
+	if len(files) == 0 {
+		if err := tx.Commit(ctx); err != nil {
+			return nil, errs.ErrConflict
+		}
+		return nil, nil
+	}
+	if len(files) > 16 {
+		return nil, errs.ErrInvalid
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errs.ErrConflict
+	}
+
+	payload.PreparedFiles = make(map[string]command.CompletedArtifact, len(files))
+	prepared := make([]objectstorage.Receipt, 0, len(files))
+	var totalBytes int64
+	for _, item := range files {
+		file := item.file
+		if file.Prepared != nil || file.SizeBytes != int64(len(file.Content)) || file.SizeBytes < 0 || file.SizeBytes > 1<<20 {
+			repository.cleanupPreparedObjects(ctx, prepared, false)
+			return nil, errs.ErrInvalid
+		}
+		totalBytes += file.SizeBytes
+		if totalBytes > maximumArtifactBytes {
+			repository.cleanupPreparedObjects(ctx, prepared, false)
+			return nil, errs.ErrInvalid
+		}
+		checksum := sha256.Sum256(file.Content)
+		digestHex := hex.EncodeToString(checksum[:])
+		if !strings.EqualFold(strings.TrimSpace(file.SHA256), digestHex) {
+			repository.cleanupPreparedObjects(ctx, prepared, false)
+			return nil, errs.ErrInvalid
+		}
+		verdict := artifactpolicy.Inspect(file.FileName, file.MediaType, file.Content)
+		if verdict.ScanState != artifactpolicy.ScanClean {
+			repository.cleanupPreparedObjects(ctx, prepared, false)
+			return nil, errs.ErrInvalid
+		}
+		ref, refErr := newRef("art")
+		if refErr != nil {
+			repository.cleanupPreparedObjects(ctx, prepared, false)
+			return nil, errs.ErrUnavailable
+		}
+		digestValue := "sha256:" + digestHex
+		key := artifactObjectKey(current.organizationRef, current.actorRef, file.ProjectRef, ref, digestValue)
+		receipt, putErr := repository.objects.Put(ctx, objectstorage.PutInput{
+			Key: key, MediaType: verdict.MediaType, Digest: digestValue,
+			SizeBytes: file.SizeBytes, Body: bytes.NewReader(file.Content),
+		})
+		if putErr != nil {
+			repository.cleanupPreparedObjects(ctx, prepared, false)
+			return nil, mapObjectStorageError(putErr)
+		}
+		prepared = append(prepared, receipt)
+		payload.PreparedFiles[item.key] = command.CompletedArtifact{
+			FileName: file.FileName, MediaType: verdict.MediaType, SHA256: digestHex, SizeBytes: file.SizeBytes,
+			Prepared: &command.PreparedArtifact{
+				Ref: ref, ObjectKey: receipt.Key, ObjectVersion: receipt.VersionID, ObjectETag: receipt.ETag,
+				MediaType: verdict.MediaType, Digest: receipt.Digest, SizeBytes: receipt.SizeBytes,
+				ScanState: verdict.ScanState, PreviewState: verdict.PreviewState,
+			},
+		}
 	}
 	input.Payload = payload
 	return prepared, nil

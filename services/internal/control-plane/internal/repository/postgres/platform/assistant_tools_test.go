@@ -29,6 +29,40 @@ func TestAssistantOperationCommandUsesClosedSpecializedRegistry(t *testing.T) {
 	}
 }
 
+func TestAssistantProjectFileOperation(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{
+		Type: "CREATE_PROJECT_FILE", Summary: "Create project notes",
+		Input: map[string]any{
+			"projectRef": "prj_example", "fileName": "notes.md",
+			"mediaType": "text/markdown", "content": "# Notes\n",
+		},
+	}
+	mapped, err := assistantOperationCommand(operation)
+	if err != nil {
+		t.Fatalf("map project file: %v", err)
+	}
+	payload, ok := mapped.Payload.(command.ProjectFileInput)
+	if mapped.Kind != command.CreateProjectFile || !ok || payload.ProjectRef != "prj_example" ||
+		payload.FileName != "notes.md" || payload.SizeBytes != int64(len("# Notes\n")) || len(payload.SHA256) != 64 {
+		t.Fatalf("unexpected project file command: %#v", mapped)
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"path":  func(input map[string]any) { input["fileName"] = "../secret" },
+		"media": func(input map[string]any) { input["mediaType"] = "application/octet-stream" },
+		"extra": func(input map[string]any) { input["secret"] = "forbidden" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			forged := operation
+			forged.Input = cloneAssistantFields(operation.Input)
+			mutate(forged.Input)
+			if _, err := assistantOperationCommand(forged); !errors.Is(err, errs.ErrInvalid) {
+				t.Fatalf("forged project file accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestAssistantOperationTextLimitsCountUnicodeCharacters(t *testing.T) {
 	t.Parallel()
 

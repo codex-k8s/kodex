@@ -10,7 +10,7 @@ SET project_id = project.id,
     version = conversation.version + 1,
     updated_at = clock_timestamp()
 FROM control_plane.projects project
-JOIN LATERAL control_plane.assistant_context_projection(
+JOIN LATERAL control_plane.assistant_context_projection_v2(
     $1::uuid, $2::uuid, project.id,
     'PROJECT', project.ref, transaction_timestamp(), project.id
 ) projected ON true

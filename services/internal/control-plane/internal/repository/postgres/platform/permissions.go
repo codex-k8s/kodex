@@ -190,6 +190,8 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 			return "project.create", organization, nil
 		}
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.Ref, payload.Ref)
+	case command.ProjectFileInput:
+		return repository.resolveCommandTarget(ctx, tx, current, "artifact.upload", "PROJECT", payload.ProjectRef, payload.ProjectRef)
 	case command.PlatformMembershipInput:
 		return "access.manage", organization, nil
 	case command.MembershipInput:

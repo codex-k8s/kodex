@@ -142,7 +142,7 @@ func assistantPlanDigest(summary string, rawOperations []byte) string {
 
 func assistantOperationType(value string) bool {
 	switch value {
-	case "CREATE_PROJECT", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
+	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE":
@@ -726,6 +726,8 @@ func assistantCreateTarget(operationType string, parameters map[string]any) (str
 	switch operationType {
 	case "CREATE_PROJECT":
 		kind = "PROJECT"
+	case "CREATE_PROJECT_FILE":
+		return "ARTIFACT", assistantString(parameters, "fileName"), true
 	case "CREATE_AGENT":
 		kind = "AGENT"
 	case "CREATE_WORKFLOW":
@@ -865,7 +867,7 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 		return operation, nil
 	}
 	switch operation.Type {
-	case "UPDATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
+	case "UPDATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "LAUNCH_RUN", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE":
 	default:
 		return operation, nil
 	}
@@ -900,6 +902,25 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 			return command.Command{}, errs.ErrInvalid
 		}
 		result.Kind, result.Payload = command.CreateProject, command.ProjectInput{Name: name, Purpose: purpose, Language: language}
+	case "CREATE_PROJECT_FILE":
+		if !onlyAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "content") ||
+			!hasAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "content") {
+			return command.Command{}, errs.ErrInvalid
+		}
+		projectRef := assistantString(operation.Input, "projectRef")
+		fileName := assistantString(operation.Input, "fileName")
+		mediaType := assistantString(operation.Input, "mediaType")
+		content, contentOK := operation.Input["content"].(string)
+		if projectRef == "" || fileName == "" || safeFileName(fileName) != fileName ||
+			!contains([]string{"text/plain", "text/markdown", "text/csv", "application/json"}, mediaType) ||
+			!contentOK || len(content) > 1<<20 {
+			return command.Command{}, errs.ErrInvalid
+		}
+		digest := sha256.Sum256([]byte(content))
+		result.Kind, result.Payload = command.CreateProjectFile, command.ProjectFileInput{
+			ProjectRef: projectRef, FileName: fileName, MediaType: mediaType,
+			SHA256: fmt.Sprintf("%x", digest[:]), SizeBytes: int64(len(content)), Content: []byte(content),
+		}
 	case "UPDATE_PROJECT":
 		if !onlyAssistantFields(operation.Input, "projectRef", "name", "purpose", "language", "expectedVersion") ||
 			!hasAssistantFields(operation.Input, "projectRef", "name", "purpose", "language", "expectedVersion") {

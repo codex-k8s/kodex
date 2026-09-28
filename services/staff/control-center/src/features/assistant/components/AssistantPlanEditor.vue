@@ -125,6 +125,33 @@ function roleImageReady(operation: EditablePlanOperation): boolean {
     validateDockerfile(dockerfile).length === 0,
   );
 }
+function projectFileReady(operation: EditablePlanOperation): boolean {
+  const fileName = fieldValue(operation, "fileName").trim();
+  const mediaType = fieldValue(operation, "mediaType");
+  const content = fieldValue(operation, "content");
+  if (
+    !fileName ||
+    fileName === "." ||
+    fileName === ".." ||
+    /[\\/\0\r\n]/u.test(fileName) ||
+    new TextEncoder().encode(content).length > 1 << 20 ||
+    !["text/plain", "text/markdown", "text/csv", "application/json"].includes(
+      mediaType,
+    )
+  )
+    return false;
+  if (mediaType === "application/json") {
+    try {
+      JSON.parse(content);
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+function projectFileBytes(operation: EditablePlanOperation): number {
+  return new TextEncoder().encode(fieldValue(operation, "content")).length;
+}
 const connectionDefinitions = ref<Record<string, IntegrationDefinition>>({});
 const connectionCatalogProblem = ref(false);
 const connectionInputs = ref<Record<string, Record<string, string>>>({});
@@ -540,7 +567,9 @@ const friendlyInputsReady = computed(() =>
           integrationGrantValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_ROLE_IMAGE_RECIPE" &&
           operation.value.type !== "UPDATE_ROLE_IMAGE_RECIPE") ||
-          roleImageReady(operation))),
+          roleImageReady(operation)) &&
+        (operation.value.type !== "CREATE_PROJECT_FILE" ||
+          projectFileReady(operation))),
   ),
 );
 const canSave = computed(
@@ -705,6 +734,15 @@ function setField(
     key,
     (event.target as HTMLInputElement | HTMLTextAreaElement).value,
   );
+}
+
+function setProjectFileName(
+  operation: EditablePlanOperation,
+  event: Event,
+): void {
+  const value = (event.target as HTMLInputElement).value;
+  updateOperationParameter(operation, "fileName", value);
+  operation.value.target.name = value;
 }
 
 function setRoleImageEnvironment(
@@ -1367,6 +1405,7 @@ function validationProblemLabel(problem: string): string {
               <label
                 v-if="
                   operation.value.target.kind !== 'PROJECT' &&
+                  operation.value.target.kind !== 'ARTIFACT' &&
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
@@ -1390,6 +1429,7 @@ function validationProblemLabel(problem: string): string {
               <label
                 v-if="
                   operation.value.target.kind !== 'PROJECT' &&
+                  operation.value.target.kind !== 'ARTIFACT' &&
                   operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
@@ -1409,7 +1449,69 @@ function validationProblemLabel(problem: string): string {
                   @input="setField(operation, 'purpose', $event)"
                 />
               </label>
-              <template v-if="operation.value.target.kind === 'PROJECT'">
+              <template v-if="operation.value.target.kind === 'ARTIFACT'">
+                <div class="assistant-project-file-form">
+                  <label class="field">
+                    <span>{{
+                      $t("assistant.planEditor.projectFileName")
+                    }}</span>
+                    <input
+                      :value="fieldValue(operation, 'fileName')"
+                      :name="`assistant-project-file-name-${index}`"
+                      maxlength="255"
+                      :disabled="!editable"
+                      @input="setProjectFileName(operation, $event)"
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{{
+                      $t("assistant.planEditor.projectFileType")
+                    }}</span>
+                    <select
+                      :value="fieldValue(operation, 'mediaType')"
+                      :name="`assistant-project-file-type-${index}`"
+                      :disabled="!editable"
+                      @change="setField(operation, 'mediaType', $event)"
+                    >
+                      <option value="text/markdown">Markdown</option>
+                      <option value="text/plain">Text</option>
+                      <option value="text/csv">CSV</option>
+                      <option value="application/json">JSON</option>
+                    </select>
+                  </label>
+                  <label class="field assistant-project-file-form__content">
+                    <span>{{
+                      $t("assistant.planEditor.projectFileContent")
+                    }}</span>
+                    <textarea
+                      :value="fieldValue(operation, 'content')"
+                      :name="`assistant-project-file-content-${index}`"
+                      rows="14"
+                      :disabled="!editable"
+                      spellcheck="false"
+                      @input="setField(operation, 'content', $event)"
+                    />
+                    <small>
+                      {{
+                        $t("assistant.planEditor.projectFileBytes", {
+                          count: projectFileBytes(operation),
+                        })
+                      }}
+                    </small>
+                  </label>
+                  <p
+                    v-if="!projectFileReady(operation)"
+                    class="field-error"
+                    role="alert"
+                  >
+                    {{ $t("assistant.planEditor.projectFileInvalid") }}
+                  </p>
+                  <p class="assistant-plan-friendly__hint">
+                    {{ $t("assistant.planEditor.projectFileBoundary") }}
+                  </p>
+                </div>
+              </template>
+              <template v-else-if="operation.value.target.kind === 'PROJECT'">
                 <ProjectFormFields
                   :name="fieldValue(operation, 'name')"
                   :purpose="fieldValue(operation, 'purpose')"
@@ -2213,6 +2315,26 @@ function validationProblemLabel(problem: string): string {
   margin: 0;
   color: var(--muted);
   font-size: 0.83rem;
+}
+.assistant-project-file-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(12rem, 1fr);
+  gap: 12px;
+}
+.assistant-project-file-form__content,
+.assistant-project-file-form > p {
+  grid-column: 1 / -1;
+}
+.assistant-project-file-form__content textarea {
+  min-height: 18rem;
+  resize: vertical;
+  font-family: var(--font-mono);
+  line-height: 1.5;
+  tab-size: 2;
+}
+.assistant-project-file-form__content small {
+  color: var(--muted);
+  text-align: right;
 }
 .assistant-plan-friendly__secret-suggestions,
 .assistant-plan-friendly__secret-suggestions article {

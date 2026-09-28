@@ -24,6 +24,7 @@ export interface ResolvedAssistantContext {
 
 export const assistantContextOperations = [
   "CREATE_PROJECT",
+  "CREATE_PROJECT_FILE",
   "UPDATE_PROJECT",
   "UPDATE_AGENT",
   "CREATE_AGENT",

@@ -1189,6 +1189,19 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
+		if operation.Type == "CREATE_PROJECT_FILE" {
+			prepared, exists := payload.PreparedFiles[operation.Key]
+			projectFile, valid := planned.Payload.(command.ProjectFileInput)
+			if !exists || !valid || prepared.Prepared == nil || prepared.FileName != projectFile.FileName ||
+				prepared.SizeBytes != projectFile.SizeBytes || !strings.EqualFold(prepared.SHA256, projectFile.SHA256) {
+				_ = operationEffectsTx.Rollback(ctx)
+				_ = effectTx.Rollback(ctx)
+				return commandOutcome{}, errs.ErrConflict
+			}
+			projectFile.Prepared = prepared.Prepared
+			projectFile.Content = nil
+			planned.Payload = projectFile
+		}
 		if err := repository.authorizeCommand(ctx, operationEffectsTx, scope, planned); err != nil {
 			_ = operationEffectsTx.Rollback(ctx)
 			_ = effectTx.Rollback(ctx)
