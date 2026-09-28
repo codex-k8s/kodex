@@ -216,6 +216,12 @@ describe("AssistantWorkspace layout", () => {
     );
   });
 
+  it("не очищает открытый диалог до загрузки нового scope", () => {
+    expect(source).toMatch(
+      /watch\(contextIdentity,[\s\S]*if \(open\.value\) void store\.load\(props\.context, props\.projectRef\);\s*else store\.setContext\(props\.context, props\.projectRef\);/,
+    );
+  });
+
   it("возвращает фокус к карточке варианта после закрытия редактора", () => {
     expect(template).toContain('@click="openPlan(turn.plan, $event)"');
     expect(source).toContain(

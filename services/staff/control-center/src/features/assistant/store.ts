@@ -141,9 +141,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     cancelReads();
     const current = ++generation;
     const retained = select
-      ? (projectRef.value === nextProjectRef && selectedConversation.value
-          ? selectedRef.value
-          : undefined) ||
+      ? (selectedConversation.value ? selectedRef.value : undefined) ||
         (typeof window !== "undefined" &&
         !historyQuery.value &&
         historyState.value === "ACTIVE"

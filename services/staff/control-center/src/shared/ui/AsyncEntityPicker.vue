@@ -323,12 +323,12 @@ function chooseInline(item: PickerEntry): void {
   emit("select", item.source as S);
 }
 function chooseDropdown(item: PickerEntry): void {
-  if (props.disabled || item.disabled || !isOption(item.source)) return;
+  if (props.disabled || item.disabled) return;
   if (props.multiple) {
     chooseInline(item);
     return;
   }
-  emit("update:modelValue", item.source.ref);
+  emit("update:modelValue", item.id);
   emit("select", item.source as S);
   close();
 }

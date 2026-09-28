@@ -899,11 +899,11 @@ watch(contextIdentity, () => {
   contextOpen.value = false;
   integrationImportOpen.value = false;
   createdDefinitionRef.value = undefined;
-  store.setContext(props.context, props.projectRef);
   openPlanRef.value = undefined;
   activeView.value = "CHAT";
   attachmentComposer.value?.clear();
   if (open.value) void store.load(props.context, props.projectRef);
+  else store.setContext(props.context, props.projectRef);
 });
 watch(assistantFormActive, (active) => {
   if (active && !open.value) void show();
