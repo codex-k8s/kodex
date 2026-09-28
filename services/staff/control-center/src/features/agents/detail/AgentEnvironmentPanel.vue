@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { agentDetailCopy } from "@/features/agents/detail/copy";
+import { needsEnvironmentBinding } from "@/features/agents/detail/environment-binding";
 import type { ApplyBoundary } from "@/features/agents/detail/model";
 import {
   bindRuntimeEnvironment,
@@ -45,11 +46,21 @@ const selectedCandidate = ref<EnvironmentPickerOption>();
 const busy = ref(false);
 const loading = ref(false);
 const problem = ref<AppProblem>();
-const dirty = computed(
-  () =>
-    Boolean(selectedEnvironment.value) &&
-    selectedEnvironment.value !== view.value?.environment.ref,
-);
+const dirty = computed(() => {
+  const current = view.value;
+  const candidate = selectedCandidate.value;
+  return Boolean(
+    current &&
+    candidate?.ref === selectedEnvironment.value &&
+    needsEnvironmentBinding(
+      current.environmentBinding.environmentRef,
+      current.environmentBinding.versionRef,
+      candidate.ref,
+      candidate.environment.currentVersion.ref,
+      candidate.environment.ready,
+    ),
+  );
+});
 
 function notify(state: "APPLIED" | "DRAFT" | "RUNNING" | "FAILED"): void {
   emit("apply-state", state, copy.value.environment.catalog, "next-turn");
@@ -131,11 +142,12 @@ async function loadEnvironmentPage(
 function select(value: string | null | readonly string[]): void {
   if (typeof value !== "string") return;
   selectedEnvironment.value = value;
-  notify(value === view.value?.environment.ref ? "APPLIED" : "DRAFT");
+  notify(dirty.value ? "DRAFT" : "APPLIED");
 }
 
 function selectOption(value: EnvironmentPickerOption): void {
   selectedCandidate.value = value;
+  notify(dirty.value ? "DRAFT" : "APPLIED");
 }
 
 async function bind(): Promise<void> {
@@ -327,7 +339,11 @@ onMounted(() => void load());
             :disabled="!canEdit || busy || !dirty"
             @click="bind"
           >
-            <Save :size="16" aria-hidden="true" />{{ copy.environment.bind }}
+            <Save :size="16" aria-hidden="true" />{{
+              selectedEnvironment === view.environment.ref
+                ? copy.environment.updatePin
+                : copy.environment.bind
+            }}
           </button>
         </div>
       </article>

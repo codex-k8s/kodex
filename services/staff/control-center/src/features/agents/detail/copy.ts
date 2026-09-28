@@ -84,6 +84,7 @@ export interface AgentDetailCopy {
     loadingMore: string;
     imageReady: string;
     bind: string;
+    updatePin: string;
     values: string;
     secrets: string;
     image: string;
@@ -203,6 +204,7 @@ const ru: AgentDetailCopy = {
     loadingMore: "Загружаем следующую страницу",
     imageReady: "Образ подготовлен",
     bind: "Назначить окружение",
+    updatePin: "Обновить закреплённую ревизию",
     values: "Переменные окружения",
     secrets: "Ссылки на секреты",
     image: "Образ",
@@ -323,6 +325,7 @@ const en: AgentDetailCopy = {
     loadingMore: "Loading the next page",
     imageReady: "Image prepared",
     bind: "Assign environment",
+    updatePin: "Update pinned revision",
     values: "Environment values",
     secrets: "Secret descriptors",
     image: "Image",
