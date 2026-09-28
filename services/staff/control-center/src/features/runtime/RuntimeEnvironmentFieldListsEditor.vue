@@ -5,7 +5,10 @@ import { useI18n } from "vue-i18n";
 
 import { safeSecretReference } from "@/features/runtime/environment-capabilities";
 import { runtimeEnvironmentCollectionLimit } from "@/features/runtime/environment-form";
-import { loadRuntimeSecretPage } from "@/features/runtime-secrets/api";
+import {
+  loadRuntimeSecretPage,
+  readRuntimeSecret,
+} from "@/features/runtime-secrets/api";
 import {
   maskedSecretHint,
   type RuntimeSecret,
@@ -43,6 +46,46 @@ watch(
     for (const key of Object.keys(selectedSecrets))
       Reflect.deleteProperty(selectedSecrets, key);
   },
+);
+
+watch(
+  [
+    () => props.projectRef,
+    () =>
+      props.secretBindings.map((binding) => binding.secretRef).join("\u0000"),
+  ],
+  async ([projectRef], _previous, cleanup) => {
+    const controller = new AbortController();
+    cleanup(() => controller.abort());
+    if (!projectRef) return;
+    const refs = new Set(
+      props.secretBindings.map((binding) => binding.secretRef),
+    );
+    for (const ref of refs) {
+      if (!ref || selectedSecrets[ref]) continue;
+      try {
+        const secret = await readRuntimeSecret(
+          ref,
+          projectRef,
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        selectedSecrets[ref] = {
+          ref: secret.ref,
+          title: secret.name,
+          description: secret.description,
+          meta: `${maskedSecretHint(secret)} · rev ${String(secret.currentRevision)}`,
+          disabled: secret.state !== "ACTIVE",
+          disabledReason:
+            secret.state === "ACTIVE" ? undefined : t("runtime.secretRevoked"),
+        };
+      } catch {
+        if (controller.signal.aborted) return;
+        // Сохранённая ссылка остаётся выбранной; значение секрета не читается.
+      }
+    }
+  },
+  { immediate: true },
 );
 
 function changeValue(
@@ -174,16 +217,13 @@ function selectedSecret(
   return descriptor
     ? {
         ref: descriptor.secretRef,
-        title:
-          [descriptor.secretName, descriptor.secretKey]
-            .filter(Boolean)
-            .join(" / ") || binding.name,
+        title: t("runtime.currentPublishedSecret"),
         description: t("runtime.currentPublishedSecret"),
-        meta: `rev ${descriptor.secretResourceVersion}`,
+        meta: safeSecretReference(descriptor).target,
       }
     : {
         ref: binding.secretRef,
-        title: binding.secretRef,
+        title: t("runtime.runtimeSecret"),
         description: t("runtime.restoredSecretSelection"),
       };
 }
@@ -368,38 +408,39 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
             />
           </div>
         </div>
-        <dl
-          v-if="currentDescriptor(item)"
-          class="secret-safe-meta"
-          :aria-label="$t('runtime.currentImmutableDescriptor')"
-        >
-          <div>
-            <dt>{{ $t("runtime.secretTarget") }}</dt>
-            <dd>{{ safeSecretReference(currentDescriptor(item)!).target }}</dd>
-          </div>
-          <div>
-            <dt>{{ $t("runtime.secretResourceVersion") }}</dt>
-            <dd>
-              {{ safeSecretReference(currentDescriptor(item)!).revision }}
-            </dd>
-          </div>
-          <div>
-            <dt>UID</dt>
-            <dd>
-              <code>{{
-                safeSecretReference(currentDescriptor(item)!).uidHint
-              }}</code>
-            </dd>
-          </div>
-          <div>
-            <dt>SHA-256</dt>
-            <dd>
-              <code>{{
-                safeSecretReference(currentDescriptor(item)!).digestHint
-              }}</code>
-            </dd>
-          </div>
-        </dl>
+        <details v-if="currentDescriptor(item)" class="secret-safe-meta">
+          <summary>{{ $t("runtime.secretTechnicalDetails") }}</summary>
+          <dl>
+            <div>
+              <dt>{{ $t("runtime.secretTarget") }}</dt>
+              <dd>
+                {{ safeSecretReference(currentDescriptor(item)!).target }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ $t("runtime.secretResourceVersion") }}</dt>
+              <dd>
+                {{ safeSecretReference(currentDescriptor(item)!).revision }}
+              </dd>
+            </div>
+            <div>
+              <dt>UID</dt>
+              <dd>
+                <code>{{
+                  safeSecretReference(currentDescriptor(item)!).uidHint
+                }}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>SHA-256</dt>
+              <dd>
+                <code>{{
+                  safeSecretReference(currentDescriptor(item)!).digestHint
+                }}</code>
+              </dd>
+            </div>
+          </dl>
+        </details>
         <p v-else class="secondary-text">
           {{ $t("runtime.descriptorGeneratedOnPublish") }}
         </p>
@@ -472,11 +513,18 @@ function selectSecret(index: number, option: AsyncEntityOption): void {
   gap: 8px;
 }
 .secret-safe-meta {
-  display: grid;
-  gap: 6px;
   margin: 0;
 }
-.secret-safe-meta div {
+.secret-safe-meta summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.secret-safe-meta dl {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+.secret-safe-meta dl div {
   display: flex;
   gap: 8px;
 }

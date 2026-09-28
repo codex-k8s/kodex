@@ -1321,8 +1321,7 @@ const ru = {
     secretNotSelected: "Секрет не выбран",
     secretRevoked: "Секрет отозван и недоступен для новых ревизий",
     currentPublishedSecret: "Секрет текущей опубликованной ревизии",
-    currentImmutableDescriptor:
-      "Неизменяемые метаданные текущей опубликованной ревизии",
+    secretTechnicalDetails: "Технические сведения о закреплённой ревизии",
     descriptorGeneratedOnPublish:
       "Точные Kubernetes-метаданные появятся после публикации и будут доступны только для чтения.",
     secretTarget: "Kubernetes Secret и ключ",
@@ -5394,8 +5393,7 @@ const en = {
     secretNotSelected: "No secret selected",
     secretRevoked: "The secret is revoked and unavailable to new revisions",
     currentPublishedSecret: "Secret from the current published revision",
-    currentImmutableDescriptor:
-      "Immutable metadata of the current published revision",
+    secretTechnicalDetails: "Pinned revision technical details",
     descriptorGeneratedOnPublish:
       "Exact Kubernetes metadata is generated when publishing and remains read-only.",
     secretTarget: "Kubernetes Secret and key",
