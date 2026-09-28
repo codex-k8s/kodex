@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.275
+version: 1.0.276
 updated: 2026-09-28
 ---
 
@@ -5864,4 +5864,18 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-integration-yaml-editor-fixed-20260928.png`.
 - Адресные проверки: frontend unit 4/4, typecheck, ESLint, Prettier и
   `git diff --check` — локальный `PASS` на mounted diff поверх `ee4c011e1`.
+  Ручная приёмка владельцем — `NOT RUN`.
+
+### Конфигурации: поиск в общем каталоге без выбранного Проекта, 2026-09-28
+
+- Общий каталог project-scoped конфигураций уже показывал доступные записи
+  всех Проектов, но поле серверного поиска было ошибочно заблокировано до
+  выбора одного Проекта. Ограничение создания при этом корректно и сохранено.
+- Поиск включён независимо от фильтра Проекта. После no-cache reload общий
+  каталог конфигураций образа отправил запрос с `kind=ROLE_IMAGE` и
+  `query=координатора`, получил 200 и показал ровно одну ожидаемую строку.
+  Console error/warn пусты, горизонтального переполнения при 1920×1080 нет.
+  Снимок `/tmp/kodex-role-image-global-search-fixed-20260928.png`.
+- Адресные проверки: frontend unit 7/7, typecheck, ESLint, Prettier и
+  `git diff --check` — локальный `PASS` на mounted diff поверх `2e25ac810`.
   Ручная приёмка владельцем — `NOT RUN`.

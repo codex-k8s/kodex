@@ -150,7 +150,6 @@ function created(configurationRef: string): void {
           type="search"
           :placeholder="$t('common.search')"
           :aria-label="$t('common.search')"
-          :disabled="projectRequired"
       /></label>
       <RouterLink
         v-if="!projectRequired"
