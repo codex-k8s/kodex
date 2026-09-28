@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.267
+version: 1.0.268
 updated: 2026-09-28
 ---
 
@@ -5623,4 +5623,23 @@ GitHub checks не считается `PASS`.
   выполнена готовым Project Manager с подписочной device-code учётной записью,
   а не API-key. Сквозной сценарий повторного Human Gate — локальный `PASS` на
   `073de3f7b6f336506aa7281df6a978dea42368ed`; ручная приёмка владельцем —
+  `NOT RUN`.
+
+### Системный образ: локализованное имя в деталях, 2026-09-28
+
+- Серверное имя `i18n:SYSTEM_BASE_ROLE_IMAGE` раньше выводилось буквально в
+  заголовке и read-only поле деталей системного образа. Теперь общий
+  server-message resolver используется в заголовке, поле подтверждения,
+  read-only поле и карточке сборки помощника; обычные пользовательские имена
+  остаются без изменений.
+- После hot reload и обновления без кэша детали
+  `imgrec_NIAbt38srVEN8VDMyQw6RdOg` показывают «Базовый системный образ» и в
+  заголовке, и в поле «Название». Снимок
+  `/tmp/kodex-system-role-image-localized-final-20260928.png`, доступный
+  snapshot — `/tmp/kodex-system-role-image-localized-final-20260928.txt`.
+- Console error/warn пусты, завершённые прикладные запросы — 200; один
+  `ERR_ABORTED` относится к отменённому bootstrap при reload. Адресные
+  Prettier, Vitest (8 тестов), frontend typecheck, ESLint и
+  `git diff --check` — локальный `PASS` на
+  `c1683ac5a9c854fb1f00a7caa0057a4fea074d3a`. Ручная приёмка владельцем —
   `NOT RUN`.
