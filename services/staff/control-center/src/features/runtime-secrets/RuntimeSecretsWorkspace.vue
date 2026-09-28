@@ -386,47 +386,47 @@ onBeforeUnmount(() => {
         <dt>{{ $t("runtimeSecrets.updatedAt") }}</dt>
         <dd>{{ formatDate(details.updatedAt) }}</dd>
       </dl>
-      <div class="runtime-secrets__actions">
+      <div class="runtime-secret-details__actions">
         <button
-          class="icon-button"
-          :title="$t('impact.inspect')"
-          :aria-label="$t('impact.inspect')"
+          class="button"
+          type="button"
           @click="
             impactTarget = details;
             details = undefined;
           "
         >
-          <Link2 :size="18" />
+          <Link2 :size="16" aria-hidden="true" />
+          {{ $t("impact.inspect") }}
         </button>
         <button
           v-if="canRuntimeSecretAction(details, 'REVEAL')"
-          class="icon-button"
-          :title="$t('runtimeSecrets.reveal')"
-          :aria-label="$t('runtimeSecrets.reveal')"
+          class="button"
+          type="button"
           @click="
             revealTarget = details;
             details = undefined;
           "
         >
-          <Eye :size="18" />
+          <Eye :size="16" aria-hidden="true" />
+          {{ $t("runtimeSecrets.reveal") }}
         </button>
         <button
           v-if="canRuntimeSecretAction(details, 'ROTATE')"
-          class="icon-button"
-          :title="$t('runtimeSecrets.rotate')"
-          :aria-label="$t('runtimeSecrets.rotate')"
+          class="button"
+          type="button"
           @click="openRotate(details)"
         >
-          <RotateCw :size="18" />
+          <RotateCw :size="16" aria-hidden="true" />
+          {{ $t("runtimeSecrets.rotate") }}
         </button>
         <button
           v-if="canRuntimeSecretAction(details, 'REVOKE')"
-          class="icon-button icon-button--danger"
-          :title="$t('runtimeSecrets.revoke')"
-          :aria-label="$t('runtimeSecrets.revoke')"
+          class="button button--danger"
+          type="button"
           @click="openRevoke(details)"
         >
-          <ShieldX :size="18" />
+          <ShieldX :size="16" aria-hidden="true" />
+          {{ $t("runtimeSecrets.revoke") }}
         </button>
       </div>
     </div>
@@ -509,6 +509,12 @@ onBeforeUnmount(() => {
 }
 .runtime-secret-details dd {
   margin: 0;
+}
+.runtime-secret-details__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
 }
 .runtime-secrets__toolbar {
   display: flex;
