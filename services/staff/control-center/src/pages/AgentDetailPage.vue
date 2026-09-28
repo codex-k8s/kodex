@@ -38,7 +38,7 @@ import {
 } from "@/shared/api/generated/openapi/sdk.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
-import { runPath } from "@/shared/routes";
+import { agentPath, runPath } from "@/shared/routes";
 import { runTitleFromTask } from "@/features/runs/run-title";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
@@ -77,7 +77,11 @@ const agentRef = computed(() =>
 const projectRef = computed(() =>
   typeof route.params.projectRef === "string" ? route.params.projectRef : "",
 );
-const agent = computed(() => platform.agents[agentRef.value]);
+const storedAgent = computed(() => platform.agents[agentRef.value]);
+const agent = computed(() => {
+  const current = storedAgent.value;
+  return current?.projectRef === projectRef.value ? current : undefined;
+});
 const canEdit = computed(
   () => agent.value?.nextActions.includes("EDIT") ?? false,
 );
@@ -331,6 +335,14 @@ async function load(): Promise<void> {
     platform.loadCapabilities(),
   ]);
   if (!active()) return;
+  const current = storedAgent.value;
+  if (current && current.projectRef !== projectRef.value) {
+    await router.replace({
+      path: agentPath(current.projectRef, current.ref),
+      query: { ...route.query },
+    });
+    return;
+  }
   syncProfile();
   syncInstructions();
   loaded.value = true;

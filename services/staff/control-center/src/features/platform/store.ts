@@ -192,6 +192,16 @@ type QueryKey =
   | "audit"
   | "auditMore";
 
+function inSelectedProject(
+  projectRef: string | undefined,
+  run: () => Promise<void>,
+): () => Promise<void> {
+  return async () => {
+    if (selectedProjectRef() !== projectRef) return;
+    await run();
+  };
+}
+
 function mutationHeaders(headers: MutationHeaders): {
   "Idempotency-Key": string;
   "X-CSRF-Token": string;
@@ -1917,24 +1927,53 @@ export const usePlatformStore = defineStore("platform", () => {
     };
     switch (kind) {
       case "PROJECT":
-        add("overview", () => loadOverview(projectRef));
+        add(
+          "overview",
+          inSelectedProject(projectRef, () => loadOverview(projectRef)),
+        );
         add("gateCount", loadPendingGateCount);
-        if (projectRef) add("project", () => loadProject(projectRef));
+        if (projectRef)
+          add(
+            "project",
+            inSelectedProject(projectRef, () => loadProject(projectRef)),
+          );
         break;
       case "AGENT":
       case "INSTRUCTIONS":
-        if (projectRef) add("agents", () => loadAgents(projectRef));
-        add("overview", () => loadOverview(projectRef));
+        if (projectRef)
+          add(
+            "agents",
+            inSelectedProject(projectRef, () => loadAgents(projectRef)),
+          );
+        add(
+          "overview",
+          inSelectedProject(projectRef, () => loadOverview(projectRef)),
+        );
         break;
       case "WORKFLOW":
-        if (projectRef) add("workflows", () => loadWorkflows(projectRef));
+        if (projectRef)
+          add(
+            "workflows",
+            inSelectedProject(projectRef, () => loadWorkflows(projectRef)),
+          );
         break;
       case "ARTIFACT":
-        if (projectRef) add("artifacts", () => loadArtifacts(projectRef));
-        add("overview", () => loadOverview(projectRef));
+        if (projectRef)
+          add(
+            "artifacts",
+            inSelectedProject(projectRef, () => loadArtifacts(projectRef)),
+          );
+        add(
+          "overview",
+          inSelectedProject(projectRef, () => loadOverview(projectRef)),
+        );
         break;
       case "SCHEDULE":
-        if (projectRef) add("schedules", () => loadSchedules(projectRef));
+        if (projectRef)
+          add(
+            "schedules",
+            inSelectedProject(projectRef, () => loadSchedules(projectRef)),
+          );
         break;
       case "INTEGRATION_CONNECTION":
       case "INTEGRATION_GRANT":
@@ -1944,14 +1983,22 @@ export const usePlatformStore = defineStore("platform", () => {
         pendingGateCount.value = undefined;
         add("projects", loadProjects);
         add("gateCount", loadPendingGateCount);
-        if (projectRef) add("members", () => loadMembers(projectRef));
+        if (projectRef)
+          add(
+            "members",
+            inSelectedProject(projectRef, () => loadMembers(projectRef)),
+          );
         break;
       case "PLATFORM_MEMBERSHIP":
         pendingGateCount.value = undefined;
         add("platformMembers", loadPlatformMembers);
         add("projects", loadProjects);
         add("gateCount", loadPendingGateCount);
-        if (projectRef) add("members", () => loadMembers(projectRef));
+        if (projectRef)
+          add(
+            "members",
+            inSelectedProject(projectRef, () => loadMembers(projectRef)),
+          );
         break;
       case "SYSTEM_ASSISTANT":
         add("bootstrap", loadBootstrap);
@@ -1959,12 +2006,23 @@ export const usePlatformStore = defineStore("platform", () => {
         break;
       case "ROLE_IMAGE_RECIPE":
         if (projectRef)
-          add("roleImages", () => loadRoleImageRecipes(projectRef));
+          add(
+            "roleImages",
+            inSelectedProject(projectRef, () =>
+              loadRoleImageRecipes(projectRef),
+            ),
+          );
         break;
       case "RUN":
-        add("runs", () => loadRuns(projectRef));
+        add(
+          "runs",
+          inSelectedProject(projectRef, () => loadRuns(projectRef)),
+        );
         add("gateCount", loadPendingGateCount);
-        add("overview", () => loadOverview(projectRef));
+        add(
+          "overview",
+          inSelectedProject(projectRef, () => loadOverview(projectRef)),
+        );
         break;
       default:
         throw new Error("Unknown platform invalidation kind");
@@ -1983,22 +2041,45 @@ export const usePlatformStore = defineStore("platform", () => {
       const projectRef = selectedProjectRef();
       const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [
         { key: "bootstrap", run: loadBootstrap },
-        { key: "overview", run: () => loadOverview(projectRef) },
-        { key: "runs", run: () => loadRuns(projectRef) },
+        {
+          key: "overview",
+          run: inSelectedProject(projectRef, () => loadOverview(projectRef)),
+        },
+        {
+          key: "runs",
+          run: inSelectedProject(projectRef, () => loadRuns(projectRef)),
+        },
         { key: "gateCount", run: loadPendingGateCount },
         { key: "integrations", run: loadIntegrations },
         { key: "assistant", run: loadAssistant },
       ];
       if (projectRef) {
         operations.push(
-          { key: "project", run: () => loadProject(projectRef) },
-          { key: "agents", run: () => loadAgents(projectRef) },
-          { key: "workflows", run: () => loadWorkflows(projectRef) },
-          { key: "artifacts", run: () => loadArtifacts(projectRef) },
-          { key: "schedules", run: () => loadSchedules(projectRef) },
+          {
+            key: "project",
+            run: inSelectedProject(projectRef, () => loadProject(projectRef)),
+          },
+          {
+            key: "agents",
+            run: inSelectedProject(projectRef, () => loadAgents(projectRef)),
+          },
+          {
+            key: "workflows",
+            run: inSelectedProject(projectRef, () => loadWorkflows(projectRef)),
+          },
+          {
+            key: "artifacts",
+            run: inSelectedProject(projectRef, () => loadArtifacts(projectRef)),
+          },
+          {
+            key: "schedules",
+            run: inSelectedProject(projectRef, () => loadSchedules(projectRef)),
+          },
           {
             key: "roleImages",
-            run: () => loadRoleImageRecipes(projectRef),
+            run: inSelectedProject(projectRef, () =>
+              loadRoleImageRecipes(projectRef),
+            ),
           },
         );
       }
