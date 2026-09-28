@@ -132,6 +132,7 @@ const publicationPlan = ref<RevisionImpactPlan>();
 const publicationUnknown = ref(false);
 const imagePlan = ref<RoleImageImpactPlan>();
 const imageUnknown = ref(false);
+const imageImpactConflict = ref(false);
 const promptAttempt = ref<PublicationAttempt>();
 const imageAttempt = ref<PublicationAttempt>();
 let promptKey = "";
@@ -277,16 +278,18 @@ const projectRequired = computed(
     api.configurationRequiresProject(props.kind) &&
     !api.configurationProjectScopeValid(props.kind, props.projectRef),
 );
-const dirty = computed(
-  () =>
+const dirty = computed(() => {
+  if (props.kind === "ROLE_IMAGE" && !sourceVisible.value) return false;
+  return (
     content.value !== (revision.value?.content ?? "") ||
     JSON.stringify(promptScope.value) !==
       JSON.stringify(promptScopeInput(revision.value?.promptScope)) ||
     format.value !==
       (revision.value?.contentFormat ??
         (props.kind === "PROMPT_TEMPLATE" ? "TEXT" : "JSON")) ||
-    name.value !== (configuration.value?.name ?? ""),
-);
+    name.value !== (configuration.value?.name ?? "")
+  );
+});
 useUnsavedChanges(dirty, () => t("managed.discard"));
 const language = computed(() =>
   format.value === "TEXT"
@@ -415,6 +418,7 @@ async function load(more = false): Promise<void> {
     !window.confirm(t("managed.discard"))
   )
     return;
+  imageImpactConflict.value = false;
   await perform(async () => {
     const result = await api.history(
       ref,
@@ -803,33 +807,39 @@ async function showImpact(more = false): Promise<void> {
   )
     return;
   if (current.kind === "ROLE_IMAGE") {
+    imageImpactConflict.value = false;
     await perform(async () => {
-      const saved = readPublicationAttempt(
-        "ROLE_IMAGE",
-        current.ref,
-        window.sessionStorage,
-      );
-      if (saved) {
-        const report = await restoreImageImpact(
-          saved.planRef,
-          controller.signal,
+      try {
+        const saved = readPublicationAttempt(
+          "ROLE_IMAGE",
+          current.ref,
+          window.sessionStorage,
         );
-        if (
-          report.plan.configurationRef !== current.ref ||
-          report.plan.revisionRef !== target.ref ||
-          report.plan.configurationVersion !== saved.version
-        )
-          throw new Error("Role image recovery scope mismatch");
-        imagePlan.value = report.plan;
-        imageAttempt.value = saved;
-        imageKey = saved.key;
-        imageUnknown.value = report.plan.state === "PREPARED";
-        if (!imageUnknown.value) clearImageAttempt(current.ref);
-      } else {
-        imagePlan.value = await prepareImageImpact(current, target);
-        imageUnknown.value = false;
-        imageAttempt.value = undefined;
-        imageKey = crypto.randomUUID();
+        if (saved) {
+          const report = await restoreImageImpact(
+            saved.planRef,
+            controller.signal,
+          );
+          if (
+            report.plan.configurationRef !== current.ref ||
+            report.plan.revisionRef !== target.ref ||
+            report.plan.configurationVersion !== saved.version
+          )
+            throw new Error("Role image recovery scope mismatch");
+          imagePlan.value = report.plan;
+          imageAttempt.value = saved;
+          imageKey = saved.key;
+          imageUnknown.value = report.plan.state === "PREPARED";
+          if (!imageUnknown.value) clearImageAttempt(current.ref);
+        } else {
+          imagePlan.value = await prepareImageImpact(current, target);
+          imageUnknown.value = false;
+          imageAttempt.value = undefined;
+          imageKey = crypto.randomUUID();
+        }
+      } catch (error) {
+        imageImpactConflict.value = asProblem(error).status === 412;
+        throw error;
       }
     });
     return;
@@ -1196,7 +1206,10 @@ watch(
 
 <template>
   <section class="configuration-editor" :aria-busy="busy">
-    <ProblemNotice v-if="problem" :problem="problem" />
+    <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
+    <p v-if="imageImpactConflict && problem" role="status">
+      {{ $t("roleImages.impactConflictHelp") }}
+    </p>
     <header class="configuration-editor__toolbar">
       <StatusBadge v-if="revision" :state="revision.state" />
       <span v-if="revision">{{
@@ -1323,7 +1336,13 @@ watch(
       @busy="sourceBusy = $event"
     />
     <p v-if="!sourceVisible" role="status">
-      {{ $t("roleImages.sourceUnavailable") }}
+      {{
+        $t(
+          imageImpactConflict && problem
+            ? "roleImages.sourceHiddenAfterConflict"
+            : "roleImages.sourceUnavailable",
+        )
+      }}
     </p>
     <dl v-if="configuration" class="configuration-editor__source">
       <dt>{{ $t("managed.source") }}</dt>
