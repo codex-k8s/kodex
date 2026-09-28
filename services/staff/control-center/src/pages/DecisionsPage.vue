@@ -722,13 +722,13 @@ const serverMessage = useServerMessage();
         <GateProjectFilter v-model="projectFilter" />
       </div>
       <label :for="searchId"
-        ><span>{{ $t("common.search") }}</span
+        ><span>{{ $t("decisions.search") }}</span
         ><input
           :id="searchId"
           v-model="search"
           name="decision-search"
           type="search"
-          :placeholder="$t('common.search')"
+          :placeholder="$t('decisions.search')"
           maxlength="200"
       /></label>
       <span
