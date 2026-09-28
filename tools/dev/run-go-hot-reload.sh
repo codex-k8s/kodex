@@ -84,7 +84,9 @@ include_ext = ["go", "json", "sql", "yaml", "yml", "toml"]
 include_dir = ["$module", "libs/go"]
 exclude_dir = [".git", ".kodex-dev", "node_modules", "tmp", "vendor"]
 exclude_regex = ["_test[.]go$"]
-delay = 250
+# Массовый git checkout обновляет общий protobuf и потребителей неатомарно.
+# Короткий debounce может собрать сервис на промежуточном дереве контрактов.
+delay = 2000
 poll = true
 poll_interval = 500
 stop_on_error = true
