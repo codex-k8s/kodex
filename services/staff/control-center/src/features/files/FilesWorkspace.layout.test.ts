@@ -41,6 +41,12 @@ describe("FilesWorkspace contract", () => {
     expect(source).toContain("useCursorInfiniteScroll");
   });
 
+  it("не резервирует пустую высоту при коротком списке", () => {
+    expect(source).not.toContain("min-height: 640px");
+    expect(source).not.toContain("min-height: 540px");
+    expect(source).toContain("max-height: 68vh");
+  });
+
   it("использует один toolbar для раздела, типа, состояния и источника", () => {
     expect(source).toContain('v-model="activeTab"');
     expect(source).toContain('v-model="kind"');
