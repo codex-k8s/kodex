@@ -68,6 +68,8 @@ VERSION_OR_STATE_CONFLICT:
   other: The resource changed; review the latest version and try again
 STATE_CONFLICT:
   other: This action is not available in the current state
+RESOURCE_IN_USE:
+  other: The resource is still in use; remove its assignments before trying again
 RATE_LIMITED:
   other: Too many requests; try again shortly
 TRANSCRIPTION_RATE_LIMITED:

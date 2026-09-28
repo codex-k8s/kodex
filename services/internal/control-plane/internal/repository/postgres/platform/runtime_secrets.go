@@ -959,7 +959,7 @@ func (repository *Repository) ensureRuntimeSecretUnreferenced(ctx context.Contex
 		return errs.ErrUnavailable
 	}
 	if referenced {
-		return errs.ErrConflict
+		return errs.ErrResourceInUse
 	}
 	return nil
 }

@@ -10,6 +10,8 @@ const translator = useI18n();
 const heading = computed(() => {
   if (props.problem?.code === "FRESH_AUTHENTICATION_REQUIRED")
     return translator.t("common.freshAuthenticationRequired");
+  if (props.problem?.code === "RESOURCE_IN_USE")
+    return translator.t("common.resourceInUse");
   if (props.problem?.kind === "forbidden")
     return translator.t("common.forbidden");
   if (props.problem?.kind === "conflict")

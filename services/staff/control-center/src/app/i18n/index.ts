@@ -956,6 +956,7 @@ const ru = {
     forbiddenText:
       "У вашей роли нет разрешения на это действие в выбранном проекте.",
     conflict: "Состояние уже изменилось. Показано актуальное решение.",
+    resourceInUse: "Объект используется",
     unavailable: "Функция временно недоступна",
     available: "Доступно",
     disabled: "Отключено",
@@ -4981,6 +4982,7 @@ const en = {
     forbiddenText:
       "Your role does not allow this action in the selected project.",
     conflict: "State has already changed. Current decision is shown.",
+    resourceInUse: "Resource in use",
     unavailable: "Temporarily unavailable",
     available: "Available",
     disabled: "Disabled",

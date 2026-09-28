@@ -68,6 +68,12 @@ WHERE project.name='Role image promotion' AND image.promotion_state='PROMOTED' A
 		consumers = append(consumers, entity.RuntimeEnvironmentConsumer{AgentRef: agent.Ref, AgentVersion: view.AgentVersion, BindingRef: b.Ref, BindingVersion: b.Version, VersionRef: b.VersionRef, ProjectRef: projectRef})
 	}
 	rotated := completeRuntimeSecretRotate(t, ctx, service, runtimeSecretOwnerPrincipal(owner, "secret.rotate"), consume, complete, secret, runtimeSecretHashB, "secret-impact-rotate")
+	if _, err := service.PrepareRuntimeSecretOperation(ctx, runtimeSecretOwnerPrincipal(owner, "secret.revoke"), platformrepo.RuntimeSecretPrepareInput{
+		Kind: "REVOKE", SecretRef: rotated.Ref,
+		Mutation: value.Mutation{IdempotencyKey: "secret-impact-revoke-in-use", ExpectedVersion: &rotated.Version},
+	}); !errors.Is(err, errs.ErrResourceInUse) {
+		t.Fatalf("referenced secret revoke error = %v, want resource in use", err)
+	}
 	recoverOld := func(want string) {
 		t.Helper()
 		result, err := service.RecoverRuntimeSecretMaterialization(ctx, recoverer, platformrepo.RuntimeSecretRecoveryInput{OperationRef: prepared.OperationRef, Materialization: materialization})
