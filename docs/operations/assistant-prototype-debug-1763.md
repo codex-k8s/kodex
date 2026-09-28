@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.247
+version: 1.0.248
 updated: 2026-09-28
 ---
 
@@ -5143,3 +5143,49 @@ GitHub checks не считается `PASS`.
   no-cache reload console error/warn и HTTP 4xx/5xx нет. Снимок:
   `/tmp/kodex-openapi-gate-reject-continuation-20260928.png`. Локальный
   browser `PASS` для отказа и продолжения; ручная приёмка — `NOT RUN`.
+
+### MCP-каталог интеграций и форма Human Gate, 2026-09-28
+
+- Живой Run `run_0iuoqqtINIFA0EkiaP5gqmfp` показал ошибку этапного
+  обнаружения: модель сначала выбрала несовпадающую пару служебных полей
+  каталога, затем дважды вызвала `invoke_integration` с несовместимым набором
+  идентификаторов. Runtime-controller закрыто отказал до создания invocation,
+  но выдал модели слишком общий `TOOL_UNAVAILABLE`. Значение Secret или
+  исходный payload в журнал не переносились.
+- У MCP-каталога теперь есть один точный `grant_ref` в компактном индексе и
+  адресный запрос схемы по нему. Новый `invoke_integration` принимает только
+  `grant_ref` и типизированный `input`; runtime-controller разрешает ref лишь
+  среди grants подписанной текущей `RuntimeRevision`, самостоятельно
+  подставляет закреплённые connection/capability и control-plane повторно
+  проверяет право, версию/дайджест определения и схему. Старый полный набор
+  полей оставлен только для уже начатых ходов. Неверный ref или форма ввода
+  получают ограниченную подсказку для одного повтора, без выдачи чужой схемы
+  или значения. Проверена актуальная спецификация Context7 «Model Context
+  Protocol, tools/list/tools/call, 2025-06-18».
+- Карта вызова: пользователь запускает сотрудника в Проекте; SSO actor и grant
+  фиксируются владельцем control-plane в RuntimeRevision; MCP `tools/list`
+  отдаёт только компактные инструменты, `get_integration_catalog` читает
+  только pinned grants, `invoke_integration` передаёт точные connection и
+  capability в `ResolveIntegrationInvocation`; PostgreSQL владеет
+  идемпотентным invocation и Human Gate, integration-gateway исполняет эффект,
+  Run/Decisions получают terminal событие и квитанцию. Неверный ref не создаёт
+  invocation и не расширяет полномочия; вызов без разрешения закрыто отказан.
+- После hot reload и no-cache reload новый Run
+  `run_wiznh4P2vAAXxHuFXqCUdUZT` прошёл `grant_ref → input_schema →
+  invoke_integration → WAITING_HUMAN → APPROVE → continuation` без HTTP 412.
+  Внешний mock вернул `INTEGRATION_REQUEST_REJECTED`, поскольку единственный
+  текущий POST создаёт запись в уже занятом журнале; это не подтверждает
+  успешный второй WRITE. Ещё два отдельных Run дошли до Human Gate и были
+  отвергнуты владельцем без внешнего эффекта. Отрицательный scope и
+  продолжение после отказа уже подтверждены предыдущим шагом; два успешных
+  WRITE в одном scope остаются `NOT RUN` до подходящего контракта mock.
+- Модалка решения внутри Run больше не показывает сырой JSON вместо вопроса:
+  она называет подключение, риск, операцию и точные закрепляемые значения
+  (`body.value`), сохраняя ручное подтверждение/отказ. Русский и английский
+  тексты используются из общего словаря; screenshot конечной открытой формы:
+  `/tmp/kodex-integration-gate-modal-final-20260928.png`.
+  Console error/warn пусты; завершённых HTTP 4xx/5xx нет, два отменённых
+  `bootstrap` чтения связаны с навигацией. Локально прошли все callback unit,
+  два RunPage файла с пятью unit, frontend typecheck, ESLint и Prettier.
+  Полный baseline, PostgreSQL component и ручная приёмка владельцем —
+  `NOT RUN`.

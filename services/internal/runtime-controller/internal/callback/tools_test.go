@@ -72,6 +72,10 @@ func integrationArguments(grant runtimecontract.RunnerIntegrationGrant, value st
 	}
 }
 
+func integrationRefArguments(grant runtimecontract.RunnerIntegrationGrant, value string) map[string]any {
+	return map[string]any{"grant_ref": grant.Ref, "input": map[string]any{"value": value}}
+}
+
 func TestInvokeReturnsRejectedIntegrationAsTerminalResult(t *testing.T) {
 	t.Parallel()
 	server := &Server{
@@ -104,7 +108,7 @@ func TestInvokeReturnsPendingApprovalWithoutHoldingToolRequest(t *testing.T) {
 		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
 		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant},
 	}
-	result, err := server.invoke(t.Context(), input, integrationArguments(grant, "pending"), json.RawMessage(`"call-1"`))
+	result, err := server.invoke(t.Context(), input, integrationRefArguments(grant, "pending"), json.RawMessage(`"call-1"`))
 	if err != nil {
 		t.Fatalf("invoke pending integration: %v", err)
 	}

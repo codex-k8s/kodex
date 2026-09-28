@@ -15,6 +15,7 @@ func TestIntegrationCatalogIsPagedAndBoundToExactGrant(t *testing.T) {
 	input := runtimecontract.RunnerInput{}
 	for index := range 20 {
 		input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{
+			Ref:           fmt.Sprintf("igr_%08d", index),
 			ConnectionRef: fmt.Sprintf("int_%08d", index), ConnectionName: fmt.Sprintf("Connection %02d", index),
 			DefinitionKey: "test", DefinitionVersion: "1.0.0", DefinitionDigest: strings.Repeat("a", 64),
 			CapabilityKey: "test.read", CapabilityName: "Read", CapabilityDescription: "Read test data",
@@ -37,12 +38,18 @@ func TestIntegrationCatalogIsPagedAndBoundToExactGrant(t *testing.T) {
 	if err != nil || len(page.(map[string]any)["grants"].([]map[string]any)) != 4 {
 		t.Fatalf("integration catalog last page is invalid: %v", err)
 	}
-	selected, err := integrationCatalog(input, map[string]any{"connection_ref": "int_00000003", "capability_key": "test.read"})
+	selected, err := integrationCatalog(input, map[string]any{"grant_ref": "igr_00000003"})
 	if err != nil || len(selected.(map[string]any)["grants"].([]map[string]any)) != 1 ||
-		selected.(map[string]any)["grants"].([]map[string]any)[0]["input_schema"] == nil {
+		selected.(map[string]any)["grants"].([]map[string]any)[0]["input_schema"] == nil ||
+		selected.(map[string]any)["grants"].([]map[string]any)[0]["grant_ref"] != "igr_00000003" {
 		t.Fatalf("exact integration schema is unavailable: %v", err)
 	}
+	if _, err := integrationCatalog(input, map[string]any{"connection_ref": "int_00000003", "capability_key": "test.read"}); err != nil {
+		t.Fatalf("legacy exact selection stopped working: %v", err)
+	}
 	for _, invalid := range []map[string]any{
+		{"grant_ref": "igr_missing"}, {"grant_ref": "igr_00000003", "offset": 0},
+		{"grant_ref": "igr_00000003", "connection_ref": "int_00000003", "capability_key": "test.read"},
 		{"connection_ref": "int_00000003"}, {"connection_ref": "int_00000003", "capability_key": "other"},
 		{"connection_ref": 123, "capability_key": "test.read"}, {"offset": 257}, {"offset": 1.5},
 		{"connection_ref": "int_00000003", "capability_key": "test.read", "offset": 1},
@@ -62,7 +69,7 @@ func TestIntegrationCatalogIsPagedAndBoundToExactGrant(t *testing.T) {
 func TestIntegrationCatalogSchemaSeparatesSearchAndExactSelection(t *testing.T) {
 	schema := integrationCatalogTool()["inputSchema"].(map[string]any)
 	branches, ok := schema["oneOf"].([]map[string]any)
-	if !ok || len(branches) != 2 || schema["additionalProperties"] != false {
+	if !ok || len(branches) != 3 || schema["additionalProperties"] != false {
 		t.Fatalf("integration catalog schema does not separate call modes: %#v", schema)
 	}
 }

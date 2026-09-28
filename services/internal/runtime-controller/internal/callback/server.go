@@ -590,14 +590,57 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 
 func integrationTool() map[string]any {
 	return map[string]any{
-		"name": "invoke_integration", "description": "Invoke one exact typed integration grant from this RuntimeRevision. First use get_integration_catalog with the exact connection_ref and capability_key to read its input schema; the server revalidates this binding and input.",
-		"inputSchema": objectSchema([]string{"connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input"}, map[string]any{
-			"connection_ref": opaqueRefSchema(), "capability_key": stringSchema(1, 255),
-			"definition_version": stringSchema(1, 128), "definition_digest": stringSchema(64, 64),
-			"input_schema_sha256": stringSchema(64, 64),
-			"input":               map[string]any{"type": "object"},
+		"name": "invoke_integration", "description": "Invoke one exact grant from this RuntimeRevision. First read the compact get_integration_catalog index, then select its grant_ref to read the input schema. Copy that same grant_ref here with an input matching that schema. The server resolves and revalidates the pinned connection, capability, versions and authority.",
+		"inputSchema": objectSchema([]string{"grant_ref", "input"}, map[string]any{
+			"grant_ref": opaqueRefSchema(),
+			"input":     map[string]any{"type": "object"},
 		}),
 	}
+}
+
+// Старый полный набор полей принимается только для уже начатых ходов; новый
+// вызов привязывается к одному ref из подписанной RuntimeRevision.
+func integrationGrantForCall(input runtimecontract.RunnerInput, arguments map[string]any) (runtimecontract.RunnerIntegrationGrant, bool) {
+	if !onlyKeys(arguments, "grant_ref", "connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input") {
+		return runtimecontract.RunnerIntegrationGrant{}, false
+	}
+	if ref, selected := arguments["grant_ref"].(string); selected {
+		if ref == "" || len(arguments) != 2 {
+			return runtimecontract.RunnerIntegrationGrant{}, false
+		}
+		for _, grant := range input.IntegrationGrants {
+			if grant.Ref == ref {
+				return grant, true
+			}
+		}
+		return runtimecontract.RunnerIntegrationGrant{}, false
+	}
+	if len(arguments) != 6 {
+		return runtimecontract.RunnerIntegrationGrant{}, false
+	}
+	connection, _ := arguments["connection_ref"].(string)
+	capability, _ := arguments["capability_key"].(string)
+	definitionVersion, _ := arguments["definition_version"].(string)
+	definitionDigest, _ := arguments["definition_digest"].(string)
+	inputSchemaDigest, _ := arguments["input_schema_sha256"].(string)
+	for _, grant := range input.IntegrationGrants {
+		if grant.ConnectionRef == connection && grant.CapabilityKey == capability &&
+			grant.DefinitionVersion == definitionVersion && grant.DefinitionDigest == definitionDigest &&
+			grant.InputSchemaSHA256 == inputSchemaDigest {
+			return grant, true
+		}
+	}
+	return runtimecontract.RunnerIntegrationGrant{}, false
+}
+
+type integrationCallInputError struct{ reason string }
+
+func (inputErr *integrationCallInputError) Error() string {
+	return "integration call input is invalid"
+}
+
+func (inputErr *integrationCallInputError) GRPCStatus() *status.Status {
+	return status.New(codes.InvalidArgument, inputErr.Error())
 }
 
 func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string]any {
@@ -659,6 +702,7 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	default:
 		err = errors.New("tool is not available")
 	}
+	invocationInputInvalid := params.Name == "invoke_integration" && status.Code(err) == codes.InvalidArgument
 	projectionErr := server.recordToolCall(request.Context(), input, params.Name, params.Arguments, result, err, rpc.ID, time.Since(startedAt))
 	if err != nil {
 		failureClass := controlFailureClass(err)
@@ -669,6 +713,10 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		var catalogInputErr *integrationCatalogInputError
 		if errors.As(err, &catalogInputErr) {
 			failureClass = "integration_catalog_" + catalogInputErr.reason
+		}
+		var invocationInputErr *integrationCallInputError
+		if errors.As(err, &invocationInputErr) {
+			failureClass = "integration_call_" + invocationInputErr.reason
 		}
 		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed",
 			"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(),
@@ -700,14 +748,21 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		}
 		var catalogInputErr *integrationCatalogInputError
 		if errors.As(err, &catalogInputErr) {
-			guidance := "Retry once using either query and offset, or exact connection_ref and capability_key, but never both."
+			guidance := "Retry once using either query and offset, or the exact grant_ref copied from the catalog index, but never both."
 			if catalogInputErr.reason == "selection_missing" {
-				guidance = "That exact connection_ref and capability_key pair is not bound to this run. Call get_integration_catalog with {} to read the compact index, then copy both values from the same entry exactly. Do not use an OpenAPI operationId or display name as capability_key."
+				guidance = "That grant is not bound to this run. Call get_integration_catalog with {} to read the compact index, then copy grant_ref from one entry exactly. Do not use an OpenAPI operationId or display name as a grant_ref."
 			}
 			structured = map[string]any{
 				"error_code": "CATALOG_INPUT_INVALID",
 				"retryable":  true,
 				"guidance":   guidance,
+			}
+		}
+		if invocationInputInvalid {
+			structured = map[string]any{
+				"error_code": "INTEGRATION_INPUT_INVALID",
+				"retryable":  true,
+				"guidance":   "Read get_integration_catalog with {} and select one exact grant_ref to obtain its input_schema. Call invoke_integration using only that grant_ref and input matching the schema. Retry at most once.",
 			}
 		}
 		encoded, _ = json.Marshal(structured)
@@ -1298,12 +1353,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		step, _ := arguments["workflow_step_key"].(string)
 		return map[string]any{"target_agent_ref": target, "workflow_step_key": step}, "platform.run.delegate", "", true
 	case "invoke_integration":
-		connection, _ := arguments["connection_ref"].(string)
-		capability, _ := arguments["capability_key"].(string)
-		for _, grant := range input.IntegrationGrants {
-			if grant.ConnectionRef == connection && grant.CapabilityKey == capability {
-				return map[string]any{"connection_ref": connection, "capability_key": capability}, capability, grant.Ref, true
-			}
+		if grant, ok := integrationGrantForCall(input, arguments); ok {
+			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
 		}
 	}
 	return nil, "", "", false
@@ -1422,27 +1473,14 @@ func (server *Server) delegate(ctx context.Context, input runtimecontract.Runner
 }
 
 func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
-	if !onlyKeys(arguments, "connection_ref", "capability_key", "definition_version", "definition_digest", "input_schema_sha256", "input") {
-		return nil, errors.New("integration input is invalid")
-	}
-	connection, _ := arguments["connection_ref"].(string)
-	capability, _ := arguments["capability_key"].(string)
-	definitionVersion, _ := arguments["definition_version"].(string)
-	definitionDigest, _ := arguments["definition_digest"].(string)
-	inputSchemaDigest, _ := arguments["input_schema_sha256"].(string)
-	allowed := false
-	for _, grant := range input.IntegrationGrants {
-		if grant.ConnectionRef == connection && grant.CapabilityKey == capability &&
-			grant.DefinitionVersion == definitionVersion && grant.DefinitionDigest == definitionDigest &&
-			grant.InputSchemaSHA256 == inputSchemaDigest {
-			allowed = true
-			break
-		}
-	}
+	grant, allowed := integrationGrantForCall(input, arguments)
 	if !allowed {
-		return nil, errors.New("integration capability is not allowed")
+		return nil, &integrationCallInputError{reason: "grant_selection"}
 	}
-	bounded, _ := arguments["input"].(map[string]any)
+	bounded, ok := arguments["input"].(map[string]any)
+	if !ok {
+		return nil, &integrationCallInputError{reason: "input_shape"}
+	}
 	structure, err := structpb.NewStruct(bounded)
 	if err != nil {
 		return nil, errors.New("integration input is invalid")
@@ -1452,7 +1490,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		return nil, errors.New("integration input digest is invalid")
 	}
 	inputDigest := sha256.Sum256(inputBytes)
-	resolveRequest := &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: connection, CapabilityKey: capability, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))}
+	resolveRequest := &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: grant.ConnectionRef, CapabilityKey: grant.CapabilityKey, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))}
 	var resolved *controlplanev1.ResolveIntegrationInvocationResponse
 	for attempt := 0; attempt < 2; attempt++ {
 		requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)

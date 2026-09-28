@@ -17,18 +17,20 @@ const maximumIntegrationCatalogPage = 8
 func integrationCatalogTool() map[string]any {
 	inputSchema := objectSchema(nil, map[string]any{
 		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 256},
+		"grant_ref":      opaqueRefSchema(),
 		"connection_ref": opaqueRefSchema(), "capability_key": map[string]any{
 			"type": "string", "minLength": 1, "maxLength": 255,
 			"description": "Copy this value exactly from the compact catalog index. It is not the OpenAPI operationId or a display name.",
 		},
 	})
 	inputSchema["oneOf"] = []map[string]any{
-		{"not": map[string]any{"anyOf": []map[string]any{{"required": []string{"connection_ref"}}, {"required": []string{"capability_key"}}}}},
-		{"required": []string{"connection_ref", "capability_key"}, "not": map[string]any{"anyOf": []map[string]any{{"required": []string{"query"}}, {"required": []string{"offset"}}}}},
+		{"not": map[string]any{"anyOf": []map[string]any{{"required": []string{"grant_ref"}}, {"required": []string{"connection_ref"}}, {"required": []string{"capability_key"}}}}},
+		{"required": []string{"grant_ref"}, "not": map[string]any{"anyOf": []map[string]any{{"required": []string{"query"}}, {"required": []string{"offset"}}, {"required": []string{"connection_ref"}}, {"required": []string{"capability_key"}}}}},
+		{"required": []string{"connection_ref", "capability_key"}, "not": map[string]any{"anyOf": []map[string]any{{"required": []string{"query"}}, {"required": []string{"offset"}}, {"required": []string{"grant_ref"}}}}},
 	}
 	return map[string]any{
 		"name":        "get_integration_catalog",
-		"description": "Discover only integration grants bound to this RuntimeRevision. First call with {} or query and offset for a compact index. Copy connection_ref and capability_key exactly from one index entry to read its input schema before invoke_integration. Do not guess a key from an OpenAPI operationId or display name.",
+		"description": "Discover only grants bound to this RuntimeRevision. Call with {} or query and offset for a compact index. Copy grant_ref from one index entry and call again with that grant_ref to read its input schema. Pass the same grant_ref to invoke_integration. Do not guess identifiers from names or OpenAPI operationId.",
 		"inputSchema": inputSchema,
 		"outputSchema": objectSchema([]string{"grants"}, map[string]any{
 			"grants":      map[string]any{"type": "array", "maxItems": maximumIntegrationCatalogPage, "items": map[string]any{"type": "object"}},
@@ -55,7 +57,7 @@ func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]
 	if len(input.IntegrationGrants) == 0 {
 		return nil, errors.New("integration catalog is not available")
 	}
-	if !onlyKeys(arguments, "query", "offset", "connection_ref", "capability_key") {
+	if !onlyKeys(arguments, "query", "offset", "grant_ref", "connection_ref", "capability_key") {
 		return nil, invalidIntegrationCatalog("top_level_shape")
 	}
 	query, _ := arguments["query"].(string)
@@ -84,14 +86,18 @@ func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]
 	}
 	connection, connectionValid := arguments["connection_ref"].(string)
 	capability, capabilityValid := arguments["capability_key"].(string)
+	grantRef, grantRefValid := arguments["grant_ref"].(string)
 	_, querySelected := arguments["query"]
 	_, offsetSelected := arguments["offset"]
+	_, grantSelected := arguments["grant_ref"]
 	_, connectionSelected := arguments["connection_ref"]
 	_, capabilitySelected := arguments["capability_key"]
-	if connectionSelected && !connectionValid || capabilitySelected && !capabilityValid {
+	if connectionSelected && !connectionValid || capabilitySelected && !capabilityValid || grantSelected && !grantRefValid {
 		return nil, invalidIntegrationCatalog("selection_shape")
 	}
-	if connectionSelected != capabilitySelected || connectionSelected && (connection == "" || capability == "" || querySelected || offsetSelected) {
+	if connectionSelected != capabilitySelected ||
+		grantSelected && (grantRef == "" || connectionSelected || capabilitySelected || querySelected || offsetSelected) ||
+		connectionSelected && (connection == "" || capability == "" || querySelected || offsetSelected) {
 		return nil, invalidIntegrationCatalog("selection_shape")
 	}
 	grants := append([]runtimecontract.RunnerIntegrationGrant(nil), input.IntegrationGrants...)
@@ -105,9 +111,9 @@ func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]
 		return grants[left].ConnectionName < grants[right].ConnectionName
 	})
 	entries := make([]map[string]any, 0, maximumIntegrationCatalogPage)
-	if connectionSelected {
+	if grantSelected || connectionSelected {
 		for _, grant := range grants {
-			if grant.ConnectionRef != connection || grant.CapabilityKey != capability {
+			if grantSelected && grant.Ref != grantRef || connectionSelected && (grant.ConnectionRef != connection || grant.CapabilityKey != capability) {
 				continue
 			}
 			var schema map[string]any
@@ -145,6 +151,7 @@ func integrationCatalog(input runtimecontract.RunnerInput, arguments map[string]
 
 func integrationCatalogEntry(grant runtimecontract.RunnerIntegrationGrant) map[string]any {
 	return map[string]any{
+		"grant_ref":      grant.Ref,
 		"connection_ref": grant.ConnectionRef, "connection_name": grant.ConnectionName,
 		"definition_key": grant.DefinitionKey, "definition_version": grant.DefinitionVersion,
 		"definition_digest": grant.DefinitionDigest, "capability_key": grant.CapabilityKey,
