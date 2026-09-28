@@ -1357,7 +1357,7 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 			return "TOOL_UNAVAILABLE"
 		}
 		switch value.state {
-		case "SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "UNKNOWN_OUTCOME":
+		case "SUCCEEDED", "FAILED", "REJECTED", "CANCELLED", "WAITING_APPROVAL", "UNKNOWN_OUTCOME":
 		default:
 			return "TOOL_UNAVAILABLE"
 		}
@@ -1488,6 +1488,8 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 			return integrationToolResult{OK: true, Result: state.GetResultSummary(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "FAILED", "REJECTED", "CANCELLED":
 			return integrationToolResult{ErrorCode: state.GetSafeErrorCode(), InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
+		case "WAITING_APPROVAL":
+			return integrationToolResult{ErrorCode: "INTEGRATION_APPROVAL_PENDING", OwnerDecisionRequired: true, InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		case "UNKNOWN_OUTCOME":
 			return integrationToolResult{ErrorCode: "INTEGRATION_OUTCOME_UNKNOWN", OwnerDecisionRequired: true, InvocationRef: resolved.GetInvocationRef(), state: state.GetState(), inputSHA256: hex.EncodeToString(inputDigest[:])}, nil
 		}

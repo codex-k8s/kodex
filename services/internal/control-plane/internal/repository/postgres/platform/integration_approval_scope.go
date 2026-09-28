@@ -29,7 +29,7 @@ func (repository *Repository) approveIntegrationScope(
 	var grantVersion int64
 	var paths []string
 	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectScopedIntegrationInvocation,
-		invocationID, current.organizationID, rootRunID, projectID,
+		invocationID, current.organizationID, rootRunID, projectID, gateID,
 	).Scan(&policy, &boundedInput, &inputDigest, &capabilityKey,
 		&definitionVersion, &definitionDigest, &connectionRef, &definitionKey,
 		&organizationID, &resolvedProjectID, &resolvedRootRunID,

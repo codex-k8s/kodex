@@ -1514,6 +1514,11 @@ func (repository *Repository) completeIntegrationInvocation(ctx context.Context,
 	); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if next == "SUCCEEDED" || next == "FAILED" {
+		if _, err := repository.scheduleIntegrationContinuation(ctx, tx, scope, invocationID, projectID); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	event, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, payload.InvocationRef, "TURN_PROGRESS", nodeRef, "", "", "", "i18n:INTEGRATION_ACTION_COMPLETED", "RUNNING", "RUNNING")
 	if err != nil {
 		return commandOutcome{}, err

@@ -629,7 +629,7 @@ async function decide(gate: OwnerGate): Promise<void> {
     selectedAttachmentComposer.value?.clear();
     successMessage.value = t("decisions.applied", {
       decision: decisionLabel(decision),
-      title: gate.title,
+      title: decisionTitle(gate),
     });
     Reflect.deleteProperty(comments.value, gate.ref);
     Reflect.deleteProperty(decisionDrafts.value, gate.ref);

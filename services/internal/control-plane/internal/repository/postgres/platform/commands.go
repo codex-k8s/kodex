@@ -2473,6 +2473,11 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 	if _, err := tx.Exec(ctx, queryCommandsResolvegateUpdateOwnerGatesStateDecisionDecisionComment, gateID, nextState, payload.Decision, truncate(payload.Comment, 2000), scope.actorID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if integrationInvocationID != "" && (payload.Decision == "REJECT" || payload.Decision == "CANCEL") {
+		if _, err := repository.scheduleIntegrationContinuation(ctx, tx, scope, integrationInvocationID, projectID); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	if attachmentSet.ID != "" {
 		tag, err := tx.Exec(ctx, queryAttachmentSetsBindGateResolution, pgx.StrictNamedArgs{
 			"attachment_set_id": attachmentSet.ID,
@@ -2538,7 +2543,23 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if active == 0 {
-			runState = "SUCCEEDED"
+			if integrationInvocationID != "" {
+				// Исполнение ожидает внешний effect и следующий ход той же Session.
+				runState = "WAITING_HUMAN"
+			} else {
+				runState = "SUCCEEDED"
+			}
+		}
+	}
+	if integrationInvocationID != "" {
+		var openGates int64
+		if err := tx.QueryRow(ctx, queryCommandsResolvegateCountOpenGates, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID, "root_run_id": rootRunID,
+		}).Scan(&openGates); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if openGates > 0 {
+			runState = "WAITING_HUMAN"
 		}
 	}
 	terminalRootNodeRef := ""

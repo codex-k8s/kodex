@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.245
+version: 1.0.247
 updated: 2026-09-28
 ---
 
@@ -5097,3 +5097,49 @@ GitHub checks не считается `PASS`.
   корректное асинхронное продолжение Session после решения и завершения
   invocation. Сквозной WRITE и повторное использование scope — `FAIL`, эффект
   внешнего mock-сервиса не подтверждён; проверка продолжается.
+
+  Матрица требуемого защищённого перехода для integration invocation:
+
+  | Событие | Invocation | Gate | Root / узел | Продолжение |
+  | --- | --- | --- | --- | --- |
+  | Первый WRITE без scope | `WAITING_APPROVAL` | `OPEN` | `WAITING_HUMAN` / выполняется или уже завершён | MCP получает pending без удержания запроса |
+  | APPROVE с неизменным grant | `READY` | `APPROVED` | Root остаётся нетерминальным | Worker получает только exact invocation |
+  | REJECT/CANCEL | `REJECTED`/`CANCELLED` | terminal | Без внешнего эффекта | Сотруднику передаётся безопасный исход |
+  | Успех/отказ worker | terminal + receipt при успехе | terminal | Root не завершается прежде результата | Один новый turn той же Session с итогом |
+  | Cancel/delete/terminal корня до effect | `CANCELLED` | terminal | Закрыт весь дочерний граф | Ни claim, ни новый turn недопустимы |
+  | Повтор команды/worker completion | прежний receipt | прежний | без повторного перехода | без второго turn/эффекта |
+
+- Исправление в локальном hot reload: MCP теперь немедленно возвращает
+  `WAITING_APPROVAL`, а не держит запрос до таймаута; одобрение допускает
+  завершившийся исходный ход только при всё ещё нетерминальном корне и точном
+  закреплённом grant. Worker исполняет только одобренный invocation; после
+  terminal результата атомарно создаётся один ход продолжения исходной
+  Session, связанный ребром `CONTINUES`. REJECT/CANCEL также возобновляют
+  завершившийся ход без внешнего эффекта. Отдельный runtime-controller unit
+  для немедленного pending и compile-only проверка PostgreSQL adapter —
+  локальный `PASS`; disposable PostgreSQL component по указанию владельца
+  `NOT RUN`.
+- Повторное одобрение того же локального решения прошло без HTTP 412.
+  Первый эффект завершился `SUCCEEDED` с квитанцией, затем исполнитель
+  получил ход `attempt 2`. Второй invocation использовал тот же scope без
+  нового Human Gate, но mock ответил `INTEGRATION_REQUEST_REJECTED`: исходный
+  OpenAPI POST создаёт ресурс, а повторное создание существующего ресурса
+  отвергается. Это отказ тестового сценария на уровне семантики mock, а не
+  подтверждение второго успешного эффекта. Корневой Run завершился,
+  readback: один scope, один gate, одно ребро `CONTINUES`, одна квитанция.
+  После no-cache reload console error/warn и завершённых HTTP 4xx/5xx нет;
+  снимок `/tmp/kodex-openapi-gate-continuation-20260928.png`.
+  Сквозные два успешных WRITE с одним scope — `NOT RUN`.
+- В toast успешного решения показывался технический ключ
+  `i18n:INTEGRATION_EFFECT_GATE_TITLE`, хотя заголовок самой карточки уже
+  переводился. Toast теперь использует тот же пользовательский заголовок.
+- Новый локальный запуск `run_t3LO43CQpQxjkPCTQDpXnbo-` проверил именно
+  неблокирующий pending: после единственного WRITE-вызова исходный узел быстро
+  завершился, корень остался `WAITING_HUMAN`, invocation —
+  `WAITING_APPROVAL`, gate — `OPEN`. Отклонение из UI прошло с первой попытки,
+  toast показал переводимый заголовок. В одной owner-транзакции invocation
+  стал `REJECTED`, создался ровно один `CONTINUES`; исполнитель продолжил ту же
+  Session и корень завершился. Квитанций внешнего эффекта — ноль. После
+  no-cache reload console error/warn и HTTP 4xx/5xx нет. Снимок:
+  `/tmp/kodex-openapi-gate-reject-continuation-20260928.png`. Локальный
+  browser `PASS` для отказа и продолжения; ручная приёмка — `NOT RUN`.

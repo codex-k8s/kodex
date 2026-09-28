@@ -10,10 +10,13 @@ JOIN control_plane.integration_grants g ON g.id=i.grant_id
 JOIN control_plane.runs r ON r.id=i.run_id
 JOIN control_plane.runs root ON root.id=r.root_run_id
 JOIN control_plane.run_nodes n ON n.id=i.node_id
+JOIN control_plane.owner_gates gate ON gate.id=$5::uuid AND gate.integration_invocation_id=i.id
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 WHERE i.id=$1::uuid AND i.organization_id=$2::uuid AND i.state='WAITING_APPROVAL'
   AND r.root_run_id=$3::uuid AND r.project_id=$4::uuid
-  AND root.state='WAITING_HUMAN' AND n.state='RUNNING'
+  AND gate.organization_id=i.organization_id AND gate.project_id=r.project_id
+  AND gate.root_run_id=root.id AND gate.state='OPEN'
+  AND root.state='WAITING_HUMAN' AND n.state IN ('RUNNING','SUCCEEDED')
   AND c.enabled AND c.state='CONNECTED' AND d.enabled AND d.adapter_readiness='READY'
   AND g.enabled AND g.approval_policy=i.approval_policy
   AND g.capability_key=i.capability_key

@@ -275,6 +275,8 @@ var (
 	queryCommandsResolvegateUpdateRootNodeState string
 	//go:embed sql/commands_resolvegate_select_active_agent_nodes.sql
 	queryCommandsResolvegateSelectActiveAgentNodes string
+	//go:embed sql/commands_resolvegate_count_open_gates.sql
+	queryCommandsResolvegateCountOpenGates string
 	//go:embed sql/commands_resolvegate_complete_root_run.sql
 	queryCommandsResolvegateCompleteRootRun string
 	//go:embed sql/commands_resolvegate_update_runs_state_version_updated_at.sql

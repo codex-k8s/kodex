@@ -28,6 +28,18 @@ type unavailableIntegrationClient struct {
 	controlplanev1.RuntimeWorkServiceClient
 }
 
+type pendingIntegrationClient struct {
+	controlplanev1.RuntimeWorkServiceClient
+}
+
+func (*pendingIntegrationClient) ResolveIntegrationInvocation(_ context.Context, _ *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
+	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: "inv_pending1", State: "WAITING_APPROVAL"}, nil
+}
+
+func (*pendingIntegrationClient) GetIntegrationInvocation(_ context.Context, _ *controlplanev1.GetIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.GetIntegrationInvocationResponse, error) {
+	return &controlplanev1.GetIntegrationInvocationResponse{State: "WAITING_APPROVAL"}, nil
+}
+
 func (*rejectedIntegrationClient) ResolveIntegrationInvocation(_ context.Context, _ *controlplanev1.ResolveIntegrationInvocationRequest, _ ...grpc.CallOption) (*controlplanev1.ResolveIntegrationInvocationResponse, error) {
 	return &controlplanev1.ResolveIntegrationInvocationResponse{InvocationRef: "inv_rejected1", State: "WAITING_APPROVAL"}, nil
 }
@@ -78,6 +90,30 @@ func TestInvokeReturnsRejectedIntegrationAsTerminalResult(t *testing.T) {
 	values, ok := result.(integrationToolResult)
 	if !ok || values.OK || values.ErrorCode != "INTEGRATION_REJECTED_BY_OWNER" || values.InvocationRef != "inv_rejected1" {
 		t.Fatalf("unexpected rejected integration result: %#v", result)
+	}
+}
+
+func TestInvokeReturnsPendingApprovalWithoutHoldingToolRequest(t *testing.T) {
+	t.Parallel()
+	server := &Server{
+		config:  Config{RequestTimeout: time.Second},
+		control: &controlplaneclient.Client{Runtime: &pendingIntegrationClient{}},
+	}
+	grant := integrationGrantFixture()
+	input := runtimecontract.RunnerInput{
+		RunRef: "run_12345678", NodeRef: "nod_12345678", LeaseRef: "lse_12345678",
+		IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{grant},
+	}
+	result, err := server.invoke(t.Context(), input, integrationArguments(grant, "pending"), json.RawMessage(`"call-1"`))
+	if err != nil {
+		t.Fatalf("invoke pending integration: %v", err)
+	}
+	values, ok := result.(integrationToolResult)
+	if !ok || values.OK || !values.OwnerDecisionRequired || values.ErrorCode != "INTEGRATION_APPROVAL_PENDING" || values.state != "WAITING_APPROVAL" {
+		t.Fatalf("unexpected pending integration result: %#v", result)
+	}
+	if safeToolCallResult("invoke_integration", result, nil) == "TOOL_UNAVAILABLE" {
+		t.Fatal("pending approval lost its safe tool-call result")
 	}
 }
 

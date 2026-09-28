@@ -147,6 +147,14 @@ var (
 	queryRuntimeCallbackUpdateSession string
 	//go:embed sql/runtime_callback_resolve_continuation.sql
 	queryRuntimeCallbackResolveContinuation string
+	//go:embed sql/runtime_integration_resolve_continuation.sql
+	queryRuntimeIntegrationResolveContinuation string
+	//go:embed sql/runtime_integration_resume_child_run.sql
+	queryRuntimeIntegrationResumeChildRun string
+	//go:embed sql/runtime_integration_resume_root_run.sql
+	queryRuntimeIntegrationResumeRootRun string
+	//go:embed sql/runtime_integration_read_root_state.sql
+	queryRuntimeIntegrationReadRootState string
 	//go:embed sql/runtime_callback_insert_continuation_turn.sql
 	queryRuntimeCallbackInsertContinuationTurn string
 	//go:embed sql/runtime_callback_insert_continuation_node.sql

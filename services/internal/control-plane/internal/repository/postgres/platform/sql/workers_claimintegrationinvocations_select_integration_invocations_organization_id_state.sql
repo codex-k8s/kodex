@@ -10,13 +10,24 @@ FROM control_plane.integration_invocations i
 JOIN control_plane.integration_connections c ON c.id=i.connection_id
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 JOIN control_plane.integration_grants g ON g.id=i.grant_id AND g.enabled
-JOIN control_plane.run_nodes n ON n.id=i.node_id AND n.state='RUNNING'
+JOIN control_plane.run_nodes n ON n.id=i.node_id AND n.state IN ('RUNNING','SUCCEEDED')
 JOIN control_plane.runs r ON r.id=i.run_id
 JOIN control_plane.runs root ON root.id=r.root_run_id
 JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
 LEFT JOIN control_plane.integration_approval_scopes approval ON approval.id=i.approval_scope_id
 WHERE i.organization_id=$1::uuid
+  AND root.state IN ('RUNNING','WAITING_HUMAN')
+  AND (n.state='RUNNING' OR (
+    n.state='SUCCEEDED' AND root.state='WAITING_HUMAN' AND EXISTS (
+      SELECT 1 FROM control_plane.owner_gates approved_gate
+      WHERE approved_gate.integration_invocation_id=i.id
+        AND approved_gate.organization_id=i.organization_id
+        AND approved_gate.root_run_id=r.root_run_id
+        AND approved_gate.project_id=r.project_id
+        AND approved_gate.state='APPROVED'
+    )
+  ))
   AND (i.state='READY' OR (
     i.state='UNKNOWN_OUTCOME'
     AND c.definition_key='synthetic'
