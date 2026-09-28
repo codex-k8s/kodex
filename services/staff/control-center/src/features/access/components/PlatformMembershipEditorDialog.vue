@@ -96,36 +96,43 @@ function save(): void {
 
 <template>
   <ModalDialog
-    :title="membership ? 'Изменить участника' : 'Добавить участника'"
+    :title="
+      $t(
+        membership
+          ? 'access.platformMembershipEditor.editTitle'
+          : 'access.platformMembershipEditor.createTitle',
+      )
+    "
     :busy="busy"
     size="md"
     @close="emit('close')"
   >
     <div class="platform-member-editor">
       <p class="platform-member-editor__hint">
-        Личность и группы поступают из Keycloak. Здесь назначается только роль
-        Kodex; доступ к работе в Проекте настраивается отдельно.
+        {{ $t("access.platformMembershipEditor.hint") }}
       </p>
       <div v-if="membership" class="field">
-        <span>Участник</span>
+        <span>{{ $t("access.platformMembershipEditor.member") }}</span>
         <strong>{{ membership.user.displayName }}</strong>
       </div>
       <div v-else class="field">
-        <span>Участник Keycloak</span>
+        <span>{{ $t("access.platformMembershipEditor.keycloakMember") }}</span>
         <AsyncEntityPicker
           :model-value="selectedUser?.ref ?? ''"
           :selected="selectedOption"
           :load-page="loadCandidates"
           :labels="{
-            label: 'Участник Keycloak',
-            searchPlaceholder: 'Имя или email',
-            loading: 'Ищем участников…',
-            loadingMore: 'Загружаем ещё…',
-            empty: 'Доступных для добавления пользователей нет',
-            error: 'Не удалось найти участников',
-            retry: 'Повторить',
+            label: $t('access.platformMembershipEditor.keycloakMember'),
+            searchPlaceholder: $t(
+              'access.platformMembershipEditor.searchPlaceholder',
+            ),
+            loading: $t('access.platformMembershipEditor.loading'),
+            loadingMore: $t('access.platformMembershipEditor.loadingMore'),
+            empty: $t('access.platformMembershipEditor.empty'),
+            error: $t('access.platformMembershipEditor.error'),
+            retry: $t('common.retry'),
           }"
-          placeholder="Выбрать пользователя"
+          :placeholder="$t('access.platformMembershipEditor.chooseUser')"
           :disabled="busy"
           :clearable="false"
           @select="
@@ -138,7 +145,7 @@ function save(): void {
         />
       </div>
       <label class="field">
-        <span>Роль в платформе</span>
+        <span>{{ $t("access.platformMembershipEditor.role") }}</span>
         <select v-model="role" :disabled="busy">
           <option v-for="item in roles" :key="item" :value="item">
             {{ $t(`access.platformRoles.${item}`) }}
@@ -147,7 +154,7 @@ function save(): void {
       </label>
       <label v-if="membership" class="platform-member-editor__active">
         <input v-model="active" type="checkbox" :disabled="busy" />
-        Активен
+        {{ $t("access.platformMembershipEditor.active") }}
       </label>
       <ProblemNotice v-if="problem" :problem="problem" compact />
     </div>
@@ -166,7 +173,11 @@ function save(): void {
         :disabled="busy || (!membership && !selectedUser)"
         @click="save"
       >
-        {{ membership ? $t("common.save") : "Добавить" }}
+        {{
+          membership
+            ? $t("common.save")
+            : $t("access.platformMembershipEditor.create")
+        }}
       </button>
     </template>
   </ModalDialog>

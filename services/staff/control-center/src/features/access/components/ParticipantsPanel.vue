@@ -86,6 +86,16 @@ function platformRole(subject: AccessSubject): Membership["platformRole"] | "" {
   );
 }
 
+function platformMembership(subject: AccessSubject): Membership | undefined {
+  return membershipForSubject(subject, props.platformMemberships);
+}
+
+function participantActive(subject: AccessSubject): boolean {
+  if (!subject.active) return false;
+  if (subject.kind !== "USER") return true;
+  return platformMembership(subject)?.active === true;
+}
+
 function projectMembership(subject: AccessSubject): Membership | undefined {
   return membershipForSubject(subject, props.projectMemberships);
 }
@@ -305,15 +315,21 @@ onBeforeUnmount(() => {
                 $t("access.participants.noProjectAccess")
               }}</span>
             </div>
-            <StatusBadge :state="subject.active ? 'ACTIVE' : 'DISABLED'" />
+            <StatusBadge
+              :state="participantActive(subject) ? 'ACTIVE' : 'DISABLED'"
+            />
             <div class="access-table__actions">
               <button
                 class="button"
                 type="button"
-                :aria-label="`Эффективный доступ: ${subject.displayName}`"
+                :aria-label="
+                  $t('access.participants.inspectEffectiveFor', {
+                    name: subject.displayName,
+                  })
+                "
                 @click.stop="emit('inspect-effective', subject)"
               >
-                Доступ
+                {{ $t("access.participants.access") }}
               </button>
             </div>
           </article>
@@ -334,7 +350,9 @@ onBeforeUnmount(() => {
                 >
               </div>
               <StatusBadge
-                :state="selectedSubject.active ? 'ACTIVE' : 'DISABLED'"
+                :state="
+                  participantActive(selectedSubject) ? 'ACTIVE' : 'DISABLED'
+                "
               />
             </header>
             <div class="participant-detail__body">
@@ -400,7 +418,7 @@ onBeforeUnmount(() => {
                 type="button"
                 @click="emit('inspect-effective', selectedSubject)"
               >
-                Эффективный доступ
+                {{ $t("access.sections.effective") }}
               </button>
               <button
                 v-if="
@@ -414,7 +432,7 @@ onBeforeUnmount(() => {
                   emit('edit-platform-membership', selectedPlatformMembership!)
                 "
               >
-                Изменить роль
+                {{ $t("access.participants.editPlatformRole") }}
               </button>
               <button
                 v-if="
@@ -431,12 +449,12 @@ onBeforeUnmount(() => {
                   )
                 "
               >
-                Удалить из организации
+                {{ $t("access.participants.removeFromOrganization") }}
               </button>
               <button
                 class="button button--primary"
                 type="button"
-                :disabled="!selectedSubject.active || mutationBusy"
+                :disabled="!participantActive(selectedSubject) || mutationBusy"
                 @click="emit('bind', selectedSubject)"
               >
                 {{ $t("access.participants.createBinding") }}
