@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.288
+version: 1.0.289
 updated: 2026-09-28
 ---
 
@@ -6140,3 +6140,20 @@ GitHub checks не считается `PASS`.
   `/tmp/kodex-assistant-long-run-stop-visible-20260928.png` и
   `/tmp/kodex-assistant-long-run-cancelled-20260928.png`. Локальный browser
   сценарий — `PASS` на `da956f1d1`; ручная приёмка владельцем — `NOT RUN`.
+
+### Запуски: retry после отмены, 2026-09-28
+
+- На странице отменённого Run действие «Повторить попытку» создало новый Run
+  `run_6l2K0lHHwJTNWFSIABNdb8nv` с attempt 2; исходный Run сохранился как
+  отдельная отменённая attempt 1. Граф показал самостоятельное ребро повтора,
+  а не изменение прежнего terminal-узла.
+- Вторая попытка перешла в «Выполняется» и была отдельно отменена. Обе попытки
+  остались `CANCELLED`, runtime Pod второй попытки удалён, активных runtime Pod
+  кроме тёплого системного помощника нет.
+- После обновления без кэша realtime — «Подключено», attempt 2 и оба terminal
+  узла сохранены, console error/warn пусты, завершённых HTTP 4xx/5xx нет; один
+  bootstrap отменён самой навигацией. Снимки:
+  `/tmp/kodex-run-retry-attempt-2-running-20260928.png` и
+  `/tmp/kodex-run-retry-attempt-2-cancelled-20260928.png`. Локальный browser
+  сценарий — `PASS` на mounted tree после `a7f034e11`; конкурентный retry и
+  ручная приёмка владельцем — `NOT RUN`.
