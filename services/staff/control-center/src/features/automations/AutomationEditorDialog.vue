@@ -34,6 +34,7 @@ const props = defineProps<{
   schedule?: Schedule;
 }>();
 const emit = defineEmits<{
+  change: [];
   close: [];
   submit: [input: ScheduleInput, current?: Schedule];
 }>();
@@ -204,7 +205,9 @@ const draftInput = computed<ScheduleInput>(() => ({
   targetType: form.targetType,
   targetRef: form.targetRef,
   preset: form.preset,
-  timeOfDay: form.preset === "HOURLY" ? "00:00" : form.timeOfDay,
+  ...(form.preset !== "CUSTOM"
+    ? { timeOfDay: form.preset === "HOURLY" ? "00:00" : form.timeOfDay }
+    : {}),
   ...(form.preset === "WEEKLY" ? { dayOfWeek: form.dayOfWeek } : {}),
   timezone: form.timezone,
   input: { ...baseInput },
@@ -220,6 +223,7 @@ const draftInput = computed<ScheduleInput>(() => ({
   automationText: form.automationText,
   promptInputs: { ...initial?.promptInputs },
 }));
+watch(draftInput, () => emit("change"), { deep: true });
 function submit(): void {
   if (
     props.busy ||

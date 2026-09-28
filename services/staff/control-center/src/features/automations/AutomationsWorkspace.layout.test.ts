@@ -94,4 +94,14 @@ describe("AutomationsWorkspace lifecycle contract", () => {
     expect(promptPreview).toContain("`${fieldNamePrefix}-revision`");
     expect(promptPreview).toContain("`${fieldNamePrefix}-full`");
   });
+
+  it("очищает ошибку редактора после изменения формы", () => {
+    expect(source).toContain('@change="editorProblem = undefined"');
+  });
+
+  it("локализует состояние последнего запуска", () => {
+    expect(source).toContain("outcomeLabel(schedule.lastOutcome)");
+    expect(source).toContain("outcomeLabel(selectedSchedule.lastOutcome)");
+    expect(source).not.toContain('schedule.lastOutcome || "—"');
+  });
 });

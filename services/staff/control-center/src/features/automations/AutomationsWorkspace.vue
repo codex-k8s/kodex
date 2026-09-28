@@ -58,7 +58,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [scheduleRef: string] }>();
 const platform = usePlatformStore();
-const { locale, t } = useI18n();
+const { locale, t, te } = useI18n();
 
 const search = ref("");
 const state = ref<ScheduleFilter>("CURRENT");
@@ -449,6 +449,8 @@ async function loadRuns(reset = false): Promise<void> {
 
 function scheduleLabel(schedule: Schedule): string {
   const preset = t(`automations.presetValue.${schedule.preset}`);
+  if (schedule.preset === "CUSTOM")
+    return `${preset} · ${schedule.cronExpression}`;
   const day = schedule.dayOfWeek
     ? ` · ${t(`automations.day.${schedule.dayOfWeek}`)}`
     : "";
@@ -489,6 +491,13 @@ function task(value: Schedule | ScheduleRevision): string {
 
 function statusLabel(schedule: Schedule): string | undefined {
   return schedule.state === "DELETED" ? custom.value.deleted : undefined;
+}
+
+function outcomeLabel(value?: string): string {
+  if (!value) return "—";
+  const [state = "", ...details] = value.split(":");
+  const label = te(`states.${state}`) ? t(`states.${state}`) : state;
+  return details.length > 0 ? `${label} · ${details.join(":")}` : label;
 }
 
 function openCreate(): void {
@@ -757,7 +766,7 @@ onBeforeUnmount(() => {
               }}
             </span>
             <span class="automation-row__outcome">{{
-              schedule.lastOutcome || "—"
+              outcomeLabel(schedule.lastOutcome)
             }}</span>
           </button>
           <div ref="listSentinel" class="automation-list-sentinel">
@@ -844,7 +853,7 @@ onBeforeUnmount(() => {
               </div>
               <div>
                 <dt>{{ custom.lastResult }}</dt>
-                <dd>{{ selectedSchedule.lastOutcome || "—" }}</dd>
+                <dd>{{ outcomeLabel(selectedSchedule.lastOutcome) }}</dd>
               </div>
             </dl>
             <details class="automation-details__technical">
@@ -1058,6 +1067,7 @@ onBeforeUnmount(() => {
       :problem="editorProblem"
       :project-ref="projectRef"
       :schedule="editorSchedule"
+      @change="editorProblem = undefined"
       @close="editorOpen = false"
       @submit="submitEditor"
     />
