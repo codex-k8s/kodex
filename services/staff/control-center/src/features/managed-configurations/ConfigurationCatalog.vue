@@ -9,6 +9,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { loadCatalogProject } from "@/features/catalogs/api";
 import OpenAPIImportDialog from "./OpenAPIImportDialog.vue";
 import {
   configurationProjectScopeValid,
@@ -25,6 +26,7 @@ const emit = defineEmits<{ created: [configurationRef: string] }>();
 const query = ref("");
 const searchId = useId();
 const items = ref<ManagedConfigurationSummary[]>([]);
+const projectNames = ref<Record<string, string>>({});
 const list = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
@@ -48,6 +50,9 @@ const projectRequired = computed(
   () =>
     configurationRequiresProject(props.kind) &&
     !configurationProjectScopeValid(props.kind, props.projectRef),
+);
+const showProjectColumn = computed(
+  () => configurationRequiresProject(props.kind) && !props.projectRef,
 );
 let generation = 0;
 let controller: AbortController | undefined;
@@ -78,6 +83,7 @@ async function load(more = false): Promise<void> {
       next.some(
         (item) =>
           item.kind !== props.kind ||
+          (configurationRequiresProject(props.kind) && !item.projectRef) ||
           (props.projectRef && item.projectRef !== props.projectRef),
       ) ||
       new Set(next.map((item) => item.ref)).size !== next.length ||
@@ -86,9 +92,33 @@ async function load(more = false): Promise<void> {
           (more && cursors.has(page.nextPageToken))))
     )
       throw new Error("Invalid managed configuration catalog");
+    const missingProjects = showProjectColumn.value
+      ? [
+          ...new Set(
+            page.items
+              .map((item) => item.projectRef)
+              .filter((ref): ref is string => Boolean(ref)),
+          ),
+        ].filter((ref) => !more || !projectNames.value[ref])
+      : [];
+    const loadedProjects: Record<string, string> = {};
+    for (let offset = 0; offset < missingProjects.length; offset += 4) {
+      const projects = await Promise.all(
+        missingProjects.slice(offset, offset + 4).map(async (ref) => {
+          const project = await loadCatalogProject(ref, request.signal);
+          if (project.ref !== ref)
+            throw new Error("Invalid configuration project lookup scope");
+          return project;
+        }),
+      );
+      if (generation !== current) return;
+      for (const project of projects)
+        loadedProjects[project.ref] = project.name;
+    }
     if (!more) cursors.clear();
     if (token) cursors.add(token);
     items.value = next;
+    projectNames.value = { ...projectNames.value, ...loadedProjects };
     total.value = page.total;
     nextPageToken.value = page.nextPageToken || undefined;
   } catch (error) {
@@ -206,10 +236,19 @@ function created(configurationRef: string): void {
       </p>
     </div>
     <div ref="list" class="configuration-catalog__list">
-      <table v-if="items.length" class="configuration-catalog__table">
+      <table
+        v-if="items.length"
+        class="configuration-catalog__table"
+        :class="{
+          'configuration-catalog__table--with-project': showProjectColumn,
+        }"
+      >
         <thead>
           <tr>
             <th scope="col">{{ $t("catalog.table.name") }}</th>
+            <th v-if="showProjectColumn" scope="col">
+              {{ $t("catalog.table.project") }}
+            </th>
             <th scope="col">{{ $t("managed.catalogSource") }}</th>
             <th scope="col">{{ $t("catalog.table.state") }}</th>
             <th scope="col">{{ $t("managed.catalogRevision") }}</th>
@@ -243,6 +282,14 @@ function created(configurationRef: string): void {
                   "
                 />
                 <strong>{{ item.name }}</strong>
+              </RouterLink>
+            </td>
+            <td v-if="showProjectColumn" class="configuration-catalog__project">
+              <RouterLink
+                :to="`/projects/${encodeURIComponent(item.projectRef!)}`"
+                :title="projectNames[item.projectRef!]"
+              >
+                {{ projectNames[item.projectRef!] ?? $t("common.noData") }}
               </RouterLink>
             </td>
             <td>
@@ -371,6 +418,25 @@ function created(configurationRef: string): void {
   width: 4%;
   min-width: 52px;
 }
+.configuration-catalog__table--with-project th:nth-child(1) {
+  width: 30%;
+}
+.configuration-catalog__table--with-project th:nth-child(2) {
+  width: 20%;
+}
+.configuration-catalog__table--with-project th:nth-child(3) {
+  width: 24%;
+}
+.configuration-catalog__table--with-project th:nth-child(4) {
+  width: 14%;
+}
+.configuration-catalog__table--with-project th:nth-child(5) {
+  width: 7%;
+}
+.configuration-catalog__table--with-project th:nth-child(6) {
+  width: 5%;
+  min-width: 52px;
+}
 .configuration-catalog__table td {
   height: 64px;
   padding: 7px 12px;
@@ -394,6 +460,13 @@ function created(configurationRef: string): void {
 .configuration-catalog__identity:hover strong {
   color: var(--accent-strong);
   text-decoration: underline;
+}
+.configuration-catalog__project a {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .configuration-catalog__identity strong,
 .configuration-catalog__row td > strong,
