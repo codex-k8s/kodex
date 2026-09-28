@@ -38,6 +38,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import CodeEditor from "@/shared/ui/CodeEditor.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
@@ -46,6 +47,7 @@ const props = defineProps<{
   recipeRef?: string;
 }>();
 const { t } = useI18n();
+const localizeServerMessage = useServerMessage();
 const router = useRouter();
 const route = useRoute();
 const store = useRoleImagesStore();
@@ -82,6 +84,18 @@ function copied(configuration: ManagedConfiguration): void {
 const recipe = computed(() =>
   props.recipeRef ? store.recipes[props.recipeRef] : undefined,
 );
+const recipeDisplayName = computed(() =>
+  recipe.value ? localizeServerMessage(recipe.value.name) : t("roleImages.new"),
+);
+const nameFieldValue = computed({
+  get: () =>
+    recipe.value && !recipe.value.nextActions.includes("UPDATE")
+      ? recipeDisplayName.value
+      : name.value,
+  set: (value: string) => {
+    name.value = value;
+  },
+});
 const sourceVisible = computed(() =>
   recipe.value
     ? recipe.value.sourceAvailable &&
@@ -408,7 +422,7 @@ onBeforeUnmount(() => {
           <span class="image-summary__icon"><Box :size="22" /></span>
           <div>
             <span class="eyebrow">{{ t("roleImages.entity") }}</span>
-            <h2>{{ recipe?.name ?? t("roleImages.new") }}</h2>
+            <h2>{{ recipeDisplayName }}</h2>
             <p>{{ roleLabel }}</p>
           </div>
         </div>
@@ -618,7 +632,7 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span>{{ t("common.name") }}</span>
                 <input
-                  v-model="name"
+                  v-model="nameFieldValue"
                   :id="`${fieldNamePrefix}-name`"
                   :name="`${fieldNamePrefix}-name`"
                   maxlength="120"
@@ -1049,7 +1063,7 @@ onBeforeUnmount(() => {
       <div class="lifecycle-confirmation">
         <Box :size="24" aria-hidden="true" />
         <div>
-          <strong>{{ recipe.name }}</strong>
+          <strong>{{ recipeDisplayName }}</strong>
           <p>{{ roleLabel }}</p>
         </div>
       </div>

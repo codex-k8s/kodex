@@ -32,6 +32,15 @@ describe("каталог образов ИИ-сотрудников", () => {
     expect(editor).toContain('t("roleImages.unknownRole")');
   });
 
+  it("локализует системное имя образа в каталоге и деталях", () => {
+    expect(catalog).toContain("localizeServerMessage(recipe.name)");
+    expect(editor).toContain("const recipeDisplayName = computed");
+    expect(editor).toContain("localizeServerMessage(recipe.value.name)");
+    expect(editor).toContain("{{ recipeDisplayName }}");
+    expect(editor).toContain('v-model="nameFieldValue"');
+    expect(editor).not.toContain("{{ recipe?.name");
+  });
+
   it("не дублирует каталог образов в полноэкранной модалке", () => {
     expect(catalog).not.toContain("catalog.expand");
     expect(catalog).not.toContain("Maximize2");
