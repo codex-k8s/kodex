@@ -46,6 +46,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem, asProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
+import EntityIcon from "@/shared/ui/EntityIcon.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
@@ -723,16 +724,19 @@ onBeforeUnmount(() => {
             @dblclick="openEdit(schedule)"
           >
             <span class="automation-row__identity">
-              <strong>{{ schedule.name }}</strong>
-              <small>
-                <Bot
-                  v-if="schedule.target.type === 'AGENT'"
-                  :size="14"
-                  aria-hidden="true"
-                />
-                <Workflow v-else :size="14" aria-hidden="true" />
-                {{ schedule.target.displayName }}
-              </small>
+              <EntityIcon kind="AUTOMATION" :size="16" />
+              <span class="automation-row__identity-copy">
+                <strong>{{ schedule.name }}</strong>
+                <small>
+                  <Bot
+                    v-if="schedule.target.type === 'AGENT'"
+                    :size="14"
+                    aria-hidden="true"
+                  />
+                  <Workflow v-else :size="14" aria-hidden="true" />
+                  {{ schedule.target.displayName }}
+                </small>
+              </span>
             </span>
             <span class="automation-row__schedule">
               <strong>{{ scheduleLabel(schedule) }}</strong>
@@ -1187,6 +1191,14 @@ onBeforeUnmount(() => {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   white-space: normal;
+}
+.automation-row__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.automation-row__identity-copy {
+  min-width: 0;
 }
 .automation-row small,
 .automation-row__next,
