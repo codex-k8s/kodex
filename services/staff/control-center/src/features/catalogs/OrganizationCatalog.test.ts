@@ -118,6 +118,12 @@ describe("OrganizationCatalog realtime", () => {
     expect(catalogTemplate).toContain('"catalog.emptyGlobalHelp"');
   });
 
+  it("объясняет поля серверного поиска участников", () => {
+    expect(catalogTemplate).toContain("catalog.memberSearchPlaceholder");
+    expect(catalogTemplate).toContain(":aria-label=");
+    expect(catalogTemplate).toContain(":placeholder=");
+  });
+
   it("показывает один общий табличный реестр с точными переходами к Проекту", () => {
     expect(catalogTemplate).toContain('v-if="items.length"');
     expect(catalogTemplate).toContain("<table");
