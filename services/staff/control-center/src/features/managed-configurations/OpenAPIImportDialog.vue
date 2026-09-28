@@ -5,6 +5,7 @@ import type { OpenApiInspectionResult } from "@/shared/api/generated/openapi/typ
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import { createDraft, inspectOpenAPI } from "./api";
 import {
   openAPIImportContent,
@@ -181,17 +182,16 @@ async function create(): Promise<void> {
           @change="loadFile"
         />
       </label>
-      <label>
+      <div class="openapi-import__source">
         <span>{{ t("managed.openapiImport.source") }}</span>
-        <textarea
+        <CodeEditor
           v-model="source"
+          :label="t('managed.openapiImport.source')"
           name="openapi-import-source"
-          rows="8"
+          language="yaml"
           :disabled="creating"
-          spellcheck="false"
-          autocomplete="off"
         />
-      </label>
+      </div>
       <button
         class="button"
         type="button"
@@ -364,9 +364,10 @@ async function create(): Promise<void> {
   gap: 5px;
   min-width: 0;
 }
-.openapi-import textarea {
-  width: 100%;
-  resize: vertical;
+.openapi-import__source {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
 }
 .openapi-import fieldset {
   display: grid;
