@@ -47,4 +47,13 @@ describe("AuditPage pagination", () => {
     expect(source).toContain("actionSummary(event)");
     expect(source).toContain("event.safeSummary");
   });
+
+  it("скрывает частые технические heartbeat по умолчанию и позволяет вернуть их", () => {
+    expect(source).toContain('"controlplane.report_warm_runtime"');
+    expect(source).toContain("!technicalActions.has(event.action)");
+    expect(template).toContain('name="audit-show-technical"');
+    expect(template).toContain('$t("audit.showTechnical")');
+    expect(template).toContain(':empty="list.length === 0 && !hasMore"');
+    expect(source).toContain('next.technical = "1"');
+  });
 });

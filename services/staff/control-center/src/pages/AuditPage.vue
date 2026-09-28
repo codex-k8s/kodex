@@ -35,7 +35,15 @@ const selectedProject = computed<AsyncEntityOption | undefined>(() => {
   if (chosenProject.value?.ref === projectRef.value) return chosenProject.value;
   return { ref: projectRef.value, title: i18n.t("audit.selectedProject") };
 });
-const list = computed(() => platform.auditEvents);
+const technicalActions = new Set(["controlplane.report_warm_runtime"]);
+const showTechnical = computed(() => route.query.technical === "1");
+const list = computed(() =>
+  showTechnical.value
+    ? platform.auditEvents
+    : platform.auditEvents.filter(
+        (event) => !technicalActions.has(event.action),
+      ),
+);
 const hasMore = computed(() => Boolean(platform.auditNextPageToken));
 const loadingMore = computed(() => Boolean(platform.loading.auditMore));
 const listRoot = ref<HTMLElement>();
@@ -77,6 +85,13 @@ function selectProject(value: string | null | readonly string[]): void {
   const next = typeof value === "string" ? value : undefined;
   if (next === projectRef.value) return;
   void router.replace({ query: { ...route.query, projectRef: next } });
+}
+
+function toggleTechnical(event: Event): void {
+  const next = { ...route.query };
+  if ((event.currentTarget as HTMLInputElement).checked) next.technical = "1";
+  else delete next.technical;
+  void router.replace({ query: next });
 }
 
 async function load(): Promise<void> {
@@ -149,11 +164,20 @@ onUnmounted(() => {
           @update:model-value="selectProject"
         />
       </div>
+      <label class="audit-technical-filter">
+        <input
+          name="audit-show-technical"
+          type="checkbox"
+          :checked="showTechnical"
+          @change="toggleTechnical"
+        />
+        <span>{{ $t("audit.showTechnical") }}</span>
+      </label>
     </div>
     <AsyncState
       :loading="platform.loading.audit"
       :problem="platform.problems.audit"
-      :empty="list.length === 0"
+      :empty="list.length === 0 && !hasMore"
       :empty-title="$t('audit.emptyTitle')"
       @retry="load"
     >
@@ -223,16 +247,29 @@ onUnmounted(() => {
 <style scoped>
 .audit-filters {
   display: grid;
-  grid-template-columns: minmax(280px, 520px) minmax(220px, 340px);
+  grid-template-columns:
+    minmax(280px, 520px) minmax(220px, 340px)
+    minmax(220px, auto);
   gap: 12px;
   margin-bottom: 18px;
-  align-items: start;
+  align-items: end;
 }
 .audit-filters .field {
   min-width: 0;
 }
 .audit-search input {
-  min-height: 52px;
+  min-height: 42px;
+}
+.audit-project-filter :deep(.async-picker__trigger) {
+  min-height: 42px;
+}
+.audit-technical-filter {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  cursor: pointer;
 }
 .audit-table {
   display: grid;
