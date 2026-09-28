@@ -49,6 +49,7 @@ import {
   readableContextKind,
 } from "@/features/assistant/context";
 import {
+  isAssistantRunDebugRequest,
   isAssistantRoleImageBuildDebugRequest,
   notifyAssistantPlanApplied,
   openAssistantEvent,
@@ -373,6 +374,29 @@ function handleOpenAssistant(event: Event): void {
         safeErrorCode: request.safeErrorCode || "NONE",
         diagnosticCode: request.diagnosticCode || "NONE",
         diagnosticSummary: request.diagnosticSummary || "NONE",
+      });
+      await nextTick();
+      composer.value?.focus();
+      return;
+    }
+    if (isAssistantRunDebugRequest(request)) {
+      if (
+        message.value.trim() &&
+        !window.confirm(t("assistant.replaceDraftWithRunDebugConfirm"))
+      )
+        return;
+      message.value = t("assistant.runDebug.prompt", {
+        runRef: request.runRef,
+        rootRunRef: request.rootRunRef,
+        targetType: request.targetType,
+        attempt: request.attempt,
+        safeErrorCode: request.safeErrorCode || "NONE",
+        failedNodes: request.failedNodes
+          .map(
+            (node) =>
+              `nodeRef=${node.nodeRef},type=${node.type},agentRef=${node.agentRef || "NONE"},safeErrorCode=${node.safeErrorCode || "NONE"}`,
+          )
+          .join(" | "),
       });
       await nextTick();
       composer.value?.focus();

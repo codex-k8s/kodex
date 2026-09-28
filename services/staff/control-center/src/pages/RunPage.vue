@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useServerMessage } from "@/shared/ui/server-message";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
-import { Activity, ListChecks, PanelRightOpen } from "@lucide/vue";
+import { Activity, Bot, ListChecks, PanelRightOpen } from "@lucide/vue";
 import {
   type ComponentPublicInstance,
   computed,
@@ -19,6 +19,7 @@ import {
 } from "@/features/platform/run-refresh";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { requestAssistantRunDebug } from "@/features/assistant/events";
 import { isTerminalRun } from "@/features/workboard/model";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
@@ -239,6 +240,15 @@ const resultOutcomeState = computed(() => {
     return "OUTCOME_NEEDS_ATTENTION";
   return run.value.state === "SUCCEEDED" ? "OUTCOME_SUCCEEDED" : undefined;
 });
+
+const failedDiagnosticNodes = computed(() =>
+  (graph.value?.nodes ?? []).filter((node) => node.state === "FAILED"),
+);
+
+function delegateDiagnostics(): void {
+  if (!run.value || failedDiagnosticNodes.value.length === 0) return;
+  requestAssistantRunDebug(run.value, failedDiagnosticNodes.value);
+}
 
 const turn = ref("");
 const comments = ref<Record<string, string>>({});
@@ -631,6 +641,15 @@ onBeforeUnmount(() => {
         @click="command('CANCEL')"
       >
         {{ $t("runs.cancel") }}</button
+      ><button
+        v-if="run?.state === 'FAILED' && failedDiagnosticNodes.length > 0"
+        class="button"
+        type="button"
+        :disabled="busy"
+        @click="delegateDiagnostics"
+      >
+        <Bot :size="16" aria-hidden="true" />
+        {{ $t("runs.delegateDiagnostics") }}</button
       ><button
         v-if="run?.nextActions.includes('RETRY')"
         class="button button--primary"
