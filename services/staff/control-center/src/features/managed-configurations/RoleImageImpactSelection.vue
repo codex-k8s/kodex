@@ -158,7 +158,10 @@ useCursorInfiniteScroll({
   >
     <p>{{ $t("roleImageImpact.explanation") }}</p>
     <p>{{ $t("publicationImpact.snapshotTotal", { count: plan.total }) }}</p>
-    <label>
+    <p v-if="plan.total === 0" role="status">
+      {{ $t("roleImageImpact.noConsumers") }}
+    </p>
+    <label v-else>
       {{ $t("common.search") }}
       <input
         v-model="query"
@@ -172,7 +175,7 @@ useCursorInfiniteScroll({
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
     <template v-if="page">
-      <p>
+      <p v-if="plan.total > 0">
         {{
           $t("publicationImpact.visibleTotal", {
             loaded: page.items.length,
@@ -228,7 +231,7 @@ useCursorInfiniteScroll({
         {{ $t("publicationImpact.expired") }}
       </p>
       <button
-        v-if="page.plan.state === 'PREPARED'"
+        v-if="page.plan.state === 'PREPARED' && page.plan.total > 0"
         type="button"
         class="button button--primary"
         :disabled="!editable"

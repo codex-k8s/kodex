@@ -409,6 +409,8 @@ const ru = {
   roleImageImpact: {
     explanation:
       "Выберите окружения и привязки для обновления до допущенного образа. Неотмеченные потребители сохранят текущие версии.",
+    noConsumers:
+      "Этот образ уже опубликован, но сейчас нет окружений или привязок, которые нужно обновить. Применять план не требуется.",
     version: "Исходная версия: {version}",
     apply: "Применить образ к выбранным: {count}",
   },
@@ -4766,6 +4768,8 @@ const en = {
   roleImageImpact: {
     explanation:
       "Select environments and bindings to update to the admitted image. Unselected consumers retain their current versions.",
+    noConsumers:
+      "This image is published, but no environments or bindings currently need updating. There is no plan to apply.",
     version: "Source version: {version}",
     apply: "Apply image to selected: {count}",
   },
