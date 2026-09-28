@@ -62,25 +62,32 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
 <style scoped>
 .revoke-dialog {
   display: grid;
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
+  align-self: stretch;
   gap: 16px;
   color: var(--danger);
 }
 .revoke-dialog__problem {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 .revoke-dialog__summary {
   display: grid;
+  width: 100%;
   min-width: 0;
-  grid-template-columns: 34px minmax(0, 1fr);
+  max-width: 100%;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 12px;
 }
 .revoke-dialog__copy {
   min-width: 0;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 .revoke-dialog__copy p {
   margin: 6px 0 0;

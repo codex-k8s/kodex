@@ -19,7 +19,8 @@ describe("RuntimeSecretRevokeDialog layout", () => {
   });
 
   it("оставляет иконку и текст в отдельной двухколоночной сводке", () => {
-    expect(source).toContain("grid-template-columns: 34px minmax(0, 1fr);");
-    expect(source).toContain("overflow-wrap: break-word;");
+    expect(source).toContain("grid-template-columns: auto minmax(0, 1fr);");
+    expect(source).toContain("overflow-wrap: anywhere;");
+    expect(source).toContain("align-self: stretch;");
   });
 });

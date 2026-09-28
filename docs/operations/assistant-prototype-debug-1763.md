@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.297
+version: 1.0.298
 updated: 2026-09-28
 ---
 
@@ -6325,3 +6325,32 @@ GitHub checks не считается `PASS`.
   browser-сценарий — `PASS` на
   `cd111006b7ccc0981e9059dd2fb6c6433f7e5a8d`; ручная приёмка владельцем —
   `NOT RUN`.
+
+### Финальный план и закрытие этапа 1, 2026-09-28
+
+- Утверждён последовательный checklist
+  `docs/operations/prototype-final-debug-plan-1784.md`. STT, повторная
+  device-code авторизация и восстановление после reboot исключены; для
+  проверки доступа разрешены отдельные локальные Keycloak-аккаунты, роли и
+  группы.
+- Причина первого project-scoped turn после создания Проекта в глобальном
+  чате: прежний turn Pod уже имел `deletionTimestamp`, но ещё считался активным
+  потребителем session PVC. Runtime-controller теперь принудительно завершает
+  только точный собственный terminating consumer с совпадающими organization,
+  session, прежним global project scope, lease и UID precondition; любой живой
+  или чужой consumer по-прежнему закрыто отклоняется. Host и Pod видят один
+  SHA256 изменённого `manager.go`; Air пересобрал сервис и readiness
+  восстановилась.
+- В том же диалоге после исправления применён план создания
+  `cascade-proof.md`; файл существует в Проекте
+  `prj_7O6vmBqi-Gpx9BX5KT-oF3O-`, состояние проверки — «Проверен». Reload
+  файлового экрана дал только рабочие 2xx, console error/warn пуста. Снимок:
+  `/tmp/kodex-assistant-project-file-stage1.png`.
+- Диалог отзыва занятого секрета дополнительно защищён от min-content
+  схлопывания: общий `ProblemNotice` и сводка занимают всю доступную ширину,
+  длинный correlation id переносится внутри блока. Live `409 RESOURCE_IN_USE`
+  показан в модалке 680×316 без горизонтального переполнения; это ожидаемый
+  доменный отказ. Снимок: `/tmp/kodex-secret-revoke-dialog-stage1.png`.
+- Go workload tests, frontend unit 5/5, ESLint, Prettier и `git diff --check`
+  — локальный `PASS` на mounted diff после `456971b21`. Этап 1 checklist
+  завершён; ручная приёмка владельцем — `NOT RUN`.
