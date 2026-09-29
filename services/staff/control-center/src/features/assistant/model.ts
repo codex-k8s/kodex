@@ -393,11 +393,14 @@ export function updateOperationParameter(
   const parameters = parseObject(operation.parametersText);
   const after = parseObject(operation.afterText);
   parameters[key] = value;
-  if (operation.value.type === "CREATE_PROJECT_FILE" && key === "content")
-    delete after[key];
-  else after[key] = value;
+  const nextAfter =
+    operation.value.type === "CREATE_PROJECT_FILE" && key === "content"
+      ? Object.fromEntries(
+          Object.entries(after).filter(([candidate]) => candidate !== key),
+        )
+      : { ...after, [key]: value };
   operation.parametersText = prettyJSON(parameters);
-  operation.afterText = prettyJSON(after);
+  operation.afterText = prettyJSON(nextAfter);
   if (
     key === "name" &&
     operation.value.action === "CREATE" &&

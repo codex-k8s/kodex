@@ -58,7 +58,8 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [scheduleRef: string] }>();
 const platform = usePlatformStore();
-const { locale, t, te } = useI18n();
+const i18n = useI18n();
+const locale = i18n.locale;
 
 const search = ref("");
 const state = ref<ScheduleFilter>("CURRENT");
@@ -448,11 +449,11 @@ async function loadRuns(reset = false): Promise<void> {
 }
 
 function scheduleLabel(schedule: Schedule): string {
-  const preset = t(`automations.presetValue.${schedule.preset}`);
+  const preset = i18n.t(`automations.presetValue.${schedule.preset}`);
   if (schedule.preset === "CUSTOM")
     return `${preset} · ${schedule.cronExpression}`;
   const day = schedule.dayOfWeek
-    ? ` · ${t(`automations.day.${schedule.dayOfWeek}`)}`
+    ? ` · ${i18n.t(`automations.day.${schedule.dayOfWeek}`)}`
     : "";
   const time =
     schedule.preset === "HOURLY" ? "" : ` · ${schedule.timeOfDay ?? ""}`;
@@ -460,7 +461,7 @@ function scheduleLabel(schedule: Schedule): string {
 }
 
 function revisionLabel(revision: ScheduleRevision): string {
-  return `${t(`automations.presetValue.${revision.preset}`)} · ${revision.cronExpression} · ${revision.timezone}`;
+  return `${i18n.t(`automations.presetValue.${revision.preset}`)} · ${revision.cronExpression} · ${revision.timezone}`;
 }
 
 function revisionTargetLabel(revision: ScheduleRevision): string {
@@ -486,7 +487,7 @@ function task(value: Schedule | ScheduleRevision): string {
     "currentRevision" in value
       ? value.currentRevision.automationText
       : value.automationText;
-  return typeof item === "string" ? item : t("common.noData");
+  return typeof item === "string" ? item : i18n.t("common.noData");
 }
 
 function statusLabel(schedule: Schedule): string | undefined {
@@ -496,7 +497,7 @@ function statusLabel(schedule: Schedule): string | undefined {
 function outcomeLabel(value?: string): string {
   if (!value) return "—";
   const [state = "", ...details] = value.split(":");
-  const label = te(`states.${state}`) ? t(`states.${state}`) : state;
+  const label = i18n.te(`states.${state}`) ? i18n.t(`states.${state}`) : state;
   return details.length > 0 ? `${label} · ${details.join(":")}` : label;
 }
 
