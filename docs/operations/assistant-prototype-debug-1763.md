@@ -4,7 +4,7 @@ title: Совместная отладка прототипа системног
 type: operations
 status: approved
 owner: manager
-version: 1.0.310
+version: 1.0.311
 updated: 2026-09-29
 ---
 
@@ -6792,3 +6792,37 @@ GitHub checks не считается `PASS`.
   error/warn пуста, завершённые рабочие XHR/fetch имеют 2xx; отменённый
   bootstrap относится к самой навигации. Этап 13 checklist завершён; ручная
   приёмка владельцем — `NOT RUN`.
+
+### Итоговая готовность к ручной приёмке, 2026-09-29
+
+- Полный diff PR #1785 повторно сопоставлен с Issue #1784 и 14 этапами
+  утверждённого checklist. Перед документационным handoff remote branch и
+  локальный source HEAD совпали на
+  `d2162cd461183c35037df6ca70eceac0aef867bf`; незакоммиченных изменений не
+  было. Финальный документационный commit и его exact SHA публикуются в PR.
+- Адресные Go unit-пакеты gateway HTTP transport, control-plane system
+  assistant и gRPC transport, runtime-controller callback и workload —
+  локальный `PASS`. `buf lint`, `buf build` и сравнение generated Proto с
+  результатом точных локальных plugins `protoc-gen-go v1.36.11` и
+  `protoc-gen-go-grpc 1.6.2` — `PASS`. Remote-plugin путь `buf generate`
+  получил внешний `403`; это не замаскировано как успешный запуск и заменено
+  воспроизводимым сравнением теми же зафиксированными локальными версиями.
+- OpenAPI Go и TypeScript сгенерированы зафиксированными
+  `oapi-codegen v2.7.1` и `@hey-api/openapi-ts v0.99.0`; итог совпал с
+  репозиторием, `git status` остался чистым. Frontend `test:e2e:check`
+  скомпилировал TypeScript E2E и успешно перечислил все web-only,
+  discovery, auth, API-session, local, skill, avatar, prompt и STT профили.
+  Это проверка корректности E2E-манифеста, а не запуск disposable E2E.
+- Все обязательные workload локального кластера находятся в `Running`, Jobs —
+  в `Complete`. Миграции этой волны применены repo-owned Jobs, включая
+  `control-plane-migrate-f1a3b6279c36`; fixtures не пересоздавались.
+- После финального no-cache reload Главная на 1920×1080 показала
+  `Подключено`, без горизонтального переполнения, элементов за viewport и
+  текста мельче 10 px. Browser console error/warn пуста, все 28 завершённых
+  XHR/fetch получили 2xx. Итоговый снимок:
+  `/tmp/kodex-stage14-final-home.png`.
+- Все 14 этапов checklist завершены. Прототип готов к ручной приёмке владельца
+  в локальном Control Center; сама ручная приёмка владельцем — `NOT RUN`.
+  STT, повторная device-code авторизация и восстановление после reboot в
+  соответствии с решением владельца в эту отмашку не входят. PR остаётся
+  Draft и не сливается без отдельной команды.
