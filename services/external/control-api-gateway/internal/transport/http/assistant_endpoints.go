@@ -10,6 +10,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+const maximumAssistantPlanDraftJSONBody = 2 << 20
+
 func (server *Server) GetSystemAssistant(w http.ResponseWriter, r *http.Request) {
 	response, err := server.control.Assistant.GetSystemAssistant(r.Context(), &controlplanev1.GetSystemAssistantRequest{})
 	if err != nil {
@@ -164,7 +166,7 @@ func (server *Server) ApplyAssistantPlan(w http.ResponseWriter, r *http.Request,
 	writeMessage(w, http.StatusOK, response, "", "")
 }
 func (server *Server) UpdateAssistantPlanDraft(w http.ResponseWriter, r *http.Request, ref generated.PlanRef, p generated.UpdateAssistantPlanDraftParams) {
-	body, ok := decodeJSON[generated.UpdateAssistantPlanDraftJSONBody](w, r)
+	body, ok := decodeJSONWithLimit[generated.UpdateAssistantPlanDraftJSONBody](w, r, maximumAssistantPlanDraftJSONBody)
 	if !ok {
 		return
 	}

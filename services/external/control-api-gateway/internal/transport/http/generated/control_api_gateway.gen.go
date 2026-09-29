@@ -22,6 +22,27 @@ const (
 	SessionCookieScopes sessionCookieContextKey = "sessionCookie.Scopes"
 )
 
+// Defines values for AccessBindingManagementKind.
+const (
+	DIRECT             AccessBindingManagementKind = "DIRECT"
+	PLATFORMMEMBERSHIP AccessBindingManagementKind = "PLATFORM_MEMBERSHIP"
+	PROJECTMEMBERSHIP  AccessBindingManagementKind = "PROJECT_MEMBERSHIP"
+)
+
+// Valid indicates whether the value is a known member of the AccessBindingManagementKind enum.
+func (e AccessBindingManagementKind) Valid() bool {
+	switch e {
+	case DIRECT:
+		return true
+	case PLATFORMMEMBERSHIP:
+		return true
+	case PROJECTMEMBERSHIP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AccessBindingState.
 const (
 	AccessBindingStateACTIVE  AccessBindingState = "ACTIVE"
@@ -597,6 +618,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT            AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
 	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION       AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
 	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                     AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                 AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
 	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE             AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
 	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT     AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
 	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                    AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
@@ -633,6 +655,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEPROJECT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE:
 		return true
@@ -774,6 +798,7 @@ const (
 	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT            AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
 	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION       AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
 	AssistantPlanOperationTypeCREATEPROJECT                     AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATEPROJECTFILE                 AssistantPlanOperationType = "CREATE_PROJECT_FILE"
 	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE             AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
 	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT     AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
 	AssistantPlanOperationTypeCREATESCHEDULE                    AssistantPlanOperationType = "CREATE_SCHEDULE"
@@ -810,6 +835,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypeCREATEPROJECT:
+		return true
+	case AssistantPlanOperationTypeCREATEPROJECTFILE:
 		return true
 	case AssistantPlanOperationTypeCREATEROLEIMAGERECIPE:
 		return true
@@ -8469,16 +8496,20 @@ func (e ListOrganizationWorkflowsParamsState) Valid() bool {
 
 // AccessBinding defines model for AccessBinding.
 type AccessBinding struct {
-	Conditions  AccessConditions   `json:"conditions"`
-	CreatedAt   Timestamp          `json:"createdAt"`
-	Ref         OpaqueRef          `json:"ref"`
-	RoleVersion AccessRoleVersion  `json:"roleVersion"`
-	Scope       AccessScope        `json:"scope"`
-	State       AccessBindingState `json:"state"`
-	Subject     AccessSubject      `json:"subject"`
-	UpdatedAt   Timestamp          `json:"updatedAt"`
-	Version     int64              `json:"version"`
+	Conditions     AccessConditions            `json:"conditions"`
+	CreatedAt      Timestamp                   `json:"createdAt"`
+	ManagementKind AccessBindingManagementKind `json:"managementKind"`
+	Ref            OpaqueRef                   `json:"ref"`
+	RoleVersion    AccessRoleVersion           `json:"roleVersion"`
+	Scope          AccessScope                 `json:"scope"`
+	State          AccessBindingState          `json:"state"`
+	Subject        AccessSubject               `json:"subject"`
+	UpdatedAt      Timestamp                   `json:"updatedAt"`
+	Version        int64                       `json:"version"`
 }
+
+// AccessBindingManagementKind defines model for AccessBinding.ManagementKind.
+type AccessBindingManagementKind string
 
 // AccessBindingChangeInput defines model for AccessBindingChangeInput.
 type AccessBindingChangeInput struct {
@@ -13437,6 +13468,9 @@ type AttachmentSetRef = string
 // AuditActionQuery defines model for AuditActionQuery.
 type AuditActionQuery = string
 
+// AuditIncludeTechnicalQuery defines model for AuditIncludeTechnicalQuery.
+type AuditIncludeTechnicalQuery = bool
+
 // AuditOutcomeQuery defines model for AuditOutcomeQuery.
 type AuditOutcomeQuery = string
 
@@ -14141,9 +14175,12 @@ type ListAuditEventsParams struct {
 	Action      *AuditActionQuery      `form:"action,omitempty" json:"action,omitempty"`
 	ProjectRef  *ProjectRefQuery       `form:"projectRef,omitempty" json:"projectRef,omitempty"`
 	ResourceRef *AuditResourceRefQuery `form:"resourceRef,omitempty" json:"resourceRef,omitempty"`
-	Query       *Query                 `form:"query,omitempty" json:"query,omitempty"`
-	PageSize    *PageSize              `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken   *PageToken             `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+
+	// IncludeTechnical Включить внутренние runtime и reconciliation события. По умолчанию сохраняется полный audit readback.
+	IncludeTechnical *AuditIncludeTechnicalQuery `form:"includeTechnical,omitempty" json:"includeTechnical,omitempty"`
+	Query            *Query                      `form:"query,omitempty" json:"query,omitempty"`
+	PageSize         *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken        *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ReconcileEmailEffectParams defines parameters for ReconcileEmailEffect.
@@ -23657,6 +23694,19 @@ func (siw *ServerInterfaceWrapper) ListAuditEvents(w http.ResponseWriter, r *htt
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceRef"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "includeTechnical" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "includeTechnical", r.URL.Query(), &params.IncludeTechnical, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "includeTechnical"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "includeTechnical", Err: err})
 		}
 		return
 	}

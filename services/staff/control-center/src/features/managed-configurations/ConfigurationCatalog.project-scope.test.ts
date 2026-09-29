@@ -69,11 +69,14 @@ async function render(
 
 describe("Project scope configuration catalog", () => {
   it("показывает таблицу с иконкой и не открывает второй каталог в модалке", () => {
-    expect(catalogSource).toContain('<table v-if="items.length"');
+    expect(catalogSource).toContain("<table");
+    expect(catalogSource).toContain('v-if="items.length"');
     expect(catalogSource).toContain("<EntityIcon");
     expect(catalogSource).toContain('class="configuration-catalog__identity"');
     expect(catalogSource).not.toContain("expandCatalog");
     expect(catalogSource).not.toContain("<ModalDialog");
+    expect(catalogSource).toContain("catalog.table.project");
+    expect(catalogSource).toContain("projectNames[item.projectRef!]");
   });
 
   it.each(["PROMPT_TEMPLATE", "ROLE_IMAGE"] as const)(
@@ -84,7 +87,10 @@ describe("Project scope configuration catalog", () => {
       expect(html).toContain(
         'name="managed-configuration-search" type="search"',
       );
-      expect(html).toContain('aria-label="Поиск" disabled');
+      expect(html).toContain('aria-label="Поиск"');
+      expect(html).not.toContain(
+        'name="managed-configuration-search" type="search" placeholder="Поиск" aria-label="Поиск" disabled',
+      );
       expect(html).toContain(
         'aria-describedby="managed-catalog-project-required"',
       );

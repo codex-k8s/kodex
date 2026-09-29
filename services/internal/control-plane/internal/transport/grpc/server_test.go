@@ -20,6 +20,7 @@ func TestTransportErrorDistinguishesMissingCapabilityFromConcurrentConflict(t *t
 	}{
 		{name: "missing capability", err: errs.ErrCapabilityRequired, code: codes.FailedPrecondition},
 		{name: "already resolved", err: errs.ErrAlreadyResolved, code: codes.FailedPrecondition},
+		{name: "resource in use", err: errs.ErrResourceInUse, code: codes.FailedPrecondition},
 		{name: "concurrent conflict", err: errs.ErrConflict, code: codes.Aborted},
 	}
 
@@ -30,6 +31,18 @@ func TestTransportErrorDistinguishesMissingCapabilityFromConcurrentConflict(t *t
 				t.Fatalf("transport code = %s, want %s", actual, test.code)
 			}
 		})
+	}
+}
+
+func TestTransportErrorMarksResourceInUse(t *testing.T) {
+	t.Parallel()
+
+	actual := transportError(errs.ErrResourceInUse)
+	if status.Code(actual) != codes.FailedPrecondition {
+		t.Fatalf("resource in use code = %s, want %s", status.Code(actual), codes.FailedPrecondition)
+	}
+	if reason := errorInfoReason(actual); reason != resourceInUseReason {
+		t.Fatalf("resource in use reason = %q, want %q", reason, resourceInUseReason)
 	}
 }
 

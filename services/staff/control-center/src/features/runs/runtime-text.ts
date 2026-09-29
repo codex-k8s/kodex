@@ -3,6 +3,7 @@ import type { RunEvent } from "@/shared/api/generated/openapi/types.gen";
 const opaqueRefPattern =
   /`?(?:agt|art|bld|cap|cnv|con|edg|evt|gat|inc|int|job|mbr|msg|nod|pln|prj|rev|rol|rti|run|sch|ses|trn|usr|wfl)_[A-Za-z0-9_-]{8,}`?/g;
 const technicalTokenPattern = /`?\b[A-Z][A-Z\d]*(?:_[A-Z\d]+)+\b`?/g;
+const parenthesizedTechnicalCodePattern = /\s*\([A-Z][A-Z\d_]{7,}\)/g;
 const conversationalMessageKinds = new Set<RunEvent["messageKind"]>([
   "USER_MESSAGE",
   "ASSISTANT_MESSAGE",
@@ -47,7 +48,9 @@ export function presentRuntimeText(
       token.startsWith("`") && token.endsWith("`") ? token : `\`${token}\``,
     );
   } else {
-    visible = visible.replace(technicalTokenPattern, "");
+    visible = visible
+      .replace(parenthesizedTechnicalCodePattern, "")
+      .replace(technicalTokenPattern, "");
   }
   visible = visible
     .replace(/\s+([,.;:!?])/g, "$1")

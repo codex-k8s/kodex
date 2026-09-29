@@ -8,6 +8,15 @@ const source = readFileSync(
 );
 
 describe("OpenAPIImportDialog layout", () => {
+  it("использует CodeMirror с подсветкой YAML для контракта", () => {
+    expect(source).toContain(
+      'import CodeEditor from "@/shared/ui/CodeEditor.vue"',
+    );
+    expect(source).toContain('name="openapi-import-source"');
+    expect(source).toContain('language="yaml"');
+    expect(source).not.toContain("<textarea");
+  });
+
   it("именует все поля защищённого импорта для browser diagnostics", () => {
     expect(source).toContain('name="openapi-import-file"');
     expect(source).toContain('name="openapi-import-source"');

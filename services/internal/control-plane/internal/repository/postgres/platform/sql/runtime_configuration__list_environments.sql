@@ -38,7 +38,8 @@ LEFT JOIN control_plane.role_image_recipes image_recipe ON image_recipe.id = ima
 WHERE environment.organization_id = @organization_id::uuid
   AND (@project_ref = '' OR project.ref = @project_ref)
   AND environment.state <> 'DELETED'
-  AND (@query = '' OR environment.name ILIKE '%' || @query || '%' OR environment.description ILIKE '%' || @query || '%')
+  AND (@query = '' OR environment.name ILIKE '%' || @query || '%' OR environment.description ILIKE '%' || @query || '%'
+      OR project.name ILIKE '%' || @query || '%')
   AND (@cursor_ref = '' OR environment.ref > @cursor_ref)
   AND (@authority_project = '' OR environment.project_id = NULLIF(@authority_project,'')::uuid)
   AND control_plane.catalog_resource_visible(environment.organization_id, @actor_id::uuid, 'project.view', 'PROJECT',

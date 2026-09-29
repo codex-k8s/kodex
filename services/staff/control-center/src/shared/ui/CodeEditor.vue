@@ -20,6 +20,7 @@ import VoiceInputButton from "@/shared/ui/VoiceInputButton.vue";
 const props = defineProps<{
   modelValue: string;
   label: string;
+  name?: string;
   language?: "json" | "yaml" | "toml" | "dockerfile";
   readonly?: boolean;
   disabled?: boolean;
@@ -41,6 +42,7 @@ function extensions() {
     EditorView.contentAttributes.of({
       "aria-label": props.label,
       "aria-description": t("app.editorKeyboard"),
+      ...(props.name ? { name: props.name } : {}),
       spellcheck: "false",
       autocomplete: "off",
       autocorrect: "off",
@@ -98,7 +100,13 @@ watch(
   },
 );
 watch(
-  () => [props.readonly, props.disabled, props.language, props.label],
+  () => [
+    props.readonly,
+    props.disabled,
+    props.language,
+    props.label,
+    props.name,
+  ],
   () => view?.dispatch({ effects: configuration.reconfigure(extensions()) }),
 );
 onBeforeUnmount(() => {

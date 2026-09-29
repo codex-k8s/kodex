@@ -1,9 +1,11 @@
 package platform
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
@@ -130,5 +132,16 @@ func TestAssistantPlanCarriesAgentVersionWithinAtomicApply(t *testing.T) {
 	other := entity.AssistantPlanOperation{Type: "UPDATE_PROJECT", Target: entity.AssistantPlanTarget{Kind: "PROJECT", Ref: "prj_current"}}
 	if assistantPlanAgentVersionKey(other) != "" || rebaseAssistantPlanAgentVersion(other, 8).ExpectedVersion != nil {
 		t.Fatal("non-agent operation unexpectedly entered agent version carry")
+	}
+}
+
+func TestAssistantPlanAuthorizationProblemKeepsVersionConflict(t *testing.T) {
+	t.Parallel()
+
+	if got := assistantPlanAuthorizationProblem(2, fmt.Errorf("authorize: %w", errs.ErrVersionMismatch)); got != "operation-3-version-conflict" {
+		t.Fatalf("version conflict problem = %q", got)
+	}
+	if got := assistantPlanAuthorizationProblem(2, errs.ErrForbidden); got != "operation-3-not-permitted" {
+		t.Fatalf("permission problem = %q", got)
 	}
 }

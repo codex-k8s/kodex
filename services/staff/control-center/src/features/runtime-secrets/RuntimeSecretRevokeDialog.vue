@@ -23,11 +23,18 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
     @close="emit('close')"
   >
     <div class="revoke-dialog">
-      <ProblemNotice v-if="problem" :problem="problem" compact />
-      <ShieldX :size="28" aria-hidden="true" />
-      <div>
-        <strong>{{ secret.name }}</strong>
-        <p>{{ $t("runtimeSecrets.revokeHelp") }}</p>
+      <ProblemNotice
+        v-if="problem"
+        class="revoke-dialog__problem"
+        :problem="problem"
+        compact
+      />
+      <div class="revoke-dialog__summary">
+        <ShieldX :size="28" aria-hidden="true" />
+        <div class="revoke-dialog__copy">
+          <strong>{{ secret.name }}</strong>
+          <p>{{ $t("runtimeSecrets.revokeHelp") }}</p>
+        </div>
       </div>
     </div>
     <template #actions>
@@ -55,11 +62,34 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
 <style scoped>
 .revoke-dialog {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  align-self: stretch;
+  gap: 16px;
   color: var(--danger);
 }
-.revoke-dialog p {
+.revoke-dialog__problem {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.revoke-dialog__summary {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+.revoke-dialog__copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.revoke-dialog__copy p {
   margin: 6px 0 0;
   color: var(--text-secondary);
 }

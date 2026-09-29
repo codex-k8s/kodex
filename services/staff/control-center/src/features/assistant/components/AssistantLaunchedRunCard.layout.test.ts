@@ -30,5 +30,6 @@ describe("карточка запущенного помощником сотр�
     expect(source).toContain("run.state === 'WAITING_HUMAN'");
     expect(source).toContain("run.safeErrorCode");
     expect(source).toContain("run.resultSummary");
+    expect(source).toContain('<SafeMarkdown :content="run.resultSummary" />');
   });
 });

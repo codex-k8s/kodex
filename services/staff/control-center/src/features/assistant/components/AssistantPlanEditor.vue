@@ -105,6 +105,19 @@ const selectedImages = ref<Record<string, AsyncEntityOption>>({});
 const roleImageAgentNames = ref<Record<string, string>>({});
 const roleImageEnvironments = ref<RoleEnvironment[]>([]);
 const roleImageCatalogProblem = ref(false);
+const projectTextMediaTypes = [
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/json",
+] as const;
+const projectBinaryMediaTypes = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/pdf",
+] as const;
+const maximumProjectFileBytes = 1 << 20;
 function roleImageReady(operation: EditablePlanOperation): boolean {
   if (roleImageCatalogProblem.value) return false;
   if (
@@ -129,15 +142,32 @@ function projectFileReady(operation: EditablePlanOperation): boolean {
   const fileName = fieldValue(operation, "fileName").trim();
   const mediaType = fieldValue(operation, "mediaType");
   const content = fieldValue(operation, "content");
+  const encoding = projectFileEncoding(operation);
   if (
     !fileName ||
     fileName === "." ||
     fileName === ".." ||
     /[\\/\0\r\n]/u.test(fileName) ||
-    new TextEncoder().encode(content).length > 1 << 20 ||
-    !["text/plain", "text/markdown", "text/csv", "application/json"].includes(
-      mediaType,
+    ![...projectTextMediaTypes, ...projectBinaryMediaTypes].includes(
+      mediaType as (typeof projectTextMediaTypes)[number],
     )
+  )
+    return false;
+  if (encoding === "BASE64") {
+    return (
+      projectBinaryMediaTypes.includes(
+        mediaType as (typeof projectBinaryMediaTypes)[number],
+      ) &&
+      projectFileBytes(operation) > 0 &&
+      projectFileBytes(operation) <= maximumProjectFileBytes
+    );
+  }
+  if (
+    encoding !== "UTF8" ||
+    !projectTextMediaTypes.includes(
+      mediaType as (typeof projectTextMediaTypes)[number],
+    ) ||
+    new TextEncoder().encode(content).length > maximumProjectFileBytes
   )
     return false;
   if (mediaType === "application/json") {
@@ -150,7 +180,36 @@ function projectFileReady(operation: EditablePlanOperation): boolean {
   return true;
 }
 function projectFileBytes(operation: EditablePlanOperation): number {
+  if (projectFileEncoding(operation) === "BASE64") {
+    const content = fieldValue(operation, "content");
+    if (
+      !content ||
+      content.length % 4 !== 0 ||
+      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(
+        content,
+      )
+    )
+      return 0;
+    try {
+      return atob(content).length;
+    } catch {
+      return 0;
+    }
+  }
   return new TextEncoder().encode(fieldValue(operation, "content")).length;
+}
+
+function projectFileEncoding(operation: EditablePlanOperation): string {
+  const explicit = fieldValue(operation, "contentEncoding");
+  if (explicit) return explicit;
+  return projectBinaryMediaTypes.includes(
+    fieldValue(
+      operation,
+      "mediaType",
+    ) as (typeof projectBinaryMediaTypes)[number],
+  )
+    ? "BASE64"
+    : "UTF8";
 }
 const connectionDefinitions = ref<Record<string, IntegrationDefinition>>({});
 const connectionCatalogProblem = ref(false);
@@ -743,6 +802,60 @@ function setProjectFileName(
   const value = (event.target as HTMLInputElement).value;
   updateOperationParameter(operation, "fileName", value);
   operation.value.target.name = value;
+}
+
+function setProjectFileType(
+  operation: EditablePlanOperation,
+  event: Event,
+): void {
+  const mediaType = (event.target as HTMLSelectElement).value;
+  const encoding = projectBinaryMediaTypes.includes(
+    mediaType as (typeof projectBinaryMediaTypes)[number],
+  )
+    ? "BASE64"
+    : "UTF8";
+  if (projectFileEncoding(operation) !== encoding)
+    updateOperationParameter(operation, "content", "");
+  updateOperationParameter(operation, "mediaType", mediaType);
+  updateOperationParameter(operation, "contentEncoding", encoding);
+}
+
+async function setProjectBinaryFile(
+  operation: EditablePlanOperation,
+  event: Event,
+): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  const byExtension: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    pdf: "application/pdf",
+  };
+  const mediaType = projectBinaryMediaTypes.includes(
+    file.type as (typeof projectBinaryMediaTypes)[number],
+  )
+    ? file.type
+    : extension
+      ? byExtension[extension]
+      : undefined;
+  if (!mediaType || file.size === 0 || file.size > maximumProjectFileBytes) {
+    updateOperationParameter(operation, "content", "");
+    input.value = "";
+    return;
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  updateOperationParameter(operation, "fileName", file.name);
+  operation.value.target.name = file.name;
+  updateOperationParameter(operation, "mediaType", mediaType);
+  updateOperationParameter(operation, "contentEncoding", "BASE64");
+  updateOperationParameter(operation, "content", btoa(binary));
 }
 
 function setRoleImageEnvironment(
@@ -1471,15 +1584,22 @@ function validationProblemLabel(problem: string): string {
                       :value="fieldValue(operation, 'mediaType')"
                       :name="`assistant-project-file-type-${index}`"
                       :disabled="!editable"
-                      @change="setField(operation, 'mediaType', $event)"
+                      @change="setProjectFileType(operation, $event)"
                     >
                       <option value="text/markdown">Markdown</option>
                       <option value="text/plain">Text</option>
                       <option value="text/csv">CSV</option>
                       <option value="application/json">JSON</option>
+                      <option value="image/png">PNG</option>
+                      <option value="image/jpeg">JPEG</option>
+                      <option value="image/webp">WebP</option>
+                      <option value="application/pdf">PDF</option>
                     </select>
                   </label>
-                  <label class="field assistant-project-file-form__content">
+                  <label
+                    v-if="projectFileEncoding(operation) === 'UTF8'"
+                    class="field assistant-project-file-form__content"
+                  >
                     <span>{{
                       $t("assistant.planEditor.projectFileContent")
                     }}</span>
@@ -1494,6 +1614,31 @@ function validationProblemLabel(problem: string): string {
                     <small>
                       {{
                         $t("assistant.planEditor.projectFileBytes", {
+                          count: projectFileBytes(operation),
+                        })
+                      }}
+                    </small>
+                  </label>
+                  <label
+                    v-else
+                    class="field assistant-project-file-form__content assistant-project-file-form__upload"
+                  >
+                    <span>{{
+                      $t("assistant.planEditor.projectFileBinary")
+                    }}</span>
+                    <input
+                      :name="`assistant-project-file-binary-${index}`"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,application/pdf"
+                      :disabled="!editable"
+                      @change="setProjectBinaryFile(operation, $event)"
+                    />
+                    <small>
+                      {{
+                        $t("assistant.planEditor.projectFileBinaryStatus", {
+                          name:
+                            fieldValue(operation, "fileName") ||
+                            $t("assistant.planEditor.projectFileBinaryMissing"),
                           count: projectFileBytes(operation),
                         })
                       }}
@@ -2335,6 +2480,19 @@ function validationProblemLabel(problem: string): string {
 .assistant-project-file-form__content small {
   color: var(--muted);
   text-align: right;
+}
+.assistant-project-file-form__upload {
+  padding: 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-subtle, var(--panel));
+}
+.assistant-project-file-form__upload input[type="file"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
 }
 .assistant-plan-friendly__secret-suggestions,
 .assistant-plan-friendly__secret-suggestions article {

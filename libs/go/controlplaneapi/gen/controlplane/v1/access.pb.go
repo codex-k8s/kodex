@@ -413,6 +413,58 @@ func (AccessBindingState) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_access_proto_rawDescGZIP(), []int{6}
 }
 
+type AccessBindingManagementKind int32
+
+const (
+	AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_UNSPECIFIED         AccessBindingManagementKind = 0
+	AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_DIRECT              AccessBindingManagementKind = 1
+	AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_PLATFORM_MEMBERSHIP AccessBindingManagementKind = 2
+	AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_PROJECT_MEMBERSHIP  AccessBindingManagementKind = 3
+)
+
+// Enum value maps for AccessBindingManagementKind.
+var (
+	AccessBindingManagementKind_name = map[int32]string{
+		0: "ACCESS_BINDING_MANAGEMENT_KIND_UNSPECIFIED",
+		1: "ACCESS_BINDING_MANAGEMENT_KIND_DIRECT",
+		2: "ACCESS_BINDING_MANAGEMENT_KIND_PLATFORM_MEMBERSHIP",
+		3: "ACCESS_BINDING_MANAGEMENT_KIND_PROJECT_MEMBERSHIP",
+	}
+	AccessBindingManagementKind_value = map[string]int32{
+		"ACCESS_BINDING_MANAGEMENT_KIND_UNSPECIFIED":         0,
+		"ACCESS_BINDING_MANAGEMENT_KIND_DIRECT":              1,
+		"ACCESS_BINDING_MANAGEMENT_KIND_PLATFORM_MEMBERSHIP": 2,
+		"ACCESS_BINDING_MANAGEMENT_KIND_PROJECT_MEMBERSHIP":  3,
+	}
+)
+
+func (x AccessBindingManagementKind) Enum() *AccessBindingManagementKind {
+	p := new(AccessBindingManagementKind)
+	*p = x
+	return p
+}
+
+func (x AccessBindingManagementKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccessBindingManagementKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_access_proto_enumTypes[7].Descriptor()
+}
+
+func (AccessBindingManagementKind) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_access_proto_enumTypes[7]
+}
+
+func (x AccessBindingManagementKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccessBindingManagementKind.Descriptor instead.
+func (AccessBindingManagementKind) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_access_proto_rawDescGZIP(), []int{7}
+}
+
 type OIDCGroupState int32
 
 const (
@@ -446,11 +498,11 @@ func (x OIDCGroupState) String() string {
 }
 
 func (OIDCGroupState) Descriptor() protoreflect.EnumDescriptor {
-	return file_controlplane_v1_access_proto_enumTypes[7].Descriptor()
+	return file_controlplane_v1_access_proto_enumTypes[8].Descriptor()
 }
 
 func (OIDCGroupState) Type() protoreflect.EnumType {
-	return &file_controlplane_v1_access_proto_enumTypes[7]
+	return &file_controlplane_v1_access_proto_enumTypes[8]
 }
 
 func (x OIDCGroupState) Number() protoreflect.EnumNumber {
@@ -459,7 +511,7 @@ func (x OIDCGroupState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use OIDCGroupState.Descriptor instead.
 func (OIDCGroupState) EnumDescriptor() ([]byte, []int) {
-	return file_controlplane_v1_access_proto_rawDescGZIP(), []int{7}
+	return file_controlplane_v1_access_proto_rawDescGZIP(), []int{8}
 }
 
 type AccessDecision int32
@@ -495,11 +547,11 @@ func (x AccessDecision) String() string {
 }
 
 func (AccessDecision) Descriptor() protoreflect.EnumDescriptor {
-	return file_controlplane_v1_access_proto_enumTypes[8].Descriptor()
+	return file_controlplane_v1_access_proto_enumTypes[9].Descriptor()
 }
 
 func (AccessDecision) Type() protoreflect.EnumType {
-	return &file_controlplane_v1_access_proto_enumTypes[8]
+	return &file_controlplane_v1_access_proto_enumTypes[9]
 }
 
 func (x AccessDecision) Number() protoreflect.EnumNumber {
@@ -508,7 +560,7 @@ func (x AccessDecision) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AccessDecision.Descriptor instead.
 func (AccessDecision) EnumDescriptor() ([]byte, []int) {
-	return file_controlplane_v1_access_proto_rawDescGZIP(), []int{8}
+	return file_controlplane_v1_access_proto_rawDescGZIP(), []int{9}
 }
 
 type PermissionDefinition struct {
@@ -1108,18 +1160,19 @@ func (x *AccessConditions) GetRequireOwner() bool {
 }
 
 type AccessBinding struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ref           string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Version       int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	State         AccessBindingState     `protobuf:"varint,3,opt,name=state,proto3,enum=controlplane.v1.AccessBindingState" json:"state,omitempty"`
-	Subject       *AccessSubject         `protobuf:"bytes,4,opt,name=subject,proto3" json:"subject,omitempty"`
-	RoleVersion   *AccessRoleVersion     `protobuf:"bytes,5,opt,name=role_version,json=roleVersion,proto3" json:"role_version,omitempty"`
-	Scope         *AccessScope           `protobuf:"bytes,6,opt,name=scope,proto3" json:"scope,omitempty"`
-	Conditions    *AccessConditions      `protobuf:"bytes,7,opt,name=conditions,proto3" json:"conditions,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState      `protogen:"open.v1"`
+	Ref            string                      `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Version        int64                       `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	State          AccessBindingState          `protobuf:"varint,3,opt,name=state,proto3,enum=controlplane.v1.AccessBindingState" json:"state,omitempty"`
+	Subject        *AccessSubject              `protobuf:"bytes,4,opt,name=subject,proto3" json:"subject,omitempty"`
+	RoleVersion    *AccessRoleVersion          `protobuf:"bytes,5,opt,name=role_version,json=roleVersion,proto3" json:"role_version,omitempty"`
+	Scope          *AccessScope                `protobuf:"bytes,6,opt,name=scope,proto3" json:"scope,omitempty"`
+	Conditions     *AccessConditions           `protobuf:"bytes,7,opt,name=conditions,proto3" json:"conditions,omitempty"`
+	CreatedAt      *timestamppb.Timestamp      `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt      *timestamppb.Timestamp      `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	ManagementKind AccessBindingManagementKind `protobuf:"varint,10,opt,name=management_kind,json=managementKind,proto3,enum=controlplane.v1.AccessBindingManagementKind" json:"management_kind,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AccessBinding) Reset() {
@@ -1213,6 +1266,13 @@ func (x *AccessBinding) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *AccessBinding) GetManagementKind() AccessBindingManagementKind {
+	if x != nil {
+		return x.ManagementKind
+	}
+	return AccessBindingManagementKind_ACCESS_BINDING_MANAGEMENT_KIND_UNSPECIFIED
 }
 
 type AccessExplanationStep struct {
@@ -3336,7 +3396,7 @@ const file_controlplane_v1_access_proto_rawDesc = "" +
 	"validUntil\x88\x01\x01\x12#\n" +
 	"\rrequire_owner\x18\x03 \x01(\bR\frequireOwnerB\r\n" +
 	"\v_valid_fromB\x0e\n" +
-	"\f_valid_until\"\xe4\x03\n" +
+	"\f_valid_until\"\xbb\x04\n" +
 	"\rAccessBinding\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x129\n" +
@@ -3350,7 +3410,9 @@ const file_controlplane_v1_access_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xa9\x02\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12U\n" +
+	"\x0fmanagement_kind\x18\n" +
+	" \x01(\x0e2,.controlplane.v1.AccessBindingManagementKindR\x0emanagementKind\"\xa9\x02\n" +
 	"\x15AccessExplanationStep\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x1f\n" +
 	"\vbinding_ref\x18\x02 \x01(\tR\n" +
@@ -3551,7 +3613,12 @@ const file_controlplane_v1_access_proto_rawDesc = "" +
 	"\x12AccessBindingState\x12$\n" +
 	" ACCESS_BINDING_STATE_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bACCESS_BINDING_STATE_ACTIVE\x10\x01\x12 \n" +
-	"\x1cACCESS_BINDING_STATE_REVOKED\x10\x02*k\n" +
+	"\x1cACCESS_BINDING_STATE_REVOKED\x10\x02*\xe7\x01\n" +
+	"\x1bAccessBindingManagementKind\x12.\n" +
+	"*ACCESS_BINDING_MANAGEMENT_KIND_UNSPECIFIED\x10\x00\x12)\n" +
+	"%ACCESS_BINDING_MANAGEMENT_KIND_DIRECT\x10\x01\x126\n" +
+	"2ACCESS_BINDING_MANAGEMENT_KIND_PLATFORM_MEMBERSHIP\x10\x02\x125\n" +
+	"1ACCESS_BINDING_MANAGEMENT_KIND_PROJECT_MEMBERSHIP\x10\x03*k\n" +
 	"\x0eOIDCGroupState\x12 \n" +
 	"\x1cOIDC_GROUP_STATE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17OIDC_GROUP_STATE_ACTIVE\x10\x01\x12\x1a\n" +
@@ -3589,7 +3656,7 @@ func file_controlplane_v1_access_proto_rawDescGZIP() []byte {
 	return file_controlplane_v1_access_proto_rawDescData
 }
 
-var file_controlplane_v1_access_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
+var file_controlplane_v1_access_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
 var file_controlplane_v1_access_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_controlplane_v1_access_proto_goTypes = []any{
 	(PermissionRisk)(0),                     // 0: controlplane.v1.PermissionRisk
@@ -3599,180 +3666,182 @@ var file_controlplane_v1_access_proto_goTypes = []any{
 	(AccessRoleKind)(0),                     // 4: controlplane.v1.AccessRoleKind
 	(AccessRoleState)(0),                    // 5: controlplane.v1.AccessRoleState
 	(AccessBindingState)(0),                 // 6: controlplane.v1.AccessBindingState
-	(OIDCGroupState)(0),                     // 7: controlplane.v1.OIDCGroupState
-	(AccessDecision)(0),                     // 8: controlplane.v1.AccessDecision
-	(*PermissionDefinition)(nil),            // 9: controlplane.v1.PermissionDefinition
-	(*AccessSubject)(nil),                   // 10: controlplane.v1.AccessSubject
-	(*OIDCGroup)(nil),                       // 11: controlplane.v1.OIDCGroup
-	(*AccessRoleVersion)(nil),               // 12: controlplane.v1.AccessRoleVersion
-	(*AccessRole)(nil),                      // 13: controlplane.v1.AccessRole
-	(*AccessScope)(nil),                     // 14: controlplane.v1.AccessScope
-	(*AccessConditions)(nil),                // 15: controlplane.v1.AccessConditions
-	(*AccessBinding)(nil),                   // 16: controlplane.v1.AccessBinding
-	(*AccessExplanationStep)(nil),           // 17: controlplane.v1.AccessExplanationStep
-	(*EffectiveAccessDecision)(nil),         // 18: controlplane.v1.EffectiveAccessDecision
-	(*AccessRoleDraft)(nil),                 // 19: controlplane.v1.AccessRoleDraft
-	(*AccessBindingDraft)(nil),              // 20: controlplane.v1.AccessBindingDraft
-	(*ListPermissionRegistryRequest)(nil),   // 21: controlplane.v1.ListPermissionRegistryRequest
-	(*ListPermissionRegistryResponse)(nil),  // 22: controlplane.v1.ListPermissionRegistryResponse
-	(*ListAccessSubjectsRequest)(nil),       // 23: controlplane.v1.ListAccessSubjectsRequest
-	(*ListAccessSubjectsResponse)(nil),      // 24: controlplane.v1.ListAccessSubjectsResponse
-	(*ListOIDCGroupsRequest)(nil),           // 25: controlplane.v1.ListOIDCGroupsRequest
-	(*ListOIDCGroupsResponse)(nil),          // 26: controlplane.v1.ListOIDCGroupsResponse
-	(*ListAccessRolesRequest)(nil),          // 27: controlplane.v1.ListAccessRolesRequest
-	(*ListAccessRolesResponse)(nil),         // 28: controlplane.v1.ListAccessRolesResponse
-	(*ListAccessRoleVersionsRequest)(nil),   // 29: controlplane.v1.ListAccessRoleVersionsRequest
-	(*ListAccessRoleVersionsResponse)(nil),  // 30: controlplane.v1.ListAccessRoleVersionsResponse
-	(*ListAccessBindingsRequest)(nil),       // 31: controlplane.v1.ListAccessBindingsRequest
-	(*ListAccessBindingsResponse)(nil),      // 32: controlplane.v1.ListAccessBindingsResponse
-	(*QueryEffectiveAccessRequest)(nil),     // 33: controlplane.v1.QueryEffectiveAccessRequest
-	(*QueryEffectiveAccessResponse)(nil),    // 34: controlplane.v1.QueryEffectiveAccessResponse
-	(*ExplainAccessRequest)(nil),            // 35: controlplane.v1.ExplainAccessRequest
-	(*ExplainAccessResponse)(nil),           // 36: controlplane.v1.ExplainAccessResponse
-	(*SimulateAccessRequest)(nil),           // 37: controlplane.v1.SimulateAccessRequest
-	(*SimulateAccessResponse)(nil),          // 38: controlplane.v1.SimulateAccessResponse
-	(*CreateAccessRoleRequest)(nil),         // 39: controlplane.v1.CreateAccessRoleRequest
-	(*CreateAccessRoleResponse)(nil),        // 40: controlplane.v1.CreateAccessRoleResponse
-	(*CreateAccessRoleVersionRequest)(nil),  // 41: controlplane.v1.CreateAccessRoleVersionRequest
-	(*CreateAccessRoleVersionResponse)(nil), // 42: controlplane.v1.CreateAccessRoleVersionResponse
-	(*ArchiveAccessRoleRequest)(nil),        // 43: controlplane.v1.ArchiveAccessRoleRequest
-	(*ArchiveAccessRoleResponse)(nil),       // 44: controlplane.v1.ArchiveAccessRoleResponse
-	(*CreateAccessBindingRequest)(nil),      // 45: controlplane.v1.CreateAccessBindingRequest
-	(*CreateAccessBindingResponse)(nil),     // 46: controlplane.v1.CreateAccessBindingResponse
-	(*ChangeAccessBindingRequest)(nil),      // 47: controlplane.v1.ChangeAccessBindingRequest
-	(*ChangeAccessBindingResponse)(nil),     // 48: controlplane.v1.ChangeAccessBindingResponse
-	(*RevokeAccessBindingRequest)(nil),      // 49: controlplane.v1.RevokeAccessBindingRequest
-	(*RevokeAccessBindingResponse)(nil),     // 50: controlplane.v1.RevokeAccessBindingResponse
-	(*timestamppb.Timestamp)(nil),           // 51: google.protobuf.Timestamp
-	(*UserSummary)(nil),                     // 52: controlplane.v1.UserSummary
-	(*PageRequest)(nil),                     // 53: controlplane.v1.PageRequest
-	(*PageInfo)(nil),                        // 54: controlplane.v1.PageInfo
-	(*MutationContext)(nil),                 // 55: controlplane.v1.MutationContext
+	(AccessBindingManagementKind)(0),        // 7: controlplane.v1.AccessBindingManagementKind
+	(OIDCGroupState)(0),                     // 8: controlplane.v1.OIDCGroupState
+	(AccessDecision)(0),                     // 9: controlplane.v1.AccessDecision
+	(*PermissionDefinition)(nil),            // 10: controlplane.v1.PermissionDefinition
+	(*AccessSubject)(nil),                   // 11: controlplane.v1.AccessSubject
+	(*OIDCGroup)(nil),                       // 12: controlplane.v1.OIDCGroup
+	(*AccessRoleVersion)(nil),               // 13: controlplane.v1.AccessRoleVersion
+	(*AccessRole)(nil),                      // 14: controlplane.v1.AccessRole
+	(*AccessScope)(nil),                     // 15: controlplane.v1.AccessScope
+	(*AccessConditions)(nil),                // 16: controlplane.v1.AccessConditions
+	(*AccessBinding)(nil),                   // 17: controlplane.v1.AccessBinding
+	(*AccessExplanationStep)(nil),           // 18: controlplane.v1.AccessExplanationStep
+	(*EffectiveAccessDecision)(nil),         // 19: controlplane.v1.EffectiveAccessDecision
+	(*AccessRoleDraft)(nil),                 // 20: controlplane.v1.AccessRoleDraft
+	(*AccessBindingDraft)(nil),              // 21: controlplane.v1.AccessBindingDraft
+	(*ListPermissionRegistryRequest)(nil),   // 22: controlplane.v1.ListPermissionRegistryRequest
+	(*ListPermissionRegistryResponse)(nil),  // 23: controlplane.v1.ListPermissionRegistryResponse
+	(*ListAccessSubjectsRequest)(nil),       // 24: controlplane.v1.ListAccessSubjectsRequest
+	(*ListAccessSubjectsResponse)(nil),      // 25: controlplane.v1.ListAccessSubjectsResponse
+	(*ListOIDCGroupsRequest)(nil),           // 26: controlplane.v1.ListOIDCGroupsRequest
+	(*ListOIDCGroupsResponse)(nil),          // 27: controlplane.v1.ListOIDCGroupsResponse
+	(*ListAccessRolesRequest)(nil),          // 28: controlplane.v1.ListAccessRolesRequest
+	(*ListAccessRolesResponse)(nil),         // 29: controlplane.v1.ListAccessRolesResponse
+	(*ListAccessRoleVersionsRequest)(nil),   // 30: controlplane.v1.ListAccessRoleVersionsRequest
+	(*ListAccessRoleVersionsResponse)(nil),  // 31: controlplane.v1.ListAccessRoleVersionsResponse
+	(*ListAccessBindingsRequest)(nil),       // 32: controlplane.v1.ListAccessBindingsRequest
+	(*ListAccessBindingsResponse)(nil),      // 33: controlplane.v1.ListAccessBindingsResponse
+	(*QueryEffectiveAccessRequest)(nil),     // 34: controlplane.v1.QueryEffectiveAccessRequest
+	(*QueryEffectiveAccessResponse)(nil),    // 35: controlplane.v1.QueryEffectiveAccessResponse
+	(*ExplainAccessRequest)(nil),            // 36: controlplane.v1.ExplainAccessRequest
+	(*ExplainAccessResponse)(nil),           // 37: controlplane.v1.ExplainAccessResponse
+	(*SimulateAccessRequest)(nil),           // 38: controlplane.v1.SimulateAccessRequest
+	(*SimulateAccessResponse)(nil),          // 39: controlplane.v1.SimulateAccessResponse
+	(*CreateAccessRoleRequest)(nil),         // 40: controlplane.v1.CreateAccessRoleRequest
+	(*CreateAccessRoleResponse)(nil),        // 41: controlplane.v1.CreateAccessRoleResponse
+	(*CreateAccessRoleVersionRequest)(nil),  // 42: controlplane.v1.CreateAccessRoleVersionRequest
+	(*CreateAccessRoleVersionResponse)(nil), // 43: controlplane.v1.CreateAccessRoleVersionResponse
+	(*ArchiveAccessRoleRequest)(nil),        // 44: controlplane.v1.ArchiveAccessRoleRequest
+	(*ArchiveAccessRoleResponse)(nil),       // 45: controlplane.v1.ArchiveAccessRoleResponse
+	(*CreateAccessBindingRequest)(nil),      // 46: controlplane.v1.CreateAccessBindingRequest
+	(*CreateAccessBindingResponse)(nil),     // 47: controlplane.v1.CreateAccessBindingResponse
+	(*ChangeAccessBindingRequest)(nil),      // 48: controlplane.v1.ChangeAccessBindingRequest
+	(*ChangeAccessBindingResponse)(nil),     // 49: controlplane.v1.ChangeAccessBindingResponse
+	(*RevokeAccessBindingRequest)(nil),      // 50: controlplane.v1.RevokeAccessBindingRequest
+	(*RevokeAccessBindingResponse)(nil),     // 51: controlplane.v1.RevokeAccessBindingResponse
+	(*timestamppb.Timestamp)(nil),           // 52: google.protobuf.Timestamp
+	(*UserSummary)(nil),                     // 53: controlplane.v1.UserSummary
+	(*PageRequest)(nil),                     // 54: controlplane.v1.PageRequest
+	(*PageInfo)(nil),                        // 55: controlplane.v1.PageInfo
+	(*MutationContext)(nil),                 // 56: controlplane.v1.MutationContext
 }
 var file_controlplane_v1_access_proto_depIdxs = []int32{
 	0,   // 0: controlplane.v1.PermissionDefinition.risk:type_name -> controlplane.v1.PermissionRisk
 	2,   // 1: controlplane.v1.PermissionDefinition.allowed_scopes:type_name -> controlplane.v1.AccessScopeKind
 	3,   // 2: controlplane.v1.PermissionDefinition.resource_kinds:type_name -> controlplane.v1.AccessResourceKind
 	1,   // 3: controlplane.v1.AccessSubject.kind:type_name -> controlplane.v1.AccessSubjectKind
-	7,   // 4: controlplane.v1.OIDCGroup.state:type_name -> controlplane.v1.OIDCGroupState
-	51,  // 5: controlplane.v1.OIDCGroup.last_seen_at:type_name -> google.protobuf.Timestamp
-	51,  // 6: controlplane.v1.OIDCGroup.synced_at:type_name -> google.protobuf.Timestamp
+	8,   // 4: controlplane.v1.OIDCGroup.state:type_name -> controlplane.v1.OIDCGroupState
+	52,  // 5: controlplane.v1.OIDCGroup.last_seen_at:type_name -> google.protobuf.Timestamp
+	52,  // 6: controlplane.v1.OIDCGroup.synced_at:type_name -> google.protobuf.Timestamp
 	2,   // 7: controlplane.v1.AccessRoleVersion.allowed_scopes:type_name -> controlplane.v1.AccessScopeKind
-	51,  // 8: controlplane.v1.AccessRoleVersion.created_at:type_name -> google.protobuf.Timestamp
-	52,  // 9: controlplane.v1.AccessRoleVersion.created_by:type_name -> controlplane.v1.UserSummary
+	52,  // 8: controlplane.v1.AccessRoleVersion.created_at:type_name -> google.protobuf.Timestamp
+	53,  // 9: controlplane.v1.AccessRoleVersion.created_by:type_name -> controlplane.v1.UserSummary
 	4,   // 10: controlplane.v1.AccessRole.kind:type_name -> controlplane.v1.AccessRoleKind
 	5,   // 11: controlplane.v1.AccessRole.state:type_name -> controlplane.v1.AccessRoleState
-	12,  // 12: controlplane.v1.AccessRole.current_version:type_name -> controlplane.v1.AccessRoleVersion
-	51,  // 13: controlplane.v1.AccessRole.updated_at:type_name -> google.protobuf.Timestamp
+	13,  // 12: controlplane.v1.AccessRole.current_version:type_name -> controlplane.v1.AccessRoleVersion
+	52,  // 13: controlplane.v1.AccessRole.updated_at:type_name -> google.protobuf.Timestamp
 	2,   // 14: controlplane.v1.AccessScope.kind:type_name -> controlplane.v1.AccessScopeKind
 	3,   // 15: controlplane.v1.AccessScope.resource_kind:type_name -> controlplane.v1.AccessResourceKind
-	51,  // 16: controlplane.v1.AccessConditions.valid_from:type_name -> google.protobuf.Timestamp
-	51,  // 17: controlplane.v1.AccessConditions.valid_until:type_name -> google.protobuf.Timestamp
+	52,  // 16: controlplane.v1.AccessConditions.valid_from:type_name -> google.protobuf.Timestamp
+	52,  // 17: controlplane.v1.AccessConditions.valid_until:type_name -> google.protobuf.Timestamp
 	6,   // 18: controlplane.v1.AccessBinding.state:type_name -> controlplane.v1.AccessBindingState
-	10,  // 19: controlplane.v1.AccessBinding.subject:type_name -> controlplane.v1.AccessSubject
-	12,  // 20: controlplane.v1.AccessBinding.role_version:type_name -> controlplane.v1.AccessRoleVersion
-	14,  // 21: controlplane.v1.AccessBinding.scope:type_name -> controlplane.v1.AccessScope
-	15,  // 22: controlplane.v1.AccessBinding.conditions:type_name -> controlplane.v1.AccessConditions
-	51,  // 23: controlplane.v1.AccessBinding.created_at:type_name -> google.protobuf.Timestamp
-	51,  // 24: controlplane.v1.AccessBinding.updated_at:type_name -> google.protobuf.Timestamp
-	1,   // 25: controlplane.v1.AccessExplanationStep.source_kind:type_name -> controlplane.v1.AccessSubjectKind
-	14,  // 26: controlplane.v1.AccessExplanationStep.scope:type_name -> controlplane.v1.AccessScope
-	8,   // 27: controlplane.v1.EffectiveAccessDecision.decision:type_name -> controlplane.v1.AccessDecision
-	14,  // 28: controlplane.v1.EffectiveAccessDecision.target:type_name -> controlplane.v1.AccessScope
-	17,  // 29: controlplane.v1.EffectiveAccessDecision.explanation:type_name -> controlplane.v1.AccessExplanationStep
-	2,   // 30: controlplane.v1.AccessRoleDraft.allowed_scopes:type_name -> controlplane.v1.AccessScopeKind
-	1,   // 31: controlplane.v1.AccessBindingDraft.subject_kind:type_name -> controlplane.v1.AccessSubjectKind
-	14,  // 32: controlplane.v1.AccessBindingDraft.scope:type_name -> controlplane.v1.AccessScope
-	15,  // 33: controlplane.v1.AccessBindingDraft.conditions:type_name -> controlplane.v1.AccessConditions
-	9,   // 34: controlplane.v1.ListPermissionRegistryResponse.permissions:type_name -> controlplane.v1.PermissionDefinition
-	53,  // 35: controlplane.v1.ListAccessSubjectsRequest.page:type_name -> controlplane.v1.PageRequest
-	1,   // 36: controlplane.v1.ListAccessSubjectsRequest.kind:type_name -> controlplane.v1.AccessSubjectKind
-	10,  // 37: controlplane.v1.ListAccessSubjectsResponse.subjects:type_name -> controlplane.v1.AccessSubject
-	54,  // 38: controlplane.v1.ListAccessSubjectsResponse.page:type_name -> controlplane.v1.PageInfo
-	53,  // 39: controlplane.v1.ListOIDCGroupsRequest.page:type_name -> controlplane.v1.PageRequest
-	11,  // 40: controlplane.v1.ListOIDCGroupsResponse.groups:type_name -> controlplane.v1.OIDCGroup
-	54,  // 41: controlplane.v1.ListOIDCGroupsResponse.page:type_name -> controlplane.v1.PageInfo
-	53,  // 42: controlplane.v1.ListAccessRolesRequest.page:type_name -> controlplane.v1.PageRequest
-	13,  // 43: controlplane.v1.ListAccessRolesResponse.roles:type_name -> controlplane.v1.AccessRole
-	54,  // 44: controlplane.v1.ListAccessRolesResponse.page:type_name -> controlplane.v1.PageInfo
-	53,  // 45: controlplane.v1.ListAccessRoleVersionsRequest.page:type_name -> controlplane.v1.PageRequest
-	13,  // 46: controlplane.v1.ListAccessRoleVersionsResponse.role:type_name -> controlplane.v1.AccessRole
-	12,  // 47: controlplane.v1.ListAccessRoleVersionsResponse.versions:type_name -> controlplane.v1.AccessRoleVersion
-	54,  // 48: controlplane.v1.ListAccessRoleVersionsResponse.page:type_name -> controlplane.v1.PageInfo
-	53,  // 49: controlplane.v1.ListAccessBindingsRequest.page:type_name -> controlplane.v1.PageRequest
-	1,   // 50: controlplane.v1.ListAccessBindingsRequest.subject_kind:type_name -> controlplane.v1.AccessSubjectKind
-	16,  // 51: controlplane.v1.ListAccessBindingsResponse.bindings:type_name -> controlplane.v1.AccessBinding
-	54,  // 52: controlplane.v1.ListAccessBindingsResponse.page:type_name -> controlplane.v1.PageInfo
-	14,  // 53: controlplane.v1.QueryEffectiveAccessRequest.target:type_name -> controlplane.v1.AccessScope
-	10,  // 54: controlplane.v1.QueryEffectiveAccessResponse.subject:type_name -> controlplane.v1.AccessSubject
-	18,  // 55: controlplane.v1.QueryEffectiveAccessResponse.decisions:type_name -> controlplane.v1.EffectiveAccessDecision
-	51,  // 56: controlplane.v1.QueryEffectiveAccessResponse.evaluated_at:type_name -> google.protobuf.Timestamp
-	14,  // 57: controlplane.v1.ExplainAccessRequest.target:type_name -> controlplane.v1.AccessScope
-	10,  // 58: controlplane.v1.ExplainAccessResponse.subject:type_name -> controlplane.v1.AccessSubject
-	18,  // 59: controlplane.v1.ExplainAccessResponse.result:type_name -> controlplane.v1.EffectiveAccessDecision
-	51,  // 60: controlplane.v1.ExplainAccessResponse.evaluated_at:type_name -> google.protobuf.Timestamp
-	14,  // 61: controlplane.v1.SimulateAccessRequest.target:type_name -> controlplane.v1.AccessScope
-	19,  // 62: controlplane.v1.SimulateAccessRequest.role:type_name -> controlplane.v1.AccessRoleDraft
-	20,  // 63: controlplane.v1.SimulateAccessRequest.binding:type_name -> controlplane.v1.AccessBindingDraft
-	51,  // 64: controlplane.v1.SimulateAccessRequest.evaluated_at:type_name -> google.protobuf.Timestamp
-	10,  // 65: controlplane.v1.SimulateAccessResponse.subject:type_name -> controlplane.v1.AccessSubject
-	18,  // 66: controlplane.v1.SimulateAccessResponse.current:type_name -> controlplane.v1.EffectiveAccessDecision
-	18,  // 67: controlplane.v1.SimulateAccessResponse.simulated:type_name -> controlplane.v1.EffectiveAccessDecision
-	51,  // 68: controlplane.v1.SimulateAccessResponse.evaluated_at:type_name -> google.protobuf.Timestamp
-	55,  // 69: controlplane.v1.CreateAccessRoleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	2,   // 70: controlplane.v1.CreateAccessRoleRequest.allowed_scopes:type_name -> controlplane.v1.AccessScopeKind
-	13,  // 71: controlplane.v1.CreateAccessRoleResponse.role:type_name -> controlplane.v1.AccessRole
-	55,  // 72: controlplane.v1.CreateAccessRoleVersionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	2,   // 73: controlplane.v1.CreateAccessRoleVersionRequest.allowed_scopes:type_name -> controlplane.v1.AccessScopeKind
-	13,  // 74: controlplane.v1.CreateAccessRoleVersionResponse.role:type_name -> controlplane.v1.AccessRole
-	55,  // 75: controlplane.v1.ArchiveAccessRoleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	13,  // 76: controlplane.v1.ArchiveAccessRoleResponse.role:type_name -> controlplane.v1.AccessRole
-	55,  // 77: controlplane.v1.CreateAccessBindingRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1,   // 78: controlplane.v1.CreateAccessBindingRequest.subject_kind:type_name -> controlplane.v1.AccessSubjectKind
-	14,  // 79: controlplane.v1.CreateAccessBindingRequest.scope:type_name -> controlplane.v1.AccessScope
-	15,  // 80: controlplane.v1.CreateAccessBindingRequest.conditions:type_name -> controlplane.v1.AccessConditions
-	16,  // 81: controlplane.v1.CreateAccessBindingResponse.binding:type_name -> controlplane.v1.AccessBinding
-	55,  // 82: controlplane.v1.ChangeAccessBindingRequest.mutation:type_name -> controlplane.v1.MutationContext
-	14,  // 83: controlplane.v1.ChangeAccessBindingRequest.scope:type_name -> controlplane.v1.AccessScope
-	15,  // 84: controlplane.v1.ChangeAccessBindingRequest.conditions:type_name -> controlplane.v1.AccessConditions
-	16,  // 85: controlplane.v1.ChangeAccessBindingResponse.binding:type_name -> controlplane.v1.AccessBinding
-	55,  // 86: controlplane.v1.RevokeAccessBindingRequest.mutation:type_name -> controlplane.v1.MutationContext
-	16,  // 87: controlplane.v1.RevokeAccessBindingResponse.binding:type_name -> controlplane.v1.AccessBinding
-	21,  // 88: controlplane.v1.AccessService.ListPermissionRegistry:input_type -> controlplane.v1.ListPermissionRegistryRequest
-	23,  // 89: controlplane.v1.AccessService.ListAccessSubjects:input_type -> controlplane.v1.ListAccessSubjectsRequest
-	25,  // 90: controlplane.v1.AccessService.ListOIDCGroups:input_type -> controlplane.v1.ListOIDCGroupsRequest
-	27,  // 91: controlplane.v1.AccessService.ListAccessRoles:input_type -> controlplane.v1.ListAccessRolesRequest
-	29,  // 92: controlplane.v1.AccessService.ListAccessRoleVersions:input_type -> controlplane.v1.ListAccessRoleVersionsRequest
-	31,  // 93: controlplane.v1.AccessService.ListAccessBindings:input_type -> controlplane.v1.ListAccessBindingsRequest
-	33,  // 94: controlplane.v1.AccessService.QueryEffectiveAccess:input_type -> controlplane.v1.QueryEffectiveAccessRequest
-	35,  // 95: controlplane.v1.AccessService.ExplainAccess:input_type -> controlplane.v1.ExplainAccessRequest
-	37,  // 96: controlplane.v1.AccessService.SimulateAccess:input_type -> controlplane.v1.SimulateAccessRequest
-	39,  // 97: controlplane.v1.AccessService.CreateAccessRole:input_type -> controlplane.v1.CreateAccessRoleRequest
-	41,  // 98: controlplane.v1.AccessService.CreateAccessRoleVersion:input_type -> controlplane.v1.CreateAccessRoleVersionRequest
-	43,  // 99: controlplane.v1.AccessService.ArchiveAccessRole:input_type -> controlplane.v1.ArchiveAccessRoleRequest
-	45,  // 100: controlplane.v1.AccessService.CreateAccessBinding:input_type -> controlplane.v1.CreateAccessBindingRequest
-	47,  // 101: controlplane.v1.AccessService.ChangeAccessBinding:input_type -> controlplane.v1.ChangeAccessBindingRequest
-	49,  // 102: controlplane.v1.AccessService.RevokeAccessBinding:input_type -> controlplane.v1.RevokeAccessBindingRequest
-	22,  // 103: controlplane.v1.AccessService.ListPermissionRegistry:output_type -> controlplane.v1.ListPermissionRegistryResponse
-	24,  // 104: controlplane.v1.AccessService.ListAccessSubjects:output_type -> controlplane.v1.ListAccessSubjectsResponse
-	26,  // 105: controlplane.v1.AccessService.ListOIDCGroups:output_type -> controlplane.v1.ListOIDCGroupsResponse
-	28,  // 106: controlplane.v1.AccessService.ListAccessRoles:output_type -> controlplane.v1.ListAccessRolesResponse
-	30,  // 107: controlplane.v1.AccessService.ListAccessRoleVersions:output_type -> controlplane.v1.ListAccessRoleVersionsResponse
-	32,  // 108: controlplane.v1.AccessService.ListAccessBindings:output_type -> controlplane.v1.ListAccessBindingsResponse
-	34,  // 109: controlplane.v1.AccessService.QueryEffectiveAccess:output_type -> controlplane.v1.QueryEffectiveAccessResponse
-	36,  // 110: controlplane.v1.AccessService.ExplainAccess:output_type -> controlplane.v1.ExplainAccessResponse
-	38,  // 111: controlplane.v1.AccessService.SimulateAccess:output_type -> controlplane.v1.SimulateAccessResponse
-	40,  // 112: controlplane.v1.AccessService.CreateAccessRole:output_type -> controlplane.v1.CreateAccessRoleResponse
-	42,  // 113: controlplane.v1.AccessService.CreateAccessRoleVersion:output_type -> controlplane.v1.CreateAccessRoleVersionResponse
-	44,  // 114: controlplane.v1.AccessService.ArchiveAccessRole:output_type -> controlplane.v1.ArchiveAccessRoleResponse
-	46,  // 115: controlplane.v1.AccessService.CreateAccessBinding:output_type -> controlplane.v1.CreateAccessBindingResponse
-	48,  // 116: controlplane.v1.AccessService.ChangeAccessBinding:output_type -> controlplane.v1.ChangeAccessBindingResponse
-	50,  // 117: controlplane.v1.AccessService.RevokeAccessBinding:output_type -> controlplane.v1.RevokeAccessBindingResponse
-	103, // [103:118] is the sub-list for method output_type
-	88,  // [88:103] is the sub-list for method input_type
-	88,  // [88:88] is the sub-list for extension type_name
-	88,  // [88:88] is the sub-list for extension extendee
-	0,   // [0:88] is the sub-list for field type_name
+	11,  // 19: controlplane.v1.AccessBinding.subject:type_name -> controlplane.v1.AccessSubject
+	13,  // 20: controlplane.v1.AccessBinding.role_version:type_name -> controlplane.v1.AccessRoleVersion
+	15,  // 21: controlplane.v1.AccessBinding.scope:type_name -> controlplane.v1.AccessScope
+	16,  // 22: controlplane.v1.AccessBinding.conditions:type_name -> controlplane.v1.AccessConditions
+	52,  // 23: controlplane.v1.AccessBinding.created_at:type_name -> google.protobuf.Timestamp
+	52,  // 24: controlplane.v1.AccessBinding.updated_at:type_name -> google.protobuf.Timestamp
+	7,   // 25: controlplane.v1.AccessBinding.management_kind:type_name -> controlplane.v1.AccessBindingManagementKind
+	1,   // 26: controlplane.v1.AccessExplanationStep.source_kind:type_name -> controlplane.v1.AccessSubjectKind
+	15,  // 27: controlplane.v1.AccessExplanationStep.scope:type_name -> controlplane.v1.AccessScope
+	9,   // 28: controlplane.v1.EffectiveAccessDecision.decision:type_name -> controlplane.v1.AccessDecision
+	15,  // 29: controlplane.v1.EffectiveAccessDecision.target:type_name -> controlplane.v1.AccessScope
+	18,  // 30: controlplane.v1.EffectiveAccessDecision.explanation:type_name -> controlplane.v1.AccessExplanationStep
+	2,   // 31: controlplane.v1.AccessRoleDraft.allowed_scopes:type_name -> controlplane.v1.AccessScopeKind
+	1,   // 32: controlplane.v1.AccessBindingDraft.subject_kind:type_name -> controlplane.v1.AccessSubjectKind
+	15,  // 33: controlplane.v1.AccessBindingDraft.scope:type_name -> controlplane.v1.AccessScope
+	16,  // 34: controlplane.v1.AccessBindingDraft.conditions:type_name -> controlplane.v1.AccessConditions
+	10,  // 35: controlplane.v1.ListPermissionRegistryResponse.permissions:type_name -> controlplane.v1.PermissionDefinition
+	54,  // 36: controlplane.v1.ListAccessSubjectsRequest.page:type_name -> controlplane.v1.PageRequest
+	1,   // 37: controlplane.v1.ListAccessSubjectsRequest.kind:type_name -> controlplane.v1.AccessSubjectKind
+	11,  // 38: controlplane.v1.ListAccessSubjectsResponse.subjects:type_name -> controlplane.v1.AccessSubject
+	55,  // 39: controlplane.v1.ListAccessSubjectsResponse.page:type_name -> controlplane.v1.PageInfo
+	54,  // 40: controlplane.v1.ListOIDCGroupsRequest.page:type_name -> controlplane.v1.PageRequest
+	12,  // 41: controlplane.v1.ListOIDCGroupsResponse.groups:type_name -> controlplane.v1.OIDCGroup
+	55,  // 42: controlplane.v1.ListOIDCGroupsResponse.page:type_name -> controlplane.v1.PageInfo
+	54,  // 43: controlplane.v1.ListAccessRolesRequest.page:type_name -> controlplane.v1.PageRequest
+	14,  // 44: controlplane.v1.ListAccessRolesResponse.roles:type_name -> controlplane.v1.AccessRole
+	55,  // 45: controlplane.v1.ListAccessRolesResponse.page:type_name -> controlplane.v1.PageInfo
+	54,  // 46: controlplane.v1.ListAccessRoleVersionsRequest.page:type_name -> controlplane.v1.PageRequest
+	14,  // 47: controlplane.v1.ListAccessRoleVersionsResponse.role:type_name -> controlplane.v1.AccessRole
+	13,  // 48: controlplane.v1.ListAccessRoleVersionsResponse.versions:type_name -> controlplane.v1.AccessRoleVersion
+	55,  // 49: controlplane.v1.ListAccessRoleVersionsResponse.page:type_name -> controlplane.v1.PageInfo
+	54,  // 50: controlplane.v1.ListAccessBindingsRequest.page:type_name -> controlplane.v1.PageRequest
+	1,   // 51: controlplane.v1.ListAccessBindingsRequest.subject_kind:type_name -> controlplane.v1.AccessSubjectKind
+	17,  // 52: controlplane.v1.ListAccessBindingsResponse.bindings:type_name -> controlplane.v1.AccessBinding
+	55,  // 53: controlplane.v1.ListAccessBindingsResponse.page:type_name -> controlplane.v1.PageInfo
+	15,  // 54: controlplane.v1.QueryEffectiveAccessRequest.target:type_name -> controlplane.v1.AccessScope
+	11,  // 55: controlplane.v1.QueryEffectiveAccessResponse.subject:type_name -> controlplane.v1.AccessSubject
+	19,  // 56: controlplane.v1.QueryEffectiveAccessResponse.decisions:type_name -> controlplane.v1.EffectiveAccessDecision
+	52,  // 57: controlplane.v1.QueryEffectiveAccessResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	15,  // 58: controlplane.v1.ExplainAccessRequest.target:type_name -> controlplane.v1.AccessScope
+	11,  // 59: controlplane.v1.ExplainAccessResponse.subject:type_name -> controlplane.v1.AccessSubject
+	19,  // 60: controlplane.v1.ExplainAccessResponse.result:type_name -> controlplane.v1.EffectiveAccessDecision
+	52,  // 61: controlplane.v1.ExplainAccessResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	15,  // 62: controlplane.v1.SimulateAccessRequest.target:type_name -> controlplane.v1.AccessScope
+	20,  // 63: controlplane.v1.SimulateAccessRequest.role:type_name -> controlplane.v1.AccessRoleDraft
+	21,  // 64: controlplane.v1.SimulateAccessRequest.binding:type_name -> controlplane.v1.AccessBindingDraft
+	52,  // 65: controlplane.v1.SimulateAccessRequest.evaluated_at:type_name -> google.protobuf.Timestamp
+	11,  // 66: controlplane.v1.SimulateAccessResponse.subject:type_name -> controlplane.v1.AccessSubject
+	19,  // 67: controlplane.v1.SimulateAccessResponse.current:type_name -> controlplane.v1.EffectiveAccessDecision
+	19,  // 68: controlplane.v1.SimulateAccessResponse.simulated:type_name -> controlplane.v1.EffectiveAccessDecision
+	52,  // 69: controlplane.v1.SimulateAccessResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	56,  // 70: controlplane.v1.CreateAccessRoleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	2,   // 71: controlplane.v1.CreateAccessRoleRequest.allowed_scopes:type_name -> controlplane.v1.AccessScopeKind
+	14,  // 72: controlplane.v1.CreateAccessRoleResponse.role:type_name -> controlplane.v1.AccessRole
+	56,  // 73: controlplane.v1.CreateAccessRoleVersionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	2,   // 74: controlplane.v1.CreateAccessRoleVersionRequest.allowed_scopes:type_name -> controlplane.v1.AccessScopeKind
+	14,  // 75: controlplane.v1.CreateAccessRoleVersionResponse.role:type_name -> controlplane.v1.AccessRole
+	56,  // 76: controlplane.v1.ArchiveAccessRoleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	14,  // 77: controlplane.v1.ArchiveAccessRoleResponse.role:type_name -> controlplane.v1.AccessRole
+	56,  // 78: controlplane.v1.CreateAccessBindingRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1,   // 79: controlplane.v1.CreateAccessBindingRequest.subject_kind:type_name -> controlplane.v1.AccessSubjectKind
+	15,  // 80: controlplane.v1.CreateAccessBindingRequest.scope:type_name -> controlplane.v1.AccessScope
+	16,  // 81: controlplane.v1.CreateAccessBindingRequest.conditions:type_name -> controlplane.v1.AccessConditions
+	17,  // 82: controlplane.v1.CreateAccessBindingResponse.binding:type_name -> controlplane.v1.AccessBinding
+	56,  // 83: controlplane.v1.ChangeAccessBindingRequest.mutation:type_name -> controlplane.v1.MutationContext
+	15,  // 84: controlplane.v1.ChangeAccessBindingRequest.scope:type_name -> controlplane.v1.AccessScope
+	16,  // 85: controlplane.v1.ChangeAccessBindingRequest.conditions:type_name -> controlplane.v1.AccessConditions
+	17,  // 86: controlplane.v1.ChangeAccessBindingResponse.binding:type_name -> controlplane.v1.AccessBinding
+	56,  // 87: controlplane.v1.RevokeAccessBindingRequest.mutation:type_name -> controlplane.v1.MutationContext
+	17,  // 88: controlplane.v1.RevokeAccessBindingResponse.binding:type_name -> controlplane.v1.AccessBinding
+	22,  // 89: controlplane.v1.AccessService.ListPermissionRegistry:input_type -> controlplane.v1.ListPermissionRegistryRequest
+	24,  // 90: controlplane.v1.AccessService.ListAccessSubjects:input_type -> controlplane.v1.ListAccessSubjectsRequest
+	26,  // 91: controlplane.v1.AccessService.ListOIDCGroups:input_type -> controlplane.v1.ListOIDCGroupsRequest
+	28,  // 92: controlplane.v1.AccessService.ListAccessRoles:input_type -> controlplane.v1.ListAccessRolesRequest
+	30,  // 93: controlplane.v1.AccessService.ListAccessRoleVersions:input_type -> controlplane.v1.ListAccessRoleVersionsRequest
+	32,  // 94: controlplane.v1.AccessService.ListAccessBindings:input_type -> controlplane.v1.ListAccessBindingsRequest
+	34,  // 95: controlplane.v1.AccessService.QueryEffectiveAccess:input_type -> controlplane.v1.QueryEffectiveAccessRequest
+	36,  // 96: controlplane.v1.AccessService.ExplainAccess:input_type -> controlplane.v1.ExplainAccessRequest
+	38,  // 97: controlplane.v1.AccessService.SimulateAccess:input_type -> controlplane.v1.SimulateAccessRequest
+	40,  // 98: controlplane.v1.AccessService.CreateAccessRole:input_type -> controlplane.v1.CreateAccessRoleRequest
+	42,  // 99: controlplane.v1.AccessService.CreateAccessRoleVersion:input_type -> controlplane.v1.CreateAccessRoleVersionRequest
+	44,  // 100: controlplane.v1.AccessService.ArchiveAccessRole:input_type -> controlplane.v1.ArchiveAccessRoleRequest
+	46,  // 101: controlplane.v1.AccessService.CreateAccessBinding:input_type -> controlplane.v1.CreateAccessBindingRequest
+	48,  // 102: controlplane.v1.AccessService.ChangeAccessBinding:input_type -> controlplane.v1.ChangeAccessBindingRequest
+	50,  // 103: controlplane.v1.AccessService.RevokeAccessBinding:input_type -> controlplane.v1.RevokeAccessBindingRequest
+	23,  // 104: controlplane.v1.AccessService.ListPermissionRegistry:output_type -> controlplane.v1.ListPermissionRegistryResponse
+	25,  // 105: controlplane.v1.AccessService.ListAccessSubjects:output_type -> controlplane.v1.ListAccessSubjectsResponse
+	27,  // 106: controlplane.v1.AccessService.ListOIDCGroups:output_type -> controlplane.v1.ListOIDCGroupsResponse
+	29,  // 107: controlplane.v1.AccessService.ListAccessRoles:output_type -> controlplane.v1.ListAccessRolesResponse
+	31,  // 108: controlplane.v1.AccessService.ListAccessRoleVersions:output_type -> controlplane.v1.ListAccessRoleVersionsResponse
+	33,  // 109: controlplane.v1.AccessService.ListAccessBindings:output_type -> controlplane.v1.ListAccessBindingsResponse
+	35,  // 110: controlplane.v1.AccessService.QueryEffectiveAccess:output_type -> controlplane.v1.QueryEffectiveAccessResponse
+	37,  // 111: controlplane.v1.AccessService.ExplainAccess:output_type -> controlplane.v1.ExplainAccessResponse
+	39,  // 112: controlplane.v1.AccessService.SimulateAccess:output_type -> controlplane.v1.SimulateAccessResponse
+	41,  // 113: controlplane.v1.AccessService.CreateAccessRole:output_type -> controlplane.v1.CreateAccessRoleResponse
+	43,  // 114: controlplane.v1.AccessService.CreateAccessRoleVersion:output_type -> controlplane.v1.CreateAccessRoleVersionResponse
+	45,  // 115: controlplane.v1.AccessService.ArchiveAccessRole:output_type -> controlplane.v1.ArchiveAccessRoleResponse
+	47,  // 116: controlplane.v1.AccessService.CreateAccessBinding:output_type -> controlplane.v1.CreateAccessBindingResponse
+	49,  // 117: controlplane.v1.AccessService.ChangeAccessBinding:output_type -> controlplane.v1.ChangeAccessBindingResponse
+	51,  // 118: controlplane.v1.AccessService.RevokeAccessBinding:output_type -> controlplane.v1.RevokeAccessBindingResponse
+	104, // [104:119] is the sub-list for method output_type
+	89,  // [89:104] is the sub-list for method input_type
+	89,  // [89:89] is the sub-list for extension type_name
+	89,  // [89:89] is the sub-list for extension extendee
+	0,   // [0:89] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_access_proto_init() }
@@ -3787,7 +3856,7 @@ func file_controlplane_v1_access_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlplane_v1_access_proto_rawDesc), len(file_controlplane_v1_access_proto_rawDesc)),
-			NumEnums:      9,
+			NumEnums:      10,
 			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   1,

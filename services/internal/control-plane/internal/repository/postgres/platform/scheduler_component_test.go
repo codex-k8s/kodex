@@ -226,7 +226,27 @@ func testAutomationScheduler(t *testing.T, ctx context.Context, repository *Repo
 	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.schedule_occurrences o JOIN control_plane.schedules s ON s.id=o.schedule_id WHERE s.ref=$1 AND o.state='DEAD_LETTER'`, expiring.Ref).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("dead letter readback: %d %v", count, err)
 	}
-	disable(expiring, "disable-expiring")
+	currentExpiring, err := service.GetSchedule(ctx, owner, expiring.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatedExpiring := execute(command.UpdateSchedule, owner, "update-expiring", command.ScheduleInput{
+		Ref: currentExpiring.Ref, Name: currentExpiring.Name, Target: currentExpiring.Target,
+		Preset: currentExpiring.Preset, CronExpression: currentExpiring.CronExpression, Timezone: currentExpiring.Timezone,
+		Input: currentExpiring.Input, SessionPolicy: currentExpiring.SessionPolicy, NotificationPolicy: currentExpiring.NotificationPolicy,
+		DSTGapPolicy: currentExpiring.DSTGapPolicy, DSTFoldPolicy: currentExpiring.DSTFoldPolicy,
+		MisfirePolicy: currentExpiring.MisfirePolicy, OverlapPolicy: currentExpiring.OverlapPolicy,
+		AutomationText: currentExpiring.AutomationText, PromptInputs: currentExpiring.PromptInputs,
+	}, &currentExpiring.Version).Schedule
+	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.schedule_occurrences o JOIN control_plane.schedules s ON s.id=o.schedule_id WHERE s.ref=$1 AND o.state='CANCELLED' AND o.dead_lettered_at IS NULL`, expiring.Ref).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("updated schedule retained blocking dead letter: %d %v", count, err)
+	}
+	makeDue(updatedExpiring, 7)
+	recovered := claim()
+	if stringMap(recovered, "occurrenceRef") == "" || recovered["attempt"].(int32) != 1 {
+		t.Fatal("updated schedule did not create a fresh occurrence")
+	}
+	disable(updatedExpiring, "disable-expiring")
 	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.schedule_occurrence_attempts a JOIN control_plane.schedule_occurrences o ON o.id=a.occurrence_id JOIN control_plane.schedules s ON s.id=o.schedule_id WHERE s.ref=$1 AND a.state='CLAIMED'`, expiring.Ref).Scan(&count); err != nil || count != 0 {
 		t.Fatal("cancel left a live attempt")
 	}

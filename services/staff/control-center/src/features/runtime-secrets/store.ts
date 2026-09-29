@@ -32,6 +32,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   let generation = 0;
   let mutationGeneration = 0;
   let controller: AbortController | undefined;
+  let requestedPageSize = 20;
 
   const empty = computed(
     () => !loading.value && !problem.value && items.value.length === 0,
@@ -43,6 +44,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     nextQuery = "",
     pageSize = 20,
   ): Promise<void> {
+    requestedPageSize = pageSize;
     const current = ++generation;
     controller?.abort();
     const currentController = new AbortController();
@@ -81,6 +83,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
 
   async function loadMore(pageSize = 20): Promise<void> {
     if (!hasMore.value || loading.value || loadingMore.value) return;
+    requestedPageSize = pageSize;
     const current = generation;
     const cursor = nextPageToken.value;
     const currentController = controller ?? new AbortController();
@@ -119,7 +122,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
   }
 
   async function reload(): Promise<void> {
-    await load(projectRef.value, query.value);
+    await load(projectRef.value, query.value, requestedPageSize);
   }
 
   async function create(input: RuntimeSecretCreateInput): Promise<void> {
@@ -296,6 +299,7 @@ export const useRuntimeSecretsStore = defineStore("runtime-secrets", () => {
     problem.value = undefined;
     mutationProblem.value = undefined;
     busyRef.value = "";
+    requestedPageSize = 20;
   }
 
   return {

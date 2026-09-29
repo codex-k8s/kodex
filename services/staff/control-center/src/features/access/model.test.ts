@@ -35,6 +35,7 @@ function binding(
     ref,
     version: 1,
     state,
+    managementKind: "DIRECT",
     subject: {
       ref: subjectRef,
       kind: subjectRef.startsWith("group_") ? "OIDC_GROUP" : "USER",

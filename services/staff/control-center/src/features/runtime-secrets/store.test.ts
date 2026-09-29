@@ -160,6 +160,31 @@ describe("runtime secrets store", () => {
     expect(api.rotateRuntimeSecret).toHaveBeenCalledTimes(1);
   });
 
+  it("сохраняет адаптивный размер страницы при readback после мутации", async () => {
+    const rotated = { ...secret, version: 4, currentRevision: 3 };
+    api.loadRuntimeSecretPage.mockResolvedValue({
+      items: [secret],
+      nextPageToken: "",
+    });
+    api.rotateRuntimeSecret.mockResolvedValue(rotated);
+    api.readRuntimeSecret.mockResolvedValue(rotated);
+    const store = useRuntimeSecretsStore();
+
+    await store.load(secret.projectRef, "", 22);
+    await store.rotate(secret, {
+      valueType: "STRING",
+      value: "private-rotation",
+    });
+
+    expect(api.loadRuntimeSecretPage).toHaveBeenLastCalledWith(
+      secret.projectRef,
+      "",
+      undefined,
+      expect.any(AbortSignal),
+      22,
+    );
+  });
+
   it("отклоняет каталог другого проекта", async () => {
     api.loadRuntimeSecretPage.mockResolvedValue({
       items: [secret],

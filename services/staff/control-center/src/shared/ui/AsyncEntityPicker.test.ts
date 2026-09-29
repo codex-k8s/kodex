@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createSSRApp, effectScope, h, nextTick } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
@@ -418,6 +419,15 @@ describe("virtual window", () => {
 });
 
 describe("AsyncEntityPicker", () => {
+  it("передаёт стабильный id элементов loadItems в dropdown-режиме", () => {
+    const componentSource = readFileSync(
+      new URL("./AsyncEntityPicker.vue", import.meta.url),
+      "utf8",
+    );
+    expect(componentSource).toContain('emit("update:modelValue", item.id)');
+    expect(componentSource).not.toContain("!isOption(item.source)");
+  });
+
   it("рендерит доступный listbox и начальное состояние загрузки", async () => {
     const app = createSSRApp({
       render: () =>

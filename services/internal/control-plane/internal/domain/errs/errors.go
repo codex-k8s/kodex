@@ -15,6 +15,7 @@ var (
 	ErrVersionMismatch             = errors.New("version mismatch")
 	ErrIdempotencyReuse            = errors.New("idempotency key reused with different intent")
 	ErrProtected                   = errors.New("protected system resource")
+	ErrResourceInUse               = errors.New("resource is in use")
 	ErrUnavailable                 = errors.New("temporarily unavailable")
 	ErrMailboxPublicationPending   = errors.New("mailbox publication is pending")
 )

@@ -216,6 +216,10 @@ func (repository *Repository) changeSchedule(ctx context.Context, tx pgx.Tx, sco
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
+		if _, cancelErr := tx.Exec(ctx, queryConfigurationChangescheduleCancelClaimedOccurrences,
+			pgx.StrictNamedArgs{"schedule_id": scheduleID}); cancelErr != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
 		item.Target = payload.Target
 		item.Input = payload.Input
 		item.PromptInputs = payload.PromptInputs
@@ -1373,10 +1377,14 @@ func (repository *Repository) promoteAssistantConversationProject(ctx context.Co
 	).Scan(&sessionID); err != nil {
 		return fmt.Errorf("promote assistant session project: %w", errs.ErrConflict)
 	}
-	if _, err := tx.Exec(ctx, queryConfigurationApplyassistantplancommandPromoteSessionStorageProject,
+	var lineagePromoted bool
+	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandPromoteSessionStorageProject,
 		projectID, sessionID, scope.organizationID,
-	); err != nil {
+	).Scan(&lineagePromoted); err != nil {
 		return fmt.Errorf("promote assistant session storage project: %w", errs.ErrUnavailable)
+	}
+	if !lineagePromoted {
+		return fmt.Errorf("promote assistant session lineage project: %w", errs.ErrConflict)
 	}
 	var promotedRef string
 	if err := tx.QueryRow(ctx, queryConfigurationApplyassistantplancommandPromoteConversationProject,

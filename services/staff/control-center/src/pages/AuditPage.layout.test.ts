@@ -13,9 +13,7 @@ const template = source.slice(
 
 describe("AuditPage pagination", () => {
   it("использует server-side search и cursor-дозагрузку", () => {
-    expect(source).toContain(
-      "platform.loadAudit(projectRef.value, query.value, pageSize.value)",
-    );
+    expect(source).toContain("showTechnical.value");
     expect(source).toContain("pageSize.value");
     expect(source).toContain("useCursorInfiniteScroll");
     expect(template).toContain('ref="sentinel"');
@@ -38,7 +36,7 @@ describe("AuditPage pagination", () => {
     expect(source).toContain(':load-page="accessProjectOptions"');
     expect(source).toContain('@update:model-value="selectProject"');
     expect(source).toContain("{ ...route.query, projectRef: next }");
-    expect(source).toContain("watch(projectRef, () => {");
+    expect(source).toContain("watch([projectRef, showTechnical], () => {");
     expect(source).toContain("loadSelectedProject()");
   });
 
@@ -46,5 +44,16 @@ describe("AuditPage pagination", () => {
     expect(source).toContain('const prefix = "runtime-secret-draft."');
     expect(source).toContain("actionSummary(event)");
     expect(source).toContain("event.safeSummary");
+  });
+
+  it("скрывает частые технические heartbeat по умолчанию и позволяет вернуть их", () => {
+    expect(source).toContain("platform.loadAudit(");
+    expect(source).toContain("platform.loadMoreAudit(");
+    expect(template).toContain('name="audit-show-technical"');
+    expect(template).toContain('$t("audit.showTechnical")');
+    expect(template).toContain(':empty="list.length === 0 && !hasMore"');
+    expect(source).toContain('next.technical = "1"');
+    expect(source).toContain("watch([projectRef, showTechnical]");
+    expect(source).toContain("overflow-wrap: anywhere");
   });
 });

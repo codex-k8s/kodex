@@ -691,6 +691,7 @@ describe("platform store", () => {
         query: {
           projectRef: "project_sales",
           query: "Квартальный отчёт",
+          includeTechnical: true,
           pageSize: 20,
         },
       }),
@@ -711,6 +712,7 @@ describe("platform store", () => {
         query: {
           projectRef: "project_sales",
           resourceRef: "gat_review01",
+          includeTechnical: true,
           pageSize: 20,
         },
       }),
@@ -743,6 +745,7 @@ describe("platform store", () => {
         query: {
           projectRef: "project_sales",
           query: "Квартальный отчёт",
+          includeTechnical: true,
           pageSize: 10,
           pageToken: "audit-page-2",
         },
@@ -778,6 +781,7 @@ describe("platform store", () => {
         query: {
           projectRef: "project_sales",
           query: "отчёт",
+          includeTechnical: true,
           pageSize: 23,
           pageToken: "audit-page-after-resize",
         },
@@ -788,6 +792,26 @@ describe("platform store", () => {
       second.ref,
     ]);
     expect(store.auditNextPageToken).toBeUndefined();
+  });
+
+  it("передаёт owner API режим исключения технических событий", async () => {
+    listAuditEventsMock.mockResolvedValue({
+      data: { items: [], nextPageToken: "" },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+
+    await store.loadAudit("project_sales", "", 20, "", false);
+
+    expect(listAuditEventsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          projectRef: "project_sales",
+          includeTechnical: false,
+          pageSize: 20,
+        },
+      }),
+    );
   });
 
   it("собирает опубликованные revisions инструкций из bounded pages", async () => {

@@ -52,8 +52,10 @@ export function scheduleInput(schedule: Schedule): ScheduleInput {
     ...(schedule.preset === "CUSTOM"
       ? { cronExpression: schedule.cronExpression }
       : {}),
-    timeOfDay: schedule.timeOfDay ?? "00:00",
-    ...(dayOfWeek ? { dayOfWeek } : {}),
+    ...(schedule.preset !== "CUSTOM"
+      ? { timeOfDay: schedule.timeOfDay ?? "00:00" }
+      : {}),
+    ...(schedule.preset === "WEEKLY" && dayOfWeek ? { dayOfWeek } : {}),
     timezone: schedule.timezone,
     input: { ...schedule.input },
     sessionPolicy: schedule.sessionPolicy,
@@ -94,8 +96,9 @@ function sameInput(left: ScheduleInput, right: ScheduleInput): boolean {
     left.preset === right.preset &&
     (left.preset !== "CUSTOM" ||
       left.cronExpression === right.cronExpression) &&
-    left.timeOfDay === right.timeOfDay &&
-    (left.dayOfWeek ?? "") === (right.dayOfWeek ?? "") &&
+    (left.preset === "CUSTOM" || left.timeOfDay === right.timeOfDay) &&
+    (left.preset !== "WEEKLY" ||
+      (left.dayOfWeek ?? "") === (right.dayOfWeek ?? "")) &&
     left.timezone === right.timezone &&
     left.sessionPolicy === right.sessionPolicy &&
     left.notificationPolicy === right.notificationPolicy &&

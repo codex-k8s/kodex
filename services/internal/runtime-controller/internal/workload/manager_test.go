@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
@@ -1454,6 +1456,47 @@ func TestAssistantSessionPVCPromotesOnlyExactGlobalBinding(t *testing.T) {
 	busy.ProjectRef = "prj_abcdefgh"
 	if err := manager.ensureSessionPVC(t.Context(), busy); err == nil || !strings.Contains(err.Error(), "active consumer") {
 		t.Fatalf("active global consumer was not fenced: %v", err)
+	}
+}
+
+func TestAssistantSessionPVCPromotesAfterExactTerminatingConsumerIsDrained(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	manager := newTestManager(t, client)
+	global := runtimecontract.RunnerInput{OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", SystemAssistant: true}
+	if err := manager.ensureSessionPVC(t.Context(), global); err != nil {
+		t.Fatalf("create global assistant volume: %v", err)
+	}
+	name, _ := runtimecontract.SessionPVCName(global.SessionRef)
+	now := metav1.NewTime(time.Now())
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "assistant-completed-turn", Namespace: "kodex-runtime", UID: types.UID("assistant-completed-turn-uid"),
+			DeletionTimestamp: &now,
+			Labels:            map[string]string{managedLabel: "true", modeLabel: "turn"},
+			Annotations: map[string]string{
+				organizationHashAnnotation: shortHash(global.OrganizationRef), projectHashAnnotation: shortHash(""),
+				sessionHashAnnotation: shortHash(global.SessionRef), leaseAnnotation: "lease_abcdefgh",
+			},
+		},
+		Spec: corev1.PodSpec{Volumes: []corev1.Volume{{Name: "session", VolumeSource: corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: name},
+		}}}},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	if err := client.Tracker().Add(pod); err != nil {
+		t.Fatal(err)
+	}
+	project := global
+	project.ProjectRef = "prj_abcdefgh"
+	if err := manager.ensureSessionPVC(t.Context(), project); err != nil {
+		t.Fatalf("promote assistant volume after terminal drain: %v", err)
+	}
+	if _, err := client.CoreV1().Pods("kodex-runtime").Get(t.Context(), pod.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("terminating consumer remained after promotion: %v", err)
+	}
+	volume, err := client.CoreV1().PersistentVolumeClaims("kodex-runtime").Get(t.Context(), name, metav1.GetOptions{})
+	if err != nil || volume.Annotations[projectHashAnnotation] != shortHash(project.ProjectRef) {
+		t.Fatalf("assistant volume project readback did not match promoted project: %v", err)
 	}
 }
 

@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import { LockKeyhole, Pencil, Trash2, UsersRound } from "@lucide/vue";
 import { computed, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import type {
   AccessBinding,
-  AccessRole,
   Agent,
   Project,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -16,7 +16,6 @@ import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 
 const props = defineProps<{
   bindings: AccessBinding[];
-  roles: AccessRole[];
   projects: Project[];
   agentsByProject: Record<string, Agent[]>;
   loading?: boolean;
@@ -28,6 +27,7 @@ const emit = defineEmits<{
   create: [];
   edit: [binding: AccessBinding];
   revoke: [binding: AccessBinding];
+  "manage-membership": [binding: AccessBinding];
   search: [query: string, includeRevoked: boolean, pageSize: number];
   more: [query: string, includeRevoked: boolean, pageSize: number];
   retry: [];
@@ -45,9 +45,9 @@ const listRoot = ref<HTMLElement>();
 const sentinel = ref<HTMLElement>();
 const pageSize = useAdaptiveCursorPageSize({
   container: listRoot,
-  itemSelector: ".binding-card",
+  itemSelector: ".binding-row",
   itemCount: () => visible.value.length,
-  estimatedItemHeight: 170,
+  estimatedItemHeight: 72,
 });
 useCursorInfiniteScroll({
   root: listRoot,
@@ -101,13 +101,14 @@ function resourceName(binding: AccessBinding): string {
 function assignmentKind(
   binding: AccessBinding,
 ): "PLATFORM_ROLE" | "PROJECT_MEMBERSHIP" | "SCOPED_GRANT" {
-  const role = props.roles.find(
-    (item) => item.ref === binding.roleVersion.roleRef,
-  );
-  if (binding.scope.kind === "ORGANIZATION" && role?.kind === "SYSTEM")
-    return "PLATFORM_ROLE";
-  if (binding.scope.kind === "PROJECT") return "PROJECT_MEMBERSHIP";
+  if (binding.managementKind === "PLATFORM_MEMBERSHIP") return "PLATFORM_ROLE";
+  if (binding.managementKind === "PROJECT_MEMBERSHIP")
+    return "PROJECT_MEMBERSHIP";
   return "SCOPED_GRANT";
+}
+
+function isDirect(binding: AccessBinding): boolean {
+  return binding.managementKind === "DIRECT";
 }
 </script>
 
@@ -168,23 +169,33 @@ function assignmentKind(
       "
       @retry="emit('retry')"
     >
-      <div ref="listRoot" class="binding-list">
+      <div
+        ref="listRoot"
+        class="binding-table"
+        role="table"
+        :aria-label="$t('access.bindingsWorkspace.title')"
+      >
+        <div class="binding-table__head" role="row">
+          <span>{{ $t("access.bindingsWorkspace.columns.subject") }}</span>
+          <span>{{ $t("access.bindingsWorkspace.columns.role") }}</span>
+          <span>{{ $t("access.bindingsWorkspace.columns.assignment") }}</span>
+          <span>{{ $t("access.bindingsWorkspace.columns.conditions") }}</span>
+          <span>{{ $t("common.status") }}</span>
+          <span class="sr-only">{{ $t("common.actions") }}</span>
+        </div>
         <article
           v-for="binding in visible"
           :key="binding.ref"
-          class="binding-card"
+          class="binding-row"
+          role="row"
         >
-          <header>
-            <div>
-              <strong>{{ binding.subject.displayName }}</strong>
-              <small>{{
-                $t(`access.subjectKinds.${binding.subject.kind}`)
-              }}</small>
-            </div>
-            <StatusBadge :state="binding.state" />
-          </header>
-          <div class="binding-arrow" aria-hidden="true">→</div>
-          <div>
+          <div class="binding-cell">
+            <strong>{{ binding.subject.displayName }}</strong>
+            <small>{{
+              $t(`access.subjectKinds.${binding.subject.kind}`)
+            }}</small>
+          </div>
+          <div class="binding-cell">
             <strong>{{ binding.roleVersion.name }}</strong>
             <small
               >v{{ binding.roleVersion.revision }} ·
@@ -195,7 +206,7 @@ function assignmentKind(
               }}</small
             >
           </div>
-          <div>
+          <div class="binding-cell binding-scope">
             <span class="assignment-kind">{{
               $t(
                 "access.bindingsWorkspace.assignmentKinds." +
@@ -210,7 +221,7 @@ function assignmentKind(
               $t(`access.scope.values.${binding.scope.kind}`)
             }}</small>
           </div>
-          <div class="binding-conditions">
+          <div class="binding-cell binding-conditions">
             <span v-if="binding.conditions.requireOwner">{{
               $t("access.bindingsWorkspace.ownerOnly")
             }}</span>
@@ -227,24 +238,51 @@ function assignmentKind(
               >{{ $t("access.bindingsWorkspace.noConditions") }}</span
             >
           </div>
-          <footer>
+          <StatusBadge :state="binding.state" />
+          <div class="binding-row__actions">
             <button
-              class="button"
+              v-if="!isDirect(binding)"
+              class="icon-button"
+              type="button"
+              :title="$t('access.bindingsWorkspace.manageMembership')"
+              :aria-label="$t('access.bindingsWorkspace.manageMembership')"
+              @click="emit('manage-membership', binding)"
+            >
+              <UsersRound :size="17" aria-hidden="true" />
+            </button>
+            <span
+              v-if="!isDirect(binding)"
+              class="binding-protected"
+              :title="$t('access.bindingsWorkspace.membershipProtected')"
+            >
+              <LockKeyhole :size="14" aria-hidden="true" />
+              <span class="sr-only">{{
+                $t("access.bindingsWorkspace.membershipProtected")
+              }}</span>
+            </span>
+            <button
+              v-if="isDirect(binding)"
+              class="icon-button"
               type="button"
               :disabled="binding.state !== 'ACTIVE'"
+              :title="$t('common.edit')"
+              :aria-label="$t('common.edit')"
               @click="emit('edit', binding)"
             >
-              {{ $t("common.edit") }}
+              <Pencil :size="17" aria-hidden="true" />
             </button>
             <button
-              class="button button--danger"
+              v-if="isDirect(binding)"
+              class="icon-button binding-row__revoke"
               type="button"
               :disabled="binding.state !== 'ACTIVE'"
+              :title="$t('access.revoke')"
+              :aria-label="$t('access.revoke')"
               @click="emit('revoke', binding)"
             >
-              {{ $t("access.revoke") }}
+              <Trash2 :size="17" aria-hidden="true" />
             </button>
-          </footer>
+          </div>
         </article>
       </div>
       <div v-if="hasMore" ref="sentinel" class="cursor-sentinel" />
@@ -254,9 +292,7 @@ function assignmentKind(
 
 <style scoped>
 .bindings-header,
-.bindings-actions,
-.binding-card header,
-.binding-card footer {
+.bindings-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -270,7 +306,7 @@ function assignmentKind(
   margin: 0;
 }
 .bindings-header p,
-.binding-card small,
+.binding-row small,
 .binding-conditions {
   color: var(--muted);
 }
@@ -280,26 +316,56 @@ function assignmentKind(
 .bindings-search {
   width: min(340px, 28vw);
 }
-.binding-list {
-  display: grid;
-  gap: 10px;
-}
-.binding-card {
-  display: grid;
-  grid-template-columns:
-    minmax(180px, 1.2fr) auto minmax(180px, 1fr) minmax(170px, 1fr)
-    minmax(150px, 0.8fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
+.binding-table {
+  min-width: 1040px;
+  max-height: min(720px, calc(100dvh - 330px));
+  overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
 }
-.binding-card header {
-  justify-content: flex-start;
+.binding-table__head,
+.binding-row {
+  display: grid;
+  grid-template-columns:
+    minmax(170px, 1.1fr) minmax(170px, 1fr) minmax(230px, 1.35fr)
+    minmax(170px, 0.9fr) 110px 82px;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  padding: 10px 14px;
 }
-.binding-card small {
+.binding-table__head {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  min-height: 42px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--surface-subtle, #f8fafc);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+.binding-row {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.binding-row:last-child {
+  border-bottom: 0;
+}
+.binding-cell {
+  min-width: 0;
+}
+.binding-cell strong,
+.binding-cell small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.binding-cell strong {
+  display: block;
+  white-space: nowrap;
+}
+.binding-row small {
   display: block;
   margin-top: 2px;
 }
@@ -318,17 +384,21 @@ function assignmentKind(
   font-size: 0.72rem;
   font-weight: 600;
 }
-.load-more {
+.binding-row__actions {
   display: flex;
-  margin: 14px auto 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
 }
-@media (max-width: 1050px) {
-  .binding-card {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .binding-card > :not(header):not(footer):not(.binding-arrow) {
-    grid-column: 1 / -1;
-  }
+.binding-row__revoke {
+  color: var(--danger);
+}
+.binding-protected {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
 }
 @media (max-width: 650px) {
   .bindings-header,

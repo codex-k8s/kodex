@@ -58,8 +58,14 @@ WHERE e.organization_id = $1::uuid
                    AND membership.subject_id = $8::uuid
                    AND membership.active
                    AND 'VIEW_AUDIT' = ANY(membership.permissions)))
-  AND ($9::timestamptz IS NULL
-       OR e.occurred_at < $9::timestamptz
-       OR (e.occurred_at = $9::timestamptz AND e.ref > $10))
+  AND (NOT $9::boolean
+       OR NOT (e.resource_kind IN ('RUNTIME_LEASE', 'RUNTIME_CLAIM', 'RUN_NODE', 'RUN_TOOL_CALL', 'RUNTIME_REVISION', 'SCHEDULE_OCCURRENCE')
+               OR e.action IN ('controlplane.report_warm_runtime',
+                               'controlplane.reconcile_warm_specification',
+                               'system_assistant.provider_policy_reconciled',
+                               'system_assistant.core_prompt_upgraded')))
+  AND ($10::timestamptz IS NULL
+       OR e.occurred_at < $10::timestamptz
+       OR (e.occurred_at = $10::timestamptz AND e.ref > $11))
 ORDER BY e.occurred_at DESC, e.ref
-LIMIT $11
+LIMIT $12

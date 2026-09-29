@@ -26,6 +26,7 @@ import (
 const (
 	controlPlaneErrorDomain           = "kodex.control-plane"
 	freshAuthenticationRequiredReason = "FRESH_AUTHENTICATION_REQUIRED"
+	resourceInUseReason               = "RESOURCE_IN_USE"
 )
 
 type Server struct {
@@ -228,6 +229,8 @@ func transportError(err error) error {
 		return status.Error(codes.AlreadyExists, "idempotency key was reused with a different intent")
 	case errors.Is(err, errs.ErrProtected):
 		return status.Error(codes.FailedPrecondition, "protected system resource cannot be changed")
+	case errors.Is(err, errs.ErrResourceInUse):
+		return statusErrorWithReason(codes.FailedPrecondition, "resource is in use", resourceInUseReason)
 	case errors.Is(err, errs.ErrCapabilityRequired):
 		return status.Error(codes.FailedPrecondition, "required capability is not enabled")
 	case errors.Is(err, errs.ErrAlreadyResolved):

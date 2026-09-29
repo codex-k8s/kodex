@@ -2,9 +2,19 @@
 SELECT count(*)
 FROM control_plane.runs r
 LEFT JOIN control_plane.projects p ON p.id=r.project_id
+JOIN control_plane.subjects sub ON sub.id=r.initiated_by
+LEFT JOIN control_plane.agents a ON r.target_type IN ('AGENT','SYSTEM_ASSISTANT') AND a.ref=r.target_ref
+LEFT JOIN control_plane.workflows w ON r.target_type='WORKFLOW' AND w.ref=r.target_ref
+LEFT JOIN control_plane.agents sa ON r.target_type='SYSTEM_ASSISTANT' AND sa.system_key='system-assistant'
 WHERE r.organization_id=$1::uuid
   AND ($2='' OR p.ref=$2)
-  AND ($5='' OR strpos(lower(r.title),lower($5)) > 0 OR strpos(lower(r.task),lower($5)) > 0)
+  AND ($5='' OR
+       strpos(lower(r.title),lower($5)) > 0 OR
+       strpos(lower(r.task),lower($5)) > 0 OR
+       strpos(lower(COALESCE(r.presentation_metadata->>'activitySummary','')),lower($5)) > 0 OR
+       strpos(lower(r.result_summary),lower($5)) > 0 OR
+       strpos(lower(sub.display_name),lower($5)) > 0 OR
+       strpos(lower(COALESCE(a.name,w.name,sa.name,r.target_ref)),lower($5)) > 0)
   AND (cardinality($6::text[]) = 0 OR r.state = ANY($6::text[]))
   AND ($7='' OR r.project_id = NULLIF($7,'')::uuid)
   AND ($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target

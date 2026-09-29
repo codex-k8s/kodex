@@ -191,8 +191,11 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	}
 	fileProperties := byType["CREATE_PROJECT_FILE"]["properties"].(map[string]any)
 	if fileProperties["projectRef"] == nil || fileProperties["fileName"] == nil ||
-		fileProperties["mediaType"] == nil || fileProperties["content"] == nil {
+		fileProperties["mediaType"] == nil || fileProperties["contentEncoding"] == nil || fileProperties["content"] == nil {
 		t.Fatalf("project file schema is incomplete: %#v", fileProperties)
+	}
+	if !reflect.DeepEqual(fileProperties["contentEncoding"].(map[string]any)["enum"], []string{"UTF8", "BASE64"}) {
+		t.Fatalf("project file encoding schema is not closed: %#v", fileProperties["contentEncoding"])
 	}
 	createProject := operationByType["CREATE_PROJECT"]
 	createBefore := createProject["before"].(map[string]any)

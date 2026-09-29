@@ -92,6 +92,29 @@ describe("automations model", () => {
     });
   });
 
+  it("не отправляет и не сверяет нерелевантные календарные поля для cron", () => {
+    const custom = schedule({
+      preset: "CUSTOM",
+      timeOfDay: undefined,
+      dayOfWeek: undefined,
+      cronExpression: "*/5 * * * *",
+      currentRevision: {
+        ...schedule().currentRevision,
+        preset: "CUSTOM",
+        cronExpression: "*/5 * * * *",
+      },
+    });
+    const submitted = scheduleInput(custom);
+
+    expect(submitted).toMatchObject({
+      preset: "CUSTOM",
+      cronExpression: "*/5 * * * *",
+    });
+    expect(submitted).not.toHaveProperty("timeOfDay");
+    expect(submitted).not.toHaveProperty("dayOfWeek");
+    expect(verifyScheduleReadback(submitted, custom, custom)).toEqual(custom);
+  });
+
   it("принимает только совпавший authoritative readback", () => {
     const submitted = scheduleInput(schedule());
     const mutation = schedule({

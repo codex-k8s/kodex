@@ -29,7 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
@@ -83,6 +85,8 @@ const (
 	callbackManifestKey                     = "callback.json"
 	providerDigestKey                       = "provider-auth.sha256"
 	maximumKubernetesProjectionBytes        = 900 << 10
+	assistantSessionDrainPollInterval       = 100 * time.Millisecond
+	assistantSessionDrainTimeout            = 5 * time.Second
 )
 
 // ErrProviderCredentialRefreshRejected отделяет stale/invalid lineage от
@@ -1831,14 +1835,32 @@ func (manager *Manager) promoteAssistantSessionPVC(ctx context.Context, existing
 	if err != nil {
 		return errors.New("inspect assistant session volume consumers")
 	}
+	draining := make([]corev1.Pod, 0)
 	for _, pod := range pods.Items {
 		if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 			continue
 		}
 		for _, volume := range pod.Spec.Volumes {
 			if volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.ClaimName == desired.Name {
-				return errors.New("assistant session volume still has an active consumer")
+				if !assistantSessionConsumerCanDrain(pod, desired) {
+					return errors.New("assistant session volume still has an active consumer")
+				}
+				draining = append(draining, pod)
+				break
 			}
+		}
+	}
+	for _, pod := range draining {
+		grace := int64(0)
+		uid := pod.UID
+		if err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Delete(ctx, pod.Name, metav1.DeleteOptions{
+			GracePeriodSeconds: &grace,
+			Preconditions:      &metav1.Preconditions{UID: &uid},
+		}); err != nil && !apierrors.IsNotFound(err) {
+			return errors.New("drain terminating assistant session consumer")
+		}
+		if err := manager.waitForDeletedSessionConsumer(ctx, pod.Name, uid); err != nil {
+			return err
 		}
 	}
 	updated := existing.DeepCopy()
@@ -1849,6 +1871,36 @@ func (manager *Manager) promoteAssistantSessionPVC(ctx context.Context, existing
 	readback, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, desired.Name, metav1.GetOptions{})
 	if err != nil || !sessionPVCMatches(readback, desired, manager.config.StorageClass) {
 		return errors.New("assistant session volume project binding readback failed")
+	}
+	return nil
+}
+
+func assistantSessionConsumerCanDrain(pod corev1.Pod, desired *corev1.PersistentVolumeClaim) bool {
+	return desired != nil && pod.DeletionTimestamp != nil && pod.UID != "" &&
+		pod.Labels[managedLabel] == "true" && pod.Labels[modeLabel] == "turn" &&
+		pod.Annotations[organizationHashAnnotation] == desired.Annotations[organizationHashAnnotation] &&
+		pod.Annotations[projectHashAnnotation] == shortHash("") &&
+		pod.Annotations[sessionHashAnnotation] == desired.Labels[sessionHashAnnotation] &&
+		pod.Annotations[leaseAnnotation] != ""
+}
+
+func (manager *Manager) waitForDeletedSessionConsumer(ctx context.Context, name string, uid types.UID) error {
+	err := wait.PollUntilContextTimeout(ctx, assistantSessionDrainPollInterval, assistantSessionDrainTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			pod, err := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				return true, nil
+			}
+			if err != nil {
+				return false, errors.New("read terminating assistant session consumer")
+			}
+			if pod.UID != uid {
+				return false, errors.New("terminating assistant session consumer identity changed")
+			}
+			return false, nil
+		})
+	if err != nil {
+		return errors.New("assistant session consumer did not terminate before promotion")
 	}
 	return nil
 }

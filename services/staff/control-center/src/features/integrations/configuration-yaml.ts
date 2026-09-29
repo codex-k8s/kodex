@@ -64,3 +64,37 @@ export function connectionYaml(
     throw new Error("Connection configuration does not match schema");
   return serializeConfigurationDocument(prepared.value, "YAML");
 }
+
+export function connectionDraftYaml(
+  fields: readonly IntegrationConfigurationField[],
+  values: Readonly<Record<string, string>>,
+): string {
+  const document: Record<string, unknown> = {};
+  for (const field of fields) {
+    const raw = values[field.key] ?? "";
+    const normalized = raw.trim();
+    switch (field.valueType) {
+      case "BOOLEAN":
+        document[field.key] =
+          normalized === "true" ? true : normalized === "false" ? false : raw;
+        break;
+      case "INTEGER": {
+        const value = Number(normalized);
+        document[field.key] =
+          normalized && Number.isSafeInteger(value) ? value : raw;
+        break;
+      }
+      case "STRING_LIST":
+        document[field.key] = normalized
+          ? raw
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : [];
+        break;
+      default:
+        document[field.key] = raw;
+    }
+  }
+  return serializeConfigurationDocument(document, "YAML");
+}

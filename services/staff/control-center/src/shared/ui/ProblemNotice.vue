@@ -10,6 +10,8 @@ const translator = useI18n();
 const heading = computed(() => {
   if (props.problem?.code === "FRESH_AUTHENTICATION_REQUIRED")
     return translator.t("common.freshAuthenticationRequired");
+  if (props.problem?.code === "RESOURCE_IN_USE")
+    return translator.t("common.resourceInUse");
   if (props.problem?.kind === "forbidden")
     return translator.t("common.forbidden");
   if (props.problem?.kind === "conflict")
@@ -58,3 +60,21 @@ const message = computed(() => {
     </button>
   </section>
 </template>
+
+<style scoped>
+.problem-notice {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+.problem-notice > div {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+.problem-notice small {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+</style>

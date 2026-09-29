@@ -57,9 +57,7 @@ const memberSearch = computed(() =>
       )?.user.displayName ?? "")
     : "",
 );
-const selectedSubjectRef = computed(() =>
-  memberSearch.value ? memberRef.value : "",
-);
+const selectedSubjectRef = computed(() => memberRef.value);
 const routeSection = computed(() => {
   const raw =
     route.name === "access" ? route.params.section : route.query.section;
@@ -118,6 +116,23 @@ function inspectEffective(subject: AccessSubject): void {
     name: "access",
     params: { section: "effective" },
     query: { subjectRef: subject.ref },
+  });
+}
+
+function manageBindingMembership(binding: AccessBinding): void {
+  const query = { section: "participants", memberRef: binding.subject.ref };
+  if (binding.scope.projectRef) {
+    void router.push({
+      name: "project-access",
+      params: { projectRef: binding.scope.projectRef },
+      query,
+    });
+    return;
+  }
+  void router.push({
+    name: "access",
+    params: { section: "participants" },
+    query,
   });
 }
 
@@ -517,7 +532,7 @@ onMounted(() => void loadBaseline());
         {{
           projectRef
             ? $t("access.participants.createBinding")
-            : "Добавить участника"
+            : $t("access.platformMembershipEditor.createTitle")
         }}
       </button>
     </template>
@@ -606,7 +621,6 @@ onMounted(() => void loadBaseline());
     <BindingsPanel
       v-else-if="routeSection === 'bindings'"
       :bindings="access.bindings"
-      :roles="access.roles"
       :projects="access.projects"
       :agents-by-project="access.agents"
       :loading="access.loading.bindings"
@@ -615,6 +629,7 @@ onMounted(() => void loadBaseline());
       @create="createBinding()"
       @edit="editBinding"
       @revoke="revokeBinding"
+      @manage-membership="manageBindingMembership"
       @search="
         (query, includeRevoked, pageSize) =>
           access.loadBindings(
@@ -727,11 +742,11 @@ onMounted(() => void loadBaseline());
       v-if="confirmation"
       :title="
         confirmation.kind === 'ARCHIVE_ROLE'
-          ? 'Архивировать роль'
+          ? $t('access.confirmation.archiveRoleTitle')
           : confirmation.kind === 'REVOKE_BINDING'
-            ? 'Отозвать назначение'
+            ? $t('access.confirmation.revokeBindingTitle')
             : confirmation.kind === 'REVOKE_PLATFORM_MEMBERSHIP'
-              ? 'Удалить из организации'
+              ? $t('access.confirmation.revokePlatformMembershipTitle')
               : t('access.projectMembershipEditor.revoke')
       "
       :busy="mutationBusy"
@@ -747,7 +762,9 @@ onMounted(() => void loadBaseline());
             : confirmation.kind === "REVOKE_BINDING"
               ? t("access.bindingsWorkspace.revokeConfirm")
               : confirmation.kind === "REVOKE_PLATFORM_MEMBERSHIP"
-                ? `Удалить ${confirmation.membership.user.displayName} из организации? Доступ Kodex будет отозван; учётная запись Keycloak останется.`
+                ? t("access.confirmation.revokePlatformMembership", {
+                    name: confirmation.membership.user.displayName,
+                  })
                 : t("access.projectMembershipEditor.revokeConfirm", {
                     name: confirmation.membership.user.displayName,
                   })
@@ -775,11 +792,11 @@ onMounted(() => void loadBaseline());
         >
           {{
             mutationBusy
-              ? "Выполняем…"
+              ? $t("access.confirmation.working")
               : confirmation.kind === "ARCHIVE_ROLE"
-                ? "Архивировать"
+                ? $t("access.confirmation.archive")
                 : confirmation.kind === "REVOKE_BINDING"
-                  ? "Отозвать"
+                  ? $t("access.confirmation.revoke")
                   : t("access.projectMembershipEditor.revoke")
           }}
         </button>

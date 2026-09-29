@@ -17,6 +17,7 @@ import (
 const (
 	controlPlaneErrorDomain           = "kodex.control-plane"
 	freshAuthenticationRequiredReason = "FRESH_AUTHENTICATION_REQUIRED"
+	resourceInUseReason               = "RESOURCE_IN_USE"
 )
 
 func writeRPCProblem(writer http.ResponseWriter, err error) {
@@ -40,6 +41,9 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		statusCode, name, retryable = http.StatusPreconditionFailed, "VERSION_OR_STATE_CONFLICT", true
 	case codes.FailedPrecondition:
 		statusCode, name = http.StatusConflict, "STATE_CONFLICT"
+		if rpcErrorHasReason(err, resourceInUseReason) {
+			name = resourceInUseReason
+		}
 	case codes.ResourceExhausted:
 		statusCode, name, retryable = http.StatusTooManyRequests, "RATE_LIMITED", true
 	case codes.Canceled:

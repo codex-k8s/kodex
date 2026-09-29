@@ -6,6 +6,7 @@ SET state = 'CANCELLED',
     workload_instance = NULL,
     lease_expires_at = NULL,
     completed_at = clock_timestamp(),
+    dead_lettered_at = NULL,
     version = version + 1,
     updated_at = clock_timestamp()
 WHERE schedule_id = @schedule_id::uuid

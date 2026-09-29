@@ -79,7 +79,9 @@ WHERE schedule.organization_id = @organization_id::uuid
   AND (@project_ref = '' OR project.ref = @project_ref)
   AND schedule.lifecycle_state <> 'DELETED'
   AND (@search_query = '' OR lower(concat_ws(
-      ' ', schedule.name, schedule.target_ref, COALESCE(agent.name, ''), COALESCE(workflow.name, '')
+      ' ', schedule.name, project.name, schedule.target_ref,
+      COALESCE(agent.name, ''), COALESCE(workflow.name, ''),
+      current_revision.automation_text, schedule.cron_expression, schedule.timezone
   )) LIKE '%' || lower(@search_query) || '%')
   AND (@cursor_ref = '' OR schedule.ref > @cursor_ref)
   AND (@authority_project = '' OR schedule.project_id = NULLIF(@authority_project,'')::uuid)

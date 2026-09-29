@@ -26,6 +26,17 @@ describe("presentRuntimeText", () => {
     ).toBeUndefined();
   });
 
+  it("скрывает слитный служебный код в скобках из пользовательской сводки", () => {
+    expect(
+      presentRuntimeText(
+        "Запись не выполнена: владелец отменил вызов (INTEGRATIONCANCELLEDBYOWNER). Повторный вызов не выполнялся.",
+        identity,
+      ),
+    ).toBe(
+      "Запись не выполнена: владелец отменил вызов. Повторный вызов не выполнялся.",
+    );
+  });
+
   it.each([
     "USER_MESSAGE",
     "ASSISTANT_MESSAGE",

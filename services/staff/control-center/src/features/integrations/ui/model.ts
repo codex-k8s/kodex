@@ -32,6 +32,7 @@ export interface IntegrationGrantPresentation {
   connectionName: string;
   capabilityKey: string;
   capabilityName: string;
+  capabilityAvailable: boolean;
   targetName: string;
   targetKind: "AGENT" | "WORKFLOW" | "UNKNOWN";
   enabled: boolean;
@@ -159,29 +160,32 @@ export function flattenIntegrationGrants(
 ): IntegrationGrantPresentation[] {
   return connections
     .flatMap((connection) =>
-      connection.grants.map((grant) => ({
-        ref: grant.ref,
-        connectionRef: connection.ref,
-        connectionName: connection.name,
-        capabilityKey: grant.capabilityKey,
-        capabilityName:
-          connection.capabilities.find(
-            (capability) => capability.key === grant.capabilityKey,
-          )?.name ?? grant.capabilityKey,
-        targetName: grant.targetName,
-        targetKind: grant.agentRef
-          ? ("AGENT" as const)
-          : grant.workflowRef
-            ? ("WORKFLOW" as const)
-            : ("UNKNOWN" as const),
-        enabled: grant.enabled,
-        resourceKind: grant.resourceScope.kind,
-        resourceValues: Object.entries(grant.resourceScope.values)
-          .map(([key, value]) => ({ key, value }))
-          .sort((left, right) => left.key.localeCompare(right.key)),
-        grant,
-        connection,
-      })),
+      connection.grants.map((grant) => {
+        const capability = connection.capabilities.find(
+          (item) => item.key === grant.capabilityKey,
+        );
+        return {
+          ref: grant.ref,
+          connectionRef: connection.ref,
+          connectionName: connection.name,
+          capabilityKey: grant.capabilityKey,
+          capabilityName: capability?.name ?? "",
+          capabilityAvailable: Boolean(capability),
+          targetName: grant.targetName,
+          targetKind: grant.agentRef
+            ? ("AGENT" as const)
+            : grant.workflowRef
+              ? ("WORKFLOW" as const)
+              : ("UNKNOWN" as const),
+          enabled: grant.enabled,
+          resourceKind: grant.resourceScope.kind,
+          resourceValues: Object.entries(grant.resourceScope.values)
+            .map(([key, value]) => ({ key, value }))
+            .sort((left, right) => left.key.localeCompare(right.key)),
+          grant,
+          connection,
+        };
+      }),
     )
     .sort(
       (left, right) =>

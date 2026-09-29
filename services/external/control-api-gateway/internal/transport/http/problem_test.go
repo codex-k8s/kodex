@@ -73,6 +73,35 @@ func TestWriteRPCProblemMapsOnlyTrustedFreshAuthenticationReason(t *testing.T) {
 	}
 }
 
+func TestWriteRPCProblemMapsTrustedResourceInUseReason(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		domain   string
+		wantCode string
+	}{
+		{name: "trusted", domain: controlPlaneErrorDomain, wantCode: resourceInUseReason},
+		{name: "untrusted", domain: "untrusted.example", wantCode: "STATE_CONFLICT"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			recorder := httptest.NewRecorder()
+			writeRPCProblem(recorder, rpcStatusWithErrorInfo(t, codes.FailedPrecondition, test.domain, resourceInUseReason))
+			var body struct {
+				Status int    `json:"status"`
+				Code   string `json:"code"`
+			}
+			if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode problem: %v", err)
+			}
+			if recorder.Code != http.StatusConflict || body.Status != http.StatusConflict || body.Code != test.wantCode {
+				t.Fatalf("problem = HTTP %d body=%+v, want 409 code=%q", recorder.Code, body, test.wantCode)
+			}
+		})
+	}
+}
+
 func TestWriteRPCProblemDistinguishesLocalAuthorityTransientFromAuthRejection(t *testing.T) {
 	t.Parallel()
 

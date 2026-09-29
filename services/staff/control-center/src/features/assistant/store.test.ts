@@ -328,6 +328,44 @@ describe("assistant workspace store", () => {
     expect(store.nextPageToken).toBe("remaining");
   });
 
+  it("сохраняет открытый project-диалог при переходе в общий scope", async () => {
+    const staleGlobal = {
+      ...conversation(),
+      ref: "cnv_stale_global",
+      projectRef: "prj_other",
+      updatedAt: "2026-09-27T00:00:00Z",
+    };
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.conversation.all"
+            ? staleGlobal.ref
+            : null,
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock
+      .mockResolvedValueOnce({ items: [conversation()] })
+      .mockResolvedValueOnce({ items: [staleGlobal, conversation()] });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+
+    await store.load(
+      {
+        route: "/decisions",
+        entityKind: "ORGANIZATION",
+        entityRef: "org_current",
+        entityName: "Организация",
+        entityVersion: 1,
+        allowedOperations: [],
+      },
+      undefined,
+    );
+
+    expect(store.selectedRef).toBe("cnv_sales");
+    expect(store.selectedConversation?.projectRef).toBe("prj_sales");
+  });
+
   it("отменяет in-flight страницу при смене project и не публикует поздний ответ", async () => {
     readAssistantMock.mockResolvedValue(systemAssistant());
     readConversationsMock.mockResolvedValueOnce({

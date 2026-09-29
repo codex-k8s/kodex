@@ -35,6 +35,7 @@ const selectedProject = computed<AsyncEntityOption | undefined>(() => {
   if (chosenProject.value?.ref === projectRef.value) return chosenProject.value;
   return { ref: projectRef.value, title: i18n.t("audit.selectedProject") };
 });
+const showTechnical = computed(() => route.query.technical === "1");
 const list = computed(() => platform.auditEvents);
 const hasMore = computed(() => Boolean(platform.auditNextPageToken));
 const loadingMore = computed(() => Boolean(platform.loading.auditMore));
@@ -79,12 +80,31 @@ function selectProject(value: string | null | readonly string[]): void {
   void router.replace({ query: { ...route.query, projectRef: next } });
 }
 
+function toggleTechnical(event: Event): void {
+  const next = { ...route.query };
+  if ((event.currentTarget as HTMLInputElement).checked) next.technical = "1";
+  else delete next.technical;
+  void router.replace({ query: next });
+}
+
 async function load(): Promise<void> {
-  await platform.loadAudit(projectRef.value, query.value, pageSize.value);
+  await platform.loadAudit(
+    projectRef.value,
+    query.value,
+    pageSize.value,
+    "",
+    showTechnical.value,
+  );
 }
 
 function loadMore(): Promise<void> {
-  return platform.loadMoreAudit(projectRef.value, query.value, pageSize.value);
+  return platform.loadMoreAudit(
+    projectRef.value,
+    query.value,
+    pageSize.value,
+    "",
+    showTechnical.value,
+  );
 }
 
 function loadSelectedProject(): void {
@@ -102,7 +122,7 @@ watch(query, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => void load(), 250);
 });
-watch(projectRef, () => {
+watch([projectRef, showTechnical], () => {
   loadSelectedProject();
   void load();
 });
@@ -149,11 +169,20 @@ onUnmounted(() => {
           @update:model-value="selectProject"
         />
       </div>
+      <label class="audit-technical-filter">
+        <input
+          name="audit-show-technical"
+          type="checkbox"
+          :checked="showTechnical"
+          @change="toggleTechnical"
+        />
+        <span>{{ $t("audit.showTechnical") }}</span>
+      </label>
     </div>
     <AsyncState
       :loading="platform.loading.audit"
       :problem="platform.problems.audit"
-      :empty="list.length === 0"
+      :empty="list.length === 0 && !hasMore"
       :empty-title="$t('audit.emptyTitle')"
       @retry="load"
     >
@@ -223,16 +252,29 @@ onUnmounted(() => {
 <style scoped>
 .audit-filters {
   display: grid;
-  grid-template-columns: minmax(280px, 520px) minmax(220px, 340px);
+  grid-template-columns:
+    minmax(280px, 520px) minmax(220px, 340px)
+    minmax(220px, auto);
   gap: 12px;
   margin-bottom: 18px;
-  align-items: start;
+  align-items: end;
 }
 .audit-filters .field {
   min-width: 0;
 }
 .audit-search input {
-  min-height: 52px;
+  min-height: 42px;
+}
+.audit-project-filter :deep(.async-picker__trigger) {
+  min-height: 42px;
+}
+.audit-technical-filter {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  cursor: pointer;
 }
 .audit-table {
   display: grid;
@@ -258,10 +300,16 @@ onUnmounted(() => {
 }
 .audit-table__row div {
   display: grid;
+  min-width: 0;
   gap: 3px;
 }
 .audit-table small {
   color: var(--muted);
+}
+.audit-technical small {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .audit-technical summary {
   color: var(--muted);

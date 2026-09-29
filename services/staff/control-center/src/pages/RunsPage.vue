@@ -164,6 +164,7 @@ onBeforeUnmount(() => {
         ><Search :size="18" /><input
           :id="searchId"
           v-model="search"
+          type="search"
           :name="searchId"
           :aria-label="$t('runs.search')"
           :placeholder="$t('runs.search')"

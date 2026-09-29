@@ -215,8 +215,16 @@ onBeforeUnmount(() => {
         v-model="query"
         :name="searchId"
         type="search"
-        :aria-label="$t('common.search')"
-        :placeholder="$t('common.search')"
+        :aria-label="
+          kind === 'members'
+            ? $t('catalog.memberSearchPlaceholder')
+            : $t('catalog.searchPlaceholder')
+        "
+        :placeholder="
+          kind === 'members'
+            ? $t('catalog.memberSearchPlaceholder')
+            : $t('catalog.searchPlaceholder')
+        "
     /></label>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading && !items.length" role="status">

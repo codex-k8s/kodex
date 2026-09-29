@@ -823,6 +823,39 @@ describe("assistant plan editor model", () => {
     expect(changed?.target.name).toBe("Маркетплейс");
   });
 
+  it("не дублирует бинарное содержимое файла в итоговом снимке", () => {
+    const editable = editableOperations([
+      {
+        ...operation(),
+        type: "CREATE_PROJECT_FILE",
+        target: { kind: "ARTIFACT", name: "pixel.png" },
+        parameters: {
+          projectRef: "prj_example",
+          fileName: "pixel.png",
+          mediaType: "image/png",
+          contentEncoding: "BASE64",
+          content: "",
+        },
+        after: {
+          projectRef: "prj_example",
+          fileName: "pixel.png",
+          mediaType: "image/png",
+          contentEncoding: "BASE64",
+          content: "",
+        },
+      },
+    ]);
+    const first = editable[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+
+    updateOperationParameter(first, "content", "iVBORw0KGgo=");
+
+    const changed = operationInputs(editable)[0];
+    expect(changed?.parameters.content).toBe("iVBORw0KGgo=");
+    expect(changed?.after).not.toHaveProperty("content");
+  });
+
   it("не подменяет исходную identity сотрудника при редактировании", () => {
     const editable = editableOperations([
       {

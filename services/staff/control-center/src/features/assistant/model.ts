@@ -393,9 +393,14 @@ export function updateOperationParameter(
   const parameters = parseObject(operation.parametersText);
   const after = parseObject(operation.afterText);
   parameters[key] = value;
-  after[key] = value;
+  const nextAfter =
+    operation.value.type === "CREATE_PROJECT_FILE" && key === "content"
+      ? Object.fromEntries(
+          Object.entries(after).filter(([candidate]) => candidate !== key),
+        )
+      : { ...after, [key]: value };
   operation.parametersText = prettyJSON(parameters);
-  operation.afterText = prettyJSON(after);
+  operation.afterText = prettyJSON(nextAfter);
   if (
     key === "name" &&
     operation.value.action === "CREATE" &&
@@ -460,12 +465,16 @@ function parseObject(value: string): Record<string, unknown> {
 export function operationInputs(
   operations: readonly EditablePlanOperation[],
 ): AssistantPlanOperationInput[] {
-  return operations.map((operation) => ({
-    ...cloneOperation(operation.value),
-    parameters: parseObject(operation.parametersText),
-    before: parseObject(operation.beforeText),
-    after: parseObject(operation.afterText),
-  }));
+  return operations.map((operation) => {
+    const after = parseObject(operation.afterText);
+    if (operation.value.type === "CREATE_PROJECT_FILE") delete after.content;
+    return {
+      ...cloneOperation(operation.value),
+      parameters: parseObject(operation.parametersText),
+      before: parseObject(operation.beforeText),
+      after,
+    };
+  });
 }
 
 export function honestEditedPlanSummaries(
@@ -480,8 +489,10 @@ export function honestEditedPlanSummaries(
   const revisions = operations.map((operation) => {
     const original = plan.operations.find((item) => item.ref === operation.ref);
     if (!original) return { operation, changed: false };
-    const content = (item: AssistantPlanOperationInput) =>
-      JSON.stringify([
+    const content = (item: AssistantPlanOperationInput) => {
+      const after = cloneJSONRecord(item.after);
+      if (item.type === "CREATE_PROJECT_FILE") delete after.content;
+      return JSON.stringify([
         item.type,
         item.action,
         item.title,
@@ -489,8 +500,9 @@ export function honestEditedPlanSummaries(
         item.expectedVersion,
         item.parameters,
         item.before,
-        item.after,
+        after,
       ]);
+    };
     const contentChanged = content(operation) !== content(original);
     return {
       operation:

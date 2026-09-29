@@ -292,13 +292,17 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		if !operation.Selected {
 			continue
 		}
+		if !assistantProjectFileContentReady(operation) {
+			problems = append(problems, fmt.Sprintf("operation-%d-content-required", index+1))
+			continue
+		}
 		planned, commandErr := assistantOperationCommand(operation)
 		if commandErr != nil {
 			problems = append(problems, fmt.Sprintf("operation-%d-invalid", index+1))
 			continue
 		}
 		if commandErr = repository.authorizeCommand(ctx, tx, scope, planned); commandErr != nil {
-			problems = append(problems, fmt.Sprintf("operation-%d-not-permitted", index+1))
+			problems = append(problems, assistantPlanAuthorizationProblem(index, commandErr))
 			continue
 		}
 		if operation.Type == "LAUNCH_RUN" {
@@ -398,6 +402,14 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 	return commandOutcome{result: command.Result{Plan: &plan}, projectID: mustProjectID(ctx, tx, scope.organizationID, projectRef),
 		projectRef: projectRef, resourceKind: "ASSISTANT_PLAN", resourceRef: payload.PlanRef,
 		summary: "i18n:ASSISTANT_PLAN_VALIDATED", platformEvent: "SYSTEM_ASSISTANT_CHANGED"}, nil
+}
+
+func assistantPlanAuthorizationProblem(index int, err error) string {
+	problem := "not-permitted"
+	if errors.Is(err, errs.ErrVersionMismatch) {
+		problem = "version-conflict"
+	}
+	return fmt.Sprintf("operation-%d-%s", index+1, problem)
 }
 
 func (repository *Repository) validateAssistantLaunchReadiness(

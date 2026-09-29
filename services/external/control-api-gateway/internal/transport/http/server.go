@@ -166,8 +166,12 @@ func (server *Server) DeleteOwnerSession(writer http.ResponseWriter, request *ht
 }
 
 func decodeJSON[T any](writer http.ResponseWriter, request *http.Request) (T, bool) {
+	return decodeJSONWithLimit[T](writer, request, maximumJSONBody)
+}
+
+func decodeJSONWithLimit[T any](writer http.ResponseWriter, request *http.Request, maximumBody int64) (T, bool) {
 	var result T
-	decoder := json.NewDecoder(io.LimitReader(request.Body, maximumJSONBody+1))
+	decoder := json.NewDecoder(io.LimitReader(request.Body, maximumBody+1))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
 		writeLocalProblem(writer, http.StatusBadRequest, "INVALID_REQUEST", false)
@@ -710,7 +714,7 @@ var enumPrefixes = []string{
 	"RUNTIME_SECRET_VALUE_TYPE_",
 	"SEARCH_RESULT_KIND_",
 	"PERMISSION_RISK_", "ACCESS_SUBJECT_KIND_", "ACCESS_SCOPE_KIND_", "ACCESS_RESOURCE_KIND_",
-	"ACCESS_ROLE_KIND_", "ACCESS_ROLE_STATE_", "ACCESS_BINDING_STATE_", "OIDC_GROUP_STATE_",
+	"ACCESS_ROLE_KIND_", "ACCESS_ROLE_STATE_", "ACCESS_BINDING_STATE_", "ACCESS_BINDING_MANAGEMENT_KIND_", "OIDC_GROUP_STATE_",
 	"ACCESS_DECISION_", "ACTION_", "TYPE_",
 }
 

@@ -82,19 +82,11 @@ func (client *managedDraftRecorder) Invoke(_ context.Context, method string, req
 			revision.Revision = 3
 		}
 		revision.State = cp.ManagedConfigurationState_MANAGED_CONFIGURATION_STATE_DRAFT
-		revision.Content = strings.TrimSpace(input.GetContent())
-		revision.ContentFormat = input.GetContentFormat()
-		if revision.ContentFormat == "OPENAPI_IMPORT" {
-			definition, err := integrationpackage.DraftOpenAPIPackageFromJSON(context.Background(), []byte(revision.Content))
-			if err != nil {
-				return status.Error(codes.InvalidArgument, "OpenAPI import is invalid")
-			}
-			encoded, err := json.Marshal(definition)
-			if err != nil {
-				return status.Error(codes.Internal, "OpenAPI import serialization failed")
-			}
-			revision.Content, revision.ContentFormat = string(encoded), "JSON"
+		content, format, err := expectedManagedDraftReceipt(context.Background(), client.test.kind, input.GetContentFormat(), input.GetContent())
+		if err != nil {
+			return status.Error(codes.InvalidArgument, "managed draft normalization failed")
 		}
+		revision.Content, revision.ContentFormat = content, format
 		digest := sha256.Sum256([]byte(revision.Content))
 		revision.Digest = hex.EncodeToString(digest[:])
 	}
@@ -105,6 +97,42 @@ func (client *managedDraftRecorder) Invoke(_ context.Context, method string, req
 	target.Set(target.Descriptor().Fields().ByName("configuration"), protoreflect.ValueOfMessage(configuration.ProtoReflect()))
 	target.Set(target.Descriptor().Fields().ByName("revision"), protoreflect.ValueOfMessage(revision.ProtoReflect()))
 	return nil
+}
+
+func TestIntegrationDraftSaveAcceptsCanonicalNormalization(t *testing.T) {
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition := definitions["github"]
+	definition.Metadata.Origin = integrationpackage.OriginUI
+	content, err := json.MarshalIndent(definition, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v1/integration-definition-configurations/mcfg_fixture01/revisions/mrev_fixture01/saves"
+	for _, tc := range []struct {
+		name    string
+		corrupt func(*cp.ManagedConfigurationSet, *cp.ManagedConfigurationRevision)
+		want    int
+	}{
+		{name: "canonical", want: http.StatusOK},
+		{name: "changed-canonical-content", corrupt: func(_ *cp.ManagedConfigurationSet, revision *cp.ManagedConfigurationRevision) {
+			revision.Content += " "
+		}, want: http.StatusBadGateway},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &managedDraftRecorder{test: managedDraftCase{method: "SaveIntegrationDefinitionDraft", kind: cp.ManagedConfigurationKind_MANAGED_CONFIGURATION_KIND_INTEGRATION_DEFINITION, save: true}, corrupt: tc.corrupt}
+			w := httptest.NewRecorder()
+			managedDraftHandler(client).ServeHTTP(w, managedTestRequest("POST", path, managedSaveBody("JSON", string(content))))
+			if w.Code != tc.want {
+				t.Fatalf("status=%d want=%d body=%s", w.Code, tc.want, w.Body.String())
+			}
+			if tc.want == http.StatusOK && (strings.Contains(w.Body.String(), "\n  ") || !strings.Contains(w.Body.String(), `"contentFormat":"JSON"`)) {
+				t.Fatalf("canonical managed draft was not returned: %s", w.Body.String())
+			}
+		})
+	}
 }
 
 func managedDraftHandler(client *managedDraftRecorder) http.Handler {

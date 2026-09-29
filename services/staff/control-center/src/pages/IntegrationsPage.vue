@@ -65,7 +65,7 @@ import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import { serializeConfigurationDocument } from "@/features/managed-configurations/document";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
-  connectionYaml,
+  connectionDraftYaml,
   parseConnectionYaml,
 } from "@/features/integrations/configuration-yaml";
 
@@ -464,17 +464,28 @@ const normalizedConfigurationYaml = computed(() =>
 
 function selectConfigurationMode(mode: "FORM" | "YAML"): void {
   if (mode === configurationMode.value || !selectedDefinition.value) return;
-  try {
-    if (mode === "YAML")
-      yamlContent.value = connectionYaml(
-        selectedDefinition.value.configurationFields,
-        form.configuration,
-      );
-    else
+  if (mode === "YAML") {
+    yamlContent.value = connectionDraftYaml(
+      selectedDefinition.value.configurationFields,
+      form.configuration,
+    );
+    configurationMode.value = mode;
+    try {
       form.configuration = parseConnectionYaml(
         yamlContent.value,
         selectedDefinition.value.configurationFields,
       );
+      yamlInvalid.value = false;
+    } catch {
+      yamlInvalid.value = true;
+    }
+    return;
+  }
+  try {
+    form.configuration = parseConnectionYaml(
+      yamlContent.value,
+      selectedDefinition.value.configurationFields,
+    );
     yamlInvalid.value = false;
     configurationMode.value = mode;
   } catch {
@@ -1228,18 +1239,18 @@ onBeforeUnmount(() => {
         >
         <div class="connection-details">
           <section class="connection-details__section">
-            <h3>Учётные данные и проверка</h3>
+            <h3>{{ $t("integrations.detailsCredentialsTitle") }}</h3>
             <p>
               {{
                 isUnboundOpenAPITemplate(detailsConnection, detailsDefinition)
                   ? $t("integrations.openapiTemplateNextStep")
                   : detailsConnection.credentialsConfigured
-                    ? "Учётные данные настроены и скрыты"
-                    : "Учётные данные ещё не настроены"
+                    ? $t("integrations.credentialsConfigured")
+                    : $t("integrations.credentialsNotConfigured")
               }}
             </p>
             <p v-if="detailsConnection.lastTestOutcome">
-              Последняя проверка:
+              {{ $t("integrations.lastTest") }}:
               {{ serverMessage(detailsConnection.lastTestOutcome) }}
             </p>
             <p v-if="detailsConnection.lastTestedAt">
@@ -1250,7 +1261,7 @@ onBeforeUnmount(() => {
             v-if="detailsConfiguration.length"
             class="connection-details__section"
           >
-            <h3>Публичные настройки</h3>
+            <h3>{{ $t("integrations.publicConfiguration") }}</h3>
             <dl class="connection-details__facts">
               <div v-for="entry in detailsConfiguration" :key="entry.key">
                 <dt>{{ entry.label }}</dt>
@@ -1259,9 +1270,9 @@ onBeforeUnmount(() => {
             </dl>
           </section>
           <section class="connection-details__section">
-            <h3>Возможности</h3>
+            <h3>{{ $t("integrations.capabilities") }}</h3>
             <p v-if="!detailsConnection.capabilities.length">
-              Доступных возможностей пока нет.
+              {{ $t("integrations.noCapabilities") }}
             </p>
             <ul v-else class="connection-details__capabilities">
               <li
@@ -1270,7 +1281,9 @@ onBeforeUnmount(() => {
               >
                 <strong>{{ capability.name }}</strong>
                 <span>{{ $t("integrations.risk." + capability.risk) }}</span>
-                <span v-if="capability.approvalRequired">Human Gate</span>
+                <span v-if="capability.approvalRequired">{{
+                  $t("integrations.humanGate")
+                }}</span>
                 <p>{{ capability.description }}</p>
               </li>
             </ul>
@@ -1283,7 +1296,7 @@ onBeforeUnmount(() => {
               :disabled="!!commandRef"
               @click="openDetailsAction('EDIT')"
             >
-              Изменить настройки
+              {{ $t("integrations.editSettings") }}
             </button>
             <button
               v-if="
@@ -1294,7 +1307,7 @@ onBeforeUnmount(() => {
               :disabled="!!commandRef"
               @click="openDetailsAction('CREDENTIAL')"
             >
-              Настроить учётные данные
+              {{ $t("integrations.configureCredential") }}
             </button>
             <button
               v-if="detailsConnection.nextActions.includes('TEST')"
@@ -1303,7 +1316,7 @@ onBeforeUnmount(() => {
               :disabled="!!commandRef"
               @click="command(detailsConnection, 'TEST')"
             >
-              Проверить подключение
+              {{ $t("integrations.testConnection") }}
             </button>
             <button
               v-if="detailsConnection.nextActions.includes('ENABLE')"
@@ -1312,7 +1325,7 @@ onBeforeUnmount(() => {
               :disabled="!!commandRef"
               @click="command(detailsConnection, 'ENABLE')"
             >
-              Включить
+              {{ $t("common.enable") }}
             </button>
             <button
               v-if="detailsConnection.nextActions.includes('DISABLE')"
@@ -1321,7 +1334,7 @@ onBeforeUnmount(() => {
               :disabled="!!commandRef"
               @click="command(detailsConnection, 'DISABLE')"
             >
-              Отключить
+              {{ $t("common.disable") }}
             </button>
             <button
               v-if="detailsConnection.nextActions.includes('MANAGE_GRANTS')"
@@ -1330,7 +1343,7 @@ onBeforeUnmount(() => {
               :disabled="!!commandRef"
               @click="openDetailsAction('GRANTS')"
             >
-              Управлять разрешениями
+              {{ $t("integrations.manageGrants") }}
             </button>
           </div>
         </div>
@@ -1463,7 +1476,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <p v-if="yamlInvalid" role="alert">
-              {{ $t("managed.invalidDocument") }}
+              {{ $t("integrationsRedesign.invalidConfigurationYaml") }}
             </p>
             <CodeEditor
               v-if="configurationMode === 'YAML'"

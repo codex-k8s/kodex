@@ -6,6 +6,7 @@ import {
 } from "./document";
 import {
   emptyPackageField,
+  packageDiagnosticDetails,
   packageDiagnostics,
   packageSchema,
   resolvePackageField,
@@ -105,6 +106,25 @@ describe("IntegrationPackage canonical schema", () => {
     const errors = packageDiagnostics(value);
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.join()).not.toContain("private-synthetic-value");
+  });
+  it("возвращает безопасные пути полей для дружелюбной диагностики", () => {
+    const value = {
+      apiVersion: "integrations.kodex.io/v1",
+      kind: "IntegrationPackage",
+      metadata: { key: "local-preview" },
+      spec: { name: "Предпросмотр YAML" },
+    };
+    const details = packageDiagnosticDetails(value);
+    expect(details).toContainEqual({
+      path: ["metadata", "version"],
+      keyword: "required",
+    });
+    expect(details).toContainEqual({
+      path: ["spec", "adapter"],
+      keyword: "required",
+    });
+    expect(JSON.stringify(details)).not.toContain("Предпросмотр YAML");
+    expect(JSON.stringify(details)).not.toContain("local-preview");
   });
   it("соблюдает bounds и conditional destination schema", () => {
     const value = parseConfigurationDocument(

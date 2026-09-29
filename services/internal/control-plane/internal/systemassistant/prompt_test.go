@@ -8,7 +8,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v37" {
+	if CorePromptRevision != "system-assistant-core-v38" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -63,6 +63,8 @@ func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
 		"Разделяй шаблонные контексты",
 		"`rangeExample` и поля `itemFields`",
 		"`.automation.*` — к предпросмотру и материализации Автоматизации",
+		"Для бинарного PNG, JPEG, WebP или PDF",
+		"не помещай base64 в диалог или план",
 	} {
 		if !strings.Contains(CorePrompt(), required) {
 			t.Fatalf("system assistant prompt does not contain required guidance %q", required)

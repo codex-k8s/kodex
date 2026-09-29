@@ -22,10 +22,12 @@ import type {
   RoleImageRecipeDetail,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
 const emit = defineEmits<{ navigate: []; debug: [prompt: string] }>();
 const { t } = useI18n();
+const localizeServerMessage = useServerMessage();
 const target = computed(() =>
   assistantRoleImageBuildTarget(props.plan, props.operationRef),
 );
@@ -280,7 +282,7 @@ async function promoteCandidate(): Promise<void> {
       {{ $t("assistant.roleImageBuild.loadFailed") }}
     </p>
     <template v-if="detail">
-      <p>{{ detail.recipe.name }}</p>
+      <p>{{ localizeServerMessage(detail.recipe.name) }}</p>
       <template v-if="build">
         <label>
           {{

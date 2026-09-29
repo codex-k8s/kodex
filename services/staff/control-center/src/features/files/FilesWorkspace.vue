@@ -1789,7 +1789,6 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
-  min-height: 640px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1871,7 +1870,6 @@ onBeforeUnmount(() => {
 }
 .files-workspace__layout {
   display: grid;
-  min-height: 540px;
   grid-template-columns: minmax(0, 1fr);
 }
 .files-workspace__layout--details {

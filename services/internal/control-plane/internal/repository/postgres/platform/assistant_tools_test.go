@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -60,6 +61,78 @@ func TestAssistantProjectFileOperation(t *testing.T) {
 				t.Fatalf("forged project file accepted: %v", err)
 			}
 		})
+	}
+}
+
+func TestAssistantBinaryProjectFileOperation(t *testing.T) {
+	t.Parallel()
+	png := []byte("\x89PNG\r\n\x1a\ncontent")
+	operation := entity.AssistantPlanOperation{
+		Type: "CREATE_PROJECT_FILE", Summary: "Create project image",
+		Input: map[string]any{
+			"projectRef": "prj_example", "fileName": "pixel.png", "mediaType": "image/png",
+			"contentEncoding": "BASE64", "content": base64.StdEncoding.EncodeToString(png),
+		},
+	}
+	mapped, err := assistantOperationCommand(operation)
+	if err != nil {
+		t.Fatalf("map binary project file: %v", err)
+	}
+	payload := mapped.Payload.(command.ProjectFileInput)
+	if !reflect.DeepEqual(payload.Content, png) || payload.SizeBytes != int64(len(png)) {
+		t.Fatalf("binary content was not decoded exactly: %#v", payload)
+	}
+	for name, mutate := range map[string]func(map[string]any){
+		"invalid base64": func(input map[string]any) { input["content"] = "%%%" },
+		"binary as utf8": func(input map[string]any) { input["contentEncoding"] = "UTF8" },
+		"text as base64": func(input map[string]any) { input["mediaType"] = "text/plain" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			forged := operation
+			forged.Input = cloneAssistantFields(operation.Input)
+			mutate(forged.Input)
+			if _, err := assistantOperationCommand(forged); !errors.Is(err, errs.ErrInvalid) {
+				t.Fatalf("invalid binary project file accepted: %v", err)
+			}
+		})
+	}
+	overLimit := operation
+	overLimit.Input = cloneAssistantFields(operation.Input)
+	overLimit.Input["content"] = base64.StdEncoding.EncodeToString(make([]byte, (1<<20)+1))
+	if _, err := assistantOperationCommand(overLimit); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("oversized decoded file accepted: %v", err)
+	}
+	draft := operation
+	draft.Input = cloneAssistantFields(operation.Input)
+	draft.Input["content"] = ""
+	if _, err := assistantOperationCommand(draft); err != nil || assistantProjectFileContentReady(draft) {
+		t.Fatalf("empty binary draft must be accepted but remain incomplete: %v", err)
+	}
+}
+
+func TestNormalizeAssistantProjectFileStoresBinaryContentOnce(t *testing.T) {
+	t.Parallel()
+	parameters := map[string]any{
+		"projectRef": "prj_example", "fileName": "pixel.png", "mediaType": "image/png",
+		"contentEncoding": "BASE64", "content": "iVBORw0KGgo=",
+	}
+	operation := entity.AssistantPlanOperation{
+		Type: "CREATE_PROJECT_FILE", Key: "operation-file", Action: "CREATE",
+		Title: "Create pixel", Summary: "Create project image",
+		Target:     entity.AssistantPlanTarget{Kind: "ARTIFACT", Name: "pixel.png"},
+		Parameters: cloneAssistantFields(parameters), Before: map[string]any{}, After: cloneAssistantFields(parameters),
+		Selected: true, Permitted: true, ValidationProblems: []string{},
+	}
+	normalized, err := normalizeAssistantOperation(operation)
+	if err != nil {
+		t.Fatalf("normalize project file: %v", err)
+	}
+	if normalized.Parameters["content"] == nil || normalized.After["content"] != nil {
+		t.Fatalf("binary content must be kept once: parameters=%#v after=%#v", normalized.Parameters, normalized.After)
+	}
+	delete(operation.After, "content")
+	if _, err := normalizeAssistantOperation(operation); err != nil {
+		t.Fatalf("safe project file after snapshot must be accepted: %v", err)
 	}
 }
 

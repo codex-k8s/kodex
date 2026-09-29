@@ -2296,11 +2296,8 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		if json.Unmarshal(raw, &plan.Operations) != nil {
 			return errs.ErrUnavailable
 		}
-		if receiptRef != "" && receiptRevision == plan.Revision {
-			if receiptCreatedAt == nil ||
-				!((plan.State == "APPLIED" && receiptOutcome == "APPLIED") ||
-					(plan.State == "REJECTED" && receiptOutcome == "REJECTED") ||
-					(plan.State == "STALE" && receiptOutcome == "CONFLICT")) {
+		if receiptRef != "" && receiptRevision == plan.Revision && assistantPlanStateHasReceipt(plan.State) {
+			if !assistantPlanReceiptMatchesState(plan.State, receiptOutcome) || receiptCreatedAt == nil {
 				return errs.ErrUnavailable
 			}
 			receipt := entity.AssistantPlanReceipt{Ref: receiptRef, PlanRef: plan.Ref,
@@ -2324,6 +2321,23 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		item.LatestPlan = &latest
 	}
 	return nil
+}
+
+func assistantPlanStateHasReceipt(state string) bool {
+	return state == "APPLIED" || state == "REJECTED" || state == "STALE"
+}
+
+func assistantPlanReceiptMatchesState(state, outcome string) bool {
+	switch state {
+	case "APPLIED":
+		return outcome == "APPLIED"
+	case "REJECTED":
+		return outcome == "REJECTED"
+	case "STALE":
+		return outcome == "CONFLICT"
+	default:
+		return false
+	}
 }
 
 func (repository *Repository) GetAdministration(ctx context.Context, principal value.Principal) (platformrepo.Administration, error) {
@@ -2384,7 +2398,7 @@ func (repository *Repository) ListAuditEvents(ctx context.Context, principal val
 	limit := boundedPage(filter.Page)
 	rows, err := repository.pool.Query(ctx, queryQueriesListauditeventsSelectAuditEventsOrganizationIdRefAction,
 		scope.organizationID, filter.ProjectRef, filter.ResourceRef, filter.Action, filter.Outcome, filter.Query,
-		scope.role, scope.actorID, cursorOccurredAt, cursorRef, limit+1,
+		scope.role, scope.actorID, filter.ExcludeTechnical, cursorOccurredAt, cursorRef, limit+1,
 	)
 	if err != nil {
 		return nil, "", errs.ErrUnavailable
