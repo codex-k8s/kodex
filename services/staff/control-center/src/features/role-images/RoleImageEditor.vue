@@ -41,6 +41,7 @@ import CodeEditor from "@/shared/ui/CodeEditor.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 
 const props = defineProps<{
   projectRef: string;
@@ -337,7 +338,11 @@ async function cancelCurrentBuild(): Promise<void> {
     hasLocalChanges.value ||
     !recipe.value.nextActions.includes("CANCEL_BUILD") ||
     !buildIsActive(current) ||
-    !window.confirm(t("roleImages.cancelBuildConfirm"))
+    !(await requestConfirmation({
+      message: t("roleImages.cancelBuildConfirm"),
+      confirmLabel: t("roleImages.cancelBuild"),
+      tone: "danger",
+    }))
   )
     return;
   try {

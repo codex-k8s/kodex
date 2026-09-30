@@ -829,9 +829,12 @@ const ru = {
   voice: {
     idle: "Голосовой ввод",
     requesting: "Ожидание разрешения микрофона",
-    recording: "Остановить запись",
+    recording: "Идёт запись",
     transcribing: "Распознавание",
     error: "Не удалось распознать. Записать заново",
+    recordingActive: "Микрофон записывает",
+    cancelRecording: "Отменить запись",
+    acceptRecording: "Завершить и распознать",
     permissionDenied:
       "Доступ к микрофону запрещён. Разрешите его в настройках браузера и начните новую запись.",
     microphoneUnavailable:
@@ -921,6 +924,9 @@ const ru = {
     audit: "Аудит и диагностика",
     providers: "Учётные записи моделей",
   },
+  confirmation: {
+    title: "Подтвердите действие",
+  },
   common: {
     search: "Поиск",
     expand: "Развернуть список",
@@ -931,6 +937,7 @@ const ru = {
     selectedCount: "Выбрано: {count}",
     create: "Создать",
     save: "Сохранить",
+    confirm: "Подтвердить",
     cancel: "Отмена",
     close: "Закрыть",
     retry: "Повторить",
@@ -3540,6 +3547,19 @@ const ru = {
     renameConversation: "Переименовать диалог",
     archiveConversation: "Архивировать диалог",
     archiveConfirm: "Архивировать этот диалог?",
+    conversationActions: "Действия с диалогом",
+    deleteConversation: "Удалить диалог",
+    trashConfirm:
+      "Переместить диалог в корзину? Его можно восстановить в течение 30 дней.",
+    trashState: "Корзина",
+    trashEmpty: "Корзина пуста",
+    restoreConversation: "Восстановить диалог",
+    purgeConversation: "Удалить безвозвратно",
+    purgeConfirm:
+      "Удалить диалог безвозвратно? Сообщения и варианты планов восстановить будет нельзя.",
+    emptyTrash: "Очистить корзину",
+    emptyTrashConfirm:
+      "Удалить безвозвратно все диалоги из корзины? Это действие нельзя отменить.",
     closeWithDraftConfirm:
       "Закрыть чат с неотправленным сообщением или вложениями? Выбранные вложения потребуется добавить заново.",
     searchHistory: "Поиск диалогов",
@@ -4894,9 +4914,12 @@ const en = {
   voice: {
     idle: "Voice input",
     requesting: "Waiting for microphone permission",
-    recording: "Stop recording",
+    recording: "Recording",
     transcribing: "Transcribing",
     error: "Transcription failed. Record again",
+    recordingActive: "Microphone is recording",
+    cancelRecording: "Cancel recording",
+    acceptRecording: "Finish and transcribe",
     permissionDenied:
       "Microphone access was denied. Allow it in browser settings and start a new recording.",
     microphoneUnavailable:
@@ -4986,6 +5009,9 @@ const en = {
     audit: "Audit and diagnostics",
     providers: "Model accounts",
   },
+  confirmation: {
+    title: "Confirm action",
+  },
   common: {
     ...ru.common,
     search: "Search",
@@ -4997,6 +5023,7 @@ const en = {
     selectedCount: "Selected: {count}",
     create: "Create",
     save: "Save",
+    confirm: "Confirm",
     cancel: "Cancel",
     close: "Close",
     retry: "Retry",
@@ -7601,6 +7628,19 @@ const en = {
     renameConversation: "Rename conversation",
     archiveConversation: "Archive conversation",
     archiveConfirm: "Archive this conversation?",
+    conversationActions: "Conversation actions",
+    deleteConversation: "Delete conversation",
+    trashConfirm:
+      "Move this conversation to Trash? You can restore it within 30 days.",
+    trashState: "Trash",
+    trashEmpty: "Trash is empty",
+    restoreConversation: "Restore conversation",
+    purgeConversation: "Delete permanently",
+    purgeConfirm:
+      "Delete this conversation permanently? Messages and plan variants cannot be restored.",
+    emptyTrash: "Empty Trash",
+    emptyTrashConfirm:
+      "Permanently delete all conversations from Trash? This action cannot be undone.",
     closeWithDraftConfirm:
       "Close the chat with an unsent message or attachments? Selected attachments will need to be added again.",
     searchHistory: "Search conversations",

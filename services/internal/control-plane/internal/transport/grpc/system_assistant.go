@@ -23,6 +23,25 @@ func (server *Server) ArchiveAssistantConversation(ctx context.Context, request 
 	return &controlplanev1.ArchiveAssistantConversationResponse{Conversation: castConversation(*result.Conversation)}, nil
 }
 
+func (server *Server) RestoreAssistantConversation(ctx context.Context, request *controlplanev1.RestoreAssistantConversationRequest) (*controlplanev1.RestoreAssistantConversationResponse, error) {
+	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_RestoreAssistantConversation_FullMethodName, command.RestoreAssistantConversation, request.GetMutation(), command.AssistantConversationArchiveInput{ConversationRef: request.GetConversationRef()})
+	if err != nil {
+		return nil, err
+	}
+	if result.Conversation == nil {
+		return nil, status.Error(codes.Internal, "assistant restore result is missing")
+	}
+	return &controlplanev1.RestoreAssistantConversationResponse{Conversation: castConversation(*result.Conversation)}, nil
+}
+
+func (server *Server) PurgeAssistantConversation(ctx context.Context, request *controlplanev1.PurgeAssistantConversationRequest) (*controlplanev1.PurgeAssistantConversationResponse, error) {
+	_, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_PurgeAssistantConversation_FullMethodName, command.PurgeAssistantConversation, request.GetMutation(), command.AssistantConversationArchiveInput{ConversationRef: request.GetConversationRef()})
+	if err != nil {
+		return nil, err
+	}
+	return &controlplanev1.PurgeAssistantConversationResponse{ConversationRef: request.GetConversationRef()}, nil
+}
+
 func (server *Server) MoveAssistantConversationToProject(ctx context.Context, request *controlplanev1.MoveAssistantConversationToProjectRequest) (*controlplanev1.MoveAssistantConversationToProjectResponse, error) {
 	result, err := execute(ctx, server.service, controlplanev1.SystemAssistantService_MoveAssistantConversationToProject_FullMethodName,
 		command.MoveAssistantConversationToProject, request.GetMutation(), command.AssistantConversationProjectInput{

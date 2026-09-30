@@ -270,6 +270,16 @@ const assistantRefreshRevision = computed(() =>
   ].join("|"),
 );
 
+watch(assistantRefreshRevision, (value, previous) => {
+  if (!assistantStore.context || value === previous) return;
+  assistantStore.applyRealtimeSnapshot(
+    platform.assistant,
+    Object.values(platform.conversations),
+    assistantStore.projectRef,
+    platform.assistantConversationNextPageToken,
+  );
+});
+
 const globalLinks = computed(() => [
   { name: "home", label: t("nav.home"), path: "/", icon: Home },
   {
@@ -453,8 +463,10 @@ watch(search, (value) => {
 });
 watch(
   projectRef,
-  (value) => {
+  (value, previous) => {
     selectProjectRef(value);
+    if (realtimeStarted.value && value !== previous)
+      realtime.changeProjectScope();
     if (value && !platform.projects[value]) void platform.loadProject(value);
   },
   { immediate: true },
@@ -491,10 +503,6 @@ onMounted(() => {
     selectProjectRef(projectRef.value);
     realtimeStarted.value = true;
     realtime.openPlatform();
-    return Promise.all([
-      platform.loadPendingGateCount(),
-      platform.loadBootstrap(),
-    ]);
   });
 });
 onBeforeUnmount(() => {
@@ -800,7 +808,6 @@ onBeforeUnmount(() => {
       :project-ref="assistantContext.projectRef"
       :live="realtime.platformState.state === 'live'"
       :run-events="assistantRunEvents"
-      :refresh-revision="assistantRefreshRevision"
     />
   </div>
 </template>

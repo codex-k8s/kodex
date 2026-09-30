@@ -158,6 +158,36 @@ Duplicate/stale не повторяют effect. Sequence gap и conflicting payl
 
 Подробные runtime-инварианты задают `GO-DOC-004` и `GO-DOC-005`.
 
+## Карта browser realtime-сценария
+
+Инициатором является аутентифицированная browser session владельца или
+участника. `control-api-gateway` получает actor и organization только из
+проверенного session context; переданный браузером `projectRef` является лишь
+селектором проекции и не является источником полномочий. Gateway повторно
+передаёт его в специализированный control-plane RPC, где владелец данных
+проверяет eligibility.
+
+При открытии приложения browser передаёт последний применённый platform cursor
+и выбранный project scope. Gateway подписывается на organization-scoped NATS
+wake-сигналы, повторно читает cursor и отдаёт ограниченные снимки доступных
+каталогов. Каждый снимок получен через типизированный RPC и преобразован тем же
+публичным projection mapper, что и HTTP. Browser атомарно заменяет только
+указанный `kind` и scope, затем принимает `PLATFORM_READY` на том же cursor.
+
+Обычная mutation атомарно фиксирует состояние, audit и outbox event в
+control-plane. NATS payload не становится browser authority: gateway проверяет
+organization, строгую последовательность, event/kind registry и после wake
+повторно читает авторитетную проекцию. Browser применяет `DELTA` snapshot только
+при следующем cursor. Duplicate игнорируется; gap, неизвестный kind, ошибка
+проекции или смена scope закрываются `PLATFORM_RESYNC_REQUIRED` либо ошибкой
+stream. Авторитетный HTTP resync разрешён только для этого recovery path.
+
+При смене проекта прежняя WebSocket session закрывается, её незавершённые
+снимки больше не применяются, и новая session начинает bootstrap в новом
+server-checked scope. Серверный поиск, cursor-догрузка, тяжёлые detail views и
+mutation остаются HTTP-операциями; обычное обновление уже загруженного каталога
+не создаёт повторный HTTP readback.
+
 WebSocket snapshot contract `control-api-gateway` находится в
 [`control-api-gateway/v1/asyncapi.yaml`](control-api-gateway/v1/asyncapi.yaml).
 Он использует `wss`, а не broker: consumer заменяет channel snapshot, а

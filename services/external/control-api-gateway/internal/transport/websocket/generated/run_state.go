@@ -5,11 +5,11 @@ package generated
 type RunState string
 
 const (
-	RunStateQueued       RunState = "QUEUED"
-	RunStateRunning      RunState = "RUNNING"
+	RunStateQueued RunState = "QUEUED"
+	RunStateRunning RunState = "RUNNING"
 	RunStateWaitingHuman RunState = "WAITING_HUMAN"
-	RunStateCancelling   RunState = "CANCELLING"
-	RunStateSucceeded    RunState = "SUCCEEDED"
-	RunStateFailed       RunState = "FAILED"
-	RunStateCancelled    RunState = "CANCELLED"
+	RunStateCancelling RunState = "CANCELLING"
+	RunStateSucceeded RunState = "SUCCEEDED"
+	RunStateFailed RunState = "FAILED"
+	RunStateCancelled RunState = "CANCELLED"
 )

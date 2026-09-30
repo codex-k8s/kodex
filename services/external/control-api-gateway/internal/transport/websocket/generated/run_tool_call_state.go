@@ -6,5 +6,5 @@ type RunToolCallState string
 
 const (
 	RunToolCallStateSucceeded RunToolCallState = "SUCCEEDED"
-	RunToolCallStateFailed    RunToolCallState = "FAILED"
+	RunToolCallStateFailed RunToolCallState = "FAILED"
 )

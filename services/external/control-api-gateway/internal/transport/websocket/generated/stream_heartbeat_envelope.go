@@ -3,9 +3,10 @@
 package generated
 
 type StreamHeartbeatEnvelope struct {
-	Type       string     `json:"type"`
+	Type string `json:"type"`
 	StreamKind StreamKind `json:"streamKind"`
-	StreamRef  string     `json:"streamRef"`
-	Cursor     int64      `json:"cursor"`
-	ServerTime string     `json:"serverTime"`
+	StreamRef string `json:"streamRef"`
+	Cursor int64 `json:"cursor"`
+	ServerTime string `json:"serverTime"`
+	SpeechTranscription *SpeechTranscriptionAvailability `json:"speechTranscription,omitempty"`
 }

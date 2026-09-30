@@ -19,6 +19,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	"github.com/codex-k8s/kodex/libs/go/eventing/browserstate"
+	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/boundary"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/session"
 	httptransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http"
@@ -29,7 +30,7 @@ import (
 )
 
 const (
-	maximumFrameBytes        = 64 << 10
+	maximumFrameBytes        = 1 << 20
 	maximumRunSubscriptions  = 32
 	maximumOutboundFrames    = 256
 	maximumInboundCommands   = 64
@@ -49,24 +50,50 @@ var (
 )
 
 type queryClient interface {
+	GetBootstrapState(context.Context, *controlplanev1.GetBootstrapStateRequest, ...grpc.CallOption) (*controlplanev1.GetBootstrapStateResponse, error)
+	GetOverview(context.Context, *controlplanev1.GetOverviewRequest, ...grpc.CallOption) (*controlplanev1.GetOverviewResponse, error)
+	ListProjects(context.Context, *controlplanev1.ListProjectsRequest, ...grpc.CallOption) (*controlplanev1.ListProjectsResponse, error)
+	ListProjectMemberships(context.Context, *controlplanev1.ListProjectMembershipsRequest, ...grpc.CallOption) (*controlplanev1.ListProjectMembershipsResponse, error)
+	ListPlatformMemberships(context.Context, *controlplanev1.ListPlatformMembershipsRequest, ...grpc.CallOption) (*controlplanev1.ListPlatformMembershipsResponse, error)
+	ListAgents(context.Context, *controlplanev1.ListAgentsRequest, ...grpc.CallOption) (*controlplanev1.ListAgentsResponse, error)
+	ListWorkflows(context.Context, *controlplanev1.ListWorkflowsRequest, ...grpc.CallOption) (*controlplanev1.ListWorkflowsResponse, error)
+	ListRuns(context.Context, *controlplanev1.ListRunsRequest, ...grpc.CallOption) (*controlplanev1.ListRunsResponse, error)
+	ListArtifacts(context.Context, *controlplanev1.ListArtifactsRequest, ...grpc.CallOption) (*controlplanev1.ListArtifactsResponse, error)
+	ListSchedules(context.Context, *controlplanev1.ListSchedulesRequest, ...grpc.CallOption) (*controlplanev1.ListSchedulesResponse, error)
+	ListIntegrationDefinitions(context.Context, *controlplanev1.ListIntegrationDefinitionsRequest, ...grpc.CallOption) (*controlplanev1.ListIntegrationDefinitionsResponse, error)
+	ListIntegrationConnections(context.Context, *controlplanev1.ListIntegrationConnectionsRequest, ...grpc.CallOption) (*controlplanev1.ListIntegrationConnectionsResponse, error)
+	ListRuntimeEnvironmentSets(context.Context, *controlplanev1.ListRuntimeEnvironmentSetsRequest, ...grpc.CallOption) (*controlplanev1.ListRuntimeEnvironmentSetsResponse, error)
+	ListProviderAccounts(context.Context, *controlplanev1.ListProviderAccountsRequest, ...grpc.CallOption) (*controlplanev1.ListProviderAccountsResponse, error)
 	GetRunGraph(context.Context, *controlplanev1.GetRunGraphRequest, ...grpc.CallOption) (*controlplanev1.GetRunGraphResponse, error)
 	ListRunEvents(context.Context, *controlplanev1.ListRunEventsRequest, ...grpc.CallOption) (*controlplanev1.ListRunEventsResponse, error)
 	GetPlatformEventCursor(context.Context, *controlplanev1.GetPlatformEventCursorRequest, ...grpc.CallOption) (*controlplanev1.GetPlatformEventCursorResponse, error)
 }
 
+type assistantQueryClient interface {
+	GetSystemAssistant(context.Context, *controlplanev1.GetSystemAssistantRequest, ...grpc.CallOption) (*controlplanev1.GetSystemAssistantResponse, error)
+	ListAssistantConversations(context.Context, *controlplanev1.ListAssistantConversationsRequest, ...grpc.CallOption) (*controlplanev1.ListAssistantConversationsResponse, error)
+}
+
+type roleImageQueryClient interface {
+	ListRoleImageRecipes(context.Context, *controlplanev1.ListRoleImageRecipesRequest, ...grpc.CallOption) (*controlplanev1.ListRoleImageRecipesResponse, error)
+}
+
 type Server struct {
 	query       queryClient
+	assistant   assistantQueryClient
+	roleImages  roleImageQueryClient
+	speech      sttv1.SpeechToTextServiceClient
 	nats        *nats.Conn
 	origins     []string
 	tickets     *boundary.Boundary
 	legacyUntil time.Time
 }
 
-func New(control *controlplaneclient.Client, connection *nats.Conn, origins []string, tickets *boundary.Boundary, legacyUntil time.Time) (*Server, error) {
-	if control == nil || control.Query == nil || connection == nil || !connection.IsConnected() || len(origins) == 0 || tickets == nil {
+func New(control *controlplaneclient.Client, connection *nats.Conn, speech sttv1.SpeechToTextServiceClient, origins []string, tickets *boundary.Boundary, legacyUntil time.Time) (*Server, error) {
+	if control == nil || control.Query == nil || control.Assistant == nil || control.RoleImages == nil || connection == nil || !connection.IsConnected() || speech == nil || len(origins) == 0 || tickets == nil {
 		return nil, errors.New("realtime server configuration is invalid")
 	}
-	return &Server{query: control.Query, nats: connection, origins: origins, tickets: tickets, legacyUntil: legacyUntil}, nil
+	return &Server{query: control.Query, assistant: control.Assistant, roleImages: control.RoleImages, speech: speech, nats: connection, origins: origins, tickets: tickets, legacyUntil: legacyUntil}, nil
 }
 
 type busEnvelope struct {
@@ -131,6 +158,7 @@ type sessionMultiplexer struct {
 	overflow           chan struct{}
 	platformRequestRef string
 	organizationRef    string
+	projectRef         string
 	platformCursor     int64
 	platformAvailable  bool
 	platformSub        *nats.Subscription
@@ -266,7 +294,10 @@ func (server *Server) ServeSessionHTTP(writer http.ResponseWriter, request *http
 }
 
 func (multiplexer *sessionMultiplexer) initialize(resume generated.SessionResumeEnvelope) error {
-	if err := multiplexer.initializePlatform(resume.PlatformAfterSequence); err != nil {
+	if resume.ProjectRef != nil {
+		multiplexer.projectRef = *resume.ProjectRef
+	}
+	if err := multiplexer.initializePlatform(resume.PlatformAfterSequence, resume.PlatformSnapshotRequired); err != nil {
 		return err
 	}
 	for _, run := range resume.Runs {
@@ -285,7 +316,7 @@ func (multiplexer *sessionMultiplexer) initialize(resume generated.SessionResume
 	return nil
 }
 
-func (multiplexer *sessionMultiplexer) initializePlatform(after int64) error {
+func (multiplexer *sessionMultiplexer) initializePlatform(after int64, snapshotRequired bool) error {
 	cursor, err := multiplexer.server.query.GetPlatformEventCursor(multiplexer.ctx, &controlplanev1.GetPlatformEventCursorRequest{})
 	if err != nil || !safeRef.MatchString(cursor.GetOrganizationRef()) || cursor.GetCurrentSequence() < 0 {
 		return errors.New("platform cursor is unavailable")
@@ -311,12 +342,10 @@ func (multiplexer *sessionMultiplexer) initializePlatform(after int64) error {
 	}
 	multiplexer.platformCursor = cursor.GetCurrentSequence()
 	multiplexer.platformAvailable = true
-	if after != multiplexer.platformCursor && !multiplexer.send(generated.PlatformResyncEnvelope{
-		Type: "PLATFORM_RESYNC_REQUIRED", RequestRef: multiplexer.platformRequestRef,
-		StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: multiplexer.platformCursor,
-		Reason: "AUTHORITATIVE_READ_REQUIRED",
-	}) {
-		return errOutboundOverflow
+	if snapshotRequired || after != multiplexer.platformCursor {
+		if !multiplexer.sendPlatformBootstrap() {
+			return errOutboundOverflow
+		}
 	}
 	if !multiplexer.send(generated.PlatformReadyEnvelope{
 		Type: "PLATFORM_READY", RequestRef: multiplexer.platformRequestRef,
@@ -483,11 +512,22 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 	if signal.Sequence != multiplexer.platformCursor+1 {
 		return multiplexer.synchronizePlatform()
 	}
-	if !multiplexer.send(generated.PlatformInvalidatedEnvelope{
-		Type: "PLATFORM_INVALIDATED", RequestRef: multiplexer.platformRequestRef,
+	snapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, signal.Kind, multiplexer.projectRef, multiplexer.localize)
+	if err != nil {
+		multiplexer.platformAvailable = false
+		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
+	}
+	eventName := generated.PlatformEventName(signal.EventName)
+	envelope := generated.PlatformSnapshotEnvelope{
+		Type: "PLATFORM_SNAPSHOT", RequestRef: multiplexer.platformRequestRef,
 		StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: signal.Sequence,
-		EventName: generated.PlatformEventName(signal.EventName), Kind: generated.PlatformResourceKind(signal.Kind),
-	}) {
+		Mode: generated.PlatformSnapshotModeDelta, EventName: &eventName,
+		Kind: generated.PlatformResourceKind(signal.Kind), Snapshot: snapshot,
+	}
+	if multiplexer.projectRef != "" {
+		envelope.ProjectRef = &multiplexer.projectRef
+	}
+	if !multiplexer.send(envelope) {
 		return false
 	}
 	multiplexer.platformCursor = signal.Sequence
@@ -520,9 +560,12 @@ func (multiplexer *sessionMultiplexer) heartbeat(now time.Time) bool {
 	if !multiplexer.synchronizePlatform() {
 		return false
 	}
+	bootstrap, _ := multiplexer.server.query.GetBootstrapState(multiplexer.ctx, &controlplanev1.GetBootstrapStateRequest{})
+	availability := multiplexer.server.projectSpeechAvailability(multiplexer.ctx, bootstrap.GetState().GetSpeechTranscription())
 	if multiplexer.platformAvailable && !multiplexer.send(generated.StreamHeartbeatEnvelope{
 		Type: "STREAM_HEARTBEAT", StreamKind: generated.StreamKindPlatform,
 		StreamRef: platformStreamRef, Cursor: multiplexer.platformCursor, ServerTime: now.UTC().Format(time.RFC3339Nano),
+		SpeechTranscription: availability,
 	}) {
 		return false
 	}
@@ -701,6 +744,9 @@ func validateSessionResume(resume generated.SessionResumeEnvelope) error {
 	if resume.Type != "SESSION_RESUME" || !safeRef.MatchString(resume.RequestRef) ||
 		resume.PlatformAfterSequence < 0 || len(resume.Runs) > maximumRunSubscriptions {
 		return errors.New("session resume is invalid")
+	}
+	if resume.ProjectRef != nil && !safeRef.MatchString(*resume.ProjectRef) {
+		return errors.New("session project scope is invalid")
 	}
 	seen := make(map[string]struct{}, len(resume.Runs))
 	for _, run := range resume.Runs {

@@ -22,6 +22,7 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import EmailMailboxFields from "./EmailMailboxFields.vue";
 import { mailboxEditor } from "../email-mailbox-editor";
 import {
@@ -94,9 +95,9 @@ let deliveryAttempts = 0;
 let disposed = false;
 useUnsavedChanges(guarded, () => t("mailbox.leave"));
 watch(ownBusy, (value) => emit("busy", value), { immediate: true });
-function canClose(): boolean {
+async function canClose(): Promise<boolean> {
   if (locked.value) return false;
-  return !guarded.value || window.confirm(t("mailbox.leave"));
+  return !guarded.value || (await requestConfirmation(t("mailbox.leave")));
 }
 defineExpose({ canClose });
 function reason(action: MailboxAction): string {
@@ -119,7 +120,10 @@ function canExecute(action: MailboxAction): boolean {
 async function execute(action?: MailboxAction): Promise<void> {
   if (locked.value) return;
   if (action && !canExecute(action)) return;
-  if (action === "DISCARD" && !window.confirm(t("mailbox.discardConfirm")))
+  if (
+    action === "DISCARD" &&
+    !(await requestConfirmation(t("mailbox.discardConfirm")))
+  )
     return;
   await editor.execute(action);
   if (!editor.problem && !editor.uncertain && editor.view) {
@@ -132,14 +136,14 @@ async function open(
   configurationRef?: string,
   revisionRef?: string,
 ): Promise<void> {
-  if (!canClose()) return;
+  if (!(await canClose())) return;
   await editor.open(configurationRef, revisionRef);
   if (editor.view)
     emit("selected", editor.view.configuration.ref, editor.view.revision.ref);
   scheduleDelivery();
 }
-function newConfiguration(): void {
-  if (canClose()) editor.newConfiguration();
+async function newConfiguration(): Promise<void> {
+  if (await canClose()) editor.newConfiguration();
 }
 function search(): void {
   clearTimeout(searchTimer);

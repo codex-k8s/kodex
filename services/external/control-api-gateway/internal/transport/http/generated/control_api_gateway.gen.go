@@ -14043,6 +14043,13 @@ type CreateAssistantConversationParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// PurgeAssistantConversationParams defines parameters for PurgeAssistantConversation.
+type PurgeAssistantConversationParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // ArchiveAssistantConversationParams defines parameters for ArchiveAssistantConversation.
 type ArchiveAssistantConversationParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -14057,6 +14064,13 @@ type MoveAssistantConversationToProjectJSONBody struct {
 
 // MoveAssistantConversationToProjectParams defines parameters for MoveAssistantConversationToProject.
 type MoveAssistantConversationToProjectParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RestoreAssistantConversationParams defines parameters for RestoreAssistantConversation.
+type RestoreAssistantConversationParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
@@ -16680,11 +16694,17 @@ type ServerInterface interface {
 	// (POST /api/v1/assistant-conversations)
 	CreateAssistantConversation(w http.ResponseWriter, r *http.Request, params CreateAssistantConversationParams)
 
+	// (DELETE /api/v1/assistant-conversations/{conversationRef})
+	PurgeAssistantConversation(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params PurgeAssistantConversationParams)
+
 	// (POST /api/v1/assistant-conversations/{conversationRef}/archive)
 	ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params ArchiveAssistantConversationParams)
 
 	// (POST /api/v1/assistant-conversations/{conversationRef}/project)
 	MoveAssistantConversationToProject(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params MoveAssistantConversationToProjectParams)
+
+	// (POST /api/v1/assistant-conversations/{conversationRef}/restore)
+	RestoreAssistantConversation(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params RestoreAssistantConversationParams)
 
 	// (PUT /api/v1/assistant-conversations/{conversationRef}/title)
 	UpdateAssistantConversationTitle(w http.ResponseWriter, r *http.Request, conversationRef ConversationRef, params UpdateAssistantConversationTitleParams)
@@ -22353,6 +22373,112 @@ func (siw *ServerInterfaceWrapper) CreateAssistantConversation(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// PurgeAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) PurgeAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationRef" -------------
+	var conversationRef ConversationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationRef", r.PathValue("conversationRef"), &conversationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PurgeAssistantConversationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PurgeAssistantConversation(w, r, conversationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ArchiveAssistantConversation operation middleware
 func (siw *ServerInterfaceWrapper) ArchiveAssistantConversation(w http.ResponseWriter, r *http.Request) {
 
@@ -22556,6 +22682,112 @@ func (siw *ServerInterfaceWrapper) MoveAssistantConversationToProject(w http.Res
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.MoveAssistantConversationToProject(w, r, conversationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestoreAssistantConversation operation middleware
+func (siw *ServerInterfaceWrapper) RestoreAssistantConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationRef" -------------
+	var conversationRef ConversationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationRef", r.PathValue("conversationRef"), &conversationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RestoreAssistantConversationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestoreAssistantConversation(w, r, conversationRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -44782,8 +45014,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/restore", wrapper.RestoreArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.ListAssistantConversations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.CreateAssistantConversation)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}", wrapper.PurgeAssistantConversation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/archive", wrapper.ArchiveAssistantConversation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/project", wrapper.MoveAssistantConversationToProject)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/restore", wrapper.RestoreAssistantConversation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/title", wrapper.UpdateAssistantConversationTitle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}/turns", wrapper.AddAssistantTurn)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-plans/{planRef}/application", wrapper.ApplyAssistantPlan)

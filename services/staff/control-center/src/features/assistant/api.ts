@@ -7,7 +7,9 @@ import {
   getSystemAssistant,
   listAssistantConversations,
   moveAssistantConversationToProject,
+  purgeAssistantConversation,
   rejectAssistantPlan,
+  restoreAssistantConversation,
   updateAssistantConversationTitle,
   updateAssistantPlanDraft,
   validateAssistantPlan,
@@ -92,6 +94,52 @@ export async function archiveConversation(
   )
     throw new Error("Assistant archive receipt mismatch");
   return result;
+}
+
+export async function restoreConversation(
+  conversation: AssistantConversation,
+): Promise<AssistantConversation> {
+  const result = (
+    await mutate(
+      (headers) =>
+        restoreAssistantConversation({
+          path: { conversationRef: conversation.ref },
+          headers: {
+            "If-Match": headers["If-Match"] ?? "",
+            "Idempotency-Key": headers["Idempotency-Key"],
+            "X-CSRF-Token": headers["X-CSRF-Token"],
+          },
+          signal: requestSignal(),
+        }),
+      conversation.version,
+    )
+  ).data;
+  if (
+    result.ref !== conversation.ref ||
+    result.projectRef !== conversation.projectRef ||
+    result.state !== "ACTIVE" ||
+    result.version <= conversation.version
+  )
+    throw new Error("Assistant restore receipt mismatch");
+  return result;
+}
+
+export async function purgeConversation(
+  conversation: AssistantConversation,
+): Promise<void> {
+  await mutate(
+    (headers) =>
+      purgeAssistantConversation({
+        path: { conversationRef: conversation.ref },
+        headers: {
+          "If-Match": headers["If-Match"] ?? "",
+          "Idempotency-Key": headers["Idempotency-Key"],
+          "X-CSRF-Token": headers["X-CSRF-Token"],
+        },
+        signal: requestSignal(),
+      }),
+    conversation.version,
+  );
 }
 
 export async function moveConversationToProject(

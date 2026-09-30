@@ -64,6 +64,16 @@ export const useProvidersStore = defineStore("providers", {
     problem: undefined,
   }),
   actions: {
+    applySnapshot(
+      accounts: ProviderAccount[],
+      nextPageToken = "",
+      nextActions: ProviderAccountAction[] = [],
+    ): void {
+      this.accounts = accounts;
+      this.accountsNextPageToken = nextPageToken;
+      this.pageNextActions = nextActions;
+      this.resumeDeviceAuthorizationPolling();
+    },
     async loadDefinitions(query = "", pageSize = 20): Promise<void> {
       const page = await loadProviderDefinitions(
         query,

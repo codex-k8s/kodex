@@ -52,8 +52,61 @@ const emptyMessage = computed(() =>
     ? "workboard.noActiveRuns"
     : "common.empty",
 );
+const cachedDashboardItems = computed<HomeResultItem[]>(() => {
+  if (!props.dashboard) return [];
+  if (props.kind === "ARTIFACT")
+    return Object.values(platform.artifacts)
+      .filter((item) => item.lifecycleState === "ACTIVE")
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .map((item) => ({
+        ref: item.ref,
+        title: item.fileName,
+        description: item.mediaType,
+        state: item.scanState,
+        artifact: item,
+        ...(item.projectRef
+          ? {
+              to: `/projects/${encodeURIComponent(item.projectRef)}/files?artifactRef=${encodeURIComponent(item.ref)}`,
+            }
+          : {}),
+      }));
+  const resumable = props.kind === "SESSION";
+  return platform.runList
+    .filter((item) =>
+      resumable
+        ? item.state === "SUCCEEDED" &&
+          Boolean(item.sessionRef) &&
+          item.nextActions.includes("ADD_TURN")
+        : ["QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"].includes(
+            item.state,
+          ),
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .map((item) => ({
+      ref: item.ref,
+      ...(resumable ? { sessionRef: item.sessionRef } : {}),
+      title: item.title,
+      description:
+        (resumable
+          ? item.resultSummary
+          : [
+              item.target.displayName,
+              item.currentActivity || item.activitySummary,
+            ]
+              .filter(Boolean)
+              .join(" · ")) || item.target.displayName,
+      state: item.state,
+      to: `/runs/${encodeURIComponent(item.ref)}`,
+    }));
+});
 const dashboardItems = computed(() =>
-  props.dashboard ? items.value.slice(0, 3) : items.value,
+  (props.dashboard ? cachedDashboardItems.value : items.value).slice(
+    0,
+    props.dashboard ? 3 : undefined,
+  ),
+);
+const displayTotal = computed(() =>
+  props.dashboard ? cachedDashboardItems.value.length : total.value,
 );
 const catalogPath = computed(() =>
   props.kind === "ARTIFACT" ? "/files" : "/runs",
@@ -65,6 +118,11 @@ let artifactController: AbortController | undefined;
 let artifactGeneration = 0;
 const seen = new Set<string>();
 async function load(more = false, pageSize = 8) {
+  if (props.dashboard) {
+    emit("total", displayTotal.value);
+    emit("settled");
+    return;
+  }
   if (!props.ready || (props.kind !== "ARTIFACT" && platform.loading.runs))
     return;
   if (more && (loading.value || !cursor.value)) return;
@@ -127,6 +185,11 @@ async function load(more = false, pageSize = 8) {
   }
 }
 function refresh() {
+  if (props.dashboard) {
+    emit("total", displayTotal.value);
+    emit("settled");
+    return;
+  }
   clearTimeout(timer);
   controller?.abort();
   generation++;
@@ -203,7 +266,8 @@ watch([query, projectRef, runFilter, () => props.ready], refresh);
 watch(
   () => platform.loading.runs,
   (loading, previous) => {
-    if (props.kind !== "ARTIFACT" && previous && !loading) refresh();
+    if (!props.dashboard && props.kind !== "ARTIFACT" && previous && !loading)
+      refresh();
   },
 );
 watch(
@@ -215,7 +279,12 @@ watch(
       : Object.values(platform.artifacts)
           .map((item) => `${item.ref}:${String(item.version)}`)
           .join("|"),
-  refresh,
+  () => {
+    if (props.dashboard) {
+      emit("total", displayTotal.value);
+      emit("settled");
+    } else refresh();
+  },
 );
 onMounted(() => void load());
 onBeforeUnmount(() => {
@@ -233,7 +302,7 @@ onBeforeUnmount(() => {
   >
     <header>
       <h3>{{ $t(title) }}</h3>
-      <span v-if="total !== undefined">{{ total }}</span
+      <span v-if="displayTotal !== undefined">{{ displayTotal }}</span
       ><RouterLink v-if="dashboard" :to="catalogPath" class="home-result-all">
         {{
           kind === "ARTIFACT" ? $t("home.allFiles") : $t("home.allRuns")
@@ -276,7 +345,7 @@ onBeforeUnmount(() => {
     <p v-if="loading || !ready" role="status">
       {{ $t("common.loading") }}
     </p>
-    <p v-else-if="total === 0">{{ $t(emptyMessage) }}</p>
+    <p v-else-if="displayTotal === 0">{{ $t(emptyMessage) }}</p>
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <HomeResultRows
       :items="dashboardItems"

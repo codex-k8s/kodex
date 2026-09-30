@@ -23,14 +23,20 @@ describe("AppShell navigation", () => {
     expect(source).not.toContain("openAssistantWorkspace");
   });
 
-  it("запускает realtime до readback и не загружает полный каталог Проектов в оболочке", () => {
+  it("сливает realtime-снимок помощника без повторной загрузки открытого чата", () => {
+    expect(source).toContain("assistantStore.applyRealtimeSnapshot(");
+    expect(source).not.toContain(
+      ':refresh-revision="assistantRefreshRevision"',
+    );
+  });
+
+  it("запускает realtime без catalog readback и не загружает полный каталог Проектов в оболочке", () => {
     expect(source).toContain("<RealtimeStatus");
     expect(source).toContain("router.isReady().then");
     expect(source).toContain("selectProjectRef(projectRef.value)");
     expect(source).toContain("realtime.openPlatform()");
-    expect(source.indexOf("realtime.openPlatform()")).toBeLessThan(
-      source.indexOf("platform.loadPendingGateCount()"),
-    );
+    expect(source).not.toContain("platform.loadPendingGateCount()");
+    expect(source).not.toContain("platform.loadBootstrap()");
     expect(source).not.toContain("platform.loadGates()");
     expect(source).not.toContain("platform.loadProjects()");
     expect(source).not.toContain("]).finally(() => {");

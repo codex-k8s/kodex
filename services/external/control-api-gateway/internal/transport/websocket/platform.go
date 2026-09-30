@@ -22,6 +22,8 @@ var platformEventNames = map[string]string{
 	"PLATFORM_MEMBERSHIP_CHANGED":    "PLATFORM_MEMBERSHIP",
 	"SYSTEM_ASSISTANT_CHANGED":       "SYSTEM_ASSISTANT",
 	"ROLE_IMAGE_RECIPE_CHANGED":      "ROLE_IMAGE_RECIPE",
+	"RUNTIME_ENVIRONMENT_CHANGED":    "RUNTIME_ENVIRONMENT",
+	"PROVIDER_ACCOUNT_CHANGED":       "PROVIDER_ACCOUNT",
 	"RUN_CHANGED":                    "RUN",
 }
 
@@ -45,9 +47,10 @@ type platformBusEnvelope struct {
 }
 
 type platformSignal struct {
-	Sequence  int64
-	EventName string
-	Kind      string
+	Sequence   int64
+	EventName  string
+	Kind       string
+	ProjectRef string
 }
 
 func decodePlatformSignal(payload []byte, organizationRef string) (platformSignal, bool) {
@@ -71,5 +74,5 @@ func decodePlatformSignal(payload []byte, organizationRef string) (platformSigna
 	if envelope.ProjectRef != "" && !safeRef.MatchString(envelope.ProjectRef) {
 		return platformSignal{}, false
 	}
-	return platformSignal{Sequence: envelope.Sequence, EventName: envelope.EventName, Kind: kind}, true
+	return platformSignal{Sequence: envelope.Sequence, EventName: envelope.EventName, Kind: kind, ProjectRef: envelope.ProjectRef}, true
 }

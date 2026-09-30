@@ -5,12 +5,12 @@ package generated
 type RunNodeState string
 
 const (
-	RunNodeStatePlanned   RunNodeState = "PLANNED"
-	RunNodeStateQueued    RunNodeState = "QUEUED"
-	RunNodeStateRunning   RunNodeState = "RUNNING"
-	RunNodeStateWaiting   RunNodeState = "WAITING"
+	RunNodeStatePlanned RunNodeState = "PLANNED"
+	RunNodeStateQueued RunNodeState = "QUEUED"
+	RunNodeStateRunning RunNodeState = "RUNNING"
+	RunNodeStateWaiting RunNodeState = "WAITING"
 	RunNodeStateSucceeded RunNodeState = "SUCCEEDED"
-	RunNodeStateFailed    RunNodeState = "FAILED"
+	RunNodeStateFailed RunNodeState = "FAILED"
 	RunNodeStateCancelled RunNodeState = "CANCELLED"
-	RunNodeStateSkipped   RunNodeState = "SKIPPED"
+	RunNodeStateSkipped RunNodeState = "SKIPPED"
 )

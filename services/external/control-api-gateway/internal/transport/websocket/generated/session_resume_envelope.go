@@ -3,8 +3,10 @@
 package generated
 
 type SessionResumeEnvelope struct {
-	Type                  string            `json:"type"`
-	RequestRef            string            `json:"requestRef"`
-	PlatformAfterSequence int64             `json:"platformAfterSequence"`
-	Runs                  []RunResumeCursor `json:"runs"`
+	Type string `json:"type"`
+	RequestRef string `json:"requestRef"`
+	PlatformAfterSequence int64 `json:"platformAfterSequence"`
+	PlatformSnapshotRequired bool `json:"platformSnapshotRequired"`
+	ProjectRef *string `json:"projectRef,omitempty"`
+	Runs []RunResumeCursor `json:"runs"`
 }

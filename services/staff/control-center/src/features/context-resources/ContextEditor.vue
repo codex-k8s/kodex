@@ -30,6 +30,7 @@ import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
@@ -413,9 +414,12 @@ function addArtifact(value: unknown): void {
     artifactRevision: artifact.revision,
   });
 }
-function chooseProject(value: unknown): void {
+async function chooseProject(value: unknown): Promise<void> {
   if (item.value || typeof value !== "string" || !editable.value) return;
-  if (specification.value.files.length && !window.confirm(t("managed.discard")))
+  if (
+    specification.value.files.length &&
+    !(await requestConfirmation(t("managed.discard")))
+  )
     return;
   project.value = value;
   memoryInput.value.sourceRunRef = undefined;

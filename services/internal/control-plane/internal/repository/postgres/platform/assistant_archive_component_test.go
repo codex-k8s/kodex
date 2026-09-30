@@ -118,4 +118,25 @@ func testAssistantHistoryArchive(t *testing.T, ctx context.Context, repository *
 	if err != nil || len(archived) != 1 || archived[0].Ref != items[0].Ref {
 		t.Fatalf("archived history missing: %d %v", len(archived), err)
 	}
+	restored, err := service.Execute(ctx, command.Command{Kind: command.RestoreAssistantConversation, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "history-restore", ExpectedVersion: &result.Conversation.Version},
+		Payload:  command.AssistantConversationArchiveInput{ConversationRef: items[0].Ref}})
+	if err != nil || restored.Conversation == nil || restored.Conversation.State != "ACTIVE" {
+		t.Fatalf("restore history: %v", err)
+	}
+	rearchived, err := service.Execute(ctx, command.Command{Kind: command.ArchiveAssistantConversation, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "history-rearchive", ExpectedVersion: &restored.Conversation.Version},
+		Payload:  command.AssistantConversationArchiveInput{ConversationRef: items[0].Ref}})
+	if err != nil || rearchived.Conversation == nil || rearchived.Conversation.State != "ARCHIVED" {
+		t.Fatalf("rearchive history: %v", err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.PurgeAssistantConversation, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "history-purge", ExpectedVersion: &rearchived.Conversation.Version},
+		Payload:  command.AssistantConversationArchiveInput{ConversationRef: items[0].Ref}}); err != nil {
+		t.Fatalf("purge history: %v", err)
+	}
+	archived, _, err = service.ListAssistantConversations(ctx, owner, query.Filter{Query: "history archive", State: "ARCHIVED", Page: query.Page{Size: 10}})
+	if err != nil || len(archived) != 0 {
+		t.Fatalf("purged history remains readable: %d %v", len(archived), err)
+	}
 }

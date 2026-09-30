@@ -7,14 +7,21 @@ import { defineStore } from "pinia";
 import { onScopeDispose, reactive, ref } from "vue";
 
 import type {
+  NextAction,
+  ProviderAccount,
   RunEvent,
   RunGraph,
+  RuntimeEnvironmentSet,
+  SpeechTranscriptionAvailability,
 } from "@/shared/api/generated/openapi/types.gen";
-import type { PlatformInvalidatedEnvelope } from "@/shared/api/generated/asyncapi/PlatformInvalidatedEnvelope";
+import type { PlatformResourceKind } from "@/shared/api/generated/asyncapi/PlatformResourceKind";
 import type { StreamKind } from "@/shared/api/generated/asyncapi/StreamKind";
 import { csrfToken } from "@/shared/api/mutation";
 import { runtimeConfig } from "@/shared/config/runtime";
 import { usePlatformStore } from "@/features/platform/store";
+import { useRuntimeStore } from "@/features/runtime/store";
+import { useProvidersStore } from "@/features/providers/store";
+import { selectedProjectRef } from "@/shared/project-context";
 import { currentLocale } from "@/shared/locale";
 import {
   asProblem,
@@ -51,7 +58,7 @@ interface SessionConnection {
   stopped: boolean;
 }
 
-type PlatformKind = PlatformInvalidatedEnvelope["kind"];
+type PlatformKind = PlatformResourceKind;
 
 const platformKinds = new Set<PlatformKind>([
   "PROJECT",
@@ -66,6 +73,8 @@ const platformKinds = new Set<PlatformKind>([
   "PLATFORM_MEMBERSHIP",
   "SYSTEM_ASSISTANT",
   "ROLE_IMAGE_RECIPE",
+  "RUNTIME_ENVIRONMENT",
+  "PROVIDER_ACCOUNT",
   "RUN",
 ]);
 
@@ -110,6 +119,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function recordField(
+  value: Record<string, unknown>,
+  field: string,
+): Record<string, unknown> {
+  const candidate = value[field];
+  if (!isRecord(candidate))
+    throw new Error(`Invalid realtime snapshot ${field}`);
+  return candidate;
+}
+
+function entityArrayField<T extends { ref: string }>(
+  value: Record<string, unknown>,
+  field: string,
+): T[] {
+  const candidate = value[field];
+  if (
+    !Array.isArray(candidate) ||
+    candidate.some((item) => !isRecord(item) || typeof item.ref !== "string")
+  )
+    throw new Error(`Invalid realtime snapshot ${field}`);
+  return candidate as T[];
+}
+
+function stringArrayField<T extends string>(
+  value: Record<string, unknown>,
+  field: string,
+): T[] {
+  const candidate = value[field];
+  if (
+    !Array.isArray(candidate) ||
+    candidate.some((item) => typeof item !== "string")
+  )
+    throw new Error(`Invalid realtime snapshot ${field}`);
+  return candidate as T[];
+}
+
+function optionalStringField(
+  value: Record<string, unknown>,
+  field: string,
+): string {
+  const candidate = value[field];
+  if (candidate === undefined) return "";
+  if (typeof candidate !== "string")
+    throw new Error(`Invalid realtime snapshot ${field}`);
+  return candidate;
+}
+
 function requestRef(): string {
   return crypto.randomUUID().replaceAll("-", "");
 }
@@ -145,7 +201,10 @@ export const useRealtimeStore = defineStore("realtime", () => {
   const activeRuns = new Map<string, ActiveRun>();
   const session: SessionConnection = { attempt: 0, stopped: false };
   let platformWanted = false;
+  let platformSnapshotReady = false;
   const platform = usePlatformStore();
+  const runtime = useRuntimeStore();
+  const providers = useProvidersStore();
 
   function hasConsumers(): boolean {
     return platformWanted || activeRuns.size > 0;
@@ -272,24 +331,63 @@ export const useRealtimeStore = defineStore("realtime", () => {
         attempt: session.attempt,
       });
       await platform.reloadPlatformState();
-      if (activeSocket(socket)) platformSequence.value = cursor;
+      if (activeSocket(socket)) {
+        platformSequence.value = cursor;
+        platformSnapshotReady = true;
+      }
       return true;
     }
-    if (envelope.type === "PLATFORM_INVALIDATED") {
+    if (envelope.type === "PLATFORM_SNAPSHOT") {
       if (
-        typeof envelope.eventName !== "string" ||
+        (envelope.mode !== "BOOTSTRAP" && envelope.mode !== "DELTA") ||
         typeof envelope.kind !== "string" ||
-        !platformKinds.has(envelope.kind as PlatformKind)
+        !platformKinds.has(envelope.kind as PlatformKind) ||
+        !isRecord(envelope.snapshot) ||
+        (envelope.projectRef !== undefined &&
+          typeof envelope.projectRef !== "string") ||
+        envelope.projectRef !== selectedProjectRef()
       )
         return false;
-      const outcome = reducePlatformSequence(platformSequence.value, cursor);
-      if (outcome === "duplicate") return true;
-      if (outcome !== "applied") {
-        socket.close(clientReconnectCloseCode, "PLATFORM_GAP_DETECTED");
-        return true;
+      if (envelope.mode === "DELTA") {
+        if (typeof envelope.eventName !== "string") return false;
+        const outcome = reducePlatformSequence(platformSequence.value, cursor);
+        if (outcome === "duplicate") return true;
+        if (outcome !== "applied") {
+          socket.close(clientReconnectCloseCode, "PLATFORM_GAP_DETECTED");
+          return true;
+        }
+      } else if (cursor < platformSequence.value) {
+        return false;
       }
-      await platform.reloadPlatformKind(envelope.kind as PlatformKind);
-      if (activeSocket(socket)) platformSequence.value = cursor;
+      const kind = envelope.kind as PlatformKind;
+      if (kind === "RUNTIME_ENVIRONMENT") {
+        const catalog = recordField(envelope.snapshot, "catalog");
+        const values = entityArrayField<RuntimeEnvironmentSet>(
+          catalog,
+          "environments",
+        );
+        const scope = selectedProjectRef();
+        runtime.applyEnvironmentSnapshot(scope, values);
+        platform.markRealtimeSnapshot(kind, scope, catalog);
+      } else if (kind === "PROVIDER_ACCOUNT") {
+        const catalog = recordField(envelope.snapshot, "catalog");
+        providers.applySnapshot(
+          entityArrayField<ProviderAccount>(catalog, "accounts"),
+          optionalStringField(recordField(catalog, "page"), "nextPageToken"),
+          stringArrayField<NextAction>(catalog, "nextActions"),
+        );
+        platform.markRealtimeSnapshot(kind, selectedProjectRef(), catalog);
+      } else {
+        platform.applyPlatformSnapshot(
+          kind,
+          envelope.projectRef as string | undefined,
+          envelope.snapshot,
+        );
+      }
+      if (activeSocket(socket)) {
+        platformSequence.value = cursor;
+        platformSnapshotReady = true;
+      }
       return true;
     }
     if (envelope.type === "PLATFORM_READY") {
@@ -407,6 +505,20 @@ export const useRealtimeStore = defineStore("realtime", () => {
       envelope.streamRef === platformStreamRef
     ) {
       if (cursor !== platformSequence.value) return false;
+      if (envelope.speechTranscription !== undefined) {
+        if (!isRecord(envelope.speechTranscription)) return false;
+        const speech = envelope.speechTranscription;
+        if (
+          typeof speech.available !== "boolean" ||
+          typeof speech.reason !== "string" ||
+          (speech.validUntil !== undefined &&
+            typeof speech.validUntil !== "string")
+        )
+          return false;
+        platform.applySpeechAvailability(
+          speech as unknown as SpeechTranscriptionAvailability,
+        );
+      }
       if (platformWanted)
         Object.assign(platformState, {
           state: "live",
@@ -641,6 +753,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
         type: "SESSION_RESUME",
         requestRef: sessionRequestRef,
         platformAfterSequence: platformSequence.value,
+        platformSnapshotRequired: !platformSnapshotReady,
+        ...(selectedProjectRef() ? { projectRef: selectedProjectRef() } : {}),
         runs,
       });
       if (platformWanted)
@@ -664,7 +778,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     });
     socket.addEventListener("message", (message) => {
       if (!activeSocket(socket)) return;
-      if (typeof message.data !== "string" || message.data.length > 65_536) {
+      if (typeof message.data !== "string" || message.data.length > 1_048_576) {
         failProtocol(socket, "INVALID_SESSION_FRAME");
         return;
       }
@@ -785,6 +899,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       Reflect.deleteProperty(state, runRef);
     platformWanted = false;
     platformSequence.value = 0;
+    platformSnapshotReady = false;
     Object.assign(platformState, {
       state: "offline",
       attempt: 0,
@@ -797,6 +912,14 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
   function refreshSession(): void {
     disconnect("SESSION_RENEWED");
+    session.stopped = false;
+    void connect();
+  }
+
+  function changeProjectScope(): void {
+    platformSequence.value = 0;
+    platformSnapshotReady = false;
+    disconnect("PROJECT_SCOPE_CHANGED");
     session.stopped = false;
     void connect();
   }
@@ -837,5 +960,6 @@ export const useRealtimeStore = defineStore("realtime", () => {
     closePlatform,
     closeAll,
     refreshSession,
+    changeProjectScope,
   };
 });

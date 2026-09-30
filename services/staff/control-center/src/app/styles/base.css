@@ -339,8 +339,9 @@ p {
   max-width: 280px;
 }
 .topbar-project-picker .async-picker__trigger {
-  height: 44px;
-  min-height: 44px;
+  height: 32px;
+  min-height: 32px;
+  padding: 6px 9px;
 }
 @media (max-width: 900px) {
   .topbar-project-picker {

@@ -30,6 +30,7 @@ import CodeDiff from "@/shared/ui/CodeDiff.vue";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
@@ -375,8 +376,12 @@ function changeFormat(event: Event): void {
   format.value = next;
 }
 
-function choose(item: ManagedConfigurationRevision): void {
-  if (dirty.value && revision.value && !window.confirm(t("managed.discard")))
+async function choose(item: ManagedConfigurationRevision): Promise<void> {
+  if (
+    dirty.value &&
+    revision.value &&
+    !(await requestConfirmation(t("managed.discard")))
+  )
     return;
   revision.value = item;
   content.value = item.content;
@@ -433,7 +438,7 @@ async function load(more = false): Promise<void> {
     !more &&
     dirty.value &&
     revision.value &&
-    !window.confirm(t("managed.discard"))
+    !(await requestConfirmation(t("managed.discard")))
   )
     return;
   imageImpactConflict.value = false;

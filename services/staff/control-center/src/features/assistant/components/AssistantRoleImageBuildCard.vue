@@ -23,6 +23,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
 const emit = defineEmits<{ navigate: []; debug: [prompt: string] }>();
@@ -209,7 +210,10 @@ async function stopBuild(): Promise<void> {
     !build.value ||
     !current.nextActions.includes("CANCEL_BUILD") ||
     stopping.value ||
-    !window.confirm(t("assistant.roleImageBuild.stopConfirm"))
+    !(await requestConfirmation({
+      message: t("assistant.roleImageBuild.stopConfirm"),
+      tone: "danger",
+    }))
   )
     return;
   stopping.value = true;
@@ -240,7 +244,7 @@ async function promoteCandidate(): Promise<void> {
     promoting.value ||
     loading.value ||
     attemptedArtifactRef.value === artifact.ref ||
-    !window.confirm(t("assistant.roleImageBuild.promoteConfirm"))
+    !(await requestConfirmation(t("assistant.roleImageBuild.promoteConfirm")))
   )
     return;
   // После неопределённого ответа нельзя повторять state-changing command.

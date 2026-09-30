@@ -3,7 +3,7 @@
 package generated
 
 type UnsubscribeRunEnvelope struct {
-	Type       string `json:"type"`
+	Type string `json:"type"`
 	RequestRef string `json:"requestRef"`
-	RunRef     string `json:"runRef"`
+	RunRef string `json:"runRef"`
 }

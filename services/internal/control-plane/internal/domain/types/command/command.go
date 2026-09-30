@@ -142,6 +142,8 @@ const (
 	CreateAssistantConversation        Kind = "CREATE_ASSISTANT_CONVERSATION"
 	UpdateAssistantConversation        Kind = "UPDATE_ASSISTANT_CONVERSATION_TITLE"
 	ArchiveAssistantConversation       Kind = "ARCHIVE_ASSISTANT_CONVERSATION"
+	RestoreAssistantConversation       Kind = "RESTORE_ASSISTANT_CONVERSATION"
+	PurgeAssistantConversation         Kind = "PURGE_ASSISTANT_CONVERSATION"
 	MoveAssistantConversationToProject Kind = "MOVE_ASSISTANT_CONVERSATION_TO_PROJECT"
 	AddAssistantTurn                   Kind = "ADD_ASSISTANT_TURN"
 	UpdateAssistantPlan                Kind = "UPDATE_ASSISTANT_PLAN_DRAFT"

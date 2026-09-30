@@ -3,6 +3,6 @@
 package generated
 
 type RunResumeCursor struct {
-	RunRef        string `json:"runRef"`
-	AfterSequence int64  `json:"afterSequence"`
+	RunRef string `json:"runRef"`
+	AfterSequence int64 `json:"afterSequence"`
 }

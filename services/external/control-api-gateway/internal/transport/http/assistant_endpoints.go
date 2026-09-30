@@ -80,6 +80,47 @@ func (server *Server) ArchiveAssistantConversation(w http.ResponseWriter, r *htt
 	}
 	writeMessage(w, http.StatusOK, response, "conversation", "")
 }
+func (server *Server) RestoreAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.RestoreAssistantConversationParams) {
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.RestoreAssistantConversation(r.Context(), &controlplanev1.RestoreAssistantConversationRequest{Mutation: mutation, ConversationRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	conversation := response.GetConversation()
+	if conversation == nil || conversation.Ref != ref || !validManagedVersion(conversation.Version) || conversation.State != controlplanev1.AssistantConversationState_ASSISTANT_CONVERSATION_STATE_ACTIVE {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "conversation", "")
+}
+func (server *Server) PurgeAssistantConversation(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.PurgeAssistantConversationParams) {
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return
+	}
+	mutation, ok := requireVersionedMutation(w, p.IdempotencyKey, p.IfMatch)
+	if !ok {
+		return
+	}
+	response, err := server.control.Assistant.PurgeAssistantConversation(r.Context(), &controlplanev1.PurgeAssistantConversationRequest{Mutation: mutation, ConversationRef: ref})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	if response.GetConversationRef() != ref {
+		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 func (server *Server) MoveAssistantConversationToProject(w http.ResponseWriter, r *http.Request, ref generated.ConversationRef, p generated.MoveAssistantConversationToProjectParams) {
 	if !opaqueHTTPReference.MatchString(ref) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)

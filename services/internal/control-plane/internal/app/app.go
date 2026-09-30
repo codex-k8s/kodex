@@ -31,6 +31,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/authorityproof"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/assistantconversationpurge"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/projectpurge"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providercredentialcleanup"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/maintenance/providermodelcatalog"
@@ -328,6 +329,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		catalogWorker.Run,
 		runAgentAvatarCleanup(repository, slog.Default()),
 		projectpurge.Run(repository, objects, config.RuntimeSecretNamespace, slog.Default()),
+		assistantconversationpurge.Run(repository, slog.Default()),
 	)
 	workerDone := make(chan error, 1)
 	go func() { workerDone <- workers.Wait(lifecycle) }()

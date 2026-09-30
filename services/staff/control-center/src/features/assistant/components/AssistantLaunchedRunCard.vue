@@ -16,6 +16,7 @@ import type {
 import { unwrap } from "@/shared/api/problem";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
 const emit = defineEmits<{ navigate: [] }>();
@@ -112,7 +113,10 @@ async function stopRun(): Promise<void> {
     !exact ||
     !run.value?.nextActions.includes("CANCEL") ||
     stopping.value ||
-    !window.confirm(t("assistant.launchedRun.stopConfirm"))
+    !(await requestConfirmation({
+      message: t("assistant.launchedRun.stopConfirm"),
+      tone: "danger",
+    }))
   )
     return;
   stopping.value = true;

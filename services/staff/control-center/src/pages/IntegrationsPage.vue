@@ -254,17 +254,17 @@ const credentialConnection = ref<IntegrationConnection>();
 const detailsConnection = ref<IntegrationConnection>();
 const mailboxCredentialBusy = ref(false);
 const mailboxConfigurationBusy = ref(false);
-const mailboxConfigurationPanel = ref<{ canClose(): boolean }>();
+const mailboxConfigurationPanel = ref<{ canClose(): Promise<boolean> }>();
 const route = useRoute();
 const router = useRouter();
 const assistantForm = computed(() => route.query.assistantForm === "1");
 const integrationsLoaded = ref(false);
 const assistantCredentialDefinition = ref<IntegrationDefinition>();
-function closeConnectionDetails(): void {
+async function closeConnectionDetails(): Promise<void> {
+  if (mailboxCredentialBusy.value || mailboxConfigurationBusy.value) return;
   if (
-    mailboxCredentialBusy.value ||
-    mailboxConfigurationBusy.value ||
-    mailboxConfigurationPanel.value?.canClose() === false
+    mailboxConfigurationPanel.value &&
+    !(await mailboxConfigurationPanel.value.canClose())
   )
     return;
   detailsConnection.value = undefined;

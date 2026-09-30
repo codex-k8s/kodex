@@ -71,6 +71,7 @@ const props = withDefaults(
     virtualItemHeight?: number;
     virtualColumns?: number;
     virtualOverscan?: number;
+    popoverMaxHeight?: number;
   }>(),
   { clearable: true },
 );
@@ -627,6 +628,7 @@ watch(
       width="lg"
       block
       contained
+      :max-height="popoverMaxHeight"
       @update:open="handlePopoverOpen"
     >
       <template #trigger="{ toggle, attrs }">

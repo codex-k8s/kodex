@@ -65,6 +65,7 @@ import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { requestConfirmation } from "@/shared/ui/confirmation";
 
 const props = defineProps<{
   plan: AssistantPlan;
@@ -657,11 +658,13 @@ const canApply = computed(
 );
 const canReject = computed(() => editable.value);
 
-function requestChanges(): void {
+async function requestChanges(): Promise<void> {
   if (!editable.value || !props.canRequestChanges) return;
   if (
     !draftMatchesSavedPlan.value &&
-    !window.confirm(t("assistant.planEditor.unsavedRevisionConfirm"))
+    !(await requestConfirmation(
+      t("assistant.planEditor.unsavedRevisionConfirm"),
+    ))
   )
     return;
   emit("requestChanges");

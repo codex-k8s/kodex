@@ -51,6 +51,7 @@ async function loadPage(
     :trigger-label="$t('app.project')"
     :placeholder="placeholder ?? $t('app.allProjects')"
     :search-placeholder="$t('app.chooseProject')"
+    :popover-max-height="370"
     @update:model-value="
       emit(
         'select',

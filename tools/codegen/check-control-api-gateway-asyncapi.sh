@@ -27,7 +27,8 @@ for required in \
   session_resume_envelope.go subscribe_run_envelope.go unsubscribe_run_envelope.go \
   session_ready_envelope.go run_snapshot_envelope.go run_event_envelope.go \
   run_ready_envelope.go run_resync_envelope.go run_unsubscribed_envelope.go \
-  platform_invalidated_envelope.go platform_ready_envelope.go platform_resync_envelope.go \
+  platform_snapshot_envelope.go platform_snapshot_mode.go platform_ready_envelope.go \
+  platform_resync_envelope.go speech_transcription_availability.go \
   stream_heartbeat_envelope.go stream_problem_envelope.go session_problem_envelope.go \
   run_graph.go run_node.go run_node_type.go run_node_state.go \
   run_edge.go run_edge_type.go run_event.go run_event_type.go run_state.go \

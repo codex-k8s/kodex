@@ -3,10 +3,12 @@ info:
   title: Kodex browser session stream
   version: 3.0.0
   description: |
-    Один защищённый owner-scoped WebSocket обслуживает platform invalidation и
-    bounded набор точных Run subscriptions одной browser session. Gateway
-    проверяет каждый Run через авторитетный GetRunGraph, получает из NATS только
-    bounded wake-сигналы и восстанавливает cursor из control-plane event store.
+    Один защищённый owner-scoped WebSocket обслуживает bounded platform
+    snapshots и набор точных Run subscriptions одной browser session. Gateway
+    использует NATS только как wake-сигнал, а каждый browser snapshot строит из
+    авторитетного control-plane read path в проверенном project scope.
+    Browser атомарно заменяет соответствующую проекцию Pinia и не выполняет
+    повторный HTTP readback при обычном событии.
     Ошибка или gap одного Run не закрывает и не повреждает остальные streams.
 defaultContentType: application/json
 servers:
@@ -17,7 +19,8 @@ servers:
     security: [{ $ref: "#/components/securitySchemes/OwnerSession" }]
     x-origin-policy: EXACT_HTTPS_ALLOWLIST
     x-channel-subprotocols:
-      sessionStream: [kodex.session.v2, csrf.<csrf-token>, ticket.<one-time-ticket>]
+      sessionStream:
+        [kodex.session.v2, csrf.<csrf-token>, ticket.<one-time-ticket>]
     x-legacy-transition:
       subprotocol: kodex.session.v1
       authorization: EXISTING_COOKIE_AND_CSRF_BOUNDARY
@@ -46,7 +49,7 @@ channels:
       subscribeRun: { $ref: "#/components/messages/SubscribeRun" }
       unsubscribeRun: { $ref: "#/components/messages/UnsubscribeRun" }
       sessionReady: { $ref: "#/components/messages/SessionReady" }
-      invalidated: { $ref: "#/components/messages/PlatformInvalidated" }
+      platformSnapshot: { $ref: "#/components/messages/PlatformSnapshot" }
       platformReady: { $ref: "#/components/messages/PlatformReady" }
       platformResync: { $ref: "#/components/messages/PlatformResync" }
       runSnapshot: { $ref: "#/components/messages/RunSnapshot" }
@@ -73,7 +76,7 @@ operations:
     channel: { $ref: "#/channels/sessionStream" }
     messages:
       - { $ref: "#/channels/sessionStream/messages/sessionReady" }
-      - { $ref: "#/channels/sessionStream/messages/invalidated" }
+      - { $ref: "#/channels/sessionStream/messages/platformSnapshot" }
       - { $ref: "#/channels/sessionStream/messages/platformReady" }
       - { $ref: "#/channels/sessionStream/messages/platformResync" }
       - { $ref: "#/channels/sessionStream/messages/runSnapshot" }
@@ -87,6 +90,7 @@ operations:
     summary: Мультиплексировать platform и точные Run streams одним writer.
     x-source:
       platformCursor: controlplane.v1.PlatformQueryService.GetPlatformEventCursor
+      platformSnapshot: CONTROL_PLANE_TYPED_QUERY_FOR_EXACT_RESOURCE_KIND_AND_SCOPE
       runEligibilityAndSnapshot: controlplane.v1.PlatformQueryService.GetRunGraph
       runCatchUp: controlplane.v1.PlatformQueryService.ListRunEvents
       liveWakeSignal: CORE_NATS_CONTROL_PLANE_PLATFORM_AND_RUN_EVENTS
@@ -101,9 +105,10 @@ operations:
       missedWakeSignal: HEARTBEAT_READS_AUTHORITATIVE_CURSOR_OR_EVENT_STORE
       overflow: SESSION_FAILS_CLOSED_WITH_1013
       maximumRunSubscriptions: 32
-      maximumFrameBytes: 65536
+      maximumFrameBytes: 1048576
     x-redaction:
-      forwarded: [eventName, kind, cursor, streamKind, streamRef]
+      forwarded:
+        [eventName, kind, cursor, streamKind, streamRef, projectRef, snapshot]
       forbidden:
         - secret values
         - raw provider payloads
@@ -111,7 +116,6 @@ operations:
         - arbitrary tool payloads
         - file bodies
         - organizationRef
-        - projectRef
         - aggregateRef
         - safeSummary
         - arbitrary event data
@@ -158,10 +162,10 @@ components:
       name: run_unsubscribed
       contentType: application/json
       payload: { $ref: "#/components/schemas/RunUnsubscribedEnvelope" }
-    PlatformInvalidated:
-      name: platform_invalidated
+    PlatformSnapshot:
+      name: platform_snapshot
       contentType: application/json
-      payload: { $ref: "#/components/schemas/PlatformInvalidatedEnvelope" }
+      payload: { $ref: "#/components/schemas/PlatformSnapshotEnvelope" }
     PlatformReady:
       name: platform_ready
       contentType: application/json
@@ -210,11 +214,20 @@ components:
     SessionResumeEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, platformAfterSequence, runs]
+      required:
+        [
+          type,
+          requestRef,
+          platformAfterSequence,
+          platformSnapshotRequired,
+          runs,
+        ]
       properties:
         type: { type: string, const: SESSION_RESUME }
         requestRef: { $ref: "#/components/schemas/OpaqueRef" }
         platformAfterSequence: { type: integer, format: int64, minimum: 0 }
+        platformSnapshotRequired: { type: boolean }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         runs:
           type: array
           maxItems: 32
@@ -312,19 +325,24 @@ components:
         streamKind: { type: string, const: RUN }
         streamRef: { $ref: "#/components/schemas/OpaqueRef" }
         cursor: { type: integer, format: int64, minimum: 0 }
-    PlatformInvalidatedEnvelope:
+    PlatformSnapshotEnvelope:
       type: object
       additionalProperties: false
       required:
-        [type, requestRef, streamKind, streamRef, cursor, eventName, kind]
+        [type, requestRef, streamKind, streamRef, cursor, mode, kind, snapshot]
       properties:
-        type: { type: string, const: PLATFORM_INVALIDATED }
+        type: { type: string, const: PLATFORM_SNAPSHOT }
         requestRef: { $ref: "#/components/schemas/OpaqueRef" }
         streamKind: { type: string, const: PLATFORM }
         streamRef: { type: string, const: PLATFORM }
-        cursor: { type: integer, format: int64, minimum: 1 }
+        cursor: { type: integer, format: int64, minimum: 0 }
+        mode: { $ref: "#/components/schemas/PlatformSnapshotMode" }
         eventName: { $ref: "#/components/schemas/PlatformEventName" }
         kind: { $ref: "#/components/schemas/PlatformResourceKind" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        snapshot:
+          type: object
+          additionalProperties: true
     PlatformReadyEnvelope:
       type: object
       additionalProperties: false
@@ -356,6 +374,35 @@ components:
         streamRef: { $ref: "#/components/schemas/OpaqueRef" }
         cursor: { type: integer, format: int64, minimum: 0 }
         serverTime: { $ref: "#/components/schemas/Timestamp" }
+        speechTranscription:
+          $ref: "#/components/schemas/SpeechTranscriptionAvailability"
+          description: Присутствует только у PLATFORM heartbeat и обновляет короткий защищённый допуск STT.
+    SpeechTranscriptionAvailability:
+      type: object
+      additionalProperties: false
+      required: [available, reason]
+      properties:
+        available: { type: boolean }
+        reason:
+          type: string
+          enum:
+            [
+              READY,
+              STT_CONFIGURATION_UNAVAILABLE,
+              STT_CREDENTIAL_UNAVAILABLE,
+              STT_DISABLED,
+              STT_EGRESS_UNAVAILABLE,
+              STT_MODEL_UNSUPPORTED,
+              STT_NOT_CONFIGURED,
+              STT_PERMISSION_DENIED,
+              STT_PERMISSION_INVALID,
+              STT_PROVIDER_ACCOUNT_INELIGIBLE,
+              STT_PROVIDER_CREDENTIAL_UNSUPPORTED,
+              STT_PROVIDER_DISABLED,
+              STT_PROVIDER_UNAVAILABLE,
+              STT_SERVICE_UNAVAILABLE,
+            ]
+        validUntil: { $ref: "#/components/schemas/Timestamp" }
     StreamProblemEnvelope:
       type: object
       additionalProperties: false
@@ -408,6 +455,8 @@ components:
           PLATFORM_MEMBERSHIP_CHANGED,
           SYSTEM_ASSISTANT_CHANGED,
           ROLE_IMAGE_RECIPE_CHANGED,
+          RUNTIME_ENVIRONMENT_CHANGED,
+          PROVIDER_ACCOUNT_CHANGED,
           RUN_CHANGED,
         ]
     PlatformResourceKind:
@@ -426,8 +475,13 @@ components:
           PLATFORM_MEMBERSHIP,
           SYSTEM_ASSISTANT,
           ROLE_IMAGE_RECIPE,
+          RUNTIME_ENVIRONMENT,
+          PROVIDER_ACCOUNT,
           RUN,
         ]
+    PlatformSnapshotMode:
+      type: string
+      enum: [BOOTSTRAP, DELTA]
     ResyncReason:
       type: string
       enum:

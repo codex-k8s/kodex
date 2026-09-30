@@ -311,6 +311,7 @@ describe("browser-session realtime multiplexer", () => {
       type: "SESSION_RESUME",
       requestRef: "00000000000040008000000000000001",
       platformAfterSequence: 0,
+      platformSnapshotRequired: true,
       runs: [
         { runRef: "run_realtime01", afterSequence: 0 },
         { runRef: "run_realtime02", afterSequence: 0 },
@@ -466,8 +467,6 @@ describe("browser-session realtime multiplexer", () => {
   });
 
   it("восстанавливает platform cursor и все активные run cursors", async () => {
-    const platform = usePlatformStore();
-    vi.spyOn(platform, "reloadPlatformKind").mockResolvedValue(undefined);
     const store = useRealtimeStore();
     store.openPlatform();
     store.openRun("run_realtime01");
@@ -477,13 +476,15 @@ describe("browser-session realtime multiplexer", () => {
     first.open();
 
     first.message({
-      type: "PLATFORM_INVALIDATED",
+      type: "PLATFORM_SNAPSHOT",
       requestRef: requestRef(first),
       streamKind: "PLATFORM",
       streamRef: "PLATFORM",
       cursor: 1,
+      mode: "DELTA",
       eventName: "RUN_CHANGED",
       kind: "RUN",
+      snapshot: { catalog: { runs: [], page: {}, total: 0 } },
     });
     first.message(runSnapshot(first, "run_realtime01", 2));
     first.message(runSnapshot(first, "run_realtime02", 4));
@@ -498,6 +499,7 @@ describe("browser-session realtime multiplexer", () => {
     expect(resumeRequest(second)).toMatchObject({
       type: "SESSION_RESUME",
       platformAfterSequence: 1,
+      platformSnapshotRequired: false,
       runs: [
         { runRef: "run_realtime01", afterSequence: 2 },
         { runRef: "run_realtime02", afterSequence: 4 },
@@ -512,6 +514,7 @@ describe("browser-session realtime multiplexer", () => {
     expect(resumeRequest(renewed)).toMatchObject({
       type: "SESSION_RESUME",
       platformAfterSequence: 1,
+      platformSnapshotRequired: false,
       runs: [
         { runRef: "run_realtime01", afterSequence: 2 },
         { runRef: "run_realtime02", afterSequence: 4 },

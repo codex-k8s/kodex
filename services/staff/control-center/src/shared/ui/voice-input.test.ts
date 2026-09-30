@@ -1,5 +1,15 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { VoiceCapture } from "./voice-input";
+
+const buttonSource = readFileSync(
+  new URL("./VoiceInputButton.vue", import.meta.url),
+  "utf8",
+);
+const textareaSource = readFileSync(
+  new URL("./VoiceTextarea.vue", import.meta.url),
+  "utf8",
+);
 
 class Recorder {
   static current: Recorder;
@@ -235,5 +245,21 @@ describe("VoiceCapture", () => {
     expect(signal?.aborted).toBe(true);
     expect(failed).not.toHaveBeenCalled();
     expect(capture.state).toBe("idle");
+  });
+});
+
+describe("VoiceInput UI", () => {
+  it("разделяет отмену записи и подтверждение распознавания", () => {
+    expect(buttonSource).toContain('@click="capture.cancel()"');
+    expect(buttonSource).toContain('@click="capture.stop()"');
+    expect(buttonSource).toContain("voice.cancelRecording");
+    expect(buttonSource).toContain("voice.acceptRecording");
+    expect(buttonSource).toContain("voice-input__recording-indicator");
+  });
+
+  it("явно обновляет v-model после программной вставки transcript", () => {
+    expect(textareaSource).toContain(
+      'emit(\n    "update:modelValue",\n    props.modelModifiers?.trim ? target.value.trim() : target.value,',
+    );
   });
 });

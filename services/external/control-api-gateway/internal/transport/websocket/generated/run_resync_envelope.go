@@ -3,11 +3,11 @@
 package generated
 
 type RunResyncEnvelope struct {
-	Type                 string       `json:"type"`
-	RequestRef           string       `json:"requestRef"`
-	StreamKind           string       `json:"streamKind"`
-	StreamRef            string       `json:"streamRef"`
-	Cursor               int64        `json:"cursor"`
-	RequestedAfterCursor int64        `json:"requestedAfterCursor"`
-	Reason               ResyncReason `json:"reason"`
+	Type string `json:"type"`
+	RequestRef string `json:"requestRef"`
+	StreamKind string `json:"streamKind"`
+	StreamRef string `json:"streamRef"`
+	Cursor int64 `json:"cursor"`
+	RequestedAfterCursor int64 `json:"requestedAfterCursor"`
+	Reason ResyncReason `json:"reason"`
 }

@@ -133,6 +133,7 @@ import type {
   WorkflowCommand,
   WorkflowInput,
 } from "@/shared/api/generated/openapi/types.gen";
+import type { PlatformResourceKind } from "@/shared/api/generated/asyncapi/PlatformResourceKind";
 import {
   csrfToken,
   etag,
@@ -159,6 +160,12 @@ import {
 import { instructionCommandInput } from "@/features/platform/instruction-command";
 import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
+
+export interface RealtimeCatalogSnapshot {
+  scopeKey: string;
+  total?: number;
+  nextPageToken?: string;
+}
 
 type QueryKey =
   | "bootstrap"
@@ -262,6 +269,11 @@ export const usePlatformStore = defineStore("platform", () => {
   const integrationDefinitionActions = ref<NextAction[]>([]);
   const integrationCoreReady = ref<boolean>();
   const conversations = reactive<Record<string, AssistantConversation>>({});
+  const assistantConversationNextPageToken = ref<string>();
+  const assistantRealtimeScopeKey = ref<string>();
+  const realtimeCatalogSnapshots = reactive<
+    Record<string, RealtimeCatalogSnapshot>
+  >({});
   const assistant = ref<SystemAssistant>();
   const auditEvents = ref<AuditEvent[]>([]);
   const auditNextPageToken = ref<string>();
@@ -1918,6 +1930,300 @@ export const usePlatformStore = defineStore("platform", () => {
     return reduceRunEvent({ runs, graphs, events, gates, artifacts }, event);
   }
 
+  function snapshotRecord(
+    value: unknown,
+    field: string,
+  ): Record<string, unknown> {
+    if (typeof value !== "object" || value === null || Array.isArray(value))
+      throw new Error(`Invalid realtime snapshot ${field}`);
+    return value as Record<string, unknown>;
+  }
+
+  function snapshotArray<T extends { ref: string }>(
+    value: Record<string, unknown>,
+    field: string,
+  ): T[] {
+    const items = value[field];
+    if (
+      !Array.isArray(items) ||
+      items.some(
+        (item) =>
+          typeof item !== "object" ||
+          item === null ||
+          Array.isArray(item) ||
+          typeof (item as { ref?: unknown }).ref !== "string",
+      )
+    )
+      throw new Error(`Invalid realtime snapshot ${field}`);
+    return items as T[];
+  }
+
+  function snapshotStringArray(
+    value: Record<string, unknown>,
+    field: string,
+  ): NextAction[] {
+    const items = value[field];
+    if (!Array.isArray(items) || items.some((item) => typeof item !== "string"))
+      throw new Error(`Invalid realtime snapshot ${field}`);
+    return items as NextAction[];
+  }
+
+  function applyOverviewSnapshot(snapshot: Record<string, unknown>): void {
+    if (!("overview" in snapshot)) return;
+    const response = snapshotRecord(snapshot.overview, "overview");
+    const value = snapshotRecord(response.overview, "overview.overview");
+    overview.value = value as Overview;
+    upsert(runs, overview.value.activeRuns);
+    upsert(gates, overview.value.pendingGates);
+    upsert(artifacts, overview.value.recentArtifacts);
+    pendingGateCount.value = overview.value.pendingGateCount;
+  }
+
+  function applyBootstrapSnapshot(snapshot: Record<string, unknown>): void {
+    if (!("bootstrap" in snapshot)) return;
+    const response = snapshotRecord(snapshot.bootstrap, "bootstrap");
+    const value = snapshotRecord(response.state, "bootstrap.state");
+    bootstrap.value = value as BootstrapState;
+  }
+
+  function applySpeechAvailability(
+    value: BootstrapState["speechTranscription"],
+  ): void {
+    if (!bootstrap.value) return;
+    bootstrap.value = { ...bootstrap.value, speechTranscription: value };
+  }
+
+  function applyPlatformSnapshotValue(
+    kind: PlatformResourceKind,
+    scopeProjectRef: string | undefined,
+    snapshot: Record<string, unknown>,
+  ): void {
+    if (scopeProjectRef !== selectedProjectRef())
+      throw new Error("Realtime snapshot project scope changed");
+    const catalog =
+      "catalog" in snapshot
+        ? snapshotRecord(snapshot.catalog, "catalog")
+        : undefined;
+    switch (kind) {
+      case "PROJECT":
+        if (!catalog) throw new Error("Project realtime catalog is missing");
+        replace(projects, snapshotArray<Project>(catalog, "projects"));
+        projectCollectionActions.value = snapshotStringArray(
+          catalog,
+          "nextActions",
+        );
+        applyOverviewSnapshot(snapshot);
+        return;
+      case "AGENT":
+      case "INSTRUCTIONS":
+        if (!catalog) throw new Error("Agent realtime catalog is missing");
+        if (scopeProjectRef)
+          replaceScoped(
+            agents,
+            snapshotArray<Agent>(catalog, "agents"),
+            (agent) => agent.projectRef === scopeProjectRef,
+          );
+        else replace(agents, snapshotArray<Agent>(catalog, "agents"));
+        applyOverviewSnapshot(snapshot);
+        return;
+      case "WORKFLOW":
+        if (!catalog) throw new Error("Workflow realtime catalog is missing");
+        if (scopeProjectRef)
+          replaceScoped(
+            workflows,
+            snapshotArray<Workflow>(catalog, "workflows"),
+            (workflow) => workflow.projectRef === scopeProjectRef,
+          );
+        else replace(workflows, snapshotArray<Workflow>(catalog, "workflows"));
+        return;
+      case "RUN":
+        if (!catalog) throw new Error("Run realtime catalog is missing");
+        reconcileRuns(snapshotArray<Run>(catalog, "runs"));
+        applyOverviewSnapshot(snapshot);
+        return;
+      case "ARTIFACT":
+        if (!catalog) throw new Error("Artifact realtime catalog is missing");
+        if (scopeProjectRef)
+          replaceScoped(
+            artifacts,
+            snapshotArray<Artifact>(catalog, "artifacts"),
+            (artifact) => artifact.projectRef === scopeProjectRef,
+          );
+        else replace(artifacts, snapshotArray<Artifact>(catalog, "artifacts"));
+        applyOverviewSnapshot(snapshot);
+        return;
+      case "SCHEDULE":
+        if (!catalog) throw new Error("Schedule realtime catalog is missing");
+        if (scopeProjectRef)
+          replaceScoped(
+            schedules,
+            snapshotArray<Schedule>(catalog, "schedules"),
+            (schedule) => schedule.projectRef === scopeProjectRef,
+          );
+        else replace(schedules, snapshotArray<Schedule>(catalog, "schedules"));
+        return;
+      case "INTEGRATION_CONNECTION":
+      case "INTEGRATION_GRANT": {
+        const definitionResponse = snapshotRecord(
+          snapshot.definitions,
+          "definitions",
+        );
+        const connectionResponse = snapshotRecord(
+          snapshot.connections,
+          "connections",
+        );
+        const definitionValues = definitionResponse.definitions;
+        if (!Array.isArray(definitionValues))
+          throw new Error("Integration definitions snapshot is invalid");
+        replaceByKey(
+          definitions,
+          definitionValues as IntegrationDefinition[],
+          (item) => item.key,
+        );
+        replace(
+          connections,
+          snapshotArray<IntegrationConnection>(
+            connectionResponse,
+            "connections",
+          ),
+        );
+        integrationCoreReady.value = Boolean(definitionResponse.coreReady);
+        integrationDefinitionActions.value = snapshotStringArray(
+          definitionResponse,
+          "nextActions",
+        );
+        return;
+      }
+      case "MEMBERSHIP":
+        if (!catalog) throw new Error("Membership realtime catalog is missing");
+        replace(memberships, snapshotArray<Membership>(catalog, "memberships"));
+        projectMembershipActions.value = snapshotStringArray(
+          catalog,
+          "nextActions",
+        );
+        return;
+      case "PLATFORM_MEMBERSHIP":
+        if (!catalog)
+          throw new Error("Platform membership realtime catalog is missing");
+        replace(
+          platformMemberships,
+          snapshotArray<Membership>(catalog, "memberships"),
+        );
+        platformMembershipActions.value = snapshotStringArray(
+          catalog,
+          "nextActions",
+        );
+        return;
+      case "SYSTEM_ASSISTANT": {
+        const assistantResponse = snapshotRecord(
+          snapshot.assistant,
+          "assistant",
+        );
+        const value = snapshotRecord(
+          assistantResponse.assistant,
+          "assistant.assistant",
+        );
+        const conversationResponse = snapshotRecord(
+          snapshot.conversations,
+          "conversations",
+        );
+        assistant.value = value as SystemAssistant;
+        reconcileConversations(
+          snapshotArray<AssistantConversation>(
+            conversationResponse,
+            "conversations",
+          ),
+        );
+        const page = snapshotRecord(
+          conversationResponse.page,
+          "conversations.page",
+        );
+        assistantConversationNextPageToken.value =
+          typeof page.nextPageToken === "string"
+            ? page.nextPageToken || undefined
+            : undefined;
+        assistantRealtimeScopeKey.value = scopeProjectRef ?? "";
+        applyBootstrapSnapshot(snapshot);
+        return;
+      }
+      case "ROLE_IMAGE_RECIPE":
+        if (!catalog || !scopeProjectRef)
+          throw new Error("Role image realtime catalog is missing");
+        replaceScoped(
+          roleImageRecipes,
+          snapshotArray<RoleImageRecipe>(catalog, "recipes"),
+          (recipe) => recipe.projectRef === scopeProjectRef,
+        );
+        return;
+      case "RUNTIME_ENVIRONMENT":
+      case "PROVIDER_ACCOUNT":
+        return;
+    }
+  }
+
+  function realtimeCatalogKey(
+    kind: PlatformResourceKind,
+    scopeProjectRef?: string,
+  ): string {
+    return `${kind}:${scopeProjectRef ?? ""}`;
+  }
+
+  function markRealtimeSnapshot(
+    kind: PlatformResourceKind,
+    scopeProjectRef: string | undefined,
+    response?: Record<string, unknown>,
+  ): void {
+    const snapshot: RealtimeCatalogSnapshot = {
+      scopeKey: scopeProjectRef ?? "",
+    };
+    if (response) {
+      const total = response.total;
+      const numericTotal =
+        typeof total === "number"
+          ? total
+          : typeof total === "string" && /^\d+$/.test(total)
+            ? Number(total)
+            : undefined;
+      if (
+        numericTotal !== undefined &&
+        Number.isSafeInteger(numericTotal) &&
+        numericTotal >= 0
+      )
+        snapshot.total = numericTotal;
+      const page = response.page;
+      if (page !== undefined) {
+        const projectedPage = snapshotRecord(page, `${kind}.page`);
+        if (typeof projectedPage.nextPageToken === "string")
+          snapshot.nextPageToken = projectedPage.nextPageToken || undefined;
+      }
+    }
+    realtimeCatalogSnapshots[realtimeCatalogKey(kind, scopeProjectRef)] =
+      snapshot;
+  }
+
+  function applyPlatformSnapshot(
+    kind: PlatformResourceKind,
+    scopeProjectRef: string | undefined,
+    snapshot: Record<string, unknown>,
+  ): void {
+    applyPlatformSnapshotValue(kind, scopeProjectRef, snapshot);
+    let response: Record<string, unknown> | undefined;
+    if ("catalog" in snapshot)
+      response = snapshotRecord(snapshot.catalog, "catalog");
+    else if (kind === "SYSTEM_ASSISTANT")
+      response = snapshotRecord(snapshot.conversations, "conversations");
+    else if (kind === "INTEGRATION_CONNECTION" || kind === "INTEGRATION_GRANT")
+      response = snapshotRecord(snapshot.connections, "connections");
+    markRealtimeSnapshot(kind, scopeProjectRef, response);
+  }
+
+  function realtimeSnapshot(
+    kind: PlatformResourceKind,
+    scopeProjectRef?: string,
+  ): RealtimeCatalogSnapshot | undefined {
+    return realtimeCatalogSnapshots[realtimeCatalogKey(kind, scopeProjectRef)];
+  }
+
   async function reloadPlatformKind(kind: string): Promise<void> {
     const projectRef = selectedProjectRef();
     const operations: Array<{ key: QueryKey; run: () => Promise<void> }> = [];
@@ -2131,6 +2437,8 @@ export const usePlatformStore = defineStore("platform", () => {
       Reflect.deleteProperty(loading, key);
     for (const key of Object.keys(problems))
       Reflect.deleteProperty(problems, key);
+    for (const key of Object.keys(realtimeCatalogSnapshots))
+      Reflect.deleteProperty(realtimeCatalogSnapshots, key);
     bootstrap.value = undefined;
     overview.value = undefined;
     administration.value = undefined;
@@ -2148,6 +2456,8 @@ export const usePlatformStore = defineStore("platform", () => {
     pendingGateCount.value = undefined;
     gateCatalogRevision.value = 0;
     assistant.value = undefined;
+    assistantConversationNextPageToken.value = undefined;
+    assistantRealtimeScopeKey.value = undefined;
     auditEvents.value = [];
     auditNextPageToken.value = undefined;
     auditScopeKey.value = "";
@@ -2195,6 +2505,9 @@ export const usePlatformStore = defineStore("platform", () => {
     integrationDefinitionActions,
     integrationCoreReady,
     conversations,
+    assistantConversationNextPageToken,
+    assistantRealtimeScopeKey,
+    realtimeCatalogSnapshots,
     assistant,
     auditEvents,
     auditNextPageToken,
@@ -2272,6 +2585,10 @@ export const usePlatformStore = defineStore("platform", () => {
     updateAssistantInstructions,
     applyRunSnapshot,
     applyRunEvent,
+    applyPlatformSnapshot,
+    markRealtimeSnapshot,
+    realtimeSnapshot,
+    applySpeechAvailability,
     reloadPlatformKind,
     reloadPlatformState,
     clearOwnerState,

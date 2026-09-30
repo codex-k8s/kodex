@@ -6,15 +6,15 @@ type SessionStream interface {
 	isSessionStream()
 }
 
-func (SessionReadyEnvelope) isSessionStream()        {}
-func (PlatformInvalidatedEnvelope) isSessionStream() {}
-func (PlatformReadyEnvelope) isSessionStream()       {}
-func (PlatformResyncEnvelope) isSessionStream()      {}
-func (RunSnapshotEnvelope) isSessionStream()         {}
-func (RunEventEnvelope) isSessionStream()            {}
-func (RunReadyEnvelope) isSessionStream()            {}
-func (RunResyncEnvelope) isSessionStream()           {}
-func (RunUnsubscribedEnvelope) isSessionStream()     {}
-func (StreamHeartbeatEnvelope) isSessionStream()     {}
-func (StreamProblemEnvelope) isSessionStream()       {}
-func (SessionProblemEnvelope) isSessionStream()      {}
+func (SessionReadyEnvelope) isSessionStream() {}
+func (PlatformSnapshotEnvelope) isSessionStream() {}
+func (PlatformReadyEnvelope) isSessionStream() {}
+func (PlatformResyncEnvelope) isSessionStream() {}
+func (RunSnapshotEnvelope) isSessionStream() {}
+func (RunEventEnvelope) isSessionStream() {}
+func (RunReadyEnvelope) isSessionStream() {}
+func (RunResyncEnvelope) isSessionStream() {}
+func (RunUnsubscribedEnvelope) isSessionStream() {}
+func (StreamHeartbeatEnvelope) isSessionStream() {}
+func (StreamProblemEnvelope) isSessionStream() {}
+func (SessionProblemEnvelope) isSessionStream() {}

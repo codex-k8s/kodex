@@ -3,13 +3,13 @@
 package generated
 
 type RunToolCall struct {
-	Ref            string           `json:"ref"`
-	Tool           string           `json:"tool"`
-	SafeParameters map[string]any   `json:"safeParameters"`
-	CapabilityRef  *string          `json:"capabilityRef,omitempty"`
-	GrantRef       *string          `json:"grantRef,omitempty"`
-	State          RunToolCallState `json:"state"`
-	DurationMs     int64            `json:"durationMs"`
-	SafeResult     string           `json:"safeResult"`
-	AuditRef       string           `json:"auditRef"`
+	Ref string `json:"ref"`
+	Tool string `json:"tool"`
+	SafeParameters map[string]any `json:"safeParameters"`
+	CapabilityRef *string `json:"capabilityRef,omitempty"`
+	GrantRef *string `json:"grantRef,omitempty"`
+	State RunToolCallState `json:"state"`
+	DurationMs int64 `json:"durationMs"`
+	SafeResult string `json:"safeResult"`
+	AuditRef string `json:"auditRef"`
 }

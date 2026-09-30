@@ -5,9 +5,9 @@ package generated
 type RunEventActorKind string
 
 const (
-	RunEventActorKindUser            RunEventActorKind = "USER"
-	RunEventActorKindAgent           RunEventActorKind = "AGENT"
+	RunEventActorKindUser RunEventActorKind = "USER"
+	RunEventActorKindAgent RunEventActorKind = "AGENT"
 	RunEventActorKindSystemAssistant RunEventActorKind = "SYSTEM_ASSISTANT"
-	RunEventActorKindPlatform        RunEventActorKind = "PLATFORM"
-	RunEventActorKindIntegration     RunEventActorKind = "INTEGRATION"
+	RunEventActorKindPlatform RunEventActorKind = "PLATFORM"
+	RunEventActorKindIntegration RunEventActorKind = "INTEGRATION"
 )
